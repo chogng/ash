@@ -585,6 +585,8 @@ fn snapshot(turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
         user_time_contexts: Default::default(),
         history_sources: Default::default(),
         message_checkpoints: Default::default(),
+        history_redo: Vec::new(),
+        history_workspace: None,
         agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
         origin: Default::default(),
         session_id: id::<SessionId>("session"),

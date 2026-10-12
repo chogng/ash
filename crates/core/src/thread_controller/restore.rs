@@ -18,6 +18,62 @@ use ash_protocol::WorkspaceCheckpoint;
 use std::sync::Arc;
 
 impl ThreadController {
+    pub fn thread_history_state(&self, thread_id: &ThreadId) -> Result<ash_protocol::ThreadHistoryState, CoreError> {
+        let snapshot = self.read_thread(thread_id)?;
+        let idle = history_is_idle(&snapshot);
+        Ok(ash_protocol::ThreadHistoryState {
+            sequence: snapshot.sequence,
+            can_undo: idle && undo_message(&snapshot).is_some(),
+            can_redo: idle && !snapshot.history_redo.is_empty(),
+        })
+    }
+
+    pub fn move_thread_history(&self, request: core_api::MoveThreadHistoryRequest) -> Result<ThreadSnapshot, CoreError> {
+        use ash_history::ThreadCommandReceipt;
+        use ash_protocol::HistoryDirection;
+        use ash_protocol::ThreadCommand;
+        use ash_protocol::ThreadHistoryCheckpoint;
+        use super::BatchCommand;
+        self.mutate_thread(&request.thread_id, |snapshot| {
+            let command = ThreadCommand::MoveHistory { direction: request.direction, expected_sequence: request.expected_sequence };
+            if let Some(previous) = snapshot.commands.iter().find(|previous| previous.receipt.command_id == request.command_id) {
+                if previous.receipt.command != command { return Err(CoreError::CommandConflict); }
+                return Ok(snapshot.clone());
+            }
+            super::validate_thread_expectation(core_api::SequenceExpectation::Exact(request.expected_sequence), snapshot.sequence)?;
+            if !history_is_idle(snapshot) { return Err(CoreError::InvalidInput("history can only move in an idle active Thread".into())); }
+            let current_workspace = snapshot.history_workspace.clone().or_else(|| snapshot.items.iter().rev().find_map(|item| snapshot.message_checkpoints.get(item.item_id()).map(|point| point.workspace.clone())))
+                .unwrap_or(WorkspaceCheckpoint::NoFiles);
+            let previous_prefix = HistoryPrefix { events: self.store.load(&request.thread_id)? };
+            let previous = ThreadHistoryCheckpoint { prefix: previous_prefix.reference().map_err(CoreError::Journal)?, workspace: current_workspace };
+            let mut prefixes = vec![previous_prefix];
+            let target = match request.direction {
+                HistoryDirection::Undo => {
+                    let point = undo_message(snapshot).ok_or_else(|| CoreError::InvalidInput("no earlier request checkpoint is available".into()))?;
+                    let events = self.source_history(snapshot, &point.source_thread_id)?;
+                    let turn_start = events.iter().find(|event| matches!(&event.event, ThreadEvent::TurnAccepted { turn_id, .. } if turn_id == &point.turn_id))
+                        .ok_or_else(|| CoreError::Journal("request checkpoint has no Turn acceptance".into()))?.sequence;
+                    let prefix = HistoryPrefix { events: events.into_iter().take_while(|event| event.sequence < turn_start).collect() };
+                    let target = ThreadHistoryCheckpoint { prefix: prefix.reference().map_err(CoreError::Journal)?, workspace: point.workspace.clone() };
+                    prefixes.push(prefix);
+                    target
+                }
+                HistoryDirection::Redo => snapshot.history_redo.last().cloned().ok_or_else(|| CoreError::InvalidInput("no redo checkpoint is available".into()))?,
+            };
+            let (next, batch) = self.project_batch_with_history(Some(snapshot.clone()), &request.thread_id,
+                vec![ThreadEvent::ThreadHistoryMoved { thread_id: request.thread_id.clone(), direction: request.direction, target: target.clone(), previous: previous.clone() }],
+                BatchCommand::AtEvent { index: 0, receipt: ThreadCommandReceipt { command_id: request.command_id.clone(), command } }, prefixes)?;
+            let source = self.checkpoint_sources.read().map_err(|_| CoreError::Journal("checkpoint source lock poisoned".into()))?
+                .get(&request.thread_id).and_then(std::sync::Weak::upgrade);
+            let mut restoration = if matches!((&previous.workspace, &target.workspace), (WorkspaceCheckpoint::NoFiles, WorkspaceCheckpoint::NoFiles)) { None } else {
+                Some(source.ok_or_else(|| CoreError::Journal("Thread file checkpoint owner is unavailable".into()))?.restore(&request, &previous.workspace, &target.workspace)?)
+            };
+            self.commit_batch(&batch)?;
+            *snapshot = next;
+            if let Some(restoration) = &mut restoration { restoration.commit(); }
+            Ok(snapshot.clone())
+        })
+    }
     pub(crate) fn read_history_prefix(
         &self,
         reference: &ash_protocol::HistoryPrefixRef,
@@ -141,6 +197,19 @@ impl ThreadController {
             .map(|prefix| prefix.events)
             .map_err(CoreError::from)
     }
+}
+
+fn history_is_idle(snapshot: &ThreadSnapshot) -> bool {
+    snapshot.status == ash_protocol::ThreadStatus::Active && snapshot.turns.iter().all(|turn| matches!(turn.status, ash_protocol::TurnStatus::Completed | ash_protocol::TurnStatus::Failed | ash_protocol::TurnStatus::Interrupted))
+}
+
+fn undo_message(snapshot: &ThreadSnapshot) -> Option<&MessageCheckpoint> {
+    let turn = snapshot.turns.last()?;
+    snapshot.items.iter().find_map(|item| {
+        if item.turn_id() == &turn.turn_id && matches!(item, ash_protocol::ThreadItem::UserMessage { .. }) {
+            snapshot.message_checkpoints.get(item.item_id()).filter(|point| !matches!(point.workspace, WorkspaceCheckpoint::Unavailable { .. }))
+        } else { None }
+    })
 }
 
 #[cfg(test)]

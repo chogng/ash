@@ -728,6 +728,15 @@ impl AppServer {
                     title,
                 )?,
             )),
+            SessionRequest::MoveThreadHistory { thread_id, expected_sequence, direction } => {
+                self.read_session_thread_snapshot(&mutation.session_id, &thread_id)?;
+                self.agent_runtime().move_thread_history(core_api::MoveThreadHistoryRequest {
+                    command_id: mutation.command_id.clone(), thread_id: thread_id.clone(), expected_sequence, direction,
+                }).map_err(core_error)?;
+                self.notify_thread_updates(&thread_id, expected_sequence)?;
+                self.updates.publish_session_changed(&mutation.session_id);
+                result(&SessionRequestResult::Thread(SessionThreadResult { session: self.session_view(&mutation.session_id)?, thread_id }))
+            }
             SessionRequest::ForkSession {
                 parent_thread_id,
                 title,
@@ -1058,6 +1067,12 @@ impl AppServer {
             session: self.session_view(&mutation.session_id)?,
             thread_id: restored.thread_id,
         })
+    }
+
+    pub(super) fn thread_history_state(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: ash_app_server_protocol::protocol::session::MessageCheckpointsParams = decode(params)?;
+        self.read_session_thread_snapshot(&params.session_id, &params.thread_id)?;
+        result(&self.agent_runtime().thread_history_state(&params.thread_id).map_err(core_error)?)
     }
 
     fn fork_session_thread_request(

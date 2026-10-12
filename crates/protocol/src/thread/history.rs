@@ -26,6 +26,27 @@ pub enum MessageBoundary {
     After,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum HistoryDirection { Undo, Redo }
+
+/// Immutable conversation and file state used by the same Thread's history cursor.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadHistoryCheckpoint {
+    pub prefix: HistoryPrefixRef,
+    pub workspace: WorkspaceCheckpoint,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadHistoryState {
+    #[ts(type = "number")]
+    pub sequence: u64,
+    pub can_undo: bool,
+    pub can_redo: bool,
+}
+
 /// Exact immutable Git version retained for one repository at a message boundary.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

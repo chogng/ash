@@ -14,7 +14,22 @@ pub struct TerminalProfile {
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum TerminalProfileSelection {
     Default,
-    Profile { profile_id: String },
+    Profile {
+        profile_id: String,
+    },
+    Custom {
+        name: String,
+        path: Vec<String>,
+        args: Vec<String>,
+    },
+}
+
+/// Validated executable and literal argv selected on the execution host.
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct TerminalResolvedProfile {
+    pub profile: TerminalProfile,
+    pub executable: String,
+    pub args: Vec<String>,
 }
 
 /// Selects whether a terminal dies with its creating connection or may be reattached briefly.

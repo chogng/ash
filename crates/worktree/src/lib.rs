@@ -8,6 +8,7 @@ mod directory_checkpoint;
 mod manager;
 mod metadata;
 mod settings;
+pub use directory_checkpoint::DirectoryRestoration;
 
 pub use manager::ManagedDirBinding;
 pub use manager::ManagedDirCleanupEligibility;

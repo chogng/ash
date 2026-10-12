@@ -1034,6 +1034,45 @@ async fn non_git_threads_use_isolated_managed_directory_copies() {
 }
 
 #[tokio::test]
+async fn directory_checkpoints_restore_exact_files_after_the_original_copy_is_deleted() {
+    let temporary = tempfile::tempdir().unwrap();
+    let source = temporary.path().join("source");
+    fs::create_dir_all(source.join("empty")).unwrap();
+    fs::write(source.join("binary"), [0, 255, 0, 1]).unwrap();
+    fs::write(source.join("text"), b"\xef\xbb\xbfline\r\n").unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::os::unix::fs::symlink("text", source.join("link")).unwrap();
+        fs::set_permissions(source.join("text"), fs::Permissions::from_mode(0o750)).unwrap();
+    }
+    let settings = WorktreeSettings::defaults(&temporary.path().join("profile"));
+    let manager = WorktreeManager::new(settings.clone());
+    let digest = manager.capture_directory_checkpoint(&source).unwrap();
+    assert_eq!(manager.capture_directory_checkpoint(&source).unwrap(), digest);
+    fs::remove_dir_all(&source).unwrap();
+    let reopened = WorktreeManager::new(settings);
+    let restored = reopened.provision(&ManagedDirProvisionRequest {
+        source: ManagedDirSource::DirectoryCheckpoint { source_directory: source, digest },
+        target: ManagedDirTarget::SourceHead,
+        repository_targets: BTreeMap::new(),
+        source_dir_id: "source".into(),
+        owner: thread_owner("restored"),
+    }).await.unwrap();
+    assert_eq!(fs::read(restored.dir().join("binary")).unwrap(), [0, 255, 0, 1]);
+    assert_eq!(fs::read(restored.dir().join("text")).unwrap(), b"\xef\xbb\xbfline\r\n");
+    assert!(restored.dir().join("empty").is_dir());
+    assert!(!restored.dir().join(".git").exists());
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(fs::symlink_metadata(restored.dir().join("link")).unwrap().file_type().is_symlink(), true);
+        assert_eq!(fs::read_link(restored.dir().join("link")).unwrap(), Path::new("text"));
+        assert_eq!(fs::metadata(restored.dir().join("text")).unwrap().permissions().mode() & 0o777, 0o750);
+    }
+}
+
+#[tokio::test]
 async fn repository_identity_is_stable_across_different_selected_dirs() {
     let temp = TempDir::new().unwrap();
     let profile = temp.path().join("profile");

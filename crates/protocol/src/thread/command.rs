@@ -25,6 +25,11 @@ use ts_rs::TS;
     rename_all_fields = "camelCase"
 )]
 pub enum ThreadCommand {
+    MoveHistory {
+        direction: crate::HistoryDirection,
+        #[ts(type = "number")]
+        expected_sequence: u64,
+    },
     StartTurn {
         /// Frozen in the command receipt; older journals use the summary policy.
         #[serde(

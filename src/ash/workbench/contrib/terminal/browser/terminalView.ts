@@ -152,7 +152,7 @@ export class TerminalViewPane extends ViewPane {
 			this.titleActions.setProfiles(this.profileService.availableProfiles);
 		} catch {
 			if (this.isDisposed) return;
-			this.titleActions.setProfiles([]);
+			this.titleActions.setProfiles(this.profileService.availableProfiles);
 		} finally {
 			this.initializing = false;
 		}

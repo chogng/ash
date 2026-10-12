@@ -10,22 +10,23 @@ pub use prefix::HistoryPrefix;
 /// Reachability roots for file snapshots embedded in immutable history records.
 pub fn repository_checkpoints(
     event: &ash_protocol::ThreadEvent,
-) -> &[ash_protocol::RepositoryCheckpoint] {
-    let workspace = match event {
+) -> Vec<&ash_protocol::RepositoryCheckpoint> {
+    let workspaces = match event {
         ash_protocol::ThreadEvent::ItemCompleted {
             workspace_checkpoint,
             ..
-        } => workspace_checkpoint.as_ref(),
+        } => workspace_checkpoint.iter().collect(),
         ash_protocol::ThreadEvent::ThreadCreated {
             origin: ash_protocol::ThreadOrigin::Message { workspace, .. },
             ..
-        } => Some(workspace),
-        _ => None,
+        } => vec![workspace],
+        ash_protocol::ThreadEvent::ThreadHistoryMoved { target, previous, .. } => vec![&target.workspace, &previous.workspace],
+        _ => Vec::new(),
     };
-    match workspace {
-        Some(ash_protocol::WorkspaceCheckpoint::Git { repositories, .. }) => repositories,
-        _ => &[],
-    }
+    workspaces.into_iter().flat_map(|workspace| match workspace {
+        ash_protocol::WorkspaceCheckpoint::Git { repositories, .. } => repositories.as_slice(),
+        ash_protocol::WorkspaceCheckpoint::NoFiles | ash_protocol::WorkspaceCheckpoint::Directory { .. } | ash_protocol::WorkspaceCheckpoint::Unavailable { .. } => &[],
+    }).collect()
 }
 
 pub use record::created_thread_agent_id;

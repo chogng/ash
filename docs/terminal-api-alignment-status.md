@@ -1,5 +1,15 @@
 # Terminal API 对齐状态
 
+## 自定义 / 扩展 Profile 与 Resolver 本批准入（2026-10-11）
+
+用户选择自定义 profile → 现有配置系统、ProfileService / Quickpick / View → terminalProfileResolverService.ts → 执行端 terminal/profile/resolve 验证并选择 executable，原 TerminalService/Rust PTY owner 创建 → 保留 argv/env/cwd、准确 profile 身份、Relaunch 原启动快照 → 后端 profile/实际 PTY 与前端 resolver/创建行为测试。创建授权、私有环境过滤、输出/尺寸/恢复沿原 owner，不将 custom profile 假装成 task process。
+
+第一闭合切片允许精确路径：crates/exec-server-protocol/src/terminal.rs，crates/exec-server/src/terminal.rs 与 terminal/{profiles.rs,profiles_tests.rs,service_tests.rs}；crates/app-server-protocol/src/protocol/{terminal.rs,registry.rs} 与 crates/app-server/src/{server.rs,server/terminal_operations.rs} 只补正式 resolve 方法、custom selection 和安全环境读取。TypeScript platform/terminal/common/terminal.ts 及已批准的三个 browser adapter 对接正式契约；terminal/common/{terminal.ts,terminalConfiguration.ts}、browser/{terminal.ts,terminalProfileService.ts,terminalProfileResolverService.ts,terminalProfileQuickpick.ts,terminalView.ts,terminalActions.ts,terminal.contribution.ts,terminalService.ts} 补 profile 定义、resolver、配置与真实创建。resolver 为上游同路径缺失，其他贡献文件双方同路径；只改本职责 hunk。配套测试 terminal/test/browser/{terminalConfigurationService.test.ts,terminalService.test.ts}、platform/terminal/test/electron-main/reconnectableTerminalMainService.test.ts、test/integration/browser/terminal.integration{,.spec}.ts、中文 workbench.json、README 和本文。生成物只由生成器产生。
+
+补充准入：browser/terminalInstance.ts（双方同路径）保存 custom profile 的首次启动快照，Relaunch 沿原实例路径重用。已存在的 TerminalProcessService typed fixtures 只补新 resolveProfile 端口；精确路径 services/tasks/test/browser/taskService.test.ts、services/debug/test/browser/{debugTerminalLauncher.test.ts,debugService.test.ts}、services/terminal/test/common/embedderTerminalService.test.ts、contrib/terminal/test/browser/terminalTitleActions.test.ts、test/integration/browser/chatInput.integration.ts。
+
+扩展 provider 后续切片先核对已有 extension runtime 注册/激活/调用/撤权 owner，再锁定准确 paths；不提前添加空 registry 或虚构 provider。完整 browser 差异清单沿上一批台账，按当前入口依赖闭合推进，不以缺失文件清单作为空模块创建队列。共享工作树的 Chat/Sessions rebase 冲突保持不动。
+
 ## 配置与 Profile 本批准入（2026-10-11）
 
 更改终端设置 → settings.json / IConfigurationService → common/terminalConfiguration.ts 与 browser/terminalConfigurationService.ts → 配置服务拥有有效值，实例屏幕订阅派生配置 → 字体、光标和回滚参数实时生效且输出保留 → 配置边界单测与真实浏览器场景。
@@ -9,6 +19,19 @@
 准入路径：common/{terminal.ts,terminalConfiguration.ts}、browser/{terminal.ts,terminalConfigurationService.ts,terminalProfileService.ts,terminalProfileQuickpick.ts,terminal.contribution.ts,terminalActions.ts,terminalView.ts,xterm/xtermTerminal.ts}。其中 terminalConfiguration.ts 和三个 browser 服务/选择器为上游同路径缺失，其余为双方同路径；既有文件只改设置契约、DI、配置订阅和 profile 入口。platform/terminal/common/terminal.ts 补执行端 OS 只读契约；已批准保留的 browser/{appServerTerminalProcessService,reconnectableTerminalProcessService,disconnectedTerminalProcessService}.ts 仅映射现有初始化 OS，不改 Rust/生成协议。允许测试 terminal/test/browser/{terminalConfigurationService.test.ts,terminalTitleActions.test.ts}、platform/terminal/test/electron-main/reconnectableTerminalMainService.test.ts、test/integration/browser/{terminal.integration.ts,terminal.integration.spec.ts,chatInput.integration.ts}、中文 workbench.json，以及本文和 Terminal README。
 
 settings.json 继续由现有配置系统保存与合并；外观和 defaultProfile.{linux,osx,windows} 使用对应 WINDOW scope，不写 legacy configuration.json；先消费已验证有效值，无额外值仓库或迁移。profile 的 path/args/env、自定义和扩展 profile、自动化 shell、完整 resolver API 尚未闭合，不创建空模块。
+
+
+本批实现结果：三个缺失 browser 文件与 common/terminalConfiguration.ts 已进入真实生产链；配置/schema owner、连接适配器、实例屏幕、命令面板、View 与工具栏均已接线。屏幕消费 10 项外观设置，空终端字体继承 editor.fontFamily；line 光标映射 xterm bar。有效配置变化原地更新并 fit，不替换屏幕或复制输出。相应默认值为 macOS 字号 12／其他平台 14、回滚 1000、光标不闪烁。小于现有缓冲区的回滚值按 xterm 语义移除超限旧行。
+
+ProfileService 合并并发发现请求；工作区/连接变化撤回可用列表，旧请求与释放后的结果不能重新发布；已有选择器同步移除失效项。默认 profile 设置按执行端 OS 读取，储存 title/name 并在新建前解析为可信 ID；不可用名称使用后端 default。选择/写入失败保留配置系统错误，不伪造成功；Escape、关闭选择器或释放 owner 都不创建进程、不写默认值。交互式新建显式传入选定 profile；Tasks/Debug 的无状态读取和原实例 Relaunch 行为保留。
+
+公开契约仍为当前消费者闭合的切片：TerminalConfigurationService 的 config/onConfigChanged 已生效，font metrics、默认位置、跳过 shell 命令等端口未实现；ProfileService 的 availableProfiles/refresh/getPlatformKey/default 与事件生效，profilesReady、扩展 provider 和自定义配置未实现；Quickpick 已消费 createInstance/setDefault，返回 Ash 可信 ID 或已保存名称，未声称完成上游 executable/modifier/extension 结果契约。完整 terminalProfileResolverService 仍没有可闭合的 executable/profile 定义下层，不添加空实现。
+
+验证：Chromium Terminal 正常全量入口 54 项通过（含新增配置实时更新和中文 profile 命令场景）。Terminal configuration/profile、实例、列表/尺寸、标题/上下文与 reconnectable adapter 共 72 项单测通过，配置/profile 11 项均启用 disposable 泄漏检查；使用原 unit runner 读取当前编译产物。20 个修改的 TS 文件格式检查通过。中文新增 33 条文案齐全；全仓本地化尚缺范围外 ash/color.editorGutter.itemBackground。旧 display-history 截断用例显式设置 scrollback=5000，使其继续独立验证 4096 行显示历史上限；未弱化原截断标记及进程观察者输出断言。Reconnectable 测试 mock 记录 JSON-RPC 实际序列化参数，修正既有 adapter 可选 execution=undefined 与无字段 wire 对象的假差异，所有 adapter 场景通过。
+
+初期正常 Renderer（3657 文件）、全浏览器类型检查、普通 unit 类型检查均通过。最后共享工作树的 checkpoint 协议新增 directory，但范围外 appServerAgentService.ts:141 / IMessageCheckpoint 枚举未同步，阻塞最新全仓 Renderer、全浏览器与 unit tsc；未修改这些业务文件或放宽类型选项。最终 Terminal 浏览器定向类型检查（2111 文件）通过；unit 定向编译曾报告该范围外错误，之后从原 tsconfig.test.json 继承的定向 tsc 检查已通过，原 runner 执行当前产物 72 项全部通过。不能将当前全仓类型检查记为通过。随后共享工作树另一项 rebase 在 Chat/Sessions 文件产生冲突标记与缺失 import，浏览器重建被这些范围外文件阻塞；未修改或解除该 rebase。额外未跑通的测试断言已仅撤销本批自己的新增，保留已验证的 54 项场景。最后 View 的发现失败分支改为读取 ProfileService 当前列表，防止旧失败覆盖新工作区的有效菜单；该修改后的 Terminal 定向 unit 编译与 72 项测试通过，浏览器重建仍受上述范围外冲突阻塞。
+
+当前 browser 生产同路径文件为 21，上游缺失 44，仅 Ash 0；common 本轮补 terminalConfiguration.ts。以下旧批次目录数字是该批次时的快照。仅在 macOS Chromium 上验证交互，未验证真实跨 OS SSH 或 VoiceOver 实际读出。
 
 
 ## Browser 列表、菜单与尺寸调度（2026-10-11）
@@ -45,7 +68,7 @@ settings.json 继续由现有配置系统保存与合并；外观和 defaultProf
 | 职责链 | 仍缺的准确路径（相对 terminal/browser） |
 | --- | --- |
 | 实例创建／分组分屏 | `terminalInstanceService.ts`、`terminalGroupService.ts`、`terminalGroup.ts` |
-| 配置／profile／命令基础 | `terminalConfigurationService.ts`、`terminalProfileService.ts`、`terminalProfileResolverService.ts`、`terminalProfileQuickpick.ts`、`terminalCommands.ts`、`terminalEscapeSequences.ts`、`terminalEvents.ts` |
+| 配置／profile／命令基础（最新剩余） | `terminalProfileResolverService.ts`、`terminalCommands.ts`、`terminalEscapeSequences.ts`、`terminalEvents.ts` |
 | 编辑区承载／身份 | `terminalEditingService.ts`、`terminalEditorService.ts`、`terminalEditor.ts`、`terminalEditorInput.ts`、`terminalEditorSerializer.ts`、`terminalUri.ts` |
 | 状态、提示与图标 | `terminalStatusList.ts`、`terminalTooltip.ts`、`terminalIcons.ts`、`terminalIconPicker.ts`、`terminalTabsChatEntry.ts`、`widgets/terminalHoverWidget.ts`、`widgets/widgetManager.ts`、`widgets/widgets.ts`、`media/widgets.css`、`media/xterm.css` |
 | xterm 扩展职责 | `xterm-private.d.ts`、`xterm/decorationAddon.ts`、`xterm/decorationStyles.ts`、`xterm/lineDataEventAddon.ts`、`xterm/markNavigationAddon.ts`、`xterm/terminalFontRendering.css`、`xterm/terminalFontRendering.ts`、`xterm/xtermAddonImporter.ts` |

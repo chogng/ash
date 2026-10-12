@@ -1017,3 +1017,48 @@ fn environment_overrides_apply_at_spawn_without_changing_the_host_snapshot() {
     assert_eq!(service.create(1, invalid), Err(TerminalError::InvalidInput));
     assert_eq!(service.active_count(), 0);
 }
+
+#[cfg(unix)]
+#[test]
+fn custom_profile_resolution_and_creation_share_identity_argv_and_environment() {
+    let root = tempfile::tempdir().unwrap();
+    let service = terminal_service_for(root.path());
+    let selection = TerminalProfileSelection::Custom {
+        name: "Literal shell".into(),
+        path: vec!["/missing/shell".into(), "/bin/sh".into()],
+        args: vec![
+            "-c".into(),
+            "printf 'profile:%s:%s' \"$1\" \"$ASH_PROFILE_TEST\"".into(),
+            "profile".into(),
+            "literal;$HOME".into(),
+        ],
+    };
+    let resolved = service.resolve_profile(&selection).unwrap();
+    assert_eq!(resolved.executable, "/bin/sh");
+    assert_eq!(service.active_count(), 0);
+    let created = service
+        .create(
+            1,
+            TerminalCreateRequest {
+                rows: 24,
+                cols: 80,
+                profile: selection,
+                lifecycle: TerminalLifecycle::ConnectionOwned,
+                env: Some(HashMap::from([(
+                    "ASH_PROFILE_TEST".into(),
+                    Some("value with spaces".into()),
+                )])),
+                cwd: None,
+                execution: None,
+            },
+        )
+        .unwrap();
+    assert_eq!(created.profile, resolved.profile);
+    let output = read_until(
+        &service,
+        &created.terminal_id,
+        "profile:literal;$HOME:value with spaces",
+    );
+    assert!(String::from_utf8_lossy(&output).contains("profile:literal;$HOME:value with spaces"));
+    service.close_owner(1);
+}

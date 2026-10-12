@@ -144,3 +144,49 @@ fn discovery_uses_installed_powershell_when_path_only_has_a_store_alias() {
             .all(|profile| profile.profile_id != "powershell")
     );
 }
+
+#[test]
+fn custom_profiles_choose_the_first_executable_and_preserve_literal_arguments() {
+    let catalog = TerminalProfileCatalog::discover();
+    let discovered = catalog.resolve(&TerminalProfileSelection::Default).unwrap();
+    let program = discovered.program.clone();
+    let selection = TerminalProfileSelection::Custom {
+        name: "Profile with spaces".into(),
+        path: vec!["/definitely/missing/ash-shell".into(), program.clone()],
+        args: vec!["argument with spaces".into(), "literal;$HOME".into()],
+    };
+    let resolved = catalog.resolve(&selection).unwrap();
+    assert_eq!(resolved.program, program);
+    assert_eq!(resolved.args, ["argument with spaces", "literal;$HOME"]);
+    assert_eq!(resolved.profile_id, "custom:Profile with spaces");
+    assert_eq!(resolved.title, "Profile with spaces");
+    assert!(!resolved.is_default);
+}
+
+#[test]
+fn custom_profiles_reject_invalid_names_candidates_and_arguments() {
+    let catalog = TerminalProfileCatalog::discover();
+    let program = catalog
+        .resolve(&TerminalProfileSelection::Default)
+        .unwrap()
+        .program
+        .clone();
+    for (name, path, args) in [
+        ("bad\nname", vec![program.clone()], vec![]),
+        ("", vec![program.clone()], vec![]),
+        ("custom", vec![], vec![]),
+        ("custom", vec!["relative/unknown-shell".into()], vec![]),
+        ("custom", vec![program.clone()], vec!["nul\0arg".into()]),
+        ("custom", vec!["nul\0path".into()], vec![]),
+    ] {
+        assert!(
+            catalog
+                .resolve(&TerminalProfileSelection::Custom {
+                    name: name.into(),
+                    path,
+                    args
+                })
+                .is_none()
+        );
+    }
+}

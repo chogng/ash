@@ -2,6 +2,7 @@ use crate::terminal::TerminalProfile;
 use crate::terminal::TerminalProfileSelection;
 use crate::terminal::command_status::CommandStatusMode;
 use crate::terminal::environment::TerminalEnvironment;
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::Path;
@@ -37,15 +38,53 @@ impl TerminalProfileCatalog {
     pub(crate) fn resolve(
         &self,
         selection: &TerminalProfileSelection,
-    ) -> Option<&TerminalProfileSpec> {
+    ) -> Option<Cow<'_, TerminalProfileSpec>> {
         match selection {
-            TerminalProfileSelection::Default => {
-                self.profiles.iter().find(|profile| profile.is_default)
-            }
+            TerminalProfileSelection::Default => self
+                .profiles
+                .iter()
+                .find(|profile| profile.is_default)
+                .map(Cow::Borrowed),
             TerminalProfileSelection::Profile { profile_id } => self
                 .profiles
                 .iter()
-                .find(|profile| profile.profile_id == *profile_id),
+                .find(|profile| profile.profile_id == *profile_id)
+                .map(Cow::Borrowed),
+            TerminalProfileSelection::Custom { name, path, args } => {
+                if name.trim().is_empty()
+                    || name.len() > 256
+                    || name.chars().any(char::is_control)
+                    || path.is_empty()
+                    || path.len() > 32
+                    || args.len() > 1024
+                    || args
+                        .iter()
+                        .any(|arg| arg.len() > 32768 || arg.contains('\0'))
+                    || path
+                        .iter()
+                        .any(|path| path.is_empty() || path.len() > 32768 || path.contains('\0'))
+                {
+                    return None;
+                }
+                let program = path.iter().find_map(|candidate| {
+                    let path = Path::new(candidate);
+                    let resolved = if path.is_absolute() {
+                        Some(path.to_path_buf())
+                    } else if path.components().count() == 1 {
+                        resolve_on_path(self.environment(), candidate)
+                    } else {
+                        None
+                    }?;
+                    executable_file(&resolved).then_some(resolved)
+                })?;
+                Some(Cow::Owned(TerminalProfileSpec {
+                    profile_id: format!("custom:{name}"),
+                    title: name.clone(),
+                    program: program.to_str()?.to_owned(),
+                    args: args.clone(),
+                    is_default: false,
+                }))
+            }
         }
     }
 
@@ -57,6 +96,7 @@ impl TerminalProfileCatalog {
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct TerminalProfileSpec {
     pub(crate) profile_id: String,
     pub(crate) title: String,
@@ -94,7 +134,10 @@ impl TerminalProfileSpec {
     }
 
     pub(crate) fn command_args(&self, command: &str) -> Vec<String> {
-        match self.profile_id.as_str() {
+        match profile_for_program(self.program.clone(), false)
+            .profile_id
+            .as_str()
+        {
             "powershell" | "windows-powershell" => vec![
                 "-NoLogo".into(),
                 "-NoProfile".into(),
@@ -305,3 +348,21 @@ fn default_shell(environment: &HashMap<String, String>) -> String {
 #[cfg(test)]
 #[path = "profiles_tests.rs"]
 mod tests;
+
+fn executable_file(path: &Path) -> bool {
+    let Ok(metadata) = path.metadata() else {
+        return false;
+    };
+    if !metadata.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        metadata.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(not(unix))]
+    {
+        true
+    }
+}

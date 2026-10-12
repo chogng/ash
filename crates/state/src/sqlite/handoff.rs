@@ -713,12 +713,12 @@ fn validate_store(store: &SqliteThreadStore) -> Result<(), ThreadStoreError> {
             &row.get::<_, String>(1).map_err(error)?,
             &row.get::<_, String>(2).map_err(error)?,
         )?;
-        if let ThreadEvent::HistoryPrefixBound { thread_id, prefix } = record.event {
-            super::history::read_prefix(&connection, &prefix)?;
+        for prefix in record.event.history_prefixes() {
+            super::history::read_prefix(&connection, prefix)?;
             connection
                 .execute(
-                    "INSERT INTO expected_thread_prefixes VALUES (?1, ?2)",
-                    params![thread_id.as_str(), prefix.digest.as_str()],
+                    "INSERT OR IGNORE INTO expected_thread_prefixes VALUES (?1, ?2)",
+                    params![record.thread_id.as_str(), prefix.digest.as_str()],
                 )
                 .map_err(error)?;
         }
@@ -773,8 +773,8 @@ fn validate_store(store: &SqliteThreadStore) -> Result<(), ThreadStoreError> {
             },
         )?;
         for record in prefix.events {
-            if let ThreadEvent::HistoryPrefixBound { prefix, .. } = record.event {
-                super::history::read_prefix(&connection, &prefix)?;
+            for prefix in record.event.history_prefixes() {
+                super::history::read_prefix(&connection, prefix)?;
                 connection
                     .execute(
                         "INSERT OR IGNORE INTO expected_prefix_links VALUES (?1, ?2)",

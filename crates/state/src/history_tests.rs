@@ -41,6 +41,9 @@ impl Drop for Capture {
     }
 }
 impl MessageCheckpointSource for Source {
+    fn restore(&self, _: &core_api::MoveThreadHistoryRequest, _: &WorkspaceCheckpoint, _: &WorkspaceCheckpoint) -> Result<Box<dyn core_api::WorkspaceRestoration>, CoreError> {
+        Err(CoreError::InvalidInput("this fixture does not restore files".into()))
+    }
     fn capture(
         &self,
         _: &ash_protocol::ThreadId,

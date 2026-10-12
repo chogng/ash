@@ -36,6 +36,7 @@ pub use exec_server_protocol::terminal::TerminalReadRequest;
 pub use exec_server_protocol::terminal::TerminalReadResult;
 pub use exec_server_protocol::terminal::TerminalReconnectLease;
 pub use exec_server_protocol::terminal::TerminalResizeRequest;
+pub use exec_server_protocol::terminal::TerminalResolvedProfile;
 pub use exec_server_protocol::terminal::TerminalSignal;
 pub use exec_server_protocol::terminal::TerminalWriteBinaryRequest;
 pub use exec_server_protocol::terminal::TerminalWriteRequest;
@@ -128,6 +129,29 @@ impl TerminalService {
             .collect())
     }
 
+    /// Resolves a profile on this authorized execution host without allocating a PTY.
+    pub fn resolve_profile(
+        &self,
+        selection: &TerminalProfileSelection,
+    ) -> Result<TerminalResolvedProfile, TerminalError> {
+        self.ensure_active()?;
+        let spec = self
+            .profiles
+            .resolve(selection)
+            .ok_or(TerminalError::InvalidInput)?;
+        Ok(TerminalResolvedProfile {
+            profile: spec.profile(),
+            executable: spec.program.clone(),
+            args: spec.args.clone(),
+        })
+    }
+
+    /// Returns the same sanitized snapshot inherited by children, excluding launcher authority.
+    pub fn environment_snapshot(&self) -> Result<HashMap<String, String>, TerminalError> {
+        self.ensure_active()?;
+        Ok(self.profiles.environment().clone())
+    }
+
     pub fn default_shell_command(&self, command: &str) -> (String, Vec<String>) {
         self.profiles.default_command(command)
     }
@@ -218,7 +242,7 @@ impl TerminalService {
         // Task process/shell executions preserve argv and do not source those wrappers.
         let integration = if params.execution.is_none() {
             Some(
-                ShellIntegration::prepare(profile, &environment)
+                ShellIntegration::prepare(&profile, &environment)
                     .map_err(|_| TerminalError::OperationFailed)?,
             )
         } else {

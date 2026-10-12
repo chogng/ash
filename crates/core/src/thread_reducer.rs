@@ -68,6 +68,8 @@ pub struct ThreadSnapshot {
     pub(crate) user_time_contexts: BTreeMap<ItemId, ash_protocol::TimeContext>,
     pub(crate) history_sources: BTreeMap<ThreadId, ash_protocol::HistoryPrefixRef>,
     pub(crate) message_checkpoints: BTreeMap<ItemId, ash_protocol::MessageCheckpoint>,
+    pub(crate) history_redo: Vec<ash_protocol::ThreadHistoryCheckpoint>,
+    pub(crate) history_workspace: Option<ash_protocol::WorkspaceCheckpoint>,
     pub agent_id: ash_protocol::AgentId,
     pub origin: ash_protocol::ThreadOrigin,
     pub session_id: SessionId,
@@ -375,6 +377,7 @@ pub struct ThreadCommandSnapshot {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ThreadCommandResult {
+    HistoryMoved,
     AdvisorConfigured,
     TurnAccepted {
         turn_id: TurnId,
@@ -485,6 +488,8 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     goal_budget_limited_turn_id: None,
                     context_calibrations: Vec::new(),
                     turns: Vec::new(),
+                    history_redo: Vec::new(),
+                    history_workspace: None,
                     hook_runs: Vec::new(),
                     items: Vec::new(),
                     context_checkpoints: Vec::new(),
@@ -543,6 +548,41 @@ pub(crate) fn reduce_thread_event_with_prefix(
         }
     }
     match &envelope.event {
+        ThreadEvent::ThreadHistoryMoved { direction, target, previous, .. } => {
+            let source = prefix_source.ok_or_else(|| CoreError::Journal("history cursor target is missing".into()))?;
+            let receipt = envelope.command.clone().ok_or_else(|| CoreError::Journal("history movement requires a command receipt".into()))?;
+            if envelope.schema_version < 26 || source.session_id != snapshot.session_id
+                || source.thread_id != target.prefix.source_thread_id || source.sequence != target.prefix.source_sequence
+                || previous.prefix.source_thread_id != snapshot.thread_id || previous.prefix.source_sequence != snapshot.sequence
+                || receipt.command != (ThreadCommand::MoveHistory { direction: *direction, expected_sequence: snapshot.sequence })
+                || snapshot.commands.iter().any(|command| command.receipt.command_id == receipt.command_id)
+            {
+                return Err(CoreError::Journal("invalid history cursor movement".into()));
+            }
+            match direction {
+                ash_protocol::HistoryDirection::Undo => snapshot.history_redo.push(previous.clone()),
+                ash_protocol::HistoryDirection::Redo => {
+                    if snapshot.history_redo.pop().as_ref() != Some(target) {
+                        return Err(CoreError::Journal("redo target does not match the retained history".into()));
+                    }
+                }
+            }
+            // Billing, Goal budgets, command receipts and execution authority never rewind.
+            // Only the conversation used by the next request follows the history cursor.
+            snapshot.turns = source.turns.clone();
+            snapshot.items = source.items.clone();
+            snapshot.hook_runs = source.hook_runs.clone();
+            snapshot.user_time_contexts = source.user_time_contexts.clone();
+            snapshot.message_checkpoints = source.message_checkpoints.clone();
+            snapshot.history_sources = source.history_sources.clone();
+            snapshot.history_sources.insert(source.thread_id.clone(), target.prefix.clone());
+            snapshot.context_checkpoints = source.context_checkpoints.clone();
+            snapshot.context_overflow_recoveries = source.context_overflow_recoveries.clone();
+            snapshot.context_calibrations = source.context_calibrations.clone();
+            snapshot.item_sequences = snapshot.items.iter().map(|item| (item.item_id().clone(), envelope.sequence)).collect();
+            snapshot.history_workspace = Some(target.workspace.clone());
+            snapshot.commands.push(ThreadCommandSnapshot { receipt, result: ThreadCommandResult::HistoryMoved, response_sequence: envelope.sequence });
+        }
         ThreadEvent::HistoryPrefixBound { prefix, .. } => {
             require_no_command(envelope)?;
             let source = prefix_source.ok_or_else(|| {
@@ -1158,6 +1198,8 @@ pub(crate) fn reduce_thread_event_with_prefix(
             tool_profile,
             ..
         } => {
+            snapshot.history_redo.clear();
+            snapshot.history_workspace = None;
             if let Some(config) = advisor {
                 config
                     .validate()

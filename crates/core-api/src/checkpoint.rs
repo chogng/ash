@@ -12,6 +12,12 @@ pub trait CheckpointCapture: Send + Sync {
 
 /// Captures file evidence without reading or mutating Core's locked Thread state.
 pub trait MessageCheckpointSource: Send + Sync {
+    fn restore(
+        &self,
+        request: &crate::MoveThreadHistoryRequest,
+        expected: &WorkspaceCheckpoint,
+        target: &WorkspaceCheckpoint,
+    ) -> Result<Box<dyn WorkspaceRestoration>, CoreError>;
     fn capture(
         &self,
         thread_id: &ThreadId,
@@ -20,4 +26,9 @@ pub trait MessageCheckpointSource: Send + Sync {
         event_id: &str,
     ) -> Result<Box<dyn CheckpointCapture>, CoreError>;
     fn release(&self, checkpoint: &ash_protocol::RepositoryCheckpoint) -> Result<(), CoreError>;
+}
+
+/// Applied file transaction whose uncommitted drop restores the previous directory state.
+pub trait WorkspaceRestoration: Send {
+    fn commit(&mut self);
 }

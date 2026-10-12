@@ -1,7 +1,7 @@
 import { type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
 import type { IAppServerApi } from "../../agentHost/common/appServerApi.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
-import type { ITerminalProcessCloseOptions, ITerminalProcessCreateOptions, ITerminalProcessCreation, ITerminalProcessProfile, ITerminalProcessReadOptions, ITerminalProcessReadResult, ITerminalProcessResizeOptions, ITerminalProcessService, ITerminalProcessWriteOptions, TerminalProcessConnectionState } from "../common/terminal.js";
+import type { ITerminalResolvedProfile, TerminalProcessProfileSelection, ITerminalProcessCloseOptions, ITerminalProcessCreateOptions, ITerminalProcessCreation, ITerminalProcessProfile, ITerminalProcessReadOptions, ITerminalProcessReadResult, ITerminalProcessResizeOptions, ITerminalProcessService, ITerminalProcessWriteOptions, TerminalProcessConnectionState } from "../common/terminal.js";
 
 /** Terminal process service used when no browser App Server host is available. */
 export class DisconnectedTerminalProcessService implements ITerminalProcessService {
@@ -13,7 +13,11 @@ export class DisconnectedTerminalProcessService implements ITerminalProcessServi
 		return this.unavailable("terminal.listProfiles");
 	}
 
-	getEnvironment(_names: readonly string[], _dirId?: string): Promise<Readonly<Record<string, string>>> {
+	resolveProfile(_profile: TerminalProcessProfileSelection, _dirId?: string): Promise<ITerminalResolvedProfile> {
+		return this.unavailable('terminal.resolveProfile');
+	}
+
+	getEnvironment(_names?: readonly string[], _dirId?: string): Promise<Readonly<Record<string, string>>> {
 		return this.unavailable("terminal.getEnvironment");
 	}
 

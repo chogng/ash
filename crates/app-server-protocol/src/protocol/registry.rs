@@ -2029,6 +2029,8 @@ use crate::protocol::terminal::TerminalProcessReady;
 use crate::protocol::terminal::TerminalProfile;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalProfileListResult;
+use crate::protocol::terminal::TerminalProfileResolveParams;
+use crate::protocol::terminal::TerminalProfileResolveResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalProfileSelection;
 #[cfg(any(test, feature = "export"))]
@@ -2320,6 +2322,7 @@ use ash_protocol::FrozenAgentDefinitionRef;
 use ash_protocol::FrozenSkillActivation;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::HistoryPrefixRef;
+use ash_protocol::ThreadHistoryState;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::HookEvent;
 #[cfg(any(test, feature = "export"))]
@@ -3400,6 +3403,11 @@ client_methods! {
     MessageCheckpoints => "session/thread/checkpoints" {
         params: MessageCheckpointsParams,
         response: MessageCheckpointsResult,
+        serialization: SessionSharedRead,
+    },
+    ThreadHistoryState => "session/thread/history" {
+        params: MessageCheckpointsParams,
+        response: ThreadHistoryState,
         serialization: SessionSharedRead,
     },
     SessionList => "session/list" {
@@ -4887,6 +4895,11 @@ client_methods! {
         response: TerminalProfileListResult,
         serialization: GlobalSharedRead,
     },
+    TerminalProfileResolve => "terminal/profile/resolve" {
+        params: TerminalProfileResolveParams,
+        response: TerminalProfileResolveResult,
+        serialization: GlobalSharedRead,
+    },
     TerminalEnvironmentRead => "terminal/environment/read" {
         params: TerminalEnvironmentReadParams,
         response: TerminalEnvironmentReadResult,
@@ -5932,6 +5945,9 @@ typescript_bindings! {
     SessionTraceGraphReadResult,
     MessageCheckpointsParams,
     MessageCheckpointsResult,
+    ash_protocol::HistoryDirection,
+    ash_protocol::ThreadHistoryCheckpoint,
+    ThreadHistoryState,
     MessageCheckpoint,
     MessageBoundary,
     WorkspaceCheckpoint,
@@ -6661,6 +6677,8 @@ typescript_bindings! {
     CloudCodebaseStatusResult,
     TerminalProfile,
     TerminalProfileListResult,
+    TerminalProfileResolveParams,
+    TerminalProfileResolveResult,
     TerminalEnvironmentReadParams,
     TerminalEnvironmentReadResult,
     TerminalProfileSelection,

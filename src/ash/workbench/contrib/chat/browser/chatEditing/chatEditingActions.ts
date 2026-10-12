@@ -38,7 +38,7 @@ registerAction2(class RestoreCheckpointAction extends Action2 {
 			checkpoint, boundary,
 			label: boundary === 'before' ? localize('chat.restoreCheckpoint.before', 'Before checkpoint {0}', index + 1) : localize('chat.restoreCheckpoint.after', 'After checkpoint {0}', index + 1),
 			description: checkpoint.turnId,
-			detail: checkpoint.files === 'git'
+			detail: checkpoint.files !== 'noFiles'
 				? localize('chat.restoreCheckpoint.files', 'Creates a new chat and restores checkpoint files in a new directory. The original chat and directory are kept.')
 				: localize('chat.restoreCheckpoint.noFiles', 'Creates a new chat at this message boundary. This checkpoint contains no files.'),
 		}))).reverse();

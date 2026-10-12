@@ -122,6 +122,12 @@ pub enum ThreadEvent {
         thread_id: ThreadId,
         prefix: crate::HistoryPrefixRef,
     },
+    ThreadHistoryMoved {
+        thread_id: ThreadId,
+        direction: crate::HistoryDirection,
+        target: crate::ThreadHistoryCheckpoint,
+        previous: crate::ThreadHistoryCheckpoint,
+    },
     GoalCreated {
         thread_id: ThreadId,
         goal: crate::ThreadGoal,
@@ -398,6 +404,14 @@ fn legacy_turn_action_policy_revision() -> String {
 }
 
 impl ThreadEvent {
+    /// Immutable histories retained by this fact, including the redo destination.
+    pub fn history_prefixes(&self) -> impl Iterator<Item = &crate::HistoryPrefixRef> {
+        match self {
+            Self::HistoryPrefixBound { prefix, .. } => [Some(prefix), None],
+            Self::ThreadHistoryMoved { target, previous, .. } => [Some(&target.prefix), Some(&previous.prefix)],
+            _ => [None, None],
+        }.into_iter().flatten()
+    }
     pub fn kind(&self) -> &'static str {
         match self {
             Self::HookRunUpdated { .. } => "hook.run_updated",
@@ -429,6 +443,7 @@ impl ThreadEvent {
             Self::ModelResponseEvaluated { .. } => "model.response_evaluated",
             Self::ItemCompleted { .. } => "item.completed",
             Self::HistoryPrefixBound { .. } => "history.prefix.bound",
+            Self::ThreadHistoryMoved { .. } => "thread.history.moved",
             Self::PlanUpdated { .. } => "plan.updated",
             Self::InteractionRequested { .. } => "interaction.requested",
             Self::InteractionResolved { .. } => "interaction.resolved",
@@ -485,6 +500,7 @@ impl ThreadEvent {
             | Self::ModelResponseEvaluated { thread_id, .. }
             | Self::ItemCompleted { thread_id, .. }
             | Self::HistoryPrefixBound { thread_id, .. }
+            | Self::ThreadHistoryMoved { thread_id, .. }
             | Self::PlanUpdated { thread_id, .. }
             | Self::InteractionRequested { thread_id, .. }
             | Self::InteractionResolved { thread_id, .. }

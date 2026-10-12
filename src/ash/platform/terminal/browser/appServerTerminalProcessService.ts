@@ -8,7 +8,7 @@ import type {
 	ITerminalProcessCloseOptions, ITerminalProcessCreateOptions, ITerminalProcessCreation,
 	ITerminalProcessProfile, ITerminalProcessReadOptions, ITerminalProcessReadResult,
 	ITerminalProcessResizeOptions, ITerminalProcessService, ITerminalProcessWriteOptions,
-	TerminalProcessConnectionState,
+	TerminalProcessConnectionState, ITerminalResolvedProfile, TerminalProcessProfileSelection,
 } from "../common/terminal.js";
 
 /** App Server implementation of the terminal process service. */
@@ -22,14 +22,18 @@ export class AppServerTerminalProcessService implements ITerminalProcessService 
 		return result.profiles;
 	}
 
-	async getEnvironment(names: readonly string[], dirId?: string): Promise<Readonly<Record<string, string>>> {
-		const result = await appServerRequest(this.connection, "terminal/environment/read", { names: [...names], dirId });
+	async resolveProfile(profile: TerminalProcessProfileSelection, dirId?: string): Promise<ITerminalResolvedProfile> {
+		return appServerRequest(this.connection, 'terminal/profile/resolve', { dirId, profile: profileSelection(profile) });
+	}
+
+	async getEnvironment(names?: readonly string[], dirId?: string): Promise<Readonly<Record<string, string>>> {
+		const result = await appServerRequest(this.connection, "terminal/environment/read", { names: names && [...names], dirId });
 		return result.values;
 	}
 
 	async create(options: ITerminalProcessCreateOptions): Promise<ITerminalProcessCreation> {
 		const execution = options.execution?.type === 'process' ? { ...options.execution, args: [...options.execution.args] } : options.execution;
-		const created = await appServerRequest(this.connection, "terminal/create", { ...options, execution, lifecycle: { type: "connectionOwned" } });
+		const created = await appServerRequest(this.connection, "terminal/create", { ...options, profile: profileSelection(options.profile), execution, lifecycle: { type: "connectionOwned" } });
 		return { ready: created.ready, terminalId: created.terminalId, profile: created.profile, connectionPersistence: "connectionOwned" };
 	}
 
@@ -62,6 +66,11 @@ export class AppServerTerminalProcessService implements ITerminalProcessService 
 		const subscription = this.appServerApi.onConnectionState(listener);
 		return toDisposable(() => subscription.dispose());
 	}
+}
+
+/** Copies readonly domain collections into the generated transport request. */
+export function profileSelection(profile: TerminalProcessProfileSelection) {
+	return profile.type === 'custom' ? { ...profile, path: [...profile.path], args: [...profile.args] } : profile;
 }
 
 /** Both connection lifecycles expose the same frontend bytes and exit-code semantics. */

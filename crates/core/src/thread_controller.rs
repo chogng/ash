@@ -2901,7 +2901,8 @@ impl ThreadController {
         }
         let expected_sequence = snapshot.as_ref().map_or(0, |snapshot| snapshot.sequence);
         let previous_turns = snapshot.as_ref().map(|snapshot| snapshot.turns.clone());
-        let index_ready = self.store.history_index_sequence(thread_id)? == Some(expected_sequence);
+        let index_ready = !events.iter().any(|event| matches!(event, ThreadEvent::ThreadHistoryMoved { .. }))
+            && self.store.history_index_sequence(thread_id)? == Some(expected_sequence);
         let completed_items = events
             .iter()
             .filter_map(|event| match event {
@@ -4010,24 +4011,14 @@ impl ThreadStore for InMemoryThreadStore {
             .threads
             .values()
             .flatten()
-            .filter_map(|event| match &event.event {
-                ThreadEvent::HistoryPrefixBound { prefix, .. } => {
-                    Some(prefix.digest.as_str().to_string())
-                }
-                _ => None,
-            })
+            .flat_map(|event| event.event.history_prefixes().map(|prefix| prefix.digest.as_str().to_string()))
             .collect::<Vec<_>>();
         while let Some(digest) = pending.pop() {
             if !retained.insert(digest.clone()) {
                 continue;
             }
             if let Some(prefix) = state.prefixes.get(&digest) {
-                pending.extend(prefix.events.iter().filter_map(|event| match &event.event {
-                    ThreadEvent::HistoryPrefixBound { prefix, .. } => {
-                        Some(prefix.digest.as_str().to_string())
-                    }
-                    _ => None,
-                }));
+                pending.extend(prefix.events.iter().flat_map(|event| event.event.history_prefixes().map(|prefix| prefix.digest.as_str().to_string())));
             }
         }
         state.prefixes.retain(|digest, _| retained.contains(digest));
@@ -4064,7 +4055,7 @@ impl ThreadStore for InMemoryThreadStore {
                 .iter()
                 .flat_map(|prefix| prefix.events.iter()),
         ) {
-            if let ThreadEvent::HistoryPrefixBound { prefix, .. } = &event.event {
+            for prefix in event.event.history_prefixes() {
                 staged
                     .get(prefix.digest.as_str())
                     .or_else(|| state.prefixes.get(prefix.digest.as_str()))

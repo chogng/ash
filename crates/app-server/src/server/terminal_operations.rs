@@ -30,12 +30,27 @@ impl AppServer {
         })
     }
 
+    pub(super) fn terminal_profile_resolve(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: wire::TerminalProfileResolveParams = decode(params)?;
+        let resolved = self
+            .terminal_service_for(params.dir_id.as_deref())?
+            .resolve_profile(&profile_selection(params.profile))
+            .map_err(terminal_error)?;
+        result(&wire::TerminalProfileResolveResult {
+            profile: profile_to_dto(resolved.profile),
+            executable: resolved.executable,
+            args: resolved.args,
+        })
+    }
+
     pub(super) fn terminal_environment_read(&self, params: &Value) -> Result<Value, RpcError> {
         let params: wire::TerminalEnvironmentReadParams = decode(params)?;
-        let values = self
-            .terminal_service_for(params.dir_id.as_deref())?
-            .environment(&params.names)
-            .map_err(terminal_error)?;
+        let service = self.terminal_service_for(params.dir_id.as_deref())?;
+        let values = match params.names {
+            Some(names) => service.environment(&names),
+            None => service.environment_snapshot(),
+        }
+        .map_err(terminal_error)?;
         result(&wire::TerminalEnvironmentReadResult {
             values: values.into_iter().collect(),
         })
@@ -294,6 +309,9 @@ fn profile_selection(
         }
         wire::TerminalProfileSelection::Profile { profile_id } => {
             exec_server::terminal::TerminalProfileSelection::Profile { profile_id }
+        }
+        wire::TerminalProfileSelection::Custom { name, path, args } => {
+            exec_server::terminal::TerminalProfileSelection::Custom { name, path, args }
         }
     }
 }

@@ -105,3 +105,10 @@ pub struct RestoreMessageRequest {
     pub boundary: MessageBoundary,
     pub title: String,
 }
+
+pub struct MoveThreadHistoryRequest {
+    pub command_id: CommandId,
+    pub thread_id: ThreadId,
+    pub expected_sequence: u64,
+    pub direction: ash_protocol::HistoryDirection,
+}

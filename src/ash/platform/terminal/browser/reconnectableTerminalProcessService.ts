@@ -7,9 +7,9 @@ import type {
 	ITerminalProcessCloseOptions, ITerminalProcessCreateOptions, ITerminalProcessCreation,
 	ITerminalProcessProfile, ITerminalProcessReadOptions, ITerminalProcessReadResult,
 	ITerminalProcessResizeOptions, ITerminalProcessService, ITerminalProcessWriteOptions,
-	TerminalProcessConnectionState,
+	TerminalProcessConnectionState, ITerminalResolvedProfile, TerminalProcessProfileSelection,
 } from "../common/terminal.js";
-import { decodeTerminalProcessReadResult, encodeTerminalProcessInput } from "./appServerTerminalProcessService.js";
+import { decodeTerminalProcessReadResult, encodeTerminalProcessInput, profileSelection } from "./appServerTerminalProcessService.js";
 
 const MAX_RECONNECT_GRACE_PERIOD_MILLIS = 5 * 60 * 1_000;
 const INITIAL_RECONNECT_DELAY_MILLIS = 50;
@@ -61,8 +61,12 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 		return result.profiles;
 	}
 
-	async getEnvironment(names: readonly string[], dirId?: string): Promise<Readonly<Record<string, string>>> {
-		const result = await this.supervisor.request(APP_SERVER_METHODS["terminal/environment/read"], { names: [...names], dirId });
+	async resolveProfile(profile: TerminalProcessProfileSelection, dirId?: string): Promise<ITerminalResolvedProfile> {
+		return this.supervisor.request(APP_SERVER_METHODS['terminal/profile/resolve'], { dirId, profile: profileSelection(profile) });
+	}
+
+	async getEnvironment(names?: readonly string[], dirId?: string): Promise<Readonly<Record<string, string>>> {
+		const result = await this.supervisor.request(APP_SERVER_METHODS["terminal/environment/read"], { names: names && [...names], dirId });
 		return result.values;
 	}
 
@@ -78,6 +82,7 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 		const execution = params.execution?.type === 'process' ? { ...params.execution, args: [...params.execution.args] } : params.execution;
 		const result = await this.supervisor.request(APP_SERVER_METHODS["terminal/create"], {
 			...params,
+			profile: profileSelection(params.profile),
 			execution,
 			lifecycle: { type: "reconnectable" },
 		});

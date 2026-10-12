@@ -286,6 +286,7 @@ impl TranscriptAccumulator {
                 }
             }
             ThreadEvent::HistoryPrefixBound { .. }
+            | ThreadEvent::ThreadHistoryMoved { .. }
             | ThreadEvent::ThreadCreated { .. }
             | ThreadEvent::ThreadArchived { .. }
             | ThreadEvent::ThreadRestored { .. }

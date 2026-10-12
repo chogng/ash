@@ -66,7 +66,7 @@ pub(super) fn write_prefix(
         let record_digest = write_record(connection, event)?;
         connection.execute("INSERT OR IGNORE INTO history_prefix_records (prefix_digest, sequence, record_digest) VALUES (?1, ?2, ?3)",
             params![reference.digest.as_str(), i64::try_from(event.sequence).map_err(error)?, record_digest]).map_err(error)?;
-        if let ThreadEvent::HistoryPrefixBound { prefix, .. } = &event.event {
+        for prefix in event.event.history_prefixes() {
             read_prefix(connection, prefix)?;
             connection.execute("INSERT OR IGNORE INTO history_prefix_links (prefix_digest, child_digest) VALUES (?1, ?2)",
                 params![reference.digest.as_str(), prefix.digest.as_str()]).map_err(error)?;
@@ -123,12 +123,12 @@ pub(super) fn bind_prefix(
     connection: &Connection,
     event: &StoredEvent,
 ) -> Result<(), ThreadStoreError> {
-    if let ThreadEvent::HistoryPrefixBound { thread_id, prefix } = &event.event {
+    for prefix in event.event.history_prefixes() {
         read_prefix(connection, prefix)?;
         connection
             .execute(
-                "INSERT INTO thread_history_prefixes (thread_id, prefix_digest) VALUES (?1, ?2)",
-                params![thread_id.as_str(), prefix.digest.as_str()],
+                "INSERT OR IGNORE INTO thread_history_prefixes (thread_id, prefix_digest) VALUES (?1, ?2)",
+                params![event.thread_id.as_str(), prefix.digest.as_str()],
             )
             .map_err(error)?;
     }

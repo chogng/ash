@@ -1,7 +1,6 @@
 import { MarshalledId } from '../../../../base/common/marshallingIds.js';
 import type { Event } from '../../../../base/common/event.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
-import type { OperatingSystem } from '../../../../base/common/platform.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { ITerminalProcessProfile } from '../../../../platform/terminal/common/terminal.js';
 
@@ -28,7 +27,7 @@ export interface ITerminalProfileService extends IDisposable {
 	refreshAvailableProfiles(): Promise<void>;
 	getPlatformKey(): Promise<'linux' | 'osx' | 'windows'>;
 	getDefaultProfileName(): string | undefined;
-	getDefaultProfile(os?: OperatingSystem): ITerminalProcessProfile | undefined;
+	getDefaultProfile(): ITerminalProcessProfile | undefined;
 }
 
 export const ITerminalProfileService = createServiceIdentifier<ITerminalProfileService>('terminalProfileService');

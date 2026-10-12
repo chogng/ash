@@ -7,6 +7,10 @@
 | `browser/terminal.contribution.ts`                         | 实例服务、View 与动作/菜单的装载入口，以及 find、links、voice、accessibility、clipboard 贡献                                          |
 | `browser/terminalMainContribution.ts`                      | BlockRestore 时订阅宿主 PTY 创建通知，交给实例服务并显示 View                                               |
 | `browser/terminal.ts`                                      | `ITerminalService`、实例、profile、尺寸及前端事件契约                                                       |
+| `common/terminalConfiguration.ts` | 消费中的终端设置 schema、默认值、scope、settings UI 元数据；有效值和持久化属于配置系统 |
+| `browser/terminalConfigurationService.ts` | 读取有效屏幕配置及编辑器字体继承，通知保留的 xterm 实时更新 |
+| `browser/terminalProfileService.ts` | 可信 profile 列表快照、连接/工作区失效、执行端 OS 对应的交互默认设置与变化事件 |
+| `browser/terminalProfileQuickpick.ts` | 命令面板选择/取消与 USER 默认 profile 写入；不拥有 shell 执行定义 |
 | `browser/terminalService.ts`                               | 窗口实例列表、顺序与活动项；创建实例并维护列表生命周期                                                      |
 | `browser/terminalInstance.ts`                              | 每实例身份、创建/关闭、连接状态、宿主 PTY、进程管理器及唯一 xterm 的生命周期；原始输入绑定与 sendText       |
 | `browser/terminalExtensions.ts`                            | 实例贡献注册元数据；实例通过自己的容器装配和释放贡献                                                        |
@@ -69,4 +73,8 @@ Workbench 与 Sessions 核心入口注册所选 `ITerminalProcessService`；共�
 
 文本剪贴板由 `terminalContrib/clipboard/browser/terminal.clipboard.contribution.ts` 随实例屏幕就绪挂载。复制只读原选区，粘贴调用既有宿主剪贴板服务与 `sendText(text, false, true)`；异步读取期间关闭、断线、退出或切换实例都会作废旧结果。输入不增加 Enter，遵守 child paste mode，并返回进程确认或失败。浏览器原生粘贴仍进入 xterm 原始输入；HTML／资源粘贴、自动复制与多行确认尚未接入。
 
-Browser 列表职责已从 Tabbed View 迁回 `terminalTabsList.ts`，View 仍拥有原屏幕附着与可见性。Shift+F10／鼠标实例菜单使用捕获的数值 instanceId；活动项变更不改变目标，消失的目标在当前窗口命令边界拒绝。原字符串 UI id 保留现有消费者，数值身份从实例编号派生；PID 随 Shell 替换而变化，不能代替实例身份。大 normal 缓冲区的屏幕横向重排经过 `TerminalResizeDebouncer`，focus flush，dispose 取消；PTY 尺寸确认仍由原管理器负责。完整标准列表 hooks、分组分屏、编辑区、配置／profile、状态／hover、其他 xterm Addon 与 backend 仍未完成，完整 browser 路径清单见台账。
+Browser 列表职责已从 Tabbed View 迁回 `terminalTabsList.ts`，View 仍拥有原屏幕附着与可见性。Shift+F10／鼠标实例菜单使用捕获的数值 instanceId；活动项变更不改变目标，消失的目标在当前窗口命令边界拒绝。原字符串 UI id 保留现有消费者，数值身份从实例编号派生；PID 随 Shell 替换而变化，不能代替实例身份。大 normal 缓冲区的屏幕横向重排经过 `TerminalResizeDebouncer`，focus flush，dispose 取消；PTY 尺寸确认仍由原管理器负责。完整标准列表 hooks、分组分屏、编辑区、其余配置／profile API、状态／hover、其他 xterm Addon 与 backend 仍未完成，完整 browser 路径清单见台账。
+
+配置链已消费字体、字号、字/行间距、两种光标样式、光标闪烁/宽度、回滚与最小对比度。屏幕首次初始化和配置变化都使用有效值；更新保留屏幕及输出，字体变化触发 fit。当前默认值与 VS Code 对应字段一致（macOS 字号 12、其他平台 14、回滚 1000、光标不闪烁）；回滚缩小时由 xterm 丢弃超限旧行。
+
+交互式新建通过执行端 OS 的 `terminal.integrated.defaultProfile.{linux,osx,windows}` 解析可信 profile 名称为 ID；无效名称退回后端默认项。命令面板支持使用 profile 新建和保存默认 profile；工具栏订阅同一列表 owner。Tasks/Debug 使用原后端读取端口和明确创建参数；已有实例 Relaunch 保存原 profile。自定义 path/args/env、扩展 provider、automation profile、完整 profile resolver，以及配置服务的 font metrics / command skip / location API 尚未实现。

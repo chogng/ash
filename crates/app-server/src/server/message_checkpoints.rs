@@ -49,6 +49,14 @@ impl Drop for CapturedWorkspace {
 }
 
 impl MessageCheckpointSource for GitTurnChangesRuntime {
+    fn restore(
+        &self,
+        request: &core_api::MoveThreadHistoryRequest,
+        expected: &WorkspaceCheckpoint,
+        target: &WorkspaceCheckpoint,
+    ) -> Result<Box<dyn core_api::WorkspaceRestoration>, CoreError> {
+        self.prepare_history_restore(request, expected, target)
+    }
     fn capture(
         &self,
         thread_id: &ThreadId,

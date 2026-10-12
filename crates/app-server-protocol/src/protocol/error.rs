@@ -49,6 +49,7 @@ pub enum AppServerErrorName {
     MemoryUnavailable,
     MessageHistoryUnavailable,
     MessageHistoryOperationFailed,
+    ThreadHistoryConflict,
     ApprovalEnvironmentUnavailable,
     ApprovalEnvironmentConflict,
     ApprovalEnvironmentOperationFailed,

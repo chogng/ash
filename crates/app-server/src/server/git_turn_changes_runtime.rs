@@ -56,6 +56,7 @@ pub(super) struct GitTurnChangesRuntime {
     pub(super) write_lifecycles: WriteLifecycleTracker,
     pub(super) watchers: RwLock<BTreeMap<ThreadId, GitTurnChangeWatcher>>,
     file_watchers: RwLock<BTreeMap<ThreadId, FileSystemWatcher>>,
+    pub(super) history_restorations: std::path::PathBuf,
 }
 
 impl GitTurnChangesRuntime {
@@ -89,6 +90,7 @@ impl GitTurnChangesRuntime {
             write_lifecycles: WriteLifecycleTracker::default(),
             watchers: RwLock::new(BTreeMap::new()),
             file_watchers: RwLock::new(BTreeMap::new()),
+            history_restorations: database_path.with_extension("history-restorations"),
         });
         let hook_observer: Arc<dyn core_api::HookExecutionObserver> = runtime.clone();
         dirs.hooks.set_execution_observer(hook_observer);
@@ -109,6 +111,7 @@ impl GitTurnChangesRuntime {
                 runtime.start_watcher(thread_id.clone(), [binding.dir().to_path_buf()])?;
             }
         }
+        runtime.recover_history_restorations()?;
         runtime.resume_pending_jobs()?;
         Ok(runtime)
     }

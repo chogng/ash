@@ -30,7 +30,9 @@ pub struct TerminalEnvironmentReadParams {
     #[ts(optional)]
     pub dir_id: Option<String>,
     #[schemars(length(max = 128))]
-    pub names: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub names: Option<Vec<String>>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -49,6 +51,33 @@ pub enum TerminalProfileSelection {
         #[ts(rename = "profileId")]
         profile_id: String,
     },
+    Custom {
+        #[schemars(length(min = 1, max = 256))]
+        name: String,
+        #[schemars(length(min = 1, max = 32))]
+        path: Vec<String>,
+        #[schemars(length(max = 1024))]
+        args: Vec<String>,
+    },
+}
+
+/// Validates the selected shell on the authorized execution host without spawning it.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TerminalProfileResolveParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub dir_id: Option<String>,
+    pub profile: TerminalProfileSelection,
+}
+
+/// Execution-host resolution, including the actual executable and literal arguments.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalProfileResolveResult {
+    pub profile: TerminalProfile,
+    pub executable: String,
+    pub args: Vec<String>,
 }
 
 /// Selects whether a terminal dies with its creating connection or may be reattached briefly.
@@ -63,7 +92,10 @@ pub enum TerminalLifecycle {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(tag = "type", rename_all = "camelCase", deny_unknown_fields)]
 pub enum TerminalExecution {
-    Process { program: String, args: Vec<String> },
+    Process {
+        program: String,
+        args: Vec<String>,
+    },
     Shell {
         #[serde(rename = "commandLine")]
         command_line: String,

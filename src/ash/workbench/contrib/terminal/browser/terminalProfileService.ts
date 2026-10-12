@@ -49,9 +49,8 @@ export class TerminalProfileService extends Disposable implements ITerminalProfi
 		return platform ? this.configuration.getValue<string | null>(`${TERMINAL_CONFIG_SECTION}.defaultProfile.${platform}`) ?? undefined : undefined;
 	}
 
-	getDefaultProfile(os = this.processes.operatingSystem): ITerminalProcessProfile | undefined {
-		const platform = platformKey(os);
-		const name = platform ? this.configuration.getValue<string | null>(`${TERMINAL_CONFIG_SECTION}.defaultProfile.${platform}`) : undefined;
+	getDefaultProfile(): ITerminalProcessProfile | undefined {
+		const name = this.getDefaultProfileName();
 		return this.profiles.find(profile => profile.title === name) ?? this.profiles.find(profile => profile.isDefault);
 	}
 

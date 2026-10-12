@@ -28,6 +28,7 @@ pub enum CoreError {
     Policy(String),
     PolicyCircuitBreaker(String),
     ReviewContextChanged,
+    WorkspaceCheckpointConflict,
     ToolRepetition(String),
     CommandConflict,
     ThreadStore(ThreadStoreError),
@@ -69,6 +70,7 @@ impl fmt::Display for CoreError {
             Self::ReviewContextChanged => {
                 formatter.write_str("review context changed before tool execution")
             }
+            Self::WorkspaceCheckpointConflict => formatter.write_str("workspace changed after its history checkpoint"),
             Self::ToolRepetition(message) => write!(formatter, "tool repetition: {message}"),
             Self::CommandConflict => formatter.write_str("command ID conflict"),
             Self::ThreadStore(error) => error.fmt(formatter),

@@ -33,6 +33,7 @@ impl<'a> HistoryReader<'a> {
     ) -> Result<ThreadSnapshot, CoreError> {
         let source = match &event.event {
             ThreadEvent::HistoryPrefixBound { prefix, .. } => Some(self.resolve(prefix)?),
+            ThreadEvent::ThreadHistoryMoved { target, .. } => Some(self.resolve(&target.prefix)?),
             _ => None,
         };
         reduce_thread_event_with_prefix(snapshot, event, source.as_deref())
@@ -70,7 +71,7 @@ impl<'a> HistoryReader<'a> {
                 prefix.validate(&reference).map_err(CoreError::Journal)?;
                 todo.push((reference.clone(), true));
                 for event in prefix.events.iter().rev() {
-                    if let ThreadEvent::HistoryPrefixBound { prefix, .. } = &event.event {
+                    for prefix in event.event.history_prefixes() {
                         todo.push((prefix.clone(), false));
                     }
                 }
@@ -91,6 +92,9 @@ impl<'a> HistoryReader<'a> {
                                     )
                                 })?
                                 .as_ref(),
+                        ),
+                        ThreadEvent::ThreadHistoryMoved { target, .. } => Some(
+                            self.snapshots.get(target.prefix.digest.as_str()).ok_or_else(|| CoreError::Journal("history cursor target was not resolved".into()))?.as_ref(),
                         ),
                         _ => None,
                     };

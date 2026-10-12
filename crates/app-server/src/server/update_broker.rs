@@ -1419,6 +1419,7 @@ fn event_changes_agent_tree(event: &ThreadEvent) -> bool {
     matches!(
         event,
         ThreadEvent::ThreadCreated { .. }
+            | ThreadEvent::ThreadHistoryMoved { .. }
             | ThreadEvent::ThreadArchived { .. }
             | ThreadEvent::ThreadRestored { .. }
             | ThreadEvent::HistoryImported { .. }
