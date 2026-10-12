@@ -196,11 +196,13 @@ export class CreatePullRequestWidget extends Disposable {
 		this.message.textContent = formAction === 'sendToChat' ? localize('sessions.changes.prSending', 'Sending request to agent…') : localize('sessions.changes.prCreating', 'Creating pull request…');
 		let uncertain = false;
 		try {
-			const message = formAction === 'sendToChat'
-				? await this.options.onSendToChat!(options).then(() => localize('sessions.changes.prSent', 'Pull request request submitted to the initiating conversation.'))
-				: await this.options.creation.create(options);
+			if (formAction === 'sendToChat') {
+				await this.options.onSendToChat!(options);
+			} else {
+				const message = await this.options.creation.create(options);
+				this.options.onCreated(options, message);
+			}
 			this.preferences.update({ draft: options.draft, mergeMode: options.autoMergeMethod ? 'auto' : 'manual', mergeMethod: options.autoMergeMethod, primaryAction: formAction });
-			this.options.onCreated(options, message);
 		} catch (error) {
 			const chatUncertain = CreatePullRequestChatRequest.isSubmissionUncertain(error);
 			uncertain = chatUncertain || error instanceof GitHubError && error.code === GitHubErrorCode.SubmissionUncertain;

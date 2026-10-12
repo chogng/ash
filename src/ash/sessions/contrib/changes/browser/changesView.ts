@@ -29,7 +29,10 @@ import { CreatePullRequestContextView } from './createPullRequestContextView.js'
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { IChangesViewService } from '../common/changesViewService.js';
 import { ChangesViewMode } from '../common/changes.js';
-import { buildTreeChildren, ChangesTreeRenderer, fileState, getChangesFileUri, isChangesFileItem, type ChangesTreeElement, type IChangesFileItem } from './changesViewRenderer.js';
+import {
+	buildTreeChildren, ChangesTreeRenderer, fileState, getChangesFileUri,
+	isChangesFileItem, type ChangesTreeElement, type IChangesFileItem,
+} from './changesViewRenderer.js';
 import { SessionChangesEditorInput } from './sessionChangesEditorInput.js';
 import { autorun } from '../../../../base/common/observable.js';
 
@@ -115,15 +118,22 @@ export class ChangesViewPane extends ViewPane {
 		this.changesetPicker.setAttribute('aria-label', localize('sessions.changes.chooseTurn', 'Changes from Turn'));
 		this.modePicker = h(container.ownerDocument, 'select');
 		this.modePicker.setAttribute('aria-label', localize('sessions.changes.viewMode', 'Changes view mode'));
-		for (const [value, text] of [[ChangesViewMode.List, localize('sessions.changes.listMode', 'List')], [ChangesViewMode.Tree, localize('sessions.changes.treeMode', 'Tree')]]) {
+		for (const [value, text] of [
+			[ChangesViewMode.List, localize('sessions.changes.listMode', 'List')],
+			[ChangesViewMode.Tree, localize('sessions.changes.treeMode', 'Tree')],
+		] as const) {
 			const option = h(container.ownerDocument, 'option');
-			option.value = value!;
-			option.textContent = text!;
+			option.value = value;
+			option.textContent = text;
 			this.modePicker.append(option);
 		}
 		controls.append(this.changesetPicker, this.modePicker);
-		this.markReviewed = this._register(new Button(controls, { label: localize('sessions.changes.markReviewed', 'Mark reviewed'), onClick: () => this.setReviewState(true) }));
-		this.markUnread = this._register(new Button(controls, { label: localize('sessions.changes.markUnread', 'Mark unreviewed'), onClick: () => this.setReviewState(false) }));
+		this.markReviewed = this._register(new Button(controls, {
+			label: localize('sessions.changes.markReviewed', 'Mark reviewed'), onClick: () => this.setReviewState(true),
+		}));
+		this.markUnread = this._register(new Button(controls, {
+			label: localize('sessions.changes.markUnread', 'Mark unreviewed'), onClick: () => this.setReviewState(false),
+		}));
 		this._register(addDisposableListener(this.changesetPicker, 'change', () => {
 			this.saveTreeState();
 			this.changesetId = this.changesetPicker.value || undefined;
@@ -144,7 +154,9 @@ export class ChangesViewPane extends ViewPane {
 			ariaLabel: localize('sessions.changes.title', 'Changes'),
 			modelOptions: { identityProvider: { getId: row => row.id }, defaultCollapseState: 'expanded' },
 			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: row => isChangesFileItem(row) ? row.file.path : row.name },
-			renderElement: row => renderer.renderElement(row, isChangesFileItem(row) && this.viewState.reviewedFilesObs.get().has(getChangesFileUri(row).toString()), this.viewMode === ChangesViewMode.Tree),
+			renderElement: row => renderer.renderElement(row,
+				isChangesFileItem(row) && this.viewState.reviewedFilesObs.get().has(getChangesFileUri(row).toString()),
+				this.viewMode === ChangesViewMode.Tree),
 		}));
 		this._register(autorun(reader => {
 			const mode = viewState.viewModeObs.read(reader);
@@ -215,6 +227,7 @@ export class ChangesViewPane extends ViewPane {
 			localize('sessions.changes.title', 'Changes'),
 			this.statusDomNode.textContent,
 			this.contentElement.querySelector('.ash-sessions-changes-summary')?.textContent,
+			this.contentElement.querySelector('.ash-sessions-changes-repository-status')?.textContent,
 			...files,
 			this.checks.value?.element.textContent,
 		].join('\n');
@@ -281,6 +294,8 @@ export class ChangesViewPane extends ViewPane {
 		const request = ++this.request;
 		this.loading = true;
 		this.saveTreeState();
+		this.changesetPicker.disabled = true;
+		this.updatePreviewSelection();
 		this.review.enabled = false;
 		this.preview.enabled = false;
 		this.retry.domNode.hidden = true;
@@ -301,6 +316,7 @@ export class ChangesViewPane extends ViewPane {
 		}
 		if (selection?.kind !== 'session') {
 			this.loading = false;
+			this.changesetPicker.disabled = false;
 			this.tree.domNode.removeAttribute('aria-busy');
 			this.statusDomNode.textContent = localize('sessions.changes.draft', 'Changes appear after the agent edits files.');
 			return;
@@ -313,7 +329,10 @@ export class ChangesViewPane extends ViewPane {
 			const details = await Promise.all(summaries.filter(summary => summary.captureState !== 'discarded').map(summary => this.chat.readTurnChange(active.session.sessionId, active.threadId, summary.changeSetId)));
 			if (this.isDisposed || request !== this.request) { return; }
 			this.loading = false;
-			this.rows = details.flatMap((details, index) => details.files.map(file => ({ type: 'file' as const, id: `${details.summary.changeSetId}:${file.path}`, summary: details.summary, file, turnNumber: index + 1 })));
+			this.rows = details.flatMap((details, index) => details.files.map(file => ({
+				type: 'file' as const, id: `${details.summary.changeSetId}:${file.path}`,
+				summary: details.summary, file, turnNumber: index + 1,
+			})));
 			const selectedTurn = this.changesetId;
 			this.changesetPicker.replaceChildren();
 			const all = h(this.contentElement.ownerDocument, 'option');
@@ -340,6 +359,7 @@ export class ChangesViewPane extends ViewPane {
 		} finally {
 			if (!this.isDisposed && request === this.request) {
 				this.loading = false;
+				this.changesetPicker.disabled = false;
 				this.updatePreviewSelection();
 				this.tree.domNode.removeAttribute('aria-busy');
 			}
@@ -383,17 +403,19 @@ export class ChangesViewPane extends ViewPane {
 		if (this.isDisposed || ownerEpoch !== this.ownerEpoch) { return; }
 		if (contents.truncated && !contents.binary) { throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.')); }
 		const resource = getChangesFileUri(row);
+		const before = resource.with({ query: `${resource.query}&side=before` });
+		const after = resource.with({ query: `${resource.query}&side=after` });
 		if (contents.binary) {
 			await this.editors.openEditor(createMultiDiffEditorInput(resource.with({ scheme: 'ash-multi-diff' }), [{
 				label: row.file.path, binary: true,
-				original: { resource: resource.with({ query: 'before' }), readOnly: true },
-				modified: { resource: resource.with({ query: 'after' }), readOnly: true },
+				original: { resource: before, readOnly: true },
+				modified: { resource: after, readOnly: true },
 			}], row.file.path), options, sideBySide ? 'sideGroup' : 'activeGroup');
 			return;
 		}
 		await this.editors.openEditor(createDiffEditorInput(
-			{ resource: resource.with({ query: 'before' }), initialText: contents.before ?? '', readOnly: true },
-			{ resource: resource.with({ query: 'after' }), initialText: contents.after ?? '', readOnly: true },
+			{ resource: before, initialText: contents.before ?? '', readOnly: true },
+			{ resource: after, initialText: contents.after ?? '', readOnly: true },
 			row.file.path,
 		), options, sideBySide ? 'sideGroup' : 'activeGroup');
 	}

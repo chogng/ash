@@ -44,6 +44,9 @@ import '../workbench/contrib/scm/browser/quickDiff.contribution.js';
 import '../workbench/contrib/mediaPreview/browser/mediaPreview.contribution.js';
 import '../workbench/contrib/multiDiffEditor/browser/multiDiffEditor.contribution.js';
 import { registerTerminalView } from '../workbench/contrib/terminal/browser/terminal.contribution.js';
+// Connected App tools use the same Task owner and Terminal execution services as Code.
+import { registerTasksView } from '../workbench/contrib/tasks/browser/tasks.contribution.js';
+import { registerOutputView } from '../workbench/contrib/output/browser/output.contribution.js';
 import { SessionsViewRegistry } from './common/views.js';
 import { Lxicon } from '../base/common/lxicons.js';
 import { MenusRegistry } from '../platform/actions/common/actions.js';
@@ -63,3 +66,5 @@ for (const [id, title, icon, activeIcon, order] of [
 }
 
 registerTerminalView(SessionsViewRegistry);
+registerTasksView(SessionsViewRegistry);
+registerOutputView(SessionsViewRegistry);

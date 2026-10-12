@@ -38,6 +38,8 @@ import { ScmViewPane } from '../../../src/ash/workbench/contrib/scm/browser/scmV
 import { Pane, PaneView } from '../../../src/ash/base/browser/ui/splitview/paneview.js';
 import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
+import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
+import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import '../../../src/ash/base/browser/ui/splitview/splitview.css';
 import '../../../src/ash/workbench/contrib/scm/browser/media/scm.css';
 import { QuickDiffService } from '../../../src/ash/workbench/contrib/scm/common/quickDiffService.js';
@@ -45,7 +47,11 @@ import { MultiDiffSourceResolverService } from '../../../src/ash/workbench/contr
 import type { IDecorationsService } from '../../../src/ash/workbench/services/decorations/common/decorations.js';
 import type { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import type { IAppServerApi } from '../../../src/ash/platform/agentHost/common/appServerApi.js';
-import { setNlsMessages } from '../../../src/ash/nls.js';
+import { localize, setNlsMessages } from '../../../src/ash/nls.js';
+import scmChineseMessages from '../../../extensions/language-pack-zh-cn/translations/scm.json' with { type: 'json' };
+import { CommandsRegistry } from '../../../src/ash/platform/commands/common/commands.js';
+import { ContextKeyExpr } from '../../../src/ash/platform/contextkey/common/contextkey.js';
+import type { CancellationToken } from '../../../src/ash/base/common/cancellation.js';
 import { ILanguagePackService } from '../../../src/ash/platform/languagePacks/common/languagePacks.js';
 import { IExtensionApi } from '../../../src/ash/platform/extensions/common/extensionApi.js';
 import { createEmptyTestLanguagePacks } from '../../../src/ash/workbench/services/localization/test/common/localizationTestUtils.js';
@@ -169,7 +175,7 @@ const clientHandler = host.registerClientHandler(async (raw, signal, source): Pr
 });
 lifetime.add(toDisposable(() => clientHandler.dispose()));
 async function activate(language = 'en') {
-	setNlsMessages(language, {});
+	setNlsMessages(language, language === 'zh-CN' ? scmChineseMessages : {});
 	const snapshot = await host.reconcile('refresh'); bridge.update(snapshot);
 	return snapshot.extensions.map(value => ({ lifecycle: value.lifecycle, failure: value.failure, registrations: value.registrations.map(value => value.kind) }));
 }
@@ -193,6 +199,8 @@ window.gitExtensionIntegration = {
 	dispose: () => lifetime.dispose(),
 };
 
+let scmPaneTheme: TestThemeService | undefined;
+let scmPaneLayout: { readonly host: HTMLElement; readonly panes: PaneView; } | undefined;
 function mountChangesPane(): void {
 	const host = document.createElement('div');
 	host.id = 'scm-pane';
@@ -201,10 +209,12 @@ function mountChangesPane(): void {
 	lifetime.add(toDisposable(() => host.remove()));
 	const ui = lifetime.add(createTestEditorServices());
 	registerCodeEditorServices(ui);
+	scmPaneTheme = ui.get(IThemeService) as TestThemeService;
 	lifetime.add(bindColorTheme(ui.get(IThemeService), host));
 	ui.registerInstance(ISCMService, scm);
 	ui.registerInstance(ISCMViewService, view);
 	const panes = lifetime.add(new PaneView(host));
+	scmPaneLayout = { host, panes };
 	const changes = lifetime.add(ui.createInstance(ScmViewPane, host, { id: 'fixture.changes', title: 'Changes' }));
 	panes.addPane(changes, 424);
 	panes.addPane(lifetime.add(new Pane(host, { id: 'fixture.review', title: 'Agent Review', collapsed: true })), 28);
@@ -213,9 +223,30 @@ function mountChangesPane(): void {
 	changes.setVisible(true);
 }
 
+let generation: { readonly done: DeferredPromise<void>; readonly token: CancellationToken; readonly rootUri: URI; readonly groups: readonly { readonly resourceGroupId: string; readonly resources: readonly URI[]; }[]; } | undefined;
+let generationCount = 0;
 const gitScmPaneIntegration = {
 	mount: mountChangesPane,
 	setClean: async (value: boolean) => { clean = value; revision++; await invoke('git.refresh', [scm.getRepository('root')!]); },
+	configureGenerator: () => {
+		lifetime.add(CommandsRegistry.register('test.scm.generateCommitMessage', async (_accessor, rootUri, groups, token) => {
+			const done = new DeferredPromise<void>();
+			generation = { done, rootUri: rootUri as URI, groups: groups as NonNullable<typeof generation>['groups'], token: token as CancellationToken };
+			generationCount++;
+			await done.p;
+		}));
+		lifetime.add(MenusRegistry.appendMenuItem(MenuId.SCMInputBox, {
+			command: { id: 'test.scm.generateCommitMessage', title: localize('scm.input.generate', 'Generate commit message') },
+			when: ContextKeyExpr.equals('scmProvider', 'git'),
+		}));
+		lifetime.add(toDisposable(() => { void generation?.done.complete(undefined); }));
+	},
+	generationState: () => ({ count: generationCount, cancelled: generation?.token.isCancellationRequested, rootUri: generation?.rootUri.toString(), groups: generation?.groups.map(group => ({ id: group.resourceGroupId, resources: group.resources.map(resource => resource.toString()) })) }),
+	finishGeneration: () => { void generation?.done.complete(undefined); },
+	selectRepository: (id: string) => view.selectRepository(id),
+	draft: () => view.activeRepository?.provider.input.value,
+	setTheme: (theme: 'dark' | 'light' | 'hcDark' | 'hcLight') => scmPaneTheme!.setColorTheme({ dark: darkColorTheme, light: lightColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme }[theme]),
+	setWidth: (width: number) => { scmPaneLayout!.host.style.width = `${width}px`; scmPaneLayout!.panes.layout(480, width); },
 };
 window.gitScmPaneIntegration = gitScmPaneIntegration;
 declare global { interface Window { gitScmPaneIntegration: typeof gitScmPaneIntegration; } }

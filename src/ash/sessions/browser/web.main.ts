@@ -72,6 +72,7 @@ export class SessionsBrowserMain extends Disposable {
 					'sessions.contrib.multiDiffSource',
 					'chat.edits.editorOverlay',
 					'workbench.contrib.dataChannels',
+					'workbench.contrib.output',
 					'workbench.contrib.githubLinkPresentations',
 					'workbench.contrib.url',
 					'workbench.contrib.chatAccessibilitySignals',

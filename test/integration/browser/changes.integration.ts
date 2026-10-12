@@ -73,7 +73,7 @@ for (const command of ['git.getRepositoryContexts', 'git.pull', 'git.push', 'git
 }
 services.registerInstance(ICommandService, {
 	executeCommand: async (command: string, ...args: unknown[]) => {
-		if (command === 'git.getRepositoryContexts') { return [{ id: 'repository', label: 'Session repository', path: '/workspace', root: URI.file('/workspace').toString(), head: { type: 'branch', name: branch, objectId: 'commit' }, remotes: [{ name: 'origin', identity: { provider: 'github', host: 'github.com', owner: 'team', repository: 'repo' } }] }]; }
+		if (command === 'git.getRepositoryContexts') { return [{ id: 'repository', label: 'Session repository', path: '/workspace', root: URI.file('/workspace').toString(), head: { type: 'branch', name: branch, objectId: 'commit', upstream: { name: 'origin/feature', ahead: 2, behind: 1 } }, uncommittedChanges: 3, remotes: [{ name: 'origin', identity: { provider: 'github', host: 'github.com', owner: 'team', repository: 'repo' } }] }]; }
 		gitCalls.push(`${command}:${String(args[0])}`);
 		return undefined;
 	}

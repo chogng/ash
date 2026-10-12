@@ -12,6 +12,7 @@ import { IQuickInputService } from '../../../../platform/quickinput/common/quick
 import { createSshRemoteWorkspaceUri } from '../../../../platform/remote/common/remote.js';
 import { readLocalRepositories, type LocalRepository } from '../../../../workbench/contrib/github/common/localRepository.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
+import { RunOnceScheduler } from '../../../../base/common/async.js';
 
 /** Runs optional Git provider commands against a captured Session repository. */
 export class SessionSyncChangesActionViewItem extends Disposable {
@@ -22,6 +23,10 @@ export class SessionSyncChangesActionViewItem extends Disposable {
 	private generation = 0;
 	private owner: string | undefined;
 	private running = false;
+	private readonly status: HTMLElement;
+	private statusRequest = 0;
+	private statusOwner: string | undefined;
+	private readonly statusRefresh = this._register(new RunOnceScheduler(() => { void this.refreshStatus(); }, 60_000));
 
 	constructor(
 		container: HTMLElement,
@@ -37,9 +42,53 @@ export class SessionSyncChangesActionViewItem extends Disposable {
 		this.sync = this._register(new Button(element, { label: localize('sessions.changes.sync', 'Sync changes'), onClick: () => { void this.run('sync'); } }));
 		this.publish = this._register(new Button(element, { label: localize('sessions.changes.publish', 'Publish branch'), onClick: () => { void this.run('git.publish'); } }));
 		this.workingTree = this._register(new Button(element, { label: localize('sessions.changes.workingTree', 'Review working tree'), onClick: () => { void this.run('git.openChangesSource'); } }));
-		this._register(sessions.onDidChange(() => this.update()));
-		this._register(CommandsRegistry.onDidChangeCommands(() => this.update()));
+		this.status = h(container.ownerDocument, 'p', { className: 'ash-sessions-changes-repository-status' });
+		this.status.setAttribute('role', 'status');
+		this.status.hidden = true;
+		element.append(this.status);
+		this._register(sessions.onDidChange(() => { this.update(); void this.refreshStatus(); }));
+		this._register(CommandsRegistry.onDidChangeCommands(() => { this.update(); void this.refreshStatus(); }));
 		this.update();
+		void this.refreshStatus();
+	}
+
+	private async refreshStatus(): Promise<void> {
+		this.statusRefresh.cancel();
+		const request = ++this.statusRequest;
+		const generation = this.generation;
+		const selected = this.sessions.activeSelection;
+		const workspace = selected?.kind === 'session' ? selected.active.session.workspace : undefined;
+		if (this.statusOwner !== this.owner || !workspace || !CommandsRegistry.hasCommand('git.getRepositoryContexts')) {
+			this.status.textContent = '';
+			this.status.hidden = true;
+			this.statusOwner = this.owner;
+		}
+		if (!workspace || !CommandsRegistry.hasCommand('git.getRepositoryContexts')) { return; }
+		const root = workspace.authorityId === 'local' ? URI.file(workspace.root) : createSshRemoteWorkspaceUri(workspace.authorityId, workspace.root);
+		const current = (): boolean => !this.isDisposed && request === this.statusRequest && generation === this.generation;
+		try {
+			const repositories = (await readLocalRepositories(this.commands)).filter(repository =>
+				extUriBiasedIgnorePathCase.isEqualOrParent(repository.root, root) || extUriBiasedIgnorePathCase.isEqualOrParent(root, repository.root));
+			if (!current()) { return; }
+			this.status.textContent = repositories.map(repository => {
+				const upstream = repository.head.upstream;
+				return [
+					`${repository.label}: ${repository.head.name || (repository.head.type === 'detached' ? localize('sessions.changes.detached', 'Detached HEAD') : localize('sessions.changes.noBranch', 'No branch'))}`,
+					upstream ? localize('sessions.changes.trackingCounts', '{0}: {1} incoming · {2} outgoing', upstream.name, upstream.behind, upstream.ahead) : undefined,
+					repository.uncommittedChanges === undefined ? undefined : repository.uncommittedChanges === 1
+						? localize('sessions.changes.uncommittedOne', '1 uncommitted file')
+						: localize('sessions.changes.uncommittedCount', '{0} uncommitted files', repository.uncommittedChanges),
+				].filter(Boolean).join(' · ');
+			}).join('\n');
+			this.status.hidden = !this.status.textContent;
+		} catch {
+			if (current()) {
+				this.status.textContent = localize('sessions.changes.repositoryStatusError', 'Repository status is unavailable.');
+				this.status.hidden = false;
+			}
+		} finally {
+			if (current()) { this.statusRefresh.schedule(); }
+		}
 	}
 
 	private update(): void {
@@ -115,7 +164,7 @@ export class SessionSyncChangesActionViewItem extends Disposable {
 		} finally {
 			this.picker.clear();
 			this.running = false;
-			if (!this.isDisposed) { this.update(); }
+			if (!this.isDisposed) { this.update(); void this.refreshStatus(); }
 		}
 	}
 }

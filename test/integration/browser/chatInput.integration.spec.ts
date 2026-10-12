@@ -43,7 +43,11 @@ for (const locale of ['en', 'zh-CN']) {
 		test(`Chat footer actions stay below the input and accept keyboard commands in ${locale} ${theme}`, async ({ page }) => {
 			await page.goto(`/chatInput.html?footerStatus=1&locale=${locale}&theme=${theme}`);
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
-			await page.locator('main').evaluate(element => { element.style.marginTop = '420px'; });
+			await page.locator('main').evaluate(element => {
+				element.classList.add('ash-chat');
+				element.style.height = 'auto';
+				element.style.marginTop = '420px';
+			});
 			const input = page.locator('.ash-chat-textarea-input');
 			await input.fill('Keep my draft');
 			const footer = page.locator('.ash-chat-secondary-toolbar');
@@ -69,6 +73,18 @@ for (const locale of ['en', 'zh-CN']) {
 
 			await expect(footer.getByText('Models & providers', { exact: true })).toHaveCount(0);
 			await expect(status).toHaveCount(0);
+			const composerBackground = {
+				light: 'rgb(243, 243, 243)', dark: 'rgb(37, 37, 38)',
+				hcLight: 'rgb(255, 255, 255)', hcDark: 'rgb(0, 0, 0)',
+			}[theme]!;
+			await expect(page.locator('.ash-chat-input-container')).toHaveCSS('background-color', composerBackground);
+			const conversationBackground = { light: 'rgb(255, 255, 255)', dark: 'rgb(30, 30, 30)', hcLight: 'rgb(255, 255, 255)', hcDark: 'rgb(0, 0, 0)' }[theme]!;
+			await expect(page.locator('main')).toHaveCSS('background-color', conversationBackground);
+			await page.locator('main').evaluate(element => { element.style.setProperty('--ash-editor-background', 'rgb(250, 245, 240)'); });
+			await expect(page.locator('main')).toHaveCSS('background-color', 'rgb(250, 245, 240)');
+			await expect(page.locator('.ash-chat-input-container')).toHaveCSS('background-color', composerBackground);
+			await page.locator('main').evaluate(element => { element.style.removeProperty('--ash-editor-background'); });
+
 			const composer = await page.locator('.ash-chat-input-container').boundingBox();
 			const footerBounds = await footer.boundingBox();
 			expect(footerBounds!.y).toBeGreaterThanOrEqual(composer!.y + composer!.height);

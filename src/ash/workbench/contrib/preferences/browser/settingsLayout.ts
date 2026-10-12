@@ -352,6 +352,18 @@ export const SettingsNavigation = [
 				],
 			},
 			{
+				id: 'terminal',
+				get label() { return localize({ bundle: 'ash.settings', key: 'categories.terminal.label' }, 'Terminal'); },
+				get description() { return localize({ bundle: 'ash.settings', key: 'categories.terminal.description' }, 'Configure terminal fonts, cursor appearance, contrast, and scrollback.'); },
+				presentation: 'general',
+				groups: [{
+					id: 'terminal',
+					get label() { return localize({ bundle: 'ash.settings', key: 'categories.terminal.label' }, 'Terminal'); },
+					get description() { return localize({ bundle: 'ash.settings', key: 'categories.terminal.description' }, 'Configure terminal fonts, cursor appearance, contrast, and scrollback.'); },
+					settings: ['terminal.integrated.*'],
+				}],
+			},
+			{
 				id: 'browser',
 				label: 'Browser',
 				description: 'Choose where website links open.',

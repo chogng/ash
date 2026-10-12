@@ -66,6 +66,8 @@ export class CreatePullRequestContextView extends Disposable {
 				const chat = selected.active.session.chats.find(chat => chat.threadId === selected.active.threadId);
 				if (!chat) { throw new Error(localize('sessions.changes.prMissingChat', 'The initiating conversation is no longer available.')); }
 				await this.instantiation.createInstance(CreatePullRequestChatRequest).send(selected.active.session, request, operation, chat);
+				if (!this.isDisposed) { this.contextViews.hide(); }
+				this.notifications.info(localize('sessions.changes.prSent', 'Pull request request submitted to the initiating conversation.'));
 			} : undefined,
 		};
 		const widget = this.instantiation.createInstance(CreatePullRequestWidget, options, anchor.ownerDocument);

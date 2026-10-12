@@ -41,5 +41,9 @@
 
 .ash-sessions-change-state {
 	flex-shrink: 0;
+	max-width: 55%;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
 	color: var(--ash-description-foreground);
 }

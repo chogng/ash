@@ -352,6 +352,8 @@
     "categories.search.description": "设置工作区搜索和内容搜索引擎。",
     "categories.source-control.label": "源代码管理",
     "categories.source-control.description": "设置 Git 自动拉取和源代码管理的差异装饰。",
+    "categories.terminal.label": "终端",
+    "categories.terminal.description": "设置终端字体、光标外观、对比度和回滚行数。",
     "categories.browser.label": "浏览器",
     "categories.browser.description": "选择网站链接的打开方式。",
     "categories.voice-input.label": "语音输入",

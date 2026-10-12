@@ -15,6 +15,7 @@ import { AccessibleViewType } from '../../../../../platform/accessibility/browse
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { registerTestComponentServices } from '../../../../../workbench/test/common/testEditorServices.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { Event } from '../../../../../base/common/event.js';
 
 const details: ISessionPullRequestDetails = {
@@ -33,6 +34,25 @@ function create(services: InstantiationService, options: ICreatePullRequestWidge
 
 suite('Changes Create PR form', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('stored preferences cannot restore a disallowed merge method or an unavailable agent action', async () => {
+		using services = registerTestComponentServices(new InstantiationService());
+		services.get(IStorageService).store('sessions.createPullRequest.preferences', JSON.stringify({ draft: true, mergeMode: 'auto', mergeMethod: 'REBASE', primaryAction: 'sendToChat', title: 'Private old title' }), StorageScope.PROFILE, StorageTarget.MACHINE);
+		const calls: ISessionPullRequestOptions[] = [];
+		using widget = create(services, {
+			creation: { prepare: async () => details, create: async options => { calls.push(options); return 'Created'; } },
+			onCancel: () => undefined, onCreated: () => undefined, onDetachedError: error => { throw error; },
+		});
+		await widget.ready;
+		assert.equal(widget.domNode.querySelector<HTMLInputElement>('input[aria-label="Title"]')!.value, details.title);
+		assert.equal(widget.domNode.querySelector<HTMLSelectElement>('select[aria-label="Merge mode"]')!.value, '');
+		assert.equal(widget.domNode.querySelector<HTMLSelectElement>('select[aria-label="Merge mode"]')!.disabled, true);
+		assert.equal(widget.domNode.querySelector<HTMLSelectElement>('select[aria-label="Pull request action"]')!.value, 'create');
+		widget.domNode.dispatchEvent(new document.defaultView!.Event('submit', { cancelable: true }));
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.deepEqual(calls, [{ title: details.title, description: details.description, draft: true, expectedContext: details.context }]);
+		assert.deepEqual(JSON.parse(services.get(IStorageService).get('sessions.createPullRequest.preferences', StorageScope.PROFILE)!), { draft: true, mergeMode: 'manual', primaryAction: 'create' });
+	});
 
 	test('late defaults preserve edits and one submission survives closing its form', async () => {
 		using services = new InstantiationService();

@@ -87,6 +87,7 @@ test('Changes keeps keyboard selection through refresh and clears stale actions 
 	const file = page.getByRole('treeitem');
 	await expect(file).toHaveCount(1);
 	await expect(page.locator('.ash-sessions-changes-summary')).toHaveText('1 file changes · +3 −2');
+	await expect(page.locator('.ash-sessions-changes-repository-status')).toContainText('origin/feature: 1 incoming · 2 outgoing · 3 uncommitted files');
 	await expect(page.locator('.ash-sessions-changes-summary')).toHaveCSS('font-size', '11px');
 	await tree.focus();
 	await tree.press('ArrowDown');
@@ -118,6 +119,11 @@ test('Changes keeps keyboard selection through refresh and clears stale actions 
 	await expect(checks).toHaveAttribute('aria-expanded', 'false');
 	await expect(page.getByRole('link', { name: 'Tests · Failed · team/repo #7' })).toBeHidden();
 	await checks.press('Space');
+	await checks.press('Enter');
+	await page.evaluate(() => window.ashChangesIntegration.visible(false));
+	await page.evaluate(() => window.ashChangesIntegration.visible(true));
+	await expect(page.getByRole('button', { name: 'Checks', exact: true })).toHaveAttribute('aria-expanded', 'false');
+	await page.getByRole('button', { name: 'Checks', exact: true }).press('Enter');
 	await expect(checks).toHaveAttribute('aria-expanded', 'true');
 	await page.getByRole('button', { name: 'Sync changes', exact: true }).click();
 	await expect.poll(() => page.evaluate(() => window.ashChangesIntegration.gitCalls())).toEqual(['git.pull:repository', 'git.push:repository']);
@@ -184,10 +190,14 @@ test('Changes PR form and CI results use the selected Chinese locale', async ({ 
 	await page.goto('/changes.html?locale=zh-CN');
 	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 	await expect(page.getByRole('link', { name: 'Tests · 失败 · team/repo #7' })).toBeVisible();
+	await expect(page.locator('.ash-sessions-changes-repository-status')).toContainText('origin/feature：1 个传入 · 2 个传出 · 3 个未提交文件');
+	await page.getByRole('combobox', { name: '更改视图模式' }).selectOption('tree');
+	await expect(page.getByRole('treeitem')).toHaveCount(4);
 	await page.getByRole('button', { name: '创建拉取请求', exact: true }).click();
 	const form = page.getByRole('dialog', { name: '创建拉取请求' });
 	await expect(form.getByRole('textbox', { name: '标题', exact: true })).toHaveValue('feature');
 	await expect(form.getByRole('textbox', { name: '目标分支' })).toHaveValue('main');
+	await expect(form.getByRole('combobox', { name: '拉取请求操作' })).toHaveValue('create');
 	await expect(form.getByRole('checkbox', { name: '创建为草稿' })).toBeVisible();
 	await form.getByRole('button', { name: '取消', exact: true }).click();
 	await expect(form).toBeHidden();

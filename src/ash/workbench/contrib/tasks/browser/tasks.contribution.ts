@@ -25,4 +25,3 @@ export function registerTasksView(registry: WorkbenchViewRegistry = ViewsRegistr
 	}]);
 }
 
-registerTasksView();

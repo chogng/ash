@@ -229,7 +229,7 @@ AccessibleViewRegistry.register({
 		const document = accessor.get(ILayoutService).mainContainer.ownerDocument;
 		const focused = document.activeElement as HTMLElement;
 		return new AccessibleContentProvider(AccessibleViewProviderId.ScmInput, { type: AccessibleViewType.Help },
-			() => localize('scm.input.help', 'Type a message for the selected source control provider. Enter inserts a new line. Ctrl+Enter on Windows and Linux, or Command+Enter on macOS, runs the provider’s input action. Tab moves to the action button; Shift+Tab moves to the previous control. The toolbar and menus show actions supplied by the provider. Use the editor shortcuts to select, copy, paste, undo and redo. The input grows with its content up to ten lines and then scrolls. Each repository keeps its own draft. Escape closes this help and returns to the message.'),
+			() => localize('scm.input.help', 'Type a message for the selected source control provider. Enter inserts a new line. Ctrl+Enter on Windows and Linux, or Command+Enter on macOS, runs the provider’s input action. Tab moves to the commit message action, when available, and then to the commit button; Shift+Tab moves to the previous control. Generate commit message requires a configured generator and changes. While generation runs, the action becomes Stop generating commit message. Switching repositories cancels generation. The toolbar and menus show actions supplied by the provider. Use the editor shortcuts to select, copy, paste, undo and redo. The input grows with its content up to ten lines and then scrolls. Each repository keeps its own draft. Escape closes this help and returns to the message.'),
 			() => restoreFocus(focused), AccessibilityVerbositySettingId.ScmInput);
 	},
 });

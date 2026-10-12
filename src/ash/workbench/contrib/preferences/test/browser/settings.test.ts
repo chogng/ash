@@ -17,6 +17,7 @@ import { GitHubReviewModel, IGitHubReviewModel } from '../../../../../workbench/
 import { KeybindingTestServices } from '../../../../services/keybinding/test/browser/keybindingTestServices.js';
 import { createTestLocaleService } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import '../../../chat/common/languageModelsConfiguration.js';
+import '../../../terminal/common/terminalConfiguration.js';
 import '../../../chat/browser/chat.shared.contribution.js';
 import { ILanguageModelsService } from '../../../../contrib/chat/common/languageModels.js';
 import type { SettingsContentItem } from '../../browser/settingsTreeModels.js';
@@ -675,6 +676,7 @@ test('settingsLayout is the single projection from registered settings to catego
 		'explorer',
 		'search',
 		'source-control',
+		'terminal',
 		'browser',
 		'voice-input',
 		'chat-input',
@@ -744,6 +746,18 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, CodeEditorConfiguration.renderControlCharacters), 'editor-display');
 	assert.equal(findSettingCategory(layout, ContentSearchConfiguration.maxResults), 'search');
 	assert.equal(findSettingCategory(layout, 'scm.diffDecorationsIgnoreTrimWhitespace'), 'source-control');
+	assert.deepEqual(layout.find(category => category.id === 'terminal')?.groups.flatMap(group => group.settings.map(setting => setting.id)).sort(), [
+		'terminal.integrated.cursorBlinking',
+		'terminal.integrated.cursorStyle',
+		'terminal.integrated.cursorStyleInactive',
+		'terminal.integrated.cursorWidth',
+		'terminal.integrated.fontFamily',
+		'terminal.integrated.fontSize',
+		'terminal.integrated.letterSpacing',
+		'terminal.integrated.lineHeight',
+		'terminal.integrated.minimumContrastRatio',
+		'terminal.integrated.scrollback',
+	]);
 	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'voice-input');
 	assert.equal(findSettingCategory(layout, DictationConfiguration.cloudProvider), 'voice-input');
 	assert.equal(findSettingCategory(layout, DictationConfiguration.localModel), 'voice-input');
@@ -772,6 +786,22 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.throws(() => configurationRegistry.getConfiguration(SessionsConfiguration.layoutStyle)?.parse('other'), /Unknown Sessions layout style/);
 
 	model.dispose();
+});
+
+test('terminal settings navigation and group use the active language pack', () => {
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	try {
+		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+		const category = SettingsCategories.find(category => category.id === 'terminal');
+		assert.ok(category);
+		assert.equal(category.label, '终端');
+		assert.equal(category.description, '设置终端字体、光标外观、对比度和回滚行数。');
+		const group = createSettingsLayout(new DefaultSettings().all).find(category => category.id === 'terminal')?.groups[0];
+		assert.equal(group?.title, '终端');
+		assert.equal(group?.description, category.description);
+	} finally {
+		resetNlsResolver();
+	}
 });
 
 test('SettingsLayout validates stable configuration identities', () => {
@@ -1372,6 +1402,9 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(agentsGroup.closest('.ash-tree-row')?.getAttribute('aria-expanded'), 'false');
 	assert.equal(root.querySelector('[data-settings-category-id="models"]'), null);
 	await nextTurn();
+	await preferences.openSettings({ section: 'terminal' });
+	assert.equal(root.querySelector('[data-settings-category-id="terminal"]')?.textContent, 'Terminal');
+	assert.equal(root.querySelectorAll('[data-settings-item-id^="terminal.integrated."]').length, 10);
 	await preferences.openSettings({ section: 'search' });
 	const searchEngine = root.querySelector<HTMLElement>('[data-settings-item-id="grep.backend"] [role="combobox"]');
 	assert.equal(searchEngine?.textContent, 'tgrep (default)');
@@ -1772,7 +1805,8 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 
 	search.value = 'font family';
 	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
-	assert.equal(root.querySelectorAll('.ash-settings-content-tree [data-settings-item-id]').length, 3);
+	assert.equal(root.querySelectorAll('.ash-settings-content-tree [data-settings-item-id]').length, 4);
+	assert.ok(root.querySelector('[data-settings-item-id="terminal.integrated.fontFamily"]'));
 	assert.ok(root.querySelector('[data-settings-item-id="chat.input.fontFamily"]'));
 	assert.ok(root.querySelector('[data-settings-item-id="chat.editor.fontFamily"]'));
 	assert.ok(root.querySelector(`[data-settings-item-id="${CodeEditorConfiguration.fontFamily}"]`));

@@ -68,6 +68,9 @@ test('a hidden Changes editor ignores a late ledger result and loads fresh conte
 		assert.equal(dom.window.document.activeElement, dom.window.document.querySelector('.ash-sessions-changes-editor'));
 	}
 	pane.clearInput();
+	const cancelled = new AbortController();
+	cancelled.abort();
+	await assert.rejects(pane.setInput({ resource: URI.parse('ash-session-changes:/a?thread=a-thread') }, cancelled.signal), { name: 'CancellationError' });
 	changes.fire({ sessionId: 'a', threadId: 'a-thread' });
 	assert.equal(requests, 2);
 	dom.window.close();

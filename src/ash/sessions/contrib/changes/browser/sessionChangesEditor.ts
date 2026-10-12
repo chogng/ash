@@ -1,7 +1,7 @@
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane, IEditorControl } from '../../../../workbench/common/editor.js';
-import { Dimension, h, type IDimension } from '../../../../base/browser/dom.js';
+import { Dimension, h, addDisposableListener, type IDimension } from '../../../../base/browser/dom.js';
 import './media/sessionChangesEditor.css';
 import { MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { extUri } from '../../../../base/common/resources.js';
@@ -16,6 +16,7 @@ import type { MultiDiffEditorInput } from '../../../../workbench/contrib/multiDi
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 
 /** Resolves the selected conversation's changes only while its editor content is visible. */
 export class SessionChangesEditor extends EditorPane implements IEditorPaneWithViewState {
@@ -79,12 +80,14 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		this._register(toDisposable(() => this.domNode.remove()));
 	}
 
-	public override async setInput(input: IResourceEditorInput, _signal: AbortSignal): Promise<void> {
+	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
+		throwIfCancelled(signal);
 		if (this.input && !extUri.isEqual(this.input.resource, input.resource)) {
 			this.clearInput();
 		}
 		this.input = input;
-		await this.refresh();
+		await this.refresh(signal);
+		throwIfCancelled(signal);
 	}
 
 	public override clearInput(): void {
@@ -153,7 +156,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		}
 	}
 
-	private async refresh(): Promise<void> {
+	private async refresh(signal?: AbortSignal): Promise<void> {
 		const input = this.input;
 		if (!input || !this.visible || this.isDisposed) {
 			return;
@@ -176,10 +179,15 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		}
 		this.messageDomNode.textContent = localize('sessions.changes.loading', 'Loading changes…');
 		const controller = new AbortController();
-		this.pending.value = toDisposable(() => controller.abort());
+		const abortListener = signal ? addDisposableListener(signal, 'abort', () => controller.abort(), { once: true }) : undefined;
+		if (signal?.aborted) { controller.abort(); }
+		this.pending.value = toDisposable(() => {
+			abortListener?.dispose();
+			controller.abort();
+		});
 		try {
 			const changes = await this.chat.listTurnChanges(session.sessionId, threadId);
-			if (this.isDisposed || revision !== this.revision) {
+			if (this.isDisposed || revision !== this.revision || controller.signal.aborted) {
 				return;
 			}
 			if (!changes.some(change => change.captureState !== 'discarded' && change.statistics.files > 0)) {
@@ -187,16 +195,18 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 				return;
 			}
 			const comparison = await createTurnMultiDiffEditorInput(this.chat, { session, threadId }, 'throughCurrentTurn');
-			if (this.isDisposed || revision !== this.revision) {
+			if (this.isDisposed || revision !== this.revision || controller.signal.aborted) {
 				return;
 			}
 			const pane = await EditorPanes.getEditorPane(comparison)!.create(this.options);
-			if (this.isDisposed || revision !== this.revision) { pane.dispose(); return; }
+			if (this.isDisposed || revision !== this.revision || controller.signal.aborted) { pane.dispose(); return; }
 			this.comparisonInput = comparison;
 			this.comparison.value = pane;
 			pane.create(this.domNode);
+			// setInput waits for visible diff models, which need a nonzero viewport first.
+			pane.layout(this.dimension);
 			await pane.setInput(comparison, controller.signal);
-			if (this.isDisposed || revision !== this.revision) {
+			if (this.isDisposed || revision !== this.revision || controller.signal.aborted) {
 				return;
 			}
 			this.messageDomNode.hidden = true;
@@ -206,7 +216,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 			this.restoreViewState(this.viewState ?? { scrollTop: 0, collapsedItemIds: [], itemViewStates: [] });
 			pane.setVisible(true);
 		} catch (error) {
-			if (!this.isDisposed && revision === this.revision) {
+			if (!this.isDisposed && revision === this.revision && !controller.signal.aborted) {
 				this.messageDomNode.textContent = localize('sessions.changes.error', 'Could not load changes: {0}', String(error));
 			}
 		}

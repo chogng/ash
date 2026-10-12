@@ -70,6 +70,14 @@ test('Turn file selection commits a reviewed file and keeps another Session sepa
 		const commands = new QuickAccess(page);
 		await commands.runCommand('ash.sessions.showEditor');
 		const review = page.locator('.ash-sessions-changes-editor .stanza-multi-diff-editor');
+		console.log('Changes comparison geometry', await review.evaluate(element => {
+			const result = [];
+			for (let node: HTMLElement | null = element as HTMLElement; node; node = node.parentElement) {
+				const style = getComputedStyle(node);
+				result.push({ className: node.className, hidden: node.hidden, width: node.clientWidth, height: node.clientHeight, display: style.display, visibility: style.visibility, inline: node.style.cssText });
+			}
+			return result;
+		}));
 		await expect(review).toBeVisible();
 		const fileHeader = review.getByRole('button', { name: /main.ts/ });
 		await fileHeader.click();

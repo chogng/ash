@@ -5,7 +5,7 @@
 	min-width: 0;
 	min-height: 40px;
 	overflow: visible;
-	--ash-editor-background: var(--ash-input-background);
+	--ash-editor-background: var(--ash-editor-widgetBackground);
 }
 
 .ash-chat-input-editor .stanza-editor {

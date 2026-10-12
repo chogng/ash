@@ -107,7 +107,13 @@ export function registerGitCommands(context: ExtensionContext, git: GitService, 
 	] as const) { register(id, value => runGraphAction(ctx, kind, reviveHistoryTarget(value))); }
 	for (const scope of ['staged', 'unstaged', 'uncommitted'] as const) { register(`git.open${scope[0].toUpperCase()}${scope.slice(1)}Changes`, async () => editorClient.openEditor(await createGitMultiDiffEditorInput(git, scope), { pinned: true })); }
 	register('git.openChanges', async value => { const options = value as { status: Parameters<typeof createGitMultiDiffEditorInput>[2]; comparison: 'staged' | 'unstaged'; title: string; changes: Parameters<typeof createGitMultiDiffEditorInput>[4]; }; const current = await git.status(options.status!.repositoryId); if (current.streamInstanceId !== options.status!.streamInstanceId || current.revision !== options.status!.revision) { return 'stale'; } const input = await createGitMultiDiffEditorInput(git, options.comparison, options.status, options.title, options.changes); if (!input.items.length) { return 'empty'; } await editorClient.openEditor(input, { pinned: true }); return 'opened'; });
-	register('git.getRepositoryContexts', async () => Promise.all((await git.listRepositories()).map(async repository => ({ id: repository.id, label: repository.label, path: repository.path, root: repository.root.toString(), head: (await git.status(repository.id)).head, remotes: (await git.graph({ limit: 1 }, repository.id)).remotes }))));
+	register('git.getRepositoryContexts', async () => Promise.all((await git.listRepositories()).map(async repository => {
+		const [status, graph] = await Promise.all([git.status(repository.id), git.graph({ limit: 1 }, repository.id)]);
+		return {
+			id: repository.id, label: repository.label, path: repository.path, root: repository.root.toString(),
+			head: status.head, remotes: graph.remotes, uncommittedChanges: status.changes.length,
+		};
+	})));
 	register('git.executeRepositoryCommand', async (id, command) => { if (typeof id !== 'string' || !command || typeof command !== 'object') throw new TypeError('Invalid Git command'); return git.executeCommand(command as GitCommand, id); });
 	register('git.openChangesSource', async (id, scope) => { if (typeof id !== 'string' || scope !== 'staged' && scope !== 'unstaged' && scope !== 'uncommitted') throw new TypeError('Invalid Git source'); await editorClient.openEditor(await createGitMultiDiffEditorInput(git, scope, await git.status(id)), { pinned: true }); });
 	for (const [command, action] of [['git.stageFile', 'stage'], ['git.unstageFile', 'unstage'], ['git.discardFile', 'discard']] as const) register(command, async (id, path) => { if (typeof id !== 'string' || typeof path !== 'string') throw new TypeError('Invalid Git path'); await provider(id)?.mutatePaths(action, [path]); });

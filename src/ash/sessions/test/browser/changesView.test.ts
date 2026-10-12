@@ -142,6 +142,8 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		assert.deepEqual(openOptions[1], { pinned: true, preserveFocus: false });
 		const diff = opened[0]!;
 		assert.ok(isDiffEditorInput(diff));
+		assert.deepEqual(Object.fromEntries(new URLSearchParams(diff.original.resource.query)), { session: 'current', thread: 'current-thread', revision: '1', side: 'before' });
+		assert.equal(new URLSearchParams(diff.modified.resource.query).get('side'), 'after');
 		assert.deepEqual([diff.original.initialText, diff.modified.initialText, diff.original.readOnly, diff.modified.readOnly], ['before', 'after', true, true]);
 		assert.deepEqual(requests.at(-1), { sessionId: 'current', threadId: 'current-thread', changeSetId: 'change-current', path: 'main.ts' });
 		view.element.querySelector<HTMLButtonElement>('.ash-sessions-changes button')!.click();
@@ -338,9 +340,12 @@ suite('Changes visibility lifecycle', () => {
 			assert.equal(browser.window.document.activeElement, tree);
 		}
 		view.dispose();
-		assert.equal(changed.hasListeners(), false);
 		assert.equal(ready.hasListeners(), false);
 		assert.equal(ledgerChanged.hasListeners(), false);
+		// Window-owned view snapshots outlive a pane; their selection subscription
+		// is released with the window service scope rather than with this view.
+		services.dispose();
+		assert.equal(changed.hasListeners(), false);
 	});
 });
 

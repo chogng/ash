@@ -147,6 +147,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 			OpenAgentsWindowSystemWideKeybindingContribution.ID,
 			'chat.edits.editorOverlay',
 			'workbench.contrib.dataChannels',
+			'workbench.contrib.output',
 			'workbench.contrib.githubLinkPresentations',
 			'workbench.contrib.url',
 			'workbench.contrib.externalUriOpener',

@@ -651,6 +651,12 @@ test("Code Workbench composes code and Academic document contributions", () => {
 	assert.match(workbenchContributions, /standaloneGotoSymbolQuickAccess/u);
 	assert.match(workbenchContributions, /contrib\/codeEditor\/browser\/codeEditor\.contribution/u);
 	assert.match(workbenchContributions, /contrib\/tasks\/browser\/tasks\.contribution/u);
+	const sessionsContributions = readFileSync(join(workbenchRoot, '../sessions/sessions.common.main.ts'), 'utf8');
+	assert.match(sessionsContributions, /contrib\/tasks\/browser\/tasks\.contribution/u);
+	assert.match(sessionsContributions, /registerTasksView\(SessionsViewRegistry\)/u);
+	assert.match(sessionsContributions, /registerOutputView\(SessionsViewRegistry\)/u);
+	assert.match(readFileSync(join(workbenchRoot, 'browser/workbench.contribution.ts'), 'utf8'), /registerTasksView\(\)/u);
+	assert.doesNotMatch(readFileSync(join(workbenchRoot, 'contrib/tasks/browser/tasks.contribution.ts'), 'utf8'), /^registerTasksView\(\);/mu);
 	assert.match(workbenchContributions, /contrib\/testing\/browser\/testing\.contribution/u);
 	assert.match(workbenchContributions, /contrib\/debug\/browser\/debug\.contribution/u);
 	assert.doesNotMatch(workbenchContributions, /editor\/editor\.academic\.all/u);

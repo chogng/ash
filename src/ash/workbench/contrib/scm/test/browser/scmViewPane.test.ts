@@ -1923,6 +1923,9 @@ test('SCM input keeps repository drafts, updates help verbosity and releases its
 		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);
 		registerCodeEditorServices(services);
+		using scm = new SCMService();
+		using view = new SCMViewService(scm);
+		if (!services.has(ISCMViewService)) services.registerInstance(ISCMViewService, view);
 		using input = services.createInstance(SCMInputWidget, browser.window.document.body);
 		const first = { ...testSCMProvider('first', 'First').input, enabled: true, value: 'First draft' };
 		const second = { ...testSCMProvider('second', 'Second').input, enabled: true, value: 'Second draft' };

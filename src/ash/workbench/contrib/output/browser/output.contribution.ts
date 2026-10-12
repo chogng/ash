@@ -6,7 +6,7 @@ import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.j
 import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
-import { ViewContainerLocation, WorkbenchViewContainerId, ViewsRegistry } from '../../../common/views.js';
+import { ViewContainerLocation, WorkbenchViewContainerId, ViewsRegistry, type WorkbenchViewRegistry } from '../../../common/views.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { OutputService } from './outputServices.js';
 import { OutputViewPane } from './outputView.js';
@@ -71,8 +71,11 @@ registerAction2(class ExportOutputAction extends Action2 {
 });
 
 registerSingleton(IOutputService, OutputService, InstantiationType.Delayed);
-ViewsRegistry.registerStaticViewContainer({ id: WorkbenchViewContainerId.Output, title: 'Output', localizationKey: { bundle: 'ash.views', key: 'output' }, location: ViewContainerLocation.Panel, order: 2 });
-ViewsRegistry.registerStaticViews(WorkbenchViewContainerId.Output, [{ id: OUTPUT_VIEW_ID, title: 'Output', localizationKey: { bundle: 'ash.views', key: 'output' }, order: 1, canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(OutputViewPane) }]);
+/** Each window selects its view registry; importing shared services must not register another host's view commands. */
+export function registerOutputView(registry: WorkbenchViewRegistry = ViewsRegistry): void {
+	registry.registerStaticViewContainer({ id: WorkbenchViewContainerId.Output, title: 'Output', localizationKey: { bundle: 'ash.views', key: 'output' }, location: ViewContainerLocation.Panel, order: 2 });
+	registry.registerStaticViews(WorkbenchViewContainerId.Output, [{ id: OUTPUT_VIEW_ID, title: 'Output', localizationKey: { bundle: 'ash.views', key: 'output' }, order: 1, canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(OutputViewPane) }]);
+}
 AccessibleViewRegistry.register(new OutputAccessibilityHelp());
 
 class OutputContribution extends Disposable {

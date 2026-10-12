@@ -9,6 +9,7 @@
 	min-width: 0;
 	flex: 1 1 auto;
 	flex-direction: column;
+	background: var(--ash-editor-background);
 }
 
 .ash-chat-list-widget {
@@ -175,7 +176,7 @@
 	border: var(--ash-strokeThickness) solid
 		var(--ash-chat-input-border, var(--ash-input-border));
 	border-radius: var(--ash-chat-input-radius, var(--ash-cornerRadius-large));
-	background: var(--ash-input-background);
+	background: var(--ash-editor-widgetBackground);
 }
 
 .ash-chat-input-container.focused {

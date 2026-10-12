@@ -35,7 +35,7 @@
     "scm.welcome.verbosityTitle": "Source control accessibility help",
     "scm.welcome.verbosityDescription": "Announce how to open accessibility help when source control receives focus.",
     "scmCollapseAll": "Collapse All",
-    "scm.input.help": "Type a message for the selected source control provider. Enter inserts a new line. Ctrl+Enter on Windows and Linux, or Command+Enter on macOS, runs the provider’s input action. Tab moves to the action button; Shift+Tab moves to the previous control. The toolbar and menus show actions supplied by the provider. Use the editor shortcuts to select, copy, paste, undo and redo. The input grows with its content up to ten lines and then scrolls. Each repository keeps its own draft. Escape closes this help and returns to the message.",
+    "scm.input.help": "Type a message for the selected source control provider. Enter inserts a new line. Ctrl+Enter on Windows and Linux, or Command+Enter on macOS, runs the provider’s input action. Tab moves to the commit message action, when available, and then to the commit button; Shift+Tab moves to the previous control. Generate commit message requires a configured generator and changes. While generation runs, the action becomes Stop generating commit message. Switching repositories cancels generation. The toolbar and menus show actions supplied by the provider. Use the editor shortcuts to select, copy, paste, undo and redo. The input grows with its content up to ten lines and then scrolls. Each repository keeps its own draft. Escape closes this help and returns to the message.",
     "multiDiff.selectSource": "Select change source",
     "multiDiff.changeSource": "Multi-diff change source",
     "multiDiff.working": "Working…",
@@ -83,6 +83,11 @@
     "scm.history.badgesAll": "All references",
     "scm.history.badgesFilter": "Filtered references",
     "scm.history.badgesInvalid": "History badges must be all or filter.",
-    "scm.history.fileActions": "History file actions"
+    "scm.history.fileActions": "History file actions",
+    "scm.input.generate": "Generate commit message",
+    "scm.input.stop": "Stop generating commit message",
+    "scm.input.generatorUnavailable": "No commit message generator configured",
+    "scm.input.generating": "Generating commit message",
+    "scm.input.stopping": "Stopping commit message generation"
   }
 }

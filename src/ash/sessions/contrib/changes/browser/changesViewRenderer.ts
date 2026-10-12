@@ -22,7 +22,14 @@ export type ChangesTreeElement = IChangesFileItem | ChangesFolderItem;
 
 /** Review identity includes the revision so a changed capture cannot inherit a read marker. */
 export function getChangesFileUri(row: IChangesFileItem): URI {
-	return URI.from({ scheme: 'ash-turn-diff', path: `/${row.summary.changeSetId}/${row.file.path}`, query: new URLSearchParams({ session: row.summary.sessionId, thread: row.summary.threadId, revision: String(row.summary.revision) }).toString() });
+	return URI.from({
+		scheme: 'ash-turn-diff',
+		path: `/${row.summary.changeSetId}/${row.file.path}`,
+		query: new URLSearchParams({
+			session: row.summary.sessionId, thread: row.summary.threadId,
+			revision: String(row.summary.revision),
+		}).toString(),
+	});
 }
 
 export function isChangesFileItem(element: ChangesTreeElement): element is IChangesFileItem {
@@ -38,7 +45,10 @@ export function buildTreeChildren(items: readonly IChangesFileItem[]): ObjectTre
 		if (!folders.has(key)) {
 			const children: ObjectTreeElement<ChangesTreeElement>[] = [];
 			folders.set(key, children);
-			roots.push({ element: { type: 'folder', id: key, name: localize('sessions.changes.turn', 'Turn {0}', item.turnNumber) }, children });
+			roots.push({
+				element: { type: 'folder', id: key, name: localize('sessions.changes.turn', 'Turn {0}', item.turnNumber) },
+				children,
+			});
 		}
 		let children = folders.get(key)!;
 		for (const part of item.file.path.split('/').slice(0, -1)) {
@@ -72,8 +82,11 @@ export class ChangesTreeRenderer {
 		const counts = h(this.document, 'span');
 		counts.textContent = `+${row.file.additions} −${row.file.deletions}`;
 		const state = h(this.document, 'span', { className: 'ash-sessions-change-state' });
-		state.textContent = [localize('sessions.changes.turn', 'Turn {0}', row.turnNumber), fileState(row), reviewed ? localize('sessions.changes.reviewed', 'Reviewed') : undefined].filter(Boolean).join(' · ');
-		state.title = [row.summary.failureMessage, ...row.summary.warnings].filter(Boolean).join('\n');
+		state.textContent = [
+			localize('sessions.changes.turn', 'Turn {0}', row.turnNumber), fileState(row),
+			reviewed ? localize('sessions.changes.reviewed', 'Reviewed') : undefined,
+		].filter(Boolean).join(' · ');
+		state.title = [state.textContent, row.summary.failureMessage, ...row.summary.warnings].filter(Boolean).join('\n');
 		element.append(label, state, counts);
 		return element;
 	}

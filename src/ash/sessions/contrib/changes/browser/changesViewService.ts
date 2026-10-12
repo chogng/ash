@@ -3,7 +3,10 @@ import { observableValue } from '../../../../base/common/observable.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { ChangesViewMode } from '../common/changes.js';
-import type { IChangesDetailsViewState, IChangesViewService, IChangesViewSectionCollapseState, ChangesViewSection } from '../common/changesViewService.js';
+import type {
+	IChangesDetailsViewState, IChangesViewService,
+	IChangesViewSectionCollapseState, ChangesViewSection,
+} from '../common/changesViewService.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { SessionChangesEditorInput } from './sessionChangesEditorInput.js';
 
@@ -42,7 +45,7 @@ export class ChangesViewService extends Disposable implements IChangesViewServic
 
 	public setSectionCollapsed(resource: URI, section: ChangesViewSection, collapsed: boolean): void {
 		const key = resource.toString();
-		const state = { ...this.sections.get(key) ?? { checks: false }, [section]: collapsed };
+		const state = { ...(this.sections.get(key) ?? { checks: false }), [section]: collapsed };
 		this.sections.delete(key);
 		this.sections.set(key, state);
 		if (this.sections.size > 64) { this.sections.delete(this.sections.keys().next().value!); }

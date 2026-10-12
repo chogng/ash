@@ -542,6 +542,8 @@
 }
 
 .ash-scm-input {
+	display: flex;
+	align-items: flex-start;
 	--ash-editor-background: var(--ash-input-background);
 	--ash-editor-foreground: var(--ash-input-foreground);
 	box-sizing: border-box;
@@ -555,7 +557,20 @@
 
 .ash-scm-input-editor {
 	position: relative;
+	flex: 1 1 auto;
 	min-width: 0;
+}
+
+.ash-scm-input-action.ash-button {
+	flex: 0 0 auto;
+	width: var(--ash-spacing-size240);
+	min-height: var(--ash-spacing-size240);
+	padding: var(--ash-spacing-size20);
+	color: var(--ash-input-foreground);
+}
+
+.ash-scm-input-action.ash-button:not(:disabled):hover {
+	background: var(--ash-toolbar-hoverBackground);
 }
 
 .ash-scm-input.focused {

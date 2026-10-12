@@ -264,6 +264,8 @@
     "categories.search.description": "Configure workspace searches and the content search engine.",
     "categories.source-control.label": "Source Control",
     "categories.source-control.description": "Configure Git fetching and Source Control diff decorations.",
+    "categories.terminal.label": "Terminal",
+    "categories.terminal.description": "Configure terminal fonts, cursor appearance, contrast, and scrollback.",
     "categories.browser.label": "Browser",
     "categories.browser.description": "Choose where website links open.",
     "categories.voice-input.label": "Voice input",

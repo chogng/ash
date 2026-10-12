@@ -100,6 +100,7 @@ import { ILanguageConfigurationService } from '../../editor/common/languages/lan
 import { ILanguageFeaturesService } from '../../editor/common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../editor/common/services/languageFeaturesService.js';
 import { IModelService } from '../../editor/common/services/model.js';
+import { MarkerService, IMarkerService } from '../../platform/markers/common/markers.js';
 import { ModelService } from '../../editor/common/services/modelService.js';
 import { ITextResourcePropertiesService } from '../../editor/common/services/textResourceConfiguration.js';
 import { TextResourcePropertiesService } from '../../workbench/services/textresourceProperties/common/textResourcePropertiesService.js';
@@ -334,6 +335,7 @@ export abstract class Workbench extends Disposable {
 		const languageService = this._register(new LanguageService());
 		services.registerInstance(ILanguageService, languageService);
 		services.registerInstance(ILanguageFeaturesService, this._register(new LanguageFeaturesService()));
+		services.registerInstance(IMarkerService, this._register(new MarkerService()));
 		services.registerSingleton(ITextResourcePropertiesService, () => services.createInstance(TextResourcePropertiesService));
 		// Shared inspectors create transient models; this window owns their registry and shutdown.
 		services.registerSingleton(IModelService, () => new ModelService(configurationService, services.get(ITextResourcePropertiesService), languageService, services.get(ILanguageFeaturesService), services.get(ILanguageConfigurationService)));

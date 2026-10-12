@@ -63,6 +63,90 @@ test('SCM commit form separator disappears after a clean Git snapshot and return
 	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
 });
 
+for (const language of ['en', 'zh-CN']) test(`SCM commit message action handles layout, keyboard, cancellation and repository switching in ${language}`, async ({ page }, testInfo) => {
+	const errors = collectErrors(page);
+	const generateLabel = language === 'zh-CN' ? '生成提交信息' : 'Generate commit message';
+	const stopLabel = language === 'zh-CN' ? '停止生成提交信息' : 'Stop generating commit message';
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(() => window.gitExtensionIsolation.addGeneric());
+		await page.evaluate(language => window.gitExtensionIntegration.activate(language), language);
+		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().repositories[0]?.paths)).toEqual(['one.ts']);
+		await page.evaluate(() => window.gitScmPaneIntegration.mount());
+		const input = page.locator('#scm-pane .ash-scm-input');
+		const button = input.getByRole('button', { name: generateLabel, exact: true });
+		await expect(button).toBeVisible();
+		await expect(button).toBeDisabled();
+		await expect(button).toHaveAttribute('title', language === 'zh-CN' ? '尚未配置提交信息生成器' : 'No commit message generator configured');
+		await expect(button.locator('[data-ash-icon-id="sparkle"]')).toHaveCount(1);
+		const editor = input.locator('.stanza-editor-input');
+		await editor.focus();
+		await page.keyboard.type('Keep my draft');
+		await page.evaluate(() => window.gitScmPaneIntegration.configureGenerator());
+		await expect(button).toBeEnabled();
+		await page.keyboard.press('Tab');
+		await expect(button).toBeFocused();
+		const geometry = await input.evaluate(node => {
+			const editor = node.querySelector('.ash-scm-input-editor')!.getBoundingClientRect();
+			const button = node.querySelector('.ash-scm-input-action')!.getBoundingClientRect();
+			const bounds = node.getBoundingClientRect();
+			return { separated: editor.right <= button.left, contained: button.right <= bounds.right, width: button.width };
+		});
+		expect(geometry).toEqual({ separated: true, contained: true, width: 24 });
+		for (const theme of ['dark', 'light', 'hcDark', 'hcLight'] as const) {
+			await page.evaluate(theme => window.gitScmPaneIntegration.setTheme(theme), theme);
+			await expect(button).toHaveCSS('outline-style', 'solid');
+			const colors = await button.evaluate(node => {
+				const style = getComputedStyle(node);
+				const reference = document.createElement('span');
+				reference.style.color = style.getPropertyValue('--ash-focusBorder');
+				return { color: style.color, focus: style.outlineColor, expectedFocus: reference.style.color };
+			});
+			expect(colors.color).not.toBe('rgba(0, 0, 0, 0)');
+			expect(colors.focus).toBe(colors.expectedFocus);
+		}
+		await page.evaluate(() => window.gitScmPaneIntegration.setWidth(220));
+		await expect(button).toBeFocused();
+		await page.keyboard.press('Enter');
+		const stop = input.getByRole('button', { name: stopLabel, exact: true });
+		await expect(stop).toBeEnabled();
+		await expect(stop).toBeFocused();
+		await expect(stop.locator('[data-ash-icon-id="stop-circle"]')).toHaveCount(1);
+		await expect(input).toHaveAttribute('aria-busy', 'true');
+		await page.evaluate(() => window.gitScmPaneIntegration.setClean(false));
+		await expect(stop).toBeEnabled();
+		await expect.poll(() => page.evaluate(() => window.gitScmPaneIntegration.generationState())).toMatchObject({ count: 1, cancelled: false, groups: [{ id: 'changes', resources: [expect.stringContaining('one.ts')] }] });
+		await testInfo.attach(`commit-message-generating-${language}`, { body: await input.screenshot(), contentType: 'image/png' });
+		await page.keyboard.press('Space');
+		await expect(stop).toBeDisabled();
+		expect((await page.evaluate(() => window.gitScmPaneIntegration.generationState())).cancelled).toBe(true);
+		await page.evaluate(() => window.gitScmPaneIntegration.finishGeneration());
+		await expect(button).toBeEnabled();
+		await expect(input).toHaveAttribute('aria-busy', 'false');
+		await button.click();
+		await expect(stop).toBeEnabled();
+		await page.evaluate(() => window.gitScmPaneIntegration.selectRepository('snapshots'));
+		expect((await page.evaluate(() => window.gitScmPaneIntegration.generationState())).cancelled).toBe(true);
+		await expect(button).toBeDisabled();
+		await expect(input).toHaveAttribute('aria-busy', 'false');
+		await page.evaluate(() => window.gitScmPaneIntegration.selectRepository('root'));
+		expect(await page.evaluate(() => window.gitScmPaneIntegration.draft())).toBe('Keep my draft');
+		await page.evaluate(() => window.gitScmPaneIntegration.finishGeneration());
+		await button.click();
+		await expect(stop).toBeEnabled();
+		await page.evaluate(() => window.gitScmPaneIntegration.finishGeneration());
+		await expect(button).toBeEnabled();
+		await page.evaluate(() => window.gitScmPaneIntegration.setClean(true));
+		await expect(button).toBeDisabled();
+		await page.evaluate(() => window.gitScmPaneIntegration.setClean(false));
+		await button.click();
+		await expect(stop).toBeEnabled();
+		await page.evaluate(() => window.gitExtensionIntegration.dispose());
+		expect((await page.evaluate(() => window.gitScmPaneIntegration.generationState())).cancelled).toBe(true);
+		expect(errors).toEqual([]);
+	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
+});
+
 for (const language of ['en', 'zh-CN']) test(`distributed Git Worker registers SCM, commands and history in ${language}`, async ({ page }) => {
 	const errors = collectErrors(page);
 	await page.goto('/gitExtension.html');

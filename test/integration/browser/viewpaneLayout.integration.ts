@@ -76,6 +76,7 @@ changesServices.registerInstance(IQuickInputService, {} as IQuickInputService);
 const storage = resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'viewpane-layout', flushInterval: 0 }));
 changesServices.registerInstance(IStorageService, storage);
 const changesViewState = resources.add(changesServices.createInstance(ChangesViewService));
+changesServices.registerInstance(IChangesViewService, changesViewState);
 const commands: string[] = [];
 const submissions: { title: string; prompt: string; }[] = [];
 let watchers = 0;

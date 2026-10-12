@@ -4,3 +4,12 @@
 	gap: var(--ash-spacing-size40);
 	flex-shrink: 0;
 }
+
+.ash-sessions-changes-repository-status {
+	width: 100%;
+	margin: 0;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	font-size: var(--ash-fontSize-body2);
+	color: var(--ash-description-foreground);
+}

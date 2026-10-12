@@ -9,7 +9,7 @@
     "scm.sortByStatus": "按状态排序更改",
     "scm.input.label": "提交信息",
     "scm.input.helpHint": "{0}。按 Alt+F1 查看源代码管理输入框帮助。",
-    "scm.input.help": "为当前源代码管理提供程序输入消息。Enter 插入新行。Windows 和 Linux 使用 Ctrl+Enter，macOS 使用 Command+Enter 执行提供程序的输入操作。Tab 移动到操作按钮，Shift+Tab 移动到上一个控件。工具栏和菜单显示提供程序提供的操作。使用编辑器快捷键选择、复制、粘贴、撤销和重做。输入框随内容增高，最多显示十行，然后滚动。每个仓库保留各自的草稿。Escape 关闭帮助并返回消息输入框。",
+    "scm.input.help": "为当前源代码管理提供程序输入消息。Enter 插入新行。Windows 和 Linux 使用 Ctrl+Enter，macOS 使用 Command+Enter 执行提供程序的输入操作。Tab 移动到可用的提交信息操作，再移动到提交按钮；Shift+Tab 移动到上一个控件。生成提交信息需要已配置的生成器和待提交的更改。生成期间，操作变为停止生成提交信息。切换仓库会取消生成。工具栏和菜单显示提供程序提供的操作。使用编辑器快捷键选择、复制、粘贴、撤销和重做。输入框随内容增高，最多显示十行，然后滚动。每个仓库保留各自的草稿。Escape 关闭帮助并返回消息输入框。",
     "scm.input.verbosityInvalid": "源代码管理输入框的无障碍详细提示必须是布尔值。",
     "scm.input.verbosityTitle": "源代码管理输入框无障碍帮助",
     "scm.input.verbosityDescription": "提交信息获得焦点时，提示如何打开无障碍帮助。",
@@ -159,7 +159,12 @@
     "scm.history.badgesAll": "所有引用",
     "scm.history.badgesFilter": "筛选的引用",
     "scm.history.badgesInvalid": "历史记录徽标必须为 all 或 filter。",
-    "scm.history.fileActions": "历史文件操作"
+    "scm.history.fileActions": "历史文件操作",
+    "scm.input.generate": "生成提交信息",
+    "scm.input.stop": "停止生成提交信息",
+    "scm.input.generatorUnavailable": "尚未配置提交信息生成器",
+    "scm.input.generating": "正在生成提交信息",
+    "scm.input.stopping": "正在停止生成提交信息"
   },
   "ash.workbench": {
     "command.scm.quickDiff.next": "转到下一个快速差异更改",

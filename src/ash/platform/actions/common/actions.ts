@@ -96,6 +96,7 @@ export class MenuId {
 	static readonly ChatInputStatus = new MenuId('ChatInputStatus');
 	static readonly AgentSidebarTitle = new MenuId("AgentSidebarTitle");
 	static readonly SCMTitle = new MenuId('SCMTitle');
+	static readonly SCMInputBox = new MenuId('SCMInputBox');
 	static readonly SCMResourceGroupContext = new MenuId('SCMResourceGroupContext');
 	static readonly SCMHistoryTitle = new MenuId('SCMHistoryTitle');
 	static readonly SCMHistoryItemContext = new MenuId("SCMHistoryItemContext");

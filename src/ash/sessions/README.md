@@ -70,6 +70,14 @@ The visible Checks widget owns cancellable, paginated CI detail reads through th
 GitHub API; account and Session changes invalidate old data, and hiding Changes
 releases its model. Ordinary refreshes preserve check-link focus.
 
+ChangesViewService owns presentation state. The profile's UI state stores List or
+Tree mode; window-local snapshots retain selection, focus, expanded folders and
+scroll positions independently for each conversation, selected Turn and mode.
+Checks collapse state follows the conversation. Read markers belong to the exact
+Turn revision and remain window-local; they neither change the ledger nor grant
+commit eligibility. Repository tracking and working-tree counts come from the
+optional Git provider, independently of the immutable Turn list.
+
 Create pull request prepares an editable form without publishing or creating
 anything. Submission checks the captured repository, local commit, remote and
 account again. Once sent, completion belongs to the initiating Session even when
@@ -77,6 +85,14 @@ the form closes; the resulting reference is attached through the existing GitHub
 API. An uncertain response prevents repeating submission in the same form.
 Attachment and auto-merge failures remain warnings on the created PR, and a
 published head different from the local commit prevents automatic merging.
+
+The profile remembers only draft, allowed merge method and the last form action,
+never titles, descriptions, repository paths or credentials. Ask agent to create
+submits the displayed values and captured repository context through ChatService
+to the initiating Thread; an active Turn queues the request. Preparation rechecks
+the same context as direct creation. Agent submission uses the ordinary permission
+path and conservatively disables retries after an unconfirmed write. A submitted
+agent request is an acknowledgement, not a created PR or a background merge policy.
 
 Discovery and periodic refresh follow the selected Session. Other Sessions retain
 their last result for the current window and refresh when selected again; Sessions
