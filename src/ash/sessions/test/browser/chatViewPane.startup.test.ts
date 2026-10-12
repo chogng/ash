@@ -76,7 +76,7 @@ test("opens a local Chat conversation before the backend session request settles
 	const chat = unavailableChatService();
 	services.registerInstance(ILanguageModelsService, chat);
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
-	services.registerInstance(IAppServerSkillApi, { onDidChangeSkills: Event.None, readInstructions: async () => { throw new Error("No Skill body in this test fixture"); }, list: () => new Promise(() => { }), read: () => new Promise(() => { }), setEnabled: () => new Promise(() => { }) });
+	services.registerInstance(IAppServerSkillApi, { onDidChangeSkills: Event.None, readTextResource: async () => { throw new Error("No Skill body in this test fixture"); }, list: () => new Promise(() => { }), read: () => new Promise(() => { }), setEnabled: () => new Promise(() => { }) });
 	services.registerInstance(IContextViewService, contextViewService);
 	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 	services.registerInstance(IMenuService, emptyMenuService());

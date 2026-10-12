@@ -252,3 +252,15 @@ function resourceIndependentEvent(event: IConfigurationChangeEvent): IConfigurat
 		affectsConfiguration: (section, overrides) => event.affectsConfiguration(section, overrides ? withoutResource(overrides) : undefined),
 	};
 }
+
+
+test('ModelService creates resource models against the product Profile configuration and applies language settings', async () => {
+	using configuration = new InMemoryConfigurationService();
+	await configuration.updateValue('editor.tabSize', 2, { overrideIdentifiers: ['markdown'] });
+	using service = new ModelService(configuration, { _serviceBrand: undefined, getEOL: () => '\n' });
+	using first = service.createModel('---\nname: review\n---', { languageId: 'markdown', onDidChange: Event.None }, URI.file('/skills/review/SKILL.md'));
+	using second = service.createModel('const value = 1;', { languageId: 'typescript', onDidChange: Event.None }, URI.file('/source/file.ts'));
+	assert.equal(first.getOptions().tabSize, 2);
+	assert.equal(second.getOptions().tabSize, 4);
+	assert.equal(service.getModels().length, 2);
+});

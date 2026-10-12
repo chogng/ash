@@ -87,7 +87,7 @@ export interface IAppServerSkillApi {
 	list(reload: SkillCatalogReload, sessionId?: string): Promise<SkillCatalog>;
 	read(sessionId?: string): Promise<SkillManagementSnapshot>;
 	setEnabled(skillId: SkillIdentity, enabled: boolean, expectedRevision: number, sessionId?: string): Promise<void>;
-	readInstructions(reference: SkillReference, signal: AbortSignal, sessionId?: string): Promise<string>;
+	readTextResource(reference: SkillReference, path: string, signal: AbortSignal, sessionId?: string): Promise<string>;
 }
 
 export const IAppServerSkillApi = createServiceIdentifier<IAppServerSkillApi>('appServerSkillApi');

@@ -27,7 +27,7 @@ test('Skill body reading opens exact authorized bytes lazily and releases the co
 	const client = new AppServerProtocolClient(transport);
 	using cleanup = toDisposable(() => client.dispose());
 	await client.connect();
-	const body = await createAppServerSkillOperations(client).readInstructions(pinnedSkill, new AbortController().signal, 'skill-session');
+	const body = await createAppServerSkillOperations(client).readTextResource(pinnedSkill, 'SKILL.md', new AbortController().signal, 'skill-session');
 	assert.equal(body, '# Review\n审阅 changes\n');
 	assert.deepEqual(transport.requests.filter(request => request.method === 'skill/resource/open' || request.method === 'resource/read' || request.method === 'resource/release').map(request => [request.method, request.params]), [
 		['skill/resource/open', { sessionId: 'skill-session', skillId: pinnedSkill.id, skillContentDigest: pinnedSkill.version.digest, path: 'SKILL.md' }],
@@ -43,7 +43,7 @@ test('Cancellation while opening a Skill releases its late handle without reques
 	const client = new AppServerProtocolClient(transport);
 	using cleanup = toDisposable(() => client.dispose());
 	await client.connect();
-	await assert.rejects(createAppServerSkillOperations(client).readInstructions(pinnedSkill, controller.signal), isCancellationError);
+	await assert.rejects(createAppServerSkillOperations(client).readTextResource(pinnedSkill, 'SKILL.md', controller.signal), isCancellationError);
 	assert.deepEqual(transport.requests.filter(request => String(request.method).startsWith('resource/')).map(request => request.method), ['resource/release']);
 });
 
@@ -52,7 +52,7 @@ test('Skill snapshots reject invalid UTF-8 after releasing the resource', async 
 	const client = new AppServerProtocolClient(transport);
 	using cleanup = toDisposable(() => client.dispose());
 	await client.connect();
-	await assert.rejects(createAppServerSkillOperations(client).readInstructions(pinnedSkill, new AbortController().signal), TypeError);
+	await assert.rejects(createAppServerSkillOperations(client).readTextResource(pinnedSkill, 'SKILL.md', new AbortController().signal), TypeError);
 	assert.equal(transport.requests.at(-1)?.method, 'resource/release');
 });
 
@@ -61,7 +61,7 @@ test('Skill snapshots reject oversized instructions before reading chunks and re
 	const client = new AppServerProtocolClient(transport);
 	using cleanup = toDisposable(() => client.dispose());
 	await client.connect();
-	await assert.rejects(createAppServerSkillOperations(client).readInstructions(pinnedSkill, new AbortController().signal), /size/u);
+	await assert.rejects(createAppServerSkillOperations(client).readTextResource(pinnedSkill, 'SKILL.md', new AbortController().signal), /size/u);
 	assert.deepEqual(transport.requests.filter(request => String(request.method).startsWith('resource/')).map(request => request.method), ['resource/release']);
 });
 
@@ -72,7 +72,7 @@ test('A replaced connection never receives a Skill resource read or release from
 	await client.connect();
 	let reconnecting: ReturnType<AppServerProtocolClient['connect']> | undefined;
 	transport.onRead = () => { client.disconnect(); reconnecting = client.connect(); };
-	await assert.rejects(createAppServerSkillOperations(client).readInstructions(pinnedSkill, new AbortController().signal), /replaced/u);
+	await assert.rejects(createAppServerSkillOperations(client).readTextResource(pinnedSkill, 'SKILL.md', new AbortController().signal), /replaced/u);
 	await reconnecting;
 	assert.equal(client.state, 'ready');
 	assert.equal(transport.requests.filter(request => request.method === 'resource/release').length, 0);

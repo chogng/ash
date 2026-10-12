@@ -725,7 +725,19 @@
     "chat.transcript.toolCall": "工具调用",
     "chat.transcript.toolError": "工具错误",
     "chat.transcript.toolResult": "工具结果",
-    "chat.transcript.error": "错误"
+    "chat.transcript.error": "错误",
+    "chat.transcript.memoryReference": "打开记忆引用 {0}",
+    "prompt.syntax.unclosed": "请用单独一行 --- 结束 Skill 头部，然后编写 Markdown 正文。",
+    "prompt.syntax.tooLarge": "Skill 头部超过 16 KiB。请将说明移到 Markdown 正文中。",
+    "prompt.syntax.unsupported": "Skill 头部不支持 YAML 别名、锚点、标签或过深的嵌套值。",
+    "prompt.syntax.invalidYaml": "Skill 头部中的 YAML 无效（{0}）。",
+    "prompt.syntax.mapping": "Skill 头部必须将字段名映射到值。",
+    "prompt.syntax.parseFailed": "无法将 Skill 头部解析为 YAML。",
+    "prompt.validation.header": "Skill 需要用 --- 行包围的 YAML 头部。",
+    "prompt.validation.unknown": "Skill 目录不接受字段 {0}。",
+    "prompt.validation.metadata": "元数据必须将名称映射到文本值。",
+    "prompt.validation.text": "Skill 字段 {0} 需要文本值。",
+    "prompt.validation.required": "Skill 头部需要非空的 {0} 字段。"
   },
   "ash.workbench": {
     "command.OpenAutomations": "打开自动化",

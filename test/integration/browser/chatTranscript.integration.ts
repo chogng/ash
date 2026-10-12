@@ -1,3 +1,4 @@
+import { IAgentCapabilitiesService } from '../../../src/ash/platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { IAgentThreadService } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import toneWav from '../../../crates/utils/audio/tests/fixtures/tone.wav?url';
 import type { AppServerProtocolClient } from '../../../src/ash/platform/agentHost/browser/appServerProtocolClient.js';
@@ -13,6 +14,9 @@ import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { Selection } from '../../../src/ash/editor/common/core/selection.js';
+import { IModelService } from '../../../src/ash/editor/common/services/model.js';
+import { ILanguageService } from '../../../src/ash/editor/common/languages/language.js';
+import { IMarkerService } from '../../../src/ash/platform/markers/common/markers.js';
 import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
 import { CodeEditorWidget } from '../../../src/ash/editor/browser/widget/codeEditor/codeEditorWidget.js';
 import { ICodeEditorService } from '../../../src/ash/editor/browser/services/codeEditorService.js';
@@ -59,16 +63,21 @@ class Clipboard extends BrowserClipboardService {
 services.registerInstance(IClipboardService, resources.add(new Clipboard()));
 services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
 registerCodeEditorServices(services);
-const promptContributions = resources.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.chatPromptSyntax']));
+services.registerInstance(IAgentCapabilitiesService, { isAvailable: true, read: async () => ({ tools: [{ name: 'read_file', description: 'Read authorized files', source: 'local', sourceDetails: ['Ash'], exposure: 'direct', authority: 'directoryRead' }, { name: 'internal_tool', description: 'Internal', source: 'local', sourceDetails: [], exposure: 'hidden', authority: 'providerDefined' }], toolSets: [], localProcessSandboxConfigured: false, directoryGrantsReadable: true, sandboxBackends: [], sandboxDiagnostics: [] }) });
+const promptContributions = resources.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['chat.promptLanguageFeatures']));
 promptContributions.advance(WorkbenchPhase.BlockStartup);
 const fileContainer = document.createElement('section');
 fileContainer.style.cssText = 'width:600px;height:140px';
 fileContainer.setAttribute('aria-label', 'File editor');
 document.body.append(fileContainer);
+resources.add(services.get(ILanguageService).registerLanguage({ id: 'markdown' }));
+resources.add(services.get(ILanguageService).registerLanguage({ id: 'typescript' }));
 const promptFile = new URLSearchParams(location.search).has('prompt');
-const fileModel = resources.add(new TextModel(promptFile ? '---\n\n---\nBody' : 'before after', {
-	resource: URI.parse(promptFile ? 'inmemory://fixture/review/SKILL.md' : 'inmemory://fixture/file.ts'), languageId: promptFile ? 'markdown' : 'typescript',
-}));
+const fileModel = services.get(IModelService).createModel(promptFile ? '---\n\n---\nBody' : 'before after',
+	services.get(ILanguageService).createById(promptFile ? 'markdown' : 'typescript'),
+	URI.parse(promptFile ? 'inmemory://fixture/review/SKILL.md' : 'inmemory://fixture/file.ts'));
+if (!(fileModel instanceof TextModel)) throw new TypeError('Expected the registered Stanza model');
+resources.add(fileModel);
 const file = resources.add(services.createInstance(CodeEditorWidget, {
 	container: fileContainer, model: fileModel,
 	contributions: promptFile ? EditorExtensionsRegistry.getSomeEditorContributions([SuggestController.ID, 'editor.contrib.hover']) : [],
@@ -130,6 +139,8 @@ declare global {
 	interface Window {
 		ashChatTranscriptIntegration: {
 			state(): { copied: string; file: string; resource: string; editorCount: number; selection: unknown; notifications: readonly string[]; };
+			setFile(value: string, line: number, column: number): void;
+			diagnostics(): readonly { message: string; code?: string | number; }[];
 			setReadonly(value: boolean): void;
 			setWrap(value: boolean): Promise<void>;
 			setCodeLineHeight(height: number): Promise<void>;
@@ -156,6 +167,8 @@ window.ashChatTranscriptIntegration = {
 		selection: services.get(ICodeEditorService).listCodeEditors().find(editor => editor !== file)?.getSelection(),
 		notifications: services.get(INotificationService).getNotifications().map(item => item.message),
 	}),
+	setFile: (value, line, column) => { fileModel.setValue(value); file.setSelection(new Selection(line, column, line, column)); },
+	diagnostics: () => services.get(IMarkerService).read(fileModel.uri).map(marker => ({ message: marker.message, code: marker.code })),
 	setReadonly: value => file.updateOptions({ readOnly: value }),
 	setWrap: value => services.get(IConfigurationService).updateValue('chat.editor.wordWrap', value ? 'on' : 'off'),
 	setCodeLineHeight: height => services.get(IConfigurationService).updateValue('chat.editor.lineHeight', height),

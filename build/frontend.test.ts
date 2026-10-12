@@ -54,10 +54,20 @@ test('Frontend CI retains Academic coverage in the unified Workbench projects', 
 	}
 });
 
-test('Frontend CI collects both mock Agent Task executions in its connected Electron step', { timeout: 15_000 }, async () => {
+test('Frontend CI collects success, rejection, failure, revocation and close cases for both Task kinds', { timeout: 15_000 }, async () => {
 	assert.match(workflow, /name: Test mock Agent process and shell Task execution\n\s+if: matrix.surface == 'electron'[\s\S]*?run: pnpm run test:smoke:desktop:no-compile test\/smoke\/areas\/tasks\/task-agent.spec.ts/u);
 	const { stdout } = await execute(process.execPath, ['test/smoke/run.ts', 'electron-app-server', 'test/smoke/areas/tasks/task-agent.spec.ts', '--list'], { cwd: repositoryRoot, timeout: 10_000 });
 	assert.match(stdout, /process › Mock Agent Task loop/u);
 	assert.match(stdout, /shell › Mock Agent Task loop/u);
-	assert.match(stdout, /Total: 2 tests in 1 file/u);
+	for (const title of [
+		'refuses a declined approval',
+		'retains the failed Run ID',
+		'rechecks revoked command permission',
+		'releases the running process',
+		'closes its process with the owning window',
+		'discovers, runs, reads and cancels',
+	]) {
+		assert.equal(stdout.split('\n').filter(line => line.includes(title)).length, 2, title);
+	}
+	assert.match(stdout, /Total: 12 tests in 1 file/u);
 });

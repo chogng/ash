@@ -24,7 +24,7 @@ class Backend extends Disposable implements IAppServerSkillApi {
 	public list = async (reload: 'cached' | 'refresh', sessionId?: string): Promise<SkillCatalog> => { this.calls.push(['list', reload, sessionId]); return catalog; };
 	public read = async (sessionId?: string) => { this.calls.push(['read', sessionId]); return { revision: 7, catalog, diagnostics: [] }; };
 	public setEnabled = async (skillId: typeof id, enabled: boolean, revision: number, sessionId?: string) => { this.calls.push(['set', skillId, enabled, revision, sessionId]); };
-	public readInstructions = async (reference: SkillReference, signal: AbortSignal, sessionId?: string) => { this.calls.push(['body', reference, sessionId, signal.aborted]); return instructions; };
+	public readTextResource = async (reference: SkillReference, path: string, signal: AbortSignal, sessionId?: string) => { this.calls.push(['body', reference, sessionId, signal.aborted, path]); return instructions; };
 }
 
 test('Prompt discovery is metadata-only and reading pins source, digest and Session', async () => {
@@ -37,7 +37,7 @@ test('Prompt discovery is metadata-only and reading pins source, digest and Sess
 	assert.deepEqual(backend.calls, [['list', 'cached', 'first'], ['list', 'cached', 'second']]);
 	const parsed = await prompts.parseNew(first.uri);
 	assert.deepEqual({ content: parsed.content, body: parsed.body?.getContent(), uri: parsed.uri }, { content: instructions, body: '# Review\r\nKeep the exact file.\r\n', uri: first.uri });
-	assert.deepEqual(backend.calls.at(-1), ['body', { id, version: { type: 'pinnedDigest', digest } }, 'first', false]);
+	assert.deepEqual(backend.calls.at(-1), ['body', { id, version: { type: 'pinnedDigest', digest } }, 'first', false, 'SKILL.md']);
 });
 
 test('Prompt management uses the same discovered URIs and backend revision authority', async () => {
@@ -80,7 +80,7 @@ for (const reason of ['token', 'catalog', 'window'] as const) {
 		using cancellation = new CancellationTokenSource();
 		const pending = new DeferredPromise<string>();
 		let signal: AbortSignal | undefined;
-		backend.readInstructions = (_reference, current) => { signal = current; return pending.p; };
+		backend.readTextResource = (_reference, _path, current) => { signal = current; return pending.p; };
 		const [skill] = await prompts.findAgentSkills(CancellationToken.None, 'first');
 		const reading = prompts.parseNew(skill.uri, cancellation.token);
 		if (reason === 'token') cancellation.cancel();

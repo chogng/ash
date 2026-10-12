@@ -149,7 +149,8 @@ export class ModelService extends Disposable implements IModelService {
 		const cacheKey = `${language}\0${resource?.toString() ?? ''}\0${isForSimpleWidget ? 'simple' : 'full'}`;
 		let options = this._modelCreationOptionsByLanguageAndResource[cacheKey];
 		if (!options) {
-			const overrides: IConfigurationOverrides = { overrideIdentifier: language, resource };
+			// The current Profile configuration owns language settings, without resource overrides.
+			const overrides: IConfigurationOverrides = { overrideIdentifier: language };
 			options = ModelService._readModelOptions({
 				tabSize: this._configurationService.getValue<number>(modelConfiguration.tabSize, overrides),
 				indentSize: this._configurationService.getValue<number | 'tabSize'>(modelConfiguration.indentSize, overrides),

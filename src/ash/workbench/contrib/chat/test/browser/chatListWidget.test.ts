@@ -1,5 +1,11 @@
+import { IAgentCapabilitiesService } from '../../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { AccessibleViewType } from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { PromptLanguageFeaturesProvider } from '../../browser/promptSyntax/promptFileContributions.js';
+import { IModelService } from '../../../../../editor/common/services/model.js';
+import { ILanguageService } from '../../../../../editor/common/languages/language.js';
+import { IMarkerService, MarkerSeverity } from '../../../../../platform/markers/common/markers.js';
+import { URI } from '../../../../../base/common/uri.js';
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -200,4 +206,56 @@ test('streaming Markdown reuses static blocks and code editors, then releases re
 	assert.equal(widget.element.querySelector('.stanza-editor'), code);
 	widget.render([{ id: 'reply', type: 'agentMessage', text: 'Replacement', transient: false }]);
 	assert.equal(widget.element.querySelector('.stanza-editor'), null);
+});
+
+
+test('Skill diagnostic contribution handles open, edits, language changes and disposal without removing other markers', async () => {
+	using resources = new DisposableStore();
+	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const models = services.get(IModelService);
+	const languages = services.get(ILanguageService);
+	resources.add(languages.registerLanguage({ id: 'markdown' }));
+	const markers = services.get(IMarkerService);
+	const uri = URI.file('/skills/review/SKILL.md');
+	const model = resources.add(models.createModel('---\nname: review\n---', languages.createById('markdown'), uri));
+	markers.changeOne('other', uri, [{ range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 1 } }, severity: MarkerSeverity.Warning, message: 'existing' }]);
+	services.registerInstance(IAgentCapabilitiesService, { isAvailable: true, read: async () => ({ tools: [{ name: 'read_file', description: 'Read authorized files', source: 'local', sourceDetails: ['Ash'], exposure: 'direct', authority: 'directoryRead' }, { name: 'internal_tool', description: 'Internal', source: 'local', sourceDetails: [], exposure: 'hidden', authority: 'providerDefined' }], toolSets: [], localProcessSandboxConfigured: false, directoryGrantsReadable: true, sandboxBackends: [], sandboxDiagnostics: [] }) });
+	using contribution = services.createInstance(PromptLanguageFeaturesProvider);
+	assert.deepEqual(markers.read(uri, PromptLanguageFeaturesProvider.ID).map(marker => marker.code), ['requiredField']);
+	model.setValue('---\nname: review\ndescription: Review changes\n---');
+	await new Promise(resolve => setTimeout(resolve, 150));
+	assert.equal(markers.read(uri, PromptLanguageFeaturesProvider.ID).length, 0);
+	model.setValue('---\nname: review\n---');
+	model.setLanguage('plaintext');
+	await new Promise(resolve => setTimeout(resolve, 150));
+	assert.equal(markers.read(uri, PromptLanguageFeaturesProvider.ID).length, 0);
+	model.setLanguage('markdown');
+	assert.equal(markers.read(uri, PromptLanguageFeaturesProvider.ID).length, 1);
+	contribution.dispose();
+	assert.equal(markers.read(uri, PromptLanguageFeaturesProvider.ID).length, 0);
+	assert.equal(markers.read(uri, 'other').length, 1);
+});
+
+test('streamed memory references retain their buttons, code editor and focus as new references arrive', () => {
+	using resources = new DisposableStore();
+	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const opened: string[] = [];
+	using widget = services.createInstance(ChatListWidget, document.createElement('main'), { onDidRequestMemoryReference: (value: string) => opened.push(value) });
+	document.body.append(widget.element);
+	resources.add(toDisposable(() => widget.element.remove()));
+	const text = 'memory:first\n\n```ts\nconst a = 1;\n```';
+	widget.render([{ id: 'reply', type: 'agentMessage', text, transient: true }]);
+	const code = widget.element.querySelector('.ash-chat-code-block')!;
+	const button = [...widget.element.querySelectorAll('button')].find(button => button.textContent === 'Open memory reference 1')!;
+	button.focus();
+	widget.render([{ id: 'reply', type: 'agentMessage', text: text + '\n\nmemory:second', transient: false }]);
+	assert.equal(widget.element.querySelector('.ash-chat-code-block'), code);
+	assert.equal(document.activeElement, button);
+	button.click();
+	const second = [...widget.element.querySelectorAll('button')].find(button => button.textContent === 'Open memory reference 2')!;
+	second.click();
+	assert.deepEqual(opened, ['memory:first', 'memory:second']);
+	widget.render([]);
+	button.click();
+	assert.deepEqual(opened, ['memory:first', 'memory:second']);
 });

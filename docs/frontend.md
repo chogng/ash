@@ -176,7 +176,7 @@ iframe 通过 `acquireAshWebviewApi().postMessage()` 通信，宿主校验来源
 
 Academic 文件打开与保存已纳入 `pnpm test:desktop:app`，直接在 Code 工作台验证。旧模式迁移见 [工作台与文档贡献](workbench-modes.md)。
 
-Agent Task 闭环回归位于 [task-agent.spec.ts](../test/smoke/areas/tasks/task-agent.spec.ts)，分别覆盖 process 与 shell Task。仅模型 Responses 使用回环 HTTP mock；聊天输入、Agent Core、一次性审批、TaskService、exec-server、PTY 和 Tasks/Terminal 均为真实产品路径。测试读取 Core 工具记录，确认发现、单次启动、Run ID 状态与输出查询、取消、进程退出及保留输出；模型不生成 Task 或直接执行命令，不需要模型账户或密钥。
+Agent Task 闭环回归位于 [task-agent.spec.ts](../test/smoke/areas/tasks/task-agent.spec.ts)，分别覆盖 process 与 shell Task。仅模型 Responses 使用回环 HTTP mock；聊天输入、Agent Core、一次性审批、TaskService、exec-server、PTY 和 Tasks/Terminal 均为真实产品路径。测试读取 Core 工具记录，确认发现、单次启动、Run ID 状态与输出查询、取消、进程退出及保留输出，并覆盖审批拒绝、启动失败、审批期间与运行中的命令权限撤销、窗口关闭后的进程清理；模型不生成 Task 或直接执行命令，不需要模型账户或密钥。
 
 ```sh
 pnpm run smoketest test/smoke/areas/tasks/task-agent.spec.ts
@@ -184,7 +184,7 @@ pnpm run smoketest test/smoke/areas/tasks/task-agent.spec.ts
 pnpm run smoketest-no-compile test/smoke/areas/tasks/task-agent.spec.ts
 ```
 
-[Frontend CI](../.github/workflows/frontend.yml) 在 Windows 和 macOS 的 connected Electron 构建后单独运行这两个用例，普通 connected Electron 步骤排除同组测试以避免重复。失败诊断沿用 Playwright 报告、trace 和截图，并附加实际 Agent Thread 与 mock 模型交互记录；CI 将这些文件上传到对应的 frontend 诊断 artifact。
+[Frontend CI](../.github/workflows/frontend.yml) 在 Windows 和 macOS 的 connected Electron 构建后单独运行这 12 个用例，普通 connected Electron 步骤排除同组测试以避免重复。关闭窗口的用例保留空白测试窗口及独立后端连接，先确认 Task 进程退出、后端仍可响应，再拆卸 fixture。失败诊断沿用 Playwright 报告、trace 和截图，并附加实际 Agent Thread 与 mock 模型交互记录；CI 将这些文件上传到对应的 frontend 诊断 artifact。
 
 ### UI 场景录屏
 

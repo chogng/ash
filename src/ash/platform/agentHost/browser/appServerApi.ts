@@ -99,7 +99,7 @@ export async function readAppServerResource(api: IResourceApi, resource: Resourc
 }
 
 export function createDisconnectedSkillOperations(unavailable: UnavailableOperation): IAppServerSkillApi {
-	return { onDidChangeSkills: Event.None, list: () => unavailable("skills.list"), read: () => unavailable("skills.read"), setEnabled: () => unavailable("skills.setEnabled"), readInstructions: () => unavailable("skills.readInstructions") };
+	return { onDidChangeSkills: Event.None, list: () => unavailable("skills.list"), read: () => unavailable("skills.read"), setEnabled: () => unavailable("skills.setEnabled"), readTextResource: () => unavailable("skills.readTextResource") };
 }
 
 export function createAppServerSkillOperations(connection: AppServerProtocolClient): IAppServerSkillApi {
@@ -113,13 +113,14 @@ export function createAppServerSkillOperations(connection: AppServerProtocolClie
 			const [config, catalog] = await Promise.all([appServerRequest(connection, "config/read", {}), appServerRequest(connection, "skills/list", { reload: "refresh", sessionId })]);
 			return { revision: config.revision, catalog: normalizeSkillCatalog(catalog), diagnostics: catalog.diagnostics.map(entry => ({ source: entry.source, subject: entry.subject ?? undefined, message: entry.message })) };
 		},
-		readInstructions: async (reference, signal, sessionId) => {
+		readTextResource: async (reference, path, signal, sessionId) => {
 			throwIfCancelled(signal);
 			const resources = createAppServerResourceApi(connection);
 			const generation = resources.connectionGeneration;
-			const opened = await appServerRequest(connection, 'skill/resource/open', { sessionId, skillId: reference.id, skillContentDigest: reference.version.digest, path: 'SKILL.md' });
+			const opened = await appServerRequest(connection, 'skill/resource/open', { sessionId, skillId: reference.id, skillContentDigest: reference.version.digest, path });
 			const bytes = await readAppServerResource(resources, opened.resource, 256 * 1024, signal, generation);
 			throwIfCancelled(signal);
+			if (!opened.resource.mimeType.startsWith('text/')) throw new TypeError('Skill resource is not text');
 			return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
 		},
 		setEnabled: async (skillId, enabled, expectedRevision, sessionId) => {

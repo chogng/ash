@@ -3,7 +3,7 @@ import './media/chatListWidget.css';
 import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
 import { ScrollableElement } from "../../../../../base/browser/ui/scrollbar/scrollableElement.js";
 import { Emitter } from '../../../../../base/common/event.js';
-import { Disposable, DisposableMap, DisposableStore } from "../../../../../base/common/lifecycle.js";
+import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
 import type { URI } from '../../../../../base/common/uri.js';
 import type { ChatTurnErrorAction, IChatListItem } from "./chatListItems.js";
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
@@ -28,6 +28,7 @@ interface ChatListWidgetOptions {
 }
 
 class RenderedItem extends Disposable {
+	readonly memoryReferences = this._register(new DisposableMap<string, IDisposable & { readonly element: HTMLButtonElement; }>());
 	constructor(public item: IChatListItem, public readonly element: HTMLElement, disposables: DisposableStore, public readonly toolPart?: ChatToolInvocationPart, public readonly markdownPart?: ChatMarkdownContentPart) {
 		super();
 		this._register(disposables);
@@ -155,6 +156,7 @@ export class ChatListWidget extends DomWidget {
 				row?.element.remove();
 				row = this.renderedItems.set(item.id, this.renderItem(item));
 			}
+			this.renderMemoryReferences(row);
 			if (row.element !== next) this.transcript.insertBefore(row.element, next);
 			next = row.element.nextSibling;
 		}
@@ -248,6 +250,25 @@ export class ChatListWidget extends DomWidget {
 		return undefined;
 	}
 
+	private renderMemoryReferences(row: RenderedItem): void {
+		if (!this.onDidRequestMemoryReference) return;
+		const references = [...new Set(row.item.text.match(/memory:[A-Za-z0-9_-]+/g) ?? [])].filter(reference => reference.length <= 4096).slice(0, 8);
+		for (const [reference] of row.memoryReferences) {
+			if (!references.includes(reference)) row.memoryReferences.deleteAndDispose(reference);
+		}
+		for (const [index, reference] of references.entries()) {
+			let rendered = row.memoryReferences.get(reference);
+			if (!rendered) {
+				const button = h(row.element.ownerDocument, 'button');
+				button.type = 'button';
+				const click = addDisposableListener(button, 'click', () => this.onDidRequestMemoryReference?.(reference));
+				rendered = row.memoryReferences.set(reference, Object.assign(toDisposable(() => { click.dispose(); button.remove(); }), { element: button }));
+				row.element.append(button);
+			}
+			rendered.element.textContent = localize('chat.transcript.memoryReference', 'Open memory reference {0}', index + 1);
+		}
+	}
+
 	private renderItem(item: IChatListItem): RenderedItem {
 		const disposables = new DisposableStore();
 		const article = h(this.element.ownerDocument, "article");
@@ -298,16 +319,6 @@ export class ChatListWidget extends DomWidget {
 			const media = disposables.add(this.instantiationService.createInstance(ChatAttachmentsContentPart, { ownerDocument: article.ownerDocument, variables: item.content, source: item.attachmentSource }));
 			disposables.add(media.onDidChangeHeight(() => { if (this.visible) this.layout(); this._onDidChangeContent.fire(); }));
 			body.append(media.domNode);
-		}
-		if (this.onDidRequestMemoryReference) {
-			const references = [...new Set(item.text.match(/memory:[A-Za-z0-9_-]+/g) ?? [])].filter(reference => reference.length <= 4096).slice(0, 8);
-			for (const [index, reference] of references.entries()) {
-				const button = h(this.element.ownerDocument, 'button');
-				button.type = 'button';
-				button.textContent = `Open memory reference ${index + 1}`;
-				article.append(button);
-				disposables.add(addDisposableListener(button, 'click', () => this.onDidRequestMemoryReference?.(reference)));
-			}
 		}
 		if (item.detail) {
 			const detail = h(this.element.ownerDocument, "p");

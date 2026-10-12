@@ -50,13 +50,16 @@ export class PromptsService extends Disposable implements IPromptsService {
 
 	public async parseNew(uri: URI, token: CancellationToken = CancellationToken.None): Promise<ParsedPromptFile> {
 		throwIfCancelled(token);
-		const target = this.references.get(uri);
-		if (!target || this.isDisposed) throw new ReferenceError('Prompt URI was not discovered in this window');
+		const match = /^\/([^/]+)\/(.+)$/u.exec(uri.path);
+		const instructions = match ? uri.with({ path: `/${match[1]}/SKILL.md`, fragment: '' }) : uri;
+		const target = this.references.get(instructions);
+		const path = match?.[2];
+		if (!target || !path || path.includes('\\') || path.split('/').some(segment => segment === '..' || segment === '.' || !segment) || this.isDisposed) throw new ReferenceError('Prompt URI was not discovered in this window');
 		const controller = new AbortController();
 		this.reads.add(controller);
 		const cancelled = token.onCancellationRequested(() => controller.abort());
 		try {
-			const content = await this.backend.readInstructions(target.reference, controller.signal, target.sessionId);
+			const content = await this.backend.readTextResource(target.reference, path, controller.signal, target.sessionId);
 			throwIfCancelled(token);
 			throwIfCancelled(controller.signal);
 			return this.parser.parse(uri, content);

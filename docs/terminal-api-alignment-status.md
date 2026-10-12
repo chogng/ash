@@ -1,5 +1,19 @@
 # Terminal API 对齐状态
 
+## 本轮验证结果（2026-10-12）
+
+剩余 54 项中新增 14 个实际使用的生产文件，当前同路径 49、缺失 40、仅 Ash 0。编辑区往返保留同一 PTY/屏幕，标签关闭释放进程；Clear/Relaunch/Kill 直接作用于编辑区实例。中英文 Rename/Icon 选择及关闭目标取消通过；用户元数据跨 PTY 替换保留。屏幕标记跨进程 ID 隔离、中文 ARIA/tooltip 与原命令导航通过；水平列表宽度重建和页面重载恢复，非法持久化数值使用默认尺寸。
+
+正常 unit 入口 5 个终端文件 110 项通过，runner 自测 9 项通过；正常 Chromium 全套 73 项通过后增加页面重载回归，最终使用原 browser runner 全套 74 项通过。原编译选项的定向 TypeScript 编译与原 unit runner 的 7 文件 136 项通过（含 24 项装载/架构检查及 2 项 marker 淘汰/监听释放检查）。正常 common 2343、renderer 3736 文件检查曾通过；最后全量准备/类型检查被共享 Chat 改动阻塞：chat.json 的顶层翻译值不是 bundle，以及 chatListWidget.ts 的缺失 Symbol.dispose、chatListWidget.test.ts 的 implicit-any。保留这些范围外改动；终端未改生成协议，复用既有产物并以同一 compiler options 定向编译成功，未把最新全量检查报为通过。终端 3 个 CSS 的 scoped stylelint 零错误（1 条原有 font-size 建议），精确 TS 格式、Markdown/NLS/CSS Prettier 与本批 whitespace 检查通过。全工作树 whitespace 另有范围外 task-agent.spec.ts 的 trailing whitespace，未修改。无 Electron/真实 SSH/Windows/Linux 运行声明。
+
+40 个剩余路径仍待闭合消费链与前置契约，不按数量创建空壳；准确分类见下文当前差集。没有发起 commit/push；共享工作树期间其他操作提交了本批部分变化（包括当前 b3873ca9a），未撤销这些提交或外部改动。
+
+## 扩展 PTY 代理本批准入（2026-10-12）
+
+真实 extension profile → 原 MainThreadTerminalService → 原自供 PTY 的 create/open/input/resize/read/close → 新上游同路径 browser/terminalProcessExtHostProxy.ts → 原 ITerminalChildProcess/TerminalInstance。原 MainThread 的内嵌 PTY 类退出，由对应代理唯一拥有 opaque handle、轮询/输入队列、取消、事件响应边界与释放；新 common/basePty.ts 仅拥有原 child-process 的 typed output/ready/property/exit 事件端口，被代理实际消费。注册/扩展 incarnation 属于原 MainThread；PTY 和 screen 仍属于原实例/后端，没有第二份 profile 或 Shell state。
+
+准确新增（仅 VS Code）：browser/terminalProcessExtHostProxy.ts、common/basePty.ts。准确修改（双方已有）：src/ash/workbench/api/browser/mainThreadTerminalService.ts（只移出原 ExtensionProfilePseudoterminal，更新真实 factory import/名称，注册/配置校验保留）；既有 test/browser/terminalConfigurationService.test.ts（真实 profile→原实例的 start/input/reuse/withdraw lifecycle）；新增同路径 test/browser/terminalProcessExtHostProxy.test.ts（同步 open 输出、关闭中晚到 frame、opaque handle 恰好一次释放）、README、本台账。生产调用边已经存在，Core/API implementation 消费贡献的具体代理，公共契约/registry 不反向导入 contribution；服务层 EmbedderTerminalProcess 不迁入贡献。平台的现有 callback/JsonValue 是外部 provider 边界，不是生成 transport DTO。内部 typed payload 不重复校验，插件响应每条边界只解码一次。BasePty 的当前支持限于真实 string-output child-process 端口，不伪称 Rust byte-stream replay/persistence 完整支持。
+
 ## 统一装载本批准入（2026-10-12）
 
 现有 Sessions Desktop/Web 入口 → 新同路径 `terminal.all.ts` → 核心 terminal.contribution 与实际存在的 per-instance contributions；核心 contribution 专注终端注册，不再反向装载独立增强。准确范围：terminal.all.ts（仅 VS Code）、browser/terminal.contribution.ts（只迁移现有 7 条副作用 imports）、src/ash/sessions/sessions.common.main.ts（现有真实消费者，仅增加统一装载 import、原 registerTerminalView 保留）、既有 integration terminal fixture（相同装载链）、README、本台账。双方都有的入口沿用当前服务组装；不生成未安装增强、不增聚合导出/注册桥。采用 sessions skill；Desktop/Web 类型检查、全终端 Chromium/装载既有 unit 覆盖。
@@ -19,6 +33,8 @@ Rename / Change Icon 命令和实例菜单 → 新同路径 `browser/terminalEdi
 ## xterm 标记与布局本批准入（2026-10-12）
 
 编辑区最小真实行为切片已通过：Chromium 5 项包含分屏、两种语言往返移动与失效资源恢复。继续下一批：原后端命令事件 → XtermTerminal → 新同路径 `browser/xterm/decorationAddon.ts` 唯一拥有屏幕 marker/decoration 及其监听生命周期 → 新 `markNavigationAddon.ts` 只读取已有屏幕 marker 导航 → 标准焦点命令。标记淘汰时立即释放事件监听，不再把已淘汰标记的 listeners 留到整屏 dispose。新 `decorationStyles.ts` 独立生成有 NLS 的状态说明供 tooltip/ARIA；新 `browser/media/xterm.css` 承接既有 Ash 屏幕几何/命令状态样式。没有 Shell parser、第二份 command history/capability store；这些 addons 的当前支持是显示/导航已提交后端事件，不声明完整上游 capability API。
+
+补充验证准入：新增 `test/browser/xterm/decorationAddon.test.ts`，用可观察的 marker/render 事件订阅测试 xterm 淘汰后的即时释放与屏幕关闭，沿用原 marker owner，不访问私有实现字段。
 
 准确路径：上述 4 个缺失同路径文件（仅 VS Code）；双方已有 `browser/xterm/xtermTerminal.ts`（移出屏幕标记/导航 hunk）、`browser/media/terminal.css`（仅移出同一屏幕所拥有样式）、现有 integration fixture/spec（状态、trim/clear、跨 PTY 重用、双语/主题/焦点）。新增 `common/terminalStrings.ts`（仅 VS Code）集中真实消费的编辑区命令和导航 label；现有 terminalActions.ts/terminalEditorInput.ts/terminal.contribution.ts 仅迁移这些 label import。zh-CN/workbench.json、本台账、README 记录结果。标记对象继续属于同一屏幕，xterm 负责缓存淘汰，addons lifetime 跟随屏幕；不复制上游实现或私有结构。
 
@@ -44,14 +60,16 @@ Rename / Change Icon 命令和实例菜单 → 新同路径 `browser/terminalEdi
 
 验证：正常 `pnpm test:unit` 四个终端文件共 105 项通过，runner 自测 9 项通过；正常 Chromium Terminal 全套 66 项通过（新字体模式、分屏输入路由/几何/关闭焦点、中文 sash/Unsplit/序号命令，以及中文失败 tooltip/重启清理）。Renderer 3720 文件、common 2339 文件和完整浏览器/test 编译通过。初次全 test 编译被共享工作树 chatViewPane.test.ts 的重复 import 阻塞，按原 compiler options 定向编译和原 unit runner 验证后，共享修改修复了该重复 import，最终正常入口通过。浏览器 fixture 补上产品拥有的动态 icon resolver、SplitView CSS、执行端 OS、speech/Views/group DI；未修改产品主题或基础 widget 来掩盖 fixture。全仓 stylelint 当前在范围外 sessionChangesEditorInput.css 的 class substring selector 上失败；终端相关 CSS 单独验证，不能把全仓样式记为通过。本机为 macOS Chromium，未运行 Windows/Linux/真实 SSH 或 Electron 产品验证。
 
-当前完整 terminal 生产 TS/CSS 审计：同路径 35、缺失 54、仅 Ash 0（排除 tests 与 README）。文件存在不表示公开 API 全量完成；importer 当前仅覆盖实际安装与消费的 Search addon，font rendering 已消费设置，status list 当前覆盖真实错误消息，group 仅支持已创建实例的水平 pane，完整同步 InstanceService、垂直 orientation、持久化、editor 与 capability 端口仍未完成。后文 Browser 清单是历史批次快照，本轮已退出上述 9 项。剩余清单仍需对应调用链，不能宣称全目录已补完。
+当前完整 terminal 生产 TS/CSS 审计：同路径 49、缺失 40、仅 Ash 0（排除 tests 与 README），本轮在上一轮 54 项中完成 14 个缺失文件。新增编辑区的 URI/Input/Serializer/Pane/Service、重命名 UI owner、图标 picker、decoration/mark navigation/styles、屏幕 CSS、共享 labels/宽度 key 与统一装载入口均有真实消费者；仍不表示各文件完整公开 API 已对齐。编辑区持久化只恢复资源身份，失效实例显示不可用，不保存/恢复 PTY；分屏目前只在面板内提供水平窗格。后文旧审计按历史批次记录，当前差集以本节为准。
 
-本轮准确剩余清单（相对 `src/ash/workbench/contrib/terminal`，TS/CSS）：
+当前准确剩余 40 项（相对 `src/ash/workbench/contrib/terminal`）：
 
-- 实例、编辑区与身份：`browser/terminalEditingService.ts`、`browser/terminalEditor.ts`、`browser/terminalEditorInput.ts`、`browser/terminalEditorSerializer.ts`、`browser/terminalEditorService.ts`、`browser/terminalEscapeSequences.ts`、`browser/terminalEvents.ts`、`browser/terminalInstanceService.ts`、`browser/terminalUri.ts`。
-- 状态、widgets 与 xterm capability：`browser/media/widgets.css`、`browser/media/xterm.css`、`browser/terminalIconPicker.ts`、`browser/terminalTabsChatEntry.ts`、`browser/terminalTestHelpers.ts`、`browser/widgets/terminalHoverWidget.ts`、`browser/widgets/widgetManager.ts`、`browser/widgets/widgets.ts`、`browser/xterm-private.d.ts`、`browser/xterm/decorationAddon.ts`、`browser/xterm/decorationStyles.ts`、`browser/xterm/lineDataEventAddon.ts`、`browser/xterm/markNavigationAddon.ts`。
-- backend、remote 与 Agent：`browser/agentHostOutputChannel.ts`、`browser/agentHostPty.ts`、`browser/agentHostTerminalService.ts`、`browser/ahpTerminalCommandSource.ts`、`browser/baseTerminalBackend.ts`、`browser/chatTerminalCommandMirror.ts`、`browser/detachedTerminal.ts`、`browser/environmentVariableInfo.ts`、`browser/remotePty.ts`、`browser/remoteTerminalBackend.ts`、`browser/terminal.web.contribution.ts`、`browser/terminalProcessExtHostProxy.ts`。
-- common、Electron 与装载：`common/basePty.ts`、`common/environmentVariable.contribution.ts`、`common/environmentVariable.ts`、`common/environmentVariableService.ts`、`common/remote/remoteTerminalChannel.ts`、`common/remote/terminal.ts`、`common/terminalEnvironment.ts`、`common/terminalExtensionPoints.contribution.ts`、`common/terminalExtensionPoints.ts`、`common/terminalStorageKeys.ts`、`common/terminalStrings.ts`、`electron-browser/localPty.ts`、`electron-browser/localTerminalBackend.ts`、`electron-browser/terminal.contribution.ts`、`electron-browser/terminalNativeContribution.ts`、`electron-browser/terminalProfileResolverService.ts`、`electron-browser/terminalRemote.ts`、`terminal.all.ts`、`terminalContribChatExports.ts`、`terminalContribExports.ts`。
+- 实例与事件（3）：`browser/terminalEscapeSequences.ts`、`browser/terminalEvents.ts`、`browser/terminalInstanceService.ts`。
+- widgets 与 xterm（8）：`browser/media/widgets.css`、`browser/terminalTabsChatEntry.ts`、`browser/terminalTestHelpers.ts`、`browser/widgets/terminalHoverWidget.ts`、`browser/widgets/widgetManager.ts`、`browser/widgets/widgets.ts`、`browser/xterm-private.d.ts`、`browser/xterm/lineDataEventAddon.ts`。
+- backend、remote 与 Agent（12）：`browser/agentHostOutputChannel.ts`、`browser/agentHostPty.ts`、`browser/agentHostTerminalService.ts`、`browser/ahpTerminalCommandSource.ts`、`browser/baseTerminalBackend.ts`、`browser/chatTerminalCommandMirror.ts`、`browser/detachedTerminal.ts`、`browser/environmentVariableInfo.ts`、`browser/remotePty.ts`、`browser/remoteTerminalBackend.ts`、`browser/terminal.web.contribution.ts`、`browser/terminalProcessExtHostProxy.ts`。
+- common 与 Electron（17）：`common/basePty.ts`、`common/environmentVariable.contribution.ts`、`common/environmentVariable.ts`、`common/environmentVariableService.ts`、`common/remote/remoteTerminalChannel.ts`、`common/remote/terminal.ts`、`common/terminalEnvironment.ts`、`common/terminalExtensionPoints.contribution.ts`、`common/terminalExtensionPoints.ts`、`electron-browser/localPty.ts`、`electron-browser/localTerminalBackend.ts`、`electron-browser/terminal.contribution.ts`、`electron-browser/terminalNativeContribution.ts`、`electron-browser/terminalProfileResolverService.ts`、`electron-browser/terminalRemote.ts`、`terminalContribChatExports.ts`、`terminalContribExports.ts`。
+
+剩余清单不作完成声明：Electron/local/remote/AHP backend 要先闭合共享 child-process/backend 与 Rust transport owner；同步 InstanceService 不能用当前异步 create 的转发壳冒充。环境集合/extension points 需先有真实插件域契约；widgets、lineData、private xterm、事件 multiplexer 与 Chat exports 需有实际消费边。已有平台适配器、Rust Shell parser/nonce/history 和 services/terminal 的领域契约继续保持唯一 owner；没有创建空模块、重复注册或假 capability store。
 
 ## Send Sequence 本批准入（2026-10-12）
 

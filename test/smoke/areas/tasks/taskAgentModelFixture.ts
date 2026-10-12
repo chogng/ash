@@ -19,9 +19,10 @@ interface InputItem {
 export class TaskAgentModelFixture {
 	private readonly server: Server;
 	private sequence = 0;
-	private cancelStart = 0;
+	private followupStart = 0;
 	private directory: string | undefined;
 	private runId: string | undefined;
+	private expected: 'running' | 'denied' | 'failed' | 'revoked' = 'running';
 	readonly exchanges: { name?: string; arguments?: unknown; result?: unknown; answer?: string; }[] = [];
 	readonly errors: string[] = [];
 
@@ -39,10 +40,17 @@ export class TaskAgentModelFixture {
 				if (this.sequence >= 256) throw new Error('Agent exceeded the bounded Task tool sequence');
 				// Core adds context after the authored prompt; inspect all user entries.
 				const cancel = body.input.some(item => item.role === 'user' && JSON.stringify(item).includes('TASK_FIXTURE_CANCEL'));
-				if (cancel && !this.cancelStart) this.cancelStart = this.sequence + 1;
-				const latest = body.input.filter(item => item.type === 'function_call_output' && (!cancel || Number(item.call_id?.split('-').at(-1)) >= this.cancelStart)).at(-1);
+				const retry = body.input.some(item => item.role === 'user' && JSON.stringify(item).includes('TASK_FIXTURE_RETRY'));
+				const inspect = !retry && body.input.some(item => item.role === 'user' && JSON.stringify(item).includes('TASK_FIXTURE_INSPECT'));
+				const followup = cancel || inspect || retry;
+				if (followup && !this.followupStart) this.followupStart = this.sequence + 1;
+				const latest = body.input.filter(item => item.type === 'function_call_output' && (!followup || Number(item.call_id?.split('-').at(-1)) >= this.followupStart)).at(-1);
 				const call = latest && body.input.find(item => item.type === 'function_call' && item.call_id === latest.call_id);
-				const result = latest ? JSON.parse(typeof latest.output === 'string' ? latest.output : latest.output!.map(part => part.text).join('')) : undefined;
+				const text = latest && (typeof latest.output === 'string' ? latest.output : latest.output!.map(part => part.text).join(''));
+				let result;
+				if (text !== undefined) {
+					try { result = JSON.parse(text); } catch { result = text; }
+				}
 				if (latest) this.exchanges.push({ name: call?.name, result });
 				let name: string | undefined;
 				let args: Record<string, unknown> | undefined;
@@ -54,7 +62,11 @@ export class TaskAgentModelFixture {
 				};
 				if (!latest) {
 					if (cancel) next('tasks_cancel', target());
+					else if (inspect) next('tasks_status', target());
 					else next('tasks_list', { directory: this.directory });
+				} else if (call?.name === 'tasks_run' && (this.expected === 'denied' || this.expected === 'revoked') && typeof result === 'string') {
+					// This is the actual Core error output, not an invented failed tool result.
+					answer = 'TASK_REJECTED ' + result;
 				} else {
 					switch (call?.name) {
 						case 'tasks_list': {
@@ -73,8 +85,10 @@ export class TaskAgentModelFixture {
 							break;
 						case 'tasks_status':
 							if (result.runId !== this.runId) throw new Error('Status returned another Run');
-							if (result.status === 'failed' || result.status === 'completed') throw new Error('Fixture Task stopped unexpectedly: ' + JSON.stringify(result));
-							if ((!cancel && result.status === 'running' && result.terminalId) || (cancel && result.status === 'canceled')) {
+							if ((result.status === 'failed' || result.status === 'canceled') && (this.expected === 'failed' || inspect)) {
+								next('tasks_output', { ...target(), cursor: 0, max_characters: 65536 });
+							} else if (result.status === 'failed' || result.status === 'completed') throw new Error('Fixture Task stopped unexpectedly: ' + JSON.stringify(result));
+							else if ((!cancel && !inspect && this.expected === 'running' && result.status === 'running' && result.terminalId) || (cancel && result.status === 'canceled')) {
 								next('tasks_output', { ...target(), cursor: 0, max_characters: 65536 });
 							} else {
 								// Back off while the real PTY is starting; do not spin model requests.
@@ -83,7 +97,9 @@ export class TaskAgentModelFixture {
 							}
 							break;
 						case 'tasks_output':
-							if (result.text.includes(taskMarker)) answer = (cancel ? 'CANCELED ' : 'RUNNING ') + this.runId;
+							if (this.expected === 'failed') answer = 'FAILED ' + this.runId;
+							else if (inspect) answer = 'STOPPED ' + this.runId;
+							else if (result.text.includes(taskMarker)) answer = (cancel ? 'CANCELED ' : 'RUNNING ') + this.runId;
 							else {
 								await delay(150);
 								next('tasks_output', { ...target(), cursor: 0, max_characters: 65536 });
@@ -116,6 +132,8 @@ export class TaskAgentModelFixture {
 
 	get baseUrl(): string { return 'http://127.0.0.1:' + (this.server.address() as AddressInfo).port + '/v1'; }
 	selectDirectory(directory: string): void { this.directory = directory; }
+	expectOutcome(outcome: 'running' | 'denied' | 'failed' | 'revoked'): void { this.expected = outcome; }
+	beginFollowup(): void { this.followupStart = 0; }
 
 	async close(): Promise<void> {
 		await new Promise<void>((resolve, reject) => {

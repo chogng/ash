@@ -1098,8 +1098,8 @@ test('shell cwd waits for the original xterm commit and remains available with r
 	await page.evaluate(() => window.ashTerminalStreamIntegration.close());
 });
 
-test('terminal reuse keeps command decorations separate when the new PTY restarts command IDs', async ({ page }) => {
-	await page.goto('/terminal.html?stream&reuseCommands');
+test('terminal reuse keeps command decorations separate when the new PTY restarts command IDs with Chinese status labels', async ({ page }) => {
+	await page.goto('/terminal.html?stream&reuseCommands&locale=zh-CN');
 	await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));
 	await page.evaluate(() => window.ashTerminalStreamIntegration.start());
 	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.status().state)).toBe('exited');
@@ -1107,8 +1107,8 @@ test('terminal reuse keeps command decorations separate when the new PTY restart
 	await page.evaluate(() => window.ashTerminalStreamIntegration.reuse());
 	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.status().state)).toBe('exited');
 	await expect(page.locator('.ash-terminal-command-status')).toHaveCount(2);
-	await expect(page.getByRole('img', { name: 'Command completed successfully', exact: true })).toHaveCount(1);
-	await expect(page.getByRole('img', { name: 'Command failed with exit code 11', exact: true })).toHaveCount(1);
+	await expect(page.getByRole('img', { name: '命令已成功完成', exact: true })).toHaveCount(1);
+	await expect(page.getByRole('img', { name: '命令失败，退出代码为 11', exact: true })).toHaveCount(1);
 	expect(await page.evaluate(() => window.ashTerminalStreamIntegration.status().remaining)).toBe(1);
 	expect(await page.evaluate(() => window.ashTerminalStreamIntegration.status().closes)).toBe(1);
 	await page.evaluate(() => window.ashTerminalStreamIntegration.close());
@@ -1346,6 +1346,8 @@ test('terminal Clear and Relaunch commands operate on the active editor instance
 	await page.evaluate(() => window.ashTerminalEditorIntegration.disconnect());
 	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.relaunch'));
 	await expect.poll(() => page.evaluate(() => window.ashTerminalEditorIntegration.state())).toEqual({ instances: 1, created: 2, editorTabs: 1, originalScreen: true, target: 2 });
+	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.kill'));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalEditorIntegration.state())).toMatchObject({ instances: 0, editorTabs: 0 });
 });
 
 

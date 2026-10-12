@@ -1,10 +1,9 @@
-import { Emitter } from '../../../base/common/event.js';
-import { CancellationError, onUnexpectedError } from '../../../base/common/errors.js';
+import { TerminalProcessExtHostProxy } from '../../contrib/terminal/browser/terminalProcessExtHostProxy.js';
+import { CancellationError } from '../../../base/common/errors.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
-import { TaskQueue } from '../../../base/common/async.js';
 import { ThemeIcon } from '../../../base/common/themables.js';
 import { localize } from '../../../nls.js';
-import { ITerminalProcessService, type ITerminalChildProcess, type IProcessProperty, type IProcessReadyEvent, ProcessPropertyType, type IShellLaunchConfig, type TerminalArguments } from '../../../platform/terminal/common/terminal.js';
+import { ITerminalProcessService, type IShellLaunchConfig, type TerminalArguments } from '../../../platform/terminal/common/terminal.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { IExtensionService } from '../../services/extensions/common/extensionService.js';
 import { ITerminalService, type ITerminalInstance } from '../../services/terminal/browser/terminal.js';
@@ -85,7 +84,7 @@ export class MainThreadTerminalService extends Disposable {
 									name, icon, color, customPtyImplementation: (terminalId, cols, rows) => {
 										if (lifetime.isDisposed || generation !== this.workspaceGeneration) throw new CancellationError();
 										let registration: IDisposable | undefined;
-										const child = new ExtensionProfilePseudoterminal(terminalId, nextPtyId, pty.acceptsInput === true, cols, rows, descriptor.invoke, () => {
+										const child = new TerminalProcessExtHostProxy(terminalId, nextPtyId, pty.acceptsInput === true, cols, rows, descriptor.invoke, () => {
 											if (registration) {
 												lifetime.delete(registration);
 												registration.dispose();
@@ -130,131 +129,6 @@ export class MainThreadTerminalService extends Disposable {
 	}
 }
 
-/** The instance owns its screen; this child owns only an extension's bounded opaque PTY stream. */
-class ExtensionProfilePseudoterminal extends Disposable implements ITerminalChildProcess {
-	readonly shouldPersist = false;
-	private readonly data = this._register(new Emitter<string>());
-	private readonly ready = this._register(new Emitter<IProcessReadyEvent>());
-	private readonly property = this._register(new Emitter<IProcessProperty>());
-	private readonly exit = this._register(new Emitter<number | undefined>());
-	readonly onProcessData = this.data.event;
-	readonly onProcessReady = this.ready.event;
-	readonly onDidChangeProperty = this.property.event;
-	readonly onProcessExit = this.exit.event;
-	private readonly sendInput = (data: string) => this.dispatch('inputTaskTerminal', { data });
-	get input(): ((data: string) => void) | undefined { return this.acceptsInput ? this.sendInput : undefined; }
-	private readonly queue = new TaskQueue();
-	private readonly controller = new AbortController();
-	private timer: ReturnType<typeof setTimeout> | undefined;
-	private closed = false;
-
-	constructor(readonly id: number, private ptyId: string | undefined, private acceptsInput: boolean, private cols: number, private rows: number, private readonly invoke: ExtensionHostProviderInvoker, private readonly releaseOwner: () => void) {
-		super();
-	}
-
-	async start(): Promise<void> {
-		if (this.ptyId === undefined) {
-			const result = record(await this.invoke('createTerminalProfile', {}, this.controller.signal), ['options', 'pty']);
-			const pty = record(result.pty, ['ptyId', 'acceptsInput']);
-			this.ptyId = text(pty.ptyId, 256);
-			if (typeof pty.acceptsInput !== 'boolean') throw invalid();
-			this.acceptsInput = pty.acceptsInput;
-			if (this.closed) {
-				await this.releasePty();
-				throw new CancellationError();
-			}
-		}
-		const result = await this.invoke('openTaskTerminal', { ptyId: this.ptyId, dimensions: { columns: this.cols, rows: this.rows } }, this.controller.signal);
-		if (this.closed) throw new CancellationError();
-		this.ready.fire({ pid: -1, cwd: '' });
-		this.consume(result);
-		this.poll();
-	}
-
-	resize(cols: number, rows: number): void {
-		this.cols = cols;
-		this.rows = rows;
-		this.dispatch('resizeTaskTerminal', { dimensions: { columns: cols, rows } });
-	}
-
-	shutdown(_immediate: boolean): void {
-		this.finish(undefined);
-	}
-
-	private finish(code: number | undefined): void {
-		if (this.closed) return;
-		this.closed = true;
-		this.controller.abort();
-		this.queue.clearPending();
-		clearTimeout(this.timer);
-		this.timer = undefined;
-		this.releaseOwner();
-		this.exit.fire(code);
-		void this.releasePty();
-	}
-
-	private async releasePty(): Promise<void> {
-		if (this.ptyId === undefined) return;
-		const ptyId = this.ptyId;
-		this.ptyId = undefined;
-		await this.invoke('closeTaskTerminal', { ptyId }, new AbortController().signal).catch(() => undefined);
-	}
-
-	private dispatch(operation: string, payload: JsonValue): void {
-		const ptyId = this.ptyId;
-		if (this.closed || ptyId === undefined) return;
-		void this.queue.schedule(async () => {
-			if (this.closed) return;
-			this.consume(await this.invoke(operation, { ...record(payload), ptyId }, this.controller.signal));
-		}).catch(error => {
-			if (!this.closed) {
-				onUnexpectedError(error);
-				this.shutdown(true);
-			}
-		});
-	}
-
-	private poll(): void {
-		const ptyId = this.ptyId;
-		if (this.closed || ptyId === undefined) return;
-		void this.queue.schedule(async () => {
-			const result = record(await this.invoke('readTaskTerminal', { ptyId }, this.controller.signal));
-			if (this.closed) return;
-			this.consume(result);
-		}).then(() => {
-			if (!this.closed) this.timer = setTimeout(() => {
-				this.timer = undefined;
-				this.poll();
-			}, 50);
-		}, error => {
-			if (!this.closed) {
-				onUnexpectedError(error);
-				this.shutdown(true);
-			}
-		});
-	}
-
-	private consume(value: JsonValue): void {
-		if (this.closed) return;
-		const result = record(value);
-		if (!Array.isArray(result.events) || result.events.length > 1024) throw invalid();
-		for (const value of result.events) {
-			if (this.closed) break;
-			const event = record(value);
-			if (event.type === 'data') this.data.fire(text(event.data, 262144, true));
-			else if (event.type === 'name') this.property.fire({ type: ProcessPropertyType.Title, value: text(event.name, 256) });
-			else if (event.type === 'close') {
-				if (event.code !== null && (typeof event.code !== 'number' || !Number.isSafeInteger(event.code) || event.code < 0 || event.code > 2147483647)) throw invalid();
-				this.finish(event.code === null ? undefined : event.code as number);
-			} else throw invalid();
-		}
-	}
-
-	protected override disposeCore(): void {
-		this.shutdown(true);
-		super.disposeCore();
-	}
-}
 
 function invalid(): TypeError {
 	return new TypeError(localize('terminal.profile.invalidProviderResult', 'Invalid terminal profile provider response.'));

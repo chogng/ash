@@ -204,8 +204,12 @@ export function registerTerminalActions(): void {
 		if (!instance || instance.state === 'running' || instance.state === 'reconnecting') return;
 		await accessor.get(ITerminalService).relaunchTerminal(instance, instance.xterm?.dimensions() ?? { cols: 80, rows: 24 });
 	});
-	CommandsRegistry.register(TerminalCommandId.Kill, (accessor, context) => context === undefined
-		? terminalView(accessor).killActive() : accessor.get(ITerminalService).closeTerminal(resolveInstance(accessor, context)!));
+	CommandsRegistry.register(TerminalCommandId.Kill, (accessor, context) => {
+		const instance = resolveInstance(accessor, context);
+		if (!instance) return;
+		if (context === undefined && instance.target !== TerminalLocation.Editor) return terminalView(accessor).killActive();
+		return accessor.get(ITerminalService).closeTerminal(instance);
+	});
 	CommandsRegistry.register(TerminalCommandId.Clear, (accessor, context) => {
 		if (context === undefined && accessor.get(ITerminalService).activeInstance?.target !== TerminalLocation.Editor) return terminalView(accessor).clearActive();
 		resolveInstance(accessor, context)?.clearBuffer();

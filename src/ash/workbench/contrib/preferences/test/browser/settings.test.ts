@@ -1275,7 +1275,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	const skillId = { source: 'directory:skill-source:test', name: 'review' };
 	services.registerInstance(IAppServerSkillApi, {
 		onDidChangeSkills: skillsChanged.event,
-		readInstructions: async () => { throw new Error("No Skill body in this test fixture"); },
+		readTextResource: async () => { throw new Error("No Skill body in this test fixture"); },
 		list: async () => ({ generation: 0, skills: [] }),
 		read: async sessionId => { skillScopes.push(sessionId); return { revision: 7, catalog: { generation: 1, skills: [{ id: skillId, description: 'Review changes', contentDigest: 'sha256:review', enabled: skillEnabled, compatible: true }] }, diagnostics: [] }; },
 		setEnabled: async (...args) => { skillMutations.push(args); skillEnabled = args[1]; },

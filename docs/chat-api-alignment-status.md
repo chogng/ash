@@ -147,3 +147,29 @@ Agent 通知边界追加准入：既有 platform/agentHost/common/agentService.t
 Agent Thread transcript delta → 原 ChatWidgetModel → 原 ChatListWidget 的同 Item 行 → ChatMarkdownContentPart.tryIncrementalUpdate → 当前 Ash MarkdownElement 的 sanitized 渲染 → 原 CodeBlockPart / Stanza model。只对追加或终态确认复用；正文被替换时由旧行释放并重建。part 拥有稳定根、单一当前 Markdown lifetime、按代码块序号保留的原编辑器和当前响应的图片读取；不改变 Base sanitizer、滚动 owner 或后台 transcript。终态按实际 incomplete-token 标志重新解析，已完成的普通块保留，代码模型更新保留选区/焦点。
 
 准确范围为双方已有 chatMarkdownContentPart.ts、codeBlockPart.ts、ChatListWidget 和既有 ChatListWidget/browser transcript 测试。tryIncrementalUpdate 采用上游已存在的公开职责与名称，参数使用当前 Ash IMarkdownString 与临时渲染标志；实现使用本地 sanitized node 的可复用块和已有模型，未引入上游 incremental morpher、私有 AST/动画或第二套模型。原 provider 装饰与 image resource lifetime 仍由当前 Markdown snapshot 拥有。测试覆盖连续 delta、未闭合 fence→闭合→终态、代码模型数、选区/焦点、静态段落选区、完整复制、替换、移除、链接及图片读取。通过此 slice 后继续 Prompt 与其他台账项。
+
+流式追加回归补充：ChatListWidget 继续由本行拥有 memory 引用控件，并在增量正文中追加引用时复用已有按钮；标签进入客户端 NLS。避免为了增量正文跳过新引用，或重建整行丢失代码选区。准确范围追加既有 chat.json；测试沿现有 transcript fixture。
+
+## Skill 语法树与编辑诊断准入
+
+用户编辑 SKILL.md → 既有 Chat prompt contribution → PromptFileParser / PromptHeader AST → PromptHeaderAutocompletion、PromptHoverProvider 与上游同路径 PromptValidator → Stanza 的正式 syntaxProvider / completionProvider / hoverProvider registry。Rust Skill catalog 仍唯一决定是否接受、版本与执行权限；编辑诊断仅解释当前草稿，不另建 catalog。语法树使用独立 YAML 库的公开 parseDocument / node range API，保留 scalar、sequence、map 与精确源坐标，不复制上游 YAML 私有实现；解析不展开 alias，不执行 tag，限制输入和深度以保护编辑线程。
+
+准确路径：双方既有 common/promptSyntax/promptFileParser.ts 增加实际 provider 消费的属性与错误；双方既有 languageProviders/{promptHeaderAutocompletion.ts,promptHovers.ts} 从 AST 读取键范围；双方既有 promptFileAttributes.ts 继续当前 Ash Skill schema；上游存在、本地缺失的 languageProviders/promptValidator.ts 在正式 registry 注册并提供本地化 syntax / required / unknown-key / shape 诊断；browser/chat.contribution.ts 仅增加该注册。既有 parser / language-provider / browser transcript 测试覆盖复合 YAML、错误修复、取消、精确范围、en/zh-CN 和真实编辑器诊断。package.json / pnpm-lock.yaml 加入直接 yaml 依赖，THIRD_PARTY_NOTICES.md 与 licenses/YAML.txt 保留该依赖许可证；chat.json 添加对应中文。新值建议只沿既有实际数据源实施，无后端数据时不伪造工具清单。其他路径保持只读。
+
+诊断注册准入修正（写代码前）：读取生产 App Server syntax provider 后确认其优先级 100，普通 syntaxProvider 会被覆盖，提升 Chat 的全局 Markdown 优先级又会覆盖其他语言诊断。因此诊断独立使用既有 IMarkerService 的 owner，与其他诊断聚合；不改变 Editor/App Server provider 优先级。新增上游同路径 browser/promptSyntax/promptFileContributions.ts 的 PromptLanguageFeaturesProvider，由 contribution 注入 IModelService / IMarkerService，监听已打开 SKILL.md 的内容、语言与释放并清除本 owner markers。PromptValidator.validate 消费已解析 AST 输出现有 LanguageDiagnostic；不再实现 SyntaxProvider。浏览器 fixture 使用正式 IModelService 创建文件模型，观察真实 marker 与编辑器提示；仅更新既有 fixture/test，scope 与释放仍是宿主 owner。
+
+Skill marker 生命周期实际入口阻塞与追加准入：使用真实 IModelService 创建资源模型时发现 ModelService.getCreationOptions 向 IConfigurationService 传递 resource override，而当前 Desktop 与 InMemory 配置 owner 明确拒绝此参数；既有单测使用自制允许 resource 的配置，未覆盖产品链。追加双方既有 editor/common/services/modelService.ts 的此单一调用 hunk，只请求已支持的 language override，资源身份/EOL/缓存仍由原 ModelService 拥有；追加既有 editor/test/common/modelService.test.ts 用真实 InMemoryConfigurationService 创建资源模型并验证语言设置。修复依赖后继续原 Chat 切片，不改配置 owner、不伪造测试专用模型 registry。
+
+Hover 追加验证发现当前通用 ContentHoverController 尚未消费 MarkerService hoverMessage。准确范围内 PromptHoverProvider 改为同时消费 PromptValidator 的当前 AST 诊断：值位置可读相应字段/语法错误，键位置仍显示 schema 说明；不建立另一份 marker 状态，也不在 Chat 批次扩散改造通用 Hover。独立 owner 标记继续供 Problems 与标记装饰消费，Browser 通过实际键盘 Hover 验证中文错误文本。
+
+## Skill 工具值补全准入
+
+用户在 allowed-tools 字段输入名称 → 原 PromptHeaderAutocompletion → 当前宿主已注册 IAgentCapabilitiesService → App Server 的原工具目录 → 当前 AST 字段与编辑快照对应的值建议。只展示现有 direct/deferred 工具，隐藏 modelOnly/hidden，不推断执行许可，不建立缓存或新工具 registry；取消/旧模型结果由 provider 信号及原 Stanza 版本门禁淘汰。name 值继续使用当前资源目录。准确范围仍为既有 promptHeaderAutocompletion.ts、PromptLanguageFeaturesProvider 的 DI 创建与既有 language-provider/widget/browser tests；只有测试显式注册能力 fixture。双方 Workbench 和 Sessions 生产宿主已注册该契约，agentHost 的真实能力读取沿既有端口，不新增协议。精确 scope 是当前宿主 catalog，不能把它写成任意远程 Thread 的工具授权列表。
+
+## Prompt 正文引用与 agentHost 资源读取准入
+
+用户在本地 Skill 编辑器或已发现的 Skill Instructions 中打开正文文件引用 → PromptBody.fileReferences / resolveFilePath → 上游同路径 languageProviders/promptLinkProvider.ts → 既有 LinkDetector / Opener → 现有 text-model resolver → PromptLanguageFeaturesProvider 的只读 Skill content provider → IPromptsService.parseNew → 已确认的 IAppServerSkillApi → 原 skill/resource/open + resource/read/release。Rust SkillRuntime 与 SkillResourcePath 已经拥有来源、pinned digest、Session、路径穿越/链接与字节上限的校验，无须新协议或第二套文件存储。
+
+准确范围追加：既有 parser 的 PromptBody 仅解析实际 provider 消费的正文文件引用，使用当前 Ash Marked lexer 跳过代码/HTML，不创建未消费的变量 API；缺失 promptLinkProvider.ts 按上游同路径创建并在原 PromptLanguageFeaturesProvider 注册。既有 promptsServiceImpl.ts 的已发现 URI registry 允许该 Skill 内衍生资源 URI，并保留来源、摘要与 Session；不接受其他窗口或 query 更改的 URI。已确认 platform/agentHost/common/appServerApi.ts 与 browser/appServerApi.ts 把 readInstructions 唯一入口迁为实际生产读取的 readTextResource(reference,path,signal,sessionId)，沿原 Resource helper 验证与释放，只消费 text MIME / UTF-8。所有既有调用与 fake implementation 同批迁移（rg readInstructions 的 Skills/Sessions/agentHost tests 和 fixture）；无新旧 API 并存。
+
+PromptLanguageFeaturesProvider 通过既有 ITextModelService 注册 private scheme 的 Skill authority 文本，IModelService 仍唯一拥有模型，resolver 仍引用计数与只读模型；提供者释放取消 pending parse，不创建第二份正文缓存。ExtensionsEditor 的既有 Skill Instructions 预览传入 parsed body source，链接绑定原 Skill URI；Open instructions 直接打开原只读 URI，退出失去来源的 untitled copy。extensionsEditor.ts 只改这条 Skill 读取/打开链和原 renderDocument 的 Skill source URI 转换，包 README owner 保留；该仅 Ash 编辑器归属已在台账确认。验证使用既有 PromptsService/parser/provider/agentHost/Extensions 测试，正文 Markdown 引用、CRLF、代码排除、精确范围、相对嵌套、source/digest/Session、权限失败、取消/释放与中文仍沿真实入口；其他能力保持只读。

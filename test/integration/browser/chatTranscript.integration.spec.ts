@@ -235,3 +235,38 @@ test('streaming Markdown retains completed text, one code model, selection and f
 	await paragraphNode?.dispose();
 	expect(errors).toEqual([]);
 });
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`Skill YAML editing shows precise draft diagnostics, repairs them and completes the directory name in ${locale}`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto(`/chatTranscript.html?prompt=1&locale=${locale}`);
+		const invalid = '---\nname: review\ndescription: [one, two]\nmetadata:\n  owner: [editor]\nmodel: unknown\n---';
+		await page.evaluate(value => window.ashChatTranscriptIntegration.setFile(value, 3, 15), invalid);
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.diagnostics().map(marker => marker.code))).toEqual(['textField', 'metadataShape', 'unknownField']);
+		const editor = page.locator('section[aria-label="File editor"] .stanza-editor');
+		await editor.locator('.stanza-editor-input').focus();
+		await page.keyboard.press('ControlOrMeta+k');
+		await page.keyboard.press('ControlOrMeta+i');
+		await expect(page.getByText(locale === 'en' ? 'The Skill field description requires a text value.' : 'Skill 字段 description 需要文本值。', { exact: true }).last()).toBeVisible();
+		await page.keyboard.press('Escape');
+		await page.evaluate(() => window.ashChatTranscriptIntegration.setFile('---\n"name": review\ndescription: >-\n  Review changes.\nmetadata: { owner: editor }\n---', 2, 3));
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.diagnostics())).toEqual([]);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.setFile('---\nname: re\ndescription: Review\n---', 2, 9));
+		await editor.locator('.stanza-editor-input').focus();
+		await page.keyboard.press('Control+Space');
+		await expect(page.locator('.stanza-editor-completion-label').getByText('review', { exact: true })).toBeVisible();
+		await page.keyboard.press('ArrowDown');
+		await page.keyboard.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().file)).toBe('---\nname: review\ndescription: Review\n---');
+		await page.evaluate(() => window.ashChatTranscriptIntegration.setFile('---\nname: review\ndescription: Review\nallowed-tools: re\n---', 4, 18));
+		await editor.locator('.stanza-editor-input').focus();
+		await page.keyboard.press('Control+Space');
+		await expect(page.locator('.stanza-editor-completion-label').getByText('read_file', { exact: true })).toBeVisible();
+		await expect(page.locator('.stanza-editor-completion-label').getByText('internal_tool', { exact: true })).toHaveCount(0);
+		await page.keyboard.press('ArrowDown');
+		await page.keyboard.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().file)).toBe('---\nname: review\ndescription: Review\nallowed-tools: read_file\n---');
+		expect(errors).toEqual([]);
+	});
+}

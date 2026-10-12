@@ -3059,7 +3059,7 @@ function fakeApi(options: FakeOptions = {}): {
 			},
 		},
 		skills: {
-			onDidChangeSkills: Event.None, readInstructions: async () => { throw new Error("No Skill body in this test fixture"); },
+			onDidChangeSkills: Event.None, readTextResource: async () => { throw new Error("No Skill body in this test fixture"); },
 			list: async (_reload: string, sessionId?: string) => { skillListRequests.push(sessionId); return { generation: 1, skills: options.skills ?? [] }; },
 		},
 		thread: {

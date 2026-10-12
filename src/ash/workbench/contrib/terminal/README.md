@@ -4,7 +4,7 @@
 
 | Owner                                                      | 职责                                                                                                        |
 | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `browser/terminal.contribution.ts`                         | 实例服务、View 与动作/菜单的装载入口，以及 find、links、voice、accessibility、clipboard 贡献                |
+| `browser/terminal.contribution.ts`                         | 实例服务、View、编辑器与动作/菜单的注册入口；独立增强由 terminal.all.ts 装载                                |
 | `browser/terminalMainContribution.ts`                      | BlockRestore 时订阅宿主 PTY 创建通知，交给实例服务并显示 View                                               |
 | `browser/terminal.ts`                                      | contribution 内部屏幕配置服务契约；实例与 profile/resolver 契约归 services/terminal                         |
 | `common/terminalConfiguration.ts`                          | 消费中的终端设置 schema、默认值、scope、settings UI 元数据；有效值和持久化属于配置系统                      |
@@ -102,6 +102,16 @@ Bash/Zsh 保留用户启动文件与 prompt hooks，Bash 登录配置通过原 r
 
 Send Sequence 由 `terminalContrib/sendSequence` 的单一 contribution 入口注册。`workbench.action.terminal.sendSequence` 接受 `{ text: string }`，或使用 Quick Input 输入支持 `\n`、`\r`、`\xNN` 的序列；参数文本不再做反斜线解码。变量使用实例所属工作区文件夹，由原 ConfigurationResolverService 解析。发送调用原 `sendText(text, false)` 并等待后端确认；不追加执行回车，也不包裹 bracketed paste。提示或解析期间切换活动实例、重连、复用、关闭或更换工作区会使原调用失效。
 
-`terminalGroupService.ts` 现在拥有 panel 组成员，活动组从唯一 TerminalService 派生；`terminalGroup.ts` 使用现有 SplitView 分配组内水平窗格。Split 创建独立 Shell，继承原实例的启动 profile/argv/env 与当前 cwd；当前不拆分扩展自供 PTY。Focus Next/Previous Pane 与 focusAtIndex1–9 使用原实例选择，Unsplit 保留原进程和屏幕。组布局按容器内容尺寸更新字符网格，键盘 sash 使用原 SplitView，移动屏幕不复制输出。关闭一侧后聚焦剩余窗格，最后一个实例关闭才隐藏 panel。完整垂直布局、组持久化和编辑区终端仍待补。
+`terminalGroupService.ts` 现在拥有 panel 组成员，活动组从唯一 TerminalService 派生；`terminalGroup.ts` 使用现有 SplitView 分配组内水平窗格。Split 创建独立 Shell，继承原实例的启动 profile/argv/env 与当前 cwd；当前不拆分扩展自供 PTY。Focus Next/Previous Pane 与 focusAtIndex1–9 使用原实例选择，Unsplit 保留原进程和屏幕。组布局按容器内容尺寸更新字符网格，键盘 sash 使用原 SplitView，移动屏幕不复制输出。关闭一侧后聚焦剩余窗格，最后一个实例关闭才隐藏 panel。完整垂直布局和组持久化仍待补。
 
 `terminalStatusList.ts` 只保存进程错误的 UI 消息，Shell/连接状态仍归原实例与进程管理器；`terminalTooltip.ts` 将 profile、PID、cwd、退出码与当前消息提供给列表。Relaunch 清除旧进程错误。`terminalIcons.ts` 给菜单与列表提供语义图标，仍使用产品 icon registry/主题解析。Search addon 构造由 `xtermAddonImporter.ts` 加载，addon 实例仍归原屏幕；`terminalFontRendering.ts` 消费 fontRendering 设置，在 macOS 切换灰度字体平滑并刷新字形缓存，保留原屏幕和内容。
+
+## 编辑区与元数据
+
+`terminalEditorService.ts` 将同一 TerminalInstance 移入编辑区；`terminalEditor.ts` 只承载原 xterm。target 归原实例，面板组/列表排除编辑区实例。回到面板、编辑器组移动与标签关闭使用原 EditorPart 的生命周期原因：移动保留 PTY，关闭终端标签释放原实例。资源包含实例 incarnation，工作集只保存身份；失效身份显示不可用，不自动启动新 Shell。Clear、Relaunch 和 Kill 能直接操作编辑区实例。
+
+Rename 和 Change Icon 使用现有 Quick Input，目标关闭时取消。原实例保留用户 title/icon，列表与编辑器标签通过原 labels 事件更新，重启保留用户元数据。面板列表宽度由原 SplitView 决定，StorageService 按工作区保存；单实例隐藏和非法存储值不会造成失效布局。
+
+`decorationAddon.ts` 只拥有已提交命令事件的屏幕 marker/decoration；xterm 缓存淘汰标记时立即释放 UI listeners。`markNavigationAddon.ts` 只读取这些 marker，不建立第二份 Shell history；`decorationStyles.ts` 提供中英文 tooltip/ARIA 状态。屏幕样式由 `media/xterm.css` 拥有。`terminal.all.ts` 是 Desktop/Web 共用装载入口，核心与增强各自只注册一次。
+
+当前同路径生产 TS/CSS 为 49，仍缺 40。完整 backend/capability、环境变量集合和同步 InstanceService 未完成；准确清单与契约边界见 [对齐状态](../../../../../docs/terminal-api-alignment-status.md)。

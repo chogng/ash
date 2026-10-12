@@ -18,7 +18,7 @@ export class TerminalIconPicker extends Disposable {
 		const picker = lifetime.add(this.quickInput.createQuickPick<IconPick>());
 		picker.ariaLabel = localize('terminal.icon.title', 'Change Terminal Icon');
 		picker.placeholder = localize('terminal.icon.placeholder', 'Select an icon for the terminal');
-		picker.items = getIconRegistry().getIcons().map(icon => ({ label: icon.id, description: icon.description, icon: { id: icon.id } }));
+		picker.items = getIconRegistry().getIcons().map(icon => ({ label: icon.id, icon: { id: icon.id } }));
 		return new Promise(resolve => {
 			let selected: ThemeIcon | undefined;
 			lifetime.add(toDisposable(() => resolve(undefined)));
