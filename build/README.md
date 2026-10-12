@@ -68,6 +68,22 @@ installation performance. Common's unchanged incremental TS7 checks took a
 median 137 ms versus Bun's full-check 119 ms; those runs are recorded separately
 in `.build/benchmarks/bun-typechecks/common-incremental.json`.
 
+Local Windows x64 acceptance on 2026-10-12 used Bun 1.4.3, TS7 7.0.2 and
+Node 24.21.0 with 16 logical CPUs and 63.8 GiB physical memory. Both checkers
+passed all eleven no-emit projects. After warmup, five alternating full Renderer
+checks had median process times of 1.146 s for Bun and 3.236 s for TS7, with
+median peak working sets of 0.391 GiB and 1.040 GiB. Renderer input hashes stayed
+stable; TS2322/TS2345 probes matched in file, position, code and message and
+emitted no probe files. The five targeted build/lifecycle/host-watch tests,
+`pnpm build`, `pnpm build:web`, and one startup smoke each for Browser UI and
+Electron UI passed with no test skips. Electron rebuild initially failed Python
+discovery and passed with process-local `PYTHON` selecting `scripts/.venv`.
+Commands, input manifests, diagnostics and measurements are in
+`.build/benchmarks/bun-windows/`. Earlier measurements overlapping a rebuild or
+source edits were excluded. These warm-cache local results do not cover the CI
+runner, cold installation, cache restoration, full job time or connected-backend
+acceptance.
+
 - [ ] TODO: Benchmark Bun 1.4.3 against TS7 7.0.2 for Renderer checks on the
       `ubuntu-24.04` and `windows-latest` x64 CI runners to measure the cross-platform
       benefit of the Renderer switch. Use identical prepared inputs, alternate repeated full checks, and

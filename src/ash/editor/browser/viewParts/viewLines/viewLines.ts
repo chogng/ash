@@ -392,10 +392,20 @@ export class ViewLines extends ViewPart implements IViewLines {
 	}
 
 	/** Reprojects semantic tokens without rebuilding the visible row window. */
-	public override onTokensChanged(_event?: ViewTokensChangedEvent): boolean {
+	public override onTokensChanged(event?: ViewTokensChangedEvent): boolean {
 		// Events invalidate retained rows; only the render pass writes text. This
 		// also lets several token/decorations updates share one frame snapshot.
-		for (const line of this._visibleLines.renderedLines.values()) line.onTokensChanged();
+		let changed = false;
+		for (const [lineIndex, line] of this._visibleLines.renderedLines) {
+			if (event && !event.ranges.some(range => lineIndex + 1 >= range.fromLineNumber && lineIndex + 1 <= range.toLineNumber)) {
+				continue;
+			}
+			line.onTokensChanged();
+			changed = true;
+		}
+		if (event && !changed) {
+			return false;
+		}
 		this.contentRevision += 1;
 		return true;
 	}

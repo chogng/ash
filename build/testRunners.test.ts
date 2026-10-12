@@ -4,9 +4,17 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
 import { promisify } from 'node:util';
+import { parseRunnerOptions } from '../test/scenario/src/options.ts';
 
 const repository = resolve(import.meta.dirname, '..');
 const execute = promisify(execFile);
+
+test('scenario foreground mode is explicit and rejects Web targets', () => {
+	assert.equal(parseRunnerOptions([]).activeWindow, false);
+	assert.equal(parseRunnerOptions(['--active-window']).activeWindow, true);
+	assert.throws(() => parseRunnerOptions(['--web', '--active-window']), /requires a Desktop scenario/);
+	assert.throws(() => parseRunnerOptions(['--active-windows']), /Unknown option/);
+});
 
 test('browser integration preserves filters and rejects discarded or empty selection arguments', { timeout: 30_000 }, async t => {
 	const directory = await mkdtemp(join(repository, 'test/.integration-runner-'));

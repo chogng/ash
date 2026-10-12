@@ -152,6 +152,43 @@ test('line numbers and glyph markers share text coordinates after vertical and h
 	}))).toEqual({ fixedRoot: true, marginOutsideContent: true, inputInScrollViewport: true });
 });
 
+test('physical scroll offsets follow model clamping, resizing and browser scroll events', async ({ page }) => {
+	await openEditor(page);
+	await page.evaluate(() => {
+		const control = window.ashTextModelIntegration.getControl();
+		control.getModel()!.setLanguage('plaintext');
+		control.updateOptions({ wordWrap: 'off', smoothScrolling: false, minimap: { enabled: false } });
+		control.setValue(Array.from({ length: 200 }, () => 'long line '.repeat(100)).join('\n'));
+	});
+	const viewport = page.locator('.stanza-editor > .ash-smooth-scrollable');
+	const expectPosition = async (left: number, top: number) => {
+		await expect.poll(() => viewport.evaluate(node => {
+			const control = window.ashTextModelIntegration.getControl();
+			return { left: node.scrollLeft, top: node.scrollTop, modelLeft: control.getScrollLeft(), modelTop: control.getScrollTop() };
+		})).toEqual({ left, top, modelLeft: left, modelTop: top });
+	};
+	await page.evaluate(() => window.ashTextModelIntegration.getControl().setScrollPosition({ scrollLeft: 400, scrollTop: 500 }));
+	await expectPosition(400, 500);
+	await page.evaluate(() => window.ashTextModelIntegration.getControl().setValue('short'));
+	await expectPosition(0, 0);
+	await page.evaluate(() => {
+		const control = window.ashTextModelIntegration.getControl();
+		control.setValue(Array.from({ length: 200 }, () => 'long line '.repeat(100)).join('\n'));
+		control.setScrollPosition({ scrollLeft: 300, scrollTop: 600 });
+	});
+	await expectPosition(300, 600);
+	await viewport.evaluate(node => { node.scrollLeft = 80; node.scrollTop = 200; });
+	await expectPosition(80, 200);
+	await page.evaluate(() => window.ashTextModelIntegration.getControl().layout({ width: 300, height: 10000 }));
+	await expectPosition(80, 0);
+	await page.evaluate(() => {
+		const control = window.ashTextModelIntegration.getControl();
+		control.layout({ width: 500, height: 300 });
+		control.setScrollPosition({ scrollLeft: 160, scrollTop: 400 });
+	});
+	await expectPosition(160, 400);
+});
+
 test('scroll viewport and horizontal thumb exclude the fixed gutter after layout changes', async ({ page }) => {
 	await openEditor(page);
 	await page.evaluate(() => {

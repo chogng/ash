@@ -143,7 +143,7 @@ function wait(milliseconds: number): Promise<void> {
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
 	const scenarioArgument = commandLine.find(argument => !argument.startsWith('--'));
 	if (!scenarioArgument) {
-		console.error('Usage: node test/scenario/out/runScenario.js <scenario.cjs> [--dev] [--web] [--headless] [--verbose]');
+		console.error('Usage: node test/scenario/out/runScenario.js <scenario.cjs> [--dev] [--web] [--headless] [--active-window] [--verbose]');
 		process.exit(2);
 	}
 	if (process.env.ASH_SCENARIO_WORKER !== '1') {

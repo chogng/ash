@@ -467,7 +467,7 @@ export class View extends ViewEventHandler {
 		const updateTokenReadiness = () => this.domNode.domNode.classList.toggle('tokens-ready', this.textModel.tokenization.modelVersion === this.textModel.version && this.textModel.tokenization.tokenCount > 0);
 		updateTokenReadiness();
 		if (semanticTokenSource) {
-			this._register(semanticTokenSource.onDidChange(() => {
+			const refreshSemanticTokens = () => {
 				updateTokenReadiness();
 				this.viewLines.onTokensChanged();
 				this.viewLines.forceShouldRender();
@@ -476,7 +476,18 @@ export class View extends ViewEventHandler {
 				minimapPart.onTokensChanged();
 				minimapPart.forceShouldRender();
 				this.scheduleProjection();
-			}));
+			};
+			if (semanticTokenSource === this.textModel.tokenization.renderedTokens) {
+				// ViewModel already delivers lexical changes with their affected rows.
+				// The composite source also emits those changes without ranges.
+				this._register(this.textModel.onDidChangeTokens(updateTokenReadiness));
+				const documentTokens = this.textModel.tokenization.semanticTokens;
+				if (documentTokens) {
+					this._register(documentTokens.onDidChange(refreshSemanticTokens));
+				}
+			} else {
+				this._register(semanticTokenSource.onDidChange(refreshSemanticTokens));
+			}
 		}
 		const fontSet = ownerDocument.fonts;
 		if (fontSet) {

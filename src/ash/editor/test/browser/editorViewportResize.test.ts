@@ -12,6 +12,8 @@ import { Position } from '../../common/core/position.js';
 import { Selection } from '../../common/core/selection.js';
 import { Range } from '../../common/core/range.js';
 import { GlyphMarginLane } from '../../common/model.js';
+import { Emitter } from '../../../base/common/event.js';
+import { type IModelTokensChangedEvent } from '../../common/textModelEvents.js';
 
 const { TestView: View } = await import("./viewModel/testViewModel.js");
 
@@ -152,6 +154,83 @@ async function nextEditorFrame(targetWindow: Window): Promise<void> {
 		}, -1);
 	});
 }
+
+test('model token ranges retain unaffected rows and ignore duplicate composite notifications', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel(Array.from({ length: 200 }, () => 'plain text').join('\n'));
+	using tokenEvents = new Emitter<IModelTokensChangedEvent>();
+	using sourceEvents = new Emitter<void>();
+	// Deliver the model and composite notifications independently through their public event contracts.
+	Object.defineProperty(model, 'onDidChangeTokens', { value: tokenEvents.event });
+	const source = model.tokenization.renderedTokens;
+	Object.defineProperty(source, 'onDidChange', { value: sourceEvents.event });
+	const getLineTokens = source.getLineTokens.bind(source);
+	let tokenReads = 0;
+	let changed = false;
+	source.getLineTokens = lineIndex => {
+		tokenReads++;
+		return changed && lineIndex === 0 ? [{ startColumn: 0, endColumn: 10, syntaxPresentation: { foreground: '#123456' } }] : getLineTokens(lineIndex);
+	};
+	using view = new View({ container: requiredElement(dom.window.document, 'main'), model, semanticTokenSource: source, minimap: { enabled: false }, disableMonospaceOptimizations: true });
+	try {
+		view.layout({ width: 400, height: 100 });
+		view.render(true, false);
+		const rows = [...view.domNode.domNode.querySelectorAll<HTMLElement>('.view-lines > .view-line')];
+		let widthReads = 0;
+		for (const row of rows) {
+			row.querySelector<HTMLElement>('.stanza-editor-line-text')!.getBoundingClientRect = () => {
+				widthReads++;
+				return new dom.window.DOMRect(0, 0, 100, 20);
+			};
+		}
+		tokenReads = 0;
+		tokenEvents.fire({ semanticTokensApplied: false, ranges: [{ fromLineNumber: 170, toLineNumber: 180 }] });
+		sourceEvents.fire();
+		view.render(true, false);
+		assert.equal(tokenReads, 0, 'Offscreen lexical tokens must not reproject retained text');
+		assert.equal(widthReads, 0);
+		changed = true;
+		tokenEvents.fire({ semanticTokensApplied: false, ranges: [{ fromLineNumber: 1, toLineNumber: 1 }] });
+		sourceEvents.fire();
+		view.render(true, false);
+		assert.ok(tokenReads > 0, 'Visible token changes still update rendered text');
+		assert.equal(widthReads, 1, 'Only the affected line loses its measured width');
+		assert.deepEqual([...view.domNode.domNode.querySelectorAll('.view-lines > .view-line')], rows);
+	} finally {
+		view.dispose();
+		dom.window.close();
+	}
+});
+
+test('custom token sources still refresh retained rows through their own notifications', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('plain text');
+	using changes = new Emitter<void>();
+	let foreground = '#123456';
+	using view = new View({
+		container: requiredElement(dom.window.document, 'main'), model, minimap: { enabled: false }, semanticTokenSource: {
+			textModel: model,
+			lines: [],
+			onDidChange: changes.event,
+			getLineTokens: () => [{ startColumn: 0, endColumn: 10, syntaxPresentation: { foreground } }],
+		}
+	});
+	try {
+		view.layout({ width: 400, height: 100 });
+		view.render(true, false);
+		const token = () => requiredElement<HTMLElement>(view.domNode.domNode, '.stanza-editor-token');
+		assert.equal(token().style.getPropertyValue('--ash-editor-token-foreground'), '#123456');
+		foreground = '#654321';
+		changes.fire();
+		view.render(true, false);
+		assert.equal(token().style.getPropertyValue('--ash-editor-token-foreground'), '#654321');
+	} finally {
+		view.dispose();
+		dom.window.close();
+	}
+});
 
 test('scrolling leaves fixed overlay measurements clean while resize and zone geometry still update them', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
