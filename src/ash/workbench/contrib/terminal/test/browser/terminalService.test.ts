@@ -181,11 +181,13 @@ test("TerminalService keeps multiple instances and safely relaunches after a cra
 });
 
 test("TerminalService resumes reconnectable terminals from their existing output cursors", async () => {
+	const command = { sequence: 2, commandId: 'initial', status: 'completed' as const, exitCode: undefined, afterOutputSequence: 4, command: 'retained command', isTrusted: true };
+	const integration = { commandDetection: true, cwdDetection: true, hasRichCommandDetection: true, commandStorageDisabled: false, commands: [command], afterOutputSequence: 4 };
 	const processService = new TestTerminalProcessService([
 		readResult({
 			chunks: [{ sequence: 4, data: new TextEncoder().encode('initial output') }],
 			nextSequence: 4,
-			commandEvents: [{ sequence: 2, commandId: 'initial', status: 'completed', exitCode: undefined, afterOutputSequence: 4 }],
+			commandEvents: [command], shellIntegration: integration,
 			nextCommandSequence: 2,
 		}),
 	], "reconnectable");
@@ -211,15 +213,17 @@ test("TerminalService resumes reconnectable terminals from their existing output
 	assert.equal(output.some(value => value.includes("terminal reconnected")), false);
 
 	processService.emitConnectionState("crashed");
-	supersededRead.resolve(readResult({ nextSequence: 4, nextCommandSequence: 2 }));
+	supersededRead.resolve(readResult({ nextSequence: 4, nextCommandSequence: 2, shellIntegration: integration }));
 	await new Promise(resolve => setTimeout(resolve, 0));
 	assert.equal(instance.state, "reconnecting");
 
-	processService.queueRead(readResult({ nextSequence: 4, nextCommandSequence: 2 }));
+	processService.queueRead(readResult({ nextSequence: 4, nextCommandSequence: 2, shellIntegration: integration }));
 	processService.emitConnectionState("ready");
 	await waitFor(() => instance.state === "running" && processService.readCursors.length >= 3);
 
 	assert.equal(processService.createCalls.length, 1);
+	assert.deepEqual(instance.shellIntegration?.commands, [{ commandId: 'initial', status: 'completed', exitCode: undefined, command: 'retained command', isTrusted: true }]);
+	assert.equal(instance.shellIntegration?.hasRichCommandDetection, true);
 	assert.deepEqual(processService.readCursors.slice(0, 3), [0, 4, 4]);
 	assert.deepEqual(processService.commandReadCursors.slice(0, 3), [0, 2, 2]);
 	assert.ok(output.some(value => value.includes("terminal reconnecting")));

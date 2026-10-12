@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use ash_action_policy::ActionReviewRequest;
@@ -284,8 +285,14 @@ impl AppToolService {
                 }
                 OpenTarget::Terminal {} => {}
             },
-            AppToolOperation::ReorderSection { session_ids, .. } if session_ids.len() > 1_000 => {
-                return Err(CoreError::Policy("section exceeds 1000 sessions".into()));
+            AppToolOperation::ReorderSection { session_ids, .. } => {
+                if session_ids.len() > 1_000 {
+                    return Err(CoreError::Policy("section exceeds 1000 sessions".into()));
+                }
+                let mut seen = HashSet::new();
+                if session_ids.iter().any(|id| !seen.insert(id)) {
+                    return Err(CoreError::Policy("section contains duplicate sessions".into()));
+                }
             }
             AppToolOperation::ListThreads { .. }
             | AppToolOperation::ReadThread { .. }
@@ -296,7 +303,6 @@ impl AppToolService {
             | AppToolOperation::ListSidebarSections {}
             | AppToolOperation::DeleteSidebarSection { .. }
             | AppToolOperation::MoveThreadToSidebarSection { .. }
-            | AppToolOperation::ReorderSection { .. }
             | AppToolOperation::CheckAppUpdate {}
             | AppToolOperation::FireConfetti {} => {}
         }
@@ -647,7 +653,7 @@ fn definitions() -> Vec<ToolDefinition> {
         definition(
             "reorder_section",
             "Reorder every task in a sidebar section. Include each assigned Session ID exactly once.",
-            json!({"section_id":string,"session_ids":{"type":"array","items":string,"maxItems":1000,"uniqueItems":true}}),
+            json!({"section_id":string,"session_ids":{"type":"array","items":string,"maxItems":1000}}),
             &["section_id", "session_ids"],
         ),
         definition(

@@ -1,10 +1,15 @@
 import { localize, localize2 } from '../../../../nls.js';
+import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { CONTEXT_ACCESSIBILITY_MODE_ENABLED } from '../../../../platform/accessibility/common/accessibility.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { AppServerAvailableContext } from '../../../common/contextkeys.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { TerminalCommandId, TERMINAL_VIEW_ID } from '../common/terminal.js';
+import { TerminalContextKeys, TerminalHasActiveInstanceContext } from '../common/terminalContextKey.js';
 import { ITerminalProfileService } from '../../../services/terminal/common/terminal.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { TerminalProfileQuickpick } from './terminalProfileQuickpick.js';
@@ -66,6 +71,40 @@ export function registerTerminalActions(): void {
 			await picker.showAndGetResult('setDefault');
 		}
 	});
+	registerAction2(class ScrollToPreviousCommandAction extends Action2 {
+		constructor() {
+			super({
+				id: TerminalCommandId.ScrollToPreviousCommand,
+				title: localize2('workbench.action.terminal.scrollToPreviousCommand', 'Terminal: Scroll to Previous Command'),
+				precondition: TerminalHasActiveInstanceContext.isEqualTo(true),
+				keybinding: {
+					primary: KeyMod.CtrlCmd | KeyCode.UpArrow,
+					when: ContextKeyExpr.and(TerminalContextKeys.focus.isEqualTo(true), CONTEXT_ACCESSIBILITY_MODE_ENABLED.isEqualTo(false)),
+					weight: KeybindingWeight.WorkbenchContrib,
+				},
+			});
+		}
+		override run(accessor: ServicesAccessor): void {
+			scrollToCommand(accessor, 'previous');
+		}
+	});
+	registerAction2(class ScrollToNextCommandAction extends Action2 {
+		constructor() {
+			super({
+				id: TerminalCommandId.ScrollToNextCommand,
+				title: localize2('workbench.action.terminal.scrollToNextCommand', 'Terminal: Scroll to Next Command'),
+				precondition: TerminalHasActiveInstanceContext.isEqualTo(true),
+				keybinding: {
+					primary: KeyMod.CtrlCmd | KeyCode.DownArrow,
+					when: ContextKeyExpr.and(TerminalContextKeys.focus.isEqualTo(true), CONTEXT_ACCESSIBILITY_MODE_ENABLED.isEqualTo(false)),
+					weight: KeybindingWeight.WorkbenchContrib,
+				},
+			});
+		}
+		override run(accessor: ServicesAccessor): void {
+			scrollToCommand(accessor, 'next');
+		}
+	});
 	CommandsRegistry.register(TerminalCommandId.Relaunch, async (accessor, context) => {
 		if (context === undefined) return terminalView(accessor).relaunchActive();
 		const instance = resolveInstance(accessor, context)!;
@@ -78,6 +117,15 @@ export function registerTerminalActions(): void {
 		if (context === undefined) return terminalView(accessor).clearActive();
 		resolveInstance(accessor, context)!.clearBuffer();
 	});
+}
+
+function scrollToCommand(accessor: ServicesAccessor, direction: 'previous' | 'next'): void {
+	const instance = accessor.get(ITerminalService).activeInstance;
+	const screen = instance?.xterm;
+	if (!screen) return;
+	if (direction === 'previous') screen.scrollToPreviousCommand();
+	else screen.scrollToNextCommand();
+	screen.focus();
 }
 
 /** Validate command contexts once, then resolve identity through the invoking window's owner. */

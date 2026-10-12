@@ -39,6 +39,21 @@ fn parser_rejects_spoofed_identity_and_ambiguous_operations() {
     assert!(AppToolService::operation(&call("list_threads", json!({"connection_id":7}))).is_err());
 }
 #[test]
+fn section_reordering_keeps_uniqueness_at_the_boundary_without_an_unsupported_strict_keyword() {
+    assert!(AppToolService::operation(&call(
+        "reorder_section",
+        json!({"section_id":"section-1","session_ids":["session-1","session-1"]})
+    )).is_err());
+    assert!(AppToolService::operation(&call(
+        "reorder_section",
+        json!({"section_id":"section-1","session_ids":["session-1","session-2"]})
+    )).is_ok());
+    for definition in definitions() {
+        assert!(!definition.parameters.to_string().contains("\"uniqueItems\""));
+    }
+}
+
+#[test]
 fn automation_modes_use_the_complete_shared_contract() {
     let operation = AppToolService::operation(&call("automation_update", json!({"mode":"save","id":"automation-1","expected_revision":0,"status":"paused","definition":{"title":"Review","prompt":"Review changes","directory":"/repo","session":{"type":"new"},"schedule":{"type":"interval","anchor":0,"minutes":60}}}))).unwrap();
     assert!(matches!(

@@ -4,7 +4,7 @@ import * as terminalColors from "../../common/terminalColorRegistry.js";
 
 import type { FitAddon } from "@xterm/addon-fit";
 import type { SearchAddon, ISearchOptions, ISearchResultChangeEvent } from '@xterm/addon-search';
-import type { Terminal, IDecoration, ITheme, ITerminalOptions } from "@xterm/xterm";
+import type { Terminal, IDecoration, IMarker, ITheme, ITerminalOptions } from "@xterm/xterm";
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { IThemeService } from "../../../../../platform/theme/common/themeService.js";
 import { IOpenerService } from "../../../../../platform/opener/common/opener.js";
@@ -34,6 +34,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 	private focusSource: Element | null | undefined;
 	private readonly alternateScroll = new AlternateScrollMode();
 	private readonly commandDecorations = new Map<string, TerminalCommandDecoration>();
+	private readonly commandMarkers = new Map<string, IMarker>();
 	private visible = false;
 	private readonly resizeDebouncer: TerminalResizeDebouncer = this._register(new TerminalResizeDebouncer(
 		() => this.visible,
@@ -70,7 +71,11 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 			this.pendingWrites.length = 0;
 			this.element.remove();
 		}));
-		this._register(instance.onDidChangeCommandStatus((event) => this.writeWhenReady(terminal => this.renderCommandStatus(terminal, event))));
+		this._register(instance.onDidChangeCommandStatus((event) => {
+			// The screen survives reuse while backend command IDs are scoped to one PTY.
+			const processId = instance.processId;
+			this.writeWhenReady(terminal => this.renderCommandStatus(terminal, event, processId));
+		}));
 		this._register(instance.onDidChangeState((state) => {
 			this.element.dataset.state = state;
 		}));
@@ -366,16 +371,24 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		));
 	}
 
-	private renderCommandStatus(terminal: Terminal, event: ITerminalCommandStatusEvent): void {
-		let item = this.commandDecorations.get(event.commandId);
+	private renderCommandStatus(terminal: Terminal, event: ITerminalCommandStatusEvent, processId: number): void {
+		const key = `${processId}:${event.commandId}`;
+		let item = this.commandDecorations.get(key);
 		if (!item) {
-			const marker = terminal.registerMarker(0);
+			let marker = this.commandMarkers.get(key);
+			if (!marker || marker.isDisposed) {
+				marker = terminal.registerMarker(0);
+				if (!marker) return;
+				this.commandMarkers.set(key, marker);
+				const markerLifetime = marker.onDispose(() => this.commandMarkers.delete(key));
+				this._register(toDisposable(() => markerLifetime.dispose()));
+			}
 			const decoration = terminal.registerDecoration({ marker, width: 1, layer: "top" });
 			if (!decoration) return;
 			item = { event, decoration };
-			this.commandDecorations.set(event.commandId, item);
+			this.commandDecorations.set(key, item);
 			const renderListener = decoration.onRender((element) => this.presentCommandStatus(element, item!));
-			const disposeListener = decoration.onDispose(() => this.commandDecorations.delete(event.commandId));
+			const disposeListener = decoration.onDispose(() => this.commandDecorations.delete(key));
 			this._register(toDisposable(() => renderListener.dispose()));
 			this._register(toDisposable(() => disposeListener.dispose()));
 			this._register(toDisposable(() => decoration.dispose()));
@@ -394,6 +407,29 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		element.setAttribute("role", "img");
 		element.setAttribute("aria-label", label);
 		element.title = label;
+	}
+
+	public scrollToPreviousCommand(): void {
+		this.scrollToAdjacentCommand('previous');
+	}
+
+	public scrollToNextCommand(): void {
+		this.scrollToAdjacentCommand('next');
+	}
+
+	private scrollToAdjacentCommand(direction: 'previous' | 'next'): void {
+		const terminal = this.terminal;
+		const buffer = terminal?.buffer.active;
+		if (!terminal || !buffer || buffer.type !== 'normal') return;
+
+		const currentLine = buffer.viewportY;
+		const markers = [...this.commandMarkers.values()]
+			.filter(marker => !marker.isDisposed)
+			.sort((left, right) => left.line - right.line);
+		const target = direction === 'previous'
+			? markers.filter(marker => marker.line < currentLine).at(-1)
+			: markers.find(marker => marker.line > currentLine);
+		if (target) terminal.scrollToLine(target.line);
 	}
 }
 

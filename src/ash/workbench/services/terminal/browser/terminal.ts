@@ -121,6 +121,8 @@ export interface IXtermTerminal extends IDisposable {
 	findNext(term: string, searchOptions: ISearchOptions): Promise<boolean>;
 	findPrevious(term: string, searchOptions: ISearchOptions): Promise<boolean>;
 	clearSearchDecorations(): void;
+	scrollToPreviousCommand(): void;
+	scrollToNextCommand(): void;
 }
 
 /** Per-instance features share the instance's screen and release with the instance. */

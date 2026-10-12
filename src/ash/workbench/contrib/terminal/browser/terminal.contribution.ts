@@ -4,6 +4,7 @@ import '../../terminalContrib/voice/browser/terminal.voice.contribution.js';
 import '../../terminalContrib/links/browser/terminal.links.contribution.js';
 import '../../terminalContrib/find/browser/terminal.find.contribution.js';
 import '../../terminalContrib/accessibility/browser/terminal.accessibility.contribution.js';
+import '../../terminalContrib/history/browser/terminal.history.contribution.js';
 import '../../terminalContrib/clipboard/browser/terminal.clipboard.contribution.js';
 import { SyncDescriptor } from "../../../../platform/instantiation/common/descriptors.js";
 import { ViewContainerLocation, WorkbenchViewContainerId, type WorkbenchViewRegistry, ViewsRegistry } from "../../../common/views.js";

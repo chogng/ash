@@ -4,13 +4,6 @@ use ash_protocol::StableTurnError;
 use core_api::CoreError;
 
 pub(super) fn map_model_provider_error(error: ModelProviderError) -> CoreError {
-    if let Ok(path) = std::env::var("ASH_TASK_VALIDATION_ERROR_PATH") {
-        if let ModelProviderError::InvalidRequest(detail)
-        | ModelProviderError::Api(ApiError::InvalidRequest(detail)) = &error
-        {
-            let _ = std::fs::write(path, detail);
-        }
-    }
     if let ModelProviderError::Cancelled(message) = &error {
         return CoreError::Cancelled(message.clone());
     }

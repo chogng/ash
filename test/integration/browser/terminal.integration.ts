@@ -616,13 +616,15 @@ if (new URLSearchParams(location.search).has('stream')) {
 	const bytes = new TextEncoder().encode('中文🙂\r\n');
 	const reportCwd = new URLSearchParams(location.search).has('cwd');
 	const reportHistory = new URLSearchParams(location.search).has('history');
+	const reuseCommands = new URLSearchParams(location.search).has('reuseCommands');
+	let launch = 0;
 	const overflow = new URLSearchParams(location.search).has('overflow');
 	// This scenario observes the display-history cap independently of xterm's configurable scrollback.
 	if (overflow) await widgetServices.get(IConfigurationService).updateValue('terminal.integrated.scrollback', 5000);
 	const profile = { profileId: 'shell', title: 'Shell', isDefault: true };
 	const processes: import('../../../src/ash/platform/terminal/common/terminal.js').ITerminalProcessService = {
 		resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? (typeof profile.args === 'string' ? profile.args : [...profile.args]) : [] }), getEnvironment: async () => ({}), listProfiles: async () => [profile],
-		create: async () => ({ terminalId: 'stream-shell', ready: { pid: 1234, cwd: '/workspace' }, profile, connectionPersistence: 'connectionOwned' }),
+		create: async () => { launch++; return { terminalId: reuseCommands ? `stream-shell-${launch}` : 'stream-shell', ready: { pid: reuseCommands ? 1234 + launch : 1234, cwd: '/workspace' }, profile, connectionPersistence: 'connectionOwned' }; },
 		write: async () => { },
 		resize: async () => { },
 		close: async () => { closes++; },
@@ -631,6 +633,8 @@ if (new URLSearchParams(location.search).has('stream')) {
 		read: async options => {
 			reads.push(options.afterSequence);
 			const first = options.afterSequence === 0;
+			const status = reuseCommands && launch > 1 ? 'failed' as const : 'succeeded' as const;
+			const code = reuseCommands && launch > 1 ? 11 : 0;
 			return {
 				terminalId: options.terminalId,
 				chunks: overflow ? Array.from({ length: Math.min(options.maxChunks, 4100 - options.afterSequence) }, (_, offset) => {
@@ -639,11 +643,11 @@ if (new URLSearchParams(location.search).has('stream')) {
 				}) : [{ sequence: first ? 1 : 2, data: first ? bytes.slice(0, 2) : bytes.slice(2) }],
 				nextSequence: overflow ? Math.min(4100, options.afterSequence + options.maxChunks) : first ? 1 : 2,
 				outputGap: false,
-				commandEvents: options.afterCommandSequence === 0 ? [{ sequence: 1, commandId: 'command', status: 'succeeded', exitCode: 0, afterOutputSequence: 2, ...(reportCwd ? { cwd: '/workspace' } : {}), ...(reportHistory ? { command: 'echo 中文; printf \"quoted\"', isTrusted: true } : {}) }] : [],
+				commandEvents: options.afterCommandSequence === 0 ? [{ sequence: 1, commandId: 'command', status, exitCode: code, afterOutputSequence: 2, ...(reportCwd ? { cwd: '/workspace' } : {}), ...(reportHistory ? { command: 'echo 中文; printf \"quoted\"', isTrusted: true } : {}) }] : [],
 				nextCommandSequence: 1,
 				commandEventGap: false,
 				exited: overflow || !first,
-				exitCode: overflow || !first ? 0 : undefined,
+				exitCode: overflow || !first ? code : undefined,
 				...(reportCwd ? { cwd: { value: '/workspace/changed; directory', isTrusted: true, afterOutputSequence: 2 } } : {}),
 				...(reportHistory ? { shellIntegration: { commandDetection: true, cwdDetection: true, hasRichCommandDetection: true, commandStorageDisabled: false, commands: [{ sequence: 1, commandId: 'command', status: 'succeeded' as const, exitCode: 0, afterOutputSequence: 2, cwd: '/workspace', command: 'echo 中文; printf \"quoted\"', isTrusted: true }], afterOutputSequence: 2 } } : {}),
 			};
@@ -670,6 +674,7 @@ if (new URLSearchParams(location.search).has('stream')) {
 	const terminal = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
 	window.ashTerminalStreamIntegration = {
 		status: () => ({ reads, events, closes, state: terminal.state, remaining: terminals.instances.length, ...(reportCwd ? { cwd: terminal.cwd } : {}), ...(reportHistory ? { shellIntegration: terminal.shellIntegration } : {}) }),
+		reuse: async () => { await terminal.reuseTerminal({ executable: '/bin/sh', args: [], deferStart: true }); terminal.start(); },
 		start: async () => {
 			if (!screen) { terminal.attachToElement(document.querySelector<HTMLElement>('#terminal')!); screen = terminal.xterm!; screen.setVisible(true); }
 			await terminal.xtermReadyPromise; screen.focus();
@@ -683,6 +688,7 @@ if (new URLSearchParams(location.search).has('stream')) {
 declare global {
 	interface Window {
 		ashTerminalStreamIntegration: {
+			reuse(): Promise<void>;
 			status(): { reads: number[]; events: string[]; closes: number; state: string; remaining: number; cwd?: string; shellIntegration?: import('../../../src/ash/workbench/services/terminal/browser/terminal.js').ITerminalShellIntegration; };
 			observed(): string;
 			snapshot(): Promise<string | undefined>;

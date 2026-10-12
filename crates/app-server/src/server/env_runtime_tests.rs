@@ -742,6 +742,22 @@ fn dir_permissions_are_revision_bound_and_filter_capability_snapshots() {
         .expect("authorized session-dir terminal should start")
         .to_owned();
 
+    let encoded_session: String = url::form_urlencoded::byte_serialize(session.session_id.as_str().as_bytes()).collect();
+    let encoded_path: String = url::form_urlencoded::byte_serialize(session_dir.path.to_str().unwrap().as_bytes()).collect();
+    let scope = format!("session:{encoded_session}:{encoded_path}");
+    let scoped: serde_json::Value = serde_json::from_str(&server.handle_json(&mut connection, &serde_json::json!({
+        "jsonrpc":"2.0","id":50,"method":"terminal/create",
+        "params":{"dirId":scope,"rows":24,"cols":80,"profile":{"type":"default"},"lifecycle":{"type":"connectionOwned"}}
+    }).to_string())).unwrap();
+    assert!(scoped.get("error").is_none(), "{scoped}");
+    assert_eq!(scoped["result"]["ready"]["cwd"], session_dir.path.to_str().unwrap());
+    let scoped_id = scoped["result"]["terminalId"].as_str().unwrap();
+    let closed: serde_json::Value = serde_json::from_str(&server.handle_json(&mut connection, &serde_json::json!({
+        "jsonrpc":"2.0","id":51,"method":"terminal/close",
+        "params":{"dirId":scope,"terminalId":scoped_id}
+    }).to_string())).unwrap();
+    assert!(closed.get("error").is_none(), "{closed}");
+
     let deactivated: serde_json::Value = serde_json::from_str(
         &server.handle_json(
             &mut connection,
@@ -789,6 +805,11 @@ fn dir_permissions_are_revision_bound_and_filter_capability_snapshots() {
     )
     .unwrap();
     assert_eq!(revoked_terminal["error"]["message"], "TerminalNotFound");
+    let revoked_scope: serde_json::Value = serde_json::from_str(&server.handle_json(&mut connection, &serde_json::json!({
+        "jsonrpc":"2.0","id":52,"method":"terminal/create",
+        "params":{"dirId":scope,"rows":24,"cols":80,"profile":{"type":"default"},"lifecycle":{"type":"connectionOwned"}}
+    }).to_string())).unwrap();
+    assert_eq!(revoked_scope["error"]["message"], "TerminalOperationFailed");
 
     let stale: serde_json::Value = serde_json::from_str(
         &server.handle_json(

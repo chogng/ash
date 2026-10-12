@@ -2,6 +2,7 @@ import { environment } from '../../../../base/common/platform.js';
 import { localize } from '../../../../nls.js';
 import { ConfigurationScope, Extensions, type IConfigurationPropertySchema, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
+import { terminalHistoryConfiguration } from '../../terminalContrib/history/common/terminal.history.js';
 import { TERMINAL_CONFIG_SECTION } from './terminal.js';
 
 const properties: Record<string, IConfigurationPropertySchema> = {};
@@ -100,6 +101,7 @@ for (const platform of ['linux', 'osx', 'windows']) {
 	}
 }
 properties[`${TERMINAL_CONFIG_SECTION}.cwd`] = { type: 'string', default: '', maxLength: 32768, get description() { return localize('terminal.profile.cwdDescription', 'Starting directory of a new terminal. Execution authorization still applies.'); } };
+Object.assign(properties, terminalHistoryConfiguration);
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).updateConfigurations({
 	add: [{ id: 'terminal', scope: ConfigurationScope.WINDOW, properties }], remove: [],
 });

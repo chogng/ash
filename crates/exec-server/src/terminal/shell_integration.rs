@@ -34,12 +34,14 @@ impl ShellIntegration {
                 })
             {
                 let nonce = new_nonce()?;
-                args.extend([
-                    "-NoExit".into(),
-                    "-Command".into(),
-                    POWERSHELL.replace("__ASH_SHELL_NONCE__", &nonce),
-                ]);
+                let directory = tempfile::Builder::new().prefix("ash-shell-").tempdir()?;
+                let script = directory.path().join("integration.ps1");
+                std::fs::write(&script, POWERSHELL.replace("__ASH_SHELL_NONCE__", &nonce))?;
+                // Dot-source the private wrapper; do not put its nonce in process argv.
+                let path = script.to_string_lossy().replace('\'', "''");
+                args.extend(["-NoExit".into(), "-Command".into(), format!(". '{path}'")]);
                 launch.nonce = Some(nonce);
+                launch.directory = Some(directory);
             }
             return Ok(launch);
         }

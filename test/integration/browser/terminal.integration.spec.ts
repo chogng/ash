@@ -1097,3 +1097,19 @@ test('shell cwd waits for the original xterm commit and remains available with r
 	expect(await page.evaluate(() => window.ashTerminalStreamIntegration.snapshot())).toBe('中文🙂\n\n[process exited with code 0]');
 	await page.evaluate(() => window.ashTerminalStreamIntegration.close());
 });
+
+test('terminal reuse keeps command decorations separate when the new PTY restarts command IDs', async ({ page }) => {
+	await page.goto('/terminal.html?stream&reuseCommands');
+	await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));
+	await page.evaluate(() => window.ashTerminalStreamIntegration.start());
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.status().state)).toBe('exited');
+	await expect(page.locator('.ash-terminal-command-status.succeeded')).toHaveCount(1);
+	await page.evaluate(() => window.ashTerminalStreamIntegration.reuse());
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.status().state)).toBe('exited');
+	await expect(page.locator('.ash-terminal-command-status')).toHaveCount(2);
+	await expect(page.getByRole('img', { name: 'Command completed successfully', exact: true })).toHaveCount(1);
+	await expect(page.getByRole('img', { name: 'Command failed with exit code 11', exact: true })).toHaveCount(1);
+	expect(await page.evaluate(() => window.ashTerminalStreamIntegration.status().remaining)).toBe(1);
+	expect(await page.evaluate(() => window.ashTerminalStreamIntegration.status().closes)).toBe(1);
+	await page.evaluate(() => window.ashTerminalStreamIntegration.close());
+});

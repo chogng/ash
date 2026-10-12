@@ -2933,6 +2933,12 @@ impl AppServer {
         &self,
         dir_id: Option<&str>,
     ) -> Result<Arc<exec_server::terminal::TerminalService>, RpcError> {
+        if let Some((session_id, path)) = Self::terminal_session_directory(dir_id)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?
+        {
+            self.session_dir_authorization(&session_id, &path, Permission::ExecuteCommands)?;
+            return self.terminal_service();
+        }
         let runtime = self
             .env_runtime
             .read()

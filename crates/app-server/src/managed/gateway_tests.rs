@@ -65,6 +65,14 @@ fn session_directory_file_requests_route_to_the_session_execution_authority() {
             Some(SessionExecutionTarget::Ssh { host: "build-host".into(), root: "/work/source".into() })
         );
     }
+    for method in ["terminal/create", "terminal/read", "terminal/write", "terminal/close"] {
+        assert_eq!(selected_execution_target(&registry, &remote, &serde_json::json!({
+            "method":method,"params":{"dirId":"session:remote-session:%2Fwork%2Fsource"}
+        })).unwrap(), Some(SessionExecutionTarget::Ssh { host: "build-host".into(), root: "/work/source".into() }));
+    }
+    assert!(selected_execution_target(&registry, &remote, &serde_json::json!({
+        "method":"terminal/create","params":{"dirId":"session:remote-session:relative"}
+    })).is_err());
 }
 
 #[cfg(unix)]

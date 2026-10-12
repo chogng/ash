@@ -29,6 +29,8 @@ export const enum TerminalCommandId {
 	Kill = 'workbench.action.terminal.kill',
 	Clear = 'workbench.action.terminal.clear',
 	Focus = 'workbench.action.terminal.focus',
+	ScrollToPreviousCommand = 'workbench.action.terminal.scrollToPreviousCommand',
+	ScrollToNextCommand = 'workbench.action.terminal.scrollToNextCommand',
 	CopySelection = 'workbench.action.terminal.copySelection',
 	CopyAndClearSelection = 'workbench.action.terminal.copyAndClearSelection',
 	Paste = 'workbench.action.terminal.paste',

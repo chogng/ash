@@ -70,14 +70,26 @@ fn powershell_uses_host_markers_and_cmd_keeps_its_standard_launch() {
         is_default: false,
     };
     assert!(powershell.command_status_mode() == CommandStatusMode::ShellIntegration);
-    let TerminalArguments::Argv(args) =
+    let integration =
         crate::terminal::shell_integration::ShellIntegration::prepare(&powershell, &HashMap::new())
-            .unwrap()
-            .args
-    else {
+            .unwrap();
+    let TerminalArguments::Argv(args) = &integration.args else {
         panic!("expected argv");
     };
-    let command = args.join(" ");
+    let path = args
+        .last()
+        .unwrap()
+        .strip_prefix(". '")
+        .unwrap()
+        .strip_suffix('\'')
+        .unwrap()
+        .replace("''", "'");
+    let command = std::fs::read_to_string(path).unwrap();
+    assert!(
+        !args
+            .iter()
+            .any(|arg| arg.contains(integration.nonce.as_ref().unwrap()))
+    );
     assert!(command.contains("633;C"));
     assert!(command.contains("633;D"));
     assert_eq!(

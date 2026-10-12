@@ -299,7 +299,7 @@ fn completed_history_is_bounded_and_task_opt_out_removes_text_without_breaking_s
     tracker.start_active(301);
     apply_metadata(
         &mut tracker,
-        b"\x1b]633;P;Task\x07\x1b]633;E;private;nonce\x07\x1b]633;D;1\x07",
+        b"\x1b]633;P;Task=build\x07\x1b]633;E;private;nonce\x07\x1b]633;D;1\x07",
         302,
     );
     let integration = tracker.shell_integration().unwrap();
@@ -320,6 +320,30 @@ fn completed_history_is_bounded_and_task_opt_out_removes_text_without_breaking_s
         tracker.finish_active(Some(0), index);
     }
     let integration = tracker.shell_integration().unwrap();
-    assert_eq!(integration.commands.len(), MAX_COMMAND_TEXT_BYTES / 32768);
+    assert!(integration.commands.len() <= 16);
     assert!(tracker.read_events(0, 1024).2);
+    assert!(
+        integration
+            .commands
+            .iter()
+            .map(command_record_bytes)
+            .sum::<usize>()
+            <= MAX_COMMAND_RECORD_BYTES
+    );
+
+    let mut tracker = TerminalCommandStatusTracker::new(CommandStatusMode::ShellIntegration, None);
+    tracker.record_cwd("x".repeat(32768), false, 0);
+    for index in 0..40 {
+        tracker.record_command_line("\n".repeat(32768), false, index);
+        tracker.start_active(index);
+        tracker.finish_active(Some(0), index);
+    }
+    let history = tracker.shell_integration().unwrap();
+    let events = tracker.read_events(0, 1024).0;
+    assert!(serde_json::to_vec(&history).unwrap().len() <= MAX_COMMAND_RECORD_BYTES);
+    assert!(serde_json::to_vec(&events).unwrap().len() <= MAX_COMMAND_RECORD_BYTES);
+    assert!(
+        serde_json::to_vec(&(history, events)).unwrap().len()
+            < exec_server_protocol::MAX_FRAME_BYTES
+    );
 }

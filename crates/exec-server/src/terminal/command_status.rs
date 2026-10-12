@@ -7,7 +7,8 @@ use std::collections::VecDeque;
 const OSC_633_PREFIX: &[u8] = b"\x1b]633;";
 const MAX_COMMAND_EVENTS: usize = 1_024;
 const MAX_HISTORY_COMMANDS: usize = 256;
-const MAX_COMMAND_TEXT_BYTES: usize = 512 * 1024;
+// Include cwd and JSON escaping so metadata cannot exhaust the terminal wire frame.
+const MAX_COMMAND_RECORD_BYTES: usize = 512 * 1024;
 const MAX_OSC_BYTES: usize = 65_536;
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -156,7 +157,7 @@ impl TerminalCommandStatusTracker {
                 Some(ParsedTerminalOutput::RichCommandDetection(true))
             } else if payload == b"P;HasRichCommandDetection=False" {
                 Some(ParsedTerminalOutput::RichCommandDetection(false))
-            } else if matches!(payload, b"P;Task" | b"P;Task=True") {
+            } else if payload == b"P;Task" || payload.starts_with(b"P;Task=") {
                 Some(ParsedTerminalOutput::CommandStorageDisabled)
             } else if payload == b"B" {
                 self.pending_output.drain(..payload_end + terminator_length);
@@ -377,29 +378,47 @@ impl TerminalCommandStatusTracker {
         if status != TerminalCommandStatus::Running && !self.integration.command_storage_disabled {
             self.integration.commands.push(event.clone());
             while self.integration.commands.len() > MAX_HISTORY_COMMANDS
-                || command_text_bytes(&self.integration.commands) > MAX_COMMAND_TEXT_BYTES
+                || self
+                    .integration
+                    .commands
+                    .iter()
+                    .map(command_record_bytes)
+                    .sum::<usize>()
+                    > MAX_COMMAND_RECORD_BYTES
             {
                 self.integration.commands.remove(0);
             }
         }
         self.events.push_back(event);
         while self.events.len() > MAX_COMMAND_EVENTS
-            || self
-                .events
-                .iter()
-                .map(|event| event.command.as_ref().map_or(0, String::len))
-                .sum::<usize>()
-                > MAX_COMMAND_TEXT_BYTES
+            || self.events.iter().map(command_record_bytes).sum::<usize>()
+                > MAX_COMMAND_RECORD_BYTES
         {
             self.events.pop_front();
         }
     }
 }
 
-fn command_text_bytes(commands: &[TerminalCommandStatusEvent]) -> usize {
-    commands
-        .iter()
-        .map(|event| event.command.as_ref().map_or(0, String::len))
+fn command_record_bytes(event: &TerminalCommandStatusEvent) -> usize {
+    // Scalar fields, field names, IDs and delimiters fit this fixed allowance.
+    256 + event
+        .command
+        .as_ref()
+        .map_or(0, |value| escaped_json_bytes(value))
+        + event
+            .cwd
+            .as_ref()
+            .map_or(0, |value| escaped_json_bytes(value))
+}
+
+fn escaped_json_bytes(value: &str) -> usize {
+    value
+        .bytes()
+        .map(|byte| match byte {
+            0..=31 => 6,
+            b'"' | b'\\' => 2,
+            _ => 1,
+        })
         .sum()
 }
 
