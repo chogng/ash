@@ -1152,6 +1152,16 @@
       "rendering": "symbolic"
     },
     {
+      "id": "terminal-powershell",
+      "file": "terminal-powershell.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "terminal-ubuntu",
+      "file": "terminal-ubuntu.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "text",
       "file": "text.svg",
       "rendering": "symbolic"
