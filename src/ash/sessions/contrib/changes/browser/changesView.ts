@@ -34,6 +34,8 @@ export class ChangesViewPane extends ViewPane {
 	private rows: readonly ChangeRow[] = [];
 	private request = 0;
 	private owner: string | undefined;
+	// Returning to the same conversation must not revive work started before hiding or switching.
+	private ownerEpoch = 0;
 
 	constructor(
 		container: HTMLElement,
@@ -110,8 +112,14 @@ export class ChangesViewPane extends ViewPane {
 	}
 
 	public override setVisible(visible: boolean): void {
+		if (visible === this.isVisible()) { return; }
 		super.setVisible(visible);
-		if (visible) { void this.refresh(); }
+		if (visible) {
+			void this.refresh();
+		} else {
+			this.request++;
+			this.ownerEpoch++;
+		}
 	}
 
 	public focus(): void { this.tree.domFocus(); }
@@ -126,11 +134,13 @@ export class ChangesViewPane extends ViewPane {
 	}
 
 	private async refresh(): Promise<void> {
+		if (!this.isVisible() || this.isDisposed) { return; }
 		const request = ++this.request;
 		const selection = this.sessions.activeSelection;
 		const owner = selection?.kind === 'session' ? `${selection.active.session.sessionId}:${selection.active.threadId}` : undefined;
 		const selectedIds = owner === this.owner ? this.tree.selection.map(row => `${row.summary.changeSetId}:${row.file.path}`) : [];
 		const focused = owner === this.owner ? this.tree.focus : undefined;
+		if (owner !== this.owner) { this.ownerEpoch++; }
 		this.owner = owner;
 		if (!owner || !selectedIds.length) {
 			this.rows = [];
@@ -146,6 +156,7 @@ export class ChangesViewPane extends ViewPane {
 		try {
 			const active = selection.active;
 			const summaries = await this.chat.listTurnChanges(active.session.sessionId, active.threadId);
+			if (this.isDisposed || request !== this.request) { return; }
 			const details = await Promise.all(summaries.filter(summary => summary.captureState !== 'discarded').map(summary => this.chat.readTurnChange(active.session.sessionId, active.threadId, summary.changeSetId)));
 			if (this.isDisposed || request !== this.request) { return; }
 			this.rows = details.flatMap((details, index) => details.files.map(file => ({ summary: details.summary, file, turnNumber: index + 1 })));
@@ -163,17 +174,17 @@ export class ChangesViewPane extends ViewPane {
 
 	private async openReview(): Promise<void> {
 		const selection = this.sessions.activeSelection;
-		if (selection?.kind !== 'session') { return; }
-		const owner = this.owner;
+		if (!this.isVisible() || selection?.kind !== 'session') { return; }
+		const ownerEpoch = this.ownerEpoch;
 		const input = await createTurnMultiDiffEditorInput(this.chat, selection.active, 'throughCurrentTurn');
-		if (this.isDisposed || owner !== this.owner) { return; }
+		if (this.isDisposed || ownerEpoch !== this.ownerEpoch) { return; }
 		await this.editors.openEditor(input, { pinned: true });
 	}
 
 	private async previewSelection(): Promise<void> {
 		const selection = this.sessions.activeSelection;
-		if (selection?.kind !== 'session') { return; }
-		const owner = this.owner;
+		if (!this.isVisible() || selection?.kind !== 'session') { return; }
+		const ownerEpoch = this.ownerEpoch;
 		const selected = this.tree.selection;
 		const active = selection.active;
 		const grouped = new Map<string, TurnCommitSelection>();
@@ -183,18 +194,19 @@ export class ChangesViewPane extends ViewPane {
 		}
 		if (!grouped.size) { return; }
 		const message = await this.quickInput.input({ title: localize('sessions.changes.commitMessage', 'Commit message'), validateInput: async value => value.trim() ? undefined : localize('sessions.changes.messageRequired', 'Enter a commit message.') });
-		if (message === undefined || this.isDisposed || owner !== this.owner) { return; }
+		if (message === undefined || this.isDisposed || ownerEpoch !== this.ownerEpoch) { return; }
 		const preview = await this.chat.prepareTurnCommit(active.session.sessionId, active.threadId, [...grouped.values()], message);
 		const input = await createTurnCommitPreviewInput(this.chat, active.session.sessionId, active.threadId, preview);
-		if (this.isDisposed || owner !== this.owner) { return; }
+		if (this.isDisposed || ownerEpoch !== this.ownerEpoch) { return; }
 		await this.editors.openEditor(input, { pinned: true });
 	}
 
 	private async openFile(row: ChangeRow, options: IEditorOptions, sideBySide: boolean): Promise<void> {
-		const owner = this.owner;
+		if (!this.isVisible()) { return; }
+		const ownerEpoch = this.ownerEpoch;
 		const summary = row.summary;
 		const contents = await this.chat.readTurnChangeFile(summary.sessionId, summary.threadId, summary.changeSetId, row.file.path);
-		if (this.isDisposed || owner !== this.owner) { return; }
+		if (this.isDisposed || ownerEpoch !== this.ownerEpoch) { return; }
 		if (contents.truncated && !contents.binary) { throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.')); }
 		const resource = URI.from({ scheme: 'ash-turn-diff', path: `/${summary.changeSetId}/${row.file.path}` });
 		if (contents.binary) {

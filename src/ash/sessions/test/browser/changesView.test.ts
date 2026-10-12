@@ -4,14 +4,18 @@ import { PromptsService } from '../../../workbench/contrib/chat/common/promptSyn
 import type { IResourceEditorInput } from '../../../workbench/common/editor.js';
 import '../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { test, suite } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Event, Emitter } from '../../../base/common/event.js';
 import { DeferredPromise } from '../../../base/common/async.js';
+import { toDisposable } from '../../../base/common/lifecycle.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../base/test/common/utils.js';
+import { registerTestComponentServices } from '../../../workbench/test/common/testEditorServices.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
-import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
+import { IAccessibleViewService, AccessibleViewType } from '../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewRegistry } from '../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
 import { createDisconnectedRendererApi } from '../../../platform/agentHost/browser/rendererApi.js';
@@ -34,6 +38,9 @@ import { ChangesViewPane } from '../../contrib/changes/browser/changesView.js';
 import { setNlsMessages, resetNlsResolver } from '../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
 import { createTurnCommitPreviewInput, createTurnMultiDiffEditorInput } from '../../browser/turnMultiDiffSource.js';
+import { IViewsService } from '../../../workbench/services/views/common/viewsService.js';
+import { CHANGES_VIEW_ID } from '../../contrib/changes/common/changes.js';
+import '../../contrib/changes/browser/changes.contribution.js';
 
 for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and immutable review across refresh and ownership changes (${locale})`, async () => {
 	setNlsMessages(locale, productLanguagePackCatalogs.find(catalog => catalog.locale === locale)!.bundles);
@@ -86,6 +93,7 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		services.registerInstance(INotificationService, notifications);
 		services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => 'Press Alt+F1 for accessibility help.', disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
 		using view = services.createInstance(ChangesViewPane, browser.window.document.body, { id: 'changes', title: 'Changes' });
+		services.registerInstance(IViewsService, { getViewWithId: (id: string) => id === CHANGES_VIEW_ID ? view : undefined } as unknown as IViewsService);
 		view.setVisible(true);
 		selection = selected('current');
 		changed.fire();
@@ -93,6 +101,15 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		await old.complete({ changeSets: [] });
 		await settle();
 		assert.match(view.getAccessibleContent(), /main.ts: \+1 −1/u);
+		const accessibility = AccessibleViewRegistry.getImplementations().filter(provider => provider.name.startsWith('sessionsChanges.'));
+		for (const implementation of accessibility) {
+			using provider = implementation.getProvider(services)!;
+			if (implementation.type === AccessibleViewType.View) {
+				assert.equal(provider.provideContent(), view.getAccessibleContent());
+			} else {
+				assert.match(provider.provideContent(), locale === 'zh-CN' ? /方向键/u : /arrow keys/u);
+			}
+		}
 		const preview = view.element.querySelectorAll<HTMLButtonElement>('.ash-sessions-changes button')[1]!;
 		assert.equal(preview.textContent, locale === 'zh-CN' ? '预览选中的更改' : 'Preview selected changes');
 		const tree = view.element.querySelector<HTMLElement>('[role="tree"]')!;
@@ -160,6 +177,124 @@ function changes(id: string): TurnChangesReadResult {
 }
 
 async function settle(): Promise<void> { await new Promise<void>(resolve => setImmediate(resolve)); }
+
+suite('Changes visibility lifecycle', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('hidden views stop ledger reads, ignore late operations and restore live accessibility content', async () => {
+		const browser = new JSDOM('<!doctype html><body></body>');
+		using browserOwner = toDisposable(() => browser.window.close());
+		using services = new InstantiationService();
+		using changed = new Emitter<void>();
+		using ready = new Emitter<void>();
+		using ledgerChanged = new Emitter<{ sessionId: string; threadId: string; }>();
+		using configuration = new WorkbenchConfigurationService();
+		using contexts = new ContextKeyService();
+		using notifications = new NotificationService();
+		let selection = selected('a');
+		const pendingList = new DeferredPromise<readonly TurnChangesReadResult['summary'][]>();
+		const pendingFile = new DeferredPromise<{ path: string; binary: boolean; truncated: boolean; before: string; after: string; }>();
+		const pendingMessage = new DeferredPromise<string>();
+		const listCalls: string[] = [];
+		const detailReads: string[] = [];
+		const opened: IResourceEditorInput[] = [];
+		let fileRead = false;
+		let prepares = 0;
+		services.registerInstance(ISessionsService, {
+			onDidChange: changed.event,
+			get activeSelection() { return selection; },
+		} as unknown as ISessionsService);
+		services.registerInstance(IChatService, {
+			onDidUpdateTurnChanges: ledgerChanged.event,
+			onDidBecomeReady: ready.event,
+			listTurnChanges: async (sessionId: string) => {
+				listCalls.push(sessionId);
+				return listCalls.length === 1 ? pendingList.p : [changes(sessionId).summary];
+			},
+			readTurnChange: async (sessionId: string) => {
+				detailReads.push(sessionId);
+				return changes(sessionId);
+			},
+			readTurnChangeFile: async () => { fileRead = true; return pendingFile.p; },
+			prepareTurnCommit: async () => { prepares++; throw new Error('A stale preview must not reach the backend'); },
+		} as unknown as IChatService);
+		services.registerInstance(IEditorService, {
+			...emptyEditorServiceState,
+			openEditor: async (input: IResourceEditorInput) => { opened.push(input); },
+		} as unknown as IEditorService);
+		services.registerInstance(IConfigurationService, configuration);
+		services.registerInstance(IContextKeyService, contexts);
+		services.registerInstance(INotificationService, notifications);
+		services.registerInstance(IQuickInputService, { input: async () => pendingMessage.p } as unknown as IQuickInputService);
+		services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
+		using view = registerTestComponentServices(services).createInstance(ChangesViewPane, browser.window.document.body, { id: CHANGES_VIEW_ID, title: 'Changes' });
+		services.registerInstance(IViewsService, { getViewWithId: (id: string) => id === CHANGES_VIEW_ID ? view : undefined } as unknown as IViewsService);
+
+		changed.fire();
+		ready.fire();
+		assert.deepEqual(listCalls, []);
+		view.setVisible(true);
+		assert.deepEqual(listCalls, ['a']);
+		view.setVisible(false);
+		selection = selected('b');
+		changed.fire();
+		ready.fire();
+		ledgerChanged.fire({ sessionId: 'b', threadId: 'b-thread' });
+		await pendingList.complete([changes('a').summary]);
+		await settle();
+		assert.deepEqual({ listCalls, detailReads }, { listCalls: ['a'], detailReads: [] });
+		view.setVisible(true);
+		await settle();
+		assert.deepEqual({ listCalls, detailReads }, { listCalls: ['a', 'b'], detailReads: ['b'] });
+		view.setVisible(true);
+		assert.equal(listCalls.length, 2);
+		assert.match(view.getAccessibleContent(), /main.ts/u);
+
+		const tree = view.element.querySelector<HTMLElement>('[role="tree"]')!;
+		tree.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+		await settle();
+		assert.equal(fileRead, true);
+		view.setVisible(false);
+		view.setVisible(true);
+		await settle();
+		await pendingFile.complete({ path: 'main.ts', binary: false, truncated: false, before: 'before', after: 'after' });
+		await settle();
+		assert.deepEqual(opened, []);
+
+		view.element.querySelector<HTMLElement>('[role="treeitem"]')!.click();
+		await settle();
+		const preview = view.element.querySelectorAll<HTMLButtonElement>('.ash-sessions-changes button')[1]!;
+		assert.equal(preview.disabled, false);
+		preview.click();
+		await settle();
+		selection = selected('c');
+		changed.fire();
+		selection = selected('b');
+		changed.fire();
+		await settle();
+		await pendingMessage.complete('feat: stale preview');
+		await settle();
+		assert.equal(prepares, 0);
+
+		const providers = AccessibleViewRegistry.getImplementations().filter(provider => provider.name.startsWith('sessionsChanges.'));
+		assert.equal(providers.length, 2);
+		for (const implementation of providers) {
+			using provider = implementation.getProvider(services)!;
+			assert.ok(provider);
+			if (implementation.type === AccessibleViewType.View) {
+				assert.equal(provider.provideContent(), view.getAccessibleContent());
+			} else {
+				assert.match(provider.provideContent(), /arrow keys/u);
+			}
+			provider.dispose();
+			assert.equal(browser.window.document.activeElement, tree);
+		}
+		view.dispose();
+		assert.equal(changed.hasListeners(), false);
+		assert.equal(ready.hasListeners(), false);
+		assert.equal(ledgerChanged.hasListeners(), false);
+	});
+});
 
 
 test('Turn review and commit preview retain binary-only files without text placeholders', async () => {

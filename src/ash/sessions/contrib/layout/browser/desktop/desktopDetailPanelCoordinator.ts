@@ -5,7 +5,7 @@ import { isMultiDiffEditorInput } from '../../../../../workbench/contrib/multiDi
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import type { IAgentWorkbenchLayoutService } from '../../../../browser/workbench.js';
 import { SESSIONS_FILES_CONTAINER_ID } from '../../../files/browser/files.contribution.js';
-import { CHANGES_VIEW_CONTAINER_ID } from '../../../changes/browser/changes.contribution.js';
+import { CHANGES_VIEW_CONTAINER_ID } from '../../../changes/common/changes.js';
 
 /** Active tabs choose detail content; an explicit hide remains authoritative until another tab is selected. */
 export class DesktopDetailPanelCoordinator {

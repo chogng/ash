@@ -9,12 +9,15 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { IAccessibleViewService, AccessibleViewType } from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { IEditorPart } from '../../../../../workbench/browser/parts/editor/editorPart.js';
 import { IChatService, type TurnChangeSetSummary } from '../../../../../workbench/services/chat/common/chatService.js';
 
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { SessionChangesEditor } from '../../browser/sessionChangesEditor.js';
 import { URI } from '../../../../../base/common/uri.js';
+import '../../browser/changes.contribution.js';
 
 test('a hidden Changes editor ignores a late ledger result and loads fresh content when shown', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
@@ -51,6 +54,19 @@ test('a hidden Changes editor ignores a late ledger result and loads fresh conte
 	await Promise.resolve();
 	assert.equal(requests, 2);
 	assert.equal(pane.getAccessibleContent(), 'No changes in this conversation.');
+	services.registerInstance(IEditorPart, { activePane: pane } as unknown as IEditorPart);
+	const accessibility = AccessibleViewRegistry.getImplementations().filter(provider => provider.name.startsWith('sessionsChangesEditor.'));
+	assert.equal(accessibility.length, 2);
+	for (const implementation of accessibility) {
+		using provider = implementation.getProvider(services)!;
+		if (implementation.type === AccessibleViewType.View) {
+			assert.equal(provider.provideContent(), pane.getAccessibleContent());
+		} else {
+			assert.match(provider.provideContent(), /Compare the selected conversation/u);
+		}
+		provider.dispose();
+		assert.equal(dom.window.document.activeElement, dom.window.document.querySelector('.ash-sessions-changes-editor'));
+	}
 	pane.clearInput();
 	changes.fire({ sessionId: 'a', threadId: 'a-thread' });
 	assert.equal(requests, 2);
