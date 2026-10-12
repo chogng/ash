@@ -169,7 +169,7 @@ The desktop presentation may place the Auxiliary Bar inside the Editor's grid no
 
 Each visible session has one Sessions-owned view. The view presents the active chat for that session and scopes commands, menus, and context keys to the represented session.
 
-Conversation title tabs and document editor tabs use the shared WorkbenchTabsControl for presentation, sizing, scrolling and connected-tab geometry. Content activation, closing and ordering are delegated to their existing session or editor model; the shared control does not retain a second content model.
+The Code Auxiliary Bar shows one current conversation title and a history switcher instead of conversation tabs. History includes untitled drafts and active session threads. Switching retains their live widgets and composers; Session services own selection and lifetime. Document tabs continue to use WorkbenchTabsControl. Both surfaces consume the shared theme and Part geometry.
 
 Chat-tab presentation is a property of the session view, not of the action that opened a chat. The view observes its configuration directly and consistently applies either tabbed or session-view presentation to every chat, including restored chats and chats opened through navigation or external entry points.
 

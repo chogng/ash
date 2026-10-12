@@ -1,5 +1,10 @@
 {
   "ash": {
+    "chat.title.default": "Chat",
+    "chat.title.new": "New Chat",
+    "chat.title.switch": "Switch conversation: {0}",
+    "chat.title.actions": "Chat actions",
+    "chat.title.layout": "Chat layout",
     "chat.tabs.openChats": "Open chats",
     "agentTrace.incompletePending": "Diagnostic evidence incomplete · {0} records omitted · {1} records pending.",
     "agentTrace.attemptAccounted": "Model attempt linked to accounting · {0}",

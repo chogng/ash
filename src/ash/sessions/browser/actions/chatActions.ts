@@ -49,17 +49,17 @@ registerAction2(class NewChatAction extends Action2 {
 	}
 });
 
-interface ChatHistoryQuickPickItem extends IQuickPickItem {
-	readonly sessionId: SessionId;
-	readonly threadId: ThreadId;
-}
+type ChatHistoryQuickPickItem = IQuickPickItem & (
+	{ readonly kind: 'draft'; readonly untitledSessionId: string; }
+	| { readonly kind: 'thread'; readonly sessionId: SessionId; readonly threadId: ThreadId; }
+);
 
 registerAction2(class ShowChatHistoryAction extends Action2 {
 	constructor() {
 		super({
 			id: SHOW_CHAT_HISTORY_COMMAND_ID,
 			title: localize2({ bundle: 'ash.sessions', key: 'command.ShowChatHistoryAction' }, "Show Chat History"),
-			tooltip: "Show Chat History",
+			tooltip: localize({ bundle: 'ash.sessions', key: 'command.ShowChatHistoryAction' }, 'Show Chat History'),
 			icon: Lxicon.history,
 			f1: true,
 			menu: {
@@ -70,30 +70,45 @@ registerAction2(class ShowChatHistoryAction extends Action2 {
 		});
 	}
 
-	override run(accessor: ServicesAccessor): void {
+	override run(accessor: ServicesAccessor): Promise<void> {
 		const sessions = accessor.get(ISessionsManagementService);
 		const views = accessor.get(IViewsService);
 		const quickPick = accessor.get(IQuickInputService).createQuickPick<ChatHistoryQuickPickItem>();
 		const disposables = new DisposableStore();
 		disposables.add(quickPick);
-		quickPick.placeholder = "Select a chat";
-		quickPick.items = sessions.sessions.flatMap((session) => {
-			if (session.status !== "active") return [];
-			const threads = session.chats.filter((thread) => thread.status === "active");
-			return threads.map((thread, index) => ({
-				sessionId: session.sessionId,
-				threadId: thread.threadId,
-				label: session.title.trim() || "Chat",
-				description: [threads.length > 1 ? localize('sessions.history.thread', 'Thread {0}', index + 1) : undefined, sessionManagementLabel(thread.management)].filter(Boolean).join(' · ') || undefined,
-				detail: thread.management?.activity?.text ?? thread.management?.summary ?? undefined,
-			}));
-		});
+		quickPick.placeholder = localize('sessions.history.placeholder', 'Select a conversation or draft');
+		quickPick.items = [
+			...sessions.untitledSessions.map(session => ({
+				kind: 'draft' as const,
+				untitledSessionId: session.untitledSessionId,
+				label: session.title.trim() || localize('chat.title.new', 'New Chat'),
+				description: localize('sessions.history.draft', 'Draft'),
+			})),
+			...sessions.sessions.flatMap((session) => {
+				if (session.status !== "active") return [];
+				const threads = session.chats.filter((thread) => thread.status === "active");
+				return threads.map((thread, index) => ({
+					kind: 'thread' as const,
+					sessionId: session.sessionId,
+					threadId: thread.threadId,
+					label: session.title.trim() || localize('chat.title.default', 'Chat'),
+					description: [threads.length > 1 ? localize('sessions.history.thread', 'Thread {0}', index + 1) : undefined, sessionManagementLabel(thread.management)].filter(Boolean).join(' · ') || undefined,
+					detail: thread.management?.activity?.text ?? thread.management?.summary ?? undefined,
+				}));
+			})];
 		disposables.add(quickPick.onDidAccept((item) => {
-			sessions.selectThread(item.sessionId, item.threadId);
+			if (item.kind === 'draft') sessions.selectUntitledSession(item.untitledSessionId);
+			else sessions.selectThread(item.sessionId, item.threadId);
 			quickPick.hide();
 			void views.focusView(CHAT_VIEW_ID).catch(onUnexpectedError);
 		}));
-		disposables.add(quickPick.onDidHide(() => disposables.dispose()));
+		const dismissed = new Promise<void>(resolve => {
+			disposables.add(quickPick.onDidHide(() => {
+				disposables.dispose();
+				resolve();
+			}));
+		});
 		quickPick.show();
+		return dismissed;
 	}
 });

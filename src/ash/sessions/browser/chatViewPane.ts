@@ -10,7 +10,6 @@ import { IChatService } from "../../workbench/services/chat/common/chatService.j
 import type { IActiveSessionThread, IChat, ISession, IUntitledChatSession, ThreadId } from "../services/sessions/common/session.js";
 import { ISessionsManagementService } from "../services/sessions/common/sessionsManagement.js";
 import { ChatWidget, resolveMarkdownWorkspaceResource } from "../../workbench/contrib/chat/browser/widget/chatWidget.js";
-import type { ChatTabsDelegate } from "../../workbench/contrib/chat/browser/widgetHosts/viewPane/chatTabsControl.js";
 import { ChatViewTitleControl } from "../../workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewTitleControl.js";
 import { addDisposableListener, h, isHTMLElement } from "../../base/browser/dom.js";
 import { type ChatContextAttachment, type IChatContextTarget } from "../../workbench/services/chat/common/chatContextService.js";
@@ -20,7 +19,7 @@ import { IFileService } from '../../platform/files/common/files.js';
 import { URI } from '../../base/common/uri.js';
 import { type IContextKey } from "../../platform/contextkey/common/contextkey.js";
 import { ContextKeyService, IContextKeyService } from "../../platform/contextkey/browser/contextKeyService.js";
-import { AGENT_SESSIONS_ORIENTATION_SETTING, AgentSessionsOrientation, AgentSessionsOrientationContext, AgentSessionsSidebarVisibleContext } from '../../workbench/contrib/chat/common/chat.js';
+import { SHOW_CHAT_HISTORY_COMMAND_ID, AGENT_SESSIONS_ORIENTATION_SETTING, AgentSessionsOrientation, AgentSessionsOrientationContext, AgentSessionsSidebarVisibleContext } from '../../workbench/contrib/chat/common/chat.js';
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import { AgentSessionsControl } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsControl.js';
 import { registerAgentSessionsAccessibility } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsAccessibility.js';
@@ -41,13 +40,12 @@ const minimumSessionsSidebarWidth = 220;
 const minimumChatWidth = 360;
 
 interface ChatPaneEntry {
-	readonly tabId: string;
 	readonly label: string;
 	readonly pane: ChatWidget<ChatWidgetModel>;
 }
 
 /**
- * Chat tab container.
+ * Retains conversations behind one title and history switcher.
  *
  * Each untitled or active durable Session owns one retained ChatWidget. Thread
  * selection remains internal to durable panes, while untitled sessions
@@ -71,7 +69,6 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 	private sessionsPresentation: 'sideBySide' | 'stacked' | 'list' = 'list';
 	private readonly empty: HTMLDivElement;
 	private readonly panes = new Map<string, ChatWidget<ChatWidgetModel>>();
-	private readonly tabOrder: string[] = [];
 	private activePane: ChatWidget<ChatWidgetModel> | undefined;
 	private initialUntitledSessionId: string | undefined;
 	private viewDisposed = false;
@@ -109,13 +106,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		this.titleControl = this._register(this.instantiationService.createInstance(ChatViewTitleControl,
 			this.element,
 			viewId,
-			{
-				selectTab: (tabId) => this.selectTab(tabId),
-				closeTab: (tabId) => this.closeTab(tabId),
-				moveTab: (sourceTabId, targetTabId, position) => this.moveTab(sourceTabId, targetTabId, position),
-			} satisfies ChatTabsDelegate,
-			menuService,
-			contextMenuService,
+			() => this.commandService.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID),
 		));
 		this.paneHost = h(container.ownerDocument, "div");
 		this.paneHost.className = "ash-chat-pane-host";
@@ -202,7 +193,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		}
 		this._register(sessionService.onDidChange(() => this.syncSessions()));
 		this._register(layoutService.onDidChangePartVisibility((event) => {
-			if (event.partId === "auxiliarybar" && event.visible) this.ensureTabForVisibleChat();
+			if (event.partId === "auxiliarybar" && event.visible) this.ensureConversationForVisibleChat();
 		}));
 		this._register(toDisposable(() => {
 			this.viewDisposed = true;
@@ -211,11 +202,11 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		}));
 		this.syncSessions();
 		this.updateResponsiveLayout();
-		this.ensureTabForVisibleChat();
+		this.ensureConversationForVisibleChat();
 		void sessionService.initialize().then(() => {
 			if (this.viewDisposed) return;
 			this.discardInitialUntitledSessionWhenDurableChatExists();
-			this.ensureTabForVisibleChat();
+			this.ensureConversationForVisibleChat();
 		});
 	}
 
@@ -229,7 +220,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 	}
 
 	addContext(attachment: ChatContextAttachment): void {
-		this.ensureTabForVisibleChat();
+		this.ensureConversationForVisibleChat();
 		this.activePane?.addContext(attachment);
 	}
 
@@ -238,13 +229,13 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 	}
 
 	appendToDraft(text: string): void {
-		this.ensureTabForVisibleChat();
+		this.ensureConversationForVisibleChat();
 		if (!this.activePane) throw new Error('Chat has no active composer');
 		this.activePane.appendToDraft(text);
 	}
 
 	acceptInput(value?: string): Promise<void> {
-		this.ensureTabForVisibleChat();
+		this.ensureConversationForVisibleChat();
 		return this.activePane?.acceptInput(value) ?? Promise.resolve();
 	}
 
@@ -283,7 +274,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 			} else {
 				pane.model.selectUntitledSession(untitledSession);
 			}
-			entries.push({ tabId: pane.element.id, label: untitledSession.title.trim() || "New Chat", pane });
+			entries.push({ label: untitledSession.title.trim() || localize('chat.title.new', 'New Chat'), pane });
 		}
 		for (const session of this.sessionService.sessions) {
 			if (session.status !== "active") continue;
@@ -313,7 +304,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 			} else {
 				void pane.model.selectThread(selection);
 			}
-			entries.push({ tabId: pane.element.id, label: session.title.trim() || "Chat", pane });
+			entries.push({ label: session.title.trim() || localize('chat.title.default', 'Chat'), pane });
 		}
 		for (const [paneId, pane] of this.panes) {
 			if (retainedPaneIds.has(paneId)) continue;
@@ -322,8 +313,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		}
 		const activePaneId = this.activePaneId();
 		const activePane = activePaneId ? this.panes.get(activePaneId) : undefined;
-		const orderedEntries = this.orderEntries(entries, activePane);
-		const orderedNodes = [...orderedEntries.map((entry) => entry.pane.element), this.empty];
+		const orderedNodes = [...entries.map((entry) => entry.pane.element), this.empty];
 		for (let index = 0; index < orderedNodes.length; index += 1) {
 			const node = orderedNodes[index]!;
 			// Keep retained Chat editors attached while Session details refresh.
@@ -333,14 +323,13 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 			this.activePaneListener.value = activePane?.model.onDidChange(() => this.updateResponsiveLayout());
 		}
 		this.activePane = activePane;
-		for (const entry of orderedEntries) entry.pane.setVisible(entry.pane === this.activePane);
-		this.empty.hidden = orderedEntries.length > 0;
-		const activeTabId = this.activePane?.element.id;
-		const tabIds = this.titleControl.setTabs(
-			orderedEntries.map((entry) => ({ id: entry.tabId, label: entry.label, panelId: entry.pane.element.id })),
-			activeTabId,
-		);
-		for (const entry of orderedEntries) entry.pane.setTabId(tabIds.get(entry.tabId));
+		for (const entry of entries) entry.pane.setVisible(entry.pane === this.activePane);
+		this.empty.hidden = entries.length > 0;
+		this.titleControl.update(entries.find(entry => entry.pane === activePane)?.label, activePane?.element.id);
+		for (const entry of entries) {
+			entry.pane.element.setAttribute('role', 'region');
+			entry.pane.setTabId(entry.pane === activePane ? this.titleControl.titleId : undefined);
+		}
 		this.updateResponsiveLayout();
 		if (restoreFocus && activePane?.element.contains(focusedElement)) focusedElement.focus();
 	}
@@ -361,61 +350,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		return thread ? { session, threadId: thread.threadId } : undefined;
 	}
 
-	private selectTab(tabId: string): void {
-		const pane = this.paneForTabId(tabId);
-		if (!pane) return;
-		const untitledSessionId = pane.untitledSessionId;
-		if (untitledSessionId) {
-			this.sessionService.selectUntitledSession(untitledSessionId);
-			return;
-		}
-		const sessionId = pane.sessionId;
-		const threadId = pane.threadId;
-		if (sessionId && threadId) this.sessionService.selectThread(sessionId, threadId);
-	}
-
-	private closeTab(tabId: string): void {
-		const pane = this.paneForTabId(tabId);
-		if (!pane) return;
-		const untitledSessionId = pane.untitledSessionId;
-		if (untitledSessionId) {
-			this.sessionService.discardUntitledSession(untitledSessionId);
-			this.hideChatWhenEmpty();
-			return;
-		}
-		const sessionId = pane.sessionId;
-		if (!sessionId) return;
-		void this.sessionService.stopSession(sessionId).then(() => this.hideChatWhenEmpty()).catch(() => { });
-	}
-
-	private moveTab(sourceTabId: string, targetTabId: string | undefined, position: "before" | "after"): void {
-		if (sourceTabId === targetTabId) return;
-		const sourceIndex = this.tabOrder.indexOf(sourceTabId);
-		if (sourceIndex < 0) return;
-		this.tabOrder.splice(sourceIndex, 1);
-		const targetIndex = targetTabId === undefined
-			? this.tabOrder.length
-			: this.tabOrder.indexOf(targetTabId);
-		const insertionIndex = targetIndex < 0
-			? this.tabOrder.length
-			: position === "before" ? targetIndex : targetIndex + 1;
-		this.tabOrder.splice(insertionIndex, 0, sourceTabId);
-		this.syncSessions();
-	}
-
-	private orderEntries(entries: readonly ChatPaneEntry[], activePane: ChatWidget<ChatWidgetModel> | undefined): readonly ChatPaneEntry[] {
-		const entriesByTabId = new Map(entries.map((entry) => [entry.tabId, entry]));
-		const orderedTabIds = this.tabOrder.filter((tabId) => entriesByTabId.has(tabId));
-		for (const entry of entries) {
-			if (orderedTabIds.includes(entry.tabId)) continue;
-			if (entry.pane === activePane) orderedTabIds.unshift(entry.tabId);
-			else orderedTabIds.push(entry.tabId);
-		}
-		this.tabOrder.splice(0, this.tabOrder.length, ...orderedTabIds);
-		return orderedTabIds.map((tabId) => entriesByTabId.get(tabId)!);
-	}
-
-	private ensureTabForVisibleChat(): void {
+	private ensureConversationForVisibleChat(): void {
 		if (!this.layoutService.isPartVisible("auxiliarybar") || this.panes.size > 0) return;
 		const session = this.sessionService.createUntitledSession();
 		if (this.sessionService.state === "loading" && this.initialUntitledSessionId === undefined) {
@@ -430,10 +365,6 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		if ([...this.panes.keys()].some((paneId) => paneId.startsWith("session:"))) {
 			this.sessionService.discardUntitledSession(untitledSessionId);
 		}
-	}
-
-	private hideChatWhenEmpty(): void {
-		if (this.panes.size === 0) this.layoutService.hidePart("auxiliarybar");
 	}
 
 	private activePaneId(): string | undefined {
@@ -458,10 +389,6 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 			this.panes.delete(paneId);
 			this.panes.set(materializedPaneId, pane);
 		}
-	}
-
-	private paneForTabId(tabId: string): ChatWidget<ChatWidgetModel> | undefined {
-		return [...this.panes.values()].find((pane) => pane.element.id === tabId);
 	}
 
 	private setSessionsSidebarVisible(visible: boolean): void {

@@ -48,12 +48,11 @@ import { DeferredPromise } from '../../../base/common/async.js';
 import { SessionsService } from '../../services/sessions/browser/sessionsService.js';
 import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
-import { TAB_CLOSE_ACTION_ID } from "../../../base/browser/ui/tablist/tabList.js";
 import { Lxicon } from "../../../base/common/lxicons.js";
-import { MenuId } from "../../../platform/actions/common/actions.js";
+import { IMenuService, MenuId } from "../../../platform/actions/common/actions.js";
 import { MenuService } from "../../../platform/actions/common/menuService.js";
 import { IContextViewService } from "../../../platform/contextview/browser/contextView.js";
-import type { IContextMenuService } from "../../../platform/contextview/browser/contextView.js";
+import { IContextMenuService } from "../../../platform/contextview/browser/contextView.js";
 import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
 import { NotificationService } from '../../../workbench/services/notification/common/notificationService.js';
 import { InstantiationService } from "../../../platform/instantiation/common/instantiationService.js";
@@ -99,10 +98,12 @@ import { ILifecycleService } from '../../../workbench/services/lifecycle/common/
 
 const inputResources = new DisposableStore();
 suiteTeardown(() => inputResources.dispose());
-function createInputServices(contextView: IContextViewService, chat: IChatService): InstantiationService {
+function createInputServices(contextView: IContextViewService, chat: IChatService, menus?: IMenuService, contextMenus?: IContextMenuService): InstantiationService {
 	const services = inputResources.add(createTestEditorServices(undefined, createCodeEditorServices(inputResources)));
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IContextViewService, contextView);
+	services.registerInstance(IMenuService, menus ?? new MenuService(inputResources.add(new CommandService(services)), services.get(IContextKeyService)));
+	services.registerInstance(IContextMenuService, contextMenus ?? { showContextMenu: () => {} } as unknown as IContextMenuService);
 	services.registerInstance(IDialogService, recordingDialogService([]));
 	services.registerInstance(INotificationService, notifications);
 	services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { } } as unknown as IChatSessionNavigationService);
@@ -266,7 +267,7 @@ test('Chat loads an Ash remote workspace image through the file service', async 
 			fileService,
 			unavailableAccessibleViewService,
 			notifications,
-			createInputServices(contextViewService, paneChat), inputResources.add(new WorkbenchConfigurationService()), inputResources.add(createTestStorage()), contextKeys,
+			createInputServices(contextViewService, paneChat, menuService, contextMenuService), inputResources.add(new WorkbenchConfigurationService()), inputResources.add(createTestStorage()), contextKeys,
 		);
 		dom.window.document.body.append(pane.element);
 		await sessions.initialize();
@@ -304,7 +305,7 @@ test("Chat contribution owns the fixed Auxiliary Bar view", () => {
 	assert.equal(registry.getDefaultViewContainer(ViewContainerLocation.AgentSidebar), undefined);
 });
 
-test("Chat title separates Session tabs from its action toolbar", async () => {
+test("Chat title and history switching retain conversations and drafts", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	dom.window.HTMLElement.prototype.scrollTo = () => { };
 	using contextViewService = new BrowserContextViewService(dom.window.document.body);
@@ -382,7 +383,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		unavailableFileService,
 		unavailableAccessibleViewService,
 		notifications,
-		createInputServices(contextViewService, chat), configuration, inputResources.add(createTestStorage()), contextKeys,
+		createInputServices(contextViewService, chat, menuService, contextMenuService), configuration, inputResources.add(createTestStorage()), contextKeys,
 	);
 	chatView = pane;
 	const title = h(dom.window.document, "div");
@@ -393,16 +394,15 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	await sessions.initialize();
 	await nextTask();
 
-	const tablist = title.querySelector(
-		".ash-chat-tabs-control .ash-action-bar",
-	);
+	const titleButton = title.querySelector<HTMLButtonElement>(".ash-chat-view-title-button")!;
 	const toolbar = title.querySelector(
 		".ash-chat-title-actions > .ash-action-bar",
 	);
 	const layoutToolbar = title.querySelector<HTMLElement>(
 		".ash-chat-title-layout-actions",
 	);
-	assert.equal(tablist?.getAttribute("role"), "tablist");
+	assert.equal(title.querySelector("[role=tablist]"), null);
+	assert.equal(titleButton.textContent, "Session session-1");
 	assert.equal(toolbar?.getAttribute("role"), "toolbar");
 	assert.equal(toolbar?.classList.contains("ash-toolbar"), true);
 	assert.equal(
@@ -460,12 +460,12 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	assert.equal(sessionsSidebar?.querySelector<HTMLElement>('.ash-agent-sessions-group')?.hidden, false);
 	const paneHost = pane.element.querySelector<HTMLElement>('.ash-chat-pane-host');
 	assert.ok(paneHost);
-	const activeTab = chatTitleContent(pane).querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+	const activeTab = chatTitleContent(pane).querySelector<HTMLElement>('.ash-chat-view-title-label');
 	const paneChanges = new dom.window.MutationObserver(() => { });
 	paneChanges.observe(paneHost, { childList: true });
 	sessions.setUntitledSessionAgent(draftId, { name: 'reviewer', description: 'Reviews changes', sourceId: 'directory-1' });
 	assert.equal(paneChanges.takeRecords().flatMap(record => [...record.removedNodes]).length, 0);
-	assert.equal(chatTitleContent(pane).querySelector<HTMLElement>('[role="tab"][aria-selected="true"]'), activeTab);
+	assert.equal(chatTitleContent(pane).querySelector<HTMLElement>('.ash-chat-view-title-label'), activeTab);
 	paneChanges.disconnect();
 	sessions.discardUntitledSession(draftId);
 	sessions.selectThread('session-1', 'thread-1');
@@ -540,21 +540,10 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	assert.ok(settingsInput);
 	settingsInput.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
 	assert.equal(preferencesEditorTarget, "modalGroup");
-	const tabs = tablist?.querySelectorAll<HTMLButtonElement>("[role='tab']");
-	assert.equal(tabs?.length, 2);
-	assert.deepEqual(
-		[...(tabs ?? [])].map((tab) => tab.getAttribute("aria-selected")),
-		["true", "false"],
-	);
-	const panel = pane.element.querySelector("[role='tabpanel']");
-	assert.equal(panel?.id, tabs?.[0]?.getAttribute("aria-controls"));
-	assert.equal(panel?.getAttribute("aria-labelledby"), tabs?.[0]?.id);
-	assert.equal(
-		chatTitleContent(pane).querySelector(
-			".ash-chat-tabs-control .ash-scrollable-element",
-		)?.getAttribute("data-scroll-direction"),
-		"horizontal",
-	);
+	assert.equal(chatTitleContent(pane).querySelector('[role=tab]'), null);
+	const panel = pane.element.querySelector('[role=region]');
+	assert.equal(panel?.id, titleButton.getAttribute('aria-controls'));
+	assert.equal(panel?.getAttribute('aria-labelledby'), titleButton.querySelector('span')?.id);
 	assert.equal(
 		pane.element.querySelector(
 			".ash-chat-transcript-scrollable",
@@ -655,67 +644,31 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	assert.equal(firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.send'] button")?.disabled, false);
 	assert.equal(firstChatPane.querySelector("[data-action-id='ash.chat.input.voice']"), null);
 
-	tabs?.[1]?.click();
+	await chooseConversation(pane, dom, 1);
 	assert.equal(sessions.active?.session.sessionId, "session-2");
 	assert.equal(sessions.active?.threadId, "thread-2");
-	assert.deepEqual(
-		[...chatTitleContent(pane).querySelectorAll<HTMLElement>("[role='tab']")]
-			.map((tab) => tab.getAttribute("aria-selected")),
-		["false", "true"],
-	);
+	assert.equal(titleButton.textContent, "Session session-2");
 	assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [true, false]);
 	typeChatText(dom.window, composerInputs[1], "Second draft");
-	chatTitleContent(pane).querySelectorAll<HTMLButtonElement>("[role='tab']")[0]?.click();
+	await chooseConversation(pane, dom, 0);
 	assert.equal(sessions.active?.session.sessionId, "session-1");
 	assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [false, true]);
 	assert.equal(composerInputs[0]?.value, "First draft");
 	assert.equal(composerInputs[1]?.value, "Second draft");
 
-	const closeButtons = chatTitleContent(pane).querySelectorAll<HTMLButtonElement>(
-		`[data-action-id="${TAB_CLOSE_ACTION_ID}"] button`,
-	);
-	assert.equal(closeButtons.length, 2);
-	assert.deepEqual(
-		[...closeButtons].map((button) => button.title),
-		["Close Session session-1", "Close Session session-2"],
-	);
-	closeButtons[0]?.click();
-	await nextTask();
-
-	assert.deepEqual(
-		fake.stopRequests.map(({ sessionId }) => ({ sessionId })),
-		[{ sessionId: "session-1" }],
-	);
-	assert.equal(sessions.active?.session.sessionId, "session-2");
-	assert.deepEqual(
-		[...chatTitleContent(pane).querySelectorAll<HTMLElement>("[role='tab']")]
-			.map((tab) => ({
-				label: tab.textContent,
-				selected: tab.getAttribute("aria-selected"),
-			})),
-		[{ label: "Session session-2", selected: "true" }],
-	);
-	assert.equal(
-		pane.element.querySelector<HTMLElement>(".ash-chat-pane-host > .ash-chat")
-			?.dataset.sessionId,
-		"session-2",
-	);
-
-	chatTitleContent(pane).querySelector<HTMLButtonElement>(`[data-action-id="${TAB_CLOSE_ACTION_ID}"] button`)?.click();
-	await waitFor(() => !layout.isPartVisible("auxiliarybar"));
-	assert.equal(chatTitleContent(pane).querySelectorAll("[role='tab']").length, 0);
-	assert.equal(sessions.active, undefined);
-	assert.equal(sessions.untitledSessions.length, 0);
-
-	layout.showPart("auxiliarybar");
-	await waitFor(() => chatTitleContent(pane).querySelectorAll("[role='tab']").length === 1);
-	assert.equal(chatTitleContent(pane).querySelector<HTMLElement>("[role='tab']")?.textContent, "New Chat");
-	assert.equal(sessions.untitledSessions.length, 1);
-
-	chatTitleContent(pane).querySelector<HTMLButtonElement>(`[data-action-id="${TAB_CLOSE_ACTION_ID}"] button`)?.click();
-	assert.equal(layout.isPartVisible("auxiliarybar"), false);
-	assert.equal(chatTitleContent(pane).querySelectorAll("[role='tab']").length, 0);
-	assert.equal(sessions.untitledSessions.length, 0);
+	assert.equal(title.querySelector('.ash-tab-close-action'), null);
+	assert.deepEqual(fake.stopRequests, []);
+	const pendingDraft = sessions.createUntitledSession();
+	const draftInput = pane.element.querySelector<HTMLTextAreaElement>('.ash-chat:not([hidden]) textarea')!;
+	typeChatText(dom.window, draftInput, 'Unsent draft');
+	await chooseConversation(pane, dom, 1);
+	assert.equal(sessions.active?.session.sessionId, 'session-1');
+	await chooseConversation(pane, dom, 0);
+	assert.equal(sessions.activeUntitledSession?.untitledSessionId, pendingDraft.untitledSessionId);
+	assert.equal(draftInput.value, 'Unsent draft');
+	assert.equal(composerInputs[0]?.value, 'First draft');
+	assert.equal(composerInputs[1]?.value, 'Second draft');
+	assert.deepEqual(fake.stopRequests, []);
 
 	dom.window.close();
 });
@@ -956,7 +909,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
 		unavailableFileService,
 		unavailableAccessibleViewService,
 		notifications,
-		createInputServices(contextViewService, paneChat),
+		createInputServices(contextViewService, paneChat, menuService, contextMenuService),
 		inputResources.add(new WorkbenchConfigurationService()),
 		inputResources.add(createTestStorage()),
 	);
@@ -965,23 +918,15 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	await sessions.initialize();
 	await nextTask();
 
-	const tabs = chatTitleContent(pane).querySelectorAll<HTMLButtonElement>("[role='tab']");
-	assert.equal(tabs.length, 1);
-	assert.deepEqual(
-		[...tabs].map((tab) => ({
-			label: tab.textContent,
-			selected: tab.getAttribute("aria-selected"),
-		})),
-		[
-			{ label: "New Chat", selected: "true" },
-		],
-	);
+	const titleLabel = chatTitleContent(pane).querySelector<HTMLElement>('.ash-chat-view-title-label')!;
+	assert.equal(titleLabel.textContent, 'New Chat');
+	assert.equal(chatTitleContent(pane).querySelector('[role=tab]'), null);
 	assert.equal(pane.element.querySelector<HTMLElement>(".ash-chat-view-empty")?.hidden, true);
 	assert.equal(fake.createSessionRequests.length, 0);
 	assert.equal(fake.createThreadRequests.length, 0);
 	assert.equal(sessions.sessions.length, 0);
 	assert.equal(sessions.untitledSessions.length, 1);
-	const untitledPane = pane.element.querySelector<HTMLElement>("[role='tabpanel']");
+	const untitledPane = pane.element.querySelector<HTMLElement>("[role='region']");
 	assert.ok(untitledPane?.dataset.untitledSessionId);
 	const input = untitledPane.querySelector<HTMLTextAreaElement>(".ash-chat-textarea-input");
 	assert.ok(input);
@@ -1028,14 +973,14 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	assert.equal(sessions.active?.threadId, "thread-1");
 
 	assert.equal(
-		pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.dataset.sessionId,
+		pane.element.querySelector<HTMLElement>("[role='region']")?.dataset.sessionId,
 		"session-1",
 	);
 	assert.equal(
-		pane.element.querySelector("[role='tabpanel']")?.getAttribute(
+		pane.element.querySelector("[role='region']")?.getAttribute(
 			"aria-labelledby",
 		),
-		tabs[0]?.id,
+		titleLabel.id,
 	);
 
 	pane.dispose();
@@ -1087,7 +1032,7 @@ test("the New Chat slash command opens an untitled session", async () => {
 		unavailableFileService,
 		unavailableAccessibleViewService,
 		notifications,
-		createInputServices(contextViewService, paneChat),
+		createInputServices(contextViewService, paneChat, menuService, contextMenuService),
 		inputResources.add(new WorkbenchConfigurationService()),
 		inputResources.add(createTestStorage()),
 	);
@@ -1105,18 +1050,9 @@ test("the New Chat slash command opens an untitled session", async () => {
 		cancelable: true,
 		key: "Enter",
 	}));
-	await waitFor(() => chatTitleContent(pane).querySelectorAll("[role='tab']").length === 2);
-
-	assert.deepEqual(
-		[...chatTitleContent(pane).querySelectorAll<HTMLElement>("[role='tab']")].map((tab) => ({
-			label: tab.textContent,
-			selected: tab.getAttribute("aria-selected"),
-		})),
-		[
-			{ label: "New Chat", selected: "true" },
-			{ label: "First Chat", selected: "false" },
-		],
-	);
+	await waitFor(() => sessions.untitledSessions.length === 1);
+	assert.equal(chatTitleContent(pane).querySelector('.ash-chat-view-title-label')?.textContent, 'New Chat');
+	assert.equal(pane.element.querySelectorAll('.ash-chat').length, 2);
 	assert.equal(fake.createSessionRequests.length, 0);
 	assert.equal(fake.createThreadRequests.length, 0);
 	assert.equal(sessions.untitledSessions.length, 1);
@@ -1168,7 +1104,7 @@ test("failed first send keeps the untitled session and its input draft", async (
 		unavailableFileService,
 		unavailableAccessibleViewService,
 		notifications,
-		createInputServices(contextViewService, paneChat),
+		createInputServices(contextViewService, paneChat, menuService, contextMenuService),
 		inputResources.add(new WorkbenchConfigurationService()),
 		inputResources.add(createTestStorage()),
 	);
@@ -1198,9 +1134,9 @@ test("failed first send keeps the untitled session and its input draft", async (
 	assert.equal(sessions.untitledSessions.length, 1);
 	assert.equal(pane.element.querySelector(".ash-chat-input-attachment-label")?.textContent, "failed commit");
 	assert.equal(input.value, "Keep this draft");
-	assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.dataset.untitledSessionId, sessions.untitledSessions[0]?.untitledSessionId);
-	assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.classList.contains("empty"), true);
-	assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.classList.contains("has-conversation"), false);
+	assert.equal(pane.element.querySelector<HTMLElement>("[role='region']")?.dataset.untitledSessionId, sessions.untitledSessions[0]?.untitledSessionId);
+	assert.equal(pane.element.querySelector<HTMLElement>("[role='region']")?.classList.contains("empty"), true);
+	assert.equal(pane.element.querySelector<HTMLElement>("[role='region']")?.classList.contains("has-conversation"), false);
 	assert.match(pane.element.querySelector<HTMLElement>(".ash-chat-status, .ash-chat-status-summary")?.textContent ?? "", /Cannot create Session/);
 
 	dom.window.close();
@@ -1253,7 +1189,7 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
 		unavailableFileService,
 		unavailableAccessibleViewService,
 		notifications,
-		createInputServices(contextViewService, paneChat),
+		createInputServices(contextViewService, paneChat, menuService, contextMenuService),
 		inputResources.add(new WorkbenchConfigurationService()),
 		inputResources.add(createTestStorage()),
 	);
@@ -1262,7 +1198,7 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
 	await sessions.initialize();
 	await nextTask();
 
-	assert.equal(chatTitleContent(pane).querySelectorAll("[role='tab']").length, 1);
+	assert.equal(chatTitleContent(pane).querySelectorAll(".ash-chat-view-title-label").length, 1);
 	const chatPane = pane.element.querySelector<HTMLElement>(".ash-chat-pane-host > .ash-chat");
 	assert.ok(chatPane);
 	assert.equal(chatPane.dataset.sessionId, "session-1");
@@ -1279,7 +1215,7 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
 		pane.element.querySelector(".ash-chat-pane-host > .ash-chat"),
 		chatPane,
 	);
-	assert.equal(chatTitleContent(pane).querySelectorAll("[role='tab']").length, 1);
+	assert.equal(chatTitleContent(pane).querySelectorAll(".ash-chat-view-title-label").length, 1);
 	assert.equal(chatPane.dataset.threadId, "thread-2");
 	assert.strictEqual(dom.window.document.activeElement, input);
 	dom.window.close();
@@ -1315,7 +1251,8 @@ test("Chat history selects an active Thread through Quick Pick", async () => {
 	using commands = new CommandService(services);
 	await sessions.initialize();
 
-	await commands.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID);
+	const picking = commands.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID);
+	await nextTask();
 	assert.deepEqual(
 		[...dom.window.document.querySelectorAll(
 			".ash-quick-pick-row-label",
@@ -1337,6 +1274,7 @@ test("Chat history selects an active Thread through Quick Pick", async () => {
 		key: "Enter",
 	}));
 
+	await picking;
 	assert.equal(sessions.active?.session.sessionId, "session-2");
 	assert.equal(sessions.active?.threadId, "thread-2");
 	assert.equal(focusedView, CHAT_VIEW_ID);
@@ -3768,4 +3706,15 @@ function agentModelCatalog(models: ModelListResult['models']) {
 	return createAppServerAgentModelsService({
 		async request(): Promise<ModelListResult> { return { models }; },
 	} as unknown as AppServerProtocolClient).listModels();
+}
+
+
+async function chooseConversation(pane: InstanceType<typeof ChatViewPane>, dom: JSDOM, index: number): Promise<void> {
+	chatTitleContent(pane).querySelector<HTMLButtonElement>('.ash-chat-view-title-button')!.click();
+	await nextTask();
+	const input = dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick-input input')!;
+	assert.ok(input);
+	for (let step = 0; step < index; step++) input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' }));
+	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }));
+	await nextTask();
 }

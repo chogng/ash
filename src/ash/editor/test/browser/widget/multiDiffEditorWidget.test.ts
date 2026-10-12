@@ -6,6 +6,7 @@ import { setIconResolver } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { type CancellationToken } from '../../../../base/common/cancellation.js';
 import { Event } from '../../../../base/common/event.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import { DeferredPromise } from '../../../../base/common/async.js';
 import { type IDocumentDiff, type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from '../../../common/diff/documentDiffProvider.js';
 import { DefaultLinesDiffComputer } from '../../../common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js';
 import { type ITextModel } from '../../../common/model.js';
@@ -36,6 +37,41 @@ suiteTeardown(() => {
 	browserEnvironment.window.close();
 });
 const diffOptions: IDocumentDiffProviderOptions = { ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: false };
+
+test('source replacement releases readiness waits for disposed models during initial navigation', async function () {
+	this.timeout(2000);
+	using resources = new DisposableStore();
+	const services = createCodeEditorServices(resources);
+	const container = h(browserEnvironment.window.document, 'main');
+	browserEnvironment.window.document.body.append(container);
+	try {
+		using original = new TextModel('before');
+		using modified = new TextModel('after');
+		using slowProvider = new MultiDiffTestComputationService();
+		const computation = new DeferredPromise<IDocumentDiff>();
+		slowProvider.computeDiff = async () => computation.p;
+		using staleModel = new DiffModel({ original, modified, diffProvider: slowProvider, diffOptions });
+		using staleItem = new DocumentDiffItem({ id: 'file', label: 'old.ts' }, staleModel);
+		using collection = new MultiDiffEditorModel([staleItem]);
+		using editor = services.createInstance(MultiDiffEditorWidget, { container, model: collection });
+		editor.layout({ width: 800, height: 300 });
+		const loading = editor.resolveVisible();
+		await Promise.resolve();
+		await Promise.resolve();
+		using provider = new MultiDiffTestComputationService();
+		using nextModel = new DiffModel({ original, modified, diffProvider: provider, diffOptions });
+		using nextItem = new DocumentDiffItem({ id: 'file', label: 'new.ts' }, nextModel);
+		collection.setItems([nextItem]);
+		staleModel.dispose();
+		await loading;
+		await editor.resolveVisible();
+		assert.equal(editor.domNode.querySelector('.stanza-multi-diff-editor-title')?.textContent, 'new.ts');
+		assert.equal(editor.currentChange, undefined);
+		await computation.complete(await provider.computeDiff(original, modified, diffOptions, { isCancellationRequested: false, onCancellationRequested: Event.None }));
+	} finally {
+		container.remove();
+	}
+});
 
 for (const restore of [false, true]) {
 	test(`MultiDiffEditorWidget ${restore ? 'preserves restored collapse state during' : 'reveals the first change without focus during'} initial navigation`, async () => {

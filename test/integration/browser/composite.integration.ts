@@ -1,10 +1,10 @@
 import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { h } from '../../../src/ash/base/browser/dom.js';
 import { Lxicon } from '../../../src/ash/base/common/lxicons.js';
-import type { ChatTabsDelegate } from "../../../src/ash/workbench/contrib/chat/browser/widgetHosts/viewPane/chatTabsControl.js";
 import { AuxiliarybarPart } from '../../../src/ash/workbench/browser/parts/auxiliarybar/auxiliarybarPart.js';
 import type { PartTitleProjection } from '../../../src/ash/workbench/browser/parts/views/viewPane.js';
-import { MultiChatTabsControl } from '../../../src/ash/workbench/contrib/chat/browser/widgetHosts/viewPane/multiChatTabsControl.js';
+import { ChatViewTitleControl } from '../../../src/ash/workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewTitleControl.js';
+import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { CompositeBar } from '../../../src/ash/workbench/browser/parts/compositeBar.js';
 import { HoverPosition } from '../../../src/ash/base/browser/ui/hover/hoverWidget.js';
 import { ActivityService } from '../../../src/ash/workbench/services/activity/browser/activityService.js';
@@ -240,26 +240,24 @@ if (new URLSearchParams(location.search).has('editorTabs')) {
 		{ id: 'chat-beta', label: 'Chat beta', panelId: 'chat-beta-panel' },
 	];
 	let activeChat = chats[0]!.id;
-	const chat = resources.add(editorServices.createInstance(MultiChatTabsControl, chatPart.domNode, 'chat', {
-		selectTab: id => {
-			activeChat = id;
-			chat.setTabs(chats, activeChat);
-		},
-		closeTab: id => {
-			chats = chats.filter(entry => entry.id !== id);
-			if (id === activeChat) activeChat = chats[0]?.id ?? '';
-			chat.setTabs(chats, activeChat);
-		},
-		moveTab: (source, target, position) => {
-			const entry = chats.find(entry => entry.id === source)!;
-			chats = chats.filter(entry => entry.id !== source);
-			const index = target ? chats.findIndex(entry => entry.id === target) + (position === 'after' ? 1 : 0) : chats.length;
-			chats.splice(index, 0, entry);
-			chat.setTabs(chats, activeChat);
-		},
-	} satisfies ChatTabsDelegate, 'pane-title'));
-	chat.setTabs(chats, activeChat);
-	chatPart.setChatTitle({ content: chat.element });
+	editorServices.registerInstance(IMenuService, services.get(IMenuService));
+	editorServices.registerInstance(IContextMenuService, services.get(IContextMenuService));
+	const chat = resources.add(editorServices.createInstance(ChatViewTitleControl, chatPart.domNode, 'chat', () => {
+		const pick = editorServices.get(IQuickInputService).createQuickPick<{ label: string; id: string; }>();
+		const lifetime = new DisposableStore();
+		lifetime.add(pick);
+		pick.items = chats;
+		lifetime.add(pick.onDidAccept(entry => {
+			activeChat = entry.id;
+			chat.update(entry.label);
+			pick.hide();
+		}));
+		const dismissed = new Promise<void>(resolve => lifetime.add(pick.onDidHide(() => { lifetime.dispose(); resolve(); })));
+		pick.show();
+		return dismissed;
+	}));
+	chat.update(chats.find(entry => entry.id === activeChat)!.label);
+	chatPart.setChatTitle(chat.partTitleProjection);
 }
 
 const badgeBars: CompositeBar[] = [];

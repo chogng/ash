@@ -1,7 +1,50 @@
-.ash-chat-tabs-control.ash-chat-tabs-pane-title {
+.ash-chat-view-title {
+	display: flex;
 	min-width: 0;
 	height: 100%;
 	flex: 1 1 auto;
+	align-items: center;
+	padding: 0 var(--ash-spacing-size80);
+}
+
+.ash-chat-view-title-button {
+	display: flex;
+	min-width: 0;
+	max-width: 100%;
+	height: var(--ash-toolbar-actionSize);
+	align-items: center;
+	gap: var(--ash-spacing-size40);
+	padding: 0 var(--ash-spacing-size40);
+	border: 0;
+	border-radius: var(--ash-cornerRadius-small);
+	color: var(--ash-foreground);
+	background: transparent;
+	font-family: inherit;
+	font-size: var(--ash-fontSize-label1);
+	font-weight: var(--ash-fontWeight-regular);
+	cursor: pointer;
+}
+
+.ash-chat-view-title-button:hover {
+	background: var(--ash-toolbar-hoverBackground);
+}
+
+.ash-chat-view-title-button:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}
+
+.ash-chat-view-title-label {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-chat-view-title-chevron.ash-icon {
+	width: var(--ash-lxiconFontSize);
+	height: var(--ash-lxiconFontSize);
+	flex: 0 0 auto;
 }
 
 .ash-chat-title-actions {

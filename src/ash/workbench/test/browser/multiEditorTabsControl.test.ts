@@ -20,7 +20,6 @@ import { TextModel } from "../../../editor/common/model/textModel.js";
 import { LanguageFeaturesService } from "../../../editor/common/services/languageFeaturesService.js";
 import { InMemoryConfigurationService } from "../../../platform/configuration/common/inMemoryConfigurationService.js";
 import type { EditorTabsDelegate } from "../../browser/parts/editor/editorTabsControl.js";
-import { MultiChatTabsControl } from '../../contrib/chat/browser/widgetHosts/viewPane/multiChatTabsControl.js';
 import { MultiEditorTabsControl } from "../../browser/parts/editor/multiEditorTabsControl.js";
 import { updateConnectedTabClipping } from "../../browser/parts/editor/connectedTabClipping.js";
 import { EditorTitleControl } from "../../browser/parts/editor/editorTitleControl.js";
@@ -610,41 +609,3 @@ suite('Editor resource decorations', () => {
 	});
 });
 
-
-test('Chat and editor tab rows react to the same configuration and retain keyboard focus', async () => {
-	const dom = new JSDOM('<!doctype html><body><div id="editor"></div><div id="chat"></div></body>');
-	try {
-		using configuration = new InMemoryConfigurationService();
-		using services = createTestEditorServices(configuration);
-		const group = new EditorGroupModel();
-		using editor = services.createInstance(EditorTitleControl, dom.window.document.getElementById('editor')!, inertDelegate, group, undefined, configuration, undefined, undefined, undefined, undefined, undefined);
-		using chat = services.createInstance(MultiChatTabsControl, dom.window.document.getElementById('chat')!, 'chat', { selectTab: () => { }, closeTab: () => { }, moveTab: () => { } }, 'pane-title');
-		const first = input('first');
-		group.openEditor(first);
-		editor.setEditors([descriptor(first)], first);
-		chat.setTabs([{ id: 'first', label: 'First chat', panelId: 'chat-panel' }], 'first');
-		const chatTab = chat.element.querySelector<HTMLButtonElement>('.ash-tab-label')!;
-		chatTab.focus();
-		const editorRow = editor.domNode.querySelector<HTMLElement>('.ash-ordinary-editor-tabs-row')!;
-		for (const style of ['pill', 'connected', 'standard'] as const) {
-			await configuration.updateValue(WorkbenchConfiguration.modernUIEditorTabStyle, style);
-			for (const row of [editorRow, chat.element]) {
-				assert.equal(row.classList.contains('ash-standard-editor-tabs'), style === 'standard');
-				assert.equal(row.classList.contains('ash-connected-editor-tabs'), style === 'connected');
-				assert.equal(row.querySelector('.ash-tab-list')!.classList.contains('ash-tab-list-inset'), style !== 'standard');
-			}
-			assert.equal(dom.window.document.activeElement, chatTab);
-		}
-		await configuration.updateValue(EditorTabSizingConfiguration, 'fixed');
-		await configuration.updateValue(EditorTabSizingFixedMinWidthConfiguration, 90);
-		await configuration.updateValue(EditorTabSizingFixedMaxWidthConfiguration, 160);
-		for (const row of [editorRow, chat.element]) {
-			const list = row.querySelector<HTMLElement>('.ash-tab-list')!;
-			assert.equal(list.classList.contains('ash-tab-list-sizing-fixed'), true);
-			assert.equal(list.style.getPropertyValue('--ash-tab-list-fixed-min-width'), '90px');
-			assert.equal(list.style.getPropertyValue('--ash-tab-list-fixed-max-width'), '160px');
-		}
-	} finally {
-		dom.window.close();
-	}
-});

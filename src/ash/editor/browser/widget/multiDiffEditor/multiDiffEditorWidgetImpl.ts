@@ -77,7 +77,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	private initialNavigation: Promise<MultiDiffEditorLocation | undefined> | undefined;
 	private readonly workbenchUIElementFactory: IMultiDiffEditorWidgetOptions['workbenchUIElementFactory'];
 	private readonly logger: MultiDiffEditorLogger;
-	private readonly navigationAbortController = new AbortController();
+	private navigationAbortController = new AbortController();
 	private readonly observedItemIds = new Set<string>();
 
 	constructor(
@@ -164,6 +164,9 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 			}
 		}));
 		this._register(options.model.onDidChangeItems(items => {
+			// Source replacement disposes the old models. Their readiness events may
+			// never arrive, so release waits before binding the new item generation.
+			this.cancelPendingNavigation();
 			this.logger.itemsChanged(items);
 			this.scrollView.resetItems();
 			this.itemListeners.clear();
@@ -242,7 +245,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	public restoreViewState(state: unknown): void {
 		const scrollTop = this.viewModel.restoreViewState(state);
 		// Restored state takes precedence over a first-change navigation still waiting for the diff.
-		this.navigationGeneration++;
+		this.cancelPendingNavigation();
 		for (const section of this.sections.values()) {
 			section.setCollapsed(this.viewModel.isCollapsed(section.item.id));
 			section.domNode.classList.toggle('active', section.item.id === this.viewModel.activeItemId);
@@ -323,10 +326,11 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 
 	/** Waits for the comparisons currently projected into the viewport. */
 	public async resolveVisible(): Promise<void> {
+		const signal = this.navigationAbortController.signal;
 		// Each item publishes its own load error in the header; one failed file must not close the whole editor.
 		await Promise.allSettled([...this.sections.entries()].flatMap(([index]) => {
 			if (this.viewModel.isCollapsed(this.items[index]!.id)) return [];
-			return [this.items[index]!.resolve().then(model => model ? this.waitForReady(model) : undefined)];
+			return [this.items[index]!.resolve().then(model => model ? this.waitForReady(model, signal) : undefined)];
 		}));
 		await this.initialNavigation;
 	}
@@ -503,6 +507,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 			return undefined;
 		}
 		const generation = ++this.navigationGeneration;
+		const signal = this.navigationAbortController.signal;
 		const active = this.viewModel.activeChange;
 		const activeIndex = active ? this.items.findIndex(item => item.id === active.itemId) : -1;
 		const firstIndex = activeIndex >= 0 ? activeIndex : delta > 0 ? 0 : this.items.length - 1;
@@ -518,7 +523,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 				const resolved = await item.resolve();
 				if (!resolved) continue;
 				model = resolved;
-				await this.waitForReady(model);
+				await this.waitForReady(model, signal);
 			} catch {
 				if (!this.isDisposed && generation === this.navigationGeneration) {
 					this.accessibilityStatusDomNode.textContent = formatNlsMessage(localize('multiDiffEditor.loadError', 'Could not load {0}'), { 0: item.label });
@@ -543,26 +548,30 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		return undefined;
 	}
 
-	private waitForReady(model: DiffModel): Promise<void> {
+	private cancelPendingNavigation(): void {
+		this.navigationGeneration++;
+		this.navigationAbortController.abort();
+		this.navigationAbortController = new AbortController();
+		this.initialNavigation = undefined;
+	}
+
+	private waitForReady(model: DiffModel, signal: AbortSignal): Promise<void> {
+		if (signal.aborted || model.isDisposed) { return Promise.reject(new Error('Multi-diff navigation was cancelled')); }
 		if (model.state.kind === 'ready') return Promise.resolve();
 		if (model.state.kind === 'error') return Promise.reject(model.state.error);
-		const signal = this.navigationAbortController.signal;
 		return new Promise<void>((resolve, reject) => {
-			const listener = model.onDidChange(state => {
+			const listeners = new DisposableStore();
+			listeners.add(model.onDidChange(state => {
 				if (state.kind === 'loading') return;
-				cleanup();
+				listeners.dispose();
 				if (state.kind === 'error') reject(state.error);
 				else resolve();
-			});
+			}));
 			const abort = (): void => {
-				cleanup();
-				reject(new Error('Multi-diff editor was disposed'));
+				listeners.dispose();
+				reject(new Error('Multi-diff navigation was cancelled'));
 			};
-			const cleanup = (): void => {
-				listener.dispose();
-				signal.removeEventListener('abort', abort);
-			};
-			signal.addEventListener('abort', abort, { once: true });
+			listeners.add(addDisposableListener(signal, 'abort', abort, { once: true }));
 			if (signal.aborted) abort();
 		});
 	}

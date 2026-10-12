@@ -19,9 +19,9 @@ import { IAccessibleViewService } from '../../../platform/accessibility/browser/
 import { NotificationService } from '../../../workbench/services/notification/common/notificationService.js';
 import { Emitter, Event } from "../../../base/common/event.js";
 import { toDisposable } from "../../../base/common/lifecycle.js";
-import type { IMenu, IMenuService } from "../../../platform/actions/common/actions.js";
+import { type IMenu, IMenuService } from "../../../platform/actions/common/actions.js";
 import type { ICommandService } from "../../../platform/commands/common/commands.js";
-import { IContextViewService, type IContextMenuService } from "../../../platform/contextview/browser/contextView.js";
+import { IContextViewService, IContextMenuService } from "../../../platform/contextview/browser/contextView.js";
 import type { IChatService, ModelCatalogEntry, SlashCommandDefinition, ThreadRead, ThreadSubscription, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope } from "../../../workbench/services/chat/common/chatService.js";
 import type { IWorkbenchLayoutService, WorkbenchPartId, WorkbenchPartVisibilityChangeEvent } from "../../../workbench/services/layout/browser/layoutService.js";
 import type { ApprovalMode, IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../services/sessions/common/session.js";
@@ -71,6 +71,8 @@ test("opens a local Chat tab before the backend session request settles", () => 
 	services.registerInstance(IAppServerSkillApi, { onDidChangeSkills: Event.None, readInstructions: async () => { throw new Error("No Skill body in this test fixture"); }, list: () => new Promise(() => { }), read: () => new Promise(() => { }), setEnabled: () => new Promise(() => { }) });
 	services.registerInstance(IContextViewService, contextViewService);
 	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
+	services.registerInstance(IMenuService, emptyMenuService());
+	services.registerInstance(IContextMenuService, {} as IContextMenuService);
 	using view = new ChatViewPane(
 		document.body,
 		{ id: "workbench.chat", title: "Chat" },
