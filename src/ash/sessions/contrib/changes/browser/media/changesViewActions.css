@@ -1,0 +1,23 @@
+.ash-sessions-changes-view-actions {
+	display: flex;
+	flex-shrink: 0;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+	min-width: 0;
+}
+
+.ash-sessions-changes-view-actions > select {
+	min-width: 0;
+	max-width: 100%;
+	font: inherit;
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border, var(--ash-contrastBorder));
+	border-radius: var(--ash-cornerRadius-small);
+	padding: var(--ash-spacing-size40);
+}
+
+.ash-sessions-changes-view-actions > select:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: var(--ash-spacing-size20);
+}

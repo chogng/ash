@@ -1,6 +1,10 @@
 import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { h } from '../../../src/ash/base/browser/dom.js';
 import { Lxicon } from '../../../src/ash/base/common/lxicons.js';
+import type { ChatTabsDelegate } from "../../../src/ash/workbench/contrib/chat/browser/widgetHosts/viewPane/chatTabsControl.js";
+import { AuxiliarybarPart } from '../../../src/ash/workbench/browser/parts/auxiliarybar/auxiliarybarPart.js';
+import type { PartTitleProjection } from '../../../src/ash/workbench/browser/parts/views/viewPane.js';
+import { MultiChatTabsControl } from '../../../src/ash/workbench/contrib/chat/browser/widgetHosts/viewPane/multiChatTabsControl.js';
 import { CompositeBar } from '../../../src/ash/workbench/browser/parts/compositeBar.js';
 import { HoverPosition } from '../../../src/ash/base/browser/ui/hover/hoverWidget.js';
 import { ActivityService } from '../../../src/ash/workbench/services/activity/browser/activityService.js';
@@ -195,6 +199,7 @@ resources.add(panel.onDidCompositeOpen(({ composite, focus }) => partEvents.push
 resources.add(panel.onDidCompositeClose(composite => partEvents.push({ id: composite.getId(), visible: false })));
 const editorHost = h(document, 'div');
 editorHost.id = 'editor-tabs-host';
+if (new URLSearchParams(location.search).has('editorTabs')) editorHost.className = 'ash-workbench modern-ui';
 editorHost.style.cssText = 'position:relative;display:flex;width:800px;height:260px';
 document.body.append(editorHost);
 resources.add(toDisposable(() => editorHost.remove()));
@@ -210,6 +215,53 @@ modelServices.registerInstance(IFileTextModelService, models);
 modelServices.registerInstance(ITextModelResourceService, models);
 const editorServices = resources.add(createTestEditorServices(undefined, modelServices));
 resources.add(bindColorTheme(editorServices.get(IThemeService), document.documentElement));
+if (new URLSearchParams(location.search).has('editorTabs')) {
+	await import('../../../src/ash/workbench/contrib/modernUI/browser/media/roundedCorners.css');
+	await import('../../../src/ash/workbench/contrib/modernUI/browser/media/editorBorder.css');
+	// Use the same title-slot mounting as the product Auxiliary Bar.
+	class ChatTabsPart extends AuxiliarybarPart {
+		setChatTitle(title: PartTitleProjection): void {
+			this.setTitleProjection(title);
+		}
+	}
+	const chatHost = h(document, 'div');
+	chatHost.id = 'chat-tabs-host';
+	chatHost.className = 'ash-workbench modern-ui';
+	chatHost.style.cssText = 'display:flex;width:800px;height:120px';
+	document.body.append(chatHost);
+	resources.add(toDisposable(() => chatHost.remove()));
+	const chatPart = resources.add(editorServices.createInstance(ChatTabsPart, chatHost, {
+		openComposite: () => { throw new Error('Composite switching is outside this fixture'); },
+		viewDescriptorService: services.get(IViewDescriptorService),
+	}));
+	chatPart.domNode.style.cssText = 'box-sizing:border-box;width:100%;height:100%';
+	let chats = [
+		{ id: 'chat-alpha', label: 'Chat alpha', panelId: 'chat-alpha-panel' },
+		{ id: 'chat-beta', label: 'Chat beta', panelId: 'chat-beta-panel' },
+	];
+	let activeChat = chats[0]!.id;
+	const chat = resources.add(editorServices.createInstance(MultiChatTabsControl, chatPart.domNode, 'chat', {
+		selectTab: id => {
+			activeChat = id;
+			chat.setTabs(chats, activeChat);
+		},
+		closeTab: id => {
+			chats = chats.filter(entry => entry.id !== id);
+			if (id === activeChat) activeChat = chats[0]?.id ?? '';
+			chat.setTabs(chats, activeChat);
+		},
+		moveTab: (source, target, position) => {
+			const entry = chats.find(entry => entry.id === source)!;
+			chats = chats.filter(entry => entry.id !== source);
+			const index = target ? chats.findIndex(entry => entry.id === target) + (position === 'after' ? 1 : 0) : chats.length;
+			chats.splice(index, 0, entry);
+			chat.setTabs(chats, activeChat);
+		},
+	} satisfies ChatTabsDelegate, 'pane-title'));
+	chat.setTabs(chats, activeChat);
+	chatPart.setChatTitle({ content: chat.element });
+}
+
 const badgeBars: CompositeBar[] = [];
 const badgeActivities: ActivityService[] = [];
 const badgeHandles = resources.add(new MutableDisposable<DisposableStore>());

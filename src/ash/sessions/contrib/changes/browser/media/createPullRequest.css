@@ -1,0 +1,50 @@
+.ash-sessions-create-pr {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size80);
+	width: 400px;
+	max-width: calc(100vw - 32px);
+	max-height: calc(100vh - 32px);
+	overflow: auto;
+	box-sizing: border-box;
+	padding: var(--ash-spacing-size160);
+	font-size: var(--ash-fontSize-body1);
+	color: var(--ash-foreground);
+	background: var(--ash-editor-widgetBackground);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-border));
+	border-radius: var(--ash-cornerRadius-xLarge);
+}
+
+.ash-sessions-create-pr h3,
+.ash-sessions-create-pr p {
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+.ash-sessions-create-pr h3 {
+	font-size: var(--ash-fontSize-heading3);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-sessions-create-pr label,
+.ash-sessions-create-pr-actions {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-sessions-create-pr select {
+	min-width: 0;
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-input-border, var(--ash-contrastBorder));
+	padding: var(--ash-spacing-size40);
+}
+
+.ash-sessions-create-pr select:focus-visible,
+.ash-sessions-create-pr input[type="checkbox"]:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: var(--ash-spacing-size20);
+}

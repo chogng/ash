@@ -1,17 +1,13 @@
 import "./media/multiEditorTabsControl.css";
 import { DataTransfers } from "../../../../base/browser/dnd.js";
 import { EditorInputCapabilities, EditorResourceAccessor, SideBySideEditor, type IResourceEditorInput } from '../../../common/editor.js';
-import { TAB_CLOSE_ACTION_ID } from '../../../../base/browser/ui/tablist/tabList.js';
+import { TAB_CLOSE_ACTION_ID, type TabListOptions } from '../../../../base/browser/ui/tablist/tabList.js';
 import { addDisposableListener, isElement } from "../../../../base/browser/dom.js";
-import { observeResize } from "../../../../base/browser/observer.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import type { IAction } from "../../../../base/common/actions.js";
 import { assertDefined } from "../../../../base/common/types.js";
-import { TabList, type TabListPresentation } from "../../../../base/browser/ui/tablist/tabList.js";
 import { localize } from "../../../../nls.js";
 import { containsExternalEditorDrop } from "./editorDropData.js";
-import { clearConnectedTabClipping, updateConnectedTabClipping } from "./connectedTabClipping.js";
-import { CONNECTED_EDITOR_TABS_CLASS } from "./editor.js";
 import { EditorTabsControl, editorInputKey, type EditorTabDescriptor, type EditorTabsDelegate } from "./editorTabsControl.js";
 import { IResourceLabelService, type IResourceLabel, type ResourceLabels } from "../../labels.js";
 import { DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
@@ -24,18 +20,16 @@ import { basename, dirname } from '../../../../base/common/resources.js';
 import { shorten } from '../../../../base/common/labels.js';
 import { Schemas } from '../../../../base/common/network.js';
 import type { EditorGroupModel } from '../../../common/editor/editorGroupModel.js';
-import type { ModernUIEditorTabStyle } from '../../../common/configuration.js';
-import { EditorLabelFormatConfiguration, EditorShowIconsConfiguration, EditorTabSizingConfiguration, EditorTabSizingFixedMinWidthConfiguration, EditorTabSizingFixedMaxWidthConfiguration, EditorTitleScrollbarSizingConfiguration, EditorTitleScrollbarVisibilityConfiguration, type EditorLabelFormat, type EditorTabSizing, type EditorTitleScrollbarSizing, type EditorTitleScrollbarVisibility } from "../../../services/editor/common/editorConfiguration.js";
+import { EditorLabelFormatConfiguration, EditorShowIconsConfiguration, type EditorLabelFormat } from "../../../services/editor/common/editorConfiguration.js";
+import { WorkbenchTabsControl } from './workbenchTabsControl.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 
 const DRAG_OVER_ACTIVATE_DELAY = 1500;
 
 /** Renders every open Editor in one reorderable tab list. */
 export class MultiEditorTabsControl extends EditorTabsControl {
-	private readonly tabList: TabList<EditorTabDescriptor>;
-	private readonly viewport: HTMLElement;
+	private readonly tabs: WorkbenchTabsControl<EditorTabDescriptor>;
 	private readonly labels: ResourceLabels;
-	private connectedTab: HTMLElement | undefined;
-	private connected = true;
 	private previewedInput: IResourceEditorInput | undefined;
 	private editors: readonly EditorTabDescriptor[] = [];
 	private activeInput: IResourceEditorInput | undefined;
@@ -54,6 +48,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@ILabelService private readonly labelService: ILabelService,
 		@IWorkspaceContextService workspaceContextService: IWorkspaceContextService,
+		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super(container);
 		this.domNode.classList.add("ash-multi-editor-tabs-control");
@@ -62,17 +57,14 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 		this.labels.setIconVisibility(configurationService.getValue<boolean>(EditorShowIconsConfiguration));
 		this._register(configurationService.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(EditorShowIconsConfiguration)) this.labels.setIconVisibility(configurationService.getValue<boolean>(EditorShowIconsConfiguration));
-			if (event.affectsConfiguration(EditorTitleScrollbarSizingConfiguration) || event.affectsConfiguration(EditorTitleScrollbarVisibilityConfiguration)) this.updateScrollbarOptions();
-			if (event.affectsConfiguration(EditorTabSizingConfiguration) || event.affectsConfiguration(EditorTabSizingFixedMinWidthConfiguration) || event.affectsConfiguration(EditorTabSizingFixedMaxWidthConfiguration)) this.updateTabSizing();
 			if (event.affectsConfiguration(EditorLabelFormatConfiguration)) {
 				this.setEditors(this.editors, this.activeInput, this.selectedIds);
 			}
 		}));
 		this._register(workspaceContextService.onDidChangeWorkspace(() => this.setEditors(this.editors, this.activeInput, this.selectedIds)));
 		this._register(labelService.onDidChangeFormatters(() => this.setEditors(this.editors, this.activeInput, this.selectedIds)));
-		this.tabList = this._register(new TabList(this.domNode, {
+		this.tabs = this._register(instantiationService.createInstance(WorkbenchTabsControl<EditorTabDescriptor>, this.domNode, {
 			ariaLabel: "Open editors",
-			presentation: "inset",
 			draggable: true,
 			dragAndDrop: {
 				canDrop: (event) => delegate.isDragging() || containsExternalEditorDrop(event),
@@ -109,24 +101,17 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 			onActivate: (editor) => delegate.activate(editor.input),
 			onSelect: (editor, event) => delegate.select?.(editor.input, { toggle: event.ctrlKey || event.metaKey, range: event.shiftKey }) ?? false,
 			onClose: (editor) => delegate.close(editor.input),
-		}));
-		this.updateScrollbarOptions();
-		const viewport = this.tabList.scrollableElement;
-		this.viewport = viewport;
-		this.updateTabSizing();
-		this.domNode.classList.add(CONNECTED_EDITOR_TABS_CLASS);
-		this._register(this.tabList.onDidScroll(() => this.updateConnectedTab()));
-		this._register(observeResize(viewport, () => this.updateConnectedTab()));
-		this._register(addDisposableListener(this.tabList.element, "contextmenu", event => {
+		} satisfies TabListOptions<EditorTabDescriptor>));
+		this._register(addDisposableListener(this.tabs.tabList.element, "contextmenu", event => {
 			this.showTabContextMenu(event);
 		}));
-		this._register(addDisposableListener(this.tabList.element, "keydown", event => {
+		this._register(addDisposableListener(this.tabs.tabList.element, "keydown", event => {
 			if (!event.shiftKey || event.key !== "F10") {
 				return;
 			}
 			this.showTabContextMenu(event);
 		}));
-		this._register(addDisposableListener(this.tabList.element, "dblclick", event => {
+		this._register(addDisposableListener(this.tabs.tabList.element, "dblclick", event => {
 			const label = (event.target as Element).closest<HTMLButtonElement>(".ash-tab-label");
 			if (!label || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
 				return;
@@ -139,30 +124,13 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 		}));
 	}
 
-	private updateScrollbarOptions(): void {
-		this.tabList.updateScrollbarOptions({
-			scrollbarSize: this.configurationService.getValue<EditorTitleScrollbarSizing>(EditorTitleScrollbarSizingConfiguration) === 'large' ? 10 : 3,
-			horizontal: this.configurationService.getValue<EditorTitleScrollbarVisibility>(EditorTitleScrollbarVisibilityConfiguration),
-		});
-	}
-
-	private updateTabSizing(): void {
-		const mode = this.configurationService.getValue<EditorTabSizing>(EditorTabSizingConfiguration);
-		this.tabList.setSizing(mode === 'fixed' ? {
-			mode,
-			minWidth: this.configurationService.getValue<number>(EditorTabSizingFixedMinWidthConfiguration),
-			maxWidth: this.configurationService.getValue<number>(EditorTabSizingFixedMaxWidthConfiguration),
-		} : { mode });
-		this.updateConnectedTab();
-	}
-
 	private showTabContextMenu(event: MouseEvent | KeyboardEvent): void {
 		const target = event.target;
 		if (!isElement(target)) {
 			return;
 		}
 		const tab = target.closest<HTMLElement>(".ash-tab");
-		if (!tab || !this.tabList.element.contains(tab)) {
+		if (!tab || !this.tabs.tabList.element.contains(tab)) {
 			return;
 		}
 		const editor = this.editors.find(candidate => candidate.instanceId === tab.dataset.actionId);
@@ -206,7 +174,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 			return [editor.input, label] as const;
 		}));
 		const activeKey = activeInput ? editors.find(editor => editorInputKey(editor.input) === editorInputKey(activeInput))?.instanceId : undefined;
-		this.tabList.setTabs(editors.map((editor) => {
+		this.tabs.setTabs(editors.map((editor) => {
 			const label = labels.get(editor.input)!;
 			let primaryAction = this.unpinActions.get(editor.instanceId);
 			if (editor.sticky && !primaryAction) {
@@ -296,10 +264,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 			}
 			this.updateTabAriaLabel(editor, rendered.label);
 		}
-		clearConnectedTabClipping(this.connectedTab, this.tabList.element);
-		this.connectedTab = this.tabList.element.querySelector<HTMLElement>(".ash-tab.checked") ?? undefined;
-		this.updateConnectedTab();
-		this.tabList.element.hidden = editors.length === 0;
+		this.tabs.layout();
 	}
 
 	private updateTabAriaLabel(editor: EditorTabDescriptor, label: IResourceLabel): void {
@@ -311,32 +276,8 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 		tabLabel.setAttribute('aria-label', state ? `${name}, ${state}` : name);
 	}
 
-	setPresentation(presentation: TabListPresentation, tabStyle: ModernUIEditorTabStyle): void {
-		const standard = tabStyle === 'standard';
-		this.domNode.classList.toggle('ash-standard-editor-tabs', standard);
-		this.tabList.setPresentation(standard ? 'flush' : presentation);
-		this.connected = presentation === "inset" && tabStyle === 'connected';
-		this.domNode.classList.toggle(CONNECTED_EDITOR_TABS_CLASS, this.connected);
-		this.updateConnectedTab();
-	}
-
-	private updateConnectedTab(): void {
-		const tab = this.connectedTab;
-		if (!tab || !this.connected) {
-			clearConnectedTabClipping(tab, this.tabList.element);
-			return;
-		}
-		const tabBounds = tab.getBoundingClientRect();
-		const viewportBounds = this.viewport.getBoundingClientRect();
-		updateConnectedTabClipping({
-			tab,
-			overflowEdge: this.tabList.element,
-			fillLeft: tabBounds.left - viewportBounds.left + this.viewport.scrollLeft,
-			fillRight: tabBounds.right - viewportBounds.left + this.viewport.scrollLeft,
-			viewportLeft: 0,
-			viewportRight: this.viewport.clientWidth,
-			shoulderExtent: 6,
-		}, this.viewport.scrollLeft);
+	setConnectedToContent(touchesContent: boolean): void {
+		this.tabs.setConnectedToContent(touchesContent);
 	}
 }
 

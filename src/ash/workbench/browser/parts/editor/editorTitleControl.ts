@@ -19,13 +19,11 @@ import type { LanguageDocumentSymbol } from "../../../../editor/common/languages
 import type { Range } from "../../../../editor/common/core/range.js";
 
 import { EditorTabsControl, type EditorTabDescriptor, type EditorTabsDelegate } from "./editorTabsControl.js";
-import { MultiEditorTabsControl } from "./multiEditorTabsControl.js";
 import { MultiRowEditorControl } from "./multiRowEditorTabsControl.js";
 import { NoEditorTabsControl } from "./noEditorTabsControl.js";
 import { SingleEditorTabsControl } from "./singleEditorTabsControl.js";
 import { h } from "../../../../base/browser/dom.js";
 import { localize } from "../../../../nls.js";
-import { WorkbenchConfiguration, type ModernUIEditorTabStyle, type WorkbenchLayoutStyle } from '../../../common/configuration.js';
 import type { EditorGroupModel } from '../../../common/editor/editorGroupModel.js';
 import type { IEditorPaneDescriptor } from '../../editor.js';
 
@@ -41,7 +39,6 @@ export class EditorTitleControl extends Disposable {
 	private readonly tabsAndActionsDomNode: HTMLDivElement;
 	private readonly lockIndicator: HTMLSpanElement;
 	private readonly delegate: EditorTabsDelegate;
-	private readonly configurationService: IConfigurationService | undefined;
 	private readonly tabsSlot = this._register(new MutableDisposable<EditorTabsControl>());
 	private readonly rowsListener = this._register(new MutableDisposable());
 	private tabsMode: EditorTabsMode;
@@ -65,7 +62,6 @@ export class EditorTitleControl extends Disposable {
 	) {
 		super();
 		this.delegate = delegate;
-		this.configurationService = configurationService;
 		this.tabsMode = model.editorLimit === 1 ? 'single' : configurationService?.getValue<EditorTabsMode>(EditorTabsModeConfiguration) ?? configurationDefault<EditorTabsMode>(EditorTabsModeConfiguration);
 		const ownerDocument = container.ownerDocument;
 		this.domNode = h(ownerDocument, "div");
@@ -75,7 +71,6 @@ export class EditorTitleControl extends Disposable {
 		this.tabsAndActionsDomNode.className = "ash-editor-tabs-and-actions";
 		this.domNode.append(this.tabsAndActionsDomNode);
 		this.tabsSlot.value = this.createTabsControl(this.tabsMode);
-		this.updateTabsLayoutStyle();
 		this.header = this._register(this.instantiationService.createInstance(EditorHeaderControl,
 			this.domNode,
 			this.tabsAndActionsDomNode,
@@ -97,11 +92,9 @@ export class EditorTitleControl extends Disposable {
 				if (model.editorLimit !== 1 && event.affectsConfiguration(EditorTabsModeConfiguration)) {
 					this.tabsMode = configurationService.getValue<EditorTabsMode>(EditorTabsModeConfiguration);
 					this.tabsSlot.value = this.createTabsControl(this.tabsMode);
-					this.updateTabsLayoutStyle();
 					this.tabs.setEditors(this.editors, this.activeInput, this.selectedIds);
 					this.heightEmitter.fire();
 				}
-				if (event.affectsConfiguration(WorkbenchConfiguration.layoutStyle) || event.affectsConfiguration(WorkbenchConfiguration.modernUIEditorTabStyle)) this.updateTabsLayoutStyle();
 			}));
 		}
 		this.domNode.hidden = model.editorLimit !== 1;
@@ -157,13 +150,6 @@ export class EditorTitleControl extends Disposable {
 		this.domNode.style.setProperty("--ash-editor-tab-rows", control instanceof MultiRowEditorControl ? String(control.rowCount) : "1");
 		if (firstAction) this.tabsAndActionsDomNode.insertBefore(control.domNode, firstAction);
 		return control;
-	}
-
-	private updateTabsLayoutStyle(): void {
-		if (!(this.tabs instanceof MultiEditorTabsControl || this.tabs instanceof MultiRowEditorControl)) return;
-		const style = this.configurationService?.getValue<WorkbenchLayoutStyle>(WorkbenchConfiguration.layoutStyle) ?? configurationDefault<WorkbenchLayoutStyle>(WorkbenchConfiguration.layoutStyle);
-		const tabStyle = this.configurationService?.getValue<ModernUIEditorTabStyle>(WorkbenchConfiguration.modernUIEditorTabStyle) ?? configurationDefault<ModernUIEditorTabStyle>(WorkbenchConfiguration.modernUIEditorTabStyle);
-		this.tabs.setPresentation(style === 'modern' ? 'inset' : 'flush', tabStyle);
 	}
 
 	private get tabs(): EditorTabsControl {

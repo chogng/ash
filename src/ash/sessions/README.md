@@ -61,6 +61,23 @@ identities remain removable without a connected account. Removal uses
 the root Thread's deletion, restoration, history-transfer and cross-window
 notification rules, while live titles and status remain in the Sessions service.
 
+Code's Changes view continues to read immutable Turn changes from ChatService.
+Its summary reflects the visible file changes; failed loads clear stale selections
+and offer Retry. Optional Git actions resolve the selected Session directory,
+choose a repository when necessary, and pass its identity explicitly to the Git
+extension. Sync checks the branch and remote again between pull and push.
+The visible Checks widget owns cancellable, paginated CI detail reads through the
+GitHub API; account and Session changes invalidate old data, and hiding Changes
+releases its model. Ordinary refreshes preserve check-link focus.
+
+Create pull request prepares an editable form without publishing or creating
+anything. Submission checks the captured repository, local commit, remote and
+account again. Once sent, completion belongs to the initiating Session even when
+the form closes; the resulting reference is attached through the existing GitHub
+API. An uncertain response prevents repeating submission in the same form.
+Attachment and auto-merge failures remain warnings on the created PR, and a
+published head different from the local commit prevents automatic merging.
+
 Discovery and periodic refresh follow the selected Session. Other Sessions retain
 their last result for the current window and refresh when selected again; Sessions
 that have not been selected have no resolved association yet. PR artifacts produced

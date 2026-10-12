@@ -12,6 +12,7 @@ export default defineConfig({
 		rolldownOptions: {
 			output: rendererOutput,
 			input: {
+				changes: resolve(import.meta.dirname, 'changes.html'),
 				sessions: resolve(import.meta.dirname, 'sessions.html'),
 				scmHistory: resolve(import.meta.dirname, 'scmHistory.html'),
 				notifications: resolve(import.meta.dirname, 'notifications.html'),

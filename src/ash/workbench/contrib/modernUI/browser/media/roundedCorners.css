@@ -9,6 +9,11 @@
 	border-radius: var(--ash-cornerRadius-large);
 }
 
+.ash-workbench.modern-ui .ash-workbench-auxiliarybar {
+	/* Title tabs and content share the Part's rounded outer boundary. */
+	overflow: hidden;
+}
+
 .ash-workbench.modern-ui .ash-workbench-activitybar {
 	box-sizing: border-box;
 	border: var(--ash-strokeThickness) solid var(--ash-border);

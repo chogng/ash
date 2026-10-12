@@ -82,7 +82,7 @@ import { HoverService } from '../../../src/ash/platform/hover/browser/hoverServi
 import { setHoverDelegate } from '../../../src/ash/base/browser/ui/hover/hoverDelegate.js';
 
 declare global {
-	interface Window { ashChatInputIntegration: { setVisible(visible: boolean): void; contextAccessibility(): { help: string | undefined; content: string | undefined; }; setFooterPhase(phase: ChatInputState['phase'], error?: string): void; setContextUsage(available: boolean, capacity?: number, estimatedTokens?: number): void; setFooterStatus(visible: boolean): void; removeFooterStatus(): void; historyState(): unknown; holdNextHistoryRead(): void; releaseHistorySearch(query: string): void; addHistoryContext(): void; setHistorySkill(digest: string): void; refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; restoreCapturedDraft(): Promise<void>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; }; }
+	interface Window { ashChatInputIntegration: { setChanges(changes: ChatInputState['changes']): void; setVisible(visible: boolean): void; contextAccessibility(): { help: string | undefined; content: string | undefined; }; setFooterPhase(phase: ChatInputState['phase'], error?: string): void; setContextUsage(available: boolean, capacity?: number, estimatedTokens?: number): void; setFooterStatus(visible: boolean): void; removeFooterStatus(): void; historyState(): unknown; holdNextHistoryRead(): void; releaseHistorySearch(query: string): void; addHistoryContext(): void; setHistorySkill(digest: string): void; refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; restoreCapturedDraft(): Promise<void>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; }; }
 }
 
 const locale = new URLSearchParams(location.search).get('locale');
@@ -420,6 +420,7 @@ const delegate: ChatInputDelegate = {
 		submission.textContent = JSON.stringify(await Promise.all((contexts ?? []).map(context => context.resolve())));
 		if (new URLSearchParams(location.search).has('sendFailure')) { throw new Error('Send failed'); }
 	}, executeCommand: async invocation => { recordDestination({ command: invocation.commandId }); }, executeServerCommand: async () => { }, interrupt: async () => { },
+	openChanges: async () => { recordDestination({ changes: true }); },
 	selectModel: async model => {
 		selectedModel = model;
 		automatic = false;
@@ -483,6 +484,7 @@ function renderModels(): void {
 }
 part.render(state);
 window.ashChatInputIntegration = {
+	setChanges: changes => { state = { ...state, changes, interaction: undefined }; part.render(state); },
 	setVisible: visible => part.setVisible(visible),
 	contextAccessibility: () => {
 		const content = (type: AccessibleViewType): string | undefined => {

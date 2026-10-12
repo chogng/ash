@@ -1,4 +1,5 @@
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import './changesViewActions.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { ViewContainerLocation } from '../../../../workbench/common/views.js';
@@ -10,6 +11,11 @@ import { SessionChangesEditor } from './sessionChangesEditor.js';
 
 import { CHANGES_VIEW_CONTAINER_ID, CHANGES_VIEW_ID } from '../common/changes.js';
 import { getSessionsChangesAccessibilityProviders } from './sessionsChangesAccessibilityHelp.js';
+import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
+import { IChangesViewService } from '../common/changesViewService.js';
+import { ChangesViewService } from './changesViewService.js';
+
+registerSingleton(IChangesViewService, ChangesViewService, InstantiationType.Delayed);
 
 registerEditorPane({
 	id: 'ash.sessions.changesEditor',

@@ -1,3 +1,6 @@
+import { IChangesViewService } from '../../contrib/changes/common/changesViewService.js';
+import { ChangesViewService } from '../../contrib/changes/browser/changesViewService.js';
+import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { emptyEditorServiceState } from '../../../workbench/test/common/testEditorService.js';
 import { IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
@@ -41,12 +44,18 @@ import { createTurnCommitPreviewInput, createTurnMultiDiffEditorInput } from '..
 import { IViewsService } from '../../../workbench/services/views/common/viewsService.js';
 import { CHANGES_VIEW_ID } from '../../contrib/changes/common/changes.js';
 import '../../contrib/changes/browser/changes.contribution.js';
+import { IGitHubService as ISessionGitHubService } from '../../contrib/github/browser/githubService.js';
+import { IGitHubService as IGitHubApi } from '../../../platform/github/common/githubService.js';
+import { IAccountService } from '../../../platform/accounts/common/accountService.js';
+import { IOpenerService } from '../../../platform/opener/common/opener.js';
+import { ICommandService } from '../../../platform/commands/common/commands.js';
 
 for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and immutable review across refresh and ownership changes (${locale})`, async () => {
 	setNlsMessages(locale, productLanguagePackCatalogs.find(catalog => catalog.locale === locale)!.bundles);
 	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://changes.test' });
 	try {
 		using services = new InstantiationService();
+		registerChecksServices(services);
 		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 		using changed = new Emitter<void>();
 		using config = new WorkbenchConfigurationService();
@@ -67,6 +76,8 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		const requests: unknown[] = [];
 		const host = createDisconnectedRendererApi();
 		let truncated = false;
+		let loadFailure = false;
+		let pendingRefresh: DeferredPromise<{ changeSets: TurnChangesReadResult['summary'][]; }> | undefined;
 		let pendingRead: DeferredPromise<{ path: string; binary: boolean; truncated: boolean; before: string; after: string; }> | undefined;
 		services.registerInstance(IAgentModelsService, host.model);
 		services.registerInstance(IAgentThreadService, host.thread);
@@ -76,7 +87,10 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		services.registerInstance(IServerEventApi, host.events);
 		services.registerInstance(ITurnChangesApi, {
 			...host.turnChanges,
-			list: async params => params.sessionId === 'old' ? old.p : { changeSets: [details.summary] },
+			list: async params => {
+				if (loadFailure) { throw new Error('Repository unavailable'); }
+				return params.sessionId === 'old' ? old.p : pendingRefresh ? pendingRefresh.p : { changeSets: [details.summary] };
+			},
 			read: async params => { requests.push(params); return details; },
 			readFile: async params => { requests.push(params); return pendingRead ? pendingRead.p : { path: 'main.ts', binary: false, truncated, before: 'before', after: 'after' }; },
 		});
@@ -92,6 +106,8 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		services.registerInstance(IContextKeyService, contexts);
 		services.registerInstance(INotificationService, notifications);
 		services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => 'Press Alt+F1 for accessibility help.', disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
+		services.registerInstance(IStorageService, storage);
+		services.registerSingleton(IChangesViewService, () => services.createInstance(ChangesViewService));
 		using view = services.createInstance(ChangesViewPane, browser.window.document.body, { id: 'changes', title: 'Changes' });
 		services.registerInstance(IViewsService, { getViewWithId: (id: string) => id === CHANGES_VIEW_ID ? view : undefined } as unknown as IViewsService);
 		view.setVisible(true);
@@ -101,6 +117,7 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		await old.complete({ changeSets: [] });
 		await settle();
 		assert.match(view.getAccessibleContent(), /main.ts: \+1 −1/u);
+		assert.equal(view.element.querySelector('.ash-sessions-changes-summary')!.textContent, locale === 'zh-CN' ? '1 项文件更改 · +1 −1' : '1 file changes · +1 −1');
 		const accessibility = AccessibleViewRegistry.getImplementations().filter(provider => provider.name.startsWith('sessionsChanges.'));
 		for (const implementation of accessibility) {
 			using provider = implementation.getProvider(services)!;
@@ -142,9 +159,30 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		if (selection.kind === 'session') await assert.rejects(createTurnMultiDiffEditorInput(chat, selection.active, 'currentTurn'), locale === 'zh-CN' ? /过大/u : /too large/u);
 		view.element.querySelector<HTMLElement>('[role=treeitem]')!.click();
 		assert.equal(preview.disabled, false);
+		pendingRefresh = new DeferredPromise();
+		changed.fire();
+		assert.equal(preview.disabled, true);
+		assert.equal(tree.getAttribute('aria-busy'), 'true');
+		assert.equal(view.element.querySelectorAll('[role=treeitem]').length, 1);
+		await pendingRefresh.complete({ changeSets: [details.summary] });
+		await settle();
+		pendingRefresh = undefined;
+		assert.equal(preview.disabled, false);
+		assert.equal(tree.hasAttribute('aria-busy'), false);
+		loadFailure = true;
 		changed.fire();
 		await settle();
-		assert.equal(preview.disabled, false);
+		assert.equal(preview.disabled, true);
+		assert.equal(view.element.querySelectorAll('[role=treeitem]').length, 0);
+		assert.match(view.getAccessibleContent(), /Repository unavailable/u);
+		const retry = view.element.querySelectorAll<HTMLButtonElement>('.ash-sessions-changes button')[2]!;
+		assert.equal(retry.hidden, false);
+		assert.equal(retry.textContent, locale === 'zh-CN' ? '重新加载更改' : 'Retry loading changes');
+		loadFailure = false;
+		retry.click();
+		await settle();
+		assert.equal(retry.hidden, true);
+		assert.equal(view.element.querySelectorAll('[role=treeitem]').length, 1);
 		details.summary.commitState = 'conflict';
 		changed.fire();
 		await settle();
@@ -172,6 +210,14 @@ function selected(id: string): SessionsViewSelection {
 	return { kind: 'session', active: { threadId: `${id}-thread`, session: { sessionId: id, title: id, status: 'active', nextApprovalMode: 'manual', chats: [] } } };
 }
 
+function registerChecksServices(services: InstantiationService): void {
+	services.registerInstance(ICommandService, { executeCommand: async () => [] } as unknown as ICommandService);
+	services.registerInstance(ISessionGitHubService, { onDidChange: Event.None, getSessionPullRequests: () => [] } as unknown as ISessionGitHubService);
+	services.registerInstance(IGitHubApi, {} as IGitHubApi);
+	services.registerInstance(IAccountService, { onDidChangeAccounts: Event.None } as unknown as IAccountService);
+	services.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
+}
+
 function changes(id: string): TurnChangesReadResult {
 	return { summary: { changeSetId: `change-${id}`, sessionId: id, threadId: `${id}-thread`, turnId: 'turn', repositoryId: 'repo', statistics: { files: 1, additions: 1, deletions: 1 }, captureState: 'sealed', messageState: 'unconfigured', commitState: 'idle', committedPaths: [], dependencies: [], externalDependencyPaths: [], warnings: [], conflictPaths: [], revision: 1 }, files: [{ path: 'main.ts', kind: 'modified', binary: false, additions: 1, deletions: 1 }] };
 }
@@ -185,6 +231,7 @@ suite('Changes visibility lifecycle', () => {
 		const browser = new JSDOM('<!doctype html><body></body>');
 		using browserOwner = toDisposable(() => browser.window.close());
 		using services = new InstantiationService();
+		registerChecksServices(services);
 		using changed = new Emitter<void>();
 		using ready = new Emitter<void>();
 		using ledgerChanged = new Emitter<{ sessionId: string; threadId: string; }>();
@@ -227,6 +274,7 @@ suite('Changes visibility lifecycle', () => {
 		services.registerInstance(INotificationService, notifications);
 		services.registerInstance(IQuickInputService, { input: async () => pendingMessage.p } as unknown as IQuickInputService);
 		services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
+		services.registerSingleton(IChangesViewService, () => services.createInstance(ChangesViewService));
 		using view = registerTestComponentServices(services).createInstance(ChangesViewPane, browser.window.document.body, { id: CHANGES_VIEW_ID, title: 'Changes' });
 		services.registerInstance(IViewsService, { getViewWithId: (id: string) => id === CHANGES_VIEW_ID ? view : undefined } as unknown as IViewsService);
 

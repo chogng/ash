@@ -1,11 +1,9 @@
 import type { IResourceEditorInput } from '../../../common/editor.js';
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import type { TabListPresentation } from "../../../../base/browser/ui/tablist/tabList.js";
 import { EditorTabsControl, type EditorTabDescriptor, type EditorTabsDelegate } from "./editorTabsControl.js";
 import { MultiEditorTabsControl } from "./multiEditorTabsControl.js";
 import type { EditorGroupModel } from '../../../common/editor/editorGroupModel.js';
 import { StickyEditorGroupModel, UnstickyEditorGroupModel } from '../../../common/editor/filteredEditorGroupModel.js';
-import type { ModernUIEditorTabStyle } from '../../../common/configuration.js';
 
 import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 
@@ -16,8 +14,6 @@ export class MultiRowEditorControl extends EditorTabsControl {
 	private readonly stickyRow: MultiEditorTabsControl;
 	private readonly ordinaryRow: MultiEditorTabsControl;
 	private currentRows = 1;
-	private presentation: TabListPresentation = 'inset';
-	private tabStyle: ModernUIEditorTabStyle = 'connected';
 	private readonly stickyModel: StickyEditorGroupModel;
 	private readonly ordinaryModel: UnstickyEditorGroupModel;
 
@@ -49,20 +45,9 @@ export class MultiRowEditorControl extends EditorTabsControl {
 		const rows = sticky.length > 0 && ordinary.length > 0 ? 2 : 1;
 		if (rows !== this.currentRows) {
 			this.currentRows = rows;
-			this.updatePresentation();
+			this.stickyRow.setConnectedToContent(rows === 1);
 			this.rowsEmitter.fire();
 		}
 	}
 
-	setPresentation(presentation: TabListPresentation, tabStyle: ModernUIEditorTabStyle): void {
-		this.presentation = presentation;
-		this.tabStyle = tabStyle;
-		this.updatePresentation();
-	}
-
-	private updatePresentation(): void {
-		// Only the row touching the editor can share its surface.
-		this.stickyRow.setPresentation(this.presentation, this.currentRows === 2 && this.tabStyle === 'connected' ? 'pill' : this.tabStyle);
-		this.ordinaryRow.setPresentation(this.presentation, this.tabStyle);
-	}
 }

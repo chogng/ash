@@ -1,5 +1,5 @@
 import type { ChatContextUsage } from '../../../../../services/chat/common/chatService.js';
-import type { AgentResponse, ApprovalMode, ChatAgent, ChatMode, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, TurnInteraction } from "../../../../../services/chat/common/chatService.js";
+import type { AgentResponse, ApprovalMode, ChatAgent, ChatMode, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, TurnInteraction, TurnChangeSetSummary } from "../../../../../services/chat/common/chatService.js";
 import type { SkillReference } from "../../../../../../platform/agentHost/common/appServerApi.js";
 import type { ModelRef } from "../../../../../services/chat/common/chatService.js";
 import type { ModelReasoningEffort } from "../../../../../services/chat/common/modelCatalog.js";
@@ -27,6 +27,7 @@ export interface ChatInputState {
 	readonly canInterrupt: boolean;
 	readonly approvalMode: ApprovalMode;
 	readonly contextUsage?: ChatContextUsage;
+	readonly changes?: TurnChangeSetSummary['statistics'];
 	readonly models: readonly ModelCatalogEntry[];
 	readonly modelsError?: string;
 	readonly slashCommands: readonly SlashCommandDefinition[];
@@ -46,6 +47,7 @@ export interface ChatInputDelegate {
 	executeCommand(invocation: ChatInputCommandInvocation): Promise<void>;
 	executeServerCommand(invocation: ChatInputServerCommandInvocation): Promise<void>;
 	interrupt(): Promise<void>;
+	openChanges?(): Promise<void>;
 	selectModel(model: ModelRef): Promise<void>;
 	selectReasoningEffort(effort: ModelReasoningEffort | undefined): Promise<void>;
 	selectAutomaticModel(): Promise<void>;
@@ -55,4 +57,15 @@ export interface ChatInputDelegate {
 	selectApprovalMode?(mode: ApprovalMode): Promise<void>;
 	openModelSettings(category?: 'models' | 'dictation'): Promise<void>;
 	resolveInteraction(response: AgentResponse): Promise<void>;
+}
+
+/** Matches the non-discarded Turn ledger shown by Changes. */
+export function getChatInputChanges(changeSets: readonly TurnChangeSetSummary[]): TurnChangeSetSummary['statistics'] | undefined {
+	const visible = changeSets.filter(changeSet => changeSet.captureState !== 'discarded');
+	const statistics = visible.reduce((total, changeSet) => ({
+		files: total.files + changeSet.statistics.files,
+		additions: total.additions + changeSet.statistics.additions,
+		deletions: total.deletions + changeSet.statistics.deletions,
+	}), { files: 0, additions: 0, deletions: 0 });
+	return statistics.files > 0 ? statistics : undefined;
 }

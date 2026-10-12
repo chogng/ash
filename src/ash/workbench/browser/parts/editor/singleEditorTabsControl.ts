@@ -4,6 +4,7 @@ import type { EditorTabDescriptor, EditorTabsDelegate } from "./editorTabsContro
 import { editorInputKey } from "./editorTabsControl.js";
 import { MultiEditorTabsControl } from "./multiEditorTabsControl.js";
 
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IResourceLabelService } from "../../labels.js";
 import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
@@ -22,8 +23,9 @@ export class SingleEditorTabsControl extends MultiEditorTabsControl {
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@ILabelService labelService: ILabelService,
 		@IWorkspaceContextService workspaceContextService: IWorkspaceContextService,
+		@IInstantiationService instantiationService: IInstantiationService,
 	) {
-		super(container, delegate, model, resourceLabels, configurationService, contextKeyService, labelService, workspaceContextService);
+		super(container, delegate, model, resourceLabels, configurationService, contextKeyService, labelService, workspaceContextService, instantiationService);
 		this.domNode.classList.add("ash-single-editor-tabs-control");
 	}
 

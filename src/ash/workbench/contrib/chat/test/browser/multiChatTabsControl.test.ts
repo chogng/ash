@@ -1,3 +1,7 @@
+import '../../../../../editor/test/browser/testEditorDom.js';
+import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
+import { setNlsResolver, resetNlsResolver } from '../../../../../nls.js';
+import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -7,7 +11,8 @@ import { MultiChatTabsControl } from "../../browser/widgetHosts/viewPane/multiCh
 test("MultiChatTabsControl moves the dragged tab through its delegate", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const moves: Array<{ source: string; target: string | undefined; position: string; }> = [];
-	const control = new MultiChatTabsControl(dom.window.document.body, "chat", {
+	using services = createTestEditorServices();
+	const control = services.createInstance(MultiChatTabsControl, dom.window.document.body, "chat", {
 		selectTab: () => undefined,
 		closeTab: () => undefined,
 		moveTab: (source, target, position) => moves.push({ source, target, position }),
@@ -38,3 +43,20 @@ function dragEvent(targetWindow: { readonly Event: typeof Event; }, type: string
 	Object.defineProperty(event, "clientX", { value: clientX });
 	return event;
 }
+
+
+test('Chat tab row uses the client language for its accessible name', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+		setNlsResolver((bundle, key, fallback) => chinese.bundles[bundle]?.[key] ?? fallback);
+		using services = createTestEditorServices();
+		using control = services.createInstance(MultiChatTabsControl, dom.window.document.body, 'chat', {
+			selectTab: () => { }, closeTab: () => { }, moveTab: () => { },
+		}, 'pane-title');
+		assert.equal(control.element.querySelector('[role="tablist"]')!.getAttribute('aria-label'), '打开的聊天');
+	} finally {
+		resetNlsResolver();
+		dom.window.close();
+	}
+});

@@ -1,0 +1,33 @@
+.ash-chat-input-changes {
+	display: flex;
+	min-width: 0;
+	margin-bottom: var(--ash-spacing-size40);
+}
+
+.ash-chat-input-changes[hidden] {
+	display: none;
+}
+
+.ash-chat-changes-pill.ash-button {
+	min-width: 0;
+	gap: var(--ash-spacing-size40);
+	padding: var(--ash-spacing-size20) var(--ash-spacing-size60);
+	border-color: var(--ash-widget-border);
+	background: var(--ash-button-secondaryBackground);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.ash-chat-changes-pill:hover {
+	background: var(--ash-button-hoverBackground);
+}
+
+.ash-chat-changes-added {
+	color: var(--ash-charts-green);
+}
+
+.ash-chat-changes-removed {
+	color: var(--ash-charts-red);
+}

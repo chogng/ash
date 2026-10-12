@@ -1,0 +1,6 @@
+.ash-sessions-changes-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size40);
+	flex-shrink: 0;
+}

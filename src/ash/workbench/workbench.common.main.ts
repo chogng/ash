@@ -59,7 +59,7 @@ import './contrib/academic/browser/academicEditor.contribution.js';
 import './contrib/debug/browser/debug.contribution.js';
 import './contrib/tasks/browser/tasks.contribution.js';
 import './contrib/testing/browser/testing.contribution.js';
-import './services/extensionHost/browser/extensionHostServiceRegistration.js';
+import './api/browser/extensionHost.contribution.js';
 import './services/codebaseSymbols/browser/codebaseSymbolsServiceRegistration.js';
 import { ISyntaxApi } from '../platform/syntax/common/syntaxApi.js';
 import { ILanguageFeaturesService } from '../editor/common/services/languageFeatures.js';

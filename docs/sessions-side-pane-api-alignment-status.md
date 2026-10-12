@@ -12,10 +12,10 @@
 | ------------------------------------- | ---------: | -----: | ---------: |
 | `contrib/files/`                      |          3 |      0 |          0 |
 | `contrib/editor/`                     |          6 |      0 |          5 |
-| `contrib/changes/`                    |          8 |      0 |         26 |
+| `contrib/changes/`                    |         20 |      0 |         14 |
 | `contrib/layout/`                     |          5 |      1 |          9 |
 | 下列限定的 Part、挂载器和布局服务契约 |          0 |      7 |          8 |
-| 合计                                  |         22 |      8 |         48 |
+| 合计                                  |         34 |      8 |         36 |
 
 用户选择保留类似 Workbench 的按组件分目录结构，`parts/editor/` 与 `parts/auxiliarybar/` 不平铺。以下原始文件集合差异用于定位职责；有明确职责对应的异路径文件不作为缺陷计数。同路径也不代表公开契约或行为已全部对齐。
 
@@ -39,6 +39,18 @@ contrib/changes/browser/sessionChangesEditor.ts
 contrib/changes/browser/sessionChangesEditorInput.ts
 contrib/changes/browser/sessionsChangesAccessibilityHelp.ts
 contrib/changes/common/changes.ts
+contrib/changes/browser/changesSummaryWidget.ts
+contrib/changes/browser/checksActions.ts
+contrib/changes/browser/checksViewModel.ts
+contrib/changes/browser/checksWidget.ts
+contrib/changes/browser/createPullRequestContextView.ts
+contrib/changes/browser/createPullRequestWidget.ts
+contrib/changes/browser/sessionSyncChanges.ts
+contrib/changes/browser/media/changesActions.css
+contrib/changes/browser/media/changesSummaryWidget.css
+contrib/changes/browser/media/checksWidget.css
+contrib/changes/browser/media/createPullRequest.css
+contrib/changes/common/pullRequestCreation.ts
 contrib/layout/browser/baseSessionLayoutController.ts
 contrib/layout/browser/desktop/desktopDetailPanelCoordinator.ts
 contrib/layout/browser/desktop/desktopDockedTabsCoordinator.ts
@@ -84,28 +96,16 @@ contrib/editor/common/diffEditorOptionsService.ts
 contrib/changes/browser/changesActions.ts
 contrib/changes/browser/changesEditorLabels.ts
 contrib/changes/browser/changesMultiDiffSourceResolver.ts
-contrib/changes/browser/changesSummaryWidget.ts
 contrib/changes/browser/changesViewActions.ts
 contrib/changes/browser/changesViewRenderer.ts
 contrib/changes/browser/changesViewService.ts
 contrib/changes/browser/changesetReviewActions.ts
-contrib/changes/browser/checksActions.ts
-contrib/changes/browser/checksViewModel.ts
-contrib/changes/browser/checksWidget.ts
 contrib/changes/browser/createPullRequestChatRequest.ts
-contrib/changes/browser/createPullRequestContextView.ts
-contrib/changes/browser/createPullRequestWidget.ts
-contrib/changes/browser/media/changesActions.css
-contrib/changes/browser/media/changesSummaryWidget.css
 contrib/changes/browser/media/changesViewActions.css
-contrib/changes/browser/media/checksWidget.css
-contrib/changes/browser/media/createPullRequest.css
 contrib/changes/browser/media/sessionChangesEditorInput.css
 contrib/changes/browser/sessionChangesService.ts
-contrib/changes/browser/sessionSyncChanges.ts
 contrib/changes/common/changesViewService.ts
 contrib/changes/common/createPullRequestPreferences.ts
-contrib/changes/common/pullRequestCreation.ts
 contrib/changes/common/sessionChangesService.ts
 contrib/layout/browser/chatLayoutOwnerKeys.ts
 contrib/layout/browser/desktop/desktopDraftSessionStrategy.ts
@@ -153,36 +153,58 @@ contrib/layout/common/sessionEditorWorkingSet.ts
 
 账本和提交操作继续通过 `workbench/services/chat/common/chatService.ts` 的领域契约执行。列表快照、编辑器显示内容各自属于 UI 生命周期，不成为另一份业务账本。`browser/turnMultiDiffSource.ts` 及其 contribution 同时供 Code、Cowork 和共享多文件比较消费，继续留在 Sessions core；将其移到 Changes contribution 会造成 core 反向导入 contribution。
 
-### 上游其余 Changes 文件的职责判断
+### Changes 能力补齐
 
-以下 26 个路径均已核对公开声明与当前本地调用方。已有职责对应不表示上游全部公开 API 已实现；没有本地入口的能力不提前创建文件。
+列表仍以 ChatService 的不可变 Turn 账本为业务来源。以下入口已经接入真实生产调用链，未复制上游实现，也未新增平行业务状态：
 
-| 上游路径（相对 `contrib/changes/`）                                                                                                                                                                                                          | 本地承担者或缺口                                                                                                                        | 当前处理                                                                         |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `browser/changesViewRenderer.ts`、`browser/changesEditorLabels.ts`                                                                                                                                                                           | 列表行和路径标签目前由 `ChangesViewPane` 渲染；比较标签由 `turnMultiDiffSource.ts` 生成。没有复用同一 renderer 的第二个入口             | 保留当前 DOM owner，不机械拆分；上游层级树 renderer 与标签 API 未宣称实现        |
-| `browser/changesMultiDiffSourceResolver.ts`                                                                                                                                                                                                  | 当前 Turn / commit 来源注册和解析由 `browser/turnMultiDiffSource.contribution.ts` 承担，内容合成由 `turnMultiDiffSource.ts` 承担        | 保留共享 core owner；上游 reviewed-file context 和 provider changeset 契约仍不同 |
-| `browser/changesViewService.ts`、`common/changesViewService.ts`、`browser/sessionChangesService.ts`、`common/sessionChangesService.ts`                                                                                                       | 业务账本属于 ChatService；会话选择属于 SessionsService；Details 路由与标签协调已有 owner。上游还汇集 Git、隔离模式及 changeset 操作状态 | 不为服务名创建并行账本或选择模型；其他契约须在实际入口出现时调查                 |
-| `browser/changesActions.ts`、`browser/changesViewActions.ts`、`browser/changesetReviewActions.ts`、`browser/sessionSyncChanges.ts`                                                                                                           | 本地已有打开比较、选择提交预览及提交准备树入口。上游文件另包含操作工具栏、reviewed-file 标记、分支同步等职责                            | 不把现有不可变比较等同于上游审阅状态或同步能力；当前 Changes 没有这些新增入口    |
-| `browser/changesSummaryWidget.ts`、`browser/media/changesSummaryWidget.css`                                                                                                                                                                  | 列表目前显示逐文件计数与状态，没有独立摘要 widget 入口                                                                                  | 不创建 widget 外壳                                                               |
-| `browser/checksActions.ts`、`browser/checksViewModel.ts`、`browser/checksWidget.ts`、`browser/media/checksWidget.css`                                                                                                                        | 当前 Changes 没有 CI checks 展开、修复或展示入口                                                                                        | 不创建 actions、model 或 widget                                                  |
-| `browser/createPullRequestChatRequest.ts`、`browser/createPullRequestContextView.ts`、`browser/createPullRequestWidget.ts`、`common/createPullRequestPreferences.ts`、`common/pullRequestCreation.ts`、`browser/media/createPullRequest.css` | 当前 Changes 没有创建 PR 表单及其偏好入口；已有 PR 关联服务不等同于创建表单                                                             | 不扩展本次范围，不创建请求或偏好占位接口                                         |
-| `browser/media/changesActions.css`、`browser/media/changesViewActions.css`、`browser/media/sessionChangesEditorInput.css`                                                                                                                    | 对应的专用操作 DOM 或输入内嵌展示尚未由本地创建                                                                                         | 不提前添加不命中本地 DOM 的样式                                                  |
+| 用户入口                                          | 对应文件与唯一 owner                                                                                                      | 当前行为                                                                                                                                                                       |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 列表刷新与失败重试                                | `changesView.ts`、`changesSummaryWidget.ts` 及对应 CSS                                                                    | 展示文件更改数和增删摘要；刷新保留同一会话的选择和焦点，加载期间禁用预览，失败清除过期行并提供重试                                                                             |
+| Sync changes、Publish branch、Review working tree | `sessionSyncChanges.ts`、`media/changesActions.css` → 可选 Git 扩展命令                                                   | 按会话目录筛选仓库，多仓库由用户选择；操作显式传入仓库 ID，分支或 remote 改变、切换会话、pull 失败都阻止后续 push                                                              |
+| Checks 展开与结果链接                             | `checksViewModel.ts`、`checksWidget.ts`、`checksActions.ts` 及 CSS → 既有 GitHub API                                      | 读取关联开放 PR 的当前 head 的全部分页 check runs 和 commit statuses；账户或会话切换取消旧读取，隐藏视图释放模型，普通刷新保留链接焦点                                         |
+| Create pull request                               | `createPullRequestContextView.ts`、`createPullRequestWidget.ts`、`common/pullRequestCreation.ts` 及 CSS → 既有 GitHub API | 只读准备表单，编辑标题、描述、目标分支、Draft 和仓库允许的自动合并方式；提交前核对 local head、remote 与账户；创建后附加到发起会话，后续附加或自动合并失败作为已创建结果的警告 |
+| PR 表单 Help / Accessible View                    | `sessionsChangesAccessibilityHelp.ts`、`common/changes.ts`                                                                | 读取 live 表单内容，显示字段值和 Draft 状态，关闭后恢复原控件焦点；列表帮助覆盖新增动作                                                                                        |
+
+PR 创建一旦发出，其完成归属发起会话，关闭表单不会把结果改附到另一个会话。结果不确定时禁止在同一表单重复提交；发布分支与 local head 不同的实际结果提示审阅并不启用自动合并。业务操作由平台 GitHub 服务执行，未引入新的 transport DTO。
+
+当前契约是 Ash Turn 账本和可选 Git/GitHub 提供方的独立适配，不能称为上游全部 API、模型和布局完全对齐。以下 14 个文件仍没有对应的完整本地契约；不创建占位文件：
+
+- `changesViewService.ts`、`common/changesViewService.ts`、`sessionChangesService.ts`、`common/sessionChangesService.ts`：上游 provider changeset、Git 状态、隔离模式与审阅状态的聚合契约仍不同；Ash 的账本、会话选择、Details 路由及比较输入已有各自 owner。
+- `changesMultiDiffSourceResolver.ts`、`changesEditorLabels.ts`：Turn / commit 多文件来源与标签仍由已确认的共享 Sessions core 拥有，服务 Code、Cowork 和共享比较；不能将 core 反向迁入 contribution。
+- `changesViewRenderer.ts`、`changesViewActions.ts`、`media/changesViewActions.css`、`media/sessionChangesEditorInput.css`：上游层级 changeset 树、显示模式及其专用操作契约未实现；当前 Turn 行 DOM 继续由 view 拥有，通用比较操作由共享 Editor 提供。
+- `changesActions.ts`、`changesetReviewActions.ts`：持久化 reviewed-file 状态和 provider changeset 操作没有对应的 Turn 领域接口。
+- `createPullRequestChatRequest.ts`、`common/createPullRequestPreferences.ts`：上游创建 PR 的 agent 请求 metadata、agent merge 策略和偏好契约未接入；本次只提供现有 GitHub API 能执行的人工创建与自动合并。
+
+Checks 目前提供状态及结果链接。工作流重跑、日志/annotation 读取和 Fix CI agent 请求缺少当前领域接口，未伪造可点击入口。Git 仓库上下文不提供 incoming/outgoing 数量，因此 Sync 不显示虚构的计数。
 
 ## 验证与当前完成范围
 
-当前已完成 Files / Changes 全部 11 个生产文件的职责核对、共享标识及无障碍提供者分离、Changes 列表生命周期修复。无文件移动或删除，未新增平行业务状态、服务外壳或未接入的动作。Files 的三个生产文件及两者的 CSS 保持原样。
+Changes 当前有 20 个生产文件，Files 的三个文件保持原样。新增的 12 个 Changes 文件均有上游同路径及本地生产调用方；没有文件移动或删除。剩余 14 个路径的契约差异见前表，未将其计为已实现。
 
-本批运行：
+定向单测共 14 个通过，覆盖列表的中英文内容、选择与焦点、失败重试、显隐释放、二进制比较、Checks 分页与账户取消、Git 同步的仓库绑定与中断、PR 编辑值保留、重复提交阻止及迟到结果。最后的无障碍内容关闭保护及表单改动分别定向重跑通过。运行入口：
 
 ```sh
 pnpm test:unit \
   --run src/ash/sessions/test/browser/changesView.test.ts \
   --run src/ash/sessions/contrib/changes/test/browser/sessionChangesEditor.test.ts \
-  --run src/ash/sessions/contrib/files/test/browser/files.contribution.test.ts \
-  --run src/ash/sessions/contrib/layout/test/browser/desktopLayoutController.test.ts \
-  --run test/architecture/layer-boundaries.test.ts
+  --run src/ash/sessions/contrib/changes/test/browser/checksViewModel.test.ts \
+  --run src/ash/sessions/contrib/changes/test/browser/sessionSyncChanges.test.ts \
+  --run src/ash/sessions/contrib/changes/test/browser/createPullRequestWidget.test.ts
+
+pnpm test:browser:integration changes.integration.spec.ts viewpaneLayout.integration.spec.ts --project=chromium
+
+pnpm run test:smoke:ui test/smoke/areas/sessions/turn-changes.spec.ts --grep 'starts disabled'
 ```
 
-36 个相关测试通过：Changes 列表 4 个、Changes 编辑器 1 个、Files 3 个、布局控制器 17 个、架构 11 个。补充列表中英文无障碍内容及编辑器焦点恢复断言后，定向重跑相关 5 个测试通过。新生命周期 suite 启用 disposable tracker，并验证会话、账本和 ready 监听器释放。单测 runner 的 9 个测试通过。
+相关浏览器场景 17 个通过，其中最终 Changes / PR 五个场景在最后改动后单独重跑通过。覆盖键盘、取消及账户切换焦点恢复、异步刷新链接焦点、真实 DOM 与计算样式、窄窗口、浅色/深色/高对比度、中英文、编辑后的 PR 创建和会话附加、实际发布 head 不同时禁止自动合并。
 
-`pnpm typecheck:renderer` 通过，涉及的 7 个 TypeScript 文件通过 `pnpm format:ts`。CSS 源码检查确认既有三个文件使用本地 selector/token，未与对应上游 CSS 完全相同；本批未修改 DOM 结构、CSS、主题或尺寸。未执行真实窗口配对场景，未将剩余上游公开 API 计为已实现。
+Electron smoke 的一个实际 Changes 场景通过。此前启动失败暴露了 Sessions common entry 未加载共享配置解析服务；已补上 `sessions.common.main.ts` 的装配 import，让现有 Terminal profile resolver 的依赖闭合。此修复没有新增服务实现。
+
+`pnpm typecheck:renderer` 通过；本次 20 个相关 TypeScript 文件通过格式检查，六个 Changes CSS 文件通过 stylelint。CSS ownership audit 结果为：完全相同、品牌替换等价、上游品牌引用、上游产品 root 和新增品牌引用均为零。
+
+全局验证仍有两项既有问题：
+
+- `test/architecture/layer-boundaries.test.ts` 的 11 项中 10 项通过，服务实现不得依赖 contribution 的一项失败；现有 `workbench/services/extensionHost/browser/extensionHostServiceRegistration.ts` 导入了 Terminal 的 browser/common contribution 契约，本次未修改该模块。
+- 扩大到 `sessions.integration.spec.ts` 的四个页面场景在 fixture 启动时因 `pluginManagementService` 重复注册失败，未进入页面断言；其 fixture 全局单例与 Sessions 既有显式注册冲突。Changes 独立场景和实际 Electron 启动不受该 fixture 问题阻塞。
+
+未执行与上游窗口逐项配对的完整场景，因此这里报告的是已接入并验证的 Ash 能力，不宣称上游全部 API、审阅模型或 UI 行为完全对齐。

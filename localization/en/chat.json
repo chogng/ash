@@ -1,5 +1,6 @@
 {
   "ash": {
+    "chat.tabs.openChats": "Open chats",
     "agentTrace.incompletePending": "Diagnostic evidence incomplete · {0} records omitted · {1} records pending.",
     "agentTrace.attemptAccounted": "Model attempt linked to accounting · {0}",
     "agentTrace.accountsFor": "Committed model accounting",

@@ -1,65 +1,8 @@
-.ash-multi-editor-tabs-control {
-	--ash-tabList-activeBackground: var(--ash-editor-background);
-	--ash-tab-list-inactive-background: var(--ash-editor-tabBackground);
-
-	display: flex;
-	min-width: 0;
-	flex: 1 1 auto;
-	align-items: center;
-	overflow: hidden;
-}
-
 .ash-multi-row-editor-tabs-control {
 	display: flex;
 	min-width: 0;
 	flex: 1 1 auto;
 	flex-direction: column;
-}
-
-.ash-standard-editor-tabs {
-	--ash-tab-height: var(--ash-pane-titleHeight);
-	--ash-actionBar-gap: 0px;
-}
-
-.ash-standard-editor-tabs .ash-tab {
-	box-sizing: border-box;
-	border-top: var(--ash-strokeThickness) solid transparent;
-	border-right: var(--ash-strokeThickness) solid var(--ash-border);
-	color: var(--ash-description-foreground);
-	background: var(--ash-editor-tabBackground);
-}
-
-.ash-standard-editor-tabs .ash-tab.checked,
-.ash-standard-editor-tabs .ash-tab:hover {
-	color: var(--ash-foreground);
-}
-
-.ash-standard-editor-tabs .ash-tab-label {
-	--ash-icon-label-text-overflow: ellipsis;
-
-	height: 100%;
-	flex: 1 1 auto;
-	overflow: hidden;
-	padding: 0 10px;
-	font-weight: var(--ash-fontWeight-regular);
-	white-space: nowrap;
-	text-overflow: ellipsis;
-}
-
-.ash-standard-editor-tabs .ash-tab-label:focus-visible {
-	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
-	outline-offset: -1px;
-}
-
-.ash-standard-editor-tabs .ash-tab-actions {
-	padding-right: 4px;
-}
-
-.ash-standard-editor-tabs .ash-tab.checked {
-	/* Cover the title separator where the active tab meets the editor surface. */
-	z-index: 1;
-	/* Selection remains explicit when high-contrast tab backgrounds coincide. */
-	border-top-color: var(--ash-contrastBorder, transparent);
 }
 
 .ash-multi-row-editor-tabs-control > .ash-multi-editor-tabs-control {
@@ -70,19 +13,6 @@
 
 .ash-multi-row-editor-tabs-control > .ash-multi-editor-tabs-control[hidden] {
 	display: none;
-}
-
-.ash-connected-editor-tabs .ash-tab.checked {
-	border-bottom-right-radius: 0;
-	border-bottom-left-radius: 0;
-}
-
-.ash-connected-editor-tabs .ash-tab.checked.connected-tab-left-clipped {
-	border-top-left-radius: 0;
-}
-
-.ash-connected-editor-tabs .ash-tab.checked.connected-tab-right-clipped {
-	border-top-right-radius: 0;
 }
 
 .ash-multi-editor-tabs-control .ash-tab[data-state] .ash-tab-primary-action {

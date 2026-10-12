@@ -1,5 +1,6 @@
 {
   "ash": {
+    "chat.tabs.openChats": "打开的聊天",
     "agentTrace.incompletePending": "诊断证据不完整 · 已省略 {0} 条记录 · {1} 条记录待写入。",
     "agentTrace.attemptAccounted": "模型调用已关联账目 · {0}",
     "agentTrace.accountsFor": "已提交的模型账目",
@@ -298,7 +299,7 @@
     "chat.input.secondaryActions": "聊天第二工具栏操作",
     "chat.input.statusActions": "聊天状态操作",
     "chat.input.actionFailed": "无法打开聊天操作：{0}",
-    "chat.input.secondaryHelp": "输入框下方的审批模式按钮显示当前模式。按 Enter 或空格在按钮上方打开菜单，使用方向键选择模式，按 Escape 关闭菜单并返回按钮。完全访问需要确认。静态上下文圆环显示估算占用率；悬停或聚焦可查看百分比和 token 数，点击可打开圆环上方的明细浮层。容量未知时显示空环，只显示 token 数，不显示百分比。按 Escape 或激活“关闭”可关闭明细并返回圆环。加载、运行和错误状态与扩展状态指示一起显示。按 Tab 进入各工具栏，使用方向键切换操作，按 Enter 或空格执行操作。",
+    "chat.input.secondaryHelp": "输入框下方，“添加上下文”位于审批模式按钮左侧。已添加的附件显示在输入框内。审批模式按钮显示当前模式。按 Enter 或空格在按钮上方打开菜单，使用方向键选择模式，按 Escape 关闭菜单并返回按钮。完全访问需要确认。静态上下文圆环显示估算占用率；悬停或聚焦可查看百分比和 token 数，点击可打开圆环上方的明细浮层。容量未知时显示空环，只显示 token 数，不显示百分比。按 Escape 或激活“关闭”可关闭明细并返回圆环。加载、运行和错误状态与扩展状态指示一起显示。按 Tab 进入各工具栏，使用方向键切换操作，按 Enter 或空格执行操作。",
     "chat.input.permissions": "权限",
     "chat.input.permissionsLabel": "权限：{0}",
     "chat.input.contextModel": "模型：{0}/{1}",
@@ -668,7 +669,14 @@
     "chatEditing.history.dirty": "更改对话历史前，请先保存或还原此对话目录中尚未保存的文件。",
     "chatEditing.history.conflict": "记录检查点后文件发生了更改。其更改已保留。请先审阅文件，再更改此对话历史。",
     "chatEditing.history.undone": "已撤销上一个请求及其文件更改。",
-    "chatEditing.history.redone": "已恢复请求及其文件更改。"
+    "chatEditing.history.redone": "已恢复请求及其文件更改。",
+    "chat.changes.file": "{0} 个文件",
+    "chat.changes.files": "{0} 个文件",
+    "chat.changes.open": "打开变更：{0} 个文件，新增 {1} 行，删除 {2} 行",
+    "chat.changes.title": "变更",
+    "chat.changes.invalidIdentity": "查看变更需要一个会话。",
+    "chat.changes.unavailable": "此会话已不可用。",
+    "chat.input.changesHelp": "输入框上方的变更按钮显示当前会话的文件变更数及新增和删除行数。使用 Tab 聚焦按钮，按 Enter 或空格打开变更。没有变更时隐藏按钮。"
   },
   "ash.workbench": {
     "command.OpenAutomations": "打开自动化",

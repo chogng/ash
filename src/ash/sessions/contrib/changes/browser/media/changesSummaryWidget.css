@@ -1,0 +1,6 @@
+.ash-sessions-changes > .ash-sessions-changes-summary {
+	margin: 0;
+	font-size: var(--ash-fontSize-body2);
+	color: var(--ash-description-foreground);
+	overflow-wrap: anywhere;
+}

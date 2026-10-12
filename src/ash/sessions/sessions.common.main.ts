@@ -10,6 +10,8 @@ import '../workbench/contrib/speech/browser/speech.contribution.js';
 import '../workbench/contrib/accessibilitySignals/browser/accessibilitySignal.contribution.js';
 import '../workbench/services/dialogs/common/dialogService.js';
 import '../workbench/services/path/browser/pathService.js';
+// Terminal profiles resolve execution-side configuration in either Workbench mode.
+import '../workbench/services/configurationResolver/browser/configurationResolverService.js';
 import '../workbench/services/dataChannel/browser/dataChannelService.js';
 import '../workbench/api/browser/mainThreadDataChannels.contribution.js';
 import '../workbench/api/browser/mainThreadUriOpeners.js';

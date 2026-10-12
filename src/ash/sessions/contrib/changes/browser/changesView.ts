@@ -1,4 +1,5 @@
 import './media/changesView.css';
+import './media/changesViewActions.css';
 import { h, addDisposableListener } from '../../../../base/browser/dom.js';
 import { URI } from '../../../../base/common/uri.js';
 import { getErrorMessage } from '../../../../base/common/errors.js';
@@ -11,29 +12,50 @@ import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../.
 import { WorkbenchObjectTree } from '../../../../platform/list/browser/listService.js';
 import { ViewPane, type IViewPaneOptions } from '../../../../workbench/browser/parts/views/viewPane.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
-import { IChatService, type TurnChangeFile, type TurnChangeSetSummary, type TurnCommitSelection } from '../../../../workbench/services/chat/common/chatService.js';
+import { IChatService, type TurnChangeSetSummary, type TurnCommitSelection } from '../../../../workbench/services/chat/common/chatService.js';
 import { createDiffEditorInput } from '../../../../workbench/common/editor/diffEditorInput.js';
 import { createMultiDiffEditorInput } from '../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { createTurnCommitPreviewInput, createTurnMultiDiffEditorInput } from '../../../browser/turnMultiDiffSource.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
-
-interface ChangeRow {
-	readonly summary: TurnChangeSetSummary;
-	readonly file: TurnChangeFile;
-	readonly turnNumber: number;
-}
+import { observableValue } from '../../../../base/common/observable.js';
+import { ChangesSummaryWidget } from './changesSummaryWidget.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { MutableDisposable } from '../../../../base/common/lifecycle.js';
+import { ChecksWidget } from './checksWidget.js';
+import { SessionSyncChangesActionViewItem } from './sessionSyncChanges.js';
+import { CreatePullRequestContextView } from './createPullRequestContextView.js';
+import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
+import { IChangesViewService } from '../common/changesViewService.js';
+import { ChangesViewMode } from '../common/changes.js';
+import { buildTreeChildren, ChangesTreeRenderer, fileState, getChangesFileUri, isChangesFileItem, type ChangesTreeElement, type IChangesFileItem } from './changesViewRenderer.js';
+import { SessionChangesEditorInput } from './sessionChangesEditorInput.js';
+import { autorun } from '../../../../base/common/observable.js';
 
 /** Reviews immutable Turn changes for the selected Code conversation. */
 export class ChangesViewPane extends ViewPane {
-	private readonly tree: WorkbenchObjectTree<ChangeRow>;
+	private readonly tree: WorkbenchObjectTree<ChangesTreeElement>;
 	private readonly statusDomNode: HTMLParagraphElement;
 	private readonly review: Button;
 	private readonly preview: Button;
-	private rows: readonly ChangeRow[] = [];
+	private readonly retry: Button;
+	private readonly statistics = observableValue<TurnChangeSetSummary['statistics'] | undefined>(this, undefined);
+	private rows: readonly IChangesFileItem[] = [];
+	private readonly changesetPicker: HTMLSelectElement;
+	private readonly modePicker: HTMLSelectElement;
+	private readonly markReviewed: Button;
+	private readonly markUnread: Button;
+	private changesetId: string | undefined;
+	private viewMode = ChangesViewMode.List;
+	private stateResource: URI | undefined;
 	private request = 0;
 	private owner: string | undefined;
+	private loading = false;
+	private readonly checks = this._register(new MutableDisposable<ChecksWidget>());
+	private readonly gitActions = this._register(new MutableDisposable<SessionSyncChangesActionViewItem>());
+	private readonly pullRequest = this._register(new MutableDisposable<CreatePullRequestContextView>());
+	private readonly createPullRequest: Button;
 	// Returning to the same conversation must not revive work started before hiding or switching.
 	private ownerEpoch = 0;
 
@@ -48,6 +70,8 @@ export class ChangesViewPane extends ViewPane {
 		@INotificationService private readonly notifications: INotificationService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@IAccessibleViewService accessibleViews: IAccessibleViewService,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
+		@IChangesViewService private readonly viewState: IChangesViewService,
 	) {
 		super(container, options);
 		this.contentElement.classList.add('ash-sessions-changes');
@@ -63,36 +87,80 @@ export class ChangesViewPane extends ViewPane {
 			onClick: () => { void this.previewSelection().catch(error => this.notifications.error(getErrorMessage(error))); },
 		}));
 		this.preview.enabled = false;
+		this.review.enabled = false;
+		this.retry = this._register(new Button(this.contentElement, {
+			label: localize('sessions.changes.retry', 'Retry loading changes'),
+			onClick: () => { void this.refresh(); },
+		}));
+		this.retry.domNode.hidden = true;
+		this.createPullRequest = this._register(new Button(this.contentElement, {
+			label: localize('sessions.changes.createPR', 'Create pull request'),
+			onClick: () => {
+				const view = this.instantiation.createInstance(CreatePullRequestContextView);
+				this.pullRequest.value = view;
+				void view.show(this.createPullRequest.domNode).catch(error => { if (!view.isDisposed) { this.notifications.error(getErrorMessage(error)); view.dispose(); } });
+			},
+		}));
+		const updatePullRequest = (): void => {
+			const selected = this.sessions.activeSelection;
+			this.createPullRequest.domNode.hidden = selected?.kind !== 'session' || !selected.active.session.workspace || !CommandsRegistry.hasCommand('git.getRepositoryContexts');
+		};
+		this._register(sessions.onDidChange(updatePullRequest));
+		this._register(CommandsRegistry.onDidChangeCommands(updatePullRequest));
+		updatePullRequest();
+		this._register(new ChangesSummaryWidget(this.statistics)).render(this.contentElement);
+		const controls = h(container.ownerDocument, 'div', { className: 'ash-sessions-changes-view-actions' });
+		this.contentElement.append(controls);
+		this.changesetPicker = h(container.ownerDocument, 'select');
+		this.changesetPicker.setAttribute('aria-label', localize('sessions.changes.chooseTurn', 'Changes from Turn'));
+		this.modePicker = h(container.ownerDocument, 'select');
+		this.modePicker.setAttribute('aria-label', localize('sessions.changes.viewMode', 'Changes view mode'));
+		for (const [value, text] of [[ChangesViewMode.List, localize('sessions.changes.listMode', 'List')], [ChangesViewMode.Tree, localize('sessions.changes.treeMode', 'Tree')]]) {
+			const option = h(container.ownerDocument, 'option');
+			option.value = value!;
+			option.textContent = text!;
+			this.modePicker.append(option);
+		}
+		controls.append(this.changesetPicker, this.modePicker);
+		this.markReviewed = this._register(new Button(controls, { label: localize('sessions.changes.markReviewed', 'Mark reviewed'), onClick: () => this.setReviewState(true) }));
+		this.markUnread = this._register(new Button(controls, { label: localize('sessions.changes.markUnread', 'Mark unreviewed'), onClick: () => this.setReviewState(false) }));
+		this._register(addDisposableListener(this.changesetPicker, 'change', () => {
+			this.saveTreeState();
+			this.changesetId = this.changesetPicker.value || undefined;
+			this.renderRows();
+		}));
+		this._register(addDisposableListener(this.modePicker, 'change', () => {
+			this.viewState.setViewMode(this.modePicker.value === ChangesViewMode.Tree ? ChangesViewMode.Tree : ChangesViewMode.List);
+		}));
 		const treeContainer = h(container.ownerDocument, 'div');
 		treeContainer.className = 'ash-sessions-changes-tree';
 		this.contentElement.append(treeContainer);
 		this.trackBodyMinimum(treeContainer, this.minimumBodySize);
-		this.tree = this._register(new WorkbenchObjectTree(treeContainer, {
+		const renderer = new ChangesTreeRenderer(container.ownerDocument);
+		this.tree = this._register(new WorkbenchObjectTree<ChangesTreeElement>(treeContainer, {
 			configurationService: configuration,
 			multipleSelectionSupport: true,
 			openOnSingleClick: false,
 			ariaLabel: localize('sessions.changes.title', 'Changes'),
-			modelOptions: { identityProvider: { getId: row => `${row.summary.changeSetId}:${row.file.path}` } },
-			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: row => row.file.path },
-			renderElement: row => {
-				const element = h(container.ownerDocument, 'div');
-				element.className = 'ash-sessions-change-row';
-				const label = h(container.ownerDocument, 'span');
-				label.className = 'ash-sessions-change-path';
-				label.textContent = row.file.previousPath ? `${row.file.previousPath} → ${row.file.path}` : row.file.path;
-				label.title = label.textContent;
-				const counts = h(container.ownerDocument, 'span');
-				counts.textContent = `+${row.file.additions} −${row.file.deletions}`;
-				const state = h(container.ownerDocument, 'span');
-				state.className = 'ash-sessions-change-state';
-				state.textContent = `${localize('sessions.changes.turn', 'Turn {0}', row.turnNumber)} · ${fileState(row)}`;
-				state.title = [row.summary.failureMessage, ...row.summary.warnings].filter(Boolean).join('\n');
-				element.append(label, state, counts);
-				return element;
-			},
+			modelOptions: { identityProvider: { getId: row => row.id }, defaultCollapseState: 'expanded' },
+			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: row => isChangesFileItem(row) ? row.file.path : row.name },
+			renderElement: row => renderer.renderElement(row, isChangesFileItem(row) && this.viewState.reviewedFilesObs.get().has(getChangesFileUri(row).toString()), this.viewMode === ChangesViewMode.Tree),
+		}));
+		this._register(autorun(reader => {
+			const mode = viewState.viewModeObs.read(reader);
+			if (mode !== this.viewMode) {
+				this.saveTreeState();
+				this.viewMode = mode;
+				this.renderRows();
+			}
+			this.modePicker.value = mode;
+		}));
+		this._register(viewState.reviewedFilesObs.onDidChange(() => {
+			this.tree.rerender();
+			this.updatePreviewSelection();
 		}));
 		this._register(this.tree.onDidChangeSelection(() => this.updatePreviewSelection()));
-		const scoped = this._register(contextKeys.createScoped(this.tree.domNode));
+		const scoped = this._register(contextKeys.createScoped(this.contentElement));
 		scoped.createKey('sessionsChangesFocused', true);
 		const updateHint = (): void => {
 			const hint = accessibleViews.getOpenAriaHint(AccessibilityVerbositySettingId.SessionsChanges);
@@ -101,7 +169,9 @@ export class ChangesViewPane extends ViewPane {
 		};
 		this._register(configuration.onDidChangeConfiguration(updateHint));
 		updateHint();
-		this._register(this.tree.onDidOpen(event => { void this.openFile(event.element, event.editorOptions, event.sideBySide).catch(error => this.notifications.error(getErrorMessage(error))); }));
+		this._register(this.tree.onDidOpen(event => {
+			if (isChangesFileItem(event.element)) { void this.openFile(event.element, event.editorOptions, event.sideBySide).catch(error => this.notifications.error(getErrorMessage(error))); }
+		}));
 		this._register(sessions.onDidChange(() => { void this.refresh(); }));
 		this._register(chat.onDidUpdateTurnChanges(event => {
 			const active = sessions.activeSelection;
@@ -115,8 +185,14 @@ export class ChangesViewPane extends ViewPane {
 		if (visible === this.isVisible()) { return; }
 		super.setVisible(visible);
 		if (visible) {
+			this.gitActions.value = this.instantiation.createInstance(SessionSyncChangesActionViewItem, this.contentElement);
+			this.checks.value = this.instantiation.createInstance(ChecksWidget, this.contentElement);
 			void this.refresh();
 		} else {
+			this.saveTreeState();
+			this.pullRequest.clear();
+			this.gitActions.clear();
+			this.checks.clear();
 			this.request++;
 			this.ownerEpoch++;
 		}
@@ -125,30 +201,107 @@ export class ChangesViewPane extends ViewPane {
 	public focus(): void { this.tree.domFocus(); }
 
 	public getAccessibleContent(): string {
-		return [localize('sessions.changes.title', 'Changes'), this.statusDomNode.textContent, ...this.rows.map(row => `${row.file.path}: +${row.file.additions} −${row.file.deletions}; ${localize('sessions.changes.turn', 'Turn {0}', row.turnNumber)}; ${fileState(row)}${this.tree.selection.includes(row) ? '; ' + localize('sessions.changes.fileSelected', 'Selected') : ''}${row.summary.failureMessage ? '; ' + row.summary.failureMessage : ''}${row.summary.warnings.length ? '; ' + row.summary.warnings.join('; ') : ''}`)].join('\n');
+		const selected = new Set(this.tree.selection);
+		const files = this.visibleRows().map(row => [
+			`${row.file.path}: +${row.file.additions} −${row.file.deletions}`,
+			localize('sessions.changes.turn', 'Turn {0}', row.turnNumber),
+			fileState(row),
+			this.viewState.reviewedFilesObs.get().has(getChangesFileUri(row).toString()) ? localize('sessions.changes.reviewed', 'Reviewed') : undefined,
+			selected.has(row) ? localize('sessions.changes.fileSelected', 'Selected') : undefined,
+			row.summary.failureMessage,
+			...row.summary.warnings,
+		].filter(Boolean).join('; '));
+		return [
+			localize('sessions.changes.title', 'Changes'),
+			this.statusDomNode.textContent,
+			this.contentElement.querySelector('.ash-sessions-changes-summary')?.textContent,
+			...files,
+			this.checks.value?.element.textContent,
+		].join('\n');
 	}
 
 	private updatePreviewSelection(): void {
-		const selected = this.tree.selection;
-		this.preview.enabled = selected.length > 0 && selected.every(row => row.summary.captureState === 'sealed' && !row.summary.committedPaths.includes(row.file.path) && row.summary.commitState !== 'queued' && row.summary.commitState !== 'committing' && row.summary.repositoryId === selected[0]!.summary.repositoryId);
+		const selected = this.tree.selection.filter(isChangesFileItem);
+		const onlyFiles = selected.length > 0 && selected.length === this.tree.selection.length;
+		this.preview.enabled = !this.loading && onlyFiles && selected.every(row => row.summary.captureState === 'sealed' && !row.summary.committedPaths.includes(row.file.path) && row.summary.commitState !== 'queued' && row.summary.commitState !== 'committing' && row.summary.repositoryId === selected[0]!.summary.repositoryId);
+		this.markReviewed.enabled = !this.loading && onlyFiles;
+		this.markUnread.enabled = !this.loading && onlyFiles;
+	}
+
+	private visibleRows(): readonly IChangesFileItem[] {
+		return this.changesetId ? this.rows.filter(row => row.summary.changeSetId === this.changesetId) : this.rows;
+	}
+
+	private setReviewState(reviewed: boolean): void {
+		if (!this.isVisible() || this.loading) { return; }
+		this.viewState.setChangesetFilesReviewState(this.tree.selection.filter(isChangesFileItem).map(getChangesFileUri), reviewed);
+	}
+
+	private saveTreeState(): void {
+		if (!this.stateResource || !this.rows.length) { return; }
+		const expanded: Record<string, 0 | 1> = {};
+		for (const item of this.tree.getVisibleElements()) {
+			if (!isChangesFileItem(item)) { expanded[item.id] = this.tree.isCollapsed(item.id) ? 0 : 1; }
+		}
+		this.viewState.setDetailsViewState(this.stateResource.with({ fragment: this.changesetId ?? '' }), this.viewMode, {
+			focus: this.tree.focus ? [this.tree.focus.id] : [],
+			selection: this.tree.selection.map(row => row.id), expanded, scrollTop: this.tree.scrollTop,
+		});
+	}
+
+	private renderRows(): void {
+		const rows = this.visibleRows();
+		const children = this.viewMode === ChangesViewMode.Tree ? buildTreeChildren(rows) : rows.map(element => ({ element }));
+		this.tree.setChildren(children);
+		for (const child of children) {
+			if (!isChangesFileItem(child.element)) { this.tree.expandRecursive(child.element.id); }
+		}
+		const state = this.stateResource && this.viewState.getDetailsViewState(this.stateResource.with({ fragment: this.changesetId ?? '' }), this.viewMode);
+		if (state) {
+			for (const [id, expanded] of Object.entries(state.expanded)) {
+				if (!expanded && this.tree.isCollapsed(id) !== undefined) { this.tree.collapse(id); }
+			}
+			this.tree.setSelection(state.selection);
+			if (state.focus[0]) { this.tree.setFocus(state.focus[0]); }
+			this.tree.scrollTop = state.scrollTop;
+		} else {
+			this.tree.setSelection([]);
+			this.tree.scrollTop = 0;
+		}
+		this.review.enabled = !this.loading && rows.length > 0;
+		this.updatePreviewSelection();
+		this.statistics.set(rows.length ? {
+			files: rows.length, additions: rows.reduce((sum, row) => sum + row.file.additions, 0),
+			deletions: rows.reduce((sum, row) => sum + row.file.deletions, 0),
+		} : undefined);
 	}
 
 	private async refresh(): Promise<void> {
 		if (!this.isVisible() || this.isDisposed) { return; }
 		const request = ++this.request;
+		this.loading = true;
+		this.saveTreeState();
+		this.review.enabled = false;
+		this.preview.enabled = false;
+		this.retry.domNode.hidden = true;
+		this.tree.domNode.setAttribute('aria-busy', 'true');
 		const selection = this.sessions.activeSelection;
 		const owner = selection?.kind === 'session' ? `${selection.active.session.sessionId}:${selection.active.threadId}` : undefined;
-		const selectedIds = owner === this.owner ? this.tree.selection.map(row => `${row.summary.changeSetId}:${row.file.path}`) : [];
-		const focused = owner === this.owner ? this.tree.focus : undefined;
-		if (owner !== this.owner) { this.ownerEpoch++; }
+		const ownerChanged = owner !== this.owner;
+		if (ownerChanged) { this.ownerEpoch++; }
 		this.owner = owner;
-		if (!owner || !selectedIds.length) {
+		this.stateResource = selection ? new SessionChangesEditorInput(selection).resource : undefined;
+		if (ownerChanged) { this.changesetId = undefined; }
+		if (ownerChanged || !owner) {
 			this.rows = [];
 			this.tree.setChildren([]);
 			this.review.enabled = false;
 			this.preview.enabled = false;
+			this.statistics.set(undefined, undefined);
 		}
 		if (selection?.kind !== 'session') {
+			this.loading = false;
+			this.tree.domNode.removeAttribute('aria-busy');
 			this.statusDomNode.textContent = localize('sessions.changes.draft', 'Changes appear after the agent edits files.');
 			return;
 		}
@@ -159,16 +312,37 @@ export class ChangesViewPane extends ViewPane {
 			if (this.isDisposed || request !== this.request) { return; }
 			const details = await Promise.all(summaries.filter(summary => summary.captureState !== 'discarded').map(summary => this.chat.readTurnChange(active.session.sessionId, active.threadId, summary.changeSetId)));
 			if (this.isDisposed || request !== this.request) { return; }
-			this.rows = details.flatMap((details, index) => details.files.map(file => ({ summary: details.summary, file, turnNumber: index + 1 })));
-			this.tree.setChildren(this.rows.map(element => ({ element })));
-			this.tree.setSelection(selectedIds.filter(id => this.rows.some(row => `${row.summary.changeSetId}:${row.file.path}` === id)));
-			this.updatePreviewSelection();
-			if (focused) { this.tree.setFocus(`${focused.summary.changeSetId}:${focused.file.path}`); }
-			this.review.enabled = this.rows.length > 0;
+			this.loading = false;
+			this.rows = details.flatMap((details, index) => details.files.map(file => ({ type: 'file' as const, id: `${details.summary.changeSetId}:${file.path}`, summary: details.summary, file, turnNumber: index + 1 })));
+			const selectedTurn = this.changesetId;
+			this.changesetPicker.replaceChildren();
+			const all = h(this.contentElement.ownerDocument, 'option');
+			all.value = '';
+			all.textContent = localize('sessions.changes.allTurns', 'All Turns');
+			this.changesetPicker.append(all);
+			for (const [index, entry] of details.entries()) {
+				const option = h(this.contentElement.ownerDocument, 'option');
+				option.value = entry.summary.changeSetId;
+				option.textContent = localize('sessions.changes.turn', 'Turn {0}', index + 1);
+				this.changesetPicker.append(option);
+			}
+			this.changesetId = details.some(entry => entry.summary.changeSetId === selectedTurn) ? selectedTurn : undefined;
+			this.changesetPicker.value = this.changesetId ?? '';
+			this.renderRows();
 			this.statusDomNode.textContent = this.rows.length ? localize('sessions.changes.count', '{0} changed files', this.rows.length) : localize('sessions.changes.empty', 'No changes in this conversation.');
 		} catch (error) {
 			if (this.isDisposed || request !== this.request) { return; }
+			this.rows = [];
+			this.tree.setChildren([]);
+			this.statistics.set(undefined, undefined);
+			this.retry.domNode.hidden = false;
 			this.statusDomNode.textContent = localize('sessions.changes.error', 'Could not load changes: {0}', error instanceof Error ? error.message : String(error));
+		} finally {
+			if (!this.isDisposed && request === this.request) {
+				this.loading = false;
+				this.updatePreviewSelection();
+				this.tree.domNode.removeAttribute('aria-busy');
+			}
 		}
 	}
 
@@ -176,7 +350,7 @@ export class ChangesViewPane extends ViewPane {
 		const selection = this.sessions.activeSelection;
 		if (!this.isVisible() || selection?.kind !== 'session') { return; }
 		const ownerEpoch = this.ownerEpoch;
-		const input = await createTurnMultiDiffEditorInput(this.chat, selection.active, 'throughCurrentTurn');
+		const input = await createTurnMultiDiffEditorInput(this.chat, selection.active, 'throughCurrentTurn', this.changesetId ? [this.changesetId] : undefined);
 		if (this.isDisposed || ownerEpoch !== this.ownerEpoch) { return; }
 		await this.editors.openEditor(input, { pinned: true });
 	}
@@ -185,7 +359,7 @@ export class ChangesViewPane extends ViewPane {
 		const selection = this.sessions.activeSelection;
 		if (!this.isVisible() || selection?.kind !== 'session') { return; }
 		const ownerEpoch = this.ownerEpoch;
-		const selected = this.tree.selection;
+		const selected = this.tree.selection.filter(isChangesFileItem);
 		const active = selection.active;
 		const grouped = new Map<string, TurnCommitSelection>();
 		for (const row of selected) {
@@ -201,14 +375,14 @@ export class ChangesViewPane extends ViewPane {
 		await this.editors.openEditor(input, { pinned: true });
 	}
 
-	private async openFile(row: ChangeRow, options: IEditorOptions, sideBySide: boolean): Promise<void> {
-		if (!this.isVisible()) { return; }
+	private async openFile(row: IChangesFileItem, options: IEditorOptions, sideBySide: boolean): Promise<void> {
+		if (!this.isVisible() || this.loading) { return; }
 		const ownerEpoch = this.ownerEpoch;
 		const summary = row.summary;
 		const contents = await this.chat.readTurnChangeFile(summary.sessionId, summary.threadId, summary.changeSetId, row.file.path);
 		if (this.isDisposed || ownerEpoch !== this.ownerEpoch) { return; }
 		if (contents.truncated && !contents.binary) { throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.')); }
-		const resource = URI.from({ scheme: 'ash-turn-diff', path: `/${summary.changeSetId}/${row.file.path}` });
+		const resource = getChangesFileUri(row);
 		if (contents.binary) {
 			await this.editors.openEditor(createMultiDiffEditorInput(resource.with({ scheme: 'ash-multi-diff' }), [{
 				label: row.file.path, binary: true,
@@ -225,15 +399,3 @@ export class ChangesViewPane extends ViewPane {
 	}
 }
 
-function fileState(row: ChangeRow): string {
-	const summary = row.summary;
-	if (summary.committedPaths.includes(row.file.path)) { return localize('sessions.changes.fileCommitted', 'Committed'); }
-	if (summary.captureState !== 'sealed') { return localize('sessions.changes.fileUnsealed', 'Not sealed'); }
-	switch (summary.commitState) {
-		case 'queued': return localize('sessions.changes.fileQueued', 'Queued');
-		case 'committing': return localize('sessions.changes.fileCommitting', 'Committing');
-		case 'conflict': return localize('sessions.changes.fileConflict', 'Conflict — preview again after resolving');
-		case 'failed': return localize('sessions.changes.fileFailed', 'Commit failed: {0}', summary.failureMessage ?? '');
-		case 'idle': case 'partiallyCommitted': case 'committed': return localize('sessions.changes.fileRemaining', 'Not committed');
-	}
-}

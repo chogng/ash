@@ -1,5 +1,8 @@
 import "./media/multiChatTabsControl.css";
-import { TabList } from "../../../../../../base/browser/ui/tablist/tabList.js";
+import type { TabListOptions } from "../../../../../../base/browser/ui/tablist/tabList.js";
+import { WorkbenchTabsControl } from '../../../../../browser/parts/editor/workbenchTabsControl.js';
+import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
+import { localize } from '../../../../../../nls.js';
 import { ChatTabsControl, type ChatTab, type ChatTabsDelegate, type ChatTabsPresentation } from "./chatTabsControl.js";
 
 interface ChatTabDescriptor {
@@ -11,7 +14,7 @@ interface ChatTabDescriptor {
 
 /** Maps untitled and durable Chat sessions onto one reorderable tab list. */
 export class MultiChatTabsControl extends ChatTabsControl {
-	private readonly tabList: TabList<string>;
+	private readonly tabs: WorkbenchTabsControl<string>;
 	private readonly idPrefix: string;
 	private readonly tabIds = new Map<string, string>();
 	private hasRenderedTabs = false;
@@ -21,13 +24,12 @@ export class MultiChatTabsControl extends ChatTabsControl {
 	private draggedTabId: string | undefined;
 	private nextTabId = 0;
 
-	constructor(container: HTMLElement, idPrefix: string, delegate: ChatTabsDelegate, presentation: ChatTabsPresentation) {
+	constructor(container: HTMLElement, idPrefix: string, delegate: ChatTabsDelegate, presentation: ChatTabsPresentation, @IInstantiationService instantiationService: IInstantiationService) {
 		super(container, presentation);
 		this.idPrefix = idPrefix;
 		this.element.classList.add("ash-multi-chat-tabs-control");
-		this.tabList = this._register(new TabList(this.element, {
-			ariaLabel: "Open chats",
-			presentation: "inset",
+		this.tabs = this._register(instantiationService.createInstance(WorkbenchTabsControl<string>, this.element, {
+			ariaLabel: localize("chat.tabs.openChats", "Open chats"),
 			draggable: true,
 			dragAndDrop: {
 				canDrop: () => this.draggedTabId !== undefined,
@@ -44,7 +46,7 @@ export class MultiChatTabsControl extends ChatTabsControl {
 			},
 			onActivate: (tabId) => delegate.selectTab(tabId),
 			onClose: (tabId) => delegate.closeTab(tabId),
-		}));
+		} satisfies TabListOptions<string>));
 	}
 
 	setTabs(entries: readonly ChatTab[], activeTabId: string | undefined): ReadonlyMap<string, string> {
@@ -62,7 +64,7 @@ export class MultiChatTabsControl extends ChatTabsControl {
 			}
 			return { id, label, panelId, tabId } satisfies ChatTabDescriptor;
 		});
-		this.tabList.setTabs(tabs.map((tab) => ({
+		this.tabs.setTabs(tabs.map((tab) => ({
 			id: tab.id,
 			value: tab.id,
 			label: tab.label,

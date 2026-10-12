@@ -683,7 +683,10 @@ test("Workbench entries select runtime services and load feature services throug
 	assert.match(workbenchContributions, /contrib\/tasks\/browser\/tasks\.contribution/u);
 	assert.match(readFileSync(join(workbenchRoot, "contrib/tasks/browser/tasks.contribution.ts"), "utf8"), /import ["']\.\/taskService\.js["']/u);
 	assert.doesNotMatch(workbenchContributions, /contrib\/tasks\/browser\/taskService/u);
-	assert.match(workbenchContributions, /extensionHostServiceRegistration/u);
+	assert.match(workbenchContributions, /api\/browser\/extensionHost\.contribution/u);
+	assert.doesNotMatch(workbenchContributions, /extensionHostServiceRegistration/u);
+	const extensionHostComposition = readFileSync(join(workbenchRoot, 'api/browser/extensionHost.contribution.ts'), 'utf8');
+	assert.match(extensionHostComposition, /dependencies: \[ITerminalService, ITerminalProfileService, ITerminalProfileResolverService/u);
 	assert.match(workbenchContributions, /codebaseSymbolsServiceRegistration/u);
 	assert.match(debugContribution, /import ["']\.\/debugService\.js["']/u);
 	assert.match(testingContribution, /services\/testing\/browser\/testingServiceRegistration/u);

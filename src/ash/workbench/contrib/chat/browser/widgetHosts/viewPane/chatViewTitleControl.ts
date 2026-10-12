@@ -4,9 +4,10 @@ import { AnchorPosition } from "../../../../../../base/common/layout.js";
 import { MenuWorkbenchToolBar } from "../../../../../../platform/actions/browser/toolbar.js";
 import { type IMenuService, MenuId } from "../../../../../../platform/actions/common/actions.js";
 import type { IContextMenuService } from "../../../../../../platform/contextview/browser/contextView.js";
-import { ChatTabsControl, type ChatTab, type ChatTabsDelegate } from "./chatTabsControl.js";
+import type { ChatTab, ChatTabsDelegate, ChatTabsControl } from "./chatTabsControl.js";
 import { MultiChatTabsControl } from "./multiChatTabsControl.js";
 import type { PartTitleProjection } from "../../../../../browser/parts/views/viewPane.js";
+import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { h } from "../../../../../../base/browser/dom.js";
 
 /** Owns Chat's title content and action projections. */
@@ -15,10 +16,10 @@ export class ChatViewTitleControl extends Disposable {
 	private readonly actionsElement: HTMLDivElement;
 	private readonly layoutToolbar: MenuWorkbenchToolBar;
 
-	constructor(container: HTMLElement, idPrefix: string, delegate: ChatTabsDelegate, menuService: IMenuService, contextMenuService: IContextMenuService) {
+	constructor(container: HTMLElement, idPrefix: string, delegate: ChatTabsDelegate, menuService: IMenuService, contextMenuService: IContextMenuService, @IInstantiationService instantiationService: IInstantiationService) {
 		super();
 		const ownerDocument = container.ownerDocument;
-		this.tabs = this._register(new MultiChatTabsControl(container, idPrefix, delegate, "pane-title"));
+		this.tabs = this._register(instantiationService.createInstance(MultiChatTabsControl, container, idPrefix, delegate, "pane-title"));
 		this.actionsElement = h(ownerDocument, "div");
 		this.actionsElement.className = "ash-chat-title-actions";
 		container.append(this.actionsElement);

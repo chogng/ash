@@ -14,7 +14,7 @@ import type { ResolvedChatContext } from "../../workbench/services/chat/common/c
 import type { IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../services/sessions/common/session.js";
 import type { ISessionsManagementService } from "../services/sessions/common/sessionsManagement.js";
 import { chatTranscriptListItems, type IChatListItem } from "../../workbench/contrib/chat/browser/widget/chatListItems.js";
-import type { ChatInputState } from '../../workbench/contrib/chat/browser/widget/input/chatInput.js';
+import { getChatInputChanges, type ChatInputState } from '../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { modelRefIdentity, type ModelReasoningEffort } from '../../workbench/services/chat/common/modelCatalog.js';
 import type { ApprovalMode } from '../../workbench/services/chat/common/chatService.js';
 import { observableValue } from '../../base/common/observable.js';
@@ -118,6 +118,7 @@ export class ChatWidgetModel extends Disposable {
 			phase: this._state,
 			error: this._error,
 			canInterrupt: this.canInterrupt,
+			changes: getChatInputChanges(this._changeSets),
 			contextUsage: this.contextUsage,
 			approvalMode: this.selectedApprovalModes.get().get(this.composerIdentity) ?? this._thread?.turns.at(-1)?.approvalMode ?? this.defaultApprovalMode.get(),
 			models: this._models,

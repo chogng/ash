@@ -1,3 +1,5 @@
+import { IChangesViewService } from '../../../src/ash/sessions/contrib/changes/common/changesViewService.js';
+import { ChangesViewService } from '../../../src/ash/sessions/contrib/changes/browser/changesViewService.js';
 import '../../../src/ash/base/browser/ui/styles.css';
 import '../../../src/ash/workbench/browser/media/style.css';
 import { Pane, PaneView } from '../../../src/ash/base/browser/ui/splitview/paneview.js';
@@ -16,12 +18,13 @@ import { type ISymphonyService, type SymphonyViewState } from '../../../src/ash/
 import { AgentTraceNavigationView } from '../../../src/ash/workbench/contrib/trace/browser/agentTraceNavigation.js';
 import { type IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { ChangesViewPane } from '../../../src/ash/sessions/contrib/changes/browser/changesView.js';
-import { type ISessionsService } from '../../../src/ash/sessions/services/sessions/browser/sessionsService.js';
+import { ISessionsService } from '../../../src/ash/sessions/services/sessions/browser/sessionsService.js';
 import { type IChatService, type TurnChangeDetails } from '../../../src/ash/workbench/services/chat/common/chatService.js';
-import { type IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
+import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { type IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { DebugConsoleViewPane } from '../../../src/ash/workbench/contrib/debug/browser/debugConsoleViewPane.js';
 import '../../../src/ash/workbench/contrib/debug/browser/media/debug.css';
@@ -43,6 +46,12 @@ import { EmptyView } from '../../../src/ash/workbench/contrib/files/browser/view
 import { ScmAgentReviewViewPane } from '../../../src/ash/workbench/contrib/scm/browser/scmAgentReviewViewPane.js';
 import '../../../src/ash/workbench/contrib/files/browser/media/explorerviewlet.css';
 import '../../../src/ash/workbench/contrib/scm/browser/media/scm.css';
+import { IGitHubService as ISessionGitHubService } from '../../../src/ash/sessions/contrib/github/browser/githubService.js';
+import { IGitHubService as IGitHubApi } from '../../../src/ash/platform/github/common/githubService.js';
+import { IAccountService } from '../../../src/ash/platform/accounts/common/accountService.js';
+import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
+import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
+import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 
 const params = new URLSearchParams(location.search);
 if (params.get('locale') === 'zh-CN') {
@@ -55,7 +64,18 @@ resources.add(bindColorTheme(resources.add(new TestThemeService(params.has('hc')
 const contextKeys = resources.add(new ContextKeyService());
 const configuration = resources.add(new InMemoryConfigurationService());
 const notifications = resources.add(new NotificationService());
+const changesServices = resources.add(new InstantiationService());
+changesServices.registerInstance(ISessionGitHubService, { onDidChange: Event.None, getSessionPullRequests: () => [] } as unknown as ISessionGitHubService);
+changesServices.registerInstance(IGitHubApi, {} as IGitHubApi);
+changesServices.registerInstance(IAccountService, { onDidChangeAccounts: Event.None } as unknown as IAccountService);
+changesServices.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
+changesServices.registerInstance(INotificationService, notifications);
+changesServices.registerInstance(ISessionsService, { onDidChange: Event.None } as unknown as ISessionsService);
+changesServices.registerInstance(ICommandService, { executeCommand: async () => [] } as unknown as ICommandService);
+changesServices.registerInstance(IQuickInputService, {} as IQuickInputService);
 const storage = resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'viewpane-layout', flushInterval: 0 }));
+changesServices.registerInstance(IStorageService, storage);
+const changesViewState = resources.add(changesServices.createInstance(ChangesViewService));
 const commands: string[] = [];
 const submissions: { title: string; prompt: string; }[] = [];
 let watchers = 0;
@@ -112,7 +132,7 @@ const pane = resources.add(view === 'empty'
 								{ activeSelection: { kind: 'session', active: { threadId: 'fixture-thread', session: { sessionId: 'fixture' } } }, onDidChange: Event.None } as unknown as ISessionsService,
 								{ onDidUpdateTurnChanges: Event.None, onDidBecomeReady: Event.None, listTurnChanges: async () => [changes.summary], readTurnChange: async () => changes } as unknown as IChatService,
 								editors, configuration, contextKeys, notifications, {} as IQuickInputService,
-								{ getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService)
+								{ getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, changesServices, changesViewState)
 							: view === 'console'
 								? new DebugConsoleViewPane(root, { id: 'fixture.console', title: 'Console' }, {
 									...Disposable.None, sessions: [], activeSession: { id: 'fixture', label: 'Fixture', state: 'stopped', output: 'Fixture output', canEvaluate: true },

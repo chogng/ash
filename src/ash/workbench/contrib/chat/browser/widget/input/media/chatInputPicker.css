@@ -43,3 +43,7 @@
 	white-space: nowrap;
 	text-overflow: ellipsis;
 }
+
+.ash-chat-input-permission-picker.ash-button {
+	padding-inline: var(--ash-spacing-size60);
+}

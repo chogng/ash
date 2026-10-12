@@ -1,3 +1,6 @@
+import { CommandsRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
+import { OPEN_CHAT_CHANGES_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
+import { getChatInputChanges } from '../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -128,7 +131,7 @@ test('Sessions contributes Turn changes and commit actions to the shared multi-d
 	using services = new InstantiationService();
 	services.registerInstance(IQuickInputService, { input: async () => 'feat: reviewed selection', createQuickPick() { throw new Error('This scenario uses a message input'); } });
 	services.registerInstance(IChatService, chat);
-	const session = { sessionId: 'session' };
+	const session = { sessionId: 'session', chats: [{ threadId: 'thread' }] };
 	services.registerInstance(ISessionsManagementService, {
 		active: { session, threadId: 'thread' },
 		sessions: [session],
@@ -153,6 +156,23 @@ test('Sessions contributes Turn changes and commit actions to the shared multi-d
 		before: 'before', after: 'after',
 		source: { kind: 'external', providerId: 'sessions.turn', label: 'Changes Through Current Turn', repositoryId: 'repo', branchName: 'main' },
 	});
+	assert.deepEqual(getChatInputChanges([...summaries, { ...summaries[0]!, changeSetId: 'discarded', captureState: 'discarded', statistics: { files: 20, additions: 100, deletions: 100 } }]), { files: 2, additions: 2, deletions: 2 });
+	assert.equal(getChatInputChanges([{ ...summaries[0]!, captureState: 'discarded' }]), undefined);
+	const openChanges = CommandsRegistry.getCommand(OPEN_CHAT_CHANGES_COMMAND_ID)!;
+	await openChanges(services, 'session', 'thread');
+	const changesInput = opened.pop()!;
+	assert.equal(changesInput.label, 'Changes');
+	assert.equal(changesInput.resource.toString(), input.resource.toString());
+	assert.equal(changesInput.items[0]?.modified.initialText, 'after');
+	await assert.rejects(async () => openChanges(services, 'session', 'unknown-thread'), /no longer available/);
+	await assert.rejects(async () => openChanges(services, undefined, 'thread'), /require a conversation/);
+	let managedChangesOpened = 0;
+	using managedChanges = CommandsRegistry.register('ash.sessions.openChangesTab', () => { managedChangesOpened++; });
+	services.registerInstance(ICommandService, { executeCommand: async (id: string) => CommandsRegistry.getCommand(id)!(services) } as unknown as ICommandService);
+	await openChanges(services, 'session', 'thread');
+	assert.equal(managedChangesOpened, 1);
+	assert.equal(opened.length, 1);
+
 	const restored = EditorInputSerializers.deserialize(EditorInputSerializers.serialize(input)) as MultiDiffEditorInput;
 	assert.deepEqual(restored.source, input.source);
 	summaries.push({ ...summaries[1]!, changeSetId: 'three', turnId: 'turn-three', revision: 3 });

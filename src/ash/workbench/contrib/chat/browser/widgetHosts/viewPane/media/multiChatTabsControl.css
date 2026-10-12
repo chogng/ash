@@ -1,9 +1,3 @@
 .ash-multi-chat-tabs-control {
-	--ash-tab-list-inactive-background: var(--ash-chat-tabBackground);
-
-	display: flex;
-	min-width: 0;
-	flex: 1 1 auto;
-	align-items: center;
-	overflow: hidden;
+	height: 100%;
 }

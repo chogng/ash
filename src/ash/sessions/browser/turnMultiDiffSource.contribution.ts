@@ -1,3 +1,5 @@
+import { CommandsRegistry, ICommandService } from '../../platform/commands/common/commands.js';
+import { OPEN_CHAT_CHANGES_COMMAND_ID } from '../../workbench/contrib/chat/common/chat.js';
 import type { IAction } from '../../base/common/actions.js';
 import { Disposable } from '../../base/common/lifecycle.js';
 import { Lxicon } from '../../base/common/lxicons.js';
@@ -137,3 +139,21 @@ function commitSourceIdentity(uri: URI): { readonly sessionId: string; readonly 
 // The resolver needs IEditorService, which the Workbench registers after BlockStartup.
 registerWorkbenchContribution('sessions.contrib.multiDiffSource', WorkbenchPhase.BlockRestore,
 	accessor => accessor.get(IInstantiationService).createInstance(SessionsMultiDiffSourceContribution));
+
+CommandsRegistry.register(OPEN_CHAT_CHANGES_COMMAND_ID, async (accessor, sessionId, threadId) => {
+	if (typeof sessionId !== 'string' || !sessionId || typeof threadId !== 'string' || !threadId) {
+		throw new Error(localize('chat.changes.invalidIdentity', 'Changes require a conversation.'));
+	}
+	const sessions = accessor.get(ISessionsManagementService);
+	const session = sessions.sessions.find(candidate => candidate.sessionId === sessionId);
+	if (!session || !session.chats.some(chat => chat.threadId === threadId)) {
+		throw new Error(localize('chat.changes.unavailable', 'This conversation is no longer available.'));
+	}
+	// Sessions reveals its managed Changes tab; the Workbench opens the identity-bound comparison below.
+	if (CommandsRegistry.hasCommand('ash.sessions.openChangesTab') && sessions.active?.session.sessionId === sessionId && sessions.active.threadId === threadId) {
+		const opened = await accessor.get(ICommandService).executeCommand('ash.sessions.openChangesTab');
+		if (opened !== false) return;
+	}
+	const input = await createTurnMultiDiffEditorInput(accessor.get(ChatServiceId), { session, threadId }, 'throughCurrentTurn');
+	await accessor.get(IEditorService).openEditor({ ...input, label: localize('chat.changes.title', 'Changes') }, { pinned: true });
+});

@@ -10,6 +10,7 @@ import { IChatService } from "../../workbench/services/chat/common/chatService.j
 import type { IActiveSessionThread, IChat, ISession, IUntitledChatSession, ThreadId } from "../services/sessions/common/session.js";
 import { ISessionsManagementService } from "../services/sessions/common/sessionsManagement.js";
 import { ChatWidget, resolveMarkdownWorkspaceResource } from "../../workbench/contrib/chat/browser/widget/chatWidget.js";
+import type { ChatTabsDelegate } from "../../workbench/contrib/chat/browser/widgetHosts/viewPane/chatTabsControl.js";
 import { ChatViewTitleControl } from "../../workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewTitleControl.js";
 import { addDisposableListener, h, isHTMLElement } from "../../base/browser/dom.js";
 import { type ChatContextAttachment, type IChatContextTarget } from "../../workbench/services/chat/common/chatContextService.js";
@@ -105,14 +106,14 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		this.headerElement.hidden = true;
 		this.contentElement.classList.add("ash-chat-view");
 		const viewId = `ash-chat-view-${++chatViewInstanceId}`;
-		this.titleControl = this._register(new ChatViewTitleControl(
+		this.titleControl = this._register(this.instantiationService.createInstance(ChatViewTitleControl,
 			this.element,
 			viewId,
 			{
 				selectTab: (tabId) => this.selectTab(tabId),
 				closeTab: (tabId) => this.closeTab(tabId),
 				moveTab: (sourceTabId, targetTabId, position) => this.moveTab(sourceTabId, targetTabId, position),
-			},
+			} satisfies ChatTabsDelegate,
 			menuService,
 			contextMenuService,
 		));

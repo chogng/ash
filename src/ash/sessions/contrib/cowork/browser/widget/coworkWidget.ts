@@ -1,3 +1,4 @@
+import { OPEN_CHAT_CHANGES_COMMAND_ID } from '../../../../../workbench/contrib/chat/common/chat.js';
 import './media/chat.css';
 import { Disposable, toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
 import type { Event } from "../../../../../base/common/event.js";
@@ -99,6 +100,7 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 				? commandService.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID)
 				: this.model.executeServerCommand(invocation.name, invocation.argumentsText),
 			interrupt: () => this.model.interrupt(),
+			openChanges: () => commandService.executeCommand(OPEN_CHAT_CHANGES_COMMAND_ID, this.model.sessionId, this.model.threadId),
 			selectModel: (model) => this.model.selectModel(model),
 			selectReasoningEffort: effort => this.model.selectReasoningEffort(effort),
 			selectAutomaticModel: () => this.model.selectAutomaticModel(),

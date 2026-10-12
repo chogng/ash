@@ -494,3 +494,107 @@ test('keyboard resizing cancels an in-progress pane transition and keeps the foc
 	expect(result.bottom).toBeCloseTo(result.nextTop, 0);
 	expect(result.sash).toBeCloseTo(result.nextTop, 0);
 });
+
+
+test('Chat and editor tabs share styles, sizing, keyboard behavior and theme selection', async ({ page }) => {
+	await page.goto('/composite.html?editorTabs');
+	await page.waitForFunction(() => !!window.ashCompositeIntegration);
+	await page.evaluate(() => window.ashCompositeIntegration.openEditor('alpha'));
+	const editor = page.locator('#editor-tabs-host').getByRole('tab', { name: 'alpha.ts', exact: true });
+	const chatHost = page.locator('#chat-tabs-host');
+	const alpha = chatHost.getByRole('tab', { name: 'Chat alpha', exact: true });
+	const beta = chatHost.getByRole('tab', { name: 'Chat beta', exact: true });
+	await alpha.focus();
+	await alpha.press('ArrowRight');
+	await expect(beta).toBeFocused();
+	await expect(alpha).toHaveAttribute('aria-selected', 'true');
+	await beta.press('Enter');
+	await expect(beta).toHaveAttribute('aria-selected', 'true');
+	for (const style of ['pill', 'connected', 'standard'] as const) {
+		await page.evaluate(style => window.ashCompositeIntegration.configureEditorTabs(style, 'fixed'), style);
+		await expect(beta).toBeFocused();
+		for (const tab of [editor.locator(".."), beta.locator("..")]) {
+			await expect(tab).toHaveCSS('max-width', '160px');
+			await expect(tab).toHaveCSS('border-bottom-left-radius', style === 'connected' || style === 'standard' ? '0px' : '4px');
+		}
+		const geometry = await Promise.all([editor.locator(".."), beta.locator("..")].map(tab => tab.evaluate(element => ({
+			height: element.getBoundingClientRect().height,
+			topRadius: getComputedStyle(element).borderTopLeftRadius,
+		}))));
+		expect(geometry[0]).toEqual(geometry[1]);
+	}
+	for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+		await page.evaluate(theme => window.ashCompositeIntegration.setEditorTheme(theme), theme);
+		const colors = await Promise.all([editor.locator(".."), beta.locator("..")].map(tab => tab.evaluate(element => ({
+			background: getComputedStyle(element).backgroundColor,
+			border: getComputedStyle(element).borderTopColor,
+		}))));
+		expect(colors[0]).toEqual(colors[1]);
+		await expect(beta).toHaveCSS('outline-style', 'solid');
+	}
+	await beta.press('Delete');
+	await expect(beta).toHaveCount(0);
+	await expect(alpha).toHaveAttribute('aria-selected', 'true');
+});
+
+
+test('Editor and Chat tabs share rounded outer corners across styles and themes', async ({ page }, testInfo) => {
+	await page.goto('/composite.html?editorTabs');
+	await page.waitForFunction(() => !!window.ashCompositeIntegration);
+	await page.evaluate(() => window.ashCompositeIntegration.openEditor('alpha'));
+	const editorHost = page.locator('#editor-tabs-host');
+	const chatHost = page.locator('#chat-tabs-host');
+	const editorPart = editorHost.locator('.ash-workbench-editor');
+	const chatPart = chatHost.locator('.ash-workbench-auxiliarybar');
+	const editorTab = editorHost.getByRole('tab', { name: 'alpha.ts', exact: true });
+	const chatTab = chatHost.getByRole('tab', { name: 'Chat alpha', exact: true });
+	// A contrasting backdrop exposes paint escaping any rounded outer corner.
+	for (const host of [editorHost, chatHost]) {
+		await host.evaluate(element => { element.style.background = 'rgb(255, 0, 255)'; });
+	}
+	for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+		await page.evaluate(theme => window.ashCompositeIntegration.setEditorTheme(theme), theme);
+		for (const style of ['standard', 'connected', 'pill'] as const) {
+			await page.evaluate(style => window.ashCompositeIntegration.configureEditorTabs(style), style);
+			for (const [part, tab] of [[editorPart, editorTab], [chatPart, chatTab]] as const) {
+				await tab.focus();
+				await expect(tab).toBeFocused();
+				await expect(tab).toHaveCSS('outline-style', 'solid');
+				await expect(part).toHaveCSS('border-radius', '8px');
+				const screenshot = await part.screenshot();
+				const corners = await page.evaluate(async base64 => {
+					const image = new Image();
+					image.src = `data:image/png;base64,${base64}`;
+					await image.decode();
+					const canvas = document.createElement('canvas');
+					canvas.width = image.width;
+					canvas.height = image.height;
+					const context = canvas.getContext('2d')!;
+					context.drawImage(image, 0, 0);
+					return [[1, 1], [image.width - 2, 1], [1, image.height - 2], [image.width - 2, image.height - 2]].map(([x, y]) => [...context.getImageData(x!, y!, 1, 1).data]);
+				}, screenshot.toString('base64'));
+				expect(corners, `${theme}, ${style}, ${part === editorPart ? 'editor' : 'chat'}`).toEqual(Array.from({ length: 4 }, () => [255, 0, 255, 255]));
+			}
+			const radii = await Promise.all([editorTab, chatTab].map(tab => tab.locator('..').evaluate(element => {
+				const style = getComputedStyle(element);
+				return [style.borderTopLeftRadius, style.borderTopRightRadius, style.borderBottomLeftRadius, style.borderBottomRightRadius];
+			})));
+			expect(radii[0]).toEqual(radii[1]);
+		}
+	}
+	for (const host of [editorHost, chatHost]) {
+		await host.evaluate(element => { element.style.removeProperty('background'); });
+	}
+	await page.evaluate(async () => {
+		await window.ashCompositeIntegration.configureEditorTabs('standard');
+		window.ashCompositeIntegration.setEditorTheme('ash-light');
+	});
+	await testInfo.attach('rounded-editor-title', { body: await editorPart.screenshot(), contentType: 'image/png' });
+	await testInfo.attach('rounded-chat-title', { body: await chatPart.screenshot(), contentType: 'image/png' });
+	for (const host of [editorHost, chatHost]) {
+		await host.evaluate(element => { element.classList.remove('modern-ui'); });
+	}
+	for (const part of [editorPart, chatPart]) {
+		await expect(part).toHaveCSS('border-radius', '0px');
+	}
+});

@@ -59,7 +59,8 @@
 	font-size: var(--ash-fontSize-label1);
 }
 
-.ash-chat-secondary-input-toolbar {
+.ash-chat-secondary-toolbar > .ash-chat-secondary-input-toolbar {
+	gap: var(--ash-spacing-size40);
 	min-width: 0;
 	flex: 1 1 auto;
 	flex-wrap: wrap;

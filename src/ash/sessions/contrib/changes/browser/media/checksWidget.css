@@ -1,0 +1,29 @@
+.ash-sessions-checks {
+	min-width: 0;
+	max-height: 35%;
+	flex-shrink: 0;
+	overflow: auto;
+	font-size: var(--ash-fontSize-body2);
+}
+
+.ash-sessions-checks-body ul {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.ash-sessions-checks-body li,
+.ash-sessions-checks-body p {
+	margin: 0;
+	padding: var(--ash-spacing-size40) 0;
+	overflow-wrap: anywhere;
+}
+
+.ash-sessions-checks-body a[href] {
+	color: var(--ash-link-foreground);
+}
+
+.ash-sessions-checks-body a:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: var(--ash-spacing-size20);
+}

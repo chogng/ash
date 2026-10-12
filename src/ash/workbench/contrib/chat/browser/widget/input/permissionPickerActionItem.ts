@@ -21,6 +21,7 @@ export class PermissionPickerActionItem extends ChatInputPickerActionViewItem {
 
 	public override render(container: HTMLElement): void {
 		super.render(container);
+		this.element.classList.add('ash-chat-input-permission-picker');
 		const update = (): void => {
 			this.element.querySelector('.ash-button-label')!.textContent = this.action.label;
 			this.element.setAttribute('aria-label', this.action.tooltip);

@@ -25,7 +25,7 @@ import type { IEditorService } from "../../../../services/editor/common/editorSe
 import { URI } from "../../../../../base/common/uri.js";
 import { Schemas } from "../../../../../base/common/network.js";
 import { ASH_REMOTE_SCHEME, createSshRemoteWorkspaceUri, getRemoteWorkspacePath } from '../../../../../platform/remote/common/remote.js';
-import { OPEN_CHAT_SETTINGS_COMMAND_ID, OPEN_CHAT_PERMISSIONS_COMMAND_ID, OPEN_GUARDIAN_SETUP_COMMAND_ID } from "../../common/chat.js";
+import { OPEN_CHAT_CHANGES_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, OPEN_CHAT_PERMISSIONS_COMMAND_ID, OPEN_GUARDIAN_SETUP_COMMAND_ID } from "../../common/chat.js";
 import { OpenSettingsCommandId } from '../../../preferences/common/preferences.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ChatInputEditors } from './input/chatInputEditorRegistry.js';
@@ -112,6 +112,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 				? commandService.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID)
 				: this.model.executeServerCommand(invocation.name, invocation.argumentsText),
 			interrupt: () => this.model.interrupt(),
+			openChanges: () => commandService.executeCommand(OPEN_CHAT_CHANGES_COMMAND_ID, this.model.sessionId, this.model.threadId),
 			selectModel: (model) => this.model.selectModel(model),
 			selectReasoningEffort: effort => this.model.selectReasoningEffort(effort),
 			selectAutomaticModel: () => this.model.selectAutomaticModel(),

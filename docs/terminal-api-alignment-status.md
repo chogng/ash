@@ -16,7 +16,7 @@
 
 补充准入：crates/plugin/src/manifest/validation.rs 的闭合 activation enum 校验同步新变体，保持 capability ceiling 验证。
 
-补充准入：services/extensionHost/browser/extensionHostServiceRegistration.ts 显式声明其 Terminal 领域依赖，保证组合安装顺序。
+扩展宿主由 `api/browser/extensionHost.contribution.ts` 组合注册并显式声明 Terminal 领域依赖，保证 API bridge 的安装顺序。`services/extensionHost` 不再反向依赖 Terminal contribution。
 
 补充准入：services/extensionHost/common/extensionHostService.ts 的注册 kind 闭合枚举同步 terminalProfileProvider；测试入口为实际存在的 services/extensionHost/test/browser/appServerExtensionHostService.test.ts。
 

@@ -169,6 +169,8 @@ The desktop presentation may place the Auxiliary Bar inside the Editor's grid no
 
 Each visible session has one Sessions-owned view. The view presents the active chat for that session and scopes commands, menus, and context keys to the represented session.
 
+Conversation title tabs and document editor tabs use the shared WorkbenchTabsControl for presentation, sizing, scrolling and connected-tab geometry. Content activation, closing and ordering are delegated to their existing session or editor model; the shared control does not retain a second content model.
+
 Chat-tab presentation is a property of the session view, not of the action that opened a chat. The view observes its configuration directly and consistently applies either tabbed or session-view presentation to every chat, including restored chats and chats opened through navigation or external entry points.
 
 In the side-by-side presentation, ordinary opens replace the active group's conversation and retain its siblings. Explicit side-by-side opens add a group. Ash intentionally uses this policy instead of VS Code Agents' transient and pinned slot search.

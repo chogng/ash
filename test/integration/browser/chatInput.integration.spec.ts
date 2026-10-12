@@ -47,6 +47,9 @@ for (const locale of ['en', 'zh-CN']) {
 			const input = page.locator('.ash-chat-textarea-input');
 			await input.fill('Keep my draft');
 			const footer = page.locator('.ash-chat-secondary-toolbar');
+			const add = footer.getByRole('button', { name: locale === 'en' ? 'Add context' : '添加上下文', exact: true });
+			await expect(page.locator('.ash-chat-input-container').getByRole('button', { name: locale === 'en' ? 'Add context' : '添加上下文', exact: true })).toHaveCount(0);
+			await expect(add).toBeVisible();
 			const permissions = footer.getByRole('button', { name: locale === 'en' ? 'Permissions: Manual' : '权限：手动' });
 			const context = footer.getByRole('button', { name: locale === 'en' ? /^Context usage:/ : /^上下文用量：/ });
 			const status = footer.getByRole('button', { name: 'Extension status' });
@@ -69,7 +72,12 @@ for (const locale of ['en', 'zh-CN']) {
 			const composer = await page.locator('.ash-chat-input-container').boundingBox();
 			const footerBounds = await footer.boundingBox();
 			expect(footerBounds!.y).toBeGreaterThanOrEqual(composer!.y + composer!.height);
-			await permissions.focus();
+			const addBounds = (await add.boundingBox())!;
+			const permissionBounds = (await permissions.boundingBox())!;
+			expect(permissionBounds.x - (addBounds.x + addBounds.width)).toBe(4);
+			await add.focus();
+			await page.keyboard.press('ArrowRight');
+			await expect(permissions).toBeFocused();
 			await page.keyboard.press('Enter');
 			const picker = page.locator('.ash-action-widget');
 			await expect(picker).toBeVisible();
@@ -143,7 +151,7 @@ for (const locale of ['en', 'zh-CN']) {
 				await expect(context).toBeVisible();
 				await expect(status).toBeVisible();
 				const bounds = await footer.boundingBox();
-				for (const button of [context, status]) {
+				for (const button of [add, updatedPermissions, context, status]) {
 					const buttonBounds = await button.boundingBox();
 					expect(buttonBounds!.x + buttonBounds!.width).toBeLessThanOrEqual(bounds!.x + bounds!.width + 1);
 				}
@@ -960,4 +968,46 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(menu).toHaveCount(0);
 		await expect(trigger).toBeFocused();
 	});
+}
+
+for (const locale of ['en', 'zh-CN']) {
+	for (const theme of ['light', 'dark', 'hcLight', 'hcDark']) {
+		for (const surface of ['code', 'cowork']) {
+			test(`Chat changes button shows statistics above the input in ${locale} ${theme} ${surface}`, async ({ page }) => {
+				await page.goto(`/chatInput.html?locale=${locale}&theme=${theme}&surface=${surface}`);
+				await page.evaluate(() => window.ashChatInputIntegration.showModels());
+				const input = page.getByRole('textbox', { name: 'Chat message', exact: true });
+				await input.fill('Keep my draft');
+				const changes = page.locator('.ash-chat-changes-pill');
+				await expect(changes).toBeHidden();
+				await page.evaluate(() => window.ashChatInputIntegration.setChanges({ files: 3, additions: 677, deletions: 31 }));
+				await expect(changes).toBeVisible();
+				await expect(changes).toHaveText(locale === 'en' ? '3 files+677−31' : '3 个文件+677−31');
+				await expect(changes).toHaveAccessibleName(locale === 'en' ? 'Open Changes: 3 files, 677 lines added, 31 lines removed' : '打开变更：3 个文件，新增 677 行，删除 31 行');
+				for (const width of [240, 450]) {
+					await page.locator('main').evaluate((element, width) => { element.style.width = `${width}px`; }, width);
+					const button = (await changes.boundingBox())!;
+					const composer = (await page.locator('.ash-chat-input-container').boundingBox())!;
+					expect(button.y + button.height).toBeLessThanOrEqual(composer.y);
+					expect(button.x + button.width).toBeLessThanOrEqual(composer.x + composer.width);
+				}
+				if (locale === 'en' && theme === 'light' && surface === 'code') {
+					await page.locator('main').screenshot({ path: test.info().outputPath('chat-changes-button.png') });
+				}
+				await changes.focus();
+				await page.keyboard.press('Enter');
+				await expect(page.getByLabel('Opened sources')).toHaveText('[{"changes":true}]');
+				await expect(input).toHaveValue('Keep my draft');
+				await page.evaluate(() => window.ashChatInputIntegration.setChanges({ files: 1, additions: 2, deletions: 0 }));
+				await expect(changes).toHaveText(locale === 'en' ? '1 file+2−0' : '1 个文件+2−0');
+				await expect(changes).toBeFocused();
+				await page.keyboard.press('Space');
+				await expect(page.getByLabel('Opened sources')).toHaveText('[{"changes":true},{"changes":true}]');
+				await page.evaluate(() => window.ashChatInputIntegration.setChanges(undefined));
+				await expect(changes).toBeHidden();
+				await expect(input).toBeFocused();
+				await expect(input).toHaveValue('Keep my draft');
+			});
+		}
+	}
 }

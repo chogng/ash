@@ -7,11 +7,38 @@ import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPa
 import { CHANGES_VIEW_ID } from '../common/changes.js';
 import { ChangesViewPane } from './changesView.js';
 import { SessionChangesEditor } from './sessionChangesEditor.js';
+import { CreatePullRequestFocusedContext } from '../common/changes.js';
+import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
+import { isHTMLElement } from '../../../../base/browser/dom.js';
 
 /** Uses the live view or editor content and restores focus to its owning surface. */
 export function getSessionsChangesAccessibilityProviders(): readonly IAccessibleViewImplementation[] {
 	const providers: IAccessibleViewImplementation[] = [];
 	for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
+		providers.push({
+			type,
+			name: `sessionsCreatePullRequest.${type}`,
+			priority: 110,
+			when: CreatePullRequestFocusedContext.isEqualTo(true),
+			getProvider: accessor => {
+				const form = accessor.get(IContextViewService).container.querySelector<HTMLElement>('.ash-sessions-create-pr');
+				if (!form) { return undefined; }
+				const focused = form.ownerDocument.activeElement;
+				return new AccessibleContentProvider(AccessibleViewProviderId.SessionsChanges, { type }, () => {
+					if (!form.isConnected) { return localize('sessions.changes.prClosed', 'Pull request form closed.'); }
+					if (type === AccessibleViewType.Help) { return localize('sessions.changes.prHelp', 'Create pull request\nUse Tab and Shift+Tab to move between the title, target branch, description, Draft checkbox, merge mode and actions. Choose Create pull request to submit the displayed values. Escape or Cancel closes the form and returns focus. Changes to the session or GitHub account close the form. Creation checks the repository and branch again; a changed context requires reopening the form.') + '\n' + localize('sessions.changes.prAgentHelp', 'Choose Create directly to use GitHub, or Ask agent to create to submit the displayed title, description, branch and merge choice to this conversation. An active Turn queues the request. This uses normal agent permissions. Draft and merge choices are remembered for the profile and limited by the current repository. An unconfirmed submission disables retry; inspect the conversation or repository first.'); }
+					const fields = [...form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('input, textarea, select')].filter(field => !field.hidden);
+					const values = fields.map(field => {
+						let value = field.value;
+						if (field instanceof form.ownerDocument.defaultView!.HTMLInputElement && field.type === 'checkbox') {
+							value = field.checked ? localize('sessions.changes.prChecked', 'Checked') : localize('sessions.changes.prUnchecked', 'Unchecked');
+						}
+						return localize('sessions.changes.prField', '{0}: {1}', field.getAttribute('aria-label') ?? '', value);
+					});
+					return [form.textContent, ...values].join('\n');
+				}, () => { if (isHTMLElement(focused) && focused.isConnected) { focused.focus(); } }, AccessibilityVerbositySettingId.SessionsChanges);
+			},
+		});
 		providers.push({
 			type,
 			name: `sessionsChangesEditor.${type}`,
@@ -39,11 +66,12 @@ export function getSessionsChangesAccessibilityProviders(): readonly IAccessible
 			getProvider: accessor => {
 				const view = accessor.get(IViewsService).getViewWithId(CHANGES_VIEW_ID);
 				if (!(view instanceof ChangesViewPane)) { return undefined; }
+				const focused = view.element.ownerDocument.activeElement;
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsChanges,
 					{ type },
-					() => type === AccessibleViewType.View ? view.getAccessibleContent() : localize('sessions.changes.help', 'Changes\nUse the arrow keys to navigate changed files. Hold Shift to select several files, or use Command on macOS and Control on other platforms to add files to the selection. Press Enter to compare a file. Preview selected changes asks for a commit message and opens the final comparison. Commit this preview submits exactly the reviewed contents and message. Committed files remain readable; remaining files can be selected later. Press Alt+F2 to read the files, their Turn and selection state. Changes belong to the selected conversation.'),
-					() => view.focus(),
+					() => type === AccessibleViewType.View ? view.getAccessibleContent() : localize('sessions.changes.help', 'Changes\nUse the arrow keys to navigate changed files. Hold Shift to select several files, or use Command on macOS and Control on other platforms to add files to the selection. Press Enter to compare a file. Preview selected changes asks for a commit message and opens the final comparison. Commit this preview submits exactly the reviewed contents and message. Committed files remain readable; remaining files can be selected later. Press Alt+F2 to read the files, their Turn and selection state. Changes belong to the selected conversation.') + '\n' + localize('sessions.changes.reviewHelp', 'Choose All Turns or a specific Turn to filter files. Switch between List and Tree; use Left and Right arrows to collapse or expand folders. Select files and choose Mark reviewed or Mark unreviewed. Read markers belong to the exact Turn revision and do not change commit eligibility. Each conversation and view mode retains its selection, focus, expansion and scroll position while this window is open.') + '\n' + localize('sessions.changes.operationsHelp', 'Use Tab to reach the summary and actions. Retry loading changes reloads a failed list. Sync changes pulls and pushes the session repository; Publish branch publishes it. Review working tree opens live uncommitted changes. Create pull request opens an editable form; publish the source branch before creating the pull request. Checks shows all check runs and commit statuses for associated open pull requests. Enter or Space on Checks expands or collapses the list. Check links open the full results. Switching sessions or accounts clears old checks; hiding Changes cancels its reads.'),
+					() => { if (isHTMLElement(focused) && focused.isConnected && view.element.contains(focused)) { focused.focus(); } else { view.focus(); } },
 					AccessibilityVerbositySettingId.SessionsChanges,
 				);
 			},
