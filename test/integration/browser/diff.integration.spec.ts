@@ -1735,21 +1735,29 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		test(`hidden region edges reveal continuously without overlapping content (${locale}, ${mode})`, async ({ page }, testInfo) => {
 			await openDiffPage(page, locale);
 			const original = Array.from({ length: 80 }, (_, index) => `shared line ${index + 1}`);
-			const modified = original.map((line, index) => index === 0 || index >= 40 ? `changed ${line}` : line);
-			await page.evaluate(([left, right, inline]) => {
+			const modified = original.map((line, index) => index < 10 || index >= 40 ? `changed ${line}` : line);
+			await page.evaluate(([left, right, sideBySide]) => {
 				window.ashDiffIntegration.setTheme('vs');
 				window.ashDiffIntegration.setComparisonText(left, right);
 				window.ashDiffIntegration.setHiddenRegions(true);
-				window.ashDiffIntegration.setViewMode(inline, false, 900);
-			}, [original.join('\n'), modified.join('\n'), mode === 'inline'] as const);
+				window.ashDiffIntegration.setViewMode(sideBySide, false, 900);
+			}, [original.join('\n'), modified.join('\n'), mode !== 'inline'] as const);
 			await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
 			const host = page.locator(mode === 'multi' ? '#multi' : '#single');
-			const side = host.locator('.stanza-diff-editor-side.modified').first();
+			const sideName = locale === 'en' && mode !== 'inline' ? 'original' : 'modified';
+			const side = host.locator(`.stanza-diff-editor-side.${sideName}`).first();
 			const region = side.locator('.ash-diff-hidden-region').first();
 			const count = region.locator('.ash-diff-hidden-region-count');
 			const above = region.locator('.ash-diff-hidden-region-above');
 			const below = region.locator('.ash-diff-hidden-region-below');
+			await side.locator('.view-line').first().click();
+			if (mode === 'multi') {
+				await host.locator('.stanza-multi-diff-editor').evaluate(node => { node.scrollTop = 180; });
+			} else {
+				await page.evaluate(top => window.ashDiffIntegration.scrollModified(top), mode === 'inline' ? 300 : 100);
+			}
 			await expect(region).toBeVisible();
+			await expect(above).toBeInViewport();
 			const initial = Number((await count.textContent())!.match(/\d+/)![0]);
 			const lineHeight = await side.locator('.view-line').first().evaluate(node => parseFloat(getComputedStyle(node).lineHeight));
 			const geometry = await region.evaluate(node => {
@@ -1774,24 +1782,38 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await page.mouse.down();
 			await page.mouse.move(x, y + 2 * lineHeight, { steps: 4 });
 			await expect(count).toHaveText(localized(locale, `${initial - 2} hidden lines`, `隐藏 ${initial - 2} 行`));
+			await expect.poll(async () => (await above.boundingBox())!.y - start.y).toBe(2 * lineHeight);
 			expect(await retained!.evaluate(node => node.isConnected)).toBe(true);
 			await page.mouse.move(x, y + lineHeight);
 			await expect(count).toHaveText(localized(locale, `${initial - 1} hidden lines`, `隐藏 ${initial - 1} 行`));
+			await expect.poll(async () => (await above.boundingBox())!.y - start.y).toBe(lineHeight);
 			await page.mouse.up();
 			await expect(above).not.toHaveClass(/dragging/);
 			await expect(count).toHaveText(localized(locale, `${initial - 1} hidden lines`, `隐藏 ${initial - 1} 行`));
 			await retained!.dispose();
-			const lowerContext = side.locator('.view-line').filter({ hasText: 'changed shared line 41' }).first();
+			if (mode === 'multi') {
+				await host.locator('.stanza-multi-diff-editor').evaluate(node => { node.scrollTop = 180; });
+				await host.locator('.stanza-multi-diff-editor').focus();
+			}
+			const lowerContext = side.locator('.view-line').filter({ hasText: /^shared line 40$/ }).first();
 			const anchorTop = (await lowerContext.boundingBox())!.y - (await side.boundingBox())!.y;
 			const bottom = (await below.boundingBox())!;
+			const sideTop = (await side.boundingBox())!.y;
 			await page.mouse.move(x, bottom.y + bottom.height / 2);
 			await page.mouse.down();
 			await page.mouse.move(x, bottom.y + bottom.height / 2 - 2 * lineHeight, { steps: 4 });
 			await expect(count).toHaveText(localized(locale, `${initial - 3} hidden lines`, `隐藏 ${initial - 3} 行`));
+			await expect.poll(async () => (await below.boundingBox())!.y - (await side.boundingBox())!.y - (bottom.y - sideTop)).toBe(-2 * lineHeight);
+			await page.mouse.move(x, bottom.y + bottom.height / 2 - lineHeight);
+			await expect(count).toHaveText(localized(locale, `${initial - 2} hidden lines`, `隐藏 ${initial - 2} 行`));
+			await expect.poll(async () => (await below.boundingBox())!.y - (await side.boundingBox())!.y - (bottom.y - sideTop)).toBe(-lineHeight);
+			await page.mouse.move(x, bottom.y + bottom.height / 2 - 2 * lineHeight);
+			await expect(count).toHaveText(localized(locale, `${initial - 3} hidden lines`, `隐藏 ${initial - 3} 行`));
 			await page.mouse.up();
 			await expect.poll(async () => (await lowerContext.boundingBox())!.y - (await side.boundingBox())!.y).toBe(anchorTop);
 			if (mode !== 'inline') {
-				await expect(host.locator('.stanza-diff-editor-side.original .ash-diff-hidden-region-count').first()).toHaveText(await count.textContent() ?? '');
+				const otherSide = sideName === 'original' ? 'modified' : 'original';
+				await expect(host.locator(`.stanza-diff-editor-side.${otherSide} .ash-diff-hidden-region-count`).first()).toHaveText(await count.textContent() ?? '');
 			}
 			const revealCount = Number((await above.getAttribute('aria-label'))!.match(/\d+/)![0]);
 			await above.focus();
@@ -2640,6 +2662,11 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			.map(element => ({ id: element.getAttribute('data-statusbar-item-id'), left: element.getBoundingClientRect().left }))
 			.sort((a, b) => a.left - b.left).map(item => item.id));
 		expect(order).toEqual(['cursor', 'indentation', 'encoding', 'eol', 'language'].map(id => `ash.status.editor.${id}`));
+		const gaps = await status.locator('[data-statusbar-item-id^="ash.status.editor."] .ash-statusbar-item-label').evaluateAll(elements => {
+			const bounds = elements.map(element => element.getBoundingClientRect()).sort((a, b) => a.left - b.left);
+			return bounds.slice(1).map((bound, index) => bound.left - bounds[index]!.right);
+		});
+		expect(gaps).toEqual([6, 6, 6, 6]);
 		await editorInputs.last().focus();
 		await page.keyboard.press('ArrowRight');
 		await expect(cursor).toHaveText(localized(locale, 'Ln 1, Col 2', '行 1，列 2'));
@@ -2650,9 +2677,24 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await expect(eol.getByRole('button')).toHaveAttribute('aria-disabled', 'true');
 		await cursor.getByRole('button').focus();
 		await page.keyboard.press('Enter');
-		const gotoInput = page.locator('#title-comparison .stanza-editor-goto-line-widget.visible input');
+		const gotoInput = page.locator('.ash-quick-input-host input');
 		await expect(gotoInput).toBeFocused();
-		await gotoInput.fill('2:2');
+		await expect(gotoInput).toHaveValue(':');
+		await expect(gotoInput).toHaveAttribute('placeholder', localized(locale,
+			'Type a line number and optional column (e.g. :42:5), or ::1024 for a character offset. Negative values count backwards.',
+			'输入行号和可选的列号（例如 :42:5），或输入 ::1024 定位字符偏移量。负数从末尾向前计数。'));
+		await expect(page.locator('#title-comparison .stanza-editor-goto-line-widget.visible')).toHaveCount(0);
+		await gotoInput.fill(':2:2');
+		await expect(cursor).toHaveText(localized(locale, 'Ln 1, Col 3', '行 1，列 3'));
+		await page.keyboard.press('Escape');
+		await expect(editorInputs.first()).toBeFocused();
+		await expect(cursor).toHaveText(localized(locale, 'Ln 1, Col 3', '行 1，列 3'));
+		await cursor.getByRole('button').click();
+		await expect(gotoInput).toHaveValue(':');
+		await gotoInput.fill(':invalid');
+		await page.keyboard.press('Enter');
+		await expect(gotoInput).toBeFocused();
+		await gotoInput.fill(':2:2');
 		await page.keyboard.press('Enter');
 		await expect(cursor).toHaveText(localized(locale, 'Ln 2, Col 2', '行 2，列 2'));
 		await expect(editorInputs.first()).toBeFocused();
@@ -2684,9 +2726,14 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await cursor.getByRole('button').focus();
 		await page.keyboard.press('Enter');
 		await expect(gotoInput).toBeFocused();
-		await gotoInput.fill('2:3');
+		await gotoInput.fill(':-1:3');
 		await page.keyboard.press('Enter');
 		await expect(cursor).toHaveText(localized(locale, 'Ln 2, Col 3', '行 2，列 3'));
+		await expect(editorInputs.last()).toBeFocused();
+		await cursor.getByRole('button').click();
+		await gotoInput.fill('::8');
+		await page.keyboard.press('Enter');
+		await expect(cursor).toHaveText(localized(locale, 'Ln 2, Col 2', '行 2，列 2'));
 		await expect(editorInputs.last()).toBeFocused();
 		await language.focus();
 		await page.keyboard.press('Enter');

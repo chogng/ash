@@ -1,5 +1,10 @@
 {
   "ash": {
+    "gotoLineQuickAccess.noEditor": "打开文本编辑器以转到指定行或列。",
+    "gotoLineQuickAccess.location": "按 Enter 转到第 {0} 行，第 {1} 列。",
+    "gotoLineQuickAccess.offsetPrompt": "输入 1 到 {0} 之间的字符偏移量。",
+    "gotoLineQuickAccess.linePrompt": "输入 1 到 {0} 之间的行号和可选的列号。",
+    "gotoLineQuickAccess.placeholder": "输入行号和可选的列号（例如 :42:5），或输入 ::1024 定位字符偏移量。负数从末尾向前计数。",
     "url.trust.editorHelp": "在命令面板选择“管理可信域名”，可打开包含域名规则的 JSONC 数组。保存后应用更改；删除规则可撤销信任。无效规则和过期保存会被拒绝。打开不可信网页链接前会询问确认。使用 Tab 选择“打开”“复制”“配置可信域名”或“取消”，按 Enter 选择，按 Escape 取消。",
     "url.trust.conflict": "可信域名已更改。请重新加载文档后再保存。",
     "url.trust.invalidDocument": "可信域名必须是 JSONC 数组，最多包含 1024 个域名规则，大小不超过 64 KiB。",

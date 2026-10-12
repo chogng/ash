@@ -254,7 +254,7 @@ export class EditorStatusContribution extends Disposable implements IWorkbenchCo
 			return;
 		}
 		if (slot.value) slot.value.update(entry);
-		else slot.value = this.statusbar.addEntry(entry, { id, alignment: StatusbarAlignment.Right, priority, compactGroup: "editor" });
+		else slot.value = this.statusbar.addEntry(entry, { id, alignment: StatusbarAlignment.Right, priority });
 	}
 }
 

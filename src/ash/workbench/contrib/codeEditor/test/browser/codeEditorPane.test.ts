@@ -13,6 +13,11 @@ import { URI } from "../../../../../base/common/uri.js";
 import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../editor/common/core/range.js";
 import { TextEditorSelectionSource } from '../../../../../platform/editor/common/editor.js';
+import { QuickAccessController } from '../../../../../platform/quickinput/browser/quickAccess.js';
+import { QuickInputController } from '../../../../../platform/quickinput/browser/quickInputController.js';
+import { IQuickAccessController } from '../../../../../platform/quickinput/common/quickAccess.js';
+import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
+import { CommandService } from '../../../../services/commands/common/commandService.js';
 
 import { EditorPaneSelectionChangeReason } from '../../../../common/editor.js';
 import { TextFileContentSource, type ResolvedTextFileContent, type TextFileResolveRequest } from "../../../../services/textfile/common/textFileService.js";
@@ -275,28 +280,59 @@ test('open code editor applies live view settings and actions without replacing 
 	assert.equal(control.getOption(EditorOption.minimap).enabled, true);
 });
 
-test('Workbench Go to Line command opens the active editor dialog and focuses its input', async () => {
+test('Workbench Go to Line command opens colon Quick Access and commits the active editor position', async () => {
 	const dom = createTestDom('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using closeWindow = toDisposable(() => dom.window.close());
 	const parent = dom.window.document.querySelector<HTMLElement>('main')!;
-	const resourceStore = new BrowserTextResourceStore(new ImmediateTextFiles('first\nsecond'));
+	const resourceStore = new BrowserTextResourceStore(new ImmediateTextFiles(['first', 'second', ...Array.from({ length: 100 }, () => 'line')].join('\n')));
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
-	using services = paneServices(models);
+	using parentServices = paneServices(models);
+	using services = parentServices.createChild();
+	using commands = new CommandService(services);
+	services.registerInstance(ICommandService, commands);
+	using quickInput = new QuickInputController(dom.window.document.body);
+	services.registerInstance(IQuickInputService, quickInput);
+	using quickAccess = services.createInstance(QuickAccessController);
+	services.registerInstance(IQuickAccessController, quickAccess);
 	using pane = createPane(services, resourceStore, {
 		createPart: options => createBrowserEditorPart(services, options),
 		showUnicodeHighlights: false,
 	});
 	pane.create(parent);
+	pane.layout({ width: 600, height: 100 });
 	await pane.setInput({ resource: URI.file('/project/goto.ts') }, new AbortController().signal);
 	pane.focus();
 
 	await services.get(ICommandService).executeCommand('workbench.action.gotoLine');
-	const dialog = parent.querySelector<HTMLElement>('.stanza-editor-goto-line-widget');
-	const input = dialog?.querySelector<HTMLInputElement>('input');
-	assert.ok(dialog && input);
-	assert.equal(dialog.hidden, false);
+	const editor = pane.getControl();
+	assert.ok(editor instanceof CodeEditorWidget);
+	const input = dom.window.document.querySelector<HTMLInputElement>('.ash-quick-input-host input')!;
+	assert.ok(input);
+	assert.equal(input.value, ':');
 	assert.equal(dom.window.document.activeElement, input);
+	assert.equal(parent.querySelectorAll('.stanza-editor-goto-line-widget.visible').length, 0);
+	input.value = ':2:3';
+	input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+	assert.deepEqual(editor.getPosition(), new Position(1, 1));
+	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+	assert.deepEqual(editor.getPosition(), new Position(2, 3));
+	assert.ok(editor.hasTextFocus());
+
+	editor.setScrollTop(0);
+	await commands.executeCommand('workbench.action.gotoLine');
+	const preview = dom.window.document.querySelector<HTMLInputElement>('.ash-quick-input-host input')!;
+	preview.value = ':80';
+	preview.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+	assert.ok(editor.getScrollTop() > 0);
+	preview.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+	assert.equal(editor.getScrollTop(), 0);
+	assert.deepEqual(editor.getPosition(), new Position(2, 3));
+	assert.ok(editor.hasTextFocus());
+
+	await commands.executeCommand('workbench.action.gotoLine');
+	pane.clearInput();
+	assert.equal(quickInput.currentQuickInput, undefined);
 });
 
 test('Stanza editor pane switches files without leaving the old model, DOM, or keyboard focus behind', async () => {

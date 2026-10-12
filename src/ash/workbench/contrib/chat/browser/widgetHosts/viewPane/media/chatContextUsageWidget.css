@@ -1,0 +1,29 @@
+.ash-chat-context-usage-button {
+	gap: 0;
+}
+
+.ash-chat-context-usage-hover {
+	white-space: pre-line;
+}
+
+.ash-chat-context-usage-ring {
+	inline-size: var(--ash-lxiconFontSize);
+	block-size: var(--ash-lxiconFontSize);
+	flex-shrink: 0;
+	fill: none;
+	/* A capacity meter needs a legible arc at icon size. */
+	stroke-width: calc(2 * var(--ash-strokeThickness));
+	transform: rotate(-90deg);
+}
+
+.ash-chat-context-usage-track {
+	stroke: var(--ash-input-border);
+}
+
+.ash-chat-context-usage-value {
+	stroke: currentColor;
+}
+
+.ash-chat-context-usage-value.empty {
+	display: none;
+}

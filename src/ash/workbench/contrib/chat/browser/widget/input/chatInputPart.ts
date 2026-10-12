@@ -1,6 +1,3 @@
-import { Button } from '../../../../../../base/browser/ui/button/button.js';
-import { AnchorAlignment, AnchorPosition, ContextViewFocusRestore } from '../../../../../../base/browser/ui/contextview/contextview.js';
-import type { IManagedHover } from '../../../../../../base/browser/ui/hover/hoverDelegate.js';
 import type { SkillReference } from '../../../../../../platform/agentHost/common/appServerApi.js';
 import { ChatHistoryNavigator } from '../../../common/widget/chatWidgetHistoryService.js';
 import type { MessageHistoryEntry } from '../../../../../../platform/messageHistory/common/messageHistory.js';
@@ -11,7 +8,7 @@ import { ISpeechService, SpeechToTextState } from '../../../../speech/common/spe
 import { DictationActionViewItem } from '../../speechToText/dictationActionViewItem.js';
 import { DictationSession } from '../../speechToText/dictationSession.js';
 import { IDictationOnboardingService } from '../../speechToText/dictationOnboarding.js';
-import { addDisposableListener, h, isNode, svg, stopEvent } from "../../../../../../base/browser/dom.js";
+import { addDisposableListener, h, stopEvent } from "../../../../../../base/browser/dom.js";
 import { ActionViewItem, ButtonActionViewItem } from "../../../../../../base/browser/ui/actionbar/actionViewItems.js";
 import type { IAction } from "../../../../../../base/common/actions.js";
 import { Separator } from "../../../../../../base/common/actions.js";
@@ -49,9 +46,9 @@ import { ChatInputEditors, type IChatInputEditor, type IChatInputEditorProvider 
 import { ChatInputPickerResponsiveLayout } from './chatInputPickerResponsiveLayout.js';
 import { ModelPickerActionItem } from './modelPicker/modelPickerActionItem.js';
 import { approvalModeDefinition, approvalModeDefinitions } from '../../../../../../platform/sessions/common/approvalModes.js';
-import type { ChatContextUsage } from '../../../../../services/chat/common/chatService.js';
 import type { Event } from '../../../../../../base/common/event.js';
 import { ModePickerActionItem, type ChatInputMode } from './modePickerActionItem.js';
+import { ChatContextUsageWidget } from '../../widgetHosts/viewPane/chatContextUsageWidget.js';
 
 type ChatInputToolbarPresentation = "mode" | "model" | "mic" | "voice" | "send" | "interrupt";
 
@@ -136,7 +133,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private readonly footerPicker = this._register(new MutableDisposable<DisposableStore>());
 	private footerContextToolbar: WorkbenchToolBar | undefined;
 	private footerContextAction: IAction | undefined;
-	private contextUsageViewItem: ChatContextUsageActionViewItem | undefined;
+	private contextUsageWidget: ChatContextUsageWidget | undefined;
 	// Retaining this action keeps the open picker and its focused switch alive when the selection changes.
 	private readonly modelAction = new ChatInputAction('ash.chat.input.model', '', '', undefined, true, 'model', () => { });
 	private readonly modelPickerPresentationChanged = this._register(new Emitter<void>());
@@ -214,20 +211,12 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.inputContainer.append(this.attachmentList, editorHost, this.inputToolbar.element);
 		this.secondaryToolbarContainer = options.renderSecondaryToolbar === false
 			? undefined
-			: this.createSecondaryToolbar(contextMenuService, contextViewService, menuService);
+			: this.createSecondaryToolbar(contextMenuService, menuService);
 		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			this._register(AccessibleViewRegistry.register({
 				type, priority: 95, name: `chatAttachments-${type}-${createUuid()}`,
 				getProvider: () => {
 					const focused = this.element.ownerDocument.activeElement as HTMLElement | null;
-					const details = this.contextUsageViewItem?.detailsElement;
-					if (focused && details?.contains(focused)) {
-						const detailsText = details.innerText;
-						return new AccessibleContentProvider(AccessibleViewProviderId.SessionsChat, { type }, () => type === AccessibleViewType.View
-							? detailsText
-							: localize('chat.input.contextDetailsHelp', 'Context usage details show the estimated token count and a breakdown by category. Percentages use the model context capacity. The unsent draft is excluded. Unknown capacity shows token counts without percentages. Press Escape or activate Close to return to the context ring. Tab leaves the details.'),
-							() => details.isConnected ? details.focus() : this.contextUsageViewItem?.focus(), AccessibilityVerbositySettingId.Chat);
-					}
 					const footerFocused = focused && this.secondaryToolbarContainer?.contains(focused);
 					if (!focused || (!footerFocused && !this.input.element.contains(focused) && !this.attachmentList.contains(focused) && !this.inputToolbar.element.querySelector('[data-action-id="ash.chat.input.attach"]')?.contains(focused))) { return undefined; }
 					if (footerFocused && type === AccessibleViewType.View) { return undefined; }
@@ -535,9 +524,12 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 	setVisible(visible: boolean): void {
 		this.visible = visible;
-		if (visible) this.input.layout();
+		if (visible) {
+			this.input.layout();
+			this.contextUsageWidget?.update(this.state.contextUsage);
+		}
 		if (!visible) {
-			this.contextUsageViewItem?.hideDetails();
+			this.contextUsageWidget?.hide();
 			this.history.invalidatePending();
 			this.historySearch.clear();
 			this.footerPicker.clear();
@@ -706,7 +698,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		}
 	}
 
-	private createSecondaryToolbar(contextMenus: IContextMenuService, contextViews: IContextViewService, menuService: IMenuService): HTMLElement {
+	private createSecondaryToolbar(contextMenus: IContextMenuService, menuService: IMenuService): HTMLElement {
 		const container = h(this.element.ownerDocument, 'div');
 		container.className = 'ash-chat-secondary-toolbar';
 		const owner = this;
@@ -732,29 +724,17 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		secondaryToolbar.element.classList.add('ash-chat-secondary-input-toolbar');
 		this.footerContextAction = {
 			id: 'ash.chat.input.contextUsage',
-			get label() {
-				const usage = owner.state.contextUsage;
-				if (!usage) return localize('chat.input.contextUsage', 'Context usage');
-				return usage.contextWindow && usage.contextWindow > 0
-					? localize('chat.input.contextRingLabel', 'Context usage: {0}%, {1} of {2} tokens', Math.round(usage.estimatedTokens / usage.contextWindow * 100), usage.estimatedTokens.toLocaleString(), usage.contextWindow.toLocaleString())
-					: localize('chat.input.contextRingUnknownLabel', 'Context usage: {0} tokens, capacity unavailable', usage.estimatedTokens.toLocaleString());
-			},
-			get tooltip() {
-				const usage = owner.state.contextUsage;
-				if (!usage) return this.label;
-				return usage.contextWindow && usage.contextWindow > 0
-					? localize('chat.input.contextRingHover', 'Context usage: {0}%\nEstimated tokens: {1} / {2}', Math.round(usage.estimatedTokens / usage.contextWindow * 100), usage.estimatedTokens.toLocaleString(), usage.contextWindow.toLocaleString())
-					: localize('chat.input.contextRingUnknownHover', 'Estimated context: {0} tokens\nContext capacity is unavailable.', usage.estimatedTokens.toLocaleString());
-			},
+			label: localize('chat.input.contextUsage', 'Context usage'), tooltip: '',
 			get enabled() { return owner.state.contextUsage !== undefined; },
-			run: () => this.contextUsageViewItem?.toggleDetails(),
+			run: () => this.contextUsageWidget?.showDetails(),
 		};
 		this.footerContextToolbar = this._register(new WorkbenchToolBar(container, contextMenus, {
 			ariaLabel: localize('chat.input.contextUsage', 'Context usage'),
 			presentation: 'inherit-foreground',
 			actionViewItemProvider: action => {
-				this.contextUsageViewItem = new ChatContextUsageActionViewItem(action, this.footerChanged.event, () => this.state.contextUsage, contextViews);
-				return this.contextUsageViewItem;
+				const widget = this.instantiationService.createInstance(ChatContextUsageWidget, this.element.ownerDocument);
+				this.contextUsageWidget = widget;
+				return new ChatContextUsageActionViewItem(action, widget);
 			},
 		}));
 		this.footerContextToolbar.element.classList.add('ash-chat-input-context-toolbar');
@@ -781,6 +761,12 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		if (!this.footerContextToolbar || !this.footerContextAction) return;
 		const hasUsage = this.state.contextUsage !== undefined;
 		this.footerContextToolbar.setActions(hasUsage ? [this.footerContextAction] : []);
+		if (hasUsage) {
+			this.contextUsageWidget?.update(this.state.contextUsage);
+			if (!this.visible) this.contextUsageWidget?.hide();
+		} else {
+			this.contextUsageWidget = undefined;
+		}
 		this.footerContextToolbar.element.hidden = !hasUsage;
 		this.footerContextToolbar.element.classList.toggle('empty', !hasUsage);
 		this.status.title = this.status.textContent ?? '';
@@ -1037,194 +1023,22 @@ function sameModel(left: ModelRef | undefined, right: ModelRef | undefined): boo
 	return left === right || (left !== undefined && right !== undefined && left.provider === right.provider && left.model === right.model);
 }
 
-/** Owns the decorative meter and its anchored details; usage remains in the input model. */
+/** Mounts the context widget in the ActionBar's focus and disposal lifecycle. */
 class ChatContextUsageActionViewItem extends ActionViewItem {
-	private button: Button | undefined;
-	private hover: IManagedHover | undefined;
-	private readonly detailsResources = this._register(new MutableDisposable<DisposableStore>());
-	private detailsRoot: HTMLElement | undefined;
-	private detailsBody: HTMLElement | undefined;
-
-	constructor(action: IAction, private readonly onDidChange: Event<void>, private readonly getUsage: () => ChatContextUsage | undefined, private readonly contextViews: IContextViewService) {
+	constructor(action: IAction, private readonly widget: ChatContextUsageWidget) {
 		super(action);
-		this._register(toDisposable(() => this.hideDetails()));
+		this._register(widget);
 	}
-
-	get detailsElement(): HTMLElement | undefined { return this.detailsRoot; }
 
 	override render(container: HTMLElement): void {
 		container.classList.add('icon');
-		const button = this.createButton(container, {
-			label: '', iconOnly: true, ariaLabel: this.action.label,
-			enabled: this.action.enabled, onClick: () => this.action.run(),
-		});
-		button.domNode.classList.add('ash-chat-context-usage-button');
-		button.domNode.setAttribute('aria-haspopup', 'dialog');
-		button.domNode.setAttribute('aria-expanded', 'false');
-		this.button = button;
-		const document = container.ownerDocument;
-		const ring = svg(document, 'svg', { attributes: { viewBox: '0 0 16 16', 'aria-hidden': 'true', focusable: 'false' } });
-		ring.classList.add('ash-chat-context-usage-ring');
-		const track = svg(document, 'circle', { attributes: { cx: '8', cy: '8', r: '6', pathLength: '100' } });
-		track.classList.add('ash-chat-context-usage-track');
-		const value = svg(document, 'circle', { attributes: { cx: '8', cy: '8', r: '6', pathLength: '100' } });
-		value.classList.add('ash-chat-context-usage-value');
-		ring.append(track, value);
-		button.domNode.append(ring);
-		this.hover = this.setupHover(button.domNode, this.action.tooltip);
-		const update = (): void => {
-			const usage = this.getUsage();
-			const capacity = usage?.contextWindow;
-			const percentage = usage && capacity !== undefined && capacity > 0 ? usage.estimatedTokens / capacity * 100 : undefined;
-			const filled = percentage !== undefined ? Math.min(100, Math.max(0, percentage)) : 0;
-			value.classList.toggle('empty', filled === 0);
-			value.setAttribute('stroke-dasharray', `${filled} ${100 - filled}`);
-			button.enabled = this.action.enabled;
-			button.domNode.setAttribute('aria-label', this.action.label);
-			this.hover?.update(this.detailsRoot ? undefined : this.action.tooltip);
-			if (usage && this.detailsBody) this.renderDetails(this.detailsBody, usage);
-			else if (!usage) this.hideDetails();
-		};
-		this._register(this.onDidChange(update));
-		update();
+		container.append(this.widget.domNode);
 	}
 
-	toggleDetails(): void {
-		if (this.detailsRoot) {
-			this.hideDetails();
-			return;
-		}
-		const button = this.button;
-		const usage = this.getUsage();
-		if (!button || !usage || this.isDisposed) return;
-		const resources = new DisposableStore();
-		const document = button.domNode.ownerDocument;
-		const root = h(document, 'div');
-		root.className = 'ash-chat-context-details';
-		root.id = createUuid();
-		root.tabIndex = 0;
-		root.setAttribute('role', 'dialog');
-		root.setAttribute('aria-modal', 'false');
-		root.setAttribute('aria-label', localize('chat.input.contextUsage', 'Context usage'));
-		const header = h(document, 'div');
-		header.className = 'ash-chat-context-details-header';
-		const title = h(document, 'h3');
-		title.textContent = localize('chat.input.contextUsage', 'Context usage');
-		const close = resources.add(new Button(header, {
-			label: '', icon: Lxicon.close, iconOnly: true, size: 'small',
-			ariaLabel: localize('chat.input.contextClose', 'Close context usage details'),
-			onClick: () => this.hideDetails(),
-		}));
-		header.prepend(title);
-		close.domNode.classList.add('ash-chat-context-details-close');
-		const body = h(document, 'div');
-		root.append(header, body);
-		this.renderDetails(body, usage);
-		resources.add(addDisposableListener(root, 'focusout', event => {
-			if (!isNode(event.relatedTarget) || (!root.contains(event.relatedTarget) && event.relatedTarget !== button.domNode)) this.hideDetails();
-		}));
-		this.detailsResources.value = resources;
-		this.detailsRoot = root;
-		this.detailsBody = body;
-		this.hover?.hide();
-		this.hover?.update(undefined);
-		button.focus();
-		button.domNode.setAttribute('aria-controls', root.id);
-		button.domNode.setAttribute('aria-expanded', 'true');
-		const shown = this.contextViews.show({
-			anchor: button.domNode, content: root,
-			anchorPosition: AnchorPosition.Above, anchorAlignment: AnchorAlignment.Right,
-			presentation: 'default', focusRestore: ContextViewFocusRestore.Previous,
-			onHide: () => {
-				this.detailsRoot = undefined;
-				this.detailsBody = undefined;
-				this.detailsResources.clear();
-				button.domNode.setAttribute('aria-expanded', 'false');
-				button.domNode.removeAttribute('aria-controls');
-				this.hover?.update(this.action.tooltip);
-			},
-		});
-		if (shown) root.focus({ preventScroll: true });
-	}
-
-	hideDetails(): void {
-		if (this.detailsRoot) this.contextViews.hide();
-	}
-
-	private renderDetails(body: HTMLElement, usage: ChatContextUsage): void {
-		const document = body.ownerDocument;
-		const capacity = usage.contextWindow && usage.contextWindow > 0 ? usage.contextWindow : undefined;
-		const categoryLabels = {
-			systemPrompt: localize('chat.input.context.systemPrompt', 'System prompt'),
-			systemTools: localize('chat.input.context.systemTools', 'Tools'),
-			memoryFiles: localize('chat.input.context.memoryFiles', 'Memory files'),
-			skills: localize('chat.input.context.skills', 'Skills'),
-			conversation: localize('chat.input.context.conversation', 'Conversation'),
-		};
-		body.replaceChildren();
-		const summary = h(document, 'p');
-		summary.className = 'ash-chat-context-details-summary';
-		summary.textContent = capacity !== undefined
-			? localize('chat.input.contextSummary', '{0} / {1} tokens · {2}%', usage.estimatedTokens.toLocaleString(), capacity.toLocaleString(), Math.round(usage.estimatedTokens / capacity * 100))
-			: localize('chat.input.contextSummaryUnknown', '{0} tokens · Capacity unavailable', usage.estimatedTokens.toLocaleString());
-		const bar = h(document, 'div');
-		bar.className = 'ash-chat-context-details-bar';
-		bar.setAttribute('aria-hidden', 'true');
-		if (capacity !== undefined) {
-			for (const { category, tokens } of usage.categories) {
-				const segment = h(document, 'span');
-				segment.className = 'ash-chat-context-category';
-				segment.dataset.category = category;
-				segment.style.width = `${Math.min(100, tokens / capacity * 100)}%`;
-				bar.append(segment);
-			}
-		}
-		const table = h(document, 'table');
-		table.className = 'ash-chat-context-details-table';
-		table.setAttribute('aria-label', localize('chat.input.contextBreakdown', 'Context breakdown'));
-		const tableHead = table.createTHead().insertRow();
-		const headings = [localize('chat.input.contextCategoryHeading', 'Category'), localize('chat.input.contextTokensHeading', 'Tokens')];
-		if (capacity !== undefined) headings.push(localize('chat.input.contextShareHeading', 'Capacity share'));
-		for (const label of headings) {
-			const heading = h(document, 'th');
-			heading.scope = 'col';
-			heading.textContent = label;
-			tableHead.append(heading);
-		}
-		const rows = table.createTBody();
-		const appendRow = (label: string, tokens: number, category?: string): void => {
-			const row = rows.insertRow();
-			const heading = h(document, 'th');
-			heading.scope = 'row';
-			const marker = h(document, 'span');
-			marker.className = 'ash-chat-context-category ash-chat-context-details-marker';
-			marker.dataset.category = category ?? 'remaining';
-			marker.setAttribute('aria-hidden', 'true');
-			heading.append(marker, document.createTextNode(label));
-			row.append(heading);
-			row.insertCell().textContent = tokens.toLocaleString();
-			if (capacity !== undefined) row.insertCell().textContent = `${(tokens / capacity * 100).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`;
-		};
-		for (const { category, tokens } of usage.categories) appendRow(categoryLabels[category], tokens, category);
-		if (capacity !== undefined) appendRow(localize('chat.input.contextRemaining', 'Remaining space'), Math.max(0, capacity - usage.estimatedTokens));
-		const notes = h(document, 'div');
-		notes.className = 'ash-chat-context-details-notes';
-		const addNote = (text: string): void => {
-			const note = h(document, 'p');
-			note.textContent = text;
-			notes.append(note);
-		};
-		if (usage.model) addNote(localize('chat.input.contextModel', 'Model: {0}/{1}', usage.model.provider, usage.model.model));
-		if (usage.autoCompactAt !== undefined) addNote(localize('chat.input.contextCompaction', 'Automatic compaction at: {0} tokens', usage.autoCompactAt.toLocaleString()));
-		if (usage.latestRequestTokens !== undefined) addNote(localize('chat.input.contextLatest', 'Latest request measurement: {0} tokens', usage.latestRequestTokens.toLocaleString()));
-		addNote(localize('chat.input.contextDraft', 'The unsent draft is not included in this estimate.'));
-		body.append(summary, bar, table, notes);
-	}
-
-	override focus(): void { this.button?.focus(); }
+	override focus(): void { this.widget.domNode.focus(); }
 
 	override setTabbable(tabbable: boolean): void {
-		if (this.button) this.button.domNode.tabIndex = tabbable ? 0 : -1;
+		this.widget.domNode.tabIndex = tabbable ? 0 : -1;
 	}
 }
 

@@ -2,6 +2,44 @@ import { expect, test } from '@playwright/test';
 
 for (const locale of ['en', 'zh-CN']) {
 	for (const theme of ['light', 'dark', 'hcLight', 'hcDark']) {
+		test(`Context usage hover keeps two lines in ${locale} ${theme}`, async ({ page }) => {
+			await page.goto(`/chatInput.html?contextHover=1&locale=${locale}&theme=${theme}`);
+			await page.evaluate(() => window.ashChatInputIntegration.showModels());
+			await page.locator('main').evaluate(element => { element.style.width = '450px'; element.style.marginTop = '420px'; });
+			const context = page.getByRole('button', { name: locale === 'en' ? /^Context usage:/ : /^上下文用量：/ });
+			await context.hover();
+			const hover = page.getByRole('tooltip').locator('.ash-chat-context-usage-hover');
+			for (const known of [true, false]) {
+				if (!known) await page.evaluate(() => window.ashChatInputIntegration.setContextUsage(true));
+				await expect(hover).toBeVisible();
+				const lines = known
+					? locale === 'en' ? ['Context usage: 20%', 'Estimated tokens: 200 / 1,000'] : ['上下文占用：20%', '估算 token 数：200 / 1,000']
+					: locale === 'en' ? ['Estimated context: 200 tokens', 'Context capacity unavailable.'] : ['上下文估算：200 个 token', '容量未知'];
+				await expect(hover).toHaveText(lines.join('\n'));
+				await expect(hover).toHaveCSS('white-space', 'pre-line');
+				const linePositions = await hover.evaluate(element => {
+					const text = element.firstChild!;
+					const split = element.textContent!.indexOf('\n');
+					const first = element.ownerDocument.createRange();
+					first.setStart(text, 0);
+					first.setEnd(text, split);
+					const second = element.ownerDocument.createRange();
+					second.setStart(text, split + 1);
+					second.setEnd(text, text.textContent!.length);
+					return { first: first.getBoundingClientRect().top, second: second.getBoundingClientRect().top };
+				});
+				expect(linePositions.second).toBeGreaterThan(linePositions.first);
+				if (!known) await expect(hover).not.toContainText('%');
+			}
+			await context.click();
+			await expect(page.getByRole('tooltip')).toBeHidden();
+			await expect(page.getByRole('dialog', { name: locale === 'en' ? 'Context usage' : '上下文用量' })).toBeVisible();
+		});
+	}
+}
+
+for (const locale of ['en', 'zh-CN']) {
+	for (const theme of ['light', 'dark', 'hcLight', 'hcDark']) {
 		test(`Chat footer actions stay below the input and accept keyboard commands in ${locale} ${theme}`, async ({ page }) => {
 			await page.goto(`/chatInput.html?footerStatus=1&locale=${locale}&theme=${theme}`);
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
@@ -44,6 +82,9 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect(details).toBeFocused();
 			await expect(context).toHaveAttribute('aria-expanded', 'true');
 			await expect(details.locator('.ash-chat-context-details-summary')).toHaveText(locale === 'en' ? '200 / 1,000 tokens · 20%' : '200 / 1,000 个 token · 20%');
+			const accessibleDetails = await page.evaluate(() => window.ashChatInputIntegration.contextAccessibility());
+			expect(accessibleDetails.content).toContain(locale === 'en' ? '200 / 1,000 tokens · 20%' : '200 / 1,000 个 token · 20%');
+			expect(accessibleDetails.help).toContain('Escape');
 			await expect(details.getByRole('rowheader', { name: locale === 'en' ? 'Remaining space' : '剩余空间' }).locator('..')).toContainText('800');
 			const detailsBounds = (await details.boundingBox())!;
 			const contextBounds = (await context.boundingBox())!;
@@ -86,14 +127,24 @@ for (const locale of ['en', 'zh-CN']) {
 			}
 			await page.evaluate(() => window.ashChatInputIntegration.removeFooterStatus());
 			await expect(status).toHaveCount(0);
+			await context.click();
+			await expect(details).toBeVisible();
+			await page.evaluate(() => window.ashChatInputIntegration.setVisible(false));
+			await expect(details).toHaveCount(0);
+			await expect(context).toBeHidden();
+			await page.evaluate(() => window.ashChatInputIntegration.setVisible(true));
+			await expect(context).toBeVisible();
+			await context.click();
+			await expect(details).toBeVisible();
 			await page.evaluate(() => window.ashChatInputIntegration.setContextUsage(false));
+			await expect(details).toHaveCount(0);
 			await expect(context).toHaveCount(0);
 			await page.evaluate(() => window.ashChatInputIntegration.setContextUsage(true));
 			await expect(context).toHaveAttribute('aria-label', locale === 'en' ? 'Context usage: 200 tokens, capacity unavailable' : '上下文用量：200 个 token，容量未知');
 			await expect(ring.locator('.ash-chat-context-usage-track')).toHaveCSS('stroke-dasharray', 'none');
 			await expect(ring.locator('.ash-chat-context-usage-value')).toHaveAttribute('stroke-dasharray', '0 100');
 			await expect(ring.locator('.ash-chat-context-usage-value')).toBeHidden();
-			await expect(context).toHaveAttribute('title', locale === 'en' ? 'Estimated context: 200 tokens\nContext capacity is unavailable.' : '上下文估算：200 个 token\n无法获取上下文容量。');
+			await expect(context).toHaveAttribute('title', locale === 'en' ? 'Estimated context: 200 tokens\nContext capacity unavailable.' : '上下文估算：200 个 token\n容量未知');
 			await expect(context).not.toHaveAttribute('aria-label', /%/);
 			await context.click();
 			await expect(details).toBeVisible();

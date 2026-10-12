@@ -74,9 +74,13 @@ import { IHostService } from '../../../src/ash/workbench/services/host/browser/h
 import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
 import { IChatService } from '../../../src/ash/workbench/services/chat/common/chatService.js';
 import { IGitHubService } from '../../../src/ash/platform/github/common/githubService.js';
+import { AccessibleViewRegistry } from '../../../src/ash/platform/accessibility/browser/accessibleViewRegistry.js';
+import { AccessibleViewType } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
+import { HoverService } from '../../../src/ash/platform/hover/browser/hoverService.js';
+import { setHoverDelegate } from '../../../src/ash/base/browser/ui/hover/hoverDelegate.js';
 
 declare global {
-	interface Window { ashChatInputIntegration: { setFooterPhase(phase: ChatInputState['phase'], error?: string): void; setContextUsage(available: boolean, capacity?: number, estimatedTokens?: number): void; setFooterStatus(visible: boolean): void; removeFooterStatus(): void; historyState(): unknown; holdNextHistoryRead(): void; releaseHistorySearch(query: string): void; addHistoryContext(): void; setHistorySkill(digest: string): void; refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; restoreCapturedDraft(): Promise<void>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; }; }
+	interface Window { ashChatInputIntegration: { setVisible(visible: boolean): void; contextAccessibility(): { help: string | undefined; content: string | undefined; }; setFooterPhase(phase: ChatInputState['phase'], error?: string): void; setContextUsage(available: boolean, capacity?: number, estimatedTokens?: number): void; setFooterStatus(visible: boolean): void; removeFooterStatus(): void; historyState(): unknown; holdNextHistoryRead(): void; releaseHistorySearch(query: string): void; addHistoryContext(): void; setHistorySkill(digest: string): void; refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; restoreCapturedDraft(): Promise<void>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; }; }
 }
 
 const locale = new URLSearchParams(location.search).get('locale');
@@ -399,6 +403,14 @@ errorOutput.setAttribute('aria-label', 'Context error');
 document.body.append(errorOutput);
 resources.add(notifications.onDidAdd(item => { errorOutput.textContent = item.message; }));
 
+if (new URLSearchParams(location.search).has('contextHover')) {
+	const hover = resources.add(new HoverService(services.get(IConfigurationService), services.get(IContextViewService), {
+		contextMenuStyle: 'custom',
+		showContextMenu: () => { }, hideContextMenu: () => { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
+	}));
+	resources.add(setHoverDelegate(hover));
+}
+
 const delegate: ChatInputDelegate = {
 	send: async (_text, _mode, _skills, contexts) => {
 		historySubmissions.push({ text: _text, skills: _skills });
@@ -468,6 +480,20 @@ function renderModels(): void {
 }
 part.render(state);
 window.ashChatInputIntegration = {
+	setVisible: visible => part.setVisible(visible),
+	contextAccessibility: () => {
+		const content = (type: AccessibleViewType): string | undefined => {
+			for (const entry of AccessibleViewRegistry.getImplementations()) {
+				if (entry.type !== type || !entry.name.startsWith('chatContextUsage-')) continue;
+				const provider = entry.getProvider(services);
+				if (!provider) continue;
+				try { return provider.provideContent(); }
+				finally { provider.dispose(); }
+			}
+			return undefined;
+		};
+		return { help: content(AccessibleViewType.Help), content: content(AccessibleViewType.View) };
+	},
 	setFooterPhase: (phase, error) => { state = { ...state, phase, error, interaction: undefined }; part.render(state); },
 	setContextUsage: (available, capacity, estimatedTokens = 200) => { state = { ...state, contextUsage: available ? { estimatedTokens, contextWindow: capacity, categories: sampleContextCategories(estimatedTokens), latestRequestTokens: 180 } : undefined, interaction: undefined }; part.render(state); },
 	setFooterStatus: visible => footerStatusVisible.set(visible),

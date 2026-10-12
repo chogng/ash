@@ -305,7 +305,7 @@
     "chat.input.contextRingLabel": "上下文用量：{0}%，{1} / {2} 个 token",
     "chat.input.contextRingUnknownLabel": "上下文用量：{0} 个 token，容量未知",
     "chat.input.contextRingHover": "上下文占用：{0}%\n估算 token 数：{1} / {2}",
-    "chat.input.contextRingUnknownHover": "上下文估算：{0} 个 token\n无法获取上下文容量。",
+    "chat.input.contextRingUnknownHover": "上下文估算：{0} 个 token\n容量未知",
     "chat.input.contextUsage": "上下文用量",
     "chat.input.contextClose": "关闭上下文用量明细",
     "chat.input.contextSummary": "{0} / {1} 个 token · {2}%",

@@ -342,6 +342,8 @@ export class HideUnchangedRegionsFeature extends Disposable {
 			if (event.button !== 0) { return; }
 			event.preventDefault();
 			event.stopPropagation();
+			// Multi-diff forwards scroll anchoring only from the focused child editor.
+			editor.focus();
 			this.drag.clear();
 			const drag = new DisposableStore();
 			this.drag.value = drag;

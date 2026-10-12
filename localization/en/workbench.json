@@ -1,5 +1,10 @@
 {
   "ash": {
+    "gotoLineQuickAccess.noEditor": "Open a text editor to go to a line or column.",
+    "gotoLineQuickAccess.location": "Press Enter to go to line {0}, column {1}.",
+    "gotoLineQuickAccess.offsetPrompt": "Type a character offset from 1 to {0}.",
+    "gotoLineQuickAccess.linePrompt": "Type a line number from 1 to {0} and an optional column.",
+    "gotoLineQuickAccess.placeholder": "Type a line number and optional column (e.g. :42:5), or ::1024 for a character offset. Negative values count backwards.",
     "url.trust.editorHelp": "Manage Trusted Domains in the Command Palette opens a JSONC array of domain rules. Save to apply changes; remove rules to revoke trust. Invalid rules and stale saves are rejected. Untrusted web links ask before opening. Use Tab to choose Open, Copy, Configure Trusted Domains, or Cancel, Enter to select, and Escape to cancel.",
     "url.trust.conflict": "Trusted domains changed. Reload the document before saving.",
     "url.trust.invalidDocument": "Trusted domains must be a JSONC array of at most 1024 domain patterns, within 64 KiB.",

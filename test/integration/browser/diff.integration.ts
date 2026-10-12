@@ -257,6 +257,8 @@ function createSessionChangesPane(): SessionChangesEditor {
 import '../../../src/ash/editor/contrib/indentation/browser/indentation.js';
 import '../../../src/ash/editor/contrib/quickAccess/browser/quickAccessController.js';
 import '../../../src/ash/workbench/contrib/codeEditor/browser/quickaccess/gotoLineQuickAccess.js';
+import { QuickAccessController } from '../../../src/ash/platform/quickinput/browser/quickAccess.js';
+import { IQuickAccessController } from '../../../src/ash/platform/quickinput/common/quickAccess.js';
 import { EditorStatusContribution, ChangeLanguageAction, ChangeEOLAction, ChangeEncodingAction } from '../../../src/ash/workbench/browser/parts/editor/editorStatus.js';
 import { StatusbarService } from '../../../src/ash/workbench/services/statusbar/browser/statusbar.js';
 import { StatusbarPart } from '../../../src/ash/workbench/browser/parts/statusbar/statusbarPart.js';
@@ -321,6 +323,7 @@ const harness = {
 		services.registerInstance(IDialogService, dialogs);
 		resources.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(document.body)));
 		registerCodeEditorServices(services);
+		services.registerSingleton(IQuickAccessController, () => resources.add(services.createInstance(QuickAccessController)));
 		resources.add(services.get(ILanguageService).registerLanguage({ id: 'status-language', aliases: ['Status Language'] }));
 		services.registerInstance(IMultiDiffSourceResolverService, new MultiDiffSourceResolverService());
 		if (kind === 'git') {
