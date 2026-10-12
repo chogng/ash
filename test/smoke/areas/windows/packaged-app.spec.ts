@@ -38,7 +38,7 @@ test('Desktop package omits standalone Node and retains its Electron binding aft
 	for (const name of ['ASH_ELECTRON_RUN_AS_NODE_PATH', 'ASH_ELECTRON_RUN_AS_NODE_SHA256', 'ASH_ELECTRON_RUNTIME_BINDING', 'ASH_ELECTRON_RUNTIME_AVAILABLE']) delete carrierEnvironment[name];
 	const lifecycle = async (operation: string) => JSON.parse((await promisify(execFile)(daemon, [operation], { env: carrierEnvironment, timeout: 20_000, windowsHide: true })).stdout);
 	// This scenario owns daemon cleanup so quitting Electron does not tear down the shared backend.
-	const desktop = await launchElectron({ packagedBundle: bundlePath, appServerMode: 'required', userDataDirectory, profileDirectory: profile, workspaceDirectory, workspacePermissions: 'development', environment });
+	const desktop = await launchElectron({ packagedBundle: bundlePath, appServerMode: 'required', startupTimeout: 60_000, userDataDirectory, profileDirectory: profile, workspaceDirectory, workspacePermissions: 'development', environment });
 	try {
 		const page = await desktop.application.firstWindow();
 		await new Workbench(page).waitForReady();
@@ -46,11 +46,12 @@ test('Desktop package omits standalone Node and retains its Electron binding aft
 		expect(metadata.javascriptRuntime.electronVersion).toBe(electronVersion);
 		const before = await lifecycle('version');
 		expect(before.status).toBe('running');
+		const electronProcess = desktop.application.process();
 		const quitting = desktop.application.evaluate(({ app }) => app.quit());
 		// The background daemon can retain inherited handles after Main exits. Observe the real
 		// process exit before waiting for Playwright's pipe-close acknowledgement.
 		void quitting.catch(() => { });
-		await expect.poll(() => desktop.application.process().exitCode, { timeout: 15_000 }).toBe(0);
+		await expect.poll(() => electronProcess.exitCode, { timeout: 15_000 }).toBe(0);
 		const afterQuit = await lifecycle('version');
 		expect(afterQuit.pid).toBe(before.pid);
 		const restarted = await lifecycle('restart');

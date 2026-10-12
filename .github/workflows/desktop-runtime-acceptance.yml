@@ -55,6 +55,9 @@ jobs:
         run: |
           python -B scripts/install_python_tools.py
           pnpm install --frozen-lockfile
+      - name: Install browser used to render Windows application icons
+        if: runner.os == 'Windows'
+        run: pnpm exec playwright install chromium
       - name: Fetch locked Rust graph for offline build-script metadata
         # V8's include discovery reads Cargo metadata offline, including other targets.
         run: cargo fetch --locked

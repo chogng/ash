@@ -6,7 +6,7 @@ import { launchElectron } from './playwrightElectron.js';
 /** Verify file and terminal operations through the delivered application's own backend. */
 export async function exercisePackagedWorkbench(installation: string, version: string, userDataDirectory: string, workspaceDirectory: string, saved: string, testInfo: TestInfo, stage: string): Promise<void> {
 	const packagedBundle = process.platform === 'darwin' ? join(installation, 'Ash.app') : installation;
-	const desktop = await test.step(`${stage}: launch delivered application`, () => launchElectron({ packagedBundle, appServerMode: 'required', userDataDirectory, workspaceDirectory, workspacePermissions: 'development' }));
+	const desktop = await test.step(`${stage}: launch delivered application`, () => launchElectron({ packagedBundle, appServerMode: 'required', startupTimeout: 60_000, userDataDirectory, workspaceDirectory, workspacePermissions: 'development' }));
 	const page = desktop.driver.workbench.page;
 	const diagnostics = desktop.driver.diagnostics;
 	let failed = false;
