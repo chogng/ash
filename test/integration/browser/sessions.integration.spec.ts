@@ -1,4 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { EditorGroup } from '../../automation/editors.js';
+import { QuickAccess } from '../../automation/quickaccess.js';
+import { StorageTarget } from '../../../src/ash/platform/storage/common/storage.js';
 
 const runtimeErrors = new WeakMap<Page, string[]>();
 
@@ -56,7 +59,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.afterEach(async ({ page }) => {
-	await expect.poll(() => page.evaluate(() => window.ashSessionsIntegration.errors)).toEqual([]);
+	await expect.poll(() => page.evaluate(() => ({ errors: window.ashSessionsIntegration.errors, details: window.ashSessionsIntegration.errorDetails }))).toEqual({ errors: [], details: [] });
 	expect(runtimeErrors.get(page)).toEqual([]);
 });
 
@@ -116,6 +119,52 @@ test('Sessions navigation icons and surface controls follow the selected compone
 	await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
 	await expect(chat).toHaveCSS('background-color', 'rgb(240, 240, 240)');
 	await expect(page.locator('.ash-sessions-list-item.selected').first()).toHaveCSS('background-color', 'rgb(240, 240, 240)');
+});
+
+test('Sessions can directly dispose and recreate a restored window without capturing released editor grids', async ({ page }) => {
+	const navigation = page.locator('.ash-sessions-activity-content');
+	for (let attempt = 0; attempt < 2; attempt++) {
+		await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+		await expect(page.locator('[data-part="editor"] .ash-editor-title-control').getByRole('tab', { name: 'Changes', exact: true })).toBeVisible();
+		await page.evaluate(() => window.ashSessionsIntegration.remountAfterDirectDispose());
+		await expect(page.locator('.ash-sessions-window')).toHaveCount(1);
+		await expect(page.locator('.ash-sessions-list-add')).toBeVisible();
+	}
+});
+
+test('Code defaults stay in document groups after visiting a retained Trace page', async ({ page }) => {
+	await new QuickAccess(page).runCommand('sessions.trace.import');
+	await expect(page.locator('.ash-agent-trace')).toBeVisible();
+	const navigation = page.locator('.ash-sessions-activity-content');
+	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	const tabs = page.locator('[data-part="editor"] .ash-editor-title-control');
+	await expect(tabs.getByRole('tab', { name: 'Files', exact: true })).toBeVisible();
+	await expect(tabs.getByRole('tab', { name: 'Changes', exact: true })).toBeVisible();
+	await expect(page.locator('[data-part="auxiliarybar"] [data-view-id="sessions.files.explorer.empty"]')).toBeFocused();
+	await navigation.getByRole('button', { name: 'Trace', exact: true }).click();
+	await expect(page.locator('.ash-agent-trace')).toBeVisible();
+	await expect(page.locator('.ash-agent-trace').locator('.ash-editor-title-control')).toHaveCount(0);
+});
+
+test('a corrupt legacy draft reports its failure while other drafts and startup survive', async ({ page }) => {
+	await page.addInitScript(target => {
+		localStorage.setItem('ash.storage.workspace.sessions', JSON.stringify({
+			version: 1, entries: {
+				'sessions.draftState:broken': { value: '{broken', target },
+				'sessions.codeDraftState:untitled:saved': { value: JSON.stringify({ mode: 'agent', text: 'synthetic preserved draft', contexts: [] }), target },
+			}
+		}));
+	}, StorageTarget.MACHINE);
+	await page.evaluate(() => window.ashSessionsIntegration.disposeAndCheckErrorHandler());
+	await page.reload();
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	await expect(page.getByRole('region', { name: 'Notifications', exact: true }).getByText(/^Could not restore the Chat draft:/u)).toBeVisible();
+	await expect(page.locator('.ash-sessions-list-add')).toBeVisible();
+	expect(await page.evaluate(() => window.ashSessionsIntegration.disposeAndCheckErrorHandler())).toBe(true);
+	const entries = await page.evaluate(() => JSON.parse(localStorage.getItem('ash.storage.workspace.sessions')!).entries);
+	expect(entries['sessions.draftState:broken'].value).toBe('{broken');
+	expect(entries['sessions.codeDraftState:untitled:saved']).toBeUndefined();
+	expect(JSON.parse(entries['sessions.inputDraft:untitled:saved'].value)).toEqual({ mode: 'agent', text: 'synthetic preserved draft', contexts: [] });
 });
 
 test('Creator canvas responds to wheel, drag and keyboard input', async ({ page }) => {
@@ -226,8 +275,8 @@ test.describe('Sessions settings components', () => {
 		const navigation = settings.getByRole('navigation', { name: 'Settings categories' });
 		for (const [section, categories] of [
 			['Basics', ['General', 'Account', 'Appearance', 'Customize']],
-			['Development', ['Agents', 'Design', 'Models', 'Git & PRs', 'Worktree', 'Browser', 'Tab', 'Code Intelligence', 'Environment']],
-			['Management', ['Keyboard Shortcuts', 'Archived Chats']],
+			['Development', ['Agents', 'Design', 'Models', 'Git & PRs', 'Browser', 'Tab', 'Code Intelligence', 'Environment']],
+			['Management', ['Keyboard Shortcuts']],
 		] as const) {
 			const group = navigation.getByRole('group', { name: section });
 			for (const category of categories) {
@@ -248,10 +297,12 @@ test.describe('Sessions settings components', () => {
 		await expect(settings.locator('[data-configuration-key="sessions.activityBar.compact"]')).toBeVisible();
 		await navigation.getByRole('button', { name: 'General' }).click();
 		await expect(settings.getByRole('heading', { name: 'General' })).toBeVisible();
-		await navigation.getByRole('button', { name: 'Archived Chats' }).click();
-		await expect(settingsPage.getByRole('heading')).toHaveCount(0);
-		await expect(settingsPage.locator('.ash-configuration-setting')).toHaveCount(0);
-		await expect(settings.getByText('No settings found.')).toBeHidden();
+		await expect(navigation.getByRole('button', { name: 'Archived Chats', exact: true })).toHaveCount(0);
+		await expect(navigation.getByRole('button', { name: 'Worktree', exact: true })).toHaveCount(0);
+		await navigation.getByRole('button', { name: 'Keyboard Shortcuts', exact: true }).click();
+		await expect(settingsPage.getByRole('heading', { name: 'Keyboard Shortcuts' }).first()).toBeVisible();
+		await expect(settingsPage.getByRole('button', { name: 'Keyboard Shortcuts', exact: true })).toBeVisible();
+		await expect(settingsPage.getByRole('button', { name: 'Preferences: Open Keyboard Shortcuts (JSON)', exact: true })).toBeVisible();
 		await navigation.getByRole('button', { name: 'Appearance' }).click();
 		await expect(settings.getByRole('heading', { name: 'Appearance' })).toBeVisible();
 		await expect(settings.locator('[data-configuration-key="workbench.layoutStyle"]')).toHaveCount(0);
@@ -263,6 +314,90 @@ test.describe('Sessions settings components', () => {
 		await searchSettings.fill('unmatched-setting');
 		await expect(settings.getByText('No settings found.')).toBeVisible();
 		await navigation.getByRole('button', { name: 'Appearance' }).click();
+	});
+
+	test('preferences keyboard navigation clears search before handing off to shared shortcuts', async ({ page }) => {
+		const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+		const search = settings.getByRole('searchbox');
+		await search.fill('compact');
+		await search.press('Escape');
+		await expect(search).toHaveValue('');
+		await expect(search).toBeFocused();
+		await expect(settings).toBeVisible();
+		const general = settings.locator('[data-settings-category-id="general"]');
+		await general.focus();
+		await general.press('End');
+		const shortcutsCategory = settings.locator('[data-settings-category-id="keyboard-shortcuts"]');
+		await expect(shortcutsCategory).toBeFocused();
+		await expect(shortcutsCategory).toHaveAttribute('aria-current', 'page');
+		await shortcutsCategory.press('ArrowDown');
+		await expect(general).toBeFocused();
+		await expect(general).toHaveAttribute('aria-current', 'page');
+		await search.fill('shortcuts');
+		await search.press('ArrowDown');
+		const openShortcuts = settings.locator('.ash-sessions-settings-page').getByRole('button', { name: 'Keyboard Shortcuts', exact: true });
+		await expect(openShortcuts).toBeFocused();
+		await openShortcuts.press('Enter');
+		await expect(settings).toHaveCount(0);
+		const sharedEditor = page.locator('.ash-keybindings-editor');
+		await expect(sharedEditor).toBeVisible();
+		await expect(sharedEditor.getByRole('searchbox')).toBeFocused();
+		await sharedEditor.getByRole('searchbox').fill('workbench.action.openSettings');
+		await expect(sharedEditor.locator('.ash-keybindings-command-id').filter({ hasText: /^workbench\.action\.openSettings$/u })).toBeVisible();
+	});
+
+	test('Customize settings and feature links open the actual Workbench settings owner', async ({ page }, testInfo) => {
+		let settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+		await settings.locator('[data-settings-category-id="customize"]').click();
+		await settings.getByRole('button', { name: 'Open Workbench Settings', exact: true }).click();
+		await expect(settings).toHaveCount(0);
+		const sharedSettings = page.locator('.ash-settings-editor');
+		await expect(sharedSettings).toBeVisible();
+		await expect(sharedSettings.getByRole('searchbox')).toBeFocused();
+		await sharedSettings.getByRole('searchbox').fill('cowork.defaultmodel');
+		await expect(sharedSettings.locator('[data-settings-item-id="cowork.defaultmodel"]').getByRole('textbox')).toBeVisible();
+		await sharedSettings.getByRole('searchbox').fill('');
+		const chat = page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Chat', exact: true });
+		await expect(chat).toHaveAttribute('aria-current', 'page');
+		await testInfo.attach('shared-settings-preserves-chat', { body: await page.screenshot(), contentType: 'image/png' });
+		await page.getByRole('button', { name: 'Close Ash Settings', exact: true }).click();
+		await expect(chat).toHaveAttribute('aria-current', 'page');
+		for (const [category, label, target] of [
+			['browser', 'Open Browser settings', 'browser'],
+			['tab', 'Open Tab settings', 'editor-opening'],
+			['code-intelligence', 'Language servers', 'editor-language'],
+			['environment', 'Open Environment settings', 'terminal'],
+		] as const) {
+			await page.getByRole('button', { name: 'Accounts', exact: true }).click();
+			await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
+			settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+			await settings.locator(`[data-settings-category-id="${category}"]`).click();
+			await settings.getByRole('button', { name: label, exact: true }).click();
+			await expect(settings).toHaveCount(0);
+			await expect(sharedSettings).toBeVisible();
+			await expect(sharedSettings.locator('[data-active-settings-category]')).toHaveAttribute('data-active-settings-category', target);
+			await page.getByRole('button', { name: 'Close Ash Settings', exact: true }).click();
+		}
+	});
+
+	test('preferences JSON actions reveal ordinary Code editors with their shared configuration resources', async ({ page }) => {
+		for (const [category, command, title, contents] of [
+			['customize', 'Preferences: Open User Settings (JSON)', 'User Settings (JSON)', '{}'],
+			['keyboard-shortcuts', 'Preferences: Open Keyboard Shortcuts (JSON)', 'Keyboard Shortcuts (JSON)', '[]'],
+		] as const) {
+			const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+			await settings.locator(`[data-settings-category-id="${category}"]`).click();
+			await settings.getByRole('button', { name: command, exact: true }).click();
+			await expect(settings).toHaveCount(0);
+			const group = new EditorGroup(page.locator('.ash-editor-group:visible').filter({ has: page.getByRole('tab', { name: title, exact: true }) }));
+			await expect(group.tabs.getByText(title, { exact: true })).toBeVisible();
+			await group.editor.waitForEditorContents(source => source.replace(/\s/gu, '') === contents);
+			await expect(page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true })).toHaveAttribute('aria-current', 'page');
+			if (category === 'customize') {
+				await page.getByRole('button', { name: 'Accounts', exact: true }).click();
+				await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
+			}
+		}
 	});
 
 	test('dictation settings switch between local models and API connections', async ({ page }) => {

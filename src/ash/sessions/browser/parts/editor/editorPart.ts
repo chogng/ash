@@ -24,6 +24,15 @@ export class EditorPart extends WorkbenchEditorPart {
 		this.pageGroupId = pages.id;
 		pages.setLocked(true);
 		this.setGroupVisible(pages.id, false);
+		this._register(this.onDidChangeEditors(event => {
+			if (this.isDisposed || event.kind !== 'groupRemoved' || this.groups.length !== 1 || this.groups[0]!.id !== this.pageGroupId) { return; }
+			// Working-set restoration temporarily detaches every group. Recreate a document host only
+			// when the retained product group is actually the sole live group after a close.
+			const documents = this.addGroup(this.pageGroupId, Direction.Left);
+			const productVisible = this.isGroupVisible(this.pageGroupId);
+			this.setGroupVisible(documents.id, !productVisible);
+			if (!productVisible) { this.activateGroup(documents.id); }
+		}));
 	}
 
 	public override get minimumWidth(): number { return Math.max(EDITOR_PART_MINIMUM_WIDTH, super.minimumWidth); }

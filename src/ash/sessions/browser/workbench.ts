@@ -1,3 +1,10 @@
+import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../editor/common/services/languageFeatureDebounce.js';
+import { IInlineCompletionsService, InlineCompletionsService } from '../../editor/browser/services/inlineCompletionsService.js';
+import { IMarkerDecorationsService } from '../../editor/common/services/markerDecorations.js';
+import { MarkerDecorationsService } from '../../editor/common/services/markerDecorationsService.js';
+import { ILanguageServerService } from '../../platform/language/common/languageServerService.js';
+import { INetworkDiagnosticsService } from '../../platform/networkDiagnostics/common/networkDiagnosticsService.js';
+import { IConfigurationResourceService } from '../../platform/configuration/common/configurationResourceService.js';
 import { ISnippetsService } from '../../workbench/contrib/snippets/browser/snippets.js';
 import { IMessageHistoryService } from '../../platform/messageHistory/common/messageHistory.js';
 import { GlobalExtensionEnablementService } from '../../platform/extensionManagement/common/extensionEnablementService.js';
@@ -9,7 +16,7 @@ import { IExtensionBackendApi } from '../../platform/agentHost/common/extensionB
 import { IExtensionApi } from '../../platform/extensions/common/extensionApi.js';
 import { ITraceService } from '../../workbench/services/trace/common/traceService.js';
 import { AppServerTraceService } from '../../workbench/services/trace/browser/appServerTraceService.js';
-import { IContentSearchService } from '../../platform/search/common/search.js';
+import { IContentSearchService, IContentSearchConfigurationService } from '../../platform/search/common/search.js';
 import { FileContentSearchService } from '../../platform/search/browser/searchService.js';
 import { ISearchService } from '../../workbench/services/search/common/search.js';
 import { SearchService } from '../../workbench/services/search/common/searchService.js';
@@ -328,12 +335,16 @@ export abstract class Workbench extends Disposable {
 		const serviceContributionReady: Promise<void>[] = [];
 		if (options.browserViewService) { services.registerInstance(IBrowserViewService, options.browserViewService); }
 		services.registerInstance(IAssetService, options.api.assets);
+		services.registerInstance(INetworkDiagnosticsService, options.api.networkDiagnostics);
+		services.registerInstance(IContentSearchConfigurationService, options.api.contentSearchConfiguration);
+		services.registerInstance(ILanguageServerService, options.api.languageServers);
 		services.registerInstance(IExtensionHostApi, this._register(services.createInstance(WebWorkerExtensionHost, withEnabledBuiltInExtensions(createBrowserExtensionApi(), enablement), options.api.extensionHost)));
 		services.registerInstance(ITelemetryService, NullTelemetryService);
 		if (options.api.approvalEnvironment) { services.registerInstance(IApprovalEnvironmentService, options.api.approvalEnvironment); }
 		services.registerInstance(IDictationService, options.api.dictation);
 		services.registerInstance(ILocalTranscriptionService, options.api.localTranscription ?? this._register(new NullLocalTranscriptionService()));
 		services.registerInstance(IConfigurationService, configurationService);
+		services.registerInstance(IConfigurationResourceService, configurationService);
 		if (options.nativeHostApi) services.registerInstance(INativeHostService, options.nativeHostApi);
 		const languageService = this._register(new LanguageService());
 		services.registerInstance(ILanguageService, languageService);
@@ -342,6 +353,9 @@ export abstract class Workbench extends Disposable {
 		// Shared inspectors create transient models; this window owns their registry and shutdown.
 		services.registerSingleton(IModelService, () => new ModelService(configurationService, services.get(ITextResourcePropertiesService), languageService, services.get(ILanguageFeaturesService), services.get(ILanguageConfigurationService)));
 		services.registerInstance(ICodeEditorService, this._register(new StandaloneCodeEditorService()));
+		services.registerSingleton(IInlineCompletionsService, () => services.createInstance(InlineCompletionsService));
+		services.registerSingleton(ILanguageFeatureDebounceService, () => services.createInstance(LanguageFeatureDebounceService));
+		services.registerSingleton(IMarkerDecorationsService, () => services.createInstance(MarkerDecorationsService));
 		this.logService = this._register(logger);
 		services.registerInstance(ILogService, this.logService);
 		// Window errors must terminate at the host logger. The default handler rethrows,
@@ -377,6 +391,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IExtensionApi, enabledExtensions);
 		services.registerInstance(IExtensionBackendApi, options.api.extensionBackend);
 		services.registerInstance(IAgentModelsService, options.api.model);
+		services.registerInstance(IAgentExecutionSettingsService, options.api.executionSettings);
 		services.registerInstance(IAgentSessionService, options.api.session);
 		services.registerInstance(IAgentThreadService, options.api.thread);
 		services.registerSingleton(ITraceService, () => services.createInstance(AppServerTraceService));
@@ -451,7 +466,6 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IDirPermissionsService, this._register(new AppServerDirPermissionsService(options.api.dirPermissions, options.api.events)));
 		services.registerInstance(IHooksService, options.api.hooks);
 		services.registerInstance(ITraceSettingsService, options.api.traceSettings);
-		services.registerInstance(IAgentExecutionSettingsService, options.api.executionSettings);
 		const localization = this._register(new WorkbenchLocalizationService());
 		services.registerInstance(ILocalizationService, localization);
 		services.registerInstance(IAppServerRemoteAgentService, this._register(services.createInstance(AppServerRemoteAgentService, { remoteApi: options.api.remote })));
@@ -581,7 +595,7 @@ export abstract class Workbench extends Disposable {
 			return catalog.agents.map(agent => ({ name: agent.name, description: agent.description, role: { type: 'exact' as const, name: agent.name, source: agent.source } }));
 		}));
 		const sidebar = this._register(services.createInstance(SidebarPart, this.domNode));
-		const recoveredDrafts = migrateNewChatDraftState(storage);
+		const recoveredDrafts = migrateNewChatDraftState(storage, error => notificationService.error(localize('sessions.chat.draftRestoreFailed', 'Could not restore the Chat draft: {0}', String(error))));
 		this._register(CommandsRegistry.register('sessions.library.useInDesign', async (_accessor, value) => {
 			const version = value as AssetVersion;
 			const design = services.get(IDesignEditorService);
@@ -769,6 +783,8 @@ export abstract class Workbench extends Disposable {
 		contributions.advance(WorkbenchPhase.BlockRestore);
 		this.layoutService.layout();
 		const entryLayout = services.get(ISessionsLayoutService);
+		// Stop layout persistence before Parts are released; the service scope otherwise outlives their editor grids.
+		this._register(toDisposable(() => entryLayout.dispose()));
 		this.lifecycleService.phase = LifecyclePhase.Ready;
 		this.whenRestored = Promise.all([keybindingsReady, extensionReady, ...serviceContributionReady]).then(() => this.initialize(view, configurationService, ownerWindow, entryLayout, contributions, storage, recoveredDrafts));
 	}
@@ -794,7 +810,9 @@ export abstract class Workbench extends Disposable {
 	}
 
 	private async initialize(view: SessionsService, configurationService: ConfigurationService, ownerWindow: Window, entryLayout: ISessionsLayoutService, contributions: WorkbenchContributionHost, storage: IStorageService, recoveredDrafts: ReturnType<typeof migrateNewChatDraftState>): Promise<void> {
+		if (this.isDisposed) return;
 		await configurationService.reloadConfiguration();
+		if (this.isDisposed) return;
 		await view.initialize();
 		if (this.isDisposed) return;
 		if (!view.activeSelection) view.openNewSession();

@@ -51,22 +51,25 @@ export class SessionsBrowserMain extends Disposable {
 		try {
 			let documentClient: AppServerProtocolClient | undefined;
 			const connectedHost = await connectBrowserWorkbenchHost([client => { documentClient = client; return {}; }], true, true);
+			if (this.isDisposed) { connectedHost?.dispose(); this.assertNotDisposed(); }
 			if (connectedHost) { this._register(connectedHost); }
 			installBaseUiStyles();
 			const configurationApi = this._register(new IndexedDbConfigurationApi());
 			const initialConfigurationSnapshot = await configurationApi.read();
+			this.assertNotDisposed();
 			const host = globalThis.ashWebWorkbenchHost;
 			const ownerWindow = container.ownerDocument.defaultView;
 			if (!ownerWindow) throw new Error('Sessions renderer requires an owner window');
 			const browserFiles = host?.webWorkspaceClient ? undefined : this._register(new HTMLFileSystemProvider(ownerWindow.indexedDB, ownerWindow));
-			const workbench = this._register(await createSessionsWorkbench({
+			const workbench = await createSessionsWorkbench({
 				createAppToolsHost: documentClient ? services => new AppServerAppToolsHost(documentClient!, services.createInstance(AppToolsHost, container.ownerDocument, undefined)) : undefined,
 				createTextDocumentHost: documentClient ? services => {
 					const editing = services.get(IChatEditingService);
-					return services.createInstance(AppServerTextDocumentHost, documentClient!, editing.applyEdits.bind(editing));
+					return services.createInstance(AppServerTextDocumentHost, documentClient!, { applyEdits: editing.applyEdits.bind(editing), finishTurn: editing.finishTurn.bind(editing) });
 				} : undefined,
 				contributionIds: [
 					'workbench.contrib.partsSplash',
+					'workbench.contrib.preferences',
 					'workbench.contrib.snippets',
 					'workbench.contrib.sessionsLayout',
 					'sessions.contrib.multiDiffSource',
@@ -110,8 +113,11 @@ export class SessionsBrowserMain extends Disposable {
 				createHostColorSchemeService: () => new BrowserHostColorSchemeService(ownerWindow),
 				createTitlebarPart: (titlebarContainer, services) => services.createInstance(TitlebarPart, titlebarContainer, 'application-menu'),
 				container,
-			}));
+			});
+			if (this.isDisposed) { workbench.dispose(); this.assertNotDisposed(); }
+			this._register(workbench);
 			await workbench.whenRestored;
+			this.assertNotDisposed();
 			return workbench;
 		} catch (error) {
 			this.dispose();

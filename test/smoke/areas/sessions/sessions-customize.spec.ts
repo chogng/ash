@@ -1,6 +1,7 @@
 import { expect, test } from '../../../automation/test.js';
 import type { Locator, Page } from '@playwright/test';
 import { Editor } from '../../../automation/editor.js';
+import { EditorGroup } from '../../../automation/editors.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 
 async function useCustomMenus(page: Page): Promise<void> {
@@ -216,7 +217,10 @@ test('Sessions Customize uses Chinese labels and localized Skills controls', asy
 	await settings.getByRole('button', { name: '智能体', exact: true }).click();
 	await expect(settings.getByRole('button', { name: '顾问模型', exact: true })).toBeVisible();
 	await expect(settings.getByRole('switch', { name: '启用顾问' })).toBeVisible();
+	await settings.getByRole('button', { name: '快捷键', exact: true }).click();
+	await expect(settings.locator('.ash-sessions-settings-page')).toContainText('搜索命令和快捷键、查看默认绑定、录制按键');
 	await settings.getByRole('button', { name: '自定义', exact: true }).click();
+	await expect(settings.getByRole('button', { name: '打开工作台设置', exact: true })).toBeVisible();
 	const tabs = settings.getByRole('tablist', { name: '自定义标签页' });
 	await expect(tabs.getByRole('tab')).toHaveText(['设置', 'Hooks']);
 	await tabs.getByRole('tab', { name: 'Hooks', exact: true }).click();
@@ -226,4 +230,39 @@ test('Sessions Customize uses Chinese labels and localized Skills controls', asy
 	await expect(hooks.getByRole('searchbox', { name: '搜索事件、Hook、命令或路径' })).toBeFocused();
 	await hooks.getByRole('searchbox').press('Alt+F1');
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/配置 Hooks[\s\S]*不会发送/u);
+});
+
+
+test('Sessions Customize settings hands off to the same Workbench settings and JSON resources', async ({ target, workbench, runningApplication }) => {
+	if (target.kind === 'electron' && process.platform === 'darwin') await useCustomMenus(workbench.page);
+	const page = await workbench.openAgentsWindow(target.kind);
+	let settings = await openSettings(page);
+	await settings.locator('[data-settings-category-id="customize"]').click();
+	await settings.getByRole('button', { name: 'Open Workbench Settings', exact: true }).click();
+	await expect(settings).toHaveCount(0);
+	const sharedSettings = page.locator('.ash-settings-editor');
+	await expect(sharedSettings).toBeVisible();
+	await expect(sharedSettings.getByRole('searchbox')).toBeFocused();
+	await sharedSettings.getByRole('searchbox').fill('workbench.activityBar.badges');
+	const badges = sharedSettings.locator('[data-settings-item-id="workbench.activityBar.badges"]').getByRole('switch');
+	await expect(badges).toBeChecked();
+	await badges.press('Space');
+	await expect(badges).not.toBeChecked();
+	await expect(badges).toBeEnabled();
+	await page.getByRole('button', { name: 'Close Ash Settings', exact: true }).click();
+	settings = await openSettings(page);
+	await settings.locator('[data-settings-category-id="appearance"]').click();
+	const compact = settings.locator('[data-settings-item-id="sessions.activityBar.compact"]').getByRole('switch');
+	await expect(compact).not.toBeChecked();
+	await compact.press('Space');
+	await expect(compact).toBeChecked();
+	await expect(compact).toBeEnabled();
+	await settings.locator('[data-settings-category-id="customize"]').click();
+	await settings.getByRole('button', { name: 'Preferences: Open User Settings (JSON)', exact: true }).click();
+	await expect(settings).toHaveCount(0);
+	const group = new EditorGroup(page.locator('.ash-editor-group:visible').filter({ has: page.getByRole('tab', { name: 'User Settings (JSON)', exact: true }) }));
+	await expect(group.tabs.getByText('User Settings (JSON)', { exact: true })).toBeVisible();
+	await group.editor.waitForEditorContents(source => source.includes('"workbench.activityBar.badges": false') && source.includes('"sessions.activityBar.compact": true'));
+	expect(runningApplication.diagnostics.consoleErrors.filter(message => message.startsWith('Code editor contribution failed'))).toEqual([]);
+	expect(runningApplication.diagnostics.errors).toEqual([]);
 });

@@ -1,55 +1,85 @@
+import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { IEditorPart } from '../../../../../workbench/browser/parts/editor/editorPart.js';
 import { IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
 import { EditorInputCapabilities, type IResourceEditorInput } from '../../../../../workbench/common/editor.js';
 import { EmptyFileEditorInput } from '../../../editor/browser/emptyFileEditorInput.js';
 import { SessionChangesEditorInput } from '../../../changes/browser/sessionChangesEditorInput.js';
-import type { SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
+import { ISessionsService, type SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
 import { ISessionChangesService } from '../../../changes/common/sessionChangesService.js';
 
 /** Only settled session/reveal transitions seed tabs; ordinary closes never recreate defaults. */
-export class DesktopDockedTabsCoordinator {
-	constructor(@IEditorPart private readonly editor: IEditorPart, @IEditorService private readonly editors: IEditorService, @ISessionChangesService private readonly changes: ISessionChangesService) { }
+export class DesktopDockedTabsCoordinator extends Disposable {
+	constructor(private readonly pageGroupId: string, @IEditorPart private readonly editor: IEditorPart, @IEditorService private readonly editors: IEditorService, @ISessionChangesService private readonly changes: ISessionChangesService, @ISessionsService private readonly sessions: ISessionsService) { super(); }
+
+	private get documentGroups() { return this.editor.groups.filter(group => group.id !== this.pageGroupId); }
+
+	private isCurrent(selection: SessionsViewSelection): boolean {
+		if (this.isDisposed) { return false; }
+		const active = this.sessions.activeSelection;
+		return active?.kind === 'session' && selection.kind === 'session'
+			? active.active.session.sessionId === selection.active.session.sessionId && active.active.threadId === selection.active.threadId
+			: active?.kind === 'untitled' && selection.kind === 'untitled' && active.session.untitledSessionId === selection.session.untitledSessionId;
+	}
 
 	public async reconcile(selection: SessionsViewSelection, detailsOnly: boolean): Promise<void> {
+		if (!this.isCurrent(selection)) { return; }
 		const changes = new SessionChangesEditorInput(selection);
-		for (const group of this.editor.groups) {
+		for (const group of this.documentGroups) {
 			for (const input of group.inputs.filter(input => input.resource.scheme === 'ash-session-changes' && input.resource.toString() !== changes.resource.toString())) {
-				await group.replaceEditor(input, changes);
+				try { await group.replaceEditor(input, changes); }
+				catch (error) {
+					if (!this.isCurrent(selection) || !this.documentGroups.includes(group)) { return; }
+					throw error;
+				}
+				if (!this.isCurrent(selection) || !this.documentGroups.includes(group)) { return; }
 			}
 		}
-		const inputs = this.editor.groups.flatMap(group => group.inputs).filter(input => input.resource.scheme !== 'ash-creator' && input.resource.scheme !== 'ash-library');
+		const target = this.documentGroups.find(group => group.id === this.editor.activeGroup.id) ?? this.documentGroups[0];
+		if (!target) { return; }
+		// Product pages are retained in their own locked group. They must neither suppress nor receive Code's managed tabs.
+		const inputs = this.documentGroups.flatMap(group => group.inputs);
 		if (inputs.length === 0 || detailsOnly) {
 			if (!inputs.some(input => input.resource.scheme === 'ash-sessions-files')) {
 				const files = new EmptyFileEditorInput();
 				files.capabilities = detailsOnly ? EditorInputCapabilities.CannotClose : EditorInputCapabilities.None;
-				await this.editors.openEditor(files, { pinned: true, preserveFocus: true, inactive: true });
+				await this.editors.openEditor(files, { pinned: true, preserveFocus: true, inactive: true }, { groupId: target.id });
+				if (!this.isCurrent(selection) || !this.documentGroups.includes(target)) { return; }
 			}
 			if (!inputs.some(input => input.resource.scheme === 'ash-session-changes')) {
 				changes.capabilities = detailsOnly ? EditorInputCapabilities.CannotClose : EditorInputCapabilities.None;
-				await this.editors.openEditor(changes, { pinned: true, preserveFocus: true, inactive: true });
+				await this.editors.openEditor(changes, { pinned: true, preserveFocus: true, inactive: true }, { groupId: target.id });
+				if (!this.isCurrent(selection) || !this.documentGroups.includes(target)) { return; }
 			}
 		}
-		for (const input of this.editor.groups.flatMap(group => group.inputs)) {
-			if (input instanceof EmptyFileEditorInput || input instanceof SessionChangesEditorInput) {
-				input.capabilities = detailsOnly ? EditorInputCapabilities.CannotClose : EditorInputCapabilities.None;
-				await this.editors.openEditor(input, { pinned: true, preserveFocus: true, inactive: true });
+		for (const group of this.documentGroups) {
+			for (const input of group.inputs) {
+				if (input instanceof EmptyFileEditorInput || input instanceof SessionChangesEditorInput) {
+					input.capabilities = detailsOnly ? EditorInputCapabilities.CannotClose : EditorInputCapabilities.None;
+					await this.editors.openEditor(input, { pinned: true, preserveFocus: true, inactive: true }, { groupId: group.id });
+					if (!this.isCurrent(selection) || !this.documentGroups.includes(group)) { return; }
+				}
 			}
 		}
 	}
 
 	public async removeFilesLandingTab(): Promise<void> {
-		for (const group of this.editor.groups) {
+		if (this.isDisposed) { return; }
+		for (const group of this.documentGroups) {
 			for (const input of group.inputs.filter(input => input.resource.scheme === 'ash-sessions-files')) {
 				await group.closeEditor(input, { skipConfirmation: true, reason: 'reset' });
+				if (this.isDisposed) { return; }
 			}
 		}
 	}
 
 	public async openFiles(): Promise<void> {
-		await this.editors.openEditor(new EmptyFileEditorInput(), { pinned: true });
+		if (this.isDisposed) { return; }
+		const target = this.documentGroups.find(group => group.id === this.editor.activeGroup.id) ?? this.documentGroups[0];
+		if (target) { await this.editors.openEditor(new EmptyFileEditorInput(), { pinned: true }, { groupId: target.id }); }
 	}
 
 	public async openChanges(selection: SessionsViewSelection): Promise<void> {
+		if (!this.isCurrent(selection)) { return; }
 		await this.changes.openChangesEditor(new SessionChangesEditorInput(selection).sessionResource, { changesetSelection: { kind: 'id', id: undefined } });
 	}
 

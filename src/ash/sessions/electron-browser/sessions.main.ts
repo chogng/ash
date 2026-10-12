@@ -100,108 +100,110 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		api = await createElectronRendererApi([client => { documentClient = client; return {}; }, client => registerLocalTranscriptionService(transcriptionServices, client)], { browser: false, textDocuments: true, appTools: true }, permissionDialog, mainProcessService);
 	}
 	catch (error) { sessions.dispose(); return showStartupError(error, text => invoke<void>('ash:host:writeClipboard', text)); }
-	sessions.add(api);
-	const profileFiles = sessions.add(profileServices.createInstance(FileService));
-	sessions.add(profileFiles.registerProvider(api.userDataHome.scheme, api.localFiles));
-	profileServices.registerInstance(IFileService, profileFiles);
-	const { loadUserThemes } = await import('../../workbench/services/themes/browser/workbenchThemeService.js');
-	sessions.add(await loadUserThemes(profileServices, URI.parse(api.userDataHome.toString().replace(/\/$/u, '') + '/themes')));
-	const setFullscreen = (fullscreen: boolean): void => { container.classList.toggle('ash-sessions-fullscreen', fullscreen); };
-	setFullscreen(await invoke<boolean>(WINDOW_OPERATION_CHANNEL, { kind: 'getFullscreen' }));
-	sessions.add(toDisposable(() => container.classList.remove('ash-sessions-fullscreen')));
-	const fullscreenSubscription = subscribe<boolean>(WINDOW_FULLSCREEN_CHANGED_CHANNEL, setFullscreen);
-	sessions.add(toDisposable(() => fullscreenSubscription.dispose()));
-	const updateZoomFactor = async (): Promise<void> => {
-		const factor = await invoke<number>(WINDOW_OPERATION_CHANNEL, { kind: 'getZoomFactor' });
-		container.style.setProperty('--ash-sessions-inverse-zoom-factor', (1 / factor).toString());
-	};
-	await updateZoomFactor();
-	sessions.add(toDisposable(() => container.style.removeProperty('--ash-sessions-inverse-zoom-factor')));
-	const zoomSubscription = subscribe<number>(WINDOW_ZOOM_CHANGED_CHANNEL, () => { void updateZoomFactor().catch(onUnexpectedError); });
-	sessions.add(toDisposable(() => zoomSubscription.dispose()));
-	let lifecycleService!: ElectronLifecycleService;
-	const initialConfigurationSnapshot = validateConfigurationSnapshot(await api.configuration.read());
-	const workspaceContext = createWorkspaceContextApi();
-	let workspace = parseWorkspace(await workspaceContext.getWorkspace());
-	let workspaceSelection = selectionFromWorkspace(workspace);
-	const workspaceSubscription = workspaceContext.onDidChange(value => {
-		workspace = parseWorkspace(value);
-		workspaceSelection = selectionFromWorkspace(workspace);
-	});
-	sessions.add(toDisposable(() => workspaceSubscription.dispose()));
-	const hostColorScheme = await api.nativeHost.getOSColorScheme();
-	workbench = sessions.add(await createSessionsWorkbench({
-		serviceCollection,
-		createAppToolsHost: documentClient ? services => new AppServerAppToolsHost(documentClient!, services.createInstance(AppToolsHost, container.ownerDocument, services.createInstance(ElectronUpdateService))) : undefined,
-		createTextDocumentHost: documentClient ? services => {
-			const editing = services.get(IChatEditingService);
-			return services.createInstance(AppServerTextDocumentHost, documentClient!, editing.applyEdits.bind(editing));
-		} : undefined,
-		contributionIds: [
-			'workbench.contrib.settingsChangeRelauncher',
-			'workbench.contrib.partsSplash',
-			'workbench.contrib.snippets',
-			'workbench.contrib.sessionsLayout',
-			'sessions.contrib.multiDiffSource',
-			'workbench.contrib.nativeWindow',
-			OpenAgentsWindowSystemWideKeybindingContribution.ID,
-			'chat.edits.editorOverlay',
-			'workbench.contrib.dataChannels',
-			'workbench.contrib.output',
-			'workbench.contrib.githubLinkPresentations',
-			'workbench.contrib.url',
-			'workbench.contrib.externalUriOpener',
-			'workbench.contrib.browserView',
-			'workbench.contrib.browserView.restore',
-			'workbench.contrib.chatAccessibilitySignals',
-			'workbench.contrib.speechAccessibilitySignal',
-			'workbench.contrib.saveAccessibilitySignals',
-		],
-		browserViewService: api.browserView,
-		createLogService: () => logger.createLogger('agents'),
-		createStorageService: async options => {
-			const storage = profileServices.createInstance(NativeWorkbenchStorageService, options);
-			try { await storage.initialize(); return storage; }
-			catch (error) { storage.dispose(); throw error; }
-		},
-		profile,
-		api,
-		workspaceSelection: () => workspaceSelection,
-		workspace: () => workspace,
-		createFileDialogService: services => services.createInstance(FileDialogService),
-		createLifecycleService: services => {
-			lifecycleService = services.createInstance(ElectronLifecycleService, { ownerWindow: window, onError: onUnexpectedError });
-			sessions.add(lifecycleService.onWillShutdown(event => event.join(logger.flush(), 'Agents logs flush')));
-			return lifecycleService;
-		},
-		nativeHostApi: api.nativeHost,
-		keyboardLayoutProvider: api.keyboardLayout,
-		userKeyboardLayoutApi: api.userKeyboardLayout,
-		returnToWorkbench: () => { void invoke<void>(RETURN_TO_WORKBENCH_CHANNEL).catch(onUnexpectedError); },
-		configurationApi: api.configuration,
-		initialConfigurationSnapshot,
-		createUserDataFileSystemProvider: async () => new FileUserDataProvider(api.localFiles, api.userDataHome),
-		createContextMenuService: services => services.createInstance(ElectronContextMenuService, api.nativeContextMenu),
-		createHostColorSchemeService: services => {
-			const colors = services.createInstance(NativeHostColorSchemeService, hostColorScheme);
-			void colors.initialize().catch(onUnexpectedError);
-			return colors;
-		},
-		createTitlebarPart: (titlebarContainer, services) => {
-			if (isMacintosh) {
-				// Publish this window's menu so switching focus never dispatches Workbench-only actions here.
-				sessions.add(new NativeMenubarControl(services.get(IMenuService), api.nativeMenubar, Menus.MenubarMainMenu));
-			}
-			return services.createInstance(TitlebarPart, titlebarContainer, isMacintosh ? 'actions-only' : 'application-menu');
-		},
-		container,
-	}));
-	requestDrain();
-	sessions.add(bindWindowControlTheme(workbench.themeService, api.nativeHost));
-	sessions.add(addDisposableListener(window, "pagehide", () => {
-		void workbench.shutdown("pageHide").catch(error => console.error("Failed to shut down Sessions Workbench", error)).finally(() => sessions.dispose());
-	}, { once: true }));
 	try {
+		sessions.add(api);
+		const profileFiles = sessions.add(profileServices.createInstance(FileService));
+		sessions.add(profileFiles.registerProvider(api.userDataHome.scheme, api.localFiles));
+		profileServices.registerInstance(IFileService, profileFiles);
+		const { loadUserThemes } = await import('../../workbench/services/themes/browser/workbenchThemeService.js');
+		sessions.add(await loadUserThemes(profileServices, URI.parse(api.userDataHome.toString().replace(/\/$/u, '') + '/themes')));
+		const setFullscreen = (fullscreen: boolean): void => { container.classList.toggle('ash-sessions-fullscreen', fullscreen); };
+		setFullscreen(await invoke<boolean>(WINDOW_OPERATION_CHANNEL, { kind: 'getFullscreen' }));
+		sessions.add(toDisposable(() => container.classList.remove('ash-sessions-fullscreen')));
+		const fullscreenSubscription = subscribe<boolean>(WINDOW_FULLSCREEN_CHANGED_CHANNEL, setFullscreen);
+		sessions.add(toDisposable(() => fullscreenSubscription.dispose()));
+		const updateZoomFactor = async (): Promise<void> => {
+			const factor = await invoke<number>(WINDOW_OPERATION_CHANNEL, { kind: 'getZoomFactor' });
+			container.style.setProperty('--ash-sessions-inverse-zoom-factor', (1 / factor).toString());
+		};
+		await updateZoomFactor();
+		sessions.add(toDisposable(() => container.style.removeProperty('--ash-sessions-inverse-zoom-factor')));
+		const zoomSubscription = subscribe<number>(WINDOW_ZOOM_CHANGED_CHANNEL, () => { void updateZoomFactor().catch(onUnexpectedError); });
+		sessions.add(toDisposable(() => zoomSubscription.dispose()));
+		let lifecycleService!: ElectronLifecycleService;
+		const initialConfigurationSnapshot = validateConfigurationSnapshot(await api.configuration.read());
+		const workspaceContext = createWorkspaceContextApi();
+		let workspace = parseWorkspace(await workspaceContext.getWorkspace());
+		let workspaceSelection = selectionFromWorkspace(workspace);
+		const workspaceSubscription = workspaceContext.onDidChange(value => {
+			workspace = parseWorkspace(value);
+			workspaceSelection = selectionFromWorkspace(workspace);
+		});
+		sessions.add(toDisposable(() => workspaceSubscription.dispose()));
+		const hostColorScheme = await api.nativeHost.getOSColorScheme();
+		workbench = sessions.add(await createSessionsWorkbench({
+			serviceCollection,
+			createAppToolsHost: documentClient ? services => new AppServerAppToolsHost(documentClient!, services.createInstance(AppToolsHost, container.ownerDocument, services.createInstance(ElectronUpdateService))) : undefined,
+			createTextDocumentHost: documentClient ? services => {
+				const editing = services.get(IChatEditingService);
+				return services.createInstance(AppServerTextDocumentHost, documentClient!, { applyEdits: editing.applyEdits.bind(editing), finishTurn: editing.finishTurn.bind(editing) });
+			} : undefined,
+			contributionIds: [
+				'workbench.contrib.settingsChangeRelauncher',
+				'workbench.contrib.partsSplash',
+				'workbench.contrib.preferences',
+				'workbench.contrib.snippets',
+				'workbench.contrib.sessionsLayout',
+				'sessions.contrib.multiDiffSource',
+				'workbench.contrib.nativeWindow',
+				OpenAgentsWindowSystemWideKeybindingContribution.ID,
+				'chat.edits.editorOverlay',
+				'workbench.contrib.dataChannels',
+				'workbench.contrib.output',
+				'workbench.contrib.githubLinkPresentations',
+				'workbench.contrib.url',
+				'workbench.contrib.externalUriOpener',
+				'workbench.contrib.browserView',
+				'workbench.contrib.browserView.restore',
+				'workbench.contrib.chatAccessibilitySignals',
+				'workbench.contrib.speechAccessibilitySignal',
+				'workbench.contrib.saveAccessibilitySignals',
+			],
+			browserViewService: api.browserView,
+			createLogService: () => logger.createLogger('agents'),
+			createStorageService: async options => {
+				const storage = profileServices.createInstance(NativeWorkbenchStorageService, options);
+				try { await storage.initialize(); return storage; }
+				catch (error) { storage.dispose(); throw error; }
+			},
+			profile,
+			api,
+			workspaceSelection: () => workspaceSelection,
+			workspace: () => workspace,
+			createFileDialogService: services => services.createInstance(FileDialogService),
+			createLifecycleService: services => {
+				lifecycleService = services.createInstance(ElectronLifecycleService, { ownerWindow: window, onError: onUnexpectedError });
+				sessions.add(lifecycleService.onWillShutdown(event => event.join(logger.flush(), 'Agents logs flush')));
+				return lifecycleService;
+			},
+			nativeHostApi: api.nativeHost,
+			keyboardLayoutProvider: api.keyboardLayout,
+			userKeyboardLayoutApi: api.userKeyboardLayout,
+			returnToWorkbench: () => { void invoke<void>(RETURN_TO_WORKBENCH_CHANNEL).catch(onUnexpectedError); },
+			configurationApi: api.configuration,
+			initialConfigurationSnapshot,
+			createUserDataFileSystemProvider: async () => new FileUserDataProvider(api.localFiles, api.userDataHome),
+			createContextMenuService: services => services.createInstance(ElectronContextMenuService, api.nativeContextMenu),
+			createHostColorSchemeService: services => {
+				const colors = services.createInstance(NativeHostColorSchemeService, hostColorScheme);
+				void colors.initialize().catch(onUnexpectedError);
+				return colors;
+			},
+			createTitlebarPart: (titlebarContainer, services) => {
+				if (isMacintosh) {
+					// Publish this window's menu so switching focus never dispatches Workbench-only actions here.
+					sessions.add(new NativeMenubarControl(services.get(IMenuService), api.nativeMenubar, Menus.MenubarMainMenu));
+				}
+				return services.createInstance(TitlebarPart, titlebarContainer, isMacintosh ? 'actions-only' : 'application-menu');
+			},
+			container,
+		}));
+		requestDrain();
+		sessions.add(bindWindowControlTheme(workbench.themeService, api.nativeHost));
+		const activeWorkbench = workbench;
+		sessions.add(addDisposableListener(window, "pagehide", () => {
+			void activeWorkbench.shutdown("pageHide").catch(error => console.error("Failed to shut down Sessions Workbench", error)).finally(() => sessions.dispose());
+		}, { once: true }));
 		await lifecycleService.initialize();
 		await workbench.whenRestored;
 		return sessions;

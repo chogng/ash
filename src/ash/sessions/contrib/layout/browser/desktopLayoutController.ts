@@ -13,6 +13,7 @@ import type { EditorWorkingSet } from '../../../../workbench/services/editor/com
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { ISessionsService, type SessionsViewSelection } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
+import { ViewContainerLocation } from '../../../../workbench/common/views.js';
 import { IPaneCompositePartService } from '../../../../workbench/services/panecomposite/browser/panecomposite.js';
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
 import { DesktopDockedTabsCoordinator } from './desktop/desktopDockedTabsCoordinator.js';
@@ -50,7 +51,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 		@IInstantiationService instantiation: IInstantiationService,
 	) {
 		super(panes, sessions, management, editor, editors, workspace, layout, storage, notifications, lifecycle);
-		this.tabs = instantiation.createInstance(DesktopDockedTabsCoordinator);
+		this.tabs = this._register(instantiation.createInstance(DesktopDockedTabsCoordinator, pageGroupId));
 		this.detailPanel = instantiation.createInstance(DesktopDetailPanelCoordinator);
 		const lastOpen = storage.get(lastOpenKey, StorageScope.PROFILE);
 		if (lastOpen !== undefined) {
@@ -78,18 +79,32 @@ export class DesktopLayoutController extends BaseLayoutController {
 	/** Settle the current session before capturing the document groups that the entry leaves behind. */
 	public async prepareContentChange(): Promise<void> {
 		await this.whenSettled();
+		if (this.isDisposed) { return; }
 		this.captureEditors();
 	}
 
 	public async activate(revealDetails: boolean): Promise<void> {
 		await this.whenSettled();
+		if (this.isDisposed) { return; }
 		this.editor.activateGroup(this.documentGroups[0]!.id);
 		const selection = this.sessions.activeSelection;
 		if (selection) { await this.tabs.reconcile(selection, !this.documentsVisible && revealDetails); }
+		if (this.isDisposed) { return; }
 		await this.detailPanel.update(revealDetails);
 	}
 
-	public updateDetails(reveal: boolean): Promise<void> { return this.detailPanel.update(reveal); }
+	public updateDetails(reveal: boolean): Promise<void> { return this.isDisposed ? Promise.resolve() : this.detailPanel.update(reveal); }
+
+	/** Details-only keeps the tab strip while its editor content is hidden; focus the visible pane instead. */
+	public focus(): void {
+		if (this.isDisposed) { return; }
+		if (this.documentsVisible) { this.editor.focus(); }
+		else {
+			const details = this.panes.getActivePaneComposite(ViewContainerLocation.AuxiliaryBar);
+			if (this.layout.isPartVisible('auxiliarybar') && details) { details.focus(); }
+			else { this.layout.focus(); }
+		}
+	}
 
 	private setDocumentsVisible(visible: boolean): void {
 		if (visible) { this.layout.showPart('editor'); }
@@ -109,6 +124,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 	protected override getWorkingSet(key: string): EditorWorkingSet { return this.editor.saveWorkingSet(key, [this.pageGroupId]); }
 	protected override async applyWorkingSet(saved: EditorWorkingSet | 'empty'): Promise<void> {
 		await this.editor.applyWorkingSet(saved, { preserveFocus: true, preserveGroups: [this.pageGroupId] });
+		if (this.isDisposed) { return; }
 		this.editor.setGroupVisible(this.pageGroupId, false);
 		this.editor.activateGroup(this.documentGroups[0]!.id);
 	}
@@ -116,30 +132,38 @@ export class DesktopLayoutController extends BaseLayoutController {
 		if (!this.context.isDocumentContent) { return; }
 		this.editor.activateGroup(this.documentGroups[0]!.id);
 		await this.tabs.reconcile(selection, !this.documentsVisible && this.layout.isPartVisible('auxiliarybar'));
+		if (this.isDisposed) { return; }
 		await this.detailPanel.update(false);
 	}
 	public async hideEditor(): Promise<void> {
+		if (this.isDisposed) { return; }
 		this.setDocumentsVisible(false);
 		this.layout.showPart('auxiliarybar');
 		if (this.sessions.activeSelection) { await this.tabs.reconcile(this.sessions.activeSelection, true); }
+		if (this.isDisposed) { return; }
 		await this.detailPanel.update(true);
-		this.layout.focus();
+		if (!this.isDisposed) { this.layout.focus(); }
 	}
 	public async showEditor(): Promise<void> {
+		if (this.isDisposed) { return; }
 		this.setDocumentsVisible(true);
 		this.editor.activateGroup(this.documentGroups[0]!.id);
 		if (this.sessions.activeSelection) { await this.tabs.reconcile(this.sessions.activeSelection, false); }
+		if (this.isDisposed) { return; }
 		await this.detailPanel.update(false);
-		this.editor.focus();
+		if (!this.isDisposed) { this.editor.focus(); }
 	}
 	public async toggleDetails(): Promise<void> {
+		if (this.isDisposed) { return; }
 		if (this.layout.isPartVisible('auxiliarybar')) {
 			if (!this.documentsVisible) { await this.showEditor(); }
+			if (this.isDisposed) { return; }
 			this.layout.hidePart('auxiliarybar');
 		}
 		else { this.editor.activateGroup(this.documentGroups[0]!.id); await this.detailPanel.update(true); }
 	}
 	public async toggleSidePane(): Promise<void> {
+		if (this.isDisposed) { return; }
 		if (this.documentsVisible || this.layout.isPartVisible('auxiliarybar')) {
 			this.closedProfile = { documents: this.documentsVisible, details: this.layout.isPartVisible('auxiliarybar') };
 			this.storage.store(lastOpenKey, JSON.stringify({ editor: this.closedProfile.documents, details: this.closedProfile.details }), StorageScope.PROFILE, StorageTarget.MACHINE);
@@ -155,15 +179,21 @@ export class DesktopLayoutController extends BaseLayoutController {
 	}
 
 	public async openFiles(): Promise<void> {
+		if (this.isDisposed) { return; }
 		await this.showEditor();
+		if (this.isDisposed) { return; }
 		await this.tabs.openFiles();
+		if (this.isDisposed) { return; }
 		await this.detailPanel.update(true);
 	}
 
 	public async openChanges(): Promise<void> {
+		if (this.isDisposed) { return; }
 		await this.showEditor();
+		if (this.isDisposed) { return; }
 		const selection = this.sessions.activeSelection;
 		if (selection) { await this.tabs.openChanges(selection); }
+		if (this.isDisposed) { return; }
 		await this.detailPanel.update(true);
 	}
 }

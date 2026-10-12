@@ -32,21 +32,26 @@ export function writeNewChatDraftState(storage: IStorageService, draft: ChatDraf
 }
 
 /** Conflicting legacy drafts get their own session before their old entry is removed. */
-export function migrateNewChatDraftState(storage: IStorageService): readonly { readonly draft: ChatDraft; readonly key: string; }[] {
+export function migrateNewChatDraftState(storage: IStorageService, onError?: (error: unknown) => void): readonly { readonly draft: ChatDraft; readonly key: string; }[] {
 	const prefixes = storage.get('sessions.activityBar.activePage', StorageScope.WORKSPACE) === 'code'
 		? ['sessions.codeDraftState', 'sessions.draftState'] : ['sessions.draftState', 'sessions.codeDraftState'];
 	const recovered: { draft: ChatDraft; key: string; }[] = [];
 	for (const prefix of prefixes) {
 		for (const key of storage.keys(StorageScope.WORKSPACE, StorageTarget.MACHINE).filter(key => key === prefix || key.startsWith(`${prefix}:`))) {
-			const draft = parseChatDraft(storage.get(key, StorageScope.WORKSPACE)!);
-			const identity = key.slice(prefix.length + 1);
-			const existing = identity ? readNewChatDraftState(storage, identity) : undefined;
-			if (!identity || existing && JSON.stringify(existing) !== JSON.stringify(draft)) {
-				recovered.push({ draft, key });
-				continue;
+			try {
+				const draft = parseChatDraft(storage.get(key, StorageScope.WORKSPACE)!);
+				const identity = key.slice(prefix.length + 1);
+				const existing = identity ? readNewChatDraftState(storage, identity) : undefined;
+				if (!identity || existing && JSON.stringify(existing) !== JSON.stringify(draft)) {
+					recovered.push({ draft, key });
+					continue;
+				}
+				writeNewChatDraftState(storage, draft, identity);
+				storage.remove(key, StorageScope.WORKSPACE);
+			} catch (error) {
+				// One corrupt entry must not block other drafts or remove recoverable storage.
+				onError?.(error);
 			}
-			writeNewChatDraftState(storage, draft, identity);
-			storage.remove(key, StorageScope.WORKSPACE);
 		}
 	}
 	return recovered;

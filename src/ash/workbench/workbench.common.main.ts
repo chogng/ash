@@ -1,4 +1,6 @@
 import '../platform/uriIdentity/common/uriIdentityService.js';
+import './contrib/terminal/common/environmentVariable.contribution.js';
+import './contrib/terminal/common/terminalExtensionPoints.contribution.js';
 import './contrib/memories/browser/memories.contribution.js';
 import './contrib/memory/browser/memory.contribution.js';
 import './contrib/trace/browser/trace.contribution.js';

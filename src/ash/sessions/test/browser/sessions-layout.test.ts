@@ -439,6 +439,39 @@ test('Sessions product page group survives legacy document group restoration', a
 	assert.equal(editor.groups.length, 3);
 });
 
+test('Sessions recreates its document host when the last document group closes', async () => {
+	const { EditorPart } = await import('../../browser/parts/editor/editorPart.js');
+	const { createTestEditorServices } = await import('../../../workbench/test/common/testEditorServices.js');
+	using services = createTestEditorServices();
+	using editor = registerTestComponentServices(services).createInstance(EditorPart, browserEnvironment.window.document.body, {});
+	const pages = editor.groups.find(group => group.id === editor.pageGroupId)!;
+	const documents = editor.activeGroup;
+	await editor.removeGroup(documents);
+	const remainingDocuments = editor.groups.filter(group => group.id !== pages.id);
+	assert.equal(remainingDocuments.length, 1);
+	assert.equal(editor.groups.find(group => group.id === pages.id), pages);
+	assert.notEqual(remainingDocuments[0]!.id, documents.id);
+	assert.equal(editor.activeGroup, remainingDocuments[0]);
+	assert.equal(editor.isGroupVisible(remainingDocuments[0]!.id), true);
+});
+
+test('Sessions recreates a hidden document host without activating it over a product page', async () => {
+	const { EditorPart } = await import('../../browser/parts/editor/editorPart.js');
+	const { createTestEditorServices } = await import('../../../workbench/test/common/testEditorServices.js');
+	using services = createTestEditorServices();
+	using editor = registerTestComponentServices(services).createInstance(EditorPart, browserEnvironment.window.document.body, {});
+	const documents = editor.activeGroup;
+	const pages = editor.groups.find(group => group.id === editor.pageGroupId)!;
+	editor.setGroupVisible(pages.id, true);
+	editor.setGroupVisible(documents.id, false);
+	editor.activateGroup(pages.id);
+	await editor.removeGroup(documents);
+	const remainingDocuments = editor.groups.filter(group => group.id !== pages.id);
+	assert.equal(remainingDocuments.length, 1);
+	assert.equal(editor.activeGroup, pages);
+	assert.equal(editor.isGroupVisible(remainingDocuments[0]!.id), false);
+});
+
 test('Sessions layout creation requires the registered storage service', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using services = new InstantiationService();

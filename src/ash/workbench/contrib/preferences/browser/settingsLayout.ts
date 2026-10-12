@@ -465,7 +465,7 @@ export const SettingsNavigation = [
 					id: 'chat-default',
 					get label() { return localize('settings.models.chatDefault.label', 'Chat'); },
 					get description() { return localize('settings.models.chatDefault.description', 'Choose the model used for new chats.'); },
-					settings: ['chat.defaultModel'],
+					settings: ['chat.defaultModel', 'cowork.defaultmodel'],
 				}],
 			},
 			{

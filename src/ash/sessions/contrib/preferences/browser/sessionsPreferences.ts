@@ -19,6 +19,7 @@ import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import type { Icon } from '../../../../base/common/icon.js';
+import { Event } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
@@ -29,6 +30,10 @@ import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, typ
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
+import { createSettingsEditorInput } from '../../../../workbench/services/preferences/common/settingsEditorInput.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ActivityBarPosition } from '../../../../workbench/common/configuration.js';
 import '../../../../workbench/contrib/preferences/common/settingsEditorColorRegistry.js';
@@ -37,11 +42,11 @@ import { AdvisorSettingsContent } from '../../../../workbench/contrib/chat/brows
 import { ModelSettingsContent } from '../../../../workbench/contrib/chat/browser/modelSettingsContent.js';
 import { DictationSettingsContent } from '../../../../workbench/contrib/chat/browser/speechToText/dictationSettingsContent.js';
 import { SettingsTree } from '../../../../workbench/contrib/preferences/browser/settingsTree.js';
-import { SettingsTreeModel, type SettingsContent, type SettingsContentItem, type SettingsTreeNode } from '../../../../workbench/contrib/preferences/browser/settingsTreeModels.js';
+import { SettingsTreeModel, type SettingsContent, type SettingsContentItem, type SettingsSectionField, type SettingsTreeNode } from '../../../../workbench/contrib/preferences/browser/settingsTreeModels.js';
 import { SettingsSearchQuery } from '../../../../workbench/contrib/preferences/browser/settingsSearch.js';
 import { SettingsSearchMenu } from '../../../../workbench/contrib/preferences/browser/settingsSearchMenu.js';
 import type { SettingWidgetOptions } from '../../../../workbench/contrib/preferences/browser/settingsWidgets.js';
-import { validateSettingsEditorOptions, type IOpenSettingsOptions, type ISetting } from '../../../../workbench/services/preferences/common/preferences.js';
+import { IPreferencesService, validateSettingsEditorOptions, type IOpenSettingsOptions, type ISetting } from '../../../../workbench/services/preferences/common/preferences.js';
 import { SessionsConfiguration } from '../../../common/configuration.js';
 import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
 import { SessionsCustomizeContent } from './sessionsCustomizeContent.js';
@@ -68,7 +73,7 @@ function configuration<T>(key: string): IRegisteredConfiguration<T> {
 }
 
 interface SettingsCategory {
-	readonly id?: string;
+	readonly id: string;
 	readonly title: string;
 	readonly icon: Icon;
 	readonly settings: readonly ISetting[];
@@ -110,7 +115,7 @@ export class SessionsPreferences extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsSettings,
 					{ type: AccessibleViewType.Help },
-					() => localize('sessions.settings.help', 'Sessions Settings has categories on the left and settings on the right. General contains dictation settings; Models contains chat models and API connections. Tools shows the current tool catalog and execution requirements. Git & PRs contains Codex review account status, repository access checks, and official review management links. Agents contains the Advisor model and enable switch. Execution trace shows the running recorder, detailed recording switch and save directory. Save trace settings explicitly, then restart the owning App Server to apply them. Other changes are saved immediately. Design contains canvas cursor and accessibility settings. Customize has Settings and Hooks tabs. Extensions, Plugins, Skills and MCP Servers are managed in Extensions. Manage Hooks opens Agent Customizations in the editor. Use Left and Right to move between tabs, then Enter or Space to open one. Use search to filter settings. Open More actions for a configuration setting and choose Copy Setting as JSON to copy its key and current value; copying does not save settings. The local dictation table lists available and installed models. Use arrow keys to move between rows and cells, and Tab to reach Install, Use model, Cancel, or Uninstall. Preparation continues after Settings closes. Cloud dictation uses the API connections in Models. Press Escape to close Settings.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.modifiedHelp' }, 'Type @modified or choose Modified in Filter Settings to show settings saved in local user settings, including explicit default values. Combine it with text or @id: filters. Language-only overrides and service status are excluded. Reset removes a saved override; failed saves keep the previous results. Clear Filters keeps your search text.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.openQueryHelp' }, 'Search accepts setting IDs or words. Opening Settings with a query focuses the search field and updates the existing page. An empty query clears the filter. Press Escape in a non-empty search field to clear it.'),
+					() => localize('sessions.settings.help', 'Sessions Settings has categories on the left and settings on the right. General contains dictation settings; Models contains chat models and API connections. Tools shows the current tool catalog and execution requirements. Git & PRs contains Codex review account status, repository access checks, and official review management links. Agents contains the Advisor model and enable switch. Execution trace shows the running recorder, detailed recording switch and save directory. Save trace settings explicitly, then restart the owning App Server to apply them. Other changes are saved immediately. Design contains canvas cursor and accessibility settings. Customize has Settings and Hooks tabs. Extensions, Plugins, Skills and MCP Servers are managed in Extensions. Manage Hooks opens Agent Customizations in the editor. Use Left and Right to move between tabs, then Enter or Space to open one. Use Up and Down, Home or End to navigate categories. Keyboard Shortcuts opens the shared shortcut editor or keybindings.json. Customize Settings opens all Workbench settings or settings.json. Browser, Tab, Code Intelligence and Environment open their Workbench settings. Use search to filter settings and Down to focus the first result. Open More actions for a configuration setting and choose Copy Setting as JSON to copy its key and current value; copying does not save settings. The local dictation table lists available and installed models. Use arrow keys to move between rows and cells, and Tab to reach Install, Use model, Cancel, or Uninstall. Preparation continues after Settings closes. Cloud dictation uses the API connections in Models. Press Escape to close Settings.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.modifiedHelp' }, 'Type @modified or choose Modified in Filter Settings to show settings saved in local user settings, including explicit default values. Combine it with text or @id: filters. Language-only overrides and service status are excluded. Reset removes a saved override; failed saves keep the previous results. Clear Filters keeps your search text.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.openQueryHelp' }, 'Search accepts setting IDs or words. Opening Settings with a query focuses the search field and updates the existing page. An empty query clears the filter. Press Escape in a non-empty search field to clear it.'),
 					() => focused.focus(),
 					AccessibilityVerbositySettingId.SessionsSettings,
 				);
@@ -127,6 +132,9 @@ export class SessionsPreferences extends Disposable {
 			else this.dialog.element.focus();
 			return;
 		}
+		// Release the closed modal's menus and accessibility registrations before
+		// a replacement is constructed, even if its open promise is still settling.
+		this.activeDialog.clear();
 		const ownerDocument = this.container.ownerDocument;
 		const content = h(ownerDocument, 'div');
 		content.className = 'ash-sessions-settings';
@@ -143,6 +151,7 @@ export class SessionsPreferences extends Disposable {
 		navigationContent.className = 'ash-sessions-settings-navigation-content';
 		sidebar.append(search, navigation);
 		const page = h(ownerDocument, 'section');
+		page.id = 'ash-sessions-settings-content';
 		page.className = 'ash-sessions-settings-page';
 		const pageContent = h(ownerDocument, 'div');
 		pageContent.className = 'ash-sessions-settings-page-content';
@@ -184,6 +193,7 @@ export class SessionsPreferences extends Disposable {
 			presentation: 'field',
 			placeholder: localize('sessions.settings.search', 'Search settings'),
 			ariaLabel: localize('sessions.settings.search', 'Search settings'),
+			ariaControls: page.id,
 		}));
 		if (validated.query !== undefined) searchInput.value = validated.query;
 		const dialog = resources.add(new Dialog(this.container, {
@@ -209,7 +219,33 @@ export class SessionsPreferences extends Disposable {
 			focus: () => searchInput.focus(),
 			contextMenuProvider: contextMenus,
 		}));
+		// The window owns preferences, editors and notifications. Resolve them before closing
+		// the modal, whose child service scope is released by open()'s finally block.
+		const notifications = this.instantiationService.invokeFunction(accessor => accessor.get(INotificationService));
+		const handoff = async (operation: () => Promise<void>, showEditor = true): Promise<void> => {
+			dialog.close();
+			try {
+				await operation();
+				if (showEditor && !this.isDisposed) this.showEditor();
+			} catch (error) {
+				if (!this.isDisposed) notifications.error(localize('sessions.settings.openFailed', 'Could not open preferences: {0}', String(error)));
+			}
+		};
+		const openSettingsEditor = (section?: string): Promise<void> => {
+			const editors = this.instantiationService.invokeFunction(accessor => accessor.get(IEditorService));
+			return handoff(async () => { await editors.openEditor(createSettingsEditorInput(section), { pinned: true }, 'modalGroup'); }, false);
+		};
+		const openUserSettings = (key?: string): Promise<void> => {
+			const preferences = this.instantiationService.invokeFunction(accessor => accessor.get(IPreferencesService));
+			return handoff(() => preferences.openUserSettings(key ? { revealSetting: { key, edit: true } } : {}));
+		};
+		const managementContent = (id: string, title: string, description: string, fields: readonly SettingsSectionField[]): SettingsContent =>
+			resources.add(contentServices.createInstance(SettingsSectionRenderer, list, {
+				categoryId: id, title, description, help: description, fields,
+				onDidChange: Event.None, setVisible: () => { },
+			}, AccessibleViewProviderId.SessionsSettings, AccessibilityVerbositySettingId.SessionsSettings));
 		const settingOptions: SettingWidgetOptions = {
+			onOpenSettings: key => openUserSettings(key),
 			onStatus: (message, isError) => {
 				status.textContent = message;
 				status.classList.toggle('is-error', isError);
@@ -221,7 +257,7 @@ export class SessionsPreferences extends Disposable {
 		const renderer = resources.add(contentServices.createInstance(SettingsRenderer, list, settingOptions));
 		const modelContent = resources.add(this.instantiationService.createInstance(ModelSettingsContent, list));
 		const dictationContent = resources.add(this.instantiationService.createInstance(DictationSettingsContent, list));
-		const customizeContent = resources.add(contentServices.createInstance(SessionsCustomizeContent, list, async () => { dialog.close(); }, this.showEditor));
+		const customizeContent = resources.add(contentServices.createInstance(SessionsCustomizeContent, list, async () => { dialog.close(); }, this.showEditor, () => openSettingsEditor(), () => openUserSettings()));
 		const advisorContent = resources.add(contentServices.createInstance(AdvisorSettingsContent, list));
 		const githubSettings = resources.add(contentServices.createInstance(GitHubSettingsModel, async () => { dialog.close(); }));
 		const githubContent = resources.add(contentServices.createInstance(SettingsSectionRenderer, list, githubSettings, AccessibleViewProviderId.GitHubSettings, AccessibilityVerbositySettingId.GitHubSettings));
@@ -229,17 +265,52 @@ export class SessionsPreferences extends Disposable {
 		const traceContent = resources.add(contentServices.createInstance(SettingsSectionRenderer, list, traceSettings, AccessibleViewProviderId.TraceSettings, AccessibilityVerbositySettingId.TraceSettings));
 		const executionSettings = resources.add(contentServices.createInstance(ExecutionSettingsModel));
 		const executionContent = resources.add(contentServices.createInstance(SettingsSectionRenderer, list, executionSettings, AccessibleViewProviderId.ExecutionSettings, AccessibilityVerbositySettingId.ExecutionSettings));
-		const sections = this.sections(modelContent, dictationContent, customizeContent, advisorContent, githubContent, traceContent, executionContent);
+		const management = new Map<string, SettingsContent>();
+		const accountTitle = localize('sessions.settings.account', 'Account');
+		management.set('account', managementContent('account', accountTitle,
+			localize('sessions.settings.accountDescription', 'Manage connected accounts and sign-in methods.'), [{
+				id: 'manage', kind: 'action', enabled: true,
+				label: localize({ bundle: 'ash', key: 'workbench.manageAccounts' }, 'Manage Accounts'),
+				run: () => {
+					const commands = this.instantiationService.invokeFunction(accessor => accessor.get(ICommandService));
+					return handoff(async () => { await commands.executeCommand('workbench.action.manageAccounts'); }, false);
+				},
+			}]));
+		const shortcutTitle = localize('sessions.settings.shortcuts', 'Keyboard Shortcuts');
+		management.set('keyboard-shortcuts', managementContent('keyboard-shortcuts', shortcutTitle,
+			localize('sessions.settings.shortcutsDescription', 'Search commands and keybindings, inspect defaults, record keys, and edit or reset shortcuts. Changes use the current profile and also apply in the Workbench.'),
+			[false, true].map(textual => ({
+				id: textual ? 'json' : 'editor', kind: 'action', enabled: true,
+				label: textual ? localize({ bundle: 'ash', key: 'keybindings.openJson' }, 'Preferences: Open Keyboard Shortcuts (JSON)') : shortcutTitle,
+				run: () => {
+					const preferences = this.instantiationService.invokeFunction(accessor => accessor.get(IPreferencesService));
+					return handoff(() => preferences.openGlobalKeybindingSettings(textual));
+				},
+			}))));
+		for (const [id, section, title] of [
+			['browser', 'browser', localize('sessions.settings.browser', 'Browser')],
+			['tab', 'editor-opening', localize('sessions.settings.tab', 'Tab')],
+			['code-intelligence', 'editor-suggestions', localize('sessions.settings.codeIntelligence', 'Code Intelligence')],
+			['environment', 'terminal', localize('sessions.settings.environment', 'Environment')],
+		] as const) {
+			const label = localize('sessions.settings.openSection', 'Open {0} settings', title);
+			const fields: SettingsSectionField[] = [{ id: 'settings', kind: 'action', label, enabled: true, run: () => openSettingsEditor(section) }];
+			if (id === 'code-intelligence') fields.push({
+				id: 'language-servers', kind: 'action', enabled: true,
+				label: localize('sessions.settings.languageServers', 'Language servers'), run: () => openSettingsEditor('editor-language'),
+			});
+			management.set(id, managementContent(id, title,
+				localize('sessions.settings.sharedDescription', 'These preferences are shared with the Workbench. Open the settings editor to view, change, search, or reset them.'), fields));
+		}
+		const sections = this.sections(modelContent, dictationContent, customizeContent, advisorContent, githubContent, traceContent, executionContent, management);
 		const categories = sections.flatMap(section => section.categories);
-		if (categoryId === 'hooks') customizeContent.selectTab(categoryId);
-		let activeCategory = categoryId === 'customize' || categoryId === 'hooks' ? categories.findIndex(category => category.content === customizeContent)
-			: categoryId === 'dictation' ? categories.findIndex(category => category.content === dictationContent)
-				: categoryId === 'execution-permissions' ? categories.findIndex(category => category.content === executionContent)
-					: categoryId === 'github' ? categories.findIndex(category => category.content === githubContent)
-						: categoryId === 'execution-trace' ? categories.findIndex(category => category.content === traceContent)
-							: categoryId === 'agents' ? categories.findIndex(category => category.content === advisorContent)
-								: categoryId === 'models' ? categories.findIndex(category => category.content === modelContent)
-									: categoryId === 'tools' ? categories.findIndex(category => category.id === 'tools') : 0;
+		const categoryIndex = (id: string | undefined): number => {
+			const target = id === 'hooks' ? 'customize' : id === 'dictation' ? 'general' : id;
+			const index = categories.findIndex(category => category.id === target);
+			return index >= 0 ? index : 0;
+		};
+		if (categoryId === 'hooks') customizeContent.selectTab('hooks');
+		let activeCategory = categoryIndex(categoryId);
 		const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 		const treeModel = resources.add(new SettingsTreeModel<ISetting | SettingsContentItem>(id =>
 			// Keep service-only sections out of the local-user filter without creating configuration copies.
@@ -280,20 +351,22 @@ export class SessionsPreferences extends Disposable {
 					},
 				}));
 				button.domNode.classList.add('ash-sessions-settings-navigation-item');
+				button.domNode.dataset.settingsCategoryId = category.id;
+				button.domNode.setAttribute('aria-controls', page.id);
 				buttons.push(button);
 			}
 		}
 		const render = (): void => {
 			const query = new SettingsSearchQuery(searchInput.value);
 			const nodes: readonly SettingsTreeNode<ISetting | SettingsContentItem>[] = categories.map((category, index) => ({
-				element: { kind: 'group', id: `sessions.category.${index}`, title: category.title, description: '' },
+				element: { kind: 'group', id: `sessions.category.${category.id}`, title: category.title, description: '' },
 				children: [
 					...category.settings.map(setting => ({ element: { kind: 'item' as const, id: setting.id, title: setting.title, description: setting.description, keywords: [setting.id, ...setting.keywords ?? []], value: setting } })),
 					...category.content?.getNodes(query) ?? [],
 				],
 			}));
 			treeModel.setChildren(nodes);
-			tree.setNavigationTarget(query.isEmpty ? `sessions.category.${activeCategory}` : undefined);
+			tree.setNavigationTarget(query.isEmpty ? `sessions.category.${categories[activeCategory].id}` : undefined);
 			treeModel.setQuery(query);
 			for (const [index, category] of categories.entries()) {
 				category.content?.setVisible(!query.isEmpty || index === activeCategory);
@@ -317,17 +390,39 @@ export class SessionsPreferences extends Disposable {
 		resources.add(this.configurationService.onDidChangeConfiguration(() => {
 			if (new SettingsSearchQuery(searchInput.value).hasModifiedFilter) render();
 		}));
-		this.navigate = (categoryId) => {
-			if (categoryId === 'hooks') customizeContent.selectTab(categoryId);
-			activeCategory = categoryId === 'customize' || categoryId === 'hooks' ? categories.findIndex(category => category.content === customizeContent)
-				: categoryId === 'execution-permissions' ? categories.findIndex(category => category.content === executionContent)
-					: categoryId === 'github' ? categories.findIndex(category => category.content === githubContent)
-						: categoryId === 'agents' ? categories.findIndex(category => category.content === advisorContent)
-							: categoryId === 'models' ? categories.findIndex(category => category.content === modelContent)
-								: categoryId === 'tools' ? categories.findIndex(category => category.id === 'tools') : categories.findIndex(category => category.content === dictationContent);
+		this.navigate = categoryId => {
+			if (categoryId === 'hooks') customizeContent.selectTab('hooks');
+			activeCategory = categoryIndex(categoryId);
 			searchInput.value = '';
 			render();
+			pageScrollable.scrollTo(0, 0);
 		};
+		resources.add(addDisposableListener(navigation, 'keydown', event => {
+			const current = buttons.findIndex(button => button.domNode === ownerDocument.activeElement);
+			if (current < 0) return;
+			const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1
+				: event.key === 'ArrowDown' ? (current + 1) % buttons.length
+					: event.key === 'ArrowUp' ? (current + buttons.length - 1) % buttons.length : undefined;
+			if (next === undefined) return;
+			event.preventDefault();
+			event.stopPropagation();
+			buttons[next].focus();
+			buttons[next].domNode.click();
+		}));
+		resources.add(searchInput.onKeyDown(event => {
+			if (event.key === 'Escape' && searchInput.value) {
+				event.preventDefault();
+				event.stopPropagation();
+				searchInput.value = '';
+			} else if (event.key === 'ArrowDown') {
+				const target = [...pageContent.querySelectorAll<HTMLElement>('button, input, select, textarea, [tabindex="0"]')]
+					.find(element => !element.hasAttribute('disabled') && element.getClientRects().length > 0);
+				if (!target) return;
+				event.preventDefault();
+				event.stopPropagation();
+				target.focus();
+			}
+		}));
 		resources.add(searchInput.onDidChange(() => {
 			render();
 			pageScrollable.scrollTo(0, 0);
@@ -359,14 +454,18 @@ export class SessionsPreferences extends Disposable {
 			if (validated.query !== undefined) searchInput.focus();
 			await shown;
 		} finally {
-			this.navigate = undefined;
-			this.applyQuery = undefined;
-			this.dialog = undefined;
-			this.activeDialog.clear();
+			// Closing can be followed by another open before this promise settles.
+			// A retired opening must not release the replacement's modal scope.
+			if (this.dialog === dialog) {
+				this.navigate = undefined;
+				this.applyQuery = undefined;
+				this.dialog = undefined;
+				this.activeDialog.clear();
+			}
 		}
 	}
 
-	private sections(modelContent: SettingsContent, dictationContent: SettingsContent, customizeContent: SettingsContent, advisorContent: SettingsContent, githubContent: SettingsContent, traceContent: SettingsContent, executionContent: SettingsContent): readonly SettingsSection[] {
+	private sections(modelContent: SettingsContent, dictationContent: SettingsContent, customizeContent: SettingsContent, advisorContent: SettingsContent, githubContent: SettingsContent, traceContent: SettingsContent, executionContent: SettingsContent, management: ReadonlyMap<string, SettingsContent>): readonly SettingsSection[] {
 		const appearanceSettings: readonly ISetting[] = [{
 			id: SessionsConfiguration.layoutStyle,
 			valueType: 'select',
@@ -431,33 +530,31 @@ export class SessionsPreferences extends Disposable {
 		return [{
 			title: localize('sessions.settings.section.basics', 'Basics'),
 			categories: [
-				{ title: localize('sessions.settings.general', 'General'), icon: Lxicon.settings, settings: generalSettings, content: dictationContent },
-				{ title: localize('sessions.settings.account', 'Account'), icon: Lxicon.account, settings: [] },
-				{ title: localize('sessions.settings.appearance', 'Appearance'), icon: Lxicon.appearance, settings: appearanceSettings },
-				{ title: localize('sessions.settings.customize', 'Customize'), icon: Lxicon.briefcase, settings: [], content: customizeContent },
+				{ id: 'general', title: localize('sessions.settings.general', 'General'), icon: Lxicon.settings, settings: generalSettings, content: dictationContent },
+				{ id: 'account', title: localize('sessions.settings.account', 'Account'), icon: Lxicon.account, settings: [], content: management.get('account') },
+				{ id: 'appearance', title: localize('sessions.settings.appearance', 'Appearance'), icon: Lxicon.appearance, settings: appearanceSettings },
+				{ id: 'customize', title: localize('sessions.settings.customize', 'Customize'), icon: Lxicon.briefcase, settings: [], content: customizeContent },
 			],
 		}, {
 			title: localize('sessions.settings.section.development', 'Development'),
 			categories: [
-				{ title: localize({ bundle: 'ash.settings', key: 'execution.title' }, 'Execution and permissions'), icon: Lxicon.settings, settings: [], content: executionContent },
+				{ id: 'execution-permissions', title: localize({ bundle: 'ash.settings', key: 'execution.title' }, 'Execution and permissions'), icon: Lxicon.settings, settings: [], content: executionContent },
 				{ id: 'tools', title: localize('sessions.settings.tools', 'Tools'), icon: Lxicon.settings, settings: [] },
-				{ title: localize('sessions.settings.agents', 'Agents'), icon: Lxicon.agent, settings: [], content: advisorContent },
-				{ title: localize('sessions.settings.executionTrace', 'Execution trace'), icon: Lxicon.history, settings: [], content: traceContent },
-				{ title: localize('library.title', 'Library'), icon: Lxicon.library, settings: librarySettings },
-				{ title: localize('sessions.settings.design', 'Design'), icon: Lxicon.symbolColor, settings: designSettings },
-				{ title: localize('sessions.settings.models', 'Models'), icon: Lxicon.model, settings: [], content: modelContent },
-				{ title: localize('sessions.settings.gitPrs', 'Git & PRs'), icon: Lxicon.git, settings: [], content: githubContent },
-				{ title: localize('sessions.settings.worktree', 'Worktree'), icon: Lxicon.gitBranch, settings: [] },
-				{ title: localize('sessions.settings.browser', 'Browser'), icon: Lxicon.browserWeb, settings: [] },
-				{ title: localize('sessions.settings.tab', 'Tab'), icon: Lxicon.keyboardTab, settings: [] },
-				{ title: localize('sessions.settings.codeIntelligence', 'Code Intelligence'), icon: Lxicon.code, settings: [] },
-				{ title: localize('sessions.settings.environment', 'Environment'), icon: Lxicon.terminal, settings: [] },
+				{ id: 'agents', title: localize('sessions.settings.agents', 'Agents'), icon: Lxicon.agent, settings: [], content: advisorContent },
+				{ id: 'execution-trace', title: localize('sessions.settings.executionTrace', 'Execution trace'), icon: Lxicon.history, settings: [], content: traceContent },
+				{ id: 'library', title: localize('library.title', 'Library'), icon: Lxicon.library, settings: librarySettings },
+				{ id: 'design', title: localize('sessions.settings.design', 'Design'), icon: Lxicon.symbolColor, settings: designSettings },
+				{ id: 'models', title: localize('sessions.settings.models', 'Models'), icon: Lxicon.model, settings: [], content: modelContent },
+				{ id: 'github', title: localize('sessions.settings.gitPrs', 'Git & PRs'), icon: Lxicon.git, settings: [], content: githubContent },
+				{ id: 'browser', title: localize('sessions.settings.browser', 'Browser'), icon: Lxicon.browserWeb, settings: [], content: management.get('browser') },
+				{ id: 'tab', title: localize('sessions.settings.tab', 'Tab'), icon: Lxicon.keyboardTab, settings: [], content: management.get('tab') },
+				{ id: 'code-intelligence', title: localize('sessions.settings.codeIntelligence', 'Code Intelligence'), icon: Lxicon.code, settings: [], content: management.get('code-intelligence') },
+				{ id: 'environment', title: localize('sessions.settings.environment', 'Environment'), icon: Lxicon.terminal, settings: [], content: management.get('environment') },
 			],
 		}, {
 			title: localize('sessions.settings.section.management', 'Management'),
 			categories: [
-				{ title: localize('sessions.settings.shortcuts', 'Keyboard Shortcuts'), icon: Lxicon.command, settings: [] },
-				{ title: localize('sessions.settings.archivedChats', 'Archived Chats'), icon: Lxicon.archive, settings: [] },
+				{ id: 'keyboard-shortcuts', title: localize('sessions.settings.shortcuts', 'Keyboard Shortcuts'), icon: Lxicon.command, settings: [], content: management.get('keyboard-shortcuts') },
 			],
 		}];
 	}

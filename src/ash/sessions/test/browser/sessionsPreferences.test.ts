@@ -26,7 +26,7 @@ import { JSDOM } from 'jsdom';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { IAppServerSkillApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { IExtensionManagementService } from '../../../platform/extensionManagement/common/extensionManagementService.js';
-import { ICommandService } from '../../../platform/commands/common/commands.js';
+import { CommandsRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
 import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { IHooksService } from '../../../platform/hooks/common/hooksService.js';
@@ -63,7 +63,7 @@ test('Sessions modified filtering excludes window defaults, fixed values and lan
 	assert.deepEqual(tree.visibleItems.map(item => item.id), []);
 });
 
-test('Sessions Models switches control the model picker visibility preference', async () => {
+test('Sessions preferences reuses Workbench owners and preserves navigation, search, models and localization', async () => {
 	const unexpectedErrors: unknown[] = [];
 	const previousErrorHandler = errorHandler.getUnexpectedErrorHandler();
 	errorHandler.setUnexpectedErrorHandler(error => unexpectedErrors.push(error));
@@ -203,11 +203,30 @@ test('Sessions Models switches control the model picker visibility preference', 
 	services.registerInstance(ITraceSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, configured: null, recording: { type: 'disabled' } }), configure: async () => { } });
 	services.registerInstance(IFileDialogService, { showOpenDialog: async () => undefined, showSaveDialog: async () => undefined, pickFileToSave: async () => undefined, showSaveConfirm: async () => 2 });
 	services.registerInstance(IChatSessionNavigationService, { getActiveConversation: () => undefined, getConversations: () => [], captureActiveDraft: async () => undefined, openConversation: async () => { }, appendToActiveDraft: () => { } });
-	services.registerInstance(IEditorService, {} as IEditorService);
+	const editorOpens: { resource: string; target: unknown; }[] = [];
+	services.registerInstance(IEditorService, {
+		openEditor: async (input, _options, target) => {
+			assert.equal(window.document.querySelector('dialog[open]'), null, 'the modal is closed before editor ownership changes');
+			editorOpens.push({ resource: input.resource.toString(), target });
+			return undefined;
+		}
+	} as IEditorService);
 	services.registerInstance(IFileService, {} as IFileService);
 	services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, fallback) => fallback });
 	const { IPreferencesService } = await import('../../../workbench/services/preferences/common/preferences.js');
-	services.registerInstance(IPreferencesService, { openSettings: options => preferences.open(options) } as import('../../../workbench/services/preferences/common/preferences.js').IPreferencesService);
+	const preferenceOpens: unknown[] = [];
+	let rejectShortcut = false;
+	let pendingShortcut: Promise<void> | undefined;
+	services.registerInstance(IPreferencesService, {
+		openSettings: options => preferences.open(options),
+		openUserSettings: async options => { preferenceOpens.push({ user: options }); },
+		openGlobalKeybindingSettings: async textual => {
+			assert.equal(window.document.querySelector('dialog[open]'), null);
+			if (pendingShortcut) await pendingShortcut;
+			if (rejectShortcut) throw new Error('shortcut editor unavailable');
+			preferenceOpens.push({ keybindings: textual });
+		},
+	});
 	services.registerInstance(IAccountService, { onDidChangeAccounts: Event.None, onDidCompleteLogin: Event.None, read: async () => ({ revision: 1n, accounts: [] }), startLogin: async () => { throw new Error('Not used'); }, cancelLogin: async () => { }, logout: async () => { } });
 	services.registerInstance(IGitHubService, { listAccounts: async () => [] } as unknown as IGitHubService);
 	services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async () => { }, cancel: async () => { } });
@@ -216,10 +235,43 @@ test('Sessions Models switches control the model picker visibility preference', 
 	services.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
 	services.registerInstance(IAgentCapabilitiesService, { isAvailable: true, read: async () => ({ toolSets: [], tools: [{ name: 'read_file', description: 'Read authorized files', source: 'local', sourceDetails: ['Ash'], exposure: 'direct', authority: 'directoryRead' }], localProcessSandboxConfigured: false, sandboxBackends: [], directoryGrantsReadable: false, sandboxDiagnostics: [] }) });
 	services.registerInstance(IDirPermissionsService, { onDidChangePermissions: Event.None } as import('../../../platform/dirPermissions/common/dirPermissionsService.js').IDirPermissionsService);
-	using preferences = services.createInstance(SessionsPreferences, window.document.body, () => { });
+	let editorReveals = 0;
+	using preferences = services.createInstance(SessionsPreferences, window.document.body, () => { editorReveals++; });
 	await configuration.updateValue('sessions.activityBar.compact', true);
 	const opened = preferences.open();
 	await Promise.race([opened, Promise.resolve()]);
+	await preferences.open({ query: 'Preferences: Open User Settings (JSON)' });
+	assert.ok(window.document.querySelector('.ash-sessions-customize'), 'global search discovers lazily created Settings actions');
+	await preferences.open({ section: 'general' });
+	const categoryButton = (id: string): HTMLButtonElement => window.document.querySelector<HTMLButtonElement>(`[data-settings-category-id="${id}"]`)!;
+	assert.equal(categoryButton('worktree'), null, 'unsupported worktree management is not offered as an empty page');
+	assert.equal(categoryButton('archived-chats'), null);
+	for (const id of ['execution-trace', 'appearance', 'browser', 'tab', 'code-intelligence', 'environment', 'keyboard-shortcuts', 'account', 'library', 'design', 'customize', 'general']) {
+		await preferences.open({ section: id });
+		assert.equal(categoryButton(id).getAttribute('aria-current'), 'page', `reopening navigates to ${id}`);
+		assert.equal(categoryButton(id).getAttribute('aria-controls'), 'ash-sessions-settings-content');
+	}
+	await preferences.open({ section: 'dictation' });
+	assert.equal(categoryButton('general').getAttribute('aria-current'), 'page');
+	await preferences.open({ section: 'unavailable' });
+	assert.equal(categoryButton('general').getAttribute('aria-current'), 'page');
+	await preferences.open({ section: 'hooks' });
+	assert.equal(window.document.querySelector('[role="tab"][aria-selected="true"]')?.textContent, 'Hooks');
+	const settingsSearch = window.document.querySelector<HTMLInputElement>('.ash-sessions-settings-search input')!;
+	settingsSearch.value = 'compact';
+	settingsSearch.dispatchEvent(new window.Event('input', { bubbles: true }));
+	settingsSearch.focus();
+	settingsSearch.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+	assert.equal(settingsSearch.value, '');
+	assert.equal(window.document.activeElement, settingsSearch);
+	assert.ok(window.document.querySelector('dialog[open]'), 'clearing a search must not dismiss Settings');
+	categoryButton('general').focus();
+	categoryButton('general').dispatchEvent(new window.KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }));
+	assert.equal(window.document.activeElement, categoryButton('keyboard-shortcuts'));
+	assert.equal(categoryButton('keyboard-shortcuts').getAttribute('aria-current'), 'page');
+	categoryButton('keyboard-shortcuts').dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+	assert.equal(window.document.activeElement, categoryButton('general'));
+	await preferences.open({ section: 'general' });
 	const openCopyMenu = (category = 'Appearance', copyLabel = 'Copy Setting as JSON') => {
 		const dialog = window.document.querySelector<HTMLDialogElement>('dialog')!;
 		[...dialog.querySelectorAll<HTMLButtonElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === category)!.click();
@@ -229,6 +281,8 @@ test('Sessions Models switches control the model picker visibility preference', 
 		const menu = dialog.querySelector<HTMLElement>('[role="menu"]')!;
 		assert.ok(menu);
 		menu.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+		assert.equal(window.document.activeElement?.textContent, category === '外观' ? '在 JSON 中编辑' : 'Edit in settings.json', 'the JSON editor action is reachable from the configuration owner');
+		menu.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
 		const copy = [...menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(button => button.textContent === copyLabel)!;
 		assert.ok(copy);
 		assert.equal(window.document.activeElement, copy);
@@ -409,11 +463,86 @@ test('Sessions Models switches control the model picker visibility preference', 
 		assert.equal(restoredSwitch.getAttribute('aria-label'), '在画布中使用指针光标');
 		assert.equal(restoredSwitch.checked, false);
 		await assert.rejects(configuration.updateValue('sessions.design.usePointerCursor', 'false'), /必须是布尔值/u);
+		await preferences.open({ section: 'keyboard-shortcuts' });
+		assert.ok([...window.document.querySelectorAll<HTMLButtonElement>('.ash-sessions-settings-page button')].some(button => button.textContent === '快捷键'));
+		assert.ok(window.document.querySelector('.ash-sessions-settings-page')?.textContent?.includes('搜索命令和快捷键、查看默认绑定、录制按键'));
+		await preferences.open({ section: 'customize' });
+		assert.ok([...window.document.querySelectorAll<HTMLButtonElement>('.ash-sessions-settings-page button')].some(button => button.textContent === '打开工作台设置'));
+
 		window.document.querySelector<HTMLDialogElement>('dialog')?.close();
 		await reopened;
 	} finally {
 		resetNlsResolver();
 	}
+	const retiringOpen = preferences.open({ section: 'general' });
+	window.document.querySelector<HTMLDialogElement>('dialog')!.close();
+	const replacementOpen = preferences.open({ section: 'keyboard-shortcuts' });
+	await Promise.race([replacementOpen, Promise.resolve()]);
+	const replacementDialog = window.document.querySelector<HTMLDialogElement>('dialog[open]');
+	await retiringOpen;
+	assert.equal(replacementDialog?.open, true, 'the retired opening cannot dispose a replacement dialog');
+	assert.equal(categoryButton('keyboard-shortcuts').getAttribute('aria-current'), 'page');
+	replacementDialog!.close();
+	await replacementOpen;
+	const openCategoryAction = async (section: string, label: string): Promise<void> => {
+		const opening = preferences.open({ section });
+		const button = [...window.document.querySelectorAll<HTMLButtonElement>('.ash-sessions-settings-page button')].find(button => button.textContent === label);
+		assert.ok(button, `${section} offers ${label}`);
+		button.click();
+		await opening;
+		await Promise.resolve();
+	};
+	await openCategoryAction('keyboard-shortcuts', 'Keyboard Shortcuts');
+	await openCategoryAction('keyboard-shortcuts', 'Preferences: Open Keyboard Shortcuts (JSON)');
+	await openCategoryAction('customize', 'Preferences: Open User Settings (JSON)');
+	assert.deepEqual(preferenceOpens, [{ keybindings: false }, { keybindings: true }, { user: {} }]);
+	await openCategoryAction('customize', 'Open Workbench Settings');
+	await openCategoryAction('browser', 'Open Browser settings');
+	await openCategoryAction('tab', 'Open Tab settings');
+	await openCategoryAction('code-intelligence', 'Language servers');
+	await openCategoryAction('environment', 'Open Environment settings');
+	assert.deepEqual(editorOpens.map(open => ({ section: new URL(open.resource).searchParams.get('target'), target: open.target })), [
+		{ section: null, target: 'modalGroup' }, { section: 'browser', target: 'modalGroup' },
+		{ section: 'editor-opening', target: 'modalGroup' }, { section: 'editor-language', target: 'modalGroup' }, { section: 'terminal', target: 'modalGroup' },
+	]);
+	assert.equal(editorReveals, 3);
+	let accountOpens = 0;
+	using manageAccounts = CommandsRegistry.register('workbench.action.manageAccounts', () => {
+		assert.equal(window.document.querySelector('dialog[open]'), null);
+		accountOpens++;
+	});
+	await openCategoryAction('account', 'Manage Accounts');
+	assert.equal(accountOpens, 1, 'Account delegates to the existing account command');
+	assert.equal(editorReveals, 3, 'account management preserves the current Sessions entry');
+	const editSettingOpen = preferences.open({ section: 'appearance' });
+	const editSettingMenu = openCopyMenu();
+	const editSetting = [...editSettingMenu.menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(button => button.textContent === 'Edit in settings.json');
+	assert.ok(editSetting);
+	editSetting.click();
+	await editSettingOpen;
+	await Promise.resolve();
+	assert.deepEqual(preferenceOpens.at(-1), { user: { revealSetting: { key: 'sessions.activityBar.compact', edit: true } } }, 'Edit JSON reveals this setting in the same profile document');
+	assert.equal(editorReveals, 4);
+	const cancelledOpen = preferences.open({ section: 'keyboard-shortcuts' });
+	const callsBeforeCancel = preferenceOpens.length;
+	window.document.querySelector<HTMLDialogElement>('dialog')!.dispatchEvent(new window.Event('cancel', { cancelable: true }));
+	await cancelledOpen;
+	assert.equal(window.document.querySelector('dialog'), null);
+	assert.equal(preferenceOpens.length, callsBeforeCancel, 'cancelling Settings cannot open or edit a profile resource');
+	rejectShortcut = true;
+	await openCategoryAction('keyboard-shortcuts', 'Keyboard Shortcuts');
+	assert.equal(notifications.getNotifications().at(-1)?.message, 'Could not open preferences: Error: shortcut editor unavailable');
+	assert.equal(editorReveals, 4, 'a failed open cannot reveal an unrelated editor');
+	const notificationsBeforeShutdown = notifications.getNotifications().length;
+	let rejectLateOpen!: (error: Error) => void;
+	pendingShortcut = new Promise<void>((_resolve, reject) => { rejectLateOpen = reject; });
+	await openCategoryAction('keyboard-shortcuts', 'Keyboard Shortcuts');
+	preferences.dispose();
+	rejectLateOpen(new Error('window closed while opening shortcuts'));
+	await pendingShortcut.catch(() => { });
+	await Promise.resolve();
+	assert.equal(notifications.getNotifications().length, notificationsBeforeShutdown, 'late opens cannot notify a retired window');
+	assert.equal(editorReveals, 4);
 	changed.dispose();
 	browser.window.close();
 	assert.deepEqual(unexpectedErrors, [], 'Preferences interactions must not leave a stale UI after a listener error');

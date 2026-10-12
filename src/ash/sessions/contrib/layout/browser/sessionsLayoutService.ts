@@ -101,13 +101,17 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		this._register(instantiation.createInstance(EditorTitleMenuBridgeContribution, this.controller, this));
 		this._register(storage.onWillSaveState(() => this.saveVisibility()));
 		this._register(lifecycle.onWillShutdown(event => event.join(this.navigationQueue.then(() => this.saveVisibility()), 'Sessions entry layout')));
-		this._register(editors.onDidActiveEditorChange(() => {
-			if (this.isChangingContent || this.controller.isRestoringEditors || !editors.activeEditor) { return; }
+		this._register(lifecycle.onDidShutdown(() => this.dispose()));
+		this._register(editor.onDidChangeEditors(event => {
+			// A modal borrows the current entry. Opening or closing it does not navigate its underlying document groups.
+			if (event.kind !== 'activeGroupChanged' && !(event.kind === 'groupChanged' && event.groupId === editor.activeGroup.id && event.event.kind === 'activeEditorChanged')) { return; }
+			if (editor.isModalEditorVisible || this.isChangingContent || this.controller.isRestoringEditors || !editors.activeEditor) { return; }
+			if (editor.activeGroup.id === this.pageGroupId && !editor.isGroupVisible(this.pageGroupId)) { return; }
 			const entry = this.editorEntries.get(extUri.getComparisonKey(editors.activeEditor.resource)) ?? documentEntry;
 			if (entry.id !== this.activeEntry.get()?.id) {
-				void this.openEntry(entry).catch(error => notifications.error(String(error)));
+				void this.openEntry(entry).catch(error => { if (!this.isDisposed) { notifications.error(String(error)); } });
 			} else if (entry.content === 'documents') {
-				void this.runOperation(() => this.controller.updateDetails(true)).catch(error => notifications.error(String(error)));
+				void this.runOperation(() => this.controller.updateDetails(true)).catch(error => { if (!this.isDisposed) { notifications.error(String(error)); } });
 			}
 		}));
 		this._register(toDisposable(() => { for (const key of this.activityKeys.values()) { key.reset(); } }));
@@ -115,23 +119,27 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 
 	public runOperation(operation: () => Promise<void>): Promise<void> {
 		const pending = this.navigationQueue.then(async () => {
+			if (this.isDisposed) { return; }
 			await operation();
-			this.saveVisibility();
+			if (!this.isDisposed) { this.saveVisibility(); }
 		});
-		this.navigationQueue = pending.catch(error => { this.notifications.error(String(error)); });
+		this.navigationQueue = pending.catch(error => { if (!this.isDisposed) { this.notifications.error(String(error)); } });
 		return pending;
 	}
 
 	public openEntry(entry: ISessionsEntry, initialize?: () => ISessionsEntry): Promise<void> {
 		return this.runOperation(async () => {
 			await this.controller.prepareContentChange();
+			if (this.isDisposed) { return; }
 			await this.conversation.setConversationKind(entry.content === 'documents' ? 'code' : 'cowork');
+			if (this.isDisposed) { return; }
 			this.saveVisibility();
 			this.isChangingContent = true;
 			try {
 				if (entry.editorInput) {
 					await this.editors.openEditor(entry.editorInput, { pinned: true }, { groupId: this.pageGroupId });
 				}
+				if (this.isDisposed) { return; }
 				entry = initialize ? initialize() : entry;
 				this.activeEntry.set(entry, undefined);
 				if (entry.editorInput) { this.editorEntries.set(extUri.getComparisonKey(entry.editorInput.resource), entry); }
@@ -155,11 +163,14 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 					this.setVisible('auxiliarybar', state.details);
 					this.setVisible('panel', documents && state.panel);
 				});
-				await this.views.openViewContainer(entry.sidebarContainerId, entry.focus === 'sidebar');
+				await this.views.openViewContainer(entry.sidebarContainerId, entry.focus === 'sidebar' && state.sidebar);
+				if (this.isDisposed) { return; }
 				this.setVisible('sidebar', state.sidebar);
 				if (entry.detailsContainerId) { await this.views.openViewContainer(entry.detailsContainerId); }
+				if (this.isDisposed) { return; }
 				if (documents) { await this.controller.activate(state.details); }
 				else { this.setVisible('auxiliarybar', state.details); }
+				if (this.isDisposed) { return; }
 				this.contextKeys.bufferChangeEvents(() => {
 					for (const key of this.activityKeys.values()) { key.reset(); }
 					let key = this.activityKeys.get(entry.activityContext);
@@ -168,8 +179,9 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				});
 				this.storage.store(activeEntryKey, entry.restoreCommand, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 				if (entry.focus === 'conversation') { this.layout.focus(); }
-				else if (entry.focus === 'editor') { this.editors.focusActiveEditor(); }
-			} finally { this.isChangingContent = false; this.conversationChanged.fire(); }
+				else if (entry.focus === 'editor') { documents ? this.controller.focus() : this.editors.focusActiveEditor(); }
+				else if (!state.sidebar) { this.layout.focus(); }
+			} finally { this.isChangingContent = false; if (!this.isDisposed) { this.conversationChanged.fire(); } }
 		});
 	}
 
@@ -190,7 +202,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 
 	private saveVisibility(): void {
 		const entry = this.activeEntry.get();
-		if (this.isChangingContent || !entry) { return; }
+		if (this.isDisposed || this.isChangingContent || !entry) { return; }
 		this.visibility.set(entry.id, {
 			sidebar: this.layout.isPartVisible('sidebar'), details: this.layout.isPartVisible('auxiliarybar'),
 			panel: this.layout.isPartVisible('panel'), documents: this.isDocumentContent && this.layout.isPartVisible('editor'),
@@ -200,6 +212,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 
 	public async restore(): Promise<void> {
 		await this.controller.whenSettled();
+		if (this.isDisposed) { return; }
 		const saved = this.storage.get(activeEntryKey, StorageScope.WORKSPACE);
 		// These names describe the discarded storage format, not runtime product selection.
 		const oldEditor = this.storage.get('sessions.layout.primaryEditor', StorageScope.WORKSPACE);
@@ -215,6 +228,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 			throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'));
 		}
 		await this.commands.executeCommand(saved ?? (oldEntry ? oldCommands[oldEntry]! : 'sessions.open.chat'));
+		if (this.isDisposed) { return; }
 		for (const key of ['sessions.layout.activeMode', 'sessions.layout.primaryPage', 'sessions.activityBar.activePage', 'sessions.layout.primaryEditor']) {
 			this.storage.remove(key, StorageScope.WORKSPACE);
 		}

@@ -29,8 +29,9 @@ export class SessionsCustomizeContent extends Disposable implements SettingsCont
 	private activeTab: CustomizeTab = 'settings';
 	private query = new SettingsSearchQuery('');
 	private hooks: SettingsSectionRenderer | undefined;
+	private settings: SettingsSectionRenderer | undefined;
 
-	constructor(container: HTMLElement, private readonly closeSettings: () => Promise<void>, private readonly showEditor: () => void,
+	constructor(container: HTMLElement, private readonly closeSettings: () => Promise<void>, private readonly showEditor: () => void, private readonly openSettingsEditor: () => Promise<void>, private readonly openUserSettings: () => Promise<void>,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 	) {
 		super();
@@ -82,7 +83,26 @@ export class SessionsCustomizeContent extends Disposable implements SettingsCont
 
 	private render(): void {
 		const searching = !this.query.isEmpty;
+		let contentCreated = false;
 		const isActive = (tab: CustomizeTab): boolean => this.visible && (searching || this.activeTab === tab);
+		if (isActive('settings') && !this.settings) {
+			this.settings = this._register(this.instantiation.createInstance(SettingsSectionRenderer, this.panel, {
+				categoryId: 'customize-settings',
+				title: this.tabItems[0].label,
+				description: localize('sessions.customize.settingsDescription', 'Edit shared Workbench preferences using the settings editor or the current profile’s settings.json file.'),
+				help: localize('sessions.customize.settingsHelp', 'Open Workbench Settings to search, change or reset settings. Open User Settings (JSON) to edit the profile’s settings.json file. Both use the same configuration owner as the Workbench.'),
+				onDidChange: Event.None,
+				fields: [{
+					id: 'editor', kind: 'action', enabled: true,
+					label: localize('sessions.customize.openSettings', 'Open Workbench Settings'), run: this.openSettingsEditor,
+				}, {
+					id: 'json', kind: 'action', enabled: true,
+					label: localize({ bundle: 'ash.settings', key: 'json.openCommand' }, 'Preferences: Open User Settings (JSON)'), run: this.openUserSettings,
+				}],
+				setVisible: () => { },
+			}, AccessibleViewProviderId.SessionsSettings, AccessibilityVerbositySettingId.SessionsSettings));
+			contentCreated = true;
+		}
 		if (isActive('hooks') && !this.hooks) {
 			this.hooks = this._register(this.instantiation.createInstance(SettingsSectionRenderer, this.panel, {
 				categoryId: 'hooks',
@@ -101,10 +121,11 @@ export class SessionsCustomizeContent extends Disposable implements SettingsCont
 				}],
 				setVisible: () => { },
 			}, AccessibleViewProviderId.HooksSettings, AccessibilityVerbositySettingId.HooksSettings));
+			contentCreated = true;
 
 		}
 		const nodes: SettingsTreeNode<SettingsContentItem>[] = [
-			{ element: { kind: 'group', id: 'settings', title: this.tabItems[0].label, description: '' }, children: [] },
+			{ element: { kind: 'group', id: 'settings', title: this.tabItems[0].label, description: '' }, children: this.settings?.getNodes() as readonly SettingsTreeNode<SettingsContentItem>[] ?? [] },
 			{ element: { kind: 'group', id: 'hooks', title: this.tabItems[1].label, description: '' }, children: this.hooks?.getNodes() as readonly SettingsTreeNode<SettingsContentItem>[] ?? [] },
 		];
 		this.treeModel.setChildren(nodes);
@@ -114,6 +135,9 @@ export class SessionsCustomizeContent extends Disposable implements SettingsCont
 		this.tabs.setTabs(this.tabItems, this.activeTab);
 		this.panel.setAttribute('aria-labelledby', `ash-sessions-customize-${this.activeTab}`);
 		this.hooks?.setVisible(isActive('hooks'));
+		this.settings?.setVisible(isActive('settings'));
+		// The outer search must refilter once lazily created action labels are available.
+		if (contentCreated) this.changed.fire();
 	}
 
 }

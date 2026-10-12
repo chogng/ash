@@ -6,19 +6,22 @@ import { SessionsBrowserMain } from '../../../src/ash/sessions/browser/web.main.
 
 // Mount the renderer's real Parts, settings and canvas without a product process or backend.
 const initialErrorHandler = errorHandler.getUnexpectedErrorHandler();
-const main = new SessionsBrowserMain(document.querySelector<HTMLElement>('#app')!, codeSessionsProfile);
+let main = new SessionsBrowserMain(document.querySelector<HTMLElement>('#app')!, codeSessionsProfile);
 window.addEventListener('pagehide', () => main.dispose(), { once: true });
-const workbench = await main.open();
+let workbench = await main.open();
 const errors: string[] = [];
-const stopObservingErrors = errorHandler.addListener(error => errors.push(String(error)));
+const errorDetails: string[] = [];
+const stopObservingErrors = errorHandler.addListener(error => { errors.push(String(error)); errorDetails.push(error instanceof Error ? error.stack ?? String(error) : String(error)); });
 window.addEventListener('pagehide', stopObservingErrors, { once: true });
 
 declare global {
 	interface Window {
 		ashSessionsIntegration: {
 			readonly errors: readonly string[];
+			readonly errorDetails: readonly string[];
 			takeErrors(): string[];
 			disposeAndCheckErrorHandler(): Promise<boolean>;
+			remountAfterDirectDispose(): Promise<void>;
 			setTheme(id: string): Promise<void>;
 			updateConfiguration(key: string, value: unknown): Promise<void>;
 		};
@@ -26,12 +29,17 @@ declare global {
 }
 
 window.ashSessionsIntegration = {
-	errors,
-	takeErrors: () => errors.splice(0),
+	errors, errorDetails,
+	takeErrors: () => { errorDetails.splice(0); return errors.splice(0); },
 	disposeAndCheckErrorHandler: async () => {
 		await workbench.shutdown('windowClose');
 		main.dispose();
 		return errorHandler.getUnexpectedErrorHandler() === initialErrorHandler;
+	},
+	remountAfterDirectDispose: async () => {
+		main.dispose();
+		main = new SessionsBrowserMain(document.querySelector<HTMLElement>('#app')!, codeSessionsProfile);
+		workbench = await main.open();
 	},
 	setTheme: id => workbench.configurationService.updateValue('workbench.colorTheme', id),
 	updateConfiguration: (key, value) => workbench.configurationService.updateValue(key, value),

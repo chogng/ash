@@ -3,6 +3,7 @@ import { captureElectronMenu } from '../../../automation/menus.js';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Workbench } from '../../../automation/workbench.js';
+import { EditorGroup } from '../../../automation/editors.js';
 
 test('Sessions Settings command queries reuse search and restore saved values after reopening', async ({ application, target, workbench, runningApplication }, testInfo) => {
 	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
@@ -249,6 +250,8 @@ test('Sessions setting menus copy their current registered value as JSON', async
 			await more.focus();
 			await more.press('Enter');
 			await sessionsPage.keyboard.press('End');
+			await expect(settings.getByRole('menuitem', { name: 'Edit in settings.json', exact: true })).toBeFocused();
+			await sessionsPage.keyboard.press('ArrowUp');
 			await expect(copy).toBeFocused();
 		};
 		const read = 'windows' in application
@@ -374,4 +377,75 @@ test('Workbench and Sessions keep one settings document across edits and window 
 		'sessions.activityBar.compact': false,
 	});
 	await expect(workbench.page.locator('[data-part="sidebar"]')).toHaveClass(/sidebar-right/u);
+});
+
+
+test('Sessions preferences opens shared shortcuts and retains the profile after reopening', async ({ application, target, workbench, runningApplication }, testInfo) => {
+	let page = await workbench.openAgentsWindow(target.kind);
+	const openPreferences = async (): Promise<void> => {
+		const accounts = page.getByRole('button', { name: 'Accounts', exact: true });
+		if ('windows' in application && process.platform === 'darwin') {
+			await captureElectronMenu(application, () => accounts.click(), { label: 'Settings' });
+		} else {
+			await accounts.click();
+			await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
+		}
+		await expect(page.getByRole('dialog', { name: 'Sessions Settings' })).toBeVisible();
+	};
+	const openShortcuts = async (): Promise<void> => {
+		await openPreferences();
+		const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+		await settings.locator('[data-settings-category-id="keyboard-shortcuts"]').click();
+		await settings.locator('.ash-sessions-settings-page').getByRole('button', { name: 'Keyboard Shortcuts', exact: true }).click();
+		await expect(settings).toHaveCount(0);
+		await expect(page.locator('.ash-keybindings-editor')).toBeVisible();
+	};
+	await openShortcuts();
+	let shortcuts = page.locator('.ash-keybindings-editor');
+	await shortcuts.getByRole('searchbox').fill('workbench.action.openSettings');
+	const defaultRow = shortcuts.locator('.ash-keybindings-row:not(.is-user)').filter({ has: page.locator('.ash-keybindings-command-id', { hasText: /^workbench\.action\.openSettings$/u }) });
+	const addShortcut = defaultRow.getByRole('button', { name: 'Add', exact: true });
+	await addShortcut.click();
+	const recorder = shortcuts.getByRole('textbox', { name: 'Record keybinding', exact: true });
+	await expect(recorder).toBeFocused();
+	await recorder.press('Control+Alt+Y');
+	await shortcuts.getByRole('button', { name: 'Cancel', exact: true }).click();
+	await expect(shortcuts.locator('.ash-keybindings-recorder')).toBeHidden();
+	await expect(shortcuts.locator('.ash-keybindings-row.is-user')).toHaveCount(0);
+	await expect(addShortcut).toBeFocused();
+	await addShortcut.click();
+	await recorder.press('Control+Alt+Y');
+	await shortcuts.getByRole('button', { name: 'Save', exact: true }).click();
+	await expect(shortcuts.locator('.ash-keybindings-recorder')).toBeHidden();
+	await expect(shortcuts.locator('.ash-keybindings-row.is-user')).toHaveCount(1);
+	await openPreferences();
+	const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+	await settings.getByRole('searchbox').fill('compact');
+	await settings.getByRole('searchbox').press('Escape');
+	await expect(settings).toBeVisible();
+	await expect(settings.getByRole('searchbox')).toHaveValue('');
+	await settings.getByRole('searchbox').press('Escape');
+	await expect(settings).toHaveCount(0);
+	await page.getByRole('button', { name: 'Accounts', exact: true }).focus();
+	await page.keyboard.press('Control+Alt+Y');
+	await expect(settings).toBeVisible();
+	await settings.getByRole('searchbox').press('Escape');
+	page = await workbench.reopenAgentsWindow(application, page);
+	await openShortcuts();
+	shortcuts = page.locator('.ash-keybindings-editor');
+	await shortcuts.getByRole('searchbox').fill('workbench.action.openSettings');
+	const userRow = shortcuts.locator('.ash-keybindings-row.is-user');
+	await expect(userRow).toHaveCount(1);
+	await expect(userRow.locator('.ash-keybindings-key')).toHaveText(/Y/u);
+	await userRow.getByRole('button', { name: 'Remove', exact: true }).click();
+	await expect(shortcuts.locator('.ash-keybindings-row.is-user')).toHaveCount(0);
+	await openPreferences();
+	await page.locator('[data-settings-category-id="keyboard-shortcuts"]').click();
+	await page.locator('.ash-sessions-settings-page').getByRole('button', { name: 'Preferences: Open Keyboard Shortcuts (JSON)', exact: true }).click();
+	const group = new EditorGroup(page.locator('.ash-editor-group:visible').filter({ has: page.getByRole('tab', { name: 'Keyboard Shortcuts (JSON)', exact: true }) }));
+	await expect(group.tabs.getByText('Keyboard Shortcuts (JSON)', { exact: true })).toBeVisible();
+	await group.editor.waitForEditorContents(source => source.replace(/\s/gu, '') === '[]');
+	expect(runningApplication.diagnostics.consoleErrors.filter(message => message.startsWith('Code editor contribution failed'))).toEqual([]);
+	await testInfo.attach('sessions-preferences-shortcuts-diagnostics', { body: JSON.stringify(runningApplication.diagnostics), contentType: 'application/json' });
+	expect(runningApplication.diagnostics.errors).toEqual([]);
 });

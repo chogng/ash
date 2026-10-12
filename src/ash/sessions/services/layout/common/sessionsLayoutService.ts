@@ -1,3 +1,4 @@
+import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { Event } from '../../../../base/common/event.js';
@@ -16,7 +17,7 @@ export interface ISessionsEntry {
 	readonly focus: 'conversation' | 'sidebar' | 'editor';
 }
 
-export interface ISessionsLayoutService {
+export interface ISessionsLayoutService extends IDisposable {
 	readonly conversationVisible: boolean;
 	readonly onDidChangeConversationVisibility: Event<void>;
 	setConversationVisible(visible: boolean): Promise<void>;
