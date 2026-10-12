@@ -88,8 +88,8 @@ const fileContainer = document.createElement('section');
 fileContainer.style.cssText = 'width:600px;height:140px';
 fileContainer.setAttribute('aria-label', 'File editor');
 document.body.append(fileContainer);
-resources.add(services.get(ILanguageService).registerLanguage({ id: 'markdown' }));
-resources.add(services.get(ILanguageService).registerLanguage({ id: 'typescript' }));
+resources.add(services.get(ILanguageService).registerLanguage({ id: 'markdown', extensions: ['.md'] }));
+resources.add(services.get(ILanguageService).registerLanguage({ id: 'typescript', extensions: ['.ts'] }));
 const promptFile = new URLSearchParams(location.search).has('prompt');
 const fileModel = services.get(IModelService).createModel(promptFile ? '---\n\n---\nBody' : 'before after',
 	services.get(ILanguageService).createById(promptFile ? 'markdown' : 'typescript'),
@@ -168,6 +168,7 @@ declare global {
 		ashChatTranscriptIntegration: {
 			state(): { copied: string; file: string; resource: string; editorCount: number; selection: unknown; notifications: readonly string[]; };
 			openSkill(): Promise<void>;
+			referenceReady(line: number, column: number): boolean;
 			openReference(line: number, column: number): Promise<void>;
 			skillRequests(): readonly unknown[];
 			setFile(value: string, line: number, column: number): void;
@@ -202,6 +203,7 @@ window.ashChatTranscriptIntegration = {
 		const [skill] = await prompts.findAgentSkills(CancellationToken.None, 'reference-session');
 		await services.get(ICodeEditorService).openCodeEditor({ resource: skill.uri }, file);
 	},
+	referenceReady: (line, column) => !!LinkDetector.get(file)?.getLinkOccurrence(new Selection(line, column, line, column).getPosition()),
 	openReference: async (line, column) => { file.setSelection(new Selection(line, column, line, column)); file.focus(); await services.get(ICommandService).executeCommand('editor.action.openLink'); },
 	skillRequests: () => skillResourceRequests,
 	setFile: (value, line, column) => { fileModel.setValue(value); file.setSelection(new Selection(line, column, line, column)); },

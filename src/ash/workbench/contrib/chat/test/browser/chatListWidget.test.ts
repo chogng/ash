@@ -1,4 +1,5 @@
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
+import { TextModelResolverService } from '../../../../services/textmodelResolver/common/textModelResolverService.js';
 import { ITextModelService } from '../../../../../editor/common/services/resolverService.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { IPromptsService } from '../../common/promptSyntax/service/promptsService.js';
@@ -271,6 +272,7 @@ test('streamed memory references retain their buttons, code editor and focus as 
 test('Skill resource content provider shares readonly models and cancels a late resource on removal', async () => {
 	using resources = new DisposableStore();
 	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
 	resources.add(services.get(ILanguageService).registerLanguage({ id: 'markdown', extensions: ['.md'] }));
 	services.registerInstance(IAgentCapabilitiesService, { isAvailable: false, read: async () => { throw new Error('Unexpected capabilities read'); } });
 	const pending = new DeferredPromise<string>();

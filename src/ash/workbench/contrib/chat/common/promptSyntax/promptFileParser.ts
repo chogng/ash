@@ -89,8 +89,9 @@ export class PromptBody {
 		if (!path || path.startsWith('#') || path.includes('\0')) return undefined;
 		if (path.startsWith('~/')) return userHome ? URI.joinPath(userHome, path.slice(2)) : undefined;
 		try {
-			const target = URI.parse(path);
-			if (target.scheme) return target.scheme === 'file' || target.scheme === this.uri.scheme ? target : undefined;
+			const hasScheme = /^[a-z][a-z\d+.-]*:/iu.test(path);
+			const target = URI.parse(hasScheme ? path : `relative:${path}`, true);
+			if (hasScheme) return target.scheme === 'file' || target.scheme === this.uri.scheme ? target : undefined;
 			return URI.joinPath(this.uri.with({ fragment: '' }), '..', target.path).with({ fragment: target.fragment });
 		} catch { return undefined; }
 	}

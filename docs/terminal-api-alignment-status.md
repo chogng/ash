@@ -2,11 +2,11 @@
 
 ## 本轮验证结果（2026-10-12）
 
-剩余 54 项中新增 14 个实际使用的生产文件，当前同路径 49、缺失 40、仅 Ash 0。编辑区往返保留同一 PTY/屏幕，标签关闭释放进程；Clear/Relaunch/Kill 直接作用于编辑区实例。中英文 Rename/Icon 选择及关闭目标取消通过；用户元数据跨 PTY 替换保留。屏幕标记跨进程 ID 隔离、中文 ARIA/tooltip 与原命令导航通过；水平列表宽度重建和页面重载恢复，非法持久化数值使用默认尺寸。
+剩余 54 项中新增 16 个实际使用的生产文件，当前同路径 51、缺失 38、仅 Ash 0。编辑区往返保留同一 PTY/屏幕，标签关闭释放进程；Clear/Relaunch/Kill 直接作用于编辑区实例。中英文 Rename/Icon 选择及关闭目标取消通过；用户元数据跨 PTY 替换保留。屏幕标记跨进程 ID 隔离、中文 ARIA/tooltip 与原命令导航通过；marker 淘汰即时释放监听。水平列表宽度重建和页面重载恢复，非法持久化数值使用默认尺寸。扩展 PTY 从 MainThread 内嵌类迁入标准代理文件，通用事件端口由 BasePty 拥有；原注册、实例和后端 owner 保持，关闭时丢弃晚到 frame，opaque handle 恰好发送一次释放。
 
-正常 unit 入口 5 个终端文件 110 项通过，runner 自测 9 项通过；正常 Chromium 全套 73 项通过后增加页面重载回归，最终使用原 browser runner 全套 74 项通过。原编译选项的定向 TypeScript 编译与原 unit runner 的 7 文件 136 项通过（含 24 项装载/架构检查及 2 项 marker 淘汰/监听释放检查）。正常 common 2343、renderer 3736 文件检查曾通过；最后全量准备/类型检查被共享 Chat 改动阻塞：chat.json 的顶层翻译值不是 bundle，以及 chatListWidget.ts 的缺失 Symbol.dispose、chatListWidget.test.ts 的 implicit-any。保留这些范围外改动；终端未改生成协议，复用既有产物并以同一 compiler options 定向编译成功，未把最新全量检查报为通过。终端 3 个 CSS 的 scoped stylelint 零错误（1 条原有 font-size 建议），精确 TS 格式、Markdown/NLS/CSS Prettier 与本批 whitespace 检查通过。全工作树 whitespace 另有范围外 task-agent.spec.ts 的 trailing whitespace，未修改。无 Electron/真实 SSH/Windows/Linux 运行声明。
+最终正常 unit 入口 8 文件 139 项通过（含 24 项装载/架构检查、2 项 marker 生命周期和 3 项 provider PTY 边界），runner 自测 9 项通过；正常 Chromium 全套 74 项通过。曾被共享 Chat 修改阻塞：chat.json 顶层翻译值不是 bundle，chatListWidget.ts 的缺失 Symbol.dispose、chatListWidget.test.ts 的 implicit-any；期间保留外部修改、按原 compiler options 定向编译成功，并使用原 runners 验证。外部修复后最后正常入口重新通过，未把较早失败抹掉。终端 3 个 CSS 的 scoped stylelint 零错误（1 条原有 font-size 建议），精确 TS 格式、Markdown/NLS/CSS Prettier 与本批 whitespace 检查通过。全工作树 whitespace 曾另有范围外 task-agent.spec.ts 的 trailing whitespace，未修改。无 Electron/真实 SSH/Windows/Linux 运行声明。
 
-40 个剩余路径仍待闭合消费链与前置契约，不按数量创建空壳；准确分类见下文当前差集。没有发起 commit/push；共享工作树期间其他操作提交了本批部分变化（包括当前 b3873ca9a），未撤销这些提交或外部改动。
+38 个剩余路径仍待闭合消费链与前置契约，不按数量创建空壳；准确分类见下文当前差集。没有发起 commit/push；共享工作树期间其他操作提交了本批部分变化，未撤销这些提交或外部改动。
 
 ## 扩展 PTY 代理本批准入（2026-10-12）
 
@@ -60,14 +60,14 @@ Rename / Change Icon 命令和实例菜单 → 新同路径 `browser/terminalEdi
 
 验证：正常 `pnpm test:unit` 四个终端文件共 105 项通过，runner 自测 9 项通过；正常 Chromium Terminal 全套 66 项通过（新字体模式、分屏输入路由/几何/关闭焦点、中文 sash/Unsplit/序号命令，以及中文失败 tooltip/重启清理）。Renderer 3720 文件、common 2339 文件和完整浏览器/test 编译通过。初次全 test 编译被共享工作树 chatViewPane.test.ts 的重复 import 阻塞，按原 compiler options 定向编译和原 unit runner 验证后，共享修改修复了该重复 import，最终正常入口通过。浏览器 fixture 补上产品拥有的动态 icon resolver、SplitView CSS、执行端 OS、speech/Views/group DI；未修改产品主题或基础 widget 来掩盖 fixture。全仓 stylelint 当前在范围外 sessionChangesEditorInput.css 的 class substring selector 上失败；终端相关 CSS 单独验证，不能把全仓样式记为通过。本机为 macOS Chromium，未运行 Windows/Linux/真实 SSH 或 Electron 产品验证。
 
-当前完整 terminal 生产 TS/CSS 审计：同路径 49、缺失 40、仅 Ash 0（排除 tests 与 README），本轮在上一轮 54 项中完成 14 个缺失文件。新增编辑区的 URI/Input/Serializer/Pane/Service、重命名 UI owner、图标 picker、decoration/mark navigation/styles、屏幕 CSS、共享 labels/宽度 key 与统一装载入口均有真实消费者；仍不表示各文件完整公开 API 已对齐。编辑区持久化只恢复资源身份，失效实例显示不可用，不保存/恢复 PTY；分屏目前只在面板内提供水平窗格。后文旧审计按历史批次记录，当前差集以本节为准。
+当前完整 terminal 生产 TS/CSS 审计：同路径 51、缺失 38、仅 Ash 0（排除 tests 与 README），本轮在上一轮 54 项中完成 16 个缺失文件。新增编辑区的 URI/Input/Serializer/Pane/Service、重命名 UI owner、图标 picker、decoration/mark navigation/styles、屏幕 CSS、共享 labels/宽度 key 与统一装载入口均有真实消费者；仍不表示各文件完整公开 API 已对齐。编辑区持久化只恢复资源身份，失效实例显示不可用，不保存/恢复 PTY；分屏目前只在面板内提供水平窗格。后文旧审计按历史批次记录，当前差集以本节为准。
 
-当前准确剩余 40 项（相对 `src/ash/workbench/contrib/terminal`）：
+当前准确剩余 38 项（相对 `src/ash/workbench/contrib/terminal`）：
 
 - 实例与事件（3）：`browser/terminalEscapeSequences.ts`、`browser/terminalEvents.ts`、`browser/terminalInstanceService.ts`。
 - widgets 与 xterm（8）：`browser/media/widgets.css`、`browser/terminalTabsChatEntry.ts`、`browser/terminalTestHelpers.ts`、`browser/widgets/terminalHoverWidget.ts`、`browser/widgets/widgetManager.ts`、`browser/widgets/widgets.ts`、`browser/xterm-private.d.ts`、`browser/xterm/lineDataEventAddon.ts`。
-- backend、remote 与 Agent（12）：`browser/agentHostOutputChannel.ts`、`browser/agentHostPty.ts`、`browser/agentHostTerminalService.ts`、`browser/ahpTerminalCommandSource.ts`、`browser/baseTerminalBackend.ts`、`browser/chatTerminalCommandMirror.ts`、`browser/detachedTerminal.ts`、`browser/environmentVariableInfo.ts`、`browser/remotePty.ts`、`browser/remoteTerminalBackend.ts`、`browser/terminal.web.contribution.ts`、`browser/terminalProcessExtHostProxy.ts`。
-- common 与 Electron（17）：`common/basePty.ts`、`common/environmentVariable.contribution.ts`、`common/environmentVariable.ts`、`common/environmentVariableService.ts`、`common/remote/remoteTerminalChannel.ts`、`common/remote/terminal.ts`、`common/terminalEnvironment.ts`、`common/terminalExtensionPoints.contribution.ts`、`common/terminalExtensionPoints.ts`、`electron-browser/localPty.ts`、`electron-browser/localTerminalBackend.ts`、`electron-browser/terminal.contribution.ts`、`electron-browser/terminalNativeContribution.ts`、`electron-browser/terminalProfileResolverService.ts`、`electron-browser/terminalRemote.ts`、`terminalContribChatExports.ts`、`terminalContribExports.ts`。
+- backend、remote 与 Agent（11）：`browser/agentHostOutputChannel.ts`、`browser/agentHostPty.ts`、`browser/agentHostTerminalService.ts`、`browser/ahpTerminalCommandSource.ts`、`browser/baseTerminalBackend.ts`、`browser/chatTerminalCommandMirror.ts`、`browser/detachedTerminal.ts`、`browser/environmentVariableInfo.ts`、`browser/remotePty.ts`、`browser/remoteTerminalBackend.ts`、`browser/terminal.web.contribution.ts`。
+- common 与 Electron（16）：`common/environmentVariable.contribution.ts`、`common/environmentVariable.ts`、`common/environmentVariableService.ts`、`common/remote/remoteTerminalChannel.ts`、`common/remote/terminal.ts`、`common/terminalEnvironment.ts`、`common/terminalExtensionPoints.contribution.ts`、`common/terminalExtensionPoints.ts`、`electron-browser/localPty.ts`、`electron-browser/localTerminalBackend.ts`、`electron-browser/terminal.contribution.ts`、`electron-browser/terminalNativeContribution.ts`、`electron-browser/terminalProfileResolverService.ts`、`electron-browser/terminalRemote.ts`、`terminalContribChatExports.ts`、`terminalContribExports.ts`。
 
 剩余清单不作完成声明：Electron/local/remote/AHP backend 要先闭合共享 child-process/backend 与 Rust transport owner；同步 InstanceService 不能用当前异步 create 的转发壳冒充。环境集合/extension points 需先有真实插件域契约；widgets、lineData、private xterm、事件 multiplexer 与 Chat exports 需有实际消费边。已有平台适配器、Rust Shell parser/nonce/history 和 services/terminal 的领域契约继续保持唯一 owner；没有创建空模块、重复注册或假 capability store。
 

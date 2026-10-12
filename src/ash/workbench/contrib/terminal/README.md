@@ -114,4 +114,6 @@ Rename 和 Change Icon 使用现有 Quick Input，目标关闭时取消。原实
 
 `decorationAddon.ts` 只拥有已提交命令事件的屏幕 marker/decoration；xterm 缓存淘汰标记时立即释放 UI listeners。`markNavigationAddon.ts` 只读取这些 marker，不建立第二份 Shell history；`decorationStyles.ts` 提供中英文 tooltip/ARIA 状态。屏幕样式由 `media/xterm.css` 拥有。`terminal.all.ts` 是 Desktop/Web 共用装载入口，核心与增强各自只注册一次。
 
-当前同路径生产 TS/CSS 为 49，仍缺 40。完整 backend/capability、环境变量集合和同步 InstanceService 未完成；准确清单与契约边界见 [对齐状态](../../../../../docs/terminal-api-alignment-status.md)。
+当前同路径生产 TS/CSS 为 51，仍缺 38。完整 backend/capability、环境变量集合和同步 InstanceService 未完成；准确清单与契约边界见 [对齐状态](../../../../../docs/terminal-api-alignment-status.md)。
+
+`common/basePty.ts` 提供当前实际消费的 string-output child-process 事件端口；`terminalProcessExtHostProxy.ts` 接原扩展 provider 的 opaque PTY，拥有轮询/输入队列和取消，不创建 Shell 或屏幕。MainThread 继续拥有 profile 注册与 extension incarnation，实际工厂直接创建此代理；旧内嵌 PTY 类已退出。插件响应在代理边界校验，typed 内部 payload 不重复校验；关闭后忽略晚到数据并只发一次释放请求。完整 Rust byte-stream child-process/replay/backend API 仍待补。

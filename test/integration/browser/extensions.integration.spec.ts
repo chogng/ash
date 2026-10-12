@@ -492,7 +492,7 @@ for (const [locale, skillsTitle, disable, enable, openInstructions] of [
 		await expect(details.getByRole('button', { name: enable, exact: true })).toBeVisible();
 		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'skill'))).toEqual([['skill', { source: 'marketplace:example/web', name: 'review' }, false, 3, 'session-scope']]);
 		await details.getByRole('button', { name: openInstructions, exact: true }).click();
-		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.find((entry: any) => entry[0] === 'document'))).toMatchObject(['document', { resource: { scheme: 'private', authority: 'skill', path: '/review/SKILL.md' }, readOnly: true, languageId: 'markdown' }]);
+		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'document').map((entry: any) => [entry[0], { ...entry[1], resource: { scheme: entry[1].resource.scheme, authority: entry[1].resource.authority, path: entry[1].resource.path } }])[0])).toMatchObject(['document', { resource: { scheme: 'private', authority: 'skill', path: '/review/SKILL.md' }, readOnly: true, languageId: 'markdown' }]);
 		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.find((entry: any) => entry[0] === 'documentOptions'))).toMatchObject(['documentOptions', { selection: { startLineNumber: 5, startColumn: 1, endLineNumber: 5, endColumn: 1 } }]);
 		await header.focus();
 		await header.press('ArrowLeft');
