@@ -63,6 +63,7 @@ export default defineConfig({
 				themeEditor: resolve(import.meta.dirname, 'themeEditor.html'),
 				webTransport: resolve(import.meta.dirname, 'webTransport.html'),
 				files: resolve(import.meta.dirname, 'files.html'),
+				fileMenus: resolve(import.meta.dirname, 'fileMenus.html'),
 				dialog: resolve(import.meta.dirname, "dialog.html"),
 				onboarding: resolve(import.meta.dirname, 'onboarding.html'),
 				link: resolve(import.meta.dirname, 'link.html'),

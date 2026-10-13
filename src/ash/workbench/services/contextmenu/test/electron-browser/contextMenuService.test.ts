@@ -1,5 +1,5 @@
 import { isMacintosh } from '../../../../../base/common/platform.js';
-import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { promiseWithResolvers } from '../../../../../base/common/async.js';
 import { CancellationToken, CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import type { IAction } from '../../../../../base/common/actions.js';
@@ -25,6 +25,68 @@ import { ConfigurationRegistry } from "../../../../../platform/configuration/com
 import { IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
 import { IKeybindingService } from "../../../../../platform/keybinding/common/keybinding.js";
 import { INotificationService } from "../../../../../platform/notification/common/notification.js";
+import { KeybindingRegistry } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
+import { KeybindingResolver } from '../../../../../platform/keybinding/common/keybindingResolver.js';
+import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
+import { parseKeybinding } from '../../../../../base/common/keybindingParser.js';
+import { getKeybindingLabel } from '../../../../../base/common/keybindingLabels.js';
+import { resolveKeybinding } from '../../../../../base/common/keybindings.js';
+import { toElectronAccelerator } from '../../../../../platform/keybinding/common/electronAccelerator.js';
+
+test('system menus retain scoped shortcut hints, chord labels and delegate overrides', async () => {
+	const environment = new JSDOM('<!doctype html><body></body>');
+	using lifetime = new DisposableStore();
+	lifetime.add(toDisposable(() => environment.window.close()));
+	const contexts = lifetime.add(new ContextKeyService());
+	const registry = new KeybindingRegistry();
+	const resolver = new KeybindingResolver({ registry });
+	const single = parseKeybinding('ctrl+c')!;
+	const chord = parseKeybinding('ctrl+k ctrl+c')!;
+	for (const [command, keybinding] of [['copy', single], ['copyPath', chord]] as const) {
+		lifetime.add(registry.registerKeybindingRule({ command, keybinding, when: ContextKeyExpr.has('explorerFocus') }));
+	}
+	const keybindings = {
+		inChordMode: false, onDidUpdateKeybindings: Event.None,
+		getKeybindings: () => [], enableKeybindingHoldMode: () => undefined,
+		registerSchemaContribution: () => Disposable.None,
+		resolveKeybinding, resolveUserBinding: () => undefined,
+		lookupKeybindings: command => resolver.lookupKeybindings(command, contexts),
+		lookupKeybinding: command => resolver.lookupKeybinding(command, contexts),
+	} satisfies IKeybindingService;
+	const requests: INativeContextMenuRequest[] = [];
+	const closed = promiseWithResolvers<void>();
+	const api: INativeContextMenuApi = {
+		async popup(request) { requests.push(request); return {}; },
+		async close() { },
+	};
+	const services = lifetime.add(new InstantiationService());
+	services.registerInstance(IMenuService, {} as IMenuService);
+	services.registerInstance(IContextKeyService, contexts);
+	services.registerInstance(IKeybindingService, keybindings);
+	services.registerInstance(INotificationService, lifetime.add(new NotificationService()));
+	const { NativeContextMenuService } = await import('../../electron-browser/contextMenuService.js');
+	const service = lifetime.add(services.createInstance(NativeContextMenuService, api));
+	const actions: IAction[] = ['copy', 'copyPath'].map(id => ({ id, label: id, tooltip: '', enabled: true, run() { } }));
+	service.showContextMenu({
+		getAnchor: () => ({ x: 10, y: 20, targetWindow: environment.window as unknown as Window }),
+		getActions: () => actions,
+		onHide: () => closed.resolve(),
+	});
+	await closed.promise;
+	assert.deepEqual(requests[0]!.items, [
+		{ type: 'action', id: 'action-1', label: 'copy', enabled: true, accelerator: toElectronAccelerator(resolveKeybinding(single)) },
+		{ type: 'action', id: 'action-2', label: `copyPath [${getKeybindingLabel(resolveKeybinding(chord))}]`, enabled: true },
+	]);
+	const overridden = promiseWithResolvers<void>();
+	service.showContextMenu({
+		getAnchor: () => ({ x: 10, y: 20, targetWindow: environment.window as unknown as Window }),
+		getActions: () => actions,
+		getKeyBinding: () => undefined,
+		onHide: () => overridden.resolve(),
+	});
+	await overridden.promise;
+	assert.deepEqual(requests[1]!.items, actions.map((action, index) => ({ type: 'action', id: `action-${index + 1}`, label: action.label, enabled: true })));
+});
 
 test("Electron context menus run the selected action with its delegate context", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");

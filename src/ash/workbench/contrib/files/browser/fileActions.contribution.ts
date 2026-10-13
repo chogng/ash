@@ -7,7 +7,8 @@ import { localize, localize2 } from '../../../../nls.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Schemas } from '../../../../base/common/network.js';
-import { isMacintosh } from '../../../../base/common/platform.js';
+import { isMacintosh, isWindows } from '../../../../base/common/platform.js';
+import { EditorContextKeys } from '../../../../editor/common/editorContextKeys.js';
 import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
@@ -348,3 +349,32 @@ if (isMacintosh) {
 	KeybindingsRegistry.registerKeybindingPassThrough({ command: PASTE_FILE_COMMAND_ID, keybinding: Keybinding.single(logicalKey('v', { primaryKey: true, altKey: true })), when: ContextKeyExpr.and(ExplorerFocusedContext.isEqualTo(true), canCreateWhen), priority: KeybindingWeight.WorkbenchContrib + 10 });
 }
 KeybindingsRegistry.registerKeybindingRule({ command: CANCEL_CUT_COMMAND_ID, keybinding: Keybinding.single(logicalKey('Escape')), when: ContextKeyExpr.and(ExplorerFocusedContext.isEqualTo(true), ContextKeyExpr.has('ashExplorerHasCutFiles')), priority: KeybindingWeight.WorkbenchContrib + 10 });
+
+KeybindingsRegistry.registerKeybindingRule({
+	command: OPEN_TO_SIDE_COMMAND_ID,
+	keybinding: Keybinding.single(logicalKey('Enter', isMacintosh ? { ctrlKey: true } : { primaryKey: true })),
+	when: ExplorerFocusedContext.isEqualTo(true),
+	priority: KeybindingWeight.WorkbenchContrib,
+});
+
+const copyPathKey = logicalKey('c', isWindows ? { shiftKey: true, altKey: true } : { primaryKey: true, altKey: true });
+const copyRelativePathKey = logicalKey('c', { primaryKey: true, shiftKey: true, altKey: !isWindows });
+const pathChordPrefix = logicalKey('k', { primaryKey: true });
+for (const editorFocused of [false, true]) {
+	KeybindingsRegistry.registerKeybindingRule({
+		command: COPY_PATH_COMMAND_ID,
+		keybinding: editorFocused && !isWindows
+			? Keybinding.chord(pathChordPrefix, copyPathKey)
+			: Keybinding.single(copyPathKey),
+		when: editorFocused ? ContextKeyExpr.has(EditorContextKeys.focus.key) : ContextKeyExpr.not(EditorContextKeys.focus.key),
+		priority: KeybindingWeight.WorkbenchContrib,
+	});
+	KeybindingsRegistry.registerKeybindingRule({
+		command: COPY_RELATIVE_PATH_COMMAND_ID,
+		keybinding: editorFocused || isWindows
+			? Keybinding.chord(pathChordPrefix, copyRelativePathKey)
+			: Keybinding.single(copyRelativePathKey),
+		when: editorFocused ? ContextKeyExpr.has(EditorContextKeys.focus.key) : ContextKeyExpr.not(EditorContextKeys.focus.key),
+		priority: KeybindingWeight.WorkbenchContrib,
+	});
+}

@@ -1,5 +1,7 @@
 import '../../../../../editor/test/browser/testEditorDom.js';
-import { OperatingSystem, isWindows } from '../../../../../base/common/platform.js';
+import { OperatingSystem, isWindows, isMacintosh } from '../../../../../base/common/platform.js';
+import { KeybindingResolver } from '../../../../../platform/keybinding/common/keybindingResolver.js';
+import { getKeybindingLabel, KeybindingLabelStyle } from '../../../../../base/common/keybindingLabels.js';
 import type { IAction } from '../../../../../base/common/actions.js';
 import { createDisconnectedRendererApi } from '../../../../../platform/agentHost/browser/rendererApi.js';
 import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
@@ -65,6 +67,21 @@ const fileCommandRoots = [
 	{ name: 'Windows drive', uri: 'file:///C:/project' },
 	{ name: 'UNC', uri: 'file://fileserver/share/project' },
 ] as const;
+
+test('Explorer path and side-opening defaults match VS Code inside and outside editor focus', async () => {
+	await import('../../browser/fileActions.contribution.js');
+	using contexts = new ContextKeyService();
+	const resolver = new KeybindingResolver();
+	const label = (command: string) => getKeybindingLabel(resolver.lookupKeybinding(command, contexts)!, KeybindingLabelStyle.UserSettings);
+	const path = isWindows ? 'shift+alt+c' : isMacintosh ? 'alt+cmd+c' : 'ctrl+alt+c';
+	const relative = isMacintosh ? 'shift+alt+cmd+c' : isWindows ? 'ctrl+k ctrl+shift+c' : 'ctrl+shift+alt+c';
+	assert.equal(label(COPY_PATH_COMMAND_ID), path);
+	assert.equal(label(COPY_RELATIVE_PATH_COMMAND_ID), relative);
+	assert.equal(label(OPEN_TO_SIDE_COMMAND_ID), 'ctrl+enter');
+	contexts.setContext('editorFocus', true);
+	assert.equal(label(COPY_PATH_COMMAND_ID), isWindows ? path : `${isMacintosh ? 'cmd' : 'ctrl'}+k ${path}`);
+	assert.equal(label(COPY_RELATIVE_PATH_COMMAND_ID), isWindows ? relative : `${isMacintosh ? 'cmd' : 'ctrl'}+k ${relative}`);
+});
 
 test('Save File command saves the active editor', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');

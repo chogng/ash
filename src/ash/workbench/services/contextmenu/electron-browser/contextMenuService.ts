@@ -15,6 +15,7 @@ import {
 	SubmenuAction,
 } from "../../../../base/common/actions.js";
 import { toElectronAccelerator } from "../../../../platform/keybinding/common/electronAccelerator.js";
+import { getKeybindingLabel } from "../../../../base/common/keybindingLabels.js";
 import { IMenuService } from "../../../../platform/actions/common/actions.js";
 import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { hasSystemContextMenu, MenuSettings } from "../../../../platform/window/common/window.js";
@@ -89,7 +90,7 @@ export class NativeContextMenuService extends Disposable
 			this.contextKeyService,
 		);
 		const actions = resolved.getActions();
-		const serialized = serializeActions(actions, this.keybindingService);
+		const serialized = serializeActions(actions, resolved.getKeyBinding ?? (action => this.keybindingService.lookupKeybinding(action.id)));
 		if (serialized.items.length === 0 || this.activePopup || this.isDisposed || resolved.cancellationToken?.isCancellationRequested) {
 			resolved.onHide?.(true);
 			return;
@@ -193,7 +194,7 @@ interface ISerializedActions {
 
 function serializeActions(
 	actions: readonly IAction[],
-	keybindingService: IKeybindingService,
+	getKeybinding: NonNullable<IContextMenuDelegate['getKeyBinding']>,
 ): ISerializedActions {
 	const actionMap = new Map<string, IAction>();
 	let nextId = 1;
@@ -222,13 +223,14 @@ function serializeActions(
 
 			const id = `action-${nextId++}`;
 			actionMap.set(id, action);
-			const accelerator = toElectronAccelerator(
-				keybindingService.lookupKeybinding(action.id),
-			);
+			const keybinding = getKeybinding(action);
+			const accelerator = toElectronAccelerator(keybinding);
+			// Electron cannot render chords in its accelerator column.
+			const shortcutLabel = keybinding && !accelerator ? getKeybindingLabel(keybinding) : undefined;
 			items.push({
 				type: "action",
 				id,
-				label: action.label,
+				label: shortcutLabel ? `${action.label} [${shortcutLabel}]` : action.label,
 				enabled: action.enabled,
 				...(accelerator ? { accelerator } : {}),
 				...(action.checked === undefined
