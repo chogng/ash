@@ -1,3 +1,4 @@
+import { isCancellationError } from '../../../../../base/common/errors.js';
 import './implicitContextAttachment.css';
 import { h } from '../../../../../base/browser/dom.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
@@ -86,16 +87,17 @@ export class ImplicitContextAttachmentWidget extends Disposable {
 		this.pending = true;
 		this.render();
 		try {
-			// Capture the clicked file, even if the active editor changes during the read.
-			const attachment = await this.instantiation.createInstance(FilesAndFoldersPickerPick).asAttachment(resource, FileKind.File, this.controller.signal, input.initialText);
+			// Capture the clicked source, while the shared draft owner gates sending and cancels stale reads.
+			const attached = await this.attachments.acquireContext(async draftSignal => {
+				const signal = AbortSignal.any([this.controller.signal, draftSignal]);
+				const attachment = await this.instantiation.createInstance(FilesAndFoldersPickerPick).asAttachment(resource, FileKind.File, signal, input.initialText);
+				return this.attachments.attachments.some(entry => entry.kind === 'file' && extUri.isEqual(entry.resource, resource)) ? [] : [attachment];
+			}, this.controller.signal);
 			if (this.isDisposed) return;
-			if (!this.attachments.attachments.some(entry => entry.kind === 'file' && extUri.isEqual(entry.resource, resource))) {
-				this.attachments.addContext(attachment);
-				status(localize('chat.context.added', 'Added {0}', attachment.name));
-			}
+			if (attached.length > 0) status(localize('chat.context.added', 'Added {0}', attached[0]!.name));
 			this.focusInput();
 		} catch (error) {
-			if (!this.isDisposed) this.notifications.error(localize('chat.context.failed', 'Could not add context: {0}', String(error)));
+			if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(localize('chat.context.failed', 'Could not add context: {0}', String(error)));
 		} finally {
 			this.pending = false;
 			if (!this.isDisposed) this.render();

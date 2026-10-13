@@ -47,8 +47,8 @@ import { ILifecycleService } from '../../../workbench/services/lifecycle/common/
 import { BrowserLifecycleService } from '../../../workbench/services/lifecycle/browser/lifecycleService.js';
 import { migrateNewChatDraftState, readNewChatDraftState, writeNewChatDraftState } from '../../contrib/chat/common/newChatDraftState.js';
 import type { SessionsPartOptions } from '../../browser/parts/sessions/sessionsPart.js';
-import { ChatAttachmentModel } from '../../../workbench/contrib/chat/browser/attachments/chatAttachmentModel.js';
 import { NewChatContextAttachments } from '../../contrib/chat/browser/newChatContextAttachments.js';
+import { NewChatInputPasteTarget } from '../../contrib/chat/browser/newChatInputPasteTarget.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>", { url: 'http://localhost/' });
 for (const [name, value] of Object.entries({
@@ -434,34 +434,46 @@ test('legacy drafts merge by session identity and conflicting content survives u
 	assert.deepEqual([readNewChatDraftState(restored, 'thread-1'), readNewChatDraftState(restored, 'untitled:recovered')], [codeDraft, chatDraft]);
 });
 
-test('Sessions file acquisition preserves valid UTF-8 and rejects binary content without adding it', async () => {
-	using model = new ChatAttachmentModel();
-	using notifications = new NotificationService();
-	using attachments = new NewChatContextAttachments(document.body, model, () => true, notifications);
-	await attachments.attachFiles([new browserEnvironment.window.File(['A literal \uFFFD character'], 'context.txt', { type: 'text/plain' })]);
-	assert.deepEqual(await model.attachments[0]!.resolve(), { name: 'context.txt', content: 'A literal \uFFFD character' });
-	await attachments.attachFiles([new browserEnvironment.window.File([new Uint8Array([0xFF, 0x00])], 'binary.dat')]);
-	assert.equal(model.size, 1);
-	assert.match(notifications.getNotifications()[0]?.message ?? '', /binary.dat must be a UTF-8 text file/u);
+test('Sessions file picker forwards the original files to the shared composer', () => {
+	const container = document.createElement('div');
+	const batches: (readonly File[])[] = [];
+	const files = [new browserEnvironment.window.File(['Selected context'], 'context.txt', { type: 'text/plain' })];
+	using attachments = new NewChatContextAttachments(container, async selected => { batches.push(selected); });
+	const picker = container.querySelector<HTMLInputElement>('input[type=file]')!;
+	Object.defineProperty(picker, 'files', { value: files });
+	picker.dispatchEvent(new browserEnvironment.window.Event('change'));
+	assert.deepEqual(batches, [files]);
+	assert.equal(batches[0]![0], files[0]);
+	assert.equal(picker.value, '');
 });
 
-test('Closing Sessions file acquisition cancels its readers and does not mutate attachments', async () => {
-	using model = new ChatAttachmentModel();
-	using notifications = new NotificationService();
-	using attachments = new NewChatContextAttachments(document.body, model, () => true, notifications);
-	const pending = attachments.attachFiles([new browserEnvironment.window.File(['Pending read'], 'context.txt', { type: 'text/plain' })]);
+test('Closing the Sessions file picker removes its event source and rejects later acquisition', async () => {
+	const container = document.createElement('div');
+	const files = [new browserEnvironment.window.File(['Selected context'], 'context.txt')];
+	let reads = 0;
+	using attachments = new NewChatContextAttachments(container, async () => { reads++; });
+	const picker = container.querySelector<HTMLInputElement>('input[type=file]')!;
 	attachments.dispose();
-	await pending;
-	assert.equal(model.size, 0);
-	assert.deepEqual(notifications.getNotifications(), []);
+	await attachments.attachFiles(files);
+	picker.dispatchEvent(new browserEnvironment.window.Event('change'));
+	assert.equal(reads, 0);
+	assert.equal(container.childElementCount, 0);
 });
 
-test('Sessions file acquisition rejects image inputs for a text-only model while keeping text available', async () => {
-	using model = new ChatAttachmentModel();
-	using notifications = new NotificationService();
-	using attachments = new NewChatContextAttachments(document.body, model, () => false, notifications);
-	await attachments.attachFiles([new browserEnvironment.window.File(['image'], 'preview.png', { type: 'image/png' })]);
-	assert.deepEqual({ size: model.size, message: notifications.getNotifications()[0]?.message }, { size: 0, message: 'Could not attach files: Error: The selected model does not support images' });
-	await attachments.attachFiles([new browserEnvironment.window.File(['Text remains available'], 'context.txt', { type: 'text/plain' })]);
-	assert.deepEqual(await model.attachments[0]!.resolve(), { name: 'context.txt', content: 'Text remains available' });
+test('Sessions file paste reaches the shared composer once and text paste stays editable', () => {
+	const container = document.createElement('div');
+	const batches: (readonly File[])[] = [];
+	using attachments = new NewChatContextAttachments(container, async selected => { batches.push(selected); });
+	using target = new NewChatInputPasteTarget(container, attachments);
+	const files = [new browserEnvironment.window.File(['image'], 'preview.png', { type: 'image/png' })];
+	const paste = new browserEnvironment.window.Event('paste', { bubbles: true, cancelable: true });
+	Object.defineProperty(paste, 'clipboardData', { value: { files } });
+	container.dispatchEvent(paste);
+	assert.equal(paste.defaultPrevented, true);
+	assert.deepEqual(batches, [files]);
+	const text = new browserEnvironment.window.Event('paste', { bubbles: true, cancelable: true });
+	Object.defineProperty(text, 'clipboardData', { value: { files: [] } });
+	container.dispatchEvent(text);
+	assert.equal(text.defaultPrevented, false);
+	assert.equal(batches.length, 1);
 });

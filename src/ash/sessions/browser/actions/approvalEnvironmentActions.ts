@@ -10,6 +10,7 @@ import { IWorkspaceContextService } from '../../../platform/workspace/common/wor
 import type { IChatWidgetModel } from '../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import { OPEN_GUARDIAN_SETUP_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
+import { selectionFromWorkspace } from '../workspaceSelection.js';
 
 interface Item extends IQuickPickItem { readonly id: string; }
 
@@ -26,14 +27,26 @@ registerAction2(class PrepareApprovalEnvironment extends Action2 {
 		const threadId = model.threadId;
 		const taskModel = model.inputState.selectedModel;
 		let selectedRoot: string | undefined;
-		if (model.untitledSessionId) {
-			const workspace = sessions.untitledSessions.find(session => session.untitledSessionId === model.untitledSessionId)?.workspace;
-			if (workspace?.type === 'local' || workspace?.type === 'ssh') { selectedRoot = workspace.root; }
-			if (workspace?.type === 'current') {
-				const folders = accessor.get(IWorkspaceContextService).getWorkspace().folders;
-				if (folders.length === 1) { selectedRoot = folders[0]!.uri.fsPath; }
-				else if (folders.length > 1) { selectedRoot = (await pick(input, localize('approvalEnvironment.project', 'Choose the project to prepare'), folders.map(folder => ({ id: folder.uri.fsPath, label: folder.name, description: folder.uri.fsPath }))))?.id; }
+		const unsupportedRemote = (): Error => new Error(localize('approvalEnvironment.remoteUnsupported', 'Preparing a review environment for a remote project is not supported yet. No project files were scanned.'));
+		if (threadId) {
+			const session = sessions.sessions.find(session => session.sessionId === model.sessionId);
+			const workspace = session?.chats.find(chat => chat.threadId === threadId)?.workspace ?? session?.workspace;
+			if (workspace && workspace.authorityId !== 'local') { throw unsupportedRemote(); }
+		} else if (model.untitledSessionId) {
+			let workspace = sessions.untitledSessions.find(session => session.untitledSessionId === model.untitledSessionId)?.workspace;
+			if (workspace?.type === 'current') { workspace = selectionFromWorkspace(accessor.get(IWorkspaceContextService).getWorkspace()); }
+			if (workspace?.type === 'multiple') {
+				const folders = workspace.folders;
+				const selected = await pick(input, localize('approvalEnvironment.project', 'Choose the project to prepare'), folders.map((folder, index) => ({
+					id: String(index), label: folder.label,
+					description: folder.target.type === 'ssh' ? `${folder.target.host}:${folder.target.root}` : folder.target.root,
+				})));
+				if (!selected) { return; }
+				workspace = folders[Number(selected.id)]!.target;
 			}
+			// Directory scope addresses the current backend. Dropping a remote host would read a different machine.
+			if (workspace?.type === 'ssh') { throw unsupportedRemote(); }
+			if (workspace?.type === 'local') { selectedRoot = workspace.root; }
 		}
 		if (!threadId && !selectedRoot) { throw new Error(localize('approvalEnvironment.noProject', 'Choose a project for this chat before preparing its review environment.')); }
 		const scope: ReviewEnvironmentScope = threadId ? { type: 'thread', threadId } : { type: 'directory', root: selectedRoot! };

@@ -45,6 +45,7 @@ export class NewChatInputWidget extends ChatInputPart {
 	private readonly permissionButton: HTMLButtonElement;
 	private draftVisible = false;
 	private restoringDraft = false;
+	private draftRestoreFailed = false;
 	private readonly draftWriteRevisions = new Map<string, number>();
 	private readonly draftWrites = new Set<Promise<void>>();
 	private readonly draftNotifications: INotificationService;
@@ -67,16 +68,20 @@ export class NewChatInputWidget extends ChatInputPart {
 	) {
 		super(container, {
 			...delegate,
-			send: async (text, mode, skills, contexts) => {
+			send: async (text, mode, skills, contexts, submissionSignal) => {
+				if (this.isDisposed || submissionSignal?.aborted) return;
 				this.submittedMessage = true;
 				this.updateConversation();
 				try {
-					await delegate.send(text, mode, skills, contexts);
+					await delegate.send(text, mode, skills, contexts, submissionSignal);
 				} catch (error) {
-					if (this.model.items.length === 0) {
-						this.submittedMessage = false;
+					// A retired submission must not change the newly selected conversation's welcome state.
+					if (!this.isDisposed && !submissionSignal?.aborted) {
+						if (this.model.items.length === 0) {
+							this.submittedMessage = false;
+						}
+						this.updateConversation();
 					}
-					this.updateConversation();
 					throw error;
 				}
 			},
@@ -92,14 +97,14 @@ export class NewChatInputWidget extends ChatInputPart {
 			icon: Lxicon.add,
 			enabled: true,
 			run: () => this.contextAttachments.showPicker(),
-		}], { modePicker: 'visible', modelPickerPosition: 'leading', renderSecondaryToolbar: false }, instantiationService, speechToText, onboarding, quickInput, menuService);
+		}], { modePicker: 'visible', modelPickerPosition: 'leading', renderSecondaryToolbar: false, fileEvents: 'host' }, instantiationService, speechToText, onboarding, quickInput, menuService);
 		this.draftNotifications = notifications;
 		this.element.classList.add('ash-sessions-chat-input', 'floating-card');
 		this.element.classList.add('chat-composer');
 		const pullRequests = this._register(instantiationService.createInstance(SessionChatInputToolbar, this.element, model));
 		this.element.insertBefore(pullRequests.domNode, this.inputContainer);
 		pullRequests.render();
-		this.contextAttachments = this._register(instantiationService.createInstance(NewChatContextAttachments, this.inputContainer, this.attachmentModel, () => this.supportsImages()));
+		this.contextAttachments = this._register(new NewChatContextAttachments(this.inputContainer, files => this.attachFiles(files)));
 		this._register(new NewChatInputPasteTarget(this.inputContainer, this.contextAttachments));
 		const dragAndDrop = this._register(new ChatDragAndDrop(files => this.contextAttachments.attachFiles(files)));
 		dragAndDrop.addOverlay(this.inputContainer, this.inputContainer);
@@ -134,10 +139,10 @@ export class NewChatInputWidget extends ChatInputPart {
 		this.element.prepend(this.heading);
 		this.displayedThreadId = model.threadId;
 		this.displayedDraftId = model.threadId ?? `untitled:${model.untitledSessionId!}`;
-		const storedDraft = readNewChatDraftState(storage, this.displayedDraftId);
-		if (storedDraft) this.restoreDraft(storedDraft);
+		this.restoreStoredDraft(this.displayedDraftId);
 		this._register(this.onDidChangeInput(() => {
 			if (!this.restoringDraft) {
+				this.draftRestoreFailed = false;
 				this.saveDraft();
 			}
 		}));
@@ -159,8 +164,7 @@ export class NewChatInputWidget extends ChatInputPart {
 					this.restoringDraft = true;
 					this.input.value = '';
 					this.attachmentModel.clear();
-					const draft = readNewChatDraftState(storage, model.threadId ?? `untitled:${model.untitledSessionId!}`);
-					if (draft) this.restoreDraft(draft);
+					this.restoreStoredDraft(model.threadId ?? `untitled:${model.untitledSessionId!}`);
 					this.restoringDraft = false;
 				} else {
 					// A successful materialization consumes the new-session identity and its persisted draft.
@@ -192,12 +196,25 @@ export class NewChatInputWidget extends ChatInputPart {
 		return super.statusText(state);
 	}
 
+	private restoreStoredDraft(draftId: string): void {
+		this.draftRestoreFailed = false;
+		try {
+			const draft = readNewChatDraftState(this.storage, draftId);
+			if (draft) this.restoreDraft(draft);
+		} catch (error) {
+			// Keep the original entry until the user edits; merely showing the empty composer must not erase it.
+			this.draftRestoreFailed = true;
+			this.draftNotifications.error(localize('sessions.chat.draftRestoreFailed', 'Could not restore the Chat draft: {0}', String(error)));
+		}
+	}
+
 	private saveDraft(): void {
+		if (this.draftRestoreFailed) return;
 		const operation = this.writeDraft();
 		this.draftWrites.add(operation);
 		void operation.then(() => this.draftWrites.delete(operation), error => {
 			this.draftWrites.delete(operation);
-			this.draftNotifications.error(localize('sessions.chat.draftFailed', 'Could not save the Chat draft: {0}', String(error)));
+			if (!this.isDisposed) this.draftNotifications.error(localize('sessions.chat.draftFailed', 'Could not save the Chat draft: {0}', String(error)));
 		});
 	}
 
@@ -215,8 +232,13 @@ export class NewChatInputWidget extends ChatInputPart {
 		const contexts = await Promise.all(attachments.map(async attachment => ({
 			id: attachment.id, kind: attachment.kind, name: attachment.name,
 			content: (await attachment.resolve()).content,
-		})));
-		if (revision !== this.draftWriteRevisions.get(draftId)) return;
+			...(attachment.resource ? { resource: attachment.resource.toString() } : {}),
+		}))).catch(error => {
+			// A removed attachment or closed pane no longer owns a persistence error.
+			if (revision !== this.draftWriteRevisions.get(draftId)) return undefined;
+			throw error;
+		});
+		if (!contexts || revision !== this.draftWriteRevisions.get(draftId)) return;
 		writeNewChatDraftState(this.storage, { mode, text, contexts }, draftId);
 	}
 

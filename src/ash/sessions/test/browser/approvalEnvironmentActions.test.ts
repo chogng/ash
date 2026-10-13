@@ -1,6 +1,10 @@
 import { quickInputServiceTestControls } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { QuickInputType, type IQuickPickDidAcceptEvent } from '../../../platform/quickinput/common/quickInput.js';
 import { Event as QuickPickTestEvent } from '../../../base/common/event.js';
+import { WorkspaceContextService } from '../../../workbench/services/workspaces/browser/workspaceContextService.js';
+import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
+import { createSshRemoteWorkspaceUri } from '../../../platform/remote/common/remote.js';
+import type { SessionWorkspaceSelection } from '../../services/sessions/common/session.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Emitter, Event } from '../../../base/common/event.js';
@@ -130,7 +134,7 @@ test('closing a running environment scan calls the backend cancellation API and 
 		cancel: async id => { cancelledId = id; cancel!(); },
 		save: async () => { assert.fail('cancelled drafts must not be saved'); },
 	} satisfies EnvironmentService);
-	services.registerInstance(ISessionsManagementService, { sessions: [{ sessionId: 'chosen', workspace: { root: '/chosen' } }], untitledSessions: [] } as unknown as ISessionsManagementService);
+	services.registerInstance(ISessionsManagementService, { sessions: [{ sessionId: 'chosen', workspace: { authorityId: 'local', root: '/chosen' }, chats: [{ threadId: 'thread-chosen' }] }], untitledSessions: [] } as unknown as ISessionsManagementService);
 	services.registerInstance(INotificationService, { info() { }, error: (error: unknown) => { throw error; } } as unknown as INotificationService);
 	using commands = new CommandService(services);
 	// After cancellation the next environment picker closes, leaving the existing profile untouched.
@@ -172,5 +176,51 @@ test('rescanning replaces untouched observations while retaining explicit edits 
 		await commands.executeCommand('chat.guardian.setup', { untitledSessionId: 'chosen', inputState: {} } as IChatWidgetModel);
 		assert.equal(scans, 2);
 		assert.equal(choices.length, 0);
+	}
+});
+
+
+test('review preparation refuses explicit, window and durable remote targets before contacting the backend', async () => {
+	for (const scope of ['draft', 'window', 'thread'] as const) {
+		using services = new InstantiationService();
+		services.registerInstance(IQuickInputService, { ...quickInputServiceTestControls, createQuickPick() { assert.fail('remote scopes do not open project preparation'); }, input: async () => undefined } satisfies QuickInput);
+		services.registerInstance(IApprovalEnvironmentService, {
+			read: async () => { assert.fail('remote root must not be read by the local backend'); },
+			scan: async () => { assert.fail('remote root must not be scanned'); }, cancel: async () => { assert.fail('no scan started'); },
+			save: async () => { assert.fail('remote root must not be saved'); },
+		} satisfies EnvironmentService);
+		services.registerInstance(INotificationService, {} as INotificationService);
+		services.registerInstance(ISessionsManagementService, {
+			sessions: [{ sessionId: 'remote', workspace: { authorityId: 'build-host', root: '/same-as-local' }, chats: [{ threadId: 'remote-thread' }] }],
+			untitledSessions: [{ untitledSessionId: 'chosen', workspace: scope === 'window' ? { type: 'current' } : { type: 'ssh', host: 'build-host', root: '/same-as-local' } }],
+		} as unknown as ISessionsManagementService);
+		using context = new WorkspaceContextService({ id: 'remote-workspace', folders: [{ id: 'folder', index: 0, name: 'Project', uri: createSshRemoteWorkspaceUri('build-host', '/same-as-local') }] });
+		services.registerInstance(IWorkspaceContextService, context);
+		using commands = new CommandService(services);
+		await assert.rejects(commands.executeCommand('chat.guardian.setup', { ...(scope === 'thread' ? { sessionId: 'remote', threadId: 'remote-thread' } : { untitledSessionId: 'chosen' }), inputState: {} } as IChatWidgetModel), /remote project is not supported yet/u);
+	}
+});
+
+test('multiple project review selection binds the selected local folder and cancellation has no side effects', async () => {
+	for (const cancelled of [false, true]) {
+		using services = new InstantiationService();
+		const workspace: SessionWorkspaceSelection = { type: 'multiple', folders: [{ label: 'First', target: { type: 'local', root: '/first' } }, { label: 'Selected', target: { type: 'local', root: '/selected' } }] };
+		services.registerInstance(ISessionsManagementService, { sessions: [], untitledSessions: [{ untitledSessionId: 'chosen', workspace }] } as unknown as ISessionsManagementService);
+		services.registerInstance(INotificationService, {} as INotificationService);
+		const reads: unknown[] = [];
+		services.registerInstance(IApprovalEnvironmentService, {
+			read: async scope => { reads.push(scope); return { root: '/selected', revision: 1, entries: [], scanOptions }; },
+			scan: async () => { assert.fail('selection does not start a scan'); }, cancel: async () => { assert.fail('no scan started'); },
+			save: async () => { assert.fail('selection does not save a profile'); },
+		} satisfies EnvironmentService);
+		services.registerInstance(IQuickInputService, {
+			...quickInputServiceTestControls,
+			createQuickPick: <T extends IQuickPickItem>(): IQuickPick<T> => new Picker<T>(picker => {
+				if (!cancelled && picker.ariaLabel === 'Choose the project to prepare') picker.choose('Selected'); else picker.hide();
+			}), input: async () => undefined,
+		} satisfies QuickInput);
+		using commands = new CommandService(services);
+		await commands.executeCommand('chat.guardian.setup', { untitledSessionId: 'chosen', inputState: {} } as IChatWidgetModel);
+		assert.deepEqual(reads, cancelled ? [] : [{ type: 'directory', root: '/selected' }]);
 	}
 });

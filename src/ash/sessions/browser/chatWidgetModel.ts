@@ -41,6 +41,9 @@ export class ChatWidgetModel extends Disposable {
 	private readonly chatService: IChatService;
 	private readonly sessionService: ISessionsManagementService;
 	private readonly _onDidChange = this._register(new Emitter<void>());
+	private readonly _onDidChangeComposer = this._register(new Emitter<void>());
+	private _composerGeneration = 0;
+	private materializingComposer: { readonly untitledSessionId: string; readonly generation: number; readonly threadId: ThreadId; } | undefined;
 	private transcriptEntries: ThreadTranscriptEntry[] = [];
 	private transcriptRevision = 0;
 	private selection: ChatWidgetSelection;
@@ -78,6 +81,16 @@ export class ChatWidgetModel extends Disposable {
 	private changesGeneration = 0;
 
 	readonly onDidChange: Event<void> = this._onDidChange.event;
+	/** Navigation retires input synchronously, including A-B-A. First materialization keeps its composer. */
+	readonly onDidChangeComposer: Event<void> = this._onDidChangeComposer.event;
+
+	get composerGeneration(): number { return this._composerGeneration; }
+
+	/** Only the selected initiating draft can replace an incidental early catalog pane. */
+	get materializingUntitledSessionId(): string | undefined {
+		const composer = this.materializingComposer;
+		return composer?.generation === this.composerGeneration && composer.threadId === this.threadId ? composer.untitledSessionId : undefined;
+	}
 
 	constructor(chatService: IChatService, selection: ChatWidgetSelection, sessionService: ISessionsManagementService, @IPromptsService private readonly skills: IPromptsService, @ILanguageModelsService private readonly languageModels: ILanguageModelsService, @IAgentExecutionSettingsService private readonly execution: IAgentExecutionSettingsService) {
 		super();
@@ -102,6 +115,7 @@ export class ChatWidgetModel extends Disposable {
 		}));
 		this._register(toDisposable(() => {
 			this.generation++;
+			this._composerGeneration++;
 			const active = this.activeSession;
 			if (active) void this.chatService.unsubscribeThread(active.session.sessionId, active.threadId, this);
 			this.transcriptEntries = [];
@@ -272,6 +286,10 @@ export class ChatWidgetModel extends Disposable {
 		}
 		const previousThreadId = current.threadId;
 		const previousModel = current.session.model;
+		if (previousThreadId !== active.threadId) {
+			this._composerGeneration++;
+			this._onDidChangeComposer.fire();
+		}
 		this.selection = { kind: "session", active };
 		if (previousThreadId === active.threadId && this._thread?.threadId === active.threadId) {
 			if (!sameModel(previousModel, active.session.model)) void this.loadModels();
@@ -365,21 +383,22 @@ export class ChatWidgetModel extends Disposable {
 	async send(text: string, mode: ChatMode = this.mode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[]): Promise<void> {
 		const input = text.trim();
 		if (!input && !contexts?.length) return;
+		const generation = this.composerGeneration;
 		let identity = this.composerIdentity;
 		try {
 			await this.pendingModelSelection;
-			if (this.isDisposed || identity !== this.composerIdentity) throw canceled();
+			if (this.isDisposed || generation !== this.composerGeneration || identity !== this.composerIdentity) throw canceled();
 			await this.initialize();
-			if (this.isDisposed || identity !== this.composerIdentity) throw canceled();
+			if (this.isDisposed || generation !== this.composerGeneration || identity !== this.composerIdentity) throw canceled();
 			this.setState("submitting");
 			const active = await this.ensureActiveSession();
-			if (this.isDisposed || active.session.sessionId !== this.sessionId || active.threadId !== this.threadId) throw canceled();
+			if (this.isDisposed || generation !== this.composerGeneration || active.session.sessionId !== this.sessionId || active.threadId !== this.threadId) throw canceled();
 			// Materializing this composer changes its identity from draft to durable Thread.
 			identity = active.threadId;
 			if (this._thread?.threadId !== active.threadId) {
 				await this.subscribe(active);
 			}
-			if (this.isDisposed || identity !== this.composerIdentity) throw canceled();
+			if (this.isDisposed || generation !== this.composerGeneration || identity !== this.composerIdentity) throw canceled();
 			const thread = this._thread;
 			if (!thread || thread.threadId !== active.threadId) {
 				throw new Error("Chat Thread is not available");
@@ -401,6 +420,7 @@ export class ChatWidgetModel extends Disposable {
 			if (turn && (turn.mode !== mode || skills?.length)) {
 				// A frozen Turn keeps its approach. A new approach gets its own durable submission.
 				await this.chatService.queueTurn(submission);
+				if (this.isDisposed || generation !== this.composerGeneration) return;
 				await this.loadQueue();
 			} else if (turn) {
 				if (!isSteerableTurn(turn)) throw new Error(`The active ${turn.status} Turn cannot accept steering`);
@@ -408,11 +428,11 @@ export class ChatWidgetModel extends Disposable {
 			} else {
 				await this.chatService.startTurn(submission);
 			}
-			if (this.isDisposed || identity !== this.composerIdentity) return;
+			if (this.isDisposed || generation !== this.composerGeneration || identity !== this.composerIdentity) return;
 			await this.refreshThread();
-			if (!this.isDisposed && identity === this.composerIdentity) this.setState("ready");
+			if (!this.isDisposed && generation === this.composerGeneration && identity === this.composerIdentity) this.setState("ready");
 		} catch (error) {
-			if (this.isDisposed || identity !== this.composerIdentity) throw error;
+			if (this.isDisposed || generation !== this.composerGeneration || identity !== this.composerIdentity) throw error;
 			if (isCancellationError(error)) {
 				this.setState('ready');
 				throw error;
@@ -925,6 +945,11 @@ export class ChatWidgetModel extends Disposable {
 			this.sessionService.promoteUntitledSession(untitledSession.untitledSessionId, created);
 			throw new Error("Untitled Chat Session was closed while its durable Session was being created");
 		}
+		// A catalog notification can create a durable pane before the create response arrives.
+		// Capture the authoritative draft selection before promotion removes its untitled key.
+		this.materializingComposer = this.sessionService.activeUntitledSession?.untitledSessionId === untitledSession.untitledSessionId
+			? { untitledSessionId: untitledSession.untitledSessionId, generation: this.composerGeneration, threadId: created.threadId }
+			: undefined;
 		this.selection = { kind: "session", active: created };
 		// The durable Session may authorize directory Skills absent from the untitled catalog.
 		this._skillSelectors = [];
@@ -942,9 +967,13 @@ export class ChatWidgetModel extends Disposable {
 		this.selectedReasoningEfforts.delete(untitledSession.untitledSessionId);
 		if (untitledSession.model) this.selectedModels.set(created.threadId, untitledSession.model);
 		else this.automaticModels.add(created.threadId);
-		this.sessionService.promoteUntitledSession(untitledSession.untitledSessionId, created);
-		await this.subscribe(created);
-		return created;
+		try {
+			this.sessionService.promoteUntitledSession(untitledSession.untitledSessionId, created);
+			await this.subscribe(created);
+			return created;
+		} finally {
+			this.materializingComposer = undefined;
+		}
 	}
 }
 

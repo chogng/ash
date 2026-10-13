@@ -620,7 +620,10 @@
     "sessions.customize.settingsDescription": "通过设置编辑器或当前配置的 settings.json 文件编辑共享的工作台首选项。",
     "sessions.customize.settingsHelp": "打开“工作台设置”可搜索、更改或重置设置。打开“用户设置 (JSON)”可编辑当前配置的 settings.json 文件。两种方式都使用工作台的同一配置服务。",
     "sessions.customize.openSettings": "打开工作台设置",
-    "sessions.chat.draftRestoreFailed": "无法恢复聊天草稿：{0}"
+    "sessions.chat.draftRestoreFailed": "无法恢复聊天草稿：{0}",
+    "sessions.chat.attachmentPreparationHelp": "文件附件读取完成后才会发送或移交草稿。离开此输入区会取消未完成的读取；已完成的附件仍保留在草稿中。读取失败会保留草稿并阻止此次发送。",
+    "approvalEnvironment.remoteUnsupported": "暂不支持为远程项目准备审核环境。未扫描任何项目文件。",
+    "sessions.chat.reviewTargetHelp": "审核环境使用此聊天选定的项目。工作区包含多个文件夹时，请选择本地项目；取消不会更改审核环境。暂不支持远程项目。"
   },
   "ash.sessions": {
     "command.OpenChatAction": "打开聊天",

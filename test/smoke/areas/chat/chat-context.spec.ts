@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { createTestWorkspace, disposeTestWorkspace } from '../../../automation/testWorkspace.js';
 import type { ElectronApplication } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
+import { Editor } from '../../../automation/editor.js';
 
 // The same renderer interaction is exercised in Browser, Electron UI and connected Electron.
 test('Workbench context picker uploads, previews and removes attachments with the keyboard', async ({ workbench }) => {
@@ -79,32 +80,50 @@ test('host clipboard image becomes a decoded context attachment in Workbench and
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
-	const png = await page.evaluate(() => {
+	const marker = 'ash-input-owned-clipboard-fixture-20261012';
+	const png = await page.evaluate(marker => {
 		const canvas = document.createElement('canvas');
 		canvas.width = 2560; canvas.height = 1280;
-		canvas.getContext('2d')!.fillRect(0, 0, 2560, 1280);
+		const context = canvas.getContext('2d')!;
+		context.fillRect(0, 0, 2560, 1280);
+		context.fillStyle = 'white';
+		context.font = '24px monospace';
+		context.fillText(marker, 24, 48);
 		return canvas.toDataURL('image/png').split(',')[1];
-	});
+	}, marker);
 	const electron = application as ElectronApplication;
 	if (target.kind === 'browser') await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
-	// Snapshot every available format before writing so the smoke test restores the user's clipboard.
-	const previous = target.kind === 'electron' ? await electron.evaluate(async ({ clipboard }) => Promise.all((await clipboard.read()).map(async item => {
-		const formats: Record<string, { bytes: number[]; } | { bookmark: { title: string; url: string; }; }> = {};
-		for (const type of item.types) {
-			const value = await item.getType(type);
-			formats[type] = value instanceof Blob ? { bytes: Array.from(new Uint8Array(await value.arrayBuffer())) } : { bookmark: value };
-		}
-		return formats;
-	}))) : await page.evaluate(async () => Promise.all((await navigator.clipboard.read()).map(async item => {
-		const formats: Record<string, { bytes: number[]; }> = {};
-		for (const type of item.types) formats[type] = { bytes: Array.from(new Uint8Array(await (await item.getType(type)).arrayBuffer())) };
-		return formats;
-	})));
+	// This exclusive test writes only its known fixture and never reads the previous clipboard.
+	let fixtureWritten = false;
 	try {
+		if (target.kind === 'electron') await electron.evaluate(({ clipboard }, text) => clipboard.writeText(text), marker);
+		else await page.evaluate(text => navigator.clipboard.writeText(text), marker);
+		fixtureWritten = true;
+		const copiedMarker = `${marker}-copied-by-product`;
+		const editor = chat.locator('.stanza-editor');
+		await editor.click();
+		await page.keyboard.insertText(copiedMarker);
+		await page.keyboard.press('ControlOrMeta+a');
+		await page.keyboard.press('ControlOrMeta+c');
+		// Every read follows a successful fixture write, so only this test's content can be inspected.
+		await expect.poll(() => target.kind === 'electron'
+			? electron.evaluate(({ clipboard }) => clipboard.readText())
+			: page.evaluate(() => navigator.clipboard.readText())).toBe(copiedMarker);
+		await page.keyboard.press('ControlOrMeta+a');
+		await page.keyboard.press('Backspace');
+		await page.keyboard.press('ControlOrMeta+v');
+		// Viewport rows include soft wraps; the public input value additionally checks
+		// exact logical text so an inserted newline cannot pass as a visual wrap.
+		await new Editor(chat).waitForEditorContents(contents => contents.replace(/\n/g, '') === copiedMarker);
+		await expect.poll(() => editor.locator('.stanza-editor-input').evaluate(element => element instanceof HTMLTextAreaElement
+			? element.value
+			: (element as HTMLElement & { readonly editContext?: { readonly text: string; }; }).editContext?.text)).toBe(copiedMarker);
+		await page.keyboard.press('ControlOrMeta+a');
+		await page.keyboard.press('Backspace');
 		if (target.kind === 'electron') {
-			await electron.evaluate(async ({ clipboard, ClipboardItem }, data) => clipboard.write([new ClipboardItem({ 'image/png': new Blob([Buffer.from(data, 'base64')], { type: 'image/png' }) })]), png);
+			await electron.evaluate(async ({ clipboard, ClipboardItem }, { png, marker }) => clipboard.write([new ClipboardItem({ 'image/png': new Blob([Buffer.from(png, 'base64')], { type: 'image/png' }), 'text/plain': new Blob([marker], { type: 'text/plain' }) })]), { png, marker });
 		} else {
-			await page.evaluate(async data => navigator.clipboard.write([new ClipboardItem({ 'image/png': new Blob([Uint8Array.from(atob(data), character => character.charCodeAt(0))], { type: 'image/png' }) })]), png);
+			await page.evaluate(async ({ png, marker }) => navigator.clipboard.write([new ClipboardItem({ 'image/png': new Blob([Uint8Array.from(atob(png), character => character.charCodeAt(0))], { type: 'image/png' }), 'text/plain': new Blob([marker], { type: 'text/plain' }) })]), { png, marker });
 		}
 		for (const surface of ['workbench', 'sessions']) {
 			const surfacePage = surface === 'workbench' ? page : await workbench.openAgentsWindow(target.kind);
@@ -123,18 +142,10 @@ test('host clipboard image becomes a decoded context attachment in Workbench and
 			await composer.getByRole('button', { name: 'Remove Pasted Image', exact: true }).press('Enter');
 		}
 	} finally {
-		if (target.kind === 'electron') {
-			await electron.evaluate(async ({ clipboard, ClipboardItem }, saved) => {
-				saved = saved.filter(formats => Object.keys(formats).length > 0);
-				if (!saved.length) { clipboard.clear(); return; }
-				await clipboard.write(saved.map(formats => new ClipboardItem(Object.fromEntries(Object.entries(formats).map(([type, value]) => [type, 'bytes' in value ? new Blob([new Uint8Array(value.bytes)], { type }) : value.bookmark])))));
-			}, previous);
-		} else {
-			await page.evaluate(async saved => {
-				saved = saved.filter(formats => Object.keys(formats).length > 0);
-				if (!saved.length) { await navigator.clipboard.writeText(''); return; }
-				await navigator.clipboard.write(saved.map(formats => new ClipboardItem(Object.fromEntries(Object.entries(formats).map(([type, value]) => [type, new Blob([new Uint8Array('bytes' in value ? value.bytes : [])], { type })])))));
-			}, previous);
+		// A denied write leaves the original clipboard untouched; only clear after our fixture was written.
+		if (fixtureWritten) {
+			if (target.kind === 'electron') await electron.evaluate(({ clipboard }) => clipboard.clear());
+			else await page.evaluate(() => navigator.clipboard.writeText(''));
 		}
 	}
 });

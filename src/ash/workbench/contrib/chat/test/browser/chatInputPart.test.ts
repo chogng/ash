@@ -1,4 +1,7 @@
 import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
+import { isCancellationError } from '../../../../../base/common/errors.js';
+import { DeferredPromise } from '../../../../../base/common/async.js';
+import { installEditorTestGlobals } from '../../../../../editor/test/browser/editorTestGlobals.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import { IMenuService } from '../../../../../platform/actions/common/actions.js';
@@ -56,7 +59,11 @@ const sharedNotifications = new NotificationService();
 setARIAContainer(document.body);
 suiteTeardown(() => sharedNotifications.dispose());
 
-function inputPart(notifications: NotificationService, dictation?: Pick<IDictationService, 'start'> & Partial<IDictationService>, mode: ChatInputState['mode'] = 'agent', delegate: Partial<ChatInputDelegate> = {}, sharedServices?: InstantiationService): ChatInputPart {
+class ObservableInputPart extends ChatInputPart {
+	readonly onDidChangeInputForTest = this.onDidChangeInput;
+}
+
+function inputPart(notifications: NotificationService, dictation?: Pick<IDictationService, 'start'> & Partial<IDictationService>, mode: ChatInputState['mode'] = 'agent', delegate: Partial<ChatInputDelegate> = {}, sharedServices?: InstantiationService): ObservableInputPart {
 	const container = document.createElement('div');
 	document.body.append(container);
 	let state: ChatInputState = { mode, queuedMessages: 0, approvalMode: 'manual', phase: 'loading', canInterrupt: false, models: [], isAutomaticModel: false, slashCommands: [], skillSelectors: [], canSelectAgent: false };
@@ -105,7 +112,7 @@ function inputPart(notifications: NotificationService, dictation?: Pick<IDictati
 		discoverProviderModels: async () => [],
 	} satisfies ILanguageModelsService);
 	partServices.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
-	const part = partServices.createInstance(ChatInputPart, container, { ...delegate, selectMode: selected => { state = { ...state, mode: selected }; part.render(state); } } as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading' });
+	const part = partServices.createInstance(ObservableInputPart, container, { ...delegate, selectMode: selected => { state = { ...state, mode: selected }; part.render(state); } } as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading' });
 	part.render(state);
 	return part;
 }
@@ -527,3 +534,295 @@ test('approval shows every exact target as text and dispatches both decisions', 
 	assert.equal(interaction.childElementCount, 0);
 	assert.equal((interaction as HTMLElement).hidden, true);
 });
+
+
+test('Chat input retry restores the original Skill revision and backward selection', async () => {
+	const failure = new DeferredPromise<void>();
+	const sent: unknown[] = [];
+	using part = inputPart(sharedNotifications, undefined, 'agent', {
+		send: async (_text, _mode, skills) => {
+			sent.push(skills);
+			if (sent.length === 1) await failure.p;
+		}
+	});
+	const state: ChatInputState = { mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false };
+	const skill = (digest: string): ChatInputState['skillSelectors'][number] => ({ name: 'commit', description: 'Commit changes', source: 'user', skill: { id: { source: 'user:skill-source:test', name: 'commit' }, version: { type: 'pinnedDigest', digest } } });
+	part.render({ ...state, skillSelectors: [skill('original')] });
+	edit(part, '$commit review');
+	const input = part.element.querySelector('textarea')!;
+	input.setSelectionRange(2, 7, 'backward');
+	const sending = part.acceptInput();
+	part.render({ ...state, skillSelectors: [skill('updated')] });
+	const rejected = assert.rejects(sending, /Request failed/u);
+	await failure.error(new Error('Request failed'));
+	await rejected;
+	assert.equal(input.value, '$commit review');
+	assert.deepEqual([input.selectionStart, input.selectionEnd, input.selectionDirection], [2, 7, 'backward']);
+	await part.acceptInput();
+	assert.deepEqual(sent, [[skill('original').skill], [skill('original').skill]]);
+});
+
+test('Chat input failure does not restore over a new draft that was edited and emptied', async () => {
+	const failure = new DeferredPromise<void>();
+	using part = inputPart(sharedNotifications, undefined, 'agent', { send: () => failure.p });
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	const sending = part.acceptInput('Original');
+	edit(part, 'New draft');
+	edit(part, '');
+	const rejected = assert.rejects(sending, /Request failed/u);
+	await failure.error(new Error('Request failed'));
+	await rejected;
+	assert.equal(part.element.querySelector('textarea')!.value, '');
+});
+
+test('Chat input waits for file preparation before sending an attachment-only request', async () => {
+	using globals = installEditorTestGlobals({ FileReader: browserEnvironment.window.FileReader });
+	const sent: string[] = [];
+	using part = inputPart(sharedNotifications, undefined, 'agent', {
+		send: async (text, _mode, _skills, contexts) => {
+			assert.equal(text, '');
+			for (const context of contexts ?? []) sent.push((await context.resolve()).content);
+		}
+	});
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	const attaching = part.attachFiles([new browserEnvironment.window.File(['file contents'], 'input.txt', { type: 'text/plain' })]);
+	const sending = part.acceptInput();
+	assert.deepEqual(sent, []);
+	await Promise.all([attaching, sending]);
+	assert.deepEqual(sent, ['file contents']);
+	assert.equal(part.element.querySelector('.ash-chat-input-attachments')!.textContent, '');
+});
+
+test('Failed file preparation blocks the waiting send and notifies once while preserving the draft', async () => {
+	using globals = installEditorTestGlobals({ FileReader: browserEnvironment.window.FileReader });
+	using notifications = new NotificationService();
+	const messages: string[] = [];
+	using listener = notifications.onDidAdd(message => messages.push(message.message));
+	let sends = 0;
+	using part = inputPart(notifications, undefined, 'agent', { send: async () => { sends++; } });
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	edit(part, 'Keep original');
+	const attaching = part.attachFiles([new browserEnvironment.window.File(['\0binary'], 'bad.bin')]);
+	await assert.rejects(part.acceptInput(), /must contain nonempty UTF-8 text/u);
+	await attaching;
+	assert.equal(sends, 0);
+	assert.equal(part.element.querySelector('textarea')!.value, 'Keep original');
+	assert.equal(messages.length, 1);
+});
+
+test('Hiding an input cancels pending file preparation without sending or notifying', async () => {
+	using globals = installEditorTestGlobals({ FileReader: browserEnvironment.window.FileReader });
+	using notifications = new NotificationService();
+	let errors = 0;
+	using listener = notifications.onDidAdd(() => { errors++; });
+	let sends = 0;
+	using part = inputPart(notifications, undefined, 'agent', { send: async () => { sends++; } });
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	const attaching = part.attachFiles([new browserEnvironment.window.File(['file contents'], 'input.txt')]);
+	const sending = assert.rejects(part.acceptInput(), isCancellationError);
+	part.setVisible(false);
+	await Promise.all([attaching, sending]);
+	part.setVisible(true);
+	assert.equal(sends, 0);
+	assert.equal(errors, 0);
+	assert.equal(await part.captureDraft(), undefined);
+});
+
+
+test('Typing a newer draft during file preparation preserves it while sending the captured request', async () => {
+	using globals = installEditorTestGlobals({ FileReader: browserEnvironment.window.FileReader });
+	const sent: { text: string; contents: string[]; }[] = [];
+	using part = inputPart(sharedNotifications, undefined, 'agent', {
+		send: async (text, _mode, _skills, contexts) => {
+			sent.push({ text, contents: await Promise.all((contexts ?? []).map(async context => (await context.resolve()).content)) });
+		}
+	});
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	edit(part, 'Original request');
+	const first = part.attachFiles([new browserEnvironment.window.File(['first contents'], 'first.txt')]);
+	const sending = part.acceptInput();
+	edit(part, 'Next request');
+	const next = part.attachFiles([new browserEnvironment.window.File(['next contents'], 'next.txt')]);
+	await Promise.all([first, sending, next]);
+	assert.deepEqual(sent, [{ text: 'Original request', contents: ['first contents'] }]);
+	const draft = await part.captureDraft();
+	assert.equal(draft?.draft.text, 'Next request');
+	assert.deepEqual(draft?.draft.contexts.map(context => context.name), ['next.txt']);
+});
+
+
+test('Disposing an input during preparation cancels sending without creating new UI', async () => {
+	using globals = installEditorTestGlobals({ FileReader: browserEnvironment.window.FileReader });
+	using notifications = new NotificationService();
+	let sends = 0;
+	const part = inputPart(notifications, undefined, 'agent', { send: async () => { sends++; } });
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	const attaching = part.attachFiles([new browserEnvironment.window.File(['file contents'], 'input.txt')]);
+	const rejected = assert.rejects(part.acceptInput(), isCancellationError);
+	part.dispose();
+	await Promise.all([attaching, rejected]);
+	assert.equal(sends, 0);
+	assert.equal(part.element.isConnected, false);
+	assert.deepEqual(notifications.getNotifications(), []);
+});
+
+
+test('A local settings command executes while file context is still being prepared', async () => {
+	using globals = installEditorTestGlobals({ FileReader: browserEnvironment.window.FileReader });
+	const commands: string[] = [];
+	using part = inputPart(sharedNotifications, undefined, 'agent', { executeCommand: async invocation => { commands.push(invocation.commandId); } });
+	const attaching = part.attachFiles([new browserEnvironment.window.File(['following context'], 'following.txt')]);
+	const command = part.acceptInput('/config');
+	assert.equal(commands.length, 1);
+	await Promise.all([command, attaching]);
+	const draft = await part.captureDraft();
+	assert.equal(draft?.draft.text, '');
+	assert.deepEqual(draft?.draft.contexts.map(context => context.name), ['following.txt']);
+});
+
+
+test('Pending attachment-only context exposes mouse Send and waits for acquisition', async () => {
+	const preparation = new DeferredPromise<readonly Parameters<ChatInputPart['addContext']>[0][]>();
+	const delivered = new DeferredPromise<void>();
+	const sent: { text: string; contents: string[]; }[] = [];
+	using part = inputPart(sharedNotifications, undefined, 'agent', {
+		send: async (text, _mode, _skills, contexts) => {
+			sent.push({ text, contents: await Promise.all((contexts ?? []).map(async context => (await context.resolve()).content)) });
+			await delivered.complete();
+		}
+	});
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	const acquiring = part.acquireContext(() => preparation.p);
+	const send = part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.send"] button');
+	assert.ok(send);
+	assert.equal(send.disabled, false);
+	assert.equal(part.element.querySelector('[data-action-id="ash.chat.input.voice"]'), null);
+	send.click();
+	assert.equal(part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.send"] button')?.disabled, true);
+	assert.deepEqual(sent, []);
+	await preparation.complete([{ id: 'held-file', kind: 'file', name: 'held.txt', resolve: async () => ({ name: 'held.txt', content: 'held attachment contents' }) }]);
+	await acquiring;
+	await delivered.p;
+	assert.deepEqual(sent, [{ text: '', contents: ['held attachment contents'] }]);
+});
+
+test('Canceling pending attachment-only context restores the empty mouse toolbar', async () => {
+	const preparation = new DeferredPromise<readonly Parameters<ChatInputPart['addContext']>[0][]>();
+	const controller = new AbortController();
+	using part = inputPart(sharedNotifications);
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	const acquiring = part.acquireContext(() => preparation.p, controller.signal);
+	const rejected = assert.rejects(acquiring, isCancellationError);
+	assert.equal(part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.send"] button')?.disabled, false);
+	controller.abort();
+	await rejected;
+	assert.equal(part.element.querySelector('[data-action-id="ash.chat.input.send"]'), null);
+	assert.equal(part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.voice"] button')?.disabled, true);
+	await preparation.complete([]);
+});
+
+
+test('A retired composer cannot restore its failed request into the reopened blank draft', async () => {
+	const reply = new DeferredPromise<void>();
+	const dispatched = new DeferredPromise<void>();
+	using part = inputPart(sharedNotifications, undefined, 'agent', { send: async () => { await dispatched.complete(); await reply.p; } });
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	const sending = part.acceptInput('Request for the previous composer');
+	const rejected = assert.rejects(sending, /Retired request failed/u);
+	try {
+		await dispatched.p;
+		part.setVisible(false);
+		part.setVisible(true);
+		assert.equal(part.element.querySelector('textarea')!.value, '');
+		await reply.error(new Error('Retired request failed'));
+		await rejected;
+		assert.equal(part.element.querySelector('textarea')!.value, '');
+	} finally {
+		await reply.error(new Error('Retired request failed'));
+		await rejected;
+	}
+});
+
+
+test('A reopened composer keeps its send locked when the retired send settles', async () => {
+	const previousReply = new DeferredPromise<void>();
+	const nextReply = new DeferredPromise<void>();
+	const nextDispatched = new DeferredPromise<void>();
+	const sent: string[] = [];
+	using part = inputPart(sharedNotifications, undefined, 'agent', {
+		send: async text => {
+			sent.push(text);
+			if (text === 'Previous request') await previousReply.p;
+			else { await nextDispatched.complete(); await nextReply.p; }
+		},
+	});
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	const previous = assert.rejects(part.acceptInput('Previous request'), /Retired request failed/u);
+	part.setVisible(false);
+	part.setVisible(true);
+	const next = part.acceptInput('Next request');
+	try {
+		await nextDispatched.p;
+		await previousReply.error(new Error('Retired request failed'));
+		await previous;
+		await part.acceptInput('Duplicate next request');
+		assert.deepEqual(sent, ['Previous request', 'Next request']);
+		assert.equal(part.element.querySelector('textarea')!.value, '');
+	} finally {
+		await previousReply.error(new Error('Retired request failed'));
+		await nextReply.complete();
+		await Promise.all([previous, next]);
+	}
+});
+
+test('An acknowledged handoff from a retired composer cannot clear the reopened draft', async () => {
+	using part = inputPart(sharedNotifications);
+	edit(part, 'Retained draft');
+	const previous = await part.captureDraft();
+	part.setVisible(false);
+	part.setVisible(true);
+	previous!.clear();
+	assert.equal(part.element.querySelector('textarea')!.value, 'Retained draft');
+});
+
+test('Draft context resolved after retirement does not produce a new handoff', async () => {
+	const resolving = new DeferredPromise<{ name: string; content: string; }>();
+	using part = inputPart(sharedNotifications);
+	edit(part, 'Retained draft');
+	part.addContext({ id: 'slow-context', kind: 'file', name: 'slow.txt', resolve: () => resolving.p });
+	const capturing = part.captureDraft();
+	part.setVisible(false);
+	part.setVisible(true);
+	await resolving.complete({ name: 'slow.txt', content: 'Previous context' });
+	assert.equal(await capturing, undefined);
+	assert.equal(part.element.querySelector('textarea')!.value, 'Retained draft');
+});
+
+for (const submission of [
+	{ kind: 'message', text: 'Old message' },
+	{ kind: 'local command', text: '/config' },
+	{ kind: 'server command', text: '/compact' },
+]) {
+	test(`Retiring input during synchronous draft clearing blocks the old ${submission.kind}`, async () => {
+		const calls: string[] = [];
+		using part = inputPart(sharedNotifications, undefined, 'agent', {
+			send: async () => { calls.push('message'); },
+			executeCommand: async () => { calls.push('local command'); },
+			executeServerCommand: async () => { calls.push('server command'); },
+		});
+		part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [{ name: 'compact', description: 'Compact context', argumentMode: 'none' }], skillSelectors: [], canSelectAgent: false });
+		edit(part, submission.text);
+		let retired = false;
+		using transition = part.onDidChangeInputForTest(() => {
+			if (!retired && part.element.querySelector<HTMLTextAreaElement>('textarea')!.value === '') {
+				retired = true;
+				part.invalidatePendingInput();
+				edit(part, 'New thread draft');
+			}
+		});
+		await part.acceptInput();
+		assert.equal(retired, true);
+		assert.deepEqual(calls, []);
+		assert.equal(part.element.querySelector<HTMLTextAreaElement>('textarea')!.value, 'New thread draft');
+	});
+}

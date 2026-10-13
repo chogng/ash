@@ -1,3 +1,5 @@
+import { isCancellationError } from '../../../../../../base/common/errors.js';
+import { DeferredPromise } from '../../../../../../base/common/async.js';
 import '../../../../../../editor/test/browser/testEditorDom.js';
 import { setARIAContainer } from '../../../../../../base/browser/ui/aria/aria.js';
 import assert from 'node:assert/strict';
@@ -74,6 +76,7 @@ test('Adding suggested context captures unsaved text and restores input focus', 
 	using resources = new DisposableStore();
 	const { widget, attachments, input } = setup(resources, async () => { assert.fail('Unsaved text must take precedence'); }, 'const unsaved = true;');
 	const added = new Promise<void>(resolve => resources.add(attachments.onDidChange(resolve)));
+	widget.domNode.querySelector('button')!.focus();
 	widget.domNode.querySelector('button')!.click();
 	await added;
 	assert.equal(widget.domNode.hidden, true);
@@ -145,4 +148,41 @@ test('A file diff suggestion uses its modified working copy rather than the comp
 	await added;
 	assert.equal(attachments.attachments[0]!.resource?.path, '/workspace/after.ts');
 	assert.deepEqual(await attachments.attachments[0]!.resolve(), { name: 'after.ts', content: 'Unsaved modified text' });
+});
+
+
+test('Suggested context joins the pending submission and cannot reenter a cleared draft', async () => {
+	using resources = new DisposableStore();
+	const result = new DeferredPromise<string>();
+	const started = new DeferredPromise<void>();
+	const { widget, attachments, notifications } = setup(resources, async () => { await started.complete(); return result.p; });
+	widget.domNode.querySelector('button')!.click();
+	assert.equal(attachments.hasPendingContext, true);
+	const captured = attachments.resolvePendingContext();
+	await started.p;
+	const rejected = assert.rejects(captured, isCancellationError);
+	attachments.clear();
+	await rejected;
+	await result.complete('late file contents');
+	await Promise.resolve();
+	assert.equal(attachments.size, 0);
+	assert.deepEqual(notifications.getNotifications(), []);
+});
+
+test('Disposing a suggested-context widget cancels its borrowed draft preparation', async () => {
+	using resources = new DisposableStore();
+	const result = new DeferredPromise<string>();
+	const started = new DeferredPromise<void>();
+	const { widget, attachments, notifications } = setup(resources, async () => { await started.complete(); return result.p; });
+	widget.domNode.querySelector('button')!.click();
+	const captured = attachments.resolvePendingContext();
+	await started.p;
+	const rejected = assert.rejects(captured, isCancellationError);
+	widget.dispose();
+	await rejected;
+	await result.complete('late file contents');
+	await Promise.resolve();
+	assert.equal(attachments.size, 0);
+	assert.equal(attachments.hasPendingContext, false);
+	assert.deepEqual(notifications.getNotifications(), []);
 });

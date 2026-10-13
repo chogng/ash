@@ -94,7 +94,7 @@ import { HoverService, IHoverService } from '../../../src/ash/platform/hover/bro
 import { setHoverDelegate } from '../../../src/ash/base/browser/ui/hover/hoverDelegate.js';
 
 declare global {
-	interface Window { ashChatInputIntegration: { setActiveFile(path?: string): void; setActiveDiff(original: string, modified: string, text?: string): void; setChanges(changes: ChatInputState['changes']): void; setVisible(visible: boolean): void; contextAccessibility(): { help: string | undefined; content: string | undefined; }; setFooterPhase(phase: ChatInputState['phase'], error?: string): void; setContextUsage(available: boolean, capacity?: number, estimatedTokens?: number): void; setFooterStatus(visible: boolean): void; removeFooterStatus(): void; historyState(): unknown; holdNextHistoryRead(): void; releaseHistorySearch(query: string): void; addHistoryContext(): void; setHistorySkill(digest: string): void; refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; restoreCapturedDraft(): Promise<void>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; }; }
+	interface Window { ashChatInputIntegration: { setActiveFile(path?: string): void; setActiveDiff(original: string, modified: string, text?: string): void; setChanges(changes: ChatInputState['changes']): void; setVisible(visible: boolean): void; inputAccessibility(): string | undefined; contextAccessibility(): { help: string | undefined; content: string | undefined; }; setFooterPhase(phase: ChatInputState['phase'], error?: string): void; setContextUsage(available: boolean, capacity?: number, estimatedTokens?: number): void; setFooterStatus(visible: boolean): void; removeFooterStatus(): void; historyState(): unknown; holdNextHistoryRead(): void; releaseHistorySearch(query: string): void; addHistoryContext(): void; setHistorySkill(digest: string): void; refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; restoreCapturedDraft(): Promise<void>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; }; }
 }
 
 const locale = new URLSearchParams(location.search).get('locale');
@@ -539,6 +539,16 @@ window.ashChatInputIntegration = {
 	setActiveFile: path => { activeEditor = path ? { resource: URI.parse(path) } : undefined; activeEditorChanged.fire(); },
 	setChanges: changes => { state = { ...state, changes, interaction: undefined }; part.render(state); },
 	setVisible: visible => part.setVisible(visible),
+	inputAccessibility: () => {
+		for (const entry of AccessibleViewRegistry.getImplementations()) {
+			if (entry.type !== AccessibleViewType.Help || !entry.name.startsWith('chatAttachments-')) continue;
+			const provider = entry.getProvider(services);
+			if (!provider) continue;
+			try { return provider.provideContent(); }
+			finally { provider.dispose(); }
+		}
+		return undefined;
+	},
 	contextAccessibility: () => {
 		const content = (type: AccessibleViewType): string | undefined => {
 			for (const entry of AccessibleViewRegistry.getImplementations()) {

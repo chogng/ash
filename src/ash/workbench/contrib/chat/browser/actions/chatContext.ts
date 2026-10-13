@@ -340,7 +340,9 @@ export function pickChatContextItem<T extends IQuickPickItem>(quickInput: IQuick
 			const cancellation = new CancellationTokenSource();
 			request.value = toDisposable(() => cancellation.dispose(true));
 			const token = cancellation.token;
-			picker.items = [back];
+			// Quick Input preserves the active item by identity when results change.
+			// Start empty so the completed catalog selects its first actual source.
+			picker.items = [];
 			picker.busy = true;
 			try {
 				const items = await provide(query, token);

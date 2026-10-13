@@ -1,7 +1,5 @@
 import { ChatInstructionsPickerPick } from '../promptSyntax/attachInstructionsAction.js';
-import { createImageAttachment } from '../chatImageUtils.js';
 import { pickFiles } from '../../../../../base/browser/fileAccess.js';
-import { createUuid } from '../../../../../base/common/uuid.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { ThemeIcon } from '../../../../../base/common/themables.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
@@ -12,7 +10,7 @@ import { FileKind } from '../../../../../platform/files/common/files.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
-import { IChatContextPickService, type IChatContextTarget } from '../../../../services/chat/common/chatContextService.js';
+import { IChatContextPickService } from '../../../../services/chat/common/chatContextService.js';
 import { IEditorGroupsService } from '../../../../services/editor/common/editorGroupsService.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { type AnythingQuickAccessProviderRunOptions } from '../../../../../platform/quickinput/common/quickAccess.js';
@@ -22,9 +20,14 @@ import { ClipboardImageContextValuePick, GitHubContextValuePick, ScreenshotConte
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { addDisposableListener } from '../../../../../base/browser/dom.js';
+import { isCancellationError } from '../../../../../base/common/errors.js';
+import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
 
 interface AttachContextHost {
-	readonly target: Pick<IChatContextTarget, 'addContext'>;
+	readonly target: {
+		attachFiles(files: readonly File[], signal?: AbortSignal): Promise<void>;
+		acquireContext(prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>, signal?: AbortSignal): Promise<readonly ChatContextAttachment[]>;
+	};
 	readonly container: HTMLElement;
 	readonly focusInput: () => void;
 	readonly supportsImages: () => boolean;
@@ -60,9 +63,6 @@ export class AttachContextAction extends Disposable {
 		this.pending = controller;
 		this.pickers.add(toDisposable(() => controller.abort()));
 		anchor?.setAttribute('aria-expanded', 'true');
-		let added = false;
-		let failed = false;
-		let completed = false;
 		// Child sources borrow the window's picker owner with this composer's placement.
 		// Keeping the scope in DI covers multi-step sources without changing their attachment logic.
 		const quickInput = this.quickInput;
@@ -80,10 +80,6 @@ export class AttachContextAction extends Disposable {
 			},
 		});
 		const instantiation = this.pickers.add(this.instantiation.createChild(new ServiceCollection([IQuickInputService, scopedQuickInput])));
-		const addContext = (attachment: Parameters<IChatContextTarget['addContext']>[0]): void => {
-			this.host.target.addContext(attachment);
-			added = true;
-		};
 		try {
 			const sources: ContextSourceItem[] = [{ label: localize('chat.attach.files', 'Attach files'), iconClass: ThemeIcon.asClassName(Lxicon.paperclip), source: 'upload' }];
 			if (this.workspace.getWorkspace().folders.length) sources.unshift({ label: localize('chat.context.filesAndFolders', 'Files & Folders…'), iconClass: ThemeIcon.asClassName(Lxicon.folders), source: 'workspace' });
@@ -102,19 +98,20 @@ export class AttachContextAction extends Disposable {
 			if (this.editors.groups.some(group => group.inputs.length)) sources.push({ label: localize('chat.context.editors', 'Open editors'), iconClass: ThemeIcon.asClassName(Lxicon.files), source: 'editors' });
 			if ((await Promise.all(this.contextPicks.items.map(picker => picker.isEnabled()))).some(Boolean)) sources.push({ label: localize('chat.context.providers', 'Other context sources'), iconClass: ThemeIcon.asClassName(Lxicon.connectors), source: 'providers' });
 			if (this.isDisposed || controller.signal.aborted) return;
-			completed = await this.showAttachments(sources, controller.signal, scopedQuickInput, addContext, anchor);
+			await this.showAttachments(sources, controller.signal, scopedQuickInput, anchor);
 		} catch (error) {
-			failed = true;
-			if (!this.isDisposed && !controller.signal.aborted) this.notifications.error(localize('chat.context.failed', 'Could not add context: {0}', String(error)));
+			if (!this.isDisposed && !controller.signal.aborted && !isCancellationError(error)) this.notifications.error(localize('chat.context.failed', 'Could not add context: {0}', String(error)));
 		} finally {
 			this.pending = undefined;
 			this.pickers.clear();
 			anchor?.setAttribute('aria-expanded', 'false');
-			if (!this.isDisposed && ((added && completed) || failed)) this.host.focusInput();
+			// The shared picker first restores its trigger; the live composer owns the
+			// final focus after success, cancellation, or failure.
+			if (!this.isDisposed) this.host.focusInput();
 		}
 	}
 
-	private showAttachments(sources: readonly ContextSourceItem[], signal: AbortSignal, quickInput: IQuickInputService, addContext: IChatContextTarget['addContext'], anchor?: HTMLElement): Promise<boolean> {
+	private showAttachments(sources: readonly ContextSourceItem[], signal: AbortSignal, quickInput: IQuickInputService, anchor?: HTMLElement): Promise<void> {
 		const lifetime = this.pickers.add(new DisposableStore());
 		const ownedPicker = lifetime.add(new MutableDisposable());
 		const resolver = this.instantiation.createInstance(FilesAndFoldersPickerPick);
@@ -122,10 +119,10 @@ export class AttachContextAction extends Disposable {
 			let finished = false;
 			let transitioning = false;
 			let accepting = false;
-			const finish = (error?: unknown, accepted = false): void => {
+			const finish = (error?: unknown): void => {
 				if (finished) return;
 				finished = true;
-				if (error) reject(error); else resolve(accepted);
+				if (error) reject(error); else resolve();
 				lifetime.dispose();
 			};
 			lifetime.add(toDisposable(() => finish()));
@@ -167,35 +164,40 @@ export class AttachContextAction extends Disposable {
 						if (item.source === 'context') {
 							const context = (item as Extract<ContextSourceItem, { source: 'context'; }>).context;
 							if ((context instanceof ClipboardImageContextValuePick || context instanceof ScreenshotContextValuePick) && !this.host.supportsImages()) throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
-							const selection = await context.asAttachment(signal);
-							const attachment = selection?.attachment;
+							let selection: Awaited<ReturnType<ChatContextSource['asAttachment']>>;
+							const attachments = await this.host.target.acquireContext(async draftSignal => {
+								selection = await context.asAttachment(AbortSignal.any([signal, draftSignal]));
+								return selection ? [selection.attachment] : [];
+							}, signal);
+							const attachment = attachments[0];
 							if (finished || signal.aborted) return;
 							if (attachment) {
-								addContext(attachment);
 								status(localize('chat.context.added', 'Added {0}', attachment.name));
 							}
-							if (!attachment || background || selection?.acceptInBackground) show(); else finish(undefined, true);
+							if (!attachment || background || selection?.acceptInBackground) show(); else finish();
 							return;
 						}
-						if (item.source === 'upload') { await this.showFilePicker(addContext, signal); finish(undefined, true); return; }
+						if (item.source === 'upload') { await this.showFilePicker(signal); finish(); return; }
 						if (item.source === 'providers') {
-							const attachment = await this.contextPicks.pickContext(quickInput, signal);
-							if (attachment && !signal.aborted) addContext(attachment);
-							if (attachment) finish(undefined, true); else show();
+							const attachments = await this.host.target.acquireContext(async draftSignal => {
+								const attachment = await this.contextPicks.pickContext(quickInput, AbortSignal.any([signal, draftSignal]));
+								return attachment ? [attachment] : [];
+							}, signal);
+							const attachment = attachments[0];
+							if (attachment) finish(); else show();
 							return;
 						}
 						const editors = [...new Map(this.editors.groups.flatMap(group => group.inputs).map(input => [extUri.getComparisonKey(input.resource), input])).values()];
-						const attachments = await Promise.all(editors.map(editor => resolver.asAttachment(editor.resource, FileKind.File, signal)));
-						if (!signal.aborted) for (const attachment of attachments) addContext(attachment);
-						finish(undefined, true);
+						await this.host.target.acquireContext(draftSignal => Promise.all(editors.map(editor => resolver.asAttachment(editor.resource, FileKind.File, AbortSignal.any([signal, draftSignal])))), signal);
+						finish();
 						return;
 					}
 					const resource = item as IAnythingQuickPickItem;
-					const attachment = await resolver.asAttachment(resource.resource, resource.kind, signal);
-					if (signal.aborted || finished) return;
-					addContext(attachment);
+					const attachments = await this.host.target.acquireContext(async draftSignal => [await resolver.asAttachment(resource.resource, resource.kind, AbortSignal.any([signal, draftSignal]))], signal);
+					const attachment = attachments[0];
+					if (signal.aborted || finished || !attachment) return;
 					status(localize('chat.context.added', 'Added {0}', attachment.name));
-					if (!background) finish(undefined, true);
+					if (!background) finish();
 				} catch (error) {
 					if (!signal.aborted) finish(error);
 				} finally {
@@ -207,42 +209,14 @@ export class AttachContextAction extends Disposable {
 		});
 	}
 
-	private async showFilePicker(addContext: IChatContextTarget['addContext'], signal: AbortSignal): Promise<void> {
+	private async showFilePicker(signal: AbortSignal): Promise<void> {
 		const files = await pickFiles({
 			ownerDocument: this.host.container.ownerDocument,
 			selection: 'multiple',
 			ariaLabel: localize('chat.attach.files', 'Attach files'),
 			signal,
 		});
-		if (files && !signal.aborted && !this.isDisposed) { await this.attachFiles(files, addContext, signal); }
-	}
-
-	private async attachFiles(files: readonly File[], addContext: IChatContextTarget['addContext'], signal: AbortSignal): Promise<void> {
-		try {
-			const attachments = await Promise.all(files.map(async file => {
-				const bytes = new Uint8Array(await file.arrayBuffer());
-				if (!bytes.length) { throw new Error(localize('chat.attach.empty', '{0} is empty', file.name)); }
-				const image = /^image\/(png|jpeg|gif|webp)$/u.test(file.type);
-				let content: string;
-				if (image) {
-					if (!this.host.supportsImages()) throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
-					return createImageAttachment(file.name, bytes, file.type);
-				} else {
-					try { content = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
-					catch { throw new Error(localize('chat.attach.binary', '{0} must be a UTF-8 text file or a PNG, JPEG, GIF, or WebP image', file.name)); }
-					if (content.includes('\0') || !content.trim()) {
-						throw new Error(localize('chat.context.invalidText', '{0} must contain nonempty UTF-8 text', file.name));
-					}
-				}
-				return { id: createUuid(), name: file.name, kind: 'file', resolve: async () => ({ name: file.name, content }) };
-			}));
-			if (!this.isDisposed && !signal.aborted) {
-				for (const attachment of attachments) { addContext(attachment); }
-				status(localize('chat.context.filesAdded', 'Added {0} attachments', attachments.length));
-			}
-		} catch (error) {
-			if (!this.isDisposed && !signal.aborted) { this.notifications.error(localize('chat.context.failed', 'Could not add context: {0}', String(error))); }
-		}
+		if (files && !signal.aborted && !this.isDisposed) { await this.host.target.attachFiles(files, signal); }
 	}
 
 }

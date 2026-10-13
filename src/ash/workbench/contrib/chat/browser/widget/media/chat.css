@@ -166,6 +166,7 @@
 }
 
 .ash-chat-input-container {
+	position: relative;
 	display: flex;
 	box-sizing: border-box;
 	container-type: inline-size;
@@ -177,6 +178,23 @@
 		var(--ash-chat-input-border, var(--ash-input-border));
 	border-radius: var(--ash-chat-input-radius, var(--ash-cornerRadius-large));
 	background: var(--ash-input-background);
+}
+
+.ash-chat-input-container > .ash-chat-drop-overlay {
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+	display: grid;
+	place-items: center;
+	pointer-events: none;
+	border: var(--ash-strokeThickness) dashed var(--ash-focusBorder);
+	border-radius: inherit;
+	background: var(--ash-input-background);
+	color: var(--ash-foreground);
+}
+
+.ash-chat-input-container > .ash-chat-drop-overlay[hidden] {
+	display: none;
 }
 
 .ash-chat-input-container.focused {

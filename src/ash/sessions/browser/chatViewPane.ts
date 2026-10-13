@@ -382,9 +382,17 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 			if (paneId === materializedPaneId) continue;
 			const existing = this.panes.get(materializedPaneId);
 			if (existing && existing !== pane) {
-				pane.dispose();
-				this.panes.delete(paneId);
-				continue;
+				const origin = pane.model.materializingUntitledSessionId;
+				const active = this.sessionService.active;
+				// Keep the first submission's editor and lifetime when the catalog arrived
+				// before its create response. A deliberately selected durable draft wins.
+				if (origin && paneId === `untitled:${origin}` && pane === this.activePane && active?.session.sessionId === sessionId && active.threadId === pane.threadId) {
+					existing.dispose();
+				} else {
+					pane.dispose();
+					this.panes.delete(paneId);
+					continue;
+				}
 			}
 			this.panes.delete(paneId);
 			this.panes.set(materializedPaneId, pane);

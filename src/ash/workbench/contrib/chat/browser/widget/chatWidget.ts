@@ -4,6 +4,7 @@ import { localize } from '../../../../../nls.js';
 import './media/chat.css';
 import { Disposable, toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
 import type { Event } from "../../../../../base/common/event.js";
+import { canceled } from "../../../../../base/common/errors.js";
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import type { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
@@ -35,6 +36,8 @@ import type { IOpenAgentsWindowOptions } from '../../../../../platform/native/co
 /** The presentation consumes one conversation model owned by its product. */
 export interface IChatWidgetModel extends IDisposable {
 	readonly onDidChange: Event<void>;
+	readonly onDidChangeComposer: Event<void>;
+	readonly composerGeneration: number;
 	readonly sessionId: SessionId | undefined;
 	readonly threadId: ThreadId | undefined;
 	readonly untitledSessionId: string | undefined;
@@ -104,7 +107,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		});
 		this.listWidget = listWidgets.get();
 		const inputDelegate: ChatInputDelegate = {
-			send: (text, mode, skills, contexts) => this.send(text, mode, skills, contexts),
+			send: (text, mode, skills, contexts, submissionSignal) => this.send(text, mode, skills, contexts, submissionSignal),
 			executeCommand: (invocation) => invocation.commandId === OPEN_CHAT_PERMISSIONS_COMMAND_ID || invocation.commandId === OPEN_GUARDIAN_SETUP_COMMAND_ID
 				? commandService.executeCommand(invocation.commandId, this.model, invocation.argumentsText)
 				: invocation.argumentsText ? commandService.executeCommand(invocation.commandId, invocation.argumentsText) : commandService.executeCommand(invocation.commandId),
@@ -146,6 +149,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			this.listWidget = widget;
 			widget.restoreViewState(state, this.model.items);
 		}));
+		this._register(this.model.onDidChangeComposer(() => this.inputPart.invalidatePendingInput()));
 		this._register(this.model.onDidChange(() => this.render()));
 		this._register(toDisposable(() => this.element.remove()));
 		this.render();
@@ -203,14 +207,18 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		return this.inputPart.acceptInput(value);
 	}
 
-	private async send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts: readonly ChatContextAttachment[] = []): Promise<void> {
+	private async send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts: readonly ChatContextAttachment[] = [], submissionSignal?: AbortSignal): Promise<void> {
+		const model = this.model;
+		const generation = model.composerGeneration;
+		if (this.isDisposed || submissionSignal?.aborted) throw canceled();
 		this.submittedMessage = true;
 		this.updateConversationState();
 		try {
 			const resolvedContexts = await Promise.all(contexts.map(context => context.resolve()));
-			await this.model.send(text, mode, skills, resolvedContexts);
+			if (this.isDisposed || submissionSignal?.aborted || generation !== model.composerGeneration) throw canceled();
+			await model.send(text, mode, skills, resolvedContexts);
 		} catch (error) {
-			if (this.model.items.length === 0) {
+			if (!this.isDisposed && !submissionSignal?.aborted && generation === model.composerGeneration && model.items.length === 0) {
 				this.submittedMessage = false;
 				this.updateConversationState();
 			}
