@@ -318,7 +318,6 @@ export class ScmViewPane extends ViewPane {
 		this.statusElement.hidden = !provider;
 		this.statusElement.textContent = provider?.statusMessage ?? '';
 		const groups = provider?.groups;
-		this.commitForm.classList.toggle('has-resource-groups', !!groups?.length);
 		if (provider !== this.renderedProvider || groups !== this.renderedGroups) {
 			this.renderedProvider = provider;
 			this.renderedGroups = groups;

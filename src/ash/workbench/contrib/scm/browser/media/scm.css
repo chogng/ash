@@ -550,10 +550,6 @@
 	padding: 0 0 var(--ash-spacing-size120);
 }
 
-.ash-scm-commit-form.has-resource-groups {
-	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
-}
-
 .ash-scm-commit-form.hidden {
 	display: none;
 }
