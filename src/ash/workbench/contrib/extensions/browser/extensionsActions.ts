@@ -40,7 +40,11 @@ export function registerExtensionManagementActions(): DisposableStore {
 				})),
 			];
 			const selected = await new Promise<(IQuickPickItem & { readonly sourceId?: string; }) | undefined>(resolve => {
-				resources.add(picker.onDidAccept(item => { resolve(item); picker.hide(); }));
+				resources.add(picker.onDidAccept(() => {
+					const item = picker.selectedItems[0];
+					if (!item) return;
+					resolve(item); picker.hide();
+				}));
 				resources.add(picker.onDidHide(() => resolve(undefined)));
 				resources.add(picker.onDidBlur(() => picker.hide()));
 				picker.show();
@@ -107,7 +111,11 @@ export function registerExtensionManagementActions(): DisposableStore {
 				picker.ariaLabel = localize({ bundle: 'ash.extensions', key: 'gitInstallFolder' }, 'Choose the workspace folder for the temporary checkout');
 				picker.items = folders.map(folder => ({ label: folder.name, description: folder.uri.toString(), folderId: folder.id }));
 				const selected = await new Promise<string | undefined>(resolve => {
-					selection.add(picker.onDidAccept(item => { resolve(item.folderId); picker.hide(); }));
+					selection.add(picker.onDidAccept(() => {
+						const item = picker.selectedItems[0];
+						if (!item) return;
+						resolve(item.folderId); picker.hide();
+					}));
 					selection.add(picker.onDidHide(() => resolve(undefined)));
 					picker.show();
 				});

@@ -1,3 +1,5 @@
+import { quickInputServiceTestControls } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
+import { QuickInputType, type IQuickPickDidAcceptEvent } from '../../../../../platform/quickinput/common/quickInput.js';
 import { Event as QuickPickTestEvent } from '../../../../../base/common/event.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { strict as assert } from "node:assert";
@@ -154,6 +156,16 @@ class TestRemoteConnectionService implements IRemoteConnectionApi {
 }
 
 class TestQuickInputService implements IQuickInputService {
+	readonly quickAccess = quickInputServiceTestControls.quickAccess;
+	readonly onShow = quickInputServiceTestControls.onShow;
+	readonly onHide = quickInputServiceTestControls.onHide;
+	readonly currentQuickInput = undefined;
+	focus = quickInputServiceTestControls.focus;
+	toggle = quickInputServiceTestControls.toggle;
+	navigate = quickInputServiceTestControls.navigate;
+	accept = quickInputServiceTestControls.accept;
+	cancel = quickInputServiceTestControls.cancel;
+
 	readonly pickers: TestQuickPick<IQuickPickItem>[] = [];
 	async input(): Promise<string | undefined> { return undefined; }
 
@@ -165,11 +177,17 @@ class TestQuickInputService implements IQuickInputService {
 }
 
 class TestQuickPick<TItem extends IQuickPickItem> implements IQuickPick<TItem> {
+	readonly type = QuickInputType.QuickPick;
+	activeItems: readonly TItem[] = [];
+	focus(): void { }
+	toggle(): void { }
+	accept(inBackground = false): void { this.selectedItems = this.activeItems; this.acceptEmitter.fire({ inBackground }); }
+
 	canSelectMany = false;
 	selectedItems: readonly TItem[] = [];
 	readonly onDidChangeSelection = QuickPickTestEvent.None;
 	sortByLabel = true;
-	private readonly acceptEmitter = new Emitter<TItem>();
+	private readonly acceptEmitter = new Emitter<IQuickPickDidAcceptEvent>();
 	private readonly valueEmitter = new Emitter<string>();
 	private readonly hideEmitter = new Emitter<void>();
 	private visible = false;
@@ -185,12 +203,12 @@ class TestQuickPick<TItem extends IQuickPickItem> implements IQuickPick<TItem> {
 	valueSelection = { start: 0, end: 0 };
 	filterValue = (value: string): string => value;
 
-	accept(index = 0): void {
+	chooseItem(index = 0): void {
 		const item = this.items[index];
-		if (item) this.acceptEmitter.fire(item);
+		if (item) { this.selectedItems = [item]; this.acceptEmitter.fire({ inBackground: false }); }
 	}
 
-	type(value: string): void {
+	setQuery(value: string): void {
 		this.value = value;
 		this.valueEmitter.fire(value);
 	}
@@ -231,13 +249,13 @@ class TestDialogService implements IDialogService {
 
 async function acceptPicker(quickInput: TestQuickInputService, pickerIndex: number, itemIndex = 0): Promise<void> {
 	const picker = await pickerAt(quickInput, pickerIndex);
-	picker.accept(itemIndex);
+	picker.chooseItem(itemIndex);
 }
 
 async function enterText(quickInput: TestQuickInputService, pickerIndex: number, value: string): Promise<void> {
 	const picker = await pickerAt(quickInput, pickerIndex);
-	picker.type(value);
-	picker.accept();
+	picker.setQuery(value);
+	picker.chooseItem();
 }
 
 async function pickerAt(quickInput: TestQuickInputService, index: number): Promise<TestQuickPick<IQuickPickItem>> {

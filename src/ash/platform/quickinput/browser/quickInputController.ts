@@ -7,7 +7,9 @@ import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../
 import { CancellationToken } from '../../../base/common/cancellation.js';
 import { RunOnceScheduler } from '../../../base/common/async.js';
 import { localize } from '../../../nls.js';
-import type { IInputOptions, IQuickPick, IQuickPickItem } from '../common/quickInput.js';
+import { QuickInputType, type IInputOptions, type IQuickInput, type IQuickPick, type IQuickPickItem } from '../common/quickInput.js';
+import type { Context } from '../../contextkey/common/contextkey.js';
+import { dispatchQuickInputKeyDown } from './quickInputActions.js';
 import { QuickPick, type BrowserQuickInputHostOptions, type IBrowserQuickInputHost } from './quickInput.js';
 import { QuickInputBox } from './quickInputBox.js';
 
@@ -22,11 +24,18 @@ export class QuickInputController extends Disposable {
 	private readonly visibleListeners = this._register(new DisposableStore());
 	public readonly onShow = this.shown.event;
 	public readonly onHide = this.hidden.event;
-	public get currentQuickInput(): IQuickPick<IQuickPickItem> | undefined {
-		return this.active instanceof QuickPick ? this.active : undefined;
+	public get currentQuickInput(): IQuickInput | undefined {
+		return this.active;
 	}
 
-	constructor(container: HTMLElement, className?: string) {
+	constructor(container: HTMLElement, className?: string, private readonly callbacks: {
+		readonly onShow?: (input: IQuickInput) => void;
+		readonly onHide?: (input: IQuickInput) => void;
+		readonly onFocus?: (inputOrList: boolean, atEnd: boolean) => void;
+		readonly getContext?: (target: Node) => Context;
+		readonly shouldRestoreFocus?: () => boolean;
+		readonly onDispose?: () => void;
+	} = {}) {
 		super();
 		this.host = h(container.ownerDocument, 'div');
 		this.host.className = 'ash-quick-input-host';
@@ -44,13 +53,29 @@ export class QuickInputController extends Disposable {
 				this.active.hide();
 			}
 		}, true));
+		// Modifier state belongs to the existing picker, including commands rebound by the host.
+		const updateModifiers = (event: KeyboardEvent): void => {
+			if (this.active instanceof QuickPick) this.active.keyMods = {
+				ctrlCmd: event.ctrlKey || event.metaKey, alt: event.altKey, shift: event.shiftKey,
+			};
+		};
+		this._register(addDisposableListener(this.host.ownerDocument, 'keydown', updateModifiers, true));
+		this._register(addDisposableListener(this.host.ownerDocument, 'keyup', updateModifiers, true));
 		this._register(addDisposableListener(this.host, 'keydown', event => {
-			if (event.key === 'Escape' && !event.isComposing) {
-				event.preventDefault();
-				event.stopPropagation();
-				this.active?.hide();
+			if (this.active) {
+				dispatchQuickInputKeyDown(event, this.active, this.callbacks.getContext?.(event.target as Node));
 			}
 		}));
+		const updateFocus = (): void => {
+			if (!this.active) return;
+			const focused = this.host.ownerDocument.activeElement;
+			const within = isHTMLElement(focused) && this.host.contains(focused) && !focused.closest('button, [role="tab"]');
+			const field = focused?.tagName === 'INPUT' ? focused as HTMLInputElement : undefined;
+			this.callbacks.onFocus?.(within, within && (!field || field.selectionStart === field.selectionEnd && field.selectionEnd === field.value.length));
+		};
+		for (const event of ['focusin', 'input', 'keyup', 'click'] as const) this._register(addDisposableListener(this.host, event, updateFocus));
+		this._register(addDisposableListener(this.host, 'focusout', () => queueMicrotask(updateFocus)));
+		this._register(addDisposableListener(this.host.ownerDocument, 'selectionchange', updateFocus));
 		this._register(toDisposable(() => {
 			for (const quickInput of [...this.quickInputs]) {
 				quickInput.hide();
@@ -59,8 +84,12 @@ export class QuickInputController extends Disposable {
 			this.quickInputs.clear();
 			this.focusToRestore = undefined;
 			this.host.remove();
+			this.callbacks.onDispose?.();
 		}));
 	}
+
+	/** The controller's own host is the boundary for scoped keybinding context. */
+	public getDomNode(): HTMLElement { return this.host; }
 
 	public createQuickPick<TItem extends IQuickPickItem>(): IQuickPick<TItem> {
 		this.assertNotDisposed();
@@ -170,6 +199,7 @@ export class QuickInputController extends Disposable {
 			}));
 		}
 		this.shown.fire();
+		this.callbacks.onShow?.(quickPick);
 		quickPick.focus();
 	}
 
@@ -177,7 +207,7 @@ export class QuickInputController extends Disposable {
 		if (this.active !== quickPick) {
 			return;
 		}
-		const shouldRestoreFocus = quickPick.element.contains(this.host.ownerDocument.activeElement);
+		const shouldRestoreFocus = this.callbacks.shouldRestoreFocus?.() !== false && quickPick.element.contains(this.host.ownerDocument.activeElement);
 		this.active = undefined;
 		this.visibleListeners.clear();
 		this.host.replaceChildren();
@@ -185,6 +215,7 @@ export class QuickInputController extends Disposable {
 		const focusToRestore = this.focusToRestore;
 		this.focusToRestore = undefined;
 		this.hidden.fire();
+		this.callbacks.onHide?.(quickPick);
 		if (shouldRestoreFocus && focusToRestore?.isConnected) {
 			focusToRestore.focus({ preventScroll: true });
 		}
@@ -192,6 +223,7 @@ export class QuickInputController extends Disposable {
 }
 
 class InputQuickInput extends Disposable implements IBrowserQuickInputHost {
+	public readonly type = QuickInputType.InputBox;
 	public readonly element: HTMLDivElement;
 	public readonly onDidAccept: Event<string>;
 	public readonly onDidHide: Event<void>;
@@ -216,7 +248,6 @@ class InputQuickInput extends Disposable implements IBrowserQuickInputHost {
 			this.acceptEmitter.fire(value);
 			this.hide();
 		}));
-		this._register(this.inputBox.onDidCancel(() => this.hide()));
 		this._register(this.inputBox.onDidError(error => this.errorEmitter.fire(error)));
 		this._register(toDisposable(() => {
 			this.hide();
@@ -248,4 +279,6 @@ class InputQuickInput extends Disposable implements IBrowserQuickInputHost {
 	public focus(): void {
 		this.inputBox.focus();
 	}
+
+	public accept(): Promise<void> { return this.inputBox.accept(); }
 }

@@ -52,10 +52,14 @@ export class StandaloneGotoSymbolQuickAccessProvider extends Disposable {
 			picker.hide();
 			void commandAction.run(value).catch(error => this.notifications.error(String(error)));
 		}));
-		this._register(picker.onDidAccept(item => {
+		this._register(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
+
 			picker.hide();
 			this.editor.setSelection(item.symbol.selectionRange, 'editor.action.quickOutline');
 			this.editor.revealRange(item.symbol.selectionRange);
+
 		}));
 
 		const request = new AbortController();

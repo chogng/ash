@@ -1,3 +1,4 @@
+import './hover.css';
 import { Emitter } from "../../../common/event.js";
 import { cancelOnDispose, type CancellationToken } from '../../../common/cancellation.js';
 import { Disposable, MutableDisposable, DisposableStore, type IDisposable, toDisposable } from "../../../common/lifecycle.js";

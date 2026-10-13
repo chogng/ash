@@ -76,7 +76,7 @@ import { ILocalGitService } from '../../../src/ash/platform/git/common/localGitS
 import { canceled } from '../../../src/ash/base/common/errors.js';
 import { ILogService, NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
-import { WorkbenchQuickInputService } from '../../../src/ash/workbench/services/quickinput/browser/quickInputService.js';
+import { TestQuickInputService } from '../../../src/ash/platform/quickinput/test/browser/testQuickInputService.js';
 import { SkillsViewPane, McpServersViewPane, RecommendedExtensionsView } from '../../../src/ash/workbench/contrib/extensions/browser/extensionsViews.js';
 import { IFileService, type IFileChangeEvent } from '../../../src/ash/platform/files/common/files.js';
 import { FileService } from '../../../src/ash/platform/files/common/fileService.js';
@@ -249,7 +249,7 @@ services.registerInstance(ILanguageServerService, {
 	removeConfiguration: async () => { },
 });
 services.registerInstance(IContextKeyService, disposables.add(new ContextKeyService()));
-services.registerInstance(IQuickInputService, disposables.add(new WorkbenchQuickInputService({ container: document.body, contextKeyService: services.get(IContextKeyService) })));
+services.registerInstance(IQuickInputService, disposables.add(new TestQuickInputService({ instantiationService: services, container: document.body, contextKeyService: services.get(IContextKeyService) })));
 let pluginRevision = 0;
 let localPackages: PluginPackageDto[] = [];
 let commandCompletion: Promise<unknown> | undefined;

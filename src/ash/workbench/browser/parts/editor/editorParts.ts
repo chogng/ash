@@ -1,6 +1,6 @@
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import type { IEditorPaneDescriptor } from '../../editor.js';
-import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { addDisposableListener, getWindow } from "../../../../base/browser/dom.js";
 import type { IDimension } from "../../../../base/browser/dom.js";
 import type { Direction as GridDirection } from "../../../../base/browser/ui/grid/grid.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
@@ -152,7 +152,12 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 	}
 
 	async createAuxiliaryEditorPart(): Promise<IEditorPart> {
-		const auxiliaryWindow = await this.windows.open({ title: "Editor" });
+		this.assertNotDisposed();
+		const auxiliaryWindow = await this.windows.open();
+		if (this.isDisposed) {
+			auxiliaryWindow.dispose();
+			throw new Error('Editor parts were disposed while opening an auxiliary window');
+		}
 		let creation: AuxiliaryEditorPartCreation;
 		try {
 			creation = this.createPart(auxiliaryWindow.container);
@@ -160,7 +165,16 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 			auxiliaryWindow[Symbol.dispose]();
 			throw error;
 		}
-		const handle = this.instantiationService.createInstance(AuxiliaryEditorPart, auxiliaryWindow, creation, this.accessibility);
+		let handle: AuxiliaryEditorPart;
+		try {
+			handle = this.instantiationService.createInstance(AuxiliaryEditorPart, auxiliaryWindow, creation, this.accessibility);
+		} catch (error) {
+			creation.titlebar.dispose();
+			creation.part.dispose();
+			for (const resource of creation.resources ?? []) resource.dispose();
+			auxiliaryWindow.dispose();
+			throw error;
+		}
 		this.auxiliary.set(creation.part, handle);
 		this.registerPart(creation.part, auxiliaryWindow);
 		this.setActivePart(creation.part);
@@ -170,10 +184,18 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 
 	async moveActiveEditorToNewWindow(): Promise<IEditorPart | undefined> {
 		const source = this._activePart;
-		if (!source.activeInput) return undefined;
+		const sourceGroup = source.activeGroup;
+		const input = source.activeInput;
+		if (!input) return undefined;
 		const target = await this.createAuxiliaryEditorPart();
 		try {
-			if (!await source.moveActiveEditorTo(target)) throw new Error("The active editor could not be moved");
+			// Popup styles load asynchronously. Move the editor that invoked the command,
+			// even if another tab became active while the window was opening.
+			if (!source.groups.includes(sourceGroup) || !sourceGroup.inputs.includes(input)) {
+				await this.closeAuxiliaryEditorPart(target);
+				return undefined;
+			}
+			await sourceGroup.moveEditorTo(input, target.activeGroup, target.activeGroup.inputs.length);
 			this.setActivePart(target);
 			target.focus();
 			return target;
@@ -305,8 +327,13 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 			this.editorChangeEmitter.fire(event);
 		}));
 		listeners.add(addDisposableListener(part.domNode, "focusin", () => this.setActivePart(part)));
+		// Window chrome and shortcuts can receive focus without focusing the editor DOM.
+		for (const event of ['focus', 'keydown', 'pointerdown'] as const) {
+			listeners.add(addDisposableListener(getWindow(part.domNode), event, () => this.setActivePart(part), true));
+		}
+		if (auxiliaryWindow) listeners.add(addDisposableListener(auxiliaryWindow.container, 'focusin', () => this.setActivePart(part)));
 		if (auxiliaryWindow) listeners.add(auxiliaryWindow.onDidClose(() => {
-			void this.returnEditorsToMainPart(part);
+			if (!this.isDisposed) void this.returnEditorsToMainPart(part);
 		}));
 		this.partListeners.set(part, listeners);
 	}

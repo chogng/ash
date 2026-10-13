@@ -24,7 +24,7 @@ import type { ISession } from '../../../src/ash/sessions/services/sessions/commo
 import { GitHubService } from '../../../src/ash/sessions/contrib/github/browser/githubService.js';
 import { SessionChatInputToolbar } from '../../../src/ash/sessions/contrib/chat/browser/sessionChatInputToolbar.js';
 import { SessionsList } from '../../../src/ash/sessions/browser/parts/sidebar/sessionsList.js';
-import { QuickInputController } from '../../../src/ash/platform/quickinput/browser/quickInputController.js';
+import { TestQuickInputService } from '../../../src/ash/platform/quickinput/test/browser/testQuickInputService.js';
 import type { GitHubPullRequestReference, GitHubIssueReference } from '../../../src/ash/platform/github/common/githubService.js';
 
 interface Request { readonly id: number; readonly method: string; readonly params: Record<string, unknown>; }
@@ -160,7 +160,7 @@ document.body.append(main);
 const opened: string[] = [];
 const opener = { open: async (uri: URI) => { opened.push(uri.toString()); return true; } } as IOpenerService;
 const notifications = { error: (error: unknown) => { throw error; } } as unknown as INotificationService;
-const quickInput = resources.add(new QuickInputController(document.body));
+const quickInput = resources.add(new TestQuickInputService({ container: document.body }));
 const toolbar = resources.add(new SessionChatInputToolbar(main, { sessionId: 'session', onDidChange: Event.None }, github, opener, notifications, quickInput, { openEditor: async input => { opened.push(input.resource.toString()); } } as IEditorService));
 toolbar.render();
 const list = resources.add(new SessionsList(main, management, sessions, 'Sessions', 'New Session', github));

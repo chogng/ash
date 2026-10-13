@@ -1,34 +1,36 @@
 import './standaloneQuickInput.css';
-import { Disposable, DisposableMap } from '../../../../base/common/lifecycle.js';
+import { DisposableMap } from '../../../../base/common/lifecycle.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { QuickInputService } from '../../../../platform/quickinput/browser/quickInputService.js';
 import { QuickInputController } from '../../../../platform/quickinput/browser/quickInputController.js';
-import type { IInputOptions, IQuickInputService, IQuickPick, IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
+import type { IQuickInput } from '../../../../platform/quickinput/common/quickInput.js';
 import type { ICodeEditor } from '../../../browser/editorBrowser.js';
 import { ICodeEditorService } from '../../../browser/services/codeEditorService.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 
 /** Each embedded editor owns the lifetime and geometry of its Quick Input host. */
-export class StandaloneQuickInputService extends Disposable implements IQuickInputService {
+export class StandaloneQuickInputService extends QuickInputService {
 	private readonly controllers = this._register(new DisposableMap<ICodeEditor, QuickInputController>());
 
 	constructor(
 		@ICodeEditorService private readonly codeEditors: ICodeEditorService,
-		@ILayoutService private readonly layout: ILayoutService,
+		@ILayoutService layout: ILayoutService,
+		@IContextKeyService contextKeys: IContextKeyService,
+		@IInstantiationService instantiation: IInstantiationService,
 	) {
-		super();
+		super(instantiation, contextKeys, layout);
 		this._register(codeEditors.onCodeEditorRemove(editor => {
 			this.controllers.deleteAndDispose(editor);
 		}));
 	}
 
-	public createQuickPick<TItem extends IQuickPickItem>(): IQuickPick<TItem> {
-		return this.controller().createQuickPick<TItem>();
+	public override get currentQuickInput(): IQuickInput | undefined {
+		const editor = this.codeEditors.getFocusedCodeEditor() ?? this.codeEditors.getActiveCodeEditor();
+		return editor ? this.controllers.get(editor)?.currentQuickInput : undefined;
 	}
 
-	public input(options: IInputOptions): Promise<string | undefined> {
-		return this.controller().input(options);
-	}
-
-	private controller(): QuickInputController {
+	protected override get controller(): QuickInputController {
 		this.assertNotDisposed();
 		const editor = this.codeEditors.getFocusedCodeEditor() ?? this.codeEditors.getActiveCodeEditor();
 		if (!editor) {
@@ -36,7 +38,7 @@ export class StandaloneQuickInputService extends Disposable implements IQuickInp
 		}
 		let controller = this.controllers.get(editor);
 		if (!controller) {
-			controller = new QuickInputController(this.layout.activeContainer, 'ash-standalone-quick-input');
+			controller = this.createController('ash-standalone-quick-input');
 			this.controllers.set(editor, controller);
 		}
 		return controller;

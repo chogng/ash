@@ -42,6 +42,12 @@ test('dialog buttons and Escape return their result and restore focus', async ({
 
 	const dialog = page.getByRole('dialog', { name: 'Save changes' });
 	await expect(dialog).toBeVisible();
+	// The fixture imports components only: their owners must bring their own styles.
+	await expect(dialog).toHaveCSS('width', '440px');
+	await expect(dialog).toHaveCSS('padding', '0px');
+	await expect(dialog.locator('.ash-dialog-actions')).toHaveCSS('display', 'flex');
+	await expect(dialog.getByRole('button', { name: 'Save' })).toHaveCSS('display', 'flex');
+	await expect(dialog.getByRole('button', { name: 'Save' }).locator('.ash-icon-label')).toHaveCSS('display', 'flex');
 	await expect(dialog.getByRole('button', { name: 'Save' })).toBeFocused();
 	await page.keyboard.press('Shift+Tab');
 	await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();

@@ -365,7 +365,11 @@ export class CopyPasteController extends Disposable implements IEditorContributi
 		return await new Promise(resolve => {
 			const listeners = new DisposableStore();
 			let selected: PasteEditWithProvider | undefined;
-			listeners.add(picker.onDidAccept(item => { selected = item.edit; picker.hide(); }));
+			listeners.add(picker.onDidAccept(() => {
+				const item = picker.selectedItems[0];
+				if (!item) return;
+				selected = item.edit; picker.hide();
+			}));
 			listeners.add(picker.onDidHide(() => { listeners.dispose(); resolve(selected); }));
 			listeners.add(token.onCancellationRequested(() => picker.hide()));
 			picker.show();

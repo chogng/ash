@@ -406,7 +406,10 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			}
 		};
 		resources.add(picker.onDidChangeValue(text => { void load(text); }));
-		resources.add(picker.onDidAccept(item => {
+		resources.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
+
 			if (item.kind === 'more') { void load(picker.value, item.before); return; }
 			if (!this.isDisposed && revision === this.historyInputRevision) {
 				accepted = true;
@@ -414,6 +417,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				this.applyHistoryEntry(item.entry);
 			}
 			picker.hide();
+
 		}));
 		resources.add(picker.onDidHide(() => {
 			if (closed) return;

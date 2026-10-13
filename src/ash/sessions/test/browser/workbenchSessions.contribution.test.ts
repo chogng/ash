@@ -1,3 +1,4 @@
+import { quickInputServiceTestControls } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { CommandsRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
 import { OPEN_CHAT_CHANGES_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
 import { getChatInputChanges } from '../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
@@ -130,7 +131,10 @@ test('Sessions contributes Turn changes and commit actions to the shared multi-d
 		},
 	} as unknown as IChatService;
 	using services = new InstantiationService();
-	services.registerInstance(IQuickInputService, { input: async () => 'feat: reviewed selection', createQuickPick() { throw new Error('This scenario uses a message input'); } });
+	services.registerInstance(IQuickInputService, {
+		...quickInputServiceTestControls,
+		input: async () => 'feat: reviewed selection', createQuickPick() { throw new Error('This scenario uses a message input'); }
+	});
 	services.registerInstance(IChatService, chat);
 	const session = { sessionId: 'session', chats: [{ threadId: 'thread' }] };
 	services.registerInstance(ISessionsManagementService, {

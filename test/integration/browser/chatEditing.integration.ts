@@ -33,7 +33,7 @@ import { CodeEditorService } from '../../../src/ash/workbench/services/editor/br
 import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
-import { WorkbenchQuickInputService } from '../../../src/ash/workbench/services/quickinput/browser/quickInputService.js';
+import { TestQuickInputService } from '../../../src/ash/platform/quickinput/test/browser/testQuickInputService.js';
 import { ITextModelResourceService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
 import { BrowserTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/browser/browserTextModelService.js';
 import { IWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/common/workingCopyService.js';
@@ -99,7 +99,7 @@ resources.add(notifications.onDidAdd(item => { document.querySelector('#error')!
 services.registerInstance(IEditorPartsService, { activePane: undefined } as unknown as IEditorPartsService);
 services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService));
 const contexts = resources.add(new ContextKeyService());
-services.registerInstance(IQuickInputService, resources.add(new WorkbenchQuickInputService({ container: document.body, contextKeyService: contexts })));
+services.registerInstance(IQuickInputService, resources.add(new TestQuickInputService({ instantiationService: services, container: document.body, contextKeyService: contexts })));
 const commands = resources.add(new CommandService(services));
 const editing = resources.add(services.createInstance(ChatEditingService));
 services.registerInstance(IChatEditingService, editing);

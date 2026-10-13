@@ -247,7 +247,9 @@ if (new URLSearchParams(location.search).has('editorTabs')) {
 		const lifetime = new DisposableStore();
 		lifetime.add(pick);
 		pick.items = chats;
-		lifetime.add(pick.onDidAccept(entry => {
+		lifetime.add(pick.onDidAccept(() => {
+			const entry = pick.selectedItems[0];
+			if (!entry) return;
 			activeChat = entry.id;
 			chat.update(entry.label);
 			pick.hide();

@@ -30,7 +30,11 @@ async function switchWindow(accessor: ServicesAccessor): Promise<void> {
 	picker.placeholder = localize({ bundle: 'ash', key: 'workbench.switchWindowPlaceholder' }, 'Select a window');
 	picker.ariaLabel = picker.placeholder;
 	const selected = new Promise<number | undefined>(resolve => {
-		listeners.add(picker.onDidAccept(item => resolve(item.windowId)));
+		listeners.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
+			return resolve(item.windowId);
+		}));
 		listeners.add(picker.onDidHide(() => resolve(undefined)));
 	});
 	picker.show();

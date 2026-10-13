@@ -1,3 +1,4 @@
+import './button.css';
 import { h } from "../../dom.js";
 import { DomEmitter, type DOMEventMap } from "../../event.js";
 import { FastDomNode } from "../../fastDomNode.js";

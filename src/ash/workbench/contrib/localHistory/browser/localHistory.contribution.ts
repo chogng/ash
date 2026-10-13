@@ -41,7 +41,11 @@ registerAction2(class OpenLocalHistoryAction extends Action2 {
 		picker.ariaLabel = localize('localHistory.select', 'Select a saved version to open');
 		picker.placeholder = picker.ariaLabel;
 		const selected = await new Promise<IWorkingCopyHistoryEntry | undefined>(resolve => {
-			lifetime.add(picker.onDidAccept(item => resolve(item.entry)));
+			lifetime.add(picker.onDidAccept(() => {
+				const item = picker.selectedItems[0];
+				if (!item) return;
+				return resolve(item.entry);
+			}));
 			lifetime.add(picker.onDidHide(() => resolve(undefined)));
 			picker.show();
 		});

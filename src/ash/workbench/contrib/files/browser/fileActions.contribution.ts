@@ -62,9 +62,13 @@ registerAction2(class CompareBinaryEditorsAction extends Action2 {
 			label: input.label ?? (basename(input.resource) || input.resource.toString()),
 			detail: input.resource.toString(),
 		}));
-		disposables.add(picker.onDidAccept(item => {
+		disposables.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
+
 			picker.hide();
 			void editors.openEditor(createBinaryDiffEditorInput(item.input, modified), { pinned: true });
+
 		}));
 		disposables.add(picker.onDidHide(() => disposables.dispose()));
 		picker.show();

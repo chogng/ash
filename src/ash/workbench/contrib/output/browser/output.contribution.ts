@@ -37,7 +37,11 @@ registerAction2(class ShowOutputChannelsAction extends Action2 {
 		disposables.add(picker);
 		picker.placeholder = localize('output.pickChannel', 'Select an Output channel');
 		picker.items = output.channels.map(channel => ({ channel, label: channel.label, description: channel.kind === "log" ? localize('output.log', 'Log') : undefined, detail: channel.descriptor.extensionId }));
-		disposables.add(picker.onDidAccept(item => { picker.hide(); output.showChannel(item.channel.id); }));
+		disposables.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
+			picker.hide(); output.showChannel(item.channel.id);
+		}));
 		disposables.add(picker.onDidHide(() => disposables.dispose()));
 		picker.show();
 	}

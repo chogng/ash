@@ -34,12 +34,16 @@ export function showEditorTypePicker(editorPart: IEditorPart, quickInputService:
 		label: descriptor.name,
 		description: descriptor.id,
 	}));
-	disposables.add(picker.onDidAccept(item => {
+	disposables.add(picker.onDidAccept(() => {
+		const item = picker.selectedItems[0];
+		if (!item) return;
+
 		picker.hide();
 		if (!input || !group?.inputs.includes(input)) return;
 		void group.openEditor(input, { preferredEditorId: item.descriptor.id, pinned: true }).catch(error => {
 			console.error("Could not reopen editor", error);
 		});
+
 	}));
 	disposables.add(picker.onDidHide(() => disposables.dispose()));
 	picker.show();

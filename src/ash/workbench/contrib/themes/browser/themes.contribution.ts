@@ -61,12 +61,16 @@ for (const [index, themeAction] of themeActions.entries()) {
 			picker.placeholder = commandActionLabel(themeAction.title);
 			picker.ariaLabel = picker.placeholder;
 			picker.items = items;
-			disposables.add(picker.onDidAccept(item => {
+			disposables.add(picker.onDidAccept(() => {
+				const item = picker.selectedItems[0];
+				if (!item) return;
+
 				picker.hide();
 				const update = themeAction.setting === WorkbenchConfiguration.colorTheme
 					? accessor.get(IWorkbenchThemeService).setColorTheme(item.value)
 					: configuration.updateValue(themeAction.setting, item.value);
 				void update.catch(onUnexpectedError);
+
 			}));
 			disposables.add(picker.onDidHide(() => disposables.dispose()));
 			picker.show();

@@ -1,3 +1,4 @@
+import { quickInputServiceTestControls } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import assert from 'node:assert/strict';
 import { suite, test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -22,7 +23,10 @@ suite('Remote tunnel commands', () => {
 		service.startTunnel = async mode => { calls.push(mode); return TunnelStates.disconnected(); };
 		using services = new InstantiationService();
 		services.registerInstance(IRemoteTunnelService, service);
-		services.registerInstance(IQuickInputService, { input: async () => 'ash-relay', createQuickPick: () => { throw new Error('unused'); } });
+		services.registerInstance(IQuickInputService, {
+			...quickInputServiceTestControls,
+			input: async () => 'ash-relay', createQuickPick: () => { throw new Error('unused'); }
+		});
 		services.registerInstance(IClipboardService, { writeText: async () => undefined } as unknown as IClipboardService);
 		services.registerInstance(IDialogService, { error: async (message: string) => { errors.push(message); } } as unknown as IDialogService);
 		await services.invokeFunction(accessor => CommandsRegistry.getCommand(RemoteTunnelCommandIds.turnOn)!(accessor));

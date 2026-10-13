@@ -134,7 +134,11 @@ function promptText(quickInput: IQuickInputService, placeholder: string, initial
 			resolve(value);
 			picker.hide();
 		};
-		disposables.add(picker.onDidAccept(item => finish(item.text)));
+		disposables.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
+			return finish(item.text);
+		}));
 		disposables.add(picker.onDidHide(() => {
 			finish(undefined);
 			disposables.dispose();
@@ -157,7 +161,11 @@ function pickOne<TItem extends IQuickPickItem>(quickInput: IQuickInputService, p
 			resolve(value);
 			picker.hide();
 		};
-		disposables.add(picker.onDidAccept(item => finish(item)));
+		disposables.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
+			return finish(item);
+		}));
 		disposables.add(picker.onDidHide(() => {
 			finish(undefined);
 			disposables.dispose();

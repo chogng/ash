@@ -38,7 +38,11 @@ export async function configureOpenerTrustedDomainsHandler(
 	picker.items = choices;
 	const selected = await new Promise<TrustChoice | undefined>(resolve => {
 		store.add(token.onCancellationRequested(() => { resolve(undefined); picker.hide(); }));
-		store.add(picker.onDidAccept(item => { resolve(item); picker.hide(); }));
+		store.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
+			resolve(item); picker.hide();
+		}));
 		store.add(picker.onDidHide(() => resolve(undefined)));
 		picker.show();
 	});

@@ -1,3 +1,4 @@
+import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { createHash } from 'node:crypto';
 import { ExtensionResourceLoaderService } from '../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { TestExtensionService } from '../../../../test/common/testExtensionServices.js';
@@ -20,7 +21,6 @@ import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
-import { WorkbenchQuickInputService } from '../../../quickinput/browser/quickInputService.js';
 import { createTestFileService } from '../../../../test/common/testEditorServices.js';
 import { MemoryFileService } from '../../../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
 import { suite, test } from 'mocha';
@@ -315,7 +315,7 @@ function inputServices(owner: DisposableStore, workspace: IWorkspaceContextServi
 	}
 	const document = dom.window.document;
 	const context = owner.add(new ContextKeyService());
-	const quickInput = owner.add(new WorkbenchQuickInputService({ container: document.body, contextKeyService: context }));
+	const quickInput = owner.add(new TestQuickInputService({ container: document.body, contextKeyService: context }));
 	const services = owner.add(new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, testRendererHost()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)],
 		...getSingletonServiceDescriptors(), [ITerminalProcessService, { getEnvironment: async () => ({}) }], [IWorkspaceContextService, workspace],
 		[IFileService, owner.add(createTestFileService(new MemoryFileService(contents)))], [IQuickInputService, quickInput],

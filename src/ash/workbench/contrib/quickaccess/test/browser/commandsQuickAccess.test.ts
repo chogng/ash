@@ -1,3 +1,4 @@
+import type { IQuickPickDidAcceptEvent } from '../../../../../platform/quickinput/common/quickInput.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Emitter, Event } from '../../../../../base/common/event.js';
@@ -63,10 +64,10 @@ test('Command Palette finds localized commands by their English title and report
 			lookupKeybinding: () => undefined,
 			onDidUpdateKeybindings: Event.None,
 		} as unknown as IKeybindingService);
-		const provider = services.createInstance(CommandsQuickAccessProvider);
-		const accept = resources.add(new Emitter<IQuickPickItem>());
+		const provider = resources.add(services.createInstance(CommandsQuickAccessProvider));
+		const accept = resources.add(new Emitter<IQuickPickDidAcceptEvent>());
 		const picker = {
-			value: '', filterValue: (value: string) => value, onDidChangeValue: Event.None, onDidTriggerItemButton: Event.None,
+			selectedItems: [], value: '', filterValue: (value: string) => value, onDidChangeValue: Event.None, onDidTriggerItemButton: Event.None,
 			items: [] as readonly IQuickPickItem[],
 			onDidAccept: accept.event,
 			hide() { },
@@ -77,7 +78,8 @@ test('Command Palette finds localized commands by their English title and report
 		assert.deepEqual([item.label, item.detail], ['启动调试', 'Start Debugging']);
 		assert.ok(filterQuickPickItems(picker.items.filter((candidate): candidate is IQuickPickItem => !('type' in candidate)), '启动调试').includes(item));
 
-		accept.fire(item);
+		picker.selectedItems = [item];
+		accept.fire({ inBackground: false });
 		await Promise.resolve();
 		const dialog = dialogs.model.dialogs[0];
 		assert.deepEqual(dialog?.request, {
@@ -115,10 +117,10 @@ test('Command Palette does not show a dialog for cancelled commands', async () =
 		lookupKeybinding: () => undefined,
 		onDidUpdateKeybindings: Event.None,
 	} as unknown as IKeybindingService);
-	const provider = services.createInstance(CommandsQuickAccessProvider);
-	const accept = resources.add(new Emitter<IQuickPickItem>());
+	const provider = resources.add(services.createInstance(CommandsQuickAccessProvider));
+	const accept = resources.add(new Emitter<IQuickPickDidAcceptEvent>());
 	const picker = {
-		value: '', filterValue: (value: string) => value, onDidChangeValue: Event.None, onDidTriggerItemButton: Event.None,
+		selectedItems: [], value: '', filterValue: (value: string) => value, onDidChangeValue: Event.None, onDidTriggerItemButton: Event.None,
 		items: [] as readonly IQuickPickItem[],
 		onDidAccept: accept.event,
 		hide() { },
@@ -127,7 +129,8 @@ test('Command Palette does not show a dialog for cancelled commands', async () =
 	const item = picker.items.find(candidate => candidate.label === 'Cancelled command');
 	assert.ok(item && !('type' in item));
 
-	accept.fire(item);
+	picker.selectedItems = [item];
+	accept.fire({ inBackground: false });
 	await Promise.resolve();
 	assert.deepEqual(dialogs.model.dialogs, []);
 });
@@ -155,14 +158,15 @@ test('Command Palette retains the focused embedded editor actions while its pick
 	services.registerInstance(IDialogService, resources.add(new DialogService()));
 	const updated = resources.add(new Emitter<void>());
 	services.registerInstance(IKeybindingService, { lookupKeybinding: () => undefined, onDidUpdateKeybindings: updated.event } as unknown as IKeybindingService);
-	const accept = resources.add(new Emitter<IQuickPickItem>());
-	const picker = { items: [] as readonly IQuickPickItem[], value: '', filterValue: (value: string) => value, onDidChangeValue: Event.None, onDidTriggerItemButton: Event.None, onDidAccept: accept.event, hide: () => { focused = true; } } as unknown as IQuickPick<IQuickPickItem>;
-	resources.add(services.createInstance(CommandsQuickAccessProvider).provide(picker));
+	const accept = resources.add(new Emitter<IQuickPickDidAcceptEvent>());
+	const picker = { items: [] as readonly IQuickPickItem[], selectedItems: [], value: '', filterValue: (value: string) => value, onDidChangeValue: Event.None, onDidTriggerItemButton: Event.None, onDidAccept: accept.event, hide: () => { focused = true; } } as unknown as IQuickPick<IQuickPickItem>;
+	resources.add(resources.add(services.createInstance(CommandsQuickAccessProvider)).provide(picker));
 	focused = false;
 	updated.fire();
 	const item = picker.items.find(candidate => !('type' in candidate) && candidate.description === 'test.outputCommand');
 	assert.ok(item && !('type' in item));
-	accept.fire(item);
+	picker.selectedItems = [item];
+	accept.fire({ inBackground: false });
 	await Promise.resolve();
 	assert.deepEqual(executed, [true]);
 	editors.removeCodeEditor(editor);

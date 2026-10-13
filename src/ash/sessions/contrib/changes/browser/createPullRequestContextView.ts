@@ -94,7 +94,11 @@ export class CreatePullRequestContextView extends Disposable {
 		picker.ariaLabel = picker.placeholder = localize('sessions.changes.prChooseRemote', 'Choose the repository and remote for the pull request');
 		return new Promise(resolve => {
 			this.pickers.add(toDisposable(() => resolve(undefined)));
-			this.pickers.add(picker.onDidAccept(item => { resolve(item); picker.hide(); }));
+			this.pickers.add(picker.onDidAccept(() => {
+				const item = picker.selectedItems[0];
+				if (!item) return;
+				resolve(item); picker.hide();
+			}));
 			this.pickers.add(picker.onDidHide(() => this.pickers.clear()));
 			picker.show();
 		});

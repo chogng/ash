@@ -1,5 +1,6 @@
 import { IEnvironmentVariableService } from '../../../../contrib/terminal/common/environmentVariable.js';
 import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../../terminal/common/terminal.js';
+import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { TerminalProfileService } from '../../../../contrib/terminal/browser/terminalProfileService.js';
 import { BrowserTerminalProfileResolverService } from '../../../../contrib/terminal/browser/terminalProfileResolverService.js';
 import { IEditorService } from '../../../editor/common/editorService.js';
@@ -75,7 +76,6 @@ import { DebugService } from "../../../../contrib/debug/browser/debugService.js"
 import { DebugAdapterSession } from "../../browser/debugAdapterSession.js";
 import { JSDOM } from 'jsdom';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
-import { WorkbenchQuickInputService } from '../../../quickinput/browser/quickInputService.js';
 
 const launchJson = `{
   "version": "0.2.0",
@@ -801,7 +801,7 @@ test('DebugService resolves configured command inputs in adapter and launch data
 	const dom = new JSDOM('<!doctype html><body></body>');
 	resources.add(toDisposable(() => dom.window.close()));
 	const context = resources.add(new ContextKeyService());
-	const quickInput = resources.add(new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: context }));
+	const quickInput = resources.add(new TestQuickInputService({ container: dom.window.document.body, contextKeyService: context }));
 	const input = {
 		version: '0.2.0',
 		inputs: [{ id: 'adapter', type: 'command', command: 'debug.test.input', args: { mode: 'debug' } }],
@@ -1255,7 +1255,7 @@ for (const selection of ['accept', 'escape', 'workspace replacement'] as const) 
 		const dom = new JSDOM('<!doctype html><body></body>');
 		resources.add(toDisposable(() => dom.window.close()));
 		const context = resources.add(new ContextKeyService());
-		const quickInput = resources.add(new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: context }));
+		const quickInput = resources.add(new TestQuickInputService({ container: dom.window.document.body, contextKeyService: context }));
 		const files = new FakeFileService(root);
 		using service = createDebugService(resources, files, workspace, processes, {} as ITerminalService, new TestStorageService(), tasks, adapters, context, quickInput);
 		const entered = new DeferredPromise<AbortSignal>();

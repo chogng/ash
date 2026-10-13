@@ -6,7 +6,6 @@ import { Keybinding, logicalKey } from "../../../../base/common/keybindings.js";
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import type { ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 import { IQuickInputService, type IQuickPickItem } from "../../../../platform/quickinput/common/quickInput.js";
-import { IQuickAccessController } from "../../../../platform/quickinput/common/quickAccess.js";
 import { IEditorPart } from "./editorPart.js";
 import type { ExtensionFileTemplateDefinition } from "../../../services/extensions/common/extensionFileTemplate.js";
 import { IExtensionService } from "../../../services/extensions/common/extensionService.js";
@@ -387,7 +386,7 @@ registerAction2(class ShowAllEditorsAction extends Action2 {
 	}
 
 	override run(accessor: ServicesAccessor): void {
-		accessor.get(IQuickAccessController).show(AllEditorsByMostRecentlyUsedQuickAccess.PREFIX);
+		accessor.get(IQuickInputService).quickAccess.show(AllEditorsByMostRecentlyUsedQuickAccess.PREFIX);
 	}
 });
 
@@ -442,10 +441,14 @@ registerAction2(class NewFileFromTemplateAction extends Action2 {
 			description: template.extensionId,
 			...(template.description === undefined ? {} : { detail: template.description }),
 		}));
-		disposables.add(picker.onDidAccept(item => {
+		disposables.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
+
 			picker.hide();
 			const untitled = accessor.get(IUntitledTextEditorService).create({ initialValue: item.template.body, languageId: item.template.languageId });
 			void accessor.get(IEditorPart).openEditor(new UntitledTextEditorInput(untitled)).catch(error => console.error("Could not create file from extension template", error));
+
 		}));
 		disposables.add(picker.onDidHide(() => disposables.dispose()));
 		picker.show();

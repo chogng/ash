@@ -1,3 +1,4 @@
+import './aria.css';
 import {
 	Disposable,
 	MutableDisposable,

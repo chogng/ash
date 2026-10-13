@@ -76,9 +76,9 @@ export class BrowserLayoutService
 	private readonly getOffset: () => ILayoutOffsetInfo;
 	private readonly focusPrimary: () => void;
 	private readonly _onDidLayoutMainContainer = this._register(new Emitter<IDimension>());
-	private readonly _onDidLayoutContainer = this._register(new Emitter<ILayoutContainerEvent>());
-	private readonly _onDidLayoutActiveContainer = this._register(new Emitter<IDimension>());
-	private readonly _onDidChangeActiveContainer = this._register(new Emitter<void>());
+	protected readonly _onDidLayoutContainer = this._register(new Emitter<ILayoutContainerEvent>());
+	protected readonly _onDidLayoutActiveContainer = this._register(new Emitter<IDimension>());
+	protected readonly _onDidChangeActiveContainer = this._register(new Emitter<void>());
 	private dimension: Dimension;
 
 	readonly onDidLayoutMainContainer: Event<IDimension> =
@@ -152,7 +152,7 @@ export class BrowserLayoutService
 			dimension: this.dimension,
 		});
 		this._onDidLayoutMainContainer.fire(this.dimension);
-		this._onDidLayoutActiveContainer.fire(this.dimension);
+		if (this.activeContainer === this.root) this._onDidLayoutActiveContainer.fire(this.dimension);
 	}
 
 	focus(): void {

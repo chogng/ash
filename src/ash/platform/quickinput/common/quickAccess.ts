@@ -1,7 +1,7 @@
 import { toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import type { Event } from '../../../base/common/event.js';
-import type { Constructor } from '../../instantiation/common/descriptors.js';
-import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
+import type { Constructor, SyncDescriptor } from '../../instantiation/common/descriptors.js';
+import type { CancellationToken } from '../../../base/common/cancellation.js';
 import type { IQuickPick, IQuickPickItem, IQuickPickSeparator } from './quickInput.js';
 
 export interface IQuickAccessProviderRunOptions {
@@ -24,15 +24,18 @@ export interface IQuickAccessOptions {
 
 /** One search mode hosted by the shared Quick Access picker. */
 export interface IQuickAccessProvider {
-	provide(picker: IQuickPick<IQuickPickItem>, prefix: string, signal: AbortSignal, options?: IQuickAccessProviderRunOptions): IDisposable;
+	provide(picker: IQuickPick<IQuickPickItem>, token: CancellationToken, options?: IQuickAccessProviderRunOptions): IDisposable;
 }
 
 export interface IQuickAccessProviderDescriptor {
 	readonly prefix: string;
+	/** Opts a product search mode into the Quick Access navigation row. */
+	readonly tabLabel?: string;
+	readonly tabOrder?: number;
 	/** Read when shown so a long-lived registration can use the current language. */
 	readonly placeholder: string;
 	readonly helpLabel: string;
-	readonly ctor: Constructor<IQuickAccessProvider>;
+	readonly ctor: Constructor<IQuickAccessProvider> | SyncDescriptor<IQuickAccessProvider>;
 }
 
 /** Registered search modes are resolved by the longest matching prefix. */
@@ -67,5 +70,3 @@ export interface IQuickAccessController {
 	readonly onDidChangeVisibility: Event<boolean>;
 	show(value?: string, options?: IQuickAccessOptions): void;
 }
-
-export const IQuickAccessController = createServiceIdentifier<IQuickAccessController>('quickAccessController');

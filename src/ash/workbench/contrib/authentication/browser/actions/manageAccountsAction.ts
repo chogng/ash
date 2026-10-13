@@ -81,13 +81,17 @@ export class ManageAccountsAction extends Action2 {
 			})),
 			...(loginItems.length > 0 ? [{ kind: 'add' as const, label: localize({ bundle: 'ash', key: 'workbench.addAccount' }, 'Add account') }] : []),
 		];
-		resources.add(picker.onDidAccept(item => {
+		resources.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
+
 			picker.hide();
 			if (item.kind === 'account') {
 				showAccountActions(quickInput, accounts, notifications, item.account);
 				return;
 			}
 			showAddAccountActions(quickInput, accounts, github, notifications, loginItems);
+
 		}));
 		resources.add(picker.onDidHide(() => resources.dispose()));
 		picker.show();
@@ -101,7 +105,10 @@ function showAddAccountActions(quickInput: IQuickInputService, accounts: IAccoun
 	picker.placeholder = localize({ bundle: 'ash', key: 'workbench.addAccount' }, 'Add account');
 	picker.ariaLabel = picker.placeholder;
 	picker.items = items;
-	resources.add(picker.onDidAccept(item => {
+	resources.add(picker.onDidAccept(() => {
+		const item = picker.selectedItems[0];
+		if (!item) return;
+
 		picker.hide();
 		if (item.kind === 'github') {
 			void (github.isConnecting ? github.cancel() : github.connect());
@@ -110,6 +117,7 @@ function showAddAccountActions(quickInput: IQuickInputService, accounts: IAccoun
 		void accounts.startLogin(item.method).catch(() => {
 			notifications.error(localize({ bundle: 'ash', key: 'workbench.startAccountSignInFailed' }, 'Could not start {0} sign in.', item.providerName));
 		});
+
 	}));
 	resources.add(picker.onDidHide(() => resources.dispose()));
 	picker.show();

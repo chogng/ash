@@ -192,6 +192,15 @@
     "github.editor.prComment": "PR 评论 #{0}",
     "github.editor.reviewCommit": "已审查的提交：{0}",
     "github.editor.morePRComments": "加载更多 PR 评论",
-    "github.settings.codexUnknown": "暂时无法读取 Codex 登录状态。请连接 App Server 后刷新账号。"
+    "github.settings.codexUnknown": "暂时无法读取 Codex 登录状态。请连接 App Server 后刷新账号。",
+    "github.quickAccess.loadMore": "加载更多结果",
+    "github.quickAccess.chooseRepository": "打开 GitHub 以登录或选择仓库",
+    "github.quickAccess.signIn": "登录 GitHub 以搜索议题和拉取请求",
+    "github.quickAccess.failed": "GitHub 搜索失败。打开 GitHub 以重新连接或重试。",
+    "github.quickAccess.openFailed": "无法打开 GitHub 搜索结果：{0}",
+    "github.quickAccess.issuePlaceholder": "按标题或编号搜索开放的 GitHub 议题",
+    "github.quickAccess.prPlaceholder": "按标题或编号搜索开放的 GitHub 拉取请求",
+    "github.quickAccess.issuesTab": "议题",
+    "github.quickAccess.prTab": "PR"
   }
 }

@@ -1,3 +1,5 @@
+import { quickInputServiceTestControls } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
+import { QuickInputType, type IQuickPickDidAcceptEvent } from '../../../../../platform/quickinput/common/quickInput.js';
 import { Event as QuickPickTestEvent } from '../../../../../base/common/event.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { StandaloneCommandService } from '../../../../../editor/standalone/browser/standaloneServices.js';
@@ -30,11 +32,17 @@ import { ExternalUriOpenerService, IExternalUriOpenerService, type IExternalUriO
 import '../../common/externalUriOpener.contribution.js';
 
 class Picker<T extends IQuickPickItem> extends Disposable implements IQuickPick<T> {
+	readonly type = QuickInputType.QuickPick;
+	activeItems: readonly T[] = [];
+	focus(): void { }
+	toggle(): void { }
+	accept(inBackground = false): void { this.selectedItems = this.activeItems; this.accepted.fire({ inBackground }); }
+
 	canSelectMany = false;
 	selectedItems: readonly T[] = [];
 	readonly onDidChangeSelection = QuickPickTestEvent.None;
 	sortByLabel = true;
-	private readonly accepted = this._register(new Emitter<T>());
+	private readonly accepted = this._register(new Emitter<IQuickPickDidAcceptEvent>());
 	private readonly hidden = this._register(new Emitter<void>());
 	public readonly onDidAccept = this.accepted.event;
 	public readonly onDidHide = this.hidden.event;
@@ -49,10 +57,10 @@ class Picker<T extends IQuickPickItem> extends Disposable implements IQuickPick<
 	public filterValue = (value: string): string => value;
 	public show(): void { }
 	public hide(): void { this.hidden.fire(); }
-	public accept(index: number): void { this.accepted.fire(this.items[index]!); }
+	public chooseItem(index: number): void { this.selectedItems = [this.items[index]!]; this.accepted.fire({ inBackground: false }); }
 }
 
-type TestPicker = IQuickPick<IQuickPickItem> & { accept(index: number): void; readonly isDisposed: boolean; };
+type TestPicker = IQuickPick<IQuickPickItem> & { chooseItem(index: number): void; readonly isDisposed: boolean; };
 
 class Fixture extends Disposable {
 	public readonly configuration: InMemoryConfigurationService;
@@ -81,6 +89,8 @@ class Fixture extends Disposable {
 		this.services.registerInstance(IOpenerService, this.opener);
 		this.opener.setDefaultExternalOpener({ openExternal: async href => { this.hostOpened.push(href); return true; } });
 		this.services.registerInstance(IQuickInputService, {
+			...quickInputServiceTestControls,
+
 			createQuickPick: <T extends IQuickPickItem>(): IQuickPick<T> => {
 				const picker = new Picker<T>();
 				this.picker = picker;
@@ -191,7 +201,7 @@ suite('External URI opener production routing', () => {
 			fixture.register(fixture.handler('first'), fixture.handler('second'));
 			const result = fixture.opener.open(destination, { allowContributedOpeners: true });
 			const picker = await fixture.waitForPicker();
-			if (choice === undefined) { picker.hide(); } else { picker.accept(choice); }
+			if (choice === undefined) { picker.hide(); } else { picker.chooseItem(choice); }
 			assert.equal(await result, true);
 			assert.deepEqual([fixture.contributedOpened, fixture.hostOpened, fixture.settings], [
 				choice === 0 ? [`first:${destination.toString()}`] : [],

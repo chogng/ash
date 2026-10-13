@@ -1,3 +1,4 @@
+import './sash.css';
 import { addDisposableListener, getWindow, h } from "../../dom.js";
 import { ManagedStyleSheet } from "../../domStylesheets.js";
 import { disposableWindowTimeout } from "../../scheduler.js";

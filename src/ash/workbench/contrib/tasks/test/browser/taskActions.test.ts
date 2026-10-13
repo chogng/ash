@@ -1,3 +1,5 @@
+import { quickInputServiceTestControls } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
+import { QuickInputType, type IQuickPickDidAcceptEvent } from '../../../../../platform/quickinput/common/quickInput.js';
 import { Event as QuickPickTestEvent } from '../../../../../base/common/event.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
@@ -21,11 +23,17 @@ import { RUN_BUILD_TASK_COMMAND_ID, RUN_TASK_COMMAND_ID, RUN_TEST_TASK_COMMAND_I
 interface TaskItem extends IQuickPickItem { readonly task: IWorkspaceTask; }
 
 class Picker extends Disposable implements IQuickPick<TaskItem> {
+	readonly type = QuickInputType.QuickPick;
+	activeItems: readonly TaskItem[] = [];
+	focus(): void { }
+	toggle(): void { }
+	accept(inBackground = false): void { this.selectedItems = this.activeItems; this.accepted.fire({ inBackground }); }
+
 	canSelectMany = false;
 	selectedItems: readonly TaskItem[] = [];
 	readonly onDidChangeSelection = QuickPickTestEvent.None;
 	sortByLabel = true;
-	readonly accepted = this._register(new Emitter<TaskItem>());
+	readonly accepted = this._register(new Emitter<IQuickPickDidAcceptEvent>());
 	readonly hidden = this._register(new Emitter<void>());
 	readonly onDidAccept = this.accepted.event;
 	readonly onDidHide = this.hidden.event;
@@ -105,7 +113,10 @@ suite('Tasks command catalog and async service lifetime', () => {
 				terminate: async () => { }, dispose() { }, [Symbol.dispose]() { },
 			};
 			services.registerInstance(ITaskService, tasks);
-			services.registerInstance(IQuickInputService, { createQuickPick: () => picker, input: async () => undefined } as unknown as IQuickInputService);
+			services.registerInstance(IQuickInputService, {
+				...quickInputServiceTestControls,
+				createQuickPick: () => picker, input: async () => undefined
+			} as unknown as IQuickInputService);
 			services.registerInstance(IViewsService, { focusView: async (id: string) => { focused.push(id); return true; } } as IViewsService);
 			services.registerInstance(INotificationService, { error: (message: string) => { errors.push(message); } } as INotificationService);
 			try {
@@ -114,7 +125,8 @@ suite('Tasks command catalog and async service lifetime', () => {
 				catalog = [latest];
 				changes.fire(catalog);
 				assert.deepEqual(picker.items.map(item => item.label), ['Updated task']);
-				picker.accepted.fire(picker.items[0] as TaskItem);
+				picker.selectedItems = [picker.items[0] as TaskItem];
+				picker.accepted.fire({ inBackground: false });
 				await new Promise<void>(resolve => setImmediate(resolve));
 				assert.deepEqual({ executed, focused, errors }, { executed: [latest], focused: [], errors: failure ? ['Unsupported execution setting'] : [] });
 				changes.fire([previous]);

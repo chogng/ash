@@ -61,8 +61,8 @@ const { InstantiationService } = await import(
 const { CommandService } = await import(
 	"../../../../../../workbench/services/commands/common/commandService.js"
 );
-const { IQuickAccessController } = await import(
-	"../../../../../../platform/quickinput/common/quickAccess.js"
+const { IQuickInputService } = await import(
+	"../../../../../../platform/quickinput/common/quickInput.js"
 );
 const { BrowserTitlebarPart } = await import(
 	"../../../../../../workbench/browser/parts/titlebar/titlebarPart.js"
@@ -163,7 +163,7 @@ test('title service shares the resolved title with its registered part and relea
 	services.registerInstance(ICommandService, commandService);
 	services.registerInstance(IMenuService, new MenuService(commandService, contextKeys));
 	services.registerInstance(ContextMenuServiceId, contextMenuService);
-	services.registerInstance(IQuickAccessController, { onDidChangeVisibility: Event.None, show() { } });
+	services.registerInstance(IQuickInputService, { quickAccess: { onDidChangeVisibility: Event.None, show() { } } } as import("../../../../../../platform/quickinput/common/quickInput.js").IQuickInputService);
 	services.registerInstance(LocalizationServiceId, { whenReady: Promise.resolve(), translate: (_bundle, _key, fallback) => fallback });
 	services.registerInstance(IEditorService, editors);
 	services.registerInstance(IWorkspaceContextService, workspace);
@@ -271,7 +271,7 @@ test("titlebar owns a menu-driven actions container", async () => {
 	const services = disposables.add(new InstantiationService());
 	const commandService = disposables.add(new CommandService(services));
 	services.registerInstance(ICommandService, commandService);
-	services.registerInstance(IQuickAccessController, { onDidChangeVisibility: Event.None, show() { } });
+	services.registerInstance(IQuickInputService, { quickAccess: { onDidChangeVisibility: Event.None, show() { } } } as import("../../../../../../platform/quickinput/common/quickInput.js").IQuickInputService);
 	const contextKeyService = disposables.add(new ContextKeyService());
 	const menuService = new MenuService(commandService, contextKeyService);
 	services.registerInstance(IMenuService, menuService);
@@ -365,7 +365,7 @@ test("titlebar renders its product icon, command center, and application menu", 
 	const services = disposables.add(new InstantiationService());
 	const commandService = disposables.add(new CommandService(services));
 	services.registerInstance(ICommandService, commandService);
-	services.registerInstance(IQuickAccessController, { onDidChangeVisibility: Event.None, show() { } });
+	services.registerInstance(IQuickInputService, { quickAccess: { onDidChangeVisibility: Event.None, show() { } } } as import("../../../../../../platform/quickinput/common/quickInput.js").IQuickInputService);
 	const contextKeyService = disposables.add(new ContextKeyService());
 	const menuService = new MenuService(commandService, contextKeyService);
 	services.registerInstance(IMenuService, menuService);

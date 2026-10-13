@@ -3,6 +3,7 @@ import { TerminalContributionService } from '../../../../contrib/terminal/common
 import { IEnvironmentVariableService } from '../../../../contrib/terminal/common/environmentVariable.js';
 import { EnvironmentVariableService } from '../../../../contrib/terminal/common/environmentVariableService.js';
 import { ITerminalContributionService, ITerminalProfileService, ITerminalProfileResolverService } from '../../../terminal/common/terminal.js';
+import { quickInputServiceTestControls } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { ITerminalService } from '../../../terminal/browser/terminal.js';
 import { ITerminalProcessService } from '../../../../../platform/terminal/common/terminal.js';
 import { TerminalProfileService } from '../../../../contrib/terminal/browser/terminalProfileService.js';
@@ -1010,6 +1011,8 @@ function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesServ
 		apply: () => assert.fail('Unexpected bulk edit request'),
 	});
 	services.registerInstance(IQuickInputService, {
+		...quickInputServiceTestControls,
+
 		createQuickPick: () => assert.fail('Unexpected Quick Input request'),
 		input: () => assert.fail('Unexpected Quick Input request'),
 	});

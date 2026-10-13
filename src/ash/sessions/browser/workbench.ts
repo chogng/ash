@@ -146,7 +146,6 @@ import { IFileService } from '../../platform/files/common/files.js';
 import { ISystemFileTransferService } from '../../platform/files/common/systemFileTransferService.js';
 import { IClipboardService } from '../../platform/clipboard/common/clipboardService.js';
 import { IDialogService, IFileDialogService } from '../../platform/dialogs/common/dialogs.js';
-import type { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
 import { FileService } from '../../platform/files/common/fileService.js';
 import type { DialogService } from '../../workbench/services/dialogs/common/dialogService.js';
 import { IDialogsModel } from '../../workbench/common/dialogs.js';
@@ -200,8 +199,6 @@ import { IKeybindingService } from "../../platform/keybinding/common/keybinding.
 import { IKeyboardLayoutService, type IKeyboardLayoutProvider } from "../../platform/keyboardLayout/common/keyboardLayout.js";
 import { IUserKeyboardLayoutService, UnavailableUserKeyboardLayoutService, type IUserKeyboardLayoutApi } from "../../platform/keyboardLayout/common/userKeyboardLayout.js";
 import { IQuickInputService } from "../../platform/quickinput/common/quickInput.js";
-import { IQuickAccessController } from "../../platform/quickinput/common/quickAccess.js";
-import { QuickAccessController } from "../../platform/quickinput/browser/quickAccess.js";
 import { IOpenerService } from "../../platform/opener/common/opener.js";
 import { IBrowserViewService } from '../../platform/browserView/common/browserView.js';
 import '../../workbench/contrib/externalUriOpener/common/externalUriOpener.contribution.js';
@@ -212,7 +209,7 @@ import { WorkbenchKeybindingService } from "../../workbench/services/keybinding/
 import { IKeyboardShortcutTroubleshootingService } from "../../workbench/services/keybinding/common/keyboardShortcutTroubleshooting.js";
 import { IPreferencesService } from "../../workbench/services/preferences/common/preferences.js";
 import { PreferencesService } from "../../workbench/services/preferences/browser/preferencesService.js";
-import { WorkbenchQuickInputService } from "../../workbench/services/quickinput/browser/quickInputService.js";
+import "../../workbench/services/quickinput/browser/quickInputService.js";
 import { ChatContextPickService } from "../../workbench/services/chat/browser/chatContextPickService.js";
 import { IChatContextPickService } from "../../workbench/services/chat/common/chatContextService.js";
 import { WorkbenchWindow } from "../../workbench/browser/window.js";
@@ -272,7 +269,9 @@ export interface IWorkbenchOptions {
 	readonly api: IRendererHost;
 	readonly workspaceSelection: () => SessionWorkspaceSelection;
 	readonly workspace: () => IWorkspace;
-	readonly browserFileSystemProvider?: HTMLFileSystemProvider;
+	readonly browserFileSystemProvider?: IFileSystemProvider;
+	/** Host-owned extension execution; embedders can supply a disconnected implementation. */
+	readonly extensionHost?: IExtensionHostApi;
 	readonly browserViewService?: IBrowserViewService;
 	readonly createFileDialogService: (services: IInstantiationService) => IFileDialogService;
 	readonly createLifecycleService: (services: IInstantiationService) => ILifecycleService & IDisposable;
@@ -338,7 +337,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(INetworkDiagnosticsService, options.api.networkDiagnostics);
 		services.registerInstance(IContentSearchConfigurationService, options.api.contentSearchConfiguration);
 		services.registerInstance(ILanguageServerService, options.api.languageServers);
-		services.registerInstance(IExtensionHostApi, this._register(services.createInstance(WebWorkerExtensionHost, withEnabledBuiltInExtensions(createBrowserExtensionApi(), enablement), options.api.extensionHost)));
+		services.registerInstance(IExtensionHostApi, options.extensionHost ?? this._register(services.createInstance(WebWorkerExtensionHost, withEnabledBuiltInExtensions(createBrowserExtensionApi(), enablement), options.api.extensionHost)));
 		services.registerInstance(ITelemetryService, NullTelemetryService);
 		if (options.api.approvalEnvironment) { services.registerInstance(IApprovalEnvironmentService, options.api.approvalEnvironment); }
 		services.registerInstance(IDictationService, options.api.dictation);
@@ -548,13 +547,6 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IMenuService, menus);
 		const contextViews = this._register(new BrowserContextViewService(this.layoutService.activeContainer, this.layoutService));
 		services.registerInstance(IContextViewService, contextViews);
-		const quickInputService = this._register(new WorkbenchQuickInputService({
-			container: this.layoutService.activeContainer,
-			contextKeyService: contextKeys,
-			layoutService: this.layoutService,
-		}));
-		services.registerInstance(IQuickInputService, quickInputService);
-		services.registerInstance(IQuickAccessController, this._register(services.createInstance(QuickAccessController)));
 		services.registerInstance(IChatContextPickService, new ChatContextPickService());
 		const contextMenus = this._register(options.createContextMenuService(services));
 		services.registerInstance(IContextMenuService, contextMenus);

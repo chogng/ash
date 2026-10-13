@@ -7,7 +7,7 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { MenuWorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IMenuService, MenuId } from '../../../../platform/actions/common/actions.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
-import { IQuickAccessController } from '../../../../platform/quickinput/common/quickAccess.js';
+import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { localize, type ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import type { WindowTitle } from './windowTitle.js';
 
@@ -19,7 +19,7 @@ export class CommandCenterControl extends Disposable {
 		container: HTMLElement,
 		windowTitle: Pick<WindowTitle, 'value' | 'onDidChange'>,
 		localizationService: ILocalizationService | undefined,
-		@IQuickAccessController private readonly quickAccess: IQuickAccessController,
+		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@IMenuService menuService: IMenuService,
 		@IContextMenuService contextMenuService: IContextMenuService,
 	) {
@@ -41,7 +41,7 @@ export class CommandCenterControl extends Disposable {
 			ariaLabel: label(),
 			icon: Lxicon.search,
 			onClick: () => {
-				this.quickAccess.show();
+				this.quickInput.quickAccess.show();
 			},
 		}));
 		this.button.toggleClassName('ash-titlebar-command-center-button', true);
@@ -53,7 +53,7 @@ export class CommandCenterControl extends Disposable {
 		updateTitle();
 		setAriaAttribute(this.button.domNode, 'haspopup', 'dialog');
 		setAriaAttribute(this.button.domNode, 'expanded', false);
-		this._register(this.quickAccess.onDidChangeVisibility(visible => {
+		this._register(this.quickInput.quickAccess.onDidChangeVisibility(visible => {
 			this.button.toggleClassName('active', visible);
 			setAriaAttribute(this.button.domNode, 'expanded', visible);
 		}));

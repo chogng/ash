@@ -63,9 +63,7 @@ import { EditorExtensionsRegistry } from '../../../src/ash/editor/browser/editor
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
-import { WorkbenchQuickInputService } from '../../../src/ash/workbench/services/quickinput/browser/quickInputService.js';
-import { QuickAccessController } from '../../../src/ash/platform/quickinput/browser/quickAccess.js';
-import { IQuickAccessController } from '../../../src/ash/platform/quickinput/common/quickAccess.js';
+import { TestQuickInputService } from '../../../src/ash/platform/quickinput/test/browser/testQuickInputService.js';
 import { ZoneWidget } from '../../../src/ash/editor/contrib/zoneWidget/browser/zoneWidget.js';
 import { setIconResolver } from '../../../src/ash/base/browser/ui/lxicons/lxicon.js';
 import { getIconDefinition } from '../../../src/ash/platform/theme/common/iconRegistry.js';
@@ -196,12 +194,11 @@ services.registerInstance(ILanguageFeaturesService, languageFeaturesService);
 disposables.add(services.createInstance(WorkbenchLanguageFeatures));
 services.registerInstance(ILanguageConfigurationService, languageConfigurationService);
 services.registerInstance(ILogService, new NullLoggerService());
-services.registerInstance(IQuickInputService, disposables.add(new WorkbenchQuickInputService({
+services.registerInstance(IQuickInputService, disposables.add(new TestQuickInputService({ instantiationService: services,
 	container: root,
 	contextKeyService: services.get(IContextKeyService),
 })));
 registerCodeEditorServices(services);
-services.registerSingleton(IQuickAccessController, () => disposables.add(services.createInstance(QuickAccessController)));
 disposables.add(services.createInstance(SaveParticipantsContribution));
 services.get(IAccessibilityService).setAccessibilitySupport(AccessibilitySupport.Enabled);
 services.get(IKeybindingService);

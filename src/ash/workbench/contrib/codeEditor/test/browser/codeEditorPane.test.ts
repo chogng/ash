@@ -1,3 +1,4 @@
+import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
@@ -13,9 +14,6 @@ import { URI } from "../../../../../base/common/uri.js";
 import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../editor/common/core/range.js";
 import { TextEditorSelectionSource } from '../../../../../platform/editor/common/editor.js';
-import { QuickAccessController } from '../../../../../platform/quickinput/browser/quickAccess.js';
-import { QuickInputController } from '../../../../../platform/quickinput/browser/quickInputController.js';
-import { IQuickAccessController } from '../../../../../platform/quickinput/common/quickAccess.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 
@@ -291,10 +289,9 @@ test('Workbench Go to Line command opens colon Quick Access and commits the acti
 	using services = parentServices.createChild();
 	using commands = new CommandService(services);
 	services.registerInstance(ICommandService, commands);
-	using quickInput = new QuickInputController(dom.window.document.body);
+	using quickInput = new TestQuickInputService({ instantiationService: services, container: dom.window.document.body });
 	services.registerInstance(IQuickInputService, quickInput);
-	using quickAccess = services.createInstance(QuickAccessController);
-	services.registerInstance(IQuickAccessController, quickAccess);
+	const quickAccess = services.get(IQuickInputService).quickAccess;
 	using pane = createPane(services, resourceStore, {
 		createPart: options => createBrowserEditorPart(services, options),
 		showUnicodeHighlights: false,

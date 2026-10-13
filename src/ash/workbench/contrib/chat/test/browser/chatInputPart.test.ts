@@ -1,3 +1,4 @@
+import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import { IMenuService } from '../../../../../platform/actions/common/actions.js';
@@ -5,7 +6,6 @@ import { MenuService } from '../../../../../platform/actions/common/menuService.
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IMessageHistoryService } from '../../../../../platform/messageHistory/common/messageHistory.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
-import { QuickInputController } from '../../../../../platform/quickinput/browser/quickInputController.js';
 import { registerTestDictationOnboarding } from '../../../../test/common/testDictationServices.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { SpeechToTextState, ISpeechService } from '../../../speech/common/speechService.js';
@@ -70,7 +70,7 @@ function inputPart(notifications: NotificationService, dictation?: Pick<IDictati
 	const partServices = inputResources.add(services.createChild());
 	if (!partServices.has(IEditorService)) partServices.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } });
 	if (!partServices.has(IMessageHistoryService)) partServices.registerInstance(IMessageHistoryService, undefined);
-	if (!partServices.has(IQuickInputService)) partServices.registerSingleton(IQuickInputService, () => new QuickInputController(document.body));
+	if (!partServices.has(IQuickInputService)) partServices.registerSingleton(IQuickInputService, () => new TestQuickInputService({ container: document.body }));
 	partServices.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
 	partServices.registerInstance(ICommandService, { executeCommand: async () => undefined } as unknown as ICommandService);
 	partServices.registerInstance(IContextKeyService, inputResources.add(new ContextKeyService()));

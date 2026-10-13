@@ -83,7 +83,11 @@ export class BinaryFileEditor extends BaseBinaryResourceEditor {
 			picker.placeholder = picker.ariaLabel = localize('status.editor.selectEncoding', 'Select File Encoding');
 			const selected = await new Promise<{ id: string; } | undefined>(resolve => {
 				resources.add(toDisposable(() => resolve(undefined)));
-				resources.add(picker.onDidAccept(item => { resolve(item); picker.hide(); }));
+				resources.add(picker.onDidAccept(() => {
+					const item = picker.selectedItems[0];
+					if (!item) return;
+					resolve(item); picker.hide();
+				}));
 				resources.add(picker.onDidHide(() => resolve(undefined)));
 				picker.show();
 			});

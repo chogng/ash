@@ -109,7 +109,10 @@ export class ConfigureDisplayLanguageAction extends Action2 {
 
 		picker.items = [...installedItems(), browseItem];
 		disposables.add(picker.onDidChangeValue(query => { void search(query); }));
-		disposables.add(picker.onDidAccept(item => {
+		disposables.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
+
 			picker.hide();
 			void (async () => {
 				if (item.kind === 'browse') {
@@ -138,6 +141,7 @@ export class ConfigureDisplayLanguageAction extends Action2 {
 					String(error),
 				));
 			});
+
 		}));
 		disposables.add(picker.onDidHide(() => {
 			closed = true;

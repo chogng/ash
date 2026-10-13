@@ -1,3 +1,4 @@
+import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { localize, localize2 } from '../../../../../nls.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
@@ -6,7 +7,7 @@ import { parseStanzaGotoLocation } from '../../../../../editor/contrib/quickAcce
 import { Action2, MenuId, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { TextEditorSelectionSource } from '../../../../../platform/editor/common/editor.js';
-import { IQuickAccessController, QuickAccessRegistry, type IQuickAccessProvider } from '../../../../../platform/quickinput/common/quickAccess.js';
+import { QuickAccessRegistry, type IQuickAccessProvider } from '../../../../../platform/quickinput/common/quickAccess.js';
 import type { IQuickPick, IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { EditorsVisibleContext } from '../../../../common/contextkeys.js';
 
@@ -87,7 +88,7 @@ class GotoLineAction extends Action2 {
 	}
 
 	override run(accessor: ServicesAccessor): void {
-		accessor.get(IQuickAccessController).show(GotoLineQuickAccessProvider.GO_TO_LINE_PREFIX);
+		accessor.get(IQuickInputService).quickAccess.show(GotoLineQuickAccessProvider.GO_TO_LINE_PREFIX);
 	}
 }
 

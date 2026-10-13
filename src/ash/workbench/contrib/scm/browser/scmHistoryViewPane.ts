@@ -363,9 +363,13 @@ export class SCMHistoryViewPane extends ViewPane {
 		const selected = await new Promise<typeof repositories[number] | undefined>(resolve => {
 			resources.add(toDisposable(() => resolve(undefined)));
 			resources.add(picker.onDidHide(() => { if (this.filterPicker.value === resources) { this.filterPicker.clear(); } }));
-			resources.add(picker.onDidAccept(item => {
+			resources.add(picker.onDidAccept(() => {
+				const item = picker.selectedItems[0];
+				if (!item) return;
+
 				resolve(item.repository);
 				picker.hide();
+
 			}));
 			picker.show();
 		});

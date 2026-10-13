@@ -35,7 +35,7 @@ import { CommandService } from '../../../src/ash/workbench/services/commands/com
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import chineseMessages from '../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
-import { WorkbenchQuickInputService } from '../../../src/ash/workbench/services/quickinput/browser/quickInputService.js';
+import { TestQuickInputService } from '../../../src/ash/platform/quickinput/test/browser/testQuickInputService.js';
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
 import { BrowserTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/browser/browserTextModelService.js';
 import { IFileTextModelService, ITextModelResourceService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
@@ -80,7 +80,7 @@ services.registerInstance(IDialogService, dialogs);
 resources.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(document.body)));
 const copied: string[] = [];
 services.registerInstance(IClipboardService, { writeText: async (value: string) => { copied.push(value); } } as IClipboardService);
-services.registerInstance(IQuickInputService, resources.add(new WorkbenchQuickInputService({ container: document.body, contextKeyService: services.get(IContextKeyService) })));
+services.registerInstance(IQuickInputService, resources.add(new TestQuickInputService({ instantiationService: services, container: document.body, contextKeyService: services.get(IContextKeyService) })));
 const opener = resources.add(services.createInstance(OpenerService));
 services.registerInstance(IOpenerService, opener);
 const opened: string[] = [];

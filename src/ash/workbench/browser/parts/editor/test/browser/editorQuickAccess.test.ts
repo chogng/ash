@@ -8,12 +8,10 @@ import type { LanguageDocumentSymbol } from "../../../../../../editor/common/lan
 import { formatNlsMessage, resetNlsResolver, setNlsResolver } from "../../../../../../nls.js";
 import { IContextKeyService, ContextKeyService } from "../../../../../../platform/contextkey/browser/contextKeyService.js";
 import { InstantiationService } from "../../../../../../platform/instantiation/common/instantiationService.js";
-import { QuickAccessController } from "../../../../../../platform/quickinput/browser/quickAccess.js";
-import { IQuickAccessController } from "../../../../../../platform/quickinput/common/quickAccess.js";
 import { IQuickInputService } from "../../../../../../platform/quickinput/common/quickInput.js";
 import { CommandService } from "../../../../../services/commands/common/commandService.js";
 import { productLanguagePackCatalogs } from "../../../../../services/localization/common/localizationCatalogs.js";
-import { WorkbenchQuickInputService } from "../../../../../services/quickinput/browser/quickInputService.js";
+import { TestQuickInputService } from "../../../../../../platform/quickinput/test/browser/testQuickInputService.js";
 import { IEditorPart, type IEditorPart as EditorPartContract } from "../../editorPart.js";
 import { AllEditorsByMostRecentlyUsedQuickAccess } from "../../editorQuickAccess.js";
 import { BreadcrumbsSymbolPicker } from "../../breadcrumbsPicker.js";
@@ -58,10 +56,9 @@ test("Show All Editors opens the MRU quick access mode and activates the chosen 
 		using contextKeys = new ContextKeyService();
 		services.registerInstance(IContextKeyService, contextKeys);
 		services.registerInstance(IEditorPart, editorPart);
-		using quickInput = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
+		using quickInput = new TestQuickInputService({ instantiationService: services, container: dom.window.document.body, contextKeyService: contextKeys });
 		services.registerInstance(IQuickInputService, quickInput);
-		using quickAccess = services.createInstance(QuickAccessController);
-		services.registerInstance(IQuickAccessController, quickAccess);
+		const quickAccess = services.get(IQuickInputService).quickAccess;
 		using commands = new CommandService(services);
 		const focusTarget = dom.window.document.querySelector("button");
 		assert.ok(focusTarget);
@@ -110,7 +107,7 @@ test("breadcrumb symbol picker reveals a nested outline item", () => {
 	}
 	try {
 		using contextKeys = new ContextKeyService();
-		using quickInput = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
+		using quickInput = new TestQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
 		const outerRange = new Range(1, 1, 3, 1);
 		const innerRange = new Range(2, 1, 2, 10);
 		const inner: LanguageDocumentSymbol = { name: "Beta", kind: "method", range: innerRange, selectionRange: innerRange };

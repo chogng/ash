@@ -12,7 +12,8 @@ import Severity from '../../../../../../base/common/severity.js';
 import { CancellationError, errorHandler } from '../../../../../../base/common/errors.js';
 import { DialogService } from '../../../../../services/dialogs/common/dialogService.js';
 import assert from "node:assert/strict";
-import { test, suiteTeardown } from "mocha";
+import { test, suite, suiteTeardown } from "mocha";
+import { ensureNoDisposablesAreLeakedInTestSuite } from "../../../../../../base/test/common/utils.js";
 import { JSDOM } from "jsdom";
 import type {
 	IDimension,
@@ -165,7 +166,7 @@ function createEditorPart(container: HTMLElement, options: IEditorPartOptions, p
 }
 
 /** Editor lifecycle tests use fixed window chrome; title calculation is exercised in the title service suite. */
-function createAuxiliaryPart(container: HTMLElement, registry: EditorPaneRegistry) {
+function createAuxiliaryPart(container: HTMLElement, registry: EditorPaneRegistry, services?: InstantiationService) {
 	const element = container.ownerDocument.createElement('section');
 	container.prepend(element);
 	const titlebar = {
@@ -181,7 +182,7 @@ function createAuxiliaryPart(container: HTMLElement, registry: EditorPaneRegistr
 		dispose() { element.remove(); },
 		[Symbol.dispose]() { this.dispose(); },
 	};
-	return { part: createEditorPart(container, { registry }), titlebar };
+	return { part: services ? services.createInstance(EditorPart, container, { registry }) : createEditorPart(container, { registry }), titlebar };
 }
 
 test('inactive editor opens keep the selected tab and its content visible', async () => {
@@ -3702,6 +3703,7 @@ class TestAuxiliaryWindowService extends Disposable implements IAuxiliaryWindowS
 }
 
 class TestAuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
+	readonly whenStylesHaveLoaded = Promise.resolve();
 	readonly id = 42;
 	private readonly dom = new JSDOM("<!doctype html><body><main></main></body>");
 	private readonly layoutEmitter = this._register(new Emitter<IDimension>());
@@ -4081,5 +4083,78 @@ test('recent file history retains closed resources and restores workspace histor
 		assert.deepEqual(restored.getHistory().map(entry => entry.resource.toString()), [second.resource.toString(), first.resource.toString()]);
 	} finally {
 		dom.window.close();
+	}
+});
+
+
+suite('Auxiliary editor lifecycle', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	for (const outcome of ['switch tab', 'close source', 'dispose parts'] as const) {
+		test(`opening an auxiliary window handles ${outcome} before popup readiness`, async () => {
+			const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+			try {
+				using services = createTestEditorServices(undefined, undefined, dom.window.document);
+				using registry = new EditorPaneRegistry();
+				using registration = registry.registerEditorPane(descriptor('test.detached', '.ts', () => new TestEditorPane('test.detached')));
+				using main = services.createInstance(EditorPart, dom.window.document.body, { registry });
+				using windows = new TestAuxiliaryWindowService();
+				const ready = deferred<void>();
+				const open = windows.open.bind(windows);
+				windows.open = async () => { await ready.promise; return open(); };
+				using parts = services.createInstance(EditorParts, main, windows, (container: HTMLElement) => createAuxiliaryPart(container, registry, services), {
+					onDidChangeScreenReaderOptimized: Event.None, isScreenReaderOptimized: () => false,
+				} as unknown as IAccessibilityService, services.get(IStorageService));
+				services.registerSingleton(ICodeEditorService, () => new CodeEditorService(parts));
+				services.registerSingleton(ICommandService, () => new CommandService(services));
+				const original = input('/project/original.ts');
+				const newer = input('/project/newer.ts');
+				await main.openEditor(original);
+				const moving = parts.moveActiveEditorToNewWindow();
+				if (outcome === 'switch tab') await main.openEditor(newer);
+				else if (outcome === 'close source') await main.closeEditor(original);
+				else parts.dispose();
+				ready.resolve(undefined);
+				if (outcome === 'dispose parts') {
+					await assert.rejects(moving, /disposed while opening/);
+					assert.equal(windows.lastWindow?.isDisposed, true);
+					assert.deepEqual(main.activeGroup.inputs, [original]);
+				} else {
+					const target = await moving;
+					if (outcome === 'switch tab') {
+						assert.deepEqual([main.activeGroup.inputs, target?.activeGroup.inputs], [[newer], [original]]);
+					} else {
+						assert.equal(target, undefined);
+						assert.equal(parts.parts.length, 1);
+						assert.equal(windows.lastWindow?.isDisposed, true);
+					}
+				}
+			} finally { dom.window.close(); }
+		});
+	}
+
+	for (const failure of ['factory', 'chrome'] as const) {
+		test(`failed auxiliary ${failure} creation releases the window and editor resources`, async () => {
+			const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+			try {
+				using services = createTestEditorServices(undefined, undefined, dom.window.document);
+				using registry = new EditorPaneRegistry();
+				using main = services.createInstance(EditorPart, dom.window.document.body, { registry });
+				using windows = new TestAuxiliaryWindowService();
+				let failedPart: import('../../editorPart.js').IEditorPart | undefined;
+				using parts = services.createInstance(EditorParts, main, windows, (container: HTMLElement) => {
+					if (failure === 'factory') throw new Error('Factory failed');
+					const creation = createAuxiliaryPart(container, registry, services);
+					failedPart = creation.part;
+					creation.titlebar.updateOptions = () => { throw new Error('Chrome failed'); };
+					return creation;
+				}, { onDidChangeScreenReaderOptimized: Event.None, isScreenReaderOptimized: () => false } as unknown as IAccessibilityService, services.get(IStorageService));
+				await assert.rejects(parts.createAuxiliaryEditorPart(), /failed/i);
+				assert.equal(windows.lastWindow?.isDisposed, true);
+				assert.deepEqual(parts.parts, [main]);
+				assert.equal(parts.activePart, main);
+				assert.equal(failedPart?.domNode.isConnected ?? false, false);
+			} finally { dom.window.close(); }
+		});
 	}
 });

@@ -1,3 +1,4 @@
+import { BrowserAuxiliaryWindowService, IAuxiliaryWindowService } from '../../../src/ash/workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { operatingSystem, OperatingSystem } from '../../../src/ash/base/common/platform.js';
 import { BrowserPathService } from '../../../src/ash/workbench/services/path/browser/pathService.js';
 import { createDisconnectedRendererApi } from '../../../src/ash/platform/agentHost/browser/rendererApi.js';
@@ -221,6 +222,7 @@ instantiation.registerInstance(IThemeService, theme);
 instantiation.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (bundle, key, fallback) => localize({ bundle, key }, fallback) });
 const descriptors = store.add(instantiation.createInstance(ViewDescriptorService, { registry }));
 instantiation.registerInstance(IViewDescriptorService, descriptors);
+instantiation.registerInstance(IAuxiliaryWindowService, store.add(instantiation.createInstance(BrowserAuxiliaryWindowService, window, host)));
 const layout = store.add(instantiation.createInstance(WorkbenchLayout, host, {
 	initialDimension: new Dimension(1024, 600), workbenchState: WorkbenchState.WORKSPACE,
 	defaultLayout: { force: true, parts: { sidebar: true, auxiliarybar: false, agentSidebar: false, panel: false } },

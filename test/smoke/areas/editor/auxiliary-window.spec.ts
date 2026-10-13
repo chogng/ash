@@ -11,7 +11,7 @@ test('detached editor window inherits workbench theme and accessibility state', 
 
 	await page.keyboard.press('F1');
 	const command = page.locator('.ash-quick-pick').getByRole('combobox');
-	await command.fill('Move to New Window');
+	await command.fill('>Move to New Window');
 	await expect(page.locator('.ash-quick-pick-row-label', { hasText: 'Move to New Window' })).toBeVisible();
 	const popupPromise = page.context().waitForEvent('page');
 	await command.press('Enter');
@@ -36,8 +36,10 @@ test('detached editor window inherits workbench theme and accessibility state', 
 			foreground: getComputedStyle(element).color,
 		}))).toEqual(mainAppearance);
 		await popup.keyboard.press('F1');
-		await expect(page.locator('.ash-quick-pick')).toBeVisible();
-		await page.keyboard.press('Escape');
+		await expect(popup.locator('.ash-quick-pick')).toBeVisible();
+		await expect(page.locator('.ash-quick-pick')).toHaveCount(0);
+		await popup.keyboard.press('Escape');
+		await expect(popup.locator('.stanza-editor-input').first()).toBeFocused();
 		await popup.keyboard.press('ControlOrMeta+f');
 		await expect(popup.locator('.stanza-editor-find-widget')).toBeVisible();
 		await popup.keyboard.press('Escape');
@@ -48,7 +50,7 @@ test('detached editor window inherits workbench theme and accessibility state', 
 		await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'Untitled' })).toHaveCount(1);
 		await page.keyboard.press('F1');
 		const reopenCommand = page.locator('.ash-quick-pick').getByRole('combobox');
-		await reopenCommand.fill('Move to New Window');
+		await reopenCommand.fill('>Move to New Window');
 		const reopenedPromise = page.context().waitForEvent('page');
 		await reopenCommand.press('Enter');
 		const reopened = await reopenedPromise;
@@ -63,39 +65,52 @@ test('detached editor window inherits workbench theme and accessibility state', 
 	}
 });
 
-focusTest('detached editor windows participate in desktop window switching and close-other-windows', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ workbench, target, application }) => {
+focusTest('detached editor windows participate in desktop window switching and close-other-windows', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ workbench, application }) => {
 	if (!('windows' in application)) {
 		throw new Error('Expected an Electron application');
 	}
 	const page = workbench.page;
+	const mainWindow = await application.browserWindow(page);
+	const mainWindowId = await mainWindow.evaluate(window => window.id);
+	await mainWindow.dispose();
+	const focusMain = async (): Promise<void> => {
+		await page.evaluate(async id => {
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
+			await ipc.invoke('ash:window:operation', { kind: 'focus', windowId: id });
+		}, mainWindowId);
+		await waitForElectronWindowState(application, page, { focused: true });
+	};
 	await page.keyboard.press('ControlOrMeta+N');
 	await expect(workbench.editors.groupAt(0).tabs.last()).toContainText('Untitled');
 	await page.keyboard.press('F1');
 	const command = page.locator('.ash-quick-pick').getByRole('combobox');
-	await command.fill('Move to New Window');
+	await command.fill('>Move to New Window');
 	const opened = page.context().waitForEvent('page');
 	await command.press('Enter');
 	const popup = await opened;
 	try {
 		await expect(popup.locator('.ash-auxiliary-window-container .ash-workbench-editor')).toBeVisible();
+		await expect(popup.getByRole('tab', { name: 'Untitled-1', exact: true })).toBeVisible();
+		await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'Untitled' })).toHaveCount(0);
+		await waitForElectronWindowState(application, popup, { focused: true });
 		const title = await popup.title();
-		await page.bringToFront();
+		await focusMain();
 		await page.keyboard.press('F1');
-		await command.fill('Switch Window...');
+		await command.fill('>Switch Window...');
 		await command.press('Enter');
 		await expect(command).toHaveAttribute('placeholder', 'Select a window');
 		await expect(page.locator('.ash-quick-pick-row-label')).toHaveCount(2);
 		await page.locator('.ash-quick-pick-row-label').filter({ hasText: title }).click();
 		await waitForElectronWindowState(application, popup, { focused: true });
 
-		await page.bringToFront();
+		await focusMain();
 		await page.keyboard.press('F1');
-		await command.fill('Close Other Windows');
+		await command.fill('>Close Other Windows');
 		await command.press('Enter');
 		await expect.poll(() => popup.isClosed()).toBe(true);
 		await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'Untitled' })).toHaveCount(1);
 		await page.keyboard.press('F1');
-		await command.fill('Switch Window...');
+		await command.fill('>Switch Window...');
 		await command.press('Enter');
 		await expect(command).toHaveAttribute('placeholder', 'Select a window');
 		await expect(page.locator('.ash-quick-pick-row-label')).toHaveCount(1);
@@ -112,7 +127,7 @@ test('detached window titlebar follows its own editor and reserves layout space'
 	await page.keyboard.press('ControlOrMeta+N');
 	await page.keyboard.press('F1');
 	const command = page.locator('.ash-quick-pick').getByRole('combobox');
-	await command.fill('Move to New Window');
+	await command.fill('>Move to New Window');
 	await expect(page.locator('.ash-quick-pick-row-label', { hasText: 'Move to New Window' })).toBeVisible();
 	const popupPromise = page.context().waitForEvent('page');
 	await command.press('Enter');

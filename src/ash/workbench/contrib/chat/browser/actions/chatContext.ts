@@ -352,10 +352,14 @@ export function pickChatContextItem<T extends IQuickPickItem>(quickInput: IQuick
 			}
 		};
 		resources.add(picker.onDidChangeValue(query => { void load(query); }));
-		resources.add(picker.onDidAccept(item => {
+		resources.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
+
 			if ('back' in item) finish({ kind: 'back' });
 			else if (accept(item)) finish({ kind: 'item', item, background: picker.keyMods?.ctrlCmd === true });
 			else void load(picker.value);
+
 		}));
 		resources.add(picker.onDidHide(() => finish()));
 		resources.add(addDisposableListener(signal, 'abort', () => finish()));

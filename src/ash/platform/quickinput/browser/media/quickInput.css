@@ -1,5 +1,6 @@
 .ash-quick-input-host {
 	position: absolute;
+	box-sizing: border-box;
 	z-index: var(--ash-z-index-quick-input, 2600);
 	display: flex;
 	align-items: flex-start;
@@ -15,13 +16,17 @@
 
 .ash-quick-pick {
 	display: flex;
+	box-sizing: border-box;
 	pointer-events: auto;
-	width: min(620px, calc(100vw - 32px));
+	width: clamp(320px, 62%, 600px);
+	max-width: 100%;
 	max-height: min(520px, calc(100vh - 48px));
 	overflow: hidden;
 	flex-direction: column;
-	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
-	border-radius: var(--ash-cornerRadius-medium);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-widget-border));
+	border-radius: var(--ash-cornerRadius-large);
+	font-size: var(--ash-fontSize-body1);
 	color: var(--ash-foreground);
 	background: var(--ash-quickInput-background);
 	box-shadow: 0 8px 32px var(--ash-widget-shadow);
@@ -36,14 +41,15 @@
 }
 
 .ash-quick-pick-input {
-	padding: 8px;
-	border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	padding: var(--ash-spacing-size60) var(--ash-spacing-size60)
+		var(--ash-spacing-size40);
 }
 
 .ash-quick-pick-input input {
-	height: 32px;
-	padding: 0 10px;
+	height: 26px;
+	padding: 0 var(--ash-spacing-size80);
 	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border-radius: var(--ash-cornerRadius-small);
 	outline: none;
 	color: var(--ash-input-foreground);
 	background: var(--ash-input-background);
@@ -53,12 +59,32 @@
 	border-color: var(--ash-focusBorder);
 }
 
+.ash-quick-pick-navigation {
+	flex: 0 0 auto;
+	padding: 0 var(--ash-spacing-size60) var(--ash-spacing-size40);
+}
+
+.ash-quick-pick-navigation .ash-tab-list {
+	--ash-tab-height: 28px;
+	--ash-tabList-contentInset: 0px;
+	--ash-tabList-itemContentInset: var(--ash-spacing-size60);
+	--ash-actionBar-gap: var(--ash-spacing-size40);
+
+	height: 28px;
+}
+
+.ash-quick-pick-navigation .ash-tab-label {
+	align-items: center;
+	justify-content: center;
+	padding: 0 var(--ash-spacing-size60);
+}
+
 .ash-quick-pick-list {
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
 	overflow: hidden;
-	padding: 4px 0 4px 4px;
+	padding: 0 var(--ash-spacing-size60) var(--ash-spacing-size60);
 }
 
 .ash-quick-pick-list .ash-quick-pick-list-items {
@@ -81,19 +107,34 @@
 	display: flex;
 	min-height: 34px;
 	align-items: center;
-	gap: 12px;
+	gap: var(--ash-spacing-size120);
 	justify-content: space-between;
-	padding: 6px 8px;
+	padding: var(--ash-spacing-size60) var(--ash-spacing-size80);
 }
 
-.ash-quick-pick-row-content.has-separator {
-	flex-wrap: wrap;
+.ash-quick-pick-list:not(.ash-quick-pick-list-menu)
+	.ash-quick-pick-row-content {
+	box-sizing: border-box;
+	min-height: 24px;
+	gap: var(--ash-spacing-size60);
+	padding: 0 var(--ash-spacing-size60);
+	line-height: 24px;
+}
+
+.ash-quick-pick-list:not(.ash-quick-pick-list-menu)
+	.ash-list-row:not(:first-child)
+	.has-separator {
+	border-top: var(--ash-strokeThickness) solid var(--ash-widget-border);
 }
 
 .ash-quick-pick-separator {
-	flex: 0 0 100%;
-	padding-top: var(--ash-spacing-size40);
-	border-top: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	order: 1;
+	flex: 0 0 auto;
+	align-self: flex-start;
+	max-width: 30%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 	color: var(--ash-description-foreground);
 	font-size: var(--ash-fontSize-label1);
 }
@@ -109,20 +150,31 @@
 	background: var(--ash-list-activeSelectionBackground);
 }
 
+.ash-quick-pick-list:not(.ash-quick-pick-list-menu)
+	.ash-list-row:hover:not(.is-active) {
+	background: var(--ash-list-hoverBackground);
+}
+
+.ash-quick-pick-list .ash-list-row.is-active .ash-quick-pick-separator {
+	color: inherit;
+}
+
 .ash-quick-pick-list-menu .ash-list-row.is-active {
 	color: var(--ash-menu-selectionForeground);
 	background: var(--ash-menu-selectionBackground);
 }
 
 .ash-quick-pick-row-text {
-	display: flex;
+	display: grid;
 	min-width: 0;
-	flex: 1 1 auto;
+	flex: 1 1 0;
+	grid-template-columns: minmax(0, auto) minmax(0, 1fr);
 	align-items: baseline;
-	gap: 8px;
+	column-gap: var(--ash-spacing-size80);
 }
 
 .ash-quick-pick-list-menu .ash-quick-pick-row-text {
+	display: flex;
 	flex-direction: column;
 	align-items: stretch;
 	gap: var(--ash-spacing-size20);
@@ -186,11 +238,15 @@
 	white-space: nowrap;
 }
 
+.ash-quick-pick-row-detail {
+	grid-column: 1 / -1;
+}
+
 .ash-quick-pick-row-description,
 .ash-quick-pick-row-detail {
 	overflow: hidden;
 	color: var(--ash-description-foreground);
-	font-size: 12px;
+	font-size: var(--ash-fontSize-label1);
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
@@ -208,11 +264,12 @@
 	color: var(--ash-description-foreground);
 	background: var(--ash-keybindingLabel-background);
 	font: inherit;
-	font-size: 11px;
+	font-size: var(--ash-fontSize-label2);
 }
 
 .ash-quick-pick-row-action.icon-only {
 	display: grid;
+	order: 2;
 	flex: 0 0 auto;
 	place-items: center;
 	width: 24px;

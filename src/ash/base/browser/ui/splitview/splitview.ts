@@ -1,3 +1,4 @@
+import './splitview.css';
 import { Emitter, type Event } from "../../../common/event.js";
 import { type IDisposable, Disposable, DisposableStore, toDisposable } from "../../../common/lifecycle.js";
 import { clamp, isFiniteNumber } from "../../../common/numbers.js";

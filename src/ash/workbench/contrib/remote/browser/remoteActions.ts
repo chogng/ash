@@ -128,9 +128,13 @@ export async function showRemoteConnectionPicker(
 		description: connection.host,
 		detail: connection.workspace,
 	}));
-	disposables.add(picker.onDidAccept(item => {
+	disposables.add(picker.onDidAccept(() => {
+		const item = picker.selectedItems[0];
+		if (!item) return;
+
 		picker.hide();
 		void connectToRemote(item.connection, connections, dialogs);
+
 	}));
 	disposables.add(picker.onDidHide(() => disposables.dispose()));
 	picker.show();

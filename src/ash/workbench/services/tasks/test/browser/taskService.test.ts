@@ -1,4 +1,6 @@
 import { IEnvironmentVariableService } from '../../../../contrib/terminal/common/environmentVariable.js';
+import type { IQuickPick, IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
+import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { ShellQuoting } from '../../common/taskService.js';
 import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../../terminal/common/terminal.js';
 import { TerminalProfileService } from '../../../../contrib/terminal/browser/terminalProfileService.js';
@@ -122,7 +124,6 @@ import { waitForTask } from '../../common/taskService.js';
 import { JSDOM } from 'jsdom';
 import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
-import { WorkbenchQuickInputService } from '../../../quickinput/browser/quickInputService.js';
 
 test('TaskService discovers UTF-8 configuration through the provider text contract without opening binary resources', async () => {
 	const root = URI.file('/task-text');
@@ -1391,7 +1392,7 @@ for (const retirement of ['workspace', 'dispose'] as const) {
 		// The fixture's catalog operations are microtasks; observe the public window
 		// selection after they drain rather than substituting a picker implementation.
 		await new Promise<void>(resolve => setImmediate(resolve));
-		assert.deepEqual(quickInput.currentQuickInput?.items.map(item => item.label), ['Choose build']);
+		assert.deepEqual((quickInput.currentQuickInput as IQuickPick<IQuickPickItem> | undefined)?.items.map(item => item.label), ['Choose build']);
 		if (retirement === 'workspace') workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/replacement') });
 		else tasks.dispose();
 		assert.equal(await pending, undefined);
@@ -1519,7 +1520,7 @@ test('TaskService resolves configured command inputs at dispatch, reevaluates re
 	const dom = new JSDOM('<!doctype html><body></body>');
 	resources.add(toDisposable(() => dom.window.close()));
 	const context = resources.add(new ContextKeyService());
-	services.registerInstance(IQuickInputService, resources.add(new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: context })));
+	services.registerInstance(IQuickInputService, resources.add(new TestQuickInputService({ instantiationService: services, container: dom.window.document.body, contextKeyService: context })));
 	let calls = 0;
 	using command = CommandsRegistry.register('tasks.test.input', (_accessor, args) => {
 		assert.deepEqual(args, { target: 'release' });
@@ -2429,7 +2430,7 @@ suite('Task instance policies through the execution owners', () => {
 		registerTestExtensionService(owner, services);
 		const dom = new JSDOM('<!doctype html><body></body>');
 		owner.add(toDisposable(() => dom.window.close()));
-		const quickInput = owner.add(new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: owner.add(new ContextKeyService()) }));
+		const quickInput = owner.add(new TestQuickInputService({ instantiationService: services, container: dom.window.document.body, contextKeyService: owner.add(new ContextKeyService()) }));
 		services.registerInstance(IQuickInputService, quickInput);
 		const peer = {
 			creations: 0, closed: [] as string[], close: async (_id: string): Promise<void> => { },

@@ -1,56 +1,48 @@
 import './media/editorquickaccess.css';
-import { DisposableStore } from "../../../../base/common/lifecycle.js";
 import { basename } from "../../../../base/common/resources.js";
 import { localize } from "../../../../nls.js";
-import type { IQuickAccessProvider } from "../../../../platform/quickinput/common/quickAccess.js";
-import type { IQuickPick, IQuickPickItem } from "../../../../platform/quickinput/common/quickInput.js";
+import { PickerQuickAccessProvider, TriggerAction, type IPickerQuickAccessItem, type Picks } from "../../../../platform/quickinput/browser/pickerQuickAccess.js";
+import { filterQuickPickItems } from "../../../../platform/quickinput/browser/quickInputList.js";
 import type { EditorIdentifier } from "../../../services/editor/common/editorState.js";
 import { IEditorPart } from "./editorPart.js";
 
-interface EditorQuickPickItem extends IQuickPickItem {
+interface EditorQuickPickItem extends IPickerQuickAccessItem {
 	readonly editor: EditorIdentifier;
 }
 
 /** Searches open editors in the order they were last used. */
-export class AllEditorsByMostRecentlyUsedQuickAccess implements IQuickAccessProvider {
+export class AllEditorsByMostRecentlyUsedQuickAccess extends PickerQuickAccessProvider<EditorQuickPickItem> {
 	static readonly PREFIX = "edt mru ";
 
-	constructor(@IEditorPart private readonly editorPart: IEditorPart) { }
-
-	provide(picker: IQuickPick<IQuickPickItem>): DisposableStore {
-		const disposables = new DisposableStore();
-		const update = (): void => {
-			const editorState = new Map(this.editorPart.groups.flatMap(group => group.editors.map(editor => [editor.instanceId, editor] as const)));
-			picker.items = this.editorPart.editorsMru.map(editor => ({
-				editor,
-				className: editorState.get(editor.instanceId)?.isDirty
-					? 'ash-editor-quick-pick-item dirty'
-					: 'ash-editor-quick-pick-item',
-				buttons: [{ id: 'close', label: localize('workbench.closeEditor', 'Close') }],
-				label: editorInputLabel(editor.input),
-				description: localize(
-					"workbench.editorGroupNumber",
-					"Group {0}",
-					this.editorPart.groups.findIndex(group => group.id === editor.groupId) + 1,
-				),
-				detail: editor.input.resource.toString(),
-			}));
-		};
-		disposables.add(this.editorPart.onDidChangeEditors(update));
-		disposables.add(picker.onDidAccept(item => {
-			picker.hide();
-			this.editorPart.activateEditorIdentifier((item as EditorQuickPickItem).editor);
-			this.editorPart.focus();
-		}));
-		disposables.add(picker.onDidTriggerItemButton(({ item, button }) => {
-			if (button.id !== 'close') return;
-			void this.editorPart.closeEditorIdentifier((item as EditorQuickPickItem).editor).catch(error => {
-				console.error('Could not close editor from Quick Pick', error);
-			});
-		}));
-		update();
-		return disposables;
+	constructor(@IEditorPart private readonly editorPart: IEditorPart) {
+		super(AllEditorsByMostRecentlyUsedQuickAccess.PREFIX);
+		this._register(editorPart.onDidChangeEditors(() => this.refresh()));
 	}
+
+	protected override _getPicks(filter: string): Picks<EditorQuickPickItem> {
+		const editorState = new Map(this.editorPart.groups.flatMap(group => group.editors.map(editor => [editor.instanceId, editor] as const)));
+		return filterQuickPickItems(this.editorPart.editorsMru.map(editor => ({
+			editor,
+			accept: () => { this.editorPart.activateEditorIdentifier(editor); this.editorPart.focus(); },
+			trigger: async () => {
+				try { await this.editorPart.closeEditorIdentifier(editor); }
+				catch (error) { console.error('Could not close editor from Quick Pick', error); }
+				return TriggerAction.REFRESH_PICKER;
+			},
+			className: editorState.get(editor.instanceId)?.isDirty
+				? 'ash-editor-quick-pick-item dirty'
+				: 'ash-editor-quick-pick-item',
+			buttons: [{ id: 'close', label: localize('workbench.closeEditor', 'Close') }],
+			label: editorInputLabel(editor.input),
+			description: localize(
+				"workbench.editorGroupNumber",
+				"Group {0}",
+				this.editorPart.groups.findIndex(group => group.id === editor.groupId) + 1,
+			),
+			detail: editor.input.resource.toString(),
+		})), filter);
+	}
+
 }
 
 function editorInputLabel(input: EditorIdentifier["input"]): string {

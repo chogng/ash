@@ -1,6 +1,7 @@
+import { BrowserAuxiliaryWindowService, IAuxiliaryWindowService } from '../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { IMessageHistoryService } from '../../../platform/messageHistory/common/messageHistory.js';
 import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
-import { WorkbenchQuickInputService } from '../../services/quickinput/browser/quickInputService.js';
+import { TestQuickInputService } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
 import '../../contrib/chat/browser/chat.shared.contribution.js';
 import { WorkbenchConfigurationService } from '../../services/configuration/browser/configurationService.js';
 import type { ITextResourceStore } from '../../services/textmodelResolver/common/textResourceStore.js';
@@ -117,6 +118,7 @@ export function registerTestComponentServices(services: InstantiationService, do
 	if (!services.has(IStorageService)) {
 		services.registerSingleton(IStorageService, () => new BrowserStorageService({ ownerWindow: document.defaultView!, workspaceId: 'test-components', backend: new TestStorageBackend(), flushInterval: 0 }));
 	}
+	if (!services.has(IAuxiliaryWindowService)) services.registerSingleton(IAuxiliaryWindowService, () => services.createInstance(BrowserAuxiliaryWindowService, document.defaultView!, document.body));
 	return services;
 }
 
@@ -164,7 +166,7 @@ export function createTestEditorServices(configuration?: IConfigurationService, 
 	if (!services.has(IFilesConfigurationService)) services.registerSingleton(IFilesConfigurationService, () => services.createInstance(FilesConfigurationService));
 	if (!services.has(IResourceIconRenderer)) services.registerInstance(IResourceIconRenderer, { onDidChangeResourceIcons: Event.None, getFileIconTheme: () => noFileIconTheme, renderFileIcon() { } });
 	if (!services.has(IMessageHistoryService)) services.registerInstance(IMessageHistoryService, undefined);
-	if (!services.has(IQuickInputService)) services.registerSingleton(IQuickInputService, () => new WorkbenchQuickInputService({ container: document.body, contextKeyService: services.get(IContextKeyService) }));
+	if (!services.has(IQuickInputService)) services.registerSingleton(IQuickInputService, () => new TestQuickInputService({ instantiationService: services, container: document.body, contextKeyService: services.get(IContextKeyService) }));
 	if (!services.has(IRendererHostService)) services.registerInstance(IRendererHostService, createDisconnectedRendererApi());
 	if (!services.has(IPathService)) services.registerSingleton(IPathService, () => services.createInstance(BrowserPathService));
 	if (!services.has(ILabelService)) services.registerSingleton(ILabelService, () => services.createInstance(LabelService));

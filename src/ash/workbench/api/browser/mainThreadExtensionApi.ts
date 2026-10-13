@@ -306,7 +306,11 @@ export class MainThreadExtensionApi extends Disposable {
 		return new Promise<ExtensionClientResult>((resolve, reject) => {
 			const finish = (index: number | null): void => resolve({ result: 'selection', index });
 			const cancel = (): void => { reject(new CancellationError()); pick.hide(); };
-			listeners.add(pick.onDidAccept(item => { finish(item.index); pick.hide(); }));
+			listeners.add(pick.onDidAccept(() => {
+				const item = pick.selectedItems[0];
+				if (!item) return;
+				finish(item.index); pick.hide();
+			}));
 			listeners.add(pick.onDidHide(() => finish(null)));
 			signal.addEventListener('abort', cancel, { once: true });
 			listeners.add(toDisposable(() => signal.removeEventListener('abort', cancel)));

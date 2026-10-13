@@ -46,13 +46,11 @@ import { FileKind, IFileService } from '../../../src/ash/platform/files/common/f
 import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
 import { IEditorGroupsService } from '../../../src/ash/workbench/services/editor/common/editorGroupsService.js';
 import { IWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/common/workingCopyService.js';
-import { QuickAccessController } from '../../../src/ash/platform/quickinput/browser/quickAccess.js';
-import { IQuickAccessController } from '../../../src/ash/platform/quickinput/common/quickAccess.js';
 import { IHistoryService } from '../../../src/ash/workbench/services/history/common/history.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import '../../../src/ash/workbench/contrib/quickaccess/browser/quickAccess.contribution.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
-import { QuickInputController } from '../../../src/ash/platform/quickinput/browser/quickInputController.js';
+import { TestQuickInputService } from '../../../src/ash/platform/quickinput/test/browser/testQuickInputService.js';
 import { IChatContextPickService } from '../../../src/ash/workbench/services/chat/common/chatContextService.js';
 import { ChatContextPickService } from '../../../src/ash/workbench/services/chat/browser/chatContextPickService.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
@@ -323,9 +321,8 @@ services.registerSingleton(ISpeechService, () => services.createInstance(SpeechS
 registerTestDictationOnboarding(services);
 const notifications = resources.add(new NotificationService());
 services.registerInstance(INotificationService, notifications);
-const quickInput = resources.add(new QuickInputController(document.body));
+const quickInput = resources.add(new TestQuickInputService({ instantiationService: services, container: document.body }));
 services.registerInstance(IQuickInputService, quickInput);
-services.registerInstance(IQuickAccessController, resources.add(services.createInstance(QuickAccessController)));
 services.registerInstance(IHistoryService, { getHistory: () => [{ resource: URI.file('/workspace/closed.ts') }], goBack: async () => { }, goForward: async () => { }, reopenLastClosedEditor: async () => { } } satisfies IHistoryService);
 const openedEditors = document.createElement('output');
 openedEditors.setAttribute('aria-label', 'Opened editor count');

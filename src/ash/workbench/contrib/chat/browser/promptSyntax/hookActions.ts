@@ -73,7 +73,11 @@ export async function showConfigureHooksQuickPick(accessor: ServicesAccessor, op
 	let cancelled = false;
 	let opening = false;
 	let accept: (item: IQuickPickItem | undefined) => void = () => { };
-	lifetime.add(picker.onDidAccept(item => accept(item)));
+	lifetime.add(picker.onDidAccept(() => {
+		const item = picker.selectedItems[0];
+		if (!item) return;
+		return accept(item);
+	}));
 	const dismissed = new Promise<undefined>(resolve => {
 		lifetime.add(picker.onDidHide(() => { cancelled = true; accept(undefined); resolve(undefined); }));
 	});

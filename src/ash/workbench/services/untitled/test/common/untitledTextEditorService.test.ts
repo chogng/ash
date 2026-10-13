@@ -1,3 +1,5 @@
+import { quickInputServiceTestControls } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
+import { QuickInputType, type IQuickPickDidAcceptEvent } from '../../../../../platform/quickinput/common/quickInput.js';
 import { Event as QuickPickTestEvent } from '../../../../../base/common/event.js';
 import type { ITextResourceStore } from '../../../textmodelResolver/common/textResourceStore.js';
 import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
@@ -308,6 +310,16 @@ function createModels(): BrowserTextModelService {
 }
 
 class TestQuickInputService implements IQuickInputServiceContract {
+	readonly quickAccess = quickInputServiceTestControls.quickAccess;
+	readonly onShow = quickInputServiceTestControls.onShow;
+	readonly onHide = quickInputServiceTestControls.onHide;
+	readonly currentQuickInput = undefined;
+	focus = quickInputServiceTestControls.focus;
+	toggle = quickInputServiceTestControls.toggle;
+	navigate = quickInputServiceTestControls.navigate;
+	accept = quickInputServiceTestControls.accept;
+	cancel = quickInputServiceTestControls.cancel;
+
 	picker: TestQuickPick<IQuickPickItem> | undefined;
 	async input(): Promise<string | undefined> { return undefined; }
 
@@ -319,10 +331,16 @@ class TestQuickInputService implements IQuickInputServiceContract {
 }
 
 class TestQuickPick<TItem extends IQuickPickItem> implements IQuickPick<TItem> {
+	readonly type = QuickInputType.QuickPick;
+	activeItems: readonly TItem[] = [];
+	focus(): void { }
+	toggle(): void { }
+	accept(inBackground = false): void { this.selectedItems = this.activeItems; this.acceptEmitter.fire({ inBackground }); }
+
 	canSelectMany = false;
 	selectedItems: readonly TItem[] = [];
 	readonly onDidChangeSelection = QuickPickTestEvent.None;
-	private readonly acceptEmitter = new Emitter<TItem>();
+	private readonly acceptEmitter = new Emitter<IQuickPickDidAcceptEvent>();
 	private readonly valueEmitter = new Emitter<string>();
 	private readonly hideEmitter = new Emitter<void>();
 
@@ -341,7 +359,7 @@ class TestQuickPick<TItem extends IQuickPickItem> implements IQuickPick<TItem> {
 
 	acceptFirst(): void {
 		const item = this.items[0];
-		if (item) this.acceptEmitter.fire(item);
+		if (item) { this.selectedItems = [item]; this.acceptEmitter.fire({ inBackground: false }); }
 	}
 
 	show(): void { }

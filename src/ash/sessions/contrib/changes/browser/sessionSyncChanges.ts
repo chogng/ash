@@ -116,7 +116,11 @@ export class SessionSyncChangesActionViewItem extends Disposable {
 		return new Promise(resolve => {
 			let result: LocalRepository | undefined;
 			this.picker.add(toDisposable(() => resolve(result)));
-			this.picker.add(picker.onDidAccept(item => { result = item.repository; picker.hide(); }));
+			this.picker.add(picker.onDidAccept(() => {
+				const item = picker.selectedItems[0];
+				if (!item) return;
+				result = item.repository; picker.hide();
+			}));
 			this.picker.add(picker.onDidHide(() => this.picker.clear()));
 			picker.show();
 		});

@@ -98,7 +98,11 @@ function runTaskCommand(accessor: ServicesAccessor, group?: 'build' | 'test'): v
 		// An open picker follows catalog changes without turning a refresh into execution.
 		disposables.add(tasks.onDidChangeTasks(updateItems));
 		updateItems(tasks.tasks);
-		disposables.add(picker.onDidAccept(item => { picker.hide(); void run(item.task).catch(error => reportTaskError(notifications, error)); }));
+		disposables.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
+			picker.hide(); void run(item.task).catch(error => reportTaskError(notifications, error));
+		}));
 		disposables.add(picker.onDidHide(() => disposables.dispose()));
 		picker.show();
 	}).catch(error => reportTaskError(notifications, error));
@@ -136,7 +140,11 @@ registerAction2(class TerminateTaskAction extends Action2 {
 		disposables.add(picker);
 		picker.placeholder = "Select a running task to terminate";
 		picker.items = tasks.activeRuns.map(run => ({ run, label: run.task.label, description: run.task.source, detail: run.task.command }));
-		disposables.add(picker.onDidAccept(item => { picker.hide(); void tasks.terminate(item.run).catch(error => reportTaskError(notifications, error)); }));
+		disposables.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
+			picker.hide(); void tasks.terminate(item.run).catch(error => reportTaskError(notifications, error));
+		}));
 		disposables.add(picker.onDidHide(() => disposables.dispose()));
 		picker.show();
 	}

@@ -30,7 +30,7 @@ import { IStatusbarService, StatusbarService } from '../../services/statusbar/br
 import { ContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
-import { WorkbenchQuickInputService } from '../../services/quickinput/browser/quickInputService.js';
+import { TestQuickInputService } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { NotificationService } from '../../services/notification/common/notificationService.js';
 import { ViewsService } from '../../services/views/browser/viewsService.js';
 import { IViewsService } from '../../services/views/common/viewsService.js';
@@ -100,6 +100,6 @@ export function registerTestWorkbenchInteractionServices(owner: DisposableStore,
 
 	const window = new JSDOM('', { url: 'https://ash.test' });
 	owner.add(toDisposable(() => window.window.close()));
-	services.registerInstance(IQuickInputService, owner.add(new WorkbenchQuickInputService({ container: window.window.document.body, contextKeyService: owner.add(new ContextKeyService()) })));
+	services.registerInstance(IQuickInputService, owner.add(new TestQuickInputService({ container: window.window.document.body, contextKeyService: owner.add(new ContextKeyService()) })));
 	services.registerInstance(INotificationService, owner.add(new NotificationService()));
 }

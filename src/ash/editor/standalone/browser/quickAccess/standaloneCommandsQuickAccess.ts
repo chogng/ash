@@ -69,9 +69,13 @@ export class GotoLineAction extends EditorAction {
 		};
 		resources.add(keybindings.onDidUpdateKeybindings(updateMode));
 		resources.add(picker.onDidChangeValue(updateMode));
-		resources.add(picker.onDidAccept(item => {
+		resources.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
+
 			picker.hide();
 			void item.action.run().catch(error => notifications.error(String(error)));
+
 		}));
 		resources.add(picker.onDidHide(() => resources.dispose()));
 		updateMode();

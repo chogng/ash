@@ -1,3 +1,5 @@
+import { quickInputServiceTestControls } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
+import { QuickInputType, type IQuickPickDidAcceptEvent } from '../../../../../platform/quickinput/common/quickInput.js';
 import { Event as QuickPickTestEvent } from '../../../../../base/common/event.js';
 import { createTestLocaleService } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import assert from 'node:assert/strict';
@@ -34,7 +36,7 @@ test('display language commands select an installed catalog and clear the prefer
 		const picker = environment.quickInput.picker!;
 		assert.equal(picker.ariaLabel, 'Select Display Language');
 		const changed = nextPreferenceChange(environment.configuration);
-		picker.accept(picker.items.find(item => item.label === '简体中文')!);
+		picker.chooseItem(picker.items.find(item => item.label === '简体中文')!);
 		await changed;
 		assert.equal(environment.configuration.getValue(LocalizationConfiguration.locale), 'zh-CN');
 		assert.equal(environment.localization.translate('ash.settings', 'displayLanguage.title', 'Display Language'), 'Display Language');
@@ -58,7 +60,7 @@ test('display language command installs a Extensions catalog before selecting it
 		picker.setQuery('French');
 		const packageItem = await picker.waitForItem('French pack');
 		const changed = nextPreferenceChange(environment.configuration);
-		picker.accept(packageItem);
+		picker.chooseItem(packageItem);
 		await changed;
 		assert.deepEqual(environment.installs, [['fr-pack', '1']]);
 		assert.deepEqual(environment.searches, [['French', { packageType: 'localization', limit: 30 }]]);
@@ -175,6 +177,16 @@ class TestLanguagePacks extends Disposable implements ILanguagePackService {
 }
 
 class TestQuickInputService implements IQuickInputService {
+	readonly quickAccess = quickInputServiceTestControls.quickAccess;
+	readonly onShow = quickInputServiceTestControls.onShow;
+	readonly onHide = quickInputServiceTestControls.onHide;
+	readonly currentQuickInput = undefined;
+	focus = quickInputServiceTestControls.focus;
+	toggle = quickInputServiceTestControls.toggle;
+	navigate = quickInputServiceTestControls.navigate;
+	accept = quickInputServiceTestControls.accept;
+	cancel = quickInputServiceTestControls.cancel;
+
 	public picker: TestQuickPick<IQuickPickItem> | undefined;
 
 	public createQuickPick<TItem extends IQuickPickItem>(): IQuickPick<TItem> {
@@ -189,11 +201,17 @@ class TestQuickInputService implements IQuickInputService {
 }
 
 class TestQuickPick<TItem extends IQuickPickItem> extends Disposable implements IQuickPick<TItem> {
+	readonly type = QuickInputType.QuickPick;
+	activeItems: readonly TItem[] = [];
+	focus(): void { }
+	toggle(): void { }
+	accept(inBackground = false): void { this.selectedItems = this.activeItems; this.accepted.fire({ inBackground }); }
+
 	canSelectMany = false;
 	selectedItems: readonly TItem[] = [];
 	readonly onDidChangeSelection = QuickPickTestEvent.None;
 	sortByLabel = true;
-	private readonly accepted = this._register(new Emitter<TItem>());
+	private readonly accepted = this._register(new Emitter<IQuickPickDidAcceptEvent>());
 	private readonly changed = this._register(new Emitter<string>());
 	private readonly hidden = this._register(new Emitter<void>());
 	private readonly itemsChanged = this._register(new Emitter<void>());
@@ -235,8 +253,8 @@ class TestQuickPick<TItem extends IQuickPickItem> extends Disposable implements 
 		});
 	}
 
-	public accept(item: TItem): void {
-		this.accepted.fire(item);
+	public chooseItem(item: TItem): void {
+		this.selectedItems = [item]; this.accepted.fire({ inBackground: false });
 	}
 
 	public setQuery(value: string): void {

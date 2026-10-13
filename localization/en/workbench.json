@@ -552,7 +552,20 @@
     "themeEditor.verbosityTitle": "Theme Editor accessibility help",
     "themeEditor.verbosityDescription": "Announce how to open accessibility help when Theme Editor receives focus.",
     "themeEditor.help": "Theme Editor runs in an auxiliary window while the main window previews your theme. Use Tab and Shift+Tab to move between search, category, color controls and JSON. Enter on a color name locates its JSON value. Edit a hex color, or open the color picker from its swatch with Enter or Space. In the picker, Left and Right adjust saturation, Up and Down adjust brightness, and Shift increases the step. Tab moves through hue, opacity, format and color values. Enter confirms a color value. <keybinding:editor.action.accessibleView> reads the current color. Escape or Close dismisses the picker and returns to the swatch; edits remain in the shared JSON. You can also use arrow keys on the row opacity slider. Reset removes the file override and restores inherited colors. The color panel and JSON share undo and redo. Invalid JSON retains the last valid preview. Live preview toggles temporary colors without saving. Save writes the current theme; Save as creates a user theme copy. Use <keybinding:workbench.action.files.save> to save. Close this editor or turn off Live preview to restore the configured theme. Press Escape to close this help and return to the previous control.",
-    "themeEditor.cancel": "Cancel"
+    "themeEditor.cancel": "Cancel",
+    "auxiliaryWindow.editor": "Editor",
+    "auxiliaryWindow.unsavedChanges": "The auxiliary editor window contains unsaved changes.",
+    "quickInput.searchModes": "Search modes",
+    "quickAccess.filesTab": "Files",
+    "github.quickAccess.loadMore": "Load more results",
+    "github.quickAccess.chooseRepository": "Open GitHub to sign in or choose a repository",
+    "github.quickAccess.signIn": "Sign in to GitHub to search issues and pull requests",
+    "github.quickAccess.failed": "GitHub search failed. Open GitHub to reconnect or retry.",
+    "github.quickAccess.openFailed": "Could not open the GitHub result: {0}",
+    "github.quickAccess.issuePlaceholder": "Search open GitHub issues by title or number",
+    "github.quickAccess.prPlaceholder": "Search open GitHub pull requests by title or number",
+    "github.quickAccess.issuesTab": "Issues",
+    "github.quickAccess.prTab": "PR"
   },
   "ash.views": {
     "explorer": "Explorer",

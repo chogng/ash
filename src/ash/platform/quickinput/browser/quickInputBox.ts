@@ -8,11 +8,9 @@ import type { IInputOptions } from '../common/quickInput.js';
 /** Owns the input field used by a Quick Input prompt. */
 export class QuickInputBox extends Disposable {
 	public readonly onDidAccept: Event<string>;
-	public readonly onDidCancel: Event<void>;
 	public readonly onDidError: Event<unknown>;
 	private readonly inputBox: InputBox;
 	private readonly acceptEmitter = this._register(new Emitter<string>());
-	private readonly cancelEmitter = this._register(new Emitter<void>());
 	private readonly errorEmitter = this._register(new Emitter<unknown>());
 	private validating = false;
 
@@ -27,23 +25,13 @@ export class QuickInputBox extends Disposable {
 		if (options.value !== undefined) this.inputBox.value = options.value;
 		if (options.validationMessage) this.inputBox.showValidation(options.validationMessage);
 		this.onDidAccept = this.acceptEmitter.event;
-		this.onDidCancel = this.cancelEmitter.event;
 		this.onDidError = this.errorEmitter.event;
 		this._register(this.inputBox.onDidChange(() => this.inputBox.showValidation('')));
 		this._register(this.inputBox.onKeyDown(event => {
-			if (event.key === 'Escape') {
-				stopEvent(event);
-				this.cancelEmitter.fire();
-				return;
-			}
 			if (event.key === 'Tab') {
 				stopEvent(event);
 				this.focus();
 				return;
-			}
-			if (event.key === 'Enter') {
-				stopEvent(event);
-				void this.accept();
 			}
 		}));
 		this._register(toDisposable(() => this.clear()));
@@ -57,7 +45,7 @@ export class QuickInputBox extends Disposable {
 		this.inputBox.value = '';
 	}
 
-	private async accept(): Promise<void> {
+	public async accept(): Promise<void> {
 		if (this.validating) {
 			return;
 		}

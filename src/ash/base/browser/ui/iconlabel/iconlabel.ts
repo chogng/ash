@@ -1,3 +1,4 @@
+import './iconlabel.css';
 import type { HoverContent } from '../hover/hover.js';
 import { getHoverDelegate, type IManagedHover } from '../hover/hoverDelegate.js';
 import { appendIcon } from '../lxicons/lxicon.js';

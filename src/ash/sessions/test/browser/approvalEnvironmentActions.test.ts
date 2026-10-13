@@ -1,3 +1,5 @@
+import { quickInputServiceTestControls } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
+import { QuickInputType, type IQuickPickDidAcceptEvent } from '../../../platform/quickinput/common/quickInput.js';
 import { Event as QuickPickTestEvent } from '../../../base/common/event.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -37,10 +39,16 @@ test('permission command uses stable IDs and keeps bypass confirmation on the re
 });
 
 class Picker<T extends IQuickPickItem> extends Disposable implements IQuickPick<T> {
+	readonly type = QuickInputType.QuickPick;
+	activeItems: readonly T[] = [];
+	focus(): void { }
+	toggle(): void { }
+	accept(inBackground = false): void { this.selectedItems = this.activeItems; this.accepted.fire({ inBackground }); }
+
 	canSelectMany = false;
 	selectedItems: readonly T[] = [];
 	readonly onDidChangeSelection = QuickPickTestEvent.None;
-	private readonly accepted = this._register(new Emitter<T>());
+	private readonly accepted = this._register(new Emitter<IQuickPickDidAcceptEvent>());
 	private readonly hidden = this._register(new Emitter<void>());
 	readonly onDidAccept = this.accepted.event;
 	readonly onDidHide = this.hidden.event;
@@ -57,7 +65,7 @@ class Picker<T extends IQuickPickItem> extends Disposable implements IQuickPick<
 	constructor(private readonly select: (picker: Picker<T>) => void) { super(); }
 	show(): void { queueMicrotask(() => this.select(this)); }
 	hide(): void { this.hidden.fire(); }
-	choose(label: string): void { const item = this.items.find(item => item.label === label); assert.ok(item, `Missing choice: ${label}`); this.accepted.fire(item); }
+	choose(label: string): void { const item = this.items.find(item => item.label === label); assert.ok(item, `Missing choice: ${label}`); this.selectedItems = [item]; this.accepted.fire({ inBackground: false }); }
 }
 
 test('Chinese environment preparation keeps scan scope explicit and saves only reviewed entries for its composer', async () => {
@@ -68,6 +76,8 @@ test('Chinese environment preparation keeps scan scope explicit and saves only r
 	const seen: string[] = [];
 	const sourceDetails: string[] = [];
 	const input: QuickInput = {
+		...quickInputServiceTestControls,
+
 		createQuickPick: <T extends IQuickPickItem>(): IQuickPick<T> => new Picker<T>(picker => {
 			seen.push(picker.ariaLabel);
 			const source = picker.items.find(item => item.label === 'curl')?.detail;
@@ -125,6 +135,8 @@ test('closing a running environment scan calls the backend cancellation API and 
 	using commands = new CommandService(services);
 	// After cancellation the next environment picker closes, leaving the existing profile untouched.
 	services.registerInstance(IQuickInputService, {
+		...quickInputServiceTestControls,
+
 		createQuickPick: <T extends IQuickPickItem>(): IQuickPick<T> => new Picker<T>(picker => {
 			if (picker.ariaLabel === 'Preparing review environment' || choices.length === 0) { picker.hide(); }
 			else { picker.choose(choices.shift()!); }
@@ -151,6 +163,8 @@ test('rescanning replaces untouched observations while retaining explicit edits 
 		services.registerInstance(ISessionsManagementService, { untitledSessions: [{ untitledSessionId: 'chosen', workspace: { type: 'local', root: '/chosen' } }] } as unknown as ISessionsManagementService);
 		services.registerInstance(INotificationService, { info() { }, error: (error: unknown) => { throw error; } } as unknown as INotificationService);
 		services.registerInstance(IQuickInputService, {
+			...quickInputServiceTestControls,
+
 			createQuickPick: <T extends IQuickPickItem>(): IQuickPick<T> => new Picker<T>(picker => { if (picker.ariaLabel !== 'Preparing review environment') { picker.choose(choices.shift()!); } }),
 			input: async () => 'pnpm build with pinned Node',
 		} satisfies QuickInput);

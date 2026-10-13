@@ -10,12 +10,12 @@ import { extUri } from '../../../../../base/common/resources.js';
 import { localize } from '../../../../../nls.js';
 import { FileKind } from '../../../../../platform/files/common/files.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { IChatContextPickService, type IChatContextTarget } from '../../../../services/chat/common/chatContextService.js';
 import { IEditorGroupsService } from '../../../../services/editor/common/editorGroupsService.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
-import { IQuickAccessController, type AnythingQuickAccessProviderRunOptions } from '../../../../../platform/quickinput/common/quickAccess.js';
+import { type AnythingQuickAccessProviderRunOptions } from '../../../../../platform/quickinput/common/quickAccess.js';
 import { FilesAndFoldersPickerPick, SymbolsContextPickerPick, SearchViewResultChatContextPick } from '../../../search/browser/searchChatContext.js';
 import type { IAnythingQuickPickItem } from '../../../search/browser/anythingQuickAccess.js';
 import { ClipboardImageContextValuePick, GitHubContextValuePick, ScreenshotContextValuePick, SessionReferenceContextPickerPick, TerminalContext, ToolsContextPickerPick, type ChatContextSource } from './chatContext.js';
@@ -45,7 +45,6 @@ export class AttachContextAction extends Disposable {
 		private readonly host: AttachContextHost,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@IChatContextPickService private readonly contextPicks: IChatContextPickService,
-		@IQuickAccessController private readonly quickAccess: IQuickAccessController,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IEditorGroupsService private readonly editors: IEditorGroupsService,
@@ -67,16 +66,19 @@ export class AttachContextAction extends Disposable {
 		// Child sources borrow the window's picker owner with this composer's placement.
 		// Keeping the scope in DI covers multi-step sources without changing their attachment logic.
 		const quickInput = this.quickInput;
-		const scopedQuickInput: IQuickInputService = {
-			get currentQuickInput() { return quickInput.currentQuickInput; },
-			createQuickPick: <T extends IQuickPickItem>() => {
-				const picker = quickInput.createQuickPick<T>();
-				picker.anchor = anchor;
-				picker.anchorPosition = 'above';
-				return picker;
-			},
-			input: (options, token) => quickInput.input(options, token),
+		const createQuickPick = <T extends IQuickPickItem>(): IQuickPick<T> => {
+			const picker = quickInput.createQuickPick<T>();
+			picker.anchor = anchor;
+			picker.anchorPosition = 'above';
+			return picker;
 		};
+		const scopedQuickInput = new Proxy(quickInput, {
+			get: (owner, key) => {
+				if (key === 'createQuickPick') return createQuickPick;
+				const value = Reflect.get(owner, key, owner);
+				return typeof value === 'function' ? value.bind(owner) : value;
+			},
+		});
 		const instantiation = this.pickers.add(this.instantiation.createChild(new ServiceCollection([IQuickInputService, scopedQuickInput])));
 		const addContext = (attachment: Parameters<IChatContextTarget['addContext']>[0]): void => {
 			this.host.target.addContext(attachment);
@@ -137,7 +139,7 @@ export class AttachContextAction extends Disposable {
 					additionPicks: additions,
 					handleAccept: (item, background) => { void accept(item, background); },
 				};
-				this.quickAccess.show('', {
+				this.quickInput.quickAccess.show('', {
 					anchor,
 					anchorPosition: 'above',
 					placeholder: folders ? localize('chat.context.searchFilesAndFolders', 'Search file or folder by name') : localize('chat.context.searchAttachments', 'Search attachments'),

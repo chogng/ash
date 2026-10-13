@@ -1,5 +1,6 @@
 import {
 	Disposable,
+	DisposableMap,
 	DisposableStore,
 	type IDisposable,
 	toDisposable,
@@ -43,7 +44,7 @@ export class ManagedStyleSheet extends Disposable {
  * window.
  */
 export class GlobalStyleSheet extends Disposable {
-	private readonly styles = new Map<BrowserWindow, ManagedStyleSheet>();
+	private readonly styles = this._register(new DisposableMap<BrowserWindow, ManagedStyleSheet>());
 	private cssText: string;
 
 	constructor(cssText = "") {
@@ -54,28 +55,23 @@ export class GlobalStyleSheet extends Disposable {
 		}
 		this._register(onDidRegisterWindow(({ window }) => this.attach(window)));
 		this._register(onWillUnregisterWindow(({ window }) => this.detach(window)));
-		this._register(toDisposable(() => this.styles.clear()));
 	}
 
 	setText(cssText: string): void {
 		if (cssText === this.cssText) return;
 		this.cssText = cssText;
-		for (const style of this.styles.values()) style.setText(cssText);
+		for (const [, style] of this.styles) style.setText(cssText);
 	}
 
 	private attach(targetWindow: BrowserWindow): void {
 		if (this.styles.has(targetWindow)) return;
-		const style = this._register(
-			new ManagedStyleSheet(targetWindow.document, this.cssText),
-		);
-		this.styles.set(targetWindow, style);
+		// The window map must be the sole owner: a permanent registration would
+		// retain the removed style's document after the auxiliary window closes.
+		this.styles.set(targetWindow, new ManagedStyleSheet(targetWindow.document, this.cssText));
 	}
 
 	private detach(targetWindow: BrowserWindow): void {
-		const style = this.styles.get(targetWindow);
-		if (!style) return;
-		this.styles.delete(targetWindow);
-		style.dispose();
+		this.styles.deleteAndDispose(targetWindow);
 	}
 }
 

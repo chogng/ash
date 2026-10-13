@@ -160,7 +160,11 @@ export class ExternalUriOpenerService extends Disposable implements IExternalUri
 					{ label: localize('externalUriOpener.default', 'Open in default browser'), opener: 'default' },
 					{ label: localize('externalUriOpener.configure', 'Configure default opener...'), opener: 'configure' },
 				];
-				session.add(picker.onDidAccept(item => resolve(item)));
+				session.add(picker.onDidAccept(() => {
+					const item = picker.selectedItems[0];
+					if (!item) return;
+					return resolve(item);
+				}));
 				session.add(picker.onDidHide(() => resolve(undefined)));
 				session.add(picker.onDidBlur(() => resolve(undefined)));
 				session.add(token.onCancellationRequested(() => resolve(undefined)));

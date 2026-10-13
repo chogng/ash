@@ -1,3 +1,4 @@
+import './toggle.css';
 import { Emitter, type Event } from "../../../common/event.js";
 import { Disposable, toDisposable } from "../../../common/lifecycle.js";
 import { addDisposableListener, h, text as createText } from "../../dom.js";

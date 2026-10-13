@@ -32,12 +32,16 @@ QuickAccessRegistry.register({
 	prefix: '',
 	get placeholder() { return localize('quickAccess.searchFiles', 'Search files by name or enter an absolute path or ~/path'); },
 	get helpLabel() { return localize('quickAccess.files', 'Files by name, absolute path or ~/path'); },
+	get tabLabel() { return localize('quickAccess.filesTab', 'Files'); },
+	tabOrder: 1,
 	ctor: AnythingQuickAccessProvider,
 });
 QuickAccessRegistry.register({
 	prefix: '>',
 	get placeholder() { return localize('quickAccess.commandPlaceholder', 'Type the name of a command to run'); },
 	get helpLabel() { return localize('quickAccess.commands', 'Commands'); },
+	get tabLabel() { return localize('quickAccess.commands', 'Commands'); },
+	tabOrder: 0,
 	ctor: CommandsQuickAccessProvider,
 });
 QuickAccessRegistry.register({

@@ -86,7 +86,11 @@ registerAction2(class SelectAndStartDebugAction extends Action2 {
 			selected = await new Promise<DebugConfigurationPick | undefined>((resolve, reject) => {
 				// Hiding the picker revokes discovery, including pending extension callbacks.
 				const cancel = (): void => { controller.abort(); resolve(undefined); };
-				resources.add(picker.onDidAccept(item => { resolve(item); controller.abort(); picker.hide(); }));
+				resources.add(picker.onDidAccept(() => {
+					const item = picker.selectedItems[0];
+					if (!item) return;
+					resolve(item); controller.abort(); picker.hide();
+				}));
 				resources.add(picker.onDidHide(cancel));
 				resources.add(picker.onDidBlur(() => { cancel(); picker.hide(); }));
 				resources.add(workspace.onDidChangeWorkspace(() => { cancel(); picker.hide(); }));

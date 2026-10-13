@@ -258,7 +258,11 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 				disposables.dispose();
 				resolve(item);
 			};
-			disposables.add(picker.onDidAccept(item => finish(item)));
+			disposables.add(picker.onDidAccept(() => {
+				const item = picker.selectedItems[0];
+				if (!item) return;
+				return finish(item);
+			}));
 			disposables.add(picker.onDidTriggerItemButton(({ item, button }) => {
 				if (button.id === 'navigate' && item.kind === 'directory') finish({ kind: 'navigate', resource: item.resource, label: item.label });
 			}));
@@ -283,7 +287,11 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 				disposables.dispose();
 				resolve(filter);
 			};
-			disposables.add(picker.onDidAccept(item => finish(item.filter)));
+			disposables.add(picker.onDidAccept(() => {
+				const item = picker.selectedItems[0];
+				if (!item) return;
+				return finish(item.filter);
+			}));
 			disposables.add(picker.onDidHide(() => finish(undefined)));
 			picker.show();
 		});
@@ -337,7 +345,11 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 				disposables.dispose();
 				resolve(item);
 			};
-			disposables.add(picker.onDidAccept(item => finish(item)));
+			disposables.add(picker.onDidAccept(() => {
+				const item = picker.selectedItems[0];
+				if (!item) return;
+				return finish(item);
+			}));
 			disposables.add(picker.onDidHide(() => finish(undefined)));
 			picker.show();
 		});

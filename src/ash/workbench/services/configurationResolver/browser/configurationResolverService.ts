@@ -386,9 +386,13 @@ class ConfiguredInputResolver {
 			return { label: typeof option === 'string' ? option : option.label ?? value, inputValue: value, picked: value === input.default };
 		}).sort((left, right) => Number(right.picked) - Number(left.picked));
 		return await new Promise(resolve => {
-			listeners.add(picker.onDidAccept(item => {
+			listeners.add(picker.onDidAccept(() => {
+				const item = picker.selectedItems[0];
+				if (!item) return;
+
 				resolve(item.inputValue);
 				picker.hide();
+
 			}));
 			listeners.add(picker.onDidHide(() => resolve(undefined)));
 			listeners.add(token.onCancellationRequested(() => picker.hide()));

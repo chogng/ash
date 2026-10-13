@@ -10,6 +10,7 @@ import { StatusbarPart } from "../statusbar/statusbarPart.js";
 import type { IAuxiliaryTitlebarPart } from "../titlebar/titlebarPart.js";
 import type { IEditorPart } from "./editorPart.js";
 import { EditorStatusContribution } from "./editorStatus.js";
+import { localize } from '../../../../nls.js';
 
 export interface AuxiliaryEditorPartCreation {
 	readonly part: IEditorPart;
@@ -28,32 +29,37 @@ export class AuxiliaryEditorPart extends Disposable {
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super();
-		// The window service owns registry lifetime; this part only requests close.
-		this._register(toDisposable(() => window[Symbol.dispose]()));
-		const resources = this._register(new DisposableStore());
-		for (const resource of creation.resources ?? []) resources.add(resource);
-		this._register(creation.part);
-		// The title service owns the part; closing this window releases its registration.
-		this._register(toDisposable(() => creation.titlebar.dispose()));
-		creation.titlebar.updateOptions({ compact: false });
-		this._register(creation.titlebar.onDidChange!(() => window.layout()));
-		const statusbarService = this._register(new StatusbarService());
-		const statusbarPart = this._register(instantiationService.createInstance(StatusbarPart, window.container, statusbarService));
-		const statusServices = this._register(instantiationService.createChild());
-		statusServices.registerInstance(IAccessibilityService, accessibility);
-		this._register(statusServices.createInstance(EditorStatusContribution, creation.part, statusbarService));
-		this._register(window.onBeforeUnload(event => {
-			if (creation.part.getEditorState().groups.some(group => group.editors.some(editor => editor.isDirty))) {
-				event.veto("The auxiliary editor window contains unsaved changes.");
-			}
-		}));
-		this._register(window.onDidLayout(dimension => {
-			creation.part.layout(new Dimension(
-				dimension.width,
-				Math.max(0, dimension.height - StatusbarHeight - creation.titlebar.height),
-			));
-			statusbarPart.layout(new Dimension(dimension.width, StatusbarHeight));
-		}));
-		window.layout();
+		try {
+			// The window service owns registry lifetime; this part only requests close.
+			this._register(toDisposable(() => window[Symbol.dispose]()));
+			const resources = this._register(new DisposableStore());
+			for (const resource of creation.resources ?? []) resources.add(resource);
+			this._register(creation.part);
+			// The title service owns the part; closing this window releases its registration.
+			this._register(toDisposable(() => creation.titlebar.dispose()));
+			creation.titlebar.updateOptions({ compact: false });
+			this._register(creation.titlebar.onDidChange!(() => window.layout()));
+			const statusbarService = this._register(new StatusbarService());
+			const statusbarPart = this._register(instantiationService.createInstance(StatusbarPart, window.container, statusbarService));
+			const statusServices = this._register(instantiationService.createChild());
+			statusServices.registerInstance(IAccessibilityService, accessibility);
+			this._register(statusServices.createInstance(EditorStatusContribution, creation.part, statusbarService));
+			this._register(window.onBeforeUnload(event => {
+				if (creation.part.getEditorState().groups.some(group => group.editors.some(editor => editor.isDirty))) {
+					event.veto(localize({ bundle: 'ash', key: 'auxiliaryWindow.unsavedChanges' }, 'The auxiliary editor window contains unsaved changes.'));
+				}
+			}));
+			this._register(window.onDidLayout(dimension => {
+				creation.part.layout(new Dimension(
+					dimension.width,
+					Math.max(0, dimension.height - StatusbarHeight - creation.titlebar.height),
+				));
+				statusbarPart.layout(new Dimension(dimension.width, StatusbarHeight));
+			}));
+			window.layout();
+		} catch (error) {
+			this.dispose();
+			throw error;
+		}
 	}
 }

@@ -1,3 +1,4 @@
+import './list.css';
 import { addDisposableListener, getWindow, isHTMLElement, stopEvent } from "../../dom.js";
 import { equals } from "../../../common/arrays.js";
 import { Emitter, type Event } from "../../../common/event.js";

@@ -27,7 +27,11 @@ async function selectReviewSession(accessor: ServicesAccessor): Promise<IChatEdi
 	};
 	store.add(editing.onDidChange(refresh));
 	return new Promise(resolve => {
-		store.add(picker.onDidAccept(item => { resolve(item.session); picker.hide(); }));
+		store.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
+			resolve(item.session); picker.hide();
+		}));
 		store.add(picker.onDidHide(() => { resolve(undefined); store.dispose(); }));
 		refresh();
 		picker.show();
@@ -81,7 +85,11 @@ registerAction2(class ReviewChangesAction extends Action2 {
 			}
 			void (button.id === 'accept' ? editing.acceptEntry(item.entry) : editing.rejectEntry(item.entry)).then(() => status(localize('chatEditing.reviewed', 'Changes reviewed.')), error => notifications.error(localize('chatEditing.failed', 'Could not review changes: {0}', String(error))));
 		}));
-		store.add(picker.onDidAccept(item => { picker.hide(); void codeEditors.openCodeEditor({ resource: item.entry.modifiedURI }, null); }));
+		store.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
+			picker.hide(); void codeEditors.openCodeEditor({ resource: item.entry.modifiedURI }, null);
+		}));
 		store.add(session.onDidDispose(() => picker.hide()));
 		store.add(picker.onDidHide(() => store.dispose()));
 		picker.show();

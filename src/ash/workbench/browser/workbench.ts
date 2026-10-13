@@ -312,8 +312,6 @@ import { BrowserContextViewService } from "../../platform/contextview/browser/co
 import { HoverService, IHoverService } from "../../platform/hover/browser/hoverService.js";
 import { IKeybindingService } from "../../platform/keybinding/common/keybinding.js";
 import { IUserKeyboardLayoutService, UnavailableUserKeyboardLayoutService } from "../../platform/keyboardLayout/common/userKeyboardLayout.js";
-import { IQuickAccessController } from "../../platform/quickinput/common/quickAccess.js";
-import { QuickAccessController } from "../../platform/quickinput/browser/quickAccess.js";
 import { IOpenerService } from "../../platform/opener/common/opener.js";
 import { OpenerService } from '../../editor/browser/services/openerService.js';
 import { IURLService } from '../../platform/url/common/url.js';
@@ -323,7 +321,7 @@ import { WorkbenchKeybindingService } from "../services/keybinding/browser/keybi
 import { IKeyboardShortcutTroubleshootingService } from "../services/keybinding/common/keyboardShortcutTroubleshooting.js";
 import { IPreferencesService } from "../services/preferences/common/preferences.js";
 import { PreferencesService } from "../services/preferences/browser/preferencesService.js";
-import { WorkbenchQuickInputService } from "../services/quickinput/browser/quickInputService.js";
+import "../services/quickinput/browser/quickInputService.js";
 import { ChatContextPickService } from "../services/chat/browser/chatContextPickService.js";
 import { IChatContextPickService } from "../services/chat/common/chatContextService.js";
 import type { IUserKeyboardLayoutApi } from "../../platform/keyboardLayout/common/userKeyboardLayout.js";
@@ -338,7 +336,11 @@ export interface IStartWorkbenchOptions {
 	readonly environmentService: IWorkbenchEnvironmentService;
 	readonly defaultLayout?: WorkbenchDefaultLayout;
 	readonly api: IRendererHost;
+	/** Optional host-owned execution boundary; declarative extension assets remain available. */
+	readonly extensionHost?: IExtensionHostApi;
 	readonly browserFileSystemProvider?: HTMLFileSystemProvider;
+	/** Ephemeral hosts may supply workspace storage without OS file access. */
+	readonly workspaceFileSystemProvider?: IFileSystemProvider & IDisposable;
 	readonly webWorkspaceClient?: IWebWorkspaceClient;
 	readonly browserViewService?: IBrowserViewService;
 	readonly container: HTMLElement;
@@ -372,7 +374,9 @@ export async function startWorkbench({
 	environmentService,
 	defaultLayout,
 	api,
+	extensionHost,
 	browserFileSystemProvider,
+	workspaceFileSystemProvider,
 	webWorkspaceClient,
 	container,
 	workspace,
@@ -411,6 +415,7 @@ export async function startWorkbench({
 			productName,
 			defaultLayout,
 			api,
+			extensionHost,
 			container,
 			workspace,
 			createLifecycleService,
@@ -428,6 +433,7 @@ export async function startWorkbench({
 			createTitlebarPart,
 			browserViewService,
 			browserFileSystemProvider,
+			workspaceFileSystemProvider,
 			webWorkspaceClient,
 			themes,
 			storage,
@@ -477,6 +483,7 @@ export class Workbench extends Disposable {
 		productName: string,
 		defaultLayout: WorkbenchDefaultLayout | undefined,
 		api: IRendererHost,
+		extensionHost: IExtensionHostApi | undefined,
 		workbenchRoot: HTMLElement,
 		workspace: IWorkspace,
 		createLifecycleService: (services: IInstantiationService) => ILifecycleService & IDisposable,
@@ -494,6 +501,7 @@ export class Workbench extends Disposable {
 		createTitlebarPart: TitlebarPartFactory,
 		browserViewService: IBrowserViewService | undefined,
 		browserFileSystemProvider: HTMLFileSystemProvider | undefined,
+		workspaceFileSystemProvider: (IFileSystemProvider & IDisposable) | undefined,
 		webWorkspaceClient: IWebWorkspaceClient | undefined,
 		themes: ExtensionColorThemeService,
 		storageService: IStorageService & IDisposable & { switchWorkspace(workspaceId: string): void | Promise<void>; },
@@ -560,8 +568,9 @@ export class Workbench extends Disposable {
 		services.registerInstance(IHooksService, api.hooks);
 		const commandService = this._register(new CommandService(services));
 		services.registerInstance(ICommandService, commandService);
-		// Browser packages always execute in Workers; server executable packages keep their process host.
-		services.registerInstance(IExtensionHostApi, this._register(services.createInstance(WebWorkerExtensionHost, withEnabledBuiltInExtensions(createBrowserExtensionApi(), enablement), api.extensionHost)));
+		// Hosts can disable executable extensions while keeping declarative assets.
+		// Otherwise browser packages execute in Workers and server packages keep their process host.
+		services.registerInstance(IExtensionHostApi, extensionHost ?? this._register(services.createInstance(WebWorkerExtensionHost, withEnabledBuiltInExtensions(createBrowserExtensionApi(), enablement), api.extensionHost)));
 		services.registerInstance(ITelemetryService, NullTelemetryService);
 		services.registerInstance(ICodebaseSymbolsApi, api.codebaseSymbols);
 		services.registerInstance(ISyntaxApi, api.syntax);
@@ -651,7 +660,8 @@ export class Workbench extends Disposable {
 		this._register(userDataFileSystemProvider);
 		this._register(fileService.registerProvider(Schemas.vscodeUserData, userDataFileSystemProvider));
 		services.registerInstance(IUserDataProfileService, new UserDataProfileService());
-		this._register(fileService.registerProvider(Schemas.file, browserFileSystemProvider ?? workspaceFileService));
+		if (workspaceFileSystemProvider) this._register(workspaceFileSystemProvider);
+		this._register(fileService.registerProvider(Schemas.file, workspaceFileSystemProvider ?? browserFileSystemProvider ?? workspaceFileService));
 		this._register(fileService.registerProvider(Schemas.ashRemote, workspaceFileService));
 		services.registerInstance(IFileService, fileService);
 		services.registerInstance(ISystemFileTransferService, workspaceFileService);
@@ -785,6 +795,15 @@ export class Workbench extends Disposable {
 		const lifecycleService = this.lifecycleService = this._register(createLifecycleService(services));
 		services.registerInstance(ILifecycleService, lifecycleService);
 		services.registerInstance(ILocaleService, this._register(services.createInstance(WorkbenchLocaleService)));
+		if (nativeHostApi && !createHostColorSchemeService) { throw new Error('Desktop Workbench requires its system appearance service'); }
+		const hostColors = this._register(createHostColorSchemeService ? createHostColorSchemeService(services) : new BrowserHostColorSchemeService(this.ownerWindow));
+		services.registerInstance(IHostColorSchemeService, hostColors);
+		const themeService = this._register(services.createInstance(WorkbenchThemeService, workbenchRoot));
+		services.registerInstance(IThemeService, themeService);
+		services.registerInstance(IWorkbenchThemeService, themeService);
+		themeService.initialize();
+		const auxiliaryWindows = this._register(services.createInstance(BrowserAuxiliaryWindowService, ownerWindow, workbenchRoot));
+		services.registerInstance(IAuxiliaryWindowService, auxiliaryWindows);
 		const layoutService = this._register(services.createInstance(WorkbenchLayout, workbenchRoot, {
 			workbenchState,
 			defaultLayout,
@@ -856,13 +875,6 @@ export class Workbench extends Disposable {
 		this._register(logService.registerSink(systemOutputService));
 		const serviceContributionReady: Promise<void>[] = [];
 		services.registerInstance(IAccessibleViewInformationService, this._register(new AccessibleViewInformationService(storage)));
-		if (nativeHostApi && !createHostColorSchemeService) { throw new Error('Desktop Workbench requires its system appearance service'); }
-		const hostColors = this._register(createHostColorSchemeService ? createHostColorSchemeService(services) : new BrowserHostColorSchemeService(this.ownerWindow));
-		services.registerInstance(IHostColorSchemeService, hostColors);
-		const themeService = this._register(services.createInstance(WorkbenchThemeService, workbenchRoot));
-		services.registerInstance(IThemeService, themeService);
-		services.registerInstance(IWorkbenchThemeService, themeService);
-		themeService.initialize();
 		let textMateThemeRevision = 0;
 		const updateTextMateTheme = (): void => {
 			const model = textMateService.mutableScopeTheme;
@@ -915,13 +927,6 @@ export class Workbench extends Disposable {
 		services.registerInstance(IMenuService, menus);
 		const contextViews = this._register(new BrowserContextViewService(layoutService.activeContainer, layoutService));
 		services.registerInstance(IContextViewService, contextViews);
-		const quickInputService = this._register(new WorkbenchQuickInputService({
-			container: layoutService.activeContainer,
-			contextKeyService: contextKeys,
-			layoutService,
-		}));
-		services.registerInstance(IQuickInputService, quickInputService);
-		services.registerInstance(IQuickAccessController, this._register(services.createInstance(QuickAccessController)));
 		services.registerInstance(IChatContextPickService, new ChatContextPickService());
 		services.registerSingleton(IPreferencesService, () => services.createInstance(PreferencesService));
 		const contextMenus = this._register(createContextMenuService(services));
@@ -1059,24 +1064,29 @@ export class Workbench extends Disposable {
 				void nativeHostApi.setWindowDimmed(visible).catch(error => console.error('Failed to update window controls', error));
 			}));
 		}
-		const auxiliaryWindows = this._register(services.createInstance(BrowserAuxiliaryWindowService, ownerWindow, workbenchRoot));
-		services.registerInstance(IAuxiliaryWindowService, auxiliaryWindows);
 		const editorParts = this._register(services.createInstance(EditorParts, editor, auxiliaryWindows, (container: HTMLElement) => {
 			const resources = new DisposableStore();
-			const contextKeyService = resources.add(contextKeys.createScoped(container));
-			const part = instantiationService.createInstance(EditorPart, container, {
-				...editorOptions,
-				contextKeyService,
-			});
-			const windowServices = resources.add(services.createChild());
-			windowServices.registerSingleton(IEditorService, () => new BrowserEditorService(part));
-			windowServices.registerInstance(IContextKeyService, contextKeyService);
-			const titlebar = services.get(ITitleService).createAuxiliaryTitlebarPart(container, part, windowServices);
-			return {
-				part,
-				titlebar,
-				resources: [resources],
-			};
+			let part: EditorPart | undefined;
+			try {
+				const contextKeyService = resources.add(contextKeys.createScoped(container));
+				const editorPart = part = instantiationService.createInstance(EditorPart, container, {
+					...editorOptions,
+					contextKeyService,
+				});
+				const windowServices = resources.add(services.createChild());
+				windowServices.registerSingleton(IEditorService, () => new BrowserEditorService(editorPart));
+				windowServices.registerInstance(IContextKeyService, contextKeyService);
+				const titlebar = services.get(ITitleService).createAuxiliaryTitlebarPart(container, editorPart, windowServices);
+				return {
+					part: editorPart,
+					titlebar,
+					resources: [resources],
+				};
+			} catch (error) {
+				part?.dispose();
+				resources.dispose();
+				throw error;
+			}
 		}, accessibilityService, storage));
 		services.registerInstance(IEditorPartsService, editorParts);
 		this._register(new EditorContextKeyController(contextKeys, editorParts, EditorPanes, languageService));

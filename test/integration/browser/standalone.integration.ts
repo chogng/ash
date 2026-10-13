@@ -73,7 +73,7 @@ import { IThemeService } from '../../../src/ash/platform/theme/common/themeServi
 import '../../../src/ash/workbench/contrib/bulkEdit/browser/preview/bulkEdit.css';
 import type { IQuickPickItem } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { CommandsQuickAccessProvider } from '../../../src/ash/workbench/contrib/quickaccess/browser/commandsQuickAccess.js';
-import { WorkbenchQuickInputService } from '../../../src/ash/workbench/services/quickinput/browser/quickInputService.js';
+import { TestQuickInputService } from '../../../src/ash/platform/quickinput/test/browser/testQuickInputService.js';
 import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
 
 interface EditorState {
@@ -3163,7 +3163,7 @@ window.ashStandaloneIntegration = {
 	readScrollGeometryEvents: () => [...scrollGeometryEvents],
 	openScrollGeometryPicker: () => {
 		const commands = StandaloneServices.get(ICommandService);
-		const inputs = scrollGeometryResources.add(new WorkbenchQuickInputService({ container: document.body, contextKeyService: StandaloneServices.get(IContextKeyService) }));
+		const inputs = scrollGeometryResources.add(new TestQuickInputService({ container: document.body, contextKeyService: StandaloneServices.get(IContextKeyService) }));
 		scrollGeometryResources.add(CommandsRegistry.register('test.scrollGeometry.keepPosition', () => { scrollGeometryCommandExecutions += 1; recordScrollGeometry('command'); }));
 		scrollGeometryResources.add(MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command: { id: 'test.scrollGeometry.keepPosition', title: 'Keep editor position' } }));
 		const picker = scrollGeometryResources.add(inputs.createQuickPick<IQuickPickItem>());

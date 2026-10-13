@@ -1,9 +1,9 @@
-import { h } from "../../base/browser/dom.js";
+import { addDisposableListener, getWindow, h } from "../../base/browser/dom.js";
 import { Dimension, getClientArea, type IDimension } from "../../base/browser/dom.js";
 import { SerializableGrid, type SerializedGridDescriptor, type Direction } from "../../base/browser/ui/grid/grid.js";
 import { isAncestorOfActiveElement } from '../../base/browser/focus.js';
 import { Emitter } from "../../base/common/event.js";
-import { MutableDisposable, toDisposable } from "../../base/common/lifecycle.js";
+import { DisposableMap, DisposableStore, MutableDisposable, toDisposable } from "../../base/common/lifecycle.js";
 import { isRecord } from "../../base/common/types.js";
 import { IConfigurationService } from "../../platform/configuration/common/configuration.js";
 import { BrowserLayoutService, type ILayoutOffsetInfo } from "../../platform/layout/browser/layoutService.js";
@@ -13,6 +13,7 @@ import { ActivityBarPosition, WorkbenchConfiguration, type SideBarLocation, type
 import { type IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent, workbenchPartIds } from "../services/layout/browser/layoutService.js";
 import type { Part } from "./part.js";
 import { WorkbenchPartView } from "./workbenchPartView.js";
+import { IAuxiliaryWindowService, type IAuxiliaryWindow } from '../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 
 const WINDOW_LEFT_EDGE_INSET = 6;
 const WINDOW_RIGHT_EDGE_INSET = 8;
@@ -108,6 +109,9 @@ export class WorkbenchLayout
 	private sideBarLocation: SideBarLocation;
 	// Maximization is transient; persistence and Grid rebuilds retain the user's restored Panel height.
 	private panelHeightBeforeMaximize: number | undefined;
+	private readonly auxiliaryContainers = this._register(new DisposableMap<Window, DisposableStore>());
+	private readonly auxiliaryWindows = new Map<Window, IAuxiliaryWindow>();
+	private focusedContainer: HTMLElement | undefined;
 
 	readonly onDidChangePartVisibility = this._onDidChangePartVisibility.event;
 	readonly domNode: HTMLDivElement;
@@ -131,6 +135,7 @@ export class WorkbenchLayout
 		options: WorkbenchLayoutOptions,
 		@IStorageService private readonly storageService: IStorageService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
+		@IAuxiliaryWindowService auxiliaryWindowService: IAuxiliaryWindowService,
 	) {
 		super({ root: container, focus: options.focus });
 		this.layoutStyle = configurationService.getValue(WorkbenchConfiguration.layoutStyle);
@@ -144,6 +149,62 @@ export class WorkbenchLayout
 		this.initialDimension = resolveInitialDimension(container, options.initialDimension);
 		validateWorkbenchDefaultLayout(options.defaultLayout);
 		this.stateModel = new WorkbenchLayoutStateModel(storageService, options.workbenchState, options.defaultLayout);
+		// Input can arrive before Electron's document focus notification. Capture it
+		// at the window boundary before keybindings or titlebar actions choose a host.
+		for (const event of ['focus', 'keydown', 'pointerdown'] as const) {
+			this._register(addDisposableListener(getWindow(container), event, () => this.activateContainer(container), true));
+		}
+		this._register(addDisposableListener(container, 'focusin', () => this.activateContainer(container)));
+		this._register(auxiliaryWindowService.onDidOpenWindow(window => this.trackAuxiliaryWindow(window)));
+		this._register(toDisposable(() => {
+			this.auxiliaryWindows.clear();
+			this.focusedContainer = undefined;
+		}));
+	}
+
+	override get activeContainer(): HTMLElement { return this.focusedContainer ?? this.mainContainer; }
+	override get activeContainerDimension(): IDimension {
+		return this.activeContainer === this.mainContainer ? this.mainContainerDimension : getClientArea(this.activeContainer);
+	}
+	override get containers(): Iterable<HTMLElement> {
+		return [this.mainContainer, ...[...this.auxiliaryWindows.values()].map(window => window.container)];
+	}
+	override get activeContainerOffset(): ILayoutOffsetInfo {
+		if (this.activeContainer === this.mainContainer) return this.mainContainerOffset;
+		return { top: this.activeContainer.querySelector('.ash-auxiliary-titlebar')?.getBoundingClientRect().height ?? 0, quickInputTop: 0 };
+	}
+	override getContainer(targetWindow: Window): HTMLElement {
+		return this.auxiliaryWindows.get(targetWindow)?.container ?? super.getContainer(targetWindow);
+	}
+	override whenContainerStylesLoaded(targetWindow: Window): Promise<void> | undefined {
+		return this.auxiliaryWindows.get(targetWindow)?.whenStylesHaveLoaded ?? super.whenContainerStylesLoaded(targetWindow);
+	}
+
+	private activateContainer(container: HTMLElement): void {
+		if (this.activeContainer === container) return;
+		this.focusedContainer = container;
+		this._onDidChangeActiveContainer.fire();
+		this._onDidLayoutActiveContainer.fire(this.activeContainerDimension);
+	}
+
+	private trackAuxiliaryWindow(window: IAuxiliaryWindow): void {
+		const resources = new DisposableStore();
+		this.auxiliaryWindows.set(window.window, window);
+		this.auxiliaryContainers.set(window.window, resources);
+		for (const event of ['focus', 'keydown', 'pointerdown'] as const) {
+			resources.add(addDisposableListener(window.window, event, () => this.activateContainer(window.container), true));
+		}
+		resources.add(addDisposableListener(window.container, 'focusin', () => this.activateContainer(window.container)));
+		resources.add(window.onDidLayout(dimension => {
+			this._onDidLayoutContainer.fire({ container: window.container, dimension });
+			if (this.activeContainer === window.container) this._onDidLayoutActiveContainer.fire(dimension);
+		}));
+		resources.add(window.onDidClose(() => {
+			this.auxiliaryWindows.delete(window.window);
+			this.auxiliaryContainers.deleteAndDispose(window.window);
+			if (this.activeContainer === window.container) this.activateContainer(this.mainContainer);
+		}));
+		if (window.window.document.hasFocus()) this.activateContainer(window.container);
 	}
 
 	/** Parts are assembled once, after container services and their dependencies have been registered. */

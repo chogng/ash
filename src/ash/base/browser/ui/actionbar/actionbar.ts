@@ -1,3 +1,4 @@
+import './actionbar.css';
 import { addDisposableListener, h } from "../../dom.js";
 import { DataTransfers, DragAndDropObserver } from "../../dnd.js";
 import type { IAction } from "../../../common/actions.js";

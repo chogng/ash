@@ -84,7 +84,7 @@ import { ViewsService } from "../../../workbench/services/views/browser/viewsSer
 import { ContextKeyService, IContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
 import { DialogResult, IDialogService, type IMessageDialogOptions } from '../../../platform/dialogs/common/dialogs.js';
 import { ViewDescriptorService } from "../../../workbench/services/views/browser/viewDescriptorService.js";
-import { WorkbenchQuickInputService } from "../../../workbench/services/quickinput/browser/quickInputService.js";
+import { TestQuickInputService } from "../../../platform/quickinput/test/browser/testQuickInputService.js";
 import { h } from "../../../base/browser/dom.js";
 import type { IFileService } from '../../../platform/files/common/files.js';
 import { URI } from "../../../base/common/uri.js";
@@ -338,7 +338,7 @@ test("Chat title and history switching retain conversations and drafts", async (
 	services.registerInstance(IConfigurationService, configuration);
 	let preferencesEditorTarget: import('../../../workbench/services/editor/common/editorService.js').EditorOpenTarget | undefined;
 	using chat = createChatService(api);
-	using quickInput = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
+	using quickInput = new TestQuickInputService({ instantiationService: services, container: dom.window.document.body, contextKeyService: contextKeys });
 	using keybindingFiles = new KeybindingTestServices();
 	using editorServices = createTestEditorServices(undefined, keybindingFiles.services);
 	editorServices.registerInstance(IDialogService, recordingDialogService([]));
@@ -1241,7 +1241,7 @@ test("Chat history selects an active Thread through Quick Pick", async () => {
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	using sessions = new SessionsManagementService(api);
 	using contextKeys = new ContextKeyService();
-	using quickInput = new WorkbenchQuickInputService({
+	using quickInput = new TestQuickInputService({ instantiationService: services,
 		container: dom.window.document.body,
 		contextKeyService: contextKeys,
 	});
@@ -3406,7 +3406,7 @@ test("Chat Settings toggles Advisor while keeping its selected model", async () 
 	const fake = fakeApi({ advisorDefault: selected });
 	using chat = createChatService(fake.api);
 	using contextKeys = new ContextKeyService();
-	using quickInput = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
+	using quickInput = new TestQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
 	const services = new InstantiationService();
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IChatService, chat);
@@ -3451,7 +3451,7 @@ test('Chat Settings saves a masked provider key through the model API and refres
 	});
 	using chat = createChatService(fake.api);
 	using contextKeys = new ContextKeyService();
-	using quickInput = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
+	using quickInput = new TestQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
 	const messages: IMessageDialogOptions[] = [];
 	const services = new InstantiationService();
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));

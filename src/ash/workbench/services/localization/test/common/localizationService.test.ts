@@ -41,6 +41,11 @@ suite('Workbench localization', () => {
 		assert.equal(error.message, `Ash 前后端协议指纹不匹配：客户端要求 ${expected}，后端返回 ${received}。请重新构建并启动对应的后端。`);
 	});
 
+	test('auxiliary window labels and close warnings use the selected Chinese catalog', () => {
+		initializeTestLocalization('zh-CN');
+		assert.deepEqual([localize('auxiliaryWindow.editor', ''), localize('auxiliaryWindow.unsavedChanges', '')], ['编辑器', '辅助编辑器窗口中有未保存的更改。']);
+	});
+
 	test('Panel commands and navigation help use the selected Chinese catalog', () => {
 		initializeTestLocalization('zh-CN');
 		assert.deepEqual([

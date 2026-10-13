@@ -43,7 +43,7 @@ import { OutputService } from '../../../src/ash/workbench/contrib/output/browser
 import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
 import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
-import { WorkbenchQuickInputService } from '../../../src/ash/workbench/services/quickinput/browser/quickInputService.js';
+import { TestQuickInputService } from '../../../src/ash/platform/quickinput/test/browser/testQuickInputService.js';
 import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
 import { ExternalUriOpenerService } from '../../../src/ash/workbench/contrib/externalUriOpener/common/externalUriOpenerService.js';
 import { ExternalUriOpenerPriority } from '../../../src/ash/editor/common/languages.js';
@@ -183,7 +183,7 @@ window.ashLinkIntegration = {
 			const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 			setNlsMessages(catalog.locale, catalog.bundles);
 		}
-		services.registerInstance(IQuickInputService, resources.add(new WorkbenchQuickInputService({ container: document.body, contextKeyService: services.get(IContextKeyService) })));
+		services.registerInstance(IQuickInputService, resources.add(new TestQuickInputService({ instantiationService: services, container: document.body, contextKeyService: services.get(IContextKeyService) })));
 		services.registerInstance(IPreferencesService, {
 			openSettings: async () => { }, openGlobalKeybindingSettings: async () => { },
 			openUserSettings: async options => { settingsRevealed.push(options!.revealSetting!.key); },

@@ -1,6 +1,6 @@
+import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
-import { QuickInputController } from '../../../../../platform/quickinput/browser/quickInputController.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -37,7 +37,7 @@ test('Binary file editor opens a bounded read-only text preview', async () => {
 	using services = new InstantiationService();
 	services.registerSingleton(IFileService, () => createTestFileService(new BinaryEditorTestFileSystemProvider(new Uint8Array([0x48, 0x69, 0x00, 0xff]))));
 	registerTestComponentServices(services, dom.window.document);
-	using quickInput = new QuickInputController(dom.window.document.body);
+	using quickInput = new TestQuickInputService({ container: dom.window.document.body });
 	services.registerInstance(IQuickInputService, quickInput);
 	services.registerInstance(IEditorService, {
 		...emptyEditorServiceState,

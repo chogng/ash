@@ -6,7 +6,7 @@ import { isMacintosh } from '../../../../../../base/common/platform.js';
 import { DisposableTracker, installDisposableTracker } from '../../../../../../base/common/lifecycle.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
-import { IQuickAccessController } from '../../../../../../platform/quickinput/common/quickAccess.js';
+import { IQuickInputService } from '../../../../../../platform/quickinput/common/quickInput.js';
 import { IThemeService } from '../../../../../../platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../../../../platform/theme/test/common/testThemeService.js';
 import { darkColorTheme, lightColorTheme } from '../../../../../../platform/theme/common/colorTheme.js';
@@ -47,7 +47,7 @@ test('Electron titlebar applies the active theme and releases its subscription w
 		const menus = new MenuService(commands, contextKeys);
 		services.registerInstance(IMenuService, menus);
 		services.registerInstance(ICommandService, commands);
-		services.registerInstance(IQuickAccessController, { onDidChangeVisibility: Event.None, show() { } });
+		services.registerInstance(IQuickInputService, { quickAccess: { onDidChangeVisibility: Event.None, show() { } } } as IQuickInputService);
 		const applied: INativeWindowTheme[] = [];
 		services.registerInstance(IThemeService, themes);
 		registerTestComponentServices(services, environment.window.document);

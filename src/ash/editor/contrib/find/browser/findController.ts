@@ -459,7 +459,11 @@ export class MoveToMatchFindAction extends EditorAction {
 			const number = Number(value);
 			picker.items = Number.isInteger(number) && number >= 1 && number <= controller.getState().matchesCount ? [{ label: value }] : [];
 		});
-		picker.onDidAccept(item => { controller.goToMatch(Number(item.label) - 1); picker.hide(); });
+		picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
+			controller.goToMatch(Number(item.label) - 1); picker.hide();
+		});
 		picker.onDidHide(() => picker.dispose());
 		picker.show();
 	}

@@ -63,7 +63,10 @@ export function showToolsPicker(quickInput: IQuickInputService, catalog: AgentCa
 			picker.items = [...filterQuickPickItems(items, picker.value), { label: localize('chat.tools.apply', 'Apply tool selection'), alwaysShow: true }];
 		};
 		resources.add(picker.onDidChangeValue(render));
-		resources.add(picker.onDidAccept(item => {
+		resources.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
+
 			if (!item.names) {
 				if (disabled.size > 4096) { status(localize('chat.tools.selectionLimit', 'Select at most 4096 disabled tools. Enable some tools before applying.')); return; }
 				finish([...disabled].sort()); return;
@@ -74,6 +77,7 @@ export function showToolsPicker(quickInput: IQuickInputService, catalog: AgentCa
 			}
 			status(localize('chat.tools.changed', '{0}: {1}', item.label, enable ? localize('chat.tools.enabled', 'Enabled') : localize('chat.tools.disabled', 'Disabled')));
 			render();
+
 		}));
 		resources.add(picker.onDidHide(() => finish()));
 		resources.add(addDisposableListener(signal, 'abort', () => finish()));

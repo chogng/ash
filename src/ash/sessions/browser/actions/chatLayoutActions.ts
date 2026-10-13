@@ -210,7 +210,10 @@ registerAction2(class OpenChatSettingsAction extends Action2 {
 					: { model: entry.model, enabled: true, maxCalls: 3, maxOutputTokens: 2048 },
 			})),
 		];
-		disposables.add(picker.onDidAccept((item) => {
+		disposables.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
+
 			if (item.openSettings) {
 				picker.hide();
 				void accessor.get(IPreferencesService).openSettings();
@@ -233,6 +236,7 @@ registerAction2(class OpenChatSettingsAction extends Action2 {
 				() => picker.hide(),
 				error => { picker.placeholder = `${localize('chat.settings.advisorSaveFailed', 'Could not save advisor model')}: ${String(error)}`; },
 			);
+
 		}));
 		disposables.add(picker.onDidHide(() => disposables.dispose()));
 		picker.show();
@@ -312,7 +316,11 @@ function pickModelProvider(quickInput: IQuickInputService, providers: readonly M
 			disposables.dispose();
 			resolve(provider);
 		};
-		disposables.add(picker.onDidAccept(item => finish(item)));
+		disposables.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
+			return finish(item);
+		}));
 		disposables.add(picker.onDidHide(() => finish(undefined)));
 		picker.show();
 	});

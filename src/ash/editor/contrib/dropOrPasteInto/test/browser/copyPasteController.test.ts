@@ -1,3 +1,4 @@
+import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import '../../../../test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
@@ -5,7 +6,6 @@ import { BrowserClipboardService } from '../../../../../platform/clipboard/brows
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
-import { QuickInputController } from '../../../../../platform/quickinput/browser/quickInputController.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { registerWindow } from '../../../../../base/browser/window.js';
 import { JSDOM } from 'jsdom';
@@ -362,7 +362,7 @@ test('Paste As requests the selected HTML kind from the rich clipboard', async (
 	using services = new InstantiationService();
 	using clipboard = new EventClipboard(dom);
 	services.registerInstance(IClipboardService, clipboard);
-	using quickInput = new QuickInputController(dom.window.document.body);
+	using quickInput = new TestQuickInputService({ container: dom.window.document.body });
 	services.registerInstance(IQuickInputService, quickInput);
 	registerCodeEditorServices(services);
 
@@ -384,7 +384,7 @@ test('Paste As asks which provider edit to apply when no kind is specified', asy
 	using services = new InstantiationService();
 	using clipboard = new EventClipboard(dom);
 	services.registerInstance(IClipboardService, clipboard);
-	using quickInput = new QuickInputController(dom.window.document.body);
+	using quickInput = new TestQuickInputService({ container: dom.window.document.body });
 	services.registerInstance(IQuickInputService, quickInput);
 	registerCodeEditorServices(services);
 
@@ -415,7 +415,7 @@ test('Copy preparation data reaches the matching paste provider', async () => {
 	using services = new InstantiationService();
 	using clipboard = new EventClipboard(dom);
 	services.registerInstance(IClipboardService, clipboard);
-	using quickInput = new QuickInputController(dom.window.document.body);
+	using quickInput = new TestQuickInputService({ container: dom.window.document.body });
 	services.registerInstance(IQuickInputService, quickInput);
 	registerCodeEditorServices(services);
 	using model = new TextModel('source');
@@ -475,7 +475,7 @@ test('Paste as Text ignores URI metadata added during copy preparation', async (
 	using services = new InstantiationService();
 	using clipboard = new EventClipboard(dom);
 	services.registerInstance(IClipboardService, clipboard);
-	using quickInput = new QuickInputController(dom.window.document.body);
+	using quickInput = new TestQuickInputService({ container: dom.window.document.body });
 	services.registerInstance(IQuickInputService, quickInput);
 	registerCodeEditorServices(services);
 	using model = new TextModel('source');
@@ -570,7 +570,7 @@ test('Paste As merges service resources without replacing event URI data', async
 	using services = new InstantiationService();
 	using clipboard = new EventClipboard(dom);
 	services.registerInstance(IClipboardService, clipboard);
-	using quickInput = new QuickInputController(dom.window.document.body);
+	using quickInput = new TestQuickInputService({ container: dom.window.document.body });
 	services.registerInstance(IQuickInputService, quickInput);
 	registerCodeEditorServices(services);
 	using model = new TextModel('');
@@ -671,7 +671,7 @@ for (const preference of ['html', 'text', 'picker']) {
 			readText: async () => { throw new Error('Paste As must use all MIME types'); },
 		} as unknown as Clipboard);
 		services.registerInstance(IClipboardService, clipboard);
-		using quickInput = new QuickInputController(dom.window.document.body);
+		using quickInput = new TestQuickInputService({ container: dom.window.document.body });
 		services.registerInstance(IQuickInputService, quickInput);
 		registerCodeEditorServices(services);
 		using model = new TextModel('old');

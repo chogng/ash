@@ -1,4 +1,5 @@
-import { stopEvent, h, isHTMLElement } from "../../../base/browser/dom.js";
+import { addDisposableListener, stopEvent, h, isHTMLElement } from "../../../base/browser/dom.js";
+import { TabList } from '../../../base/browser/ui/tablist/tabList.js';
 import { getViewport } from '../../../base/browser/geometry.js';
 import { AnchorPosition, layout2d } from '../../../base/common/layout.js';
 import {
@@ -10,16 +11,26 @@ import {
 	type InputSelection,
 } from "../../../base/browser/ui/inputbox/inputbox.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
+import { Disposable, MutableDisposable, toDisposable } from "../../../base/common/lifecycle.js";
 import type {
 	IQuickPick,
 	IQuickPickItem,
 	IQuickPickItemButton,
 	IQuickPickSeparator,
+	IQuickInputNavigation,
+	IKeyMods,
+	IQuickInput,
+	IQuickPickDidAcceptEvent,
 } from "../common/quickInput.js";
 import { QuickInputList } from "./quickInputList.js";
-import { QuickPickFocus } from '../common/quickInput.js';
+import { QuickInputType, QuickPickFocus } from '../common/quickInput.js';
 import { localize } from '../../../nls.js';
+import { RawContextKey } from '../../contextkey/common/contextkey.js';
+
+export const inQuickInputContext = new RawContextKey<boolean>('inQuickInput', false);
+export const quickInputTypeContextKey = new RawContextKey<string>('quickInputType', '');
+export const endOfQuickInputBoxContext = new RawContextKey<boolean>('cursorAtEndOfQuickInputBox', false);
+export const quickInputFocusContext = new RawContextKey<boolean>('quickInputFocus', false);
 
 export interface BrowserQuickInputHostOptions {
 	readonly onShow: (quickInput: IBrowserQuickInputHost) => void;
@@ -28,7 +39,7 @@ export interface BrowserQuickInputHostOptions {
 }
 
 /** Narrow controller used by the shared Workbench host. */
-export interface IBrowserQuickInputHost {
+export interface IBrowserQuickInputHost extends IQuickInput {
 	readonly element: HTMLDivElement;
 	focus(): void;
 	hide(): void;
@@ -40,14 +51,49 @@ export class QuickPick<TItem extends IQuickPickItem>
 	extends Disposable
 	implements IQuickPick<TItem>, IBrowserQuickInputHost {
 	readonly element: HTMLDivElement;
+	public readonly type = QuickInputType.QuickPick;
 	public anchor?: unknown;
 	public anchorPosition?: 'above' | 'below';
 	private readonly inputBox: InputBox;
 	private readonly list: QuickInputList<TItem>;
 	private readonly progress: HTMLDivElement;
+	private readonly navigationHost: HTMLDivElement;
+	private readonly navigationTabs = this._register(new MutableDisposable<TabList<string>>());
+	private navigationValue: IQuickInputNavigation | undefined;
+	public get navigation(): IQuickInputNavigation | undefined { return this.navigationValue; }
+	public set navigation(value: IQuickInputNavigation | undefined) {
+		this.navigationValue = value;
+		this.navigationHost.hidden = !value;
+		if (!value) {
+			this.navigationTabs.clear();
+			this.list.element.removeAttribute('role');
+			this.list.element.removeAttribute('aria-labelledby');
+		} else {
+			if (!this.navigationTabs.value) {
+				this.navigationTabs.value = new TabList(this.navigationHost, {
+					ariaLabel: localize('quickInput.searchModes', 'Search modes'),
+					presentation: 'inset',
+					onActivate: id => this.navigationValue?.onSelect(id),
+				});
+				this.navigationTabs.value.setSizing({ mode: 'fixed', minWidth: 0, maxWidth: 600 });
+			}
+			const tabs = value.items.map(item => ({
+				...item, value: item.id,
+				tabId: `${this.list.listId}-tab-${encodeURIComponent(item.id)}`,
+				panelId: this.list.element.id,
+			}));
+			this.navigationTabs.value.setTabs(tabs, value.selectedId);
+			this.list.element.setAttribute('role', 'tabpanel');
+			const selected = tabs.find(tab => tab.id === value.selectedId);
+			if (selected) { this.list.element.setAttribute('aria-labelledby', selected.tabId); }
+			else { this.list.element.removeAttribute('aria-labelledby'); }
+		}
+		if (this.visible) this.layout();
+	}
 	public canAcceptInBackground = false;
 	private _busy = false;
 	public get keyMods() { return this.list.keyMods; }
+	public set keyMods(value: IKeyMods) { this.list.keyMods = value; }
 	public get busy(): boolean { return this._busy; }
 	public set busy(value: boolean) {
 		this._busy = value;
@@ -56,7 +102,8 @@ export class QuickPick<TItem extends IQuickPickItem>
 		this.element.setAttribute('aria-busy', String(value));
 		if (this.visible) this.layout();
 	}
-	private readonly _onDidAccept = this._register(new Emitter<TItem>());
+	private readonly _onDidAccept = this._register(new Emitter<IQuickPickDidAcceptEvent>());
+	private acceptingInBackground = false;
 	private readonly _onDidChangeValue = this._register(new Emitter<string>());
 	private readonly _onDidHide = this._register(new Emitter<void>());
 	private readonly _onDidBlur = this._register(new Emitter<void>());
@@ -67,7 +114,9 @@ export class QuickPick<TItem extends IQuickPickItem>
 	private _placeholder = "";
 	private _filterValue = (value: string): string => value;
 
-	readonly onDidAccept: Event<TItem> = this._onDidAccept.event;
+	readonly onDidAccept: Event<IQuickPickDidAcceptEvent> = this._onDidAccept.event;
+	public get activeItems(): readonly TItem[] { return this.list.activeItem ? [this.list.activeItem] : []; }
+	public set activeItems(items: readonly TItem[]) { if (items[0]) this.list.setActiveItem(items[0]); }
 	readonly onDidChangeValue: Event<string> =
 		this._onDidChangeValue.event;
 	readonly onDidHide: Event<void> = this._onDidHide.event;
@@ -88,6 +137,7 @@ export class QuickPick<TItem extends IQuickPickItem>
 		setRole(this.element, "dialog");
 		setAriaAttribute(this.element, "label", this._ariaLabel);
 		this.list = this._register(new QuickInputList<TItem>(this.element));
+		this.list.element.id = `${this.list.listId}-panel`;
 		this.inputBox = this._register(new InputBox(this.element, {
 			type: "search",
 			ariaLabel: localize('quickInput.title', 'Quick Pick'),
@@ -97,6 +147,15 @@ export class QuickPick<TItem extends IQuickPickItem>
 			ariaExpanded: true,
 		}));
 		this.inputBox.element.classList.add("ash-quick-pick-input");
+		this.navigationHost = h(ownerDocument, 'div');
+		this.navigationHost.className = 'ash-quick-pick-navigation';
+		this.navigationHost.hidden = true;
+		this._register(addDisposableListener(this.navigationHost, 'keydown', event => {
+			if (event.key === 'ArrowDown') {
+				stopEvent(event);
+				this.inputBox.focus();
+			}
+		}));
 		this.progress = h(ownerDocument, 'div');
 		this.progress.className = 'ash-quick-pick-progress';
 		this.progress.setAttribute('role', 'status');
@@ -104,6 +163,7 @@ export class QuickPick<TItem extends IQuickPickItem>
 		this.progress.hidden = true;
 		this.element.append(
 			this.inputBox.element,
+			this.navigationHost,
 			this.progress,
 			this.list.element,
 		);
@@ -119,15 +179,13 @@ export class QuickPick<TItem extends IQuickPickItem>
 			});
 		}));
 		this._register(this.list.onDidAccept((item) => {
-			this._onDidAccept.fire(item);
+			if (!this.canSelectMany) this.list.selectedItems = [item];
+			this._onDidAccept.fire({ inBackground: this.acceptingInBackground || this.canAcceptInBackground && this.keyMods.ctrlCmd });
 		}));
 		this._register(this.list.onDidChangeActive(({ rowId }) => {
 			this.inputBox.ariaActiveDescendant = rowId;
 		}));
 		this._register(this.list.onDidTriggerItemButton(event => this._onDidTriggerItemButton.fire(event)));
-		this._register(this.inputBox.onKeyDown(
-			(event: KeyboardEvent) => this.handleKeyDown(event),
-		));
 		this._register(toDisposable(() => {
 			if (this.visible) this.hide();
 			options.onDispose(this);
@@ -221,6 +279,7 @@ export class QuickPick<TItem extends IQuickPickItem>
 			const style = ownerWindow.getComputedStyle(this.element);
 			const listStyle = ownerWindow.getComputedStyle(this.list.element);
 			const reservedHeight = this.inputBox.element.getBoundingClientRect().height
+				+ this.navigationHost.getBoundingClientRect().height
 				+ (this.busy ? this.progress.getBoundingClientRect().height : 0)
 				+ Number.parseFloat(style.borderTopWidth) + Number.parseFloat(style.borderBottomWidth)
 				+ Number.parseFloat(listStyle.paddingTop) + Number.parseFloat(listStyle.paddingBottom);
@@ -248,11 +307,15 @@ export class QuickPick<TItem extends IQuickPickItem>
 		const listStyle = ownerWindow.getComputedStyle(this.list.element);
 		const roomBelow = hostBounds.bottom - pickerBounds.top - Number.parseFloat(hostStyle.paddingBottom);
 		const reservedHeight = inputHeight
+			+ this.navigationHost.getBoundingClientRect().height
+			+ (this.busy ? this.progress.getBoundingClientRect().height : 0)
 			+ Number.parseFloat(pickerStyle.borderTopWidth)
 			+ Number.parseFloat(pickerStyle.borderBottomWidth)
 			+ Number.parseFloat(listStyle.paddingTop)
 			+ Number.parseFloat(listStyle.paddingBottom);
-		this.list.layout(Math.max(0, Math.min(maxPickerHeight, roomBelow) - reservedHeight));
+		const availableHeight = Math.min(maxPickerHeight, roomBelow) - reservedHeight;
+		// Keep results proportional to the host while leaving room for the editor below.
+		this.list.layout(Math.max(0, Math.min(hostBounds.height * 0.4, availableHeight)));
 	}
 
 	hide(): void {
@@ -262,49 +325,29 @@ export class QuickPick<TItem extends IQuickPickItem>
 		this._onDidHide.fire();
 	}
 
-	focus(): void {
-		this.inputBox.focus();
-		this.inputBox.select();
+	focus(what?: QuickPickFocus): void {
+		if (what !== undefined) this.list.focus(what);
+		else {
+			this.inputBox.focus();
+			this.inputBox.select();
+		}
+	}
+
+	public accept(inBackground = false): void {
+		if (inBackground && !this.canAcceptInBackground) return;
+		this.acceptingInBackground = inBackground || this.canAcceptInBackground && this.keyMods.ctrlCmd;
+		try { this.list.acceptActive(); }
+		finally { this.acceptingInBackground = false; }
+	}
+
+	public toggle(): void {
+		if (this.canSelectMany) this.list.toggleActive();
 	}
 
 	private handleValueChange(value: string): void {
 		this.list.filter(this._filterValue(value));
 		if (this.visible) this.layout();
 		this._onDidChangeValue.fire(value);
-	}
-
-	private handleKeyDown(event: KeyboardEvent): void {
-		if (this.canSelectMany && event.key === ' ' && event.ctrlKey) {
-			stopEvent(event);
-			this.list.toggleActive();
-			return;
-		}
-		switch (event.key) {
-			case "ArrowDown":
-				stopEvent(event);
-				this.list.focus(QuickPickFocus.Next);
-				break;
-			case "ArrowUp":
-				stopEvent(event);
-				this.list.focus(QuickPickFocus.Previous);
-				break;
-			case 'PageDown':
-				stopEvent(event);
-				this.list.focus(QuickPickFocus.NextPage);
-				break;
-			case 'PageUp':
-				stopEvent(event);
-				this.list.focus(QuickPickFocus.PreviousPage);
-				break;
-			case "Enter":
-				stopEvent(event);
-				this.list.acceptActive(event);
-				break;
-			case "Escape":
-				stopEvent(event);
-				this.hide();
-				break;
-		}
 	}
 
 }

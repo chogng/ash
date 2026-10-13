@@ -77,7 +77,11 @@ async function selectContext(quickInputService: IQuickInputService, provider: Ch
 			}
 		};
 		resources.add(quickPick.onDidChangeValue(value => void load(value)));
-		resources.add(quickPick.onDidAccept(item => finish(item.attachment)));
+		resources.add(quickPick.onDidAccept(() => {
+			const item = quickPick.selectedItems[0];
+			if (!item) return;
+			return finish(item.attachment);
+		}));
 		resources.add(quickPick.onDidHide(() => finish(undefined)));
 		if (signal?.aborted) { finish(undefined); return; }
 		if (signal) resources.add(addDisposableListener(signal, 'abort', () => finish(undefined)));
@@ -101,7 +105,11 @@ function selectItem<T extends IQuickPickItem>(quickInputService: IQuickInputServ
 			resolve(item);
 			resources.dispose();
 		};
-		resources.add(quickPick.onDidAccept(item => finish(item)));
+		resources.add(quickPick.onDidAccept(() => {
+			const item = quickPick.selectedItems[0];
+			if (!item) return;
+			return finish(item);
+		}));
 		resources.add(quickPick.onDidHide(() => finish(undefined)));
 		if (signal?.aborted) { finish(undefined); return; }
 		if (signal) resources.add(addDisposableListener(signal, 'abort', () => finish(undefined)));

@@ -27,6 +27,8 @@ import { ChatListWidget } from '../../browser/widget/chatListWidget.js';
 import '../../browser/chat.shared.contribution.js';
 import { ChatEditorConfiguration, ChatInputConfiguration } from '../../common/constants.js';
 import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfiguration.js';
+import { IFileService } from '../../../../../platform/files/common/files.js';
+import { FileService } from '../../../../../platform/files/common/fileService.js';
 
 const document = browserEnvironment.window.document;
 

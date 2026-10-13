@@ -35,7 +35,11 @@ export function pickWorkspaceFolder(quickInput: IQuickInputService, folders: rea
 			resolve(target);
 			disposables.dispose();
 		};
-		disposables.add(picker.onDidAccept(item => finish(item.target)));
+		disposables.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
+			return finish(item.target);
+		}));
 		disposables.add(picker.onDidHide(() => finish(undefined)));
 		picker.show();
 	});

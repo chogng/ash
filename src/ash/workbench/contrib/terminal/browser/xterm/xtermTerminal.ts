@@ -348,7 +348,11 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 				picker.ariaLabel = localize('terminal.links.choose', 'Open a terminal link');
 				picker.placeholder = localize('terminal.links.select', 'Select a terminal URL to open');
 				picker.items = Array.from(urls, label => ({ label }));
-				session.add(picker.onDidAccept(item => resolve(item.label)));
+				session.add(picker.onDidAccept(() => {
+					const item = picker.selectedItems[0];
+					if (!item) return;
+					return resolve(item.label);
+				}));
 				session.add(picker.onDidHide(() => resolve(undefined)));
 				session.add(picker.onDidBlur(() => resolve(undefined)));
 				picker.show();

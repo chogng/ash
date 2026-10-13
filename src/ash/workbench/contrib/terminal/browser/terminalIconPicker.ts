@@ -22,10 +22,14 @@ export class TerminalIconPicker extends Disposable {
 		return new Promise(resolve => {
 			let selected: ThemeIcon | undefined;
 			lifetime.add(toDisposable(() => resolve(undefined)));
-			lifetime.add(picker.onDidAccept(item => {
+			lifetime.add(picker.onDidAccept(() => {
+				const item = picker.selectedItems[0];
+				if (!item) return;
+
 				if (!getIconRegistry().getIcon(item.icon.id)) return;
 				selected = item.icon;
 				picker.hide();
+
 			}));
 			lifetime.add(picker.onDidHide(() => { resolve(selected); this.selection.clear(); }));
 			picker.show();

@@ -1,3 +1,11 @@
+import { installEditorTestDom } from '../../../../../editor/test/browser/editorTestGlobals.js';
+import type { IDisposable } from '../../../../../base/common/lifecycle.js';
+import { getWindowById, getWindowId, registerWindow } from '../../../../../base/browser/window.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+import { DeferredPromise } from '../../../../../base/common/async.js';
+import { PickerQuickAccessProvider, TriggerAction, type IPickerQuickAccessItem, type Picks, type FastAndSlowPicks } from '../../../../../platform/quickinput/browser/pickerQuickAccess.js';
+import type { IKeyMods } from '../../../../../platform/quickinput/common/quickInput.js';
+import { inQuickInputContext } from '../../../../../platform/quickinput/browser/quickInput.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
@@ -13,7 +21,7 @@ import { IEditorPartsService } from '../../../../browser/parts/editor/editorPart
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { DialogService } from '../../../../services/dialogs/common/dialogService.js';
 import assert from "node:assert/strict";
-import { test } from "mocha";
+import { suite, suiteSetup, suiteTeardown, test } from "mocha";
 import { JSDOM } from "jsdom";
 import { Action2, IMenuService, MenuId, MenusRegistry, registerAction2 } from "../../../../../platform/actions/common/actions.js";
 import { MenuService } from "../../../../../platform/actions/common/menuService.js";
@@ -36,18 +44,16 @@ import {
 	type IQuickPick,
 	type IQuickPickItem,
 } from "../../../../../platform/quickinput/common/quickInput.js";
-import { IQuickAccessController, QuickAccessRegistry } from "../../../../../platform/quickinput/common/quickAccess.js";
-import { QuickAccessController } from "../../../../../platform/quickinput/browser/quickAccess.js";
+import { QuickAccessRegistry } from "../../../../../platform/quickinput/common/quickAccess.js";
 import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
 import {
 	CommandService,
 } from "../../../../../workbench/services/commands/common/commandService.js";
 import {
-	WorkbenchQuickInputService,
-} from "../../../../../workbench/services/quickinput/browser/quickInputService.js";
+	TestQuickInputService,
+} from "../../../../../platform/quickinput/test/browser/testQuickInputService.js";
 import { productLanguagePackCatalogs } from '../../../../../workbench/services/localization/common/localizationCatalogs.js';
 import {
-	InQuickInputContext,
 	ShowAllCommandsCommandId,
 } from "../../../../../workbench/browser/quickaccess.js";
 await import('../../../../../workbench/contrib/quickaccess/browser/quickAccess.contribution.js');
@@ -187,13 +193,13 @@ test("Command Palette filters, executes, closes, and restores focus", async () =
 	services.registerInstance(ICommandService, commands);
 	const menus = new MenuService(commands, contextKeys);
 	services.registerInstance(IMenuService, menus);
-	const quickInput = new WorkbenchQuickInputService({
+	const quickInput = new TestQuickInputService({
+		instantiationService: services,
 		container,
 		contextKeyService: contextKeys,
 	});
 	services.registerInstance(IQuickInputService, quickInput);
-	const quickAccess = services.createInstance(QuickAccessController);
-	services.registerInstance(IQuickAccessController, quickAccess);
+	const quickAccess = services.get(IQuickInputService).quickAccess;
 	services.registerInstance(IKeybindingService, emptyKeybindingService());
 
 	let executions = 0;
@@ -213,7 +219,7 @@ test("Command Palette filters, executes, closes, and restores focus", async () =
 	using actionRegistration = registerAction2(PaletteTargetAction);
 
 	await commands.executeCommand(ShowAllCommandsCommandId);
-	assert.equal(contextKeys.getValue(InQuickInputContext.key), true);
+	assert.equal(contextKeys.getValue(inQuickInputContext.key), true);
 	const input = container.querySelector<HTMLInputElement>(
 		".ash-quick-pick-input input",
 	);
@@ -234,7 +240,7 @@ test("Command Palette filters, executes, closes, and restores focus", async () =
 	await Promise.resolve();
 
 	assert.equal(executions, 1);
-	assert.equal(contextKeys.getValue(InQuickInputContext.key), false);
+	assert.equal(contextKeys.getValue(inQuickInputContext.key), false);
 	assert.equal(
 		container.querySelector(".ash-quick-pick"),
 		null,
@@ -242,7 +248,7 @@ test("Command Palette filters, executes, closes, and restores focus", async () =
 	assert.equal(dom.window.document.activeElement, focusTarget);
 
 	quickInput.dispose();
-	quickAccess.dispose();
+	quickInput.dispose();
 	commands.dispose();
 	contextKeys.dispose();
 	dom.window.close();
@@ -267,10 +273,9 @@ test('Command Palette releases its provider before an accepted command disposes 
 		services.registerInstance(IMenuService, new MenuService(commands, contextKeys));
 		using keybindingsChanged = new Emitter<void>();
 		services.registerInstance(IKeybindingService, { ...emptyKeybindingService(), onDidUpdateKeybindings: keybindingsChanged.event });
-		using quickInput = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
+		using quickInput = new TestQuickInputService({ instantiationService: services, container: dom.window.document.body, contextKeyService: contextKeys });
 		services.registerInstance(IQuickInputService, quickInput);
-		using quickAccess = services.createInstance(QuickAccessController);
-		services.registerInstance(IQuickAccessController, quickAccess);
+		const quickAccess = services.get(IQuickInputService).quickAccess;
 		let disposed = false;
 		let executions = 0;
 		const editor = {
@@ -309,17 +314,17 @@ test('Quick Access preserves hide delivery and a new session opened before old c
 	try {
 		using services = new InstantiationService();
 		using contextKeys = new ContextKeyService();
-		using quickInput = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
+		using quickInput = new TestQuickInputService({ instantiationService: services, container: dom.window.document.body, contextKeyService: contextKeys });
 		services.registerInstance(IQuickInputService, quickInput);
-		using quickAccess = services.createInstance(QuickAccessController);
-		const runs: { picker: IQuickPick<IQuickPickItem>; signal: AbortSignal; disposed: number; complete(): Promise<void>; }[] = [];
+		const quickAccess = services.get(IQuickInputService).quickAccess;
+		const runs: { picker: IQuickPick<IQuickPickItem>; signal: CancellationToken; disposed: number; complete(): Promise<void>; }[] = [];
 		class PendingProvider {
-			provide(picker: IQuickPick<IQuickPickItem>, _prefix: string, signal: AbortSignal) {
+			provide(picker: IQuickPick<IQuickPickItem>, signal: CancellationToken) {
 				const generation = runs.length + 1;
 				picker.items = [{ label: `Current ${generation}` }];
 				let resolve!: () => void;
 				const completed = new Promise<void>(done => { resolve = done; }).then(() => {
-					if (!signal.aborted) picker.items = [{ label: `Completed ${generation}` }];
+					if (!signal.isCancellationRequested) picker.items = [{ label: `Completed ${generation}` }];
 				});
 				const run = { picker, signal, disposed: 0, complete: () => { resolve(); return completed; } };
 				runs.push(run);
@@ -336,21 +341,21 @@ test('Quick Access preserves hide delivery and a new session opened before old c
 		});
 		first.picker.hide();
 		first.picker.hide();
-		assert.deepEqual({ hidden: hideEvents, aborted: first.signal.aborted, disposed: first.disposed, generations: runs.length }, {
+		assert.deepEqual({ hidden: hideEvents, aborted: first.signal.isCancellationRequested, disposed: first.disposed, generations: runs.length }, {
 			hidden: 1, aborted: true, disposed: 1, generations: 2,
 		});
 		const second = runs[1]!;
 		await first.complete();
 		first.picker.dispose();
-		assert.deepEqual({ items: second.picker.items.map(item => item.label), aborted: second.signal.aborted, disposed: second.disposed, visible: contextKeys.getValue(InQuickInputContext.key) }, {
+		assert.deepEqual({ items: second.picker.items.map(item => item.label), aborted: second.signal.isCancellationRequested, disposed: second.disposed, visible: contextKeys.getValue(inQuickInputContext.key) }, {
 			items: ['Current 2'], aborted: false, disposed: 0, visible: true,
 		});
 		await second.complete();
 		assert.deepEqual(second.picker.items.map(item => item.label), ['Completed 2']);
-		quickAccess.dispose();
-		quickAccess.dispose();
+		quickInput.dispose();
+		quickInput.dispose();
 		await Promise.resolve();
-		assert.deepEqual({ disposed: runs.map(run => run.disposed), aborted: runs.map(run => run.signal.aborted), picker: dom.window.document.querySelector('.ash-quick-pick') }, {
+		assert.deepEqual({ disposed: runs.map(run => run.disposed), aborted: runs.map(run => run.signal.isCancellationRequested), picker: dom.window.document.querySelector('.ash-quick-pick') }, {
 			disposed: [1, 1], aborted: [true, true], picker: null,
 		});
 	} finally {
@@ -364,10 +369,10 @@ test('Quick Access cancels old provider results when switching modes in the same
 	try {
 		using services = new InstantiationService();
 		using contextKeys = new ContextKeyService();
-		using quickInput = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
+		using quickInput = new TestQuickInputService({ instantiationService: services, container: dom.window.document.body, contextKeyService: contextKeys });
 		services.registerInstance(IQuickInputService, quickInput);
-		using quickAccess = services.createInstance(QuickAccessController);
-		let oldSignal: AbortSignal | undefined;
+		const quickAccess = services.get(IQuickInputService).quickAccess;
+		let oldSignal: CancellationToken | undefined;
 		let oldPicker: IQuickPick<IQuickPickItem> | undefined;
 		let newPicker: IQuickPick<IQuickPickItem> | undefined;
 		let resolve!: () => void;
@@ -375,11 +380,11 @@ test('Quick Access cancels old provider results when switching modes in the same
 		let oldDisposed = 0;
 		let newDisposed = 0;
 		class OldProvider {
-			provide(picker: IQuickPick<IQuickPickItem>, _prefix: string, signal: AbortSignal) {
+			provide(picker: IQuickPick<IQuickPickItem>, signal: CancellationToken) {
 				oldSignal = signal;
 				oldPicker = picker;
 				completed = new Promise<void>(done => { resolve = done; }).then(() => {
-					if (!signal.aborted) picker.items = [{ label: 'Stale result' }];
+					if (!signal.isCancellationRequested) picker.items = [{ label: 'Stale result' }];
 				});
 				return toDisposable(() => { oldDisposed++; });
 			}
@@ -399,13 +404,13 @@ test('Quick Access cancels old provider results when switching modes in the same
 		assert.equal(newPicker, oldPicker);
 		resolve();
 		await completed;
-		assert.deepEqual({ aborted: oldSignal?.aborted, disposed: oldDisposed, items: newPicker.items.map(item => item.label) }, {
+		assert.deepEqual({ aborted: oldSignal?.isCancellationRequested, disposed: oldDisposed, items: newPicker.items.map(item => item.label) }, {
 			aborted: true, disposed: 1, items: ['Current result'],
 		});
 		newPicker.hide();
 		newPicker.hide();
-		quickAccess.dispose();
-		quickAccess.dispose();
+		quickInput.dispose();
+		quickInput.dispose();
 		await Promise.resolve();
 		assert.deepEqual({ oldDisposed, newDisposed, picker: dom.window.document.querySelector('.ash-quick-pick') }, { oldDisposed: 1, newDisposed: 1, picker: null });
 	} finally {
@@ -428,10 +433,9 @@ test('Quick Access switches search modes in one picker and restores focus on clo
 		services.registerInstance(ICommandService, commands);
 		services.registerInstance(IMenuService, new MenuService(commands, contextKeys));
 		services.registerInstance(IKeybindingService, emptyKeybindingService());
-		using quickInput = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
+		using quickInput = new TestQuickInputService({ instantiationService: services, container: dom.window.document.body, contextKeyService: contextKeys });
 		services.registerInstance(IQuickInputService, quickInput);
-		using quickAccess = services.createInstance(QuickAccessController);
-		services.registerInstance(IQuickAccessController, quickAccess);
+		const quickAccess = services.get(IQuickInputService).quickAccess;
 		const button = dom.window.document.querySelector('button')!;
 		button.focus();
 		quickAccess.show('>');
@@ -494,7 +498,7 @@ test('Quick Input preserves viewport intent across repeated focus restoration an
 	installDomGlobals(dom);
 	try {
 		using contextKeys = new ContextKeyService();
-		using service = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
+		using service = new TestQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
 		const [editor, otherEditor] = dom.window.document.querySelectorAll('button');
 		const originalFocus = editor.focus;
 		const focusCalls: (FocusOptions | undefined)[] = [];
@@ -517,7 +521,7 @@ test('Quick Input preserves viewport intent across repeated focus restoration an
 					picker.hide();
 				}
 				picker.hide();
-				assert.deepEqual({ focus: dom.window.document.activeElement, calls: [...focusCalls], visible: contextKeys.getValue(InQuickInputContext.key) }, { focus: editor, calls: [{ preventScroll: true }], visible: false });
+				assert.deepEqual({ focus: dom.window.document.activeElement, calls: [...focusCalls], visible: contextKeys.getValue(inQuickInputContext.key) }, { focus: editor, calls: [{ preventScroll: true }], visible: false });
 			}
 			picker.show();
 			otherEditor.focus();
@@ -548,7 +552,7 @@ test('Quick Input replaces a visible picker and releases it with its host', () =
 	const dom = new JSDOM('<!doctype html><body><button>Editor</button></body>');
 	installDomGlobals(dom);
 	using contextKeys = new ContextKeyService();
-	const service = new WorkbenchQuickInputService({
+	const service = new TestQuickInputService({
 		container: dom.window.document.body,
 		contextKeyService: contextKeys,
 	});
@@ -570,12 +574,12 @@ test('Quick Input replaces a visible picker and releases it with its host', () =
 		assert.equal(firstHidden, 1);
 		assert.deepEqual(values, ['second']);
 		assert.deepEqual([...dom.window.document.querySelectorAll('.ash-quick-pick-row-label')].map(item => item.textContent), ['Second']);
-		assert.equal(contextKeys.getValue(InQuickInputContext.key), true);
+		assert.equal(contextKeys.getValue(inQuickInputContext.key), true);
 		let secondHidden = 0;
 		second.onDidHide(() => { secondHidden++; });
 		service.dispose();
 		assert.equal(secondHidden, 1);
-		assert.equal(contextKeys.getValue(InQuickInputContext.key), false);
+		assert.equal(contextKeys.getValue(inQuickInputContext.key), false);
 		assert.equal(dom.window.document.querySelector('.ash-quick-input-host'), null);
 		assert.equal(dom.window.document.activeElement, button);
 	} finally {
@@ -588,7 +592,7 @@ test('Quick Input masks a password, validates it, clears it, and restores focus'
 	const dom = new JSDOM('<!doctype html><body><button>Editor</button></body>');
 	installDomGlobals(dom);
 	using contextKeys = new ContextKeyService();
-	using service = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
+	using service = new TestQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
 	const editor = dom.window.document.querySelector('button')!;
 	editor.focus();
 
@@ -637,7 +641,7 @@ test('Quick Pick labels its input and reports focus leaving the picker', async (
 	const dom = new JSDOM('<!doctype html><body><button>Editor</button><button>Other editor</button></body>');
 	installDomGlobals(dom);
 	using contextKeys = new ContextKeyService();
-	using service = new WorkbenchQuickInputService({
+	using service = new TestQuickInputService({
 		container: dom.window.document.body,
 		contextKeyService: contextKeys,
 	});
@@ -669,7 +673,7 @@ test('Quick Input keeps clicks inside the picker and passes outside clicks to th
 	installDomGlobals(dom);
 	{
 		using contextKeys = new ContextKeyService();
-		using service = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
+		using service = new TestQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
 		const [editor, action] = dom.window.document.querySelectorAll('button');
 		const picker = service.createQuickPick();
 		let clicks = 0;
@@ -679,10 +683,10 @@ test('Quick Input keeps clicks inside the picker and passes outside clicks to th
 		const input = dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick-input input');
 		assert.ok(input);
 		input.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true }));
-		assert.equal(contextKeys.getValue(InQuickInputContext.key), true);
+		assert.equal(contextKeys.getValue(inQuickInputContext.key), true);
 		action.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true }));
 		action.click();
-		assert.deepEqual({ clicks, pickerVisible: contextKeys.getValue(InQuickInputContext.key) }, { clicks: 1, pickerVisible: false });
+		assert.deepEqual({ clicks, pickerVisible: contextKeys.getValue(inQuickInputContext.key) }, { clicks: 1, pickerVisible: false });
 	}
 	dom.window.close();
 });
@@ -739,7 +743,7 @@ test('Quick Input token cancellation closes only its prompt and releases the tok
 	installDomGlobals(dom);
 	using browser = toDisposable(() => dom.window.close());
 	using contextKeys = new ContextKeyService();
-	using service = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
+	using service = new TestQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
 	const editor = dom.window.document.querySelector('button')!;
 	editor.focus();
 	assert.equal(await service.input({ title: 'Already canceled' }, CancellationToken.Cancelled), undefined);
@@ -761,4 +765,135 @@ test('Quick Input token cancellation closes only its prompt and releases the tok
 	assert.equal(dom.window.document.querySelector('input')?.getAttribute('aria-label'), 'Next');
 	dom.window.document.querySelector('input')!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
 	assert.equal(await next, undefined);
+});
+
+suite('Quick Input shared foundations', () => {
+	let mainDom: JSDOM;
+	let mainGlobals: IDisposable;
+	suiteSetup(() => {
+		mainDom = new JSDOM('<!doctype html><body></body>');
+		mainGlobals = installEditorTestDom(mainDom, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent']);
+		getWindowId(mainDom.window as unknown as Window);
+	});
+	suiteTeardown(() => {
+		getWindowById(1)?.disposables.dispose();
+		mainGlobals.dispose();
+		mainDom.window.close();
+	});
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('Quick Access is lazy and owned by its Quick Input service', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		using browser = toDisposable(() => dom.window.close());
+		using registrationWindow = registerWindow(dom.window as unknown as Window);
+		using globals = installEditorTestDom(dom, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent']);
+		using service = new TestQuickInputService({ container: dom.window.document.body });
+		const access = service.quickAccess;
+		assert.equal(service.quickAccess, access);
+		assert.equal(service.currentQuickInput, undefined);
+		assert.equal(dom.window.document.querySelector('.ash-quick-input-host'), null);
+	});
+
+	test('Picker queries publish fast results, cancel superseded work and retain the current busy state', async () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		using browser = toDisposable(() => dom.window.close());
+		using registrationWindow = registerWindow(dom.window as unknown as Window);
+		using globals = installEditorTestDom(dom, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent']);
+		using service = new TestQuickInputService({ container: dom.window.document.body });
+		const requests: { filter: string; token: CancellationToken; result: DeferredPromise<Picks<IPickerQuickAccessItem>>; disposed: boolean; }[] = [];
+		class QueryProvider extends PickerQuickAccessProvider<IPickerQuickAccessItem> {
+			constructor() { super('test-query:'); }
+			protected override _getPicks(filter: string, resources: DisposableStore, token: CancellationToken): FastAndSlowPicks<IPickerQuickAccessItem> {
+				const request = { filter, token, result: new DeferredPromise<Picks<IPickerQuickAccessItem>>(), disposed: false };
+				requests.push(request);
+				resources.add(toDisposable(() => { request.disposed = true; }));
+				return { picks: [{ label: `Fast ${filter}` }], additionalPicks: request.result.p };
+			}
+		}
+		using registration = QuickAccessRegistry.register({ prefix: 'test-query:', placeholder: 'Query', helpLabel: 'Query', ctor: QueryProvider });
+		service.quickAccess.show('test-query:old');
+		const picker = service.currentQuickInput as IQuickPick<IQuickPickItem>;
+		assert.deepEqual(picker.items.map(item => item.label), ['Fast old']);
+		assert.equal(picker.busy, true);
+		picker.value = 'test-query:new';
+		assert.equal(requests[0].token.isCancellationRequested, true);
+		assert.equal(requests[0].disposed, true);
+		await requests[0].result.complete([{ label: 'Late old' }]);
+		await Promise.resolve();
+		assert.deepEqual(picker.items.map(item => item.label), ['Fast new']);
+		assert.equal(picker.busy, true);
+		const active = { label: 'Current result' };
+		await requests[1].result.complete({ items: [active], active });
+		await Promise.resolve();
+		assert.deepEqual(picker.items.map(item => item.label), ['Fast new', 'Current result']);
+		assert.deepEqual(picker.activeItems, [active]);
+		assert.equal(picker.busy, false);
+		picker.hide();
+		await Promise.resolve();
+		assert.equal(requests[1].token.isCancellationRequested, true);
+		assert.equal(requests[1].disposed, true);
+	});
+
+	test('Fast picks remain acceptable while additional results are pending and close before the item recipe runs', async () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		using browser = toDisposable(() => dom.window.close());
+		using registrationWindow = registerWindow(dom.window as unknown as Window);
+		using globals = installEditorTestDom(dom, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent']);
+		using service = new TestQuickInputService({ container: dom.window.document.body });
+		const additional = new DeferredPromise<Picks<IPickerQuickAccessItem>>();
+		let accepted = false;
+		let token!: CancellationToken;
+		class FastProvider extends PickerQuickAccessProvider<IPickerQuickAccessItem> {
+			constructor() { super('test-fast:'); }
+			protected override _getPicks(_filter: string, _resources: DisposableStore, query: CancellationToken): FastAndSlowPicks<IPickerQuickAccessItem> {
+				token = query;
+				return { picks: [{ label: 'Cached', accept: () => { accepted = true; assert.equal(service.currentQuickInput, undefined); } }], additionalPicks: additional.p };
+			}
+		}
+		using registration = QuickAccessRegistry.register({ prefix: 'test-fast:', placeholder: 'Fast', helpLabel: 'Fast', ctor: FastProvider });
+		service.quickAccess.show('test-fast:');
+		await service.accept();
+		assert.equal(accepted, true);
+		assert.equal(token.isCancellationRequested, true);
+		await additional.complete([{ label: 'Late' }]);
+		await Promise.resolve();
+		assert.equal(service.currentQuickInput, undefined);
+	});
+
+	test('Item attachment, background acceptance and async buttons share one picker lifetime', async () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		using browser = toDisposable(() => dom.window.close());
+		using registrationWindow = registerWindow(dom.window as unknown as Window);
+		using globals = installEditorTestDom(dom, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent']);
+		using service = new TestQuickInputService({ container: dom.window.document.body });
+		const buttonResult = new DeferredPromise<TriggerAction>();
+		const accepted: IKeyMods[] = [];
+		const attached: IKeyMods[] = [];
+		class RecipeProvider extends PickerQuickAccessProvider<IPickerQuickAccessItem> {
+			constructor() { super('test-recipe:', { canAcceptInBackground: true }); }
+			protected override _getPicks(): Picks<IPickerQuickAccessItem> {
+				return [{
+					label: 'Recipe', accept: mods => accepted.push(mods), attach: mods => attached.push(mods),
+					buttons: [{ id: 'remove', label: 'Remove' }], trigger: () => buttonResult.p
+				}];
+			}
+		}
+		using registration = QuickAccessRegistry.register({ prefix: 'test-recipe:', placeholder: 'Recipe', helpLabel: 'Recipe', ctor: RecipeProvider });
+		service.quickAccess.show('test-recipe:');
+		const picker = service.currentQuickInput as IQuickPick<IQuickPickItem>;
+		const mods = { ctrlCmd: false, alt: true, shift: true };
+		await service.accept(mods);
+		assert.deepEqual(attached, [mods]);
+		assert.equal(service.currentQuickInput, picker);
+		picker.keyMods = { ctrlCmd: false, alt: false, shift: false };
+		picker.accept(true);
+		assert.equal(accepted.length, 1);
+		assert.equal(service.currentQuickInput, picker);
+		dom.window.document.querySelector<HTMLButtonElement>('.ash-quick-pick-row-action')!.click();
+		await service.cancel();
+		await buttonResult.complete(TriggerAction.REFRESH_PICKER);
+		await Promise.resolve();
+		assert.equal(service.currentQuickInput, undefined);
+		assert.equal(dom.window.document.querySelector('.ash-quick-pick'), null);
+	});
 });

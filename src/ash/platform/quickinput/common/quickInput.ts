@@ -1,6 +1,7 @@
 import type { Event } from "../../../base/common/event.js";
 import type { CancellationToken } from '../../../base/common/cancellation.js';
 import type { IDisposable } from "../../../base/common/lifecycle.js";
+import type { IQuickAccessController } from './quickAccess.js';
 import {
 	createServiceIdentifier,
 } from "../../instantiation/common/instantiation.js";
@@ -41,6 +42,13 @@ export interface IQuickInputSelection {
 	readonly end: number;
 }
 
+/** Optional search navigation; selection and search state remain with the caller. */
+export interface IQuickInputNavigation {
+	readonly items: readonly { readonly id: string; readonly label: string; }[];
+	readonly selectedId: string | undefined;
+	readonly onSelect: (id: string) => void;
+}
+
 export enum QuickPickFocus {
 	First = 1,
 	Second,
@@ -51,10 +59,31 @@ export enum QuickPickFocus {
 	PreviousPage,
 }
 
+export enum QuickInputType {
+	QuickPick = 'quickPick',
+	InputBox = 'inputBox',
+}
+
+/** The active control, including prompts that do not contain a result list. */
+export interface IQuickInput extends IDisposable {
+	readonly type: QuickInputType;
+	readonly onDidHide: Event<void>;
+	focus(): void;
+	accept(inBackground?: boolean): void | Promise<void>;
+	hide(): void;
+}
+
+export interface IQuickPickDidAcceptEvent {
+	readonly inBackground: boolean;
+}
+
 /** A short-lived searchable selection UI hosted by the current window. */
 export interface IQuickPick<TItem extends IQuickPickItem>
-	extends IDisposable {
-	readonly onDidAccept: Event<TItem>;
+	extends IQuickInput {
+	readonly type: QuickInputType.QuickPick;
+	navigation?: IQuickInputNavigation;
+	readonly onDidAccept: Event<IQuickPickDidAcceptEvent>;
+	activeItems: readonly TItem[];
 	readonly onDidChangeValue: Event<string>;
 	readonly onDidHide: Event<void>;
 	readonly onDidBlur: Event<void>;
@@ -68,7 +97,7 @@ export interface IQuickPick<TItem extends IQuickPickItem>
 	readonly onDidChangeSelection: Event<readonly TItem[]>;
 	busy?: boolean;
 	canAcceptInBackground?: boolean;
-	readonly keyMods?: IKeyMods;
+	keyMods?: IKeyMods;
 	ariaLabel: string;
 	/** An optional HTMLElement anchor; unanchored pickers retain the window's default placement. */
 	anchor?: unknown;
@@ -80,6 +109,8 @@ export interface IQuickPick<TItem extends IQuickPickItem>
 
 	show(): void;
 	hide(): void;
+	focus(what?: QuickPickFocus): void;
+	toggle(): void;
 }
 
 export interface IInputOptions {
@@ -93,7 +124,15 @@ export interface IInputOptions {
 
 /** Creates Quick Input controllers hosted by one Workbench window. */
 export interface IQuickInputService {
-	readonly currentQuickInput?: IQuickPick<IQuickPickItem>;
+	readonly quickAccess: IQuickAccessController;
+	readonly onShow: Event<void>;
+	readonly onHide: Event<void>;
+	readonly currentQuickInput: IQuickInput | undefined;
+	focus(): void;
+	toggle(): void;
+	navigate(next: boolean): void;
+	accept(keyMods?: IKeyMods): Promise<void>;
+	cancel(): Promise<void>;
 	createQuickPick<TItem extends IQuickPickItem>(): IQuickPick<TItem>;
 	input(options: IInputOptions, token?: CancellationToken): Promise<string | undefined>;
 }

@@ -174,7 +174,11 @@ function pick(input: IQuickInputService, title: string, items: readonly Item[]):
 		picker.placeholder = title;
 		picker.items = items;
 		let selected: Item | undefined;
-		store.add(picker.onDidAccept(item => { selected = item; picker.hide(); }));
+		store.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
+			selected = item; picker.hide();
+		}));
 		store.add(picker.onDidHide(() => { store.dispose(); resolve(selected); }));
 		picker.show();
 	});

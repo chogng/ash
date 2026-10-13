@@ -85,9 +85,13 @@ registerAction2(class RunRecentCommandAction extends Action2 {
 			picker.items = items;
 			let selected: CommandHistoryPick | undefined;
 			const command = await new Promise<CommandHistoryPick | undefined>(resolve => {
-				pickerLifetime.add(picker.onDidAccept(item => {
+				pickerLifetime.add(picker.onDidAccept(() => {
+					const item = picker.selectedItems[0];
+					if (!item) return;
+
 					selected = item;
 					picker.hide();
+
 				}));
 				pickerLifetime.add(picker.onDidHide(() => resolve(selected)));
 				pickerLifetime.add(toDisposable(() => resolve(undefined)));

@@ -47,7 +47,11 @@ registerAction2(class RestoreCheckpointAction extends Action2 {
 				: localize('chat.restoreCheckpoint.noFiles', 'Creates a new chat at this message boundary. This checkpoint contains no files.'),
 		}))).reverse();
 		const selected = await new Promise<CheckpointItem | undefined>(resolve => {
-			store.add(picker.onDidAccept(item => { resolve(item); picker.hide(); }));
+			store.add(picker.onDidAccept(() => {
+				const item = picker.selectedItems[0];
+				if (!item) return;
+				resolve(item); picker.hide();
+			}));
 			store.add(picker.onDidHide(() => { resolve(undefined); store.dispose(); }));
 			picker.show();
 		});

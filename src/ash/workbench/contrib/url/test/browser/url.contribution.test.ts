@@ -1,3 +1,4 @@
+import { quickInputServiceTestControls } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { suite, test } from 'mocha';
@@ -62,6 +63,8 @@ class URLFixture extends Disposable {
 		this.services.registerInstance(IFileService, this.files);
 		this.services.registerInstance(IClipboardService, { writeText: async (value: string) => { this.copied.push(value); } } as IClipboardService);
 		this.services.registerInstance(IQuickInputService, {
+			...quickInputServiceTestControls,
+
 			input: async (options: { value?: string; }) => { this.lastInput = options.value; return inputTarget; },
 			createQuickPick: () => { throw new Error('Unexpected domain picker'); },
 		});

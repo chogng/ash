@@ -64,7 +64,10 @@ registerAction2(class ChangeKeyboardLayoutAction extends Action2 {
 				detail: layout.id,
 			})),
 		];
-		disposables.add(picker.onDidAccept((item) => {
+		disposables.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
+
 			picker.hide();
 			if (item.kind === 'autodetect') {
 				void configuration.updateValue(KeyboardConfiguration.layout, 'autodetect').catch(reportKeyboardLayoutError);
@@ -77,6 +80,7 @@ registerAction2(class ChangeKeyboardLayoutAction extends Action2 {
 			if (item.layout) {
 				void configuration.updateValue(KeyboardConfiguration.layout, item.layout.id).catch(reportKeyboardLayoutError);
 			}
+
 		}));
 		disposables.add(picker.onDidHide(() => disposables.dispose()));
 		picker.show();

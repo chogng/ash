@@ -125,6 +125,7 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 	private lastFocused: HTMLElement | null = null;
 	private replaceLastFocused = false;
 	private viewZoneId: string | null = null;
+	private viewZone: FindWidgetViewZone | undefined;
 	private readonly clearOptionHighlight = this._register(new RunOnceScheduler(() => {
 		for (const button of [this.matchCaseButton, this.wholeWordButton, this.regexButton]) button.domNode.classList.remove('find-options-highlight');
 	}, 2000));
@@ -260,11 +261,7 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 
 	public getId(): string { return `${this.editor.getId()}.findWidget`; }
 	public override dispose(): void {
-		if (this.viewZoneId) {
-			const id = this.viewZoneId;
-			this.editor.changeViewZones(accessor => accessor.removeZone(id));
-			this.viewZoneId = null;
-		}
+		this.removeViewZone();
 		super.dispose();
 	}
 	public getDomNode(): HTMLElement { return this.root; }
@@ -379,12 +376,30 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 	private updateViewZone(): void {
 		const shouldShow = this.state.isRevealed && this.editor.getOption(EditorOption.find).addExtraSpaceOnTop;
 		if (shouldShow && !this.viewZoneId) {
-			this.editor.changeViewZones(accessor => { this.viewZoneId = accessor.addZone(new FindWidgetViewZone(0, this.root.ownerDocument)); });
+			const scrollTop = this.editor.getScrollTop();
+			const zone = new FindWidgetViewZone(0, this.root.ownerDocument);
+			this.editor.changeViewZones(accessor => {
+				this.viewZone = zone;
+				this.viewZoneId = accessor.addZone(zone);
+				// Keep the visible text in place when inserting space above a scrolled document.
+				if (scrollTop > 0) this.editor.setScrollTop(scrollTop + zone.heightInPx);
+			});
 		} else if (!shouldShow && this.viewZoneId) {
-			const id = this.viewZoneId;
-			this.editor.changeViewZones(accessor => accessor.removeZone(id));
-			this.viewZoneId = null;
+			this.removeViewZone();
 		}
+	}
+	private removeViewZone(): void {
+		const id = this.viewZoneId;
+		const zone = this.viewZone;
+		if (!id || !zone) return;
+		const scrollTop = this.editor.getScrollTop();
+		this.editor.changeViewZones(accessor => {
+			accessor.removeZone(id);
+			this.viewZoneId = null;
+			this.viewZone = undefined;
+			// Removing the zone must not scroll the found line out of the viewport.
+			this.editor.setScrollTop(Math.max(0, scrollTop - zone.heightInPx));
+		});
 	}
 	private onKeyDown(event: KeyboardEvent): void {
 		if (event.defaultPrevented || event.isComposing) return;

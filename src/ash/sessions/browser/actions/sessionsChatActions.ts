@@ -99,7 +99,11 @@ function selectReviewItem(input: IQuickInputService, title: string, items: reado
 		picker.placeholder = title;
 		picker.ariaLabel = title;
 		picker.items = items.map(item => ({ ...item, picked: item.id === selectedId }));
-		disposables.add(picker.onDidAccept(item => { resolve(item); picker.hide(); }));
+		disposables.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
+			resolve(item); picker.hide();
+		}));
 		disposables.add(picker.onDidHide(() => { resolve(undefined); disposables.dispose(); }));
 		picker.show();
 	});
@@ -144,9 +148,13 @@ registerAction2(class ShowSessionsChatHistoryAction extends Action2 {
 				detail: thread.management?.activity?.text ?? thread.management?.summary ?? undefined,
 			}));
 		});
-		disposables.add(quickPick.onDidAccept(item => {
+		disposables.add(quickPick.onDidAccept(() => {
+			const item = quickPick.selectedItems[0];
+			if (!item) return;
+
 			view.openSession(item.sessionId, item.threadId);
 			quickPick.hide();
+
 		}));
 		disposables.add(quickPick.onDidHide(() => disposables.dispose()));
 		quickPick.show();

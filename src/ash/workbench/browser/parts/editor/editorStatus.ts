@@ -269,7 +269,11 @@ function pickStatusItem<T extends IQuickPickItem>(quickInput: IQuickInputService
 		picker.sortByLabel = false;
 		picker.placeholder = label;
 		picker.ariaLabel = label;
-		resources.add(picker.onDidAccept(item => { resolve(item); picker.hide(); }));
+		resources.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
+			resolve(item); picker.hide();
+		}));
 		resources.add(picker.onDidHide(() => { resolve(undefined); resources.dispose(); }));
 		picker.show();
 	});

@@ -1,3 +1,4 @@
+import './dialog.css';
 import { addDisposableListener, getActiveElement, h, isHTMLElement } from "../../dom.js";
 import { Disposable, toDisposable } from "../../../common/lifecycle.js";
 import {

@@ -1,3 +1,4 @@
+import { quickInputServiceTestControls } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { IAgentExecutionSettingsService } from '../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
@@ -180,6 +181,8 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	// Search renders Customize as well as Models; its required services belong to this dialog fixture.
 	const unsupportedExtensionAction = async (): Promise<never> => { throw new Error('Extension mutation is outside this Preferences test'); };
 	services.registerInstance(IQuickInputService, {
+		...quickInputServiceTestControls,
+
 		createQuickPick: () => { throw new Error('Extension filter selection is outside this Preferences test'); },
 		input: unsupportedExtensionAction,
 	});

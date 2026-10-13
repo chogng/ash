@@ -1,3 +1,5 @@
+import { quickInputServiceTestControls } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
+import { QuickInputType, type IQuickPickDidAcceptEvent } from '../../../platform/quickinput/common/quickInput.js';
 import { Event as QuickPickTestEvent } from '../../../base/common/event.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
@@ -152,13 +154,23 @@ test('Session History shows each branch management state in Chinese before openi
 });
 
 class TestQuickInputService implements IQuickInputService {
+	readonly quickAccess = quickInputServiceTestControls.quickAccess;
+	readonly onShow = quickInputServiceTestControls.onShow;
+	readonly onHide = quickInputServiceTestControls.onHide;
+	readonly currentQuickInput = undefined;
+	focus = quickInputServiceTestControls.focus;
+	toggle = quickInputServiceTestControls.toggle;
+	navigate = quickInputServiceTestControls.navigate;
+	accept = quickInputServiceTestControls.accept;
+	cancel = quickInputServiceTestControls.cancel;
+
 	picker: TestQuickPick<IQuickPickItem> | undefined;
 	constructor(private readonly labels: string[] = []) { }
 
 	createQuickPick<TItem extends IQuickPickItem>(): IQuickPick<TItem> {
 		const picker = new TestQuickPick<TItem>(() => {
 			const label = this.labels.shift();
-			if (label) picker.accept(label);
+			if (label) picker.chooseItem(label);
 		});
 		this.picker = picker as unknown as TestQuickPick<IQuickPickItem>;
 		return picker;
@@ -168,11 +180,17 @@ class TestQuickInputService implements IQuickInputService {
 }
 
 class TestQuickPick<TItem extends IQuickPickItem> extends Disposable implements IQuickPick<TItem> {
+	readonly type = QuickInputType.QuickPick;
+	activeItems: readonly TItem[] = [];
+	focus(): void { }
+	toggle(): void { }
+	accept(inBackground = false): void { this.selectedItems = this.activeItems; this.acceptEmitter.fire({ inBackground }); }
+
 	canSelectMany = false;
 	selectedItems: readonly TItem[] = [];
 	readonly onDidChangeSelection = QuickPickTestEvent.None;
 	constructor(private readonly onShow: () => void) { super(); }
-	private readonly acceptEmitter = this._register(new Emitter<TItem>());
+	private readonly acceptEmitter = this._register(new Emitter<IQuickPickDidAcceptEvent>());
 	private readonly hideEmitter = this._register(new Emitter<void>());
 	readonly onDidAccept = this.acceptEmitter.event;
 	readonly onDidHide = this.hideEmitter.event;
@@ -189,13 +207,13 @@ class TestQuickPick<TItem extends IQuickPickItem> extends Disposable implements 
 
 	acceptFirst(): void {
 		const item = this.items[0];
-		if (item) this.acceptEmitter.fire(item);
+		if (item) { this.selectedItems = [item]; this.acceptEmitter.fire({ inBackground: false }); }
 	}
 
-	accept(label: string): void {
+	chooseItem(label: string): void {
 		const item = this.items.find(item => item.label === label);
 		assert.ok(item, `Expected review choice: ${label}`);
-		this.acceptEmitter.fire(item);
+		this.selectedItems = [item]; this.acceptEmitter.fire({ inBackground: false });
 	}
 	show(): void { this.onShow(); }
 	hide(): void { this.hideEmitter.fire(); }

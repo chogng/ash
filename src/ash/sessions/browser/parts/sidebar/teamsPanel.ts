@@ -235,7 +235,11 @@ export class TeamsPanel extends Disposable {
 		return new Promise(resolve => {
 			let settled = false;
 			const finish = (role: TeamRole | undefined): void => { if (settled) return; settled = true; resolve(role); picker.hide(); };
-			const accepted = picker.onDidAccept(item => finish(item.role));
+			const accepted = picker.onDidAccept(() => {
+				const item = picker.selectedItems[0];
+				if (!item) return;
+				return finish(item.role);
+			});
 			const hidden = picker.onDidHide(() => { finish(undefined); accepted.dispose(); hidden.dispose(); picker.dispose(); });
 			picker.show();
 		});

@@ -1627,7 +1627,11 @@
     "themeEditor.verbosityTitle": "主题编辑器辅助功能帮助",
     "themeEditor.verbosityDescription": "主题编辑器获得焦点时，播报如何打开辅助功能帮助。",
     "themeEditor.help": "主题编辑器在辅助窗口中运行，主窗口实时预览主题。使用 Tab 和 Shift+Tab 在搜索、分类、颜色控件和 JSON 之间移动。在颜色名称上按 Enter 可定位对应的 JSON 值。编辑十六进制颜色，或在色块上按 Enter 或空格打开颜色选择器。选择器内，左右方向键调整饱和度，上下方向键调整亮度，按住 Shift 可加大步长。Tab 在色相、不透明度、格式和颜色值之间移动。Enter 确认颜色值。使用 <keybinding:editor.action.accessibleView> 可读取当前颜色。Escape 或关闭会关闭选择器并返回色块；修改会保留在共用的 JSON 中。也可使用方向键调整颜色行的不透明度滑块。重置会移除文件中的覆盖值，恢复继承颜色。颜色面板与 JSON 共用撤销和重做。无效 JSON 会保留上一次有效预览。实时预览开关可应用临时颜色，不会保存文件。保存会写入当前主题；另存为会创建用户主题副本。使用 <keybinding:workbench.action.files.save> 保存。关闭此编辑器或关闭实时预览，可恢复已配置的主题。按 Escape 关闭此帮助并返回之前的控件。",
-    "themeEditor.cancel": "取消"
+    "themeEditor.cancel": "取消",
+    "auxiliaryWindow.editor": "编辑器",
+    "auxiliaryWindow.unsavedChanges": "辅助编辑器窗口中有未保存的更改。",
+    "quickInput.searchModes": "搜索分类",
+    "quickAccess.filesTab": "文件"
   },
   "ash.menu": {
     "file": "文件",

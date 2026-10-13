@@ -53,7 +53,7 @@ import { AccessibilityService } from '../../../platform/accessibility/browser/ac
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
-import { QuickInputController } from '../../../platform/quickinput/browser/quickInputController.js';
+import { TestQuickInputService } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
 import { IOpenerService } from '../../../platform/opener/common/opener.js';
 import { OpenerService } from '../../browser/services/openerService.js';
@@ -126,7 +126,7 @@ export function registerCodeEditorServices(services: InstantiationService): void
 		services.registerSingleton(INotificationService, () => services.createInstance(StandaloneNotificationService));
 	}
 	if (!services.has(IQuickInputService)) {
-		services.registerSingleton(IQuickInputService, () => new QuickInputController(document.body));
+		services.registerSingleton(IQuickInputService, () => new TestQuickInputService({ instantiationService: services, container: document.body }));
 	}
 	if (!services.has(IMenuService)) {
 		services.registerSingleton(IMenuService, () => services.createInstance(new SyncDescriptor(MenuService)));
@@ -191,7 +191,7 @@ export function createTestCodeEditor(options: TestCodeEditorOptions): CodeEditor
 			overrides.registerSingleton(IContextViewService, () => overrides.createInstance(BrowserContextViewService, widgetOptions.container.ownerDocument.body));
 		}
 		if (!overrides.has(IQuickInputService)) {
-			overrides.registerSingleton(IQuickInputService, () => new QuickInputController(widgetOptions.container.ownerDocument.body));
+			overrides.registerSingleton(IQuickInputService, () => new TestQuickInputService({ instantiationService: overrides, container: widgetOptions.container.ownerDocument.body }));
 		}
 		if (languageConfigurationService) {
 			overrides.registerInstance(ILanguageConfigurationService, languageConfigurationService);

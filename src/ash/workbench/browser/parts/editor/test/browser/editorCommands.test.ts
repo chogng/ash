@@ -8,7 +8,7 @@ import { ContextKeyService, IContextKeyService } from "../../../../../../platfor
 import { InstantiationService } from "../../../../../../platform/instantiation/common/instantiationService.js";
 import { IQuickInputService } from "../../../../../../platform/quickinput/common/quickInput.js";
 import { CommandService } from "../../../../../services/commands/common/commandService.js";
-import { WorkbenchQuickInputService } from "../../../../../services/quickinput/browser/quickInputService.js";
+import { TestQuickInputService } from "../../../../../../platform/quickinput/test/browser/testQuickInputService.js";
 import { IEditorGroupsService } from "../../../../../services/editor/common/editorGroupsService.js";
 import { IEditorPart, type IEditorPart as EditorPartContract } from "../../editorPart.js";
 import { registerAction2, MenuId } from '../../../../../../platform/actions/common/actions.js';
@@ -216,7 +216,7 @@ test("editor commands close the active tab and reopen it with a chosen editor", 
 		services.registerInstance(IContextKeyService, contextKeys);
 		services.registerInstance(IEditorPart, editorPart);
 		services.registerInstance(IEditorGroupsService, { groups: [activeGroup, otherGroup], activeGroup, getGroup: (id: string) => [activeGroup, otherGroup].find(group => group.id === id) } as unknown as import("../../../../../services/editor/common/editorGroupsService.js").IEditorGroupsService);
-		using quickInput = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
+		using quickInput = new TestQuickInputService({ instantiationService: services, container: dom.window.document.body, contextKeyService: contextKeys });
 		services.registerInstance(IQuickInputService, quickInput);
 		using commands = new CommandService(services);
 

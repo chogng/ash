@@ -285,7 +285,11 @@ export class TaskService extends Disposable implements ITaskService {
 					picker.items = candidates(catalog).map(task => ({ task, label: task.label, description: task.source }));
 				};
 				resources.add(this.onDidChangeTasks(update));
-				resources.add(picker.onDidAccept(item => finish(item.task.label)));
+				resources.add(picker.onDidAccept(() => {
+					const item = picker.selectedItems[0];
+					if (!item) return;
+					return finish(item.task.label);
+				}));
 				resources.add(picker.onDidHide(() => finish()));
 				update(this.currentTasks);
 				picker.show();
@@ -633,7 +637,11 @@ export class TaskService extends Disposable implements ITaskService {
 				instance, label: localize('tasks.runningInstance', '{0} — instance {1}', task.label, index + 1),
 				description: instance.run?.terminalId ?? localize('tasks.preparingInstance', 'Preparing'),
 			}));
-			resources.add(picker.onDidAccept(item => finish(item.instance)));
+			resources.add(picker.onDidAccept(() => {
+				const item = picker.selectedItems[0];
+				if (!item) return;
+				return finish(item.instance);
+			}));
 			resources.add(picker.onDidHide(() => finish()));
 			resources.add(this.onDidChangeTasks(() => finish(null)));
 			const cancel = (): void => finish();

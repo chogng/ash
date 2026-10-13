@@ -1,10 +1,11 @@
+import type { IQuickPick, IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
+import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import gitMessages from '../../../../../../../extensions/git/package.nls.json' with { type: 'json' };
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import { IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import manifest from '../../../../../../../extensions/git/package.json' with { type: 'json' };
 import { parseExtensionManifest } from '../../../../services/extensions/common/extensionManifest.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
-import { QuickInputController } from '../../../../../platform/quickinput/browser/quickInputController.js';
 import { showConfigureHooksQuickPick } from '../../../chat/browser/promptSyntax/hookActions.js';
 import { IAgentExecutionSettingsService } from '../../../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { IPromptsService } from '../../../chat/common/promptSyntax/service/promptsService.js';
@@ -1743,7 +1744,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	await nextTurn();
 	assert.equal(userTomlButton.disabled, false);
 
-	const quickInput = disposables.add(new QuickInputController(root));
+	const quickInput = disposables.add(new TestQuickInputService({ container: root }));
 	const hooksServices = disposables.add(editorServices.createChild());
 	hooksServices.registerInstance(IQuickInputService, quickInput);
 	const slowDiscovery = new DeferredPromise<readonly HookSource[]>();
@@ -1755,7 +1756,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	pickerInput.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
 	pickerInput.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 	await nextTurn();
-	assert.equal(quickInput.currentQuickInput?.busy, true);
+	assert.equal((quickInput.currentQuickInput as IQuickPick<IQuickPickItem> | undefined)?.busy, true);
 	let pickerReleased = false;
 	void configureHooks.then(() => { pickerReleased = true; });
 	pickerInput.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));

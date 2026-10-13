@@ -274,7 +274,11 @@ function pickWorkspaceFolder(quickInput: IQuickInputService, folders: readonly I
 			resolve(folder);
 			disposables.dispose();
 		};
-		disposables.add(picker.onDidAccept(item => finish(item.folder)));
+		disposables.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
+			return finish(item.folder);
+		}));
 		disposables.add(picker.onDidHide(() => finish(undefined)));
 		picker.show();
 	});

@@ -1,3 +1,4 @@
+import { BrowserAuxiliaryWindowService, IAuxiliaryWindowService } from '../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { LayoutActionsContext } from '../../browser/actions/layoutActions.js';
 import { createTestComponentServices, registerTestComponentServices, createTestEditorServices } from '../common/testEditorServices.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
@@ -58,7 +59,7 @@ suiteTeardown(() => {
 });
 const { InMemoryConfigurationService } = await import('../../../platform/configuration/common/inMemoryConfigurationService.js');
 const { IConfigurationService } = await import('../../../platform/configuration/common/configuration.js');
-const { WorkbenchQuickInputService } = await import('../../../workbench/services/quickinput/browser/quickInputService.js');
+const { TestQuickInputService } = await import('../../../platform/quickinput/test/browser/testQuickInputService.js');
 const componentServices = createTestComponentServices(paneStorage);
 suiteTeardown(() => componentServices.dispose());
 const { Part } = await import("../../../workbench/browser/part.js");
@@ -548,10 +549,12 @@ test('Workbench layout requires its services and hosts overlays before Parts cre
 	assert.throws(() => services.createInstance(WorkbenchLayout, container, options), /configurationService/);
 	using configuration = new InMemoryConfigurationService();
 	services.registerInstance(IConfigurationService, configuration);
+	assert.throws(() => services.createInstance(WorkbenchLayout, container, options), /auxiliaryWindowService/);
+	registerTestComponentServices(services, dom.window.document);
 	using layout = services.createInstance(WorkbenchLayout, container, options);
 	services.registerInstance(IWorkbenchLayoutService, layout);
 	using contextKeys = new ContextKeyService();
-	using quickInput = new WorkbenchQuickInputService({
+	using quickInput = new TestQuickInputService({ instantiationService: services,
 		container,
 		contextKeyService: contextKeys,
 		layoutService: services.get(ILayoutService),
@@ -2301,3 +2304,70 @@ function registerContainerServices(services: InstanceType<typeof InstantiationSe
 	}
 	return services;
 }
+
+
+test('auxiliary containers route Quick Input and context views through focus, resize and close', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	const popup = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	try {
+		const harness = createLayoutHarness(dom.window.document);
+		using resources = harness.disposables;
+		Object.defineProperty(dom.window, 'open', { configurable: true, value: () => popup.window });
+		const windows = harness.services.get(IAuxiliaryWindowService);
+		const auxiliary = await windows.open();
+		const root = auxiliary.container;
+		assert.deepEqual([...harness.layout.containers], [harness.container, root]);
+		assert.equal(harness.layout.getContainer(auxiliary.window), root);
+		assert.equal(harness.layout.whenContainerStylesLoaded(auxiliary.window), auxiliary.whenStylesHaveLoaded);
+
+		using contexts = new ContextKeyService();
+		using quickInput = new TestQuickInputService({ instantiationService: harness.services, container: harness.container, contextKeyService: contexts, layoutService: harness.layout });
+		using mainPicker = quickInput.createQuickPick();
+		mainPicker.show();
+		const target = h(popup.window.document, 'button');
+		root.append(target);
+		target.focus();
+		assert.equal(harness.layout.activeContainer, root);
+		assert.equal(quickInput.currentQuickInput, undefined);
+		assert.equal(harness.container.querySelector('.ash-quick-pick'), null);
+
+		using picker = quickInput.createQuickPick();
+		picker.items = [{ label: 'Auxiliary choice' }];
+		picker.show();
+		assert.equal(quickInput.currentQuickInput, picker);
+		assert.ok(root.querySelector('.ash-quick-pick input'));
+		assert.equal(harness.container.querySelector('.ash-quick-pick'), null);
+		picker.hide();
+		assert.equal(popup.window.document.activeElement, target);
+
+		const { BrowserContextViewService } = await import('../../../platform/contextview/browser/contextViewService.js');
+		using contextViews = new BrowserContextViewService(harness.container, harness.layout);
+		const content = h(popup.window.document, 'div');
+		assert.equal(contextViews.show({ anchor: target, content }), true);
+		assert.equal(content.closest('.ash-workbench') ?? content.parentElement?.parentElement, root);
+		const layouts: import('../../../platform/layout/browser/layoutService.js').ILayoutContainerEvent[] = [];
+		resources.add(harness.layout.onDidLayoutContainer(event => layouts.push(event)));
+		Object.defineProperties(popup.window, { innerWidth: { configurable: true, value: 680 }, innerHeight: { configurable: true, value: 490 } });
+		auxiliary.layout();
+		assert.deepEqual(layouts.map(event => [event.container, event.dimension.width, event.dimension.height]), [[root, 680, 490]]);
+
+		picker.show();
+		harness.container.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'F1', bubbles: true }));
+		assert.equal(harness.layout.activeContainer, harness.container);
+		assert.equal(quickInput.currentQuickInput, undefined);
+		root.dispatchEvent(new popup.window.KeyboardEvent('keydown', { key: 'F1', bubbles: true }));
+		assert.equal(harness.layout.activeContainer, root);
+		picker.show();
+		auxiliary.dispose();
+		assert.equal(harness.layout.activeContainer, harness.container);
+		assert.deepEqual([...harness.layout.containers], [harness.container]);
+		assert.throws(() => harness.layout.getContainer(auxiliary.window), /not registered/);
+		assert.equal(root.querySelector('.ash-quick-input-host'), null);
+		assert.equal(harness.container.querySelector('.ash-context-view')?.hasAttribute('hidden'), true);
+		mainPicker.show();
+		assert.equal(quickInput.currentQuickInput, mainPicker);
+	} finally {
+		popup.window.close();
+		dom.window.close();
+	}
+});

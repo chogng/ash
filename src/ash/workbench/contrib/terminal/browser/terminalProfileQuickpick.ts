@@ -38,10 +38,14 @@ export class TerminalProfileQuickpick extends Disposable {
 			update();
 			lifetime.add(this.profiles.onDidChangeAvailableProfiles(update));
 			let selected: string | undefined;
-			lifetime.add(picker.onDidAccept(item => {
+			lifetime.add(picker.onDidAccept(() => {
+				const item = picker.selectedItems[0];
+				if (!item) return;
+
 				if (!this.profiles.availableProfiles.some(profile => profile.profileId === item.profileId) && !this.profiles.contributedProfiles.some(profile => item.profileId === `extension:${profile.extensionIdentifier}/${profile.id}`)) return;
 				selected = item.profileId;
 				picker.hide();
+
 			}));
 			lifetime.add(picker.onDidHide(() => { resolve(selected); this.selection.clear(); }));
 			lifetime.add(toDisposable(() => resolve(undefined)));

@@ -11,6 +11,7 @@ import { IStorageService, StorageScope, StorageTarget } from "../../../../platfo
 import { bindColorTheme } from "../../../../platform/theme/browser/themeStyles.js";
 import { getIconDefinition } from "../../../../platform/theme/common/iconRegistry.js";
 import { IThemeService } from "../../../../platform/theme/common/themeService.js";
+import { localize } from '../../../../nls.js';
 
 const WORKBENCH_ROOT_CLASSES = ["ash-reduce-motion", "ash-enable-motion", "ash-reduce-transparency", "ash-underline-links"] as const;
 const WORKBENCH_ROOT_ATTRIBUTES = ["data-os", "data-runtime", "data-workbench-state"] as const;
@@ -48,6 +49,7 @@ export interface IAuxiliaryWindow extends Disposable {
 	readonly onDidLayout: Event<IDimension>;
 	readonly onBeforeUnload: Event<AuxiliaryWindowBeforeUnloadEvent>;
 	readonly onDidClose: Event<void>;
+	readonly whenStylesHaveLoaded: Promise<void>;
 	layout(): void;
 	createState(): AuxiliaryWindowState;
 }
@@ -77,6 +79,7 @@ export class BrowserAuxiliaryWindowService extends Disposable implements IAuxili
 	}
 
 	async open(options: AuxiliaryWindowOpenOptions = {}): Promise<IAuxiliaryWindow> {
+		this.assertNotDisposed();
 		const restored = parseWindowBounds(this.storageService.get(AUXILIARY_WINDOW_STATE_KEY, StorageScope.APPLICATION));
 		const width = finiteDimension(options.width ?? (restored ? restored.width + restored.featureWidthOffset : undefined), 960);
 		const height = finiteDimension(options.height ?? (restored ? restored.height + restored.featureHeightOffset : undefined), 720);
@@ -104,7 +107,7 @@ export class BrowserAuxiliaryWindowService extends Disposable implements IAuxili
 			target,
 			this.workbenchRoot,
 			this.themeService,
-			options.title ?? "Editor",
+			options.title ?? localize({ bundle: 'ash', key: 'auxiliaryWindow.editor' }, 'Editor'),
 		);
 		this.windows.set(auxiliary.id, auxiliary);
 		this.windowListeners.set(auxiliary.id, auxiliary.onDidClose(() => {

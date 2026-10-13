@@ -1,3 +1,4 @@
+import './toolbar.css';
 import { localize } from "../../../../nls.js";
 import type { IContextMenuProvider } from "../../contextmenu.js";
 import type { IAction } from "../../../common/actions.js";

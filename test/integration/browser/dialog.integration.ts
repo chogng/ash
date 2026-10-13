@@ -1,7 +1,3 @@
-import '../../../src/ash/base/browser/ui/button/button.css';
-import '../../../src/ash/base/browser/ui/dialog/dialog.css';
-import '../../../src/ash/base/browser/ui/inputbox/inputbox.css';
-import '../../../src/ash/base/browser/ui/toggle/toggle.css';
 import { Dialog } from '../../../src/ash/base/browser/ui/dialog/dialog.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
@@ -17,7 +13,7 @@ import { IStorageService } from '../../../src/ash/platform/storage/common/storag
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
 import { ICodeEditorService } from '../../../src/ash/editor/browser/services/codeEditorService.js';
 import { IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
-import type { IQuickPick, IQuickPickItem } from '../../../src/ash/platform/quickinput/common/quickInput.js';
+import type { IQuickPick, IQuickPickItem, IQuickPickDidAcceptEvent } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.js';
 import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.web.contribution.js';
 import { CommandsQuickAccessProvider } from '../../../src/ash/workbench/contrib/quickaccess/browser/commandsQuickAccess.js';
@@ -129,10 +125,10 @@ window.ashDialogIntegration = {
 		services.registerInstance(ICodeEditorService, editors);
 		services.registerInstance(IConfigurationService, commandResources.add(new InMemoryConfigurationService()));
 		services.registerInstance(IStorageService, commandResources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'dialog', flushInterval: 0 })));
-		const provider = services.createInstance(CommandsQuickAccessProvider);
-		const accept = commandResources.add(new Emitter<IQuickPickItem>());
+		const provider = commandResources.add(services.createInstance(CommandsQuickAccessProvider));
+		const accept = commandResources.add(new Emitter<IQuickPickDidAcceptEvent>());
 		const picker = {
-			value: '', filterValue: (value: string) => value, onDidChangeValue: Event.None, onDidTriggerItemButton: Event.None,
+			selectedItems: [], value: '', filterValue: (value: string) => value, onDidChangeValue: Event.None, onDidTriggerItemButton: Event.None,
 			items: [] as readonly IQuickPickItem[],
 			onDidAccept: accept.event,
 			hide() { },
@@ -140,6 +136,7 @@ window.ashDialogIntegration = {
 		commandResources.add(provider.provide(picker));
 		const item = picker.items.find(candidate => candidate.label === 'Failing command');
 		if (!item || 'type' in item) throw new Error('Test command is missing from the Command Palette');
-		accept.fire(item);
+		picker.selectedItems = [item];
+		accept.fire({ inBackground: false });
 	},
 };

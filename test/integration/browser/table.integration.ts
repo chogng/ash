@@ -1,6 +1,6 @@
 import { IMessageHistoryService } from '../../../src/ash/platform/messageHistory/common/messageHistory.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
-import { QuickInputController } from '../../../src/ash/platform/quickinput/browser/quickInputController.js';
+import { TestQuickInputService } from '../../../src/ash/platform/quickinput/test/browser/testQuickInputService.js';
 import '../../../src/ash/workbench/contrib/chat/browser/chat.shared.contribution.js';
 import '../../../src/ash/workbench/contrib/codeEditor/browser/dictation/editorDictation.js';
 import '../../../src/ash/workbench/contrib/chat/browser/actions/chatSpeechToTextActions.js';
@@ -86,7 +86,7 @@ const resources = new DisposableStore();
 const configuration = resources.add(new WorkbenchConfigurationService());
 const services = resources.add(new InstantiationService());
 services.registerInstance(IMessageHistoryService, undefined);
-services.registerSingleton(IQuickInputService, () => new QuickInputController(document.body));
+services.registerSingleton(IQuickInputService, () => new TestQuickInputService({ instantiationService: services, container: document.body }));
 services.registerInstance(IConfigurationService, configuration);
 services.registerInstance(ILanguageModelsService, {
 	onDidChangeModels: Event.None,

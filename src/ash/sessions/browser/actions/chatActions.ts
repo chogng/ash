@@ -96,11 +96,15 @@ registerAction2(class ShowChatHistoryAction extends Action2 {
 					detail: thread.management?.activity?.text ?? thread.management?.summary ?? undefined,
 				}));
 			})];
-		disposables.add(quickPick.onDidAccept((item) => {
+		disposables.add(quickPick.onDidAccept(() => {
+			const item = quickPick.selectedItems[0];
+			if (!item) return;
+
 			if (item.kind === 'draft') sessions.selectUntitledSession(item.untitledSessionId);
 			else sessions.selectThread(item.sessionId, item.threadId);
 			quickPick.hide();
 			void views.focusView(CHAT_VIEW_ID).catch(onUnexpectedError);
+
 		}));
 		const dismissed = new Promise<void>(resolve => {
 			disposables.add(quickPick.onDidHide(() => {

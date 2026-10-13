@@ -76,6 +76,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
 
 		this.list = this._register(new List<TItem>(this.element, {
 			ariaLabel: localize('quickInput.results', 'Quick Pick results'),
+			domFocusable: true,
 			scrolling: 'managed',
 			renderItem: (item) => this.renderItem(item),
 		}));
@@ -90,7 +91,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
 		this.element.append(this.empty);
 
 		this._register(this.list.onDidAccept(({ item, browserEvent }) => {
-			this.keyMods = { ctrlCmd: !!(browserEvent?.ctrlKey || browserEvent?.metaKey), alt: !!browserEvent?.altKey, shift: !!browserEvent?.shiftKey };
+			if (browserEvent) this.keyMods = { ctrlCmd: browserEvent.ctrlKey || browserEvent.metaKey, alt: browserEvent.altKey, shift: browserEvent.shiftKey };
 			if (this.multiple && browserEvent?.type === 'click') {
 				this.toggleSelection(item);
 				return;
@@ -132,6 +133,11 @@ export class QuickInputList<TItem extends IQuickPickItem>
 
 	get activeItem(): TItem | undefined {
 		return this.list.activeItem;
+	}
+
+	public setActiveItem(item: TItem): void {
+		const index = this._visibleItems.indexOf(item);
+		if (index >= 0) this.list.setActiveIndex(index);
 	}
 
 	filter(query: string): void {
@@ -211,6 +217,8 @@ export class QuickInputList<TItem extends IQuickPickItem>
 		}
 		const active = this.list.activeItem;
 		this.list.items = this._visibleItems;
+		// Item actions already provide Tab targets; otherwise the list needs its own.
+		this.list.element.tabIndex = this._visibleItems.some(item => item.buttons?.length) ? -1 : 0;
 		const activeIndex = active ? this._visibleItems.indexOf(active) : -1;
 		if (activeIndex >= 0) { this.list.setActiveIndex(activeIndex); }
 		if (this.multiple) { this.list.setSelection(this._visibleItems.flatMap((item, index) => this.checked.has(item) ? [index] : [])); }
@@ -232,6 +240,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
 			separator.setAttribute('role', 'separator');
 			separator.setAttribute('aria-label', heading);
 			separator.textContent = heading;
+			separator.title = heading;
 			content.append(separator);
 			content.classList.add('has-separator');
 		}
@@ -247,6 +256,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
 		const label = h(ownerDocument, "span");
 		label.className = "ash-quick-pick-row-label";
 		label.textContent = item.label;
+		label.title = item.label;
 		text.append(label);
 		appendOptionalText(
 			text,
@@ -298,6 +308,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
 			}
 			action.addEventListener('click', event => {
 				stopEvent(event);
+				this.keyMods = { ctrlCmd: event.ctrlKey || event.metaKey, alt: event.altKey, shift: event.shiftKey };
 				this.buttonEmitter.fire({ item, button });
 			});
 			content.append(action);
@@ -373,6 +384,7 @@ function appendOptionalText(
 	const element = h(ownerDocument, "span");
 	element.className = className;
 	element.textContent = value;
+	element.title = value;
 	container.append(element);
 }
 
