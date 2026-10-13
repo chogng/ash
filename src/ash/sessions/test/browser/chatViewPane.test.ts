@@ -1,3 +1,5 @@
+import { installEditorTestGlobals } from '../../../editor/test/browser/editorTestGlobals.js';
+import { StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import { createAppServerAgentThreadService, createDisconnectedAgentThreadService } from '../../../platform/agentHost/browser/appServerAgentService.js';
 import type { AppServerProtocolClient } from '../../../platform/agentHost/browser/appServerProtocolClient.js';
 import { createAppServerAgentModelsService } from '../../../platform/agentHost/browser/appServerAgentModels.js';
@@ -19,6 +21,7 @@ import { CoworkModelPreferences } from '../../contrib/cowork/common/languageMode
 import { CoworkWidgetModel } from '../../contrib/cowork/browser/coworkWidgetModel.js';
 import { ILanguageModelsConfigurationService as ICoworkModelPreferences } from '../../contrib/cowork/common/languageModelsConfiguration.js';
 import { LanguageModelsConfigurationService as CoworkModelPreferencesService } from '../../contrib/cowork/browser/languageModelsConfigurationService.js';
+import { SessionsChatAccessibilityHelp } from '../../contrib/chat/browser/sessionsChatAccessibilityHelp.js';
 import { initializeTestLocalization } from '../../../workbench/services/localization/test/common/localizationTestUtils.js';
 import { resetNlsResolver } from '../../../nls.js';
 import { IAccountService } from '../../../platform/accounts/common/accountService.js';
@@ -692,7 +695,7 @@ test("Empty chat transcripts do not render a redundant placeholder", () => {
 	dom.window.close();
 });
 
-test("Chat transcript reuses unchanged messages while replacing changed content", () => {
+test("Chat transcript retains message rows while reordering and revising Markdown", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	using list = createChatListWidget(dom.window.document.body);
 	const first = { id: "first", type: "agentMessage" as const, text: "Original **answer**", transient: false };
@@ -708,8 +711,11 @@ test("Chat transcript reuses unchanged messages while replacing changed content"
 		id: element.dataset.itemId,
 		reused: element === secondElement,
 	})), [{ id: "second", reused: true }, { id: "first", reused: false }]);
-	assert.equal(firstElement.isConnected, false);
-	assert.equal(list.element.querySelector("strong")?.textContent, "answer");
+	assert.equal(firstElement.isConnected, true);
+	assert.equal(list.element.querySelector('[data-item-id="first"]'), firstElement);
+	assert.equal(firstElement.querySelector("p")?.textContent, "Revised answer");
+	assert.ok(!firstElement.textContent?.includes("Original"));
+	assert.equal(firstElement.querySelector("strong")?.textContent, "answer");
 	dom.window.close();
 });
 
@@ -758,6 +764,168 @@ test("Turn error cards invoke their typed action without interpreting message te
 	assert.equal(list.element.querySelector("pre")?.textContent, "same opaque message");
 	assert.deepEqual(requestedAction, { type: "chooseModel", label: "Choose another model" });
 	dom.window.close();
+});
+
+class SessionsInputForTest extends NewChatInputWidget {
+	retireWhenInputChanges() {
+		return this.onDidChangeInput(() => this.invalidatePendingInput());
+	}
+}
+
+async function sessionsInputFixture(send: ChatInputDelegate['send'] = async () => { }, stored?: string) {
+	const resources = new DisposableStore();
+	try {
+		const fake = fakeApi({ sessions: [] });
+		const sessions = resources.add(new SessionsManagementService(fake.api));
+		await sessions.initialize();
+		const draft = sessions.createUntitledSession();
+		const chat = resources.add(createChatService(fake.api));
+		const model = resources.add(createWidgetModel(chat, { kind: 'untitled', session: draft }, sessions));
+		await model.initialize();
+		const contextView = resources.add(new BrowserContextViewService(document.body));
+		const parentServices = resources.add(createInputServices(contextView, chat));
+		const services = resources.add(parentServices.createChild());
+		const storage = resources.add(createTestStorage());
+		const notices = resources.add(new NotificationService());
+		services.registerInstance(IStorageService, storage);
+		services.registerInstance(INotificationService, notices);
+		services.registerInstance(ILifecycleService, { onWillShutdown: Event.None } as unknown as ILifecycleService);
+		services.registerSingleton(IChatTipService, () => services.createInstance(ChatTipService));
+		services.registerInstance(ISessionsGitHubService, {
+			onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], initialize() { },
+			attachIssue: async () => { }, detachIssue: async () => { }, attachPullRequest: async () => { throw new Error('Unexpected PR attachment'); }, detachPullRequest: async () => { },
+		});
+		const identity = `untitled:${draft.untitledSessionId}`;
+		if (stored !== undefined) storage.store(`sessions.inputDraft:${identity}`, stored, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		const delegate: ChatInputDelegate = {
+			send, executeCommand: async () => { }, executeServerCommand: async () => { }, interrupt: async () => { },
+			selectModel: async () => { }, selectReasoningEffort: async () => { }, selectAutomaticModel: async () => { },
+			listAgents: async () => [], selectAgent: () => { }, selectMode: mode => model.selectMode(mode),
+			openModelSettings: async () => { }, resolveInteraction: async () => { },
+		};
+		const input = resources.add(services.createInstance(SessionsInputForTest, document.body, delegate, model));
+		input.render(model.inputState);
+		return { input, storage, notices, identity, [Symbol.dispose]() { resources.dispose(); } };
+	} catch (error) { resources.dispose(); throw error; }
+}
+
+test('Sessions composer forwards its original submission lifetime to the owning widget', async () => {
+	let submittedSignal: AbortSignal | undefined;
+	using fixture = await sessionsInputFixture(async (_text, _mode, _skills, _contexts, signal) => { submittedSignal = signal; });
+	await fixture.input.acceptInput('Use this composer');
+	assert.ok(submittedSignal);
+	assert.equal(submittedSignal.aborted, false);
+	fixture.input.invalidatePendingInput();
+	assert.equal(submittedSignal.aborted, true);
+});
+
+test('Sessions composer does not submit when clearing the old input synchronously retires its owner', async () => {
+	let sends = 0;
+	using fixture = await sessionsInputFixture(async () => { sends++; });
+	fixture.input.appendToDraft('The old conversation');
+	using transition = fixture.input.retireWhenInputChanges();
+	await fixture.input.acceptInput();
+	assert.equal(sends, 0);
+	assert.equal(fixture.input.element.querySelector<HTMLHeadingElement>('.ash-sessions-chat-welcome-heading')!.hidden, false);
+});
+
+test('an old Sessions submission failure cannot hide the new submission or replace its unsent text', async () => {
+	const oldResult = new DeferredPromise<void>();
+	const newResult = new DeferredPromise<void>();
+	let sends = 0;
+	using fixture = await sessionsInputFixture(async () => (++sends === 1 ? oldResult.p : newResult.p));
+	const oldSending = fixture.input.acceptInput('Old request');
+	await waitFor(() => sends === 1);
+	fixture.input.invalidatePendingInput();
+	const newSending = fixture.input.acceptInput('New request');
+	await waitFor(() => sends === 2);
+	fixture.input.appendToDraft('Keep the new unsent text');
+	const heading = fixture.input.element.querySelector<HTMLHeadingElement>('.ash-sessions-chat-welcome-heading')!;
+	assert.equal(heading.hidden, true);
+	const oldFailure = assert.rejects(oldSending, /Old request failed/u);
+	await oldResult.error(new Error('Old request failed'));
+	await oldFailure;
+	assert.equal(heading.hidden, true);
+	assert.equal((await fixture.input.captureDraft())?.draft.text, 'Keep the new unsent text');
+	await newResult.complete();
+	await newSending;
+	assert.equal((await fixture.input.captureDraft())?.draft.text, 'Keep the new unsent text');
+});
+
+test('Sessions composer retains corrupt storage through visibility changes until the user edits', async () => {
+	const raw = '{unfinished';
+	using fixture = await sessionsInputFixture(undefined, raw);
+	const { input, storage, notices, identity } = fixture;
+	input.setVisible(true);
+	input.setVisible(false);
+	input.setVisible(true);
+	assert.equal(storage.get(`sessions.inputDraft:${identity}`, StorageScope.WORKSPACE), raw);
+	assert.equal(notices.getNotifications().length, 1);
+	assert.match(notices.getNotifications()[0]!.message, /Could not restore the Chat draft/u);
+	input.appendToDraft('A new draft');
+	assert.deepEqual(readNewChatDraftState(storage, identity), { mode: 'agent', text: 'A new draft', contexts: [] });
+});
+
+test('Chinese Sessions draft recovery and accessibility help use the product language catalog', async () => {
+	initializeTestLocalization('zh-CN');
+	try {
+		using fixture = await sessionsInputFixture(undefined, '{unfinished');
+		assert.match(fixture.notices.getNotifications()[0]!.message, /^无法恢复聊天草稿：/u);
+		fixture.input.focus();
+		const help = new SessionsChatAccessibilityHelp(fixture.input.element, () => fixture.input.focus()).getProvider();
+		assert.ok(help);
+		const content = help.provideContent();
+		assert.match(content, /已完成的附件仍保留在草稿中/u);
+		assert.match(content, /暂不支持远程项目/u);
+	} finally { resetNlsResolver(); }
+});
+
+test('a removed Sessions attachment cannot report a stale draft persistence error', async () => {
+	using fixture = await sessionsInputFixture();
+	fixture.input.appendToDraft('Keep this task');
+	const source = new DeferredPromise<{ name: string; content: string; }>();
+	fixture.input.addContext({ id: 'delayed', kind: 'file', name: 'delayed.txt', resolve: () => source.p });
+	const capture = fixture.input.captureDraft();
+	fixture.input.element.querySelector<HTMLButtonElement>('[aria-label="Remove delayed.txt"]')!.click();
+	const rejected = assert.rejects(capture, /Source unavailable/u);
+	await source.error(new Error('Source unavailable'));
+	await rejected;
+	assert.deepEqual(fixture.notices.getNotifications(), []);
+	assert.deepEqual(readNewChatDraftState(fixture.storage, fixture.identity), { mode: 'agent', text: 'Keep this task', contexts: [] });
+});
+
+test('Sessions composer waits for file paste before sending and clears only the completed request', async () => {
+	using globals = installEditorTestGlobals({ FileReader: browserEnvironment.window.FileReader });
+	const sent: string[] = [];
+	using fixture = await sessionsInputFixture(async (text, _mode, _skills, contexts) => {
+		assert.equal(text, '');
+		for (const context of contexts ?? []) sent.push((await context.resolve()).content);
+	});
+	const paste = new browserEnvironment.window.Event('paste', { bubbles: true, cancelable: true });
+	Object.defineProperty(paste, 'clipboardData', { value: { files: [new browserEnvironment.window.File(['selected contents'], 'source.txt', { type: 'text/plain' })] } });
+	fixture.input.element.querySelector('.ash-chat-input-container')!.dispatchEvent(paste);
+	const sending = fixture.input.acceptInput();
+	assert.equal(paste.defaultPrevented, true);
+	assert.deepEqual(sent, []);
+	await sending;
+	assert.deepEqual(sent, ['selected contents']);
+	assert.equal(await fixture.input.captureDraft(), undefined);
+	assert.equal(readNewChatDraftState(fixture.storage, fixture.identity), undefined);
+});
+
+test('Sessions composer cancellation keeps the text and prevents a late file from entering the reopened draft', async () => {
+	using globals = installEditorTestGlobals({ FileReader: browserEnvironment.window.FileReader });
+	let sends = 0;
+	using fixture = await sessionsInputFixture(async () => { sends++; });
+	fixture.input.appendToDraft('Keep this task');
+	const reading = fixture.input.attachFiles([new browserEnvironment.window.File(['late contents'], 'source.txt')]);
+	const sending = assert.rejects(fixture.input.acceptInput(), isCancellationError);
+	fixture.input.setVisible(false);
+	await Promise.all([reading, sending]);
+	fixture.input.setVisible(true);
+	assert.equal(sends, 0);
+	assert.deepEqual((await fixture.input.captureDraft())?.draft, { mode: 'agent', text: 'Keep this task', contexts: [] });
+	assert.deepEqual(fixture.notices.getNotifications(), []);
 });
 
 test('sending from one session preserves a later draft during first-session creation', async () => {
@@ -844,7 +1012,7 @@ test('sending from one session preserves a later draft during first-session crea
 		{ showContextMenu: () => undefined } as unknown as IContextMenuService, contextViewService, commands,
 		unavailableAccessibleViewService, notifications, undefined, undefined, undefined, (container, delegate) => editorServices.createInstance(NewChatInputWidget, container, delegate, chatModel), editorServices, recordingDialogService([]));
 	chatWidget.setVisible(true);
-	const chatDraft = { mode: 'agent' as const, text: 'Keep my Chat draft', contexts: [{ id: 'chat-file', kind: 'file', name: 'chat.txt', content: 'Chat context' }] };
+	const chatDraft = { mode: 'agent' as const, text: 'Keep my Chat draft', contexts: [{ id: 'chat-file', kind: 'file', name: 'chat.txt', content: 'Chat context', resource: 'file:///workspace/chat.txt' }] };
 	chatWidget.restoreDraft(chatDraft);
 	await attachment.complete({ name: 'code.ts', content: 'Code context' });
 	await sending;
@@ -1241,7 +1409,8 @@ test("Chat history selects an active Thread through Quick Pick", async () => {
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	using sessions = new SessionsManagementService(api);
 	using contextKeys = new ContextKeyService();
-	using quickInput = new TestQuickInputService({ instantiationService: services,
+	using quickInput = new TestQuickInputService({
+		instantiationService: services,
 		container: dom.window.document.body,
 		contextKeyService: contextKeys,
 	});
@@ -3881,3 +4050,329 @@ test('An unavailable model leaves backend defaults and Auto intact with the gene
 		assert.equal(model.isAutomaticModel, true);
 	} finally { resetNlsResolver(); }
 });
+
+
+function navigationThreadSnapshot(threadId: string): import('../../../platform/agentHost/common/agentService.js').ThreadRead {
+	return {
+		thread: { advisor: { type: 'default' }, agentId: 'agent-1', origin: { type: 'root' }, sessionId: 'session-1', threadId, title: 'Navigation fixture', status: 'active', sequence: 1, usage: emptyUsage(), turns: [] },
+		transcript: { sessionId: 'session-1', threadId, durableSequence: 1, revision: 1, entries: [] },
+	};
+}
+
+
+async function createNavigationInputPane() {
+	const resources = new DisposableStore();
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const contextView = resources.add(new BrowserContextViewService(dom.window.document.body));
+	const activeSession: ISession = {
+		...session('session-1', 'thread-1', 'Navigation fixture'),
+		chats: [
+			{ threadId: 'thread-1', origin: { type: 'root' }, status: 'active' },
+			{ threadId: 'thread-2', origin: { type: 'fork', parentThreadId: 'thread-1', parentSequence: 1 }, status: 'active' },
+		],
+	};
+	const fake = fakeApi({ sessions: [activeSession] });
+	const api: IRendererHost = {
+		...fake.api,
+		thread: {
+			...fake.api.thread,
+			read: async ({ threadId }) => navigationThreadSnapshot(threadId),
+			subscribe: async ({ threadId }) => ({ ...navigationThreadSnapshot(threadId), updates: [] }),
+		},
+	};
+	const sessions = resources.add(new SessionsManagementService(api));
+	const contextKeys = resources.add(new ContextKeyService());
+	resources.add(new ViewDescriptorService({ registry: new WorkbenchViewRegistry() }, contextKeys));
+	const commands = resources.add(new CommandService(resources.add(new InstantiationService())));
+	const menu = new MenuService(commands, contextKeys);
+	const contextMenus = { showContextMenu: () => { } } as unknown as IContextMenuService;
+	const chat = resources.add(createChatService(api));
+	const pane = resources.add(new ChatViewPane(dom.window.document.body, { id: CHAT_VIEW_ID, title: 'Chat' }, chat, sessions,
+		menu, contextMenus, contextView, commands, testLayoutService(), unavailableFileService, unavailableAccessibleViewService, notifications,
+		createInputServices(contextView, chat, menu, contextMenus), inputResources.add(new WorkbenchConfigurationService()), inputResources.add(createTestStorage())));
+	dom.window.document.body.append(pane.element);
+	await sessions.initialize();
+	await nextTask();
+	const chatPane = pane.element.querySelector<HTMLElement>('.ash-chat-pane-host > .ash-chat')!;
+	const input = chatPane.querySelector<HTMLTextAreaElement>('.ash-chat-textarea-input')!;
+	assert.ok(input);
+	resources.add(toDisposable(() => dom.window.close()));
+	return { resources, dom, fake, pane, sessions, chatPane, input };
+}
+
+for (const text of ['', 'Private request for A']) {
+	for (const aba of [false, true]) {
+		test(`composer navigation cancels held file ${text ? 'with text' : 'only'} across ${aba ? 'A-B-A' : 'A-B'} and preserves the new draft`, async () => {
+			const fixture = await createNavigationInputPane();
+			using resources = fixture.resources;
+			const { dom, fake, pane, sessions, chatPane, input } = fixture;
+			const reads: (() => void)[] = [];
+			const Reader = dom.window.FileReader;
+			using globals = installEditorTestGlobals({
+				FileReader: class extends Reader {
+					override readAsArrayBuffer(blob: Blob): void { reads.push(() => super.readAsArrayBuffer(blob)); }
+				}
+			});
+			const paste = new dom.window.Event('paste', { bubbles: true, cancelable: true });
+			Object.defineProperty(paste, 'clipboardData', { value: { files: [new dom.window.File(['Private contents for A'], 'private-A.txt', { type: 'text/plain' })] } });
+			input.dispatchEvent(paste);
+			assert.equal(paste.defaultPrevented, true);
+			await waitFor(() => reads.length === 1);
+			const previous = pane.acceptInput(text).then(() => undefined, error => { assert.ok(isCancellationError(error)); });
+			sessions.selectThread('session-1', 'thread-2');
+			await nextTask();
+			if (aba) { sessions.selectThread('session-1', 'thread-1'); await nextTask(); }
+			assert.strictEqual(pane.element.querySelector('.ash-chat-pane-host > .ash-chat'), chatPane);
+			assert.equal(chatPane.hidden, false);
+			const selected = aba ? 'thread-1' : 'thread-2';
+			assert.equal(chatPane.dataset.threadId, selected);
+			const newDraft = `Current draft for ${selected}`;
+			typeChatText(dom.window, input, newDraft);
+			for (const read of reads.splice(0)) read();
+			await previous;
+			assert.equal(fake.turnStartRequests.length, 0);
+			assert.equal(input.value, newDraft);
+			assert.equal(chatPane.querySelectorAll('.ash-chat-input-attachment-item').length, 0);
+			await pane.acceptInput();
+			assert.equal(fake.turnStartRequests.length, 1);
+			assert.equal(fake.turnStartRequests[0]!.threadId, selected);
+			assert.deepEqual(fake.turnStartRequests[0]!.input, [{ type: 'text', text: newDraft }]);
+		});
+	}
+}
+
+test('composer navigation stable A sends held file context exactly once', async () => {
+	const fixture = await createNavigationInputPane();
+	using resources = fixture.resources;
+	const { dom, fake, pane, input, chatPane } = fixture;
+	const reads: (() => void)[] = [];
+	const Reader = dom.window.FileReader;
+	using globals = installEditorTestGlobals({
+		FileReader: class extends Reader {
+			override readAsArrayBuffer(blob: Blob): void { reads.push(() => super.readAsArrayBuffer(blob)); }
+		}
+	});
+	const paste = new dom.window.Event('paste', { bubbles: true, cancelable: true });
+	Object.defineProperty(paste, 'clipboardData', { value: { files: [new dom.window.File(['Stable A contents'], 'stable-A.txt', { type: 'text/plain' })] } });
+	input.dispatchEvent(paste);
+	await waitFor(() => reads.length === 1);
+	const sending = pane.acceptInput('Stable A request');
+	assert.equal(fake.turnStartRequests.length, 0);
+	for (const read of reads.splice(0)) read();
+	await sending;
+	assert.equal(fake.turnStartRequests.length, 1);
+	assert.equal(fake.turnStartRequests[0]!.threadId, 'thread-1');
+	assert.deepEqual(fake.turnStartRequests[0]!.input, [{ type: 'context', name: 'stable-A.txt', content: 'Stable A contents' }, { type: 'text', text: 'Stable A request' }]);
+	assert.equal(input.value, '');
+	assert.equal(chatPane.querySelectorAll('.ash-chat-input-attachment-item').length, 0);
+});
+
+test('composer navigation keeps the first untitled materialization in the same input lifetime', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using domLifetime = toDisposable(() => dom.window.close());
+	using contextView = new BrowserContextViewService(dom.window.document.body);
+	const fake = fakeApi({ createSession: session('session-1', undefined, 'First request'), createThread: { session: session('session-1', 'thread-1'), threadId: 'thread-1' } });
+	using sessions = new SessionsManagementService(fake.api);
+	using chat = createChatService(fake.api);
+	using model = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
+	using commands = new CommandService(new InstantiationService());
+	const contextMenus = { showContextMenu: () => { } } as unknown as IContextMenuService;
+	const services = createInputServices(contextView, chat, undefined, contextMenus);
+	using widget = services.createInstance(ChatWidget, dom.window.document.body, 'materialization-fixture', model, () => { }, contextMenus, contextView, commands, unavailableAccessibleViewService, notifications, undefined, undefined, undefined, undefined);
+	widget.setVisible(true);
+	await model.initialize();
+	widget.addContext({ id: 'first-file', kind: 'file', name: 'first.txt', resolve: async () => ({ name: 'first.txt', content: 'First file contents' }) });
+	await widget.acceptInput('First request');
+	assert.equal(fake.turnStartRequests.length, 1);
+	assert.equal(fake.turnStartRequests[0]!.threadId, 'thread-1');
+	assert.equal(widget.element.querySelectorAll('.ash-chat-input-attachment-item').length, 0);
+	assert.equal(widget.element.querySelector<HTMLTextAreaElement>('.ash-chat-textarea-input')!.value, '');
+});
+
+test('composer navigation A-B-A during model initialization cannot dispatch an old A request', async () => {
+	const activeSession = { ...session('session-1', 'thread-1'), chats: [{ threadId: 'thread-1', origin: { type: 'root' as const }, status: 'active' as const }, { threadId: 'thread-2', origin: { type: 'fork' as const, parentThreadId: 'thread-1', parentSequence: 1 }, status: 'active' as const }] };
+	const fake = fakeApi({ sessions: [activeSession] });
+	const initial = new DeferredPromise<void>();
+	let subscriptions = 0;
+	using chat = createChatService({
+		...fake.api, thread: {
+			...fake.api.thread, subscribe: async ({ threadId }) => {
+				if (++subscriptions === 1) await initial.p;
+				return { ...navigationThreadSnapshot(threadId), updates: [] };
+			}
+		}
+	});
+	using sessions = new SessionsManagementService(fake.api);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+	await waitFor(() => subscriptions === 1);
+	const previous = model.send('Old A request').then(() => undefined, error => { assert.ok(isCancellationError(error)); });
+	await model.selectThread({ session: activeSession, threadId: 'thread-2' });
+	await model.selectThread({ session: activeSession, threadId: 'thread-1' });
+	await initial.complete();
+	await previous;
+	assert.equal(fake.turnStartRequests.length, 0);
+});
+
+
+for (const aba of [false, true]) {
+	test(`composer navigation cancels text-only between input submission and model dispatch across ${aba ? 'A-B-A' : 'A-B'}`, async () => {
+		const fixture = await createNavigationInputPane();
+		using resources = fixture.resources;
+		const { dom, fake, pane, sessions, chatPane, input } = fixture;
+		const previous = pane.acceptInput('Private text for A').then(() => undefined, error => { assert.ok(isCancellationError(error)); });
+		// Even empty context resolution yields. Navigate before that continuation resumes.
+		sessions.selectThread('session-1', 'thread-2');
+		if (aba) sessions.selectThread('session-1', 'thread-1');
+		typeChatText(dom.window, input, 'Current unsent draft');
+		await previous;
+		assert.equal(fake.turnStartRequests.length, 0);
+		assert.equal(input.value, 'Current unsent draft');
+		assert.strictEqual(pane.element.querySelector('.ash-chat-pane-host > .ash-chat'), chatPane);
+	});
+}
+
+test('composer navigation A-B-A during a pending model save cannot dispatch the old request', async () => {
+	const activeSession = { ...session('session-1', 'thread-1'), chats: [{ threadId: 'thread-1', origin: { type: 'root' as const }, status: 'active' as const }, { threadId: 'thread-2', origin: { type: 'fork' as const, parentThreadId: 'thread-1', parentSequence: 1 }, status: 'active' as const }] };
+	const selected = { provider: 'openai', model: 'gpt-6.1-sol' };
+	const fake = fakeApi({ sessions: [activeSession], models: [{ model: selected, displayName: 'Navigation model' }] });
+	const gate = new DeferredPromise<void>();
+	const saving = new DeferredPromise<void>();
+	using chat = createChatService({
+		...fake.api, model: {
+			...fake.api.model, configureDefaults: async (update, expectedRevision) => {
+				await saving.complete();
+				await gate.p;
+				return fake.api.model.configureDefaults(update, expectedRevision);
+			}
+		}, thread: { ...fake.api.thread, read: async ({ threadId }) => navigationThreadSnapshot(threadId), subscribe: async ({ threadId }) => ({ ...navigationThreadSnapshot(threadId), updates: [] }) }
+	});
+	using sessions = new SessionsManagementService(fake.api);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+	await model.initialize();
+	assert.ok(model.inputState.models.some(entry => entry.model.provider === selected.provider && entry.model.model === selected.model));
+	const selection = model.selectModel(selected);
+	await saving.p;
+	const previous = model.send('Old A request').then(() => undefined, error => { assert.ok(isCancellationError(error)); });
+	await model.selectThread({ session: activeSession, threadId: 'thread-2' });
+	await model.selectThread({ session: activeSession, threadId: 'thread-1' });
+	await gate.complete();
+	await selection;
+	await previous;
+	assert.equal(fake.turnStartRequests.length, 0);
+});
+
+
+for (const aba of [false, true]) {
+	test(`composer navigation old dispatched failure cannot alter the next pending send across ${aba ? 'A-B-A' : 'A-B'}`, async () => {
+		const fixture = await createNavigationInputPane();
+		using resources = fixture.resources;
+		const { dom, fake, pane, sessions, chatPane, input } = fixture;
+		const oldReply = new DeferredPromise<void>();
+		const nextReply = new DeferredPromise<void>();
+		const oldDispatched = new DeferredPromise<void>();
+		const nextDispatched = new DeferredPromise<void>();
+		const start = fake.api.turn.start;
+		let requests = 0;
+		fake.api.turn.start = async params => {
+			const result = await start(params);
+			if (++requests === 1) { await oldDispatched.complete(); await oldReply.p; }
+			else { await nextDispatched.complete(); await nextReply.p; }
+			return result;
+		};
+		const previous = assert.rejects(pane.acceptInput('Already dispatched A'), /Old request failed/u);
+		await oldDispatched.p;
+		sessions.selectThread('session-1', 'thread-2');
+		await nextTask();
+		if (aba) { sessions.selectThread('session-1', 'thread-1'); await nextTask(); }
+		const next = pane.acceptInput('Next request');
+		try {
+			await nextDispatched.p;
+			typeChatText(dom.window, input, 'Keep my later draft');
+			await oldReply.error(new Error('Old request failed'));
+			await previous;
+			assert.equal(chatPane.querySelector('.ash-chat-status, .ash-chat-status-summary')!.textContent, 'Working…');
+			assert.equal(input.value, 'Keep my later draft');
+			await pane.acceptInput();
+			assert.equal(fake.turnStartRequests.length, 2);
+			assert.equal(fake.turnStartRequests[1]!.threadId, aba ? 'thread-1' : 'thread-2');
+		} finally {
+			await oldReply.error(new Error('Old request failed'));
+			await nextReply.complete();
+			await Promise.all([previous, next]);
+		}
+		assert.equal(input.value, 'Keep my later draft');
+	});
+}
+
+for (const navigate of [false, true]) {
+	test(`first materialization adopts its initiating pane after early catalog notification${navigate ? ' unless the user chose the durable pane' : ''}`, async () => {
+		const resources = new DisposableStore();
+		using lifetime = resources;
+		const dom = new JSDOM('<!doctype html><body></body>');
+		resources.add(toDisposable(() => dom.window.close()));
+		const contextView = resources.add(new BrowserContextViewService(dom.window.document.body));
+		const created = session('session-1', 'thread-1', 'Early created Session');
+		const fake = fakeApi({ sessions: [], createSession: created });
+		const reply = new DeferredPromise<void>();
+		const create = fake.api.session.create;
+		fake.api.session.create = async params => {
+			const result = await create(params);
+			fake.emit({ method: 'session/changed', params: { sessionId: created.sessionId, agentTreeChanged: false } });
+			await reply.p;
+			return result;
+		};
+		fake.api.session.readCatalog = async () => ({ session: sessionDto(created) });
+		fake.api.thread.read = async ({ threadId }) => navigationThreadSnapshot(threadId);
+		fake.api.thread.subscribe = async ({ threadId }) => ({ ...navigationThreadSnapshot(threadId), updates: [] });
+		const sessions = resources.add(new SessionsManagementService(fake.api));
+		await sessions.initialize();
+		const contextKeys = resources.add(new ContextKeyService());
+		resources.add(new ViewDescriptorService({ registry: new WorkbenchViewRegistry() }, contextKeys));
+		const commands = resources.add(new CommandService(resources.add(new InstantiationService())));
+		const menu = new MenuService(commands, contextKeys);
+		const contextMenus = { showContextMenu: () => { } } as unknown as IContextMenuService;
+		const chat = resources.add(createChatService(fake.api));
+		const pane = resources.add(new ChatViewPane(dom.window.document.body, { id: CHAT_VIEW_ID, title: 'Chat' }, chat, sessions,
+			menu, contextMenus, contextView, commands, testLayoutService(), unavailableFileService, unavailableAccessibleViewService, notifications,
+			createInputServices(contextView, chat, menu, contextMenus), inputResources.add(new WorkbenchConfigurationService()), inputResources.add(createTestStorage())));
+		dom.window.document.body.append(pane.element);
+		await nextTask();
+		const original = pane.element.querySelector<HTMLElement>('.ash-chat-pane-host > .ash-chat')!;
+		assert.ok(original);
+		let contextResolutions = 0;
+		pane.addContext({ id: 'original-file', kind: 'file', name: 'original.txt', resolve: async () => { contextResolutions++; return { name: 'original.txt', content: 'Original request context' }; } });
+		const sending = pane.acceptInput('Original first request').then(() => undefined, error => {
+			if (!navigate) throw error;
+			assert.ok(isCancellationError(error));
+		});
+		await waitFor(() => pane.element.querySelectorAll('.ash-chat-pane-host > .ash-chat').length === 2);
+		let target = original;
+		if (navigate) {
+			sessions.selectThread(created.sessionId, 'thread-1');
+			await nextTask();
+			target = pane.element.querySelector<HTMLElement>('.ash-chat-pane-host > .ash-chat:not([hidden])')!;
+			assert.notStrictEqual(target, original);
+			const input = target.querySelector<HTMLTextAreaElement>('.ash-chat-textarea-input')!;
+			input.value = 'Keep my chosen durable draft';
+			input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+		}
+		await reply.complete();
+		await sending;
+		await nextTask();
+		assert.strictEqual(pane.element.querySelector('.ash-chat-pane-host > .ash-chat:not([hidden])'), target);
+		assert.equal(target.hidden, false);
+		if (navigate) {
+			assert.equal(fake.turnStartRequests.length, 0);
+			assert.equal(target.querySelector<HTMLTextAreaElement>('.ash-chat-textarea-input')!.value, 'Keep my chosen durable draft');
+		} else {
+			assert.equal(fake.turnStartRequests.length, 1);
+			assert.equal(fake.turnStartRequests[0]!.threadId, 'thread-1');
+			assert.equal(contextResolutions, 1);
+			assert.deepEqual(fake.turnStartRequests[0]!.input, [
+				{ type: 'context', name: 'original.txt', content: 'Original request context' },
+				{ type: 'text', text: 'Original first request' },
+			]);
+			assert.equal(original.querySelectorAll('.ash-chat-input-attachment-item').length, 0);
+		}
+	});
+}

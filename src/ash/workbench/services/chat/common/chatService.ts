@@ -1,4 +1,4 @@
-import type { SessionMode, Turn, Thread, ThreadGoalUpdate, AgentResponse, ThreadUpdateEnvelope, ThreadTranscriptUpdateEnvelope, ThreadRead, ThreadSubscription } from '../../../../platform/agentHost/common/agentService.js';
+import type { ChatHookRun, SessionMode, Turn, Thread, ThreadGoalUpdate, AgentResponse, ThreadUpdateEnvelope, ThreadTranscriptUpdateEnvelope, ThreadRead, ThreadSubscription } from '../../../../platform/agentHost/common/agentService.js';
 export type {
 	ChatImageAttachment,
 	ChatAudioAttachment,
@@ -115,10 +115,8 @@ export interface ChatContextUsage {
 /** User-facing Hook feedback; process evidence remains in Execution trace. */
 export interface IChatHookPart {
 	readonly kind: 'hook';
-	readonly hookType: string;
-	readonly stopReason?: string;
-	readonly systemMessage?: string;
-	readonly toolDisplayName?: string;
+	/** The owning transcript's typed run, including status and Turn/tool identity. */
+	readonly run: ChatHookRun;
 }
 
 export interface StartTurnOptions {

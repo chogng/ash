@@ -3,8 +3,9 @@ import { ChatAttachmentsContentPart } from './chatContentParts/chatAttachmentsCo
 import './media/chatListWidget.css';
 import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
 import { ScrollableElement } from "../../../../../base/browser/ui/scrollbar/scrollableElement.js";
+import { RunOnceScheduler } from '../../../../../base/common/async.js';
 import { Emitter } from '../../../../../base/common/event.js';
-import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
+import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
 import type { URI } from '../../../../../base/common/uri.js';
 import type { ChatTurnErrorAction, IChatListItem } from "./chatListItems.js";
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
@@ -28,9 +29,24 @@ interface ChatListWidgetOptions {
 	readonly imageResourceLoader?: (resource: URI) => Promise<Blob>;
 }
 
+const textInputSelector = 'textarea, [role="textbox"], [contenteditable="true"]';
+const focusableSelector = 'button, a, summary, textarea, audio, [role="textbox"], [tabindex="0"], [contenteditable="true"]';
+
 class RenderedItem extends Disposable {
 	readonly memoryReferences = this._register(new DisposableMap<string, IDisposable & { readonly element: HTMLButtonElement; }>());
-	constructor(public item: IChatListItem, public readonly element: HTMLElement, disposables: DisposableStore, public readonly toolPart?: ChatToolInvocationPart, public readonly markdownPart?: ChatMarkdownContentPart) {
+	readonly media = this._register(new MutableDisposable<ChatAttachmentsContentPart>());
+	readonly mediaChanges = this._register(new MutableDisposable());
+	readonly resources = this._register(new MutableDisposable<ChatResourceGroupWidget>());
+	readonly resourceChanges = this._register(new MutableDisposable());
+	constructor(
+		public item: IChatListItem,
+		public readonly element: HTMLElement,
+		disposables: DisposableStore,
+		public readonly toolPart?: ChatToolInvocationPart,
+		public readonly markdownPart?: ChatMarkdownContentPart,
+		public readonly attachments?: HTMLElement,
+		public readonly hookPart?: ChatHookContentPart,
+	) {
 		super();
 		this._register(disposables);
 	}
@@ -48,7 +64,7 @@ interface ChatListViewState {
 	readonly anchor: ReadingAnchor | undefined;
 	readonly advisorExpansion: readonly [string, boolean][];
 	readonly toolExpansion?: readonly [string, boolean][];
-	readonly focus: { readonly itemId: string; readonly index: number; } | undefined;
+	readonly focus: { readonly itemId: string; readonly index: number; readonly textInput?: boolean; } | undefined;
 }
 
 /** Renders the ordered user, Agent, reasoning, and tool items in one Chat pane. */
@@ -65,6 +81,9 @@ export class ChatListWidget extends DomWidget {
 	private readonly advisorExpansion = new Map<string, boolean>();
 	private visible = false;
 	private shouldFollow = true;
+	private readingPosition: ReadingAnchor | undefined;
+	private layingOut = false;
+	private readonly relayout = this._register(new RunOnceScheduler(() => { if (this.visible) this.layout(); }, 0));
 	private pendingReadingPosition: { readonly top: number; readonly anchor: ReadingAnchor | undefined; } | undefined;
 
 	public get element(): HTMLElement { return this.domNode; }
@@ -81,7 +100,9 @@ export class ChatListWidget extends DomWidget {
 			tabIndex: -1,
 		}));
 		this._register(this.scrollable.onDidScroll(event => {
+			if (this.layingOut || !this.visible) return;
 			this.shouldFollow = event.current.maximumTop - event.current.top < 48;
+			this.readingPosition = this.shouldFollow ? undefined : this.readingAnchor();
 		}));
 		this.domNode = this.scrollable.element;
 		this.element.classList.add("ash-chat-list-widget", "ash-chat-transcript-scrollable");
@@ -98,9 +119,9 @@ export class ChatListWidget extends DomWidget {
 					const active = this.element.ownerDocument.activeElement as HTMLElement | null;
 					if (!active || !this.transcript.contains(active)) return undefined;
 					const provider = new AccessibleContentProvider(AccessibleViewProviderId.SessionsChat, { type }, () => {
-						if (type === AccessibleViewType.Help) return localize('chat.transcript.help', 'Chat responses\nUse Tab and Shift+Tab to reach response links, code block actions and tool summaries. Press Enter or Space on a tool summary to expand or collapse its input, source, execution target, output and result. Streaming updates keep focus and expansion. Failed calls show an error; a finished turn without a result is never shown as successful. Use <keybinding:editor.action.accessibleView> to read the transcript as plain text, including collapsed tool details. Closing this view returns focus to the response.');
-						return [...this.renderedItems].map(([, row]) => row.toolPart
-							? [...row.toolPart.domNode.children].map(child => child.textContent).filter(Boolean).join('\n\n')
+						if (type === AccessibleViewType.Help) return localize("chat.transcript.help", "Chat responses\nUse Tab and Shift+Tab to reach response links, code block actions and tool summaries. Press Enter or Space on a tool summary to expand or collapse its input, source, execution target, output and result. Code block actions copy the complete source, insert it into the active editor, or open it in a new unsaved file. Streaming updates and provider corrections keep code selections, keyboard focus and expansion. Reading older messages preserves the reading position; returning to the bottom follows new content. Failed calls show an error; a finished turn without a result is never shown as successful. Use <keybinding:editor.action.accessibleView> to read the transcript as plain text, including collapsed tool details. Closing this view returns focus to the response.");
+						return [...this.renderedItems].map(([, row]) => row.toolPart || row.hookPart
+							? [...(row.toolPart?.domNode ?? row.hookPart!.domNode).children].map(child => child.textContent).filter(Boolean).join('\n\n')
 							: [itemLabel(row.item), row.item.text, row.item.detail].filter(Boolean).join('\n\n')).join('\n\n');
 					}, () => { if (active.isConnected) active.focus(); }, AccessibilityVerbositySettingId.Chat);
 					provider.onDidChangeContent = this._onDidChangeContent.event;
@@ -108,12 +129,17 @@ export class ChatListWidget extends DomWidget {
 				},
 			}));
 		}
+		// Keep the position measured before an image, editor wrap or disclosure changes height.
+		const resize = new ResizeObserver(() => this.relayout.schedule());
+		resize.observe(this.transcript);
+		resize.observe(this.element);
+		this._register(toDisposable(() => resize.disconnect()));
 		this.updateCodeBlockOptions();
 		this._register(this.configurationService.onDidChangeConfiguration(event => {
 			const keys = [...Object.values(ChatEditorConfiguration), CodeEditorConfiguration.fontFamily, CodeEditorConfiguration.fontSize, CodeEditorConfiguration.lineHeight];
 			if (!keys.some(key => event.affectsConfiguration(key))) return;
 			if (this.visible) this.captureFollowState();
-			const anchor = this.visible && !this.shouldFollow ? this.readingAnchor() : undefined;
+			const anchor = this.visible && !this.shouldFollow ? this.readingPosition : undefined;
 			this.updateCodeBlockOptions();
 			if (this.visible) this.layout(anchor);
 		}));
@@ -133,7 +159,7 @@ export class ChatListWidget extends DomWidget {
 
 	render(items: readonly IChatListItem[]): void {
 		if (this.visible) this.captureFollowState();
-		const anchor = this.visible && !this.shouldFollow ? this.readingAnchor() : undefined;
+		const anchor = this.visible && !this.shouldFollow ? this.readingPosition : undefined;
 		const ids = new Set(items.map(item => item.id));
 		for (const [id, row] of this.renderedItems) {
 			if (ids.has(id)) continue;
@@ -143,14 +169,21 @@ export class ChatListWidget extends DomWidget {
 		let next: ChildNode | null = this.transcript.firstChild;
 		for (const item of items) {
 			let row = this.renderedItems.get(item.id);
-			if (row?.toolPart && item.toolInvocation && row.toolPart.toolCallId === item.toolInvocation.call.toolCallId) {
+			if (row?.hookPart && item.hookPart && row.item.hookPart?.run.runId === item.hookPart.run.runId) {
+				row.hookPart.render(item.hookPart);
+				row.item = item;
+				row.element.classList.toggle('error', item.isError === true);
+				if (item.transient) row.element.dataset.transient = 'true';
+				else delete row.element.dataset.transient;
+			} else if (row?.toolPart && item.toolInvocation && row.toolPart.toolCallId === item.toolInvocation.call.toolCallId) {
 				row.toolPart.render(item.toolInvocation, item.attachmentSource);
 				row.item = item;
 				row.element.classList.toggle('error', item.isError === true);
 				if (item.transient) row.element.dataset.transient = 'true';
 				else delete row.element.dataset.transient;
 			} else if (row?.markdownPart && !sameItem(row.item, item) && row.item.type === item.type && row.item.label === item.label && row.item.detail === item.detail && sameAction(row.item.action, item.action)
-				&& row.markdownPart.tryIncrementalUpdate({ value: item.text, supportThemeIcons: true, supportAlertSyntax: true }, item.transient)) {
+				&& (row.item.text === item.text && row.item.transient === item.transient
+					|| row.markdownPart.tryIncrementalUpdate({ value: item.text, supportThemeIcons: true, supportAlertSyntax: true }, item.transient))) {
 				row.item = item;
 				row.element.classList.toggle('error', item.isError === true);
 				if (item.transient) row.element.dataset.transient = 'true';
@@ -160,12 +193,15 @@ export class ChatListWidget extends DomWidget {
 				row?.element.remove();
 				row = this.renderedItems.set(item.id, this.renderItem(item));
 			}
+			this.renderAttachments(row);
 			this.renderMemoryReferences(row);
 			if (row.element !== next) this.transcript.insertBefore(row.element, next);
 			next = row.element.nextSibling;
 		}
 		for (const id of this.advisorExpansion.keys()) if (!ids.has(id)) this.advisorExpansion.delete(id);
-		if (this.visible) this.layout(anchor);
+		// Reconciliation can temporarily shorten the DOM scroll range. Keep the position
+		// captured before moving retained widgets instead of interpreting that clamp as user input.
+		if (this.visible) this.layout(anchor, false);
 		this._onDidChangeContent.fire();
 	}
 
@@ -173,13 +209,16 @@ export class ChatListWidget extends DomWidget {
 		if (this.visible === visible) return;
 		if (!visible) {
 			this.captureFollowState();
-			this.pendingReadingPosition = { top: this.scrollable.state.top, anchor: this.shouldFollow ? undefined : this.readingAnchor() };
+			this.pendingReadingPosition = { top: this.scrollable.state.top, anchor: this.shouldFollow ? undefined : this.readingPosition };
 		}
 		this.visible = visible;
 		if (visible) {
 			if (this.pendingReadingPosition) {
-				this.scrollable.layout();
-				this.scrollable.scrollTo(0, this.pendingReadingPosition.top);
+				this.layingOut = true;
+				try {
+					this.scrollable.layout();
+					this.scrollable.scrollTo(0, this.pendingReadingPosition.top);
+				} finally { this.layingOut = false; }
 			}
 			this.layout(this.pendingReadingPosition?.anchor);
 			this.pendingReadingPosition = undefined;
@@ -192,14 +231,17 @@ export class ChatListWidget extends DomWidget {
 		const active = this.element.ownerDocument.activeElement;
 		let focus: ChatListViewState['focus'];
 		for (const [itemId, row] of this.renderedItems) {
-			const index = [...row.element.querySelectorAll('button, a, summary')].indexOf(active!);
-			if (index >= 0) { focus = { itemId, index }; break; }
+			// Editor scrollbars appear after measurement; their controls must not shift the
+			// remembered input ordinal while a replacement editor is still being laid out.
+			const textInput = active?.matches(textInputSelector) === true;
+			const index = [...row.element.querySelectorAll(textInput ? textInputSelector : focusableSelector)].indexOf(active!);
+			if (index >= 0) { focus = { itemId, index, ...(textInput ? { textInput: true } : {}) }; break; }
 		}
 		return {
 			visible: this.visible,
 			shouldFollow: this.shouldFollow,
 			top: this.pendingReadingPosition?.top ?? this.scrollable.state.top,
-			anchor: this.pendingReadingPosition?.anchor ?? (this.visible && !this.shouldFollow ? this.readingAnchor() : undefined),
+			anchor: this.pendingReadingPosition?.anchor ?? (this.visible && !this.shouldFollow ? this.readingPosition : undefined),
 			advisorExpansion: [...this.advisorExpansion],
 			toolExpansion: [...this.renderedItems].flatMap(([id, row]) => row.toolPart ? [[id, row.toolPart.domNode.open] as [string, boolean]] : []),
 			focus,
@@ -220,27 +262,42 @@ export class ChatListWidget extends DomWidget {
 		this.setVisible(state.visible);
 		if (state.focus) {
 			const row = this.renderedItems.get(state.focus.itemId);
-			row?.element.querySelectorAll<HTMLElement>('button, a, summary')[state.focus.index]?.focus({ preventScroll: true });
+			const selector = state.focus.textInput ? textInputSelector : focusableSelector;
+			row?.element.querySelectorAll<HTMLElement>(selector)[state.focus.index]?.focus({ preventScroll: true });
 		}
 	}
 
-	private captureFollowState(): void {
-		this.scrollable.layout();
+	private captureFollowState(): boolean {
+		// DOM scrolling can precede its scroll event. Capture it before layout consumes that
+		// position, otherwise an async size measurement can mistake reading for following.
 		const state = this.scrollable.state;
-		this.shouldFollow = state.scrollHeight - state.top - state.height < 48;
+		const scrolled = this.scrollable.scrollableElement.scrollTop !== state.top;
+		if (scrolled) {
+			this.shouldFollow = state.maximumTop - this.scrollable.scrollableElement.scrollTop < 48;
+			this.readingPosition = this.shouldFollow ? undefined : this.readingAnchor();
+		}
+		this.layingOut = true;
+		try { this.scrollable.layout(); }
+		finally { this.layingOut = false; }
+		return scrolled;
 	}
 
-	private layout(anchor?: ReadingAnchor): void {
-		this.scrollable.layout();
-		if (this.shouldFollow) {
-			this.scrollable.scrollTo(0, this.scrollable.state.maximumTop);
-		} else if (anchor) {
-			const row = this.renderedItems.get(anchor.id);
-			if (row) {
-				const contentTop = row.element.getBoundingClientRect().top - this.transcript.getBoundingClientRect().top;
-				this.scrollable.scrollTo(0, contentTop - anchor.viewportTop);
+	private layout(anchor?: ReadingAnchor, captureScroll = true): void {
+		if ((captureScroll && this.captureFollowState()) || !anchor) anchor = this.readingPosition;
+		this.layingOut = true;
+		try {
+			this.scrollable.layout();
+			if (this.shouldFollow) {
+				this.scrollable.scrollTo(0, this.scrollable.state.maximumTop);
+			} else if (anchor) {
+				const row = this.renderedItems.get(anchor.id);
+				if (row) {
+					const contentTop = row.element.getBoundingClientRect().top - this.transcript.getBoundingClientRect().top;
+					this.scrollable.scrollTo(0, contentTop - anchor.viewportTop);
+				}
 			}
-		}
+			this.readingPosition = this.shouldFollow ? undefined : this.readingAnchor();
+		} finally { this.layingOut = false; }
 	}
 
 	private readingAnchor(): ReadingAnchor | undefined {
@@ -252,6 +309,29 @@ export class ChatListWidget extends DomWidget {
 			}
 		}
 		return undefined;
+	}
+
+	private renderAttachments(row: RenderedItem): void {
+		if (!row.attachments) return;
+		const content = row.item.content ?? [];
+		const changed = () => { this.relayout.schedule(); this._onDidChangeContent.fire(); };
+		if (content.some(part => part.type !== 'text' && part.type !== 'artifact')) {
+			if (!row.media.value) {
+				const media = this.instantiationService.createInstance(ChatAttachmentsContentPart, { ownerDocument: row.element.ownerDocument, variables: content, source: row.item.attachmentSource });
+				row.media.value = media;
+				row.attachments.prepend(media.domNode);
+				row.mediaChanges.value = media.onDidChangeHeight(changed);
+			} else row.media.value.updateVariables(content, row.item.attachmentSource);
+		} else { row.mediaChanges.clear(); row.media.clear(); }
+		if (content.some(part => part.type === 'artifact')) {
+			if (!row.resources.value) {
+				const resources = this.instantiationService.createInstance(ChatResourceGroupWidget, row.element.ownerDocument);
+				row.resources.value = resources;
+				row.attachments.append(resources.domNode);
+				row.resourceChanges.value = resources.onDidChangeHeight(changed);
+			}
+			row.resources.value.render(content, JSON.stringify([row.item.attachmentSource?.sessionId, row.item.attachmentSource?.threadId, row.item.id]), row.item.attachmentSource);
+		} else { row.resourceChanges.clear(); row.resources.clear(); }
 	}
 
 	private renderMemoryReferences(row: RenderedItem): void {
@@ -282,14 +362,14 @@ export class ChatListWidget extends DomWidget {
 		if (item.isError) article.classList.add("error");
 		if (item.toolInvocation) {
 			const part = disposables.add(this.instantiationService.createInstance(ChatToolInvocationPart, article.ownerDocument, item.toolInvocation, item.attachmentSource));
-			disposables.add(part.onDidChangeHeight(() => { if (this.visible) this.layout(); this._onDidChangeContent.fire(); }));
+			disposables.add(part.onDidChangeHeight(() => { this.relayout.schedule(); this._onDidChangeContent.fire(); }));
 			article.append(part.domNode);
 			return new RenderedItem(item, article, disposables, part);
 		}
 		if (item.type === 'hook' && item.hookPart) {
 			const part = disposables.add(new ChatHookContentPart(article.ownerDocument, item.hookPart));
 			article.append(part.domNode);
-			return new RenderedItem(item, article, disposables);
+			return new RenderedItem(item, article, disposables, undefined, undefined, undefined, part);
 		}
 		const label = h(this.element.ownerDocument, item.type === "advisor" ? "summary" : "div");
 		label.className = "ash-chat-item-label";
@@ -312,7 +392,7 @@ export class ChatListWidget extends DomWidget {
 				linkHandler: (target: string) => this.onDidRequestLink?.(target),
 				imageResourceLoader: this.imageResourceLoader,
 			}));
-			disposables.add(markdown.onDidChangeHeight(() => { if (this.visible) this.layout(this.shouldFollow ? undefined : this.readingAnchor()); this._onDidChangeContent.fire(); }));
+			disposables.add(markdown.onDidChangeHeight(() => { this.relayout.schedule(); this._onDidChangeContent.fire(); }));
 			markdownPart = markdown;
 			body.append(markdown.domNode);
 		} else {
@@ -320,17 +400,8 @@ export class ChatListWidget extends DomWidget {
 			content.textContent = item.text;
 			body.append(content);
 		}
-		if (item.content?.some(part => part.type !== 'text' && part.type !== 'artifact')) {
-			const media = disposables.add(this.instantiationService.createInstance(ChatAttachmentsContentPart, { ownerDocument: article.ownerDocument, variables: item.content, source: item.attachmentSource }));
-			disposables.add(media.onDidChangeHeight(() => { if (this.visible) this.layout(); this._onDidChangeContent.fire(); }));
-			body.append(media.domNode);
-		}
-		if (item.content?.some(part => part.type === 'artifact')) {
-			const resources = disposables.add(this.instantiationService.createInstance(ChatResourceGroupWidget, article.ownerDocument));
-			disposables.add(resources.onDidChangeHeight(() => { if (this.visible) this.layout(); this._onDidChangeContent.fire(); }));
-			resources.render(item.content, JSON.stringify([item.attachmentSource?.sessionId, item.attachmentSource?.threadId, item.id]), item.attachmentSource);
-			body.append(resources.domNode);
-		}
+		const attachments = h(article.ownerDocument, 'div');
+		body.append(attachments);
 		if (item.detail) {
 			const detail = h(this.element.ownerDocument, "p");
 			detail.className = "ash-chat-turn-error-detail";
@@ -346,12 +417,13 @@ export class ChatListWidget extends DomWidget {
 			article.append(button);
 			disposables.add(addDisposableListener(button, "click", () => this.onDidRequestErrorAction?.(action)));
 		}
-		return new RenderedItem(item, article, disposables, undefined, markdownPart);
+		return new RenderedItem(item, article, disposables, undefined, markdownPart, attachments);
 	}
 }
 
 function sameItem(left: IChatListItem, right: IChatListItem): boolean {
 	return left.id === right.id && left.type === right.type && left.text === right.text
+		&& left.hookPart?.run === right.hookPart?.run
 		&& left.transient === right.transient && left.isError === right.isError
 		&& left.label === right.label && left.detail === right.detail && left.errorCode === right.errorCode
 		&& sameContent(left.content, right.content) && left.attachmentSource?.sessionId === right.attachmentSource?.sessionId
@@ -388,7 +460,7 @@ function itemLabel(item: IChatListItem): string {
 		case "toolResult":
 			return item.isError ? localize('chat.transcript.toolError', 'Tool error') : localize('chat.transcript.toolResult', 'Tool result');
 		case "advisor":
-			return "Advisor";
+			return localize('advisor.settings.title', 'Advisor');
 		case "turnError":
 			return localize('chat.transcript.error', 'Error');
 	}

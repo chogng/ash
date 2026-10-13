@@ -296,18 +296,24 @@ test('Execution Trace retains real model failure and cancellation during concurr
 });
 
 for (const outcome of ['continued', 'denied', 'failed', 'cancelled'] as const) {
-	test(`Hook outcomes reach Chat and Execution Trace through real scripts and survive reopening (${outcome})`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench, testWorkspace }) => {
-		const page = await workbench.openAgentsWindow(target.kind);
-		const connection = await connectTraceAppServer(application, page, testWorkspace.directory);
+	test(`Hook outcomes reach Chat and Execution Trace through real scripts and survive reopening (${outcome})`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench, testWorkspace }, testInfo) => {
+		test.setTimeout(180_000);
+		let page = await workbench.openAgentsWindow(target.kind);
+		let connection: Awaited<ReturnType<typeof connectTraceAppServer>> | undefined = await connectTraceAppServer(application, page, testWorkspace.directory);
 		const { client } = connection;
 		try {
 			const marker = join(testWorkspace.directory, 'hook-started');
-			const action = outcome === 'continued' ? 'console.log(JSON.stringify({decision:"continue"}))' : outcome === 'denied' ? 'console.log(JSON.stringify({decision:"deny",reason:"hook-trace-denied"}))' : outcome === 'failed' ? 'console.error("hook-trace-stderr"); process.exit(7)' : 'setInterval(() => {}, 1000)';
-			const script = `require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'running'); ${action}`;
+			const counter = join(testWorkspace.directory, 'hook-executions');
+			const gate = join(testWorkspace.directory, 'hook-release');
+			const deniedReason = 'hook-trace-denied <img src=x onerror=alert(1)>';
+			const action = outcome === 'continued' ? 'console.log(JSON.stringify({decision:"continue"}))' : outcome === 'denied' ? `console.log(JSON.stringify({decision:"deny",reason:${JSON.stringify(deniedReason)}}))` : 'console.error("hook-trace-stderr"); process.exit(7)';
+			// The real process is held until the renderer has observed running. Each
+			// launch appends once, so reopening cannot pass by silently re-running it.
+			const script = `const fs=require('node:fs'); fs.appendFileSync(${JSON.stringify(counter)}, 'started\\n'); fs.writeFileSync(${JSON.stringify(marker)}, 'running'); const timer=setInterval(() => { if (fs.existsSync(${JSON.stringify(gate)})) { clearInterval(timer); ${action} } }, 20);`;
 			const initialConfig = await client.request(APP_SERVER_METHODS['config/read'], {});
 			await client.request(APP_SERVER_METHODS['execPolicy/rule/upsert'], {
 				commandId: `hook-policy-${outcome}`, expectedRevision: initialConfig.revision,
-				rule: { id: 'hook-trace', selector: { type: 'source', source: 'user', sourceId: 'user:hook:trace-test' }, effect: { type: 'allowUnsandboxed' }, justification: 'The controlled Hook only writes readiness in the isolated test workspace and returns a scripted outcome.' },
+				rule: { id: 'hook-trace', selector: { type: 'source', source: 'user', sourceId: 'user:hook:trace-test' }, effect: { type: 'allowUnsandboxed' }, justification: 'The controlled Hook writes readiness and an execution count in the isolated test workspace, waits for a local release file, and returns a scripted outcome.' },
 			});
 			const config = await client.request(APP_SERVER_METHODS['config/read'], {});
 			await client.request(APP_SERVER_METHODS['hook/upsert'], { commandId: `hook-config-${outcome}`, expectedRevision: config.revision, hook: { id: 'user:hook:trace-test', event: 'beforeTool', enablement: 'enabled', matcher: { toolNames: ['shell-command'] }, action: { type: 'process', program: process.execPath, args: ['-e', script] } } });
@@ -316,31 +322,66 @@ for (const outcome of ['continued', 'denied', 'failed', 'cancelled'] as const) {
 			const threadId = created.session.threads[0].threadId;
 			const thread = await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId });
 			await client.request(APP_SERVER_METHODS['session/request'], { commandId: `hook-start-${outcome}`, sessionId, request: { type: 'startTurn', threadId, expectedSequence: thread.thread.sequence, input: [{ type: 'text', text: 'hook-trace-fixture' }], model: { provider: 'custom-trace-fixture', model: 'gpt-6.1-sol' }, mode: 'agent', approvalMode: 'bypassPermissions', toolMode: 'direct' } });
+			await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
 			await page.locator('.ash-sessions-list-item').filter({ hasText: `Hook ${outcome}` }).click();
-			// The process owns readiness; Thread snapshots no longer carry Hook runtime records.
 			await expect.poll(() => readFile(marker, 'utf8').catch(error => {
 				if (error.code === 'ENOENT') { return undefined; }
 				throw error;
 			})).toBe('running');
+			const running = await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId });
+			const runningEntry = running.transcript.entries.find(entry => entry.type === 'hookRun' && entry.run.hookId === 'user:hook:trace-test');
+			if (!runningEntry || runningEntry.type !== 'hookRun') throw new Error('Missing real running Hook transcript record');
+			expect(runningEntry.run.status.type).toBe('running');
+			const identity = { runId: runningEntry.run.runId, turnId: runningEntry.run.turnId, toolCallId: runningEntry.run.toolCallId };
+			expect(identity).toMatchObject({ turnId: running.thread.turns.at(-1)!.turnId, toolCallId: 'fixture-hook-tool' });
+			const transcript = () => page.getByRole('log', { name: 'Chat transcript', exact: true }).filter({ visible: true });
+			const feedback = transcript().locator('.ash-chat-hook');
+			await expect(feedback).toHaveAttribute('data-status', 'running');
+			await expect(feedback).toHaveAttribute('data-run-id', identity.runId);
+			await expect(feedback).toHaveAttribute('data-turn-id', identity.turnId!);
+			await expect(feedback).toHaveAttribute('data-tool-call-id', identity.toolCallId!);
+			const original = await feedback.elementHandle();
+			const summary = feedback.locator('summary');
+			await summary.press('Enter');
+			await expect.poll(() => feedback.evaluate(element => (element as HTMLDetailsElement).open)).toBe(true);
+			await expect(summary).toBeFocused();
+			await testInfo.attach('hook-running.png', { body: await page.screenshot(), contentType: 'image/png' });
 			if (outcome === 'cancelled') {
-				const running = await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId });
 				await client.request(APP_SERVER_METHODS['session/request'], { commandId: 'hook-interrupt', sessionId, request: { type: 'interruptTurn', threadId, turnId: running.thread.turns.at(-1)!.turnId, expectedSequence: running.thread.sequence } });
-			}
+			} else { await writeFile(gate, 'release'); }
 			const status = outcome === 'cancelled' ? 'interrupted' : outcome === 'failed' ? 'failed' : 'completed';
-			await expect.poll(async () => (await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })).thread.turns.at(-1)?.status).toBe(status);
+			// Turn interruption is recorded before the Hook process finishes cancellation.
+			// Observe the same canonical run's terminal status before reviewing or reopening it.
+			await expect.poll(async () => {
+				const snapshot = await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId });
+				const entry = snapshot.transcript.entries.find(entry => entry.entryId === runningEntry.entryId);
+				return { turnStatus: snapshot.thread.turns.at(-1)?.status, hookStatus: entry?.type === 'hookRun' ? entry.run.status.type : undefined };
+			}).toEqual({ turnStatus: status, hookStatus: outcome });
 			const completed = await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId });
+			const completedEntry = completed.transcript.entries.find(entry => entry.entryId === runningEntry.entryId);
+			if (!completedEntry || completedEntry.type !== 'hookRun') throw new Error('Missing completed Hook transcript identity');
+			expect(completedEntry.run).toMatchObject({ ...identity, status: { type: outcome } });
+			await expect(feedback).toHaveAttribute('data-status', outcome);
+			expect(await feedback.evaluate((element, previous) => element === previous, original)).toBe(true);
+			await expect(summary).toBeFocused();
+			expect(await feedback.evaluate(element => (element as HTMLDetailsElement).open)).toBe(true);
+			expect(await feedback.evaluate(element => element.closest('article')!.classList.contains('error'))).toBe(outcome === 'denied' || outcome === 'failed');
+			const reason = completedEntry.run.status.type === 'denied' || completedEntry.run.status.type === 'cancelled' ? completedEntry.run.status.reason : completedEntry.run.status.type === 'failed' ? completedEntry.run.status.message : '';
+			await expect(feedback.locator('p')).toHaveText(reason);
+			await expect(feedback.locator('img')).toHaveCount(0);
+			expect(await readFile(counter, 'utf8')).toBe('started\n');
 			const turn = completed.thread.turns.at(-1)!;
-			expect(await readFile(marker, 'utf8')).toBe('running');
 			const result = turn.items.find(item => item.type === 'toolResult' && item.toolCallId === 'fixture-hook-tool');
-			const transcript = page.getByRole('log', { name: 'Chat transcript', exact: true }).filter({ visible: true });
 			if (outcome === 'continued' || outcome === 'denied') {
 				const text = outcome === 'continued' ? 'hook-trace-tool-executed' : 'hook-trace-denied';
 				expect(result).toMatchObject({ isError: outcome === 'denied', text: expect.stringContaining(text) });
-				await expect(transcript).toContainText(text);
+				await expect(transcript()).toContainText(text);
 			} else if (outcome === 'failed') {
 				expect(turn.error).toBeDefined();
-				await expect(transcript).toContainText(turn.error!.message);
+				await expect(transcript()).toContainText(turn.error!.message);
 			}
+			await testInfo.attach('hook-completed.png', { body: await page.screenshot(), contentType: 'image/png' });
+			await testInfo.attach('hook-identities.json', { body: JSON.stringify({ running: runningEntry, completed: completedEntry }, null, 2), contentType: 'application/json' });
 			await new QuickAccess(page).runCommand('sessions.trace.open');
 			const viewer = page.locator('.ash-agent-trace');
 			const capture = parseAgentTrace((await client.request(APP_SERVER_METHODS['session/trace/read'], { sessionId, after: {}, limit: 500 })).trace);
@@ -356,11 +397,20 @@ for (const outcome of ['continued', 'denied', 'failed', 'cancelled'] as const) {
 			await viewer.getByRole('tab', { name: 'Raw record', exact: true }).click();
 			await expect(viewer.getByRole('tabpanel')).toContainText(type);
 			await page.getByRole('button', { name: 'Close Execution Trace', exact: true }).click();
-			await new QuickAccess(page).runCommand('sessions.trace.open');
-			await selectRecord(viewer, event.eventId);
-			await viewer.getByRole('tab', { name: 'Raw record', exact: true }).click();
-			await expect(viewer.getByRole('tabpanel')).toContainText(type);
-			await page.getByRole('button', { name: 'Close Execution Trace', exact: true }).click();
-		} finally { await connection.close(); }
+			await original?.dispose();
+			await connection.close();
+			connection = undefined;
+			page = await workbench.reopenAgentsWindow(application, page);
+			await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
+			await page.locator('.ash-sessions-list-item').filter({ hasText: `Hook ${outcome}` }).click();
+			const restored = transcript().locator('.ash-chat-hook');
+			await expect(restored).toHaveAttribute('data-status', outcome);
+			await expect(restored).toHaveAttribute('data-run-id', identity.runId);
+			await expect(restored).toHaveAttribute('data-turn-id', identity.turnId!);
+			await expect(restored).toHaveAttribute('data-tool-call-id', identity.toolCallId!);
+			await expect(restored.locator('p')).toHaveText(reason);
+			expect(await readFile(counter, 'utf8')).toBe('started\n');
+			await testInfo.attach('hook-restored-without-reexecution.png', { body: await page.screenshot(), contentType: 'image/png' });
+		} finally { await connection?.close(); }
 	});
 }

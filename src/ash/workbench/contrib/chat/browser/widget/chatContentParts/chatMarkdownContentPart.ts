@@ -23,7 +23,6 @@ export class ChatMarkdownContentPart extends Disposable {
 	private readonly codeBlocks = this._register(new DisposableMap<number, CodeBlockPart>());
 	private readonly images = new Map<string, Promise<Blob>>();
 	private blocks: readonly RenderedBlock[] = [];
-	private source = '';
 
 	constructor(private readonly options: MarkdownElementOptions, @IInstantiationService private readonly instantiation: IInstantiationService) {
 		super();
@@ -35,9 +34,9 @@ export class ChatMarkdownContentPart extends Disposable {
 		this.render(markdown, options.fillInIncompleteTokens ?? false);
 	}
 
-	/** Accepts only an append to this response; the list replaces the part for rewritten content. */
+	/** Reconciles appended text and provider corrections within this response's existing lifetime. */
 	public tryIncrementalUpdate(newMarkdown: IMarkdownString, fillInIncompleteTokens = false): boolean {
-		if (!newMarkdown.value.startsWith(this.source)) return false;
+		if (this.isDisposed) return false;
 		this.render(newMarkdown, fillInIncompleteTokens);
 		return true;
 	}
@@ -77,9 +76,19 @@ export class ChatMarkdownContentPart extends Disposable {
 				reusable: node.nodeType !== 1 || !(node as Element).matches('img,input,button,pre') && !(node as Element).querySelector('img,input,button,.ash-chat-code-placeholder'),
 			}));
 			this.current.clear();
+			// Corrections can insert a block before the reader's selection. Match sanitized content
+			// across positions, consuming each old node once even when paragraphs are identical.
+			const reusable = new Map<string, ChildNode[]>();
+			for (const block of this.blocks) {
+				if (!block.reusable) continue;
+				const matches = reusable.get(block.source) ?? [];
+				matches.push(block.node);
+				reusable.set(block.source, matches);
+			}
 			for (const [index, node] of nodes.entries()) {
-				const previous = this.blocks[index];
-				if (previous?.reusable && fingerprints[index].reusable && previous.source === fingerprints[index].source) node.parentNode?.replaceChild(previous.node, node);
+				if (!fingerprints[index].reusable) continue;
+				const previous = reusable.get(fingerprints[index].source)?.shift();
+				if (previous) node.parentNode?.replaceChild(previous, node);
 			}
 			for (const [index, data] of code.entries()) {
 				let part = this.codeBlocks.get(index);
@@ -95,9 +104,10 @@ export class ChatMarkdownContentPart extends Disposable {
 			for (const key of this.images.keys()) if (!images.has(key)) this.images.delete(key);
 			lifetime.add(this.instantiation.createInstance(ChatMarkdownDecorationsRenderer, rendered.element));
 			this.current.value = lifetime;
-			this.source = markdown.value;
-			if (focused?.isConnected) focused.focus({ preventScroll: true });
 			if (selected?.anchor.isConnected && selected.focus.isConnected) selection?.setBaseAndExtent(selected.anchor, selected.anchorOffset, selected.focus, selected.focusOffset);
+			// Restoring a DOM range can focus the browser's editing host. The user's toolbar
+			// or link focus takes precedence while the editor keeps its own model selection.
+			if (focused?.isConnected) focused.focus({ preventScroll: true });
 		} catch (error) {
 			lifetime.dispose();
 			throw error;

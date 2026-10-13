@@ -54,7 +54,6 @@ export function chatTranscriptListItems(entries: readonly ThreadTranscriptEntry[
 	const calls = new Map(entries.flatMap(entry => entry.type === "item" && entry.item.type === "toolCall" && entry.item.name === "advisor" ? [[entry.item.toolCallId, entry] as const] : []));
 	const results = new Set(entries.flatMap(entry => entry.type === "item" && entry.item.type === "toolResult" ? [entry.item.toolCallId] : []));
 	return entries.flatMap(entry => {
-		if (entry.type === 'hookRun' && (entry.run.status.type === 'running' || entry.run.status.type === 'continued')) { return []; }
 		if (entry.type === "item" && entry.item.type === "toolCall" && calls.has(entry.item.toolCallId)) {
 			if (results.has(entry.item.toolCallId)) return [];
 			return [{ id: entry.entryId, type: "advisor" as const, text: "Consulting the selected model…", transient: entry.transient, label: "Advisor" }];

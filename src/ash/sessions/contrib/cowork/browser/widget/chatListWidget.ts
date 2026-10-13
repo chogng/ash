@@ -18,7 +18,7 @@ interface ChatListWidgetOptions {
 }
 
 class RenderedItem extends Disposable {
-	constructor(public readonly item: IChatListItem, public readonly element: HTMLElement, disposables: DisposableStore) {
+	constructor(public item: IChatListItem, public readonly element: HTMLElement, disposables: DisposableStore, public readonly hookPart?: ChatHookContentPart) {
 		super();
 		this._register(disposables);
 	}
@@ -87,7 +87,13 @@ export class ChatListWidget extends DomWidget {
 		let next: ChildNode | null = this.transcript.firstChild;
 		for (const item of items) {
 			let row = this.renderedItems.get(item.id);
-			if (!row || !sameItem(row.item, item)) {
+			if (row?.hookPart && item.hookPart && row.item.hookPart?.run.runId === item.hookPart.run.runId) {
+				row.hookPart.render(item.hookPart);
+				row.item = item;
+				row.element.classList.toggle('error', item.isError === true);
+				if (item.transient) row.element.dataset.transient = 'true';
+				else delete row.element.dataset.transient;
+			} else if (!row || !sameItem(row.item, item)) {
 				if (row?.element === next) next = row.element.nextSibling;
 				row?.element.remove();
 				row = this.renderedItems.set(item.id, this.renderItem(item));
@@ -189,7 +195,7 @@ export class ChatListWidget extends DomWidget {
 		if (item.type === 'hook' && item.hookPart) {
 			const part = disposables.add(new ChatHookContentPart(article.ownerDocument, item.hookPart));
 			article.append(part.domNode);
-			return new RenderedItem(item, article, disposables);
+			return new RenderedItem(item, article, disposables, part);
 		}
 		const label = h(this.element.ownerDocument, item.type === "advisor" ? "summary" : "div");
 		label.className = "ash-cowork-item-label";
@@ -249,6 +255,7 @@ export class ChatListWidget extends DomWidget {
 
 function sameItem(left: IChatListItem, right: IChatListItem): boolean {
 	return left.id === right.id && left.type === right.type && left.text === right.text
+		&& left.hookPart?.run === right.hookPart?.run
 		&& left.transient === right.transient && left.isError === right.isError
 		&& left.label === right.label && left.detail === right.detail && left.errorCode === right.errorCode
 		&& sameAction(left.action, right.action);

@@ -2,7 +2,7 @@ import './media/chatMarkdownPart.css';
 import { addDisposableListener, h } from '../../../../../../base/browser/dom.js';
 import { status } from '../../../../../../base/browser/ui/aria/aria.js';
 import { Emitter } from '../../../../../../base/common/event.js';
-import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../../nls.js';
 import { IAgentThreadService, type AgentAttachmentSource, type ChatContentPart } from '../../../../../../platform/agentHost/common/agentService.js';
 import { IClipboardService } from '../../../../../../platform/clipboard/common/clipboardService.js';
@@ -13,9 +13,10 @@ import { IChatResponseResourceFileSystemProvider } from '../../../common/widget/
 type Artifact = Extract<ChatContentPart, { readonly type: 'artifact'; }>['artifact'];
 
 class ResourceRow extends Disposable {
-	constructor(public readonly node: HTMLDetailsElement, public readonly identity: string, lifetime: DisposableStore) {
+	public readonly lifetime = this._register(new MutableDisposable<DisposableStore>());
+	public identity = '';
+	constructor(public readonly node: HTMLDetailsElement, public readonly summary: HTMLElement) {
 		super();
-		this._register(lifetime);
 		this._register(toDisposable(() => node.remove()));
 	}
 }
@@ -48,8 +49,11 @@ export class ChatResourceGroupWidget extends Disposable {
 			indices.add(index);
 			const artifact = part.artifact;
 			const identity = JSON.stringify([source, index, artifact.source, artifact.mimeType, artifact.contentDigest, artifact.data.type, artifact.truncated]);
-			if (this.rows.get(index)?.identity !== identity) this.rows.set(index, this.renderResource(artifact, identity, coordinate ? { sessionId: coordinate.sessionId, threadId: coordinate.threadId, itemId: coordinate.itemId, contentIndex: index } : undefined));
-			const node = this.rows.get(index)!.node;
+			const location = coordinate ? { sessionId: coordinate.sessionId, threadId: coordinate.threadId, itemId: coordinate.itemId, contentIndex: index } : undefined;
+			let row = this.rows.get(index);
+			if (!row) row = this.rows.set(index, this.renderResource(artifact, identity, location));
+			else if (row.identity !== identity) this.renderResource(artifact, identity, location, row);
+			const node = row.node;
 			const next = previous ? previous.nextSibling : this.domNode.firstChild;
 			if (node !== next) this.domNode.insertBefore(node, next);
 			previous = node;
@@ -57,11 +61,18 @@ export class ChatResourceGroupWidget extends Disposable {
 		for (const [index] of this.rows) if (!indices.has(index)) this.rows.deleteAndDispose(index);
 	}
 
-	private renderResource(artifact: Artifact, identity: string, coordinate?: AgentAttachmentSource & { readonly contentIndex: number; }): ResourceRow {
-		const lifetime = new DisposableStore();
+	private renderResource(artifact: Artifact, identity: string, coordinate?: AgentAttachmentSource & { readonly contentIndex: number; }, previous?: ResourceRow): ResourceRow {
 		const document = this.domNode.ownerDocument;
-		const node = h(document, 'details');
-		const summary = h(document, 'summary');
+		const row = previous ?? new ResourceRow(h(document, 'details'), h(document, 'summary'));
+		const { node, summary } = row;
+		const active = document.activeElement;
+		const focused = active === summary;
+		const focusIndex = [...node.querySelectorAll('button, pre')].indexOf(active!);
+		// Retire the old origin and its response bytes before binding updated content to the same disclosure.
+		row.lifetime.clear();
+		const lifetime = new DisposableStore();
+		row.lifetime.value = lifetime;
+		row.identity = identity;
 		summary.textContent = artifact.source.type !== 'structuredResult' ? localize('chat.resource.title', 'Resource: {0}', artifact.source.uri) : localize('chat.resource.structured', 'Structured result');
 		const metadata = h(document, 'p');
 		metadata.textContent = artifact.truncated ? localize('chat.resource.truncated', '{0} · Truncated content', artifact.mimeType) : artifact.source.type === 'resourceLink' ? localize('chat.resource.linked', '{0} · Linked resource', artifact.mimeType) : artifact.mimeType;
@@ -92,10 +103,10 @@ export class ChatResourceGroupWidget extends Disposable {
 				if (controller.signal.aborted) return;
 				await this.editors.openEditor({ resource: association.resource, readOnly: true, showBreadcrumbs: false }, { pinned: true });
 			})().catch(error => {
-				if (!this.isDisposed && node.isConnected) this.notifications.error(localize('chat.resource.openFailed', 'Could not open the response resource: {0}', String(error)));
+				if (!lifetime.isDisposed && !this.isDisposed && node.isConnected) this.notifications.error(localize('chat.resource.openFailed', 'Could not open the response resource: {0}', String(error)));
 			}).finally(() => { opening = false; open.removeAttribute('aria-busy'); });
 		}));
-		node.append(summary, metadata, open);
+		node.replaceChildren(summary, metadata, open);
 		if (text !== undefined) {
 			const copy = h(document, 'button');
 			copy.type = 'button';
@@ -109,8 +120,10 @@ export class ChatResourceGroupWidget extends Disposable {
 		}
 		node.append(body);
 		lifetime.add(addDisposableListener(node, 'toggle', () => this.changedHeight.fire()));
-		this.domNode.append(node);
-		return new ResourceRow(node, identity, lifetime);
+		if (!previous) this.domNode.append(node);
+		if (focused) summary.focus({ preventScroll: true });
+		else if (focusIndex >= 0) node.querySelectorAll<HTMLElement>('button, pre')[focusIndex]?.focus({ preventScroll: true });
+		return row;
 	}
 }
 

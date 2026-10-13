@@ -88,13 +88,12 @@ test('code block settings reject invalid persisted values without changing the a
 });
 
 
-test('Hook feedback stays collapsed, renders process text safely, and successful runs stay silent', () => {
+test('Hook denial stays collapsed, renders process text safely, and updates its failure reason', () => {
 	using resources = new DisposableStore();
 	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
 	using widget = services.createInstance(ChatListWidget, document.createElement('main'), {});
 	const run: ChatHookRun = { runId: 'run', hookId: 'user:hook:test', event: 'preToolUse', status: { type: 'running' }, startedAtUnixMs: 1, durationMs: 0, turnId: 'turn', toolCallId: 'tool', toolName: 'shell-command' };
 	const entry = (status: ChatHookRun['status']): ThreadTranscriptEntry => ({ type: 'hookRun', entryId: 'hook:run', turnId: 'turn', run: { ...run, status } });
-	assert.deepEqual(chatTranscriptListItems([entry({ type: 'running' }), entry({ type: 'continued' })]), []);
 	const denied = chatTranscriptListItems([entry({ type: 'denied', reason: '<img src=x onerror=alert(1)>' })]);
 	widget.render(denied);
 	const feedback = widget.element.querySelector<HTMLDetailsElement>('.ash-chat-hook')!;
@@ -119,7 +118,7 @@ test('Hook summaries use the active Chinese locale', () => {
 		using resources = new DisposableStore();
 		const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
 		using widget = services.createInstance(ChatListWidget, document.createElement('main'), {});
-		widget.render([{ id: 'hook', type: 'hook', text: 'reason', transient: false, hookPart: { kind: 'hook', hookType: 'preToolUse', stopReason: 'reason', toolDisplayName: 'shell-command' } }]);
+		widget.render([{ id: 'hook', type: 'hook', text: 'reason', transient: false, hookPart: { kind: 'hook', run: { runId: 'run', hookId: 'user:hook:test', event: 'preToolUse', status: { type: 'denied', reason: 'reason' }, startedAtUnixMs: 1, durationMs: 1, turnId: 'turn', toolCallId: 'tool', toolName: 'shell-command' } } }]);
 		assert.match(widget.element.querySelector('summary')!.textContent!, /已阻断 shell-command/);
 	} finally { resetNlsResolver(); }
 });

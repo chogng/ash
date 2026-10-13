@@ -145,14 +145,19 @@ export class CodeBlockPart extends Disposable {
 		this.toolbar.setAttribute('aria-label', localize('chat.code.numberedActions', 'Code block {0} actions', data.codeBlockIndex + 1));
 		const languageId = this.languages.isRegisteredLanguageId(data.languageId) ? data.languageId
 			: this.languages.getLanguageIdByLanguageName(data.languageId) ?? 'plaintext';
-		if (this.documentModel.value?.getLanguageId() !== languageId) {
-			const model = new TextModel(data.text, { languageId });
-			this.editor.setModel(model);
-			this.documentModel.value = model;
-		} else if (this.documentModel.value.getValue() !== data.text) {
-			const selections = this.editor.getSelections();
-			this.documentModel.value.setValue(data.text);
-			if (selections) this.editor.setSelections(selections);
+		const model = this.documentModel.value;
+		if (!model) {
+			const created = new TextModel(data.text, { languageId });
+			this.editor.setModel(created);
+			this.documentModel.value = created;
+		} else {
+			// A completed language fence changes highlighting, not the response document's lifetime.
+			if (model.getLanguageId() !== languageId) model.setLanguage(languageId);
+			if (model.getValue() !== data.text) {
+				const selections = this.editor.getSelections();
+				model.setValue(data.text);
+				if (selections) this.editor.setSelections(selections);
+			}
 		}
 		this.updateOptions();
 		this.layout(width);

@@ -31,7 +31,7 @@ import { ICodeEditorService } from '../../../src/ash/editor/browser/services/cod
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { StandaloneCommandService } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
 import { createTestEditorServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
-import { chatTranscriptListItems } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatListItems.js';
+import { chatTranscriptListItems, type IChatListItem } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatListItems.js';
 import { createAppServerAgentThreadService } from '../../../src/ash/platform/agentHost/browser/appServerAgentService.js';
 import type { ThreadTranscriptEntry } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import { ChatListWidget } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatListWidget.js';
@@ -146,7 +146,9 @@ document.body.append(root);
 services.registerInstance(ILayoutService, resources.add(new BrowserLayoutService({ root: document.body })));
 const accessibleView = resources.add(services.createInstance(AccessibleViewService));
 let imageReads = 0;
-const list = resources.add(services.createInstance(ChatListWidget, root, { imageResourceLoader: async () => { imageReads++; return new Blob([new Uint8Array(imageBytes)], { type: 'image/png' }); } }));
+const listOptions = { imageResourceLoader: async () => { imageReads++; return new Blob([new Uint8Array(imageBytes)], { type: 'image/png' }); } };
+let list = resources.add(services.createInstance(ChatListWidget, root, listOptions));
+let rendererItems: readonly IChatListItem[] = [];
 list.setVisible(true);
 const toolNotifications = resources.add(new Emitter<ServerNotification>());
 const appHtml = `<h1>Report</h1><output id="context"></output><output id="result"></output><output id="error"></output><button id="increment">Increment</button><button id="call">Call tool</button><output id="count">0</output>
@@ -245,6 +247,11 @@ declare global {
 			setTheme(value: 'dark' | 'light' | 'hc'): void;
 			refresh(): void;
 			imageReadCount(): number;
+			renderItems(items: readonly IChatListItem[]): void;
+			readingState(): ReturnType<ChatListWidget['getViewState']>;
+			delayAttachments(value: boolean): void;
+			setTranscriptVisible(value: boolean): void;
+			recreateTranscript(): void;
 			stream(value: string, complete: boolean): void;
 			showLongCode(): string;
 			showTool(): void;
@@ -290,6 +297,22 @@ window.ashChatTranscriptIntegration = {
 		theme.setColorTheme(palette);
 	},
 	imageReadCount: () => imageReads,
+	renderItems: items => { rendererItems = items; list.render(items); },
+	readingState: () => list.getViewState(),
+	delayAttachments: value => { delayMedia = value; },
+	setTranscriptVisible: value => {
+		if (!value) list.setVisible(false);
+		root.style.display = value ? 'flex' : 'none';
+		if (value) list.setVisible(true);
+	},
+	recreateTranscript: () => {
+		const previous = list;
+		const state = previous.getViewState();
+		list = resources.add(services.createInstance(ChatListWidget, root, listOptions));
+		previous.element.replaceWith(list.element);
+		list.restoreViewState(state, rendererItems);
+		previous.dispose();
+	},
 	stream: (value, complete) => list.render([{ id: 'stream', type: 'agentMessage', text: value, transient: !complete }]),
 	refresh: () => list.render([{ id: 'reply', type: 'agentMessage', text, transient: false }]),
 	showLongCode: () => {

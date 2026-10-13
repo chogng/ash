@@ -82,13 +82,17 @@ export class ChatAttachmentsContentPart extends Disposable {
 		this.updateVariables(options.variables, options.source);
 	}
 
-	public updateVariables(variables: readonly ChatContentPart[], source = this.options.source): void {
+	public updateVariables(variables: readonly ChatContentPart[], source?: IChatListItem['attachmentSource']): void {
 		const indices = new Set(variables.flatMap((part, index) => part.type === 'text' || part.type === 'artifact' ? [] : [index]));
-		for (const [index] of this.rows) if (!indices.has(index)) this.rows.deleteAndDispose(index);
+		let changed = false;
+		for (const [index] of this.rows) if (!indices.has(index)) { this.rows.deleteAndDispose(index); changed = true; }
+		let next: ChildNode | null = this.domNode.firstChild;
 		for (const [index, part] of variables.entries()) {
 			if (part.type === 'text' || part.type === 'artifact') continue;
 			let row = this.rows.get(index);
 			if (!row || !sameMedia(row.part, part) || !sameSource(row.source, source)) {
+				changed = true;
+				if (row?.element === next) next = row.element.nextSibling;
 				row = this.rows.set(index, new MediaRow(this.options.ownerDocument, part, source, index));
 				const current = row;
 				// The row owns listeners even when a later update replaces it at the same content index.
@@ -108,9 +112,11 @@ export class ChatAttachmentsContentPart extends Disposable {
 					}
 				}
 			}
-			this.domNode.append(row.element);
+			// Avoid disconnecting a retained audio player or the user's focused media row.
+			if (row.element !== next) { this.domNode.insertBefore(row.element, next); changed = true; }
+			next = row.element.nextSibling;
 		}
-		this._onDidChangeHeight.fire();
+		if (changed) this._onDidChangeHeight.fire();
 	}
 
 	private async load(row: MediaRow): Promise<void> {
@@ -162,7 +168,11 @@ function sameSource(left: IChatListItem['attachmentSource'], right: IChatListIte
 function sameMedia(left: MediaPart, right: MediaPart): boolean {
 	if (left.type !== right.type) return false;
 	if ('url' in left) return 'url' in right && left.url === right.url;
-	return 'attachment' in right && left.attachment.contentDigest === right.attachment.contentDigest;
+	if (!('attachment' in right) || left.attachment.contentDigest !== right.attachment.contentDigest
+		|| left.attachment.mediaType !== right.attachment.mediaType || left.attachment.encodedBytes !== right.attachment.encodedBytes) return false;
+	return left.type === 'imageAttachment'
+		? right.type === 'imageAttachment' && left.attachment.width === right.attachment.width && left.attachment.height === right.attachment.height
+		: right.type === 'audioAttachment' && left.attachment.durationMs === right.attachment.durationMs;
 }
 
 function safeMediaUrl(part: Extract<MediaPart, { readonly type: 'imageUrl' | 'audioUrl'; }>): string | undefined {
