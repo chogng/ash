@@ -53,7 +53,7 @@ import { normalizeExternalUrl } from '../../platform/opener/common/opener.js';
 import { NativeKeyboardLayoutMainService, keyboardLayoutChannel } from "../../platform/keyboardLayout/electron-main/nativeKeyboardLayoutMainService.js";
 import { UserKeyboardLayoutMainService, userKeyboardLayoutChannel } from "../../platform/keyboardLayout/electron-main/userKeyboardLayoutMainService.js";
 import { NativeMenubarMainService, nativeMenubarIpcRoutes } from "../../platform/menubar/electron-main/menubarMainService.js";
-import { clearElectronApplicationMenu, createElectronMenubarHost } from "../../platform/menubar/electron-main/menubar.js";
+import { clearElectronApplicationMenu, createElectronMenubarHost, Menubar } from "../../platform/menubar/electron-main/menubar.js";
 import { colorSchemeChannel, windowSplashIpcRoutes, nativeHostIpcRoutes, type INativeHostMainService } from "../../platform/native/electron-main/nativeHostIpc.js";
 import { UpdateMainService } from '../../platform/update/electron-main/updateMainService.js';
 import { UpdateChannel } from '../../platform/update/common/updateIpc.js';
@@ -473,7 +473,16 @@ export class AshApplication extends Disposable {
 		const workspaces = new WorkspacesManagementMainService();
 		this.workspaces = workspaces;
 		launchServices.registerInstance(IWindowsMainService, this.windowsMainService);
+		launchServices.registerInstance(ILogService, this.logService);
 		this.launchMainService = this._register(launchServices.createInstance(LaunchMainService));
+		if (process.platform === 'darwin') {
+			this._register(launchServices.createInstance(Menubar, () => this.mainLocalizationMessages()['taskbar.newWindow']!, this.localizationChanged.event));
+			const updateRecentDocuments = (): void => {
+				void this.workspacesHistory.updateMacOSRecentDocuments().catch(error => this.logService.error('workspaces', 'Failed to update Dock recent projects', error));
+			};
+			this._register(this.workspacesHistory.onDidChangeRecentlyOpened(updateRecentDocuments));
+			updateRecentDocuments();
+		}
 		this.mainProcessIpcServer.registerChannel('url', new URLHandlerChannel({ handleURL: (uri, options) => this.handleProtocolUrl(uri, options) }));
 		// Once windows can accept user input, finish their setup before requesting normal, vetoable shutdown.
 		this.startupWindowOpeningStarted = true;

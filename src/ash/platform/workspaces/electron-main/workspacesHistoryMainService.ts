@@ -1,6 +1,8 @@
 import { Emitter, type Event } from '../../../base/common/event.js';
 import type { IServerChannel } from '../../../base/parts/ipc/common/ipc.js';
-import { Disposable } from '../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { TaskQueue } from '../../../base/common/async.js';
+import { Schemas } from '../../../base/common/network.js';
 import { extUriBiasedIgnorePathCase } from '../../../base/common/resources.js';
 import type { URI } from '../../../base/common/uri.js';
 import { IStateService } from '../../state/node/state.js';
@@ -8,6 +10,7 @@ import { mergeRecentlyOpened, recentWorkspaceUri, restoreRecentlyOpened, toStore
 import { basename } from 'node:path';
 import type { JumpListCategory } from 'electron';
 import { windowsCommandLine } from '../../environment/node/argvHelper.js';
+import { stat } from 'node:fs/promises';
 
 export function workspacesHistoryChannel(service: IWorkspacesService): IServerChannel {
 	return {
@@ -46,10 +49,12 @@ export class WorkspacesHistoryMainService extends Disposable implements IWorkspa
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChangeRecentlyOpened = this.changed.event;
 	private recentlyOpened: IRecentlyOpened;
+	private readonly macOSRecentDocumentsUpdates = new TaskQueue();
 
 	constructor(@IStateService private readonly state: IStateService) {
 		super();
 		this.recentlyOpened = restoreRecentlyOpened(state.getItem(RECENTLY_OPENED_STORAGE_KEY));
+		this._register(toDisposable(() => this.macOSRecentDocumentsUpdates.clearPending()));
 	}
 
 	public async getRecentlyOpened(): Promise<IRecentlyOpened> {
@@ -109,6 +114,32 @@ export class WorkspacesHistoryMainService extends Disposable implements IWorkspa
 		if (this.isDisposed) return;
 		const result = app.setJumpList(categories);
 		if (result !== 'ok') console.error(`Failed to update Windows Jump List: ${result}`);
+	}
+
+	public async updateMacOSRecentDocuments(): Promise<void> {
+		if (process.platform !== 'darwin' || this.isDisposed) return;
+		await this.macOSRecentDocumentsUpdates.scheduleSkipIfCleared(async () => {
+			if (this.isDisposed) return;
+			const recents = this.recentlyOpened;
+			const paths: string[] = [];
+			for (const recent of recents.workspaces) {
+				const uri = recentWorkspaceUri(recent);
+				if (uri.scheme !== Schemas.file) continue;
+				try {
+					await stat(uri.fsPath);
+					paths.push(uri.fsPath);
+				} catch (error) {
+					const code = (error as NodeJS.ErrnoException).code;
+					if (code !== 'ENOENT' && code !== 'ENOTDIR') throw error;
+				}
+				if (paths.length === 7) break;
+			}
+			const { app } = await import('electron/main');
+			if (this.isDisposed || recents !== this.recentlyOpened) return;
+			app.clearRecentDocuments();
+			// macOS places the last added item nearest the Dock, so add the newest last.
+			for (const path of paths.reverse()) app.addRecentDocument(path);
+		});
 	}
 
 	public getWorkspaceLaunchArguments(recent: IRecent): string[] {
