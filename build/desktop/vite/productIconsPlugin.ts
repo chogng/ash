@@ -1,8 +1,7 @@
 import { dirname, extname, resolve } from "node:path";
 import type { Plugin } from "vite";
 import { generateIcons } from "../../resources/icons/generate.ts";
-
-const watchedEvents = new Set(["add", "change", "unlink"]);
+import { watchRebuild, type RebuildServer } from "../../lib/watchRebuild.ts";
 
 interface ProductIconsPluginOptions {
 	readonly sourceDirectory?: string;
@@ -10,13 +9,10 @@ interface ProductIconsPluginOptions {
 	readonly debounceMilliseconds?: number;
 }
 
-interface ProductIconsServer {
-	readonly config: { readonly logger: { error(message: string, options?: { readonly error?: unknown; }): void; }; };
-	readonly watcher: {
+interface ProductIconsServer extends RebuildServer {
+	readonly watcher: RebuildServer["watcher"] & {
 		add(path: string): unknown;
-		on(event: "all", listener: (event: string, path: string) => void): unknown;
 	};
-	readonly ws: { send(message: { readonly type: "full-reload"; }): void; };
 }
 
 export type AshProductIconsPlugin = Omit<Plugin, "configureServer"> & {
@@ -31,34 +27,17 @@ export function productIconsPlugin(options: ProductIconsPluginOptions = {}): Ash
 	const sourceDirectory = resolve(options.sourceDirectory ?? resolve(import.meta.dirname, "../../../resources/icons"));
 	const outputFile = resolve(options.outputFile ?? resolve(import.meta.dirname, "../../../src/ash/base/common/productIcons.ts"));
 	const debounceMilliseconds = options.debounceMilliseconds ?? 50;
-	let timer: NodeJS.Timeout | undefined;
-	let pending: Promise<unknown> = Promise.resolve();
+	let stopWatching: (() => void) | undefined;
 
 	return {
 		name: "ash-product-icons",
+		closeBundle() { stopWatching?.(); },
 		configureServer(server) {
 			server.watcher.add(sourceDirectory);
-			server.watcher.on("all", (event, path) => {
-				if (!watchedEvents.has(event) || !isDirectSvgChild(path, sourceDirectory)) {
-					return;
-				}
-				clearTimeout(timer);
-				timer = setTimeout(() => {
-					pending = pending
-						.catch(() => undefined)
-						.then(() => generateIcons({
-							outputs: { typescriptFile: outputFile },
-							sourceDirectory,
-							sourceHandling: "ignore",
-						}))
-						.then((report) => {
-							if (report.outputChanged) {
-								server.ws.send({ type: "full-reload" });
-							}
-						})
-						.catch((error) => server.config.logger.error(error instanceof Error ? error.message : String(error), { error }));
-				}, debounceMilliseconds);
-			});
+			stopWatching = watchRebuild(server, path => isDirectSvgChild(path, sourceDirectory), async () => {
+				const report = await generateIcons({ outputs: { typescriptFile: outputFile }, sourceDirectory, sourceHandling: "ignore" });
+				return report.outputChanged;
+			}, debounceMilliseconds);
 		},
 	};
 }

@@ -41,20 +41,26 @@ export function verifyFormatting(fileName: string, text: string): boolean {
 }
 
 function sourceFiles(paths: readonly string[]): string[] {
-	// Git owns the input inventory so ignored build outputs cannot become sources.
-	const inventory = execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], { cwd: repositoryRoot, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }).split('\0');
-	const files = [...new Set(inventory)].filter(name => sourceRoots.some(root => name.startsWith(root)) && !copiedSourceRoots.some(root => name.startsWith(root)) && !generatedSources.has(name) && sourceExtensions.test(name) && !/\.d\.[cm]?ts$/.test(name) && !excludedDirectories.test(name) && statSync(resolve(repositoryRoot, name), { throwIfNoEntry: false })?.isFile()).sort();
-	if (paths.length === 0) {
-		return files;
-	}
-	const selected = new Set<string>();
-	for (const path of paths) {
+	const selections = paths.map(path => {
 		const name = relative(repositoryRoot, resolve(repositoryRoot, path));
 		if (name === '..' || name.startsWith(`..${sep}`) || isAbsolute(name)) {
 			throw new Error(`Source path must belong to the repository: ${path}`);
 		}
-		const normalized = name.replaceAll('\\', '/');
-		const matches = files.filter(file => normalized === '' || file === normalized || file.startsWith(`${normalized}/`));
+		return { path, name: name.replaceAll('\\', '/') };
+	});
+	// Git owns the input inventory so ignored build outputs cannot become sources.
+	// Literal pathspecs preserve filenames containing glob characters, such as brackets.
+	const scope = selections.length ? selections.map(({ name }) => name || '.') : sourceRoots;
+	const inventory = execFileSync('git', ['--literal-pathspecs', 'ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', ...scope], { cwd: repositoryRoot, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }).split('\0');
+	const files = [...new Set(inventory)].filter(name => sourceRoots.some(root => name.startsWith(root)) && !copiedSourceRoots.some(root => name.startsWith(root)) && !generatedSources.has(name) && sourceExtensions.test(name) && !/\.d\.[cm]?ts$/.test(name) && !excludedDirectories.test(name)).sort();
+	// Narrow requested paths before touching the filesystem; Git may still list deleted files.
+	const isFile = (name: string): boolean => statSync(resolve(repositoryRoot, name), { throwIfNoEntry: false })?.isFile() === true;
+	if (paths.length === 0) {
+		return files.filter(isFile);
+	}
+	const selected = new Set<string>();
+	for (const { path, name } of selections) {
+		const matches = files.filter(file => name === '' || file === name || file.startsWith(`${name}/`)).filter(isFile);
 		if (matches.length === 0) {
 			throw new Error(`No first-party TypeScript or JavaScript sources matched: ${path}`);
 		}

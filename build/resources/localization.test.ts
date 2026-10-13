@@ -18,6 +18,14 @@ test('source extraction preserves bundle identities, aliases and original comman
 	assert.deepEqual(messages, { ash: { hello: 'Hello {0}', undo: 'Undo' }, 'ash.menu': { close: 'Close' } });
 });
 
+test('source extraction preserves escaped imports and color identifiers', () => {
+	assert.deepEqual(extractLocalizationMessages([
+		{ path: 'unrelated.ts', text: 'export const answer = 42;' },
+		{ path: 'escaped.ts', text: String.raw`import { localize as text } from '../\u006els.js'; text('hello', 'Hello');` },
+		{ path: 'color.ts', text: String.raw`regist\u0065rColor('input.background', defaults, { description: 'Input background.' });` },
+	]), { ash: { hello: 'Hello', 'color.input.background': 'Input background.' } });
+});
+
 test('conflicting English declarations fail the build', () => {
 	assert.throws(() => extractLocalizationMessages([{
 		path: 'commands.ts', text: `
@@ -97,6 +105,10 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 		'package.json': JSON.stringify({ type: 'module' }),
 		'src/ash/nls.ts': `export function localize(_key: string, message: string): string { return message; }`,
 		'src/ash/feature.ts': `import { localize } from './nls.js'; localize('hello', 'Hello');`,
+		'src/ash/nested/feature.ts': `import { localize } from '../nls.js'; localize('hello', 'Hello');`,
+		'src/ash/ignored.test.ts': `import { localize } from './nls.js'; localize('hello', 'Ignored test');`,
+		'src/ash/test/ignored.ts': `import { localize } from '../nls.js'; localize('hello', 'Ignored test directory');`,
+		'src/ash/generated/ignored.ts': `import { localize } from '../nls.js'; localize('hello', 'Ignored generated directory');`,
 		'src/ash/platform/languagePacks/common/languagePackContract.ts': `export const ASH_LOCALIZATION_CATALOG_VERSION = 'ash-1'; export interface LanguagePackCatalog { readonly schemaVersion: 1; readonly locale: string; readonly languageName: string; readonly localizedLanguageName: string; readonly catalogVersion: string; readonly bundles: Readonly<Record<string, Readonly<Record<string, string>>>>; } export interface PreinstalledLanguagePack { readonly id: string; readonly version: string; readonly displayName: string; readonly description: string; readonly catalog: LanguagePackCatalog; }`,
 		'.build/protocol/typescript/ApprovalModes.ts': `export const APPROVAL_MODE_DEFINITIONS = [];`,
 		'localization/languages.json': JSON.stringify(['en'].map(locale => ({ locale, languageName: locale, localizedLanguageName: locale }))),
@@ -108,7 +120,7 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 		await mkdir(dirname(join(root, name)), { recursive: true });
 		await writeFile(join(root, name), text);
 	}
-	for (const file of ['build/resources/localization.ts', entry]) {
+	for (const file of ['build/resources/localization.ts', 'build/lib/watchRebuild.ts', entry]) {
 		await mkdir(dirname(join(root, file)), { recursive: true });
 		await copyFile(join(repository, file), join(root, file));
 	}
@@ -146,6 +158,7 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 		assert.deepEqual(provenance, { core: ['en'], extensions: [{ id: 'ash/language-pack-zh-cn', catalog: packedCatalog }] });
 	}
 	await writeFile(join(root, 'src/ash/feature.ts'), `import { localize } from './nls.js'; localize('hello', 'Hello again');`);
+	await writeFile(join(root, 'src/ash/nested/feature.ts'), `import { localize } from '../nls.js'; localize('hello', 'Hello again');`);
 	run(['build/resources/localization.ts', '--check']);
 	assert.doesNotMatch(await readFile(join(generated, 'localizationCatalog.en.ts'), 'utf8'), /Hello again/u);
 	run(['build/resources/localization.ts']);
@@ -155,4 +168,9 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 	assert.equal(invalid.error, undefined);
 	assert.notEqual(invalid.status, 0);
 	assert.match(invalid.stderr, /Unknown translation: zh-CN\/ash\/unknown/u);
+	await writeFile(join(root, 'src/ash/nested/feature.ts'), `import { localize } from '../nls.js'; localize('hello', 'Conflicting nested message');`);
+	const conflicting = spawnSync(process.execPath, ['build/resources/localization.ts', '--check'], { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 30_000 });
+	assert.equal(conflicting.error, undefined);
+	assert.notEqual(conflicting.status, 0);
+	assert.match(conflicting.stderr, /Conflicting English declaration: ash\/hello in nested[/\\]feature\.ts/u);
 });

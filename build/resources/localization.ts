@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import type { LanguagePackCatalog } from '../../src/ash/platform/languagePacks/common/languagePackContract.ts';
 import { ASH_LOCALIZATION_CATALOG_VERSION } from '../../src/ash/platform/languagePacks/common/languagePackContract.ts';
 import { APPROVAL_MODE_DEFINITIONS } from '../../.build/protocol/typescript/ApprovalModes.ts';
+import { watchRebuild } from '../lib/watchRebuild.ts';
 
 type Bundles = Record<string, Record<string, string>>;
 export interface LocalizationSource { readonly path: string; readonly text: string; }
@@ -14,6 +15,8 @@ export interface LocalizationSource { readonly path: string; readonly text: stri
 export function extractLocalizationMessages(sources: readonly LocalizationSource[]): Bundles {
 	const bundles: Bundles = {};
 	for (const input of sources) {
+		// Escapes can spell either an NLS import or registerColor, so keep those files on the parser path.
+		if (!/nls\.js|registerColor|\\/u.test(input.text)) { continue; }
 		const source = ts.createSourceFile(input.path, input.text, ts.ScriptTarget.Latest, true);
 		const names = new Map<string, string>();
 		const namespaces = new Set<string>();
@@ -243,26 +246,18 @@ export function localizationPlugin(): Plugin {
 	const sources = resolve(repository, 'src/ash');
 	const translations = resolve(repository, 'localization');
 	const extensions = resolve(repository, 'extensions');
-	let pending: Promise<unknown> = Promise.resolve();
-	let timer: NodeJS.Timeout | undefined;
+	let stopWatching: (() => void) | undefined;
 	return {
 		name: 'ash-localization',
 		async buildStart() { await generateLocalization(); },
+		closeBundle() { stopWatching?.(); },
 		configureServer(server) {
 			server.watcher.add(translations);
 			server.watcher.add(extensions);
-			server.watcher.on('all', (event, path) => {
+			stopWatching = watchRebuild(server, path => {
 				const file = resolve(path);
-				if (!['add', 'change', 'unlink'].includes(event)) return;
-				if (!(file.startsWith(`${translations}${sep}`) || file.startsWith(`${extensions}${sep}`) && file.endsWith('.json') || file.startsWith(`${sources}${sep}`) && file.endsWith('.ts'))) return;
-				clearTimeout(timer);
-				timer = setTimeout(() => {
-					pending = pending.then(() => generateLocalization()).then(changed => {
-						if (changed) server.ws.send({ type: 'full-reload' });
-					}).catch(error => server.config.logger.error(String(error), { error }));
-				}, 50);
-			});
-			server.httpServer?.once('close', () => clearTimeout(timer));
+				return file.startsWith(`${translations}${sep}`) || file.startsWith(`${extensions}${sep}`) && file.endsWith('.json') || file.startsWith(`${sources}${sep}`) && file.endsWith('.ts');
+			}, generateLocalization);
 		},
 	};
 }
@@ -327,15 +322,23 @@ async function readDomains(directory: string): Promise<Bundles> {
 	return bundles;
 }
 
-async function readSources(directory: string, sourceRoot = directory): Promise<LocalizationSource[]> {
-	const sources: LocalizationSource[] = [];
-	for (const entry of (await readdir(directory, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
-		const path = resolve(directory, entry.name);
-		if (entry.isDirectory()) {
-			if (!['test', 'generated'].includes(entry.name)) { sources.push(...await readSources(path, sourceRoot)); }
-		} else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) {
-			sources.push({ path: relative(sourceRoot, path), text: await readFile(path, 'utf8') });
+async function readSources(sourceRoot: string): Promise<LocalizationSource[]> {
+	const files: string[] = [];
+	async function collect(directory: string): Promise<void> {
+		for (const entry of (await readdir(directory, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
+			const path = resolve(directory, entry.name);
+			if (entry.isDirectory()) {
+				if (!['test', 'generated'].includes(entry.name)) { await collect(path); }
+			} else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) {
+				files.push(path);
+			}
 		}
+	}
+	await collect(sourceRoot);
+	const sources: LocalizationSource[] = [];
+	// Bound open files while preserving traversal order for conflict diagnostics and generated catalogs.
+	for (let offset = 0; offset < files.length; offset += 32) {
+		sources.push(...await Promise.all(files.slice(offset, offset + 32).map(async path => ({ path: relative(sourceRoot, path), text: await readFile(path, 'utf8') }))));
 	}
 	return sources;
 }

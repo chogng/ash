@@ -43,12 +43,66 @@ and the scenario runner's esbuild retain bundling. Node, Mocha and Playwright
 retain test execution; pnpm retains dependency management. Build tools keep
 the TS6 JavaScript Compiler API provided by the `typescript` compatibility alias.
 
-Bun also runs the product-icon generator, localization generator, CSS checker
-and TypeScript/JavaScript formatter through their existing pnpm scripts. The
-formatting CI job installs dependencies with `--ignore-scripts`, then runs
+Bun also runs the product-icon generator, localization generator, CSS checker,
+TypeScript/JavaScript formatter and Prettier through their existing pnpm scripts.
+Prettier retains its pinned version, formatting rules and ignore list; its CLI
+runs directly from the installed workspace package without invoking a package
+executor or downloading tools. The formatting CI job installs dependencies with
+`--ignore-scripts`, then runs
 `pnpm rebuild bun` to initialize the pinned executable without running other
 dependency build scripts. Desktop build, packaging, launch and test runners
 continue to use Node.
+
+On Windows x64 (2026-10-13), Prettier 3.9.9 checking `package.json`,
+`build/**/*.json`, `docs/**/*.md` and `src/**/*.css` took median process times of
+7.389 s under Node 24.21.0 and 6.247 s under Bun 1.4.3. One warmup preceded five
+alternating runs per runtime with a warm filesystem cache. Both reported the
+same existing formatting violations and exit code. Separate JSON, JSONC, YAML,
+Markdown, CSS and HTML fixtures produced identical formatted bytes, diagnostics,
+ignore behavior and check/write/parse-error exit codes. Commands, logs and hashes
+are in `.build/benchmarks/bun-review/`. This sample does not measure the complete
+formatting job or other operating systems. Browser-extension preparation stays
+on Node: its Bun run changed the compressed Markdown webview resource bytes.
+
+The TS/JS formatter asks Git for literal requested paths before reading file
+status; without arguments it enumerates only the owned source roots.
+Localization extraction skips parsing sources without NLS imports or color
+registrations; sources containing escapes still use the parser. Source reads
+run in batches of at most 32 files, preserving traversal order for diagnostics
+and catalogs. Windows x64 Bun 1.4.3 comparisons on the same date used one warmup
+and five alternating runs per version, with these median process times:
+
+| Incremental optimization        | Check                          |  Before |   After |
+| ------------------------------- | ------------------------------ | ------: | ------: |
+| Filter before file status reads | `format:ts build/format.ts`    |  537 ms |  454 ms |
+| Skip unrelated syntax trees     | Localization source validation | 2303 ms | 1733 ms |
+| Scope Git enumeration           | `format:ts build/format.ts`    |  433 ms |  269 ms |
+| Batch source reads              | Localization source validation | 1906 ms | 1686 ms |
+
+Diagnostics matched, and all ten generated localization files had identical
+hashes, including the English and Chinese catalogs. The measurements use a warm
+filesystem cache and exclude pnpm and protocol-generation prehooks. Each pair
+measures the named change against the preceding implementation; separate pairs
+must not be added together. Scoped Git enumeration retained all 4547 source-root
+inventory entries. Script snapshots, commands, logs and hashes are in
+`.build/benchmarks/bun-review-followup/` and `.build/benchmarks/bun-review-io/`.
+
+Development resource watchers serialize generation and keep only one pending
+rerun when edits arrive during a build. Localization, browser-extension and icon
+generators reread all their inputs, so coalescing retains the latest changes
+without retaining each notification. Closing Vite removes listeners, cancels
+pending work and suppresses reloads from in-flight generation, including in
+middleware mode.
+
+On Windows x64 with Node 24.21.0, eight notifications separated by 75 ms timers
+triggered eight localization scans before this change and three to four afterward.
+One warmup preceded three alternating runs per version with a warm filesystem
+cache. Median time from the first notification until generation drained fell
+from 8.718 s to 4.158 s (52%). Synchronous parsing can delay notification timers;
+their actual delivery times are recorded. All ten output hashes matched, and
+unchanged outputs caused no reloads. This measures a burst of development edits,
+not startup or single-save latency. Snapshots, commands, timings and hashes are
+in `.build/benchmarks/watch-rebuild/`.
 
 Linux ARM64 Renderer checks were compared in the existing Debian 12 devcontainer
 on an Apple M5, with 10 Docker VM CPUs and about 8 GB VM memory. The source and

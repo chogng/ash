@@ -30,7 +30,7 @@ test('the CLI checks without writing, fixes both languages, and leaves generated
 	t.after(() => rmSync(directory, { recursive: true, force: true }));
 	const input = 'function example(){\n  return 1+2\n}\n';
 	const excluded = ['generated/contract.ts', 'fixtures/input.ts', 'node_modules/dependency.js', 'types.d.mts'];
-	for (const name of ['file with spaces.ts', 'script.js', ...excluded]) {
+	for (const name of ['file [with spaces].ts', 'script.js', ...excluded]) {
 		const path = join(directory, name);
 		mkdirSync(resolve(path, '..'), { recursive: true });
 		writeFileSync(path, input);
@@ -41,14 +41,26 @@ test('the CLI checks without writing, fixes both languages, and leaves generated
 	const isScript = /\.[cm]?js$/.test(packageManager);
 	const executable = isScript ? process.execPath : packageManager;
 	const prefix = isScript ? [packageManager] : [];
-	const invoke = (script: string): ReturnType<typeof spawnSync> => spawnSync(executable, [...prefix, script, source], { cwd: repositoryRoot, encoding: 'utf8' });
+	const invoke = (script: string, ...paths: string[]): ReturnType<typeof spawnSync> => spawnSync(executable, [...prefix, script, source, ...paths], { cwd: repositoryRoot, encoding: 'utf8' });
 	const checked = invoke('format:ts');
 	assert.equal(checked.status, 1, String(checked.stdout) + String(checked.stderr));
-	assert.equal(readFileSync(join(directory, 'file with spaces.ts'), 'utf8'), input);
+	assert.equal(readFileSync(join(directory, 'file [with spaces].ts'), 'utf8'), input);
 	assert.match(String(checked.stdout), /checked 2 files; 2 unformatted/);
+	const literal = spawnSync(executable, [...prefix, 'format:ts', join(source, 'file [with spaces].ts')], { cwd: repositoryRoot, encoding: 'utf8' });
+	assert.equal(literal.status, 1, String(literal.stdout) + String(literal.stderr));
+	assert.match(String(literal.stdout), /checked 1 files; 1 unformatted/);
+	const overlapping = invoke('format:ts', join(source, 'file [with spaces].ts'));
+	assert.equal(overlapping.status, 1, String(overlapping.stdout) + String(overlapping.stderr));
+	assert.match(String(overlapping.stdout), /checked 2 files; 2 unformatted/);
+	const missing = invoke('format:ts', join(source, 'missing.ts'));
+	assert.equal(missing.status, 1);
+	assert.match(String(missing.stderr), /No first-party TypeScript or JavaScript sources matched/);
+	const outside = invoke('format:ts', '../outside.ts');
+	assert.equal(outside.status, 1);
+	assert.match(String(outside.stderr), /Source path must belong to the repository/);
 	const fixed = invoke('format:ts:fix');
 	assert.equal(fixed.status, 0, String(fixed.stdout) + String(fixed.stderr));
-	assert.equal(readFileSync(join(directory, 'file with spaces.ts'), 'utf8'), 'function example() {\n\treturn 1 + 2;\n}\n');
+	assert.equal(readFileSync(join(directory, 'file [with spaces].ts'), 'utf8'), 'function example() {\n\treturn 1 + 2;\n}\n');
 	assert.equal(invoke('format:ts').status, 0);
 	for (const name of excluded) {
 		assert.equal(readFileSync(join(directory, name), 'utf8'), input);
