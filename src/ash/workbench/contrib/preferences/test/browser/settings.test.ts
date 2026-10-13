@@ -6,6 +6,7 @@ import { IServerEventApi } from '../../../../../platform/agentHost/common/appSer
 import manifest from '../../../../../../../extensions/git/package.json' with { type: 'json' };
 import { parseExtensionManifest } from '../../../../services/extensions/common/extensionManifest.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
+import { ITextFileService } from '../../../../services/textfile/common/textfiles.js';
 import { showConfigureHooksQuickPick } from '../../../chat/browser/promptSyntax/hookActions.js';
 import { IAgentExecutionSettingsService } from '../../../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { IPromptsService } from '../../../chat/common/promptSyntax/service/promptsService.js';
@@ -36,7 +37,7 @@ import { IAppServerSkillApi } from '../../../../../platform/agentHost/common/app
 import { IExtensionManagementService } from '../../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { ILanguageServerService } from '../../../../../platform/language/common/languageServerService.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
-import { createTestFileService, createTestEditorServices } from '../../../../test/common/testEditorServices.js';
+import { createTestFileService, createTestEditorServices, createTestTextFileService } from '../../../../test/common/testEditorServices.js';
 import assert from 'node:assert/strict';
 import { suiteTeardown, test } from 'mocha';
 import { installEditorTestDom } from '../../../../../editor/test/browser/editorTestGlobals.js';
@@ -135,6 +136,12 @@ const { EditorPaneRegistry, EditorPanes } = await import('../../../../browser/ed
 const { SettingsSearchQuery } = await import('../../browser/settingsSearch.js');
 await import('../../browser/preferencesActions.js');
 const { createSettingsLayout, settingsRootNodes, SettingsCategories, SettingsLayout } = await import('../../browser/settingsLayout.js');
+
+// The canonical module above captures English. Chinese metadata tests need the
+// same NLS-before-import order used by a fresh production window.
+async function loadChineseSettingsLayout(): Promise<typeof import('../../browser/settingsLayout.js')> {
+	return await import(new URL('../../browser/settingsLayout.js?locale=zh-CN', import.meta.url).href);
+}
 const { TOCTreeModel } = await import('../../browser/tocTree.js');
 const { SettingsEditorId } = await import('../../browser/settingsEditor.js');
 await import('../../../chat/browser/aiCustomization/aiCustomizationManagement.contribution.js');
@@ -624,12 +631,13 @@ test('empty-editor tips expose translated settings metadata', () => {
 	}
 });
 
-test('file opening preferences have a translated group and correctly typed controls', () => {
+test('file opening preferences have a translated group and correctly typed controls', async () => {
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {
 		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		const defaults = new DefaultSettings();
-		const group = createSettingsLayout(defaults.all).find(category => category.id === 'editor-opening')?.groups.find(group => group.id === 'file-opening');
+		const layout = await loadChineseSettingsLayout();
+		const group = layout.createSettingsLayout(defaults.all).find(category => category.id === 'editor-opening')?.groups.find(group => group.id === 'file-opening');
 		assert.equal(group?.title, '文件打开');
 		assert.deepEqual(group?.settings.map(setting => ({ id: setting.id, title: setting.title, valueType: setting.valueType })), [
 			{ id: 'workbench.editor.openErrorDialog', title: '文件打开错误弹窗', valueType: 'boolean' },
@@ -645,12 +653,13 @@ test('file opening preferences have a translated group and correctly typed contr
 	}
 });
 
-test('font preferences show translated labels and the actual platform defaults', () => {
+test('font preferences show translated labels and the actual platform defaults', async () => {
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {
 		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		const defaults = new DefaultSettings();
-		const fonts = createSettingsLayout(defaults.all).find(category => category.id === 'editor-fonts')!;
+		const layout = await loadChineseSettingsLayout();
+		const fonts = layout.createSettingsLayout(defaults.all).find(category => category.id === 'editor-fonts')!;
 		assert.equal(fonts.groups[0]?.title, '字体与排版');
 		assert.deepEqual(fonts.groups.flatMap(group => group.settings.map(setting => ({ id: setting.id, title: setting.title, type: setting.valueType }))), [
 			{ id: 'editor.fontFamily', title: '字体', type: 'text' },
@@ -662,7 +671,7 @@ test('font preferences show translated labels and the actual platform defaults',
 		assert.equal(family.valueType === 'text' && family.placeholder, '系统默认');
 		assert.ok(family.description.includes(EDITOR_FONT_DEFAULTS.fontFamily));
 		assert.ok(defaults.get('editor.fontSize').description.includes(String(EDITOR_FONT_DEFAULTS.fontSize)));
-		const input = createSettingsLayout(defaults.all).find(category => category.id === 'chat-input')!;
+		const input = layout.createSettingsLayout(defaults.all).find(category => category.id === 'chat-input')!;
 		assert.equal(input.groups[0]?.title, '消息输入');
 		assert.deepEqual(input.groups.flatMap(group => group.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue])), [
 			['chat.input.fontFamily', '字体', ''],
@@ -671,7 +680,7 @@ test('font preferences show translated labels and the actual platform defaults',
 		]);
 		const inputFamily = defaults.get('chat.input.fontFamily');
 		assert.equal(inputFamily.valueType === 'text' && inputFamily.placeholder, '系统默认');
-		const blocks = createSettingsLayout(defaults.all).find(category => category.id === 'chat-code-blocks')!;
+		const blocks = layout.createSettingsLayout(defaults.all).find(category => category.id === 'chat-code-blocks')!;
 		assert.equal(blocks.groups[0]?.title, '代码块');
 		assert.deepEqual(blocks.groups.flatMap(group => group.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue])), [
 			['chat.editor.fontFamily', '字体', ''],
@@ -827,17 +836,20 @@ test('settingsLayout is the single projection from registered settings to catego
 	model.dispose();
 });
 
-test('terminal settings navigation and group use the active language pack', () => {
+test('terminal settings navigation and group capture the language initialized before module loading', async () => {
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {
 		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
-		const category = SettingsCategories.find(category => category.id === 'terminal');
+		const layout = await loadChineseSettingsLayout();
+		const category = layout.SettingsCategories.find(category => category.id === 'terminal');
 		assert.ok(category);
 		assert.equal(category.label, '终端');
 		assert.equal(category.description, '设置终端字体、光标外观、对比度和回滚行数。');
-		const group = createSettingsLayout(new DefaultSettings().all).find(category => category.id === 'terminal')?.groups[0];
+		const group = layout.createSettingsLayout(new DefaultSettings().all).find(category => category.id === 'terminal')?.groups[0];
 		assert.equal(group?.title, '终端');
 		assert.equal(group?.description, category.description);
+		resetNlsResolver();
+		assert.equal(category.label, '终端', 'loaded navigation retains its startup language');
 	} finally {
 		resetNlsResolver();
 	}
@@ -1393,6 +1405,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	const hooksFolder = await mkdtemp(join(tmpdir(), 'ash-settings-hooks-'));
 	await using hooksFolderCleanup = { [Symbol.asyncDispose]: async () => { await rm(hooksFolder, { recursive: true, force: true }); } };
 	services.registerSingleton(IFileService, () => createTestFileService(disposables.add(new DiskFileSystemProvider([URI.file(hooksFolder)]))));
+	services.registerSingleton(ITextFileService, () => disposables.add(createTestTextFileService(services.get(IFileService), configuration)));
 	const editorPanes = new EditorPaneRegistry();
 	disposables.add(editorPanes.registerEditorPane(descriptor));
 	const managementDescriptor = EditorPanes.getEditorPanes().find(candidate => candidate.id === AI_CUSTOMIZATION_MANAGEMENT_EDITOR_ID)!;

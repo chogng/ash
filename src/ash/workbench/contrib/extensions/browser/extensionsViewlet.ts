@@ -27,7 +27,7 @@ import { ExtensionsInput, ExtensionsInputSource } from '../common/extensionsInpu
 import { changeExtensionPackage } from './extensionsEditor.js';
 import { IGlobalExtensionEnablementService } from '../../../../platform/extensionManagement/common/extensionManagement.js';
 import { IPluginManagementService } from '../../../../platform/extensionManagement/common/pluginManagementService.js';
-import { createBrowserExtensionApi } from '../../../../platform/extensions/browser/extensionApi.js';
+import { IExtensionApi } from '../../../../platform/extensions/common/extensionApi.js';
 import { changeExtensionEnablement, extensionEnablementLabel } from './extensionsActions.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { ViewContainerLocation, type WorkbenchViewRegistry } from '../../../common/views.js';
@@ -74,6 +74,7 @@ class ExtensionsContent extends Disposable {
 		@IEditorService private readonly editors: IEditorService,
 		@IGlobalExtensionEnablementService private readonly enablement: IGlobalExtensionEnablementService,
 		@IPluginManagementService private readonly plugins: IPluginManagementService,
+		@IExtensionApi private readonly extensionCatalog: IExtensionApi,
 	) {
 		super();
 		this.options = options;
@@ -89,7 +90,7 @@ class ExtensionsContent extends Disposable {
 		this.list = this._register(new List(listContainer, {
 			ariaLabel: this.isPluginsPane ? localize({ bundle: 'ash.extensions', key: 'pluginsPane' }, 'Plugins') : localize({ bundle: 'ash.extensions', key: 'extensionList' }, 'Extensions'), domFocusable: true, keyboardNavigation: true, focusOnMouseMove: false,
 			getId: item => `${item.source ?? ExtensionsInputSource.Registry}/${item.installation?.installationId ?? item.summary.id}/${item.summary.version}`,
-			accessibilityProvider: { getAriaLabel: item => `${item.summary.displayName}, ${item.summary.version}, ${item.summary.description}, ${item.enabled === undefined ? '' : item.enabled ? localize({ bundle: 'ash.extensions', key: 'enabledState' }, 'Enabled') : localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled')}` },
+			accessibilityProvider: { getAriaLabel: item => `${item.summary.displayName}, ${item.summary.version}, ${item.summary.description}, ${item.source === ExtensionsInputSource.BuiltIn ? localize({ bundle: 'ash.extensions', key: 'builtInFilter' }, 'Built-in') + ', ' : ''}${item.enabled === undefined ? '' : item.enabled ? localize({ bundle: 'ash.extensions', key: 'enabledState' }, 'Enabled') : localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled')}` },
 			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: item => item.summary.displayName },
 			renderItem: (item, _index, row) => this.renderItem(item, row),
 			onDidRemoveRow: row => this.rowResources.deleteAndDispose(row),
@@ -150,7 +151,7 @@ class ExtensionsContent extends Disposable {
 				});
 			}));
 		} else {
-			const state = h(mainWindow.document, 'span'); state.className = 'extension-state'; state.textContent = item.installation?.state === 'pendingRemoval' ? localize({ bundle: 'ash.extensions', key: 'removalPending' }, 'Removal pending') : localize({ bundle: 'ash.extensions', key: 'installedFilter' }, 'Installed'); actions.append(state);
+			const state = h(mainWindow.document, 'span'); state.className = 'extension-state'; state.textContent = item.source === ExtensionsInputSource.BuiltIn ? localize({ bundle: 'ash.extensions', key: 'builtInFilter' }, 'Built-in') : item.installation?.state === 'pendingRemoval' ? localize({ bundle: 'ash.extensions', key: 'removalPending' }, 'Removal pending') : localize({ bundle: 'ash.extensions', key: 'installedFilter' }, 'Installed'); actions.append(state);
 		}
 		if (item.enabled !== undefined) {
 			const state = h(mainWindow.document, 'span'); state.className = 'extension-state';
@@ -164,7 +165,7 @@ class ExtensionsContent extends Disposable {
 						if (this.working) { return; }
 						this.working = true; toggle.enabled = false;
 						using input = new ExtensionsInput(item.summary, item.installation?.installationId, item.source);
-						try { await changeExtensionEnablement(input, this.enablement, this.extensionManagement, this.plugins); }
+						try { await changeExtensionEnablement(input, this.enablement, this.extensionManagement, this.plugins, this.extensionCatalog); }
 						finally { this.working = false; if (!this.isDisposed) { await this.load(); this.list.domFocus(); } }
 					});
 				}));
@@ -175,19 +176,20 @@ class ExtensionsContent extends Disposable {
 
 	private async load(): Promise<void> {
 		const generation = ++this.generation;
-		const isInstalled = this.options.mode === 'installed';
 		const query = this.query.value.trim();
+		const isInstalled = this.options.mode === 'installed' || this.options.mode === undefined && !query && !this.options.capabilityKind && !this.options.languageId;
 		this.status.textContent = localize({ bundle: 'ash.extensions', key: 'loading' }, 'Loading Extensions…');
 		this.domNode.setAttribute('aria-busy', 'true');
 		try {
 			const installed = this.options.mode === 'builtIn' ? [] : await this.extensionManagement.listInstalled();
 			const policies = this.options.mode === 'builtIn' ? { extensions: [] } : await this.extensionManagement.listEditorExtensions();
 			let items: ExtensionListItem[];
-			if (this.options.mode === 'builtIn') {
-				const catalog = await createBrowserExtensionApi().list('cached');
+			const builtInItems: ExtensionListItem[] = [];
+			if (!this.isPluginsPane && (this.options.mode === 'builtIn' || isInstalled)) {
+				const catalog = await this.extensionCatalog.list('cached', { includeDisabled: true });
 				const providers = await this.extensionManagement.listBuiltInProviders().catch(() => undefined);
 				const disabled = new Set(this.enablement.getDisabledExtensions().map(value => value.id));
-				items = catalog.extensions.filter(extension => extension.sourceKind === 'builtIn').map(extension => {
+				builtInItems.push(...catalog.extensions.filter(extension => extension.sourceKind === 'builtIn' && (!this.options.capabilityKind || this.options.capabilityKind === 'editorExtension' || this.options.capabilityKind === 'localization' && JSON.parse(extension.manifestJson).contributes?.localizations?.length)).map(extension => {
 					const manifest = JSON.parse(extension.manifestJson);
 					const provider = providers?.providers.find(value => value.id === extension.id);
 					const isProvider = manifest.ashRuntime?.kind === 'rust' && !manifest.browser;
@@ -195,12 +197,16 @@ class ExtensionsContent extends Disposable {
 						source: ExtensionsInputSource.BuiltIn, enabled: isProvider ? provider?.enabled : !disabled.has(extension.id.toLowerCase()), canChangeEnablement: isProvider ? !!provider : !manifest.contributes?.localizations?.length,
 						summary: { id: extension.id, version: extension.version, packageType: 'editorExtension', displayName: manifest.displayName?.startsWith('%') ? extension.id : manifest.displayName ?? extension.displayName, description: typeof manifest.description === 'string' && !manifest.description.startsWith('%') ? manifest.description : '' }
 					};
-				});
+				}));
+			}
+			if (this.options.mode === 'builtIn') {
+				items = builtInItems;
 			} else if (isInstalled) {
 				items = installed.filter(entry => (!this.isPluginsPane || !entry.capabilities.some(capability => capability.kind === 'editorExtension')) && (!this.options.capabilityKind || entry.capabilities.some(capability => capability.kind === this.options.capabilityKind))).map(installation => {
 					const policy = policies.extensions.find(value => value.installationId === installation.installationId);
 					return { installation, enabled: policy?.enabled, canChangeEnablement: !!policy, summary: { id: installation.package.id, version: installation.package.version, displayName: installation.package.id.split('@')[0], packageType: 'installed', description: installation.capabilities.map(capability => capability.kind).join(' · ') } };
 				});
+				items.push(...builtInItems);
 				if (this.isPluginsPane || !this.options.capabilityKind || this.options.capabilityKind === 'editorExtension') {
 					const catalog = await this.plugins.list();
 					items.push(...catalog.packages.filter(plugin => this.isPluginsPane || plugin.hasEditorExtensions).map(plugin => ({ source: ExtensionsInputSource.Local, enabled: plugin.enabled, canChangeEnablement: plugin.enabled || !plugin.revoked, summary: { id: plugin.id, version: plugin.version, packageType: 'editorExtension', displayName: plugin.displayName, description: this.isPluginsPane ? localize({ bundle: 'ash.extensions', key: 'localPlugin' }, 'Local plugin') : localize({ bundle: 'ash.extensions', key: 'localExtension' }, 'Local extension') } })));

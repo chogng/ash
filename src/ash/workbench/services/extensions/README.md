@@ -6,16 +6,19 @@
 > filesystem catalog details are in
 > [`crates/external-ext/src/packages/README.md`](../../../../../crates/external-ext/src/packages/README.md).
 
-This service is the Workbench composition boundary for static extension packages. TS builds and loads built-in editor resources for Web and Electron.
-`ash-external-ext::packages` validates only host-selected external package resources. The TS adapter
-combines both sources with built-in precedence and maps resource generations to their owners. Runtime adapters convert transport DTOs; this service
+This service is the Workbench composition boundary for static extension packages. The Rust App Server
+selects, validates and freezes built-in and authorized external package directories through
+`ash-external-ext::packages`, then supplies their catalog and resources through one interface.
+The TS adapter binds resource generations to the backend connection without a static catalog fallback.
+Runtime adapters convert transport DTOs; this service
 owns Workbench catalog types and decides which supported declarative contributions become active.
 It never executes extension JavaScript or gives extensions editor DOM, model, Worker-port, or host
 filesystem access.
 
 `platform/extensionResourceLoader` owns resource URI interpretation, strict UTF-8 decoding and binary reads.
-`IExtensionApi.resources` is the same service registered in the window scope. Browser snapshots and
-App Server adapters bind its source callbacks; contribution loaders keep their candidate resource caches.
+`IExtensionApi.resources` is the same service registered in the window scope. The App Server adapter
+binds its source callbacks; disconnected clients report unavailability. Contribution loaders keep their
+candidate resource caches, and test pages explicitly inject the prepared resource fixture.
 Installed reads retain the catalog generation. Gallery reads use the configured Open VSX URL contract
 and Rust-verified VSIX contents without installing, enabling or executing the package. The backend
 returns a connection-owned resource handle; the existing bounded read path verifies and releases it.
@@ -73,12 +76,14 @@ releases the registrations. This mechanism activates the packaged `media-preview
 does not execute extension JavaScript or acquire text models for binary media. Workbench and
 Sessions both start this declarative loader.
 
-Workbench and Sessions create `WebWorkerExtensionHost` for packaged `browser` entries. It owns the window's extension Workers alongside the App Server executable-host transport.
+Workbench and Sessions create `WebWorkerExtensionHost` for built-in `browser` entries obtained from the same enabled Rust package catalog used by declarative loaders. It owns the window's extension Workers alongside the App Server executable-host transport.
 The Worker entry lives in `workbench/api/worker/extensionHostWorker.ts`; editor callback contracts
 live in `workbench/api/common/extHost.protocol.ts`. `platform/agentHost` owns the App Server
 transport, invocation cancellation and wire validation, without importing Workbench contracts.
 `build/builtin/extensions.ts` bundles each browser entry and its dependencies into an immutable ES
-module. Activation receives the window language, registration callbacks, and command execution.
+module and stages it inside the complete package directory. Rust supplies its catalog and bytes;
+user/registry readability does not admit a browser Worker. Activation receives the window language,
+registration callbacks, and command execution.
 `MainThreadExtensionApi` installs extension commands and manifest editor menus. Command categories
 prefix palette labels while menus retain short titles, and declared enablement gates menu actions.
 Worker client requests queue at the host's concurrency limit; SCM state publication keeps its
@@ -95,7 +100,7 @@ the sandbox document when its pane first becomes visible; this keeps the first n
 a hidden editor host. Independent custom tabs retain their editor ID in working sets.
 Browser packages use Ash's bounded registration contract, not the complete VS Code extension API.
 
-Browser reconciliation scans the enabled package catalog but retains healthy Workers with the
+Browser reconciliation reads the enabled Rust package catalog but retains healthy Workers with the
 same package/manifest digests, version, provenance, execution location/platform and window
 language. Removal or changed identity revokes the old registrations before bounded SDK cleanup
 and replacement; failed Workers can be retried. Refreshing for a remote activation does not

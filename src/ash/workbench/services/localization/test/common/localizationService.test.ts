@@ -18,6 +18,7 @@ import { WorkbenchLocalizationService } from "../../browser/workbenchLocalizatio
 import { AppServerProtocolIncompatibleError } from '../../../../../platform/agentHost/common/appServerProtocolCompatibility.js';
 
 import { commandActionLabel } from '../../../../../platform/action/common/action.js';
+import { dirPermissionNames } from '../../../../../platform/dirPermissions/common/dirPermissionsService.js';
 import { JSDOM } from 'jsdom';
 import { QuickInputController } from '../../../../../platform/quickinput/browser/quickInputController.js';
 import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '../../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
@@ -32,6 +33,13 @@ const jsonRegistry = Registry.as<IJSONContributionRegistry>(JSONExtensions.JSONC
 suite('Workbench localization', () => {
 	setup(() => initializeTestLocalization('en'));
 	teardown(() => resetNlsResolver());
+
+	test('shared permission originals remain English while their window renders Chinese', () => {
+		initializeTestLocalization('zh-CN');
+		using localization = new WorkbenchLocalizationService();
+		assert.equal(dirPermissionNames.readFiles, 'Read files');
+		assert.equal(localization.translate('ash.settings', 'capabilities.permission.readFiles', dirPermissionNames.readFiles), '读取文件');
+	});
 
 	test('backend protocol mismatch reports the fingerprints in Chinese', () => {
 		initializeTestLocalization('zh-CN');
@@ -214,29 +222,24 @@ suite('Workbench localization', () => {
 		assert.equal(localization.translate('ash', 'sessions.list.search', 'Search sessions'), '搜索会话');
 		assert.equal(localization.translate('ash', 'sessions.menu.workbench', 'Return to Workbench'), '返回工作台');
 		assert.deepEqual([
-			localization.translate('ash', 'sessions.navigation.actions', 'Session window actions'),
-			localization.translate('ash', 'sessions.navigation.menu', 'Session menu'),
 			localization.translate('ash', 'sessions.navigation.showSidebar', 'Show sidebar'),
 			localization.translate('ash', 'sessions.navigation.hideSidebar', 'Hide sidebar'),
 			localization.translate('ash', 'sessions.activity.chat', 'Chat'),
 			localization.translate('ash', 'sessions.mode.code', 'Code'),
-		], ['会话窗口操作', '会话菜单', '显示侧边栏', '隐藏侧边栏', '聊天', '代码']);
+		], ['显示侧边栏', '隐藏侧边栏', '聊天', '代码']);
 		assert.match(localization.translate('ash', 'sessions.activity.help', ''), /聊天和代码共用选中的会话、导航记录、未发送的文字和附件，切换时只改变布局/u);
 		assert.equal(localization.translate('ash', 'chat.modelPicker.context', '{0} context tokens', { '0': '128,000' }), '上下文：128,000 个词元');
 		assert.equal(localization.translate('ash', 'chat.defaultModel.title', 'Default chat model'), '默认聊天模型');
 		assert.deepEqual([
 			localization.translate('ash', 'chat.modelPicker.auto', 'Auto'),
 			localization.translate('ash', 'chat.modelPicker.addModels', 'Add Models'),
-			localization.translate('ash', 'chat.modelPicker.contextWindow', '{0} context window', { '0': '200,000' }),
 			localization.translate('ash', 'chat.modelPicker.thinkingEffort', 'Thinking Level'),
-		], ['自动', '添加模型', '上下文窗口：200,000 个词元', '推理强度']);
+		], ['自动', '添加模型', '推理强度']);
 		assert.deepEqual([
 			localization.translate('ash', 'sessions.activity.chat', 'Chat'),
 			localization.translate('ash', 'sessions.activity.colab', 'Collaboration'),
 			localization.translate('ash', 'sessions.activity.library', 'Library'),
-			localization.translate('ash', 'sessions.activity.mobile', 'Mobile devices'),
-			localization.translate('ash', 'sessions.activity.unavailable', '{0} (coming soon)', { '0': '协作' }),
-		], ['聊天', '协作', '资料库', '移动设备', '协作（即将推出）']);
+		], ['聊天', '协作', '资料库']);
 		assert.equal(localization.translate('ash', 'sessions.activityBar.location.title', 'Sessions Activity Bar Position'), '活动栏位置');
 		assert.equal(localization.translate('ash', 'sessions.activityBar.compact.title', 'Compact Sessions Activity Bar'), '紧凑活动栏');
 		assert.equal(localization.translate('ash', 'dialog.input', 'Input'), '输入');

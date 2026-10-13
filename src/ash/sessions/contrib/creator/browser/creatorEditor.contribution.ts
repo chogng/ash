@@ -21,9 +21,9 @@ import { designToolActions, designModeActions } from './widget/designToolsWidget
 import { ColorPicker } from '../../../../base/browser/ui/colorPicker/colorPicker.js';
 import { CreatorPage } from './creatorPage.js';
 
-for (const [tool, key, title, icon] of designToolActions) {
+for (const [tool, title, icon] of designToolActions) {
 	registerAction2(class SelectDesignTool extends Action2 {
-		constructor() { super({ id: `sessions.design.tool.${tool}`, title: localize2({ bundle: 'ash', key: key }, title), icon }); }
+		constructor() { super({ id: `sessions.design.tool.${tool}`, title: title(), icon }); }
 		public override run(_accessor: ServicesAccessor, editor: DesignEditorWidget): void { editor.setTool(tool); }
 	});
 }
@@ -38,9 +38,9 @@ for (const [id, key, title] of [['addFrame', 'sessions.design.addFrame', 'Add fr
 	});
 }
 
-for (const [mode, key, title, icon] of designModeActions) {
+for (const [mode, title, icon] of designModeActions) {
 	registerAction2(class SwitchDesignMode extends Action2 {
-		constructor() { super({ id: `sessions.design.mode.${mode}`, title: localize2({ bundle: 'ash', key: key }, title), icon }); }
+		constructor() { super({ id: `sessions.design.mode.${mode}`, title: title(), icon }); }
 		public override run(_accessor: ServicesAccessor, editor: DesignEditorWidget): void { editor.setMode(mode); }
 	});
 }

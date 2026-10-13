@@ -448,20 +448,20 @@ function schemaForDefault(value: unknown): JsonSchema {
 	return {};
 }
 
-for (const [key, defaultValue, titleKey, title, descriptionKey, description] of [
-	['diffEditor.renderIndicators', diffEditorDefaultOptions.renderIndicators, 'diffEditor.indicators.title', 'Diff indicators', 'diffEditor.indicators.description', 'Show plus and minus signs beside added and removed lines.'],
-	['diffEditor.renderMarginRevertIcon', diffEditorDefaultOptions.renderMarginRevertIcon, 'diffEditor.revertIcon.title', 'Revert change buttons', 'diffEditor.revertIcon.description', 'Show buttons to revert changes in the modified editor margin.'],
-	['diffEditor.renderGutterMenu', diffEditorDefaultOptions.renderGutterMenu, 'diffEditor.gutterMenu.title', 'Change actions', 'diffEditor.gutterMenu.description', 'Show contributed actions beside changed blocks and selected changes.'],
-	['diffEditor.renderOverviewRuler', diffEditorDefaultOptions.renderOverviewRuler, 'diffEditor.overviewRuler.title', 'Diff overview ruler', 'diffEditor.overviewRuler.description', 'Show differences and the current viewport in the diff overview ruler.'],
-	['diffEditor.experimental.showMoves', diffEditorDefaultOptions.experimental.showMoves, 'diffEditor.showMoves.title', 'Show moved code', 'diffEditor.showMoves.description', 'Detect and connect code blocks that moved between the original and modified documents.'],
+for (const [key, defaultValue, title, description] of [
+	['diffEditor.renderIndicators', diffEditorDefaultOptions.renderIndicators, () => localize('diffEditor.indicators.title', 'Diff indicators'), () => localize('diffEditor.indicators.description', 'Show plus and minus signs beside added and removed lines.')],
+	['diffEditor.renderMarginRevertIcon', diffEditorDefaultOptions.renderMarginRevertIcon, () => localize('diffEditor.revertIcon.title', 'Revert change buttons'), () => localize('diffEditor.revertIcon.description', 'Show buttons to revert changes in the modified editor margin.')],
+	['diffEditor.renderGutterMenu', diffEditorDefaultOptions.renderGutterMenu, () => localize('diffEditor.gutterMenu.title', 'Change actions'), () => localize('diffEditor.gutterMenu.description', 'Show contributed actions beside changed blocks and selected changes.')],
+	['diffEditor.renderOverviewRuler', diffEditorDefaultOptions.renderOverviewRuler, () => localize('diffEditor.overviewRuler.title', 'Diff overview ruler'), () => localize('diffEditor.overviewRuler.description', 'Show differences and the current viewport in the diff overview ruler.')],
+	['diffEditor.experimental.showMoves', diffEditorDefaultOptions.experimental.showMoves, () => localize('diffEditor.showMoves.title', 'Show moved code'), () => localize('diffEditor.showMoves.description', 'Detect and connect code blocks that moved between the original and modified documents.')],
 ] as const) {
 	configurationRegistry.registerConfiguration({
 		key,
 		defaultValue,
 		parse: value => modelBoolean(value, key),
 		setting: {
-			get title() { return localize(titleKey, title); },
-			get description() { return localize(descriptionKey, description); },
+			get title() { return title(); },
+			get description() { return description(); },
 			valueType: 'boolean',
 		},
 	});

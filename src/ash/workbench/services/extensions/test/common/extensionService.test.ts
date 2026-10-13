@@ -680,7 +680,7 @@ test('extension theme contributions activate together, retain the last valid cat
 });
 
 test('the packaged browser catalog activates Markdown grammar and configuration as one generation', async () => {
-	const bundle = JSON.parse(await readFile('src/ash/platform/extensions/common/generated/browser.json', 'utf8'));
+	const bundle = JSON.parse(await readFile('.build/builtin/fixture.json', 'utf8'));
 	using languages = new LanguageFeaturesService();
 	using languageService = new LanguageService();
 	using service = new AppServerExtensionService({ api: { list: async () => bundle.catalog, resources: new ExtensionResourceLoaderService(async request => Uint8Array.from(Buffer.from(bundle.resources[request.extensionId][request.path], 'base64'))) }, textMateService: emptyTextMateService(), languageService, languageConfigurationService: languages.languageConfigurationService }, createEmptyTestLanguagePacks());

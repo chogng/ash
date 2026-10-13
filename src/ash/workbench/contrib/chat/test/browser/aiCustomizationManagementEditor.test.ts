@@ -5,12 +5,14 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
-import { formatNlsMessage } from '../../../../../nls.js';
+import { formatNlsMessage, resetNlsResolver } from '../../../../../nls.js';
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
 import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
 import { ILocalizationService } from '../../../../services/localization/common/localizationService.js';
+import { WorkbenchLocalizationService } from '../../../../services/localization/browser/workbenchLocalizationService.js';
+import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import { BrowserContextViewService } from '../../../../../platform/contextview/browser/contextViewService.js';
 import { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { IHooksService, type HookSource } from '../../../../../platform/hooks/common/hooksService.js';
@@ -29,7 +31,7 @@ import { AICustomizationManagementEditor } from '../../browser/aiCustomization/a
 const document = browserEnvironment.window.document;
 const source: HookSource = { namespace: 'directory:fixture', configPath: '/fixture/.ash/config.toml', hooks: [{ id: 'directory:fixture:hook:test', event: 'preToolUse', enabled: false, program: '/synthetic/check', args: ['two words'], toolNames: [] }] };
 
-function setup(resources: DisposableStore, read: () => Promise<readonly HookSource[]>) {
+function setup(resources: DisposableStore, read: () => Promise<readonly HookSource[]>, localization: ILocalizationService = { whenReady: Promise.resolve(), translate: (_bundle, _key, fallback, parameters) => formatNlsMessage(fallback, parameters) }) {
 	const services = resources.add(new InstantiationService());
 	const keys = resources.add(new ContextKeyService());
 	const views = resources.add(new BrowserContextViewService(document.body));
@@ -42,7 +44,7 @@ function setup(resources: DisposableStore, read: () => Promise<readonly HookSour
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IAppServerRemoteAgentService, remote);
 	services.registerInstance(IChatSessionNavigationService, { getActiveConversation: () => undefined } as IChatSessionNavigationService);
-	services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, fallback, parameters) => formatNlsMessage(fallback, parameters) });
+	services.registerInstance(ILocalizationService, localization);
 	services.registerInstance(IContextViewService, views);
 	services.registerInstance(IContextKeyService, keys);
 	services.registerInstance(IAccessibleViewService, { ...toDisposable(() => { }), getOpenAriaHint: () => undefined, show: () => false, disableHint: async () => { }, showAccessibleViewHelp: () => { } });
@@ -57,6 +59,19 @@ function setup(resources: DisposableStore, read: () => Promise<readonly HookSour
 	pane.create(container);
 	return { pane, container, workspace, saved };
 }
+
+test('Hook management renders source-owned event descriptions and status through the Chinese window catalog', async () => {
+	initializeTestLocalization('zh-CN');
+	try {
+		using resources = new DisposableStore();
+		const localization = resources.add(new WorkbenchLocalizationService());
+		const { pane, container } = setup(resources, async () => [source], localization);
+		pane.setVisible(true);
+		await Promise.resolve();
+		assert.match(container.querySelector('[role="status"]')?.textContent ?? '', /^\d+ 种事件 · 已配置 1 个 Hook$/u);
+		assert.ok(container.querySelector('[data-hook-event="preToolUse"]')?.textContent?.includes('工具执行前。'));
+	} finally { resetNlsResolver(); }
+});
 
 test('Hook management refreshes a saved configuration through the owning text-file event, preserving disclosure and search', async () => {
 	using resources = new DisposableStore();

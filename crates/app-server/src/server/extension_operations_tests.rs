@@ -168,3 +168,70 @@ fn extension_catalog_exposes_its_authorized_package_location_and_execution_platf
         serde_json::from_value(catalog).unwrap();
     assert_eq!(wire.extensions[0].id, "test.debugger");
 }
+
+#[test]
+fn extension_catalog_serves_built_in_language_pack_resources_from_the_rust_snapshot() {
+    use crate::local::ProviderModelService;
+    use crate::server::AppServer;
+    use ash_core::InMemoryThreadStore;
+    use ash_core::ThreadController;
+    use ash_external_ext::packages::ExtensionRoot;
+    use ash_model_provider::EchoModel;
+    use base64::Engine;
+    use std::sync::Arc;
+
+    let root = tempfile::tempdir().unwrap();
+    let package = root.path().join("language-pack-zh-cn");
+    std::fs::create_dir_all(package.join("localization")).unwrap();
+    std::fs::write(
+        package.join("package.json"),
+        include_str!("../../../../extensions/language-pack-zh-cn/package.json"),
+    )
+    .unwrap();
+    let chinese = r#"{"locale":"zh-CN","bundles":{"ash":{"example":"示例"}}}"#;
+    std::fs::write(package.join("localization/package.json"), chinese).unwrap();
+    let server = AppServer::new(
+        Arc::new(ThreadController::with_store(Arc::new(
+            InMemoryThreadStore::default(),
+        ))),
+        Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
+    )
+    .with_extension_roots(vec![ExtensionRoot::built_in(root.path())]);
+    let catalog = server
+        .extension_list(&serde_json::json!({"reload":"refresh"}))
+        .unwrap();
+    assert_eq!(catalog["extensions"][0]["id"], "ash.language-pack-zh-cn");
+    assert_eq!(catalog["extensions"][0]["sourceKind"], "builtIn");
+    assert_eq!(catalog["diagnostics"], serde_json::json!([]));
+    let connection = server.connection();
+    let opened = server.extension_resource_open(&connection, &serde_json::json!({
+        "generation": catalog["generation"], "extensionId": "ash.language-pack-zh-cn", "path": "localization/package.json",
+    })).unwrap();
+    // Published bytes remain frozen even if a development build updates the file in place.
+    std::fs::write(package.join("localization/package.json"), "{}").unwrap();
+    let chunk = server
+        .resource_read(
+            &connection,
+            &serde_json::json!({
+                "resourceId": opened["resource"]["resourceId"], "offset": 0, "maxBytes": 262144,
+            }),
+        )
+        .unwrap();
+    assert_eq!(
+        base64::engine::general_purpose::STANDARD
+            .decode(chunk["dataBase64"].as_str().unwrap())
+            .unwrap(),
+        chinese.as_bytes()
+    );
+    let other_connection = server.connection();
+    assert!(
+        server
+            .resource_read(
+                &other_connection,
+                &serde_json::json!({
+                    "resourceId": opened["resource"]["resourceId"], "offset": 0, "maxBytes": 262144,
+                })
+            )
+            .is_err()
+    );
+}

@@ -151,6 +151,9 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 		this.assertNotDisposed();
 		const runtimes: ExtensionHostRuntime[] = [];
 		for (const extension of catalog.extensions) {
+			// Package readability does not admit code into the client host. User and registry
+			// packages must pass backend runtime admission before their scripts can execute.
+			if (extension.sourceKind !== 'builtIn') { continue; }
 			const previous = this.snapshot.extensions.find(runtime => runtime.id === extension.id);
 			if (previous?.lifecycle === 'ready') { runtimes.push(previous); continue; }
 			const localization = this.instantiation.createInstance(MainThreadLocalization);
@@ -205,8 +208,10 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 		}
 		// Background SCM/status-bar publication can advance a retained runtime while another
 		// package activates. Carry its latest acknowledged registrations into the complete fleet.
-		this.snapshot = Object.freeze({ generation: this.snapshot.generation + 1, extensions: Object.freeze(runtimes.map(runtime =>
-			this.snapshot.extensions.find(current => current.id === runtime.id && current.activationGeneration === runtime.activationGeneration) ?? runtime)) });
+		this.snapshot = Object.freeze({
+			generation: this.snapshot.generation + 1, extensions: Object.freeze(runtimes.map(runtime =>
+				this.snapshot.extensions.find(current => current.id === runtime.id && current.activationGeneration === runtime.activationGeneration) ?? runtime))
+		});
 		this.snapshotGeneration++;
 		await this.refreshRemote(mode);
 		if (!this.pendingMode) { this.changes.fire(++this.snapshotGeneration); }

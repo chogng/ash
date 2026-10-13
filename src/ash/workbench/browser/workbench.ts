@@ -81,7 +81,7 @@ import { IDebugAdapterProcessService } from "../../platform/debug/common/debugAd
 import { ITestExecutionService } from '../../platform/testing/common/testExecutionService.js';
 import { IExtensionHostApi } from '../../platform/agentHost/common/extensionHostApi.js';
 import { WebWorkerExtensionHost } from '../services/extensions/browser/webWorkerExtensionHost.js';
-import { createBrowserExtensionApi, withEnabledBuiltInExtensions } from '../../platform/extensions/browser/extensionApi.js';
+import { withEnabledBuiltInExtensions } from '../../platform/extensions/browser/extensionApi.js';
 import { IExtensionResourceLoaderService } from '../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
 import { ITelemetryService } from '../../platform/telemetry/common/telemetry.js';
 import { NullTelemetryService } from '../../platform/telemetry/common/telemetryUtils.js';
@@ -573,7 +573,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(ICommandService, commandService);
 		// Hosts can disable executable extensions while keeping declarative assets.
 		// Otherwise browser packages execute in Workers and server packages keep their process host.
-		services.registerInstance(IExtensionHostApi, extensionHost ?? this._register(services.createInstance(WebWorkerExtensionHost, withEnabledBuiltInExtensions(createBrowserExtensionApi(), enablement), api.extensionHost)));
+		services.registerInstance(IExtensionHostApi, extensionHost ?? this._register(services.createInstance(WebWorkerExtensionHost, enabledExtensions, api.extensionHost)));
 		services.registerInstance(ITelemetryService, NullTelemetryService);
 		services.registerInstance(ICodebaseSymbolsApi, api.codebaseSymbols);
 		services.registerInstance(ISyntaxApi, api.syntax);

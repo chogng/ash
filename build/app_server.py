@@ -3,6 +3,7 @@
 
 import argparse
 import os
+import subprocess
 import sys
 from pathlib import Path
 from typing import Optional, Sequence
@@ -190,10 +191,24 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
     return build_package(parse_arguments(arguments))
 
 
+def _prepare_builtin_extensions() -> None:
+    subprocess.run(
+        ["node", "build/resources/localization.ts"],
+        cwd=REPOSITORY_ROOT,
+        check=True,
+    )
+    subprocess.run(
+        ["node", "build/builtin/extensions.ts"],
+        cwd=REPOSITORY_ROOT,
+        check=True,
+    )
+
+
 def build_package(args: argparse.Namespace) -> int:
     target = args.target or default_target()
     spec = TARGETS[target]
     generate_protocol(root=REPOSITORY_ROOT, cargo=args.cargo)
+    _prepare_builtin_extensions()
     protocol_metadata = load_protocol_metadata(REPOSITORY_ROOT)
     inputs = {
         "ash-voice-host": None,

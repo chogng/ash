@@ -24,6 +24,46 @@ from build.protocol.artifacts import (
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 
+def prepare_builtin_fixture(root: Path) -> dict[str, Path]:
+    """Stage deterministic resources without compiling scripts or using workspace caches."""
+    prepared = root / ".build/builtin"
+    publication = {"schemaVersion": 1, "builtIn": [], "user": [], "packageNames": {}}
+    packages = {}
+    for package in sorted((root / "extensions").iterdir()):
+        manifest_path = package / "package.json"
+        if not manifest_path.is_file():
+            continue
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        snapshot = hashlib.sha256(package.name.encode()).hexdigest()
+        destination = prepared / "packages" / snapshot
+        excluded = ["node_modules"]
+        if manifest.get("ashRuntime", {}).get("kind") == "rust":
+            excluded.extend(
+                ["Cargo.toml", "Cargo.lock", "BUILD.bazel", "tests", "src", "browser"]
+            )
+        browser = manifest.get("browser")
+        if browser and browser.removeprefix("./").startswith("browser/"):
+            excluded.append("browser")
+        shutil.copytree(package, destination, ignore=shutil.ignore_patterns(*excluded))
+        if browser:
+            entry = destination / browser.removeprefix("./")
+            entry.parent.mkdir(parents=True, exist_ok=True)
+            entry.write_text("export function activate() {}", encoding="utf-8")
+        if manifest.get("contributes", {}).get("localizations"):
+            catalog = (
+                root
+                / ".build/desktop/localization/extensions"
+                / f"{manifest['publisher']}.{manifest['name']}"
+                / "localization"
+            )
+            shutil.copytree(catalog, destination / "localization")
+        publication["builtIn"].append(snapshot)
+        publication["packageNames"][snapshot] = package.name
+        packages[manifest["name"]] = destination
+    (prepared / "current.json").write_text(json.dumps(publication), encoding="utf-8")
+    return packages
+
+
 def create_package_sources(root: Path) -> Path:
     """Own package resources and a prepared protocol without workspace cache state."""
     root.mkdir(parents=True, exist_ok=True)
@@ -38,6 +78,31 @@ def create_package_sources(root: Path) -> Path:
         destination = root / name
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(REPOSITORY_ROOT / name, destination)
+    for package in (root / "extensions").iterdir():
+        manifest_path = package / "package.json"
+        if not manifest_path.is_file():
+            continue
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        for language in manifest.get("contributes", {}).get("localizations", []):
+            identity = f"{manifest['publisher']}.{manifest['name']}"
+            prepared = (
+                root
+                / ".build/desktop/localization/extensions"
+                / identity
+                / "localization"
+            )
+            prepared.mkdir(parents=True, exist_ok=True)
+            (prepared / "package.json").write_text(
+                json.dumps(
+                    {
+                        "schemaVersion": 1,
+                        "locale": language["languageId"],
+                        "bundles": {},
+                    }
+                ),
+                encoding="utf-8",
+            )
+    prepare_builtin_fixture(root)
     notices = [item["source"] for item in LAYOUT["licenses"]] + [
         "crates/windows-sandbox/LICENSE-APACHE",
         "crates/windows-sandbox/NOTICE",

@@ -4,7 +4,7 @@ import { ButtonActionViewItem } from "../../../../base/browser/ui/actionbar/acti
 import { SubmenuAction, type IAction } from "../../../../base/common/actions.js";
 import { Disposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
-import { localize as resolveNls, type LocalizationKey } from "../../../../nls.js";
+import { localize as resolveNls } from "../../../../nls.js";
 import { MenuWorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
 import { type IMenu, type IMenuService, MenuId } from "../../../../platform/actions/common/actions.js";
 import type { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
@@ -72,10 +72,9 @@ export class BrowserMenubarControl extends Disposable
 	) {
 		super();
 		this.contextMenuService = contextMenuService;
-		const resolveLabel = (key: LocalizationKey, fallback: string): string => localizationService
-			? localize(localizationService, key, fallback)
-			: resolveNls(key, fallback);
-		const applicationMenuLabel = () => resolveLabel({ bundle: "ash.regions", key: "applicationMenu" }, "Application menu");
+		const applicationMenuLabel = () => localizationService
+			? localize(localizationService, { bundle: 'ash.regions', key: 'applicationMenu' }, 'Application menu')
+			: resolveNls({ bundle: 'ash.regions', key: 'applicationMenu' }, 'Application menu');
 		this.menu = this._register(menuService.createMenu(options.applicationMenuId ?? MenuId.MenubarMainMenu));
 		const action: IAction = {
 			id: "ash.applicationMenu",
@@ -85,7 +84,9 @@ export class BrowserMenubarControl extends Disposable
 			enabled: true,
 			run: () => this.toggleMenu(),
 		};
-		const leftActionsLabel = () => resolveLabel({ bundle: "ash.regions", key: "titleBarLeftActions" }, "Title bar left actions");
+		const leftActionsLabel = () => localizationService
+			? localize(localizationService, { bundle: 'ash.regions', key: 'titleBarLeftActions' }, 'Title bar left actions')
+			: resolveNls({ bundle: 'ash.regions', key: 'titleBarLeftActions' }, 'Title bar left actions');
 		this.toolbar = this._register(new MenuWorkbenchToolBar(container, menuService, contextMenuService, options.titlebarMenuId ?? MenuId.TitleBarLeft, {
 			ariaLabel: leftActionsLabel(),
 			presentation: "inherit-foreground",

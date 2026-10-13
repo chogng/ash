@@ -8,6 +8,7 @@ import { ViewContainerLocation, type IViewContainerDescriptor } from "../../../c
 import { IStorageService } from "../../../../platform/storage/common/storage.js";
 import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import type { ILocalizationService, LocalizationKey } from "../../../services/localization/common/localizationService.js";
+import { localize2 } from '../../../../nls.js';
 import type { IViewDescriptorService } from "../../../common/views.js";
 import { PaneCompositePart, type PaneCompositeTitleActions } from "../paneCompositePart.js";
 import { ActivityBarPosition } from '../../../common/configuration.js';
@@ -62,9 +63,9 @@ export class SidebarPart extends PaneCompositePart {
 			localizationService: options.localizationService,
 			id: options.id ?? "sidebar",
 			location,
-			ariaLabel: options.ariaLabel ?? "Primary sidebar",
+			ariaLabel: options.ariaLabel ?? localize2({ bundle: 'ash.regions', key: 'primarySidebar' }, 'Primary sidebar').original,
 			ariaLabelKey: options.ariaLabelKey,
-			viewsAriaLabel: options.viewsAriaLabel ?? "Primary side bar views",
+			viewsAriaLabel: options.viewsAriaLabel ?? localize2({ bundle: 'ash.regions', key: 'primarySidebarViews' }, 'Primary side bar views').original,
 			viewsAriaLabelKey: options.viewsAriaLabelKey,
 			compositeBarContainerFilter: options.compositeBarContainerFilter,
 			compositeBarVisible: options.compositeBarVisible,

@@ -1,15 +1,16 @@
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
+import { DeferredPromise } from '../../../../base/common/async.js';
 import type { IResourceApi } from "../../../agentHost/common/appServerApi.js";
 import type { AppServerProtocolClient } from "../../../agentHost/browser/appServerProtocolClient.js";
-import { createAppServerExtensionApi, createBrowserExtensionApi } from "../../browser/extensionApi.js";
+import { createAppServerExtensionApi } from "../../browser/extensionApi.js";
 import { MAX_EXTENSION_RESOURCE_BYTES, type ExtensionResourceRequest, type IExtensionApi } from "../../common/extensionApi.js";
 import { createHash } from 'node:crypto';
 
 test('App Server extension resources require a published catalog before opening a handle', async () => {
 	let requests = 0;
 	const connection = { request: async () => { requests++; throw new Error('Unexpected request'); } } as unknown as AppServerProtocolClient;
-	const api = createAppServerExtensionApi(connection, resourceApi({}), emptyBuiltInExtensions());
+	const api = createAppServerExtensionApi(connection, resourceApi({}));
 	await assert.rejects(api.resources.readExtensionResourceBytes({ generation: 1, extensionId: 'ash.demo', path: 'demo.json' }), /generation/);
 	assert.equal(requests, 0);
 });
@@ -125,13 +126,9 @@ async function initializedExtensionApi(opened: unknown, resources: IResourceApi)
 			return opened;
 		},
 	} as unknown as AppServerProtocolClient;
-	const api = createAppServerExtensionApi(connection, resources, emptyBuiltInExtensions());
+	const api = createAppServerExtensionApi(connection, resources);
 	const catalog = await api.list('cached');
 	return { api, request: { generation: catalog.generation, extensionId: 'ash.demo', path: 'demo.json' } };
-}
-
-function emptyBuiltInExtensions(): IExtensionApi {
-	return createBrowserExtensionApi(async () => new Response(JSON.stringify({ catalog: { generation: 1, extensions: [], diagnostics: [] }, resources: {} })));
 }
 
 test('gallery resources use the negotiated backend, verify bytes and release their connection handle', async () => {
@@ -153,7 +150,7 @@ test('gallery resources use the negotiated backend, verify bytes and release the
 	const api = createAppServerExtensionApi(connection, resourceApi({
 		read: async () => ({ resourceId: resource.resourceId, offset: 0, decodedLength: bytes.length, dataBase64: bytes.toString('base64'), eof: true }),
 		release: async () => { releases++; },
-	}), emptyBuiltInExtensions());
+	}));
 	const uri = await api.resources.getExtensionGalleryResourceURL({ publisher: 'publisher', name: 'sample', version: '1.0.0' }, 'package.json');
 	assert.equal(await api.resources.readExtensionResource(uri!), bytes.toString());
 	assert.deepEqual(requests.at(-1), { method: 'extensions/gallery/resource/open', params: { resourceUrlTemplate: 'https://registry.example/api/{publisher}/{name}/universal/{version}/file/{path}', publisher: 'publisher', name: 'sample', version: '1.0.0', path: 'package.json' } });
@@ -163,9 +160,54 @@ test('gallery resources use the negotiated backend, verify bytes and release the
 test('a backend without the gallery contract does not receive unsupported gallery requests', async () => {
 	let requests = 0;
 	const connection = { request: async () => { requests++; throw new Error('Unexpected request'); } } as unknown as AppServerProtocolClient;
-	const api = createAppServerExtensionApi(connection, resourceApi({}), emptyBuiltInExtensions());
+	const api = createAppServerExtensionApi(connection, resourceApi({}));
 	assert.equal(await api.resources.supportsExtensionGalleryResources(), false);
 	assert.equal(requests, 0);
+});
+
+test('Rust catalog reconnection retires old resource references even when the backend reuses its generation', async () => {
+	const bytes = Buffer.from('export function activate() {}');
+	const resource = { ...metadata(bytes.length), sha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}` };
+	const resources = resourceApi({
+		read: async () => ({ resourceId: resource.resourceId, offset: 0, dataBase64: bytes.toString('base64'), decodedLength: bytes.length, eof: true }),
+	});
+	const opened: unknown[] = [];
+	const connection = {
+		request: async ({ method }: { method: string; }, params: unknown) => {
+			if (method === 'extensions/list') return { generation: 17, diagnostics: [], extensions: [{ id: 'ash.git', name: 'git', publisher: 'ash', version: '1', displayName: 'Git', sourceKind: 'builtIn', manifestJson: '{"browser":"browser/extension.ts"}', manifestSha256: `sha256:${'a'.repeat(64)}`, packageSha256: `sha256:${'b'.repeat(64)}` }] };
+			assert.equal(method, 'extensions/resource/open'); opened.push(params); return { resource };
+		}
+	} as unknown as AppServerProtocolClient;
+	const api = createAppServerExtensionApi(connection, resources);
+	const first = await api.list('cached');
+	assert.strictEqual(await api.list('refresh'), first);
+	const request = { generation: first.generation, extensionId: 'ash.git', path: 'browser/extension.ts' };
+	assert.deepEqual(await api.resources.readExtensionResourceBytes(request), Uint8Array.from(bytes));
+	assert.deepEqual(opened, [{ ...request, generation: 17 }]);
+	Object.assign(resources, { connectionGeneration: 1 });
+	await assert.rejects(api.resources.readExtensionResourceBytes(request), /generation/);
+	const second = await api.list('cached');
+	assert.equal(second.generation, first.generation + 1);
+	await assert.rejects(api.resources.readExtensionResourceBytes(request), /generation/);
+	assert.deepEqual(await api.resources.readExtensionResourceBytes({ ...request, generation: second.generation }), Uint8Array.from(bytes));
+});
+
+test('an in-flight resource read cannot publish bytes after the Rust catalog has changed', async () => {
+	const bytes = Buffer.from('old data');
+	const deferred = new DeferredPromise<Awaited<ReturnType<IResourceApi['read']>>>();
+	const resource = { ...metadata(bytes.length), sha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}` };
+	let generation = 1;
+	let releases = 0;
+	const resources = resourceApi({ read: () => deferred.p, release: async () => { releases++; } });
+	const connection = { request: async ({ method }: { method: string; }) => method === 'extensions/list' ? { generation, diagnostics: [], extensions: [] } : { resource } } as unknown as AppServerProtocolClient;
+	const api = createAppServerExtensionApi(connection, resources);
+	const catalog = await api.list('cached');
+	const reading = api.resources.readExtensionResourceBytes({ generation: catalog.generation, extensionId: 'ash.git', path: 'package.json' });
+	generation++;
+	await api.list('refresh');
+	deferred.complete({ resourceId: resource.resourceId, offset: 0, dataBase64: bytes.toString('base64'), decodedLength: bytes.length, eof: true });
+	await assert.rejects(reading, /generation/);
+	assert.equal(releases, 1);
 });
 
 function resourceApi(overrides: Partial<IResourceApi>): IResourceApi {

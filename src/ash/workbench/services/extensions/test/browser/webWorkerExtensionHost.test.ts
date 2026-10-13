@@ -84,6 +84,24 @@ function browser(remote: RemoteHost): WebWorkerExtensionHost {
 
 const request = { extensionId: 'lazy', activationGeneration: 7, event: { type: 'command' as const, command: 'lazy.run' } };
 
+test('readable user and registry browser packages do not gain client execution authority', async () => {
+	using remote = new RemoteHost();
+	remote.reconcile = remote.list = async () => ({ generation: 1, extensions: [] });
+	let reads = 0;
+	using api = new WebWorkerExtensionHost({
+		list: async () => ({
+			generation: 1, diagnostics: [], extensions: ['user', 'registry'].map(sourceKind => ({
+				id: `test.${sourceKind}`, name: sourceKind, publisher: 'test', version: '1', displayName: sourceKind,
+				sourceKind: sourceKind as 'user' | 'registry', manifestJson: '{"browser":"main.js"}',
+				manifestSha256: `sha256:${'a'.repeat(64)}`, packageSha256: `sha256:${'b'.repeat(64)}`,
+			}))
+		}),
+		resources: new ExtensionResourceLoaderService(async () => { reads++; throw new Error('Unauthorized browser entry'); }),
+	}, remote, remote.instantiation);
+	assert.deepEqual((await api.reconcile('refresh')).extensions, []);
+	assert.equal(reads, 0);
+});
+
 test('browser refresh preserves unchanged Workers and pending calls, and cleans up changed packages before replacement', async () => {
 	const originalWorker = Object.getOwnPropertyDescriptor(globalThis, 'Worker');
 	const order: string[] = [];

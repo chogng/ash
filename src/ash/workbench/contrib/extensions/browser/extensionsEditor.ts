@@ -19,7 +19,6 @@ import type { IResourceEditorInput } from '../../../common/editor.js';
 import { ExtensionsInput, ExtensionsInputSource, ExtensionsCapabilityInput } from '../common/extensionsInput.js';
 import { IGlobalExtensionEnablementService } from '../../../../platform/extensionManagement/common/extensionManagement.js';
 import { IPluginManagementService } from '../../../../platform/extensionManagement/common/pluginManagementService.js';
-import { createBrowserExtensionApi } from '../../../../platform/extensions/browser/extensionApi.js';
 import { IExtensionApi, type ExtensionDescriptor } from '../../../../platform/extensions/common/extensionApi.js';
 import { toExtensionResourceURI } from '../../../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
@@ -106,7 +105,6 @@ export class ExtensionsEditor extends EditorPane {
 	private instructionsLoader: (() => Promise<void>) | undefined;
 	private instructionsPending: Promise<void> | undefined;
 	private readonly documentResources = this._register(new DisposableStore());
-	private readonly bundledExtensions = createBrowserExtensionApi();
 	private readonly actionResources = this._register(new DisposableStore());
 	private loadVersion = 0;
 	private working = false;
@@ -343,11 +341,11 @@ export class ExtensionsEditor extends EditorPane {
 		}
 
 		const toggle = async () => {
-			await changeExtensionEnablement(input, this.enablement, this.extensions, this.plugins);
+			await changeExtensionEnablement(input, this.enablement, this.extensions, this.plugins, this.editorExtensions);
 			if (!signal.aborted && !this.isDisposed && version === this.loadVersion) { await this.setInput(input, signal); this.focus(); }
 		};
 		if (input.source === ExtensionsInputSource.BuiltIn) {
-			const catalog = await this.bundledExtensions.list('cached');
+			const catalog = await this.editorExtensions.list('cached', { includeDisabled: true });
 			if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
 			const extension = catalog.extensions.find(value => value.sourceKind === 'builtIn' && value.id === input.summary.id);
 			if (!extension) { throw new Error(localize({ bundle: 'ash.extensions', key: 'extensionMissing' }, 'This extension is no longer installed. Refresh Extensions.')); }
@@ -448,7 +446,7 @@ export class ExtensionsEditor extends EditorPane {
 				this.status.textContent = policy.enabled ? localize({ bundle: 'ash.extensions', key: 'enabledState' }, 'Enabled') : localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled');
 				button(extensionEnablementLabel(policy.enabled), async () => {
 					using target = new ExtensionsInput(input.summary, installation.installationId);
-					await changeExtensionEnablement(target, this.enablement, this.extensions, this.plugins);
+					await changeExtensionEnablement(target, this.enablement, this.extensions, this.plugins, this.editorExtensions);
 					if (!signal.aborted && !this.isDisposed && version === this.loadVersion) { await this.setInput(input, signal); this.focus(); }
 				});
 				if (policy.entrypoint !== null || policy.granted) {
@@ -523,12 +521,12 @@ export class ExtensionsEditor extends EditorPane {
 	}
 
 	private async loadPackageDocument(input: ExtensionsInput, signal: AbortSignal, version: number): Promise<void> {
-		const api = input.source === ExtensionsInputSource.BuiltIn ? this.bundledExtensions : this.editorExtensions;
+		const api = this.editorExtensions;
 		let descriptor: ExtensionDescriptor | undefined;
 		let manifest: Record<string, unknown>;
 		let resourceFor: (path: string) => Promise<URI | undefined>;
 		try {
-			const catalog = await api.list('cached');
+			const catalog = await api.list('cached', { includeDisabled: input.source === ExtensionsInputSource.BuiltIn });
 			const id = input.summary.id.replace(/@open-vsx$/u, '');
 			descriptor = catalog.extensions.find(extension => extension.id === id && extension.version === input.summary.version);
 			if (descriptor) {

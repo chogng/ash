@@ -114,7 +114,9 @@ export class WindowTitle extends Disposable {
 			...customValues,
 		});
 		const admin = this.properties.isAdmin
-			? this.localizationService.translate('ash', isWindows ? 'window.title.admin' : 'window.title.superuser', isWindows ? '[Administrator]' : '[Superuser]')
+			? isWindows
+				? this.localizationService.translate('ash', 'window.title.admin', '[Administrator]')
+				: this.localizationService.translate('ash', 'window.title.superuser', '[Superuser]')
 			: '';
 		const title = [this.properties.prefix, titleText, admin].filter(Boolean).join(' ');
 		if (this.targetWindow.document.title !== title) {

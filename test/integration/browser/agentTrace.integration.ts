@@ -13,7 +13,7 @@ import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
 import { ContextKeyService, IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
-import { createBrowserExtensionApi } from '../../../src/ash/platform/extensions/browser/extensionApi.js';
+import { createBuiltinExtensionFixture } from './builtinExtensionsFixture.js';
 import { StandaloneServiceCollection } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
 import '../../../src/ash/editor/editor.all.js';
 import { IModelService } from '../../../src/ash/editor/common/services/model.js';
@@ -44,7 +44,7 @@ declare global {
 }
 
 const resources = new DisposableStore();
-const extensionThemes = resources.add(new ExtensionColorThemeService(createBrowserExtensionApi(), { subscribe: () => ({ dispose() { } }) }));
+const extensionThemes = resources.add(new ExtensionColorThemeService(createBuiltinExtensionFixture(), { subscribe: () => ({ dispose() { } }) }));
 await extensionThemes.start();
 const root = document.querySelector<HTMLElement>('#root')!;
 setIconResolver(document, getIconDefinition);

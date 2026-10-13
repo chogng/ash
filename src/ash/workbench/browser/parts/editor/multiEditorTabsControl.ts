@@ -64,7 +64,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 		this._register(workspaceContextService.onDidChangeWorkspace(() => this.setEditors(this.editors, this.activeInput, this.selectedIds)));
 		this._register(labelService.onDidChangeFormatters(() => this.setEditors(this.editors, this.activeInput, this.selectedIds)));
 		this.tabs = this._register(instantiationService.createInstance(WorkbenchTabsControl<EditorTabDescriptor>, this.domNode, {
-			ariaLabel: "Open editors",
+			ariaLabel: localize({ bundle: 'ash.regions', key: 'openEditors' }, 'Open editors'),
 			draggable: true,
 			dragAndDrop: {
 				canDrop: (event) => delegate.isDragging() || containsExternalEditorDrop(event),

@@ -202,7 +202,11 @@ export class LanguageServerSettingsContent extends Disposable implements Setting
 			if (ids.includes(this.server.value)) { this.list.value = this.server.value; }
 			this.server.value = this.list.value ?? '';
 			this.select();
-			this.setStatus(snapshot.servers.length ? 'available' : 'empty', snapshot.servers.length ? '{0} servers available. They start when a matching document needs them.' : 'No enabled server is available. Find a package in Extensions or configure an executable.', snapshot.servers.length ? [snapshot.servers.length] : []);
+			if (snapshot.servers.length) {
+				this.setStatus('available', '{0} servers available. They start when a matching document needs them.', [snapshot.servers.length]);
+			} else {
+				this.setStatus('empty', 'No enabled server is available. Find a package in Extensions or configure an executable.');
+			}
 			this.changed.fire();
 		} catch (error) {
 			if (this.isDisposed || generation !== this.generation) { return; }

@@ -133,12 +133,14 @@ for (const [signal, code] of [['SIGINT', 130], ['SIGTERM', 143]] as const) {
 		writeFileSync(waiting, `
 import { test } from 'mocha';
 import { spawn } from 'node:child_process';
-import { writeFile } from 'node:fs/promises';
+import { rename, writeFile } from 'node:fs/promises';
 test('waiting', async function() {
  this.timeout(120000);
  const child = spawn(process.execPath, ['-e', 'process.on("SIGTERM", () => {}); process.on("SIGINT", () => {}); process.send(process.pid); setInterval(() => {}, 1000)'], { stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
  await new Promise(resolveReady => child.once('message', resolveReady));
- await writeFile(${JSON.stringify(marker)}, JSON.stringify([process.pid, child.pid]));
+ // The parent polls for existence; expose the marker only after its JSON is complete.
+ await writeFile(${JSON.stringify(marker + '.tmp')}, JSON.stringify([process.pid, child.pid]));
+ await rename(${JSON.stringify(marker + '.tmp')}, ${JSON.stringify(marker)});
  await new Promise(() => {});
 });
 `);

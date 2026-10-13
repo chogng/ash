@@ -39,7 +39,6 @@ import { EMPTY_WORKSPACE_ID_KEY } from '../services/host/browser/browserHostServ
 import { URI } from '../../base/common/uri.js';
 import { IWorkspaceContextService, type IAnyWorkspaceIdentifier } from '../../platform/workspace/common/workspace.js';
 import { IndexedDbConfigurationApi } from '../../platform/configuration/browser/indexedDbConfigurationApi.js';
-import { createBrowserExtensionApi } from '../../platform/extensions/browser/extensionApi.js';
 import { BrowserWorkbenchEnvironmentService } from '../services/environment/browser/environmentService.js';
 
 /** Creates a browser-hosted Workbench with the shared Web adapters. */
@@ -117,11 +116,7 @@ export async function startWebWorkbench(
 	try {
 		const configurationApi = workbench.add(new IndexedDbConfigurationApi());
 		const initialConfigurationSnapshot = await configurationApi.read();
-		let api = host?.api;
-		if (!api) {
-			const extensions = createBrowserExtensionApi();
-			api = { ...createDisconnectedRendererApi(), extensions };
-		}
+		const api = host?.api ?? createDisconnectedRendererApi();
 		const browserFileSystemProvider = !host && WebFileSystemAccess.supported(window) && globalThis.indexedDB
 			? new HTMLFileSystemProvider(globalThis.indexedDB, window)
 			: undefined;

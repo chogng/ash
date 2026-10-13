@@ -180,6 +180,7 @@ test('Language server Settings searches server metadata, localizes Chinese, and 
 	const field = fixture.field('语言 ID');
 	assert.equal(field.value, 'rust');
 	assert.ok(fixture.button('保存服务器配置'));
+	assert.equal(fixture.content.domNode.querySelector('[role="status"]')?.textContent, '有 1 个可用服务器。匹配语言的文档需要时才会启动。');
 	field.focus();
 	const implementation = AccessibleViewRegistry.getImplementations().find(entry => entry.name.startsWith('language-server-settings-') && entry.type === AccessibleViewType.Help)!;
 	const provider = fixture.services.invokeFunction(accessor => implementation.getProvider(accessor))!;

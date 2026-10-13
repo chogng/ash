@@ -234,9 +234,9 @@ export const CLOSE_SAVED_EDITORS_COMMAND_ID = 'workbench.action.closeUnmodifiedE
 export const CLOSE_EDITORS_IN_GROUP_COMMAND_ID = 'workbench.action.closeEditorsInGroup';
 
 for (const definition of [
-	{ id: CLOSE_EDITORS_TO_THE_RIGHT_COMMAND_ID, key: 'workbench.closeEditorsToTheRight', title: 'Close to the Right', order: 30, precondition: ContextKeyExpr.and(EditorsVisibleContext.isEqualTo(true), ActiveEditorLastInGroupContext.isEqualTo(false), ContextKeyExpr.not(MultipleEditorsSelectedInGroupContext.key)) },
-	{ id: CLOSE_SAVED_EDITORS_COMMAND_ID, key: 'workbench.closeSavedEditors', title: 'Close Saved', order: 40, precondition: EditorsVisibleContext.isEqualTo(true) },
-	{ id: CLOSE_EDITORS_IN_GROUP_COMMAND_ID, key: 'workbench.closeEditorsInGroup', title: 'Close All in Group', order: 50, precondition: EditorsVisibleContext.isEqualTo(true) },
+	{ id: CLOSE_EDITORS_TO_THE_RIGHT_COMMAND_ID, key: 'workbench.closeEditorsToTheRight', title: localize2({ bundle: 'ash', key: 'workbench.closeEditorsToTheRight' }, 'Close to the Right').original, order: 30, precondition: ContextKeyExpr.and(EditorsVisibleContext.isEqualTo(true), ActiveEditorLastInGroupContext.isEqualTo(false), ContextKeyExpr.not(MultipleEditorsSelectedInGroupContext.key)) },
+	{ id: CLOSE_SAVED_EDITORS_COMMAND_ID, key: 'workbench.closeSavedEditors', title: localize2({ bundle: 'ash', key: 'workbench.closeSavedEditors' }, 'Close Saved').original, order: 40, precondition: EditorsVisibleContext.isEqualTo(true) },
+	{ id: CLOSE_EDITORS_IN_GROUP_COMMAND_ID, key: 'workbench.closeEditorsInGroup', title: localize2({ bundle: 'ash', key: 'workbench.closeEditorsInGroup' }, 'Close All in Group').original, order: 50, precondition: EditorsVisibleContext.isEqualTo(true) },
 ]) {
 	registerAction2(class CloseEditorsInGroupAction extends Action2 {
 		constructor() {

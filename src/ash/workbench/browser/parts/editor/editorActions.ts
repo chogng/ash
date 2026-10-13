@@ -123,10 +123,10 @@ registerAction2(class SplitEditorVerticalAction extends Action2 {
 });
 
 for (const definition of [
-	{ id: 'workbench.action.splitEditorUp', key: 'workbench.splitEditorUp', title: 'Split Up', direction: Direction.Up, order: 10 },
-	{ id: 'workbench.action.splitEditorDown', key: 'workbench.splitEditorDown', title: 'Split Down', direction: Direction.Down, order: 20 },
-	{ id: 'workbench.action.splitEditorLeft', key: 'workbench.splitEditorLeft', title: 'Split Left', direction: Direction.Left, order: 30 },
-	{ id: 'workbench.action.splitEditorRight', key: 'workbench.splitEditorRight', title: 'Split Right', direction: Direction.Right, order: 40 },
+	{ id: 'workbench.action.splitEditorUp', key: 'workbench.splitEditorUp', title: localize2({ bundle: 'ash', key: 'workbench.splitEditorUp' }, 'Split Up').original, direction: Direction.Up, order: 10 },
+	{ id: 'workbench.action.splitEditorDown', key: 'workbench.splitEditorDown', title: localize2({ bundle: 'ash', key: 'workbench.splitEditorDown' }, 'Split Down').original, direction: Direction.Down, order: 20 },
+	{ id: 'workbench.action.splitEditorLeft', key: 'workbench.splitEditorLeft', title: localize2({ bundle: 'ash', key: 'workbench.splitEditorLeft' }, 'Split Left').original, direction: Direction.Left, order: 30 },
+	{ id: 'workbench.action.splitEditorRight', key: 'workbench.splitEditorRight', title: localize2({ bundle: 'ash', key: 'workbench.splitEditorRight' }, 'Split Right').original, direction: Direction.Right, order: 40 },
 ]) {
 	registerAction2(class SplitEditorAction extends Action2 {
 		constructor() {

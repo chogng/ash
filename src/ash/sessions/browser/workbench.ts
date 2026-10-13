@@ -10,7 +10,7 @@ import { IMessageHistoryService } from '../../platform/messageHistory/common/mes
 import { GlobalExtensionEnablementService } from '../../platform/extensionManagement/common/extensionEnablementService.js';
 import { IGlobalExtensionEnablementService } from '../../platform/extensionManagement/common/extensionManagement.js';
 import { IWorkspaceOpenService, WorkspaceOpenService } from '../../workbench/services/workspaces/browser/workspaceOpenService.js';
-import { createBrowserExtensionApi, withEnabledBuiltInExtensions } from '../../platform/extensions/browser/extensionApi.js';
+import { withEnabledBuiltInExtensions } from '../../platform/extensions/browser/extensionApi.js';
 import { WebWorkerExtensionHost } from '../../workbench/services/extensions/browser/webWorkerExtensionHost.js';
 import { IExtensionBackendApi } from '../../platform/agentHost/common/extensionBackendApi.js';
 import { IExtensionApi } from '../../platform/extensions/common/extensionApi.js';
@@ -341,7 +341,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(INetworkDiagnosticsService, options.api.networkDiagnostics);
 		services.registerInstance(IContentSearchConfigurationService, options.api.contentSearchConfiguration);
 		services.registerInstance(ILanguageServerService, options.api.languageServers);
-		services.registerInstance(IExtensionHostApi, options.extensionHost ?? this._register(services.createInstance(WebWorkerExtensionHost, withEnabledBuiltInExtensions(createBrowserExtensionApi(), enablement), options.api.extensionHost)));
+		services.registerInstance(IExtensionHostApi, options.extensionHost ?? this._register(services.createInstance(WebWorkerExtensionHost, enabledExtensions, options.api.extensionHost)));
 		services.registerInstance(ITelemetryService, NullTelemetryService);
 		if (options.api.approvalEnvironment) { services.registerInstance(IApprovalEnvironmentService, options.api.approvalEnvironment); }
 		services.registerInstance(IDictationService, options.api.dictation);

@@ -35,7 +35,7 @@ test('browser packaging excludes Rust-only extensions and rejects missing JS man
 		const packaged = run();
 		assert.ifError(packaged.error);
 		assert.equal(packaged.status, 0, packaged.stderr);
-		const bundle = JSON.parse(await readFile(join(directory, 'src/ash/platform/extensions/common/generated/browser.json'), 'utf8'));
+		const bundle = JSON.parse(await readFile(join(directory, '.build/builtin/fixture.json'), 'utf8'));
 		assert.deepEqual(bundle.catalog.extensions.map((extension: { id: string; }) => extension.id), ['test.git', 'test.language-pack', 'test.theme-defaults']);
 		assert.deepEqual(Object.keys(bundle.resources['test.git']).sort(), ['package.json', 'package.nls.zh-CN.json']);
 		assert.equal(bundle.catalog.extensions.find((extension: { id: string; }) => extension.id === 'test.language-pack').sourceKind, 'builtIn');
@@ -75,7 +75,13 @@ test('browser Git packages publish their bundled frontend without a Rust runtime
 			assert.equal(result.status, 0, result.stderr);
 		};
 		run();
-		const bundle = JSON.parse(await readFile(join(directory, 'src/ash/platform/extensions/common/generated/browser.json'), 'utf8'));
+		const bundle = JSON.parse(await readFile(join(directory, '.build/builtin/fixture.json'), 'utf8'));
+		const publicationPath = join(directory, '.build/builtin/current.json');
+		const publication = async () => JSON.parse(await readFile(publicationPath, 'utf8')) as { builtIn: string[]; packageNames: Record<string, string>; };
+		const firstPublication = await publication();
+		const gitSnapshot = firstPublication.builtIn.find(id => firstPublication.packageNames[id] === 'git')!;
+		const preparedEntry = join(directory, '.build/builtin/packages', gitSnapshot, 'browser/main.ts');
+		assert.equal(await readFile(preparedEntry, 'utf8'), Buffer.from(bundle.resources['test.git']['browser/main.ts'], 'base64').toString('utf8'));
 		assert.deepEqual(Object.keys(bundle.resources['test.git']).sort(), ['browser/main.ts', 'browser/sample.ts', 'package.json']);
 		const module = Buffer.from(bundle.resources['test.git']['browser/main.ts'], 'base64').toString('utf8');
 		assert.match(module, /combined-entry-marker/);
@@ -85,6 +91,7 @@ test('browser Git packages publish their bundled frontend without a Rust runtime
 		const first = await snapshots();
 		run();
 		assert.deepEqual(await snapshots(), first, 'a new process reuses the compiled package');
+		assert.deepEqual(await publication(), firstPublication, 'unchanged packages retain immutable directories');
 		await mkdir(join(directory, 'extensions/other'));
 		await writeFile(join(directory, 'extensions/other/package.json'), JSON.stringify({ publisher: 'test', name: 'other', version: '1.0.0', browser: 'main.ts' }));
 		await writeFile(join(directory, 'extensions/other/main.ts'), 'export const activate = () => 2;');
@@ -92,7 +99,8 @@ test('browser Git packages publish their bundled frontend without a Rust runtime
 		const both = await snapshots();
 		assert.equal(Object.keys(both).length, 2);
 		assert.equal(both[Object.keys(first)[0]!], Object.values(first)[0]);
-		const catalog = join(directory, 'src/ash/platform/extensions/common/generated/browser.json');
+		assert((await publication()).builtIn.includes(gitSnapshot), 'adding another package preserves existing package identities');
+		const catalog = join(directory, '.build/builtin/fixture.json');
 		const published = (await stat(catalog, { bigint: true })).mtimeNs;
 		await writeFile(join(directory, 'extensions/git/browser/helper.ts'), "export const marker: 'combined-entry-marker' = 'combined-entry-marker';");
 		run();
@@ -110,6 +118,16 @@ test('browser Git packages publish their bundled frontend without a Rust runtime
 		assert.equal(Object.keys(dependentEdit).filter(key => dependentEdit[key] !== dependencies[key]).length, 1, 'external module edits invalidate only their consumer');
 		const latest = JSON.parse(await readFile(catalog, 'utf8'));
 		assert.match(Buffer.from(latest.resources['test.git']['browser/main.ts'], 'base64').toString('utf8'), /external-two/);
+		assert.match(await readFile(preparedEntry, 'utf8'), /combined-entry-marker/, 'published old bytes remain frozen');
+		const beforeCorruption = await publication();
+		const currentGit = beforeCorruption.builtIn.find(id => beforeCorruption.packageNames[id] === 'git')!;
+		const corruptedEntry = join(directory, '.build/builtin/packages', currentGit, 'browser/main.ts');
+		await writeFile(corruptedEntry, 'tampered');
+		run();
+		const repaired = await publication();
+		assert(!repaired.builtIn.includes(currentGit), 'corrupt artifacts are replaced rather than overwritten');
+		assert.equal(await readFile(corruptedEntry, 'utf8'), 'tampered');
+		assert(beforeCorruption.builtIn.filter(id => id !== currentGit).every(id => repaired.builtIn.includes(id)));
 		await rm(catalog);
 		run();
 		assert.deepEqual(await snapshots(), dependentEdit, 'a missing published catalog is restored from package caches');

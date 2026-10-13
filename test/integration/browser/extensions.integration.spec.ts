@@ -345,10 +345,11 @@ for (const trigger of ['command', 'view']) {
 		await expect(view.getByRole('status')).toHaveText('Loading Extensions…');
 		await page.evaluate(() => window.ashExtensionsIntegration.open({ mode: 'installed' }));
 		await expect(view).toHaveAttribute('aria-busy', 'false');
-		await expect(view.getByRole('status')).toBeEmpty();
+		await expect(view.getByRole('option').filter({ hasText: 'ash.language-pack-zh-cn' })).toBeVisible();
+		const status = await view.getByRole('status').textContent();
 		await page.evaluate(() => window.ashExtensionsIntegration.failHeldSearch());
-		await expect(view.getByRole('status')).toBeEmpty();
-		await expect(view.getByRole('option')).toHaveCount(0);
+		await expect(view.getByRole('status')).toHaveText(status!);
+		await expect(view.locator('[data-package-id="example/web"]')).toHaveCount(0);
 	});
 }
 
@@ -384,13 +385,15 @@ test('Extensions reviews bundled capabilities and uninstalls a selected version 
 	expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'install'))).toEqual([]);
 	await installFixture(page);
 	await page.evaluate(() => { window.ashExtensionsIntegration.addSecondVersion(); window.ashExtensionsIntegration.setOffline(); return window.ashExtensionsIntegration.open({ mode: 'installed' }); });
-	await expect(view.getByRole('option')).toHaveCount(2);
-	await view.getByRole('option').filter({ hasText: '2.0.0' }).click();
+	const versions = view.getByRole('option').filter({ hasText: 'example/web' });
+	await expect(versions).toHaveCount(2);
+	await versions.filter({ hasText: '2.0.0' }).click();
 	const editor = page.locator('.ash-extension-editor');
 	await expect(editor).toContainText('2.0.0');
 	await editor.getByRole('button', { name: 'Uninstall', exact: true }).click();
 	await page.getByRole('dialog', { name: 'Uninstall extension', exact: true }).getByRole('button', { name: 'Uninstall', exact: true }).click();
-	await expect(view.getByRole('option')).toHaveCount(1);
+	await expect(versions).toHaveCount(1);
+	await expect(view.getByRole('option').filter({ hasText: 'ash.language-pack-zh-cn' })).toBeVisible();
 	expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'uninstall'))).toEqual([['uninstall', { installationId: 'version-two', mode: 'whenUnused' }]]);
 });
 
@@ -418,6 +421,30 @@ for (const [locale, disable, enable, disabled, languagePackReason] of [
 	['en', 'Disable', 'Enable', 'Disabled', 'cannot be disabled'],
 	['zh-CN', '禁用', '启用', '已禁用', '不能禁用'],
 ]) {
+	test(`Built-in language pack list and details use backend metadata in ${locale}`, async ({ page }) => {
+		await page.goto(`/extensions.html?rustBuiltIn&locale=${locale}`);
+		await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.manageBuiltIn'));
+		const languagePack = page.locator('[data-view-id="ash.extensions.view"] .ash-extensions').getByRole('option').filter({ hasText: 'ash.language-pack-zh-cn' });
+		await expect(languagePack).toContainText('中文语言包（Rust 目录）');
+		await languagePack.click();
+		const editor = page.locator('.ash-extension-editor');
+		await expect(editor.getByRole('heading', { name: '中文语言包（Rust 目录）', exact: true })).toBeVisible();
+		await expect(editor.getByRole('status')).toContainText(languagePackReason);
+		await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'extensionResource' && entry[1].extensionId === 'ash.language-pack-zh-cn').length)).toBeGreaterThan(0);
+	});
+
+	test(`Installed extensions include the built-in Chinese language pack in ${locale}`, async ({ page }) => {
+		await page.goto(`/extensions.html?locale=${locale}`);
+		await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.open'));
+		const view = page.locator('[data-view-id="ash.extensions.view"] .ash-extensions');
+		const languagePack = view.getByRole('option').filter({ hasText: 'ash.language-pack-zh-cn' });
+		await expect(languagePack).toContainText(locale === 'en' ? 'Built-in' : '内置');
+		await expect(languagePack).toHaveAccessibleName(new RegExp(locale === 'en' ? 'Built-in' : '内置'));
+		await expect(languagePack.getByRole('button')).toHaveCount(0);
+		await languagePack.click();
+		await expect(page.locator('.ash-extension-editor').getByRole('status')).toContainText(languagePackReason);
+	});
+
 	test(`All built-in extensions share enablement management and preserve language-pack behavior in ${locale}`, async ({ page }) => {
 		await page.goto(`/extensions.html?locale=${locale}`);
 		await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.manageBuiltIn'));

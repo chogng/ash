@@ -8,7 +8,7 @@ import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IPluginManagementService, type PluginPackageView, type PluginPermission } from '../../../../platform/extensionManagement/common/pluginManagementService.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { type IGlobalExtensionEnablementService } from '../../../../platform/extensionManagement/common/extensionManagement.js';
-import { createBrowserExtensionApi } from '../../../../platform/extensions/browser/extensionApi.js';
+import type { IExtensionApi } from '../../../../platform/extensions/common/extensionApi.js';
 import { ExtensionsInputSource, type ExtensionsInput } from '../common/extensionsInput.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
@@ -194,9 +194,9 @@ export function describePluginPermission(permission: PluginPermission): string {
 
 
 /** Resolve current authority at invocation time; rows and editors never retain a policy revision. */
-export async function changeExtensionEnablement(input: ExtensionsInput, enablement: IGlobalExtensionEnablementService, management: IExtensionManagementService, plugins: IPluginManagementService): Promise<void> {
+export async function changeExtensionEnablement(input: ExtensionsInput, enablement: IGlobalExtensionEnablementService, management: IExtensionManagementService, plugins: IPluginManagementService, packages: IExtensionApi): Promise<void> {
 	if (input.source === ExtensionsInputSource.BuiltIn) {
-		const descriptor = (await createBrowserExtensionApi().list('cached')).extensions.find(value => value.id === input.summary.id);
+		const descriptor = (await packages.list('cached', { includeDisabled: true })).extensions.find(value => value.id === input.summary.id);
 		if (!descriptor) { throw new Error(localize({ bundle: 'ash.extensions', key: 'extensionMissing' }, 'This extension is no longer installed. Refresh Extensions.')); }
 		const manifest = JSON.parse(descriptor.manifestJson);
 		if (manifest.ashRuntime?.kind === 'rust' && !manifest.browser) {

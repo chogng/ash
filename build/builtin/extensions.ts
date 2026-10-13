@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
-import { delimiter, dirname, isAbsolute, relative, resolve } from 'node:path';
+import { mkdir, readFile, readdir, rename, stat, writeFile, lstat } from 'node:fs/promises';
+import { basename, delimiter, dirname, isAbsolute, relative, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { build } from 'vite';
@@ -8,7 +8,6 @@ import { gzipSync } from 'node:zlib';
 import { fingerprintPaths, PreparedInputs, readJsonCache, writeJsonCache } from '../lib/preparedInputs.ts';
 
 const root = resolve(import.meta.dirname, '../..');
-const directory = resolve(root, 'extensions/theme-defaults');
 export const browserExtensionRoots = [resolve(root, 'extensions'), ...String(process.env.ASH_WEB_EXTENSION_PATHS ?? '').split(delimiter).filter(Boolean).map(path => resolve(path))];
 
 const prepared = new PreparedInputs(resolve(root, '.build/browser-extension-inputs.json'));
@@ -20,6 +19,10 @@ const toolchainFiles = [
 	'.env', '.env.local', '.env.production', '.env.production.local',
 ].map(path => resolve(root, path));
 const environment = JSON.stringify([buildEnvironment, process.versions.node, Object.entries(process.env).filter(([key]) => key.startsWith('VITE_')).sort(([a], [b]) => a.localeCompare(b))]);
+
+function preparedReferences(value: unknown): string[] {
+	return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string' && /^[a-f0-9]{64}(?:-[a-f0-9]{32})?$/u.test(entry)) : [];
+}
 
 /** Vite also watches imported modules outside package roots (runtime bridges and shared sources). */
 export async function browserExtensionWatchFiles(): Promise<string[]> {
@@ -36,8 +39,12 @@ export async function browserExtensionWatchFiles(): Promise<string[]> {
 }
 
 async function extensionOutputFingerprint(): Promise<string> {
+	const publication = await readJsonCache(resolve(root, '.build/builtin/current.json'));
+	const packages = [...preparedReferences(publication?.builtIn), ...preparedReferences(publication?.user)];
 	return fingerprintPaths([
-		resolve(root, 'src/ash/platform/extensions/common/generated/browser.json'),
+		resolve(root, '.build/builtin/fixture.json'),
+		resolve(root, '.build/builtin/current.json'),
+		...packages.filter(value => /^[a-f0-9]{64}(?:-[a-f0-9]{32})?$/u.test(value)).map(value => resolve(root, '.build/builtin/packages', value)),
 		resolve(root, '.build/browser-extensions'), ...await browserExtensionWatchFiles(),
 	]);
 }
@@ -50,7 +57,7 @@ async function extensionFingerprint(): Promise<string> {
 		+ JSON.stringify(browserExtensionRoots) + environment;
 }
 
-export function prepareBrowserExtensions(): Promise<boolean> {
+export function prepareBuiltinExtensions(): Promise<boolean> {
 	return prepared.prepare(extensionFingerprint, extensionOutputFingerprint, preparePackages);
 }
 
@@ -70,13 +77,15 @@ async function preparePackages(): Promise<boolean> {
 	let snapshotBytes = 0;
 	const extensions = [];
 	const bundledResources: Record<string, Record<string, string>> = {};
+	const packageNames: Record<string, string> = Object.create(null);
 	for (const [index, packageRoot] of packages.entries()) {
 		if ((await stat(resolve(packageRoot, 'package.json'))).size > 4 * 1024 * 1024) { throw new RangeError('Browser extension manifest exceeds its byte limit'); }
 		const manifestJson = await readFile(resolve(packageRoot, 'package.json'), 'utf8');
 		const manifest = JSON.parse(manifestJson);
 		const id = `${manifest.publisher}.${manifest.name}`;
+		packageNames[id] = basename(packageRoot);
 		if (Object.hasOwn(bundledResources, id)) { throw new Error(`Duplicate browser extension: ${id}`); }
-		const packageResources: Record<string, string> = {};
+		const packageResources: Record<string, string> = Object.create(null);
 		let packageBytes = 0;
 		let fileCount = 0;
 		async function readPackageFile(path: string): Promise<Buffer> {
@@ -209,7 +218,60 @@ async function preparePackages(): Promise<boolean> {
 		bundledResources[id] = packageResources;
 		extensions.push({ id, name: manifest.name, publisher: manifest.publisher, version: manifest.version, displayName: manifest.name, sourceKind: index < builtInCount ? 'builtIn' : 'user', manifestJson, manifestSha256: digest(manifestJson), packageSha256: digest(JSON.stringify(packageResources)) });
 	}
-	return publish(resolve(root, 'src/ash/platform/extensions/common/generated/browser.json'), { catalog: { generation: 1, diagnostics: [], extensions }, resources: bundledResources });
+	// This JSON is a test fixture; product hosts discover and read the prepared directories in Rust.
+	const fixtureChanged = await publish(resolve(root, '.build/builtin/fixture.json'), { catalog: { generation: 1, diagnostics: [], extensions }, resources: bundledResources });
+	const packagesChanged = await publishPackages(extensions, bundledResources, packageNames);
+	return fixtureChanged || packagesChanged;
+}
+
+async function publishPackages(extensions: { id: string; sourceKind: string; }[], resources: Record<string, Record<string, string>>, packageNames: Record<string, string>): Promise<boolean> {
+	const directory = resolve(root, '.build/builtin');
+	const previous = await readJsonCache(resolve(directory, 'current.json'));
+	const previousPackages = [...preparedReferences(previous?.builtIn), ...preparedReferences(previous?.user)];
+	const publication = { schemaVersion: 1, builtIn: [] as string[], user: [] as string[], packageNames: Object.create(null) as Record<string, string> };
+	for (const extension of extensions) {
+		const files = resources[extension.id];
+		const content = digest(JSON.stringify(files)).slice(7);
+		let snapshot = previousPackages.find(value => value === content || value.startsWith(content + '-'));
+		if (!snapshot || !await packageMatches(resolve(directory, 'packages', snapshot), files)) {
+			snapshot = content + '-' + randomUUID().replaceAll('-', '');
+			const destination = resolve(directory, 'packages', snapshot);
+			await mkdir(destination, { recursive: true });
+			for (const [path, encoded] of Object.entries(files)) {
+				if (isAbsolute(path) || /[\\:\0]/u.test(path) || path.split('/').some(part => !part || part === '.' || part === '..')) throw new Error(`Invalid prepared extension resource: ${path}`);
+				const output = resolve(destination, path);
+				await mkdir(dirname(output), { recursive: true });
+				await writeFile(output, Buffer.from(encoded, 'base64'));
+			}
+		}
+		publication[extension.sourceKind === 'builtIn' ? 'builtIn' : 'user'].push(snapshot);
+		publication.packageNames[snapshot] = packageNames[extension.id];
+	}
+	// Each referenced directory is complete before the atomic publication. Old directories stay
+	// immutable so a running host can retain its current generation until it observes this update.
+	return publish(resolve(directory, 'current.json'), publication);
+}
+
+async function packageMatches(directory: string, files: Record<string, string>): Promise<boolean> {
+	try {
+		const paths: string[] = [];
+		let entries = 0;
+		async function visit(current: string): Promise<void> {
+			if (++entries > 8192) throw new Error('Prepared package exceeds its entry budget');
+			const metadata = await lstat(current);
+			if (metadata.isDirectory()) {
+				for (const entry of await readdir(current)) await visit(resolve(current, entry));
+			} else if (metadata.isFile() && metadata.nlink === 1 && metadata.size <= 16 * 1024 * 1024) {
+				paths.push(relative(directory, current).replaceAll('\\', '/'));
+			} else { throw new Error('Prepared package contains an unsafe entry'); }
+		}
+		await visit(directory);
+		if (paths.length !== Object.keys(files).length) return false;
+		for (const path of paths) {
+			if (!Object.hasOwn(files, path) || (await readFile(resolve(directory, path))).toString('base64') !== files[path]) return false;
+		}
+		return true;
+	} catch { return false; }
 }
 
 const digest = (content: string): string => 'sha256:' + createHash('sha256').update(content).digest('hex');
@@ -225,25 +287,6 @@ async function publish(output: string, value: unknown): Promise<boolean> {
 	await writeFile(temporary, content);
 	await rename(temporary, output);
 	return true;
-}
-
-export async function prepareBuiltinExtensions(): Promise<void> {
-	await prepareBrowserExtensions();
-	const manifestJson = await readFile(resolve(directory, 'package.json'), 'utf8');
-	const manifest = JSON.parse(manifestJson);
-	const resources: Record<string, string> = {};
-	for (const file of (await readdir(resolve(directory, 'themes'))).sort()) {
-		if (file.endsWith('.json')) resources['themes/' + file] = await readFile(resolve(directory, 'themes', file), 'utf8');
-	}
-	const output = resolve(root, 'src/ash/platform/extensions/common/generated/theme-defaults.json');
-	await publish(output, {
-		descriptor: {
-			id: `${manifest.publisher}.${manifest.name}`, name: manifest.name, publisher: manifest.publisher,
-			version: manifest.version, displayName: manifest.name, sourceKind: 'builtIn',
-			manifestJson, manifestSha256: digest(manifestJson), packageSha256: digest(JSON.stringify(resources)),
-		},
-		resources,
-	});
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {

@@ -29,6 +29,7 @@ async function localizationFingerprint(): Promise<string> {
 	return (await fingerprintPaths([resolve(repository, 'src/ash')], sourceInput)) + await fingerprintPaths([
 		resolve(repository, 'localization'), resolve(repository, 'extensions'),
 		resolve(repository, '.build/protocol/typescript/ApprovalModes.ts'),
+		resolve(repository, '.build/protocol/typescript/ProductSlashCommands.ts'),
 		fileURLToPath(import.meta.url), resolve(repository, 'build/lib/preparedInputs.ts'), resolve(repository, 'pnpm-lock.yaml'),
 	], (path, directory) => directory ? !['node_modules', 'test', 'generated', '.git', 'target'].includes(path.split(sep).at(-1)!) : path.startsWith(`${resolve(repository, 'extensions')}${sep}`) ? path.endsWith('.json') : /\.(json|ts|yaml)$/.test(path));
 }
@@ -41,17 +42,26 @@ export function extractLocalizationMessages(sources: readonly LocalizationSource
 	const bundles: Bundles = {};
 	for (const input of sources) {
 		// Escapes can spell either an NLS import or registerColor, so keep those files on the parser path.
-		if (!/nls\.js|registerColor|\\/u.test(input.text)) { continue; }
+		if (!/nls\.js|localizationService\.js|localizationKey|ariaLabelKey|registerColor|\\/u.test(input.text)) { continue; }
 		const source = ts.createSourceFile(input.path, input.text, ts.ScriptTarget.Latest, true);
 		const names = new Map<string, string>();
 		const namespaces = new Set<string>();
+		const serviceTypes = new Set<string>();
 		const colorDeclarations = new Map<string, number>();
 		for (const statement of source.statements) {
-			if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier) || !/\/nls\.js$/u.test(statement.moduleSpecifier.text)) { continue; }
+			if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) { continue; }
+			const serviceImport = /\/localization\/common\/localizationService\.js$/u.test(statement.moduleSpecifier.text);
+			if (!serviceImport && !/\/nls\.js$/u.test(statement.moduleSpecifier.text)) { continue; }
 			const imports = statement.importClause?.namedBindings;
 			if (imports && ts.isNamedImports(imports)) {
-				for (const item of imports.elements) { names.set(item.name.text, item.propertyName?.text ?? item.name.text); }
-			} else if (imports && ts.isNamespaceImport(imports)) { namespaces.add(imports.name.text); }
+				for (const item of imports.elements) {
+					const name = item.propertyName?.text ?? item.name.text;
+					if (serviceImport) {
+						if (name === 'ILocalizationService') serviceTypes.add(item.name.text);
+						if (name === 'localize') names.set(item.name.text, 'serviceLocalize');
+					} else names.set(item.name.text, name);
+				}
+			} else if (!serviceImport && imports && ts.isNamespaceImport(imports)) { namespaces.add(imports.name.text); }
 		}
 		// Color descriptions are declared by the theme owner and translated by its registry.
 		if (input.text.includes('registerColor')) {
@@ -75,7 +85,111 @@ export function extractLocalizationMessages(sources: readonly LocalizationSource
 			};
 			inspect(source);
 		}
-		const visit = (node: ts.Node): void => {
+		interface MessageCall { readonly bundle: string; readonly key: ts.Expression; readonly message: ts.Expression; }
+		const keyReference = (key: ts.Expression): { prefix: string; parameter: string; } | undefined => {
+			if (ts.isIdentifier(key)) return { prefix: '', parameter: key.text };
+			if (ts.isTemplateExpression(key) && key.templateSpans.length === 1 && ts.isIdentifier(key.templateSpans[0].expression) && !key.templateSpans[0].literal.text) {
+				return { prefix: key.head.text, parameter: key.templateSpans[0].expression.text };
+			}
+			return undefined;
+		};
+		const messageCall = (node: ts.CallExpression, services: ReadonlySet<string>): MessageCall | undefined => {
+			const expression = node.expression;
+			if (ts.isPropertyAccessExpression(expression) && expression.name.text === 'translate' && services.has(expression.expression.getText(source))) {
+				const bundle = literal(node.arguments[0]);
+				if (bundle && node.arguments[1] && node.arguments[2]) return { bundle, key: node.arguments[1], message: node.arguments[2] };
+			}
+			const name = ts.isIdentifier(expression) ? names.get(expression.text)
+				: ts.isPropertyAccessExpression(expression) && ts.isIdentifier(expression.expression) && namespaces.has(expression.expression.text) ? expression.name.text : undefined;
+			const offset = name === 'serviceLocalize' ? 1 : 0;
+			if (!['localize', 'localize2', 'serviceLocalize'].includes(name ?? '')) return undefined;
+			const info = node.arguments[offset];
+			const message = node.arguments[offset + 1];
+			if (!info || !message) return undefined;
+			if (!ts.isObjectLiteralExpression(info)) return name === 'serviceLocalize' ? undefined : { bundle: 'ash', key: info, message };
+			const property = (name: string) => info.properties.find(property => ts.isPropertyAssignment(property) && property.name.getText(source) === name) as ts.PropertyAssignment | undefined;
+			const key = property('key')?.initializer;
+			const bundleProperty = property('bundle');
+			const bundle = bundleProperty ? literal(bundleProperty.initializer) : 'ash';
+			return bundle && key ? { bundle, key, message } : undefined;
+		};
+		interface ForwardedCall { readonly bundle: string; readonly prefix: string; readonly key: number; readonly message: number; }
+		// Only follow same-class methods that forward parameters to the NLS API or a
+		// typed localization service. Unrelated methods with the same name are ignored.
+		const visit = (node: ts.Node, services: ReadonlySet<string> = new Set(), wrappers: ReadonlyMap<string, readonly ForwardedCall[]> = new Map()): void => {
+			if (ts.isObjectLiteralExpression(node)) {
+				const property = (name: string) => node.properties.find(property => ts.isPropertyAssignment(property) && property.name.getText(source) === name) as ts.PropertyAssignment | undefined;
+				// View and region descriptors already own both a stable NLS key and
+				// its English fallback; extract that contract without evaluating UI code.
+				for (const [keyProperty, textProperty] of [['localizationKey', 'title'], ['ariaLabelKey', 'ariaLabel'], ['viewsAriaLabelKey', 'viewsAriaLabel']] as const) {
+					const info = property(keyProperty)?.initializer;
+					const message = literal(property(textProperty)?.initializer);
+					if (!info || !ts.isObjectLiteralExpression(info) || message === undefined) continue;
+					const fields = info.properties.filter(ts.isPropertyAssignment);
+					const bundle = literal(fields.find(field => field.name.getText(source) === 'bundle')?.initializer);
+					const key = literal(fields.find(field => field.name.getText(source) === 'key')?.initializer);
+					if (bundle && key) addMessage(bundles, bundle, key, message, input.path);
+				}
+			}
+			if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) {
+				const classServices = new Set<string>();
+				const isService = (type: ts.TypeNode | undefined): boolean => !!type && (ts.isTypeReferenceNode(type) && serviceTypes.has(type.typeName.getText(source)) || ts.isUnionTypeNode(type) && type.types.some(isService));
+				for (const member of node.members) {
+					if (ts.isPropertyDeclaration(member) && isService(member.type)) classServices.add(`this.${member.name.getText(source)}`);
+					if (ts.isConstructorDeclaration(member)) {
+						for (const parameter of member.parameters) {
+							if (isService(parameter.type) && ts.isIdentifier(parameter.name)) {
+								classServices.add(parameter.name.text);
+								if (parameter.modifiers?.some(modifier => [ts.SyntaxKind.PrivateKeyword, ts.SyntaxKind.ProtectedKeyword, ts.SyntaxKind.PublicKeyword, ts.SyntaxKind.ReadonlyKeyword].includes(modifier.kind))) classServices.add(`this.${parameter.name.text}`);
+							}
+						}
+					}
+				}
+				const classWrappers = new Map<string, ForwardedCall[]>();
+				const methods: { name: string; parameters: string[]; calls: ts.CallExpression[]; }[] = [];
+				for (const member of node.members) {
+					if (!ts.isMethodDeclaration(member) || !member.body || !ts.isIdentifier(member.name)) continue;
+					const method = { name: member.name.text, parameters: member.parameters.map(parameter => parameter.name.getText(source)), calls: [] as ts.CallExpression[] };
+					const inspect = (body: ts.Node): void => {
+						if (ts.isFunctionLike(body) || ts.isClassDeclaration(body) || ts.isClassExpression(body)) return;
+						if (ts.isCallExpression(body)) method.calls.push(body);
+						ts.forEachChild(body, inspect);
+					};
+					inspect(member.body);
+					methods.push(method);
+				}
+				// Resolve forwarding chains such as setStatus → label → translate,
+				// independent of declaration order, with a bound on traversal depth.
+				for (let depth = 0; depth < methods.length; depth++) {
+					let changed = false;
+					for (const method of methods) {
+						for (const node of method.calls) {
+							const direct = messageCall(node, classServices);
+							const calls: (MessageCall & { prefix: string; })[] = direct ? [{ ...direct, prefix: '' }] : [];
+							if (!direct && ts.isPropertyAccessExpression(node.expression) && node.expression.expression.kind === ts.SyntaxKind.ThisKeyword) {
+								for (const wrapper of classWrappers.get(node.expression.name.text) ?? []) {
+									if (node.arguments[wrapper.key] && node.arguments[wrapper.message]) calls.push({ bundle: wrapper.bundle, prefix: wrapper.prefix, key: node.arguments[wrapper.key], message: node.arguments[wrapper.message] });
+								}
+							}
+							for (const call of calls) {
+								const reference = keyReference(call.key);
+								if (!reference || !ts.isIdentifier(call.message)) continue;
+								const key = method.parameters.indexOf(reference.parameter), message = method.parameters.indexOf(call.message.text);
+								if (key < 0 || message < 0) continue;
+								const declaration = { bundle: call.bundle, prefix: call.prefix + reference.prefix, key, message };
+								const declarations = classWrappers.get(method.name) ?? [];
+								if (declarations.some(value => value.bundle === declaration.bundle && value.prefix === declaration.prefix && value.key === key && value.message === message)) continue;
+								declarations.push(declaration);
+								classWrappers.set(method.name, declarations);
+								changed = true;
+							}
+						}
+					}
+					if (!changed) break;
+				}
+				for (const member of node.members) visit(member, classServices, classWrappers);
+				return;
+			}
 			if (ts.isCallExpression(node)) {
 				const expression = node.expression;
 				if (ts.isIdentifier(expression)) {
@@ -89,24 +203,19 @@ export function extractLocalizationMessages(sources: readonly LocalizationSource
 					}
 					if (id && description !== undefined) { addMessage(bundles, 'ash', `color.${id}`, description, input.path); }
 				}
-				const name = ts.isIdentifier(expression) ? names.get(expression.text)
-					: ts.isPropertyAccessExpression(expression) && ts.isIdentifier(expression.expression) && namespaces.has(expression.expression.text) ? expression.name.text : undefined;
-				if (name === 'localize' || name === 'localize2') {
-					let bundle = 'ash';
-					let key = literal(node.arguments[0]);
-					const info = node.arguments[0];
-					if (info && ts.isObjectLiteralExpression(info)) {
-						for (const property of info.properties) {
-							if (!ts.isPropertyAssignment(property)) { continue; }
-							if (property.name.getText(source) === 'key') { key = literal(property.initializer); }
-							if (property.name.getText(source) === 'bundle') { bundle = literal(property.initializer) ?? ''; }
-						}
+				const call = messageCall(node, services);
+				if (!call && ts.isPropertyAccessExpression(expression) && expression.expression.kind === ts.SyntaxKind.ThisKeyword) {
+					for (const wrapper of wrappers.get(expression.name.text) ?? []) {
+						const key = literal(node.arguments[wrapper.key]), message = literal(node.arguments[wrapper.message]);
+						if (key && message !== undefined) addMessage(bundles, wrapper.bundle, wrapper.prefix + key, message, input.path);
 					}
-					const message = literal(node.arguments[1]);
-					if (bundle && key && message !== undefined) { addMessage(bundles, bundle, key, message, input.path); }
+				}
+				if (call) {
+					const key = literal(call.key), message = literal(call.message);
+					if (key && message !== undefined) addMessage(bundles, call.bundle, key, message, input.path);
 				}
 			}
-			ts.forEachChild(node, visit);
+			ts.forEachChild(node, child => visit(child, services, wrappers));
 		};
 		visit(source);
 	}
@@ -138,14 +247,29 @@ async function generate(check: boolean): Promise<boolean> {
 	// Load only after protocol preparation, including a changed contract in a long-lived dev server.
 	const approvalModes = resolve(repository, '.build/protocol/typescript/ApprovalModes.ts');
 	const { APPROVAL_MODE_DEFINITIONS } = await import(`${pathToFileURL(approvalModes).href}?v=${await fingerprintPaths([approvalModes])}`) as typeof import('../../.build/protocol/typescript/ApprovalModes.ts');
+	const slashCommands = resolve(repository, '.build/protocol/typescript/ProductSlashCommands.ts');
+	const { PRODUCT_SLASH_COMMANDS } = await import(`${pathToFileURL(slashCommands).href}?v=${await fingerprintPaths([slashCommands])}`) as typeof import('../../.build/protocol/typescript/ProductSlashCommands.ts');
 	const sourceRoot = resolve(repository, 'src/ash');
 	const resourceRoot = resolve(repository, 'localization');
 	const sources = await readSources(sourceRoot);
 	const english = extractLocalizationMessages(sources);
-	merge(english, await readDomains(resolve(resourceRoot, 'en')), 'English declarations');
+	const declarations = await readDomains(resolve(resourceRoot, 'en')).catch(error => {
+		if (error.code === 'ENOENT') return {};
+		throw error;
+	});
+	for (const [bundle, messages] of Object.entries(declarations)) {
+		for (const key of Object.keys(messages)) {
+			throw new Error(`English declaration must live in its owning source module: ${bundle}/${key}`);
+		}
+	}
 	for (const definition of APPROVAL_MODE_DEFINITIONS) {
 		addMessage(english, 'ash', definition.label.key, definition.label.english, 'ApprovalModes');
 		addMessage(english, 'ash', definition.description.key, definition.description.english, 'ApprovalModes');
+	}
+	// The clients translate these shared product descriptions; their English
+	// originals are owned by protocol metadata and follow its generation lifecycle.
+	for (const id of ['permission', 'guardian'] as const) {
+		addMessage(english, 'ash', `slash.${id}.description`, PRODUCT_SLASH_COMMANDS[id].description, 'ProductSlashCommands');
 	}
 	const languages: LanguageMetadata[] = JSON.parse(await readFile(resolve(resourceRoot, 'languages.json'), 'utf8'));
 	if (languages.length !== 1 || languages[0]?.locale !== 'en') throw new Error('Core localization must contain only English');
@@ -313,12 +437,6 @@ function addMessage(bundles: Bundles, bundle: string, key: string, message: stri
 	const messages = bundles[bundle] ??= {};
 	if (Object.hasOwn(messages, key) && messages[key] !== message) { throw new Error(`Conflicting English declaration: ${bundle}/${key} in ${source}`); }
 	messages[key] = message;
-}
-
-function merge(target: Bundles, source: Bundles, path: string): void {
-	for (const [bundle, messages] of Object.entries(source)) {
-		for (const [key, message] of Object.entries(messages)) { addMessage(target, bundle, key, message, path); }
-	}
 }
 
 function placeholders(message: string): string {

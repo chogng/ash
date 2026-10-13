@@ -31,7 +31,7 @@ afterEach(async () => {
 });
 
 async function loadMarkdown(language: string, documents: readonly unknown[] = [], configuration: unknown = {}, folders: readonly string[] = [], clientRequest: (request: { operation: string; uri?: string; command?: string; arguments?: unknown[]; }) => Promise<unknown> = async () => ({ result: 'done' })) {
-	const bundle = JSON.parse(await readFile(resolve(process.cwd(), 'src/ash/platform/extensions/common/generated/browser.json'), 'utf8'));
+	const bundle = JSON.parse(await readFile(resolve(process.cwd(), '.build/builtin/fixture.json'), 'utf8'));
 	const entry = bundle.resources['vscode.markdown-language-features']['src/extension.js'];
 	const manifest = JSON.parse(await readFile(resolve(process.cwd(), 'extensions/markdown-language-features/package.json'), 'utf8'));
 	const packageNls = JSON.parse(await readFile(resolve(process.cwd(), 'extensions/markdown-language-features/package.nls.json'), 'utf8'));

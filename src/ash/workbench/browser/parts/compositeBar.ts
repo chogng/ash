@@ -8,6 +8,7 @@ import type { IComposite } from '../../common/composite.js';
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 
 import { localize, type ILocalizationService } from "../../services/localization/common/localizationService.js";
+import { localize as resolveNls } from '../../../nls.js';
 import { ViewContainerLocation, type IViewContainerDescriptor } from "../../common/views.js";
 import type { IViewDescriptorService } from "../../common/views.js";
 import { CompositeBarAction, CompositeActionViewItem, CompositeOverflowActivityAction, CompositeOverflowActivityActionViewItem, type IActivityHoverOptions } from "./compositeBarActions.js";
@@ -430,7 +431,9 @@ export class CompositeBar extends Disposable {
 		if (!selected) return toggleActions;
 		const isPinned = !this.hiddenContainerIds.has(selected.id);
 		const name = localize(this.localizationService, selected.localizationKey, selected.title);
-		const label = this.localizationService?.translate('ash', isPinned ? 'workbench.hideActivityBarView' : 'workbench.keepActivityBarView', isPinned ? "Hide '{0}'" : "Keep '{0}'", { '0': name }) ?? (isPinned ? `Hide '${name}'` : `Keep '${name}'`);
+		const label = isPinned
+			? this.localizationService?.translate('ash', 'workbench.hideActivityBarView', "Hide '{0}'", { '0': name }) ?? resolveNls('workbench.hideActivityBarView', "Hide '{0}'", name)
+			: this.localizationService?.translate('ash', 'workbench.keepActivityBarView', "Keep '{0}'", { '0': name }) ?? resolveNls('workbench.keepActivityBarView', "Keep '{0}'", name);
 		const badgeLabel = this.areBadgesEnabled(selected.id)
 			? localize(this.localizationService, { bundle: 'ash', key: 'workbench.hideActivityBarBadge' }, 'Hide Badge')
 			: localize(this.localizationService, { bundle: 'ash', key: 'workbench.showActivityBarBadge' }, 'Show Badge');

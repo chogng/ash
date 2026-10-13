@@ -22,7 +22,7 @@ import { ExtensionsEditor } from '../../../src/ash/workbench/contrib/extensions/
 import { EditorPanes } from '../../../src/ash/workbench/browser/editor.js';
 import { ExtensionsInput, ExtensionsCapabilityInput } from '../../../src/ash/workbench/contrib/extensions/common/extensionsInput.js';
 import { IExtensionApi, type ExtensionResourceRequest } from '../../../src/ash/platform/extensions/common/extensionApi.js';
-import { createBrowserExtensionApi, withBuiltInExtensions } from '../../../src/ash/platform/extensions/browser/extensionApi.js';
+import { createBuiltinExtensionFixture } from './builtinExtensionsFixture.js';
 import { ExtensionResourceLoaderService } from '../../../src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import { IMarkdownRendererService, MarkdownRendererService } from '../../../src/ash/platform/markdown/browser/markdownRenderer.js';
@@ -128,24 +128,37 @@ const extensionReference = { ...reference, id: extensionSummary.id };
 const extensionCapabilities = [{ kind: 'editorExtension' as const, id: 'publisher.sample', contractVersion: '1', permissions: [], authenticationProvider: null }];
 const extensionDetails = { ...packageDetails, package: extensionReference, ...extensionSummary, capabilities: extensionCapabilities };
 const galleryOnly = new URLSearchParams(location.search).has('gallery');
+const rustBuiltIn = new URLSearchParams(location.search).has('rustBuiltIn');
+const rustLanguagePackManifest = { publisher: 'ash', name: 'language-pack-zh-cn', version: '1.0.0', displayName: '中文语言包（Rust 目录）', description: 'Rust package snapshot', contributes: { localizations: [{ languageId: 'zh-CN' }] } };
 const extensionManifest = { publisher: 'Fixture publisher', name: 'sample', icon: 'icon.svg', categories: ['Programming Languages'], homepage: 'https://example.invalid/tools' };
 let heldReadme: ((text: string) => void) | undefined;
 let holdReadme = false;
 const fixtureReadme = '# Sample editor extension\n\nTools for working with your project.\n\n## Features\n\n- Inspect and review workspace files\n- Keep your tools in the editor\n\n## Getting started\n\nInstall the extension and review its requested permissions.\n\n[Homepage](https://example.invalid/tools)\n' + (new URLSearchParams(location.search).has('unsafeReadme') ? '\n[Unsafe](command:fixture.unsafe)\n\n<script>window.fixtureUnsafe = true</script>\n' : '');
 const readPackageResource = async (request: ExtensionResourceRequest): Promise<Uint8Array> => {
 	requests.push(['extensionResource', request]);
+	if (rustBuiltIn && request.extensionId === 'ash.language-pack-zh-cn') {
+		if (request.path === 'package.json') { return new TextEncoder().encode(JSON.stringify(rustLanguagePackManifest)); }
+		throw new Error('Language pack has no README or executable resources');
+	}
 	if (request.path === 'package.json') { return new TextEncoder().encode(JSON.stringify(extensionManifest)); }
 	if (request.path === 'README.md') { if (holdReadme) { holdReadme = false; return new TextEncoder().encode(await new Promise<string>(resolve => { heldReadme = resolve; })); } return new TextEncoder().encode(fixtureReadme); }
 	if (request.path === 'icon.svg') { return new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><rect width="128" height="128" rx="8" fill="#3355aa"/><path d="m32 40 32-16 32 16v48L64 104 32 88Z" fill="none" stroke="white" stroke-width="8"/></svg>'); }
 	throw new Error('Package resource is missing');
 };
-services.registerInstance(IExtensionApi, withBuiltInExtensions({
-	list: async () => ({ generation: 1, diagnostics: [], extensions: galleryOnly ? [] : [{ id: 'publisher.sample', name: 'sample', publisher: 'Fixture publisher', version: '1.0.0', displayName: extensionSummary.displayName, sourceKind: 'registry', manifestSha256: reference.digest, packageSha256: reference.digest, manifestJson: JSON.stringify(extensionManifest) }] }),
-	resources: new ExtensionResourceLoaderService(readPackageResource, galleryOnly ? {
+const builtinPackages = createBuiltinExtensionFixture();
+services.registerInstance(IExtensionApi, {
+	list: async () => ({
+		generation: 1, diagnostics: [], extensions: [
+			...(await builtinPackages.list('cached')).extensions.filter(value => !rustBuiltIn || value.id !== 'ash.language-pack-zh-cn'),
+			...galleryOnly ? [] : [{ id: 'publisher.sample', name: 'sample', publisher: 'Fixture publisher', version: '1.0.0', displayName: extensionSummary.displayName, sourceKind: 'registry' as const, manifestSha256: reference.digest, packageSha256: reference.digest, manifestJson: JSON.stringify(extensionManifest) }],
+			...rustBuiltIn ? [{ id: 'ash.language-pack-zh-cn', ...rustLanguagePackManifest, sourceKind: 'builtIn' as const, manifestSha256: reference.digest, packageSha256: reference.digest, manifestJson: JSON.stringify(rustLanguagePackManifest) }] : [],
+		]
+	}),
+	resources: new ExtensionResourceLoaderService(request => request.extensionId === 'publisher.sample' || rustBuiltIn && request.extensionId === 'ash.language-pack-zh-cn' ? readPackageResource(request) : builtinPackages.resources.readExtensionResourceBytes(request), galleryOnly ? {
 		template: async () => 'https://registry.invalid/api/{publisher}/{name}/{version}/file/{path}',
 		read: async request => { requests.push(['galleryResource', request]); return readPackageResource({ generation: 1, extensionId: `${request.publisher}.${request.name}`, path: request.path }); },
 	} : undefined),
-}, createBrowserExtensionApi()));
+});
 services.registerInstance(IOpenerService, { open: async (href, options) => { requests.push(['openLink', String(href), options]); return true; } } as IOpenerService);
 services.registerSingleton(IMarkdownRendererService, () => services.createInstance(MarkdownRendererService));
 let editorPolicyRevision = 1;
@@ -377,6 +390,9 @@ const skills = disposables.add(services.createInstance(SkillsViewPane, host, { i
 const mcp = disposables.add(services.createInstance(McpServersViewPane, host, { id: 'ash.extensions.mcp', title: 'MCP Servers', collapsed: true }));
 const recommended = disposables.add(services.createInstance(RecommendedExtensionsView, host, { id: 'ash.extensions.recommended', title: new URLSearchParams(location.search).get('locale') === 'zh-CN' ? '推荐' : 'Recommended', collapsed: true }));
 for (const pane of [extensionManagement, plugins, skills, mcp, recommended]) { panes.addPane(pane, 350); pane.setVisible(true); }
+// Installation scenarios explicitly browse the fixture registry. Opening the product command
+// without filters is tested separately and shows installed packages, including built-ins.
+void extensionManagement.open({ mode: 'browse' });
 panes.layout(paneLayout ? 260 : previewHeight, paneLayout ? 280 : 360);
 services.registerInstance(IViewsService, {
 	openView: (id: string) => {

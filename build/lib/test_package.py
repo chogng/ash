@@ -15,6 +15,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from build.builtin import copy_builtin_extensions
+from build.lib.package_test_support import prepare_builtin_fixture
 from build.lib.targets import TARGETS
 from build.code.package import build_code_package
 from build.app_server import main as build_main
@@ -61,6 +62,9 @@ class PackageTests(unittest.TestCase):
 
     def setUp(self) -> None:
         boundary = patch("build.app_server.generate_protocol", return_value=False)
+        boundary.start()
+        self.addCleanup(boundary.stop)
+        boundary = patch("build.app_server._prepare_builtin_extensions")
         boundary.start()
         self.addCleanup(boundary.stop)
         boundary = patch(
@@ -517,7 +521,10 @@ class PackageTests(unittest.TestCase):
             self.assertNotIn("ashRuntime", git_manifest)
             self.assertEqual("./browser/extension.ts", git_manifest["browser"])
             self.assertFalse((git_extension / "src").exists())
-            self.assertFalse((git_extension / "browser").exists())
+            self.assertEqual(
+                "export function activate() {}",
+                (git_extension / "browser/extension.ts").read_text(encoding="utf-8"),
+            )
             self.assertFalse((git_extension / "Cargo.toml").exists())
             self.assertFalse((output / "bin" / "ash-git-extension").exists())
             self.assertIn(
@@ -824,7 +831,7 @@ class PackageTests(unittest.TestCase):
             (dependencies / "markdown-library").mkdir()
             (dependencies / "markdown-library/index.js").write_text("dependency")
             output = root / "packaged-extensions"
-
+            prepared = prepare_builtin_fixture(root)["markdown"]
             copy_builtin_extensions(root, output)
 
             self.assertEqual(
@@ -833,9 +840,41 @@ class PackageTests(unittest.TestCase):
             )
             # Hard links also violate the regular-unlinked file contract and
             # work without enabling Windows developer mode for the test host.
-            (package / "linked.js").hardlink_to(package / "extension.js")
+            (prepared / "linked.js").hardlink_to(prepared / "extension.js")
             with self.assertRaisesRegex(RuntimeError, "not a regular unlinked file"):
                 copy_builtin_extensions(root, root / "rejected-extensions")
+
+    def test_builtin_language_pack_includes_its_prepared_catalog(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package = root / "extensions/language-pack-zh-cn"
+            package.mkdir(parents=True)
+            (package / "package.json").write_text(
+                json.dumps(
+                    {
+                        "publisher": "ash",
+                        "name": "language-pack-zh-cn",
+                        "version": "1.0.0",
+                        "contributes": {"localizations": [{"languageId": "zh-CN"}]},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            prepared = (
+                root
+                / ".build/desktop/localization/extensions/ash.language-pack-zh-cn/localization"
+            )
+            prepared.mkdir(parents=True)
+            catalog = '{"locale":"zh-CN","bundles":{"ash":{"example":"示例"}}}'
+            (prepared / "package.json").write_text(catalog, encoding="utf-8")
+            prepare_builtin_fixture(root)
+            copy_builtin_extensions(root, root / "output")
+            self.assertEqual(
+                (
+                    root / "output/language-pack-zh-cn/localization/package.json"
+                ).read_text(encoding="utf-8"),
+                catalog,
+            )
 
     def test_builtin_rust_package_keeps_resources_and_excludes_browser_sources(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -854,9 +893,10 @@ class PackageTests(unittest.TestCase):
             (package / "src/main.rs").write_text("fn main() {}")
             (package / "Cargo.toml").write_text("[package]")
             (package / "package.nls.json").write_text('{"name":"Git"}')
+            prepare_builtin_fixture(root)
             copy_builtin_extensions(root, root / "output")
             self.assertEqual(
-                ["package.json", "package.nls.json"],
+                ["browser", "package.json", "package.nls.json"],
                 sorted(path.name for path in (root / "output/git").iterdir()),
             )
 
@@ -869,9 +909,10 @@ class PackageTests(unittest.TestCase):
             dependencies.mkdir(parents=True)
             (package / "package.json").write_text('{"name":"markdown"}')
             (dependencies / "cycle").symlink_to(package, target_is_directory=True)
+            prepared = prepare_builtin_fixture(root)["markdown"]
             copy_builtin_extensions(root, root / "output")
             self.assertFalse((root / "output/markdown/node_modules").exists())
-            (package / "linked.js").symlink_to(package / "package.json")
+            (prepared / "linked.js").symlink_to(prepared / "package.json")
             with self.assertRaisesRegex(RuntimeError, "not a regular unlinked file"):
                 copy_builtin_extensions(root, root / "rejected")
 

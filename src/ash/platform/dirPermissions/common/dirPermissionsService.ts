@@ -1,3 +1,4 @@
+import { localize2 } from '../../../nls.js';
 import type { Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 
@@ -44,21 +45,21 @@ export interface IDirPermissionsService {
 
 export const IDirPermissionsService = createServiceIdentifier<IDirPermissionsService>("dirPermissionsService");
 
-/** Shared display fallbacks; identifiers and granted capabilities retain their backend semantics. */
+/** English NLS originals; each consumer resolves them through its window's localization service. */
 export const dirPermissionNames: Readonly<Record<DirPermission, string>> = {
-	readFiles: 'Read files',
-	writeFiles: 'Write files',
-	executeCommands: 'Execute commands',
-	watchFiles: 'Watch files',
-	browseFiles: 'Browse files',
-	searchFiles: 'Search files',
-	loadInstructions: 'Load instructions',
-	loadConfig: 'Load configuration',
-	discoverSkills: 'Discover skills',
-	discoverMcp: 'Discover MCP',
-	useLanguageServices: 'Use language services',
-	discoverHooks: 'Discover hooks',
-	discoverPlugins: 'Discover plugins',
-	inspectRepository: 'Inspect repository',
-	mutateRepository: 'Modify repository',
+	readFiles: localize2({ bundle: 'ash.settings', key: 'capabilities.permission.readFiles' }, 'Read files').original,
+	writeFiles: localize2({ bundle: 'ash.settings', key: 'capabilities.permission.writeFiles' }, 'Write files').original,
+	executeCommands: localize2({ bundle: 'ash.settings', key: 'capabilities.permission.executeCommands' }, 'Execute commands').original,
+	watchFiles: localize2({ bundle: 'ash.settings', key: 'capabilities.permission.watchFiles' }, 'Watch files').original,
+	browseFiles: localize2({ bundle: 'ash.settings', key: 'capabilities.permission.browseFiles' }, 'Browse files').original,
+	searchFiles: localize2({ bundle: 'ash.settings', key: 'capabilities.permission.searchFiles' }, 'Search files').original,
+	loadInstructions: localize2({ bundle: 'ash.settings', key: 'capabilities.permission.loadInstructions' }, 'Load instructions').original,
+	loadConfig: localize2({ bundle: 'ash.settings', key: 'capabilities.permission.loadConfig' }, 'Load configuration').original,
+	discoverSkills: localize2({ bundle: 'ash.settings', key: 'capabilities.permission.discoverSkills' }, 'Discover skills').original,
+	discoverMcp: localize2({ bundle: 'ash.settings', key: 'capabilities.permission.discoverMcp' }, 'Discover MCP').original,
+	useLanguageServices: localize2({ bundle: 'ash.settings', key: 'capabilities.permission.useLanguageServices' }, 'Use language services').original,
+	discoverHooks: localize2({ bundle: 'ash.settings', key: 'capabilities.permission.discoverHooks' }, 'Discover hooks').original,
+	discoverPlugins: localize2({ bundle: 'ash.settings', key: 'capabilities.permission.discoverPlugins' }, 'Discover plugins').original,
+	inspectRepository: localize2({ bundle: 'ash.settings', key: 'capabilities.permission.inspectRepository' }, 'Inspect repository').original,
+	mutateRepository: localize2({ bundle: 'ash.settings', key: 'capabilities.permission.mutateRepository' }, 'Modify repository').original,
 };

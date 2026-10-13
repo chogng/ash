@@ -3,7 +3,7 @@ import type { ITextResourceStore } from '../../../src/ash/workbench/services/tex
 import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { ExtensionResourceLoaderService } from '../../../src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { ExtensionColorThemeService } from '../../../src/ash/workbench/services/extensions/browser/extensionColorThemeService.js';
-import { createBrowserExtensionApi } from '../../../src/ash/platform/extensions/browser/extensionApi.js';
+import { createBuiltinExtensionFixture } from './builtinExtensionsFixture.js';
 import '../../../src/ash/workbench/browser/parts/notifications/media/notificationsList.css';
 import '../../../src/ash/workbench/browser/parts/notifications/media/notificationsToasts.css';
 import { IHostColorSchemeService } from '../../../src/ash/workbench/services/themes/common/hostColorSchemeService.js';
@@ -130,7 +130,7 @@ window.tokenizeInTextMateWorker = async () => {
 
 const resources = new DisposableStore();
 const uriIdentityServices = resources.add(new TestUriIdentityServices());
-const extensionThemes = resources.add(new ExtensionColorThemeService(createBrowserExtensionApi(), {
+const extensionThemes = resources.add(new ExtensionColorThemeService(createBuiltinExtensionFixture(), {
 	subscribe: () => ({ dispose() { } }),
 }));
 await extensionThemes.start();

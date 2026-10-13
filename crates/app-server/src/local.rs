@@ -1767,6 +1767,14 @@ pub fn open_app_server_with_codebase_providers(
     .with_cloud_codebase_storage_root(cloud_codebase_root)
     .with_cloud_codebase_providers(providers.cloud)
     .with_extension_roots(extension_roots);
+    if InstallContext::current()
+        .bundled_resource_directory("extensions")
+        .is_none()
+    {
+        server = server.with_prepared_extension_sources(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.build/builtin"),
+        );
+    }
     if let Some(github) = github_oauth {
         server = server.with_built_in_extension_runtime(github.runtime());
         server = server
@@ -2429,8 +2437,14 @@ fn resolve_built_in_skill_root(selection: BuiltInSkillRoot) -> BuiltInSkillSourc
 }
 
 fn resolve_extension_roots(profile_root: &std::path::Path) -> Vec<ExtensionRoot> {
-    // Built-in editor resources are bundled and loaded by the TypeScript client.
-    vec![ExtensionRoot::user(profile_root.join("extensions"))]
+    let mut roots = Vec::new();
+    // Development artifacts use the live publication source; installed products have fixed roots.
+    let built_in = InstallContext::current().bundled_resource_directory("extensions");
+    if let Some(root) = built_in {
+        roots.push(ExtensionRoot::built_in(root));
+    }
+    roots.push(ExtensionRoot::user(profile_root.join("extensions")));
+    roots
 }
 
 fn development_built_in_skill_root() -> Option<PathBuf> {

@@ -46,7 +46,8 @@ export const MAX_EXTENSION_RESOURCE_BYTES = 16 * 1024 * 1024;
 /** Client package metadata and resources, with host validation for installed external packages. */
 export interface IExtensionApi {
 	readonly onDidChange?: Event<void>;
-	list(reload: ExtensionCatalogReload): Promise<ExtensionCatalog>;
+	/** Management may include disabled packages; activation consumers use the default enabled view. */
+	list(reload: ExtensionCatalogReload, options?: { readonly includeDisabled?: boolean; }): Promise<ExtensionCatalog>;
 	readonly resources: IExtensionResourceLoaderService;
 }
 

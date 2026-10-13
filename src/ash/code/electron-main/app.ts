@@ -45,7 +45,7 @@ import { BrowserViewGroupMainService } from '../../platform/browserView/electron
 import { IPlaywrightService } from '../../platform/browserView/common/playwrightService.js';
 import { WebContentsView, session as electronSession } from 'electron/main';
 import { configurationValues } from '../../platform/configuration/common/configurationIpc.js';
-import { formatNlsMessage } from '../../nls.js';
+import { formatNlsMessage, localize2 } from '../../nls.js';
 import { ConfigurationMainService, configurationChannel } from "../../platform/configuration/electron-main/configurationMainService.js";
 import { IConfigurationResourceService } from '../../platform/configuration/common/configurationResourceService.js';
 import { IMeteredConnectionService } from '../../platform/meteredConnection/common/meteredConnection.js';
@@ -845,7 +845,22 @@ export class AshApplication extends Disposable {
 	}
 
 	private mainLocalizationMessages(): Readonly<Record<string, string>> {
-		return { ...productLanguagePackCatalogs.find(catalog => catalog.locale === 'en')!.bundles.ash, ...this.activeLanguagePack.bundles.ash };
+		// Main owns these system labels; use their English originals before applying
+		// the active window's catalog, independently of the renderer's NLS resolver.
+		return {
+			...productLanguagePackCatalogs.find(catalog => catalog.locale === 'en')!.bundles.ash,
+			'taskbar.newWindow': localize2('taskbar.newWindow', "New Window").original,
+			'shell.recentProjects': localize2('shell.recentProjects', "Recent Folders & Workspaces").original,
+			'shell.noRecentProjects': localize2('shell.noRecentProjects', "No Recent Projects").original,
+			'shell.clearRecentProjects': localize2('shell.clearRecentProjects', "Clear Recently Opened").original,
+			'tray.showWindow': localize2('tray.showWindow', "Show Ash").original,
+			'tray.quit': localize2('tray.quit', "Quit Ash").original,
+			'taskbar.newWindowDescription': localize2('taskbar.newWindowDescription', "Open a new Ash window").original,
+			'taskbar.agentsWindow': localize2('taskbar.agentsWindow', "Open Agents Window").original,
+			'taskbar.agentsWindowDescription': localize2('taskbar.agentsWindowDescription', "Open the Ash Agents window").original,
+			'taskbar.invalidAgentsArguments': localize2('taskbar.invalidAgentsArguments', "Open the Agents window with --agents-window and an optional --folder or --workspace target. File, window, and wait options cannot be combined with it.").original,
+			...this.activeLanguagePack.bundles.ash,
+		};
 	}
 
 	/** Focuses a live window, or recreates an empty Workbench when none remains. */
@@ -1942,12 +1957,12 @@ export class AshApplication extends Disposable {
 		return {
 			kind: 'prompt',
 			title: AshApplicationName,
-			primaryButton: translate('workspaceTrust.readOnly', 'Open Read Only'),
-			secondaryButton: translate('workspaceTrust.trust', 'Trust Folder & Enable Features'),
-			cancelButton: translate('dialog.cancel', 'Cancel'),
-			message: translate('workspaceTrust.question', 'Do you trust the files in this folder?'),
+			primaryButton: translate('workspaceTrust.readOnly', localize2('workspaceTrust.readOnly', 'Open Read Only').original),
+			secondaryButton: translate('workspaceTrust.trust', localize2('workspaceTrust.trust', 'Trust Folder & Enable Features').original),
+			cancelButton: translate('dialog.cancel', localize2('dialog.cancel', 'Cancel').original),
+			message: translate('workspaceTrust.question', localize2('workspaceTrust.question', 'Do you trust the files in this folder?').original),
 			detail: formatNlsMessage(
-				translate('workspaceTrust.detail', 'Folder: {0}\n\nTrusting this folder allows Ash to edit files, run commands, change the repository, and load project instructions and configuration. Read Only allows browsing, searching, and repository inspection.'),
+				translate('workspaceTrust.detail', localize2('workspaceTrust.detail', 'Folder: {0}\n\nTrusting this folder allows Ash to edit files, run commands, change the repository, and load project instructions and configuration. Read Only allows browsing, searching, and repository inspection.').original),
 				{ '0': path },
 			),
 		};

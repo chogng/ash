@@ -146,8 +146,12 @@ provider 上游的 `ash-core-plugins` authority 完成。Executable Editor Exten
 [`ash-external-ext`](../../README.md) 监管；静态 catalog 不会隐式进入该
 执行边界。
 
-App Server 默认仅传入 profile 用户根和 authority-selected 外部包；内置编辑器资源由 TS 构建和加载，
-不再由后端扫描。安装、启用和授权仍属于上游来源 owner；SDK 不接管包发现或宿主生命周期。
+App Server 在产品安装中传入 `ash-resources/extensions` 内置根；开发环境通过
+`.build/builtin/current.json` 选择构建已完整准备的 exact immutable package 目录。
+内置包、authority-selected 外部包和 profile 用户包共用 Rust 目录与资源接口，浏览器入口的
+编译代码也是包内资源。组合来源按 built-in → authority → user 排序，用户开发包保持 user
+provenance。发布文件变化在下一次 cached 查询或 refresh 时生效；未发布目录不进入目录。
+安装、启用和授权仍属于上游来源 owner；SDK 不接管包发现或宿主生命周期。
 
 The catalog descriptor retains the canonical directory of the exact authorized package.
 The App Server publishes it as an optional `extensionLocation` file URI together with

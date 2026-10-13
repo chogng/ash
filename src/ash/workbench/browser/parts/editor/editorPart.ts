@@ -214,7 +214,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		}));
 		this.beforeCloseEditor = options.beforeCloseEditor;
 		this.titleDomNode.remove();
-		this.domNode.setAttribute("aria-label", "Editor");
+		this.domNode.setAttribute('aria-label', localize({ bundle: 'ash.regions', key: 'editor' }, 'Editor'));
 		this.groupOptions = {
 			editorLimit: options.editorLimit,
 			registry: options.registry ?? EditorPanes,

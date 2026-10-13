@@ -69,6 +69,39 @@ test('selected product icon theme refreshes mounted SVGs and returns to defaults
 	}
 });
 
+test('base colors support disconnected schemes and yield to a registered extension theme', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
+	try {
+		using configuration = new WorkbenchConfigurationService();
+		using services = new InstantiationService();
+		services.registerInstance(IConfigurationService, configuration);
+		using languages = new LanguageService();
+		services.registerInstance(ILanguageService, languages);
+		const { Event } = await import('../../../../../base/common/event.js');
+		const colors = { dark: false, highContrast: false, onDidChangeColorScheme: Event.None };
+		services.registerInstance(IHostColorSchemeService, colors);
+		using active = services.createInstance(WorkbenchThemeService, browser.window.document.body);
+		active.initialize();
+		await configuration.updateValue(WorkbenchConfiguration.colorTheme, 'pending-extension-theme');
+		await configuration.updateValue('window.autoDetectHighContrast', true);
+		for (const [dark, highContrast, id] of [
+			[false, false, 'ash-light'], [true, false, 'ash-dark'],
+			[false, true, 'ash-high-contrast-light'], [true, true, 'ash-high-contrast-dark'],
+		] as const) {
+			Object.assign(colors, { dark, highContrast });
+			// A configuration change resolves the current host scheme.
+			await configuration.updateValue('workbench.colorCustomizations', { 'editor.foreground': dark ? '#eeeeee' : '#111111' });
+			assert.equal(active.getColorTheme().id, id);
+			assert(browser.window.document.body.style.getPropertyValue('--ash-editor-background'));
+		}
+		Object.assign(colors, { dark: false, highContrast: false });
+		const extension = parseUserColorTheme('{"colors":{"editor.background":"#123456"}}', 'pending-extension-theme');
+		using registration = WorkbenchThemesRegistry.registerColorThemes([extension]);
+		assert.equal(active.getColorTheme().getColorCss('editor.background'), '#123456');
+		assert.equal(browser.window.document.body.style.getPropertyValue('--ash-editor-background'), '#123456');
+	} finally { browser.window.close(); }
+});
+
 const document = {
 	name: 'Test User Aurora',
 	type: 'dark',

@@ -16,6 +16,7 @@ import { FileKind, FileNotFoundError, FileRevisionConflictError, IFileService, t
 import { type IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { getTokenClassificationRegistry } from '../../../../platform/theme/common/tokenClassificationRegistry.js';
 import { Colors } from '../../../../platform/theme/common/colorRegistry.js';
+import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../../platform/theme/common/colorTheme.js';
 import { applyThemeCustomizations, ThemeConfigurationSettings } from '../common/themeConfiguration.js';
 import { noFileIconTheme, defaultProductIconTheme, type IFileIconTheme, type IColorTheme, type IProductIconTheme, type IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { getIconDefinition, getIconRegistry } from '../../../../platform/theme/common/iconRegistry.js';
@@ -23,7 +24,7 @@ import { bindColorTheme } from '../../../../platform/theme/browser/themeStyles.j
 import type { IResourceIconRenderer } from '../../../browser/labels.js';
 import { isDarkColorScheme } from '../../../../platform/theme/common/theme.js';
 import { WorkbenchConfiguration } from '../../../common/configuration.js';
-import { resolveWorkbenchColorTheme, SystemColorThemePreference, WorkbenchThemesRegistry } from '../../../common/theme.js';
+import { SystemColorThemePreference, WorkbenchThemesRegistry } from '../../../common/theme.js';
 import type { IUserThemeDeleteResult, IUserThemeLoadIssue, IUserThemeSaveResult, IUserThemeService, IUserThemeSource } from '../../../common/userThemes.js';
 import { loadUserColorTheme, parseUserColorTheme, userThemeId } from '../common/colorThemeData.js';
 import { migrateUserTheme } from '../common/themeMigration.js';
@@ -165,10 +166,16 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 			preference = this.configurationService.getValue(this.hostColorScheme.dark ? settings.preferredDarkColorTheme : settings.preferredLightColorTheme);
 		}
 		const registeredTheme = WorkbenchThemesRegistry.getColorTheme(preference);
+		// These base colors keep a disconnected window usable; extension themes still come from
+		// the Rust catalog and replace this bootstrap view when their registration arrives.
+		let bootstrap = this.hostColorScheme.dark ? darkColorTheme : lightColorTheme;
+		if (this.hostColorScheme.highContrast && this.configurationService.getValue<boolean>(settings.autoDetectHighContrast)) {
+			bootstrap = this.hostColorScheme.dark ? highContrastDarkColorTheme : highContrastLightColorTheme;
+		}
 		// The registry owns the available version; this service owns the version actually applied.
 		const theme = registeredTheme && this.deferredColorTheme?.id === registeredTheme.id
 			? this.deferredColorTheme
-			: registeredTheme ?? resolveWorkbenchColorTheme(SystemColorThemePreference, this.hostColorScheme.dark);
+			: registeredTheme ?? WorkbenchThemesRegistry.getColorTheme(bootstrap.id) ?? bootstrap;
 		return applyThemeCustomizations(theme, this.configurationService);
 	}
 

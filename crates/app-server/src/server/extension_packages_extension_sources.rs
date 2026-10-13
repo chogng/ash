@@ -9,6 +9,7 @@ use ash_external_ext::packages::DynamicExtensionSourceProvider;
 use ash_external_ext::packages::DynamicExtensionSourceSnapshot;
 use ash_external_ext::packages::ExtensionDiagnostic;
 use ash_external_ext::packages::ExtensionDiagnosticCode;
+use ash_external_ext::packages::ExtensionRootKind;
 
 /// Projects installed Extensions declarative editor assets into the Extension catalog.
 pub(super) struct ExtensionsExtensionSourceProvider {
@@ -226,6 +227,13 @@ impl DynamicExtensionSourceProvider for CombinedExtensionSourceProvider {
                 .iter()
                 .map(|diagnostic| format!("{diagnostic:?}")),
         );
+        // Host-prepared built-ins precede authorities; explicit development user packages
+        // cannot replace an authority-selected package or acquire built-in provenance.
+        packages.sort_by_key(|package| match package.kind {
+            ExtensionRootKind::BuiltIn => 0,
+            ExtensionRootKind::Plugin | ExtensionRootKind::Registry => 1,
+            ExtensionRootKind::User => 2,
+        });
         let generation = next_generation(&self.state, fingerprint)?;
         Ok(DynamicExtensionSourceSnapshot {
             generation,

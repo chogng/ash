@@ -1,5 +1,6 @@
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import { h } from "../../../../base/browser/dom.js";
+import { localize } from '../../../../nls.js';
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { RunOnceScheduler } from "../../../../base/common/async.js";
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
@@ -88,7 +89,7 @@ export class EditorHeaderControl extends Disposable {
 				actionsContainer,
 				emptyEditorToolbarContextMenuProvider,
 				{
-					ariaLabel: "Editor actions",
+					ariaLabel: localize({ bundle: 'ash.regions', key: 'editorActions' }, 'Editor actions'),
 					highlightToggledItems: true,
 					hoverAnchorPosition: AnchorPosition.Below,
 				},

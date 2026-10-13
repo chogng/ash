@@ -7,7 +7,7 @@ import type { Button } from '../../../../../base/browser/ui/button/button.js';
 import type { IAction } from '../../../../../base/common/actions.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
-import { localize } from '../../../../../nls.js';
+import { localize, localize2 } from '../../../../../nls.js';
 import { DropdownWithPrimaryActionViewItem } from '../../../../../platform/actions/browser/dropdownWithPrimaryActionViewItem.js';
 import { registerColor } from '../../../../../platform/theme/common/colorUtils.js';
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
@@ -15,19 +15,19 @@ import { IContextMenuService } from '../../../../../platform/contextview/browser
 import { DesignMode, DesignTool } from '../../common/config/editorConfiguration.js';
 
 export const designToolActions = [
-	[DesignTool.Select, 'sessions.design.selectTool', 'Select (V)', Lxicon.cursor2],
-	[DesignTool.Hand, 'sessions.design.handTool', 'Move canvas (H)', Lxicon.hand],
-	[DesignTool.Rectangle, 'sessions.design.rectangle', 'Rectangle', Lxicon.square],
-	[DesignTool.Ellipse, 'sessions.design.ellipse', 'Ellipse', Lxicon.circleLarge],
-	[DesignTool.Pen, 'sessions.design.penTool', 'Pen (P)', Lxicon.pen],
-	[DesignTool.Text, 'sessions.design.textTool', 'Text (T)', Lxicon.text2],
+	[DesignTool.Select, () => localize2('sessions.design.selectTool', 'Select (V)'), Lxicon.cursor2],
+	[DesignTool.Hand, () => localize2('sessions.design.handTool', 'Move canvas (H)'), Lxicon.hand],
+	[DesignTool.Rectangle, () => localize2('sessions.design.rectangle', 'Rectangle'), Lxicon.square],
+	[DesignTool.Ellipse, () => localize2('sessions.design.ellipse', 'Ellipse'), Lxicon.circleLarge],
+	[DesignTool.Pen, () => localize2('sessions.design.penTool', 'Pen (P)'), Lxicon.pen],
+	[DesignTool.Text, () => localize2('sessions.design.textTool', 'Text (T)'), Lxicon.text2],
 ] as const;
 
 export const designModeActions = [
-	[DesignMode.Draw, 'sessions.design.drawMode', 'Draw', Lxicon.pen],
-	[DesignMode.Design, 'sessions.design.designMode', 'Design', Lxicon.design],
-	[DesignMode.Motion, 'sessions.design.motionMode', 'Motion', Lxicon.motion],
-	[DesignMode.Code, 'sessions.design.codeMode', 'Code', Lxicon.code],
+	[DesignMode.Draw, () => localize2('sessions.design.drawMode', 'Draw'), Lxicon.pen],
+	[DesignMode.Design, () => localize2('sessions.design.designMode', 'Design'), Lxicon.design],
+	[DesignMode.Motion, () => localize2('sessions.design.motionMode', 'Motion'), Lxicon.motion],
+	[DesignMode.Code, () => localize2('sessions.design.codeMode', 'Code'), Lxicon.code],
 ] as const;
 
 registerColor('sessions.design.chromeBackground', { light: '#181818', dark: '#181818', hcDark: '#000000', hcLight: '#ffffff' }, { owner: 'sessions.design', description: localize('color.sessions.design.chromeBackground', 'Background of the Design toolbar and menus.') });
@@ -73,12 +73,12 @@ export class DesignToolsWidget extends Disposable {
 			},
 		}));
 		this.modes = this._register(new ActionBar(modes, { ariaLabel: localize('sessions.design.modes', 'Editor modes'), highlightToggledItems: true, actionViewItemProvider: action => new DesignToolViewItem(action) }));
-		for (const [tool, key, fallback, icon] of designToolActions) {
-			const label = localize(key, fallback);
+		for (const [tool, title, icon] of designToolActions) {
+			const label = title().value;
 			this.toolActions.set(tool, { id: `sessions.design.tool.${tool}`, label, tooltip: label, icon, enabled: true, checked: false, run: () => selectTool(tool) });
 		}
-		for (const [mode, key, fallback, icon] of designModeActions) {
-			const label = localize(key, fallback);
+		for (const [mode, title, icon] of designModeActions) {
+			const label = title().value;
 			this.modeActions.set(mode, { id: `sessions.design.mode.${mode}`, label, tooltip: label, icon, enabled: true, checked: false, run: () => selectMode(mode) });
 		}
 	}

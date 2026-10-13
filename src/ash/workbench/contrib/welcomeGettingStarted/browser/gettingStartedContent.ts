@@ -103,25 +103,25 @@ export class GettingStarted extends Disposable {
 		cards.className = 'ash-getting-started-cards';
 		const cardOptions: readonly WelcomeCardOptions[] = [
 			{
-				label: 'Open folder',
+				label: localize('editorWelcome.openFolder', 'Open folder'),
 				labelKey: 'editorWelcome.openFolder',
 				icon: Lxicon.folders,
 				action: actions?.openFolder,
 			},
 			{
-				label: 'Clone repo',
+				label: localize('editorWelcome.cloneRepo', 'Clone repo'),
 				labelKey: 'editorWelcome.cloneRepo',
 				icon: Lxicon.gitBranch,
 				action: actions?.cloneRepository,
 			},
 			{
-				label: 'Connect via SSH',
+				label: localize('editorWelcome.connectViaSsh', 'Connect via SSH'),
 				labelKey: 'editorWelcome.connectViaSsh',
 				icon: Lxicon.remote,
 				action: actions?.connectViaSsh,
 			},
 			{
-				label: 'Connect GitHub',
+				label: localize('editorWelcome.connectGitHub', 'Connect GitHub'),
 				labelKey: 'editorWelcome.connectGitHub',
 				icon: Lxicon.github,
 				action: actions?.connectGitHub,

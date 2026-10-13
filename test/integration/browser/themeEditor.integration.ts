@@ -46,7 +46,7 @@ import { ThemeEditor } from '../../../src/ash/workbench/contrib/themeEditor/brow
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { ExtensionColorThemeService } from '../../../src/ash/workbench/services/extensions/browser/extensionColorThemeService.js';
-import { createBrowserExtensionApi } from '../../../src/ash/platform/extensions/browser/extensionApi.js';
+import { createBuiltinExtensionFixture } from './builtinExtensionsFixture.js';
 import { TokenizationRegistry } from '../../../src/ash/editor/common/languages.js';
 
 const locale = new URLSearchParams(location.search).get('locale');
@@ -55,7 +55,7 @@ if (locale) {
 	setNlsMessages(locale, catalog.bundles);
 }
 const resources = new DisposableStore();
-const extensions = resources.add(new ExtensionColorThemeService(createBrowserExtensionApi(), { subscribe: () => toDisposable(() => { }) }));
+const extensions = resources.add(new ExtensionColorThemeService(createBuiltinExtensionFixture(), { subscribe: () => toDisposable(() => { }) }));
 await extensions.start();
 const resource = URI.file('/themes/aurora.json');
 const initial = '// keep this comment\n{\n  "name": "Aurora",\n  "type": "dark",\n  "colors": { "editor.background": "#101525", "sideBar.background": "#151a25" },\n}\n';

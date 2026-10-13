@@ -375,7 +375,7 @@ for (const language of ['en', 'zh-CN']) test(`Git rebase setting reads and write
 		await expect(toggle).toBeEnabled();
 		await page.evaluate(() => window.gitSettingsIntegration.externalChange(false));
 		await expect(toggle).toHaveAttribute('aria-checked', 'false');
-		await toggle.click();
+		await page.locator('#git-settings .ash-switch-track').click();
 		await expect.poll(() => page.evaluate(() => window.gitSettingsIntegration.profile().rebaseWhenSync)).toBe(true);
 		await expect(toggle).toHaveAttribute('aria-checked', 'true');
 		await expect(toggle).toBeEnabled();
@@ -395,7 +395,7 @@ test('Git rebase Settings UI keeps the saved value when writing fails', async ({
 		const toggle = page.getByRole('switch', { name: 'Rebase When Sync', exact: true });
 		await expect(toggle).toHaveAttribute('aria-checked', 'false');
 		await page.evaluate(() => window.gitSettingsIntegration.rejectWrites());
-		await toggle.click();
+		await page.locator('#git-settings .ash-switch-track').click();
 		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().errors.some(error => error.includes('Settings save rejected')))).toBe(true);
 		await expect(toggle).toHaveAttribute('aria-checked', 'false');
 		expect(await page.evaluate(() => window.gitSettingsIntegration.profile().rebaseWhenSync)).toBe(false);

@@ -1,5 +1,5 @@
 import './media/settingsWidgets.css';
-import { localize } from '../../../../nls.js';
+import { localize, localize2 } from '../../../../nls.js';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import { addDisposableListener, getActiveElement, h, stopEvent } from '../../../../base/browser/dom.js';
 import { isAncestorOfActiveElement } from '../../../../base/browser/focus.js';
@@ -46,7 +46,7 @@ export class SettingsSearchWidget extends Disposable {
 		this.domNode = h(container.ownerDocument, 'div');
 		this.domNode.className = 'ash-settings-search';
 		this.domNode.setAttribute('role', 'search');
-		const searchLabel = this.localized('chrome.search', 'Search settings');
+		const searchLabel = this.searchLabel();
 		this.inputBox = this._register(new InputBox(this.domNode, {
 			type: 'search',
 			placeholder: searchLabel,
@@ -91,13 +91,13 @@ export class SettingsSearchWidget extends Disposable {
 	}
 
 	private updateLocalizedChrome(): void {
-		const searchLabel = this.localized('chrome.search', 'Search settings');
+		const searchLabel = this.searchLabel();
 		this.inputBox.placeholder = searchLabel;
 		this.inputBox.inputElement.setAttribute('aria-label', searchLabel);
 	}
 
-	private localized(key: string, fallback: string): string {
-		return this.options.localizationService.translate('ash.settings', key, fallback);
+	private searchLabel(): string {
+		return this.options.localizationService.translate('ash.settings', 'chrome.search', localize2({ bundle: 'ash.settings', key: 'chrome.search' }, 'Search settings').original);
 	}
 }
 

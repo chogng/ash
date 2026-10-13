@@ -8,7 +8,7 @@ import { RunOnceScheduler } from '../../../../../base/common/async.js';
 import { Schemas } from '../../../../../base/common/network.js';
 import { extUri } from '../../../../../base/common/resources.js';
 import { URI } from '../../../../../base/common/uri.js';
-import { localize } from '../../../../../nls.js';
+import { localize, localize2 } from '../../../../../nls.js';
 import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
@@ -399,11 +399,40 @@ function eventName(event: HookEvent): string {
 }
 
 const EventDescriptions: Record<HookEvent, string> = {
-	preToolUse: 'Before a tool executes.', postToolUse: 'After a tool succeeds.', postToolUseFailure: 'After a tool fails.', postToolBatch: 'After a batch of tool calls.', permissionDenied: 'After tool permission is denied.',
-	notification: 'When a notification reaches a client.', userPromptSubmit: 'When the user submits a prompt.', userPromptExpansion: 'When a slash command expands.', sessionStart: 'When a session starts.', stop: 'After a turn completes.', stopFailure: 'When a turn ends with an error.',
-	subagentStart: 'When a subagent starts.', subagentStop: 'After a subagent produces its result.', preCompact: 'Before context compaction.', postCompact: 'After context compaction.', preModelSwitch: 'Before a model switch is requested.', postModelSwitch: 'After the session model changes.',
-	sessionEnd: 'When a session ends.', permissionRequest: 'Before a permission request is shown.', setup: 'When project setup starts.', teammateIdle: 'When a teammate completes its assigned work.', taskCreated: 'When a plan step is created.', taskCompleted: 'When a plan step completes.',
-	elicitation: 'Before MCP requests user input.', elicitationResult: 'After the user answers MCP.', configChange: 'When session configuration changes.', instructionsLoaded: 'When an instruction file is read.', worktreeCreate: 'Before a worktree is created.', worktreeRemove: 'Before a worktree is removed.',
-	cwdChanged: 'After the active directory changes.', fileChanged: 'When a watched file changes.', directoryAdded: 'After a directory is added to a session.', messageDisplay: 'When assistant text reaches a client.',
-	beforeTool: 'Legacy event before a tool executes.', afterTool: 'Legacy event after a tool succeeds or fails.', turnCompleted: 'Legacy event after a turn completes.',
+	preToolUse: localize2({ bundle: 'ash.settings', key: 'hooks.events.preToolUse' }, 'Before a tool executes.').original,
+	postToolUse: localize2({ bundle: 'ash.settings', key: 'hooks.events.postToolUse' }, 'After a tool succeeds.').original,
+	postToolUseFailure: localize2({ bundle: 'ash.settings', key: 'hooks.events.postToolUseFailure' }, 'After a tool fails.').original,
+	postToolBatch: localize2({ bundle: 'ash.settings', key: 'hooks.events.postToolBatch' }, 'After a batch of tool calls.').original,
+	permissionDenied: localize2({ bundle: 'ash.settings', key: 'hooks.events.permissionDenied' }, 'After tool permission is denied.').original,
+	notification: localize2({ bundle: 'ash.settings', key: 'hooks.events.notification' }, 'When a notification reaches a client.').original,
+	userPromptSubmit: localize2({ bundle: 'ash.settings', key: 'hooks.events.userPromptSubmit' }, 'When the user submits a prompt.').original,
+	userPromptExpansion: localize2({ bundle: 'ash.settings', key: 'hooks.events.userPromptExpansion' }, 'When a slash command expands.').original,
+	sessionStart: localize2({ bundle: 'ash.settings', key: 'hooks.events.sessionStart' }, 'When a session starts.').original,
+	stop: localize2({ bundle: 'ash.settings', key: 'hooks.events.stop' }, 'After a turn completes.').original,
+	stopFailure: localize2({ bundle: 'ash.settings', key: 'hooks.events.stopFailure' }, 'When a turn ends with an error.').original,
+	subagentStart: localize2({ bundle: 'ash.settings', key: 'hooks.events.subagentStart' }, 'When a subagent starts.').original,
+	subagentStop: localize2({ bundle: 'ash.settings', key: 'hooks.events.subagentStop' }, 'After a subagent produces its result.').original,
+	preCompact: localize2({ bundle: 'ash.settings', key: 'hooks.events.preCompact' }, 'Before context compaction.').original,
+	postCompact: localize2({ bundle: 'ash.settings', key: 'hooks.events.postCompact' }, 'After context compaction.').original,
+	preModelSwitch: localize2({ bundle: 'ash.settings', key: 'hooks.events.preModelSwitch' }, 'Before a model switch is requested.').original,
+	postModelSwitch: localize2({ bundle: 'ash.settings', key: 'hooks.events.postModelSwitch' }, 'After the session model changes.').original,
+	sessionEnd: localize2({ bundle: 'ash.settings', key: 'hooks.events.sessionEnd' }, 'When a session ends.').original,
+	permissionRequest: localize2({ bundle: 'ash.settings', key: 'hooks.events.permissionRequest' }, 'Before a permission request is shown.').original,
+	setup: localize2({ bundle: 'ash.settings', key: 'hooks.events.setup' }, 'When project setup starts.').original,
+	teammateIdle: localize2({ bundle: 'ash.settings', key: 'hooks.events.teammateIdle' }, 'When a teammate completes its assigned work.').original,
+	taskCreated: localize2({ bundle: 'ash.settings', key: 'hooks.events.taskCreated' }, 'When a plan step is created.').original,
+	taskCompleted: localize2({ bundle: 'ash.settings', key: 'hooks.events.taskCompleted' }, 'When a plan step completes.').original,
+	elicitation: localize2({ bundle: 'ash.settings', key: 'hooks.events.elicitation' }, 'Before MCP requests user input.').original,
+	elicitationResult: localize2({ bundle: 'ash.settings', key: 'hooks.events.elicitationResult' }, 'After the user answers MCP.').original,
+	configChange: localize2({ bundle: 'ash.settings', key: 'hooks.events.configChange' }, 'When session configuration changes.').original,
+	instructionsLoaded: localize2({ bundle: 'ash.settings', key: 'hooks.events.instructionsLoaded' }, 'When an instruction file is read.').original,
+	worktreeCreate: localize2({ bundle: 'ash.settings', key: 'hooks.events.worktreeCreate' }, 'Before a worktree is created.').original,
+	worktreeRemove: localize2({ bundle: 'ash.settings', key: 'hooks.events.worktreeRemove' }, 'Before a worktree is removed.').original,
+	cwdChanged: localize2({ bundle: 'ash.settings', key: 'hooks.events.cwdChanged' }, 'After the active directory changes.').original,
+	fileChanged: localize2({ bundle: 'ash.settings', key: 'hooks.events.fileChanged' }, 'When a watched file changes.').original,
+	directoryAdded: localize2({ bundle: 'ash.settings', key: 'hooks.events.directoryAdded' }, 'After a directory is added to a session.').original,
+	messageDisplay: localize2({ bundle: 'ash.settings', key: 'hooks.events.messageDisplay' }, 'When assistant text reaches a client.').original,
+	beforeTool: localize2({ bundle: 'ash.settings', key: 'hooks.events.beforeTool' }, 'Legacy event before a tool executes.').original,
+	afterTool: localize2({ bundle: 'ash.settings', key: 'hooks.events.afterTool' }, 'Legacy event after a tool succeeds or fails.').original,
+	turnCompleted: localize2({ bundle: 'ash.settings', key: 'hooks.events.turnCompleted' }, 'Legacy event after a turn completes.').original,
 };

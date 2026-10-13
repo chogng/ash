@@ -1,21 +1,26 @@
 # Builtin extension build
 
-This directory owns Ash's builtin extension resources. `extensions.ts` prepares the browser
-catalog and its immutable resource snapshots, and bundles browser entrypoints for Vite.
-`__init__.py` stages and validates backend extension resources for the shared package assembler.
-Both retain Rust provider manifests and NLS resources while excluding Rust sources and Cargo
-inputs; the shared backend build separately produces and signs each Rust executable.
+This directory prepares the complete builtin package set from `extensions/`. `extensions.ts`
+compiles required browser entrypoints and stages manifests, NLS, language catalogs and assets
+as immutable per-package directories in `.build/builtin/packages/`. It publishes `current.json`
+atomically after every package is ready; unchanged packages retain their directory identities.
+The Rust App Server selects those exact directories, validates and freezes their contents,
+and serves the sole runtime catalog and all package resources. Vite watches build inputs but
+provides no client catalog or resource fallback.
 
-`pnpm prepare:extensions`, the Desktop Vite plugin and shared package preparation use these
-owners. Package selection comes from this checkout's `extensions/`; external browser packages
-can be explicitly supplied through `ASH_WEB_EXTENSION_PATHS`.
+`pnpm prepare:extensions`, the Desktop Vite plugin and shared package preparation use this
+owner. `__init__.py` copies the published builtin directories into `ash-resources/extensions`
+for installed products. Rust source and Cargo inputs are excluded; Rust provider executables
+are built and signed separately. Language catalogs are generated before preparation and
+staged at each language pack manifest's `localization/package.json` path.
 
-A package can contain both a Rust capability and a browser frontend. Git is a browser-only
-TypeScript package; its `browser` entry is bundled with the public `ash` and supported `vscode` modules into its Worker resource; its manifest
-and NLS travel with the same browser catalog. Desktop and Sessions load that entry through their
-generic extension hosts rather than linking Git frontend classes into renderer assemblies.
+Git and Markdown retain necessary browser/editor entrypoints. Compiled dependencies are
+bundled into one module, replacing the entry resource; unused samples and assets remain.
+Workbench and Agents Window fetch that module through the same Rust catalog/resource
+interface before starting their generic Workers. A readable package does not imply code
+execution authority: explicitly supplied `ASH_WEB_EXTENSION_PATHS` packages retain user
+provenance and require backend admission to execute.
 
-Compiled browser module inputs are omitted from the resource snapshot; uncompiled samples and
-assets remain available. Browser source directories are excluded from backend resource staging.
-Git backend capabilities remain part of the shared Rust runtime rather than a packaged extension
-executable.
+`.build/builtin/fixture.json` is only a test fixture for unit and browser integration scenarios.
+Production clients do not import it. Initial NLS caches and base UI colors remain client
+bootstrap resources so disconnected windows can display a localized connection diagnostic.

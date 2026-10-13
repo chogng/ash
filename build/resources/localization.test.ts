@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { test } from 'node:test';
@@ -37,6 +37,54 @@ test('source extraction preserves escaped imports and color identifiers', () => 
 		{ path: 'escaped.ts', text: String.raw`import { localize as text } from '../\u006els.js'; text('hello', 'Hello');` },
 		{ path: 'color.ts', text: String.raw`regist\u0065rColor('input.background', defaults, { description: 'Input background.' });` },
 	]), { ash: { hello: 'Hello', 'color.input.background': 'Input background.' } });
+});
+
+test('service and forwarding declarations preserve literal fallbacks without matching unrelated classes', () => {
+	assert.deepEqual(extractLocalizationMessages([{
+		path: 'settings.ts', text: `
+		import { localize } from '../nls.js';
+		import { ILocalizationService, localize as label } from '../services/localization/common/localizationService.js';
+		class Settings {
+			constructor(private readonly localization: ILocalizationService) {}
+			label(key: string, fallback: string) { return this.localization.translate('ash.settings', key, fallback); }
+			status(key: string, fallback: string) { this.text = localize(key, fallback); }
+			language(key: string, fallback: string) { return this.localization.translate('ash.settings', \`lsp.\${key}\`, fallback); }
+			setLanguageStatus(key: string, fallback: string) { return this.language(key, fallback); }
+			both(key: string, fallback: string) { this.localization.translate('ash.first', key, fallback); this.localization.translate('ash.second', key, fallback); }
+			render() {
+				this.label('search', 'Search settings');
+				this.status('loading', 'Loading…');
+				this.language('available', '{0} servers available.');
+				this.setLanguageStatus('loading', 'Loading language servers…');
+				this.both('shared', 'Shared label');
+				this.localization.translate('ash.settings', 'help', 'Help');
+				label(this.localization, { bundle: 'ash.regions', key: 'editor' }, 'Editor');
+			}
+		}
+		class Unrelated {
+			label(key: string, fallback: string) { return fallback; }
+			render() { this.label('search', 'Unrelated'); this.other.translate('ash.settings', 'help', 'Unrelated'); }
+		}
+	` }]), {
+		'ash.settings': { search: 'Search settings', 'lsp.available': '{0} servers available.', 'lsp.loading': 'Loading language servers…', help: 'Help' },
+		ash: { loading: 'Loading…' }, 'ash.regions': { editor: 'Editor' },
+		'ash.first': { shared: 'Shared label' }, 'ash.second': { shared: 'Shared label' },
+	});
+});
+
+test('descriptor fallbacks and lazy data-table declarations are extracted without executing owners', () => {
+	assert.deepEqual(extractLocalizationMessages([{
+		path: 'views.ts', text: `
+		export const view = { title: 'Explorer', localizationKey: { bundle: 'ash.views', key: 'explorer' } };
+		export const region = { ariaLabel: 'Panel', ariaLabelKey: { bundle: 'ash.regions', key: 'panel' }, viewsAriaLabel: 'Panel views', viewsAriaLabelKey: { bundle: 'ash.regions', key: 'panelViews' } };
+		export const dynamic = { title: userTitle, localizationKey: { bundle: 'ash.views', key: 'user' } };
+	` }, {
+		path: 'settings.ts', text: `
+		import { localize } from '../nls.js';
+		export const settings = [['setting', () => localize('setting.title', 'Setting')]];
+	` }]), {
+		'ash.views': { explorer: 'Explorer' }, 'ash.regions': { panel: 'Panel', panelViews: 'Panel views' }, ash: { 'setting.title': 'Setting' },
+	});
 });
 
 test('conflicting English declarations fail the build', () => {
@@ -111,7 +159,9 @@ test('explicit source text is covered while absent locale entries remain visible
 
 test('clean checkout validates sources and generates catalogs consumed by host and test compilation', async t => {
 	const repository = resolve(import.meta.dirname, '../..');
-	const root = await mkdtemp(join(tmpdir(), 'ash-localization-'));
+	// ESM resolves the copied plugin through macOS's /var symlink. Use the same
+	// canonical root when asserting watcher paths and module identities.
+	const root = await realpath(await mkdtemp(join(tmpdir(), 'ash-localization-')));
 	t.after(() => rm(root, { recursive: true, force: true }));
 	const entry = 'src/ash/workbench/services/localization/common/localizationCatalogs.ts';
 	const files = {
@@ -124,6 +174,7 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 		'src/ash/generated/ignored.ts': `import { localize } from '../nls.js'; localize('hello', 'Ignored generated directory');`,
 		'src/ash/platform/languagePacks/common/languagePackContract.ts': `export const ASH_LOCALIZATION_CATALOG_VERSION = 'ash-1'; export interface LanguagePackCatalog { readonly schemaVersion: 1; readonly locale: string; readonly languageName: string; readonly localizedLanguageName: string; readonly catalogVersion: string; readonly bundles: Readonly<Record<string, Readonly<Record<string, string>>>>; } export interface PreinstalledLanguagePack { readonly id: string; readonly version: string; readonly displayName: string; readonly description: string; readonly catalog: LanguagePackCatalog; }`,
 		'.build/protocol/typescript/ApprovalModes.ts': `export const APPROVAL_MODE_DEFINITIONS = [];`,
+		'.build/protocol/typescript/ProductSlashCommands.ts': `export const PRODUCT_SLASH_COMMANDS = { permission: { description: 'Choose permissions' }, guardian: { description: 'Prepare project background' } };`,
 		'localization/languages.json': JSON.stringify(['en'].map(locale => ({ locale, languageName: locale, localizedLanguageName: locale }))),
 		'localization/en/messages.json': '{}',
 		'extensions/language-pack-zh-cn/package.json': JSON.stringify({ name: 'language-pack-zh-cn', publisher: 'ash', version: '1.0.0', displayName: '简体中文', description: 'Chinese', license: 'MIT', engines: { ash: '*' }, contributes: { localizations: [{ languageId: 'zh-CN', languageName: 'Chinese', localizedLanguageName: '简体中文', translations: [{ id: 'ash', path: 'localization/package.json' }] }] } }),
@@ -154,6 +205,12 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 	const packedCatalog = JSON.parse(await readFile(join(extensionRoot, 'localization/package.json'), 'utf8'));
 	assert.equal(packedCatalog.locale, 'zh-CN');
 	assert.equal(packedCatalog.bundles.ash.hello, '你好');
+	assert.match(await readFile(join(generated, 'localizationCatalog.en.ts'), 'utf8'), /"slash.permission.description": "Choose permissions"/u);
+	await writeFile(join(root, '.build/protocol/typescript/ProductSlashCommands.ts'), `export const PRODUCT_SLASH_COMMANDS = { permission: { description: 'Choose next-turn permissions' }, guardian: { description: 'Prepare project background' } };`);
+	run(['build/resources/localization.ts', '--check']);
+	assert.doesNotMatch(await readFile(join(generated, 'localizationCatalog.en.ts'), 'utf8'), /Choose next-turn permissions/u);
+	run(['build/resources/localization.ts']);
+	assert.match(await readFile(join(generated, 'localizationCatalog.en.ts'), 'utf8'), /"slash.permission.description": "Choose next-turn permissions"/u);
 	const manifest = JSON.parse(await readFile(join(extensionRoot, 'package.json'), 'utf8'));
 	assert.deepEqual(manifest.engines, { ash: '*' });
 	assert.equal(manifest.main, undefined);
@@ -204,6 +261,17 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 		} while (Date.now() < updatedBy);
 		assert.match(catalog, /After edit/, 'unimported declarations update the language resource');
 	} finally { await server.close(); }
+	await writeFile(join(root, 'localization/en/messages.json'), JSON.stringify({ ash: { hello: 'Hello again' } }));
+	const duplicate = spawnSync(process.execPath, ['build/resources/localization.ts', '--check'], { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 30_000 });
+	assert.equal(duplicate.error, undefined);
+	assert.notEqual(duplicate.status, 0);
+	assert.match(duplicate.stderr, /English declaration must live in its owning source module: ash\/hello/u);
+	await writeFile(join(root, 'localization/en/messages.json'), JSON.stringify({ ash: { obsolete: 'Unused legacy message' } }));
+	const legacy = spawnSync(process.execPath, ['build/resources/localization.ts', '--check'], { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 30_000 });
+	assert.equal(legacy.error, undefined);
+	assert.notEqual(legacy.status, 0);
+	assert.match(legacy.stderr, /English declaration must live in its owning source module: ash\/obsolete/u);
+	await writeFile(join(root, 'localization/en/messages.json'), '{}');
 	await writeFile(join(root, 'extensions/language-pack-zh-cn/translations/messages.json'), JSON.stringify({ ash: { unknown: '未知' } }));
 	const invalid = spawnSync(process.execPath, ['build/resources/localization.ts', '--check'], { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 30_000 });
 	assert.equal(invalid.error, undefined);

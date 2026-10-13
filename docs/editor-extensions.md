@@ -98,7 +98,7 @@ Workspace edit 的 `entries` 按顺序执行：`kind: textDocument` 带 `resourc
 
 | 路径                                      | 启动与激活 owner                                | 当前机制                                                                                          |
 | ----------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| 内置或显式可信的 TS/JS `browser` 包       | 窗口的 `WebWorkerExtensionHost`                 | reconcile 读取启用目录并启动 browser 入口；当前尚未按 manifest `activationEvents` 延迟创建 Worker |
+| 内置 TS/JS `browser` 包       | 窗口的 `WebWorkerExtensionHost`                 | reconcile 读取启用目录并启动 browser 入口；当前尚未按 manifest `activationEvents` 延迟创建 Worker |
 | 后端标准 JS 包（Node 或 Rust/V8 JS 宿主） | App Server 的 JS 扩展发现、授权与宿主监管       | 启用并授权后可保持 `dormant`，按已支持的命令、语言、启动完成等事件激活；Rust/V8 仍执行 JS         |
 | 独立 Rust capability Provider             | 共享运行时、来源授权与对应 supervisor           | 按 Provider 声明、scope 和能力需求启动/握手，不套用浏览器包的 VS Code activation events           |
 | 共享 Git 后端                             | App Server 的目录级 `GitRuntime` / `GitService` | 由共享后端管理仓库、监听和状态；不依赖 `ash.git` Worker 的启用或激活事件                          |
@@ -232,7 +232,7 @@ Rust 扩展的边界是独立程序与版本化协议，不建立稳定 Rust dyn
 | `crates/external-ext-protocol` / `ash-external-ext-protocol` | 扩展进程通信的版本化生命周期、调用身份、错误与取消；业务请求/响应保留 typed 领域契约                                               |
 | `sdk/rust` / `ash-external-ext-sdk`                          | Rust 作者注册、typed capability 调用、回调与 stdio runtime；不依赖产品宿主或 V8                                                    |
 
-`host` 不必出现在 crate 名中；具体类型只有确实表达承载扩展的执行环境时才使用它。Rust 扩展运行自己的 executable，由共享接入层监管，不另建 `external-rs-ext` 执行器。`ash-external-ext::packages` 校验外部包快照和资源；内置编辑器资源由 TS 构建与加载，主题、语言、grammar 与 snippets 的解析和注册继续由 TS owner 承担；`ash-v8-runtime` 保持引擎初始化设施职责，不承担扩展管理、Node API 或 Code Mode/扩展的执行状态。
+`host` 不必出现在 crate 名中；具体类型只有确实表达承载扩展的执行环境时才使用它。Rust 扩展运行自己的 executable，由共享接入层监管，不另建 `external-rs-ext` 执行器。`ash-external-ext::packages` 校验内置及外部包快照和资源；浏览器执行入口仍由 TS 构建，主题、语言、grammar 与 snippets 的解析和注册继续由 TS owner 承担；`ash-v8-runtime` 保持引擎初始化设施职责，不承担扩展管理、Node API 或 Code Mode/扩展的执行状态。
 
 协议独立保留，不并入根 `ash-protocol`。扩展进程通信有自身消费者、版本协商和生命周期，Rust SDK、监管器与 JS 执行程序共同依赖这个轻量契约；根 `ash-protocol` 继续维护 Thread、Turn 等共享领域事实。通用 ID 按真实共享需求复用，不复制类型，也不让作者 SDK 为扩展通信而依赖整套产品协议。重命名本身不改变 wire 格式或版本；接口变化另按兼容与能力协商规则处理。
 
@@ -313,7 +313,7 @@ flowchart TD
 
 TS API 兼容适配跟随扩展执行宿主：后端 V8/Node 执行的扩展由该独立宿主适配，浏览器扩展由 Worker 宿主适配，不能统一塞进 Workbench Renderer。兼容实现把 JS 对象、回调、事件与取消转换为共享契约；协议定义与后端管理层不解释 JS 闭包或 Promise。后端接入层统一管理接入它的 TS/JS 与 Rust 扩展的身份、能力注册、授权、调用和退出；运行时只保留执行该语言必需的对象与回调生命周期。
 
-Workbench 的客户端 adapter 接入命令、语言服务、Debug/Tasks 等已有 owner，并处理绑定该窗口的编辑器和 UI 请求。它不运行后端扩展、不保存 Provider 的业务状态，也不代理所有后端 IO。可信离线 Browser Worker 仍由窗口管理本地生命周期；共用能力契约不意味着没有后端连接时已经受后端监管。
+Workbench 的客户端 adapter 接入命令、语言服务、Debug/Tasks 等已有 owner，并处理绑定该窗口的编辑器和 UI 请求。它不运行后端扩展、不保存 Provider 的业务状态，也不代理所有后端 IO。内置 Browser Worker 由窗口管理编辑器交互及本地生命周期，入口与资源通过 Rust 目录读取；断开后端的窗口不另发现或回退到静态包目录。
 
 | 同一语义       | TS/JS 适配                                                                     | Rust 适配                                                                                |
 | -------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
@@ -564,8 +564,8 @@ V8 将调用身份随 Promise 续执行保留；并行命令不共享身份，�
 
 ```mermaid
 flowchart TD
-    builtin["内置编辑器资源"] --> build["TS 构建冻结资源"]
-    build --> parse
+    builtin["extensions 内置源码"] --> build["构建完整不可变包目录"]
+    build --> scan
     package["Extensions exact asset / legacy Plugin exact package / 用户根"] --> scan["ash-external-ext::packages 扫描并冻结包快照"]
     scan -->|非法包| diagnostic["目录诊断；不注册该包"]
     scan --> catalog["不可变目录代次与 package digest"]
@@ -577,17 +577,28 @@ flowchart TD
     commit --> consumers["Stanza / TextMate Worker / Debug service"]
 ```
 
-TS 构建从根目录 `extensions/` 冻结内置编辑器资源，Web 和 Electron 使用同一静态快照。
-App Server 只把当前 Plugin activation snapshot 中的 `declarativeExtensions[]`、Manager 的
+内置包源码位于根目录 `extensions/`。产品安装中的 `ash-resources/extensions` 由 Rust 扫描，
+开发环境通过 `.build/builtin/current.json` 选择已完整准备的 immutable package 目录，
+每个目录包含 manifest、生成的翻译、声明式资源及必要的已编译 browser 入口。
+构建在所有包完成后原子发布清单；内容未变的包保持路径，刷新保留已有 Worker。
+目录发现、校验、资源冻结和读取统一由 Rust 提供，客户端没有文件系统或静态目录回退。
+无后端窗口返回空目录及本地化连接诊断，基础颜色和初始 NLS 缓存保障界面可用。
+App Server 还把当前 Plugin activation snapshot 中的 `declarativeExtensions[]`、Manager 的
 Theme/Language capabilities 和 profile 用户根交给 `ash-external-ext::packages` 校验。
-后端按 dynamic authority sources
+后端按 built-in roots → dynamic authority sources
 → profile user 顺序扫描，每个扩展 ID 的第一个有效包获胜。每次 `Refresh` 或任一动态 source
 generation 改变都会重新扫描；只有 descriptor、完整 package digest 或 diagnostics 改变才推进目录
 代次，并把包内 regular-file bytes 冻结为当前内存快照。内容相同的刷新保留代次，避免启动时多个
 加载器互相打断资源读取。资源读取必须携带该代次，只能读取当前快照；目录内容改变后请求旧代次会得到 generation
 conflict，而不是从已变化的磁盘路径读取内容。
 
-TS adapter 合并内置与外部包描述，内置 ID 优先，并将客户端资源代次映射回所属来源。
+TS adapter 仅适配 Rust 领域接口及连接代次；目录与资源读取始终绑定同一来源。
+后端重连即使复用目录代次，也会退役旧客户端资源引用。带 `browser` 入口的内置包通过该接口
+读取编译代码，在客户端 Worker 执行必要的编辑器交互；可读的用户或 registry 包不会因此获得
+Worker 执行权限。`ASH_WEB_EXTENSION_PATHS` 开发包保持 user 来源，执行须经后端授权。
+扩展列表和详情页消费该接口，不另读浏览器目录；
+管理查询可包含禁用包，激活查询继续过滤它们。无查询或能力筛选时默认展示已安装扩展，包含内置包；
+输入查询或能力筛选继续浏览扩展源。语言包由显示语言设置管理。
 外部包描述保留受授权包的 location 和平台，供 Debug 等 owner 解析程序入口。客户端再以“目录代次 + 扩展 ID + 包内相对路径”请求资源。
 App Server 把有界 bytes 放入 connection-owned `ResourceStore`，前端通过分块 API 读取并释放临时
 资源。Workbench 最后把声明式贡献投影到各自领域 registry。
@@ -985,8 +996,8 @@ GitHub 消费端通过可选的 `git.getRepositoryContexts` 与 `git.executeRepo
 领域上下文或执行仓库意图，不导入 Git 扩展实现。Git 自动获取仍持久化到共享配置 owner，设置页仅
 使用通用的扩展设置绑定。`ash.scm` 是已接入的 Ash 合约，不表示完整实现 VS Code 的 `vscode.scm` API。
 
-[`build/builtin`](../build/builtin) 统一拥有内置扩展资源打包与浏览器快照。Rust 扩展的 manifest、
-NLS 和资源随 catalog 发布，Rust 源码及 Cargo 构建输入不进入资源包；可执行文件由共享后端
-构建、签名和包布局装配。Git manifest 只有浏览器入口；浏览器源码由 renderer 构建打包，
-共享后端包只保留其元数据，不再构建或装配 Git 扩展可执行组件。禁用 Git 扩展后，通用 SCM、
+[`build/builtin`](../build/builtin) 统一拥有内置扩展资源打包。manifest、NLS、资源及编译后的
+browser 入口随完整包发布，再由 Rust 目录和资源接口提供；Rust 源码及 Cargo 构建输入不进入
+资源包，可执行文件由共享后端构建、签名和包布局装配。Git manifest 只有浏览器入口；
+共享后端包包含其编译代码与资源，不再构建或装配 Git 扩展可执行组件。禁用 Git 扩展后，通用 SCM、
 差异编辑、撤销与保存仍由核心 owner 提供；共享 Rust Git 与 Agent/TUI 继续可用。

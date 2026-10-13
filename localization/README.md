@@ -10,8 +10,10 @@ Electron 的 Workbench 和 Sessions 在加载贡献注册模块前读取语言�
 - 命令标题等同时需要英文原文和译文的地方调用 `localize2(key, 'English message')`；返回 `{ original, value }`，两者都在调用时确定。命令面板显示译文，并支持按英文原名、译文或命令 ID 搜索。
 - 跨 bundle 的文案使用 `{ bundle, key }`。已有 bundle/key 是稳定标识，不随文件移动改名。
 - `extensions/language-pack-zh-cn/translations/*.json` 按 Editor、Workbench、Settings、Sessions 等较大的领域维护译文。不要为每个组件建一个文件。
-- `en/*.json` 只保存不能由静态调用提取的声明，例如以数据表或动态 key 调用的文案。可以静态提取的英文留在调用位置。
-- 主题颜色说明由主题注册代码声明。审批模式的英中说明由生成的 `ApprovalModes` 提供，不在这里重复维护。
+- 英文原文由功能代码拥有。普通文案直接使用 `localize/localize2`；数据表可通过 getter 或函数声明静态调用，避免另存一份英文。
+- 生成器也提取本地化服务的静态调用、同类中转发 key 和英文参数的多层包装方法，以及视图和区域描述符中配对的翻译 key 与英文文案。
+- 枚举和动态 key 的数据表在所属模块通过静态 `localize2` 声明文案。需要保留英文供指定窗口的本地化服务使用时，取其 `.original`，避免在模块初始化时固定为当前语言。英文 JSON 字典已退出生成链；新增英文词条必须回到所属源码，校验会拒绝 `en/*.json` 中的非空声明。
+- 主题颜色说明由主题注册代码声明。审批模式的英中说明和产品 Slash Command 的英文说明来自生成的协议元数据，不在客户端另存副本。
 
 `build/resources/localization.ts` 提取英文、合并领域资源，生成 `.build/desktop/localization/` 中的语言目录。生成文件不提交到 Git，也不要手工修改。源码中的 `src/ash/workbench/services/localization/common/localizationCatalogs.ts` 是固定加载入口，不随词条变化。
 

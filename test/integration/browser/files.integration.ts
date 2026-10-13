@@ -44,7 +44,7 @@ import { isCancellationError } from '../../../src/ash/base/common/errors.js';
 import { ILanguagePackService } from '../../../src/ash/platform/languagePacks/common/languagePacks.js';
 import { createEmptyTestLanguagePacks } from '../../../src/ash/workbench/services/localization/test/common/localizationTestUtils.js';
 import { IExtensionApi } from '../../../src/ash/platform/extensions/common/extensionApi.js';
-import { createBrowserExtensionApi } from '../../../src/ash/platform/extensions/browser/extensionApi.js';
+import { createBuiltinExtensionFixture } from './builtinExtensionsFixture.js';
 import { createExtensionHostInitialization } from '../../../src/ash/workbench/services/extensions/common/extensionHostProtocol.js';
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
 
@@ -296,7 +296,7 @@ const integration = {
 		lifetime.add(files.registerProvider(Schemas.file, new MemoryFileService([])));
 		const services = lifetime.add(new InstantiationService());
 		services.registerInstance(ILanguagePackService, createEmptyTestLanguagePacks());
-		services.registerInstance(IExtensionApi, createBrowserExtensionApi());
+		services.registerInstance(IExtensionApi, createBuiltinExtensionFixture());
 		services.registerInstance(IFileService, files);
 		services.registerInstance(ICommandService, {
 			onWillExecuteCommand: Event.None, onDidExecuteCommand: Event.None,

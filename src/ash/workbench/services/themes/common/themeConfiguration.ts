@@ -1,6 +1,6 @@
 import { colorThemeSchema } from './colorThemeSchema.js';
 import { Colors, validateTokenId } from '../../../../platform/theme/common/colorRegistry.js';
-import { localize } from '../../../../nls.js';
+import { localize, localize2 } from '../../../../nls.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Extensions, ConfigurationScope, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -95,14 +95,14 @@ export const ThemeConfigurationSettings = Object.freeze({
 			},
 		},
 	}),
-	tokenColorCustomizations: registerRuleSetting('editor.tokenColorCustomizations', 'Token Colors', 'Override syntax colors and TextMate rules.', parseTokenColors, tokenCustomizationSchema()),
-	semanticTokenColorCustomizations: registerRuleSetting('editor.semanticTokenColorCustomizations', 'Semantic Token Colors', 'Override semantic token colors and styles.', parseSemanticColors, semanticCustomizationSchema()),
-	autoDetectColorScheme: registerBoolean('window.autoDetectColorScheme', false, 'Follow System Appearance', 'Select your preferred light or dark theme when the system appearance changes.'),
-	autoDetectHighContrast: registerBoolean('window.autoDetectHighContrast', true, 'Follow System High Contrast', 'Select your preferred high contrast theme when the system enables high contrast.'),
-	preferredDarkColorTheme: registerPreferred('workbench.preferredDarkColorTheme', 'ash-dark', 'Preferred Dark Theme'),
-	preferredLightColorTheme: registerPreferred('workbench.preferredLightColorTheme', 'ash-light', 'Preferred Light Theme'),
-	preferredHighContrastColorTheme: registerPreferred('workbench.preferredHighContrastColorTheme', 'ash-high-contrast-dark', 'Preferred High Contrast Dark Theme'),
-	preferredHighContrastLightColorTheme: registerPreferred('workbench.preferredHighContrastLightColorTheme', 'ash-high-contrast-light', 'Preferred High Contrast Light Theme'),
+	tokenColorCustomizations: registerRuleSetting('editor.tokenColorCustomizations', localize2('theme.editor.tokenColorCustomizations.title', 'Token Colors').original, localize2('theme.editor.tokenColorCustomizations.description', 'Override syntax colors and TextMate rules.').original, parseTokenColors, tokenCustomizationSchema()),
+	semanticTokenColorCustomizations: registerRuleSetting('editor.semanticTokenColorCustomizations', localize2('theme.editor.semanticTokenColorCustomizations.title', 'Semantic Token Colors').original, localize2('theme.editor.semanticTokenColorCustomizations.description', 'Override semantic token colors and styles.').original, parseSemanticColors, semanticCustomizationSchema()),
+	autoDetectColorScheme: registerBoolean('window.autoDetectColorScheme', false, localize2('theme.window.autoDetectColorScheme.title', 'Follow System Appearance').original, localize2('theme.window.autoDetectColorScheme.description', 'Select your preferred light or dark theme when the system appearance changes.').original),
+	autoDetectHighContrast: registerBoolean('window.autoDetectHighContrast', true, localize2('theme.window.autoDetectHighContrast.title', 'Follow System High Contrast').original, localize2('theme.window.autoDetectHighContrast.description', 'Select your preferred high contrast theme when the system enables high contrast.').original),
+	preferredDarkColorTheme: registerPreferred('workbench.preferredDarkColorTheme', 'ash-dark', localize2('theme.workbench.preferredDarkColorTheme.title', 'Preferred Dark Theme').original),
+	preferredLightColorTheme: registerPreferred('workbench.preferredLightColorTheme', 'ash-light', localize2('theme.workbench.preferredLightColorTheme.title', 'Preferred Light Theme').original),
+	preferredHighContrastColorTheme: registerPreferred('workbench.preferredHighContrastColorTheme', 'ash-high-contrast-dark', localize2('theme.workbench.preferredHighContrastColorTheme.title', 'Preferred High Contrast Dark Theme').original),
+	preferredHighContrastLightColorTheme: registerPreferred('workbench.preferredHighContrastLightColorTheme', 'ash-high-contrast-light', localize2('theme.workbench.preferredHighContrastLightColorTheme.title', 'Preferred High Contrast Light Theme').original),
 });
 
 function registerBoolean(key: string, defaultValue: boolean, title: string, description: string): string {
