@@ -657,6 +657,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "inspect",
+      "file": "inspect.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "issue-closed",
       "file": "issue-closed.svg",
       "rendering": "symbolic"
@@ -664,6 +669,11 @@
     {
       "id": "issue-opened",
       "file": "issue-opened.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "issues",
+      "file": "issues.svg",
       "rendering": "symbolic"
     },
     {
