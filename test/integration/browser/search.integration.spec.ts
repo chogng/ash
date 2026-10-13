@@ -281,6 +281,7 @@ test('Copy Path menus copy explicit file and folder URIs and release callbacks o
 	const other = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path').filter({ has: page.locator('.ash-icon-label-description', { hasText: 'other • src' }) }) });
 	await first.click();
 	await other.click({ button: 'right' });
+	await expect(page.getByRole('menuitem', { name: 'Copy Path', exact: true }).locator('.ash-menu-keybinding')).toBeVisible();
 	await page.getByRole('menuitem', { name: 'Copy Path', exact: true }).click();
 	await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['/other/src/main.ts']);
 	await page.getByRole('toolbar', { name: 'Search result actions', exact: true }).getByRole('button', { name: 'More Actions', exact: true }).click();

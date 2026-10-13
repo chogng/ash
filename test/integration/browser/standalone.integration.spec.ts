@@ -61,6 +61,7 @@ test('editor context menu runs navigation, rename and formatting through the foc
 	}
 	await page.evaluate(() => window.ashStandaloneIntegration.prepareEditorContextMenu(true));
 	await input.press('Shift+F10');
+	await expect(page.getByRole('menuitem', { name: 'Rename Symbol', exact: true }).locator('.ash-menu-keybinding')).toBeVisible();
 	await page.getByRole('menuitem', { name: 'Rename Symbol', exact: true }).click();
 	const rename = page.getByRole('textbox', { name: 'New symbol name', exact: true });
 	await expect(rename).toBeFocused();

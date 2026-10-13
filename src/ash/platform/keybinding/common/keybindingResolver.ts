@@ -130,11 +130,20 @@ export class KeybindingResolver {
 		command: CommandId,
 		context: Context,
 	): ResolvedKeybinding | undefined {
-		return this.winningRules(context)
-			.find(({ rule }) =>
-				(rule.kind === KeybindingRuleKind.Command || rule.kind === KeybindingRuleKind.PassThrough) &&
-				rule.command === command
-			)?.keybinding;
+		const bindings: ResolvedRule[] = [];
+		const overriddenShortcuts = new Set<string>();
+		for (const candidate of this.resolvedRules().slice().sort(compareResolvedRules)) {
+			const identity = keybindingIdentity(candidate.keybinding);
+			if (overriddenShortcuts.has(identity)) continue;
+			// An unconditional override suppresses the older shortcut in every scope.
+			if (!candidate.rule.when) overriddenShortcuts.add(identity);
+			if ((candidate.rule.kind === KeybindingRuleKind.Command || candidate.rule.kind === KeybindingRuleKind.PassThrough) && candidate.rule.command === command) {
+				bindings.push(candidate);
+			}
+		}
+		// Menus display a command's shortcut even after focus leaves its scope.
+		// Dispatch still checks context and conflicts in resolve().
+		return (bindings.find(({ rule }) => !rule.when || rule.when.evaluate(context)) ?? bindings[0])?.keybinding;
 	}
 
 	lookupKeybindings(
