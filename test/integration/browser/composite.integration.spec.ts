@@ -6,6 +6,30 @@ test.beforeEach(async ({ page }) => {
 	await page.waitForFunction(() => !!window.ashCompositeIntegration);
 });
 
+test('Auxiliary Part sash stops at the hosted Chat minimum and releases it when Sessions closes', async ({ page }) => {
+	await page.goto('/composite.html?partWidth');
+	await expect.poll(() => page.evaluate(() => window.ashPartWidthIntegration.state().minimum)).toBe(301);
+	await page.evaluate(() => window.ashPartWidthIntegration.setMinimum(520));
+	await expect.poll(() => page.evaluate(() => window.ashPartWidthIntegration.state())).toEqual({ minimum: 521, frameMinimum: 537, width: 537 });
+	const sash = page.locator('#part-width-host .ash-grid > .ash-split-view > .ash-sash');
+	const bounds = await sash.boundingBox();
+	expect(bounds).not.toBeNull();
+	await page.mouse.move(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(bounds!.x + 250, bounds!.y + bounds!.height / 2, { steps: 10 });
+	await page.mouse.up();
+	await expect.poll(() => page.evaluate(() => window.ashPartWidthIntegration.state().width)).toBe(537);
+	await sash.focus();
+	await page.keyboard.press('ArrowRight');
+	await expect.poll(() => page.evaluate(() => window.ashPartWidthIntegration.state().width)).toBe(537);
+	const part = page.locator('#part-width-host .ash-workbench-auxiliarybar');
+	await expect(part.getByLabel('First input')).toBeVisible();
+	await expect.poll(() => part.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+	await page.locator('#part-width-host').screenshot({ path: test.info().outputPath('auxiliary-part-minimum.png') });
+	await page.evaluate(() => { window.ashPartWidthIntegration.setMinimum(300); window.ashPartWidthIntegration.resize(1); });
+	await expect.poll(() => page.evaluate(() => window.ashPartWidthIntegration.state())).toEqual({ minimum: 301, frameMinimum: 317, width: 317 });
+});
+
 for (const locale of ['en', 'zh-CN']) {
 	test(`empty editor actions follow bindings and stay centered (${locale})`, async ({ page }, testInfo) => {
 		await page.goto(`/composite.html?emptyEditor&locale=${locale}`);

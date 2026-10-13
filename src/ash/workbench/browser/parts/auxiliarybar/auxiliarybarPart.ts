@@ -24,7 +24,10 @@ export interface AuxiliarybarPartOptions {
  */
 export class AuxiliarybarPart extends PaneCompositePart {
 
-	override get minimumWidth(): number { return 180; }
+	override get minimumWidth(): number {
+		// The content minimum excludes this Part's one-pixel left border; Grid adds frame insets.
+		return Math.max(180, super.minimumWidth + 1);
+	}
 	override get maximumWidth(): number { return Number.POSITIVE_INFINITY; }
 	override get preferredWidth(): number | undefined {
 		const active = this.activeCompositeId;

@@ -10,6 +10,15 @@
 	background: var(--ash-auxiliaryBar-background);
 }
 
+.ash-chat-body.sessions-sidebar-visible:not(.sessions-stacked) > .ash-chat-pane-host {
+	min-width: 300px;
+}
+
+.ash-chat-body.sessions-sidebar-visible:not(.sessions-stacked) > .ash-chat-sessions-sidebar {
+	min-width: 220px;
+	flex-shrink: 1;
+}
+
 .ash-chat-body {
 	position: relative;
 	display: flex;
@@ -90,14 +99,11 @@
 	outline-offset: calc(-1 * var(--ash-strokeThickness));
 }
 
-.ash-chat-body.sessions-stacked.sessions-sidebar-visible,
-.ash-chat-body.sessions-list-only.sessions-sidebar-visible {
+.ash-chat-body.sessions-stacked.sessions-sidebar-visible {
 	flex-direction: column;
 }
 
 .ash-chat-body.sessions-stacked.sessions-sidebar-visible
-	> .ash-chat-sessions-sidebar,
-.ash-chat-body.sessions-list-only.sessions-sidebar-visible
 	> .ash-chat-sessions-sidebar {
 	flex: 1 1 0;
 	min-width: 0;
@@ -106,14 +112,25 @@
 }
 
 .ash-chat-body.sessions-stacked.sessions-sidebar-visible > .ash-chat-pane-host {
-	flex: 0 1 auto;
-	max-height: 50%;
+	/* Let the composer grow with its input and attachments before allocating list space. */
+	flex: 0 0 auto;
+	min-height: 116px;
 }
 
 .ash-chat-body.sessions-stacked.sessions-sidebar-visible
 	> .ash-chat-pane-host
 	> .ash-chat {
 	height: auto;
+}
+
+.ash-chat-body.sessions-stacked.sessions-sidebar-visible
+	> .ash-chat-pane-host
+	> .ash-chat
+	> .ash-chat-list-widget {
+	/* The Sessions list takes the transcript's space; the retained Chat keeps its input. */
+	flex: 0 0 0;
+	height: 0;
+	overflow: hidden;
 }
 
 .ash-chat-pane-host > .ash-chat {

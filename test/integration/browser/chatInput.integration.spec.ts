@@ -1,6 +1,68 @@
 import { expect, test } from '@playwright/test';
 
 for (const locale of ['en', 'zh-CN']) {
+	for (const theme of ['light', 'hcDark']) {
+		for (const newChat of [true, false]) {
+			test(`Stacked Sessions retain a growing ${newChat ? 'new' : 'existing'} chat input in ${locale} ${theme}`, async ({ page }) => {
+				await page.goto(`/chatInput.html?sessionsLayout=1${newChat ? '&newChat=1' : ''}&locale=${locale}&theme=${theme}`);
+				await page.evaluate(() => window.ashChatInputIntegration.showModels());
+				const body = page.locator('main');
+				const host = page.locator('.ash-chat-pane-host');
+				const sidebar = page.locator('.ash-chat-sessions-sidebar');
+				const input = page.locator('.ash-chat-textarea-input');
+				await expect(input).toBeVisible();
+				await sidebar.getByRole('button').focus();
+				await page.keyboard.press('Tab');
+				await expect(input).toBeFocused();
+				const draft = Array.from({ length: 10 }, (_, index) => `Keep draft line ${index + 1}`).join('\n');
+				await input.fill(draft);
+				await expect.poll(async () => {
+					const bounds = await body.boundingBox();
+					const chat = await host.boundingBox();
+					const composer = await page.locator('.ash-chat-input-part').boundingBox();
+					const sessions = await sidebar.boundingBox();
+					return !!bounds && !!chat && !!composer && !!sessions && chat.height >= 116 && chat.height > bounds.height / 2
+						&& composer.y >= chat.y && composer.y + composer.height <= bounds.y + bounds.height + 1
+						&& composer.y + composer.height <= chat.y + chat.height + 1
+						&& sessions.y + sessions.height <= chat.y + 1;
+				}).toBe(true);
+				await expect(input).toBeFocused();
+				await expect(input).toHaveValue(draft);
+				for (const width of [800, 240, 600]) {
+					await page.locator('.ash-chat-view').evaluate((element, value) => { (element as HTMLElement).style.width = `${value}px`; }, width);
+					await expect(body).toHaveClass(/sessions-stacked/u);
+					await expect(input).toBeVisible();
+					await expect(input).toHaveValue(draft);
+					await expect(input).toBeFocused();
+				}
+				await page.locator('.ash-chat-view').evaluate(element => { (element as HTMLElement).style.width = '380px'; });
+				if (locale === 'en' && theme === 'light' && !newChat) {
+					await body.screenshot({ path: test.info().outputPath('sessions-stacked.png') });
+				}
+				await body.evaluate(element => { element.classList.remove('sessions-sidebar-visible'); });
+				await sidebar.evaluate(element => { element.setAttribute('hidden', ''); });
+				await expect(input).toBeVisible();
+				await expect(input).toHaveValue(draft);
+				await expect(input).toBeFocused();
+			});
+		}
+	}
+}
+
+test('Closed Sessions keep the full Chat transcript and composer at every width', async ({ page }) => {
+	await page.goto('/chatInput.html?sessionsLayout=closed');
+	await page.evaluate(() => window.ashChatInputIntegration.showModels());
+	for (const width of [800, 380, 240, 600]) {
+		await page.locator('.ash-chat-view').evaluate((element, value) => { (element as HTMLElement).style.width = `${value}px`; }, width);
+		await expect(page.locator('.ash-chat-sessions-sidebar')).toBeHidden();
+		await expect(page.locator('.ash-chat-list-widget')).toBeVisible();
+		await expect(page.locator('.ash-chat-textarea-input')).toBeVisible();
+		const bounds = await page.locator('.ash-chat-pane-host').boundingBox();
+		expect(bounds!.width).toBe(width);
+	}
+});
+
+for (const locale of ['en', 'zh-CN']) {
 	test(`SCM diff shows suggested file context and sends the staged version in ${locale}`, async ({ page }) => {
 		await page.goto(`/chatInput.html?locale=${locale}`);
 		await page.evaluate(() => {

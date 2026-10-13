@@ -26,6 +26,16 @@ export interface PartTitleProjection {
 
 /** A titled, independently managed view hosted inside a workbench view container. */
 export abstract class ViewPane extends Pane implements IView {
+	private readonly constraintsChanged = this._register(new Emitter<void>());
+	readonly onDidChangeConstraints = this.constraintsChanged.event;
+
+	/** Intrinsic horizontal content constraint, independent of the current Part allocation. */
+	get minimumWidth(): number { return 0; }
+
+	protected notifyConstraintsChanged(): void {
+		this.constraintsChanged.fire();
+	}
+
 	private readonly titleAreaUpdate = this._register(new Emitter<void>());
 	public readonly onDidChangeTitleArea = this.titleAreaUpdate.event;
 

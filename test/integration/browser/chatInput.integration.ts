@@ -490,6 +490,36 @@ const part = resources.add(services.createInstance(ChatInputPart, document.query
 	modelPickerPosition: cowork ? 'trailing' : 'leading',
 	renderSecondaryToolbar: !cowork,
 }));
+if (new URLSearchParams(location.search).has('sessionsLayout')) {
+	// Exercise the Chat host's production CSS with the real, auto-growing composer.
+	const body = document.querySelector('main')!;
+	const layout = new URLSearchParams(location.search).get('sessionsLayout');
+	const view = document.createElement('section');
+	view.className = 'ash-chat-view';
+	view.style.cssText = 'width:380px;height:400px';
+	body.replaceWith(view);
+	view.append(body);
+	body.className = `ash-chat-body${layout === 'closed' ? '' : ' sessions-stacked sessions-sidebar-visible'}`;
+	const sidebar = document.createElement('aside');
+	sidebar.className = 'ash-chat-sessions-sidebar';
+	sidebar.hidden = layout === 'closed';
+	const sessions = document.createElement('button');
+	sessions.textContent = 'Session fixture';
+	sidebar.append(sessions);
+	const host = document.createElement('div');
+	host.className = 'ash-chat-pane-host';
+	const chat = document.createElement('div');
+	chat.className = new URLSearchParams(location.search).has('newChat') ? 'ash-chat empty' : 'ash-chat has-conversation';
+	const transcript = document.createElement('div');
+	transcript.className = 'ash-chat-list-widget';
+	const message = document.createElement('p');
+	message.textContent = 'Retained conversation';
+	message.style.height = '1200px';
+	transcript.append(message);
+	chat.append(transcript, part.element);
+	host.append(chat);
+	body.append(sidebar, host);
+}
 function sampleContextCategories(tokens: number): ChatContextUsage['categories'] {
 	const systemPrompt = Math.floor(tokens * 0.2);
 	const systemTools = Math.floor(tokens * 0.4);

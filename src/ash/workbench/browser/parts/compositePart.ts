@@ -19,6 +19,11 @@ export abstract class CompositePart<T extends Composite> extends Part {
 	private readonly composites = this._register(new DisposableMap<string, T>());
 	private activeComposite: T | undefined;
 	private readonly titleAreaListener = this._register(new MutableDisposable());
+	private readonly constraintsListener = this._register(new MutableDisposable());
+
+	override get minimumWidth(): number {
+		return this.activeComposite?.minimumWidth ?? super.minimumWidth;
+	}
 	protected compositeToolBar: WorkbenchToolBar | undefined;
 	private compositeToolBarContainer: HTMLElement | undefined;
 	private compositeToolBarAriaLabel = '';
@@ -97,6 +102,8 @@ export abstract class CompositePart<T extends Composite> extends Part {
 			const visible = composite.isVisible();
 			this.activeComposite = undefined;
 			this.titleAreaListener.clear();
+			this.constraintsListener.clear();
+			this.notifyConstraintsChanged();
 			this.updateTitleArea();
 			composite.setVisible(false);
 			if (visible) { this.compositeClosed.fire(composite); }
@@ -134,8 +141,10 @@ export abstract class CompositePart<T extends Composite> extends Part {
 		}
 		this.activeComposite = composite;
 		this.titleAreaListener.value = composite.onTitleAreaUpdate(() => this.updateTitleArea());
+		this.constraintsListener.value = composite.onDidChangeConstraints(() => this.notifyConstraintsChanged());
 		this.contentDomNode.append(composite.getContainer()!);
 		composite.setVisible(!this.domNode.hidden);
+		this.notifyConstraintsChanged();
 		this.updateTitleArea();
 		this.layoutActiveComposite();
 		if (!this.domNode.hidden) {

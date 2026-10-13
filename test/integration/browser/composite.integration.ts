@@ -2,6 +2,10 @@ import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/t
 import { h } from '../../../src/ash/base/browser/dom.js';
 import { Lxicon } from '../../../src/ash/base/common/lxicons.js';
 import { AuxiliarybarPart } from '../../../src/ash/workbench/browser/parts/auxiliarybar/auxiliarybarPart.js';
+import { Grid } from '../../../src/ash/base/browser/ui/grid/grid.js';
+import { WorkbenchPartView } from '../../../src/ash/workbench/browser/workbenchPartView.js';
+import { Part } from '../../../src/ash/workbench/browser/part.js';
+import { PaneComposite } from '../../../src/ash/workbench/browser/parts/views/paneComposite.js';
 import type { PartTitleProjection } from '../../../src/ash/workbench/browser/parts/views/viewPane.js';
 import { ChatViewTitleControl } from '../../../src/ash/workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewTitleControl.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
@@ -79,6 +83,11 @@ interface CompositeState {
 
 declare global {
 	interface Window {
+		ashPartWidthIntegration: {
+			setMinimum(width: number): void;
+			resize(width: number): void;
+			state(): { minimum: number; width: number; frameMinimum: number; };
+		};
 		ashSessionGridIntegration: {
 			show(ids: readonly string[], active: string): Promise<void>;
 			replace(id: string): Promise<void>;
@@ -167,6 +176,48 @@ services.registerInstance(IContextMenuService, {
 	showContextMenu: () => { throw new Error('Unexpected context menu'); }, hideContextMenu() { },
 });
 const panel = resources.add(registerTestComponentServices(services).createInstance(PanelPart, document.body));
+if (new URLSearchParams(location.search).has('partWidth')) {
+	const host = h(document, 'section');
+	host.id = 'part-width-host';
+	host.style.cssText = 'width:1000px;height:400px';
+	document.body.prepend(host);
+	resources.add(toDisposable(() => host.remove()));
+	resources.add(bindColorTheme(services.get(IThemeService), host));
+	class WidthView extends FocusView {
+		private width = 300;
+		override get minimumWidth(): number { return this.width; }
+		setMinimum(width: number): void { this.width = width; this.notifyConstraintsChanged(); }
+	}
+	const descriptor = { id: 'width-chat', title: 'Chat', location: ViewContainerLocation.AuxiliaryBar };
+	resources.add(registry.registerViewContainer(descriptor));
+	resources.add(registry.registerViews(descriptor.id, [{ id: 'width-chat.view', title: 'Chat', ctorDescriptor: new SyncDescriptor(WidthView) }]));
+	const part = resources.add(services.createInstance(AuxiliarybarPart, host, { openComposite: () => { }, viewDescriptorService: services.get(IViewDescriptorService) }));
+	const composite = resources.add(services.createInstance(PaneComposite, part.domNode, {
+		viewContainer: descriptor,
+		model: services.get(IViewDescriptorService).getViewContainerModel(descriptor.id)!,
+		instantiationService: services, contextKeyService: contexts,
+		paneHeaders: 'hidden', paneLayout: 'fill',
+	}));
+	part.addComposite(composite);
+	part.showComposite(composite.id);
+	class EditorStub extends Part {
+		constructor() { super(host, 'fixture-editor', services.get(IThemeService), storage); }
+		override get minimumWidth(): number { return 200; }
+	}
+	const editor = resources.add(new EditorStub());
+	const editorView = new WorkbenchPartView('editor', editor);
+	const auxiliaryView = new WorkbenchPartView('auxiliarybar', part);
+	auxiliaryView.setFrameInsets({ left: 8, right: 8, top: 0, bottom: 0 });
+	const grid = resources.add(new Grid<WorkbenchPartView>(host, { type: 'branch', orientation: 'horizontal', size: 1000, children: [{ type: 'leaf', view: editorView, size: 620 }, { type: 'leaf', view: auxiliaryView, size: 380 }] }));
+	grid.element.style.cssText = 'width:100%;height:100%';
+	grid.layout(1000, 400);
+	const pane = composite.getView('width-chat.view') as WidthView;
+	window.ashPartWidthIntegration = {
+		setMinimum: width => pane.setMinimum(width),
+		resize: width => grid.resizeView(auxiliaryView, { width, height: 400 }),
+		state: () => ({ minimum: part.minimumWidth, frameMinimum: auxiliaryView.minimumWidth, width: auxiliaryView.element.getBoundingClientRect().width }),
+	};
+}
 if (new URLSearchParams(location.search).has('paneTransitions')) {
 	await import('../../../src/ash/base/browser/ui/sash/sash.css');
 	const paneHost = h(document, 'div');

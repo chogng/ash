@@ -8,6 +8,16 @@ import type { IDimension } from '../../base/browser/dom.js';
 
 /** Owns focus for the complete hosted content, across all of its child controls. */
 export abstract class Composite<MementoType extends object = object> extends Component<MementoType> implements IComposite {
+	private readonly constraintsChanged = this._register(new Emitter<void>());
+	readonly onDidChangeConstraints = this.constraintsChanged.event;
+
+	/** Hosted content reports its minimum; the outer Part adds its own chrome and frame. */
+	get minimumWidth(): number { return 0; }
+
+	protected notifyConstraintsChanged(): void {
+		this.constraintsChanged.fire();
+	}
+
 	public abstract readonly id: string;
 	private readonly titleAreaUpdate = this._register(new Emitter<void>());
 	public readonly onTitleAreaUpdate = this.titleAreaUpdate.event;

@@ -138,6 +138,10 @@ export class ViewPaneContainer extends Composite {
 		return this.panes.reduce((width, pane) => Math.max(width, pane.getOptimalWidth()), 0) + 16;
 	}
 
+	override get minimumWidth(): number {
+		return Math.max(0, ...this.mountedPanes.filter(pane => pane.isExpanded()).map(pane => pane.minimumWidth));
+	}
+
 	getView(id: string): ViewPane | undefined {
 		return this.model.isVisible(id) ? this._panes.get(id)?.pane : undefined;
 	}
@@ -220,7 +224,13 @@ export class ViewPaneContainer extends Composite {
 					() => this.viewBlur.fire(pane),
 				);
 				this.viewsAdded.fire([pane]);
-				item.listenToLayout(() => this.saveState());
+				item.listenToLayout(() => {
+					this.saveState();
+					this.notifyConstraintsChanged();
+				});
+				item.listenToConstraints(() => {
+					if (this.mountedPanes.includes(pane) && pane.isExpanded()) this.notifyConstraintsChanged();
+				});
 			}
 			let index = 0;
 			for (const descriptor of desired) {
@@ -244,6 +254,7 @@ export class ViewPaneContainer extends Composite {
 		}
 		this.saveState();
 		this.updateTitleArea();
+		this.notifyConstraintsChanged();
 	}
 
 	private stateKey(viewId: string, field: "size" | "collapsed"): string {
@@ -305,6 +316,10 @@ export class ViewPaneContainer extends Composite {
 }
 
 class ViewPaneItem extends Disposable {
+	listenToConstraints(listener: () => void): void {
+		this._register(this.pane.onDidChangeConstraints(listener));
+	}
+
 	public listenToTitle(listener: () => void): void {
 		this._register(this.pane.onDidChangeTitleArea(listener));
 	}

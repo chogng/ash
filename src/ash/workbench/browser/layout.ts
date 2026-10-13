@@ -542,8 +542,8 @@ function requiredPart(
 }
 
 function isSnappableWorkbenchPart(partId: WorkbenchPartId): boolean {
+	// Auxiliary Bar resizing stops at its content minimum; explicit toggles own hiding it.
 	return partId === "sidebar" ||
-		partId === "auxiliarybar" ||
 		partId === "agentSidebar" ||
 		partId === "panel";
 }

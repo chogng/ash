@@ -463,7 +463,7 @@ test('Workbench layout assigns the window edge inset on startup from the Activit
 	dom.window.close();
 });
 
-test("Workbench pane sashes snap closed and remain available for drag restore", () => {
+test("Workbench pane sashes snap closed while Auxiliary Bar stops at its minimum", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const contextKeys = new ContextKeyService();
 	const harness = createLayoutHarness(dom.window.document, {
@@ -480,8 +480,11 @@ test("Workbench pane sashes snap closed and remain available for drag restore", 
 	assert.equal(harness.layout.isPartVisible("sidebar"), true);
 
 	dragWorkbenchSash(dom.window, harness.container, "auxiliarybar", 1, 320);
-	assert.equal(harness.layout.isPartVisible("auxiliarybar"), false);
-	assert.equal(contextKeys.getValue("auxiliaryBarVisible"), false);
+	assert.equal(harness.layout.isPartVisible("auxiliarybar"), true);
+	assert.equal(contextKeys.getValue("auxiliaryBarVisible"), true);
+	const auxiliaryFrame = harness.container.querySelector<HTMLElement>("[data-part='auxiliarybar']")!.parentElement!;
+	const frameInsets = (Number.parseFloat(auxiliaryFrame.style.paddingLeft) || 0) + (Number.parseFloat(auxiliaryFrame.style.paddingRight) || 0);
+	assert.equal(harness.layout.getPartSize("auxiliarybar").width, 180 + frameInsets);
 	dragWorkbenchSash(dom.window, harness.container, "auxiliarybar", 1, -110);
 	assert.equal(harness.layout.isPartVisible("auxiliarybar"), true);
 

@@ -88,7 +88,7 @@ import { ContextKeyService, IContextKeyService } from "../../../platform/context
 import { DialogResult, IDialogService, type IMessageDialogOptions } from '../../../platform/dialogs/common/dialogs.js';
 import { ViewDescriptorService } from "../../../workbench/services/views/browser/viewDescriptorService.js";
 import { TestQuickInputService } from "../../../platform/quickinput/test/browser/testQuickInputService.js";
-import { h } from "../../../base/browser/dom.js";
+import { Dimension, h } from "../../../base/browser/dom.js";
 import type { IFileService } from '../../../platform/files/common/files.js';
 import { URI } from "../../../base/common/uri.js";
 import { ICommandService } from "../../../platform/commands/common/commands.js";
@@ -96,11 +96,19 @@ import { IChatSessionNavigationService } from '../../../workbench/services/chat/
 import type { IOpenerService, OpenOptions } from "../../../platform/opener/common/opener.js";
 import { IEditorService } from "../../../workbench/services/editor/common/editorService.js";
 import { IStorageService } from '../../../platform/storage/common/storage.js';
+import { ConfigurationResourceRevisionConflictError, type IConfigurationResourceService } from '../../../platform/configuration/common/configurationResourceService.js';
+import { parseJsonDocument } from '../../../base/common/json.js';
+import { productLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
 import { ChatTipService, IChatTipService } from '../../../workbench/contrib/chat/browser/chatTipService.js';
 import { BrowserLifecycleService } from '../../../workbench/services/lifecycle/browser/lifecycleService.js';
 import { ILifecycleService } from '../../../workbench/services/lifecycle/common/lifecycle.js';
 
 const inputResources = new DisposableStore();
+const emptyConfigurationResource = {
+	onDidChangeResource: Event.None,
+	read: async () => ({ source: '{}', revision: 0 }),
+	write: async () => { throw new Error('This fixture has no legacy configuration to migrate'); },
+};
 suiteTeardown(() => inputResources.dispose());
 function createInputServices(contextView: IContextViewService, chat: IChatService, menus?: IMenuService, contextMenus?: IContextMenuService): InstantiationService {
 	const services = inputResources.add(createTestEditorServices(undefined, createCodeEditorServices(inputResources)));
@@ -273,7 +281,7 @@ test('Chat loads an Ash remote workspace image through the file service', async 
 			fileService,
 			unavailableAccessibleViewService,
 			notifications,
-			createInputServices(contextViewService, paneChat, menuService, contextMenuService), inputResources.add(new WorkbenchConfigurationService()), inputResources.add(createTestStorage()), contextKeys,
+			createInputServices(contextViewService, paneChat, menuService, contextMenuService), inputResources.add(new WorkbenchConfigurationService()), inputResources.add(createTestStorage()), emptyConfigurationResource, contextKeys,
 		);
 		dom.window.document.body.append(pane.element);
 		await sessions.initialize();
@@ -390,7 +398,7 @@ test("Chat title and history switching retain conversations and drafts", async (
 		unavailableFileService,
 		unavailableAccessibleViewService,
 		notifications,
-		createInputServices(contextViewService, chat, menuService, contextMenuService), configuration, inputResources.add(createTestStorage()), contextKeys,
+		createInputServices(contextViewService, chat, menuService, contextMenuService), configuration, inputResources.add(createTestStorage()), emptyConfigurationResource, contextKeys,
 	);
 	chatView = pane;
 	const title = h(dom.window.document, "div");
@@ -439,6 +447,10 @@ test("Chat title and history switching retain conversations and drafts", async (
 	assert.ok(layoutToolbar?.querySelector(
 		`[data-action-id="${TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID}"]`,
 	));
+	assert.equal(pane.element.querySelector<HTMLElement>('.ash-chat-sessions-sidebar')?.hidden, true);
+	assert.equal(configuration.getValue(AGENT_SESSIONS_ORIENTATION_SETTING), AgentSessionsOrientation.SideBySide);
+	assert.equal(pane.minimumWidth, 300);
+	await configuration.updateValue(AGENT_SESSIONS_ORIENTATION_SETTING, AgentSessionsOrientation.Stacked);
 	layoutToolbar?.querySelector<HTMLButtonElement>("button")?.focus();
 	await commands.executeCommand(TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID);
 	const sessionsSidebar = pane.element.querySelector<HTMLElement>('.ash-chat-sessions-sidebar');
@@ -453,7 +465,8 @@ test("Chat title and history switching retain conversations and drafts", async (
 	assert.equal(pane.element.querySelector('.ash-chat:where(:not([hidden]))')?.contains(dom.window.document.activeElement), true);
 	layoutToolbar?.querySelector<HTMLButtonElement>('button')?.focus();
 	await commands.executeCommand(TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID);
-	assert.equal(pane.element.querySelector<HTMLElement>('.ash-chat-pane-host')?.hidden, true);
+	assert.equal(pane.element.querySelector<HTMLElement>('.ash-chat-pane-host')?.hidden, false);
+	assert.equal(pane.element.querySelector('.ash-chat-body')?.classList.contains('sessions-stacked'), true);
 	const search = sessionsSidebar?.querySelector<HTMLInputElement>('.ash-agent-sessions-search');
 	assert.ok(search);
 	search.value = 'session-1';
@@ -523,25 +536,58 @@ test("Chat title and history switching retain conversations and drafts", async (
 	);
 	assert.deepEqual(menuService.getMenuActions(MenuId.ChatTitle).find(([group]) => group === 'layout')?.[1].map(action => action.label), ['Sessions layout']);
 	const layoutChoices = () => menuService.getMenuActions(Menus.ChatSessionsLayout).flatMap(([, actions]) => actions);
-	assert.deepEqual(layoutChoices().map(action => [action.label, action.checked]), [['Automatic', true], ['Side by side', false], ['Stacked', false]]);
+	assert.deepEqual(layoutChoices().map(action => [action.label, action.checked]), [['Side by side', false], ['Stacked', true]]);
 	await commands.executeCommand('workbench.action.chat.setAgentSessionsOrientationStacked');
 	assert.equal(configuration.getValue(AGENT_SESSIONS_ORIENTATION_SETTING), AgentSessionsOrientation.Stacked);
-	assert.deepEqual(layoutChoices().map(action => action.checked), [false, false, true]);
+	assert.deepEqual(layoutChoices().map(action => action.checked), [false, true]);
 	await assert.rejects(configuration.updateValue(AGENT_SESSIONS_ORIENTATION_SETTING, 'diagonal'), /Invalid Sessions layout/);
 	const body = pane.element.querySelector<HTMLElement>('.ash-chat-body')!;
-	body.getBoundingClientRect = () => new dom.window.DOMRect(0, 0, 900, 600);
+	body.getBoundingClientRect = () => new dom.window.DOMRect(0, 0, 600, 600);
 	await configuration.updateValue(AGENT_SESSIONS_ORIENTATION_SETTING, AgentSessionsOrientation.SideBySide);
 	await commands.executeCommand(TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID);
+	assert.equal(body.classList.contains('sessions-stacked'), false);
+	assert.equal(pane.element.querySelector<HTMLElement>('.ash-chat-sessions-sash')?.hidden, false);
+	assert.equal(pane.minimumWidth, 520);
 	sessionsSidebar?.querySelector<HTMLButtonElement>('.ash-agent-session-row')?.click();
 	assert.equal(sessionsSidebar?.hidden, false);
 	assert.equal(paneHost.hidden, false);
 	await configuration.updateValue(AGENT_SESSIONS_ORIENTATION_SETTING, AgentSessionsOrientation.Stacked);
-	assert.equal(body.classList.contains('sessions-list-only'), true);
+	assert.equal(body.classList.contains('sessions-stacked'), true);
+	assert.equal(paneHost.hidden, false);
+	assert.equal(pane.minimumWidth, 300);
+	const activeInput = paneHost.querySelector<HTMLTextAreaElement>('.ash-chat:not([hidden]) .ash-chat-textarea-input')!;
+	activeInput.value = 'Keep this draft while resizing';
+	activeInput.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+	activeInput.focus();
+	// Width and orientation changes must retain the same composer and keyboard focus.
+	body.getBoundingClientRect = () => new dom.window.DOMRect(0, 0, 599, 600);
+	await configuration.updateValue(AGENT_SESSIONS_ORIENTATION_SETTING, AgentSessionsOrientation.SideBySide);
 	assert.equal(body.classList.contains('sessions-stacked'), false);
-	assert.equal(paneHost.hidden, true);
+	assert.equal(sessionsSidebar?.hidden, false);
+	assert.equal(pane.minimumWidth, 520);
+	assert.equal(paneHost.hidden, false);
+	assert.equal(dom.window.document.activeElement, activeInput);
+	assert.equal(activeInput.value, 'Keep this draft while resizing');
+	body.getBoundingClientRect = () => new dom.window.DOMRect(0, 0, 600, 600);
+	await commands.executeCommand('workbench.action.chat.setAgentSessionsOrientationStacked');
+	assert.equal(body.classList.contains('sessions-stacked'), true);
+	await commands.executeCommand('workbench.action.chat.setAgentSessionsOrientationSideBySide');
+	assert.equal(body.classList.contains('sessions-stacked'), false);
+	assert.equal(activeInput.value, 'Keep this draft while resizing');
+	const sash = pane.element.querySelector<HTMLElement>('.ash-chat-sessions-sash')!;
+	sash.focus();
+	body.getBoundingClientRect = () => new dom.window.DOMRect(0, 0, 599, 600);
+	await configuration.updateValue(AGENT_SESSIONS_ORIENTATION_SETTING, AgentSessionsOrientation.SideBySide);
+	assert.equal(sash.hidden, false);
+	assert.equal(dom.window.document.activeElement, sash);
+	await commands.executeCommand('workbench.action.chat.setAgentSessionsOrientationStacked');
+	assert.equal(sash.hidden, true);
+	assert.equal(sessionsSidebar?.contains(dom.window.document.activeElement), true);
 	sessionsSidebar?.querySelector<HTMLButtonElement>('.ash-agent-session-row')?.click();
 	assert.equal(sessionsSidebar?.hidden, true);
 	assert.equal(paneHost.hidden, false);
+	activeInput.value = '';
+	activeInput.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
 	await chatActions[3]?.run();
 	const settingsInput = dom.window.document.querySelector<HTMLInputElement>(".ash-quick-pick-input input");
 	assert.ok(settingsInput);
@@ -877,6 +923,10 @@ test('Chinese Sessions draft recovery and accessibility help use the product lan
 		const content = help.provideContent();
 		assert.match(content, /已完成的附件仍保留在草稿中/u);
 		assert.match(content, /暂不支持远程项目/u);
+		const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+		assert.match(chinese.bundles.ash['chat.sessions.help'], /新聊天和已有对话的输入区都保持可见/u);
+		assert.match(chinese.bundles.ash['chat.sessions.help'], /外层分隔线会停在可容纳两栏的最小宽度/u);
+		assert.match(chinese.bundles.ash['chat.sessions.layout.description'], /调整聊天区域大小时不会切换/u);
 	} finally { resetNlsResolver(); }
 });
 
@@ -1088,6 +1138,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
 		createInputServices(contextViewService, paneChat, menuService, contextMenuService),
 		inputResources.add(new WorkbenchConfigurationService()),
 		inputResources.add(createTestStorage()),
+		emptyConfigurationResource,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -1109,7 +1160,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	assert.equal(untitledPane.classList.contains("empty"), true);
 	let contextResolutions = 0;
 	pane.toggleSessionsSidebar();
-	assert.equal(pane.element.querySelector('.ash-chat-body')?.classList.contains('sessions-stacked'), true);
+	assert.equal(pane.element.querySelector('.ash-chat-body')?.classList.contains('sessions-stacked'), false);
 	pane.addContext({
 		id: "commit-1",
 		kind: "scmHistoryItem",
@@ -1131,7 +1182,8 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	assert.ok(untitledPane.querySelector(":scope > .ash-chat-list-widget"));
 	assert.ok(untitledPane.querySelector(":scope > .ash-chat-input-part"));
 	await waitFor(() => fake.turnStartRequests.length === 1);
-	assert.equal(pane.element.querySelector<HTMLElement>('.ash-chat-sessions-sidebar')?.hidden, true);
+	assert.equal(pane.element.querySelector<HTMLElement>('.ash-chat-sessions-sidebar')?.hidden, false);
+	assert.equal(pane.element.querySelector<HTMLElement>('.ash-chat-pane-host')?.hidden, false);
 
 	assert.equal(fake.createSessionRequests.length, 1);
 	assert.deepEqual(fake.createSessionRequests[0]?.agent, { type: 'default' });
@@ -1211,6 +1263,7 @@ test("the New Chat slash command opens an untitled session", async () => {
 		createInputServices(contextViewService, paneChat, menuService, contextMenuService),
 		inputResources.add(new WorkbenchConfigurationService()),
 		inputResources.add(createTestStorage()),
+		emptyConfigurationResource,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -1283,6 +1336,7 @@ test("failed first send keeps the untitled session and its input draft", async (
 		createInputServices(contextViewService, paneChat, menuService, contextMenuService),
 		inputResources.add(new WorkbenchConfigurationService()),
 		inputResources.add(createTestStorage()),
+		emptyConfigurationResource,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -1368,6 +1422,7 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
 		createInputServices(contextViewService, paneChat, menuService, contextMenuService),
 		inputResources.add(new WorkbenchConfigurationService()),
 		inputResources.add(createTestStorage()),
+		emptyConfigurationResource,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -3089,6 +3144,7 @@ test('ChatWidgetModel retries the recorded mode independently of prompt identity
 });
 
 function testLayoutService(auxiliaryBarVisible = true): IWorkbenchLayoutService {
+	let auxiliaryBarSize = new Dimension(380, 600);
 	const visibility = new Emitter<WorkbenchPartVisibilityChangeEvent>();
 	const visibleParts = new Set<WorkbenchPartId>(auxiliaryBarVisible ? ["auxiliarybar"] : []);
 	const updateVisibility = (partId: WorkbenchPartId, visible: boolean): void => {
@@ -3097,14 +3153,17 @@ function testLayoutService(auxiliaryBarVisible = true): IWorkbenchLayoutService 
 		else visibleParts.delete(partId);
 		visibility.fire({ partId, visible });
 	};
-	return {
+	const layout: Partial<IWorkbenchLayoutService> = {
+		getPartSize: () => auxiliaryBarSize,
+		resizePart: (_partId, size) => { auxiliaryBarSize = new Dimension(size.width, size.height); },
 		onDidChangePartVisibility: visibility.event,
 		isPartVisible: (partId) => visibleParts.has(partId),
 		showPart: (partId) => updateVisibility(partId, true),
 		showParts: (partIds) => partIds.forEach((partId) => updateVisibility(partId, true)),
 		hidePart: (partId) => updateVisibility(partId, false),
 		hideParts: (partIds) => partIds.forEach((partId) => updateVisibility(partId, false)),
-	} as IWorkbenchLayoutService;
+	};
+	return layout as IWorkbenchLayoutService;
 }
 
 function fakeApi(options: FakeOptions = {}): {
@@ -4080,7 +4139,7 @@ function navigationThreadSnapshot(threadId: string): import('../../../platform/a
 }
 
 
-async function createNavigationInputPane() {
+async function createNavigationInputPane(configurationSource = '{}', configurationResource?: IConfigurationResourceService) {
 	const resources = new DisposableStore();
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const contextView = resources.add(new BrowserContextViewService(dom.window.document.body));
@@ -4103,13 +4162,16 @@ async function createNavigationInputPane() {
 	const sessions = resources.add(new SessionsManagementService(api));
 	const contextKeys = resources.add(new ContextKeyService());
 	resources.add(new ViewDescriptorService({ registry: new WorkbenchViewRegistry() }, contextKeys));
-	const commands = resources.add(new CommandService(resources.add(new InstantiationService())));
+	const commandServices = resources.add(new InstantiationService());
+	const configuration = resources.add(new WorkbenchConfigurationService({ initialSnapshot: { revision: 1, document: { version: 1, source: configurationSource } } }));
+	commandServices.registerInstance(IConfigurationService, configuration);
+	const commands = resources.add(new CommandService(commandServices));
 	const menu = new MenuService(commands, contextKeys);
 	const contextMenus = { showContextMenu: () => { } } as unknown as IContextMenuService;
 	const chat = resources.add(createChatService(api));
 	const pane = resources.add(new ChatViewPane(dom.window.document.body, { id: CHAT_VIEW_ID, title: 'Chat' }, chat, sessions,
 		menu, contextMenus, contextView, commands, testLayoutService(), unavailableFileService, unavailableAccessibleViewService, notifications,
-		createInputServices(contextView, chat, menu, contextMenus), inputResources.add(new WorkbenchConfigurationService()), inputResources.add(createTestStorage())));
+		createInputServices(contextView, chat, menu, contextMenus), configuration, inputResources.add(createTestStorage()), configurationResource ?? configuration));
 	dom.window.document.body.append(pane.element);
 	await sessions.initialize();
 	await nextTask();
@@ -4117,8 +4179,53 @@ async function createNavigationInputPane() {
 	const input = chatPane.querySelector<HTMLTextAreaElement>('.ash-chat-textarea-input')!;
 	assert.ok(input);
 	resources.add(toDisposable(() => dom.window.close()));
-	return { resources, dom, fake, pane, sessions, chatPane, input };
+	return { resources, dom, fake, pane, sessions, chatPane, input, configuration, commands };
 }
+
+test('Sessions layout is explicit, persists across recreation and starts with full Chat', async () => {
+	const fixture = await createNavigationInputPane();
+	using resources = fixture.resources;
+	const { pane, commands, configuration } = fixture;
+	const sidebar = pane.element.querySelector<HTMLElement>('.ash-chat-sessions-sidebar')!;
+	assert.equal(sidebar.hidden, true);
+	assert.equal(configuration.getValue(AGENT_SESSIONS_ORIENTATION_SETTING), AgentSessionsOrientation.SideBySide);
+	await commands.executeCommand('workbench.action.chat.setAgentSessionsOrientationStacked');
+	assert.equal(sidebar.hidden, true);
+	const snapshot = await configuration.read();
+	resources.dispose();
+	const reopened = await createNavigationInputPane(snapshot.source);
+	using reopenedResources = reopened.resources;
+	assert.equal(reopened.configuration.getValue(AGENT_SESSIONS_ORIENTATION_SETTING), AgentSessionsOrientation.Stacked);
+	assert.equal(reopened.pane.element.querySelector<HTMLElement>('.ash-chat-sessions-sidebar')?.hidden, true);
+	reopened.pane.toggleSessionsSidebar();
+	assert.equal(reopened.pane.element.querySelector('.ash-chat-body')?.classList.contains('sessions-stacked'), true);
+});
+
+test('Sessions migrates legacy automatic layout once while preserving profile comments and other settings', async () => {
+	const source = '{\n // Keep this comment\n "chat.viewSessions.orientation": "auto",\n "editor.wordWrap": "on",\n}';
+	const fixture = await createNavigationInputPane(source);
+	using resources = fixture.resources;
+	const snapshot = await fixture.configuration.read();
+	assert.ok(snapshot.source.includes('// Keep this comment'));
+	assert.ok(snapshot.source.includes('"editor.wordWrap": "on"'));
+	assert.deepEqual(parseJsonDocument(snapshot.source, { allowComments: true, allowTrailingComma: true }).value, { [AGENT_SESSIONS_ORIENTATION_SETTING]: AgentSessionsOrientation.SideBySide, 'editor.wordWrap': 'on' });
+	resources.dispose();
+	const reopened = await createNavigationInputPane(snapshot.source);
+	using reopenedResources = reopened.resources;
+	assert.equal((await reopened.configuration.read()).revision, 1);
+});
+
+test('Sessions migration yields to a newer explicit preference', async () => {
+	let writes = 0;
+	const fixture = await createNavigationInputPane(`{"${AGENT_SESSIONS_ORIENTATION_SETTING}":"stacked"}`, {
+		onDidChangeResource: Event.None,
+		read: async () => ({ revision: 0, source: `{"${AGENT_SESSIONS_ORIENTATION_SETTING}":"auto"}` }),
+		write: async () => { writes++; throw new ConfigurationResourceRevisionConflictError(0, 1); },
+	});
+	using resources = fixture.resources;
+	assert.equal(writes, 1);
+	assert.equal(fixture.configuration.getValue(AGENT_SESSIONS_ORIENTATION_SETTING), AgentSessionsOrientation.Stacked);
+});
 
 for (const text of ['', 'Private request for A']) {
 	for (const aba of [false, true]) {
@@ -4354,7 +4461,7 @@ for (const navigate of [false, true]) {
 		const chat = resources.add(createChatService(fake.api));
 		const pane = resources.add(new ChatViewPane(dom.window.document.body, { id: CHAT_VIEW_ID, title: 'Chat' }, chat, sessions,
 			menu, contextMenus, contextView, commands, testLayoutService(), unavailableFileService, unavailableAccessibleViewService, notifications,
-			createInputServices(contextView, chat, menu, contextMenus), inputResources.add(new WorkbenchConfigurationService()), inputResources.add(createTestStorage())));
+			createInputServices(contextView, chat, menu, contextMenus), inputResources.add(new WorkbenchConfigurationService()), inputResources.add(createTestStorage()), emptyConfigurationResource));
 		dom.window.document.body.append(pane.element);
 		await nextTask();
 		const original = pane.element.querySelector<HTMLElement>('.ash-chat-pane-host > .ash-chat')!;

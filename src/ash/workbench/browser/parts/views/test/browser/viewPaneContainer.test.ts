@@ -78,6 +78,9 @@ test('ViewPaneContainer derives preferred width from visible view content', asyn
 	const { ViewDescriptorService } = await import('../../../../../../workbench/services/views/browser/viewDescriptorService.js');
 	class SizedView extends ViewPane {
 		constructor(container: HTMLElement, options: import('../../../../../../workbench/browser/parts/views/viewPane.js').IViewPaneOptions) { super(container, options); }
+		private width = this.id === 'wide' ? 520 : 300;
+		override get minimumWidth(): number { return this.width; }
+		setMinimum(width: number): void { this.width = width; this.notifyConstraintsChanged(); }
 		override getOptimalWidth(): number { return this.id === 'wide' ? 360 : 180; }
 	}
 	const registry = new WorkbenchViewRegistry();
@@ -98,10 +101,22 @@ test('ViewPaneContainer derives preferred width from visible view content', asyn
 		viewContainer: descriptor, model, contextKeyService: contextKeys, instantiationService: services,
 	});
 	assert.equal(container.getOptimalWidth(), 376);
+	assert.equal(container.minimumWidth, 520);
+	const wide = container.getView('wide') as SizedView;
+	const changes: number[] = [];
+	using constraintListener = container.onDidChangeConstraints(() => changes.push(container.minimumWidth));
+	wide.setMinimum(620);
+	assert.equal(container.minimumWidth, 620);
 	model.setVisible('wide', false);
 	assert.equal(container.getOptimalWidth(), 196);
+	assert.equal(container.minimumWidth, 300);
+	const hiddenChangeCount = changes.length;
+	wide.setMinimum(700);
+	assert.equal(changes.length, hiddenChangeCount);
 	model.setVisible('wide', true);
 	assert.equal(container.getOptimalWidth(), 376);
+	assert.equal(container.minimumWidth, 700);
+	assert.deepEqual(changes, [620, 300, 700]);
 });
 
 test("ViewPaneContainer opens a collapsed view and focuses only when requested", async () => {

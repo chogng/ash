@@ -97,6 +97,7 @@ test("opens a local Chat conversation before the backend session request settles
 		services,
 		services.get(IConfigurationService),
 		services.get(IStorageService),
+		{ onDidChangeResource: Event.None, read: async () => ({ source: '{}', revision: 0 }), write: async () => { throw new Error('No legacy settings'); } },
 	);
 
 	assert.deepEqual(escaped, []);

@@ -20,12 +20,13 @@ import { Registry } from '../../../platform/registry/common/platform.js';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<AgentSessionsOrientation>({
 	key: AGENT_SESSIONS_ORIENTATION_SETTING,
-	defaultValue: AgentSessionsOrientation.Auto,
+	defaultValue: AgentSessionsOrientation.SideBySide,
 	scope: ConfigurationScope.WINDOW,
 	schema: { type: 'string', enum: Object.values(AgentSessionsOrientation) },
 	parse(value: unknown): AgentSessionsOrientation {
 		switch (value) {
-			case AgentSessionsOrientation.Auto:
+			// Decode old profiles until Chat migrates the persisted value to a fixed layout.
+			case 'auto': return AgentSessionsOrientation.SideBySide;
 			case AgentSessionsOrientation.SideBySide:
 			case AgentSessionsOrientation.Stacked: return value;
 			default: throw new TypeError(localize('chat.sessions.layout.invalid', 'Invalid Sessions layout.'));
@@ -33,10 +34,9 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	},
 	setting: {
 		title: localize('chat.sessions.layout.title', 'Sessions layout'),
-		description: localize('chat.sessions.layout.description', 'Automatic uses side by side when space allows and stacks sessions above a new chat input in narrow panels. Side by side switches to the list in narrow panels. Stacked only shows above new chats; existing conversations use the list.'),
+		description: localize('chat.sessions.layout.description', 'Choose Side by side or Stacked for the Sessions list. Your choice is remembered and does not change when you resize Chat. Use the Sessions button to open or close the list.'),
 		valueType: 'select',
 		options: [
-			{ value: AgentSessionsOrientation.Auto, label: localize('chat.sessions.layout.auto', 'Automatic') },
 			{ value: AgentSessionsOrientation.SideBySide, label: localize('chat.sessions.layout.sideBySide', 'Side by side') },
 			{ value: AgentSessionsOrientation.Stacked, label: localize('chat.sessions.layout.stacked', 'Stacked') },
 		],
@@ -51,7 +51,6 @@ MenusRegistry.appendMenuItem(MenuId.ChatTitle, {
 });
 
 for (const [orientation, title, id] of [
-	[AgentSessionsOrientation.Auto, localize2('chat.sessions.layout.auto', 'Automatic'), 'workbench.action.chat.setAgentSessionsOrientationAuto'],
 	[AgentSessionsOrientation.SideBySide, localize2('chat.sessions.layout.sideBySide', 'Side by side'), 'workbench.action.chat.setAgentSessionsOrientationSideBySide'],
 	[AgentSessionsOrientation.Stacked, localize2('chat.sessions.layout.stacked', 'Stacked'), 'workbench.action.chat.setAgentSessionsOrientationStacked'],
 ] as const) {

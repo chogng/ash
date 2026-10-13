@@ -1,5 +1,5 @@
 import "./media/chatViewPane.css";
-import { MutableDisposable, setDisposableOwner, toDisposable } from "../../base/common/lifecycle.js";
+import { setDisposableOwner, toDisposable } from "../../base/common/lifecycle.js";
 import { IMenuService } from "../../platform/actions/common/actions.js";
 import { IAccessibleViewService } from '../../platform/accessibility/browser/accessibleView.js';
 import { IContextMenuService, IContextViewService } from "../../platform/contextview/browser/contextView.js";
@@ -31,14 +31,16 @@ import { INotificationService } from '../../platform/notification/common/notific
 import type { IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
 import { Sash, SashState } from '../../base/browser/ui/sash/sash.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
+import { ConfigurationResourceRevisionConflictError, IConfigurationResourceService } from '../../platform/configuration/common/configurationResourceService.js';
+import { editJsonObjectProperty, parseJsonDocument } from '../../base/common/json.js';
 
 let chatViewInstanceId = 0;
 let chatPaneInstanceId = 0;
 const sessionsSidebarWidthKey = 'chat.sessionsSidebarWidth';
 const defaultSessionsSidebarWidth = 320;
 const minimumSessionsSidebarWidth = 220;
-const minimumChatWidth = 360;
-const minimumSideBySideWidth = 720;
+const minimumChatWidth = 300;
+const minimumSideBySideWidth = minimumChatWidth + minimumSessionsSidebarWidth;
 
 interface ChatPaneEntry {
 	readonly label: string;
@@ -67,8 +69,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 	private auxiliaryBarWidthBeforeSessions: number | undefined;
 	private readonly sessionsSidebarVisible: IContextKey<boolean>;
 	private readonly sessionsOrientation: IContextKey<AgentSessionsOrientation>;
-	private readonly activePaneListener = this._register(new MutableDisposable());
-	private sessionsPresentation: 'sideBySide' | 'stacked' | 'list' = 'list';
+	private sessionsPresentation = AgentSessionsOrientation.SideBySide;
 	private readonly empty: HTMLDivElement;
 	private readonly panes = new Map<string, ChatWidget<ChatWidgetModel>>();
 	private activePane: ChatWidget<ChatWidgetModel> | undefined;
@@ -92,6 +93,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IStorageService private readonly storage: IStorageService,
+		@IConfigurationResourceService private readonly configurationResource: IConfigurationResourceService,
 		@IContextKeyService contextKeyService?: IContextKeyService,
 		@IOpenerService private readonly openerService?: IOpenerService,
 		@IEditorService private readonly editorService?: IEditorService,
@@ -140,7 +142,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		this._register(registerAgentSessionsAccessibility(this.sessionsSidebar, sidebarContextKeys));
 		this._register(addDisposableListener(newSessionButton, 'click', () => {
 			this.sessionService.createUntitledSession();
-			if (this.sessionsPresentation === 'list') this.setSessionsSidebarVisible(false);
+			if (this.sessionsPresentation === 'stacked') this.setSessionsSidebarVisible(false);
 			this.activePane?.focus();
 		}));
 		this.sessionsControl = this._register(new AgentSessionsControl(this.sessionsSidebar, createAgentSessionsModel(sessionService, () => {
@@ -185,11 +187,11 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 			this.setSessionsSidebarVisible(false);
 		}));
 		this._register(configuration.onDidChangeConfiguration(event => {
-			if (event.affectsConfiguration(AGENT_SESSIONS_ORIENTATION_SETTING)) this.updateResponsiveLayout();
+			if (event.affectsConfiguration(AGENT_SESSIONS_ORIENTATION_SETTING)) this.updateSessionsLayout();
 		}));
 		const ResizeObserver = container.ownerDocument.defaultView?.ResizeObserver;
 		if (ResizeObserver) {
-			const observer = new ResizeObserver(() => this.updateResponsiveLayout());
+			const observer = new ResizeObserver(() => this.layoutSessionsSidebar(this.body.getBoundingClientRect().width));
 			observer.observe(this.body);
 			this._register(toDisposable(() => observer.disconnect()));
 		}
@@ -203,7 +205,8 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 			this.panes.clear();
 		}));
 		this.syncSessions();
-		this.updateResponsiveLayout();
+		this.updateSessionsLayout();
+		void this.migrateSessionsOrientation();
 		this.ensureConversationForVisibleChat();
 		void sessionService.initialize().then(() => {
 			if (this.viewDisposed) return;
@@ -213,8 +216,13 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 	}
 
 	override focus(): void {
-		if (this.sessionsSidebarVisible.get() && this.sessionsPresentation === 'list') this.sessionsControl.focus();
-		else this.activePane?.focus();
+		this.activePane?.focus();
+	}
+
+	override get minimumWidth(): number {
+		return this.sessionsSidebarVisible.get() === true && this.sessionsPresentation === AgentSessionsOrientation.SideBySide
+			? minimumSideBySideWidth
+			: minimumChatWidth;
 	}
 
 	toggleSessionsSidebar(): void {
@@ -321,9 +329,6 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 			// Keep retained Chat editors attached while Session details refresh.
 			if (this.paneHost.children[index] !== node) this.paneHost.insertBefore(node, this.paneHost.children[index] ?? null);
 		}
-		if (this.activePane !== activePane) {
-			this.activePaneListener.value = activePane?.model.onDidChange(() => this.updateResponsiveLayout());
-		}
 		this.activePane = activePane;
 		for (const entry of entries) entry.pane.setVisible(entry.pane === this.activePane);
 		this.empty.hidden = entries.length > 0;
@@ -332,7 +337,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 			entry.pane.element.setAttribute('role', 'region');
 			entry.pane.setTabId(entry.pane === activePane ? this.titleControl.titleId : undefined);
 		}
-		this.updateResponsiveLayout();
+		this.updateSessionsLayout();
 		if (restoreFocus && activePane?.element.contains(focusedElement)) focusedElement.focus();
 	}
 
@@ -403,6 +408,11 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 
 	private setSessionsSidebarVisible(visible: boolean): void {
 		if (visible === this.sessionsSidebarVisible.get()) return;
+		const previousMinimum = this.minimumWidth;
+		const width = this.body.getBoundingClientRect().width;
+		const size = (visible && width > 0 && this.sessionsPresentation === AgentSessionsOrientation.SideBySide) || (!visible && this.auxiliaryBarWidthBeforeSessions !== undefined)
+			? this.layoutService.getPartSize('auxiliarybar')
+			: undefined;
 		if (visible) {
 			const active = this.contentElement.ownerDocument.activeElement;
 			const HTMLElement = this.contentElement.ownerDocument.defaultView?.HTMLElement;
@@ -411,21 +421,21 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		this.sessionsSidebarVisible.set(visible);
 		this.body.classList.toggle('sessions-sidebar-visible', visible);
 		this.sessionsSidebar.hidden = !visible;
-		const width = this.body.getBoundingClientRect().width;
-		if (visible && width > 0 && width < minimumSideBySideWidth && this.configuration.getValue<AgentSessionsOrientation>(AGENT_SESSIONS_ORIENTATION_SETTING) !== AgentSessionsOrientation.Stacked) {
-			const size = this.layoutService.getPartSize('auxiliarybar');
+		if (visible && size && this.sessionsPresentation === AgentSessionsOrientation.SideBySide) {
 			this.auxiliaryBarWidthBeforeSessions = size.width;
+		}
+		if (this.minimumWidth !== previousMinimum) this.notifyConstraintsChanged();
+		if (visible && size && this.sessionsPresentation === AgentSessionsOrientation.SideBySide) {
 			// Reserve list space in the owning Grid, including the Part's frame insets.
-			// If window constraints prevent this width, responsive layout still handles it.
+			// The content minimum propagates to the Part before Grid resizes its node.
 			const bodyWidth = Math.max(minimumSideBySideWidth, width + this.sessionsSidebarWidth);
 			this.layoutService.resizePart('auxiliarybar', { width: size.width + bodyWidth - width, height: size.height });
-		} else if (!visible && this.auxiliaryBarWidthBeforeSessions !== undefined) {
-			const size = this.layoutService.getPartSize('auxiliarybar');
+		} else if (!visible && size && this.auxiliaryBarWidthBeforeSessions !== undefined) {
 			const previousWidth = this.auxiliaryBarWidthBeforeSessions;
 			this.auxiliaryBarWidthBeforeSessions = undefined;
 			this.layoutService.resizePart('auxiliarybar', { width: previousWidth, height: size.height });
 		}
-		this.updateResponsiveLayout();
+		this.layoutSessionsSidebar(this.body.getBoundingClientRect().width);
 		if (visible) this.sessionsControl.focus();
 		else {
 			this.focusReturn?.();
@@ -433,34 +443,40 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		}
 	}
 
-	private updateResponsiveLayout(): void {
-		const width = this.body.getBoundingClientRect().width;
-		const compact = width < minimumSideBySideWidth;
+	private updateSessionsLayout(): void {
+		const previousMinimum = this.minimumWidth;
 		const orientation = this.configuration.getValue<AgentSessionsOrientation>(AGENT_SESSIONS_ORIENTATION_SETTING);
-		this.sessionsOrientation.set(orientation);
-		const isNewChat = this.activePane?.untitledSessionId !== undefined && this.activePane.model.items.length === 0 && this.activePane.model.state !== 'submitting';
-		if (this.sessionsPresentation === 'stacked' && !isNewChat && this.sessionsSidebarVisible.get()) {
-			this.setSessionsSidebarVisible(false);
-			this.activePane?.focus();
-			return;
+		if (this.sessionsSidebarVisible.get() && orientation === AgentSessionsOrientation.SideBySide && this.sessionsPresentation !== orientation && this.body.getBoundingClientRect().width > 0) {
+			this.auxiliaryBarWidthBeforeSessions = this.layoutService.getPartSize('auxiliarybar').width;
 		}
-		if (!compact && orientation !== AgentSessionsOrientation.Stacked) {
-			this.sessionsPresentation = 'sideBySide';
-		} else if (isNewChat && orientation !== AgentSessionsOrientation.SideBySide) {
-			this.sessionsPresentation = 'stacked';
-		} else {
-			this.sessionsPresentation = 'list';
-		}
-		this.body.classList.toggle('compact', compact);
+		this.sessionsPresentation = orientation;
+		this.sessionsOrientation.set(this.sessionsPresentation);
 		this.body.classList.toggle('sessions-stacked', this.sessionsPresentation === 'stacked');
-		this.body.classList.toggle('sessions-list-only', this.sessionsPresentation === 'list');
-		const hideChat = this.sessionsSidebarVisible.get() === true && this.sessionsPresentation === 'list';
-		const restoreFocus = hideChat && this.paneHost.contains(this.paneHost.ownerDocument.activeElement);
+		if (this.minimumWidth !== previousMinimum) this.notifyConstraintsChanged();
+		if (orientation === AgentSessionsOrientation.Stacked && this.auxiliaryBarWidthBeforeSessions !== undefined) {
+			const size = this.layoutService.getPartSize('auxiliarybar');
+			const previousWidth = this.auxiliaryBarWidthBeforeSessions;
+			this.auxiliaryBarWidthBeforeSessions = undefined;
+			this.layoutService.resizePart('auxiliarybar', { width: previousWidth, height: size.height });
+		}
 		const sashHadFocus = this.sessionsSash.element === this.body.ownerDocument.activeElement;
-		this.paneHost.hidden = hideChat;
-		this.layoutSessionsSidebar(width);
-		if (restoreFocus || (sashHadFocus && this.sessionsSash.element.hidden && this.sessionsSidebarVisible.get())) {
+		this.layoutSessionsSidebar(this.body.getBoundingClientRect().width);
+		if (sashHadFocus && this.sessionsSash.element.hidden && this.sessionsSidebarVisible.get()) {
 			this.sessionsControl.focus();
+		}
+	}
+
+	private async migrateSessionsOrientation(): Promise<void> {
+		try {
+			const snapshot = await this.configurationResource.read();
+			if (this.viewDisposed) return;
+			const value = parseJsonDocument(snapshot.source, { allowComments: true, allowTrailingComma: true }).value;
+			if (!value || typeof value !== 'object' || !(AGENT_SESSIONS_ORIENTATION_SETTING in value) || value[AGENT_SESSIONS_ORIENTATION_SETTING] !== 'auto') return;
+			// The revision check preserves a layout the user chose while the old profile was loading.
+			await this.configurationResource.write(editJsonObjectProperty(snapshot.source, AGENT_SESSIONS_ORIENTATION_SETTING, AgentSessionsOrientation.SideBySide), snapshot.revision);
+		} catch (error) {
+			if (this.viewDisposed || error instanceof ConfigurationResourceRevisionConflictError) return;
+			this.notifications.error(localize('chat.sessions.layout.migrationFailed', 'Could not save the Sessions layout preference: {0}', String(error)));
 		}
 	}
 
