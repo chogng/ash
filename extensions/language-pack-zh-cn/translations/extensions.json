@@ -78,7 +78,6 @@
     "localPlugin": "本地插件",
     "paneResults": "{0} 项",
     "mcpToolsCount": "已注册 {0} 个工具",
-    "mcpRegistered": "已注册",
     "skillMissing": "此技能已不可用。请刷新技能列表。",
     "skillSource": "来源：{0}",
     "skillCompatible": "兼容",

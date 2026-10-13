@@ -261,19 +261,21 @@ test('source-owned App context survives consecutive submissions, updates in plac
 	using part = inputPart(sharedNotifications, undefined, 'agent', { send: async (text, _mode, _skills, contexts) => { sends.push({ text, contexts: await Promise.all((contexts ?? []).map(context => context.resolve())) }); } });
 	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	const context = (text: string) => ({ id: 'app-context', kind: 'mcpApp', lifetime: 'source' as const, name: 'App context', resolve: async () => ({ name: 'App context', content: text }) });
+	edit(part, 'First turn');
 	part.addContext(context('first'));
 	part.addContext(context('latest'));
 	part.addContext({ id: 'file', kind: 'file', name: 'file.ts', resolve: async () => ({ name: 'file.ts', content: 'file body' }) });
-	await part.acceptInput('First turn');
+	await part.acceptInput();
 	assert.equal(part.attachmentModel.size, 1);
-	await part.acceptInput('Next turn');
+	part.appendToDraft('Next turn');
+	await part.acceptInput();
 	assert.deepEqual(sends, [
-		{ text: 'First turn', contexts: [{ name: 'App context', content: 'latest' }, { name: 'file.ts', content: 'file body' }] },
-		{ text: 'Next turn', contexts: [{ name: 'App context', content: 'latest' }] },
+		{ text: 'First turn App context file.ts ', contexts: [{ name: 'App context', content: 'latest' }, { name: 'file.ts', content: 'file body' }] },
+		{ text: 'App context \n\nNext turn', contexts: [{ name: 'App context', content: 'latest' }] },
 	]);
-	const remove = part.element.querySelector<HTMLButtonElement>('[aria-label="Remove App context"]')!;
-	assert.ok(remove);
-	remove.click();
+	const input = part.element.querySelector('textarea')!;
+	input.setSelectionRange('App context'.length, 'App context'.length);
+	input.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }));
 	assert.equal(part.attachmentModel.size, 0);
 	await part.acceptInput('Without App context');
 	assert.deepEqual(sends[2], { text: 'Without App context', contexts: [] });
@@ -956,3 +958,23 @@ for (const submission of [
 		assert.equal(part.element.querySelector<HTMLTextAreaElement>('textarea')!.value, 'New thread draft');
 	});
 }
+
+
+test('Live App context survives inline draft submission and is revoked by its owning source', async () => {
+	const sent: string[][] = [];
+	using part = inputPart(sharedNotifications, undefined, 'agent', {
+		send: async (_text, _mode, _skills, contexts) => { sent.push(await Promise.all((contexts ?? []).map(async context => (await context.resolve()).content))); },
+	});
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	edit(part, 'First request');
+	part.attachmentModel.addContext({ id: 'app', kind: 'mcpApp', lifetime: 'source', name: 'App context', resolve: async () => ({ name: 'App context', content: 'first source state' }) });
+	await part.acceptInput();
+	assert.equal(part.attachmentModel.size, 1);
+	part.attachmentModel.addContext({ id: 'app', kind: 'mcpApp', lifetime: 'source', name: 'App context', resolve: async () => ({ name: 'App context', content: 'updated source state' }) });
+	part.appendToDraft('Next request');
+	await part.acceptInput();
+	part.attachmentModel.delete('app');
+	edit(part, 'Without App');
+	await part.acceptInput();
+	assert.deepEqual(sent, [['first source state'], ['updated source state'], []]);
+});

@@ -20,6 +20,8 @@ export class ChatDynamicVariableModel extends Disposable {
 	private decorations: string[] = [];
 	private readonly changes = this._register(new Emitter<void>());
 	readonly onDidChangeReferences = this.changes.event;
+	private readonly removed = this._register(new Emitter<ChatContextAttachment>());
+	readonly onDidRemoveReference = this.removed.event;
 	// Alternative model versions identify actual undo states; matching text alone must not attach old code.
 	private readonly history = new Map<number, readonly InlineContext[]>();
 
@@ -99,6 +101,7 @@ export class ChatDynamicVariableModel extends Disposable {
 			this.remember();
 			return;
 		}
+		const previous = this.references;
 		this.references = this.references.flatMap(context => {
 			let { start, end } = context.reference;
 			for (const edit of [...edits].sort((a, b) => b.rangeOffset - a.rangeOffset)) {
@@ -114,6 +117,14 @@ export class ChatDynamicVariableModel extends Disposable {
 		});
 		this.text = this.input.value;
 		this.refresh();
+		for (const context of previous) if (!this.references.some(current => current.id === context.id)) this.removed.fire(context);
+	}
+
+	removeReference(id: string): void {
+		const context = this.references.find(reference => reference.id === id);
+		if (!context) return;
+		this.input.setSelection({ anchor: context.reference.start, active: context.reference.end });
+		this.input.insertText('');
 	}
 
 	private refresh(): void {

@@ -1,3 +1,4 @@
+import type { NetworkInformation } from '../../browser/networkInformation.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { DeferredPromise } from '../../../../base/common/async.js';
@@ -6,7 +7,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/c
 import { IConfigurationResourceService, type IConfigurationResourceSnapshot } from '../../../configuration/common/configurationResourceService.js';
 import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
 import { IMainProcessService } from '../../../ipc/common/mainProcessService.js';
-import { IMeteredConnectionService, type NetworkInformation } from '../../common/meteredConnection.js';
+import { IMeteredConnectionService } from '../../common/meteredConnection.js';
 import { METERED_CONNECTION_CHANNEL, MeteredConnectionCommand } from '../../common/meteredConnectionIpc.js';
 import { ElectronMeteredConnectionService } from '../../electron-browser/meteredConnectionService.js';
 import { MeteredConnectionChannel } from '../../electron-main/meteredConnectionChannel.js';

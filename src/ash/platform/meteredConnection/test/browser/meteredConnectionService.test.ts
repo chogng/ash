@@ -1,3 +1,4 @@
+import type { NetworkInformation } from '../../browser/networkInformation.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
@@ -6,7 +7,7 @@ import { InMemoryConfigurationService } from '../../../configuration/common/inMe
 import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../instantiation/common/serviceCollection.js';
 import { getSingletonServiceDescriptors } from '../../../instantiation/common/extensions.js';
-import { IMeteredConnectionService, METERED_CONNECTION_SETTING_KEY, type NetworkInformation } from '../../common/meteredConnection.js';
+import { IMeteredConnectionService, METERED_CONNECTION_SETTING_KEY } from '../../common/meteredConnection.js';
 import { MeteredConnectionService } from '../../browser/meteredConnectionService.js';
 
 class BrowserConnection extends EventTarget implements NetworkInformation {

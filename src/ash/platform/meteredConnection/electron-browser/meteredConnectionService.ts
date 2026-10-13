@@ -1,10 +1,11 @@
+import type { NavigatorWithConnection, NetworkInformation } from '../browser/networkInformation.js';
 import { addDisposableListener } from '../../../base/browser/dom.js';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { SyncDescriptor } from '../../instantiation/common/descriptors.js';
 import { registerSingleton } from '../../instantiation/common/extensions.js';
 import { IMainProcessService } from '../../ipc/common/mainProcessService.js';
-import { IMeteredConnectionService, type NavigatorWithConnection, type NetworkInformation } from '../common/meteredConnection.js';
+import { IMeteredConnectionService } from '../common/meteredConnection.js';
 import { METERED_CONNECTION_CHANNEL, MeteredConnectionCommand } from '../common/meteredConnectionIpc.js';
 import '../common/meteredConnection.config.contribution.js';
 

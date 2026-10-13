@@ -990,7 +990,7 @@ for (const locale of ['en', 'zh-CN']) {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
 		const chinese = locale === 'zh-CN';
-		await page.goto(`/chatInput.html?contextSources=1&locale=${locale}&theme=${chinese ? 'hcLight' : 'dark'}`);
+		await page.goto(`/chatInput.html?inlineCode=1&contextSources=1&locale=${locale}&theme=${chinese ? 'hcLight' : 'dark'}`);
 		const add = page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true });
 		await add.press('Enter');
 		const picker = page.getByRole('dialog');

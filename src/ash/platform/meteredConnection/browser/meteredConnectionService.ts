@@ -1,10 +1,11 @@
+import type { NavigatorWithConnection, NetworkInformation } from './networkInformation.js';
 import { addDisposableListener } from '../../../base/browser/dom.js';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { IConfigurationService } from '../../configuration/common/configuration.js';
 import { SyncDescriptor } from '../../instantiation/common/descriptors.js';
 import { registerSingleton } from '../../instantiation/common/extensions.js';
-import { IMeteredConnectionService, METERED_CONNECTION_SETTING_KEY, type MeteredConnectionSettingValue, type NavigatorWithConnection, type NetworkInformation } from '../common/meteredConnection.js';
+import { IMeteredConnectionService, METERED_CONNECTION_SETTING_KEY, type MeteredConnectionSettingValue } from '../common/meteredConnection.js';
 import '../common/meteredConnection.config.contribution.js';
 
 /** Owns the effective policy for a Web page without an Electron main process. */

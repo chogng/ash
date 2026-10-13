@@ -155,6 +155,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	};
 	public readonly attachmentModel = this._register(new ChatAttachmentModel());
 	private readonly inlineContext: ChatDynamicVariableModel;
+	private synchronizingSourceContext = false;
 	private readonly status: HTMLDivElement;
 	private readonly dictationPreview: HTMLDivElement;
 	private readonly interaction: HTMLDivElement;
@@ -321,7 +322,11 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			this.renderToolbar();
 			this.inputChanges.fire();
 		}));
+		this._register(this.inlineContext.onDidRemoveReference(context => {
+			if (context.lifetime === 'source' && !this.synchronizingSourceContext) this.attachmentModel.delete(context.id);
+		}));
 		this._register(this.attachmentModel.onDidChange(() => {
+			this.syncSourceContext();
 			this.draftRevision++;
 			this.renderToolbar();
 			this.inputChanges.fire();
@@ -354,9 +359,9 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private applyHistoryDraft(draft: InputHistoryDraft): void {
 		this.applyingHistory = true;
 		try {
-			this.input.value = draft.text;
+			this.setInputValue(draft.text);
 			this.input.setSelection(draft.selection);
-			this.inlineContext.setInputState(draft.attachments);
+			this.setReferenceState(draft.attachments);
 			this.draftSkills = { text: draft.text, references: draft.skills };
 		} finally {
 			this.applyingHistory = false;
@@ -366,10 +371,10 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private applyHistoryEntry(entry: MessageHistoryEntry): void {
 		this.applyingHistory = true;
 		try {
-			this.input.value = entry.text;
+			this.setInputValue(entry.text);
 			this.input.setSelection({ anchor: entry.text.length, active: entry.text.length });
 			this.attachmentModel.cancelPendingContext();
-			this.inlineContext.setInputState([]);
+			this.setReferenceState([]);
 			this.draftSkills = undefined;
 		} finally {
 			this.applyingHistory = false;
@@ -482,9 +487,9 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		// Preparation can finish after the user has started another input; never erase that text.
 		const cleared = this.textRevision === textRevision;
 		if (cleared) {
-			this.input.value = "";
+			this.setInputValue("");
 			if (this.isDisposed || lifecycle.aborted || !this.visible) return;
-			this.inlineContext.setInputState([]);
+			this.setReferenceState([]);
 			for (const attachment of draft.attachments.filter(context => context.kind === 'toolSelection')) this.inlineContext.addReference(attachment, false);
 		}
 		const revision = this.draftRevision;
@@ -509,15 +514,47 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	addContext(attachment: ChatContextAttachment): void {
-		this.inlineContext.addReference(attachment);
+		if (attachment.lifetime === 'source') this.attachmentModel.addContext(attachment);
+		else this.inlineContext.addReference(attachment);
 		announceStatus(localize('chat.context.insertedReference', 'Inserted {0} at the message cursor', attachment.name));
 	}
 
 
 	protected get contexts(): readonly ChatContextAttachment[] {
-		// Draft references and live App-owned context have separate lifetimes. The App model
-		// remains authoritative for its content and can revoke it when its source closes.
-		return [...this.inlineContext.variables, ...this.attachmentModel.attachments];
+		return this.inlineContext.variables;
+	}
+
+	private setInputValue(value: string): void {
+		// Clearing or restoring a draft is not a user revocation of live App context.
+		const synchronizing = this.synchronizingSourceContext;
+		this.synchronizingSourceContext = true;
+		try { this.input.value = value; }
+		finally { this.synchronizingSourceContext = synchronizing; }
+	}
+
+	private setReferenceState(contexts: readonly ChatContextAttachment[]): void {
+		this.inlineContext.setInputState(contexts);
+		this.syncSourceContext();
+	}
+
+	private syncSourceContext(): void {
+		if (this.synchronizingSourceContext) return;
+		this.synchronizingSourceContext = true;
+		try {
+			const sources = this.attachmentModel.attachments;
+			for (const reference of this.inlineContext.variables) {
+				if (reference.lifetime === 'source' && !sources.some(source => source.id === reference.id)) this.inlineContext.removeReference(reference.id);
+			}
+			for (const source of sources) {
+				const reference = this.inlineContext.variables.find(reference => reference.id === source.id);
+				if (reference?.resolve === source.resolve && reference.name === source.name) continue;
+				const selection = this.input.getSelection();
+				// References own positions; the source model owns updates and revocation.
+				// Replacing an unchanged label must not move a user's caret mid-draft.
+				this.inlineContext.addReference(source, false);
+				if (reference?.name === source.name) this.input.setSelection(selection);
+			}
+		} finally { this.synchronizingSourceContext = false; }
 	}
 
 	/** Context selectors borrow this composer’s pending owner; they retain their own error presentation. */
@@ -574,9 +611,9 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			draft: { mode, text, contexts },
 			clear: () => {
 				if (this.isDisposed || lifecycle.aborted || this.draftRevision !== revision || this.mode !== mode) return;
-				this.input.value = '';
+				this.setInputValue('');
 				this.attachmentModel.cancelPendingContext();
-				this.inlineContext.setInputState([]);
+				this.setReferenceState([]);
 				this.draftRevision++;
 				this.renderToolbar();
 				this.inputChanges.fire();
@@ -586,14 +623,14 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 	appendToDraft(text: string): void {
 		const previous = this.input.value;
-		this.input.value = previous ? `${previous}\n\n${text}` : text;
+		this.setInputValue(previous ? `${previous}\n\n${text}` : text);
 		this.renderToolbar();
 	}
 
 	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>): void {
 		if (this.input.value || this.contexts.length > 0) throw new Error(localize('chat.draftHandoffConflict', 'The Agents Window already has an unsent draft in this chat.'));
 		this.delegate.selectMode(draft.mode);
-		this.input.value = draft.text;
+		this.setInputValue(draft.text);
 		const inline: ChatContextAttachment[] = [];
 		const legacyReferences: ChatContextAttachment[] = [];
 		for (const context of draft.contexts) {
@@ -609,7 +646,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			if (attachment.reference) inline.push(attachment);
 			else legacyReferences.push(attachment);
 		}
-		this.inlineContext.setInputState(inline);
+		this.setReferenceState(inline);
 		// Older drafts have snapshots without text positions; retain each as a reference at the message end.
 		for (const attachment of legacyReferences) this.inlineContext.addReference(attachment, false);
 		this.draftRevision++;
@@ -624,8 +661,9 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		if (this.submitting || this.state.phase === 'submitting' || (this.state.phase === 'loading' && !localCommand)) return;
 		if (value !== undefined) {
 			const tools = this.contexts.filter(context => context.kind === 'toolSelection');
-			this.input.value = value;
+			this.setInputValue(value);
 			for (const attachment of tools) this.inlineContext.addReference(attachment, false);
+			this.syncSourceContext();
 		}
 		if (!this.commandText().trim() && !this.attachmentModel.hasPendingContext && !this.contexts.some(attachment => attachment.kind !== 'toolSelection')) return;
 		const lifecycle = this.inputLifecycle.signal;

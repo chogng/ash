@@ -13,13 +13,3 @@ export interface IMeteredConnectionService {
 
 export const METERED_CONNECTION_SETTING_KEY = 'network.meteredConnection';
 export type MeteredConnectionSettingValue = 'on' | 'off' | 'auto';
-
-/** Browser signals are observations, not a direct OS billing-status query. */
-export interface NetworkInformation extends EventTarget {
-	readonly saveData?: boolean;
-	readonly metered?: boolean;
-}
-
-export interface NavigatorWithConnection {
-	readonly connection?: NetworkInformation;
-}
