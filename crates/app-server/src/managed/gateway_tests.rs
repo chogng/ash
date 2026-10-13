@@ -71,6 +71,9 @@ fn session_directory_file_requests_route_to_the_session_execution_authority() {
         "terminal/read",
         "terminal/write",
         "terminal/close",
+        "fs/readFile",
+        "fs/readBinaryFile",
+        "fs/writeFile",
     ] {
         assert_eq!(
             selected_execution_target(
@@ -874,4 +877,194 @@ fn ssh_buffered_response_cannot_complete_an_id_already_finished_by_route_failure
         received.recv().is_err(),
         "a late response cannot follow route failure"
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn directory_resources_remain_on_their_creating_gateway_connection() {
+    use base64::Engine;
+    let profile = tempfile::tempdir().unwrap();
+    let root = tempfile::tempdir().unwrap();
+    std::fs::write(root.path().join("bytes.bin"), b"directory resource").unwrap();
+    let options = ash_app_server_daemon::ConnectionOptions::new(
+        profile.path(),
+        None,
+        ash_app_server_daemon::GrantSource::HostConfiguration,
+        None,
+    );
+    let registry = Arc::new(ProfileAppServerRegistry::open(options.clone()).unwrap());
+    let server = registry.server_for(options).unwrap();
+    let start = || {
+        let registry = Arc::clone(&registry);
+        let server = Arc::clone(&server);
+        let (mut client, stream) = crate::server::request_dispatch::tests::Client::pair();
+        let served = thread::spawn(move || {
+            let (reader, writer) = ash_app_server_transport::LocalStream::pair(stream).unwrap();
+            let result = serve(
+                registry,
+                server,
+                BufReader::new(reader),
+                writer,
+                RemoteLaunch::from_environment(),
+            );
+            assert!(
+                result.is_ok()
+                    || result
+                        .as_ref()
+                        .is_err_and(crate::managed::is_peer_disconnect)
+            );
+        });
+        client.send(1, "initialize", serde_json::json!({"clientInfo":{"name":"resource-gateway-test","version":"1"},"capabilities":{"dirPermissionsHost":{"version":1}}}));
+        assert!(client.read()["result"].is_object());
+        (client, served)
+    };
+    let call = |client: &mut crate::server::request_dispatch::tests::Client, id, method, params| {
+        client.send(id, method, params);
+        loop {
+            let message = client.read();
+            if message["id"] == id {
+                break message;
+            }
+        }
+    };
+    let (mut owner, served) = start();
+    let created = call(
+        &mut owner,
+        2,
+        "session/create",
+        serde_json::json!({
+            "commandId":"resource-session", "title":"Resource owner",
+            "executionTarget":{"type":"local", "root":root.path()}
+        }),
+    );
+    assert!(created.get("result").is_some(), "{created}");
+    let session_id = created["result"]["session"]["sessionId"].clone();
+    let granted = call(
+        &mut owner,
+        8,
+        "session/dirs/add",
+        serde_json::json!({"sessionId":session_id,"path":root.path(),"permissions":["readFiles"]}),
+    );
+    assert!(granted.get("result").is_some(), "{granted}");
+    let read_params = serde_json::json!({"sessionDirectory":{"sessionId":session_id,"path":root.path()},"path":"bytes.bin"});
+    let opened = call(&mut owner, 3, "fs/readBinaryFile", read_params.clone());
+    assert!(opened.get("result").is_some(), "{opened}");
+    let resource = opened["result"]["resource"]["resourceId"].clone();
+    let metadata = call(
+        &mut owner,
+        4,
+        "resource/metadata",
+        serde_json::json!({"resourceId":resource}),
+    );
+    assert_eq!(metadata["result"], opened["result"]["resource"]);
+    let read = call(
+        &mut owner,
+        5,
+        "resource/read",
+        serde_json::json!({"resourceId":resource,"offset":0,"maxBytes":262144}),
+    );
+    assert_eq!(read["result"]["resourceId"], resource);
+    assert_eq!(
+        base64::engine::general_purpose::STANDARD
+            .decode(read["result"]["dataBase64"].as_str().unwrap())
+            .unwrap(),
+        b"directory resource"
+    );
+    let (mut other, other_served) = start();
+    // Open the same directory route on a second client; the route tag grants no ownership.
+    let second = call(&mut other, 2, "fs/readBinaryFile", read_params);
+    assert!(second.get("result").is_some(), "{second}");
+    for (id, method, params) in [
+        (
+            3,
+            "resource/metadata",
+            serde_json::json!({"resourceId":resource}),
+        ),
+        (
+            4,
+            "resource/read",
+            serde_json::json!({"resourceId":resource,"offset":0,"maxBytes":1}),
+        ),
+        (
+            5,
+            "resource/release",
+            serde_json::json!({"resourceId":resource}),
+        ),
+    ] {
+        let denied = call(&mut other, id, method, params);
+        assert_eq!(denied["error"]["message"], "ResourceNotOwner", "{denied}");
+    }
+    let released = call(
+        &mut owner,
+        6,
+        "resource/release",
+        serde_json::json!({"resourceId":resource}),
+    );
+    assert!(released.get("result").is_some(), "{released}");
+    let missing = call(
+        &mut owner,
+        7,
+        "resource/metadata",
+        serde_json::json!({"resourceId":resource}),
+    );
+    assert!(missing.get("error").is_some());
+    other.close();
+    owner.close();
+    other_served.join().unwrap();
+    served.join().unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn ssh_resources_route_back_to_the_live_connection_without_a_session_parameter() {
+    let initialize = remote_initialize_result();
+    let catalog = serde_json::json!({"jsonrpc":"2.0","id":catalog_request_id(1),"result":{"sessions":[{"sessionId":"remote-session","threads":[],"executionTarget":{"type":"local","root":"/workspace"}}]}}).to_string();
+    let mut gateway = gateway_with_ssh(std::time::Duration::from_secs(10), |marker| {
+        format!(
+            "IFS= read -r initialize\nprintf '%s\\n' '{}'\nIFS= read -r catalog\nprintf '%s\\n' '{}'\nIFS= read -r open\nprintf '%s\\n' '{{\"jsonrpc\":\"2.0\",\"id\":3,\"result\":{{\"resource\":{{\"resourceId\":\"remote-bytes\",\"mimeType\":\"text/plain\",\"size\":1,\"sha256\":\"digest\"}}}}}}'\nIFS= read -r read\nprintf '%s' \"$read\" > '{}'\nprintf '%s\\n' '{{\"jsonrpc\":\"2.0\",\"id\":4,\"result\":{{\"resourceId\":\"remote-bytes\",\"offset\":0,\"dataBase64\":\"eA==\",\"decodedLength\":1,\"eof\":true}}}}'\nwhile IFS= read -r request; do :; done\n",
+            initialize.replace('\'', "'\"'\"'"),
+            catalog,
+            marker.display(),
+        )
+    });
+    gateway
+        .client
+        .send(2, "session/list", serde_json::json!({}));
+    assert_eq!(
+        gateway.client.read()["result"]["sessions"][0]["sessionId"],
+        "remote-session"
+    );
+    gateway.client.send(
+        3,
+        "skill/resource/open",
+        serde_json::json!({"sessionId":"remote-session"}),
+    );
+    let opened = gateway.client.read();
+    let resource = opened["result"]["resource"]["resourceId"].clone();
+    assert_eq!(resource, "gateway-resource:1:remote-bytes");
+    gateway.client.send(
+        4,
+        "resource/read",
+        serde_json::json!({"resourceId":resource,"offset":0,"maxBytes":1}),
+    );
+    let read = gateway.client.read();
+    assert_eq!(read["result"]["resourceId"], resource);
+    assert_eq!(read["result"]["dataBase64"], "eA==");
+    let forwarded: Value = serde_json::from_str(&wait_for_ssh(&gateway.marker)).unwrap();
+    assert_eq!(forwarded["params"]["resourceId"], "remote-bytes");
+    gateway.client.send(
+        5,
+        "resource/metadata",
+        serde_json::json!({"resourceId":"gateway-resource:999:remote-bytes"}),
+    );
+    assert_eq!(
+        gateway.client.read()["error"]["message"],
+        "ResourceNotOwner"
+    );
+    gateway.close();
+    gateway
+        .completed
+        .recv_timeout(std::time::Duration::from_secs(3))
+        .unwrap()
+        .unwrap();
 }

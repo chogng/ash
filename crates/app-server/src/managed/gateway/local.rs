@@ -143,7 +143,7 @@ impl<'scope> LocalTarget<'scope> {
                     raw,
                     move |response| {
                         let result = output
-                            .send(response.into())
+                            .send(super::tag_resource_response(response, route_id).into())
                             .map_err(|_| io::Error::from(io::ErrorKind::BrokenPipe));
                         drop(admission);
                         result

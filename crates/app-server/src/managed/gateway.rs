@@ -214,8 +214,8 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
         let mut initialize_request: Option<IncomingRequest> = None;
         let result = (|| {
             while let Some(raw) = reader.read_message()? {
-                let raw = IncomingRequest::from(raw);
-                let request: Value = match serde_json::from_str(&raw) {
+                let mut raw = IncomingRequest::from(raw);
+                let mut request: Value = match serde_json::from_str(&raw) {
                     Ok(request) => request,
                     Err(_) => {
                         outbound
@@ -226,7 +226,11 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
                         continue;
                     }
                 };
-                let method = request.get("method").and_then(Value::as_str);
+                let method_name = request
+                    .get("method")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned);
+                let method = method_name.as_deref();
                 let id = request.get("id").cloned().unwrap_or(Value::Null);
                 if method.is_some()
                     && !serde_json::from_value::<JsonRpcRequest<Value>>(request.clone()).is_ok_and(
@@ -429,6 +433,39 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
                     )?;
                     continue;
                 }
+                // Resource handles belong to the backend connection that created them. A
+                // Session route cannot be inferred from a subsequent resource-only request.
+                if matches!(
+                    method,
+                    Some("resource/metadata" | "resource/read" | "resource/release")
+                ) {
+                    if let Some((route_id, resource_id)) = routed_resource(&request) {
+                        request["params"]["resourceId"] = Value::String(resource_id);
+                        raw = request.to_string().into();
+                        if route_id != 0 {
+                            let sent = if let Some(target) =
+                                local.values().find(|target| target.route_id == route_id)
+                            {
+                                target.send(raw, &request)
+                            } else if let Some(target) =
+                                remote.values().find(|target| target.route_id == route_id)
+                            {
+                                target.send(request.clone())
+                            } else {
+                                outbound
+                                    .send(resource_owner_error(id).into())
+                                    .map_err(|_| io::Error::from(io::ErrorKind::BrokenPipe))?;
+                                continue;
+                            };
+                            if let Err(error) = sent {
+                                outbound
+                                    .send(local_request_error(id, &error).into())
+                                    .map_err(|_| io::Error::from(io::ErrorKind::BrokenPipe))?;
+                            }
+                            continue;
+                        }
+                    }
+                }
                 let execution_target =
                     match selected_execution_target(&registry, &remote_sessions, &request) {
                         Ok(target) => target,
@@ -571,7 +608,7 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
                     raw,
                     move |response| {
                         output
-                            .send(response.into())
+                            .send(tag_resource_response(response, 0).into())
                             .map_err(|_| io::Error::from(io::ErrorKind::BrokenPipe))
                     },
                 )?;
@@ -609,6 +646,50 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
             .join()
             .map_err(|_| io::Error::other("Profile writer panicked"))?
     })
+}
+
+/// Qualify only binary resource contracts, not unrelated call/dictation resource IDs.
+fn tag_resource_handles(message: &mut Value, route_id: usize) {
+    for path in ["/result/resourceId", "/result/resource/resourceId"] {
+        if let Some(value) = message.pointer_mut(path) {
+            if let Some(id) = value.as_str() {
+                *value = Value::String(format!("gateway-resource:{route_id}:{id}"));
+            }
+        }
+    }
+}
+
+fn tag_resource_response(response: String, route_id: usize) -> String {
+    if !response.contains("\"resourceId\"") {
+        return response;
+    }
+    let Ok(mut message) = serde_json::from_str::<Value>(&response) else {
+        return response;
+    };
+    // Call/dictation results also use resourceId, but do not expose byte metadata.
+    if message.pointer("/result/sha256").is_some()
+        || message.pointer("/result/dataBase64").is_some()
+        || message.pointer("/result/resource/sha256").is_some()
+    {
+        tag_resource_handles(&mut message, route_id);
+        message.to_string()
+    } else {
+        response
+    }
+}
+
+fn routed_resource(request: &Value) -> Option<(usize, String)> {
+    let id = request.pointer("/params/resourceId")?.as_str()?;
+    let (route, id) = id.strip_prefix("gateway-resource:")?.split_once(':')?;
+    Some((route.parse().ok()?, id.to_owned()))
+}
+
+fn resource_owner_error(id: Value) -> String {
+    serde_json::to_string(&JsonRpcFailure::new(
+        serde_json::from_value(id).expect("gateway validated request ID"),
+        AppServerError::new(-32000, AppServerErrorName::ResourceNotOwner),
+    ))
+    .expect("valid resource owner error")
 }
 
 fn remote_key(profile: &RemoteProfile) -> RemoteKey {
@@ -669,7 +750,7 @@ fn read_remote_messages(
         let output = if message.get("method").is_some() {
             tag_host_request(message.to_string(), route_id)
         } else {
-            message.to_string()
+            tag_resource_response(message.to_string(), route_id)
         };
         if outbound.send(output.into()).is_err() {
             break;
@@ -898,7 +979,9 @@ fn selected_execution_target(
     ) {
         return Ok(None);
     }
-    let terminal_directory = if method.is_some_and(|method| method.starts_with("terminal/")) {
+    let terminal_directory = if method
+        .is_some_and(|method| method.starts_with("terminal/") || method.starts_with("fs/"))
+    {
         AppServer::terminal_session_directory(
             request
                 .get("params")
