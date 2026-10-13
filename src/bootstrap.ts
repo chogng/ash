@@ -18,6 +18,13 @@ export function bootstrapElectronMain(): void {
 }
 
 function registerProcessErrorHandlers(): void {
+	// A development launcher can exit while Electron still owns a window. Its closed
+	// output pipes must not feed write errors back into the console error handler.
+	for (const stream of [process.stdout, process.stderr]) {
+		stream.on("error", (error: NodeJS.ErrnoException) => {
+			if (error.code !== "EPIPE") onUnexpectedError(error);
+		});
+	}
 	process.on("uncaughtException", error => onUnexpectedError(error));
 	process.on("unhandledRejection", reason => onUnexpectedError(reason));
 	setUnexpectedErrorHandler(error => console.error("Unexpected error in Electron main process", error));
