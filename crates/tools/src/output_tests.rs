@@ -127,3 +127,23 @@ fn artifact_truncation_keeps_source_binary_and_a_shared_utf8_budget() {
     assert!(before.len() + text.len() + after.len() <= 256);
     assert_eq!(text.matches("Warning: truncated output").count(), 1);
 }
+
+#[test]
+fn model_text_budget_keeps_view_only_payloads_intact_without_consuming_model_bytes() {
+    let view = ash_protocol::ToolOutputArtifact::new(
+        ash_protocol::ToolOutputArtifactSource::ViewMetadata,
+        "application/json".into(),
+        ash_protocol::ToolOutputArtifactData::Json {
+            json: format!("{{\"private\":\"{}\"}}", "data".repeat(100)),
+        },
+    );
+    let output = ToolOutput::success(vec![
+        ToolContent::Artifact(view.clone()),
+        ToolContent::Text("visible data ".repeat(100)),
+    ])
+    .truncate_text(crate::ToolOutputTruncationPolicy::Bytes(128));
+    assert_eq!(output.content()[0], ToolContent::Artifact(view));
+    assert!(
+        matches!(&output.content()[1], ToolContent::Text(text) if text.len() <= 128 && text.contains("Warning: truncated output"))
+    );
+}

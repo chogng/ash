@@ -351,6 +351,10 @@ impl McpRuntime {
                 McpRuntimeError::StaleCatalog.to_string(),
             ));
         }
+        let app_input = descriptor
+            .app_resource_uri
+            .as_ref()
+            .map(|_| serde_json::Value::Object(arguments.clone()));
         let mut request = CallToolRequestParams::new(binding.remote().remote_name().to_owned());
         request.arguments = Some(arguments);
         let result = connection
@@ -363,39 +367,51 @@ impl McpRuntime {
                 ash_protocol::ToolOutputArtifactSource::McpApp { uri: uri.clone() },
                 "text/html;profile=mcp-app".into(),
                 ash_protocol::ToolOutputArtifactData::Json {
-                    json: result.meta.as_ref().map_or_else(
-                        || "{}".into(),
-                        |meta| serde_json::to_string(meta).expect("MCP metadata is JSON"),
-                    ),
+                    json: serde_json::json!({"input": app_input}).to_string(),
                 },
             )
         });
-        let reserved = app.as_ref().map_or(0, |app| {
+        let metadata = result.meta.as_ref().map(|meta| {
+            ash_protocol::ToolOutputArtifact::new(
+                ash_protocol::ToolOutputArtifactSource::ViewMetadata,
+                "application/json".into(),
+                ash_protocol::ToolOutputArtifactData::Json {
+                    json: serde_json::to_string(meta).expect("MCP metadata is JSON"),
+                },
+            )
+        });
+        let metadata_bytes = metadata.as_ref().map_or(0, |artifact| {
+            let ash_protocol::ToolOutputArtifactData::Json { json } = &artifact.data else {
+                unreachable!()
+            };
+            json.len() + artifact.mime_type.len()
+        });
+        let reserved = metadata_bytes.saturating_add(app.as_ref().map_or(0, |app| {
             let ash_protocol::ToolOutputArtifactData::Json { json } = &app.data else {
                 unreachable!("App metadata was normalized above")
             };
             json.len()
                 + app.mime_type.len()
                 + descriptor.app_resource_uri.as_ref().map_or(0, String::len)
-        });
+        }));
         if reserved > self.limits.maximum_tool_output_bytes {
             return Err(McpCallError::InvalidResult(
                 "MCP App metadata byte limit exceeded".into(),
             ));
         }
         let output = project_tool_result(result, self.limits.maximum_tool_output_bytes - reserved)?;
-        match app {
-            Some(app) => {
-                let status = output.status();
-                let mut content = output.content().to_vec();
-                content.push(ash_tools::ToolContent::Artifact(app));
-                Ok(match status {
-                    ash_tools::ToolOutputStatus::Success => ToolOutput::success(content),
-                    ash_tools::ToolOutputStatus::Error => ToolOutput::error(content),
-                })
-            }
-            None => Ok(output),
+        let status = output.status();
+        let mut content = output.content().to_vec();
+        if let Some(metadata) = metadata {
+            content.push(ash_tools::ToolContent::Artifact(metadata));
         }
+        if let Some(app) = app {
+            content.push(ash_tools::ToolContent::Artifact(app));
+        }
+        Ok(match status {
+            ash_tools::ToolOutputStatus::Success => ToolOutput::success(content),
+            ash_tools::ToolOutputStatus::Error => ToolOutput::error(content),
+        })
     }
 
     /// Reads only through a still-valid tool origin; a URI never chooses a different server.
@@ -453,6 +469,16 @@ impl McpRuntime {
                 "resource read must return one exact resource".into(),
             ));
         }
+        let app_csp = resource_app_csp(&result.contents[0])?;
+        let csp_bytes = app_csp.as_ref().map_or(0, |csp| {
+            serde_json::to_vec(csp).expect("typed CSP is JSON").len()
+        });
+        let budget = self.limits.maximum_tool_output_bytes.min(262_144);
+        if csp_bytes > budget {
+            return Err(McpCallError::InvalidResult(
+                "App CSP exceeds resource budget".into(),
+            ));
+        }
         let output = project_tool_result(
             ash_rmcp_client::CallToolResult::success(
                 result
@@ -461,7 +487,7 @@ impl McpRuntime {
                     .map(ash_rmcp_client::ContentBlock::resource)
                     .collect(),
             ),
-            self.limits.maximum_tool_output_bytes.min(262_144),
+            budget - csp_bytes,
         )?;
         let [ash_tools::ToolContent::Artifact(artifact)] = output.content() else {
             return Err(McpCallError::InvalidResult(
@@ -475,7 +501,9 @@ impl McpRuntime {
                 "resource identity mismatch or byte limit exceeded".into(),
             ));
         }
-        Ok(artifact.clone())
+        let mut artifact = artifact.clone();
+        artifact.app_csp = app_csp;
+        Ok(artifact)
     }
 
     pub async fn shutdown(self) -> Vec<McpShutdownDiagnostic> {
@@ -490,6 +518,108 @@ impl McpRuntime {
         }
         diagnostics
     }
+}
+
+/// A resource's network declaration is untrusted input to a browser security policy.
+/// Keep only complete HTTP(S) origins (and WS(S) for connections), never raw CSP expressions.
+fn resource_app_csp(
+    resource: &ash_rmcp_client::ResourceContents,
+) -> Result<Option<ash_protocol::McpAppResourceCsp>, McpCallError> {
+    let (mime, meta) = match resource {
+        ash_rmcp_client::ResourceContents::TextResourceContents {
+            mime_type, meta, ..
+        }
+        | ash_rmcp_client::ResourceContents::BlobResourceContents {
+            mime_type, meta, ..
+        } => (mime_type.as_deref(), meta.as_ref()),
+        _ => return Ok(None),
+    };
+    if !mime.is_some_and(|mime| {
+        mime.split(';')
+            .next()
+            .is_some_and(|part| part.trim().eq_ignore_ascii_case("text/html"))
+            && mime.split(';').skip(1).any(|part| {
+                part.split_once('=').is_some_and(|(key, value)| {
+                    key.trim().eq_ignore_ascii_case("profile")
+                        && value.trim().eq_ignore_ascii_case("mcp-app")
+                })
+            })
+    }) {
+        return Ok(None);
+    }
+    let Some(value) = meta
+        .and_then(|meta| meta.get("ui"))
+        .and_then(|ui| ui.get("csp"))
+    else {
+        return Ok(None);
+    };
+    if serde_json::to_vec(value)
+        .map_err(|error| McpCallError::InvalidResult(error.to_string()))?
+        .len()
+        > 16_384
+    {
+        return Err(McpCallError::InvalidResult(
+            "App CSP metadata exceeds byte limit".into(),
+        ));
+    }
+    let mut csp: ash_protocol::McpAppResourceCsp = serde_json::from_value(value.clone())
+        .map_err(|_| McpCallError::InvalidResult("invalid App CSP metadata".into()))?;
+    for (domains, allow_websocket) in [
+        (&mut csp.connect_domains, true),
+        (&mut csp.resource_domains, false),
+        (&mut csp.frame_domains, false),
+        (&mut csp.base_uri_domains, false),
+    ] {
+        if domains.len() > 32 {
+            return Err(McpCallError::InvalidResult(
+                "App CSP has too many origins".into(),
+            ));
+        }
+        for domain in domains.iter_mut() {
+            if domain.len() > 256
+                || !domain.is_ascii()
+                || domain.chars().any(|character| {
+                    character.is_ascii_whitespace()
+                        || character.is_control()
+                        || "'\"<>;`\\".contains(character)
+                })
+            {
+                return Err(McpCallError::InvalidResult("invalid App CSP origin".into()));
+            }
+            let (scheme, host) = domain
+                .split_once("://")
+                .ok_or_else(|| McpCallError::InvalidResult("App CSP requires an origin".into()))?;
+            let wildcard = host.starts_with("*.");
+            let normalized = format!("{scheme}://{}", host.strip_prefix("*.").unwrap_or(host));
+            let url = url::Url::parse(&normalized)
+                .map_err(|_| McpCallError::InvalidResult("invalid App CSP origin".into()))?;
+            if !(matches!(url.scheme(), "http" | "https")
+                || allow_websocket && matches!(url.scheme(), "ws" | "wss"))
+                || !url.username().is_empty()
+                || url.password().is_some()
+                || url.path() != "/"
+                || url.query().is_some()
+                || url.fragment().is_some()
+                || url.host_str().is_none()
+                || url.host_str().is_some_and(|host| host.contains('*'))
+                || wildcard && !matches!(url.host(), Some(url::Host::Domain(_)))
+                || host.trim_end_matches('/').contains('*') && !wildcard
+            {
+                return Err(McpCallError::InvalidResult(
+                    "App CSP requires a safe origin".into(),
+                ));
+            }
+            let origin = url.origin().ascii_serialization();
+            *domain = if wildcard {
+                origin.replacen("://", "://*.", 1)
+            } else {
+                origin
+            };
+        }
+        domains.sort();
+        domains.dedup();
+    }
+    Ok(Some(csp))
 }
 
 async fn shutdown_connections(connections: BTreeMap<McpServerId, McpConnection>) {

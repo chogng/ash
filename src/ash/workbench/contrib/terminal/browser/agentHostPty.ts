@@ -32,15 +32,18 @@ export class AgentHostPty extends BasePty<IProcessDataEvent> {
 	get onOutputGap() { return this.manager.onOutputGap; }
 	get onPtyReconnect() { return this.manager.onPtyReconnect; }
 
+	protected assertCanWrite(): void { }
+
 	start(reconnecting = false): Promise<void> {
+		try { this.assertCanWrite(); } catch (error) { return Promise.reject(error); }
 		if (this.closeTask || this.isDisposed) return Promise.reject(new CancellationError());
 		if (!this.readySent) { this.readySent = true; this.handleReady(this.creation.ready); }
 		return this.manager.start(reconnecting);
 	}
 
-	input(data: string): Promise<void> { return this.manager.write(data); }
-	processBinary(data: string): Promise<void> { return this.manager.processBinary(data); }
-	resize(cols: number, rows: number): Promise<void> { return this.manager.setDimensions(cols, rows); }
+	async input(data: string): Promise<void> { this.assertCanWrite(); return this.manager.write(data); }
+	async processBinary(data: string): Promise<void> { this.assertCanWrite(); return this.manager.processBinary(data); }
+	async resize(cols: number, rows: number): Promise<void> { this.assertCanWrite(); return this.manager.setDimensions(cols, rows); }
 	stop(): void { this.manager.stop(); }
 	shutdown(_immediate: boolean): void { void this.close().catch(onUnexpectedError); }
 

@@ -14,7 +14,7 @@ import { IEnvironmentVariableService } from '../common/environmentVariable.js';
 import { ITerminalProfileResolverService, ITerminalProfileService, type IShellLaunchConfigResolveOptions } from '../../../services/terminal/common/terminal.js';
 
 /** Resolves caller-owned launch data against one initialized execution host and workspace generation. */
-export class BrowserTerminalProfileResolverService extends Disposable implements ITerminalProfileResolverService {
+export abstract class BaseTerminalProfileResolverService extends Disposable implements ITerminalProfileResolverService {
 	private generation = 0;
 
 	constructor(
@@ -22,7 +22,7 @@ export class BrowserTerminalProfileResolverService extends Disposable implements
 		@ITerminalProcessService private readonly processes: ITerminalProcessService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IConfigurationResolverService private readonly variables: IConfigurationResolverService,
-		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
+		@IWorkspaceContextService protected readonly workspace: IWorkspaceContextService,
 		@IEnvironmentVariableService private readonly environmentVariables: IEnvironmentVariableService,
 	) {
 		super();
@@ -155,9 +155,11 @@ export class BrowserTerminalProfileResolverService extends Disposable implements
 		}
 	}
 
+	protected abstract getExecutionAuthority(): string | undefined;
+
 	private assertAuthority(remoteAuthority: string | undefined): void {
 		if (this.isDisposed) throw new CancellationError();
-		const authority = this.workspace.getWorkspace().folders[0]?.uri.authority || undefined;
+		const authority = this.getExecutionAuthority();
 		if (remoteAuthority !== undefined && remoteAuthority !== authority) throw new Error(localize('terminal.profile.targetMismatch', 'The requested terminal execution host is not selected.'));
 	}
 
@@ -168,6 +170,14 @@ export class BrowserTerminalProfileResolverService extends Disposable implements
 
 	private assertCurrent(generation: number): void {
 		if (this.isDisposed || generation !== this.generation) throw new CancellationError();
+	}
+}
+
+/** Browser execution follows the resource selected by its embedder. */
+export class BrowserTerminalProfileResolverService extends BaseTerminalProfileResolverService {
+	protected getExecutionAuthority(): string | undefined {
+		const folder = this.workspace.getWorkspace().folders[0];
+		return folder?.uri.scheme === 'ash-remote' ? folder.uri.authority : undefined;
 	}
 }
 

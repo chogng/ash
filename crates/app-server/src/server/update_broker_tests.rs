@@ -478,7 +478,7 @@ fn transcript_snapshot_includes_output_assembled_before_a_consumer_subscribes() 
         }],
         hook_runs: Vec::new(),
     };
-    let snapshot = broker.thread_transcript_snapshot(&thread, true);
+    let snapshot = broker.thread_transcript_snapshot(&thread, true, &[]);
 
     assert!(matches!(
         &snapshot.entries[0],

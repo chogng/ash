@@ -1,3 +1,5 @@
+import { TerminalChatCommandId } from '../terminalContribChatExports.js';
+import { TerminalTabsChatEntry } from './terminalTabsChatEntry.js';
 import { TerminalIconPicker } from './terminalIconPicker.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { terminalStrings } from '../common/terminalStrings.js';
@@ -25,6 +27,23 @@ import { InstanceContext } from './terminalContextMenu.js';
 
 /** Command definitions use the invoking window's services, never a retained View callback. */
 export function registerTerminalActions(): void {
+	registerAction2(class AttachTerminalToChatAction extends Action2 {
+		constructor() {
+			super({
+				id: TerminalChatCommandId.AttachToChat,
+				title: localize2('terminal.chat.attach', 'Terminal: Attach to Chat'),
+				f1: true, precondition: TerminalHasActiveInstanceContext.isEqualTo(true),
+				menu: { id: MenuId.TerminalInstanceContext, group: '2_chat' },
+			});
+		}
+		override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
+			const instance = resolveInstance(accessor, context);
+			if (!instance) return;
+			using entry = accessor.get(IInstantiationService).createInstance(TerminalTabsChatEntry);
+			await entry.attach(instance);
+		}
+	});
+
 	registerAction2(class RenameTerminalAction extends Action2 {
 		constructor() { super({ id: TerminalCommandId.Rename, title: localize2('terminal.rename.command', 'Terminal: Rename'), f1: true, precondition: TerminalHasActiveInstanceContext.isEqualTo(true) }); }
 		override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {

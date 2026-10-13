@@ -153,6 +153,24 @@ pub enum UpdatePlanDisposition {
     Unchanged,
 }
 
+/// A provider transcript delta from an authorized media epoch, unrelated to model Turn input.
+#[derive(Clone, Debug)]
+pub struct RecordVoiceTranscriptRequest {
+    pub voice_session_id: String,
+    pub media_epoch: u64,
+    pub speaker: ash_protocol::VoiceTranscriptSpeaker,
+    pub text: String,
+    pub start_ms: u64,
+    pub end_ms: u64,
+}
+
+#[derive(Clone, Debug)]
+pub struct RecordVoiceTranscriptResult {
+    pub after_sequence: u64,
+    pub sequence: u64,
+    pub transcript: ash_protocol::VoiceTranscript,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UpdatePlanResult {
     pub sequence: u64,
@@ -167,6 +185,16 @@ pub(crate) struct PrepareModelInvocationRequest<'a> {
     pub evidence: Vec<crate::ContextEvidence>,
     pub tools: Vec<ToolDefinition>,
     pub budget: ContextBudget,
+}
+
+/// A host-resolved tool Turn. Approval and execution still use the ordinary durable scheduler.
+pub struct StartToolTurnRequest {
+    pub command_id: CommandId,
+    pub expected_sequence: SequenceExpectation,
+    pub policy_revision: String,
+    pub approval_mode: ApprovalMode,
+    pub call: ash_protocol::ToolCall,
+    pub binding: ToolCallBinding,
 }
 
 /// Client command that starts a model-free Turn containing one durable shell Tool Call.
@@ -1014,6 +1042,14 @@ impl ThreadController {
             .context_policy
             .validate()
             .map_err(|message| CoreError::InvalidInput(message.into()))?;
+        if matches!(
+            request.kind,
+            TurnKind::Shell | TurnKind::Tool | TurnKind::ContextCompaction
+        ) {
+            return Err(CoreError::InvalidInput(
+                "independent actions require their owning Core command".into(),
+            ));
+        }
         if let Some(advisor) = &request.advisor {
             advisor
                 .validate()
@@ -1693,7 +1729,7 @@ impl ThreadController {
                 ThreadEvent::TurnAccepted {
                     thread_id: thread_id.clone(),
                     turn_id: turn_id.clone(),
-                    kind: TurnKind::Coding,
+                    kind: TurnKind::ContextCompaction,
                     mode: ash_protocol::CollaborationMode::Agent,
                     instructions: None,
                     policy_revision: request.policy_revision.clone(),
@@ -1765,6 +1801,51 @@ impl ThreadController {
             command: request.invocation.command.clone(),
             approval_mode: request.approval_mode,
         };
+        let call = ash_protocol::ToolCall {
+            id: request.tool_call_id,
+            name: ToolName::new("shell-command").expect("built-in shell-command name is valid"),
+            arguments: serde_json::json!({ "program": request.invocation.program, "arguments": request.invocation.arguments, "working_directory": request.invocation.working_directory }),
+        };
+        self.start_model_free_turn(
+            thread_id,
+            StartToolTurnRequest {
+                command_id: request.command_id,
+                expected_sequence: request.expected_sequence,
+                policy_revision: request.policy_revision,
+                approval_mode: request.approval_mode,
+                call,
+                binding: request.binding,
+            },
+            command,
+            TurnKind::Shell,
+        )
+    }
+
+    pub fn start_tool_turn(
+        &self,
+        thread_id: &ThreadId,
+        request: StartToolTurnRequest,
+    ) -> Result<StartTurnResult, CoreError> {
+        self.store.execution_binding(thread_id)?.require_bound()?;
+        validate_command_id(&request.command_id)?;
+        validate_policy_revision(&request.policy_revision)?;
+        let command = ThreadCommand::StartToolTurn {
+            tool_call_id: request.call.id.clone(),
+            name: request.call.name.clone(),
+            arguments_json: serde_json::to_string(&request.call.arguments)
+                .map_err(|error| CoreError::InvalidInput(error.to_string()))?,
+            approval_mode: request.approval_mode,
+        };
+        self.start_model_free_turn(thread_id, request, command, TurnKind::Tool)
+    }
+
+    fn start_model_free_turn(
+        &self,
+        thread_id: &ThreadId,
+        request: StartToolTurnRequest,
+        command: ThreadCommand,
+        kind: TurnKind,
+    ) -> Result<StartTurnResult, CoreError> {
         self.mutate_thread(thread_id, |snapshot| {
             if let Some(existing) = snapshot
                 .commands
@@ -1776,7 +1857,7 @@ impl ThreadController {
                 }
                 let ThreadCommandResult::TurnAccepted { turn_id } = &existing.result else {
                     return Err(CoreError::Journal(
-                        "start-Shell-Turn command has an invalid result".into(),
+                        "model-free Tool Turn command has an invalid result".into(),
                     ));
                 };
                 return Ok(StartTurnResult {
@@ -1788,26 +1869,21 @@ impl ThreadController {
             validate_thread_expectation(request.expected_sequence, snapshot.sequence)?;
             let turn_id =
                 TurnId::new(self.next_identifier("turn")).expect("generated Turn ID is non-empty");
-            let arguments_json = serde_json::to_string(&serde_json::json!({
-                "program": request.invocation.program,
-                "arguments": request.invocation.arguments,
-                "working_directory": request.invocation.working_directory,
-            }))
-            .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
             let tool_call = ThreadItem::ToolCall {
                 item_id: ItemId::new(self.next_identifier("item"))
                     .expect("generated Item ID is non-empty"),
                 turn_id: turn_id.clone(),
-                tool_call_id: request.tool_call_id.clone(),
-                name: ToolName::new("shell-command").expect("built-in shell-command name is valid"),
-                arguments_json,
+                tool_call_id: request.call.id.clone(),
+                name: request.call.name.clone(),
+                arguments_json: serde_json::to_string(&request.call.arguments)
+                    .map_err(|error| CoreError::InvalidInput(error.to_string()))?,
                 binding: Some(request.binding.clone()),
             };
             let events = vec![
                 ThreadEvent::TurnAccepted {
                     thread_id: thread_id.clone(),
                     turn_id: turn_id.clone(),
-                    kind: TurnKind::Coding,
+                    kind,
                     mode: ash_protocol::CollaborationMode::Agent,
                     instructions: None,
                     policy_revision: request.policy_revision.clone(),
@@ -1850,6 +1926,106 @@ impl ThreadController {
                 sequence: snapshot.sequence,
                 disposition: StartTurnDisposition::Created,
             })
+        })
+    }
+
+    /// Reads speech from the exact journal boundary used by a transcript/history snapshot.
+    pub fn read_voice_transcripts(
+        &self,
+        thread_id: &ThreadId,
+        sequence: u64,
+    ) -> Result<Vec<ash_protocol::VoiceTranscript>, CoreError> {
+        if let Some(current) = self.with_loaded_thread(thread_id, |loaded| {
+            Ok((loaded.snapshot.sequence == sequence)
+                .then(|| loaded.snapshot.voice_transcripts.clone()))
+        })? {
+            return Ok(current);
+        }
+        Ok(self
+            .load_snapshot_at_sequence(thread_id, sequence)?
+            .voice_transcripts)
+    }
+
+    /// Commits speech without acquiring an execution Turn or modifying its accepted inputs.
+    pub fn record_voice_transcript(
+        &self,
+        thread_id: &ThreadId,
+        request: RecordVoiceTranscriptRequest,
+    ) -> Result<RecordVoiceTranscriptResult, CoreError> {
+        const MAX_DELTA_BYTES: usize = 16 * 1024;
+        const MAX_SPAN_BYTES: usize = 64 * 1024;
+        if request.voice_session_id.is_empty()
+            || request.voice_session_id.len() > 128
+            || request.voice_session_id.chars().any(char::is_control)
+            || request.media_epoch == 0
+            || request.text.is_empty()
+            || request.text.len() > MAX_DELTA_BYTES
+            || request.end_ms < request.start_ms
+        {
+            return Err(CoreError::InvalidInput(
+                "Invalid voice transcript delta".into(),
+            ));
+        }
+        self.mutate_thread(thread_id, |snapshot| {
+            if snapshot.status == ash_protocol::ThreadStatus::Archived {
+                return Err(CoreError::InvalidInput("Voice target is archived".into()));
+            }
+            let after_sequence = snapshot.sequence;
+            let previous = snapshot.voice_transcripts.last().filter(|entry| {
+                entry.voice_session_id == request.voice_session_id
+                    && entry.media_epoch == request.media_epoch
+                    && entry.speaker == request.speaker
+                    && entry.text.len() + request.text.len() <= MAX_SPAN_BYTES
+                    && entry.end_ms <= request.end_ms
+            });
+            let transcript = if let Some(previous) = previous {
+                let mut transcript = previous.clone();
+                transcript.text.push_str(&request.text);
+                transcript.end_ms = request.end_ms;
+                transcript
+            } else {
+                ash_protocol::VoiceTranscript {
+                    item_id: ItemId::new(self.next_identifier("voice"))
+                        .expect("generated voice Item ID is non-empty"),
+                    voice_session_id: request.voice_session_id.clone(),
+                    media_epoch: request.media_epoch,
+                    speaker: request.speaker,
+                    text: request.text.clone(),
+                    start_ms: request.start_ms,
+                    end_ms: request.end_ms,
+                    after_item_id: snapshot.items.last().map(|item| item.item_id().clone()),
+                }
+            };
+            self.record_batch(
+                snapshot,
+                vec![ThreadEvent::VoiceTranscriptRecorded {
+                    thread_id: thread_id.clone(),
+                    transcript: transcript.clone(),
+                }],
+            )?;
+            Ok(RecordVoiceTranscriptResult {
+                after_sequence,
+                sequence: snapshot.sequence,
+                transcript,
+            })
+        })
+    }
+
+    /// Reads the canonical result of a completed model-free Tool Turn without copying its history.
+    pub fn completed_tool_result(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        call_id: &ToolCallId,
+    ) -> Result<Option<ThreadItem>, CoreError> {
+        self.with_loaded_thread(thread_id, |loaded| {
+            let turn = loaded.snapshot.turns.iter().find(|turn| &turn.turn_id == turn_id).ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
+            match turn.status {
+                TurnStatus::Completed => loaded.snapshot.items.iter().find(|item| matches!(item, ThreadItem::ToolResult { tool_call_id, turn_id: owner, .. } if tool_call_id == call_id && owner == turn_id)).cloned().map(Some).ok_or_else(|| CoreError::Journal("completed Tool Turn has no result".into())),
+                TurnStatus::Failed => Err(CoreError::Execution("Tool Turn failed".into())),
+                TurnStatus::Interrupted => Err(CoreError::Cancelled("Tool Turn interrupted".into())),
+                TurnStatus::Created | TurnStatus::Running | TurnStatus::WaitingForApproval | TurnStatus::WaitingForUserInput | TurnStatus::WaitingForCapability | TurnStatus::Cancelling => Ok(None),
+            }
         })
     }
 
@@ -3203,7 +3379,9 @@ fn tool_content_preview(content: &[ContentPart]) -> String {
             ContentPart::Artifact { artifact } => std::borrow::Cow::Owned(artifact.model_text()),
             ContentPart::Text(text) => std::borrow::Cow::Borrowed(text.as_str()),
             ContentPart::ImageAttachment { .. } => std::borrow::Cow::Borrowed("[image]"),
-            ContentPart::AudioAttachment { .. } | ContentPart::AudioUrl { .. } => std::borrow::Cow::Borrowed("[audio]"),
+            ContentPart::AudioAttachment { .. } | ContentPart::AudioUrl { .. } => {
+                std::borrow::Cow::Borrowed("[audio]")
+            }
             ContentPart::ImageUrl { .. } => std::borrow::Cow::Borrowed("[image]"),
         })
         .collect::<Vec<_>>()

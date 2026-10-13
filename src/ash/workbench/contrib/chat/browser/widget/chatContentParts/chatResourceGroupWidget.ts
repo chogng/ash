@@ -45,7 +45,7 @@ export class ChatResourceGroupWidget extends Disposable {
 		const indices = new Set<number>();
 		let previous: HTMLElement | undefined;
 		for (const [index, part] of content.entries()) {
-			if (part.type !== 'artifact' || part.artifact.source.type === 'mcpApp') continue;
+			if (part.type !== 'artifact' || part.artifact.source.type === 'mcpApp' || part.artifact.source.type === 'viewMetadata') continue;
 			indices.add(index);
 			const artifact = part.artifact;
 			const identity = JSON.stringify([source, index, artifact.source, artifact.mimeType, artifact.contentDigest, artifact.data.type, artifact.truncated]);
@@ -73,7 +73,7 @@ export class ChatResourceGroupWidget extends Disposable {
 		const lifetime = new DisposableStore();
 		row.lifetime.value = lifetime;
 		row.identity = identity;
-		summary.textContent = artifact.source.type !== 'structuredResult' ? localize('chat.resource.title', 'Resource: {0}', artifact.source.uri) : localize('chat.resource.structured', 'Structured result');
+		summary.textContent = 'uri' in artifact.source ? localize('chat.resource.title', 'Resource: {0}', artifact.source.uri) : localize('chat.resource.structured', 'Structured result');
 		const metadata = h(document, 'p');
 		metadata.textContent = artifact.truncated ? localize('chat.resource.truncated', '{0} · Truncated content', artifact.mimeType) : artifact.source.type === 'resourceLink' ? localize('chat.resource.linked', '{0} · Linked resource', artifact.mimeType) : artifact.mimeType;
 		const body = h(document, 'pre');
@@ -128,7 +128,7 @@ export class ChatResourceGroupWidget extends Disposable {
 }
 
 function resourceName(artifact: Artifact): string {
-	const name = artifact.source.type !== 'structuredResult' ? artifact.source.uri.split(/[/?#]/u).filter(Boolean).at(-1)?.replace(/[\\:*"<>|]/gu, '_') ?? 'resource' : 'result.json';
+	const name = 'uri' in artifact.source ? artifact.source.uri.split(/[/?#]/u).filter(Boolean).at(-1)?.replace(/[\\:*"<>|]/gu, '_') ?? 'resource' : 'result.json';
 	if (/\.[a-z0-9]+$/iu.test(name)) return name;
 	const extension = artifact.mimeType.split(';', 1)[0] === 'application/pdf' ? '.pdf' : artifact.mimeType.startsWith('image/png') ? '.png' : artifact.mimeType.startsWith('image/jpeg') ? '.jpg' : artifact.mimeType.startsWith('image/webp') ? '.webp' : artifact.mimeType.startsWith('text/html') ? '.html' : artifact.mimeType.startsWith('text/markdown') ? '.md' : artifact.mimeType.startsWith('application/json') ? '.json' : '.txt';
 	return name + extension;

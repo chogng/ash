@@ -300,11 +300,12 @@ pub struct ToolDefinition {
     pub strict: bool,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolCall {
     pub id: ToolCallId,
     pub name: ToolName,
+    #[ts(type = "unknown")]
     pub arguments: Value,
 }
 

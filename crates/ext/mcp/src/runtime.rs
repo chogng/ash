@@ -45,6 +45,8 @@ enum RuntimeCommand {
 
 struct RuntimeStartup {
     definitions: Vec<ToolDefinition>,
+    app_definitions: Vec<ToolDefinition>,
+    app_tools: BTreeMap<ToolName, serde_json::Value>,
     bindings: BTreeMap<ToolName, McpToolBinding>,
     status: McpRuntimeStatusSnapshot,
 }
@@ -72,6 +74,8 @@ impl McpPreparedCall {
 /// response channel, while cancellation remains independently wakeable on the worker.
 pub(crate) struct McpRuntimeOwner {
     commands: Option<tokio::sync::mpsc::Sender<RuntimeCommand>>,
+    app_definitions: Vec<ToolDefinition>,
+    app_tools: BTreeMap<ToolName, serde_json::Value>,
     definitions: Vec<ToolDefinition>,
     bindings: BTreeMap<ToolName, McpToolBinding>,
     status: McpRuntimeStatusSnapshot,
@@ -113,6 +117,8 @@ impl McpRuntimeOwner {
         Ok(Self {
             commands: Some(commands),
             definitions: startup.definitions,
+            app_definitions: startup.app_definitions,
+            app_tools: startup.app_tools,
             bindings: startup.bindings,
             status: startup.status,
             worker: Mutex::new(Some(worker)),
@@ -121,6 +127,33 @@ impl McpRuntimeOwner {
 
     pub(crate) fn definitions(&self) -> &[ToolDefinition] {
         &self.definitions
+    }
+
+    pub(crate) fn app_definitions(&self) -> &[ToolDefinition] {
+        &self.app_definitions
+    }
+
+    pub(crate) fn list_app_tools(&self, origin: &McpToolBinding) -> Vec<serde_json::Value> {
+        self.bindings
+            .iter()
+            .filter(|(_, binding)| binding.remote().server() == origin.remote().server())
+            .filter_map(|(name, _)| self.app_tools.get(name).cloned())
+            .collect()
+    }
+
+    pub(crate) fn resolve_app_tool(
+        &self,
+        origin: &McpToolBinding,
+        remote_name: &str,
+    ) -> Option<&McpToolBinding> {
+        self.bindings.values().find(|target| {
+            target.remote().server() == origin.remote().server()
+                && target.remote().remote_name() == remote_name
+                && self
+                    .app_definitions
+                    .iter()
+                    .any(|definition| &definition.name == target.exposed_name())
+        })
     }
 
     pub(crate) fn resolve(&self, name: &ToolName) -> Option<&McpToolBinding> {
@@ -267,6 +300,14 @@ fn run_worker(
                 return;
             }
         };
+        let app_definitions = match mcp.catalog().app_definitions() {
+            Ok(definitions) => definitions,
+            Err(error) => { let _ = mcp.shutdown().await; let _ = startup.send(Err(error.to_string())); return; }
+        };
+        let app_tools = mcp.catalog().tools().iter()
+            .filter(|tool| app_definitions.iter().any(|definition| &definition.name == tool.binding().exposed_name()))
+            .map(|tool| (tool.binding().exposed_name().clone(), tool.app_definition().clone()))
+            .collect();
         let bindings = mcp
             .catalog()
             .tools()
@@ -282,6 +323,8 @@ fn run_worker(
         if startup
             .send(Ok(RuntimeStartup {
                 definitions,
+                app_definitions,
+                app_tools,
                 bindings,
                 status,
             }))

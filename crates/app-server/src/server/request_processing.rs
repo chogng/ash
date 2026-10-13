@@ -28,7 +28,8 @@ impl RequestLane {
         match method {
             Some(method) if super::github_processor::GitHubRequestProcessor::handles(method) => Self::Network,
             Some(
-                ClientMethod::ToolResourceCancel
+                ClientMethod::ToolAppCancel
+                | ClientMethod::ToolResourceCancel
                 | ClientMethod::GitHubCancel
                 | ClientMethod::ApprovalEnvironmentCancel
                 | ClientMethod::AssetImportCancel
@@ -54,7 +55,10 @@ impl RequestLane {
                 | ClientMethod::ConnectorDeviceOAuthCancel,
             ) => Self::Control,
             Some(
-                ClientMethod::ToolResourceOpen
+                ClientMethod::ToolAppList
+                | ClientMethod::ToolAppCall
+                | ClientMethod::ToolAppResourceOpen
+                | ClientMethod::ToolResourceOpen
                 | ClientMethod::GitHubAccountList
                 | ClientMethod::GitHubAccountConnect
                 | ClientMethod::IssueList

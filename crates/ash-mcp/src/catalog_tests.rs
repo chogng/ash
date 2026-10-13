@@ -47,3 +47,30 @@ fn app_uri_is_retained_only_from_declared_tool_ui_metadata() {
         );
     }
 }
+
+#[test]
+fn app_only_tools_stay_in_the_origin_catalog_but_never_enter_model_definitions() {
+    let server = McpServerId::new("user:mcp:apps").unwrap();
+    let mut descriptors = Vec::new();
+    for (name, visibility) in [
+        ("shared", serde_json::json!(["model", "app"])),
+        ("model", serde_json::json!(["model"])),
+        ("app", serde_json::json!(["app"])),
+    ] {
+        let tool = serde_json::from_value(serde_json::json!({"name":name,"description":name,"inputSchema":{"type":"object"},"_meta":{"ui":{"visibility":visibility}}})).unwrap();
+        descriptors
+            .push(super::project_tool(&server, tool, 1, 1, ash_tools::ToolLoading::Eager).unwrap());
+    }
+    let app_name = descriptors[2].binding().exposed_name().clone();
+    let catalog = super::McpCatalogSnapshot::new(1, descriptors).unwrap();
+    assert_eq!(catalog.tools().len(), 3);
+    assert!(catalog.resolve(&app_name).is_some());
+    assert_eq!(catalog.model_definitions().unwrap().len(), 2);
+    assert!(
+        catalog
+            .model_definitions()
+            .unwrap()
+            .iter()
+            .all(|definition| definition.name != app_name)
+    );
+}

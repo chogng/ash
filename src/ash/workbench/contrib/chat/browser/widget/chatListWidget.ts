@@ -16,6 +16,7 @@ import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfig
 import { ChatEditorConfiguration } from '../../common/constants.js';
 import { DomWidget } from '../../../../../platform/domWidget/browser/domWidget.js';
 import { ChatToolInvocationPart } from './chatContentParts/toolInvocationParts/chatToolInvocationPart.js';
+import type { IChatMcpAppDelegate } from './chatContentParts/toolInvocationParts/chatMcpAppSubPart.js';
 import { createUuid } from '../../../../../base/common/uuid.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
@@ -23,6 +24,7 @@ import { localize } from '../../../../../nls.js';
 import { ChatHookContentPart } from './chatContentParts/chatHookContentPart.js';
 
 interface ChatListWidgetOptions {
+	readonly mcpAppDelegate?: IChatMcpAppDelegate;
 	readonly onDidRequestMemoryReference?: (reference: string) => void;
 	readonly onDidRequestErrorAction?: (action: ChatTurnErrorAction) => void;
 	readonly onDidRequestLink?: (target: string) => void;
@@ -77,6 +79,7 @@ export class ChatListWidget extends DomWidget {
 	private readonly onDidRequestMemoryReference: ((reference: string) => void) | undefined;
 	private readonly onDidRequestLink: ((target: string) => void) | undefined;
 	private readonly imageResourceLoader: ChatListWidgetOptions['imageResourceLoader'];
+	private readonly mcpAppDelegate: ChatListWidgetOptions['mcpAppDelegate'];
 	private readonly _onDidChangeContent = this._register(new Emitter<void>());
 	private readonly advisorExpansion = new Map<string, boolean>();
 	private visible = false;
@@ -94,6 +97,7 @@ export class ChatListWidget extends DomWidget {
 		this.onDidRequestMemoryReference = options.onDidRequestMemoryReference;
 		this.onDidRequestLink = options.onDidRequestLink;
 		this.imageResourceLoader = options.imageResourceLoader;
+		this.mcpAppDelegate = options.mcpAppDelegate;
 		this.scrollable = this._register(new ScrollableElement(container, {
 			direction: "vertical",
 			vertical: "auto",
@@ -119,7 +123,7 @@ export class ChatListWidget extends DomWidget {
 					const active = this.element.ownerDocument.activeElement as HTMLElement | null;
 					if (!active || !this.transcript.contains(active)) return undefined;
 					const provider = new AccessibleContentProvider(AccessibleViewProviderId.SessionsChat, { type }, () => {
-						if (type === AccessibleViewType.Help) return localize("chat.transcript.help", "Chat responses\nUse Tab and Shift+Tab to reach response links, code block actions and tool summaries. Press Enter or Space on a tool summary to expand or collapse its input, source, execution target, output and result. Code block actions copy the complete source, insert it into the active editor, or open it in a new unsaved file. Streaming updates and provider corrections keep code selections, keyboard focus and expansion. Reading older messages preserves the reading position; returning to the bottom follows new content. Failed calls show an error; a finished turn without a result is never shown as successful. Use <keybinding:editor.action.accessibleView> to read the transcript as plain text, including collapsed tool details. Closing this view returns focus to the response.");
+						if (type === AccessibleViewType.Help) return localize("chat.transcript.help", "Chat responses\nUse Tab and Shift+Tab to reach response links, code block actions and tool summaries. Press Enter or Space on a tool summary to expand or collapse its input, source, execution target, output and result. Code block actions copy the complete source, insert it into the active editor, or open it in a new unsaved file. Use resource summaries to inspect returned data and Open resource for a read-only preview. Open interactive view loads a declared MCP App; use Tab or Shift+Tab to reach its controls and Close interactive view to return focus. Streaming updates and provider corrections keep code selections, keyboard focus and expansion. Reading older messages preserves the reading position; returning to the bottom follows new content. Failed calls show an error; a finished turn without a result is never shown as successful. Use <keybinding:editor.action.accessibleView> to read the transcript as plain text, including collapsed tool details. Closing this view returns focus to the response.");
 						return [...this.renderedItems].map(([, row]) => row.toolPart || row.hookPart
 							? [...(row.toolPart?.domNode ?? row.hookPart!.domNode).children].map(child => child.textContent).filter(Boolean).join('\n\n')
 							: [itemLabel(row.item), row.item.text, row.item.detail].filter(Boolean).join('\n\n')).join('\n\n');
@@ -361,7 +365,7 @@ export class ChatListWidget extends DomWidget {
 		if (item.transient) article.dataset.transient = "true";
 		if (item.isError) article.classList.add("error");
 		if (item.toolInvocation) {
-			const part = disposables.add(this.instantiationService.createInstance(ChatToolInvocationPart, article.ownerDocument, item.toolInvocation, item.attachmentSource));
+			const part = disposables.add(this.instantiationService.createInstance(ChatToolInvocationPart, article.ownerDocument, item.toolInvocation, item.attachmentSource, this.mcpAppDelegate));
 			disposables.add(part.onDidChangeHeight(() => { this.relayout.schedule(); this._onDidChangeContent.fire(); }));
 			article.append(part.domNode);
 			return new RenderedItem(item, article, disposables, part);
@@ -442,6 +446,7 @@ function sameAction(left: ChatTurnErrorAction | undefined, right: ChatTurnErrorA
 function itemLabel(item: IChatListItem): string {
 	if (item.label) return item.label;
 	switch (item.type) {
+		case 'voiceTranscript': return localize('chat.voice.transcript.label', 'Voice transcript');
 		case 'hook': return 'Hook';
 		case "userMessage":
 		case "userContext":

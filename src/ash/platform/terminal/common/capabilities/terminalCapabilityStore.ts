@@ -42,6 +42,7 @@ export class TerminalCapabilityStore extends Disposable implements ITerminalCapa
 	}
 
 	has(id: TerminalCapability): boolean {
+		if (this.isDisposed) return false;
 		const snapshot = this.read();
 		return id === TerminalCapability.CwdDetection ? snapshot?.cwdDetection === true : snapshot?.commandDetection === true;
 	}

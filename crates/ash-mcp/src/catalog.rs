@@ -86,17 +86,31 @@ impl McpToolBinding {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum McpToolVisibility {
+    ModelAndApp,
+    ModelOnly,
+    AppOnly,
+}
+
 /// Validated host definition and frozen route for one discovered MCP tool.
 #[derive(Clone, Debug, PartialEq)]
 pub struct McpToolDescriptor {
     pub(crate) app_resource_uri: Option<String>,
+    pub(crate) visibility: McpToolVisibility,
     binding: McpToolBinding,
     definition: ToolDefinition,
+    app_definition: serde_json::Value,
 }
 
 impl McpToolDescriptor {
     pub fn binding(&self) -> &McpToolBinding {
         &self.binding
+    }
+
+    /// Original MCP Tool contract, retained only for an App-visible catalog consumer.
+    pub fn app_definition(&self) -> &serde_json::Value {
+        &self.app_definition
     }
 
     pub fn definition(&self) -> &ToolDefinition {
@@ -149,9 +163,22 @@ impl McpCatalogSnapshot {
             .map(|index| &self.tools[*index])
     }
 
+    /// App-visible definitions from this immutable origin catalog, including App-only members.
+    pub fn app_definitions(&self) -> Result<Vec<ash_protocol::ToolDefinition>, McpRuntimeError> {
+        self.tools
+            .iter()
+            .filter(|tool| tool.visibility != McpToolVisibility::ModelOnly)
+            .map(|tool| {
+                to_protocol_tool_definition(&tool.definition)
+                    .map_err(|error| McpRuntimeError::ModelProjection(error.to_string()))
+            })
+            .collect()
+    }
+
     pub fn model_definitions(&self) -> Result<Vec<ash_protocol::ToolDefinition>, McpRuntimeError> {
         self.tools
             .iter()
+            .filter(|tool| tool.visibility != McpToolVisibility::AppOnly)
             .map(|tool| {
                 to_protocol_tool_definition(&tool.definition)
                     .map_err(|error| McpRuntimeError::ModelProjection(error.to_string()))
@@ -238,6 +265,28 @@ fn project_tool(
     catalog_generation: u64,
     loading: ToolLoading,
 ) -> Result<McpToolDescriptor, McpRuntimeError> {
+    let visibility = match tool
+        .meta
+        .as_ref()
+        .and_then(|meta| meta.get("ui"))
+        .and_then(|ui| ui.get("visibility"))
+    {
+        None => McpToolVisibility::ModelAndApp,
+        Some(serde_json::Value::Array(values)) if values.len() == 1 && values[0] == "model" => {
+            McpToolVisibility::ModelOnly
+        }
+        Some(serde_json::Value::Array(values)) if values.len() == 1 && values[0] == "app" => {
+            McpToolVisibility::AppOnly
+        }
+        Some(serde_json::Value::Array(values))
+            if values.len() == 2
+                && values.iter().any(|value| value == "model")
+                && values.iter().any(|value| value == "app") =>
+        {
+            McpToolVisibility::ModelAndApp
+        }
+        Some(_) => return Err(catalog_error(server, "invalid MCP App tool visibility")),
+    };
     let app_resource_uri = tool
         .meta
         .as_ref()
@@ -254,6 +303,8 @@ fn project_tool(
         }
         Some(_) => return Err(catalog_error(server, "invalid MCP App resource URI")),
     };
+    let app_definition =
+        serde_json::to_value(&tool).map_err(|error| catalog_error(server, error.to_string()))?;
     let remote_name = tool.name.into_owned();
     let exposed_name = exposed_name(server, &remote_name)?;
     let description = tool
@@ -286,7 +337,9 @@ fn project_tool(
         catalog_generation,
     };
     Ok(McpToolDescriptor {
+        visibility,
         app_resource_uri,
+        app_definition,
         binding,
         definition,
     })

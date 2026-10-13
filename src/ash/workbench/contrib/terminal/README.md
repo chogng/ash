@@ -2,6 +2,14 @@
 
 此目录拥有终端服务实现、窗口内实例管理及界面。跨领域服务契约由 [services/terminal](../../services/terminal/README.md) 拥有；Shell 进程和授权由 Rust 后端拥有，经 [platform/terminal](../../../platform/terminal/README.md) 的进程契约访问；contribution 不导入生成协议。
 
+当前目录生产 TS/CSS 清单 89 项与参照同路径，缺失 0；文件落位表示实际消费链已接通，并不表示上游所有增强或私有 API 都已实现。
+
+创建由 TerminalInstanceService 保存不可变启动参数，AgentHostTerminalService 按窗口执行目标选择 Local / Remote backend。各 backend 索引原 PTY 句柄；实例持有唯一释放 lease。RemoteTerminalChannelClient 只约束异步请求的 workspace generation 和 input host identity，平台继续唯一拥有真实 attachment/reconnect/ACK，Rust 继续拥有执行、nonce 和 Shell 历史。Desktop 与 Web 入口各自注册 resolver/backend；Desktop shutdown 由生命周期 join 等待原实例关闭。
+
+扩展环境变量 collection 通过既有能力准入注册与撤销；EnvironmentVariableService 拥有工作区持久化和合并，resolver 在调用原 create 前准备实际 inherited environment。TerminalContributionService 从 ExtensionService 的已验证声明读 profile；全局 extension point registry 只存校验元数据。
+
+Attach to Chat 与原 Chat context picker 捕获 xterm 已解析输出、选择及 Shell 元数据，存入原 draft；只读预览复用 XtermTerminal，通过 DetachedTerminalSnapshotMirror 显示接受时的文字。源实例关闭、重新选择和 draft handoff 不替换已接受内容；预览无 PTY、实例 membership 或 stdin 目的地。screen host 契约只含必要的显示事件/geometry，widget manager 持有 Find/URL hover 的唯一 overlay lifetime。
+
 | Owner                                                      | 职责                                                                                                        |
 | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | `browser/terminal.contribution.ts`                         | 实例服务、View、编辑器与动作/菜单的注册入口；独立增强由 terminal.all.ts 装载                                |
@@ -13,7 +21,7 @@
 | `browser/terminalProfileResolverService.ts`                | 解析执行端变量、argv/env/cwd、automation/agentHost 配置及图标；真实 executable 由后端确认                   |
 | `browser/terminalProfileQuickpick.ts`                      | 命令面板选择/取消与 USER 默认 profile 写入；不拥有 shell 执行定义                                           |
 | `browser/terminalService.ts`                               | 窗口实例列表、顺序与活动项；创建实例并维护列表生命周期                                                      |
-| `browser/terminalInstance.ts`                              | 每实例身份、创建/关闭、连接状态、宿主 PTY、进程管理器及唯一 xterm 的生命周期；原始输入绑定与 sendText       |
+| `browser/terminalInstance.ts`                              | 每实例身份、关闭/复用、连接状态、宿主 PTY、原进程客户端及唯一 xterm 的生命周期；原始输入绑定与 sendText     |
 | `browser/terminalExtensions.ts`                            | 实例贡献注册元数据；实例通过自己的容器装配和释放贡献                                                        |
 | `browser/terminalProcessManager.ts`                        | Shell 输入队列、UTF-8 分块、二进制顺序、尺寸合并、输入/尺寸确认、增量读取、双游标、分页排空、解析等待与取消 |
 | `browser/terminalView.ts`                                  | 可见性、初始化、标题 toolbar、屏幕 attach/detach 及焦点；屏幕由实例保留                                     |

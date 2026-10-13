@@ -159,6 +159,16 @@ impl<'a> Runtime<'a> {
         })
     }
 
+    pub fn record_voice_transcript(
+        &self,
+        thread_id: &ThreadId,
+        request: crate::RecordVoiceTranscriptRequest,
+    ) -> Result<crate::RecordVoiceTranscriptResult, CoreError> {
+        let recorded = self.threads.record_voice_transcript(thread_id, request)?;
+        self.publish(thread_id, recorded.after_sequence)?;
+        Ok(recorded)
+    }
+
     fn publish(&self, thread_id: &ThreadId, after: u64) -> Result<(), CoreError> {
         for update in self.threads.thread_updates_after(thread_id, after)? {
             self.updates.publish(update);
@@ -225,6 +235,39 @@ impl AgentRuntime for Runtime<'_> {
     ) -> Result<TurnReceipt, CoreError> {
         self.submit_turn_with_admission(thread_id, request, |thread, request| {
             self.threads.start_turn(thread, request)
+        })
+    }
+
+    fn submit_tool(
+        &self,
+        thread_id: &ThreadId,
+        request: core_api::SubmitToolRequest,
+    ) -> Result<TurnReceipt, CoreError> {
+        let before = self.threads.read_thread(thread_id)?;
+        let start = self.threads.start_tool_turn(
+            thread_id,
+            crate::StartToolTurnRequest {
+                command_id: request.command_id,
+                expected_sequence: request.expected_sequence,
+                policy_revision: self.executor.policy_revision(),
+                approval_mode: ash_protocol::ApprovalMode::Manual,
+                call: request.call,
+                binding: request.binding,
+            },
+        )?;
+        if start.disposition == crate::StartTurnDisposition::Replayed {
+            validate_replayed_turn(&before, &start.turn_id)?;
+        } else {
+            self.publish(thread_id, before.sequence)?;
+            self.dispatch(
+                thread_id,
+                &start.turn_id,
+                self.executor.start_tool(thread_id, &start.turn_id),
+            )?;
+        }
+        Ok(TurnReceipt {
+            turn_id: start.turn_id,
+            sequence: start.sequence,
         })
     }
 

@@ -820,7 +820,7 @@ test('terminal browser list menu keeps its captured instance after active select
 	const tabs = page.getByRole('tablist', { name: 'Terminal instances' });
 	await expect(tabs.getByRole('tab')).toHaveCount(2);
 	const ids = await page.evaluate(() => window.ashTerminalPaneIntegration.ids());
-	expect((await page.evaluate(() => window.ashTerminalPaneIntegration.menuActions())).slice().sort()).toEqual(['Change Terminal Icon', 'Clear Terminal', 'Focus Terminal', 'Kill Terminal', 'Move Terminal into Editor Area', 'Rename Terminal', 'Split Terminal']);
+	expect((await page.evaluate(() => window.ashTerminalPaneIntegration.menuActions())).slice().sort()).toEqual(['Change Terminal Icon', 'Clear Terminal', 'Focus Terminal', 'Kill Terminal', 'Move Terminal into Editor Area', 'Rename Terminal', 'Split Terminal', 'Terminal: Attach to Chat'].sort());
 	await page.evaluate(id => window.ashTerminalPaneIntegration.activate(id), ids[0]!);
 	await tabs.getByRole('tab').first().click({ button: 'right' });
 	await expect(page.getByRole('menu')).toBeVisible();
@@ -845,7 +845,7 @@ test('terminal browser list menu supports keyboard dismissal and Chinese labels'
 	await page.evaluate(() => window.ashTerminalPaneIntegration.command('workbench.action.terminal.new'));
 	const tab = page.getByRole('tablist', { name: '终端实例' }).getByRole('tab').first();
 	await tab.focus();
-	expect((await page.evaluate(() => window.ashTerminalPaneIntegration.menuActions())).slice().sort()).toEqual(['拆分终端', '清除终端', '终止终端', '聚焦终端', '重命名终端', '更改终端图标', '将终端移入编辑区'].sort());
+	expect((await page.evaluate(() => window.ashTerminalPaneIntegration.menuActions())).slice().sort()).toEqual(['拆分终端', '清除终端', '终止终端', '聚焦终端', '重命名终端', '更改终端图标', '将终端移入编辑区', '终端：附加到聊天'].sort());
 	await tab.press('Shift+F10');
 	await expect(page.getByRole('menu')).toBeVisible();
 	await expect(page.getByRole('menuitem', { name: '聚焦终端', exact: true })).toBeVisible();

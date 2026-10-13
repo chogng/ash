@@ -1,3 +1,4 @@
+import { captureTerminalAttachment } from '../../../terminal/browser/chatTerminalCommandMirror.js';
 import { IAgentCapabilitiesService } from '../../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { ITerminalService, type ITerminalView } from '../../../../services/terminal/browser/terminal.js';
@@ -107,20 +108,9 @@ export class TerminalContext implements ChatContextSource {
 		if (!selected || selected.kind === 'back' || signal.aborted) { return undefined; }
 		const instance = selected.item.instance;
 		const view = this.views.getViewWithId<ITerminalView>(TERMINAL_VIEW_ID);
-		const output = this.terminals.instances.includes(instance) ? await view?.getTerminalOutput(instance, 100_000, signal) : undefined;
-		if (signal.aborted) { return undefined; }
-		if (!output?.trim()) { throw new Error(localize('chat.context.terminalUnavailable', 'The terminal has closed or has no output to attach')); }
-		const name = localize('chat.context.terminalName', 'Terminal: {0}', instance.title);
-		const integration = instance.shellIntegration;
-		const commands = integration?.commandDetection && !integration.commandStorageDisabled ? integration.commands : [];
-		const content = `Terminal: ${instance.title}\nDirectory: ${instance.cwd ?? instance.initialCwd}\n\n${output}` + (commands.length ? `\n\n${JSON.stringify({ hasRichCommandDetection: integration!.hasRichCommandDetection, commands }, null, 2)}` : '');
-		return {
-			acceptInBackground: selected.background, attachment: {
-				id: `terminal:${instance.id}`, kind: 'terminal', name,
-				resource: URI.from({ scheme: Schemas.internal, authority: 'terminal', query: new URLSearchParams({ id: instance.id }).toString() }),
-				resolve: async () => ({ name, content }),
-			}
-		};
+		if (!this.terminals.instances.includes(instance)) return undefined;
+		const attachment = await captureTerminalAttachment(instance, view, signal);
+		return attachment ? { acceptInBackground: selected.background, attachment } : undefined;
 	}
 }
 

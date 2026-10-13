@@ -6,6 +6,10 @@ use serde::Serialize;
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ResourceMetadataParams {
+    /// Routes to the same runtime that opened this connection-owned handle.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub session_id: Option<ash_protocol::SessionId>,
     #[schemars(length(min = 1))]
     pub resource_id: String,
 }
@@ -22,6 +26,9 @@ pub struct ResourceMetadataResult {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ResourceReadParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub session_id: Option<ash_protocol::SessionId>,
     #[schemars(length(min = 1))]
     pub resource_id: String,
     pub offset: usize,
@@ -43,6 +50,9 @@ pub struct ResourceReadResult {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ResourceReleaseParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub session_id: Option<ash_protocol::SessionId>,
     #[schemars(length(min = 1))]
     pub resource_id: String,
 }

@@ -1,12 +1,22 @@
 # Terminal API 对齐状态
 
-## 本轮验证结果（2026-10-12）
+## 剩余 38 项完成与验证（2026-10-12）
 
-剩余 54 项中新增 16 个实际使用的生产文件，当前同路径 51、缺失 38、仅 Ash 0。编辑区往返保留同一 PTY/屏幕，标签关闭释放进程；Clear/Relaunch/Kill 直接作用于编辑区实例。中英文 Rename/Icon 选择及关闭目标取消通过；用户元数据跨 PTY 替换保留。屏幕标记跨进程 ID 隔离、中文 ARIA/tooltip 与原命令导航通过；marker 淘汰即时释放监听。水平列表宽度重建和页面重载恢复，非法持久化数值使用默认尺寸。扩展 PTY 从 MainThread 内嵌类迁入标准代理文件，通用事件端口由 BasePty 拥有；原注册、实例和后端 owner 保持，关闭时丢弃晚到 frame，opaque handle 恰好发送一次释放。
+本轮补齐开始时的 38 个生产文件。排除 tests/README 的全目录 TS/CSS 审计：同路径 **89**、缺失 **0**、仅 Ash **0**。实例工厂、环境集合/扩展声明、widget/hover、已解析屏幕读取、readonly capabilities 与宿主诊断、Desktop/Web resolver/backend、shutdown、Chat attachment/被动屏幕及 handoff 都有实际消费者；原平台 transport/attachment/reconnect/ACK 和 Rust Shell/nonce/history owner 保持。
+
+验证：正常 `pnpm test:unit --runGlob '**/{terminal,terminalContrib}/**/*.test.js'` 的 19 文件 **170 项**通过；正常入口另跑 Event/Extension Host/API/协议 decoder/窗口 IPC/装载与分层的 8 文件 **108 项**通过。SDK Node 全套 **24 项**通过；external-ext-protocol verify **41 项**通过。正常 Chromium Terminal + Chat Context 两套 **134 项**全部通过；随后只读镜像增加 parsed-write completion，中文/dark、高对比 light 的中英文快照回归 **2 项**再验通过（键盘展开/关闭、源进程释放、draft handoff、只读属性、160px geometry、focus outline、重复打开和移除）。正常准备与 common **2408**、renderer **3794**、protocol **1455** 文件检查通过；镜像最后调整后的 renderer 直接检查再次通过。`just generate-protocol`、ash-app-server / ash-external-js-ext check 通过；`just verify ash-protocol` 的 **59 项**及 `just verify ash-app-server-protocol` 的 **129 + 2 + 1 项**、all-targets deny-warnings 通过。精确 TS formatter、声明/Markdown/NLS/CSS Prettier、两份 CSS scoped stylelint（0 errors / 0 suggestions）与 whitespace 检查通过。
+
+第一次全浏览器运行有旧菜单断言、fixture 漏装 Web resolver 与提前释放尚未捕获的源屏幕失败；实际修正入口、等待已接受附件和新菜单/中文标签断言后完整重跑成功。共享 ThreadCommand 引入 ToolCall 时缺少 required derive/JSON TS boundary；只补原数据类型的生成契约，不撤销共享业务变更。语言生成仍报告原有 1 条缺译和 38 条与原文相同条目，新标签的中文真实场景通过。
+
+完成范围是文件落位及上述已验证能力链；不声明全部 VS Code 私有 API/增强完整支持。remote channel 是 Ash Workbench request scope，不替代平台 transport；AHP 命名端口消费现有 Ash App Server 元数据，不虚构另一套 AHP parser/protocol；快照预览显示已解析文字，不恢复进程或保存可执行 ANSI 输入。未实跑 Electron/SSH/Windows/Linux PTY，本轮相关 host 路由通过实际前端 owner 与 typed process boundary 验证。未发起 commit/push，保留其他共享工作树修改。
+
+## 上一轮 54 项验证记录（2026-10-12）
+
+剩余 54 项中新增 16 个实际使用的生产文件，该轮同路径 51、缺失 38、仅 Ash 0。编辑区往返保留同一 PTY/屏幕，标签关闭释放进程；Clear/Relaunch/Kill 直接作用于编辑区实例。中英文 Rename/Icon 选择及关闭目标取消通过；用户元数据跨 PTY 替换保留。屏幕标记跨进程 ID 隔离、中文 ARIA/tooltip 与原命令导航通过；marker 淘汰即时释放监听。水平列表宽度重建和页面重载恢复，非法持久化数值使用默认尺寸。扩展 PTY 从 MainThread 内嵌类迁入标准代理文件，通用事件端口由 BasePty 拥有；原注册、实例和后端 owner 保持，关闭时丢弃晚到 frame，opaque handle 恰好发送一次释放。
 
 最终 common 2387 文件与 renderer 3744 文件类型检查通过；正常 unit 入口 8 文件 139 项通过（含 24 项装载/架构检查、2 项 marker 生命周期和 3 项 provider PTY 边界），runner 自测 9 项通过；正常 Chromium 全套 74 项通过。曾被共享 Chat 修改阻塞：chat.json 顶层翻译值不是 bundle，chatListWidget.ts 的缺失 Symbol.dispose、chatListWidget.test.ts 的 implicit-any；期间保留外部修改、按原 compiler options 定向编译成功，并使用原 runners 验证。外部修复后最后正常入口重新通过，未把较早失败抹掉。终端 3 个 CSS 的 scoped stylelint 零错误（1 条原有 font-size 建议），精确 TS 格式、Markdown/NLS/CSS Prettier 与本批 whitespace 检查通过。全工作树 whitespace 曾另有范围外 task-agent.spec.ts 的 trailing whitespace，未修改。无 Electron/真实 SSH/Windows/Linux 运行声明。
 
-38 个剩余路径仍待闭合消费链与前置契约，不按数量创建空壳；准确分类见下文当前差集。没有发起 commit/push；共享工作树期间其他操作提交了本批部分变化，未撤销这些提交或外部改动。
+该轮尚余 38 个路径；本轮已闭合这些文件的实际消费链，最新差集为 0，详见顶部结果。没有发起 commit/push；共享工作树期间其他操作提交了本批部分变化，未撤销这些提交或外部改动。
 
 ## 扩展 PTY 代理本批准入（2026-10-12）
 
@@ -70,9 +80,9 @@ Ubuntu 自动图标不依赖配置名或终端标题。参照 VS Code 的职责�
 
 验证：正常 `pnpm test:unit` 四个终端文件共 105 项通过，runner 自测 9 项通过；正常 Chromium Terminal 全套 66 项通过（新字体模式、分屏输入路由/几何/关闭焦点、中文 sash/Unsplit/序号命令，以及中文失败 tooltip/重启清理）。Renderer 3720 文件、common 2339 文件和完整浏览器/test 编译通过。初次全 test 编译被共享工作树 chatViewPane.test.ts 的重复 import 阻塞，按原 compiler options 定向编译和原 unit runner 验证后，共享修改修复了该重复 import，最终正常入口通过。浏览器 fixture 补上产品拥有的动态 icon resolver、SplitView CSS、执行端 OS、speech/Views/group DI；未修改产品主题或基础 widget 来掩盖 fixture。全仓 stylelint 当前在范围外 sessionChangesEditorInput.css 的 class substring selector 上失败；终端相关 CSS 单独验证，不能把全仓样式记为通过。本机为 macOS Chromium，未运行 Windows/Linux/真实 SSH 或 Electron 产品验证。
 
-当前完整 terminal 生产 TS/CSS 审计：同路径 51、缺失 38、仅 Ash 0（排除 tests 与 README），本轮在上一轮 54 项中完成 16 个缺失文件。新增编辑区的 URI/Input/Serializer/Pane/Service、重命名 UI owner、图标 picker、decoration/mark navigation/styles、屏幕 CSS、共享 labels/宽度 key 与统一装载入口均有真实消费者；仍不表示各文件完整公开 API 已对齐。编辑区持久化只恢复资源身份，失效实例显示不可用，不保存/恢复 PTY；分屏目前只在面板内提供水平窗格。后文旧审计按历史批次记录，当前差集以本节为准。
+上一轮 terminal 生产 TS/CSS 审计：同路径 51、缺失 38、仅 Ash 0（排除 tests 与 README），本轮在上一轮 54 项中完成 16 个缺失文件。新增编辑区的 URI/Input/Serializer/Pane/Service、重命名 UI owner、图标 picker、decoration/mark navigation/styles、屏幕 CSS、共享 labels/宽度 key 与统一装载入口均有真实消费者；仍不表示各文件完整公开 API 已对齐。编辑区持久化只恢复资源身份，失效实例显示不可用，不保存/恢复 PTY；分屏目前只在面板内提供水平窗格。本节与后文旧审计均按历史批次记录；最新差集以顶部结果为准。
 
-当前准确剩余 38 项（相对 `src/ash/workbench/contrib/terminal`）：
+本轮开始时剩余的 38 项（现已补齐，相对 `src/ash/workbench/contrib/terminal`）：
 
 - 实例与事件（3）：`browser/terminalEscapeSequences.ts`、`browser/terminalEvents.ts`、`browser/terminalInstanceService.ts`。
 - widgets 与 xterm（8）：`browser/media/widgets.css`、`browser/terminalTabsChatEntry.ts`、`browser/terminalTestHelpers.ts`、`browser/widgets/terminalHoverWidget.ts`、`browser/widgets/widgetManager.ts`、`browser/widgets/widgets.ts`、`browser/xterm-private.d.ts`、`browser/xterm/lineDataEventAddon.ts`。
@@ -856,3 +866,23 @@ backend/PTY 的 109 项单测通过后，沿原 read→writePromise→metadata �
 Rust committed ShellIntegration/cwd/status → 原 source → TerminalCapabilityStore 的只读视图 → createInstanceCapabilityEventMultiplexer → Terminal Host Output 的命令完成诊断。capability availability 由原快照计算，只缓存事件边沿；命令/目录通过 getter 读唯一 source，不能写入历史或解析 Shell。事件汇合监听既有/新增实例和 capability，撤回/关闭即时释放订阅。Output 是有界诊断消费者，不作为命令/环境 state owner。
 
 准确新增仅上游路径：platform/terminal/common/capabilities/{capabilities.ts,terminalCapabilityStore.ts}，terminal/browser/{terminalEvents.ts,agentHostOutputChannel.ts}。已有局部 base/common/event.ts（生产使用的 EventMultiplexer 底座，先读 Base reference）；terminal/browser/{ahpTerminalCommandSource.ts,terminalProcessManager.ts,agentHostPty.ts,terminalInstance.ts,terminalMainContribution.ts}（commit change signal/capability/唯一装载），批准 services/terminal/browser/terminal.ts（可选 capability 只读端口，已有 host/PTy fake 可无检测）。定向新增 terminal/test/browser/terminalEvents.test.ts 与既有源/解析/生命周期测试；Frame Output fixture只补 stdout sink domain，中文语言包新增实际 channel/诊断 label。当前 capability 支持 cwd 与 committed command detection 的只读子集，不声明完整 marker/command execution/前端 parser API。
+
+## Chat 快照与屏幕读取准入（2026-10-12）
+
+终端上下文选择 / 实例菜单 Attach to Chat → 原 TerminalContext / TerminalActions → chatTerminalCommandMirror.ts、terminalTabsChatEntry.ts → 原实例的已解析屏幕与 Chat draft → 保存接受时的不可变内容、关闭进程后仍可只读预览 → Chat context / Terminal Chromium 回归。Chat 附件模型只增加可选终端快照领域字段；不存在新的终端实例、PTY、输入或命令历史 owner。
+
+仅 VS Code 新增：browser/chatTerminalCommandMirror.ts（实际快照 capture 与离屏镜像）、browser/detachedTerminal.ts（原 XtermTerminal 的只读宿主）、browser/xterm/lineDataEventAddon.ts（原已解析屏幕读取搬迁）、browser/terminalEscapeSequences.ts（原 bracketed paste 及纯文本显示编码）、browser/terminalTabsChatEntry.ts（现有实例菜单的 draft attachment 操作）。双方已有局部修改：services/terminal/browser/terminal.ts（最小 screen-host 与快照契约）、services/chat/common/chatContextService.ts（可选快照）、terminalActions.ts（实际菜单 action）、xtermTerminal.ts（宿主缩窄、读取迁移）、terminalInstance.ts（原 paste 调用）、Chat context/attachment/input 文件（capture / preview 消费）、附件 CSS（仅新只读预览几何）、中文 bundle、既有浏览器 fixture/spec 和相应 unit。公开 buffer 是屏幕来源；快照预览禁止把已解析文字再次解释成用户提供的控制序列。无需 xterm 私有 API，不为文件计数先制造私有契约。
+
+## 执行宿主与入口准入（2026-10-12）
+
+Desktop 本地 / SSH 与 Web 创建及复用终端 → 原 TerminalInstanceService / AgentHostTerminalService → 同路径 localTerminalBackend/localPty、remoteTerminalBackend/remotePty、common/remote/terminal 与 RemoteTerminalChannelClient → 原平台 process adapter 与 Rust PTY → 异步创建跨 workspace/authority 切换时释放晚到进程，不把输入送到替换宿主 → 原 Service 生命周期与新增宿主 route unit。channel 只拥有请求 scope/cancellation，不复制平台的 attachment token、重连 queue、ACK 或 shell 状态；实例仍唯一拥有 PTY disposable lease。
+
+仅 VS Code 新增：上述六文件、electron-browser/terminalRemote.ts（Desktop 注册远端 factory）、electron-browser/terminalProfileResolverService.ts（保留远端空窗口 authority 的 resolver 策略）、browser/terminal.web.contribution.ts（真实 Web 注册入口）。双方已有局部修改：AgentHostTerminalService（backend factory 与每窗口唯一后端 lifetime）、BaseTerminalBackend（typed create 端口）、AgentHostPty（typed write guard）、Browser profile resolver（公共 Base 与 browser authority policy）、核心/desktop contributions（resolver 注册归宿）、Sessions Web 入口（实际 import，使用 sessions skill）、原 Service 定向 tests；platform transport 原 owner 不迁移。
+
+## 静态配置、Chat 契约与 xterm 边界准入（2026-10-12）
+
+原 terminalConfiguration → terminalContribExports.ts 的已安装增强配置组合 → 原配置 registry（同一 schema/注册 owner）；原 Attach to Chat action 与 Chat input → terminalContribChatExports.ts 的实际 command ID / snapshot discriminator → 原 draft；URL hover → xterm-private.d.ts 的安装版本只读 cell metrics → 原 hover anchor（公开屏幕几何回退）；原终端浏览器 fixture → terminalTestHelpers.ts writeP → 原 xterm parsed-write callback → 测试在解析后断言。四个仅 VS Code 路径由明确用户文件清单要求落位；配置组合与 Chat 对接文件本来就是跨增强组合契约，并非预留服务/空桥。testHelpers 为真正使用的测试工具，不冒充生产功能。没有声明未安装的增强、工具授权、xterm fork 私有写 API。
+
+Chat 草稿实际 capture/restore 会通过 Native host handoff 的 typed context 契约；补充准入双方已有 platform/terminal/common/terminal.ts（快照数据契约唯一位置）、platform/native/common/nativeHost.ts（可选快照及 IPC 边界长度/columns/字段校验）、Chat input capture/restore（携带原不可变内容）、windowActions.test.ts 与既有 Chat context 浏览器夹具/spec（恢复/源终端释放后只读预览）。下层只引用领域数据，不 import contribution；不从格式化 context 字符串猜测屏幕内容。
+
+正常准备入口被共享 ThreadCommand 新增 ToolCall 字段阻塞，原 ToolCall 缺少外层 DTO 已要求的 Eq/JsonSchema/TS traits；准入 crates/protocol/src/model/message.rs 只给现有数据类型补三个可派生契约，保留共享业务字段和 command 修改，不手改生成文件。生成器及协议一致性验证检查此依赖。

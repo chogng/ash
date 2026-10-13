@@ -1,3 +1,4 @@
+import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
 import { createUuid } from '../../../base/common/uuid.js';
 import { canceled } from '../../../base/common/errors.js';
 import { createAppServerResourceApi, readAppServerResource } from './appServerApi.js';
@@ -16,6 +17,7 @@ import type {
 } from '../../../../../.build/protocol/typescript/index.js';
 import type {
 	AgentResponse,
+	AgentMcpAppTool,
 	ChatContentPart,
 	Thread,
 	ThreadItem,
@@ -67,10 +69,14 @@ export function createDisconnectedAgentSessionService(unavailable: UnavailableOp
 
 export function createDisconnectedAgentThreadService(unavailable: UnavailableOperation): IAgentThreadService {
 	return {
+		onDidChangeConnection: Event.None,
 		onDidUpdateThread: Event.None,
 		onDidUpdateThreadTranscript: Event.None,
 		readAttachment: () => unavailable('thread.readAttachment'),
 		readToolResource: () => unavailable('thread.readToolResource'),
+		readAppResource: () => unavailable('thread.readAppResource'),
+		listAppTools: () => unavailable('thread.listAppTools'),
+		invokeAppTool: () => unavailable('thread.invokeAppTool'),
 		readHistoryState: () => unavailable('thread.readHistoryState'),
 		moveHistory: () => unavailable('thread.moveHistory'),
 		readContext: () => unavailable('thread.readContext'),
@@ -150,8 +156,30 @@ export function createAppServerAgentSessionService(connection: AppServerProtocol
 	};
 }
 
+/** Shares resource verification, cancellation and release for the two source-bound read ports. */
+async function readToolResource(connection: AppServerProtocolClient, source: Parameters<IAgentThreadService['readToolResource']>[0], selection: { readonly type: 'linked'; } | { readonly type: 'app'; readonly uri: string; }, signal?: AbortSignal): ReturnType<IAgentThreadService['readToolResource']> {
+	if (signal?.aborted) throw canceled();
+	const generation = connection.generation;
+	const operationId = createUuid();
+	const request = selection.type === 'linked'
+		? appServerRequest(connection, 'tool/resource/open', { ...source, operationId })
+		: appServerRequest(connection, 'tool/app/resource/open', { ...source, uri: selection.uri, operationId });
+	let cancellation: Promise<unknown> | undefined;
+	const cancel = (): void => {
+		if (connection.generation === generation) { cancellation ??= appServerRequest(connection, 'tool/resource/cancel', { sessionId: source.sessionId, threadId: source.threadId, operationId }); void cancellation.catch(() => undefined); }
+	};
+	signal?.addEventListener('abort', cancel, { once: true });
+	if (signal?.aborted) cancel();
+	try {
+		const { appCsp, encoding, resourceMetadata, ...resource } = await request;
+		const bytes = await readAppServerResource(createAppServerResourceApi(connection, { sessionId: source.sessionId }), resource, 262_144, signal, generation);
+		return { bytes, mimeType: resource.mimeType, ...(encoding ? { encoding } : {}), ...(resourceMetadata === undefined ? {} : { resourceMetadata }), ...(appCsp ? { appCsp: { connectDomains: [...appCsp.connectDomains], resourceDomains: [...appCsp.resourceDomains], frameDomains: [...appCsp.frameDomains], baseUriDomains: [...appCsp.baseUriDomains] } } : {}) };
+	} finally { signal?.removeEventListener('abort', cancel); }
+}
+
 export function createAppServerAgentThreadService(connection: AppServerProtocolClient): IAgentThreadService {
 	return {
+		onDidChangeConnection: Event.any<void>((listener, thisArgs) => connection.onStateChange(() => listener.call(thisArgs))),
 		onDidUpdateThread: Event.any<ThreadUpdateEnvelope>((listener, thisArgs) => connection.onNotification(event => {
 			if (event.method === 'session/thread/update') listener.call(thisArgs, toThreadUpdate(event.params));
 		})),
@@ -162,25 +190,41 @@ export function createAppServerAgentThreadService(connection: AppServerProtocolC
 			if (signal?.aborted) throw canceled();
 			const generation = connection.generation;
 			const resource = await appServerRequest(connection, 'attachment/resource/open', { ...source });
-			const bytes = await readAppServerResource(createAppServerResourceApi(connection), resource, 16 * 1024 * 1024, signal, generation);
+			const bytes = await readAppServerResource(createAppServerResourceApi(connection, { sessionId: source.sessionId }), resource, 16 * 1024 * 1024, signal, generation);
 			return { bytes, mimeType: resource.mimeType };
 		},
-		readToolResource: async (source, signal) => {
+		listAppTools: async (source, signal) => {
+			if (signal?.aborted) throw canceled();
+			const generation = connection.generation;
+			const result = await appServerRequest(connection, 'tool/app/list', { ...source });
+			if (signal?.aborted) throw canceled();
+			if (connection.generation !== generation) throw new Error('App catalog belongs to a retired connection');
+			// Detach arbitrary SDK schema/metadata JSON at the transport boundary.
+			return result.tools.map(value => {
+				if (!value || typeof value !== 'object' || Array.isArray(value) || typeof value.name !== 'string' || !value.inputSchema || typeof value.inputSchema !== 'object' || Array.isArray(value.inputSchema)) throw new TypeError('Invalid App tool contract');
+				return JSON.parse(JSON.stringify(value)) as AgentMcpAppTool;
+			});
+		},
+		invokeAppTool: async (source, name, argumentsJson, signal) => {
 			if (signal?.aborted) throw canceled();
 			const generation = connection.generation;
 			const operationId = createUuid();
-			const request = appServerRequest(connection, 'tool/resource/open', { ...source, operationId });
-			const cancel = (): void => {
-				if (connection.generation === generation) void appServerRequest(connection, 'tool/resource/cancel', { sessionId: source.sessionId, threadId: source.threadId, operationId }).catch(() => undefined);
-			};
+			const request = connection.request(APP_SERVER_METHODS['tool/app/call'], { ...source, remoteName: name, argumentsJson, operationId }, { timeoutMs: 240_000 });
+			let cancellation: Promise<unknown> | undefined;
+			const cancel = (): void => { if (connection.generation === generation) { cancellation ??= appServerRequest(connection, 'tool/app/cancel', { sessionId: source.sessionId, threadId: source.threadId, operationId }); void cancellation.catch(() => undefined); } };
 			signal?.addEventListener('abort', cancel, { once: true });
 			if (signal?.aborted) cancel();
 			try {
-				const resource = await request;
-				const bytes = await readAppServerResource(createAppServerResourceApi(connection), resource, 262_144, signal, generation);
-				return { bytes, mimeType: resource.mimeType };
-			} finally { signal?.removeEventListener('abort', cancel); }
+				const result = await request;
+				if (signal?.aborted || connection.generation !== generation) throw canceled();
+				const item = toThreadItem(result.item);
+				if (item.type !== 'toolResult') throw new TypeError('App invocation did not return a Tool Result');
+				return item;
+			} catch (error) { cancel(); throw error; }
+			finally { signal?.removeEventListener('abort', cancel); }
 		},
+		readToolResource: (source, signal) => readToolResource(connection, source, { type: 'linked' }, signal),
+		readAppResource: (source, uri, signal) => readToolResource(connection, source, { type: 'app', uri }, signal),
 		readHistoryState: async params => {
 			try {
 				const result = await appServerRequest(connection, 'session/thread/history', params);
@@ -428,6 +472,7 @@ function toThread(thread: ThreadDto): Thread {
 		},
 		turns: thread.turns.map((turn) => ({
 			turnId: turn.turnId,
+			kind: turn.kind,
 			status: turn.status,
 			mode: turn.mode,
 			approvalMode: turn.approvalMode,
@@ -522,6 +567,7 @@ function toThreadTranscriptUpdate(update: ThreadTranscriptUpdateEnvelopeDto): Th
 
 function toThreadTranscriptEntry(entry: ThreadTranscriptEntryDto): ThreadTranscriptEntry {
 	switch (entry.type) {
+		case 'voiceTranscript': return { type: 'voiceTranscript', entryId: entry.entryId, transcript: { itemId: entry.transcript.itemId, voiceSessionId: entry.transcript.voiceSessionId, mediaEpoch: entry.transcript.mediaEpoch, speaker: entry.transcript.speaker, text: entry.transcript.text, startMs: entry.transcript.startMs, endMs: entry.transcript.endMs, afterItemId: entry.transcript.afterItemId } };
 		case 'hookRun':
 			return {
 				type: 'hookRun',
@@ -584,7 +630,8 @@ function toThreadItem(item: ThreadItemDto): ThreadItem {
 						const data = artifact.data;
 						return {
 							type: 'artifact', artifact: {
-								...artifact, source: { ...artifact.source },
+								mimeType: artifact.mimeType, contentDigest: artifact.contentDigest, truncated: artifact.truncated,
+								...(artifact.resourceMetadata === undefined ? {} : { resourceMetadata: artifact.resourceMetadata }), source: { ...artifact.source },
 								data: data.type === 'binary' ? { type: 'bytes', bytes: Uint8Array.from(data.bytes) }
 									: data.type === 'json' ? { type: 'json', json: normalizeArtifactJson(data.json) } : { ...data },
 							},

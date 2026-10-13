@@ -639,6 +639,73 @@ fn invocation_capabilities(
 }
 
 impl ToolService for McpToolService {
+    fn list_app_tools(
+        &self,
+        origin: &ToolCall,
+        _binding: &ash_protocol::ToolCallBinding,
+    ) -> Result<Vec<serde_json::Value>, CoreError> {
+        self.review_request(origin)?;
+        let prepared = self.prepared_call(origin)?;
+        Ok(self.owner.list_app_tools(prepared.binding()))
+    }
+
+    fn app_tool_definitions(&self) -> Vec<ToolDefinition> {
+        self.owner.app_definitions().to_vec()
+    }
+
+    fn resolve_app_tool_call(
+        &self,
+        origin: &ToolCall,
+        _binding: &ash_protocol::ToolCallBinding,
+        name: &str,
+        arguments: serde_json::Value,
+        id: ash_protocol::ToolCallId,
+    ) -> Result<(ToolCall, ash_protocol::ToolCallBinding), CoreError> {
+        self.review_request(origin)?;
+        let prepared = self.prepared_call(origin)?;
+        let target = self
+            .owner
+            .resolve_app_tool(prepared.binding(), name)
+            .ok_or_else(|| {
+                CoreError::Policy("App tool is not available on the originating server".into())
+            })?;
+        let call = ToolCall {
+            id,
+            name: target.exposed_name().clone(),
+            arguments,
+        };
+        self.review_request(&call)?;
+        let binding = self
+            .bind_call(&call, ash_protocol::ToolCallCaller::Direct)?
+            .ok_or_else(|| CoreError::Policy("App tool binding is unavailable".into()))?;
+        Ok((call, binding))
+    }
+
+    fn bind_call(
+        &self,
+        call: &ToolCall,
+        caller: ash_protocol::ToolCallCaller,
+    ) -> Result<Option<ash_protocol::ToolCallBinding>, CoreError> {
+        let definition = self
+            .owner
+            .definitions()
+            .iter()
+            .chain(self.owner.app_definitions())
+            .find(|definition| definition.name == call.name)
+            .ok_or_else(|| CoreError::Policy("MCP tool definition is unavailable".into()))?;
+        use sha2::Digest;
+        let canonical = serde_json::to_vec(definition)
+            .map_err(|error| CoreError::Execution(error.to_string()))?;
+        Ok(Some(ash_protocol::ToolCallBinding {
+            registry_incarnation: None,
+            registry_generation: 0,
+            definition_digest: format!("sha256:{:x}", sha2::Sha256::digest(canonical)),
+            source_chain: self.source_provenance(&call.name),
+            activity: self.activity(call),
+            caller,
+        }))
+    }
+
     fn read_resource(
         &self,
         call: &ToolCall,

@@ -58,6 +58,159 @@ impl McpSessionFactory for FakeFactory {
 
 struct FakeSession;
 
+struct AppFactory;
+struct AppSession(McpServerId);
+
+impl McpSessionFactory for AppFactory {
+    fn connect(&self, definition: McpServerDefinition, _: RmcpClientOptions) -> McpConnectFuture {
+        Box::pin(
+            async move { Ok(Box::new(AppSession(definition.id().clone())) as Box<dyn McpSession>) },
+        )
+    }
+}
+
+impl McpSession for AppSession {
+    fn server_info(&self) -> ServerInfo {
+        ServerInfo::default()
+    }
+    fn list_tools(&self, _: McpPageCursor) -> McpSessionFuture<'_, ListToolsResult> {
+        Box::pin(async move {
+            let names = if self.0.as_str() == "user:mcp:other" {
+                vec![("other-only", vec!["app"])]
+            } else {
+                vec![
+                    ("report", vec!["model", "app"]),
+                    ("edit", vec!["app"]),
+                    ("private", vec!["model"]),
+                ]
+            };
+            let tools = names.into_iter().map(|(name, visibility)| serde_json::from_value(serde_json::json!({
+                "name":name,"description":name,"inputSchema":{"type":"object"},"_meta":{"ui":{"visibility":visibility}}
+            })).unwrap()).collect();
+            Ok(ListToolsResult {
+                tools,
+                ..Default::default()
+            })
+        })
+    }
+    fn call_tool(
+        &self,
+        _: CallToolRequestParams,
+        _: &ash_async_utils::CancellationToken,
+    ) -> McpSessionFuture<'_, CallToolResult> {
+        panic!("App selection must not invoke a tool before Core approval")
+    }
+    fn shutdown(self: Box<Self>) -> McpSessionFuture<'static, ()> {
+        Box::pin(async { Ok(()) })
+    }
+}
+
+#[test]
+fn app_targets_are_same_server_app_visible_and_still_require_original_mcp_approval() {
+    let ids = ["user:mcp:app", "user:mcp:other"].map(|id| McpServerId::new(id).unwrap());
+    let definitions = ids
+        .iter()
+        .map(|id| {
+            McpServerDefinition::new(
+                id.clone(),
+                id.as_str(),
+                McpServerTransport::Stdio(StdioServerCommand::new("unused")),
+            )
+            .unwrap()
+        })
+        .collect();
+    let authorities = ids
+        .iter()
+        .map(|id| {
+            (
+                id.clone(),
+                McpInvocationAuthority {
+                    display_name: id.to_string(),
+                    transport: McpInvocationTransport::Stdio {
+                        executable: "/test/mcp".into(),
+                    },
+                    connector_fence: None,
+                    runtime_fence: None,
+                },
+            )
+        })
+        .collect();
+    let composition =
+        start_mcp_tools(definitions, authorities, 7, Some(Arc::new(AppFactory))).unwrap();
+    let model = composition.tools.definitions();
+    assert_eq!(model.len(), 2);
+    assert_eq!(composition.tools.app_tool_definitions().len(), 3);
+    let origin = ToolCall {
+        id: ToolCallId::new("report").unwrap(),
+        name: model
+            .iter()
+            .find(|definition| definition.description == "report")
+            .unwrap()
+            .name
+            .clone(),
+        arguments: serde_json::json!({}),
+    };
+    let binding = composition
+        .tools
+        .bind_call(&origin, ash_protocol::ToolCallCaller::Direct)
+        .unwrap()
+        .unwrap();
+    let catalog = composition.tools.list_app_tools(&origin, &binding).unwrap();
+    let mut names: Vec<_> = catalog
+        .iter()
+        .map(|tool| tool["name"].as_str().unwrap())
+        .collect();
+    names.sort_unstable();
+    assert_eq!(names, ["edit", "report"]);
+    assert_eq!(
+        catalog.iter().find(|tool| tool["name"] == "edit").unwrap()["_meta"]["ui"]["visibility"],
+        serde_json::json!(["app"])
+    );
+    assert!(
+        catalog
+            .iter()
+            .all(|tool| tool["inputSchema"] == serde_json::json!({"type":"object"}))
+    );
+    let (call, target) = composition
+        .tools
+        .resolve_app_tool_call(
+            &origin,
+            &binding,
+            "edit",
+            serde_json::json!({"value":8}),
+            ToolCallId::new("app-edit").unwrap(),
+        )
+        .unwrap();
+    assert!(target.source_chain.iter().any(|source| matches!(source, ash_protocol::ToolSourceProvenance::Mcp { server_id, remote_name, catalog_generation: 7, connection_generation: 7 } if server_id == ids[0].as_str() && remote_name == "edit")));
+    composition
+        .tools
+        .validate_call_binding(&call, Some(&target))
+        .unwrap();
+    assert_eq!(composition.tools.definitions(), model);
+    let review = composition.tools.prepare(&call).unwrap();
+    assert!(matches!(
+        composition
+            .policy
+            .decide(&review, &CancellationSource::new().token())
+            .unwrap(),
+        ExecutionDecision::AskUser(_)
+    ));
+    for forbidden in ["private", "other-only", "unknown"] {
+        assert!(
+            composition
+                .tools
+                .resolve_app_tool_call(
+                    &origin,
+                    &binding,
+                    forbidden,
+                    serde_json::json!({}),
+                    ToolCallId::new(format!("denied-{forbidden}")).unwrap()
+                )
+                .is_err()
+        );
+    }
+}
+
 struct TokenStdioProvider;
 
 impl ConnectorMcpRuntimeProvider for TokenStdioProvider {

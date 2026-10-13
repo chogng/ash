@@ -968,3 +968,37 @@ for (const storageDisabled of [false, true]) test(`terminal context retains comm
 	}, null, 2)));
 	await expect(page.getByLabel('Context error')).toHaveText('');
 });
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`terminal snapshot preview survives source disposal and draft handoff in ${locale}`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		const chinese = locale === 'zh-CN';
+		await page.goto(`/chatInput.html?contextSources=1&locale=${locale}&theme=${chinese ? 'hcLight' : 'dark'}`);
+		const add = page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true });
+		await add.press('Enter');
+		const picker = page.getByRole('dialog');
+		await picker.getByRole('option', { name: chinese ? '终端…' : 'Terminal…', exact: true }).click();
+		await picker.getByRole('option', { name: /Shell \/workspace/ }).click();
+		await expect(page.locator('.ash-chat-terminal-preview summary')).toHaveText(chinese ? '预览终端快照' : 'Preview terminal snapshot');
+		await page.evaluate(() => window.ashChatInputIntegration.disposeContextTerminal());
+		await page.evaluate(() => window.ashChatInputIntegration.restoreCapturedDraft());
+		const summary = page.locator('.ash-chat-terminal-preview summary');
+		await expect(summary).toHaveText(chinese ? '预览终端快照' : 'Preview terminal snapshot');
+		await summary.focus();
+		await summary.press('Enter');
+		await expect.poll(() => summary.evaluate(node => getComputedStyle(node).outlineStyle)).toBe('solid');
+		const preview = page.locator('.ash-chat-terminal-preview-screen');
+		await expect(preview.locator('.xterm-rows')).toContainText('context terminal ready');
+		const input = preview.getByRole('textbox', { name: chinese ? '已保存的终端输出（只读）' : 'Saved terminal output (read only)', exact: true });
+		await expect(input).toHaveAttribute('readonly', '');
+		await expect.poll(() => preview.boundingBox().then(box => box?.height)).toBe(160);
+		await summary.press('Enter');
+		await expect(preview.locator('.xterm')).toHaveCount(0);
+		await summary.press('Enter');
+		await expect(preview.locator('.xterm-rows')).toContainText('context terminal ready');
+		await page.getByRole('button', { name: chinese ? '移除 终端：Shell' : 'Remove Terminal: Shell', exact: true }).click();
+		await expect(preview).toHaveCount(0);
+		expect(errors).toEqual([]);
+	});
+}

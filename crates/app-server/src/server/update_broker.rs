@@ -950,6 +950,7 @@ impl UpdateBroker {
         &self,
         thread: &ash_protocol::Thread,
         include_transient: bool,
+        voice_transcripts: &[ash_protocol::VoiceTranscript],
     ) -> ash_thread_transcript::ThreadTranscriptSnapshot {
         if include_transient
             && let Ok(transcripts) = self.transcripts.lock()
@@ -957,9 +958,10 @@ impl UpdateBroker {
                 transcripts.get(&(thread.session_id.clone(), thread.thread_id.clone()))
             && let Some(snapshot) = accumulator.snapshot(thread)
         {
-            return snapshot;
+            return snapshot.with_voice_transcripts(voice_transcripts);
         }
         ash_thread_transcript::ThreadTranscriptSnapshot::from_thread(thread)
+            .with_voice_transcripts(voice_transcripts)
     }
 
     fn publish_thread_transcript(&self, update: &ThreadTranscriptUpdateEnvelope) {

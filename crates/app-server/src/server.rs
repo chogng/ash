@@ -2905,6 +2905,16 @@ impl AppServer {
             Some(ClientMethod::ResourceRelease) => {
                 self.resource_release(connection, &request.params)
             }
+            Some(ClientMethod::ToolAppList) => self.tool_app_list(&request.params),
+            Some(ClientMethod::ToolAppCall) => {
+                self.tool_app_call(connection, &request.params, cancellation)
+            }
+            Some(ClientMethod::ToolAppResourceOpen) => {
+                self.tool_app_resource_open(connection, &request.params, cancellation)
+            }
+            Some(ClientMethod::ToolAppCancel) => {
+                self.tool_resource_cancel(connection, &request.params)
+            }
             Some(ClientMethod::ToolResourceOpen) => {
                 self.tool_resource_open(connection, &request.params, cancellation)
             }

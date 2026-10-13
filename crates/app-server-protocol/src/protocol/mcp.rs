@@ -143,6 +143,47 @@ pub struct ToolResourceOpenParams {
     pub operation_id: String,
 }
 
+/// A connection-owned resource handle with the source's validated App sandbox declaration.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolResourceOpenResult {
+    pub resource_id: String,
+    pub mime_type: String,
+    pub size: usize,
+    pub sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub app_csp: Option<ash_protocol::McpAppResourceCsp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub encoding: Option<ToolResourceEncoding>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub resource_metadata: Option<String>,
+}
+
+/// The original resource content variant, independent of its server-defined MIME type.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ToolResourceEncoding {
+    Text,
+    Binary,
+}
+
+/// Reads a resource from the server selected by a canonical MCP App result, never by its URI.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ToolAppResourceOpenParams {
+    pub session_id: ash_protocol::SessionId,
+    pub thread_id: ash_protocol::ThreadId,
+    pub item_id: ash_protocol::ItemId,
+    pub content_index: usize,
+    #[schemars(length(min = 1, max = 4096))]
+    pub uri: String,
+    #[schemars(length(min = 1, max = 256))]
+    pub operation_id: String,
+}
+
 /// Cancels a resource read owned by this connection and execution route.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -151,4 +192,43 @@ pub struct ToolResourceCancelParams {
     pub thread_id: ash_protocol::ThreadId,
     #[schemars(length(min = 1, max = 256))]
     pub operation_id: String,
+}
+
+/// One App-originated tool request. The host resolves its server and permissions from the Item.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ToolAppCallParams {
+    pub session_id: ash_protocol::SessionId,
+    pub thread_id: ash_protocol::ThreadId,
+    pub item_id: ash_protocol::ItemId,
+    pub content_index: usize,
+    #[schemars(length(min = 1, max = 256))]
+    pub remote_name: String,
+    #[schemars(length(max = 262_144))]
+    pub arguments_json: String,
+    #[schemars(length(min = 1, max = 256))]
+    pub operation_id: String,
+}
+
+/// The committed result of the Tool Turn, also delivered through ordinary Thread notifications.
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolAppCallResult {
+    pub item: ash_protocol::ThreadItem,
+}
+
+/// Reads only the App-visible tools from its original server and frozen catalog.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ToolAppListParams {
+    pub session_id: ash_protocol::SessionId,
+    pub thread_id: ash_protocol::ThreadId,
+    pub item_id: ash_protocol::ItemId,
+    pub content_index: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolAppListResult {
+    pub tools: Vec<serde_json::Value>,
 }

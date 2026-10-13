@@ -152,7 +152,11 @@ impl TranscriptAccumulator {
             self.transient_order
                 .iter()
                 .filter_map(|entry_id| self.transient_entries.get(entry_id))
-                .filter(|entry| live_turns.contains(entry.turn_id()))
+                .filter(|entry| {
+                    entry
+                        .turn_id()
+                        .is_some_and(|turn| live_turns.contains(turn))
+                })
                 .filter(|entry| match entry {
                     ThreadTranscriptEntry::Item { item, .. } => {
                         !committed_item_ids.contains(item.item_id())
@@ -162,7 +166,8 @@ impl TranscriptAccumulator {
                         tool_call_id,
                         ..
                     } => !completed_tools.contains(&(turn_id, tool_call_id)),
-                    ThreadTranscriptEntry::HookRun { .. }
+                    ThreadTranscriptEntry::VoiceTranscript { .. }
+                    | ThreadTranscriptEntry::HookRun { .. }
                     | ThreadTranscriptEntry::TurnPlan { .. }
                     | ThreadTranscriptEntry::TurnError { .. } => true,
                 })
@@ -284,6 +289,14 @@ impl TranscriptAccumulator {
                 if !removed.is_empty() {
                     changes.push(ThreadTranscriptChange::Remove { entry_ids: removed });
                 }
+            }
+            ThreadEvent::VoiceTranscriptRecorded { transcript, .. } => {
+                changes.push(ThreadTranscriptChange::Upsert {
+                    entry: ThreadTranscriptEntry::VoiceTranscript {
+                        entry_id: transcript.item_id.to_string(),
+                        transcript: transcript.clone(),
+                    },
+                });
             }
             ThreadEvent::HistoryPrefixBound { .. }
             | ThreadEvent::ThreadHistoryMoved { .. }
@@ -443,7 +456,8 @@ impl TranscriptAccumulator {
                 | ThreadTranscriptEntry::TurnPlan { .. }
                 | ThreadTranscriptEntry::TurnError { .. }
                 | ThreadTranscriptEntry::ToolOutput { .. } => None,
-                ThreadTranscriptEntry::HookRun { .. } => None,
+                ThreadTranscriptEntry::VoiceTranscript { .. }
+                | ThreadTranscriptEntry::HookRun { .. } => None,
             })
             .collect::<Vec<_>>();
         for entry_id in &removed {
@@ -456,7 +470,7 @@ impl TranscriptAccumulator {
         let removed = self
             .transient_entries
             .iter()
-            .filter(|(_, entry)| entry.turn_id() == turn_id)
+            .filter(|(_, entry)| entry.turn_id() == Some(turn_id))
             .map(|(entry_id, _)| entry_id.clone())
             .collect::<Vec<_>>();
         for entry_id in &removed {

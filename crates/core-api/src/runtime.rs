@@ -75,6 +75,14 @@ pub struct SubmitTurnRequest {
     pub input: Vec<UserInput>,
 }
 
+/// One host-resolved tool invocation, executed by Core without requesting a model response.
+pub struct SubmitToolRequest {
+    pub command_id: CommandId,
+    pub expected_sequence: SequenceExpectation,
+    pub call: ash_protocol::ToolCall,
+    pub binding: ash_protocol::ToolCallBinding,
+}
+
 pub struct SubmitShellRequest {
     pub command_id: CommandId,
     pub expected_sequence: SequenceExpectation,
@@ -182,6 +190,11 @@ pub trait AgentRuntime {
         &self,
         thread_id: &ThreadId,
         request: SubmitTurnRequest,
+    ) -> Result<TurnReceipt, CoreError>;
+    fn submit_tool(
+        &self,
+        thread_id: &ThreadId,
+        request: SubmitToolRequest,
     ) -> Result<TurnReceipt, CoreError>;
     fn submit_shell(
         &self,

@@ -1,3 +1,5 @@
+import type { IXtermCore } from '../xterm-private.js';
+import { LineDataEventAddon } from './lineDataEventAddon.js';
 import { DecorationAddon } from './decorationAddon.js';
 import { MarkNavigationAddon } from './markNavigationAddon.js';
 import '../media/xterm.css';
@@ -16,7 +18,7 @@ import { computeLinks } from "../../../../../editor/common/languages/linkCompute
 import { onUnexpectedError } from "../../../../../base/common/errors.js";
 import { localize } from "../../../../../nls.js";
 import { ITerminalConfigurationService } from "../terminal.js";
-import type { ITerminalDimensions, ITerminalInstance, IXtermTerminal } from "../../../../services/terminal/browser/terminal.js";
+import type { ITerminalDimensions, ITerminalScreenHost, IXtermTerminal } from "../../../../services/terminal/browser/terminal.js";
 import { h } from "../../../../../base/browser/dom.js";
 import { observeResize } from "../../../../../base/browser/observer.js";
 import { TerminalResizeDebouncer } from '../terminalResizeDebouncer.js';
@@ -37,6 +39,7 @@ const addonImporter = new XtermAddonImporter();
 
 /** One persistent xterm renderer bound to exactly one Terminal instance. */
 export class XtermTerminal extends Disposable implements IXtermTerminal {
+	private readonly lineData = new LineDataEventAddon();
 	private readonly widgets = this._register(new TerminalWidgetManager());
 	private readonly linkHover = this._register(new MutableDisposable<import('../../../../../base/common/lifecycle.js').IDisposable>());
 	readonly element: HTMLDivElement;
@@ -68,7 +71,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 
 	constructor(
 		container: HTMLElement,
-		readonly instance: ITerminalInstance,
+		readonly instance: ITerminalScreenHost,
 		@IThemeService private readonly themeService: IThemeService,
 		@IOpenerService private readonly openerService: IOpenerService,
 		@IQuickInputService private readonly quickInputService: IQuickInputService,
@@ -137,6 +140,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		this._register(toDisposable(() => terminal.dispose()));
 		this.fitAddon = new FitAddon();
 		terminal.loadAddon(this.fitAddon);
+		terminal.loadAddon(this.lineData);
 		terminal.loadAddon(this.decorationAddon);
 		terminal.loadAddon(this.markNavigationAddon);
 		terminal.loadAddon(new WebLinksAddon((_event, url) => { void this.openLink(url).catch(onUnexpectedError); }, {
@@ -144,9 +148,13 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 				if (!this.configuration.config.showLinkHover || !this.visible) return;
 				const rect = terminal.element?.querySelector('.xterm-screen')?.getBoundingClientRect();
 				if (!rect?.width || !rect.height) return;
+				const cell = (terminal as Terminal & { readonly _core?: IXtermCore; })._core?._renderService?.dimensions?.css?.cell;
 				this.linkHover.value = this.widgets.attachWidget(this.instantiation.createInstance(TerminalHover, {
 					viewportRange,
-					cellDimensions: { width: rect.width / terminal.cols, height: rect.height / terminal.rows },
+					cellDimensions: {
+						width: cell?.width && Number.isFinite(cell.width) ? cell.width : rect.width / terminal.cols,
+						height: cell?.height && Number.isFinite(cell.height) ? cell.height : rect.height / terminal.rows,
+					},
 					terminalDimensions: { width: rect.width, height: rect.height },
 				}, url));
 			},
@@ -305,23 +313,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 			}
 		}
 		if (this.isDisposed || signal.aborted) { return undefined; }
-		let content = terminal.getSelection();
-		if (!content) {
-			const buffer = terminal.buffer.active;
-			const lines: string[] = [];
-			let characters = 0;
-			for (let index = buffer.length - 1; index >= 0; index--) {
-				const line = buffer.getLine(index)!;
-				const text = line.translateToString(!buffer.getLine(index + 1)?.isWrapped);
-				if (!text && !lines.length) { continue; }
-				lines.push(text);
-				characters += text.length + (line.isWrapped ? 0 : 1);
-				if (!line.isWrapped) { lines.push('\n'); }
-				if (characters > maxCharacters + 1) { break; }
-			}
-			content = lines.reverse().join('').trimEnd().replace(/^\n/, '');
-		}
-		return content.length > maxCharacters ? `[Earlier output omitted]\n${content.slice(-maxCharacters)}` : content;
+		return this.lineData.getBufferText(maxCharacters);
 	}
 
 	public async openDetectedLink(): Promise<void> {

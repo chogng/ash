@@ -129,6 +129,7 @@ impl HarnessContextProvider for FixedHarnessContext {
 pub enum TurnExecutionOutcome {
     Completed(CompletedTurn),
     ShellCompleted { sequence: u64 },
+    ToolCompleted { sequence: u64 },
     ContextCompacted { sequence: u64 },
     AdvisorCompleted { sequence: u64 },
     WaitingForApproval,
@@ -229,6 +230,28 @@ impl TurnExecutor {
             Some(instructions) => catalog.with_model_descriptions(instructions),
             None => catalog,
         })
+    }
+
+    pub fn list_app_tools(
+        &self,
+        origin: &ash_protocol::ToolCall,
+        binding: &ash_protocol::ToolCallBinding,
+    ) -> Result<Vec<serde_json::Value>, CoreError> {
+        self.tools.validate_call_binding(origin, Some(binding))?;
+        self.tools.list_app_tools(origin, binding)
+    }
+
+    /// Resolves an App target and its immutable binding through the originating service.
+    pub fn resolve_app_tool_call(
+        &self,
+        origin: &ToolCall,
+        binding: &ash_protocol::ToolCallBinding,
+        name: &str,
+        arguments: serde_json::Value,
+        id: ash_protocol::ToolCallId,
+    ) -> Result<(ToolCall, ash_protocol::ToolCallBinding), CoreError> {
+        self.tools
+            .resolve_app_tool_call(origin, binding, name, arguments, id)
     }
 
     /// Opens a resource without executing the tool again or altering its committed result.
@@ -591,16 +614,31 @@ impl TurnExecutor {
 
     /// Enqueues one already-started model-free Shell Turn.
     pub fn start_shell(&self, thread_id: &ThreadId, turn_id: &TurnId) -> Result<(), CoreError> {
+        self.start_model_free(thread_id, turn_id, TurnExecutionKind::Shell)
+    }
+
+    /// Enqueues a host-resolved Tool Turn through the same durable approval and execution scheduler.
+    pub fn start_tool(&self, thread_id: &ThreadId, turn_id: &TurnId) -> Result<(), CoreError> {
+        self.start_model_free(thread_id, turn_id, TurnExecutionKind::Tool)
+    }
+
+    fn start_model_free(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        kind: TurnExecutionKind,
+    ) -> Result<(), CoreError> {
         let executor = self.clone();
         let queued_thread_id = thread_id.clone();
         let queued_turn_id = turn_id.clone();
         self.threads
             .enqueue_turn_execution(thread_id, turn_id, move |execution| {
                 if execution.check_current().is_ok() {
-                    let _ = executor.execute_shell(
+                    let _ = executor.execute_model_free(
                         &queued_thread_id,
                         &queued_turn_id,
                         execution.cancellation(),
+                        kind,
                     );
                 }
             })
@@ -610,6 +648,8 @@ impl TurnExecutor {
     pub fn resume(&self, thread_id: &ThreadId, turn_id: &TurnId) -> Result<(), CoreError> {
         if self.is_shell_turn(thread_id, turn_id)? {
             self.start_shell(thread_id, turn_id)
+        } else if self.is_tool_turn(thread_id, turn_id)? {
+            self.start_tool(thread_id, turn_id)
         } else {
             self.start(thread_id, turn_id)
         }
@@ -733,11 +773,12 @@ impl TurnExecutor {
         );
     }
 
-    fn execute_shell(
+    fn execute_model_free(
         &self,
         thread_id: &ThreadId,
         turn_id: &TurnId,
         cancellation: &CancellationToken,
+        kind: TurnExecutionKind,
     ) -> Result<TurnExecutionOutcome, CoreError> {
         let _activity = self.activity.as_ref().and_then(|activity| activity.enter());
         let sequence_before_execution = self
@@ -745,7 +786,7 @@ impl TurnExecutor {
             .read_thread(thread_id)
             .map(|snapshot| snapshot.sequence)
             .unwrap_or(0);
-        let execution = self.execution_started(thread_id, turn_id, TurnExecutionKind::Shell)?;
+        let execution = self.execution_started(thread_id, turn_id, kind)?;
         if let Err(error) = self.execution_observer.will_execute(&execution) {
             self.threads
                 .fail_turn(thread_id, turn_id, StableTurnError::change_capture_failed())?;
@@ -760,7 +801,7 @@ impl TurnExecutor {
             return Err(error);
         }
         let (result, terminal_state) =
-            match self.execute_shell_steps(thread_id, turn_id, cancellation) {
+            match self.execute_model_free_steps(thread_id, turn_id, cancellation, kind) {
                 Ok(completion @ TurnExecutionOutcome::WaitingForApproval)
                 | Ok(completion @ TurnExecutionOutcome::WaitingForCapability) => {
                     (Ok(completion), None)
@@ -804,11 +845,12 @@ impl TurnExecutor {
         result
     }
 
-    fn execute_shell_steps(
+    fn execute_model_free_steps(
         &self,
         thread_id: &ThreadId,
         turn_id: &TurnId,
         cancellation: &CancellationToken,
+        kind: TurnExecutionKind,
     ) -> Result<TurnExecutionOutcome, ExecutionFailure> {
         check_cancellation(cancellation)?;
         self.require_running_turn(thread_id, turn_id)?;
@@ -842,7 +884,11 @@ impl TurnExecutor {
             },
             cancellation,
         );
-        Ok(TurnExecutionOutcome::ShellCompleted { sequence })
+        Ok(if kind == TurnExecutionKind::Tool {
+            TurnExecutionOutcome::ToolCompleted { sequence }
+        } else {
+            TurnExecutionOutcome::ShellCompleted { sequence }
+        })
     }
 
     fn is_shell_turn(&self, thread_id: &ThreadId, turn_id: &TurnId) -> Result<bool, CoreError> {
@@ -858,6 +904,11 @@ impl TurnExecutor {
                 ) if command_turn_id == turn_id
             )
         }))
+    }
+
+    fn is_tool_turn(&self, thread_id: &ThreadId, turn_id: &TurnId) -> Result<bool, CoreError> {
+        let snapshot = self.threads.read_thread(thread_id)?;
+        Ok(snapshot.commands.iter().any(|command| matches!((&command.result, &command.receipt.command), (crate::ThreadCommandResult::TurnAccepted { turn_id: command_turn_id }, ThreadCommand::StartToolTurn { .. }) if command_turn_id == turn_id)))
     }
 
     fn is_context_compaction_turn(

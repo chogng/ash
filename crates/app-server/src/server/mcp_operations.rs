@@ -35,6 +35,165 @@ const MCP_OAUTH_DISCONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 const MCP_OAUTH_DISCONNECT_POLL_INTERVAL: Duration = Duration::from_millis(5);
 
 impl AppServer {
+    fn app_tool_origin(
+        &self,
+        session_id: &ash_protocol::SessionId,
+        thread_id: &ash_protocol::ThreadId,
+        item_id: &ash_protocol::ItemId,
+        content_index: usize,
+    ) -> Result<(u64, ash_protocol::ToolCall, ash_protocol::ToolCallBinding), RpcError> {
+        use ash_protocol::{ContentPart, ThreadItem, ToolOutputArtifactSource};
+        let thread = self.read_session_thread(session_id, thread_id)?;
+        let (turn, item) = thread
+            .turns
+            .iter()
+            .find_map(|turn| {
+                turn.items
+                    .iter()
+                    .find(|item| item.item_id() == item_id)
+                    .map(|item| (turn, item))
+            })
+            .ok_or_else(invalid_params)?;
+        let ThreadItem::ToolResult {
+            tool_call_id,
+            content: Some(content),
+            ..
+        } = item
+        else {
+            return Err(invalid_params());
+        };
+        if !matches!(content.get(content_index), Some(ContentPart::Artifact { artifact }) if matches!(artifact.source, ToolOutputArtifactSource::McpApp { .. }))
+        {
+            return Err(invalid_params());
+        }
+        let (origin, binding) = turn
+            .items
+            .iter()
+            .find_map(|item| match item {
+                ThreadItem::ToolCall {
+                    tool_call_id: id,
+                    name,
+                    arguments_json,
+                    binding: Some(binding),
+                    ..
+                } if id == tool_call_id => Some((
+                    ash_protocol::ToolCall {
+                        id: id.clone(),
+                        name: name.clone(),
+                        arguments: serde_json::from_str(arguments_json).ok()?,
+                    },
+                    binding,
+                )),
+                _ => None,
+            })
+            .ok_or_else(invalid_params)?;
+        Ok((thread.sequence, origin, binding.clone()))
+    }
+
+    pub(super) fn tool_app_list(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: ash_app_server_protocol::protocol::mcp::ToolAppListParams = decode(params)?;
+        let (_, origin, binding) = self.app_tool_origin(
+            &params.session_id,
+            &params.thread_id,
+            &params.item_id,
+            params.content_index,
+        )?;
+        let tools = self
+            .turn_executor_snapshot()
+            .list_app_tools(&origin, &binding)
+            .map_err(super::core_error)?;
+        result(&ash_app_server_protocol::protocol::mcp::ToolAppListResult { tools })
+    }
+
+    pub(super) fn tool_app_call(
+        &self,
+        connection: &super::ConnectionState,
+        params: &Value,
+        cancellation: &ash_async_utils::CancellationToken,
+    ) -> Result<Value, RpcError> {
+        use core_api::AgentRuntime;
+        let params: ash_app_server_protocol::protocol::mcp::ToolAppCallParams = decode(params)?;
+        if params.operation_id.is_empty()
+            || params.operation_id.len() > 256
+            || params.remote_name.is_empty()
+            || params.remote_name.len() > 256
+            || params.arguments_json.len() > 262_144
+        {
+            return Err(invalid_params());
+        }
+        let arguments: Value =
+            serde_json::from_str(&params.arguments_json).map_err(|_| invalid_params())?;
+        if !arguments.is_object() {
+            return Err(invalid_params());
+        }
+        let (sequence, origin, binding) = self.app_tool_origin(
+            &params.session_id,
+            &params.thread_id,
+            &params.item_id,
+            params.content_index,
+        )?;
+        let id = ash_protocol::ToolCallId::new(format!(
+            "app-tool-{}-{}",
+            connection.connection_id, params.operation_id
+        ))
+        .map_err(|_| invalid_params())?;
+        let (call, binding) = self
+            .turn_executor_snapshot()
+            .resolve_app_tool_call(
+                &origin,
+                &binding,
+                &params.remote_name,
+                arguments,
+                id.clone(),
+            )
+            .map_err(super::core_error)?;
+        cancellation
+            .check()
+            .map_err(|_| RpcError::new(-32800, AppServerErrorName::RequestCancelled))?;
+        let receipt = self
+            .agent_runtime()
+            .submit_tool(
+                &params.thread_id,
+                core_api::SubmitToolRequest {
+                    command_id: ash_protocol::CommandId::new(format!(
+                        "app-tool-{}-{}",
+                        connection.connection_id, params.operation_id
+                    ))
+                    .map_err(|_| invalid_params())?,
+                    expected_sequence: core_api::SequenceExpectation::Exact(sequence),
+                    call,
+                    binding,
+                },
+            )
+            .map_err(super::core_error)?;
+        loop {
+            if let Some(item) = self
+                .threads
+                .completed_tool_result(&params.thread_id, &receipt.turn_id, &id)
+                .map_err(super::core_error)?
+            {
+                return result(&ash_app_server_protocol::protocol::mcp::ToolAppCallResult { item });
+            }
+            if cancellation.is_cancelled() {
+                let _ = self.agent_runtime().interrupt_turn(
+                    &params.thread_id,
+                    core_api::InterruptTurnRequest {
+                        command_id: ash_protocol::CommandId::new(format!(
+                            "app-cancel-{}-{}",
+                            connection.connection_id, params.operation_id
+                        ))
+                        .map_err(|_| invalid_params())?,
+                        expected_sequence: core_api::SequenceExpectation::Any,
+                        turn_id: receipt.turn_id,
+                    },
+                );
+                return Err(RpcError::new(-32800, AppServerErrorName::RequestCancelled));
+            }
+            // Core owns the operation and approvals. This request holds no Session lock or parallel state.
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+
     pub(super) fn tool_resource_cancel(
         &self,
         connection: &super::ConnectionState,
@@ -58,12 +217,50 @@ impl AppServer {
         params: &Value,
         cancellation: &ash_async_utils::CancellationToken,
     ) -> Result<Value, RpcError> {
+        let params: ash_app_server_protocol::protocol::mcp::ToolResourceOpenParams =
+            decode(params)?;
+        self.open_tool_resource(connection, params, None, cancellation)
+    }
+
+    pub(super) fn tool_app_resource_open(
+        &self,
+        connection: &super::ConnectionState,
+        params: &Value,
+        cancellation: &ash_async_utils::CancellationToken,
+    ) -> Result<Value, RpcError> {
+        let params: ash_app_server_protocol::protocol::mcp::ToolAppResourceOpenParams =
+            decode(params)?;
+        if params.uri.is_empty()
+            || params.uri.len() > 4096
+            || params.uri.chars().any(char::is_control)
+        {
+            return Err(invalid_params());
+        }
+        self.open_tool_resource(
+            connection,
+            ash_app_server_protocol::protocol::mcp::ToolResourceOpenParams {
+                session_id: params.session_id,
+                thread_id: params.thread_id,
+                item_id: params.item_id,
+                content_index: params.content_index,
+                operation_id: params.operation_id,
+            },
+            Some(&params.uri),
+            cancellation,
+        )
+    }
+
+    fn open_tool_resource(
+        &self,
+        connection: &super::ConnectionState,
+        params: ash_app_server_protocol::protocol::mcp::ToolResourceOpenParams,
+        app_uri: Option<&str>,
+        cancellation: &ash_async_utils::CancellationToken,
+    ) -> Result<Value, RpcError> {
         use ash_protocol::ContentPart;
         use ash_protocol::ThreadItem;
         use ash_protocol::ToolOutputArtifactData;
         use ash_protocol::ToolOutputArtifactSource;
-        let params: ash_app_server_protocol::protocol::mcp::ToolResourceOpenParams =
-            decode(params)?;
         if params.operation_id.is_empty() || params.operation_id.len() > 256 {
             return Err(invalid_params());
         }
@@ -89,9 +286,22 @@ impl AppServer {
         let Some(ContentPart::Artifact { artifact }) = content.get(params.content_index) else {
             return Err(invalid_params());
         };
-        let uri = match &artifact.source {
-            ToolOutputArtifactSource::ResourceLink { uri } | ToolOutputArtifactSource::McpApp { uri } => uri,
-            ToolOutputArtifactSource::EmbeddedResource { .. } | ToolOutputArtifactSource::StructuredResult => return Err(invalid_params()),
+        let uri = match (&artifact.source, app_uri) {
+            (ToolOutputArtifactSource::McpApp { .. }, Some(uri)) => uri,
+            (
+                ToolOutputArtifactSource::ResourceLink { uri }
+                | ToolOutputArtifactSource::McpApp { uri },
+                None,
+            ) => uri.as_str(),
+            (
+                ToolOutputArtifactSource::EmbeddedResource { .. }
+                | ToolOutputArtifactSource::StructuredResult
+                | ToolOutputArtifactSource::ViewMetadata,
+                _,
+            )
+            | (ToolOutputArtifactSource::ResourceLink { .. }, Some(_)) => {
+                return Err(invalid_params());
+            }
         };
         let (call, binding) = turn
             .items
@@ -118,6 +328,16 @@ impl AppServer {
             .turn_executor_snapshot()
             .read_tool_resource(&call, binding, uri, cancellation)
             .map_err(super::core_error)?;
+        let app_csp = resource.app_csp;
+        let resource_metadata = resource.resource_metadata;
+        let encoding = Some(match &resource.data {
+            ToolOutputArtifactData::Text { .. } | ToolOutputArtifactData::Json { .. } => {
+                ash_app_server_protocol::protocol::mcp::ToolResourceEncoding::Text
+            }
+            ToolOutputArtifactData::Binary { .. } => {
+                ash_app_server_protocol::protocol::mcp::ToolResourceEncoding::Binary
+            }
+        });
         let bytes = match resource.data {
             ToolOutputArtifactData::Text { text } => text.into_bytes(),
             ToolOutputArtifactData::Binary { bytes } => bytes,
@@ -146,11 +366,14 @@ impl AppServer {
             )
             .map_err(super::operations::resource_rpc_error)?;
         result(
-            &ash_app_server_protocol::protocol::resources::ResourceMetadataResult {
+            &ash_app_server_protocol::protocol::mcp::ToolResourceOpenResult {
                 resource_id: resource.resource_id,
                 mime_type: resource.mime_type,
                 size: resource.size,
                 sha256: resource.sha256,
+                app_csp,
+                encoding,
+                resource_metadata,
             },
         )
     }

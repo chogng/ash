@@ -10,7 +10,7 @@ import { IWorkbenchEnvironmentService } from '../../../services/environment/comm
 import { webviewGenericCspSource } from '../common/webview.js';
 import { loadLocalResource } from './resourceLoading.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { IWebviewElement, WebviewInitInfo, WebviewMessageReceivedEvent } from "./webview.js";
+import type { IWebviewElement, WebviewContentOptions, WebviewInitInfo, WebviewMessageReceivedEvent } from "./webview.js";
 
 interface WebviewMessageEnvelope {
 	readonly channel: string;
@@ -54,6 +54,7 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 	private readonly localResourceRoots: readonly URI[];
 	private readonly allowScripts: boolean;
 	private readonly messageProtocol: 'mcp' | undefined;
+	private readonly mcpCsp: WebviewContentOptions['mcpCsp'];
 	private readonly resourceRequests = this._register(new MutableDisposable());
 	private documentCancellation: CancellationTokenSource | undefined;
 	private isBootstrapReady = false;
@@ -95,6 +96,7 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 		this.localResourceRoots = [...(initInfo.contentOptions?.localResourceRoots ?? [])];
 		this.allowScripts = initInfo.contentOptions?.allowScripts === true;
 		this.messageProtocol = initInfo.contentOptions?.messageProtocol;
+		this.mcpCsp = this.messageProtocol === 'mcp' ? initInfo.contentOptions?.mcpCsp : undefined;
 		this.forwardKeyboardEvents = initInfo.options.forwardKeyboardEvents === true;
 		const element = h(mainWindow.document, "iframe");
 		this.element = element;
@@ -262,7 +264,7 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 				type: 'document',
 				documentChannel: this.channel,
 				title: this.element.title,
-				html: createWebviewDocument(this.channel, this.html, this.forwardKeyboardEvents, this.allowScripts),
+				html: createWebviewDocument(this.channel, this.html, this.forwardKeyboardEvents, this.allowScripts, this.mcpCsp),
 				messageProtocol: this.messageProtocol,
 			});
 		}
@@ -328,9 +330,19 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 	}
 }
 
-function createWebviewDocument(channel: string, html: string, forwardKeyboardEvents: boolean, allowScripts: boolean): string {
+function createWebviewDocument(channel: string, html: string, forwardKeyboardEvents: boolean, allowScripts: boolean, appCsp?: WebviewContentOptions['mcpCsp']): string {
 	const nonce = crypto.randomUUID();
-	const policy = `${WEBVIEW_CONTENT_SECURITY_POLICY}; script-src ${allowScripts ? `'unsafe-inline' ${webviewGenericCspSource}` : `'nonce-${nonce}'`}`;
+	const policy = appCsp ? [
+		"default-src 'none'", "object-src 'none'", "form-action 'none'",
+		`connect-src ${webviewGenericCspSource} ${appCsp.connectDomains.join(' ')}`,
+		`frame-src ${appCsp.frameDomains.join(' ') || "'none'"}`,
+		`base-uri ${appCsp.baseUriDomains.join(' ') || webviewGenericCspSource}`,
+		`img-src ${webviewGenericCspSource} data: blob: ${appCsp.resourceDomains.join(' ')}`,
+		`media-src ${webviewGenericCspSource} data: blob: ${appCsp.resourceDomains.join(' ')}`,
+		`font-src ${webviewGenericCspSource} data: ${appCsp.resourceDomains.join(' ')}`,
+		`style-src 'unsafe-inline' ${webviewGenericCspSource} ${appCsp.resourceDomains.join(' ')}`,
+		`script-src ${allowScripts ? `'unsafe-inline' ${webviewGenericCspSource} ${appCsp.resourceDomains.join(' ')}` : `'nonce-${nonce}'`}`,
+	].join('; ') : `${WEBVIEW_CONTENT_SECURITY_POLICY}; script-src ${allowScripts ? `'unsafe-inline' ${webviewGenericCspSource}` : `'nonce-${nonce}'`}`;
 	// Wait for content scripts to register handlers before delivering queued host messages.
 	const bootstrap = `(() => {
     const channel = ${JSON.stringify(channel)};

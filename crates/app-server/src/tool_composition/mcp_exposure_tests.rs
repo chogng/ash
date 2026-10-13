@@ -44,6 +44,21 @@ impl ToolService for CatalogTools {
         self.definitions.clone()
     }
 
+    fn read_resource(
+        &self,
+        call: &ToolCall,
+        uri: &str,
+        _: &CancellationToken,
+    ) -> Result<ash_protocol::ToolOutputArtifact, CoreError> {
+        Ok(ash_protocol::ToolOutputArtifact::new(
+            ash_protocol::ToolOutputArtifactSource::EmbeddedResource { uri: uri.into() },
+            "text/plain".into(),
+            ash_protocol::ToolOutputArtifactData::Text {
+                text: format!("{}:{}", call.name, call.arguments),
+            },
+        ))
+    }
+
     fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
         Ok(ActionReviewRequest::new(
             ResolvedAction::new(
@@ -135,6 +150,22 @@ fn catalog_changes_keep_meta_definitions_stable_and_reject_previous_bindings() {
         }),
     };
     original.prepare(&call).unwrap();
+    let resource = original
+        .read_resource(&call, "docs://result", &cancellation.token())
+        .unwrap();
+    assert!(
+        matches!(resource.data, ash_protocol::ToolOutputArtifactData::Text { text } if text.contains("server__tool_7") && text.contains("\"value\":7"))
+    );
+    assert!(
+        updated
+            .read_resource(&call, "docs://result", &cancellation.token())
+            .is_err()
+    );
+    assert!(
+        original
+            .read_resource(&search, "docs://result", &cancellation.token())
+            .is_err()
+    );
     assert!(updated.prepare(&call).is_err());
     assert!(
         updated

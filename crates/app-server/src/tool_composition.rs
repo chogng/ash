@@ -353,6 +353,21 @@ impl ToolPort {
             .map(|tool| tool.name)
             .collect::<BTreeSet<_>>();
         let mut port = Self::from_service(ToolPortKind::Mcp, ToolExposure::Direct, exposed, policy);
+        let search = ToolSearchMetadata::new(ToolPortKind::Mcp.search_label())
+            .expect("static MCP search label");
+        port.contributions.extend(
+            tools
+                .app_tool_definitions()
+                .into_iter()
+                .filter(|definition| !exposed_names.contains(&definition.name))
+                .map(|definition| ToolContribution {
+                    source_chain: tools.source_provenance(&definition.name),
+                    definition,
+                    exposure: ToolExposure::Hidden,
+                    search: search.clone(),
+                    runtime: ToolContributionRuntime::Service(Arc::clone(&tools)),
+                }),
+        );
         // Large MCP catalogs call individual tools through the metadata broker. Keep those
         // source-owned members selectable without exposing all definitions to the model.
         port.catalog_only = definitions
@@ -638,6 +653,51 @@ struct ReloadableToolService {
 }
 
 impl ToolService for ReloadableToolService {
+    fn list_app_tools(
+        &self,
+        origin: &ToolCall,
+        binding: &ToolCallBinding,
+    ) -> Result<Vec<serde_json::Value>, CoreError> {
+        if binding.registry_incarnation.as_deref() != Some(self.ports.incarnation.as_str()) {
+            return Err(CoreError::Policy(
+                "App origin registry is unavailable".into(),
+            ));
+        }
+        let generation = self.ports.generation();
+        let mut inner = binding.clone();
+        inner.registry_incarnation = None;
+        generation
+            .tools
+            .validate_call_binding(origin, Some(&inner))?;
+        generation.tools.list_app_tools(origin, &inner)
+    }
+
+    fn resolve_app_tool_call(
+        &self,
+        origin: &ToolCall,
+        binding: &ToolCallBinding,
+        name: &str,
+        arguments: serde_json::Value,
+        id: ToolCallId,
+    ) -> Result<(ToolCall, ToolCallBinding), CoreError> {
+        if binding.registry_incarnation.as_deref() != Some(self.ports.incarnation.as_str()) {
+            return Err(CoreError::Policy(
+                "App origin registry is unavailable".into(),
+            ));
+        }
+        let generation = self.ports.generation();
+        let mut inner = binding.clone();
+        inner.registry_incarnation = None;
+        let (call, _) = generation
+            .tools
+            .resolve_app_tool_call(origin, &inner, name, arguments, id)?;
+        let binding = self
+            .ports
+            .bind_call_in_generation(&generation, &call, ToolCallCaller::Direct)?
+            .ok_or_else(|| CoreError::Policy("App tool registry binding is unavailable".into()))?;
+        Ok((call, binding))
+    }
+
     fn read_resource(
         &self,
         call: &ToolCall,
@@ -1057,6 +1117,7 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
     }
     let mut definitions = Vec::new();
     let mut catalog_only = Vec::new();
+    let mut catalog_overlays = BTreeSet::new();
     let mut names = BTreeSet::new();
     let mut local_policy = None;
     let mut mcp_policy = None;
@@ -1069,7 +1130,16 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
         for tool in port.catalog_only {
             let name = ToolName::new(tool.name.clone())
                 .map_err(|error| ToolCompositionError(error.to_string()))?;
-            if !names.insert(name) {
+            let overlay = port.contributions.iter().any(|contribution| {
+                contribution.exposure == ToolExposure::Hidden
+                    && contribution.definition.name == name
+                    && contribution.definition.description == tool.description
+                    && contribution.source_chain == tool.source_chain
+            });
+            if overlay {
+                catalog_overlays.insert(name.clone());
+            }
+            if !overlay && !names.insert(name) {
                 return Err(ToolCompositionError(format!(
                     "duplicate tool catalog name during App Server composition: {}",
                     tool.name
@@ -1152,6 +1222,8 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
     let (registry, routes) = build_registry(registry_generation, &definitions)?;
     let mut catalog = definitions
         .iter()
+        // Hidden App routes reuse the existing metadata catalog row instead of exposing a second choice.
+        .filter(|collected| !catalog_overlays.contains(&collected.contribution.definition.name))
         .map(|collected| AgentToolCapabilityDto {
             name: collected.contribution.definition.name.to_string(),
             description: collected.contribution.definition.description.clone(),
@@ -1349,6 +1421,39 @@ fn loading_for_exposure(exposure: ToolExposure) -> ToolLoading {
 }
 
 impl ToolService for CompositeToolService {
+    fn list_app_tools(
+        &self,
+        origin: &ToolCall,
+        binding: &ToolCallBinding,
+    ) -> Result<Vec<serde_json::Value>, CoreError> {
+        self.validate_call_binding(origin, Some(binding))?;
+        let (_, runtime) = self.runtime(origin)?;
+        let ToolContributionRuntime::Service(service) = runtime else {
+            return Err(CoreError::Policy("App origin is not a service".into()));
+        };
+        service.list_app_tools(origin, binding)
+    }
+
+    fn resolve_app_tool_call(
+        &self,
+        origin: &ToolCall,
+        binding: &ToolCallBinding,
+        name: &str,
+        arguments: serde_json::Value,
+        id: ToolCallId,
+    ) -> Result<(ToolCall, ToolCallBinding), CoreError> {
+        self.validate_call_binding(origin, Some(binding))?;
+        let (_, runtime) = self.runtime(origin)?;
+        let ToolContributionRuntime::Service(service) = runtime else {
+            return Err(CoreError::Policy("App origin is not a service".into()));
+        };
+        let (call, _) = service.resolve_app_tool_call(origin, binding, name, arguments, id)?;
+        let binding = self
+            .bind_call(&call, ToolCallCaller::Direct)?
+            .ok_or_else(|| CoreError::Policy("App tool registry binding is unavailable".into()))?;
+        Ok((call, binding))
+    }
+
     fn read_resource(
         &self,
         call: &ToolCall,

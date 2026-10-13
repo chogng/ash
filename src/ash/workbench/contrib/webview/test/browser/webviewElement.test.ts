@@ -67,6 +67,26 @@ suite('Webview element', () => {
 		assert.deepEqual(received, [{ type: 'edit' }, 'new edit']);
 	});
 
+	test('MCP source origins apply only to its owned document policy and keep frame and permissions denied by default', () => {
+		for (const messageProtocol of ['mcp', undefined] as const) {
+			using webview = createWebview({ title: 'CSP', options: {}, contentOptions: { messageProtocol, allowScripts: true, mcpCsp: { connectDomains: ['https://api.example.com'], resourceDomains: ['https://cdn.example.com'], frameDomains: [], baseUriDomains: [] } } });
+			webview.setHtml('<p>Document</p>');
+			mount(webview);
+			let documentHtml = '';
+			const target = webview.element.contentWindow!;
+			const original = target.postMessage;
+			target.postMessage = (value: { type?: string; html?: string; }) => { if (value.type === 'document') documentHtml = value.html!; };
+			try {
+				message(webview, { channel: new URLSearchParams(new URL(webview.element.src).hash.slice(1)).get('channel'), type: 'bootstrap-ready' });
+				assert.ok(documentHtml);
+				assert.equal(documentHtml.includes('https://api.example.com'), messageProtocol === 'mcp');
+				assert.equal(documentHtml.includes('https://cdn.example.com'), messageProtocol === 'mcp');
+				assert.ok(documentHtml.includes("frame-src 'none'"));
+				if (messageProtocol === 'mcp') assert.ok(webview.element.getAttribute('allow')!.includes("microphone 'none'"));
+			} finally { target.postMessage = original; }
+		}
+	});
+
 	test('queues messages before the first document and flushes once ready', async () => {
 		using webview = createWebview({ title: 'Queued', options: {} });
 		const first = webview.postMessage('first');

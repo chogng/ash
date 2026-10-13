@@ -1,3 +1,4 @@
+import type { ITerminalOutputSnapshot } from '../../terminal/common/terminal.js';
 import type { TitleBarStyleConfiguration, IColorScheme } from '../../window/common/window.js';
 import { validateJsonValue, type JsonValue } from '../../../base/common/jsonValue.js';
 import type { SessionMode } from '../../agentHost/common/agentService.js';
@@ -122,7 +123,7 @@ export interface IOpenAgentsWindowOptions {
 		readonly mode: SessionMode;
 		readonly text: string;
 		/** Optional resource is the original source URI; content is a snapshot or an instruction catalog path. */
-		readonly contexts: readonly { readonly id: string; readonly kind: string; readonly name: string; readonly content: string; readonly resource?: string; }[];
+		readonly contexts: readonly { readonly id: string; readonly kind: string; readonly name: string; readonly content: string; readonly resource?: string; readonly terminalSnapshot?: ITerminalOutputSnapshot; }[];
 	};
 }
 
@@ -199,7 +200,17 @@ export function validateOpenAgentsWindow(value: unknown): IOpenAgentsWindowOptio
 		for (const context of fields.contexts) {
 			if (!context || typeof context !== 'object' || Array.isArray(context)) throw new TypeError('Invalid Agents Window context');
 			const attachment = context as Record<string, unknown>;
-			if (!['content', 'id', 'kind', 'name'].every(key => typeof attachment[key] === 'string') || Object.keys(attachment).some(key => !['content', 'id', 'kind', 'name', 'resource'].includes(key)) || attachment.resource !== undefined && typeof attachment.resource !== 'string') throw new TypeError('Invalid Agents Window context');
+			if (!['content', 'id', 'kind', 'name'].every(key => typeof attachment[key] === 'string') || Object.keys(attachment).some(key => !['content', 'id', 'kind', 'name', 'resource', 'terminalSnapshot'].includes(key)) || attachment.resource !== undefined && typeof attachment.resource !== 'string') throw new TypeError('Invalid Agents Window context');
+			if (attachment.terminalSnapshot !== undefined) {
+				const snapshot = attachment.terminalSnapshot;
+				if (attachment.kind !== 'terminal' || !snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) throw new TypeError('Invalid terminal snapshot');
+				const data = snapshot as Record<string, unknown>;
+				if (
+					Object.keys(data).sort().join(',') !== 'columns,text'
+					|| typeof data.text !== 'string' || data.text.length > 131072
+					|| !Number.isInteger(data.columns) || (data.columns as number) < 2 || (data.columns as number) > 4096
+				) throw new TypeError('Invalid terminal snapshot');
+			}
 		}
 	}
 	return value as IOpenAgentsWindowOptions;

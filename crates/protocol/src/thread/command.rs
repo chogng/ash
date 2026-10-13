@@ -77,6 +77,13 @@ pub enum ThreadCommand {
     ConfigureAdvisor {
         selection: crate::AdvisorSelection,
     },
+    StartToolTurn {
+        tool_call_id: crate::ToolCallId,
+        name: crate::ToolName,
+        arguments_json: String,
+        #[serde(default)]
+        approval_mode: ApprovalMode,
+    },
     StartShellTurn {
         command: String,
         #[serde(default)]

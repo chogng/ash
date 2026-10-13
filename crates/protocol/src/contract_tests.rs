@@ -1519,4 +1519,18 @@ fn mcp_app_metadata_is_only_visible_to_the_view_and_never_replayed_to_the_model(
         serde_json::from_value::<ToolOutputArtifact>(serde_json::to_value(&app).unwrap()).unwrap(),
         app
     );
+    let metadata = ToolOutputArtifact::new(
+        ToolOutputArtifactSource::ViewMetadata,
+        "application/json".into(),
+        ToolOutputArtifactData::Json {
+            json: "{\"viewOnly\":\"secret\"}".into(),
+        },
+    );
+    assert_eq!(metadata.model_text(), "");
+    assert_eq!(
+        metadata
+            .truncated_text("clipped metadata".into())
+            .model_text(),
+        ""
+    );
 }

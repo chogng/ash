@@ -19,6 +19,7 @@ struct FakeFactory {
     failing: BTreeSet<McpServerId>,
     calls: Arc<Mutex<Vec<(McpServerId, String)>>>,
     shutdowns: Arc<Mutex<Vec<McpServerId>>>,
+    resource_csp: Arc<Mutex<Option<serde_json::Value>>>,
 }
 
 impl McpSessionFactory for FakeFactory {
@@ -31,6 +32,7 @@ impl McpSessionFactory for FakeFactory {
         let should_fail = self.failing.contains(&server);
         let calls = Arc::clone(&self.calls);
         let shutdowns = Arc::clone(&self.shutdowns);
+        let resource_csp = Arc::clone(&self.resource_csp);
         Box::pin(async move {
             if should_fail {
                 return Err(McpSessionError::Transport("connection refused".into()));
@@ -39,6 +41,7 @@ impl McpSessionFactory for FakeFactory {
                 server,
                 calls,
                 shutdowns,
+                resource_csp,
             }) as Box<dyn McpSession>)
         })
     }
@@ -48,6 +51,7 @@ struct FakeSession {
     server: McpServerId,
     calls: Arc<Mutex<Vec<(McpServerId, String)>>>,
     shutdowns: Arc<Mutex<Vec<McpServerId>>>,
+    resource_csp: Arc<Mutex<Option<serde_json::Value>>>,
 }
 
 impl McpSession for FakeSession {
@@ -106,6 +110,12 @@ impl McpSession for FakeSession {
                 .lock()
                 .unwrap()
                 .push((self.server.clone(), format!("read:{uri}")));
+            if uri.starts_with("ui://") {
+                let csp = self.resource_csp.lock().unwrap().clone();
+                return Ok(ash_rmcp_client::ReadResourceResult::new(vec![serde_json::from_value(serde_json::json!({
+                    "uri":uri,"mimeType":"text/html;profile=mcp-app","text":"<p>App</p>","_meta":{"ui":{"csp":csp}}
+                })).unwrap()]));
+            }
             Ok(ash_rmcp_client::ReadResourceResult::new(vec![
                 ash_rmcp_client::ResourceContents::TextResourceContents {
                     uri: if uri == "docs://wrong" {
@@ -386,7 +396,7 @@ async fn declared_apps_retain_ui_metadata_without_replacing_the_text_tool_result
     let output = runtime
         .call_tool(
             binding,
-            serde_json::json!({}),
+            serde_json::json!({"value":7}),
             &CancellationSource::new().token(),
         )
         .await
@@ -402,5 +412,78 @@ async fn declared_apps_retain_ui_metadata_without_replacing_the_text_tool_result
         }
     );
     assert_eq!(app.model_text(), "");
+    let ash_protocol::ToolOutputArtifactData::Json { json } = &app.data else {
+        panic!("expected View payload");
+    };
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(json).unwrap()["input"],
+        serde_json::json!({"value": 7})
+    );
+    runtime.shutdown().await;
+}
+
+#[tokio::test]
+async fn app_resource_csp_is_normalized_at_the_resource_boundary_and_rejects_policy_injection() {
+    let factory = Arc::new(FakeFactory::default());
+    let runtime = McpRuntime::start_with_factory(
+        vec![definition("user:mcp:apps")],
+        factory.clone(),
+        McpRuntimeOptions::new("test", "0").with_mcp_apps(),
+    )
+    .await
+    .unwrap();
+    let binding = runtime.catalog().tools()[0].binding();
+    *factory.resource_csp.lock().unwrap() = Some(
+        serde_json::json!({"connectDomains":["https://API.example.com/","wss://events.example.com"],"resourceDomains":["https://*.cdn.example.com","https://*.cdn.example.com"],"frameDomains":["https://player.example.com"],"baseUriDomains":["https://cdn.example.com"]}),
+    );
+    let artifact = runtime
+        .read_resource(
+            binding,
+            "ui://chart".into(),
+            &CancellationSource::new().token(),
+        )
+        .await
+        .unwrap();
+    assert!(
+        artifact
+            .resource_metadata
+            .as_ref()
+            .unwrap()
+            .contains("connectDomains")
+    );
+    let csp = artifact.app_csp.unwrap();
+    assert_eq!(
+        csp.connect_domains,
+        ["https://api.example.com", "wss://events.example.com"]
+    );
+    assert_eq!(csp.resource_domains, ["https://*.cdn.example.com"]);
+    for invalid in [
+        serde_json::json!({"connectDomains":["https://safe.example; script-src *"]}),
+        serde_json::json!({"connectDomains":["https://safe.example 'unsafe-eval'"]}),
+        serde_json::json!({"connectDomains":["https://user:secret@safe.example"]}),
+        serde_json::json!({"connectDomains":["https://safe.example/path"]}),
+        serde_json::json!({"connectDomains":["https://safe.example?query=1"]}),
+        serde_json::json!({"connectDomains":["https://safe.example#fragment"]}),
+        serde_json::json!({"connectDomains":["https://*.*.example.com"]}),
+        serde_json::json!({"resourceDomains":["wss://safe.example"]}),
+        serde_json::json!({"resourceDomains":["file:///secret"]}),
+        serde_json::json!({"resourceDomains":["*"]}),
+        serde_json::json!({"connectDomains":[4]}),
+        serde_json::json!({"connectDomains":vec!["https://safe.example"; 33]}),
+        serde_json::json!({"connectDomains":["https://safe.example"],"unexpected":"a".repeat(16_384)}),
+    ] {
+        *factory.resource_csp.lock().unwrap() = Some(invalid.clone());
+        assert!(
+            runtime
+                .read_resource(
+                    binding,
+                    "ui://chart".into(),
+                    &CancellationSource::new().token()
+                )
+                .await
+                .is_err(),
+            "{invalid}"
+        );
+    }
     runtime.shutdown().await;
 }

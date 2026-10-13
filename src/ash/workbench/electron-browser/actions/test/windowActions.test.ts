@@ -49,6 +49,11 @@ test('desktop dialog and shell routes reject malformed requests', async () => {
 	const handoff = { conversation: { sessionId: 'session', threadId: 'thread' }, draft: { mode: 'debug', text: 'Review this', contexts: [{ id: 'file', kind: 'file', name: 'file.ts', content: 'const value = 1;' }] } };
 	await openAgents.invoke(openAgents.validate(handoff));
 	assert.deepEqual(operations.at(-1), handoff);
+	const terminalDraft = { draft: { mode: 'agent', text: '', contexts: [{ id: 'terminal', kind: 'terminal', name: 'Shell', content: 'saved', terminalSnapshot: { text: 'saved', columns: 80 } }] } };
+	assert.deepEqual(openAgents.validate(terminalDraft), terminalDraft);
+	for (const snapshot of [{ text: 'saved', columns: 0 }, { text: 'saved', columns: Infinity }, { text: 'x'.repeat(131073), columns: 80 }, { text: 'saved', columns: 80, execute: true }]) {
+		assert.throws(() => openAgents.validate({ draft: { ...terminalDraft.draft, contexts: [{ ...terminalDraft.draft.contexts[0], terminalSnapshot: snapshot }] } }), /Invalid terminal snapshot/);
+	}
 	await openAgents.invoke(openAgents.validate(undefined));
 	assert.equal(operations.at(-1), 'openAgentsWindow');
 	const openWindow = routes.find(route => route.channel === NATIVE_HOST_OPEN_WINDOW_CHANNEL);

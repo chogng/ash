@@ -308,12 +308,49 @@ test('Agent attachment reads use the exact Item scope, verified resources and ca
 		else await assert.rejects(read);
 		assert.deepEqual(requests[0], { method: 'attachment/resource/open', params: source });
 		assert.equal(requests.filter(request => request.method === 'resource/release').length, mode === 'replace' ? 0 : 1);
+		for (const request of requests.filter(request => request.method === 'resource/read' || request.method === 'resource/release')) assert.equal((request.params as { sessionId: string; }).sessionId, source.sessionId);
 		assert.equal(requests.filter(request => request.method === 'resource/read').length, mode === 'abort' ? 0 : 1);
 	}
 });
 
-test('Agent linked resource reads use canonical coordinates and cancel the original operation before releasing late handles', async () => {
-	for (const mode of ['read', 'abort', 'replace'] as const) {
+test('Agent App calls keep canonical coordinates, detach results and cancel only their original connection operation', async () => {
+	for (const mode of ['read', 'abort', 'replace', 'error', 'wrongItem'] as const) {
+		const requests: { method: string; params: unknown; options: unknown; }[] = [];
+		const controller = new AbortController();
+		let generation = 1;
+		const item = { type: 'toolResult', itemId: 'result', turnId: 'turn', toolCallId: 'call', text: 'Edited', isError: false, content: [{ type: 'artifact', artifact: { source: { type: 'viewMetadata' }, mimeType: 'application/json', data: { type: 'json', json: '{"viewOnly":8}' }, contentDigest: 'digest', truncated: false } }] };
+		const service = createAppServerAgentThreadService({
+			get generation() { return generation; },
+			async request(definition: { method: string; }, params: unknown, options: unknown) {
+				requests.push({ method: definition.method, params, options });
+				if (definition.method === 'tool/app/cancel') return null;
+				assert.equal(definition.method, 'tool/app/call');
+				if (mode === 'abort') controller.abort();
+				if (mode === 'replace') generation++;
+				if (mode === 'error') throw new Error('Origin retired');
+				return { item: mode === 'wrongItem' ? { type: 'agentMessage', itemId: 'message', turnId: 'turn', text: 'wrong', attachments: [] } : item };
+			},
+		} as unknown as AppServerProtocolClient);
+		const source = { sessionId: 'session', threadId: 'thread', itemId: 'origin', contentIndex: 2 };
+		const call = service.invokeAppTool(source, 'edit', '{"value":8}', controller.signal);
+		if (mode === 'read') {
+			const result = await call;
+			assert.deepEqual(result, item);
+			assert.notEqual(result, item);
+			assert.notEqual(result.content, item.content);
+		} else await assert.rejects(call);
+		const params = requests[0]!.params as Record<string, unknown>;
+		assert.deepEqual(params, { ...source, remoteName: 'edit', argumentsJson: '{"value":8}', operationId: params.operationId });
+		assert.equal(typeof params.operationId, 'string');
+		assert.deepEqual(requests[0]!.options, { timeoutMs: 240_000 });
+		const cancelled = requests.filter(request => request.method === 'tool/app/cancel');
+		assert.equal(cancelled.length, mode === 'read' || mode === 'replace' ? 0 : 1);
+		if (cancelled.length) assert.deepEqual(cancelled[0]!.params, { sessionId: source.sessionId, threadId: source.threadId, operationId: params.operationId });
+	}
+});
+
+test('Agent linked and App resource reads keep their provider scope and release late handles', async () => {
+	for (const selection of ['linked', 'app'] as const) for (const mode of ['read', 'abort', 'replace'] as const) {
 		const requests: { method: string; params: unknown; }[] = [];
 		const controller = new AbortController();
 		const bytes = Buffer.from('# Original\r\n中文\r\n');
@@ -323,7 +360,8 @@ test('Agent linked resource reads use canonical coordinates and cancel the origi
 			async request(definition: { method: string; }, params: unknown) {
 				requests.push({ method: definition.method, params });
 				switch (definition.method) {
-					case 'tool/resource/open': {
+					case 'tool/resource/open':
+					case 'tool/app/resource/open': {
 						if (mode === 'abort') controller.abort();
 						return { resourceId: 'linked', size: bytes.length, mimeType: 'text/markdown', sha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}` };
 					}
@@ -338,14 +376,80 @@ test('Agent linked resource reads use canonical coordinates and cancel the origi
 			},
 		} as AppServerProtocolClient);
 		const source = { sessionId: 'session', threadId: 'thread', itemId: 'result', contentIndex: 2 };
-		const result = service.readToolResource(source, controller.signal);
+		const result = selection === 'linked' ? service.readToolResource(source, controller.signal) : service.readAppResource(source, 'file:///server/report.md', controller.signal);
 		if (mode === 'read') assert.deepEqual(await result, { bytes: new Uint8Array(bytes), mimeType: 'text/markdown' });
 		else await assert.rejects(result);
-		assert.equal(requests[0].method, 'tool/resource/open');
-		assert.deepEqual(Object.keys(requests[0].params as object).sort(), ['contentIndex', 'itemId', 'operationId', 'sessionId', 'threadId']);
+		assert.equal(requests[0].method, selection === 'linked' ? 'tool/resource/open' : 'tool/app/resource/open');
+		assert.deepEqual(Object.keys(requests[0].params as object).sort(), ['contentIndex', 'itemId', 'operationId', 'sessionId', 'threadId', ...(selection === 'app' ? ['uri'] : [])]);
+		if (selection === 'app') assert.equal((requests[0].params as { uri: string; }).uri, 'file:///server/report.md');
 		assert.equal(requests.filter(request => request.method === 'resource/release').length, mode === 'replace' ? 0 : 1);
+		for (const request of requests.filter(request => request.method === 'resource/read' || request.method === 'resource/release')) assert.equal((request.params as { sessionId: string; }).sessionId, source.sessionId);
 		const cancellations = requests.filter(request => request.method === 'tool/resource/cancel');
 		assert.equal(cancellations.length, mode === 'abort' ? 1 : 0);
 		if (mode === 'abort') assert.deepEqual(cancellations[0].params, { sessionId: source.sessionId, threadId: source.threadId, operationId: (requests[0].params as { operationId: string; }).operationId });
+	}
+});
+
+test('Agent connection events keep thisArgs and release the original protocol listener', () => {
+	using states = new Emitter<void>();
+	const api = createAppServerAgentThreadService({ onStateChange: (listener: () => void) => states.event(listener) } as unknown as AppServerProtocolClient);
+	const scope = { count: 0 };
+	const subscription = api.onDidChangeConnection(function (this: typeof scope) { this.count++; }, scope);
+	states.fire();
+	subscription.dispose();
+	states.fire();
+	assert.equal(scope.count, 1);
+});
+
+test('Agent App document CSP stays outside verified handle metadata and does not alias transport arrays', async () => {
+	const bytes = Buffer.from('<p>App</p>');
+	const appCsp = { connectDomains: ['https://api.example.com'], resourceDomains: ['https://cdn.example.com'], frameDomains: [], baseUriDomains: [] };
+	const methods: string[] = [];
+	const service = createAppServerAgentThreadService({
+		generation: 1,
+		async request(definition: { method: string; }) {
+			methods.push(definition.method);
+			if (definition.method === 'tool/resource/open') return { resourceId: 'app', mimeType: 'text/html;profile=mcp-app', size: bytes.length, sha256: 'sha256:' + createHash('sha256').update(bytes).digest('hex'), appCsp, encoding: 'text', resourceMetadata: '{"private":"view-only"}' };
+			if (definition.method === 'resource/read') return { resourceId: 'app', offset: 0, decodedLength: bytes.length, dataBase64: bytes.toString('base64'), eof: true };
+			if (definition.method === 'resource/release') return null;
+			throw new Error('Unexpected request');
+		},
+	} as unknown as AppServerProtocolClient);
+	const document = await service.readToolResource({ sessionId: 'session', threadId: 'thread', itemId: 'app', contentIndex: 2 });
+	assert.deepEqual(document.appCsp, appCsp);
+	assert.deepEqual(document.bytes, new Uint8Array(bytes));
+	assert.equal(document.encoding, 'text');
+	assert.equal(document.resourceMetadata, '{"private":"view-only"}');
+	appCsp.connectDomains.push('https://changed.example.com');
+	assert.deepEqual(document.appCsp?.connectDomains, ['https://api.example.com']);
+	assert.deepEqual(methods, ['tool/resource/open', 'resource/read', 'resource/release']);
+});
+
+test('Agent App catalogs retain original tool contracts and retire with their source connection', async () => {
+	for (const mode of ['read', 'abort', 'replace'] as const) {
+		const controller = new AbortController();
+		let generation = 1;
+		const tool = { name: 'edit', inputSchema: { type: 'object', properties: { value: { type: 'number' } } }, outputSchema: { type: 'object' }, annotations: { readOnlyHint: false }, _meta: { ui: { visibility: ['app'] } } };
+		let requested: unknown;
+		const service = createAppServerAgentThreadService({
+			get generation() { return generation; },
+			async request(definition: { method: string; }, params: unknown) {
+				assert.equal(definition.method, 'tool/app/list'); requested = params;
+				if (mode === 'abort') controller.abort();
+				if (mode === 'replace') generation++;
+				return { tools: [tool] };
+			}
+		} as unknown as AppServerProtocolClient);
+		const source = { sessionId: 'session', threadId: 'thread', itemId: 'result', contentIndex: 2 };
+		const listing = service.listAppTools(source, controller.signal);
+		if (mode === 'read') {
+			const catalog = await listing;
+			assert.deepEqual(catalog, [tool]);
+			tool._meta.ui.visibility.push('model');
+			tool.inputSchema.properties.value.type = 'string';
+			assert.deepEqual(catalog[0]!._meta, { ui: { visibility: ['app'] } });
+			assert.deepEqual(catalog[0]!.inputSchema, { type: 'object', properties: { value: { type: 'number' } } });
+		} else await assert.rejects(listing);
+		assert.deepEqual(requested, source);
 	}
 });

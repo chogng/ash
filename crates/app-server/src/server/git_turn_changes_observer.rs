@@ -75,10 +75,18 @@ impl TurnExecutionObserver for GitTurnChangesRuntime {
             turn_id: event.turn_id.clone(),
             repositories,
             commit_message_configured: self.commit_message_configured(),
-            opaque_dependencies: matches!(event.kind, TurnExecutionKind::Shell),
+            opaque_dependencies: matches!(
+                event.kind,
+                TurnExecutionKind::Shell | TurnExecutionKind::Tool
+            ),
         }) {
             Ok(records) => records,
-            Err(error) if !matches!(event.kind, TurnExecutionKind::Shell) => {
+            Err(error)
+                if !matches!(
+                    event.kind,
+                    TurnExecutionKind::Shell | TurnExecutionKind::Tool
+                ) =>
+            {
                 let warning = "dir baseline capture failed; write Tools were disabled";
                 self.capture_failures
                     .write()

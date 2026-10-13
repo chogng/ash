@@ -101,7 +101,29 @@
 	outline-offset: var(--ash-spacing-size40);
 }
 
-.ash-chat-mcp-app { min-width: 0; }
-.ash-chat-mcp-app-viewport { height: 320px; min-width: 0; }
-.ash-chat-mcp-app button { color: var(--ash-button-foreground); background: var(--ash-button-secondaryBackground); margin-block: var(--ash-spacing-size80); }
-.ash-chat-mcp-app button:focus-visible { outline: var(--ash-strokeThickness) solid var(--ash-focusBorder); outline-offset: var(--ash-spacing-size40); }
+.ash-chat-mcp-app {
+	min-width: 0;
+}
+.ash-chat-mcp-app-viewport {
+	height: 320px;
+	min-width: 0;
+}
+.ash-chat-mcp-app button {
+	color: var(--ash-button-foreground);
+	background: var(--ash-button-secondaryBackground);
+	margin-block: var(--ash-spacing-size80);
+}
+.ash-chat-mcp-app button:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: var(--ash-spacing-size40);
+}
+
+.ash-chat-mcp-app:fullscreen {
+	display: flex;
+	flex-direction: column;
+	background: var(--ash-editor-background);
+}
+.ash-chat-mcp-app:fullscreen > .ash-chat-mcp-app-viewport {
+	flex: 1 1 0;
+	min-height: 0;
+}

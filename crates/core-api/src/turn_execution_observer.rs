@@ -18,6 +18,7 @@ pub struct TurnExecutionStarted {
 pub enum TurnExecutionKind {
     Agent,
     Shell,
+    Tool,
     ContextCompaction,
 }
 

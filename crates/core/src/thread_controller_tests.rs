@@ -1768,6 +1768,7 @@ fn shell_turn_atomically_persists_its_exact_command_and_tool_call() {
     assert_eq!(created.turn_id, replayed.turn_id);
     assert_eq!(replayed.disposition, StartTurnDisposition::Replayed);
     assert_eq!(snapshot.turns.len(), 1);
+    assert_eq!(snapshot.turns[0].kind, ash_protocol::TurnKind::Shell);
     assert!(matches!(
         &snapshot.commands[0].receipt.command,
         ash_protocol::ThreadCommand::StartShellTurn { command, .. }
@@ -3233,4 +3234,168 @@ fn thread_history_window_selects_before_cloning_the_execution_snapshot() {
     assert_eq!(page.thread.sequence, expected.sequence);
     assert!(page.has_older_turns);
     assert_eq!(store.full_reads.load(Ordering::Relaxed), 0);
+}
+
+#[test]
+fn tool_turn_persists_one_bound_call_and_replays_only_the_same_invocation() {
+    let threads = ThreadController::with_store(Arc::new(InMemoryThreadStore::default()));
+    let thread = create_thread(&threads, "app");
+    let request = |value| crate::StartToolTurnRequest {
+        command_id: CommandId::new("app-call").unwrap(),
+        expected_sequence: SequenceExpectation::Any,
+        policy_revision: "test-policy-v1".into(),
+        approval_mode: ash_protocol::ApprovalMode::Manual,
+        call: ash_protocol::ToolCall {
+            id: ToolCallId::new("app-call-tool").unwrap(),
+            name: ToolName::new("increment").unwrap(),
+            arguments: serde_json::json!({"value":value}),
+        },
+        binding: ash_protocol::ToolCallBinding {
+            registry_incarnation: None,
+            registry_generation: 1,
+            definition_digest: "sha256:definition".into(),
+            source_chain: vec![ash_protocol::ToolSourceProvenance::Mcp {
+                server_id: "server".into(),
+                remote_name: "increment".into(),
+                catalog_generation: 1,
+                connection_generation: 1,
+            }],
+            activity: None,
+            caller: ash_protocol::ToolCallCaller::Direct,
+        },
+    };
+    let created = threads.start_tool_turn(&thread, request(7)).unwrap();
+    let replayed = threads.start_tool_turn(&thread, request(7)).unwrap();
+    assert_eq!(created.turn_id, replayed.turn_id);
+    assert_eq!(replayed.disposition, StartTurnDisposition::Replayed);
+    assert!(matches!(
+        threads.start_tool_turn(&thread, request(8)),
+        Err(CoreError::CommandConflict)
+    ));
+    let snapshot = threads.read_thread(&thread).unwrap();
+    assert_eq!(snapshot.turns.len(), 1);
+    assert_eq!(snapshot.turns[0].kind, ash_protocol::TurnKind::Tool);
+    assert!(matches!(
+        threads.steer_turn(
+            &thread,
+            crate::SteerTurnRequest {
+                command_id: CommandId::new("message-during-tool").unwrap(),
+                expected_sequence: SequenceExpectation::Exact(snapshot.sequence),
+                turn_id: created.turn_id,
+                input: vec![UserInput::Text {
+                    text: "Answer this follow-up".into()
+                }],
+            }
+        ),
+        Err(CoreError::InvalidInput(_))
+    ));
+    assert_eq!(
+        threads.read_thread(&thread).unwrap().sequence,
+        snapshot.sequence
+    );
+    assert!(
+        matches!(&snapshot.items[0], ThreadItem::ToolCall { name, arguments_json, binding: Some(binding), .. } if name.as_str() == "increment" && arguments_json == "{\"value\":7}" && binding.registry_generation == 1)
+    );
+    assert!(
+        matches!(&snapshot.commands[0].receipt.command, ash_protocol::ThreadCommand::StartToolTurn { arguments_json, .. } if arguments_json == "{\"value\":7}")
+    );
+}
+
+#[test]
+fn voice_transcripts_merge_in_the_original_thread_without_starting_or_steering_a_turn() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let controller = ThreadController::with_store(store.clone());
+    let thread = create_thread(&controller, "Voice");
+    let turn = start_turn(&controller, &thread, "coding");
+    let before = controller.read_thread(&thread).unwrap();
+    let request = |speaker, text: &str, epoch, end_ms| crate::RecordVoiceTranscriptRequest {
+        voice_session_id: "voice-source".into(),
+        media_epoch: epoch,
+        speaker,
+        text: text.into(),
+        start_ms: 0,
+        end_ms,
+    };
+    let first = controller
+        .record_voice_transcript(
+            &thread,
+            request(
+                ash_protocol::VoiceTranscriptSpeaker::User,
+                "Review ",
+                1,
+                100,
+            ),
+        )
+        .unwrap();
+    let second = controller
+        .record_voice_transcript(
+            &thread,
+            request(
+                ash_protocol::VoiceTranscriptSpeaker::User,
+                "these changes",
+                1,
+                200,
+            ),
+        )
+        .unwrap();
+    assert_eq!(first.transcript.item_id, second.transcript.item_id);
+    assert_eq!(second.transcript.text, "Review these changes");
+    assert_eq!(
+        second.transcript.after_item_id,
+        before.items.last().map(|item| item.item_id().clone())
+    );
+    let output = controller
+        .record_voice_transcript(
+            &thread,
+            request(
+                ash_protocol::VoiceTranscriptSpeaker::Assistant,
+                "I will review them.",
+                1,
+                300,
+            ),
+        )
+        .unwrap();
+    assert_ne!(output.transcript.item_id, second.transcript.item_id);
+    let restarted = controller
+        .record_voice_transcript(
+            &thread,
+            request(
+                ash_protocol::VoiceTranscriptSpeaker::User,
+                "New epoch",
+                2,
+                100,
+            ),
+        )
+        .unwrap();
+    assert_ne!(restarted.transcript.item_id, second.transcript.item_id);
+    let after = controller.read_thread(&thread).unwrap();
+    assert_eq!(after.turns, before.turns);
+    assert_eq!(after.items, before.items);
+    assert_eq!(after.commands, before.commands);
+    assert_eq!(after.voice_transcripts.len(), 3);
+    assert_eq!(
+        controller
+            .read_voice_transcripts(&thread, first.sequence)
+            .unwrap()[0]
+            .text,
+        "Review "
+    );
+    let reopened = ThreadController::with_store(store);
+    assert_eq!(
+        reopened.read_thread(&thread).unwrap().voice_transcripts,
+        after.voice_transcripts
+    );
+    assert!(
+        controller
+            .record_voice_transcript(
+                &thread,
+                request(
+                    ash_protocol::VoiceTranscriptSpeaker::User,
+                    &"a".repeat(16385),
+                    2,
+                    200
+                )
+            )
+            .is_err()
+    );
 }

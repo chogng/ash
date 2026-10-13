@@ -1,4 +1,4 @@
-import { ChatMcpAppSubPart } from './chatMcpAppSubPart.js';
+import { ChatMcpAppSubPart, type IChatMcpAppDelegate } from './chatMcpAppSubPart.js';
 import { ChatResourceGroupWidget } from '../chatResourceGroupWidget.js';
 import { ChatAttachmentsContentPart } from '../chatAttachmentsContentPart.js';
 import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
@@ -30,7 +30,7 @@ export class ChatToolInvocationPart extends Disposable {
 	private readonly _onDidChangeHeight = this._register(new Emitter<void>());
 	public readonly onDidChangeHeight = this._onDidChangeHeight.event;
 
-	constructor(document: Document, invocation: NonNullable<IChatListItem['toolInvocation']>, source: IChatListItem['attachmentSource'], @IInstantiationService private readonly instantiation: IInstantiationService) {
+	constructor(document: Document, invocation: NonNullable<IChatListItem['toolInvocation']>, source: IChatListItem['attachmentSource'], private readonly appDelegate: IChatMcpAppDelegate | undefined, @IInstantiationService private readonly instantiation: IInstantiationService) {
 		super();
 		this.toolCallId = invocation.call.toolCallId;
 		this.domNode = h(document, 'details');
@@ -85,7 +85,7 @@ export class ChatToolInvocationPart extends Disposable {
 				this.mediaChanges.value = media.onDidChangeHeight(() => this._onDidChangeHeight.fire());
 			} else this.media.value.updateVariables(content, source);
 		} else { this.mediaChanges.clear(); this.media.clear(); }
-		if (content.some(part => part.type === 'artifact' && part.artifact.source.type !== 'mcpApp')) {
+		if (content.some(part => part.type === 'artifact' && part.artifact.source.type !== 'mcpApp' && part.artifact.source.type !== 'viewMetadata')) {
 			if (!this.resources.value) {
 				const resources = this.instantiation.createInstance(ChatResourceGroupWidget, this.domNode.ownerDocument);
 				this.resources.value = resources;
@@ -100,7 +100,7 @@ export class ChatToolInvocationPart extends Disposable {
 			const coordinate = { sessionId: source.sessionId, threadId: source.threadId, itemId: result.itemId, contentIndex: appIndex };
 			const identity = JSON.stringify([coordinate, artifact.artifact.source, artifact.artifact.contentDigest]);
 			if (this.app.value?.identity !== identity) {
-				const app = this.instantiation.createInstance(ChatMcpAppSubPart, this.domNode.ownerDocument, coordinate, artifact.artifact, call.argumentsJson, result);
+				const app = this.instantiation.createInstance(ChatMcpAppSubPart, this.domNode.ownerDocument, coordinate, artifact.artifact, call.argumentsJson, result, this.appDelegate);
 				this.app.value = app;
 				this.appChanges.value = app.onDidChangeHeight(() => this._onDidChangeHeight.fire());
 				this.domNode.append(app.domNode);

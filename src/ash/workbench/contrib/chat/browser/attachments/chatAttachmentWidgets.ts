@@ -1,3 +1,7 @@
+import { DetachedTerminalSnapshotMirror } from '../../../terminal/browser/chatTerminalCommandMirror.js';
+import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+import { addDisposableListener } from '../../../../../base/browser/dom.js';
+import { MutableDisposable } from '../../../../../base/common/lifecycle.js';
 import { OpenSettingsCommandId } from '../../../preferences/common/preferences.js';
 import './chatAttachmentWidgets.css';
 import { h } from '../../../../../base/browser/dom.js';
@@ -99,5 +103,41 @@ export class ImageAttachmentWidget extends DefaultChatAttachmentWidget {
 		}, () => {
 			if (!this.isDisposed) { image.alt = localize('chat.context.previewFailed', 'Preview unavailable: {0}', attachment.name); }
 		});
+	}
+}
+
+/** A native disclosure keeps saved output available without changing the source terminal. */
+export class TerminalAttachmentWidget extends DefaultChatAttachmentWidget {
+	constructor(container: HTMLElement, attachment: ChatContextAttachment, remove: () => void,
+		@IOpenerService opener: IOpenerService,
+		@ICommandService commands: ICommandService,
+		@IChatSessionNavigationService navigation: IChatSessionNavigationService,
+		@INotificationService notifications: INotificationService,
+		@IInstantiationService instantiation: IInstantiationService,
+	) {
+		super(container, attachment, remove, opener, commands, navigation, notifications);
+		if (!attachment.terminalSnapshot) return;
+		this.domNode.classList.add('has-terminal-preview');
+		const details = h(container.ownerDocument, 'details');
+		details.className = 'ash-chat-terminal-preview';
+		const summary = h(container.ownerDocument, 'summary');
+		summary.textContent = localize('terminal.chat.preview', 'Preview terminal snapshot');
+		const screen = h(container.ownerDocument, 'div');
+		screen.className = 'ash-chat-terminal-preview-screen';
+		screen.setAttribute('aria-label', localize('terminal.chat.previewLabel', 'Saved terminal output: {0}', attachment.name));
+		details.append(summary, screen);
+		this.domNode.append(details);
+		const mirror = this._register(new MutableDisposable<DetachedTerminalSnapshotMirror>());
+		this._register(addDisposableListener(details, 'toggle', () => {
+			if (!details.open) { mirror.clear(); return; }
+			const current = instantiation.createInstance(DetachedTerminalSnapshotMirror, screen);
+			mirror.value = current;
+			void current.render(attachment.terminalSnapshot!).catch(() => {
+				if (!this.isDisposed && mirror.value === current) {
+					mirror.clear();
+					notifications.error(localize('chat.context.previewFailed', 'Preview unavailable: {0}', attachment.name));
+				}
+			});
+		}));
 	}
 }

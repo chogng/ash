@@ -221,6 +221,29 @@ test('Local permission and Guardian commands work before the model catalog is re
 	assert.equal(sends, 0);
 });
 
+test('source-owned App context survives consecutive submissions, updates in place and respects user removal', async () => {
+	const sends: unknown[] = [];
+	using part = inputPart(sharedNotifications, undefined, 'agent', { send: async (text, _mode, _skills, contexts) => { sends.push({ text, contexts: await Promise.all((contexts ?? []).map(context => context.resolve())) }); } });
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	const context = (text: string) => ({ id: 'app-context', kind: 'mcpApp', lifetime: 'source' as const, name: 'App context', resolve: async () => ({ name: 'App context', content: text }) });
+	part.addContext(context('first'));
+	part.addContext(context('latest'));
+	part.addContext({ id: 'file', kind: 'file', name: 'file.ts', resolve: async () => ({ name: 'file.ts', content: 'file body' }) });
+	await part.acceptInput('First turn');
+	assert.equal(part.attachmentModel.size, 1);
+	await part.acceptInput('Next turn');
+	assert.deepEqual(sends, [
+		{ text: 'First turn', contexts: [{ name: 'App context', content: 'latest' }, { name: 'file.ts', content: 'file body' }] },
+		{ text: 'Next turn', contexts: [{ name: 'App context', content: 'latest' }] },
+	]);
+	const remove = part.element.querySelector<HTMLButtonElement>('[aria-label="Remove App context"]')!;
+	assert.ok(remove);
+	remove.click();
+	assert.equal(part.attachmentModel.size, 0);
+	await part.acceptInput('Without App context');
+	assert.deepEqual(sends[2], { text: 'Without App context', contexts: [] });
+});
+
 test('Chat configuration requests append without sending or replacing draft attachments', async () => {
 	let sends = 0;
 	using part = inputPart(sharedNotifications, undefined, 'debug', { send: async () => { sends++; } });

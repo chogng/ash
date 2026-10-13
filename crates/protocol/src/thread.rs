@@ -76,3 +76,29 @@ pub struct Thread {
     #[serde(default)]
     pub hook_runs: Vec<crate::HookRunRecord>,
 }
+
+/// The authorized media source of a transcript, distinct from an execution/model message role.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum VoiceTranscriptSpeaker {
+    User,
+    Assistant,
+}
+
+/// One canonical voice transcript span. It grants no tool or model instruction authority.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct VoiceTranscript {
+    pub item_id: crate::ItemId,
+    pub voice_session_id: String,
+    #[ts(type = "number")]
+    pub media_epoch: u64,
+    pub speaker: VoiceTranscriptSpeaker,
+    pub text: String,
+    #[ts(type = "number")]
+    pub start_ms: u64,
+    #[ts(type = "number")]
+    pub end_ms: u64,
+    /// Places a speech span after its original chronological Thread item on reload.
+    pub after_item_id: Option<crate::ItemId>,
+}

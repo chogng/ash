@@ -417,7 +417,7 @@ export class ChatWidgetModel extends Disposable {
 				contexts,
 				skills,
 			};
-			if (turn && (turn.mode !== mode || skills?.length)) {
+			if (turn && (turn.kind !== undefined && turn.kind !== 'coding' && turn.kind !== 'review' || turn.mode !== mode || skills?.length)) {
 				// A frozen Turn keeps its approach. A new approach gets its own durable submission.
 				await this.chatService.queueTurn(submission);
 				if (this.isDisposed || generation !== this.composerGeneration) return;
@@ -521,7 +521,7 @@ export class ChatWidgetModel extends Disposable {
 	async retryFailedTurn(turnId: string): Promise<void> {
 		const turns = this._thread?.turns ?? [];
 		const turn = turns.at(-1);
-		if (turn?.turnId !== turnId || turn.status !== "failed" || turn.error?.retryable !== true) {
+		if (turn?.turnId !== turnId || turn.status !== "failed" || turn.error?.retryable !== true || turn.kind !== undefined && turn.kind !== 'coding' && turn.kind !== 'review') {
 			throw new Error("Only the latest retryable failed Turn can be retried");
 		}
 		await this.send("Try again.", turn.mode);
@@ -990,7 +990,7 @@ function activeTurn(thread: Thread | undefined): Turn | undefined {
 }
 
 function isSteerableTurn(turn: Turn): boolean {
-	return turn.status === "running" || turn.status === "waitingForApproval" || turn.status === "waitingForUserInput";
+	return (turn.kind === undefined || turn.kind === 'coding' || turn.kind === 'review') && (turn.status === "running" || turn.status === "waitingForApproval" || turn.status === "waitingForUserInput");
 }
 
 function sameModel(left: ModelRef | null | undefined, right: ModelRef | null | undefined): boolean {

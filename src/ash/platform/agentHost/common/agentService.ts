@@ -284,11 +284,12 @@ export interface ChatToolCallBinding {
 export type ChatContentPart =
 	| {
 		readonly type: 'artifact'; readonly artifact: {
-			readonly source: { readonly type: 'embeddedResource'; readonly uri: string; } | { readonly type: 'resourceLink'; readonly uri: string; } | { readonly type: 'mcpApp'; readonly uri: string; } | { readonly type: 'structuredResult'; };
+			readonly source: { readonly type: 'embeddedResource'; readonly uri: string; } | { readonly type: 'resourceLink'; readonly uri: string; } | { readonly type: 'mcpApp'; readonly uri: string; } | { readonly type: 'structuredResult'; } | { readonly type: 'viewMetadata'; };
 			readonly mimeType: string;
 			readonly data: { readonly type: 'text'; readonly text: string; } | { readonly type: 'bytes'; readonly bytes: Uint8Array; } | { readonly type: 'json'; readonly json: string; };
 			readonly contentDigest: string;
 			readonly truncated: boolean;
+			readonly resourceMetadata?: string | null;
 		};
 	}
 	| { readonly type: 'text'; readonly text: string; }
@@ -406,6 +407,8 @@ export interface PlanUpdate {
 }
 
 export interface Turn {
+	/** Missing only in older local consumers; the protocol adapter always preserves the Core purpose. */
+	readonly kind?: 'coding' | 'review' | 'advisor' | 'shell' | 'tool' | 'contextCompaction';
 	readonly turnId: string;
 	readonly status: TurnStatus;
 	readonly mode: ChatMode;
@@ -634,7 +637,20 @@ export interface ThreadUpdateEnvelope {
 	readonly update: ThreadUpdate;
 }
 
+/** Speech retained by Core independently of execution Turns and their instruction roles. */
+export interface AgentVoiceTranscript {
+	readonly itemId: string;
+	readonly voiceSessionId: string;
+	readonly mediaEpoch: number;
+	readonly speaker: 'user' | 'assistant';
+	readonly text: string;
+	readonly startMs: number;
+	readonly endMs: number;
+	readonly afterItemId: string | null;
+}
+
 export type ThreadTranscriptEntry =
+	| { readonly type: 'voiceTranscript'; readonly entryId: string; readonly turnId?: undefined; readonly transcript: AgentVoiceTranscript; }
 	| { readonly type: 'hookRun'; readonly entryId: string; readonly turnId: string; readonly run: ChatHookRun; }
 	| {
 		readonly type: 'item';
@@ -744,12 +760,39 @@ export interface AgentAttachmentSource {
 	readonly contentIndex?: number;
 }
 
+/** Validated external origins for one source-owned App document. */
+export interface AgentMcpAppCsp {
+	readonly connectDomains: readonly string[];
+	readonly resourceDomains: readonly string[];
+	readonly frameDomains: readonly string[];
+	readonly baseUriDomains: readonly string[];
+}
+
+export interface AgentToolResource {
+	readonly bytes: Uint8Array;
+	readonly mimeType: string;
+	readonly appCsp?: AgentMcpAppCsp;
+	readonly encoding?: 'text' | 'binary';
+	readonly resourceMetadata?: string | null;
+}
+
+/** Original public MCP Tool contract for a source-bound App catalog. */
+export interface AgentMcpAppTool extends Readonly<Record<string, unknown>> {
+	readonly name: string;
+	readonly inputSchema: Readonly<Record<string, unknown>>;
+}
+
 export interface IAgentThreadService {
+	readonly onDidChangeConnection: Event<void>;
 	/** Domain notifications from this renderer's connection; disposing the listener releases it. */
 	readonly onDidUpdateThread: Event<ThreadUpdateEnvelope>;
 	readonly onDidUpdateThreadTranscript: Event<ThreadTranscriptUpdateEnvelope>;
 	readAttachment(source: AgentAttachmentSource, signal?: AbortSignal): Promise<{ readonly bytes: Uint8Array; readonly mimeType: string; }>;
-	readToolResource(source: AgentAttachmentSource & { readonly contentIndex: number; }, signal?: AbortSignal): Promise<{ readonly bytes: Uint8Array; readonly mimeType: string; }>;
+	listAppTools(source: AgentAttachmentSource & { readonly contentIndex: number; }, signal?: AbortSignal): Promise<readonly AgentMcpAppTool[]>;
+	invokeAppTool(source: AgentAttachmentSource & { readonly contentIndex: number; }, name: string, argumentsJson: string, signal?: AbortSignal): Promise<Extract<ThreadItem, { readonly type: 'toolResult'; }>>;
+	readToolResource(source: AgentAttachmentSource & { readonly contentIndex: number; }, signal?: AbortSignal): Promise<AgentToolResource>;
+	/** Reads through the original App provider; the URI grants no local filesystem access. */
+	readAppResource(source: AgentAttachmentSource & { readonly contentIndex: number; }, uri: string, signal?: AbortSignal): Promise<AgentToolResource>;
 	readHistoryState(params: { readonly sessionId: string; readonly threadId: string; }): Promise<AgentThreadHistoryState>;
 	moveHistory(params: { readonly sessionId: string; readonly threadId: string; readonly expectedSequence: number; readonly direction: 'undo' | 'redo'; readonly commandId: string; }): Promise<void>;
 	readContext(params: { readonly sessionId: string; readonly threadId: string; }): Promise<{ readonly context: AgentContextUsage; }>;

@@ -1677,7 +1677,11 @@
     "themeEditor.previewToggleSidebar": "切换示例侧栏",
     "themeEditor.previewTogglePanel": "切换示例面板",
     "chatEditing.savePending": "已撤销的更改尚未保存。请重试保存以完成此次审阅。",
-    "chatEditing.retrySave": "重试保存已审阅的更改"
+    "chatEditing.retrySave": "重试保存已审阅的更改",
+    "terminal.chat.attach": "终端：附加到聊天",
+    "terminal.chat.preview": "预览终端快照",
+    "terminal.chat.previewLabel": "已保存的终端输出：{0}",
+    "terminal.chat.previewInput": "已保存的终端输出（只读）"
   },
   "ash.menu": {
     "file": "文件",

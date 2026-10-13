@@ -1,3 +1,5 @@
+import '../../../src/ash/workbench/contrib/terminal/browser/terminal.web.contribution.js';
+import { writeP } from '../../../src/ash/workbench/contrib/terminal/browser/terminalTestHelpers.js';
 import { IHoverService, HoverService } from '../../../src/ash/platform/hover/browser/hoverService.js';
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
 import { IEnvironmentVariableService } from '../../../src/ash/workbench/contrib/terminal/common/environmentVariable.js';
@@ -892,7 +894,7 @@ if (new URLSearchParams(location.search).has('input')) {
 				writes: () => routedWrites,
 				clearWrites: () => { routedWrites.length = 0; },
 				sizes: () => sizes,
-				feed: text => { screen.raw.write(text); },
+				feed: text => writeP(screen.raw, text),
 				close: () => terminals.closeTerminal(terminals.activeInstance!),
 				dispose: () => groupPane?.dispose(),
 			};

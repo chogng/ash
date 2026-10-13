@@ -187,7 +187,8 @@ impl TranscriptModel {
                 ThreadTranscriptEntry::Item { entry_id, item, .. } => {
                     item.client_id().map(|id| (id.clone(), entry_id.clone()))
                 }
-                ThreadTranscriptEntry::HookRun { .. }
+                ThreadTranscriptEntry::VoiceTranscript { .. }
+                | ThreadTranscriptEntry::HookRun { .. }
                 | ThreadTranscriptEntry::TurnPlan { .. }
                 | ThreadTranscriptEntry::TurnError { .. }
                 | ThreadTranscriptEntry::ToolOutput { .. } => None,
@@ -776,6 +777,15 @@ fn cell_from_entry(entry: &ThreadTranscriptEntry, render_revision: u64) -> Trans
         CellLifecycle::Final
     };
     let body = match entry {
+        ThreadTranscriptEntry::VoiceTranscript { transcript, .. } => {
+            TranscriptCellBody::Content(ContentCell {
+                role: match transcript.speaker {
+                    ash_protocol::VoiceTranscriptSpeaker::User => MessageRole::User,
+                    ash_protocol::VoiceTranscriptSpeaker::Assistant => MessageRole::Agent,
+                },
+                text: transcript.text.clone(),
+            })
+        }
         ThreadTranscriptEntry::HookRun { .. } => {
             unreachable!("Hook observations do not create terminal cells")
         }
@@ -834,12 +844,13 @@ fn cell_from_entry(entry: &ThreadTranscriptEntry, render_revision: u64) -> Trans
         source_entry_id: Some(entry_id),
         client_id: match entry {
             ThreadTranscriptEntry::Item { item, .. } => item.client_id().cloned(),
-            ThreadTranscriptEntry::HookRun { .. }
+            ThreadTranscriptEntry::VoiceTranscript { .. }
+            | ThreadTranscriptEntry::HookRun { .. }
             | ThreadTranscriptEntry::TurnPlan { .. }
             | ThreadTranscriptEntry::TurnError { .. }
             | ThreadTranscriptEntry::ToolOutput { .. } => None,
         },
-        turn_id: Some(entry.turn_id().clone()),
+        turn_id: entry.turn_id().cloned(),
         lifecycle,
         render_revision,
         body,

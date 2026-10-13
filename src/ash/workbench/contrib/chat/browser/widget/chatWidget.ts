@@ -1,3 +1,4 @@
+import type { ChatSubmissionOptions } from '../../../../services/chat/common/chatService.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { approvalModeDefinition } from '../../../../../platform/agentHost/common/approvalModes.js';
 import { localize } from '../../../../../nls.js';
@@ -32,6 +33,9 @@ import { IInstantiationService } from '../../../../../platform/instantiation/com
 import { ChatInputEditors } from './input/chatInputEditorRegistry.js';
 import type { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import type { IOpenAgentsWindowOptions } from '../../../../../platform/native/common/nativeHost.js';
+import type { IChatMcpAppDelegate } from './chatContentParts/toolInvocationParts/chatMcpAppSubPart.js';
+import { VoiceClientService, type IVoiceClientService } from '../../common/voiceClient/voiceClientService.js';
+import type { VoiceTaskRequest } from '../../../../../platform/voice/common/voiceService.js';
 
 /** The presentation consumes one conversation model owned by its product. */
 export interface IChatWidgetModel extends IDisposable {
@@ -44,7 +48,8 @@ export interface IChatWidgetModel extends IDisposable {
 	readonly goal: ThreadGoal | undefined;
 	readonly items: readonly IChatListItem[];
 	readonly inputState: ChatInputState;
-	send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[]): Promise<void>;
+	prepareConversation?(): Promise<{ readonly sessionId: string; readonly threadId: string; }>;
+	send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], submissionOptions?: ChatSubmissionOptions): Promise<void>;
 	executeServerCommand(name: string, argumentsText: string): Promise<void>;
 	interrupt(): Promise<void>;
 	selectModel(model: ModelRef): Promise<void>;
@@ -61,6 +66,7 @@ export interface IChatWidgetModel extends IDisposable {
 /** Owns the content and interaction state for one local or durable Chat tab. */
 export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> extends Disposable {
 	readonly element: HTMLElement;
+	private readonly voiceClient: IVoiceClientService;
 	readonly model: TModel;
 	private listWidget: ChatListWidget;
 	private readonly inputPart: IChatInputPart;
@@ -86,6 +92,16 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		@IDialogService dialogs: IDialogService,
 	) {
 		super();
+		this.model = this._register(model);
+		this.voiceClient = this._register(instantiationService.createInstance(VoiceClientService, async (request: VoiceTaskRequest, signal: AbortSignal) => {
+			if (signal.aborted || this.isDisposed || this.model.sessionId !== request.sessionId || this.model.threadId !== request.threadId) throw canceled();
+			// The original composer/model owns mode, queue, steering and approval. Speech remains low-trust context.
+			await this.model.send(localize('chat.voice.task.submit', 'Handle the request I just spoke.'), this.model.inputState.mode, undefined, [{ name: localize('chat.voice.task.context', 'Voice request'), content: request.transcript }], { commandId: request.commandId, source: { sessionId: request.sessionId, threadId: request.threadId }, signal });
+		}, (error: unknown) => notifications.error(localize('chat.voice.requestFailed', 'The voice request failed: {0}', String(error))), this.model.prepareConversation ? async () => {
+			const source = await this.model.prepareConversation!();
+			if (this.isDisposed || source.sessionId !== this.model.sessionId || source.threadId !== this.model.threadId) throw canceled();
+			return source;
+		} : undefined));
 		const ownerDocument = container.ownerDocument;
 		this.element = h(ownerDocument, "div");
 		this.element.id = panelId;
@@ -93,12 +109,28 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		this.element.setAttribute("role", "tabpanel");
 		this.element.hidden = true;
 		container.append(this.element);
-		this.model = this._register(model);
 		this.goalElement = h(ownerDocument, "div");
 		this.goalElement.className = "ash-chat-goal";
 		this.goalElement.hidden = true;
 		const listWidgets = ChatListWidget.instantiateObservable(instantiationService, this._store, h(ownerDocument, 'div'), {
 			imageResourceLoader,
+			mcpAppDelegate: {
+				updateModelContext: (source, text) => {
+					const id = this.appContextId(source);
+					const model = this.inputPart.attachmentModel;
+					if (!text) { model.delete(id); return Disposable.None; }
+					const name = localize('chat.mcpApp.contextLabel', 'App context');
+					const attachment: ChatContextAttachment = { id, kind: 'mcpApp', lifetime: 'source', name, resolve: async () => ({ name, content: text }) };
+					model.addContext(attachment);
+					return toDisposable(() => { if (model.attachments.includes(attachment)) model.delete(id); });
+				},
+				sendMessage: async (source, text, signal) => {
+					const id = this.appContextId(source);
+					// An App follow-up includes its own source context, never a user's unsent draft or files.
+					const contexts = this.inputPart.attachmentModel.attachments.filter(attachment => attachment.id === id);
+					await this.send(text, this.model.inputState.mode, undefined, contexts, source, signal);
+				},
+			} satisfies IChatMcpAppDelegate,
 			onDidRequestLink: (target: string) => {
 				void openChatMarkdownLink(target, openerService, editorService).catch(error => console.error("Could not open Markdown link", error));
 			},
@@ -106,8 +138,10 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			onDidRequestErrorAction: (action: ChatTurnErrorAction) => void this.handleTurnErrorAction(action).catch(() => undefined),
 		});
 		this.listWidget = listWidgets.get();
+		const voiceClient = this.voiceClient;
 		const inputDelegate: ChatInputDelegate = {
-			send: (text, mode, skills, contexts, submissionSignal) => this.send(text, mode, skills, contexts, submissionSignal),
+			voiceConversation: { get isAvailable() { return voiceClient.isAvailable; }, get isActive() { return voiceClient.isActive; }, get isConnected() { return voiceClient.isConnected; }, toggle: () => voiceClient.isActive ? voiceClient.disconnect() : voiceClient.connect(ownerDocument.defaultView?.navigator.userActivation), interrupt: () => voiceClient.stopSpeaking() },
+						send: (text, mode, skills, contexts, submissionSignal) => this.send(text, mode, skills, contexts, undefined, submissionSignal),
 			executeCommand: (invocation) => invocation.commandId === OPEN_CHAT_PERMISSIONS_COMMAND_ID || invocation.commandId === OPEN_GUARDIAN_SETUP_COMMAND_ID
 				? commandService.executeCommand(invocation.commandId, this.model, invocation.argumentsText)
 				: invocation.argumentsText ? commandService.executeCommand(invocation.commandId, invocation.argumentsText) : commandService.executeCommand(invocation.commandId),
@@ -151,6 +185,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		}));
 		this._register(this.model.onDidChangeComposer(() => this.inputPart.invalidatePendingInput()));
 		this._register(this.model.onDidChange(() => this.render()));
+		this._register(this.voiceClient.onDidChange(() => { if (!this.isDisposed) this.render(); }));
 		this._register(toDisposable(() => this.element.remove()));
 		this.render();
 	}
@@ -207,7 +242,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		return this.inputPart.acceptInput(value);
 	}
 
-	private async send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts: readonly ChatContextAttachment[] = [], submissionSignal?: AbortSignal): Promise<void> {
+	private async send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts: readonly ChatContextAttachment[] = [], appSource?: Parameters<IChatMcpAppDelegate['sendMessage']>[0], submissionSignal?: AbortSignal): Promise<void> {
 		const model = this.model;
 		const generation = model.composerGeneration;
 		if (this.isDisposed || submissionSignal?.aborted) throw canceled();
@@ -216,7 +251,8 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		try {
 			const resolvedContexts = await Promise.all(contexts.map(context => context.resolve()));
 			if (this.isDisposed || submissionSignal?.aborted || generation !== model.composerGeneration) throw canceled();
-			await model.send(text, mode, skills, resolvedContexts);
+			if (appSource) this.appContextId(appSource);
+			await model.send(text, mode, skills, resolvedContexts, appSource ? { source: { sessionId: appSource.sessionId, threadId: appSource.threadId }, signal: submissionSignal } : submissionSignal ? { signal: submissionSignal } : undefined);
 		} catch (error) {
 			if (!this.isDisposed && !submissionSignal?.aborted && generation === model.composerGeneration && model.items.length === 0) {
 				this.submittedMessage = false;
@@ -224,6 +260,11 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			}
 			throw error;
 		}
+	}
+
+	private appContextId(source: Parameters<IChatMcpAppDelegate['sendMessage']>[0]): string {
+		if (this.isDisposed || source.sessionId !== this.model.sessionId || source.threadId !== this.model.threadId) throw new Error(localize('chat.mcpApp.chatUnavailable', 'The App conversation is no longer available.'));
+		return JSON.stringify(['mcpApp', source.sessionId, source.threadId, source.itemId, source.contentIndex]);
 	}
 
 	private async handleTurnErrorAction(action: ChatTurnErrorAction): Promise<void> {
@@ -249,6 +290,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			this.submittedMessage = false;
 		}
 		this.syncIdentity();
+		this.voiceClient.setSource(this.model.sessionId && this.model.threadId ? { sessionId: this.model.sessionId, threadId: this.model.threadId } : undefined, this.model.untitledSessionId);
 		this.renderGoal();
 		const items = this.model.items;
 		this.updateConversationState(items.length > 0);

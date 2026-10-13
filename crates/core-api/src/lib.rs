@@ -79,6 +79,7 @@ pub use runtime::ContextInspectionRequest;
 pub use runtime::ContextInspectionScope;
 pub use runtime::InteractionLifecycle;
 pub use runtime::SubmitShellRequest;
+pub use runtime::SubmitToolRequest;
 pub use runtime::SubmitTurnRequest;
 pub use runtime::SubmittedCommand;
 pub use runtime::TurnReceipt;

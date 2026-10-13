@@ -1662,9 +1662,23 @@ use crate::protocol::mcp::McpServerStatusDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::mcp::McpServerStatusResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::mcp::ToolAppCallParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::mcp::ToolAppCallResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::mcp::ToolAppListParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::mcp::ToolAppListResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::mcp::ToolAppResourceOpenParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::mcp::ToolResourceCancelParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::mcp::ToolResourceEncoding;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::mcp::ToolResourceOpenParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::mcp::ToolResourceOpenResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::memory::MemoryAddParams;
 use crate::protocol::memory::MemoryChanged;
@@ -2367,6 +2381,8 @@ use ash_protocol::InteractionDeadline;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ItemDelta;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::McpAppResourceCsp;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::MessageBoundary;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::MessageCheckpoint;
@@ -2598,6 +2614,10 @@ use ash_protocol::UserInputAnswer;
 use ash_protocol::UserInputOption;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::UserInputQuestion;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::VoiceTranscript;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::VoiceTranscriptSpeaker;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::WorkspaceCheckpoint;
 #[cfg(any(test, feature = "export"))]
@@ -4206,9 +4226,25 @@ client_methods! {
         response: (),
         serialization: ResourceExclusive("resourceId"),
     },
+    ToolAppList => "tool/app/list" {
+        params: ToolAppListParams, response: ToolAppListResult, serialization: SessionSharedRead,
+    },
+    ToolAppCall => "tool/app/call" {
+        params: ToolAppCallParams, response: ToolAppCallResult,
+        serialization: None,
+        cancellation: "operationId" => PreserveOutcome,
+    },
+    ToolAppCancel => "tool/app/cancel" {
+        params: ToolResourceCancelParams, response: (), serialization: None,
+    },
+    ToolAppResourceOpen => "tool/app/resource/open" {
+        params: ToolAppResourceOpenParams, response: ToolResourceOpenResult,
+        serialization: None,
+        cancellation: "operationId",
+    },
     ToolResourceOpen => "tool/resource/open" {
         params: ToolResourceOpenParams,
-        response: ResourceMetadataResult,
+        response: ToolResourceOpenResult,
         serialization: SessionSharedRead,
         cancellation: "operationId",
     },
@@ -5553,6 +5589,13 @@ typescript_bindings! {
     McpSecretDto,
     McpOAuthStartParams,
     ToolResourceOpenParams,
+    ToolResourceOpenResult,
+    ToolResourceEncoding,
+    ToolAppResourceOpenParams,
+    ToolAppCallParams,
+    ToolAppListParams,
+    ToolAppListResult,
+    ToolAppCallResult,
     ToolResourceCancelParams,
     McpOAuthStartResult,
     McpOAuthCompleteParams,
@@ -6176,6 +6219,9 @@ typescript_bindings! {
     ToolOutputArtifact,
     ToolOutputArtifactData,
     ToolOutputArtifactSource,
+    McpAppResourceCsp,
+    VoiceTranscript,
+    VoiceTranscriptSpeaker,
     ToolOutputStream,
     ProcessExitStatus,
     ProcessExecutionOutput,

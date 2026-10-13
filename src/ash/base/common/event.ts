@@ -39,7 +39,9 @@ export class EventMultiplexer<T> extends Disposable {
 	add(event: Event<T>): IDisposable {
 		this.assertNotDisposed();
 		const subscription = this.inputs.add(event(value => this.emitter.fire(value)));
-		return toDisposable(() => { this.inputs.delete(subscription); });
+		return toDisposable(() => {
+			if (this.inputs.delete(subscription)) subscription.dispose();
+		});
 	}
 }
 

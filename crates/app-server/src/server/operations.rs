@@ -1260,9 +1260,13 @@ impl AppServer {
             &params.thread_id,
             params.history,
         )?;
-        let transcript = self
-            .updates
-            .thread_transcript_snapshot(&thread, include_transient);
+        let voice_transcripts = self
+            .threads
+            .read_voice_transcripts(&thread.thread_id, thread.sequence)
+            .map_err(core_error)?;
+        let transcript =
+            self.updates
+                .thread_transcript_snapshot(&thread, include_transient, &voice_transcripts);
         result(&SessionThreadReadResult {
             directory: self.thread_directory(&params.thread_id)?,
             thread,
@@ -1344,9 +1348,13 @@ impl AppServer {
         if params.after_sequence > sequence {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
-        let transcript = self
-            .updates
-            .thread_transcript_snapshot(&thread, include_transient);
+        let voice_transcripts = self
+            .threads
+            .read_voice_transcripts(&thread.thread_id, thread.sequence)
+            .map_err(core_error)?;
+        let transcript =
+            self.updates
+                .thread_transcript_snapshot(&thread, include_transient, &voice_transcripts);
         let replay_after = if bounded_history {
             params.after_sequence.max(thread.sequence)
         } else {

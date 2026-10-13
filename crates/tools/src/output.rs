@@ -161,6 +161,15 @@ fn truncate_artifact_content(
                 remaining = remaining.saturating_sub(output.len());
                 ToolContent::Text(output)
             }
+            ToolContent::Artifact(artifact)
+                if matches!(
+                    artifact.source,
+                    ash_protocol::ToolOutputArtifactSource::McpApp { .. }
+                        | ash_protocol::ToolOutputArtifactSource::ViewMetadata
+                ) =>
+            {
+                part.clone()
+            }
             ToolContent::Artifact(artifact) => match &artifact.data {
                 ash_protocol::ToolOutputArtifactData::Binary { .. } => part.clone(),
                 ash_protocol::ToolOutputArtifactData::Text { .. }

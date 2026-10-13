@@ -2959,6 +2959,26 @@ test('ChatWidgetModel queues a new mode while keeping the active Turn unchanged'
 	assert.equal(model.inputState.mode, 'multitask');
 });
 
+for (const kind of ['tool', 'shell', 'contextCompaction', 'advisor'] as const) {
+	test(`ChatWidgetModel queues user follow-ups after an active ${kind} Turn instead of losing them to steering`, async () => {
+		const activeSession = session('session-1', 'thread-1');
+		const value = thread('previous result');
+		value.turns[0]!.status = 'running';
+		value.turns[0]!.kind = kind;
+		value.turns[0]!.mode = 'agent';
+		const fake = fakeApi({ sessions: [activeSession], thread: () => value });
+		using chat = createChatService(fake.api);
+		using sessions = new SessionsManagementService(fake.api);
+		using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+		await model.initialize();
+		await model.send('Follow up', 'agent', undefined, [{ name: 'App context', content: 'latest context' }]);
+		assert.equal(fake.turnStartRequests.length, 0);
+		assert.equal(fake.turnSteerRequests.length, 0);
+		assert.equal(fake.queuedRequests.length, 1);
+		assert.deepEqual(fake.queuedRequests[0]?.input, [{ type: 'context', name: 'App context', content: 'latest context' }, { type: 'text', text: 'Follow up' }]);
+	});
+}
+
 test('Chat mode accessibility help explains switch_mode in Chinese and restores input focus', async () => {
 	const { SessionsChatAccessibilityHelp } = await import('../../contrib/chat/browser/sessionsChatAccessibilityHelp.js');
 	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');

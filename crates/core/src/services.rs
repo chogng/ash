@@ -308,6 +308,36 @@ impl OneTimeToolGrant {
 pub trait ToolService: Send + Sync {
     fn definitions(&self) -> Vec<ToolDefinition>;
 
+    /// Definitions admitted for an App on this provider. They need not be available to models.
+    fn app_tool_definitions(&self) -> Vec<ToolDefinition> {
+        Vec::new()
+    }
+
+    /// Lists the immutable MCP Tool contracts visible to this origin's App.
+    fn list_app_tools(
+        &self,
+        _origin: &ToolCall,
+        _binding: &ToolCallBinding,
+    ) -> Result<Vec<serde_json::Value>, CoreError> {
+        Err(CoreError::Policy(
+            "this tool provider does not support App catalogs".into(),
+        ))
+    }
+
+    /// Selects a same-origin App tool and freezes its executable binding without executing it.
+    fn resolve_app_tool_call(
+        &self,
+        _origin: &ToolCall,
+        _binding: &ToolCallBinding,
+        _name: &str,
+        _arguments: serde_json::Value,
+        _id: ash_protocol::ToolCallId,
+    ) -> Result<(ToolCall, ToolCallBinding), CoreError> {
+        Err(CoreError::Policy(
+            "this tool provider does not support App calls".into(),
+        ))
+    }
+
     /// Reads a user-selected resource through a validated originating tool service.
     /// Non-resource providers reject this optional capability; callers must validate the frozen binding first.
     fn read_resource(

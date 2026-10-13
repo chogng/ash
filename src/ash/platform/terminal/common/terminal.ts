@@ -238,3 +238,9 @@ export interface ITerminalChildProcess extends IDisposable {
 
 /** Workbench host for a terminal screen; moving it retains the process. */
 export enum TerminalLocation { Panel = 1, Editor = 2 }
+
+/** Parsed display text captured once; it cannot launch or write to a process. */
+export interface ITerminalOutputSnapshot {
+	readonly text: string;
+	readonly columns: number;
+}

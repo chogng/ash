@@ -1,3 +1,4 @@
+import { TerminalEscapeSequences } from './terminalEscapeSequences.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { getTerminalUri } from './terminalUri.js';
@@ -334,7 +335,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		if (this.isReadOnly || this.closed || this._state !== 'running') { throw new CancellationError(); }
 		if (bracketedPasteMode && this.screen) {
 			const screen = await this.xtermReadyPromise;
-			if (!this.closed && !this.isDisposed && screen?.raw.modes.bracketedPasteMode) { text = `\x1b[200~${text}\x1b[201~`; }
+			if (!this.closed && !this.isDisposed && screen?.raw.modes.bracketedPasteMode) { text = `${TerminalEscapeSequences.BracketedPasteStart}${text}${TerminalEscapeSequences.BracketedPasteEnd}`; }
 		}
 		text = text.replace(/\r?\n/g, '\r');
 		if (shouldExecute && !text.endsWith('\r')) { text += '\r'; }

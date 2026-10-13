@@ -74,12 +74,18 @@ impl ThreadController {
                 });
             }
             super::validate_thread_expectation(request.expected_sequence, snapshot.sequence)?;
-            let status = snapshot
+            let (status, kind) = snapshot
                 .turns
                 .iter()
                 .find(|turn| turn.turn_id == request.turn_id)
-                .map(|turn| turn.status)
+                .map(|turn| (turn.status, turn.kind))
                 .ok_or_else(|| CoreError::NotFound(request.turn_id.to_string()))?;
+            // Legacy records used Coding for independent actions. The owning command remains authoritative.
+            let independent = snapshot.commands.iter().any(|entry| matches!(&entry.result, ThreadCommandResult::TurnAccepted { turn_id } if turn_id == &request.turn_id)
+                && matches!(entry.receipt.command, ThreadCommand::StartShellTurn { .. } | ThreadCommand::StartToolTurn { .. } | ThreadCommand::CompactContext { .. }));
+            if independent || !matches!(kind, ash_protocol::TurnKind::Coding | ash_protocol::TurnKind::Review) {
+                return Err(CoreError::InvalidInput("independent actions cannot accept model steering".into()));
+            }
             if !matches!(
                 status,
                 TurnStatus::Running

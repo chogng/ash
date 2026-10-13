@@ -16,4 +16,10 @@ pub enum TurnKind {
     Review,
     /// One explicit consultation, without a main-model inference.
     Advisor,
+    /// An explicit local process command, without a model inference.
+    Shell,
+    /// One bound tool selected by a product action, without a model inference.
+    Tool,
+    /// An explicit context compaction, without a user-message inference.
+    ContextCompaction,
 }

@@ -14,7 +14,7 @@ interface ChatTurnErrorListItemOptions {
 /** One render-ready committed or transient Thread item. */
 export interface IChatListItem {
 	readonly id: string;
-	readonly type: ThreadItem["type"] | "turnError" | "advisor" | 'hook';
+	readonly type: ThreadItem["type"] | "turnError" | "advisor" | 'hook' | 'voiceTranscript';
 	readonly content?: readonly ChatContentPart[];
 	readonly attachmentSource?: { readonly sessionId: string; readonly threadId: string; readonly itemId: string; readonly kind: 'item' | 'toolResult'; };
 	readonly hookPart?: IChatHookPart;
@@ -130,6 +130,7 @@ export function chatTranscriptListItems(entries: readonly ThreadTranscriptEntry[
 /** Maps one backend-assembled transcript entry to Chat presentation. */
 export function chatTranscriptListItem(entry: ThreadTranscriptEntry, options: TranscriptListItemOptions = {}): IChatListItem {
 	switch (entry.type) {
+		case 'voiceTranscript': return { id: entry.entryId, type: 'voiceTranscript', text: entry.transcript.text, transient: false, label: entry.transcript.speaker === 'user' ? localize('chat.voice.transcript.user', 'Your voice transcript') : localize('chat.voice.transcript.assistant', 'Voice reply transcript') };
 		case 'hookRun': return chatHookListItem(entry);
 		case "item": return { ...chatListItem(entry.item, entry.transient), id: entry.entryId };
 		case "turnPlan": return { ...chatPlanUpdateListItem(entry.turnId, entry.plan), id: entry.entryId };
@@ -176,7 +177,7 @@ export function chatTurnErrorListItem(turn: Turn, options: ChatTurnErrorListItem
 		label: presentation?.label,
 		detail: presentation?.detail,
 		errorCode: error?.code,
-		action: options.actionsEnabled === false ? undefined : presentation?.action,
+		action: options.actionsEnabled === false || turn.kind !== undefined && turn.kind !== 'coding' && turn.kind !== 'review' ? undefined : presentation?.action,
 	};
 }
 

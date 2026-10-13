@@ -21,6 +21,10 @@ use ts_rs::TS;
     rename_all_fields = "camelCase"
 )]
 pub enum ThreadTranscriptEntry {
+    VoiceTranscript {
+        entry_id: String,
+        transcript: ash_protocol::VoiceTranscript,
+    },
     HookRun {
         entry_id: String,
         turn_id: TurnId,
@@ -54,7 +58,8 @@ pub enum ThreadTranscriptEntry {
 impl ThreadTranscriptEntry {
     pub fn entry_id(&self) -> &str {
         match self {
-            Self::Item { entry_id, .. }
+            Self::VoiceTranscript { entry_id, .. }
+            | Self::Item { entry_id, .. }
             | Self::HookRun { entry_id, .. }
             | Self::TurnPlan { entry_id, .. }
             | Self::TurnError { entry_id, .. }
@@ -62,13 +67,14 @@ impl ThreadTranscriptEntry {
         }
     }
 
-    pub fn turn_id(&self) -> &TurnId {
+    pub fn turn_id(&self) -> Option<&TurnId> {
         match self {
+            Self::VoiceTranscript { .. } => None,
             Self::Item { turn_id, .. }
             | Self::HookRun { turn_id, .. }
             | Self::TurnPlan { turn_id, .. }
             | Self::TurnError { turn_id, .. }
-            | Self::ToolOutput { turn_id, .. } => turn_id,
+            | Self::ToolOutput { turn_id, .. } => Some(turn_id),
         }
     }
 
@@ -76,7 +82,10 @@ impl ThreadTranscriptEntry {
         match self {
             Self::Item { transient, .. } => *transient,
             Self::ToolOutput { .. } => true,
-            Self::TurnPlan { .. } | Self::TurnError { .. } | Self::HookRun { .. } => false,
+            Self::VoiceTranscript { .. }
+            | Self::TurnPlan { .. }
+            | Self::TurnError { .. }
+            | Self::HookRun { .. } => false,
         }
     }
 }
@@ -95,6 +104,26 @@ pub struct ThreadTranscriptSnapshot {
 }
 
 impl ThreadTranscriptSnapshot {
+    /// Adds only speech belonging to visible history anchors, preserving each span's stable identity.
+    pub fn with_voice_transcripts(mut self, transcripts: &[ash_protocol::VoiceTranscript]) -> Self {
+        for transcript in transcripts.iter().rev() {
+            let position = match &transcript.after_item_id {
+                Some(item) => self.entries.iter().position(|entry| matches!(entry, ThreadTranscriptEntry::Item { item: original, .. } if original.item_id() == item)).map(|position| position + 1),
+                None => Some(0),
+            };
+            if let Some(position) = position {
+                self.entries.insert(
+                    position,
+                    ThreadTranscriptEntry::VoiceTranscript {
+                        entry_id: transcript.item_id.to_string(),
+                        transcript: transcript.clone(),
+                    },
+                );
+            }
+        }
+        self
+    }
+
     pub fn from_thread(thread: &Thread) -> Self {
         let mut entries = Vec::new();
         for turn in &thread.turns {

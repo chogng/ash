@@ -299,6 +299,37 @@ impl McpMetaToolService {
 }
 
 impl ToolService for McpMetaToolService {
+    fn list_app_tools(
+        &self,
+        origin: &ToolCall,
+        binding: &ash_protocol::ToolCallBinding,
+    ) -> Result<Vec<serde_json::Value>, CoreError> {
+        self.tools
+            .list_app_tools(&self.nested_call(origin)?, binding)
+    }
+
+    fn resolve_app_tool_call(
+        &self,
+        origin: &ToolCall,
+        binding: &ash_protocol::ToolCallBinding,
+        name: &str,
+        arguments: serde_json::Value,
+        id: ash_protocol::ToolCallId,
+    ) -> Result<(ToolCall, ash_protocol::ToolCallBinding), CoreError> {
+        self.tools
+            .resolve_app_tool_call(&self.nested_call(origin)?, binding, name, arguments, id)
+    }
+
+    fn read_resource(
+        &self,
+        call: &ToolCall,
+        uri: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<ash_protocol::ToolOutputArtifact, CoreError> {
+        self.tools
+            .read_resource(&self.nested_call(call)?, uri, cancellation)
+    }
+
     fn definitions(&self) -> Vec<ToolDefinition> {
         self.meta_definitions.clone()
     }

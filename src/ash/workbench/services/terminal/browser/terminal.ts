@@ -19,6 +19,18 @@ export interface ITerminalDimensions {
 /** Lifecycle state of one Workbench terminal instance. */
 export type TerminalInstanceState = "running" | "reconnecting" | "exited" | "disconnected" | "error";
 
+/** The screen needs no process, membership, persistence, or launch authority. */
+export interface ITerminalScreenHost {
+	readonly isReadOnly?: boolean;
+	readonly processId: number;
+	readonly state: TerminalInstanceState;
+	readonly onDidChangeCommandStatus: Event<ITerminalCommandStatusEvent>;
+	readonly onDidChangeState: Event<TerminalInstanceState>;
+	resize(dimensions: ITerminalDimensions): void;
+}
+
+
+
 /** Renderer-independent lifecycle state of one shell command. */
 export type TerminalCommandStatus = "running" | "completed" | "succeeded" | "failed" | "canceled";
 

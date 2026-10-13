@@ -96,6 +96,7 @@ pub struct ThreadSnapshot {
     pub turns: Vec<TurnSnapshot>,
     pub hook_runs: Vec<ash_protocol::HookRunRecord>,
     pub items: Vec<ThreadItem>,
+    pub voice_transcripts: Vec<ash_protocol::VoiceTranscript>,
     pub context_checkpoints: Vec<ContextCheckpoint>,
     pub context_overflow_recoveries: BTreeMap<TurnId, ContextCheckpointId>,
     pub item_sequences: BTreeMap<ItemId, u64>,
@@ -462,6 +463,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                 let mut event_digests = BTreeMap::new();
                 event_digests.insert(envelope.sequence, event_digest(&envelope.event)?);
                 Ok(ThreadSnapshot {
+                    voice_transcripts: Vec::new(),
                     user_time_contexts: Default::default(),
                     history_sources: BTreeMap::new(),
                     message_checkpoints: BTreeMap::new(),
@@ -1015,6 +1017,39 @@ pub(crate) fn reduce_thread_event_with_prefix(
                 CoreError::Journal("Thread reference cost aggregate is invalid".into())
             })?;
         }
+        ThreadEvent::VoiceTranscriptRecorded { transcript, .. } => {
+            require_no_command(envelope)?;
+            if let Some(existing) = snapshot
+                .voice_transcripts
+                .iter_mut()
+                .find(|entry| entry.item_id == transcript.item_id)
+            {
+                if existing.voice_session_id != transcript.voice_session_id
+                    || existing.media_epoch != transcript.media_epoch
+                    || existing.speaker != transcript.speaker
+                    || existing.after_item_id != transcript.after_item_id
+                    || !transcript.text.starts_with(&existing.text)
+                    || transcript.start_ms != existing.start_ms
+                    || transcript.end_ms < existing.end_ms
+                {
+                    return Err(CoreError::Journal(
+                        "Voice span identity or committed prefix changed".into(),
+                    ));
+                }
+                *existing = transcript.clone();
+            } else {
+                if snapshot
+                    .items
+                    .iter()
+                    .any(|item| item.item_id() == &transcript.item_id)
+                {
+                    return Err(CoreError::Journal(
+                        "Voice span reuses an execution Item identity".into(),
+                    ));
+                }
+                snapshot.voice_transcripts.push(transcript.clone());
+            }
+        }
         ThreadEvent::AgentContextSeedCommitted { seed, .. } => {
             require_no_command(envelope)?;
             if snapshot.sequence != 1
@@ -1317,8 +1352,18 @@ pub(crate) fn reduce_thread_event_with_prefix(
                 ThreadCommand::StartShellTurn {
                     approval_mode: command_approval_mode,
                     ..
+                }
+                | ThreadCommand::StartToolTurn {
+                    approval_mode: command_approval_mode,
+                    ..
                 } => {
-                    *kind == TurnKind::Coding
+                    // Coding is retained for records written before independent Turn purposes existed.
+                    (matches!(kind, TurnKind::Coding)
+                        || matches!(
+                            (&receipt.command, kind),
+                            (ThreadCommand::StartShellTurn { .. }, TurnKind::Shell)
+                                | (ThreadCommand::StartToolTurn { .. }, TurnKind::Tool)
+                        ))
                         && instructions.is_none()
                         && model.is_none()
                         && tool_profile.is_none()
@@ -1330,7 +1375,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     model: command_model,
                     ..
                 } => {
-                    *kind == TurnKind::Coding
+                    matches!(kind, TurnKind::Coding | TurnKind::ContextCompaction)
                         && instructions.is_none()
                         && command_model == model
                         && tool_profile.is_none()

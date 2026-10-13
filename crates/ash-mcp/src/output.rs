@@ -18,27 +18,86 @@ pub(crate) fn project_tool_result(
             "tool output has too many content parts".into(),
         ));
     }
-    let mut artifact_metadata_bytes = 0usize;
+    // Sidecar positions refer to the canonical content list, including persisted media.
+    // Keeping protocol metadata out of text prevents private App data reaching a model.
+    let content_metadata: Vec<_> = result
+        .content
+        .iter()
+        .enumerate()
+        .filter_map(|(index, block)| {
+            let (annotations, meta) = match block {
+                ContentBlock::Text(block) => (&block.annotations, &block.meta),
+                ContentBlock::Image(block) => (&block.annotations, &block.meta),
+                ContentBlock::Audio(block) => (&block.annotations, &block.meta),
+                ContentBlock::Resource(block) => (&block.annotations, &block.meta),
+                ContentBlock::ResourceLink(block) => (&block.annotations, &block.meta),
+                _ => return None,
+            };
+            if annotations.is_none() && meta.is_none() {
+                return None;
+            }
+            let mut entry = serde_json::Map::new();
+            entry.insert("index".into(), index.into());
+            if let Some(annotations) = annotations {
+                entry.insert(
+                    "annotations".into(),
+                    serde_json::to_value(annotations).expect("MCP annotations are JSON"),
+                );
+            }
+            if let Some(meta) = meta {
+                entry.insert(
+                    "_meta".into(),
+                    serde_json::to_value(meta).expect("MCP metadata is JSON"),
+                );
+            }
+            Some(serde_json::Value::Object(entry))
+        })
+        .collect();
+    let metadata = (!content_metadata.is_empty()).then(|| {
+        ToolOutputArtifact::new(
+            ToolOutputArtifactSource::ViewMetadata,
+            "application/vnd.ash.mcp-content-metadata+json".into(),
+            ToolOutputArtifactData::Json {
+                json: serde_json::to_string(&content_metadata).expect("MCP metadata is JSON"),
+            },
+        )
+    });
+    let mut artifact_metadata_bytes = metadata.as_ref().map_or(0, |artifact| {
+        let ToolOutputArtifactData::Json { json } = &artifact.data else {
+            unreachable!()
+        };
+        json.len() + artifact.mime_type.len()
+    });
+    if artifact_metadata_bytes > maximum_bytes {
+        return Err(McpCallError::InvalidResult(
+            "content metadata byte limit exceeded".into(),
+        ));
+    }
     let mut content = Vec::new();
     let mut media_bytes = 0usize;
     for block in result.content {
         let projected = match block {
             ContentBlock::Resource(resource) => {
-                let (uri, mime_type, data) = match resource.resource {
+                let (uri, mime_type, data, resource_metadata) = match resource.resource {
                     ResourceContents::TextResourceContents {
                         uri,
                         mime_type,
                         text,
+                        meta,
                         ..
                     } => (
                         uri,
                         mime_type.unwrap_or_else(|| "text/plain".into()),
                         ToolOutputArtifactData::Text { text },
+                        meta.map(|meta| {
+                            serde_json::to_string(&meta).expect("MCP metadata is JSON")
+                        }),
                     ),
                     ResourceContents::BlobResourceContents {
                         uri,
                         mime_type,
                         blob,
+                        meta,
                         ..
                     } => {
                         if blob.len() > maximum_bytes.min(262_144).div_ceil(3) * 4 + 4 {
@@ -61,6 +120,9 @@ pub(crate) fn project_tool_result(
                             uri,
                             mime_type.unwrap_or_else(|| "application/octet-stream".into()),
                             ToolOutputArtifactData::Binary { bytes },
+                            meta.map(|meta| {
+                                serde_json::to_string(&meta).expect("MCP metadata is JSON")
+                            }),
                         )
                     }
                     _ => {
@@ -81,7 +143,11 @@ pub(crate) fn project_tool_result(
                     ));
                 }
                 artifact_metadata_bytes = artifact_metadata_bytes
-                    .checked_add(uri.len() + mime_type.len())
+                    .checked_add(
+                        uri.len()
+                            + mime_type.len()
+                            + resource_metadata.as_ref().map_or(0, String::len),
+                    )
                     .ok_or_else(|| {
                         McpCallError::InvalidResult("resource metadata byte count overflow".into())
                     })?;
@@ -90,13 +156,18 @@ pub(crate) fn project_tool_result(
                         "resource metadata byte limit exceeded".into(),
                     ));
                 }
-                ToolContent::Artifact(ToolOutputArtifact::new(
+                let mut artifact = ToolOutputArtifact::new(
                     ToolOutputArtifactSource::EmbeddedResource { uri },
                     mime_type,
                     data,
-                ))
+                );
+                artifact.resource_metadata = resource_metadata;
+                ToolContent::Artifact(artifact)
             }
-            ContentBlock::ResourceLink(link) => {
+            ContentBlock::ResourceLink(mut link) => {
+                // Private metadata is restored only by the interactive consumer from the sidecar.
+                link.meta = None;
+                link.annotations = None;
                 let uri = link.uri.clone();
                 let mime = link
                     .mime_type
@@ -168,6 +239,9 @@ pub(crate) fn project_tool_result(
         return Err(McpCallError::InvalidResult(
             "tool output media byte limit exceeded".into(),
         ));
+    }
+    if let Some(metadata) = metadata {
+        content.push(ToolContent::Artifact(metadata));
     }
     let output = if result.is_error.unwrap_or(false) {
         ToolOutput::error(content)

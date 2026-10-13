@@ -869,6 +869,7 @@ fn embedded_skill_catalog_lists_built_ins_and_persists_enablement() {
     assert_eq!(opened.resource.mime_type, "image/png");
     let resource = client
         .read_resource(ResourceReadParams {
+            session_id: None,
             resource_id: opened.resource.resource_id,
             offset: 0,
             max_bytes: 262_144,

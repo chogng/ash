@@ -2,6 +2,7 @@ import type { URI } from '../../../../base/common/uri.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
+import type { ITerminalOutputSnapshot } from '../../../../platform/terminal/common/terminal.js';
 
 export interface ResolvedChatContext {
 	readonly name: string;
@@ -11,6 +12,9 @@ export interface ResolvedChatContext {
 }
 
 export interface ChatContextAttachment {
+	/** Source-owned context stays until its producer closes or the user removes it. */
+	readonly lifetime?: 'submission' | 'source';
+	readonly terminalSnapshot?: ITerminalOutputSnapshot;
 	readonly id: string;
 	readonly kind: string;
 	/** Original source; the resolved content remains the selected snapshot. */

@@ -6,6 +6,21 @@ use serde::Deserialize;
 use serde::Serialize;
 use ts_rs::TS;
 
+/// Origin allowlists declared by one MCP App resource and validated by its provider boundary.
+/// Empty lists preserve the isolated view's default denial of external access.
+#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct McpAppResourceCsp {
+    #[serde(default)]
+    pub connect_domains: Vec<String>,
+    #[serde(default)]
+    pub resource_domains: Vec<String>,
+    #[serde(default)]
+    pub frame_domains: Vec<String>,
+    #[serde(default)]
+    pub base_uri_domains: Vec<String>,
+}
+
 /// Distinguishes a server-provided resource identity from a structured result without inventing a URI.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(
@@ -18,6 +33,7 @@ pub enum ToolOutputArtifactSource {
     ResourceLink { uri: String },
     McpApp { uri: String },
     StructuredResult,
+    ViewMetadata,
 }
 
 /// The complete or explicitly truncated data carried by one tool artifact.
@@ -49,6 +65,13 @@ pub struct ToolOutputArtifact {
     pub data: ToolOutputArtifactData,
     pub content_digest: ContentDigest,
     pub truncated: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub app_csp: Option<McpAppResourceCsp>,
+    /// Original resource metadata for interactive consumers; never included in model text.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub resource_metadata: Option<String>,
 }
 
 impl ToolOutputArtifact {
@@ -69,19 +92,24 @@ impl ToolOutputArtifact {
             data,
             content_digest: ContentDigest::sha256(&bytes),
             truncated: false,
+            app_csp: None,
+            resource_metadata: None,
         }
     }
 
     /// Exposes text to models without embedding binary data or executing document contents.
     pub fn model_text(&self) -> String {
-        if matches!(self.source, ToolOutputArtifactSource::McpApp { .. }) {
+        if matches!(
+            self.source,
+            ToolOutputArtifactSource::McpApp { .. } | ToolOutputArtifactSource::ViewMetadata
+        ) {
             return String::new();
         }
         match &self.data {
             ToolOutputArtifactData::Text { text } => match &self.source {
                 ToolOutputArtifactSource::EmbeddedResource { uri } | ToolOutputArtifactSource::ResourceLink { uri } => serde_json::json!({ "uri": uri, "mimeType": self.mime_type, "text": text, "truncated": self.truncated }).to_string(),
                 ToolOutputArtifactSource::StructuredResult => text.clone(),
-                ToolOutputArtifactSource::McpApp { .. } => String::new(),
+                ToolOutputArtifactSource::McpApp { .. } | ToolOutputArtifactSource::ViewMetadata => String::new(),
             },
             ToolOutputArtifactData::Json { json } => json.clone(),
             ToolOutputArtifactData::Binary { bytes } => serde_json::json!({
@@ -101,6 +129,8 @@ impl ToolOutputArtifact {
             ToolOutputArtifactData::Text { text },
         );
         artifact.truncated = true;
+        artifact.resource_metadata = self.resource_metadata.clone();
+        artifact.app_csp = self.app_csp.clone();
         artifact
     }
 }

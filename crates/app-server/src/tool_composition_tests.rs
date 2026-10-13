@@ -52,6 +52,7 @@ use super::combine_tool_ports_at_generation_with_search;
 
 struct FakeTools {
     definitions: Vec<ToolDefinition>,
+    app_only: Vec<ToolDefinition>,
     activity: Option<ToolActivity>,
     source: ActionSource,
     source_id: &'static str,
@@ -67,6 +68,7 @@ impl FakeTools {
                 strict: false,
             }],
             activity: None,
+            app_only: Vec::new(),
             source,
             source_id,
         }
@@ -86,6 +88,7 @@ impl FakeTools {
                 })
                 .collect(),
             activity: None,
+            app_only: Vec::new(),
             source,
             source_id,
         }
@@ -100,6 +103,44 @@ impl FakeTools {
 impl ToolService for FakeTools {
     fn definitions(&self) -> Vec<ToolDefinition> {
         self.definitions.clone()
+    }
+
+    fn app_tool_definitions(&self) -> Vec<ToolDefinition> {
+        if self.source == ActionSource::McpServer {
+            self.definitions
+                .iter()
+                .chain(&self.app_only)
+                .cloned()
+                .collect()
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn resolve_app_tool_call(
+        &self,
+        _: &ToolCall,
+        _: &ash_protocol::ToolCallBinding,
+        name: &str,
+        arguments: serde_json::Value,
+        id: ash_protocol::ToolCallId,
+    ) -> Result<(ToolCall, ash_protocol::ToolCallBinding), CoreError> {
+        let definition = self
+            .app_tool_definitions()
+            .into_iter()
+            .find(|definition| definition.name.as_str() == name)
+            .ok_or_else(|| CoreError::Policy("App target is unavailable".into()))?;
+        let call = ToolCall {
+            id,
+            name: definition.name,
+            arguments,
+        };
+        let mut bindable = FakeTools::new(call.name.as_str(), self.source.clone(), self.source_id);
+        bindable.definitions = self.app_tool_definitions();
+        let binding = bindable
+            .bind_call(&call, ash_protocol::ToolCallCaller::Direct)?
+            .unwrap();
+        Ok((call, binding))
     }
 
     fn activity(&self, _call: &ToolCall) -> Option<ToolActivity> {
@@ -556,6 +597,109 @@ fn unavailable_persisted_hybrid_mode_does_not_silently_fallback_to_bm25() {
 }
 
 struct AskPolicy;
+
+#[test]
+fn app_hidden_routes_preserve_the_model_catalog_and_reject_retired_origins() {
+    let compose = |generation| {
+        let mut service =
+            FakeTools::catalog("external", 20, ActionSource::McpServer, "user:mcp:test");
+        service.app_only =
+            FakeTools::new("app_edit", ActionSource::McpServer, "user:mcp:test").definitions;
+        combine_tool_ports_at_generation(
+            vec![ToolPort::mcp(Arc::new(service), Arc::new(AskPolicy))],
+            ash_tools::ToolRegistryGeneration::new(generation),
+        )
+        .unwrap()
+    };
+    let ports = ReloadableToolPorts::new(compose(7));
+    let tools = ports.tools();
+    let model = tools.model_definitions(&Default::default()).unwrap();
+    assert_eq!(
+        model
+            .iter()
+            .map(|tool| tool.name.as_str())
+            .collect::<Vec<_>>(),
+        ["call_mcp_tool", "search_tools"]
+    );
+    let catalog = ports.catalog();
+    assert_eq!(
+        catalog
+            .iter()
+            .filter(|tool| tool.name == "external_7")
+            .count(),
+        1
+    );
+    let search = ToolCall {
+        id: ash_protocol::ToolCallId::new("app-search").unwrap(),
+        name: ToolName::new("search_tools").unwrap(),
+        arguments: serde_json::json!({"query":"external_7"}),
+    };
+    let review = tools.prepare(&search).unwrap();
+    let ExecutionDecision::RunUnsandboxed { grant_id } = ports
+        .policy()
+        .decide(&review, &ash_async_utils::CancellationSource::new().token())
+        .unwrap()
+    else {
+        panic!("read-only catalog search");
+    };
+    let ToolExecutionOutput::Success(output) = tools
+        .execute(
+            &search,
+            &ToolAuthorization::UnsandboxedGrant { grant_id },
+            &ash_async_utils::CancellationSource::new().token(),
+        )
+        .unwrap()
+    else {
+        panic!("catalog result");
+    };
+    let output: serde_json::Value = serde_json::from_str(&output).unwrap();
+    let entry = &output["tools"][0];
+    let origin = ToolCall {
+        id: ash_protocol::ToolCallId::new("app-origin").unwrap(),
+        name: ToolName::new("call_mcp_tool").unwrap(),
+        arguments: serde_json::json!({"tool":entry["name"],"catalog_digest":entry["catalog_digest"],"definition_digest":entry["definition_digest"],"arguments":{}}),
+    };
+    let binding = tools
+        .bind_call(&origin, ash_protocol::ToolCallCaller::Direct)
+        .unwrap()
+        .unwrap();
+    let (call, target) = tools
+        .resolve_app_tool_call(
+            &origin,
+            &binding,
+            "app_edit",
+            serde_json::json!({"value":8}),
+            ash_protocol::ToolCallId::new("app-edit").unwrap(),
+        )
+        .unwrap();
+    assert_eq!(call.name.as_str(), "app_edit");
+    assert_eq!(target.registry_generation, 7);
+    tools.validate_call_binding(&call, Some(&target)).unwrap();
+    assert_eq!(tools.model_definitions(&Default::default()).unwrap(), model);
+    assert!(
+        tools
+            .resolve_app_tool_call(
+                &origin,
+                &binding,
+                "other_server",
+                serde_json::json!({}),
+                ash_protocol::ToolCallId::new("app-forbidden").unwrap()
+            )
+            .is_err()
+    );
+    ports.replace(compose(8));
+    assert!(
+        tools
+            .resolve_app_tool_call(
+                &origin,
+                &binding,
+                "app_edit",
+                serde_json::json!({}),
+                ash_protocol::ToolCallId::new("app-retired").unwrap()
+            )
+            .is_err()
+    );
+}
 
 impl ActionPolicyService for AskPolicy {
     fn revision(&self) -> String {

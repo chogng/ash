@@ -151,6 +151,11 @@ pub enum ThreadEvent {
         thread_id: ThreadId,
         binding: TurnExecutionBinding,
     },
+    /// A complete voice span reduced by Core; never starts or steers an execution Turn.
+    VoiceTranscriptRecorded {
+        thread_id: ThreadId,
+        transcript: crate::VoiceTranscript,
+    },
     AgentContextSeedCommitted {
         thread_id: ThreadId,
         seed: Box<AgentContextSeed>,
@@ -429,6 +434,7 @@ impl ThreadEvent {
             Self::GoalCleared { .. } => "thread.goal_cleared",
             Self::UserGoalChanged { .. } => "thread.user_goal_changed",
             Self::TurnExecutionBound { .. } => "turn.execution_bound",
+            Self::VoiceTranscriptRecorded { .. } => "voice.transcript_recorded",
             Self::AgentContextSeedCommitted { .. } => "agent.context_seed_committed",
             Self::HistoryImported { .. } => "thread.history_imported",
             Self::ForkHistoryImported { .. } => "thread.fork_history_imported",
@@ -486,6 +492,7 @@ impl ThreadEvent {
             | Self::GoalCleared { thread_id, .. }
             | Self::UserGoalChanged { thread_id, .. }
             | Self::TurnExecutionBound { thread_id, .. }
+            | Self::VoiceTranscriptRecorded { thread_id, .. }
             | Self::AgentContextSeedCommitted { thread_id, .. }
             | Self::HistoryImported { thread_id, .. }
             | Self::ForkHistoryImported { thread_id, .. }

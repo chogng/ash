@@ -1,3 +1,11 @@
+import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
+import { ILogService, type LogEntry } from '../../../src/ash/platform/log/common/log.js';
+import { LogService } from '../../../src/ash/platform/log/common/logServiceImpl.js';
+import { IDialogsModel } from '../../../src/ash/workbench/common/dialogs.js';
+import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
+import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.js';
+import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.web.contribution.js';
+import { IVoiceService, type VoiceSessionState, type VoiceTaskRequest } from '../../../src/ash/platform/voice/common/voiceService.js';
 import { IWebviewService } from '../../../src/ash/workbench/contrib/webview/browser/webview.js';
 import '../../../src/ash/workbench/contrib/webview/browser/webview.contribution.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
@@ -13,7 +21,7 @@ import type { AppServerProtocolClient } from '../../../src/ash/platform/agentHos
 import type { ThreadTranscriptUpdateEnvelope as TranscriptDto, ServerNotification } from '../../../.build/protocol/typescript/index.js';
 import type { ThreadTranscriptUpdateEnvelope } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import { BrowserLayoutService, ILayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
-import { AccessibleViewType } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewType, IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewService } from '../../../src/ash/workbench/contrib/accessibility/browser/accessibleView.js';
 import '../../../src/ash/workbench/contrib/chat/browser/chat.contribution.js';
 import '../../../src/ash/base/browser/ui/styles.css';
@@ -33,6 +41,18 @@ import { StandaloneCommandService } from '../../../src/ash/editor/standalone/bro
 import { createTestEditorServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { chatTranscriptListItems, type IChatListItem } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatListItems.js';
 import { createAppServerAgentThreadService } from '../../../src/ash/platform/agentHost/browser/appServerAgentService.js';
+import { ChatWidget, type IChatWidgetModel } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatWidget.js';
+import { IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
+import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
+import { IContextViewService, type IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
+import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
+import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
+import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
+import { IDictationService } from '../../../src/ash/platform/dictation/common/dictationService.js';
+import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
+import { ILanguageModelsService } from '../../../src/ash/workbench/contrib/chat/common/languageModels.js';
+import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
+import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import type { ThreadTranscriptEntry } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import { ChatListWidget } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatListWidget.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../src/ash/workbench/common/contributions.js';
@@ -60,8 +80,15 @@ if (locale) {
 	setNlsMessages(locale, catalog.bundles);
 }
 const resources = new DisposableStore();
-const services = resources.add(createTestEditorServices(undefined, undefined, document));
+const appLogs: LogEntry[] = [];
+const parentServices = resources.add(new InstantiationService());
+parentServices.registerInstance(ILogService, resources.add(new LogService({ sinks: [{ log: entry => appLogs.push(entry) }] })));
+const services = resources.add(createTestEditorServices(undefined, parentServices, document));
 const theme = services.get(IThemeService) as TestThemeService;
+const dialogs = resources.add(new DialogService());
+services.registerInstance(IDialogService, dialogs);
+services.registerInstance(IDialogsModel, dialogs.model);
+resources.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(document.body)));
 resources.add(bindColorTheme(theme, document.body));
 let clipboardText = '';
 class Clipboard extends BrowserClipboardService {
@@ -146,34 +173,89 @@ document.body.append(root);
 services.registerInstance(ILayoutService, resources.add(new BrowserLayoutService({ root: document.body })));
 const accessibleView = resources.add(services.createInstance(AccessibleViewService));
 let imageReads = 0;
+const openedAppLinks: { uri: string; options: unknown; }[] = [];
+const appServices = resources.add(services.createChild());
+appServices.registerInstance(IOpenerService, { open: async (uri: URI, options: unknown) => { openedAppLinks.push({ uri: uri.toString(), options }); return true; } } as unknown as IOpenerService);
 const listOptions = { imageResourceLoader: async () => { imageReads++; return new Blob([new Uint8Array(imageBytes)], { type: 'image/png' }); } };
-let list = resources.add(services.createInstance(ChatListWidget, root, listOptions));
 let rendererItems: readonly IChatListItem[] = [];
+let list = resources.add(appServices.createInstance(ChatListWidget, root, listOptions));
 list.setVisible(true);
 const toolNotifications = resources.add(new Emitter<ServerNotification>());
-const appHtml = `<h1>Report</h1><output id="context"></output><output id="result"></output><output id="error"></output><button id="increment">Increment</button><button id="call">Call tool</button><output id="count">0</output>
+const connectionChanges = resources.add(new Emitter<void>());
+const appHtml = `<h1>Report</h1><output id="context"></output><output id="input"></output><output id="result"></output><output id="called"></output><output id="resource"></output><output id="binary"></output><output id="catalog"></output><output id="link-result"></output><output id="mode-result"></output><input id="link-url" aria-label="App link URL" value="https://example.com/report?view=8#result"><button id="open-link">Open external link</button><button id="fullscreen">Fullscreen</button><button id="inline">Inline</button><button id="pip">Picture in picture</button><button id="list-tools">List tools</button><output id="error"></output><output id="capabilities"></output><output id="context-ack"></output><output id="message-ack"></output><input aria-label="App context text" id="context-text" value="First context"><button id="update-context">Update context</button><button id="send-message">Send Chat message</button><button id="invalid-message">Invalid role</button><button id="increment">Increment</button><button id="call">Call tool</button><button id="cancel">Cancel call</button><button id="unsupported">Unsupported</button><button id="read">Read resource</button><button id="binary-read">Read binary</button><button id="logs">Send logs</button><button id="invalid-log">Invalid log</button><button id="large-log">Large log</button><button id="flood-log">Flood logs</button><output id="download-result"></output><button id="download-inline">Download inline</button><button id="download-linked">Download linked</button><button id="download-invalid">Invalid download</button><button id="download-cancel">Cancel download</button><output id="count">0</output>
 <script>
 let count = 0;
+let callId = 1;
 const rpc = message => parent.postMessage({jsonrpc:'2.0',...message}, '*');
 window.addEventListener('message', event => {
   if (event.source !== parent) return;
   const message = event.data;
   if (message.id === 1 && message.result) {
     document.querySelector('#context').textContent = JSON.stringify(message.result.hostContext);
+    document.querySelector('#capabilities').textContent = JSON.stringify(message.result.hostCapabilities);
     rpc({method:'ui/notifications/initialized',params:{}});
     rpc({method:'ui/notifications/size-changed',params:{height:240}});
+  } else if (message.method === 'ui/notifications/tool-input') {
+    document.querySelector('#input').textContent = JSON.stringify(message.params);
   } else if (message.method === 'ui/notifications/tool-result') {
     document.querySelector('#result').textContent = JSON.stringify(message.params);
   } else if (message.method === 'ui/notifications/host-context-changed') {
     document.querySelector('#context').textContent = JSON.stringify(message.params);
   } else if (message.error) document.querySelector('#error').textContent = JSON.stringify(message.error);
+  else if (message.result && message.id === 201) document.querySelector('#context-ack').textContent = JSON.stringify(message.result);
+  else if (message.result && message.id === 202) document.querySelector('#message-ack').textContent = JSON.stringify(message.result);
+  else if (message.result && message.id === 103) document.querySelector('#link-result').textContent = JSON.stringify(message.result);
+  else if (message.result && message.id === 301) document.querySelector('#download-result').textContent = JSON.stringify(message.result);
+  else if (message.result && message.id === 104) document.querySelector('#mode-result').textContent = JSON.stringify(message.result);
+  else if (message.result && message.id === 102) document.querySelector('#catalog').textContent = JSON.stringify(message.result);
+  else if (message.result && message.id === 100) document.querySelector('#resource').textContent = JSON.stringify(message.result);
+  else if (message.result && message.id === 101) document.querySelector('#binary').textContent = JSON.stringify(message.result);
+  else if (message.result && message.id === callId) document.querySelector('#called').textContent = JSON.stringify(message.result);
   else if (message.method === 'ui/resource-teardown') rpc({id:message.id,result:{}});
 });
 document.querySelector('#increment').onclick = () => { document.querySelector('#count').textContent = ++count; };
-document.querySelector('#call').onclick = () => rpc({id:2,method:'tools/call',params:{name:'unexpected',arguments:{}}});
+document.querySelector('#call').onclick = () => rpc({id:++callId,method:'tools/call',params:{name:'edit',arguments:{value:8}}});
+document.querySelector('#read').onclick = () => { callId = 100; rpc({id:callId,method:'resources/read',params:{uri:'file:///server/report.json'}}); };
+document.querySelector('#open-link').onclick = () => rpc({id:103,method:'ui/open-link',params:{url:document.querySelector('#link-url').value}});
+for (const mode of ['fullscreen','inline','pip']) document.querySelector('#'+mode).onclick = () => rpc({id:104,method:'ui/request-display-mode',params:{mode}});
+document.querySelector('#list-tools').onclick = () => rpc({id:102,method:'tools/list'});
+document.querySelector('#binary-read').onclick = () => rpc({id:101,method:'resources/read',params:{uri:'mcp://server/blob'}});
+document.querySelector('#cancel').onclick = () => rpc({method:'notifications/cancelled',params:{requestId:callId}});
+document.querySelector('#update-context').onclick = () => rpc({id:201,method:'ui/update-model-context',params:{content:[{type:'text',text:document.querySelector('#context-text').value}],structuredContent:{value:8}}});
+document.querySelector('#send-message').onclick = () => rpc({id:202,method:'ui/message',params:{role:'user',content:[{type:'text',text:'Follow-up from App'}]}});
+document.querySelector('#invalid-message').onclick = () => rpc({id:203,method:'ui/message',params:{role:'system',content:{type:'text',text:'untrusted instruction'}}});
+document.querySelector('#unsupported').onclick = () => rpc({id:99,method:'sampling/createMessage',params:{}});
+document.querySelector('#download-inline').onclick = () => rpc({id:301,method:'ui/download-file',params:{contents:[{type:'resource',resource:{uri:'file:///app/export.txt',mimeType:'text/plain',text:'中文\\r\\n<safe>\\r\\n'}}]}});
+document.querySelector('#download-linked').onclick = () => rpc({id:301,method:'ui/download-file',params:{contents:[{type:'resource_link',uri:'mcp://report/blob.bin',name:'../report.bin'}]}});
+document.querySelector('#download-invalid').onclick = () => rpc({id:301,method:'ui/download-file',params:{contents:[{type:'resource',resource:{uri:'mcp://report/blob.bin',blob:'Zh==',mimeType:'application/octet-stream'}}]}});
+document.querySelector('#download-cancel').onclick = () => rpc({method:'notifications/cancelled',params:{requestId:301}});
+document.querySelector('#logs').onclick = () => { for (const level of ['debug','info','notice','warning','error','critical','alert','emergency']) rpc({method:'notifications/message',params:{level,logger:'report',data:{value:8,text:'<script>unsafe()<\\/script>\\nnext line'}}}); };
+document.querySelector('#invalid-log').onclick = () => rpc({method:'notifications/message',params:{level:'other',data:'invalid'}});
+document.querySelector('#large-log').onclick = () => rpc({method:'notifications/message',params:{level:'info',data:'x'.repeat(9000)}});
+document.querySelector('#flood-log').onclick = () => { for (let i=0;i<50;i++) rpc({method:'notifications/message',params:{level:'info',data:i}}); };
 rpc({id:1,method:'ui/initialize',params:{protocolVersion:'2026-01-26',appInfo:{name:'report',version:'1'},appCapabilities:{availableDisplayModes:['inline']}}});
 </script>`;
 let appRequests = false;
+let allowAppCsp = false;
+let appCallMode: 'read' | 'delay' | 'error' = 'read';
+let appItems: readonly IChatListItem[] = [];
+let appChat: ChatWidget | undefined;
+let appChatThread = 'app-thread';
+let appChatGeneration = 0;
+const appChatMessages: unknown[] = [];
+const chatChanges = resources.add(new Emitter<void>());
+const voiceChanges = resources.add(new Emitter<void>());
+const voiceTasks = resources.add(new Emitter<VoiceTaskRequest>());
+let voiceSession: VoiceSessionState | undefined;
+const voiceControls: string[] = [];
+const voiceFixture: IVoiceService = {
+	isAvailable: true, get state() { return voiceSession; }, onDidChange: voiceChanges.event, onDidRequestTask: voiceTasks.event,
+	getOptions: async () => [{ connectionId: 'fixture', name: 'Voice fixture', defaultModel: 'speech', models: [] }],
+	start: async source => { voiceControls.push('start'); voiceSession = { ...source, resourceId: 'voice-media', mediaEpoch: (voiceSession?.mediaEpoch ?? 0) + 1, sequence: 1, state: 'connected', usageMilliseconds: 0 }; voiceChanges.fire(); return voiceSession; },
+	stop: async () => { voiceControls.push('stop'); if (voiceSession) voiceSession = { ...voiceSession, state: 'ended' }; voiceChanges.fire(); },
+	interrupt: async () => { voiceControls.push('interrupt'); if (voiceSession) voiceSession = { ...voiceSession, mediaEpoch: voiceSession.mediaEpoch + 1 }; voiceChanges.fire(); },
+	rejectTask: async () => { voiceControls.push('reject'); },
+};
 const appMessages: unknown[] = [];
 const webviews = services.get(IWebviewService);
 const observedViews = new Set<unknown>();
@@ -186,6 +268,7 @@ let completeLink: (() => void) | undefined;
 const linkBytes = new TextEncoder().encode('# Linked\r\n中文\r\n');
 const toolService = createAppServerAgentThreadService({
 	generation: 1,
+	onStateChange: (listener: () => void) => connectionChanges.event(listener),
 	onNotification: (listener: (notification: ServerNotification) => void) => toolNotifications.event(listener),
 	async request(definition: { method: string; }, params: unknown) {
 		linkRequests.push({ method: definition.method, params });
@@ -195,11 +278,37 @@ const toolService = createAppServerAgentThreadService({
 				if (linkMode === 'error') throw new Error('Resource origin retired');
 				const bytes = appRequests ? new TextEncoder().encode(appHtml) : linkBytes;
 				const digest = await crypto.subtle.digest('SHA-256', Uint8Array.from(bytes));
-				return { resourceId: 'linked', mimeType: appRequests ? 'text/html;profile=mcp-app' : 'text/markdown', size: bytes.length, sha256: `sha256:${[...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('')}` };
+				return { resourceId: 'linked', mimeType: appRequests ? 'text/html;profile=mcp-app' : 'text/markdown', size: bytes.length, sha256: `sha256:${[...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('')}`, ...(allowAppCsp ? { appCsp: { connectDomains: ['https://api.example.invalid'], resourceDomains: ['https://cdn.example.invalid'], frameDomains: ['https://frame.example.invalid'], baseUriDomains: ['https://base.example.invalid'] } } : {}) };
 			}
-			case 'resource/read': { const bytes = appRequests ? new TextEncoder().encode(appHtml) : linkBytes; return { resourceId: 'linked', offset: 0, decodedLength: bytes.length, dataBase64: btoa(String.fromCharCode(...bytes)), eof: true }; }
+			case 'tool/app/resource/open': {
+				if (appCallMode === 'delay') await new Promise<void>(resolve => { completeLink = resolve; });
+				if (appCallMode === 'error') throw new Error('Resource origin retired');
+				const binary = (params as { uri: string; }).uri.startsWith('mcp:');
+				const bytes = binary ? new Uint8Array([0, 127, 255]) : new TextEncoder().encode('{"value":8}\r\n');
+				const digest = await crypto.subtle.digest('SHA-256', Uint8Array.from(bytes));
+				return { resourceId: binary ? 'app-blob' : 'app-data', mimeType: binary ? 'text/plain' : 'application/vnd.example+json', encoding: binary ? 'binary' : 'text', resourceMetadata: '{"private":"view-only"}', size: bytes.length, sha256: `sha256:${[...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('')}` };
+			}
+			case 'resource/read': {
+				const id = (params as { resourceId: string; }).resourceId;
+				const bytes = id === 'app-blob' ? new Uint8Array([0, 127, 255]) : id === 'app-data' ? new TextEncoder().encode('{"value":8}\r\n') : appRequests ? new TextEncoder().encode(appHtml) : linkBytes; return { resourceId: id, offset: 0, decodedLength: bytes.length, dataBase64: btoa(String.fromCharCode(...bytes)), eof: true };
+			}
 			case 'resource/release': return null;
 			case 'tool/resource/cancel': return null;
+			case 'tool/app/list': return { tools: [{ name: 'edit', inputSchema: { type: 'object', properties: { value: { type: 'number' } } }, outputSchema: { type: 'object' }, annotations: { readOnlyHint: false }, _meta: { ui: { visibility: ['app'] } } }] };
+			case 'tool/app/call': {
+				if (appCallMode === 'delay') await new Promise<void>(resolve => { completeLink = resolve; });
+				if (appCallMode === 'error') throw new Error('App tool origin retired');
+				return {
+					item: {
+						type: 'toolResult', itemId: 'app-edit-result', turnId: 'app-edit-turn', toolCallId: 'app-edit', text: 'Edited report', isError: false, content: [
+							{ type: 'text', text: 'Edited report' },
+							{ type: 'artifact', artifact: { source: { type: 'structuredResult' }, mimeType: 'application/json', data: { type: 'json', json: '{"value":8}' }, contentDigest: 'sha256:result', truncated: false } },
+							{ type: 'artifact', artifact: { source: { type: 'viewMetadata' }, mimeType: 'application/json', data: { type: 'json', json: '{"viewOnly":8}' }, contentDigest: 'sha256:metadata', truncated: false } },
+						]
+					}
+				};
+			}
+			case 'tool/app/cancel': return null;
 			default: throw new Error(`Unexpected ${definition.method}`);
 		}
 	},
@@ -222,7 +331,7 @@ services.registerInstance(IAgentThreadService, {
 		mediaRequests.push(source);
 		signal?.addEventListener('abort', () => { mediaAborted = true; }, { once: true });
 		if (delayMedia) await new Promise<void>(resolve => { completeMedia = resolve; });
-		if (source.itemId === 'audio') return { bytes: new Uint8Array(await (await fetch(toneWav)).arrayBuffer()), mimeType: 'audio/wav' };
+		if (source.itemId === 'audio' || source.itemId === 'app-result' && source.contentIndex === 5) return { bytes: new Uint8Array(await (await fetch(toneWav)).arrayBuffer()), mimeType: 'audio/wav' };
 		return { bytes: imageBytes, mimeType: 'image/png' };
 	},
 });
@@ -260,13 +369,23 @@ declare global {
 			showMedia(delay: boolean): void;
 			showArtifacts(revise: boolean): void;
 			showLink(mode: 'read' | 'delay' | 'error'): void;
-			showApp(): void;
+			showApp(mode?: 'read' | 'delay' | 'error', allowCsp?: boolean, withMedia?: boolean): void;
+			showChatApp(voice?: boolean): void;
+			voiceState(): readonly string[];
+			proposeVoiceTask(): void;
+            delayAppResources(): void;
+            appLogs(): readonly LogEntry[];
+			retireChat(): void;
+			addUserContext(): void;
+			chatMessages(): readonly unknown[];
+			closeConnection(): void;
 			appState(): { messages: readonly unknown[]; views: number; };
 			linkRequests(): readonly { method: string; params: unknown; }[];
 			finishLink(): void;
 			readResource(uri: string): Promise<number[]>;
 			refreshMedia(): void;
 			finishMedia(): void;
+			openedAppLinks(): readonly { uri: string; options: unknown; }[];
 			mediaState(): { requests: readonly unknown[]; aborted: boolean; };
 			remove(): void;
 			dispose(): void;
@@ -347,28 +466,80 @@ window.ashChatTranscriptIntegration = {
 	},
 	linkRequests: () => linkRequests,
 	finishLink: () => completeLink?.(),
+	closeConnection: () => connectionChanges.fire(),
 	appState: () => ({ messages: appMessages, views: [...webviews.webviews].length }),
-	showApp: () => {
+	showChatApp: (voice = false) => {
+		window.ashChatTranscriptIntegration.showApp();
+		root.hidden = true;
+		const chatServices = resources.add(services.createChild());
+		chatServices.registerInstance(IAccessibleViewService, accessibleView);
+		chatServices.registerInstance(ILanguageModelsService, { onDidChangeModels: Event.None, isModelVisible: () => true } as unknown as ILanguageModelsService);
+		chatServices.registerInstance(IChatSessionNavigationService, { openConversation: async () => { throw new Error('Unexpected conversation navigation'); } } as unknown as IChatSessionNavigationService);
+		chatServices.registerInstance(IOpenerService, { open: async () => { throw new Error('Unexpected link opening'); } } as unknown as IOpenerService);
+		chatServices.registerInstance(IDictationService, undefined);
+		chatServices.registerInstance(IVoiceService, voice ? voiceFixture : undefined);
+		chatServices.registerSingleton(ISpeechService, () => chatServices.createInstance(SpeechService));
+		chatServices.registerSingleton(IMenuService, () => chatServices.createInstance(MenuService));
+		const contextView = resources.add(new BrowserContextViewService(document.body));
+		chatServices.registerInstance(IContextViewService, contextView);
+		chatServices.registerInstance(IDialogService, { confirm: async () => ({ confirmed: false }) } as unknown as IDialogService);
+		const contextMenus: IContextMenuService = { contextMenuStyle: 'custom', showContextMenu() { }, hideContextMenu() { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None };
+		const model: IChatWidgetModel = {
+			onDidChange: chatChanges.event, onDidChangeComposer: Event.None, get composerGeneration() { return appChatGeneration; }, sessionId: 'app-session', get threadId() { return appChatThread; }, untitledSessionId: undefined, goal: undefined, get items() { return appItems; },
+			inputState: { mode: 'plan', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false },
+			send: async (text, mode, _skills, contexts, submissionOptions) => { appChatMessages.push({ text, mode, contexts, ...(submissionOptions ? { commandId: submissionOptions.commandId, source: submissionOptions.source } : {}) }); },
+			executeServerCommand: async () => { }, interrupt: async () => { }, selectModel: async () => { }, selectReasoningEffort: async () => { }, selectAutomaticModel: async () => { },
+			listAgents: async () => [], selectAgent() { }, selectMode() { }, selectApprovalMode() { }, resolveInteraction: async () => { }, retryFailedTurn: async () => { }, dispose() { }, [Symbol.dispose]() { },
+		};
+		const container = document.createElement('main');
+		container.style.cssText = 'height:700px;width:800px';
+		document.body.append(container);
+		appChat = resources.add(chatServices.createInstance(ChatWidget, container, 'app-chat', model, () => { }, contextMenus, contextView, chatServices.get(ICommandService), accessibleView, chatServices.get(INotificationService), undefined, undefined, undefined, undefined));
+		appChat.setVisible(true);
+	},
+	addUserContext: () => appChat?.addContext({ id: 'private-file', kind: 'file', name: 'private.txt', resolve: async () => ({ name: 'private.txt', content: 'private file body' }) }),
+	retireChat: () => { appChatGeneration++; appChatThread = 'replacement-thread'; chatChanges.fire(); },
+	voiceState: () => voiceControls,
+	proposeVoiceTask: () => {
+		if (!voiceSession) throw new Error('Voice is not connected');
+		voiceTasks.fire({ ...voiceSession, delegationId: 'voice-proposal', commandId: 'voice-command', transcript: 'run tests <script>unsafe()</script>' });
+		appItems = [...appItems, ...chatTranscriptListItems([{ type: 'voiceTranscript', entryId: 'speech', transcript: { itemId: 'speech', voiceSessionId: voiceSession.resourceId, mediaEpoch: voiceSession.mediaEpoch, speaker: 'user', text: 'run tests <script>unsafe()</script>', startMs: 0, endMs: 100, afterItemId: null } }])];
+		chatChanges.fire();
+	},
+	appLogs: () => appLogs,
+    delayAppResources: () => { appCallMode = 'delay'; },
+	chatMessages: () => appChatMessages,
+	showApp: (mode = 'read', allowCsp = false, withMedia = false) => {
+		mediaRequests = [];
+		delayMedia = withMedia && mode === 'delay';
+		mediaAborted = false;
+		allowAppCsp = allowCsp;
 		appRequests = true;
+		appCallMode = mode;
 		linkMode = 'read';
 		linkRequests = [];
 		const update = receiveToolUpdate({
 			sessionId: 'app-session', threadId: 'app-thread', revision: 2, durableSequence: 1, changes: [
-				{ type: 'upsert', entry: { type: 'item', entryId: 'app-call', turnId: 'turn', transient: false, item: { type: 'toolCall', itemId: 'app-call', turnId: 'turn', toolCallId: 'report', name: 'report', argumentsJson: '{"value":7}' } } },
+				{ type: 'upsert', entry: { type: 'item', entryId: 'app-call', turnId: 'turn', transient: false, item: { type: 'toolCall', itemId: 'app-call', turnId: 'turn', toolCallId: 'report', name: 'report', argumentsJson: '{"tool":"report","arguments":{"value":7}}' } } },
 				{
 					type: 'upsert', entry: {
 						type: 'item', entryId: 'app-result', turnId: 'turn', transient: false, item: {
 							type: 'toolResult', itemId: 'app-result', turnId: 'turn', toolCallId: 'report', text: 'Report ready', isError: false, content: [
 								{ type: 'text', text: 'Report ready' },
 								{ type: 'artifact', artifact: { source: { type: 'structuredResult' }, mimeType: 'application/json', data: { type: 'json', json: '{"value":7}' }, contentDigest: 'sha256:result', truncated: false } },
-								{ type: 'artifact', artifact: { source: { type: 'mcpApp', uri: 'ui://report' }, mimeType: 'text/html;profile=mcp-app', data: { type: 'json', json: '{"viewOnly":"metadata"}' }, contentDigest: 'sha256:app', truncated: false } },
+								{ type: 'artifact', artifact: { source: { type: 'mcpApp', uri: 'ui://report' }, mimeType: 'text/html;profile=mcp-app', data: { type: 'json', json: '{"input":{"value":7}}' }, contentDigest: 'sha256:app', truncated: false } },
+								{ type: 'artifact', artifact: { source: { type: 'viewMetadata' }, mimeType: 'application/json', data: { type: 'json', json: '{"viewOnly":"metadata"}' }, contentDigest: 'sha256:metadata', truncated: false } },
+								...(withMedia ? [{ type: 'imageAttachment' as const, detail: 'auto' as const, attachment: { contentDigest: 'sha256:image', mediaType: 'png' as const, encodedBytes: imageBytes.length, width: 2, height: 1 } }, { type: 'audioAttachment' as const, attachment: { contentDigest: 'sha256:audio', mediaType: 'wav' as const, encodedBytes: 32044, durationMs: 1000 } }] : []),
+								{ type: 'artifact', artifact: { source: { type: 'embeddedResource', uri: 'docs://embedded' }, mimeType: 'text/plain', data: { type: 'text', text: 'Embedded content' }, resourceMetadata: '{"private":"resource-view-only"}', contentDigest: 'sha256:embedded', truncated: false } },
+								{ type: 'artifact', artifact: { source: { type: 'viewMetadata' }, mimeType: 'application/vnd.ash.mcp-content-metadata+json', data: { type: 'json', json: JSON.stringify([{ index: 0, annotations: { audience: ['user'], priority: 0.8 }, _meta: { private: 'text-view-only' } }, ...(withMedia ? [{ index: 4, _meta: { private: 'image-view-only' } }, { index: 5, annotations: { priority: 0.4 } }] : [])]) }, contentDigest: 'sha256:content-metadata', truncated: false } },
 							]
 						}
 					}
 				},
 			]
 		});
-		list.render(chatTranscriptListItems(update.changes.flatMap(change => change.type === 'upsert' ? [change.entry] : []), undefined, [], { sessionId: update.sessionId, threadId: update.threadId }));
+		appItems = chatTranscriptListItems(update.changes.flatMap(change => change.type === 'upsert' ? [change.entry] : []), undefined, [], { sessionId: update.sessionId, threadId: update.threadId });
+		list.render(appItems);
 	},
 	showLink: mode => {
 		appRequests = false;
@@ -416,6 +587,7 @@ window.ashChatTranscriptIntegration = {
 	},
 	refreshMedia: () => list.render(chatTranscriptListItems(mediaEntries, undefined, [], { sessionId: 'media-session', threadId: 'media-thread' })),
 	finishMedia: () => completeMedia?.(),
+	openedAppLinks: () => openedAppLinks,
 	mediaState: () => ({ requests: mediaRequests, aborted: mediaAborted }),
 	remove: () => list.render([]),
 	dispose: () => resources.dispose(),
