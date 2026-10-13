@@ -18,7 +18,11 @@ import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeSty
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
-import { Event } from '../../../src/ash/base/common/event.js';
+import { Emitter, Event } from '../../../src/ash/base/common/event.js';
+import { Keybinding, logicalKey, physicalKey, resolveKeybinding } from '../../../src/ash/base/common/keybindings.js';
+import { CommandRegistry, ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
+import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
+import { ShowAllCommandsCommandId } from '../../../src/ash/workbench/browser/quickaccess.js';
 import { DisposableStore, MutableDisposable, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
@@ -98,6 +102,9 @@ declare global {
 			readonly editorEvents: readonly string[];
 			readonly partEvents: readonly { id: string; focus?: boolean; visible: boolean; }[];
 			openEditor(name: string): Promise<void>;
+			resizeEditor(width: number, height: number): void;
+			setWatermarkBinding(command: string, key: string | null): void;
+			readonly watermarkCommands: readonly string[];
 			configureEditorTabs(style: ModernUIEditorTabStyle, sizing?: EditorTabSizing): Promise<void>;
 			setEditorTheme(id: string): void;
 			closeEditor(name: string): Promise<void>;
@@ -123,11 +130,13 @@ class FocusView extends ViewPane {
 }
 
 const resources = new DisposableStore();
-if (new URLSearchParams(location.search).has('editorTabs') || new URLSearchParams(location.search).has('badges')) {
+if (new URLSearchParams(location.search).has('editorTabs') || new URLSearchParams(location.search).has('badges') || new URLSearchParams(location.search).has('emptyEditor')) {
 	await import('../../../src/ash/base/browser/ui/iconlabel/iconlabel.css');
 }
-if (new URLSearchParams(location.search).has('badges')) {
+if (new URLSearchParams(location.search).has('badges') || new URLSearchParams(location.search).has('emptyEditor')) {
 	await import('../../../src/ash/workbench/browser/media/style.css');
+}
+if (new URLSearchParams(location.search).has('badges')) {
 	await import('../../../src/ash/workbench/browser/parts/activitybar/media/activitybarpart.css');
 }
 const uriIdentityServices = resources.add(new TestUriIdentityServices());
@@ -289,7 +298,28 @@ resources.add(editorRegistry.registerEditorPane({
 	id: CODE_EDITOR_ID, name: 'Text editor', canOpen: () => EditorPaneMatch.Default,
 	create: () => editorServices.createInstance(TextResourceEditor, resourceStore, { lineNumbers: 'on', createPart: options => StandaloneServices.initialize().createInstance(CodeEditorWidget, options) } satisfies EditorPaneOptions),
 }));
-const editor = resources.add(editorServices.createInstance(EditorPart, editorHost, { registry: editorRegistry, configurationService: editorServices.get(IConfigurationService) }));
+const watermarkBindings = new Map([
+	['workbench.action.quickOpen', resolveKeybinding(Keybinding.single(logicalKey('p', { primaryKey: true })))],
+	['workbench.action.findInFiles', resolveKeybinding(Keybinding.single(logicalKey('f', { primaryKey: true, shiftKey: true })))],
+	[ShowAllCommandsCommandId, resolveKeybinding(Keybinding.single(physicalKey('F1')))],
+]);
+const watermarkBindingChanges = resources.add(new Emitter<void>());
+const watermarkCommands: string[] = [];
+// The command registry isolates dispatch assertions from file/network services.
+const watermarkRegistry = new CommandRegistry();
+for (const command of watermarkBindings.keys()) {
+	resources.add(watermarkRegistry.register(command, () => { watermarkCommands.push(command); }));
+}
+const watermarkKeybindings = new URLSearchParams(location.search).has('emptyEditor') ? {
+	onDidUpdateKeybindings: watermarkBindingChanges.event,
+	lookupKeybinding: (command: string) => watermarkBindings.get(command),
+} as IKeybindingService : undefined;
+if (watermarkKeybindings) {
+	await import('../../../src/ash/workbench/browser/workbench.contribution.js');
+	editorServices.registerInstance(IKeybindingService, watermarkKeybindings);
+	editorServices.registerInstance(ICommandService, resources.add(new CommandService(editorServices, watermarkRegistry)));
+}
+const editor = resources.add(editorServices.createInstance(EditorPart, editorHost, { registry: editorRegistry, configurationService: editorServices.get(IConfigurationService), keybindingService: watermarkKeybindings }));
 editor.layout({ width: 800, height: 260 });
 const editorPanes = new Map<string, { pane: IEditorPane; control: unknown; }>();
 const editorEvents: string[] = [];
@@ -336,6 +366,17 @@ window.ashCompositeIntegration = {
 		return { hostWidth: host.clientWidth, hostHeight: host.clientHeight, paneWidth: bounds.width, paneHeight: bounds.height };
 	},
 	openEditor,
+	watermarkCommands,
+	setWatermarkBinding: (command, key) => {
+		if (key === null) watermarkBindings.delete(command);
+		else watermarkBindings.set(command, resolveKeybinding(Keybinding.single(physicalKey(key))));
+		watermarkBindingChanges.fire();
+	},
+	resizeEditor: (width, height) => {
+		editorHost.style.width = `${width}px`;
+		editorHost.style.height = `${height}px`;
+		editor.layout({ width, height });
+	},
 	configureEditorTabs: async (style, sizing = 'fit') => {
 		const configuration = editorServices.get(IConfigurationService);
 		await configuration.updateValue(WorkbenchConfiguration.modernUIEditorTabStyle, style);

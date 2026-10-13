@@ -821,6 +821,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			Math.max(0, dimension.height - (this.titleVisible ? this.titleControl.height : 0)),
 		);
 		this.panes.layout(this.dimension);
+		this.watermark?.layout(this.dimension.height);
 	}
 
 	public get titleHeight(): { readonly offset: number; readonly total: number; } {

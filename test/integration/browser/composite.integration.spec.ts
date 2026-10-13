@@ -6,6 +6,79 @@ test.beforeEach(async ({ page }) => {
 	await page.waitForFunction(() => !!window.ashCompositeIntegration);
 });
 
+for (const locale of ['en', 'zh-CN']) {
+	test(`empty editor actions follow bindings and stay centered (${locale})`, async ({ page }, testInfo) => {
+		await page.goto(`/composite.html?emptyEditor&locale=${locale}`);
+		await page.waitForFunction(() => !!window.ashCompositeIntegration);
+		const host = page.locator('#editor-tabs-host');
+		const shortcuts = host.locator('.ash-editor-group-watermark-shortcuts');
+		const entries = shortcuts.locator('.ash-editor-group-watermark-entries');
+		const rows = entries.getByRole('button');
+		const names = locale === 'zh-CN' ? ['打开文件', '在文件中搜索', '显示所有命令'] : ['Go to File', 'Search in Files', 'Show All Commands'];
+		await expect(rows).toHaveCount(3);
+		for (const name of names) await expect(entries.getByRole('button', { name, exact: true })).toBeVisible();
+		await expect(shortcuts.getByRole('heading')).toHaveText(locale === 'zh-CN' ? '开始工作' : 'Start Working');
+		const assertCentered = async () => {
+			const content = (await host.locator('.ash-editor-group-content').boundingBox())!;
+			const block = await entries.evaluate(element => {
+				const bounds = element.getBoundingClientRect();
+				const heading = element.previousElementSibling!;
+				const top = getComputedStyle(heading).display === 'none' ? bounds.top : heading.getBoundingClientRect().top;
+				return { x: bounds.x, width: bounds.width, y: top, height: bounds.bottom - top };
+			});
+			expect(block.x + block.width / 2).toBeCloseTo(content.x + content.width / 2, 0);
+			expect(block.y + block.height / 2).toBeCloseTo(content.y + content.height / 2, 0);
+			expect(block.x).toBeGreaterThanOrEqual(content.x + 24);
+			expect(block.x + block.width).toBeLessThanOrEqual(content.x + content.width - 24);
+			expect(block.y).toBeGreaterThanOrEqual(content.y);
+			expect(block.y + block.height).toBeLessThanOrEqual(content.y + content.height);
+		};
+		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+			await page.evaluate(theme => window.ashCompositeIntegration.setEditorTheme(theme), theme);
+			await expect(rows.nth(0).locator('kbd')).toHaveText(['⌘', 'P']);
+			await expect(rows.nth(1).locator('kbd')).toHaveText(['⇧', '⌘', 'F']);
+			const caps = await entries.locator('kbd').evaluateAll(elements => elements.map(element => {
+				const bounds = element.getBoundingClientRect();
+				const style = getComputedStyle(element);
+				return { width: bounds.width, height: bounds.height, background: style.backgroundColor };
+			}));
+			for (const cap of caps) {
+				expect(cap.width).toBe(22);
+				expect(cap.height).toBe(22);
+				expect(cap.background).not.toBe('rgba(0, 0, 0, 0)');
+			}
+			for (const [width, height] of [[800, 520], [320, 180]]) {
+				await page.evaluate(([width, height]) => window.ashCompositeIntegration.resizeEditor(width!, height!), [width!, height!]);
+				await assertCentered();
+			}
+			await page.evaluate(() => window.ashCompositeIntegration.resizeEditor(800, 520));
+			await host.screenshot({ path: testInfo.outputPath(`${theme}-empty-editor.png`) });
+		}
+		await rows.nth(0).click();
+		await rows.nth(1).focus();
+		await rows.nth(1).press('Enter');
+		await rows.nth(1).press('Tab');
+		await expect(rows.nth(2)).toBeFocused();
+		await expect(rows.nth(2)).toHaveCSS('outline-style', 'solid');
+		await page.evaluate(() => window.ashCompositeIntegration.setWatermarkBinding('workbench.action.showCommands', 'F2'));
+		await expect(rows.nth(2).locator('.ash-keybinding-label')).toHaveText('F2');
+		await expect(rows.nth(2)).toBeFocused();
+		await page.evaluate(() => window.ashCompositeIntegration.setWatermarkBinding('workbench.action.showCommands', null));
+		await expect(rows.nth(2).locator('.ash-keybinding-label')).toHaveCount(0);
+		await expect(rows.nth(2)).toBeFocused();
+		await rows.nth(2).press('Space');
+		await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.watermarkCommands)).toEqual([
+			'workbench.action.quickOpen', 'workbench.action.findInFiles', 'workbench.action.showCommands',
+		]);
+		await page.evaluate(() => window.ashCompositeIntegration.openEditor('watermark'));
+		await expect(shortcuts).toBeHidden();
+		await expect(host.locator('.ash-editor-pane-host:visible')).toHaveCount(1);
+		await page.evaluate(() => window.ashCompositeIntegration.closeEditor('watermark'));
+		await expect(rows).toHaveCount(3);
+		await assertCentered();
+	});
+}
+
 test('activity badges keep compact icons readable, center label counts and retain full accessible descriptions', async ({ page }, testInfo) => {
 	await page.goto('/composite.html?badges');
 	await page.waitForFunction(() => !!window.ashCompositeIntegration);

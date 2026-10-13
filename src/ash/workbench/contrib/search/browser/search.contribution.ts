@@ -4,6 +4,7 @@ import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { localize2 } from '../../../../nls.js';
 import { SEARCH_VIEW_ID, FOCUS_SEARCH_COMMAND_ID } from '../common/constants.js';
 import { Lxicon } from "../../../../base/common/lxicons.js";
+import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { SyncDescriptor } from "../../../../platform/instantiation/common/descriptors.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
 import { SearchView } from "./searchView.js";
@@ -25,7 +26,10 @@ registerSingleton(IReplaceService, ReplaceService, InstantiationType.Delayed);
 
 registerAction2(class FocusSearchAction extends Action2 {
 	constructor() {
-		super({ id: FOCUS_SEARCH_COMMAND_ID, title: localize2('search.focus', 'Search in Files'), f1: true });
+		super({
+			id: FOCUS_SEARCH_COMMAND_ID, title: localize2('search.focus', 'Search in Files'), f1: true,
+			keybinding: { primary: Keybinding.single(logicalKey('f', { primaryKey: true, shiftKey: true })) },
+		});
 	}
 	override run(accessor: ServicesAccessor): Promise<boolean> {
 		return accessor.get(IViewsService).focusView(SEARCH_VIEW_ID);

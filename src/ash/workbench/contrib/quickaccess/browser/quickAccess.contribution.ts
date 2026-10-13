@@ -1,4 +1,5 @@
 import { MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import '../../../browser/actions/quickAccessActions.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { EditorContextKeys } from '../../../../editor/common/editorContextKeys.js';
 import { ShowAllCommandsCommandId } from '../../../browser/quickaccess.js';

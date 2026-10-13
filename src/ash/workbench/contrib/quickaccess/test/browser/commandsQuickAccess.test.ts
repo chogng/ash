@@ -1,3 +1,4 @@
+import '../../../../../editor/test/browser/testEditorDom.js';
 import type { IQuickPickDidAcceptEvent } from '../../../../../platform/quickinput/common/quickInput.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -16,7 +17,7 @@ import { formatNlsMessage, localize2, resetNlsResolver, setNlsResolver } from '.
 import { filterQuickPickItems } from '../../../../../platform/quickinput/browser/quickInputList.js';
 import { MenuId, MenusRegistry, IMenuService } from '../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
-import { CommandRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { CommandRegistry, CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IDialogService, DialogResult, DialogSeverity } from '../../../../../platform/dialogs/common/dialogs.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
@@ -30,6 +31,27 @@ import { ICodeEditorService } from '../../../../../editor/browser/services/codeE
 import { CodeEditorService } from '../../../../services/editor/browser/codeEditorService.js';
 import { IEditorPartsService } from '../../../../browser/parts/editor/editorParts.js';
 import type { ICodeEditor } from '../../../../../editor/browser/editorBrowser.js';
+import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
+import { IViewsService } from '../../../../services/views/common/viewsService.js';
+import { KeybindingsRegistry } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
+import '../../../search/browser/search.contribution.js';
+
+test('empty-editor navigation commands open the file picker and focus file search', async () => {
+	using services = new InstantiationService();
+	const prefixes: string[] = [];
+	const views: string[] = [];
+	services.registerInstance(IQuickInputService, { quickAccess: { show: (prefix: string) => { prefixes.push(prefix); } } } as unknown as IQuickInputService);
+	services.registerInstance(IViewsService, { focusView: async (id: string) => { views.push(id); return true; } } as unknown as IViewsService);
+	using commands = new CommandService(services, CommandsRegistry);
+	await commands.executeCommand('workbench.action.quickOpen');
+	await commands.executeCommand('workbench.action.findInFiles');
+	assert.deepEqual(prefixes, ['']);
+	assert.deepEqual(views, ['ash.searchView']);
+	const registered = KeybindingsRegistry.getKeybindings();
+	for (const command of ['workbench.action.quickOpen', 'workbench.action.findInFiles']) {
+		assert.ok(registered.some(rule => 'command' in rule && rule.command === command));
+	}
+});
 
 function registerHistoryServices(services: InstantiationService, resources: DisposableStore): void {
 	const dom = new JSDOM('', { url: 'https://ash.test' });

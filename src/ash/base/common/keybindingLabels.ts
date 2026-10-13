@@ -14,6 +14,8 @@ export enum KeybindingLabelStyle {
 export interface KeybindingLabelPart {
 	readonly label: string;
 	readonly ariaLabel: string;
+	/** Individual keys, preserving layout labels such as "+" and "Page Up". */
+	readonly keys: readonly string[];
 }
 
 /** Returns one visual and accessible label for each chord. */
@@ -21,6 +23,7 @@ export function getKeybindingLabelParts(
 	keybinding: ResolvedKeybinding,
 ): readonly KeybindingLabelPart[] {
 	return keybinding.chords.map((chord) => ({
+		keys: chordLabelParts(chord, keybinding.operatingSystem, KeybindingLabelStyle.UI),
 		label: formatChord(
 			chord,
 			keybinding.operatingSystem,
@@ -52,12 +55,23 @@ function formatChord(
 	operatingSystem: OperatingSystem,
 	style: KeybindingLabelStyle,
 ): string {
+	if (style === KeybindingLabelStyle.UserSettings) {
+		return singleModifierLabel(chord, operatingSystem, style) ?? formatUserSettingsChord(chord, operatingSystem);
+	}
+	const labels = style === KeybindingLabelStyle.Aria
+		? ariaModifierLabels(operatingSystem)
+		: uiModifierLabels(operatingSystem);
+	return chordLabelParts(chord, operatingSystem, style).join(labels.separator);
+}
+
+function chordLabelParts(
+	chord: ResolvedKeybindingChord,
+	operatingSystem: OperatingSystem,
+	style: KeybindingLabelStyle.UI | KeybindingLabelStyle.Aria,
+): string[] {
 	const singleModifier = singleModifierLabel(chord, operatingSystem, style);
 	if (singleModifier) {
-		return singleModifier;
-	}
-	if (style === KeybindingLabelStyle.UserSettings) {
-		return formatUserSettingsChord(chord, operatingSystem);
+		return [singleModifier];
 	}
 
 	const labels = style === KeybindingLabelStyle.Aria
@@ -69,7 +83,7 @@ function formatChord(
 	if (chord.altKey) parts.push(labels.alt);
 	if (chord.metaKey) parts.push(labels.meta);
 	parts.push(displayKey(chord));
-	return parts.join(labels.separator);
+	return parts;
 }
 
 function singleModifierLabel(

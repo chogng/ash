@@ -1,9 +1,15 @@
 .ash-editor-group-watermark-shortcuts {
+	position: absolute;
+	inset: 0;
 	display: flex;
-	width: min(440px, calc(100% - 48px));
-	gap: 8px;
+	box-sizing: border-box;
+	padding: 24px;
+	gap: 20px;
 	flex-direction: column;
+	align-items: center;
+	justify-content: center;
 	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body1);
 }
 
 .ash-editor-group-watermark-shortcuts:empty,
@@ -11,25 +17,82 @@
 	display: none;
 }
 
+.ash-editor-group-watermark-heading {
+	width: min(320px, 100%);
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0 8px;
+	color: var(--ash-foreground);
+	font-size: var(--ash-fontSize-heading2);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-editor-group-watermark-entries {
+	display: flex;
+	width: min(320px, 100%);
+	flex-direction: column;
+	gap: 4px;
+}
+
+.ash-editor-group-watermark-shortcuts.compact
+	.ash-editor-group-watermark-heading {
+	display: none;
+}
+
 .ash-editor-group-watermark-entry {
 	display: grid;
-	min-height: 24px;
+	width: 100%;
+	min-height: 36px;
+	padding: 8px;
+	border: 0;
+	border-radius: var(--ash-cornerRadius-small);
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	text-align: left;
 	grid-template-columns: minmax(0, 1fr) auto;
-	gap: 24px;
+	gap: 20px;
 	align-items: center;
 }
 
+.ash-editor-group-watermark-entry:hover {
+	background: var(--ash-list-hoverBackground);
+	color: var(--ash-foreground);
+}
+
+.ash-editor-group-watermark-entry:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}
+
+.ash-editor-group-watermark-name {
+	display: flex;
+	min-width: 0;
+	gap: 12px;
+	align-items: center;
+}
+
+.ash-editor-group-watermark-name .ash-icon {
+	flex-shrink: 0;
+}
+
 .ash-editor-group-watermark-label {
-	overflow: hidden;
-	text-align: right;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	overflow-wrap: anywhere;
 }
 
-.ash-editor-group-watermark-shortcuts .ash-keybinding-label {
-	min-width: 118px;
+.ash-editor-group-watermark-entry .ash-keybinding-label {
+	justify-self: end;
 }
 
-.ash-editor-group-watermark-shortcuts .ash-keybinding-label:empty {
-	display: none;
+.ash-editor-group-watermark-entry .ash-keybinding-label-keycap kbd {
+	display: inline-flex;
+	box-sizing: border-box;
+	min-width: 22px;
+	height: 22px;
+	padding: 0 2px;
+	align-items: center;
+	justify-content: center;
+	border-color: var(--ash-contrastBorder, transparent);
+	box-shadow: none;
+	font-size: var(--ash-fontSize-label1);
 }

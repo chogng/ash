@@ -582,6 +582,8 @@ test("EditorPart applies empty-editor tips changes without showing them over an 
 	using services = new InstantiationService();
 	services.registerInstance(IKeybindingService, keybindings);
 	services.registerInstance(IConfigurationService, configuration);
+	using commands = new CommandService(services);
+	services.registerInstance(ICommandService, commands);
 	await assert.rejects(configuration.updateValue('workbench.tips.enabled', 'false'), /must be boolean/);
 	keybindings.set(
 		"test.openEditor",

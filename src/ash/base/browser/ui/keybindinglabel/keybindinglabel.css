@@ -16,3 +16,13 @@
 	font: inherit;
 	text-align: center;
 }
+
+.ash-keybinding-label-keycap {
+	gap: 8px;
+}
+
+.ash-keybinding-label-chord {
+	display: inline-flex;
+	gap: 4px;
+	align-items: center;
+}

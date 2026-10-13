@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "mocha";
 import {
 	getKeybindingLabel,
+	getKeybindingLabelParts,
 	KeybindingLabelStyle,
 } from "../../common/keybindingLabels.js";
 import {
@@ -125,6 +126,21 @@ test("portable primary modifiers resolve and format for each OS", () => {
 		getKeybindingLabel(mac, KeybindingLabelStyle.UserSettings),
 		"cmd+n",
 	);
+});
+
+test("keycap labels preserve individual keys and chord boundaries across platforms", () => {
+	const binding = Keybinding.chord(
+		logicalKey("+", { primaryKey: true, shiftKey: true }),
+		logicalKey("PageUp"),
+	);
+	for (const [os, modifiers] of [
+		[OperatingSystem.Macintosh, ["⇧", "⌘"]],
+		[OperatingSystem.Windows, ["Ctrl", "Shift"]],
+		[OperatingSystem.Linux, ["Ctrl", "Shift"]],
+	] as const) {
+		const parts = getKeybindingLabelParts(resolveKeybinding(binding, os));
+		assert.deepEqual(parts.map(part => part.keys), [[...modifiers, "+"], ["Page Up"]]);
+	}
 });
 
 test("VS Code numeric keybindings decode into the canonical keybinding model", () => {
