@@ -28,6 +28,7 @@ import { SessionSyncChangesActionViewItem } from './sessionSyncChanges.js';
 import { CreatePullRequestContextView } from './createPullRequestContextView.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { IChangesViewService } from '../common/changesViewService.js';
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { ChangesViewMode } from '../common/changes.js';
 import {
 	buildTreeChildren, ChangesTreeRenderer, fileState,
@@ -52,7 +53,6 @@ export class ChangesViewPane extends ViewPane {
 	private readonly modePicker: HTMLSelectElement;
 	private readonly markReviewed: Button;
 	private readonly markUnread: Button;
-	private changesetId: string | undefined;
 	private viewMode = ChangesViewMode.List;
 	private stateResource: URI | undefined;
 	private request = 0;
@@ -79,6 +79,7 @@ export class ChangesViewPane extends ViewPane {
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IChangesViewService private readonly viewState: IChangesViewService,
 		@ISessionChangesService private readonly changesService: ISessionChangesService,
+		@IStorageService storage: IStorageService,
 	) {
 		super(container, options);
 		this.contentElement.classList.add('ash-sessions-changes');
@@ -87,11 +88,17 @@ export class ChangesViewPane extends ViewPane {
 		this.contentElement.append(this.statusDomNode);
 		this.review = this._register(new Button(this.contentElement, {
 			label: localize('sessions.changes.review', 'Review all changes'),
-			onClick: () => { void this.openReview().catch(error => this.notifications.error(getErrorMessage(error))); },
+			onClick: () => {
+				const epoch = this.ownerEpoch;
+				void this.openReview().catch(error => this.reportOperationError(error, epoch));
+			},
 		}));
 		this.preview = this._register(new Button(this.contentElement, {
 			label: localize('sessions.changes.previewSelected', 'Preview selected changes'),
-			onClick: () => { void this.previewSelection().catch(error => this.notifications.error(getErrorMessage(error))); },
+			onClick: () => {
+				const epoch = this.ownerEpoch;
+				void this.previewSelection().catch(error => this.reportOperationError(error, epoch));
+			},
 		}));
 		this.preview.enabled = false;
 		this.review.enabled = false;
@@ -175,7 +182,19 @@ export class ChangesViewPane extends ViewPane {
 			this.tree.rerender();
 			this.updatePreviewSelection();
 		}));
-		this._register(this.tree.onDidChangeSelection(() => this.updatePreviewSelection()));
+		this._register(autorun(reader => {
+			const id = viewState.getChangesetId(this.stateResource, reader);
+			if (!this.loading && this.rows.length && this.changesetPicker.value !== (id ?? '')) {
+				this.changesetPicker.value = id ?? '';
+				this.renderRows();
+			}
+		}));
+		this._register(this.tree.onDidChangeSelection(event => {
+			this.updatePreviewSelection();
+			if (event.browserEvent) { this.saveTreeState(); }
+		}));
+		this._register(this.tree.onDidChangeFocus(event => { if (event.browserEvent) { this.saveTreeState(); } }));
+		this._register(this.tree.onDidChangeCollapseState(event => { if (event.browserEvent) { this.saveTreeState(); } }));
 		const scoped = this._register(contextKeys.createScoped(this.contentElement));
 		scoped.createKey('sessionsChangesFocused', true);
 		const updateHint = (): void => {
@@ -186,7 +205,13 @@ export class ChangesViewPane extends ViewPane {
 		this._register(configuration.onDidChangeConfiguration(updateHint));
 		updateHint();
 		this._register(this.tree.onDidOpen(event => {
-			if (isChangesFileItem(event.element)) { void this.openFile(event.element, event.editorOptions, event.sideBySide).catch(error => this.notifications.error(getErrorMessage(error))); }
+			const epoch = this.ownerEpoch;
+			if (isChangesFileItem(event.element)) {
+				const resource = getChangesEditorFileResource(event.element);
+				void this.openFile(event.element, event.editorOptions, event.sideBySide).catch(error => {
+					if (findChangesEditorFileChange(resource, this.rows)) { this.reportOperationError(error, epoch); }
+				});
+			}
 		}));
 		this._register(sessions.onDidChange(() => { void this.refresh(); }));
 		this._register(chat.onDidUpdateTurnChanges(event => {
@@ -195,6 +220,7 @@ export class ChangesViewPane extends ViewPane {
 		}));
 		this._register(chat.onDidBecomeReady(() => { void this.refresh(); }));
 		this._register(addDisposableListener(this.tree.domNode, 'focus', updateHint));
+		this._register(storage.onWillSaveState(() => this.saveTreeState()));
 	}
 
 	public override setVisible(visible: boolean): void {
@@ -215,6 +241,18 @@ export class ChangesViewPane extends ViewPane {
 	}
 
 	public focus(): void { this.tree.domFocus(); }
+
+	public override dispose(): void {
+		if (this.isDisposed) { return; }
+		this.saveTreeState();
+		this.request++;
+		this.ownerEpoch++;
+		super.dispose();
+	}
+
+	private reportOperationError(error: unknown, epoch: number): void {
+		if (!this.isDisposed && this.isVisible() && epoch === this.ownerEpoch) { this.notifications.error(getErrorMessage(error)); }
+	}
 
 	public getAccessibleContent(): string {
 		const selected = new Set(this.tree.selection);
@@ -247,6 +285,15 @@ export class ChangesViewPane extends ViewPane {
 
 	private visibleRows(): readonly IChangesFileItem[] {
 		return this.changesetId ? this.rows.filter(row => row.summary.changeSetId === this.changesetId) : this.rows;
+	}
+
+	private get changesetId(): string | undefined {
+		return this.stateResource ? this.viewState.getChangesetId(this.stateResource) : undefined;
+	}
+
+	private set changesetId(id: string | undefined) {
+		if (!this.stateResource) { return; }
+		this.viewState.setChangesetId(id, this.stateResource);
 	}
 
 	private setReviewState(reviewed: boolean): void {
@@ -305,13 +352,14 @@ export class ChangesViewPane extends ViewPane {
 		this.retry.domNode.hidden = true;
 		this.tree.domNode.setAttribute('aria-busy', 'true');
 		const selection = this.sessions.activeSelection;
-		const owner = selection?.kind === 'session' ? `${selection.active.session.sessionId}:${selection.active.threadId}` : undefined;
+		const resource = selection ? new SessionChangesEditorInput(selection).resource : undefined;
+		const owner = selection?.kind === 'session' ? resource!.toString() : undefined;
 		const ownerChanged = owner !== this.owner;
 		if (ownerChanged) { this.ownerEpoch++; }
 		this.owner = owner;
-		this.stateResource = selection ? new SessionChangesEditorInput(selection).resource : undefined;
-		if (ownerChanged) { this.changesetId = undefined; }
+		this.stateResource = resource;
 		if (ownerChanged || !owner) {
+			this.changesetPicker.replaceChildren();
 			this.rows = [];
 			this.tree.setChildren([]);
 			this.review.enabled = false;
@@ -349,6 +397,7 @@ export class ChangesViewPane extends ViewPane {
 				option.textContent = localize('sessions.changes.turn', 'Turn {0}', index + 1);
 				this.changesetPicker.append(option);
 			}
+			// Only an authoritative successful catalogue can clear a missing preference.
 			this.changesetId = details.some(entry => entry.summary.changeSetId === selectedTurn) ? selectedTurn : undefined;
 			this.changesetPicker.value = this.changesetId ?? '';
 			this.renderRows();
@@ -363,7 +412,7 @@ export class ChangesViewPane extends ViewPane {
 		} finally {
 			if (!this.isDisposed && request === this.request) {
 				this.loading = false;
-				this.changesetPicker.disabled = false;
+				this.changesetPicker.disabled = !this.retry.domNode.hidden;
 				this.updatePreviewSelection();
 				this.tree.domNode.removeAttribute('aria-busy');
 			}
@@ -393,6 +442,7 @@ export class ChangesViewPane extends ViewPane {
 		const message = await this.quickInput.input({ title: localize('sessions.changes.commitMessage', 'Commit message'), validateInput: async value => value.trim() ? undefined : localize('sessions.changes.messageRequired', 'Enter a commit message.') });
 		if (message === undefined || this.isDisposed || ownerEpoch !== this.ownerEpoch) { return; }
 		const preview = await this.chat.prepareTurnCommit(active.session.sessionId, active.threadId, [...grouped.values()], message);
+		if (this.isDisposed || ownerEpoch !== this.ownerEpoch) { return; }
 		const input = await createTurnCommitPreviewInput(this.chat, active.session.sessionId, active.threadId, preview);
 		if (this.isDisposed || ownerEpoch !== this.ownerEpoch) { return; }
 		await this.editors.openEditor(input, { pinned: true });
@@ -407,6 +457,11 @@ export class ChangesViewPane extends ViewPane {
 		// A refresh can replace a capture without changing the selected conversation.
 		if (this.isDisposed || ownerEpoch !== this.ownerEpoch || this.loading || !findChangesEditorFileChange(resource, this.rows)) { return; }
 		if (contents.truncated && !contents.binary) { throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.')); }
+		const current = await this.chat.readTurnChange(summary.sessionId, summary.threadId, summary.changeSetId);
+		if (this.isDisposed || ownerEpoch !== this.ownerEpoch || this.loading || !findChangesEditorFileChange(resource, this.rows)) { return; }
+		if (current.summary.revision !== summary.revision || current.summary.captureState === 'discarded') {
+			throw new Error(localize('sessions.changes.captureChanged', 'This Turn capture changed while loading. Reopen its changes to review the latest revision.'));
+		}
 		const before = resource.with({ query: `${resource.query}&side=before` });
 		const after = resource.with({ query: `${resource.query}&side=after` });
 		if (contents.binary) {

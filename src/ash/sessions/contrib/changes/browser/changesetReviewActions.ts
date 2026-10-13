@@ -24,10 +24,23 @@ export class ChangesetReviewAction extends Action2 {
 		const editors = accessor.get(IEditorPart);
 		const pane = editors.activePane;
 		if (!(pane instanceof SessionChangesEditor)) { return; }
-		const change = await pane.getFileChange(resource, { review: true });
-		if (!change || editors.activePane !== pane) { return; }
 		const state = accessor.get(IChangesViewService);
-		const reviewed = !state.reviewedFilesObs.get().has(change.uri.toString());
+		const reviewedAtStart = state.reviewedFilesObs.get();
+		let previous = reviewedAtStart;
+		const changedResources = new Set<string>();
+		// A later edit to this file supersedes the toggle, including an edit that returns it to its original state.
+		using reviewChanges = state.reviewedFilesObs.onDidChange(() => {
+			const current = state.reviewedFilesObs.get();
+			for (const uri of previous) { if (!current.has(uri)) { changedResources.add(uri); } }
+			for (const uri of current) { if (!previous.has(uri)) { changedResources.add(uri); } }
+			previous = current;
+		});
+		const change = await pane.getFileChange(resource, { review: true }).catch(error => {
+			if (editors.activePane !== pane) { return undefined; }
+			throw error;
+		});
+		if (!change || editors.activePane !== pane || changedResources.has(change.uri.toString())) { return; }
+		const reviewed = !reviewedAtStart.has(change.uri.toString());
 		state.setChangesetFilesReviewState([change.uri], reviewed);
 		if (reviewed) { pane.collapse(resource); } else { pane.expand(resource); }
 	}

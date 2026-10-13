@@ -700,6 +700,157 @@ for (const locale of ['en', 'zh-CN'] as const) {
 	});
 }
 
+for (const locale of ['en', 'zh-CN'] as const) test(`session Changes restores its capture, Viewed and comparison state after a window reload (${locale})`, async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto(`/diff.html?locale=${locale}&multipleSession=1&restoreSession=1`);
+	await page.waitForFunction(() => !!window.ashDiffIntegration);
+	await page.evaluate(() => window.ashDiffIntegration.openSessionChanges());
+	await page.evaluate(() => window.ashDiffIntegration.selectSessionCapture('review-later'));
+	const row = page.locator('#session-changes .stanza-multi-diff-editor-section').filter({ has: page.getByText('file-0.ts', { exact: true }) });
+	const viewed = row.getByRole('button', { name: localized(locale, 'Viewed', '已查看'), exact: true });
+	await viewed.click();
+	await expect(viewed).toHaveAttribute('aria-pressed', 'true');
+	expect(await page.evaluate(() => window.localStorage.getItem('ash.storage.workspace.diff-integration'))).toContain('review-later');
+	await page.evaluate(() => window.ashDiffIntegration.saveSessionWindow());
+	await page.reload();
+	await expect(page.locator('#session-changes .ash-sessions-editor-message')).toBeHidden();
+	expect(await page.evaluate(() => window.localStorage.getItem('ash.storage.workspace.diff-integration'))).toContain('review-later');
+	expect(await page.evaluate(() => window.ashDiffIntegration.sessionReviewState())).toEqual(['ash-turn-diff:/review-later/file-0.ts?session=review&thread=review-thread&revision=1']);
+	await expect(viewed).toHaveAttribute('aria-pressed', 'true');
+	await expect(row.getByRole('button', { name: /file-0.ts/ })).toHaveAttribute('aria-expanded', 'false');
+	await expect.poll(() => page.locator('#session-changes-label .ash-icon-label').evaluate(element => getComputedStyle(element, '::after').content)).toBe('"2"');
+	await page.evaluate(() => window.ashDiffIntegration.advanceSessionRevision());
+	await expect(page.locator('#session-changes .ash-sessions-editor-message')).toBeHidden();
+	await expect(viewed).toHaveAttribute('aria-pressed', 'false');
+	await expect(row.getByRole('button', { name: /file-0.ts/ })).toHaveAttribute('aria-expanded', 'true');
+	expect(errors).toEqual([]);
+});
+
+for (const failed of [false, true]) test(`session Changes releases a pending Viewed query on close before its old read ${failed ? 'fails' : 'completes'}`, async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await openDiffPage(page);
+	await page.evaluate(() => window.ashDiffIntegration.openSessionChanges());
+	await page.evaluate(() => window.ashDiffIntegration.reviewSessionFile(1));
+	await page.evaluate(() => window.ashDiffIntegration.beginDelayedSessionReview());
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionReviewReadStarted())).toBe(true);
+	await page.evaluate(() => window.ashDiffIntegration.closeSessionChanges());
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.pendingViewedOutcome())).toBe('finished');
+	await expect(page.locator('#session-changes .stanza-multi-diff-editor')).toHaveCount(0);
+	await page.evaluate(() => window.ashDiffIntegration.refreshDuringSessionReview());
+	await page.evaluate(() => window.ashDiffIntegration.reopenClosedSessionChanges());
+	await expect(page.locator('#session-changes .ash-sessions-editor-message')).toBeHidden();
+	await page.evaluate(() => window.ashDiffIntegration.reviewSessionFile(0));
+	await page.evaluate(failed => window.ashDiffIntegration.releaseSupersededSessionRead(failed), failed);
+	expect([...await page.evaluate(() => window.ashDiffIntegration.sessionReviewState())].sort()).toEqual([0, 1].map(index => `ash-turn-diff:/review-change/file-${index}.ts?session=review&thread=review-thread&revision=1`));
+	expect(errors).toEqual([]);
+});
+
+test('session Changes follows a background refresh during opening without cancelling the editor', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await openDiffPage(page);
+	await page.evaluate(() => window.ashDiffIntegration.beginPendingSessionOpen());
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionReviewReadStarted())).toBe(true);
+	await page.evaluate(() => window.ashDiffIntegration.refreshPendingSessionOpen());
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionOpenOutcome())).toBe('opened');
+	await expect(page.locator('#session-changes .ash-sessions-editor-message')).toBeHidden();
+	await page.evaluate(() => window.ashDiffIntegration.releaseSupersededSessionRead(true));
+	expect(await page.evaluate(() => window.ashDiffIntegration.sessionFileReadCount())).toBe(8);
+	await expect(page.locator('#session-changes .stanza-multi-diff-editor')).toBeVisible();
+	expect(errors).toEqual([]);
+});
+
+for (const cancelFirst of [false, true]) test(`session Changes retries a ${cancelFirst ? 'cancelled' : 'superseded'} opening while its old read remains pending`, async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await openDiffPage(page);
+	await page.evaluate(() => window.ashDiffIntegration.beginPendingSessionOpen());
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionReviewReadStarted())).toBe(true);
+	await page.evaluate(cancelFirst => window.ashDiffIntegration.retryPendingSessionOpen(cancelFirst), cancelFirst);
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionOpenOutcome())).toBe('cancelled');
+	const message = page.locator('#session-changes .ash-sessions-editor-message');
+	await expect(message).toBeHidden();
+	const row = page.locator('#session-changes .stanza-multi-diff-editor-section').filter({ has: page.getByText('file-0.ts', { exact: true }) });
+	await row.getByRole('button', { name: 'Viewed', exact: true }).click();
+	const viewed = ['ash-turn-diff:/review-later/file-0.ts?session=review&thread=review-thread&revision=1'];
+	expect(await page.evaluate(() => window.ashDiffIntegration.sessionReviewState())).toEqual(viewed);
+	await page.evaluate(() => window.ashDiffIntegration.cancelSupersededSessionOpen());
+	await page.evaluate(cancelFirst => window.ashDiffIntegration.releaseSupersededSessionRead(cancelFirst), cancelFirst);
+	await expect(message).toBeHidden();
+	expect(await page.evaluate(() => window.ashDiffIntegration.sessionFileReadCount())).toBe(2);
+	expect(await page.evaluate(() => window.ashDiffIntegration.sessionReviewState())).toEqual(viewed);
+	await expect(row.getByRole('button', { name: /file-0.ts/ })).toHaveAttribute('aria-expanded', 'false');
+	await page.evaluate(() => window.ashDiffIntegration.reopenSessionChanges());
+	await expect(message).toBeHidden();
+	await expect(row.getByRole('button', { name: /file-0.ts/ })).toHaveAttribute('aria-expanded', 'false');
+	await expect.poll(() => page.locator('#session-changes-label .ash-icon-label').evaluate(element => getComputedStyle(element, '::after').content)).toBe('"2"');
+	expect(errors).toEqual([]);
+});
+
+for (const failed of [false, true]) test(`session Changes ends a superseded Viewed lookup before its old read ${failed ? 'fails' : 'completes'}`, async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await openDiffPage(page);
+	await page.evaluate(() => window.ashDiffIntegration.openSessionChanges());
+	await page.evaluate(() => window.ashDiffIntegration.beginDelayedSessionReview());
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionReviewReadStarted())).toBe(true);
+	await page.evaluate(() => window.ashDiffIntegration.refreshDuringSessionReview());
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.pendingViewedOutcome())).toBe('finished');
+	await expect(page.locator('#session-changes .ash-sessions-editor-message')).toBeHidden();
+	await page.evaluate(() => window.ashDiffIntegration.reviewSessionFile(0));
+	const viewed = ['ash-turn-diff:/review-change/file-0.ts?session=review&thread=review-thread&revision=1'];
+	await page.evaluate(failed => window.ashDiffIntegration.releaseSupersededSessionRead(failed), failed);
+	expect(await page.evaluate(() => window.ashDiffIntegration.sessionReviewState())).toEqual(viewed);
+	expect(errors).toEqual([]);
+});
+
+for (const edit of ['same file', 'same file twice', 'another file'] as const) test(`session Changes preserves a later Viewed edit to ${edit} during lookup`, async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await openDiffPage(page);
+	await page.evaluate(() => window.ashDiffIntegration.openSessionChanges());
+	await page.evaluate(() => window.ashDiffIntegration.beginDelayedSessionReview());
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionReviewReadStarted())).toBe(true);
+	await page.evaluate(edit => {
+		window.ashDiffIntegration.setSessionReviewState(edit === 'another file' ? 1 : 0, true);
+		if (edit === 'same file twice') { window.ashDiffIntegration.setSessionReviewState(0, false); }
+	}, edit);
+	await page.evaluate(() => window.ashDiffIntegration.finishActiveSessionReview());
+	const viewed = edit === 'same file twice' ? [] : [0, ...(edit === 'another file' ? [1] : [])].map(index => `ash-turn-diff:/review-change/file-${index}.ts?session=review&thread=review-thread&revision=1`);
+	expect([...await page.evaluate(() => window.ashDiffIntegration.sessionReviewState())].sort()).toEqual(viewed);
+	expect(errors).toEqual([]);
+});
+
+test('session Changes cancels an opening before its pending backend read completes', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await openDiffPage(page);
+	await page.evaluate(() => window.ashDiffIntegration.beginPendingSessionOpen());
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionReviewReadStarted())).toBe(true);
+	await page.evaluate(() => window.ashDiffIntegration.cancelPendingSessionOpen());
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionOpenOutcome())).toBe('cancelled');
+	await page.evaluate(() => window.ashDiffIntegration.releasePendingSessionRead());
+	await page.evaluate(() => window.ashDiffIntegration.refreshSessionChanges());
+	await expect(page.locator('#session-changes .stanza-multi-diff-editor')).toHaveCount(0);
+	expect(await page.evaluate(() => window.ashDiffIntegration.sessionFileReadCount())).toBe(0);
+	expect(errors).toEqual([]);
+});
+
+test('session Changes releases the completed opening signal while retaining lazy file loading', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await openDiffPage(page);
+	await page.evaluate(() => window.ashDiffIntegration.openSessionChanges());
+	await page.evaluate(() => window.ashDiffIntegration.cancelCompletedSessionOpen());
+	await page.evaluate(() => window.ashDiffIntegration.revealSessionFile(7));
+	const row = page.locator('#session-changes .stanza-multi-diff-editor-section').filter({ has: page.getByText('file-7.ts', { exact: true }) });
+	await expect(row.locator('.stanza-diff-editor')).toBeVisible();
+	await expect(page.locator('#session-changes .ash-sessions-editor-message')).toBeHidden();
+	expect(errors).toEqual([]);
+});
+
 test('session Changes retains collapse and scroll through hiding, refresh and deferred restoration', async ({ page }) => {
 	await openDiffPage(page);
 	await page.evaluate(() => window.ashDiffIntegration.openSessionChanges());
@@ -730,6 +881,53 @@ test('session Changes retains collapse and scroll through hiding, refresh and de
 	await expect(editor.locator('.stanza-diff-overview-marker').first()).toBeAttached();
 	await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
 	await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBe(0);
+});
+
+for (const locale of ['en', 'zh-CN'] as const) test(`session Changes keeps Viewed bound to the captured revision across refresh (${locale})`, async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await openDiffPage(page, locale);
+	await page.evaluate(() => window.ashDiffIntegration.openSessionChanges());
+	await page.evaluate(() => window.ashDiffIntegration.selectSessionCapture('review-change', 'transient'));
+	const message = page.locator('#session-changes .ash-sessions-editor-message');
+	await expect(message).toBeHidden();
+	const first = page.locator('#session-changes .stanza-multi-diff-editor-section').filter({ has: page.getByText('file-0.ts', { exact: true }) });
+	const viewed = first.getByRole('button', { name: localized(locale, 'Viewed', '已查看'), exact: true });
+	await viewed.click();
+	await expect(viewed).toHaveAttribute('aria-pressed', 'true');
+	await page.evaluate(() => window.ashDiffIntegration.advanceSessionRevision());
+	await expect(message).toContainText(localized(locale, 'This Turn capture changed while loading.', '此回合的更改在加载期间已更新。'));
+	await expect(page.locator('#session-changes .stanza-multi-diff-editor-section')).toHaveCount(0);
+	await page.evaluate(() => window.ashDiffIntegration.selectSessionCapture('review-change'));
+	await expect(message).toBeHidden();
+	await expect(viewed).toHaveAttribute('aria-pressed', 'false');
+	await expect(first.getByRole('button', { name: /file-0.ts/ })).toHaveAttribute('aria-expanded', 'true');
+	await page.evaluate(() => window.ashDiffIntegration.reviewSessionFile(0, 1, true));
+	await expect(viewed).toHaveAttribute('aria-pressed', 'false');
+	await viewed.click();
+	await expect(viewed).toHaveAttribute('aria-pressed', 'true');
+	await page.evaluate(() => window.ashDiffIntegration.advanceSessionRevision());
+	await expect(message).toBeHidden();
+	await expect(viewed).toHaveAttribute('aria-pressed', 'false');
+	await expect(first.getByRole('button', { name: /file-0.ts/ })).toHaveAttribute('aria-expanded', 'true');
+	expect(errors).toEqual([]);
+});
+
+for (const locale of ['en', 'zh-CN'] as const) test(`session Changes rejects content read across a capture revision and recovers (${locale})`, async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await openDiffPage(page, locale);
+	await page.evaluate(() => window.ashDiffIntegration.openSessionChanges());
+	await page.evaluate(() => window.ashDiffIntegration.changeSessionCaptureDuringRead());
+	const message = page.locator('#session-changes .ash-sessions-editor-message');
+	await expect(message).toContainText(localized(locale, 'This Turn capture changed while loading.', '此回合的更改在加载期间已更新。'));
+	await expect(page.locator('#session-changes .stanza-multi-diff-editor-section')).toHaveCount(0);
+	await page.evaluate(() => window.ashDiffIntegration.selectSessionCapture('review-change'));
+	await expect(message).toBeHidden();
+	const first = page.locator('#session-changes .stanza-multi-diff-editor-section').filter({ has: page.getByText('file-0.ts', { exact: true }) });
+	await first.getByRole('button', { name: localized(locale, 'Viewed', '已查看'), exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionReviewState())).toEqual(['ash-turn-diff:/review-change/file-0.ts?session=review&thread=review-thread&revision=2']);
+	expect(errors).toEqual([]);
 });
 
 for (const locale of ['en', 'zh-CN'] as const) test(`session Changes restores a selected capture and reviews the current side of a cumulative comparison (${locale})`, async ({ page }) => {
@@ -789,15 +987,21 @@ for (const locale of ['en', 'zh-CN'] as const) test(`session Changes accepts a t
 	expect(errors).toEqual([]);
 });
 
-test('session Changes drops a pending Viewed action after the active editor changes', async ({ page }) => {
+for (const hidden of [false, true]) for (const failed of [false, true]) test(`session Changes drops a pending Viewed ${failed ? 'failure' : 'action'} after ${hidden ? 'hiding' : 'the active editor changes'}`, async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
 	await openDiffPage(page);
 	await page.evaluate(() => window.ashDiffIntegration.openSessionChanges());
 	await expect(page.locator('#session-changes .ash-sessions-editor-message')).toBeHidden();
 	await page.evaluate(() => window.ashDiffIntegration.beginDelayedSessionReview());
 	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionReviewReadStarted())).toBe(true);
-	await page.evaluate(() => window.ashDiffIntegration.finishInactiveSessionReview());
+	await page.evaluate(({ failed, hidden }) => window.ashDiffIntegration.finishInactiveSessionReview(failed, hidden), { failed, hidden });
+	await expect(page.locator('#session-changes .ash-sessions-editor-message')).toBeHidden();
 	expect(await page.evaluate(() => window.ashDiffIntegration.sessionReviewState())).toEqual([]);
 	await expect(page.locator('#session-changes').getByRole('button', { name: /file-0.ts/ })).toHaveAttribute('aria-expanded', 'true');
+	await page.evaluate(() => window.ashDiffIntegration.reviewSessionFile(0));
+	expect(await page.evaluate(() => window.ashDiffIntegration.sessionReviewState())).toEqual(['ash-turn-diff:/review-change/file-0.ts?session=review&thread=review-thread&revision=1']);
+	expect(errors).toEqual([]);
 });
 
 for (const locale of ['en', 'zh-CN'] as const) test(`session Changes clears its old count when the capture is empty or unavailable (${locale})`, async ({ page }) => {

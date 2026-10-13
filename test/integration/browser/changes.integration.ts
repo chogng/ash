@@ -10,7 +10,7 @@ import { SessionChangesEditorInput } from '../../../src/ash/sessions/contrib/cha
 import { IDecorationsService } from '../../../src/ash/workbench/services/decorations/common/decorations.js';
 import { DecorationsService } from '../../../src/ash/workbench/services/decorations/browser/decorationsService.js';
 import { Event, Emitter } from '../../../src/ash/base/common/event.js';
-import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
+import { DisposableStore, MutableDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/browser/configurationService.js';
@@ -24,6 +24,8 @@ import { INotificationService } from '../../../src/ash/platform/notification/com
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { ISessionsService } from '../../../src/ash/sessions/services/sessions/browser/sessionsService.js';
 import { ChangesViewPane } from '../../../src/ash/sessions/contrib/changes/browser/changesView.js';
+import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
+import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import chinese from '../../../extensions/language-pack-zh-cn/translations/sessions.json' with { type: 'json' };
 import { IGitHubService as ISessionGitHubService } from '../../../src/ash/sessions/contrib/github/browser/githubService.js';
@@ -42,7 +44,9 @@ import '../../../src/ash/base/browser/ui/styles.css';
 if (new URL(location.href).searchParams.get('locale') === 'zh-CN') { setNlsMessages('zh-CN', chinese); }
 
 const resources = new DisposableStore();
-const services = resources.add(registerTestComponentServices(new InstantiationService()));
+const services = resources.add(new InstantiationService());
+services.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'changes-integration', flushInterval: 0 })));
+registerTestComponentServices(services);
 services.registerInstance(ILogService, new NullLoggerService());
 services.registerSingleton(IDecorationsService, () => services.createInstance(DecorationsService, document));
 services.registerSingleton(IChangesViewService, () => resources.add(services.createInstance(ChangesViewService)));
@@ -101,22 +105,46 @@ const details: TurnChangeDetails = {
 	files: [{ path: 'src/a-long-directory-name/main.ts', kind: 'modified', binary: false, additions: 3, deletions: 2 }],
 };
 let ledger: readonly TurnChangeDetails[] = [details];
+function multipleTurns(): readonly TurnChangeDetails[] {
+	return [details, { ...details, summary: { ...details.summary, changeSetId: 'second', turnId: 'second-turn' }, files: [{ ...details.files[0]!, path: 'tests/main.test.ts' }] }];
+}
+if (new URL(location.href).searchParams.has('multiple')) { ledger = multipleTurns(); }
 let sessionId = 'session';
+let threadId = 'thread';
+let pendingLedger: Promise<void> | undefined;
+let finishLedger: (() => void) | undefined;
+let pendingFileFailure: Promise<never> | undefined;
+let failFile: ((error: Error) => void) | undefined;
+let fileReadStarted = false;
+let holdNextLedger: { key: string; missingSecond: boolean; } | undefined;
+const heldLedgers = new Map<string, { resolve(): void; reject(error: Error): void; }>();
 services.registerInstance(ISessionsService, {
 	onDidChange: changed.event,
-	get activeSelection() { return { kind: 'session', active: { session: { sessionId, status: 'active', title: 'Test changes', chats: [{ threadId: 'thread', status: 'active', origin: { type: 'root' } }], workspace: { authorityId: 'local', root: '/workspace' } }, threadId: 'thread' } }; },
+	get activeSelection() { return { kind: 'session', active: { session: { sessionId, status: 'active', title: 'Test changes', chats: [{ threadId, status: 'active', origin: { type: 'root' } }], workspace: { authorityId: 'local', root: '/workspace' } }, threadId } }; },
 } as unknown as ISessionsService);
 services.registerInstance(IChatService, {
 	readThread: async () => ({ thread: { sessionId, threadId: 'thread', status: 'active', sequence: 7, turns: activeTurn ? [{ status: 'running' }] : [] } }),
 	startTurn: async (request: unknown) => { agentRequests.push({ action: 'start', request }); },
 	queueTurn: async (request: unknown) => { agentRequests.push({ action: 'queue', request }); },
 	onDidBecomeReady: Event.None, onDidUpdateTurnChanges: Event.None,
-	listTurnChanges: async () => { if (fail) { throw new Error('Repository unavailable'); } return ledger.map(entry => ({ ...entry.summary, sessionId })); },
-	readTurnChange: async (_session: string, _thread: string, id: string) => {
-		const entry = ledger.find(entry => entry.summary.changeSetId === id)!;
-		return { ...entry, summary: { ...entry.summary, sessionId } };
+	listTurnChanges: async (sessionId: string, threadId: string) => {
+		const held = holdNextLedger;
+		holdNextLedger = undefined;
+		const entries = held?.missingSecond ? ledger.filter(entry => entry.summary.changeSetId !== 'second') : ledger;
+		const summaries = entries.map(entry => ({ ...entry.summary, sessionId, threadId }));
+		if (held) { await new Promise<void>((resolve, reject) => { heldLedgers.set(held.key, { resolve, reject }); }); }
+		if (pendingLedger) { await pendingLedger; }
+		if (fail) { throw new Error('Repository unavailable'); }
+		return summaries;
 	},
-	readTurnChangeFile: async () => ({ path: details.files[0]!.path, binary: false, truncated: false, before: 'Before', after: 'After' }),
+	readTurnChange: async (sessionId: string, threadId: string, id: string) => {
+		const entry = ledger.find(entry => entry.summary.changeSetId === id)!;
+		return { ...entry, summary: { ...entry.summary, sessionId, threadId } };
+	},
+	readTurnChangeFile: async () => {
+		if (pendingFileFailure) { fileReadStarted = true; return pendingFileFailure; }
+		return { path: details.files[0]!.path, binary: false, truncated: false, before: 'Before', after: 'After' };
+	},
 } as unknown as IChatService);
 let opened = 0;
 const reviews: { resource: string; changesetId?: string; }[] = [];
@@ -128,14 +156,16 @@ services.registerInstance(IEditorService, {
 		}
 	}
 } as unknown as IEditorService);
-services.registerInstance(INotificationService, { info: (message: string) => { notifications.push(message); }, error: (error: unknown) => { throw new Error(String(error)); } } as unknown as INotificationService);
+services.registerInstance(INotificationService, { info: (message: string) => { notifications.push(message); }, error: (error: unknown) => { notifications.push(String(error)); } } as unknown as INotificationService);
 services.registerInstance(IQuickInputService, { input: async () => undefined } as unknown as IQuickInputService);
 services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => 'Press Alt+F1 for accessibility help.' } as unknown as IAccessibleViewService);
 const container = document.querySelector<HTMLElement>('#changes')!;
 container.style.cssText = 'width: 360px; height: 480px; --ash-spacing-size80: 8px; --ash-fontSize-body1: 13px; --ash-fontSize-body2: 11px; --ash-description-foreground: #666;';
-const view = resources.add(services.createInstance(ChangesViewPane, container, { id: 'sessions.changes', title: 'Changes' }));
+const viewOwner = resources.add(new MutableDisposable<ChangesViewPane>());
+let view = services.createInstance(ChangesViewPane, container, { id: 'sessions.changes', title: 'Changes' });
+viewOwner.value = view;
 view.setVisible(true);
-window.addEventListener('pagehide', () => resources.dispose(), { once: true });
+window.addEventListener('pagehide', () => { viewOwner.clear(); resources.dispose(); }, { once: true });
 
 declare global {
 	interface Window {
@@ -145,6 +175,16 @@ declare global {
 			revision(value: number): void;
 			visible(value: boolean): void;
 			selectSession(id: string): void;
+			selectThread(id: string): void;
+			delayRefresh(): void;
+			completeRefresh(): void;
+			holdRefresh(key: string, missingSecond?: boolean): void;
+			releaseRefresh(key: string, failed?: boolean): void;
+			removeSecondTurn(): void;
+			rebuild(): void;
+			delayFileFailure(): void;
+			fileReadStarted(): boolean;
+			rejectFile(): void;
 			agentRequests(): readonly unknown[];
 			activeTurn(value: boolean): void;
 			setLocale(): void;
@@ -167,12 +207,32 @@ window.ashChangesIntegration = {
 	agentRequests: () => agentRequests,
 	activeTurn: value => { activeTurn = value; },
 	multipleTurns: () => {
-		ledger = [details, { ...details, summary: { ...details.summary, changeSetId: 'second', turnId: 'second-turn' }, files: [{ ...details.files[0]!, path: 'tests/main.test.ts' }] }];
+		ledger = multipleTurns();
 		changed.fire();
 	},
 	revision: value => { ledger = ledger.map(entry => ({ ...entry, summary: { ...entry.summary, revision: value } })); changed.fire(); },
 	visible: value => view.setVisible(value),
 	selectSession: id => { sessionId = id; changed.fire(); },
+	selectThread: id => { threadId = id; changed.fire(); },
+	delayRefresh: () => { pendingLedger = new Promise<void>(resolve => { finishLedger = resolve; }); changed.fire(); },
+	completeRefresh: () => { finishLedger!(); pendingLedger = undefined; finishLedger = undefined; },
+	holdRefresh: (key, missingSecond = false) => { holdNextLedger = { key, missingSecond }; changed.fire(); },
+	releaseRefresh: (key, failed = false) => {
+		const request = heldLedgers.get(key)!;
+		heldLedgers.delete(key);
+		if (failed) { request.reject(new Error('Delayed catalogue failed')); }
+		else { request.resolve(); }
+	},
+	removeSecondTurn: () => { ledger = [details]; changed.fire(); },
+	rebuild: () => {
+		viewOwner.clear();
+		view = services.createInstance(ChangesViewPane, container, { id: 'sessions.changes', title: 'Changes' });
+		viewOwner.value = view;
+		view.setVisible(true);
+	},
+	delayFileFailure: () => { fileReadStarted = false; pendingFileFailure = new Promise<never>((_resolve, reject) => { failFile = reject; }); },
+	fileReadStarted: () => fileReadStarted,
+	rejectFile: () => { failFile!(new Error('Delayed file read failed')); pendingFileFailure = undefined; failFile = undefined; },
 	fail: value => { fail = value; changed.fire(); },
 	setLocale: () => { setNlsMessages('zh-CN', chinese); changed.fire(); },
 	opened: () => opened,

@@ -136,7 +136,7 @@ const pane = resources.add(view === 'empty'
 								{ onDidUpdateTurnChanges: Event.None, onDidBecomeReady: Event.None, listTurnChanges: async () => [changes.summary], readTurnChange: async () => changes } as unknown as IChatService,
 								editors, configuration, contextKeys, notifications, {} as IQuickInputService,
 								{ getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, changesServices, changesViewState,
-								{ openChangesEditor: async () => { throw new Error('Opening review editors is outside this layout fixture'); } } as unknown as ISessionChangesService)
+								{ openChangesEditor: async () => { throw new Error('Opening review editors is outside this layout fixture'); } } as unknown as ISessionChangesService, storage)
 							: view === 'console'
 								? new DebugConsoleViewPane(root, { id: 'fixture.console', title: 'Console' }, {
 									...Disposable.None, sessions: [], activeSession: { id: 'fixture', label: 'Fixture', state: 'stopped', output: 'Fixture output', canEvaluate: true },

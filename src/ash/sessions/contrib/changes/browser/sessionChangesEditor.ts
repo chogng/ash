@@ -17,6 +17,8 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
+import { raceCancellationError } from '../../../../base/common/async.js';
+import { canceled, isCancellationError } from '../../../../base/common/errors.js';
 import { ISessionChangesService } from '../common/sessionChangesService.js';
 import { SessionChangesEditorInput } from './sessionChangesEditorInput.js';
 import type { ISessionFileChange } from '../../../services/sessions/common/session.js';
@@ -42,7 +44,8 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 	private dimension: IDimension = Dimension.Zero;
 	private visible = false;
 	private revision = 0;
-	private readonly pending = this._register(new MutableDisposable<IDisposable>());
+	private inputRequest = 0;
+	private readonly pending = this._register(new MutableDisposable<IDisposable & { readonly signal: AbortSignal; completion?: Promise<void>; }>());
 
 	constructor(
 		private readonly options: EditorPaneCreationOptions,
@@ -94,21 +97,47 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 
 	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		throwIfCancelled(signal);
+		if (this.isDisposed) { throw canceled(); }
 		if (this.input && !extUri.isEqual(this.input.resource, input.resource)) {
 			this.clearInput();
 		}
 		this.input = input;
-		await this.refresh(signal);
-		throwIfCancelled(signal);
+		const inputRequest = ++this.inputRequest;
+		let loading = this.refresh(signal);
+		for (; ;) {
+			const request = this.pending.value;
+			try {
+				await raceCancellationError(request ? raceCancellationError(loading, request.signal) : loading, signal);
+				throwIfCancelled(signal);
+				if (inputRequest !== this.inputRequest) { throw canceled(); }
+				return;
+			} catch (error) {
+				const current = this.pending.value;
+				// A background refresh belongs to the same open; follow it. A new setInput supersedes the caller.
+				if (isCancellationError(error) && !signal.aborted && inputRequest === this.inputRequest && this.visible && current?.completion && current !== request) {
+					loading = current.completion;
+					continue;
+				}
+				if (signal.aborted && inputRequest === this.inputRequest) { this.clearInput(); }
+				throw error;
+			}
+		}
 	}
 
 	public override clearInput(): void {
+		this.inputRequest++;
 		this.input = undefined;
 		this.comparisonInput = undefined;
 		this.viewState = undefined;
 		this.revision++;
 		this.pending.clear();
 		this.comparison.clear();
+	}
+
+	public override dispose(): void {
+		if (this.isDisposed) { return; }
+		this.clearInput();
+		super.dispose();
 	}
 
 	public getAccessibleContent(): string {
@@ -173,15 +202,19 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		const comparison = this.comparisonInput;
 		const input = this.input;
 		const item = this.findComparisonItem(resource);
-		if (!this.visible || !input || !comparison || !item) { return undefined; }
+		const signal = this.pending.value?.signal;
+		if (!this.visible || !input || !comparison || !item || !signal) { return undefined; }
 		// A cumulative comparison may start in an earlier Turn; its modified side identifies the capture being reviewed.
 		const currentResource = item.modified.resource;
 		const id = currentResource.path.split('/')[1];
 		if (!id) { return undefined; }
 		const sessionResource = new SessionChangesEditorInput(input.resource).sessionResource;
 		const selection = input instanceof SessionChangesEditorInput ? input.changesetSelection : undefined;
-		const changeset = selection?.kind === 'transient' ? selection.changeset : await this.changesService.resolveChangeset(sessionResource, id);
-		if (this.isDisposed || this.comparisonInput !== comparison || !changeset.isEnabled.get() || options.review && !changeset.capabilities?.review) { return undefined; }
+		const changeset = selection?.kind === 'transient' ? selection.changeset : await raceCancellationError(this.changesService.resolveChangeset(sessionResource, id), signal).catch(error => {
+			if (this.isDisposed || !this.visible || this.comparisonInput !== comparison) { return undefined; }
+			throw error;
+		});
+		if (this.isDisposed || this.comparisonInput !== comparison || !changeset?.isEnabled.get() || options.review && !changeset.capabilities?.review) { return undefined; }
 		return findChangesEditorFileChange(currentResource, changeset.changes.get());
 	}
 
@@ -205,7 +238,13 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		return this.comparisonInput?.items.find(item => extUri.isEqual(item.original.resource, resource) || extUri.isEqual(item.modified.resource, modified));
 	}
 
-	private async refresh(signal?: AbortSignal): Promise<void> {
+	private refresh(signal?: AbortSignal): Promise<void> {
+		const loading = this.loadChanges(signal);
+		if (this.pending.value) { this.pending.value.completion = loading; }
+		return loading;
+	}
+
+	private async loadChanges(signal?: AbortSignal): Promise<void> {
 		const input = this.input;
 		if (!input || !this.visible || this.isDisposed) {
 			return;
@@ -232,10 +271,10 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		const controller = new AbortController();
 		const abortListener = signal ? addDisposableListener(signal, 'abort', () => controller.abort(), { once: true }) : undefined;
 		if (signal?.aborted) { controller.abort(); }
-		this.pending.value = toDisposable(() => {
+		this.pending.value = Object.assign(toDisposable(() => {
 			abortListener?.dispose();
 			controller.abort();
-		});
+		}), { signal: controller.signal });
 		try {
 			const selected = input instanceof SessionChangesEditorInput ? input.changesetSelection : undefined;
 			let comparison: MultiDiffEditorInput;
@@ -247,7 +286,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 					return;
 				}
 				const items = await Promise.all(changes.map(async change => {
-					const contents = await this.chat.readTurnChangeFile(change.summary.sessionId, change.summary.threadId, change.summary.changeSetId, change.file.path);
+					const contents = await raceCancellationError(this.chat.readTurnChangeFile(change.summary.sessionId, change.summary.threadId, change.summary.changeSetId, change.file.path), controller.signal);
 					if (contents.truncated && !contents.binary) { throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.')); }
 					return {
 						label: change.file.path, binary: contents.binary,
@@ -259,9 +298,18 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 						modified: { resource: change.modifiedUri, initialText: contents.after ?? '', readOnly: true }
 					};
 				}));
+				if (this.isDisposed || revision !== this.revision || controller.signal.aborted) { return; }
+				// File reads target a live capture. Keep their contents paired with the revision supplied by the snapshot.
+				const captures = new Map(changes.map(change => [JSON.stringify([change.summary.sessionId, change.summary.threadId, change.summary.changeSetId]), change.summary]));
+				await Promise.all([...captures.values()].map(async summary => {
+					const current = await raceCancellationError(this.chat.readTurnChange(summary.sessionId, summary.threadId, summary.changeSetId), controller.signal);
+					if (current.summary.revision !== summary.revision || current.summary.captureState === 'discarded') {
+						throw new Error(localize('sessions.changes.captureChanged', 'This Turn capture changed while loading. Reopen its changes to review the latest revision.'));
+					}
+				}));
 				comparison = createMultiDiffEditorInput(input.resource, items, selected.changeset.label, { kind: 'snapshot', label: selected.changeset.label });
 			} else {
-				const changes = await this.chat.listTurnChanges(session.sessionId, threadId);
+				const changes = await raceCancellationError(this.chat.listTurnChanges(session.sessionId, threadId), controller.signal);
 				if (this.isDisposed || revision !== this.revision || controller.signal.aborted) { return; }
 				const candidates = selected?.id ? changes.filter(change => change.changeSetId === selected.id) : changes;
 				if (!candidates.some(change => change.captureState !== 'discarded' && change.statistics.files > 0)) {
@@ -269,8 +317,9 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 					this.messageDomNode.textContent = localize('sessions.changes.empty', 'No changes in this conversation.');
 					return;
 				}
-				if (selected?.id) { await this.changesService.resolveChangeset(new SessionChangesEditorInput(input.resource).sessionResource, selected.id); }
-				comparison = await createTurnMultiDiffEditorInput(this.chat, { session, threadId }, 'throughCurrentTurn', selected?.id ? [selected.id] : undefined);
+				if (selected?.id) { await raceCancellationError(this.changesService.resolveChangeset(new SessionChangesEditorInput(input.resource).sessionResource, selected.id), controller.signal); }
+				if (this.isDisposed || revision !== this.revision || controller.signal.aborted) { return; }
+				comparison = await createTurnMultiDiffEditorInput(this.chat, { session, threadId }, 'throughCurrentTurn', selected?.id ? [selected.id] : undefined, controller.signal);
 			}
 			if (this.isDisposed || revision !== this.revision || controller.signal.aborted) {
 				return;
@@ -282,7 +331,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 			pane.create(this.domNode);
 			// setInput waits for visible diff models, which need a nonzero viewport first.
 			pane.layout(this.dimension);
-			await pane.setInput(comparison, controller.signal);
+			await raceCancellationError(pane.setInput(comparison, controller.signal), controller.signal);
 			if (this.isDisposed || revision !== this.revision || controller.signal.aborted) {
 				return;
 			}
@@ -298,6 +347,9 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 				this.changesService.setChangesCount(input.resource, undefined);
 				this.messageDomNode.textContent = localize('sessions.changes.error', 'Could not load changes: {0}', String(error));
 			}
+		} finally {
+			// The caller's open operation ends here; the child pane retains its own controller until hidden or cleared.
+			abortListener?.dispose();
 		}
 	}
 }

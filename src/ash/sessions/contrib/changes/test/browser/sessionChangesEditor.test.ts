@@ -1,7 +1,7 @@
 import { registerTestComponentServices } from '../../../../../workbench/test/common/testEditorServices.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { test, suite } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter } from '../../../../../base/common/event.js';
@@ -27,6 +27,54 @@ import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IEditorGroupsService } from '../../../../../workbench/services/editor/common/editorGroupsService.js';
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+import { Event } from '../../../../../base/common/event.js';
+
+suite('Changes editor overlapping opens', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	for (const cancelFirst of [false, true]) test(`a ${cancelFirst ? 'cancelled' : 'replaced'} open finishes without clearing a retry of the same input`, async () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		using domOwner = toDisposable(() => dom.window.close());
+		using services = registerTestComponentServices(new InstantiationService());
+		using context = new ContextKeyService();
+		services.registerInstance(IContextKeyService, context);
+		using configuration = new InMemoryConfigurationService();
+		services.registerInstance(IConfigurationService, configuration);
+		using changes = new Emitter<{ sessionId: string; threadId: string; }>();
+		const pending = new DeferredPromise<readonly TurnChangeSetSummary[]>();
+		let requests = 0;
+		const counts: (number | undefined)[] = [];
+		services.registerInstance(ISessionChangesService, { setChangesCount: (_resource: URI, count: number | undefined) => { counts.push(count); } } as unknown as ISessionChangesService);
+		services.registerInstance(ISessionsManagementService, { sessions: [{ sessionId: 'a' }] } as unknown as ISessionsManagementService);
+		services.registerInstance(IChatService, {
+			onDidUpdateTurnChanges: changes.event, onDidBecomeReady: Event.None,
+			listTurnChanges: async () => ++requests === 1 ? pending.p : [],
+		} as unknown as IChatService);
+		services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
+		using pane = services.createInstance(SessionChangesEditor, {});
+		pane.create(dom.window.document.body);
+		pane.setVisible(true);
+		const input = { resource: URI.parse('ash-session-changes:/a?thread=a-thread') };
+		const controller = new AbortController();
+		const first = pane.setInput(input, controller.signal);
+		const rejected = assert.rejects(first, { name: 'CancellationError' });
+		if (cancelFirst) { controller.abort(); }
+		await pane.setInput(input, new AbortController().signal);
+		await rejected;
+		controller.abort();
+		await pending.error(new Error('Old ledger failed'));
+		changes.fire({ sessionId: 'a', threadId: 'a-thread' });
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.equal(requests, 3);
+		assert.equal(pane.getAccessibleContent(), 'No changes in this conversation.');
+		assert.deepEqual(counts, [undefined, undefined, 0, undefined, 0]);
+		pane.dispose();
+		await assert.rejects(pane.setInput(input, new AbortController().signal), { name: 'CancellationError' });
+		changes.fire({ sessionId: 'a', threadId: 'a-thread' });
+		assert.equal(requests, 3);
+	});
+});
 
 test('a hidden Changes editor ignores a late ledger result and loads fresh content when shown', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
@@ -67,11 +115,11 @@ test('a hidden Changes editor ignores a late ledger result and loads fresh conte
 		captureState: 'sealed', messageState: 'unconfigured', commitState: 'idle', committedPaths: [], revision: 1,
 		statistics: { files: 1, additions: 1, deletions: 0 }, dependencies: [], externalDependencyPaths: [], warnings: [], conflictPaths: [],
 	}]);
-	await Promise.resolve();
+	await new Promise<void>(resolve => setImmediate(resolve));
 	assert.equal(requests, 1);
 	assert.equal(pane.getAccessibleContent(), 'Loading changes…');
 	pane.setVisible(true);
-	await Promise.resolve();
+	await new Promise<void>(resolve => setImmediate(resolve));
 	assert.equal(requests, 2);
 	assert.equal(pane.getAccessibleContent(), 'No changes in this conversation.');
 	assert.equal((await decorations!.provideDecorations(resource, CancellationToken.None))?.letter, '0');
@@ -90,7 +138,7 @@ test('a hidden Changes editor ignores a late ledger result and loads fresh conte
 	}
 	failed = true;
 	ready.fire();
-	await Promise.resolve();
+	await new Promise<void>(resolve => setImmediate(resolve));
 	assert.match(pane.getAccessibleContent(), /Unavailable/u);
 	assert.equal(await decorations!.provideDecorations(resource, CancellationToken.None), undefined);
 	pane.clearInput();

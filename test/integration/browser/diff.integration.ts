@@ -240,12 +240,20 @@ let sessionTheme: TestThemeService | undefined;
 let sessionRevision = 1;
 let sessionCaptureState: 'sealed' | 'open' = 'sealed';
 let sessionAvailability: 'available' | 'empty' | 'failed' = 'available';
-let sessionMultipleCaptures = false;
+let sessionMultipleCaptures = new URL(location.href).searchParams.has('multipleSession');
 let sessionInput: SessionChangesEditorInput | undefined;
 let sessionCommandsActive = true;
 let pendingSessionRead: DeferredPromise<void> | undefined;
 let sessionReadStarted = false;
+let changeSessionRevisionOnRead = false;
 let pendingViewedAction: Promise<unknown> | undefined;
+let sessionOpenController: AbortController | undefined;
+let sessionOpenState = 'idle';
+let supersededSessionRead: DeferredPromise<void> | undefined;
+let supersededSessionController: AbortController | undefined;
+let pendingViewedState = 'idle';
+let closedSessionEditor: { input: ReturnType<typeof EditorInputSerializers.serialize>; state: unknown; } | undefined;
+let sessionFileReads = 0;
 const sessionOpenedFiles: string[] = [];
 const sessionPreparedFiles: unknown[] = [];
 let focusedHistoryView: string | undefined;
@@ -296,7 +304,11 @@ function createSessionChangesPane(): SessionChangesEditor {
 					files: indexes.map(index => ({ path: `file-${index}.ts`, kind: 'modified', binary: false, additions: 1, deletions: 1 })),
 				};
 			},
-			readTurnChangeFile: async (_sessionId: string, _threadId: string, _changeSetId: string, path: string) => ({ path, binary: false, truncated: false, before: `before\n${'shared\n'.repeat(30)}`, after: `after\n${'shared\n'.repeat(30)}` }),
+			readTurnChangeFile: async (_sessionId: string, _threadId: string, _changeSetId: string, path: string) => {
+				sessionFileReads++;
+				if (changeSessionRevisionOnRead) { sessionRevision++; changeSessionRevisionOnRead = false; }
+				return { path, binary: false, truncated: false, before: `before\n${'shared\n'.repeat(30)}`, after: `after\n${'shared\n'.repeat(30)}` };
+			},
 			prepareTurnCommit: async (_sessionId: string, _threadId: string, selections: unknown, message: string) => {
 				sessionPreparedFiles.push({ selections, message });
 				return { commitId: 'prepared-file', targetBranch: 'main', message, files: [{ path: 'file-7.ts', kind: 'modified', binary: false, additions: 1, deletions: 1 }], warnings: [] };
@@ -334,8 +346,6 @@ function createSessionChangesPane(): SessionChangesEditor {
 import '../../../src/ash/editor/contrib/indentation/browser/indentation.js';
 import '../../../src/ash/editor/contrib/quickAccess/browser/quickAccessController.js';
 import '../../../src/ash/workbench/contrib/codeEditor/browser/quickaccess/gotoLineQuickAccess.js';
-import { QuickAccessController } from '../../../src/ash/platform/quickinput/browser/quickAccess.js';
-import { IQuickAccessController } from '../../../src/ash/platform/quickinput/common/quickAccess.js';
 import { EditorStatusContribution, ChangeLanguageAction, ChangeEOLAction, ChangeEncodingAction } from '../../../src/ash/workbench/browser/parts/editor/editorStatus.js';
 import { StatusbarService } from '../../../src/ash/workbench/services/statusbar/browser/statusbar.js';
 import { StatusbarPart } from '../../../src/ash/workbench/browser/parts/statusbar/statusbarPart.js';
@@ -400,7 +410,6 @@ const harness = {
 		services.registerInstance(IDialogService, dialogs);
 		resources.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(document.body)));
 		registerCodeEditorServices(services);
-		services.registerSingleton(IQuickAccessController, () => resources.add(services.createInstance(QuickAccessController)));
 		resources.add(services.get(ILanguageService).registerLanguage({ id: 'status-language', aliases: ['Status Language'] }));
 		services.registerInstance(IMultiDiffSourceResolverService, new MultiDiffSourceResolverService());
 		if (kind === 'git') {
@@ -590,7 +599,45 @@ const harness = {
 		const pane = createSessionChangesPane();
 		pane.setVisible(true);
 		sessionInput = new SessionChangesEditorInput(URI.parse('ash-session-changes:/review?thread=review-thread'));
-		await pane.setInput(sessionInput, new AbortController().signal);
+		sessionOpenController = new AbortController();
+		await pane.setInput(sessionInput, sessionOpenController.signal);
+	},
+	cancelCompletedSessionOpen(): void { sessionOpenController!.abort(); },
+	beginPendingSessionOpen(): void {
+		const pane = createSessionChangesPane();
+		pane.setVisible(true);
+		pendingSessionRead = new DeferredPromise<void>();
+		sessionReadStarted = false;
+		sessionOpenController = new AbortController();
+		sessionInput = new SessionChangesEditorInput(URI.parse('ash-session-changes:/review?thread=review-thread'));
+		sessionOpenState = 'pending';
+		void pane.setInput(sessionInput, sessionOpenController.signal).then(() => { sessionOpenState = 'opened'; }, error => { sessionOpenState = error.name === 'CancellationError' ? 'cancelled' : `failed: ${String(error)}`; });
+	},
+	cancelPendingSessionOpen(): void { sessionOpenController!.abort(); },
+	sessionOpenOutcome(): string { return sessionOpenState; },
+	sessionFileReadCount(): number { return sessionFileReads; },
+	async releasePendingSessionRead(): Promise<void> { await pendingSessionRead!.complete(); pendingSessionRead = undefined; },
+	async retryPendingSessionOpen(cancelFirst: boolean): Promise<void> {
+		supersededSessionRead = pendingSessionRead;
+		pendingSessionRead = undefined;
+		supersededSessionController = sessionOpenController;
+		if (cancelFirst) { supersededSessionController!.abort(); }
+		sessionMultipleCaptures = true;
+		sessionInput = new SessionChangesEditorInput(URI.parse('ash-session-changes:/review?thread=review-thread'), { kind: 'id', id: 'review-later' });
+		sessionOpenController = new AbortController();
+		await sessionPane.value!.setInput(sessionInput, sessionOpenController.signal);
+	},
+	cancelSupersededSessionOpen(): void { supersededSessionController!.abort(); },
+	refreshPendingSessionOpen(): void {
+		supersededSessionRead = pendingSessionRead;
+		pendingSessionRead = undefined;
+		sessionChanges.fire({ sessionId: 'review', threadId: 'review-thread' });
+	},
+	async releaseSupersededSessionRead(failed: boolean): Promise<void> {
+		const pending = supersededSessionRead!;
+		supersededSessionRead = undefined;
+		if (failed) { await pending.error(new Error('Superseded capture read failed')); }
+		else { await pending.complete(); }
 	},
 	async selectSessionCapture(id: string | undefined, kind: 'id' | 'transient' | 'disabled' | 'noReview' = 'id'): Promise<void> {
 		const resource = URI.parse('ash-session:/review?thread=review-thread');
@@ -607,16 +654,39 @@ const harness = {
 	beginDelayedSessionReview(): void {
 		pendingSessionRead = new DeferredPromise<void>();
 		sessionReadStarted = false;
-		pendingViewedAction = this.reviewSessionFile(0);
+		pendingViewedState = 'pending';
+		pendingViewedAction = this.reviewSessionFile(0).then(() => { pendingViewedState = 'finished'; });
+	},
+	pendingViewedOutcome(): string { return pendingViewedState; },
+	refreshDuringSessionReview(): void {
+		supersededSessionRead = pendingSessionRead;
+		pendingSessionRead = undefined;
+		sessionChanges.fire({ sessionId: 'review', threadId: 'review-thread' });
+	},
+	setSessionReviewState(index: number, reviewed: boolean): void {
+		sessionServices!.get(IChangesViewService).setChangesetFilesReviewState([URI.parse(`ash-turn-diff:/review-change/file-${index}.ts?session=review&thread=review-thread&revision=${sessionRevision}`)], reviewed);
+	},
+	async finishActiveSessionReview(): Promise<void> {
+		const pending = pendingSessionRead!;
+		pendingSessionRead = undefined;
+		await pending.complete();
+		await pendingViewedAction;
+		pendingViewedAction = undefined;
 	},
 	sessionReviewReadStarted(): boolean { return sessionReadStarted; },
-	async finishInactiveSessionReview(): Promise<void> {
-		sessionCommandsActive = false;
-		await pendingSessionRead!.complete();
-		await pendingViewedAction;
-		pendingSessionRead = undefined;
-		pendingViewedAction = undefined;
-		sessionCommandsActive = true;
+	async finishInactiveSessionReview(failed = false, hidden = false): Promise<void> {
+		if (hidden) { sessionPane.value!.setVisible(false); }
+		else { sessionCommandsActive = false; }
+		try {
+			if (failed) { await pendingSessionRead!.error(new Error('Delayed Viewed lookup failed')); }
+			else { await pendingSessionRead!.complete(); }
+			await pendingViewedAction;
+		} finally {
+			pendingSessionRead = undefined;
+			pendingViewedAction = undefined;
+			sessionCommandsActive = true;
+			if (hidden) { sessionPane.value!.setVisible(true); }
+		}
 	},
 	setSessionChangesVisible(visible: boolean): void { sessionPane.value!.setVisible(visible); },
 	refreshSessionChanges(): void { sessionChanges.fire({ sessionId: 'review', threadId: 'review-thread' }); },
@@ -632,6 +702,7 @@ const harness = {
 	sessionReviewState(): readonly string[] { return [...sessionServices!.get(IChangesViewService).reviewedFilesObs.get()]; },
 	sessionTheme(name: 'dark' | 'light' | 'contrast'): void { sessionTheme!.setColorTheme(name === 'light' ? lightColorTheme : name === 'contrast' ? highContrastDarkColorTheme : darkColorTheme); },
 	advanceSessionRevision(): void { sessionRevision++; sessionChanges.fire({ sessionId: 'review', threadId: 'review-thread' }); },
+	changeSessionCaptureDuringRead(): void { changeSessionRevisionOnRead = true; sessionChanges.fire({ sessionId: 'review', threadId: 'review-thread' }); },
 	unsealSessionCapture(): void { sessionCaptureState = 'open'; sessionRevision++; sessionChanges.fire({ sessionId: 'review', threadId: 'review-thread' }); },
 	setSessionAvailability(availability: 'available' | 'empty' | 'failed'): void {
 		sessionAvailability = availability;
@@ -660,6 +731,22 @@ const harness = {
 		await pane.setInput(sessionInput, new AbortController().signal);
 		if (isEditorPaneWithViewState(pane)) pane.restoreViewState(state);
 		pane.setVisible(true);
+	},
+	closeSessionChanges(): void {
+		closedSessionEditor = { input: JSON.parse(JSON.stringify(EditorInputSerializers.serialize(sessionInput!))), state: this.readSessionViewState() };
+		sessionPane.value!.setVisible(false);
+		sessionPane.value!.clearInput();
+		sessionPane.clear();
+	},
+	async reopenClosedSessionChanges(): Promise<void> {
+		const pane = createSessionChangesPane();
+		sessionInput = EditorInputSerializers.deserialize(closedSessionEditor!.input) as SessionChangesEditorInput;
+		await pane.setInput(sessionInput, new AbortController().signal);
+		pane.restoreViewState(closedSessionEditor!.state);
+		pane.setVisible(true);
+	},
+	saveSessionWindow(): void {
+		window.sessionStorage.setItem('ash.diff.integration.sessionEditor', JSON.stringify({ input: EditorInputSerializers.serialize(sessionInput!), state: this.readSessionViewState() }));
 	},
 	async switchSessionChanges(): Promise<void> {
 		await sessionPane.value!.setInput({ resource: URI.parse('ash-session-changes:/other?thread=other-thread') }, new AbortController().signal);
@@ -987,3 +1074,11 @@ declare global {
 	}
 }
 window.ashDiffIntegration = harness;
+if (new URL(location.href).searchParams.has('restoreSession')) {
+	const stored = window.sessionStorage.getItem('ash.diff.integration.sessionEditor');
+	if (stored) {
+		closedSessionEditor = JSON.parse(stored);
+		await harness.reopenClosedSessionChanges();
+	}
+}
+window.addEventListener('pagehide', () => { sessionPane.clear(); resources.dispose(); }, { once: true });

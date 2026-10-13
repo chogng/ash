@@ -131,6 +131,8 @@ The form also supports requesting creation in the chat whose changes it was open
 
 Turn-level file changes route through `IChatResponseFileChangesService`. The editor workbench opens its standard multi-diff presentation; the Agents Window registers `SessionsChatResponseFileChangesService` to select its canonical Changes editor. Providers expose the data but do not choose the presentation.
 
+`ChangesViewService` persists Changes filters, file-list snapshots, section collapse state and exact-revision read markers in machine-local workspace state. Preferences remain scoped by Session and Thread across window restoration; read markers match captured resource identities and never carry over to a new revision. Editor inputs independently serialize their explicit changeset selection, while the Editor Part owns comparison view-state restoration. Closing an editor releases its pending reads without changing the stored presentation preferences or backend capture state.
+
 ### Artifacts, references, and customizations
 
 Sessions may expose the artifacts and references recorded by the agent. Both share one session-scoped observable and are told apart by `isArtifact`: an artifact is something the session produced that is not an ordinary workspace edit, while a reference is something it only points the user at. Consumers that surface one category must filter on that field rather than assuming the observable holds artifacts alone. Chats may expose the customizations used or read during their turns; these are chat-scoped. Providers that cannot determine either may omit the corresponding observable.

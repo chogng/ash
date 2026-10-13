@@ -2,6 +2,7 @@
   "ash": {
     "sessions.create.noActiveChat": "新会话中没有活动聊天。",
     "chat.modelPicker.unavailable": "所选模型不可用",
+    "sessions.changes.captureChanged": "此回合的更改在加载期间已更新。请重新打开更改以审阅最新修订。",
     "sessions.history.placeholder": "选择会话或草稿",
     "sessions.history.draft": "草稿",
     "sessions.history.thread": "分支 {0}",
@@ -582,7 +583,7 @@
     "sessions.changes.markReviewed": "标记已审阅",
     "sessions.changes.markUnread": "标记未审阅",
     "sessions.changes.allTurns": "所有回合",
-    "sessions.changes.reviewHelp": "选择所有回合或指定回合以筛选文件。“查看全部更改”会在更改编辑器中打开当前选择。切换列表和目录树，使用左右方向键折叠或展开文件夹。选择文件后可标记已审阅或未审阅。审阅标记绑定具体回合修订，不会改变文件提交条件。窗口打开期间，各会话和视图模式会保留选区、焦点、展开状态和滚动位置。",
+    "sessions.changes.reviewHelp": "选择所有回合或指定回合以筛选文件。“查看全部更改”会在更改编辑器中打开当前选择。切换列表和目录树，使用左右方向键折叠或展开文件夹。选择文件后可标记已审阅或未审阅。审阅标记绑定具体回合修订，不会改变文件提交条件。恢复窗口后，各会话仍会保留回合选择和审阅标记。各会话和视图模式会保留选区、焦点、展开状态和滚动位置。",
     "sessions.changes.viewAsList": "更改：以列表查看",
     "sessions.changes.viewAsTree": "更改：以目录树查看",
     "sessions.changes.prAgentUnavailable": "此仓库无法为智能体准备创建拉取请求的任务。",

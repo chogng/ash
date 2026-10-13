@@ -1,5 +1,6 @@
 {
   "ash": {
+    "sessions.changes.captureChanged": "This Turn capture changed while loading. Reopen its changes to review the latest revision.",
     "sessions.history.placeholder": "Select a conversation or draft",
     "sessions.history.draft": "Draft",
     "sessions.history.thread": "Thread {0}",
@@ -133,7 +134,7 @@
     "sessions.changes.markReviewed": "Mark reviewed",
     "sessions.changes.markUnread": "Mark unreviewed",
     "sessions.changes.allTurns": "All Turns",
-    "sessions.changes.reviewHelp": "Choose All Turns or a specific Turn to filter files. Review all changes opens the Changes editor for that selection. Switch between List and Tree; use Left and Right arrows to collapse or expand folders. Select files and choose Mark reviewed or Mark unreviewed. Read markers belong to the exact Turn revision and do not change commit eligibility. Each conversation and view mode retains its selection, focus, expansion and scroll position while this window is open.",
+    "sessions.changes.reviewHelp": "Choose All Turns or a specific Turn to filter files. Review all changes opens the Changes editor for that selection. Switch between List and Tree; use Left and Right arrows to collapse or expand folders. Select files and choose Mark reviewed or Mark unreviewed. Read markers belong to the exact Turn revision and do not change commit eligibility. Each conversation retains its Turn choice and read markers when this window is restored. Each conversation and view mode retains its selection, focus, expansion and scroll position.",
     "sessions.changes.viewAsList": "Changes: View as List",
     "sessions.changes.viewAsTree": "Changes: View as Tree",
     "sessions.changes.prAgentUnavailable": "This repository cannot prepare a pull request request for the agent.",

@@ -103,7 +103,7 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		const opened: IResourceEditorInput[] = [];
 		const openOptions: (EditorOpenOptions | undefined)[] = [];
 		const editors: IEditorService = { ...emptyEditorServiceState, onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [], async openEditor(input, options) { opened.push(input); openOptions.push(options); }, focusActiveEditor() { } };
-		services.registerInstance(IQuickInputService, { input: async () => 'feat: reviewed selection', createQuickPick() { throw new Error('This scenario uses a message input'); } });
+		services.registerInstance(IQuickInputService, { input: async () => 'feat: reviewed selection', createQuickPick() { throw new Error('This scenario uses a message input'); } } as unknown as IQuickInputService);
 		services.registerInstance(ISessionsService, sessions);
 		services.registerInstance(IChatService, chat);
 		services.registerInstance(IEditorService, editors);
@@ -150,7 +150,7 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		assert.deepEqual(Object.fromEntries(new URLSearchParams(diff.original.resource.query)), { session: 'current', thread: 'current-thread', revision: '1', side: 'before' });
 		assert.equal(new URLSearchParams(diff.modified.resource.query).get('side'), 'after');
 		assert.deepEqual([diff.original.initialText, diff.modified.initialText, diff.original.readOnly, diff.modified.readOnly], ['before', 'after', true, true]);
-		assert.deepEqual(requests.at(-1), { sessionId: 'current', threadId: 'current-thread', changeSetId: 'change-current', path: 'main.ts' });
+		assert.deepEqual(requests.find(request => typeof request === 'object' && request !== null && 'path' in request), { sessionId: 'current', threadId: 'current-thread', changeSetId: 'change-current', path: 'main.ts' });
 		const turnPicker = view.element.querySelector<HTMLSelectElement>('select')!;
 		turnPicker.value = 'change-current';
 		turnPicker.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
@@ -247,10 +247,56 @@ function changes(id: string): TurnChangesReadResult {
 
 async function settle(): Promise<void> { await new Promise<void>(resolve => setImmediate(resolve)); }
 
+test('Turn comparison cancellation finishes before the in-flight read and prevents later reads', async () => {
+	const details = changes('session');
+	details.files.push({ ...details.files[0]!, path: 'next.ts' });
+	const pending = new DeferredPromise<{ path: string; binary: boolean; truncated: boolean; before: string; after: string; }>();
+	const reads: string[] = [];
+	const chat = {
+		listTurnChanges: async () => [details.summary],
+		readTurnChange: async () => { reads.push('capture'); return details; },
+		readTurnChangeFile: (_session: string, _thread: string, _capture: string, path: string) => { reads.push(path); return pending.p; },
+	} as unknown as IChatService;
+	const selection = selected('session');
+	if (selection.kind !== 'session') { throw new Error('Expected a durable conversation'); }
+	const controller = new AbortController();
+	const comparison = createTurnMultiDiffEditorInput(chat, selection.active, 'currentTurn', undefined, controller.signal);
+	const rejected = assert.rejects(comparison, { name: 'CancellationError' });
+	await settle();
+	controller.abort();
+	await rejected;
+	await pending.complete({ path: 'main.ts', binary: false, truncated: false, before: 'before', after: 'after' });
+	await settle();
+	assert.deepEqual(reads, ['capture', 'main.ts']);
+	await assert.rejects(createTurnMultiDiffEditorInput(chat, selection.active, 'currentTurn', undefined, controller.signal), { name: 'CancellationError' });
+	assert.deepEqual(reads, ['capture', 'main.ts']);
+});
+
+test('Turn comparisons reject a capture revised or discarded while its file contents load', async () => {
+	for (const discarded of [false, true]) {
+		let current = changes('session');
+		const pending = new DeferredPromise<{ path: string; binary: boolean; truncated: boolean; before: string; after: string; }>();
+		const chat = {
+			listTurnChanges: async () => [current.summary],
+			readTurnChange: async () => current,
+			readTurnChangeFile: () => pending.p,
+		} as unknown as IChatService;
+		const selection = selected('session');
+		assert.equal(selection.kind, 'session');
+		if (selection.kind !== 'session') { throw new Error('Expected a durable conversation'); }
+		const comparison = createTurnMultiDiffEditorInput(chat, selection.active, 'currentTurn');
+		const rejected = assert.rejects(comparison, /Turn capture changed while loading/u);
+		await settle();
+		current = { ...current, summary: { ...current.summary, revision: discarded ? 1 : 2, captureState: discarded ? 'discarded' : 'sealed' } };
+		await pending.complete({ path: 'main.ts', binary: false, truncated: false, before: 'old', after: 'new revision' });
+		await rejected;
+	}
+});
+
 suite('Changes visibility lifecycle', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
-	for (const revision of [1, 2]) test(`a pending file comparison survives only an unchanged capture revision (${revision})`, async () => {
+	for (const revision of [1, 2, 3]) test(`a pending file comparison survives only an unchanged capture revision (${revision === 3 ? 'changed before notification' : revision})`, async () => {
 		const browser = new JSDOM('<!doctype html><body></body>');
 		using browserOwner = toDisposable(() => browser.window.close());
 		using services = new InstantiationService();
@@ -295,12 +341,13 @@ suite('Changes visibility lifecycle', () => {
 		tree.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
 		await settle();
 		assert.equal(reads, 1);
-		details = { ...details, summary: { ...details.summary, revision } };
-		ledgerChanged.fire({ sessionId: 'a', threadId: 'a-thread' });
+		details = { ...details, summary: { ...details.summary, revision: revision === 1 ? 1 : 2 } };
+		if (revision !== 3) { ledgerChanged.fire({ sessionId: 'a', threadId: 'a-thread' }); }
 		await settle();
 		await pendingFile.complete({ path: 'main.ts', binary: false, truncated: false, before: 'before', after: 'after' });
 		await settle();
 		assert.equal(opened.length, revision === 1 ? 1 : 0);
+		if (revision === 3) { assert.match(notifications.getNotifications()[0]!.message, /Turn capture changed/u); }
 	});
 
 	test('hidden views stop ledger reads, ignore late operations and restore live accessibility content', async () => {

@@ -1,5 +1,212 @@
 import { expect, test } from '@playwright/test';
 
+for (const locale of ['en', 'zh-CN'] as const) test(`Changes restores per-conversation choices and Viewed after a window reload (${locale})`, async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto(`/changes.html?locale=${locale}&multiple=1`);
+	await expect.poll(async () => ({ ready: await page.locator('body').getAttribute('data-ready'), errors })).toEqual({ ready: 'true', errors: [] });
+	await expect(page.getByRole('treeitem')).toHaveCount(2);
+	const turn = page.getByRole('combobox', { name: locale === 'en' ? 'Changes from Turn' : '选择回合更改' });
+	const reviewed = locale === 'en' ? 'Reviewed' : '已审阅';
+	await turn.selectOption('second');
+	await page.getByRole('treeitem').click();
+	await page.getByRole('button', { name: locale === 'en' ? 'Mark reviewed' : '标记已审阅', exact: true }).click();
+	await page.evaluate(() => window.ashChangesIntegration.selectSession('other'));
+	await expect(turn).toBeEnabled();
+	await turn.selectOption('change');
+	await page.evaluate(() => window.ashChangesIntegration.selectSession('session'));
+	await expect(turn).toHaveValue('second');
+	await page.reload();
+	await expect(turn).toBeEnabled();
+	await expect(turn).toHaveValue('second');
+	await expect(page.getByRole('treeitem')).toHaveAttribute('aria-selected', 'true');
+	await expect(page.getByRole('treeitem')).toContainText(reviewed);
+	await page.evaluate(() => window.ashChangesIntegration.selectSession('other'));
+	await expect(turn).toHaveValue('change');
+	await expect(page.getByRole('treeitem')).not.toContainText(reviewed);
+	await page.evaluate(() => window.ashChangesIntegration.selectSession('session'));
+	await expect(turn).toHaveValue('second');
+	await page.evaluate(() => window.ashChangesIntegration.revision(2));
+	await expect(page.getByRole('treeitem')).not.toContainText(reviewed);
+	expect(errors).toEqual([]);
+});
+
+test('Changes restores collapsed folders from workspace state after a window reload', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/changes.html?multiple=1');
+	await expect.poll(async () => ({ ready: await page.locator('body').getAttribute('data-ready'), errors })).toEqual({ ready: 'true', errors: [] });
+	await expect(page.getByRole('treeitem')).toHaveCount(2);
+	await page.getByRole('combobox', { name: 'Changes from Turn' }).selectOption('second');
+	await page.getByRole('combobox', { name: 'Changes view mode' }).selectOption('tree');
+	await page.getByRole('tree').focus();
+	await page.keyboard.press('Home');
+	await page.keyboard.press('ArrowLeft');
+	await expect(page.getByRole('treeitem')).toHaveCount(1);
+	await page.reload();
+	await expect(page.getByRole('combobox', { name: 'Changes from Turn' })).toHaveValue('second');
+	await expect(page.getByRole('combobox', { name: 'Changes view mode' })).toHaveValue('tree');
+	await expect(page.getByRole('treeitem')).toHaveCount(1);
+	await expect(page.getByRole('treeitem')).toHaveAttribute('aria-expanded', 'false');
+});
+
+for (const locale of ['en', 'zh-CN'] as const) test(`Changes keeps each conversation choice and Viewed through racing catalogues and retry (${locale})`, async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto(`/changes.html?locale=${locale}`);
+	await expect(page.getByRole('treeitem')).toHaveCount(1);
+	await page.evaluate(() => window.ashChangesIntegration.multipleTurns());
+	const turn = page.getByRole('combobox', { name: locale === 'en' ? 'Changes from Turn' : '选择回合更改' });
+	const reviewed = locale === 'en' ? 'Reviewed' : '已审阅';
+	await turn.selectOption('second');
+	await page.getByRole('treeitem').click();
+	await page.getByRole('button', { name: locale === 'en' ? 'Mark reviewed' : '标记已审阅', exact: true }).click();
+	await page.evaluate(() => { window.ashChangesIntegration.holdRefresh('old', true); window.ashChangesIntegration.selectSession('other'); });
+	await expect(turn).toBeEnabled();
+	await turn.selectOption('change');
+	await page.evaluate(() => { window.ashChangesIntegration.holdRefresh('other'); window.ashChangesIntegration.selectThread('peer'); });
+	await expect(turn).toBeEnabled();
+	await turn.selectOption('second');
+	await page.evaluate(() => { window.ashChangesIntegration.selectSession('session'); window.ashChangesIntegration.selectThread('thread'); });
+	await expect(turn).toHaveValue('second');
+	await expect(page.getByRole('treeitem')).toContainText(reviewed);
+	await page.evaluate(() => { window.ashChangesIntegration.holdRefresh('concurrent', true); window.ashChangesIntegration.fail(false); });
+	await expect(turn).toBeEnabled();
+	await page.evaluate(() => {
+		window.ashChangesIntegration.releaseRefresh('concurrent');
+		window.ashChangesIntegration.releaseRefresh('other', true);
+		window.ashChangesIntegration.releaseRefresh('old');
+	});
+	await expect(turn).toHaveValue('second');
+	await expect(page.getByRole('treeitem')).toContainText(reviewed);
+	await page.evaluate(() => { window.ashChangesIntegration.holdRefresh('cancelled', true); window.ashChangesIntegration.visible(false); window.ashChangesIntegration.visible(true); });
+	await expect(turn).toBeEnabled();
+	await page.evaluate(() => window.ashChangesIntegration.releaseRefresh('cancelled', true));
+	await expect(turn).toHaveValue('second');
+	await expect(page.getByRole('treeitem')).toContainText(reviewed);
+	await page.evaluate(() => window.ashChangesIntegration.selectSession('other'));
+	await expect(turn).toHaveValue('change');
+	await page.evaluate(() => window.ashChangesIntegration.selectThread('peer'));
+	await expect(turn).toHaveValue('second');
+	expect(await page.evaluate(() => window.ashChangesIntegration.notifications())).toEqual([]);
+	expect(errors).toEqual([]);
+});
+
+for (const locale of ['en', 'zh-CN'] as const) test(`Changes restores Turn choice, selection and Viewed after rebuilding its pane (${locale})`, async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto(`/changes.html?locale=${locale}`);
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	await page.evaluate(() => window.ashChangesIntegration.multipleTurns());
+	const turn = page.getByRole('combobox', { name: locale === 'en' ? 'Changes from Turn' : '选择回合更改' });
+	const reviewed = locale === 'en' ? 'Reviewed' : '已审阅';
+	await turn.selectOption('second');
+	await page.getByRole('treeitem').click();
+	await page.getByRole('button', { name: locale === 'en' ? 'Mark reviewed' : '标记已审阅', exact: true }).click();
+	await expect(page.getByRole('treeitem')).toContainText(reviewed);
+	await page.evaluate(() => window.ashChangesIntegration.rebuild());
+	await expect(turn).toHaveValue('second');
+	await expect(page.getByRole('treeitem')).toHaveAttribute('aria-selected', 'true');
+	await expect(page.getByRole('treeitem')).toContainText(reviewed);
+	await page.evaluate(() => window.ashChangesIntegration.selectSession('other'));
+	await expect(turn).toHaveValue('');
+	await turn.selectOption('change');
+	await page.evaluate(() => window.ashChangesIntegration.rebuild());
+	await expect(turn).toHaveValue('change');
+	await expect(page.getByRole('treeitem')).not.toContainText(reviewed);
+	await page.evaluate(() => window.ashChangesIntegration.selectSession('session'));
+	await expect(turn).toHaveValue('second');
+	await expect(page.getByRole('treeitem')).toContainText(reviewed);
+	await page.evaluate(() => { window.ashChangesIntegration.delayRefresh(); window.ashChangesIntegration.rebuild(); });
+	await expect(turn).toBeDisabled();
+	await page.evaluate(() => window.ashChangesIntegration.completeRefresh());
+	await expect(turn).toBeEnabled();
+	await expect(turn).toHaveValue('second');
+	await expect(page.getByRole('treeitem')).toContainText(reviewed);
+	await page.evaluate(() => window.ashChangesIntegration.revision(2));
+	await expect(page.getByRole('treeitem')).not.toContainText(reviewed);
+	await page.evaluate(() => window.ashChangesIntegration.rebuild());
+	await expect(turn).toHaveValue('second');
+	await expect(page.getByRole('treeitem')).not.toContainText(reviewed);
+	expect(errors).toEqual([]);
+});
+
+for (const transition of ['hide', 'rebuild', 'switch', 'revision'] as const) test(`Changes drops a late comparison failure after ${transition}`, async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/changes.html');
+	await expect(page.getByRole('treeitem')).toHaveCount(1);
+	await page.evaluate(() => window.ashChangesIntegration.delayFileFailure());
+	await page.getByRole('tree').focus();
+	await page.keyboard.press('ArrowDown');
+	await expect.poll(() => page.evaluate(() => window.ashChangesIntegration.fileReadStarted())).toBe(true);
+	await page.evaluate(transition => {
+		if (transition === 'hide') { window.ashChangesIntegration.visible(false); }
+		else if (transition === 'rebuild') { window.ashChangesIntegration.rebuild(); }
+		else if (transition === 'switch') { window.ashChangesIntegration.selectSession('other'); }
+		else { window.ashChangesIntegration.revision(2); }
+		window.ashChangesIntegration.rejectFile();
+	}, transition);
+	if (transition === 'hide') { await page.evaluate(() => window.ashChangesIntegration.visible(true)); }
+	await expect(page.getByRole('treeitem')).toHaveCount(1);
+	expect(await page.evaluate(() => window.ashChangesIntegration.opened())).toBe(0);
+	await page.getByRole('treeitem').click();
+	await page.keyboard.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashChangesIntegration.opened())).toBe(1);
+	expect(await page.evaluate(() => window.ashChangesIntegration.notifications())).toEqual([]);
+	expect(errors).toEqual([]);
+});
+
+for (const locale of ['en', 'zh-CN'] as const) test(`Changes retains each conversation Turn choice across loading, retry and deletion (${locale})`, async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto(`/changes.html?locale=${locale}`);
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	await page.evaluate(() => window.ashChangesIntegration.multipleTurns());
+	const turn = page.getByRole('combobox', { name: locale === 'en' ? 'Changes from Turn' : '选择回合更改' });
+	const tree = page.getByRole('tree');
+	await turn.selectOption('second');
+	await page.evaluate(() => window.ashChangesIntegration.delayRefresh());
+	await expect(turn).toBeDisabled();
+	await expect(turn).toHaveValue('second');
+	await expect(tree).toHaveAttribute('aria-busy', 'true');
+	await page.evaluate(() => window.ashChangesIntegration.completeRefresh());
+	await expect(turn).toBeEnabled();
+	await expect(turn).toHaveValue('second');
+	await page.evaluate(() => window.ashChangesIntegration.fail(true));
+	await expect(page.getByRole('button', { name: locale === 'en' ? 'Retry loading changes' : '重新加载更改' })).toBeVisible();
+	await expect(turn).toBeDisabled();
+	await page.evaluate(() => window.ashChangesIntegration.fail(false));
+	await expect(turn).toBeEnabled();
+	await expect(turn).toHaveValue('second');
+	await page.evaluate(() => window.ashChangesIntegration.selectSession('other'));
+	await expect(turn).toBeEnabled();
+	await expect(turn).toHaveValue('');
+	await turn.selectOption('change');
+	await page.evaluate(() => window.ashChangesIntegration.selectThread('peer'));
+	await expect(turn).toHaveValue('');
+	await turn.selectOption('second');
+	await page.evaluate(() => window.ashChangesIntegration.selectThread('thread'));
+	await expect(turn).toHaveValue('change');
+	await page.evaluate(() => window.ashChangesIntegration.selectSession('session'));
+	await expect(turn).toHaveValue('second');
+	await page.evaluate(() => window.ashChangesIntegration.delayRefresh());
+	await page.evaluate(() => window.ashChangesIntegration.selectSession('other'));
+	await expect(turn).toBeDisabled();
+	await page.evaluate(() => window.ashChangesIntegration.completeRefresh());
+	await expect(turn).toBeEnabled();
+	await expect(turn).toHaveValue('change');
+	await page.evaluate(() => window.ashChangesIntegration.selectSession('session'));
+	await expect(turn).toHaveValue('second');
+	await page.evaluate(() => window.ashChangesIntegration.removeSecondTurn());
+	await expect(turn).toHaveValue('');
+	await page.evaluate(() => window.ashChangesIntegration.selectSession('other'));
+	await expect(turn).toHaveValue('change');
+	await page.evaluate(() => window.ashChangesIntegration.selectSession('session'));
+	await expect(turn).toHaveValue('');
+	expect(errors).toEqual([]);
+});
+
 for (const locale of ['en', 'zh-CN'] as const) test(`Changes opens the selected Turn in its canonical editor (${locale})`, async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
@@ -46,6 +253,8 @@ test('Changes filters Turns, restores tree state and binds review markers to rev
 	await mode.selectOption('list');
 	await expect(page.getByRole('treeitem')).toHaveAttribute('aria-selected', 'true');
 	await mode.selectOption('tree');
+	await expect(page.getByRole('treeitem')).toHaveCount(1);
+	await page.evaluate(() => window.ashChangesIntegration.rebuild());
 	await expect(page.getByRole('treeitem')).toHaveCount(1);
 	await page.evaluate(() => window.ashChangesIntegration.visible(false));
 	await page.evaluate(() => window.ashChangesIntegration.visible(true));
