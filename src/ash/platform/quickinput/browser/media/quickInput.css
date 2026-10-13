@@ -258,13 +258,15 @@
 
 .ash-quick-pick-row-keybinding {
 	flex: 0 0 auto;
-	padding: 2px 6px;
-	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
-	border-radius: var(--ash-cornerRadius-small);
-	color: var(--ash-description-foreground);
-	background: var(--ash-keybindingLabel-background);
-	font: inherit;
-	font-size: var(--ash-fontSize-label2);
+	max-width: 55%;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+}
+
+.ash-quick-pick-list .ash-list-row.is-active .ash-keybinding-label-keycap kbd {
+	border-color: currentColor;
+	color: inherit;
+	background: transparent;
 }
 
 .ash-quick-pick-row-action.icon-only {

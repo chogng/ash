@@ -212,11 +212,9 @@
 	white-space: nowrap;
 }
 
-.ash-keybindings-key {
-	overflow: hidden;
-	font-family: var(--ash-font-family-monospace);
-	text-overflow: ellipsis;
-	white-space: nowrap;
+.ash-keybindings-key .ash-keybinding-label,
+.ash-keybindings-key .ash-keybinding-label-chord {
+	flex-wrap: wrap;
 }
 
 .ash-keybindings-empty {

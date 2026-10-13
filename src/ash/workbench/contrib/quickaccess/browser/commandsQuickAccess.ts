@@ -1,5 +1,4 @@
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
-import { getKeybindingLabel } from '../../../../base/common/keybindingLabels.js';
 import { getErrorMessage, isCancellationError, onUnexpectedError } from '../../../../base/common/errors.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
@@ -64,7 +63,7 @@ export class CommandsQuickAccessProvider extends PickerQuickAccessProvider<IComm
 				label: action.label,
 				description: action.id,
 				detail: action.alias !== action.label ? action.alias : undefined,
-				keybinding: keybinding ? getKeybindingLabel(keybinding) : undefined,
+				keybinding,
 			};
 		});
 		const editorCommandIds = new Set(editorCommands.map(command => command.commandId));
@@ -80,7 +79,7 @@ export class CommandsQuickAccessProvider extends PickerQuickAccessProvider<IComm
 					label: action.label,
 					description: action.id,
 					detail: original !== action.label ? original : undefined,
-					keybinding: keybinding ? getKeybindingLabel(keybinding) : undefined,
+					keybinding,
 				};
 			});
 		const normalizedQuery = query.toLocaleLowerCase();

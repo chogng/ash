@@ -1,5 +1,4 @@
 import { KeyCode } from '../../../../base/common/keyCodes.js';
-import { getKeybindingLabel } from '../../../../base/common/keybindingLabels.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
@@ -63,7 +62,7 @@ export class GotoLineAction extends EditorAction {
 					action,
 					label: action.label,
 					description: action.id,
-					keybinding: keybinding ? getKeybindingLabel(keybinding) : undefined,
+					keybinding,
 				}];
 			});
 		};

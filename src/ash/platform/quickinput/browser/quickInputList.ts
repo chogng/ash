@@ -1,7 +1,8 @@
 import { List } from "../../../base/browser/ui/list/listWidget.js";
+import { KeybindingLabel } from "../../../base/browser/ui/keybindinglabel/keybindinglabel.js";
 import { setRole } from "../../../base/browser/ui/aria/aria.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
+import { Disposable, DisposableMap, toDisposable } from "../../../base/common/lifecycle.js";
 import type { IKeyMods, IQuickPickItem, IQuickPickItemButton, IQuickPickSeparator } from "../common/quickInput.js";
 import { QuickPickFocus } from '../common/quickInput.js';
 import { h, stopEvent } from "../../../base/browser/dom.js";
@@ -20,6 +21,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
 	readonly element: HTMLDivElement;
 	private readonly empty: HTMLDivElement;
 	private readonly list: List<TItem>;
+	private readonly keybindingLabels = this._register(new DisposableMap<HTMLDivElement, KeybindingLabel>());
 	private readonly _onDidAccept = this._register(new Emitter<TItem>());
 	private readonly _onDidChangeActive =
 		this._register(new Emitter<QuickInputListActiveChangeEvent<TItem>>());
@@ -78,7 +80,8 @@ export class QuickInputList<TItem extends IQuickPickItem>
 			ariaLabel: localize('quickInput.results', 'Quick Pick results'),
 			domFocusable: true,
 			scrolling: 'managed',
-			renderItem: (item) => this.renderItem(item),
+			renderItem: (item, _index, row) => this.renderItem(item, row),
+			onDidRemoveRow: row => this.keybindingLabels.deleteAndDispose(row),
 		}));
 		this.list.element.classList.add("ash-quick-pick-list-items");
 		this.list.domNode.classList.add('ash-quick-pick-list-scrollable');
@@ -228,7 +231,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
 		this.layout();
 	}
 
-	private renderItem(item: TItem): HTMLDivElement {
+	private renderItem(item: TItem, row: HTMLDivElement): HTMLDivElement {
 		const ownerDocument = this.element.ownerDocument;
 		const content = h(ownerDocument, "div");
 		content.className = "ash-quick-pick-row-content";
@@ -280,10 +283,9 @@ export class QuickInputList<TItem extends IQuickPickItem>
 			content.append(check);
 		}
 		if (item.keybinding) {
-			const keybinding = h(ownerDocument, "kbd");
-			keybinding.className = "ash-quick-pick-row-keybinding";
-			keybinding.textContent = item.keybinding;
-			content.append(keybinding);
+			const keybinding = new KeybindingLabel(content, { keybinding: item.keybinding, presentation: 'keycap' });
+			keybinding.element.classList.add("ash-quick-pick-row-keybinding");
+			this.keybindingLabels.set(row, keybinding);
 		}
 		for (const button of item.buttons ?? []) {
 			const action = h(ownerDocument, 'button');

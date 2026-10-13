@@ -1,4 +1,3 @@
-import { getKeybindingLabel } from '../../../../base/common/keybindingLabels.js';
 import type { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import type { IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import type { ICodeEditor } from '../../../browser/editorBrowser.js';
@@ -25,7 +24,7 @@ export function getStandaloneHelpPicks(editor: ICodeEditor, keybindings: IKeybin
 		return [{
 			action,
 			label: `? ${action.label}`,
-			keybinding: keybinding ? getKeybindingLabel(keybinding) : undefined,
+			keybinding,
 		}];
 	});
 }

@@ -83,16 +83,3 @@
 .ash-editor-group-watermark-entry .ash-keybinding-label {
 	justify-self: end;
 }
-
-.ash-editor-group-watermark-entry .ash-keybinding-label-keycap kbd {
-	display: inline-flex;
-	box-sizing: border-box;
-	min-width: 22px;
-	height: 22px;
-	padding: 0 2px;
-	align-items: center;
-	justify-content: center;
-	border-color: var(--ash-contrastBorder, transparent);
-	box-shadow: none;
-	font-size: var(--ash-fontSize-label1);
-}

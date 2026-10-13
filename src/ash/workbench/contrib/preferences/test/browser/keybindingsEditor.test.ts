@@ -34,7 +34,7 @@ const { CancellationError } = await import('../../../../../base/common/errors.js
 const { resetNlsResolver, setNlsMessages } = await import('../../../../../nls.js');
 const { productLanguagePackCatalogs } = await import('../../../../services/localization/common/localizationCatalogs.js');
 const { OperatingSystem } = await import('../../../../../base/common/platform.js');
-const { CommandsRegistry } = await import('../../../../../platform/commands/common/commands.js');
+const { CommandsRegistry, ICommandService } = await import('../../../../../platform/commands/common/commands.js');
 const { ContextKeyService } = await import('../../../../../platform/contextkey/browser/contextKeyService.js');
 const { InstantiationService } = await import('../../../../../platform/instantiation/common/instantiationService.js');
 const { IConfigurationService } = await import('../../../../../platform/configuration/common/configuration.js');
@@ -92,6 +92,7 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 		keyboardLayoutService: keyboardLayout,
 	}, disposables.add(new NotificationService()), resources.files, resources.profiles));
 	const configuration = disposables.add(new InMemoryConfigurationService());
+	services.registerInstance(ICommandService, commands);
 	services.registerInstance(IKeybindingService, keybindings);
 	services.registerInstance(IContextKeyService, contextKeys);
 	services.registerInstance(IKeyboardLayoutService, keyboardLayout);
@@ -146,6 +147,7 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
 	const betaBefore = shortcutRow(ownerDocument, 'test.shortcuts.beta');
 	assert.ok(betaBefore);
+	assert.deepEqual([...betaBefore.querySelectorAll('kbd')].map(key => key.textContent), ['Ctrl', '2']);
 
 	await resources.write([
 		{ key: 'ctrl+3', command: 'test.shortcuts.alpha' },
@@ -156,6 +158,7 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 
 	const alpha = shortcutRow(ownerDocument, 'test.shortcuts.alpha');
 	assert.ok(alpha);
+	assert.deepEqual([...alpha.querySelectorAll('kbd')].map(key => key.textContent), ['Ctrl', '3']);
 	findButton(alpha, 'Edit').click();
 	const recorder = ownerDocument.querySelector<HTMLInputElement>('.ash-keybindings-record-input input');
 	assert.ok(recorder);
@@ -278,7 +281,7 @@ test('restored shortcut resource inputs rehydrate and release the input-owned mo
 	assert.equal(previousModel.isDisposed(), true);
 	await resources.write([{ key: 'ctrl+9', command: 'test.shortcuts.alpha' }]);
 	await keybindings.initialize();
-	assert.match(shortcutRow(document, 'test.shortcuts.alpha')?.textContent ?? '', /Ctrl\+9/);
+	assert.deepEqual([...shortcutRow(document, 'test.shortcuts.alpha')!.querySelectorAll('kbd')].map(key => key.textContent), ['Ctrl', '9']);
 	editor.clearInput();
 	assert.equal(document.querySelectorAll('.ash-keybindings-row').length, 0);
 });

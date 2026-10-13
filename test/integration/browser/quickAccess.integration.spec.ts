@@ -1,5 +1,39 @@
 import { expect, test } from '@playwright/test';
 
+for (const variant of [
+	{ locale: 'en', theme: 'light', os: 'mac' },
+	{ locale: 'zh-CN', theme: 'dark', os: 'windows' },
+	{ locale: 'en', theme: 'hc', os: 'mac' },
+]) {
+	test(`command palette renders individual keycaps and preserves chord groups (${variant.locale}, ${variant.theme})`, async ({ page }, testInfo) => {
+		await page.goto(`/quickAccess.html?${new URLSearchParams(variant)}`);
+		await page.getByRole('button', { name: 'Open commands' }).click();
+		const picker = page.locator('.ash-quick-pick');
+		const input = picker.getByRole('combobox');
+		await input.fill('>Format');
+		const row = picker.locator('.ash-list-row').filter({ has: page.locator('.ash-quick-pick-row-label', { hasText: /^Format$/ }) });
+		const shortcut = row.locator('.ash-keybinding-label');
+		const modifier = variant.os === 'windows' ? 'Ctrl' : '⌘';
+		await expect(shortcut.locator('kbd')).toHaveText([modifier, 'K', modifier, 'Enter']);
+		await expect(shortcut.locator('.ash-keybinding-label-chord')).toHaveCount(2);
+		await expect(shortcut).toHaveAttribute('aria-label', variant.os === 'windows' ? 'Control+K, Control+Enter' : 'Command+K, Command+Enter');
+		for (const cap of await shortcut.locator('kbd').all()) {
+			await expect(cap).toHaveCSS('height', '22px');
+			await expect(cap).toHaveCSS('border-radius', '4px');
+		}
+		await expect(shortcut.locator('kbd').last()).toHaveCSS('white-space', 'nowrap');
+		await page.setViewportSize({ width: 600, height: 600 });
+		const bounds = await shortcut.boundingBox();
+		const rowBounds = await row.boundingBox();
+		expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(rowBounds!.x + rowBounds!.width);
+		await picker.screenshot({ path: testInfo.outputPath('command-keycaps.png') });
+		await input.fill('>Zulu Format');
+		await expect(picker.locator('.ash-keybinding-label kbd')).toHaveText(['F1']);
+		await input.press('Enter');
+		await expect(page.getByRole('status', { name: 'Executed commands' })).toHaveText('Zulu Format');
+	});
+}
+
 for (const variant of [{ locale: 'en', theme: 'light' }, { locale: 'zh-CN', theme: 'dark' }, { locale: 'en', theme: 'hc' }]) {
 	test(`Quick Access switches Commands, Files, Issues and PR through one picker (${variant.locale}, ${variant.theme})`, async ({ page }, testInfo) => {
 		await page.goto(`/quickAccess.html?locale=${variant.locale}&theme=${variant.theme}`);

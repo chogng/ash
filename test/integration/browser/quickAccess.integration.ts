@@ -3,6 +3,8 @@ import { ILanguageFeaturesService } from '../../../src/ash/editor/common/service
 import { LanguageFeaturesService } from '../../../src/ash/editor/common/services/languageFeaturesService.js';
 import { IWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/common/workingCopyService.js';
 import { KeyCode } from '../../../src/ash/base/common/keyCodes.js';
+import { Keybinding, logicalKey, physicalKey, resolveKeybinding } from '../../../src/ash/base/common/keybindings.js';
+import { OperatingSystem } from '../../../src/ash/base/common/platform.js';
 import { KeybindingsRegistry, KeybindingSource } from '../../../src/ash/platform/keybinding/common/keybindingsRegistry.js';
 import { MutableDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { inQuickInputContext } from '../../../src/ash/platform/quickinput/browser/quickInput.js';
@@ -79,7 +81,13 @@ services.registerInstance(IStorageService, resources.add(new BrowserStorageServi
 services.registerInstance(IEditorPartsService, { activePane: undefined } as unknown as IEditorPartsService);
 services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService));
 services.registerInstance(IDialogService, resources.add(new DialogService()));
-services.registerInstance(IKeybindingService, { lookupKeybinding: () => undefined, onDidUpdateKeybindings: Event.None } as unknown as IKeybindingService);
+const shortcutOS = parameters.get('os') === 'windows' ? OperatingSystem.Windows : OperatingSystem.Macintosh;
+const commandBindings = new Map([
+	['test.quickAccess.AlphaFormat', resolveKeybinding(Keybinding.single(logicalKey('p', { primaryKey: true, shiftKey: true })), shortcutOS)],
+	['test.quickAccess.Format', resolveKeybinding(Keybinding.chord(logicalKey('k', { primaryKey: true }), logicalKey('Enter', { primaryKey: true })), shortcutOS)],
+	['test.quickAccess.ZuluFormat', resolveKeybinding(Keybinding.single(physicalKey('F1')), shortcutOS)],
+]);
+services.registerInstance(IKeybindingService, { lookupKeybinding: (command: string) => commandBindings.get(command), onDidUpdateKeybindings: Event.None } as unknown as IKeybindingService);
 const contexts = resources.add(new ContextKeyService());
 const commands = resources.add(new CommandService(services));
 services.registerInstance(ICommandService, commands);

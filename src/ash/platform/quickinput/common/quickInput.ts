@@ -1,6 +1,7 @@
 import type { Event } from "../../../base/common/event.js";
 import type { CancellationToken } from '../../../base/common/cancellation.js';
 import type { IDisposable } from "../../../base/common/lifecycle.js";
+import type { ResolvedKeybinding } from "../../../base/common/keybindings.js";
 import type { IQuickAccessController } from './quickAccess.js';
 import {
 	createServiceIdentifier,
@@ -13,7 +14,7 @@ export interface IQuickPickItem {
 	readonly detail?: string;
 	/** Marks the chosen item independently of the row being browsed. */
 	readonly picked?: boolean;
-	readonly keybinding?: string;
+	readonly keybinding?: ResolvedKeybinding;
 	readonly className?: string;
 	readonly buttons?: readonly IQuickPickItemButton[];
 	readonly iconClass?: string;

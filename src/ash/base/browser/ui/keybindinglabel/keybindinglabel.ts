@@ -1,3 +1,4 @@
+import "./keybindinglabel.css";
 import { getKeybindingLabel, getKeybindingLabelParts, KeybindingLabelStyle } from "../../../common/keybindingLabels.js";
 import type { ResolvedKeybinding } from "../../../common/keybindings.js";
 import { Disposable, toDisposable } from "../../../common/lifecycle.js";

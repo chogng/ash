@@ -316,7 +316,7 @@ test.describe('Sessions settings components', () => {
 		await navigation.getByRole('button', { name: 'Appearance' }).click();
 	});
 
-	test('preferences keyboard navigation clears search before handing off to shared shortcuts', async ({ page }) => {
+	test('preferences keyboard navigation clears search before handing off to shared shortcuts', async ({ page }, testInfo) => {
 		const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
 		const search = settings.getByRole('searchbox');
 		await search.fill('compact');
@@ -344,6 +344,13 @@ test.describe('Sessions settings components', () => {
 		await expect(sharedEditor.getByRole('searchbox')).toBeFocused();
 		await sharedEditor.getByRole('searchbox').fill('workbench.action.openSettings');
 		await expect(sharedEditor.locator('.ash-keybindings-command-id').filter({ hasText: /^workbench\.action\.openSettings$/u })).toBeVisible();
+		const shortcut = sharedEditor.locator('.ash-keybindings-key .ash-keybinding-label').first();
+		await expect(shortcut.locator('kbd')).toHaveCount(2);
+		for (const cap of await shortcut.locator('kbd').all()) {
+			await expect(cap).toHaveCSS('height', '22px');
+			await expect(cap).toHaveCSS('border-radius', '4px');
+		}
+		await sharedEditor.screenshot({ path: testInfo.outputPath('settings-keycaps.png') });
 	});
 
 	test('Customize settings and feature links open the actual Workbench settings owner', async ({ page }, testInfo) => {

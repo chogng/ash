@@ -7,6 +7,7 @@ import type { IDimension } from '../../../../base/browser/dom.js';
 import { isModifierKey, StandardKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
+import { KeybindingLabel } from '../../../../base/browser/ui/keybindinglabel/keybindinglabel.js';
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { getKeybindingLabel, KeybindingLabelStyle } from '../../../../base/common/keybindingLabels.js';
@@ -408,6 +409,7 @@ class KeyboardShortcutRow extends Disposable {
 	private readonly command: HTMLSpanElement;
 	private readonly commandId: HTMLSpanElement;
 	private readonly key: HTMLSpanElement;
+	private readonly keybindingLabel = this._register(new MutableDisposable<KeybindingLabel>());
 	private readonly when: HTMLSpanElement;
 	private readonly source: HTMLSpanElement;
 	private readonly edit: Button;
@@ -463,7 +465,16 @@ class KeyboardShortcutRow extends Disposable {
 		this.item = item;
 		this.command.textContent = item.commandLabel;
 		this.commandId.textContent = item.command ?? '';
-		this.key.textContent = item.keyLabel || '—';
+		const keybinding = item.keybindingItem.resolvedKeybinding;
+		if (!keybinding) {
+			this.keybindingLabel.clear();
+			this.key.textContent = item.keyLabel || '—';
+		} else if (this.keybindingLabel.value) {
+			this.keybindingLabel.value.keybinding = keybinding;
+		} else {
+			this.key.textContent = '';
+			this.keybindingLabel.value = new KeybindingLabel(this.key, { keybinding, presentation: 'keycap' });
+		}
 		this.when.textContent = item.when || '—';
 		this.source.textContent = item.sourceLabel;
 		this.element.classList.toggle('is-user', item.source === 'user');
