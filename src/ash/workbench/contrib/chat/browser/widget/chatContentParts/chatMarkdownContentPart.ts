@@ -1,10 +1,11 @@
 import './media/chatMarkdownPart.css';
 import { Emitter } from '../../../../../../base/common/event.js';
 import { addDisposableListener, h } from '../../../../../../base/browser/dom.js';
-import { MarkdownElement, type MarkdownElementOptions } from '../../../../../../base/browser/markdownRenderer.js';
+import type { MarkdownRenderOptions } from '../../../../../../base/browser/markdownRenderer.js';
 import type { IMarkdownString } from '../../../../../../base/common/htmlContent.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
+import { IMarkdownRendererService } from '../../../../../../platform/markdown/browser/markdownRenderer.js';
 import { ChatMarkdownDecorationsRenderer } from './chatMarkdownDecorationsRenderer.js';
 import { CodeBlockPart } from './codeBlockPart.js';
 
@@ -12,6 +13,11 @@ interface RenderedBlock {
 	readonly node: ChildNode;
 	readonly source: string;
 	readonly reusable: boolean;
+}
+
+interface ChatMarkdownContentPartOptions extends MarkdownRenderOptions {
+	readonly ownerDocument: Document;
+	readonly markdown?: string | IMarkdownString;
 }
 
 /** Owns one stable response root, sanitized render lifetime and the response's existing code models. */
@@ -24,7 +30,7 @@ export class ChatMarkdownContentPart extends Disposable {
 	private readonly images = new Map<string, Promise<Blob>>();
 	private blocks: readonly RenderedBlock[] = [];
 
-	constructor(private readonly options: MarkdownElementOptions, @IInstantiationService private readonly instantiation: IInstantiationService) {
+	constructor(private readonly options: ChatMarkdownContentPartOptions, @IInstantiationService private readonly instantiation: IInstantiationService, @IMarkdownRendererService private readonly markdownRenderer: IMarkdownRendererService) {
 		super();
 		this.domNode = h(options.ownerDocument, 'div');
 		this.domNode.className = 'ash-chat-markdown-part';
@@ -52,8 +58,8 @@ export class ChatMarkdownContentPart extends Disposable {
 		const code: { readonly languageId: string; readonly text: string; readonly placeholder: HTMLElement; }[] = [];
 		const images = new Set<string>();
 		try {
-			const rendered = lifetime.add(new MarkdownElement({
-				...this.options, markdown, fillInIncompleteTokens,
+			const rendered = lifetime.add(this.markdownRenderer.render(markdown, {
+				...this.options, fillInIncompleteTokens,
 				asyncRenderCallback: () => { this.options.asyncRenderCallback?.(); this.changedHeight.fire(); },
 				imageResourceLoader: this.options.imageResourceLoader ? resource => {
 					const key = resource.toString();

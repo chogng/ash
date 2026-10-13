@@ -1,4 +1,5 @@
 import './contrib/splash/browser/splash.contribution.js';
+import '../platform/meteredConnection/browser/meteredConnectionService.js';
 import { IRemoteTunnelService } from '../platform/remoteTunnel/common/remoteTunnel.js';
 import { BrowserRemoteTunnelService } from '../platform/remoteTunnel/browser/remoteTunnelService.js';
 import { BrowserElevatedFileService } from './services/files/browser/elevatedFileService.js';

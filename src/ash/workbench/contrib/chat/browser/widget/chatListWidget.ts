@@ -391,9 +391,9 @@ export class ChatListWidget extends DomWidget {
 			const markdown = disposables.add(this.instantiationService.createInstance(ChatMarkdownContentPart, {
 				ownerDocument: this.element.ownerDocument,
 				markdown: { value: item.text, supportThemeIcons: true, supportAlertSyntax: true },
-				breaks: true,
+				markedOptions: { breaks: true },
 				fillInIncompleteTokens: item.transient,
-				linkHandler: (target: string) => this.onDidRequestLink?.(target),
+				actionHandler: this.onDidRequestLink ? (target: string) => this.onDidRequestLink!(target) : undefined,
 				imageResourceLoader: this.imageResourceLoader,
 			}));
 			disposables.add(markdown.onDidChangeHeight(() => { this.relayout.schedule(); this._onDidChangeContent.fire(); }));

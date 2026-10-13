@@ -23,7 +23,8 @@ import { parseSnippet } from '../../../../../editor/contrib/snippet/common/snipp
 import { registerCodeEditorServices } from '../../../../../editor/test/browser/testCodeEditor.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { IMarkerService, MarkerService, MarkerSeverity } from '../../../../../platform/markers/common/markers.js';
+import { IMarkerService, MarkerSeverity } from '../../../../../platform/markers/common/markers.js';
+import { MarkerService } from '../../../../../platform/markers/common/markerService.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../common/contributions.js';
 import { SaveReason } from '../../../../common/editor.js';
 import { IEditorPartsService } from '../../../../browser/parts/editor/editorParts.js';
@@ -355,7 +356,7 @@ test('save contribution runs fixes before imports on the shared model, persists 
 	using reference = await fixture.bulk.models.acquire({ resource }, signal());
 	using second = await fixture.bulk.models.acquire({ resource }, signal());
 	reference.model.setValue('edited');
-	fixture.markers.changeOne('test', resource, [{ range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 6 } }, severity: MarkerSeverity.Warning, message: 'unused', source: 'test', code: 42 }]);
+	fixture.markers.changeOne('test', resource, [{ startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 7, severity: MarkerSeverity.Warning, message: 'unused', source: 'test', code: '42' }]);
 	const requests: LanguageCodeActionRequest[] = [];
 	using provider = fixture.features.codeActionProvider.register('*', {
 		provideCodeActions: request => {

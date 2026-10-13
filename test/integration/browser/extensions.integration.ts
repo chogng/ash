@@ -25,6 +25,7 @@ import { IExtensionApi, type ExtensionResourceRequest } from '../../../src/ash/p
 import { createBrowserExtensionApi, withBuiltInExtensions } from '../../../src/ash/platform/extensions/browser/extensionApi.js';
 import { ExtensionResourceLoaderService } from '../../../src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
+import { IMarkdownRendererService, MarkdownRendererService } from '../../../src/ash/platform/markdown/browser/markdownRenderer.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
@@ -89,6 +90,9 @@ import { IWorkspaceExtensionsConfigService, WorkspaceExtensionsConfigService } f
 import { IExtensionRecommendationsService } from '../../../src/ash/workbench/services/extensionRecommendations/common/extensionRecommendations.js';
 import { ExtensionRecommendationsService } from '../../../src/ash/workbench/contrib/extensions/browser/extensionRecommendationsService.js';
 import { IAgentCapabilitiesService } from '../../../src/ash/platform/agentCapabilities/common/agentCapabilitiesService.js';
+import { IMcpServerStatusService, type McpServerStatus } from '../../../src/ash/platform/mcp/common/mcpServerStatusService.js';
+import { createAppServerMcpServerStatusApi } from '../../../src/ash/platform/mcp/browser/mcpServerStatusApi.js';
+import type { AppServerProtocolClient } from '../../../src/ash/platform/agentHost/browser/appServerProtocolClient.js';
 import { PaneView } from '../../../src/ash/base/browser/ui/splitview/paneview.js';
 import { registerSkillActions } from '../../../src/ash/workbench/contrib/chat/browser/promptSyntax/skillActions.js';
 import { LanguageServerSettingsContent } from '../../../src/ash/workbench/contrib/language/browser/languageServerSettingsContent.js';
@@ -143,6 +147,7 @@ services.registerInstance(IExtensionApi, withBuiltInExtensions({
 	} : undefined),
 }, createBrowserExtensionApi()));
 services.registerInstance(IOpenerService, { open: async (href, options) => { requests.push(['openLink', String(href), options]); return true; } } as IOpenerService);
+services.registerSingleton(IMarkdownRendererService, () => services.createInstance(MarkdownRendererService));
 let editorPolicyRevision = 1;
 let editorEntrypoint: string | null = 'dist/extension.js';
 const editorPolicies = new Map<string, { enabled: boolean; granted: boolean; }>();
@@ -333,9 +338,32 @@ services.registerInstance(IFileService, files);
 services.registerInstance(IUriIdentityService, disposables.add(new UriIdentityService(files)));
 services.registerInstance(IWorkspaceExtensionsConfigService, disposables.add(services.createInstance(WorkspaceExtensionsConfigService)));
 services.registerInstance(IExtensionRecommendationsService, services.createInstance(ExtensionRecommendationsService));
+let mcpServers: readonly McpServerStatus[] = [{ id: 'marketplace:example/web:mcp:fixture-server', displayName: 'fixture-server', httpOrigin: 'https://example.com', state: { status: 'connected' }, catalogGeneration: 1, connectionGeneration: 1, toolCount: 1 }];
+let mcpStatusFailure = false;
+let mcpToolsFailure = false;
+let holdMcpStatus = false;
+let completeMcpStatus: (() => void) | undefined;
+const mcpCapabilities = { mcp: true };
+services.registerInstance(IMcpServerStatusService, createAppServerMcpServerStatusApi({
+	capabilities: mcpCapabilities,
+	request: async (definition: { method: string; }, params: unknown) => {
+		if (definition.method !== 'mcp/server/status') { throw new Error('Unexpected MCP request'); }
+		requests.push([definition.method, params]);
+		if (mcpStatusFailure) { throw new Error('Status connection lost'); }
+		const result = { catalogGeneration: 1, servers: structuredClone(mcpServers) };
+		if (holdMcpStatus) {
+			holdMcpStatus = false;
+			await new Promise<void>(resolve => { completeMcpStatus = resolve; });
+		}
+		return result;
+	},
+} as unknown as AppServerProtocolClient));
 services.registerInstance(IAgentCapabilitiesService, {
 	isAvailable: true,
-	read: async () => ({ tools: [{ name: 'fixture_search', description: 'Search fixture records', source: 'mcp', sourceDetails: ['marketplace:example/web:mcp:fixture-server'], exposure: 'direct', authority: 'providerDefined' }], toolSets: [{ id: 'fixture-set', source: 'mcp', sourceId: 'marketplace:example/web:mcp:fixture-server', tools: ['fixture_search'] }], localProcessSandboxConfigured: false, sandboxBackends: [], sandboxDiagnostics: [], directoryGrantsReadable: false }),
+	read: async () => {
+		if (mcpToolsFailure) { throw new Error('Tool catalog unavailable'); }
+		return { tools: [{ name: 'fixture_search', description: 'Search fixture records', source: 'mcp' as const, sourceDetails: ['marketplace:example/web:mcp:fixture-server'], exposure: 'direct' as const, authority: 'providerDefined' as const }], toolSets: [{ id: 'fixture-set', source: 'mcp' as const, sourceId: 'marketplace:example/web:mcp:fixture-server', tools: ['fixture_search'] }], localProcessSandboxConfigured: false, sandboxBackends: [], sandboxDiagnostics: [], directoryGrantsReadable: false };
+	},
 });
 const host = document.getElementById('extensions')!;
 const paneLayout = new URLSearchParams(location.search).has('paneLayout');
@@ -430,6 +458,14 @@ function prepareSettings(): void {
 }
 
 window.ashExtensionsIntegration = {
+	setMcpServers: servers => { mcpServers = servers; },
+	failMcpStatus: () => { mcpStatusFailure = true; },
+	failMcpTools: () => { mcpToolsFailure = true; },
+	setMcpSupported: supported => { mcpCapabilities.mcp = supported; },
+	refreshMcp: () => mcp.refresh(),
+	holdMcpStatus: () => { holdMcpStatus = true; completeMcpStatus = undefined; },
+	mcpStatusStarted: () => !!completeMcpStatus,
+	completeMcpStatus: () => { completeMcpStatus?.(); completeMcpStatus = undefined; },
 	prepareSettings,
 	readSetting: (key: string) => settingsConfiguration!.getValue(key),
 	requests,
@@ -464,6 +500,7 @@ window.ashExtensionsIntegration = {
 };
 declare global {
 	interface Window {
-		ashExtensionsIntegration: { prepareSettings(): void; readSetting(key: string): unknown; openEditorExtension(): Promise<void>; holdReadme(): void; readmeStarted(): boolean; completeReadme(): void; setRecommendations(content: string): Promise<void>; leaveWorkspace(): void; holdInstructions(): void; instructionsStarted(): boolean; instructionsAborted(): boolean; completeInstructions(): void; setSession(id: string): void; addMcpPackage(): void; addSkillOnlyPlugin(): void; requests: unknown[]; startCommand(id: string): void; waitCommand(): Promise<void>; changePluginRevision(): void; removeEditorEntrypoint(): void; localPackages(): PluginPackageDto[]; open(options: ExtensionsOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void; };
+
+		ashExtensionsIntegration: { setMcpServers(servers: readonly McpServerStatus[]): void; failMcpStatus(): void; failMcpTools(): void; setMcpSupported(supported: boolean): void; refreshMcp(): Promise<void>; holdMcpStatus(): void; mcpStatusStarted(): boolean; completeMcpStatus(): void; prepareSettings(): void; readSetting(key: string): unknown; openEditorExtension(): Promise<void>; holdReadme(): void; readmeStarted(): boolean; completeReadme(): void; setRecommendations(content: string): Promise<void>; leaveWorkspace(): void; holdInstructions(): void; instructionsStarted(): boolean; instructionsAborted(): boolean; completeInstructions(): void; setSession(id: string): void; addMcpPackage(): void; addSkillOnlyPlugin(): void; requests: unknown[]; startCommand(id: string): void; waitCommand(): Promise<void>; changePluginRevision(): void; removeEditorEntrypoint(): void; localPackages(): PluginPackageDto[]; open(options: ExtensionsOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void; };
 	}
 }

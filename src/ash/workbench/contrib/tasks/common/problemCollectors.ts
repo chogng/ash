@@ -3,13 +3,13 @@ import { TaskQueue } from '../../../../base/common/async.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { URI } from '../../../../base/common/uri.js';
-import { MarkerSeverity, type IMarkerService, type MarkerInput } from '../../../../platform/markers/common/markers.js';
+import { MarkerSeverity, type IMarkerService, type IResourceMarker } from '../../../../platform/markers/common/markers.js';
 import type { ProblemMatcher } from '../../../services/tasks/common/problemMatcher.js';
 
 interface MatcherState {
 	readonly matcher: ProblemMatcher;
 	readonly owner: string;
-	readonly markers: MarkerInput[];
+	readonly markers: IResourceMarker[];
 	active: boolean;
 	completed: boolean;
 	patternIndex: number;
@@ -40,12 +40,12 @@ export class WatchingProblemCollector extends Disposable {
 		super();
 		this.states = matchers.map(matcher => ({ matcher, owner: `tasks:${runId}:${matcher.owner}`, markers: [], active: matcher.watching?.activeOnStart ?? false, completed: false, patternIndex: 0, fields: {}, version: 0, pending: 0 }));
 		for (const state of this.states) {
-			markers.remove(state.owner);
+			markers.changeAll(state.owner, []);
 		}
 	}
 
 	public get isReady(): boolean { return this._isReady; }
-	public get hasErrors(): boolean { return this.states.some(state => state.markers.some(marker => marker.severity === MarkerSeverity.Error)); }
+	public get hasErrors(): boolean { return this.states.some(state => state.markers.some(({ marker }) => marker.severity === MarkerSeverity.Error)); }
 	public get hasProblems(): boolean { return this.states.some(state => state.markers.length > 0); }
 	public get isWatching(): boolean { return this.states.some(state => state.matcher.watching !== undefined); }
 	public get owners(): readonly string[] { return this.states.map(state => state.owner); }
@@ -168,7 +168,7 @@ export class WatchingProblemCollector extends Disposable {
 		}
 	}
 
-	private publishMarker(state: MatcherState, marker: MarkerInput): void {
+	private publishMarker(state: MatcherState, marker: IResourceMarker): void {
 		const open = this.isOpen(marker.resource);
 		if (state.matcher.applyTo === 'openDocuments' && !open || state.matcher.applyTo === 'closedDocuments' && open) return;
 		state.markers.push(marker);
@@ -180,13 +180,13 @@ export class WatchingProblemCollector extends Disposable {
 		// Multiple output formats may share one compiler's diagnostic owner.
 		const markers = this.states.flatMap(state => state.owner === owner ? state.markers : []).slice(0, 5000);
 		if (markers.length) {
-			this.markers.set(owner, markers);
+			this.markers.changeAll(owner, markers);
 		} else {
-			this.markers.remove(owner);
+			this.markers.changeAll(owner, []);
 		}
 	}
 
-	private resolveMarker(state: MatcherState, marker: MarkerInput, file: string): void {
+	private resolveMarker(state: MatcherState, marker: IResourceMarker, file: string): void {
 		if (this.searchController.signal.aborted) return;
 		const version = state.version;
 		const key = JSON.stringify([state.matcher.searchPaths, file]);
@@ -209,7 +209,7 @@ export class WatchingProblemCollector extends Disposable {
 		});
 	}
 
-	private marker(state: MatcherState): MarkerInput | undefined {
+	private marker(state: MatcherState): IResourceMarker | undefined {
 		const fields = state.fields;
 		if (!fields.file || !fields.message) {
 			return undefined;
@@ -253,11 +253,16 @@ export class WatchingProblemCollector extends Disposable {
 		const severity = fields.severity?.toLowerCase();
 		return {
 			resource,
-			range: fileOnly ? { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 0 } } : { start: { lineIndex: line - 1, columnIndex: column - 1 }, end: { lineIndex: endLine - 1, columnIndex: endColumn - 1 } },
-			message: fields.message,
-			severity: severity === 'error' || fields.severity === 'E' ? MarkerSeverity.Error : severity === 'warning' || severity === 'warn' || fields.severity === 'W' ? MarkerSeverity.Warning : severity === 'info' || severity === 'note' || severity === 'hint' || fields.severity === 'I' ? MarkerSeverity.Information : state.matcher.severity,
-			source: state.matcher.source,
-			code: fields.code || undefined,
+			marker: {
+				startLineNumber: line,
+				startColumn: column,
+				endLineNumber: endLine,
+				endColumn: endColumn,
+				message: fields.message,
+				severity: severity === 'error' || fields.severity === 'E' ? MarkerSeverity.Error : severity === 'warning' || severity === 'warn' || fields.severity === 'W' ? MarkerSeverity.Warning : severity === 'info' || severity === 'note' || severity === 'hint' || fields.severity === 'I' ? MarkerSeverity.Info : state.matcher.severity,
+				source: state.matcher.source,
+				code: fields.code || undefined,
+			},
 		};
 	}
 

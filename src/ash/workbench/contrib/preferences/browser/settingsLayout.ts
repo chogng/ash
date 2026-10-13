@@ -60,8 +60,8 @@ export const SettingsNavigation = [
 					{
 						id: 'updates',
 						get label() { return localize('update.settingsGroup', 'Updates'); },
-						get description() { return localize('update.settingsGroupDescription', 'Choose how Ash Desktop checks for product updates.'); },
-						settings: ['update.policy'],
+						get description() { return localize('update.settingsGroupDescription', 'Choose how Ash checks for updates and synchronizes language packs.'); },
+						settings: ['update.policy', 'network.meteredConnection'],
 					},
 					{
 						id: 'accessibility',

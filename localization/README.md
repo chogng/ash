@@ -39,6 +39,8 @@ pnpm localization:check --report-missing
 
 核心英语始终优先。与预装简中相同包 ID 的安装版本可独立替换预装目录，其他包不能覆盖预装语言。多个已安装扩展提供同一语言时，该语言不进入可选列表，也不写入本地资源；卸载重复的包后，剩下的包会重新加载。其他语言正常加载。
 
+`network.meteredConnection` 控制启动后的语言包缓存同步。在计费网络下，客户端先读取本地缓存并继续使用启动语言，推迟从 App Server 读取完整的已安装语言目录；恢复非计费网络后补做一次同步。用户主动获取语言列表、刷新，或安装状态变化后的同步照常执行。Web Workbench 和 Sessions 使用浏览器状态服务及本地应用配置；Electron 使用 Main 统一管理的计费状态。`auto` 只采用浏览器明确的省流量或计费信号，不以网速推断。
+
 ## 预装简中语言包
 
 简中的扩展清单使用 `engines.ash` 和 `contributes.localizations`，声明 `localization/package.json` 目录资源；不声明可执行入口。`localization/languages.json` 仅保留英语。

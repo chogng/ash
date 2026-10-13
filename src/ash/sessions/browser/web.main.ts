@@ -1,4 +1,5 @@
 import '../../workbench/contrib/url/browser/url.contribution.js';
+import '../../platform/meteredConnection/browser/meteredConnectionService.js';
 import { AppToolsHost } from '../contrib/appTools/browser/appToolsHost.js';
 import { AppServerAppToolsHost } from '../services/appTools/browser/appServerAppToolsHost.js';
 import { IndexedDBFileSystemProvider } from '../../platform/files/browser/indexedDBFileSystemProvider.js';

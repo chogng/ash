@@ -12,7 +12,7 @@ import { hooksConfigurationIpcRoute, openHooksTextFile } from '../../platform/ho
 import { ThemeMainService } from '../../platform/theme/electron-main/themeMainServiceImpl.js';
 import { Server as MainProcessIPCServer } from '../../base/parts/ipc/electron-main/ipc.electron.js';
 import { isRecord } from '../../base/common/types.js';
-import { Emitter } from '../../base/common/event.js';
+import { Emitter, Event } from '../../base/common/event.js';
 import { OAuthCallbackHost } from "../../platform/connectors/electron-main/oauthCallbackHost.js";
 import { RendererWorkspaceHost } from "../../platform/workspaces/electron-main/rendererWorkspaceHost.js";
 import { AppServerBrowserHost } from "../../platform/agentHost/electron-main/appServerBrowserHost.js";
@@ -47,6 +47,11 @@ import { WebContentsView, session as electronSession } from 'electron/main';
 import { configurationValues } from '../../platform/configuration/common/configurationIpc.js';
 import { formatNlsMessage } from '../../nls.js';
 import { ConfigurationMainService, configurationChannel } from "../../platform/configuration/electron-main/configurationMainService.js";
+import { IConfigurationResourceService } from '../../platform/configuration/common/configurationResourceService.js';
+import { IMeteredConnectionService } from '../../platform/meteredConnection/common/meteredConnection.js';
+import { METERED_CONNECTION_CHANNEL } from '../../platform/meteredConnection/common/meteredConnectionIpc.js';
+import { MeteredConnectionMainService } from '../../platform/meteredConnection/electron-main/meteredConnectionMainService.js';
+import { MeteredConnectionChannel } from '../../platform/meteredConnection/electron-main/meteredConnectionChannel.js';
 import { NATIVE_CONTEXT_MENU_CLOSE_CHANNEL, NATIVE_CONTEXT_MENU_POPUP_CHANNEL, validateNativeContextMenuClose, validateNativeContextMenuRequest, type INativeContextMenuRequest } from '../../base/parts/contextmenu/common/contextmenu.js';
 import { developmentArtifactsPath } from "../../platform/environment/node/developmentArtifacts.js";
 import { normalizeExternalUrl } from '../../platform/opener/common/opener.js';
@@ -199,7 +204,7 @@ export class AshApplication extends Disposable {
 		name: 'Ash Browser Automation',
 		entryPoint: fileURLToPath(new URL('../electron-utility/sharedProcess/sharedProcessMain.js', import.meta.url)),
 	}));
-	private readonly updateMainService: UpdateMainService;
+	private updateMainService!: UpdateMainService;
 	private readonly nativeKeyboardLayout: NativeKeyboardLayoutMainService;
 	private readonly globalKeybindings: GlobalKeybindingsMainService;
 	private readonly nativeMenubar: NativeMenubarMainService | undefined;
@@ -309,7 +314,6 @@ export class AshApplication extends Disposable {
 		this.disposableTracker = disposableTracker;
 		this.tracking = tracking;
 		this.trustedIpcRouter = this._register(new TrustedIpcRouter(ipcMain));
-		this.updateMainService = this._register(new UpdateMainService(version => this.lifecycleMainService.prepareUpdateRestart(version)));
 		this.nativeKeyboardLayout = this._register(new NativeKeyboardLayoutMainService());
 		this.globalKeybindings = this._register(new GlobalKeybindingsMainService({
 			shortcuts: globalShortcut,
@@ -415,6 +419,23 @@ export class AshApplication extends Disposable {
 		await this.createPersistentServices(token);
 		throwIfCancelled(token);
 		this.mainProcessIpcServer.registerChannel('configuration', configurationChannel(this.services.configuration));
+		const configuration = this.services.configuration;
+		this.windowServices.registerInstance(IConfigurationResourceService, {
+			onDidChangeResource: Event.map(configuration.onDidChange, snapshot => ({ revision: snapshot.revision, source: snapshot.document.source })),
+			async read() {
+				const snapshot = configuration.read();
+				return { revision: snapshot.revision, source: snapshot.document.source };
+			},
+			async write(source, expectedRevision) {
+				const snapshot = await configuration.update({ expectedRevision, document: { version: 1, source } });
+				return { revision: snapshot.revision, source: snapshot.document.source };
+			},
+		});
+		const meteredConnection = this._register(this.windowServices.createInstance(MeteredConnectionMainService));
+		this.windowServices.registerInstance(IMeteredConnectionService, meteredConnection);
+		this.mainProcessIpcServer.registerChannel(METERED_CONNECTION_CHANNEL, new MeteredConnectionChannel(meteredConnection));
+		this.updateMainService = this._register(this.windowServices.createInstance(UpdateMainService,
+			(version: string) => this.lifecycleMainService.prepareUpdateRestart(version), app));
 		this.mainProcessIpcServer.registerChannel('remotePortForwarding', remotePortForwardingChannel(context => {
 			const service = this.windowPortForwarding.get(context);
 			if (!service || service.isDisposed) {

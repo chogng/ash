@@ -1,6 +1,7 @@
 import { Disposable, MutableDisposable } from '../../../../../../base/common/lifecycle.js';
 import { IChatTipService } from '../../chatTipService.js';
 import { ChatTipContentPart } from '../chatContentParts/chatTipContentPart.js';
+import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
 
 export interface IChatInputTipPresenterOptions {
 	readonly container: HTMLElement;
@@ -12,7 +13,7 @@ export interface IChatInputTipPresenterOptions {
 export class ChatInputTipPresenter extends Disposable {
 	private readonly part = this._register(new MutableDisposable<ChatTipContentPart>());
 
-	constructor(private readonly options: IChatInputTipPresenterOptions, @IChatTipService private readonly tips: IChatTipService) {
+	constructor(private readonly options: IChatInputTipPresenterOptions, @IChatTipService private readonly tips: IChatTipService, @IInstantiationService private readonly instantiation: IInstantiationService) {
 		super();
 		this._register(tips.onDidDismissTip(() => this.update()));
 		this.update();
@@ -29,7 +30,7 @@ export class ChatInputTipPresenter extends Disposable {
 			return;
 		}
 		if (this.part.value) return;
-		const part = new ChatTipContentPart(this.options.container.ownerDocument, tip, () => {
+		const part = this.instantiation.createInstance(ChatTipContentPart, this.options.container.ownerDocument, tip, () => {
 			this.options.focusInput();
 			this.tips.dismissTip();
 		});

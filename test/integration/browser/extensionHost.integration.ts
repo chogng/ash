@@ -60,7 +60,7 @@ declare global {
 window.extensionEditorIntegration = {
 	focus: () => { editor.setPosition(new stanza.Position(1, model.getLineMaxColumn(1))); editor.focus(); },
 	events: () => events, completions: () => completions,
-	markers: () => services.get(IMarkerService).read(model.uri).map(marker => marker.message),
+	markers: () => services.get(IMarkerService).read({ resource: model.uri }).map(marker => marker.message),
 	text: () => model.getValue(),
 	stop: () => { documents.clear(); diagnostics.clear(); provider.replace({}); },
 	close: () => { editor.setModel(null); model.dispose(); },

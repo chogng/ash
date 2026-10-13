@@ -1,7 +1,7 @@
 import { Disposable, DisposableMap, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
 import { IModelService } from '../../../editor/common/services/model.js';
-import { IMarkerService, MarkerSeverity, type MarkerInput } from '../../../platform/markers/common/markers.js';
+import { IMarkerService, MarkerSeverity, type IResourceMarker } from '../../../platform/markers/common/markers.js';
 import type { ExtensionClientSource, ExtensionHostFleetSnapshot } from '../../../platform/agentHost/common/extensionHostApi.js';
 import type { ExtensionDiagnosticEntry } from '../common/extHost.protocol.js';
 
@@ -24,7 +24,7 @@ export class MainThreadDiagnostics extends Disposable {
 		const identity = JSON.stringify([source.extensionId, source.activationGeneration, source.incarnation]);
 		if (!this.sources.has(identity)) throw new Error('Diagnostic request belongs to a retired extension');
 		if (!collection || collection.length > 256 || entries.length > 1024) throw new TypeError('Invalid diagnostic collection');
-		const values: MarkerInput[] = [];
+		const values: IResourceMarker[] = [];
 		const resources = new Set<string>();
 		let stale = false;
 		for (const entry of entries) {
@@ -38,10 +38,20 @@ export class MainThreadDiagnostics extends Disposable {
 			for (const diagnostic of entry.diagnostics) {
 				const { start, end } = diagnostic;
 				if ([start.line, start.character, end.line, end.character].some(value => !Number.isSafeInteger(value) || value < 0) || start.line > end.line || start.line === end.line && start.character > end.character) throw new TypeError('Invalid diagnostic UTF-16 range');
+				if (typeof diagnostic.message !== 'string' || !diagnostic.message.trim()) throw new TypeError('Diagnostic message must not be empty');
 				values.push({
-					resource, range: { start: { lineIndex: start.line, columnIndex: start.character }, end: { lineIndex: end.line, columnIndex: end.character } },
-					message: diagnostic.message, severity: diagnosticSeverity(diagnostic.severity),
-					...(diagnostic.source === null ? {} : { source: diagnostic.source }), ...(diagnostic.code === null ? {} : { code: diagnostic.code }),
+					resource,
+					marker: {
+						startLineNumber: start.line + 1,
+						startColumn: start.character + 1,
+						endLineNumber: end.line + 1,
+						endColumn: end.character + 1,
+						message: diagnostic.message,
+						severity: diagnosticSeverity(diagnostic.severity),
+						...(entry.version === null ? {} : { modelVersionId: entry.version }),
+						...(diagnostic.source === null ? {} : { source: diagnostic.source }),
+						...(diagnostic.code === null ? {} : { code: diagnostic.code }),
+					},
 				});
 			}
 		}
@@ -55,8 +65,8 @@ export class MainThreadDiagnostics extends Disposable {
 		if (isNew) {
 			if ([...this.collections.keys()].filter(value => (JSON.parse(value) as [string, string])[0] === identity).length >= 128) throw new RangeError('Extension diagnostic collection quota exceeded');
 		}
-		this.markers.set(owner, values);
-		if (isNew) this.collections.set(key, toDisposable(() => this.markers.remove(owner)));
+		this.markers.changeAll(owner, values);
+		if (isNew) this.collections.set(key, toDisposable(() => this.markers.changeAll(owner, [])));
 	}
 
 	public clear(): void { this.collections.clearAndDisposeAll(); this.sources.clear(); }
@@ -66,7 +76,8 @@ function diagnosticSeverity(value: ExtensionDiagnosticEntry['diagnostics'][numbe
 	switch (value) {
 		case 'error': return MarkerSeverity.Error;
 		case 'warning': return MarkerSeverity.Warning;
-		case 'information': return MarkerSeverity.Information;
+		case 'information': return MarkerSeverity.Info;
 		case 'hint': return MarkerSeverity.Hint;
+		default: throw new TypeError('Unknown diagnostic severity');
 	}
 }

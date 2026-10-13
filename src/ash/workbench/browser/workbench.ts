@@ -90,6 +90,7 @@ import { IRendererHostService, type IRendererHost } from "../../platform/rendere
 import { ILocalTranscriptionService } from '../../platform/localTranscription/common/localTranscription.js';
 import { NullLocalTranscriptionService } from '../services/localTranscription/browser/localTranscriptionService.js';
 import { IAgentCapabilitiesService } from '../../platform/agentCapabilities/common/agentCapabilitiesService.js';
+import { IMcpServerStatusService } from '../../platform/mcp/common/mcpServerStatusService.js';
 import { ITraceSettingsService } from '../../platform/trace/common/traceSettingsService.js';
 import { IBrowserViewService } from '../../platform/browserView/common/browserView.js';
 import { IRemoteConnectionApi, IRemoteConnectionService, RemoteConnectionService } from "../../platform/remote/common/remoteConnectionService.js";
@@ -116,7 +117,8 @@ import { INotificationService } from "../../platform/notification/common/notific
 import { BrowserProgressService } from "../../platform/progress/browser/progressService.js";
 import { IProgressService } from "../../platform/progress/common/progress.js";
 import { StatusbarHeight } from './parts/workbenchPartDimensions.js';
-import { MarkerService, IMarkerService } from "../../platform/markers/common/markers.js";
+import { IMarkerService } from "../../platform/markers/common/markers.js";
+import { MarkerService } from "../../platform/markers/common/markerService.js";
 import type { IKeyboardLayoutProvider } from "../../platform/keyboardLayout/common/keyboardLayout.js";
 import {
 	BrowserDialogHandler,
@@ -313,6 +315,8 @@ import { HoverService, IHoverService } from "../../platform/hover/browser/hoverS
 import { IKeybindingService } from "../../platform/keybinding/common/keybinding.js";
 import { IUserKeyboardLayoutService, UnavailableUserKeyboardLayoutService } from "../../platform/keyboardLayout/common/userKeyboardLayout.js";
 import { IOpenerService } from "../../platform/opener/common/opener.js";
+import { IMarkdownRendererService } from '../../platform/markdown/browser/markdownRenderer.js';
+import { EditorMarkdownCodeBlockRenderer } from '../../editor/browser/widget/markdownRenderer/browser/editorMarkdownCodeBlockRenderer.js';
 import { OpenerService } from '../../editor/browser/services/openerService.js';
 import { IURLService } from '../../platform/url/common/url.js';
 import { CommandService } from "../services/commands/common/commandService.js";
@@ -527,8 +531,6 @@ export class Workbench extends Disposable {
 		services.registerInstance(IStorageService, storageService);
 		const extensionManagementService = this._register(new AppServerExtensionManagementService(api.extensionManagement, api.events));
 		services.registerInstance(IExtensionManagementService, extensionManagementService);
-		const languagePackService = this._register(services.createInstance(WebLanguagePacksService, builtinLanguagePackCatalogs, preinstalledLanguagePacks));
-		services.registerInstance(ILanguagePackService, languagePackService);
 		const enablement = this._register(services.createInstance(GlobalExtensionEnablementService));
 		services.registerInstance(IGlobalExtensionEnablementService, enablement);
 		const enabledExtensions = withEnabledBuiltInExtensions(api.extensions, enablement);
@@ -561,6 +563,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IDictationService, api.dictation);
 		services.registerInstance(ILocalTranscriptionService, api.localTranscription ?? this._register(new NullLocalTranscriptionService()));
 		services.registerInstance(IAgentCapabilitiesService, api.agentCapabilities);
+		services.registerInstance(IMcpServerStatusService, api.mcpServerStatus);
 		services.registerInstance(ITraceSettingsService, api.traceSettings);
 		services.registerInstance(IAgentExecutionSettingsService, api.executionSettings);
 		services.registerInstance(INetworkDiagnosticsService, api.networkDiagnostics);
@@ -672,6 +675,8 @@ export class Workbench extends Disposable {
 		this.configurationService = configuration;
 		services.registerInstance(IConfigurationService, configuration);
 		services.registerInstance(IConfigurationResourceService, configuration);
+		const languagePackService = this._register(services.createInstance(WebLanguagePacksService, builtinLanguagePackCatalogs, preinstalledLanguagePacks));
+		services.registerInstance(ILanguagePackService, languagePackService);
 		const textFileService = this._register(services.createInstance(TextFileService));
 		services.registerInstance(ITextFileService, textFileService);
 		const workingCopyService = this._register(services.createInstance(BrowserWorkingCopyService));
@@ -903,6 +908,7 @@ export class Workbench extends Disposable {
 			return openerService;
 		});
 		services.registerSingleton(IURLService, () => createURLService(services));
+		services.get(IMarkdownRendererService).setDefaultCodeBlockRenderer(services.createInstance(EditorMarkdownCodeBlockRenderer));
 		const userKeyboardLayoutService = userKeyboardLayoutApi ?? UnavailableUserKeyboardLayoutService;
 		services.registerInstance(IUserKeyboardLayoutService, userKeyboardLayoutService);
 		const notificationActionRunner = this._register(services.createInstance(NotificationActionRunner));

@@ -12,6 +12,7 @@ import type { LanguagePackCatalog } from '../../../../../platform/languagePacks/
 import { setNlsMessages } from '../../../../../nls.js';
 import { builtinLanguagePackCatalogs, preinstalledLanguagePacks, productLanguagePackCatalogs } from '../../common/localizationCatalogs.js';
 import type { LanguagePackIndexEntry } from '../../../../../platform/languagePacks/common/languagePackContract.js';
+import { IMeteredConnectionService } from '../../../../../platform/meteredConnection/common/meteredConnection.js';
 
 export function createTestLanguagePackStore(overrides: Partial<ILanguagePackStore> = {}): ILanguagePackStore {
 	let entries: readonly LanguagePackIndexEntry[] = [];
@@ -56,6 +57,7 @@ export function createTestLocaleService(configuration: IConfigurationService, la
 
 export function createTestLanguagePacks(extensionManagement: IExtensionManagementService): WebLanguagePacksService {
 	using services = new InstantiationService();
+	services.registerInstance(IMeteredConnectionService, { _serviceBrand: undefined, isConnectionMetered: false, onDidChangeIsConnectionMetered: Event.None });
 	services.registerInstance(IExtensionManagementService, extensionManagement);
 	services.registerInstance(ILanguagePackStore, createTestLanguagePackStore());
 	return services.createInstance(WebLanguagePacksService, builtinLanguagePackCatalogs, preinstalledLanguagePacks);

@@ -407,7 +407,7 @@ window.ashChatTranscriptIntegration = {
 	openReference: async (line, column) => { file.setSelection(new Selection(line, column, line, column)); file.focus(); await services.get(ICommandService).executeCommand('editor.action.openLink'); },
 	skillRequests: () => skillResourceRequests,
 	setFile: (value, line, column) => { fileModel.setValue(value); file.setSelection(new Selection(line, column, line, column)); },
-	diagnostics: () => services.get(IMarkerService).read(fileModel.uri).map(marker => ({ message: marker.message, code: marker.code })),
+	diagnostics: () => services.get(IMarkerService).read({ resource: fileModel.uri }).map(marker => ({ message: marker.message, code: marker.code })),
 	setReadonly: value => file.updateOptions({ readOnly: value }),
 	setWrap: value => services.get(IConfigurationService).updateValue('chat.editor.wordWrap', value ? 'on' : 'off'),
 	setCodeLineHeight: height => services.get(IConfigurationService).updateValue('chat.editor.lineHeight', height),

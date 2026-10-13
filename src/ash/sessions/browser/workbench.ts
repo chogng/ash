@@ -28,6 +28,7 @@ import { PromptsService } from '../../workbench/contrib/chat/common/promptSyntax
 import { IDirPermissionsService } from '../../platform/dirPermissions/common/dirPermissionsService.js';
 import { AppServerDirPermissionsService } from '../../workbench/services/dirPermissions/browser/appServerDirPermissionsService.js';
 import { IAgentCapabilitiesService } from '../../platform/agentCapabilities/common/agentCapabilitiesService.js';
+import { IMcpServerStatusService } from '../../platform/mcp/common/mcpServerStatusService.js';
 import { IInstructionService } from '../../platform/instructions/common/instructionService.js';
 import { ISessionGroupsService, SessionGroupsService } from '../services/sessions/browser/sessionGroupsService.js';
 import { IFileSearchService } from '../../platform/search/common/fileSearch.js';
@@ -141,7 +142,8 @@ import { IStorageService, WillSaveStateReason, StorageScope } from "../../platfo
 import { IThemeService } from "../../platform/theme/common/themeService.js";
 import { WorkbenchState, IWorkspaceContextService, type IWorkspace } from "../../platform/workspace/common/workspace.js";
 import { SessionsWorkspaceContextService } from '../services/workspace/browser/workspaceContextService.js';
-import { IMarkerService, MarkerService } from '../../platform/markers/common/markers.js';
+import { IMarkerService } from '../../platform/markers/common/markers.js';
+import { MarkerService } from '../../platform/markers/common/markerService.js';
 import { GitHubService as SessionsGitHubService, IGitHubService as ISessionsGitHubService } from '../contrib/github/browser/githubService.js';
 import { SessionFileService } from '../contrib/providers/agentHost/browser/sessionFileService.js';
 import { IFileService } from '../../platform/files/common/files.js';
@@ -202,6 +204,8 @@ import { IKeyboardLayoutService, type IKeyboardLayoutProvider } from "../../plat
 import { IUserKeyboardLayoutService, UnavailableUserKeyboardLayoutService, type IUserKeyboardLayoutApi } from "../../platform/keyboardLayout/common/userKeyboardLayout.js";
 import { IQuickInputService } from "../../platform/quickinput/common/quickInput.js";
 import { IOpenerService } from "../../platform/opener/common/opener.js";
+import { IMarkdownRendererService } from '../../platform/markdown/browser/markdownRenderer.js';
+import { EditorMarkdownCodeBlockRenderer } from '../../editor/browser/widget/markdownRenderer/browser/editorMarkdownCodeBlockRenderer.js';
 import { IBrowserViewService } from '../../platform/browserView/common/browserView.js';
 import '../../workbench/contrib/externalUriOpener/common/externalUriOpener.contribution.js';
 import { OpenerService } from '../../editor/browser/services/openerService.js';
@@ -326,8 +330,6 @@ export abstract class Workbench extends Disposable {
 		const extensionManagementService = this._register(new AppServerExtensionManagementService(options.api.extensionManagement, options.api.events));
 		services.registerInstance(IExtensionManagementService, extensionManagementService);
 		services.registerInstance(ILocalGitService, options.api.localGit);
-		const languagePacks = this._register(services.createInstance(WebLanguagePacksService, builtinLanguagePackCatalogs, preinstalledLanguagePacks));
-		services.registerInstance(ILanguagePackService, languagePacks);
 		const enablement = this._register(services.createInstance(GlobalExtensionEnablementService));
 		services.registerInstance(IGlobalExtensionEnablementService, enablement);
 		const enabledExtensions = withEnabledBuiltInExtensions(options.api.extensions, enablement);
@@ -346,6 +348,8 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(ILocalTranscriptionService, options.api.localTranscription ?? this._register(new NullLocalTranscriptionService()));
 		services.registerInstance(IConfigurationService, configurationService);
 		services.registerInstance(IConfigurationResourceService, configurationService);
+		const languagePacks = this._register(services.createInstance(WebLanguagePacksService, builtinLanguagePackCatalogs, preinstalledLanguagePacks));
+		services.registerInstance(ILanguagePackService, languagePacks);
 		if (options.nativeHostApi) services.registerInstance(INativeHostService, options.nativeHostApi);
 		const languageService = this._register(new LanguageService());
 		services.registerInstance(ILanguageService, languageService);
@@ -464,6 +468,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(ILanguageModelsService, this._register(services.createInstance(LanguageModelsService)));
 		services.registerInstance(IInstructionService, options.api.instructions);
 		services.registerInstance(IAgentCapabilitiesService, options.api.agentCapabilities);
+		services.registerInstance(IMcpServerStatusService, options.api.mcpServerStatus);
 		services.registerInstance(IDirPermissionsService, this._register(new AppServerDirPermissionsService(options.api.dirPermissions, options.api.events)));
 		services.registerInstance(IHooksService, options.api.hooks);
 		services.registerInstance(ITraceSettingsService, options.api.traceSettings);
@@ -509,6 +514,7 @@ export abstract class Workbench extends Disposable {
 			openerService.setDefaultExternalOpener({ openExternal: options.nativeHostApi.openExternal.bind(options.nativeHostApi) });
 		}
 		services.registerInstance(IOpenerService, openerService);
+		services.get(IMarkdownRendererService).setDefaultCodeBlockRenderer(services.createInstance(EditorMarkdownCodeBlockRenderer));
 		const userKeyboardLayoutService = options.userKeyboardLayoutApi ?? UnavailableUserKeyboardLayoutService;
 		services.registerInstance(IUserKeyboardLayoutService, userKeyboardLayoutService);
 		this._register(CommandsRegistry.register(RETURN_TO_WORKBENCH_COMMAND_ID, () => options.returnToWorkbench()));

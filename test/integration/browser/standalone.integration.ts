@@ -381,6 +381,7 @@ interface StandaloneHarness {
 	readLineCountConfiguration(): { lines: number; viewLines: number; digitWidth: number; layout: EditorLayoutInfo; };
 	setTestMarkers(enabled: boolean): void;
 	exerciseMarkerApi(): { readonly first: string[]; readonly second: string[]; readonly afterClear: string[]; readonly events: string[][]; };
+	exerciseMarkerBoundary(): { readonly errors: string[]; readonly messages: string[]; readonly changed: number; readonly version: number | undefined; readonly code: string | undefined; };
 	setMinimapColor(color: string): void;
 	readMinimapPixel(): number[];
 	exerciseRenderOwnership(): RenderOwnershipState;
@@ -2624,16 +2625,16 @@ window.ashStandaloneIntegration = {
 	},
 	setParentFontSize: () => callerEditor.updateOptions({ fontSize: 18 }),
 	setTestMarkers: enabled => {
-		if (enabled) stanza.editor.setModelMarkers(callerModel, 'integration', [{ range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 3 } }, severity: stanza.MarkerSeverity.Error, message: 'Test marker' }]);
+		if (enabled) stanza.editor.setModelMarkers(callerModel, 'integration', [{ startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 4, severity: stanza.MarkerSeverity.Error, message: 'Test marker' }]);
 		else stanza.editor.removeAllMarkers('integration');
 	},
 	exerciseMarkerApi: () => {
 		const events: string[][] = [];
 		const listener = stanza.editor.onDidChangeMarkers(resources => events.push(resources.map(resource => resource.toString())));
-		const range = { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 3 } };
+		const range = { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 4 };
 		try {
-			stanza.editor.setModelMarkers(callerModel, 'marker-api', [{ range, severity: stanza.MarkerSeverity.Error, message: 'caller' }]);
-			stanza.editor.setModelMarkers(ownedModel, 'marker-api', [{ range, severity: stanza.MarkerSeverity.Warning, message: 'owned' }]);
+			stanza.editor.setModelMarkers(callerModel, 'marker-api', [{ ...range, severity: stanza.MarkerSeverity.Error, message: 'caller' }]);
+			stanza.editor.setModelMarkers(ownedModel, 'marker-api', [{ ...range, severity: stanza.MarkerSeverity.Warning, message: 'owned' }]);
 			const first = stanza.editor.getModelMarkers({ owner: 'marker-api', resource: callerResource, take: 1 }).map(marker => marker.message);
 			const second = stanza.editor.getModelMarkers({ owner: 'marker-api', resource: ownedResource }).map(marker => marker.message);
 			stanza.editor.setModelMarkers(callerModel, 'marker-api', []);
@@ -2643,6 +2644,40 @@ window.ashStandaloneIntegration = {
 		} finally {
 			listener.dispose();
 			stanza.editor.removeAllMarkers('marker-api');
+		}
+	},
+	exerciseMarkerBoundary: () => {
+		const marker: stanza.IMarkerData = {
+			startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 4,
+			severity: stanza.MarkerSeverity.Error, message: 'retained',
+			modelVersionId: callerModel.getVersionId(),
+			code: { value: '0', target: stanza.URI.parse('https://example.com/diagnostic/0') },
+		};
+		stanza.editor.setModelMarkers(callerModel, 'marker-boundary', [marker]);
+		let changed = 0;
+		const listener = stanza.editor.onDidChangeMarkers(() => changed++);
+		const errors: string[] = [];
+		try {
+			for (const invalid of [
+				{ ...marker, startLineNumber: 0 },
+				{ ...marker, startColumn: -1 },
+				{ ...marker, endColumn: 0 },
+				{ ...marker, message: '' },
+				{ ...marker, severity: 32 as stanza.MarkerSeverity },
+				{ ...marker, code: 0 as unknown as string },
+			]) {
+				try { stanza.editor.setModelMarkers(callerModel, 'marker-boundary', [{ ...marker, message: 'partial' }, invalid]); }
+				catch (error) { errors.push((error as Error).message); }
+			}
+			const values = stanza.editor.getModelMarkers({ owner: 'marker-boundary', severities: stanza.MarkerSeverity.Error | stanza.MarkerSeverity.Warning, take: 1 });
+			return {
+				errors, messages: values.map(value => value.message), changed,
+				version: values[0]?.modelVersionId,
+				code: typeof values[0]?.code === 'object' ? values[0].code.value : values[0]?.code,
+			};
+		} finally {
+			listener.dispose();
+			stanza.editor.removeAllMarkers('marker-boundary');
 		}
 	},
 	setMinimapColor: color => {

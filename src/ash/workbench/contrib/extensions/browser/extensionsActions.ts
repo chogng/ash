@@ -12,6 +12,17 @@ import { createBrowserExtensionApi } from '../../../../platform/extensions/brows
 import { ExtensionsInputSource, type ExtensionsInput } from '../common/extensionsInput.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
+import type { McpServerRuntimeState } from '../../../../platform/mcp/common/mcpServerStatusService.js';
+
+export function describeMcpServerState(state: McpServerRuntimeState): string {
+	switch (state.status) {
+		case 'disabled': return localize({ bundle: 'ash.extensions', key: 'mcpDisabled' }, 'Disabled');
+		case 'disconnected': return localize({ bundle: 'ash.extensions', key: 'mcpDisconnected' }, 'Disconnected');
+		case 'connected': return localize({ bundle: 'ash.extensions', key: 'mcpConnected' }, 'Connected');
+		case 'stale': return localize({ bundle: 'ash.extensions', key: 'mcpStale' }, 'Tool catalog out of date');
+		case 'unavailable': return localize({ bundle: 'ash.extensions', key: 'mcpUnavailable' }, 'Unavailable');
+	}
+}
 
 /** Both product windows use the same source, package and execution operations. */
 export function registerExtensionManagementActions(): DisposableStore {

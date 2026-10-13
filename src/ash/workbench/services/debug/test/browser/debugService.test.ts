@@ -21,7 +21,8 @@ import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } fr
 import { registerTestWorkbenchInteractionServices, workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
 import { TaskService } from '../../../../contrib/tasks/browser/taskService.js';
 import { TerminalService } from '../../../../contrib/terminal/browser/terminalService.js';
-import { IMarkerService, MarkerService } from '../../../../../platform/markers/common/markers.js';
+import { IMarkerService } from '../../../../../platform/markers/common/markers.js';
+import { MarkerService } from '../../../../../platform/markers/common/markerService.js';
 import { IExtensionService } from '../../../extensions/common/extensionService.js';
 import { normalizeExtensionCatalog } from '../../../../../platform/extensions/common/extensionApi.js';
 import { ExtensionResourceLoaderService } from '../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';

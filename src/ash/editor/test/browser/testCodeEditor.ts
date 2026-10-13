@@ -9,7 +9,8 @@ import { ActionWidgetService, IActionWidgetService } from '../../../platform/act
 import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../common/services/languageFeatureDebounce.js';
 import '../../browser/services/contribution.js';
 import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
-import { IMarkerService, MarkerService } from '../../../platform/markers/common/markers.js';
+import { IMarkerService } from '../../../platform/markers/common/markers.js';
+import { MarkerService } from '../../../platform/markers/common/markerService.js';
 import { IMarkerDecorationsService } from '../../common/services/markerDecorations.js';
 import { MarkerDecorationsService } from '../../common/services/markerDecorationsService.js';
 import { StandaloneCodeEditorService } from '../../standalone/browser/standaloneCodeEditorService.js';

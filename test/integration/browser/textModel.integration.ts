@@ -10,7 +10,8 @@ import { TextModelResolverService } from '../../../src/ash/workbench/services/te
 import { BrowserTextMateService } from '../../../src/ash/workbench/services/textMate/browser/browserTextMateService.js';
 import { createLanguageExtensions } from './languageExtensions.js';
 import { ContextKeyService, IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
-import { IMarkerService, MarkerService } from '../../../src/ash/platform/markers/common/markers.js';
+import { IMarkerService } from '../../../src/ash/platform/markers/common/markers.js';
+import { MarkerService } from '../../../src/ash/platform/markers/common/markerService.js';
 import { IMarkerDecorationsService } from '../../../src/ash/editor/common/services/markerDecorations.js';
 import { MarkerDecorationsService } from '../../../src/ash/editor/common/services/markerDecorationsService.js';
 import { ICodeEditorService } from '../../../src/ash/editor/browser/services/codeEditorService.js';
@@ -154,17 +155,17 @@ disposables.add(new AppServerSyntaxProviders(languageFeaturesService, {
 			revision: params.revision,
 			hasErrors: true,
 			tokens: [
-				{ kind: "keyword", range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 2 } } },
-				{ kind: "function", range: { start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } } },
+				{ kind: "keyword", startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 3 },
+				{ kind: "function", startLineNumber: 1, startColumn: 4, endLineNumber: 1, endColumn: 8 },
 			],
-			foldingRanges: [{ range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 2, columnIndex: 1 } } }],
+			foldingRanges: [{ startLineNumber: 1, startColumn: 1, endLineNumber: 3, endColumn: 2 }],
 			symbols: [{
 				name: "main",
 				kind: "function",
-				range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 2, columnIndex: 1 } },
+				startLineNumber: 1, startColumn: 1, endLineNumber: 3, endColumn: 2,
 				selectionRange: { start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } },
 			}],
-			diagnostics: [{ kind: "missing", range: { start: { lineIndex: 1, columnIndex: 2 }, end: { lineIndex: 1, columnIndex: 8 } } }],
+			diagnostics: [{ kind: "missing", startLineNumber: 2, startColumn: 3, endLineNumber: 2, endColumn: 9 }],
 		};
 	},
 	selectionRanges: async params => ({ revision: params.revision, ranges: [] }),

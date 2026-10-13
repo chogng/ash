@@ -1,6 +1,6 @@
 import '../../../src/ash/editor/editor.all.js';
 import '../../../src/ash/workbench/contrib/url/browser/url.contribution.js';
-import { MarkdownElement } from '../../../src/ash/base/browser/markdownRenderer.js';
+import { renderMarkdown, type IRenderedMarkdown } from '../../../src/ash/base/browser/markdownRenderer.js';
 import { addDisposableListener } from '../../../src/ash/base/browser/dom.js';
 import { DisposableStore, MutableDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { OpenerService } from '../../../src/ash/editor/browser/services/openerService.js';
@@ -115,12 +115,11 @@ services.registerSingleton(ITrustedDomainService, () => services.createInstance(
 const host = resources.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.url']));
 host.advance(WorkbenchPhase.BlockRestore);
 const domains = services.get(ITrustedDomainService);
-const markdown = resources.add(new MutableDisposable<MarkdownElement>());
+const markdown = resources.add(new MutableDisposable<IRenderedMarkdown>());
 function setLink(target: string): void {
-	const rendered = new MarkdownElement({
+	const rendered = renderMarkdown({ value: `[Chat documentation](${target})` }, {
 		ownerDocument: document,
-		markdown: { value: `[Chat documentation](${target})` },
-		linkHandler: href => { void openChatMarkdownLink(href, opener, services.get(IEditorService)); },
+		actionHandler: href => { void openChatMarkdownLink(href, opener, services.get(IEditorService)); }
 	});
 	markdown.value = rendered;
 	document.querySelector('#chat-link')!.replaceChildren(rendered.element);

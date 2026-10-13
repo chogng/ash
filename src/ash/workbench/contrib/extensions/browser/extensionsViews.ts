@@ -16,7 +16,8 @@ import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextke
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { IAgentCapabilitiesService } from '../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
+import { IMcpServerStatusService } from '../../../../platform/mcp/common/mcpServerStatusService.js';
+import { describeMcpServerState } from './extensionsActions.js';
 import { IExtensionManagementService, type ExtensionsPackageSummary } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
@@ -102,7 +103,7 @@ abstract class ExtensionsListViewPane extends ViewPane {
 					const focused = mainWindow.document.activeElement;
 					if (!this.isBodyVisible() || !(focused instanceof HTMLElement) || !this.element.contains(focused)) { return undefined; }
 					return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type }, () => type === AccessibleViewType.Help
-						? localize({ bundle: 'ash.extensions', key: 'capabilityHelp' }, 'Extensions contains collapsible Extensions, Plugins, Skills, MCP Servers and Recommended panes. Use Left and Right on a pane header to collapse or expand it, and Up and Down to move between headers. Search within a pane, use arrow keys to select an item, and Enter to open details in the editor. Skill enablement and diagnostics are in its details. Package installation, permissions and removal are in package details. Refresh reloads the current catalog. Run Install plugin from Git repository in the Command Palette to choose a repository revision and package directory. Press Escape during installation to cancel.')
+						? localize({ bundle: 'ash.extensions', key: 'capabilityHelp' }, 'Extensions contains collapsible Extensions, Plugins, Skills, MCP Servers and Recommended panes. Use Left and Right on a pane header to collapse or expand it, and Up and Down to move between headers. Search within a pane, use arrow keys to select an item, and Enter to open details in the editor. Skill enablement and diagnostics are in its details. Package installation, permissions and removal are in package details. Refresh reloads the current catalog. Run Install plugin from Git repository in the Command Palette to choose a repository revision and package directory. Press Escape during installation to cancel. MCP server details show backend connection status and diagnostics. Refresh reloads server status.')
 						: [this.status.textContent, ...this.list.items.map(item => `${item.name}\n${item.description}\n${item.metadata}`)].join('\n\n'), () => focused.focus(), this.verbositySetting);
 				},
 			}));
@@ -201,26 +202,48 @@ export class SkillsViewPane extends ExtensionsListViewPane {
 export class McpServersViewPane extends ExtensionsListViewPane {
 	constructor(container: HTMLElement, options: IViewPaneOptions,
 		@IEditorService editors: IEditorService, @IContextKeyService contextKeys: IContextKeyService, @IConfigurationService configuration: IConfigurationService,
-		@IExtensionManagementService private readonly extensions: IExtensionManagementService, @IAgentCapabilitiesService private readonly capabilities: IAgentCapabilitiesService,
+		@IExtensionManagementService private readonly extensions: IExtensionManagementService, @IMcpServerStatusService private readonly mcpStatus: IMcpServerStatusService,
 	) {
 		super(container, options, editors, contextKeys, configuration);
 		this._register(extensions.onDidChangeInstalled(() => this.invalidate()));
 	}
 
 	protected async readItems(): Promise<ExtensionsListSnapshot> {
-		const installed = await this.extensions.listInstalled();
-		// Installed MCP providers use the backend package namespace; registered tool sets carry that same server ID.
+		const [installedResult, statusResult] = await Promise.allSettled([
+			this.extensions.listInstalled(),
+			this.mcpStatus.isAvailable ? this.mcpStatus.read() : Promise.resolve(undefined),
+		]);
+		const installed = installedResult.status === 'fulfilled' ? installedResult.value : [];
+		const snapshot = statusResult.status === 'fulfilled' ? statusResult.value : undefined;
+		// Package identity enriches backend status; installation alone says nothing about connection state.
 		const items: ExtensionsListItem[] = installed.flatMap(installation => installation.capabilities.filter(capability => capability.kind === 'mcp').map(capability => ({
 			target: { kind: 'mcp' as const, serverId: `marketplace:${installation.package.id}:mcp:${capability.id}`, installationId: installation.installationId, capabilityId: capability.reference.id },
 			name: capability.id, description: `${installation.package.id} · ${installation.package.version}`, metadata: installation.state === 'pendingRemoval' ? localize({ bundle: 'ash.extensions', key: 'removalPending' }, 'Removal pending') : localize({ bundle: 'ash.extensions', key: 'installedFilter' }, 'Installed'),
 		})));
-		if (this.capabilities.isAvailable) {
-			const catalog = await this.capabilities.read();
-			for (const set of catalog.toolSets.filter(set => set.source === 'mcp')) {
-				if (items.some(item => item.target.kind === 'mcp' && item.target.serverId === set.sourceId)) { continue; }
-				items.push({ target: { kind: 'mcp', serverId: set.sourceId }, name: set.sourceId, description: localize({ bundle: 'ash.extensions', key: 'mcpToolsCount' }, '{0} registered tools', set.tools.length), metadata: localize({ bundle: 'ash.extensions', key: 'mcpRegistered' }, 'Registered') });
-			}
+		for (const server of snapshot?.servers ?? []) {
+			const index = items.findIndex(item => item.target.kind === 'mcp' && item.target.serverId === server.id);
+			const installedItem = index >= 0 ? items[index] : undefined;
+			const item: ExtensionsListItem = {
+				target: installedItem?.target ?? { kind: 'mcp', serverId: server.id },
+				name: server.displayName || installedItem?.name || server.id,
+				description: [
+					installedItem?.description,
+					localize({ bundle: 'ash.extensions', key: 'mcpToolsCount' }, '{0} registered tools', server.toolCount),
+					server.state.status === 'unavailable' ? server.state.reason : '',
+				].filter(Boolean).join(' · '),
+				metadata: describeMcpServerState(server.state),
+			};
+			if (index >= 0) { items[index] = item; } else { items.push(item); }
 		}
-		return { items };
+		const statusNote = statusResult.status === 'rejected'
+			? localize({ bundle: 'ash.extensions', key: 'mcpStatusReadFailed' }, 'Could not load MCP server status: {0}', String(statusResult.reason))
+			: !snapshot ? localize({ bundle: 'ash.extensions', key: 'mcpStatusUnavailable' }, 'MCP server status is unavailable.') : '';
+		return {
+			items,
+			note: [
+				installedResult.status === 'rejected' ? localize({ bundle: 'ash.extensions', key: 'mcpPackagesReadFailed' }, 'Could not load installed packages: {0}', String(installedResult.reason)) : '',
+				statusNote,
+			].filter(Boolean).join(' · '),
+		};
 	}
 }

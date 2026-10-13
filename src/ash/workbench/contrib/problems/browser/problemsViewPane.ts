@@ -5,27 +5,35 @@ import { Lxicon } from "../../../../base/common/lxicons.js";
 import { getOrSet } from "../../../../base/common/map.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { Range } from "../../../../editor/common/core/range.js";
-import { MarkerSeverity, type Marker } from "../../../../platform/markers/common/markers.js";
+import { MarkerSeverity, type IMarker } from "../../../../platform/markers/common/markers.js";
 import { IEditorService } from "../../../services/editor/common/editorService.js";
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../browser/parts/views/viewPane.js";
 import { IMarkerService } from "../../../../platform/markers/common/markers.js";
 
 interface ProblemEntry {
-	readonly marker: Marker;
+	readonly marker: IMarker;
 }
 
 const severities = Object.freeze([
 	MarkerSeverity.Error,
 	MarkerSeverity.Warning,
-	MarkerSeverity.Information,
+	MarkerSeverity.Info,
 	MarkerSeverity.Hint,
 ]);
 
 const severityLabels: Readonly<Record<MarkerSeverity, string>> = Object.freeze({
 	[MarkerSeverity.Error]: "Errors",
 	[MarkerSeverity.Warning]: "Warnings",
-	[MarkerSeverity.Information]: "Information",
+	[MarkerSeverity.Info]: "Information",
 	[MarkerSeverity.Hint]: "Hints",
+});
+
+// Severity is a bit mask in the domain contract; CSS keeps its existing semantic state names.
+const severityClasses: Readonly<Record<MarkerSeverity, string>> = Object.freeze({
+	[MarkerSeverity.Error]: 'error',
+	[MarkerSeverity.Warning]: 'warning',
+	[MarkerSeverity.Info]: 'information',
+	[MarkerSeverity.Hint]: 'hint',
 });
 
 /** Aggregated workspace diagnostics with severity filtering and editor navigation. */
@@ -69,7 +77,7 @@ export class ProblemsViewPane extends ViewPane {
 		for (const severity of severities) {
 			const button = h(document, "button");
 			button.type = "button";
-			button.className = `ash-problems-severity ${severity} checked`;
+			button.className = `ash-problems-severity ${severityClasses[severity]} checked`;
 			button.textContent = severityLabels[severity];
 			button.setAttribute("aria-pressed", "true");
 			this.severityButtons.set(severity, button);
@@ -92,7 +100,7 @@ export class ProblemsViewPane extends ViewPane {
 			const problem = Number.isSafeInteger(index) ? this.renderedProblems[index] : undefined;
 			if (problem) void this.openProblem(problem);
 		}));
-		this._register(markerService.onDidChange(() => this.render()));
+		this._register(markerService.onMarkerChanged(() => this.render()));
 		this.render();
 	}
 
@@ -111,7 +119,7 @@ export class ProblemsViewPane extends ViewPane {
 	}
 
 	private render(): void {
-		const all = markerEntries(this.markerService.getAll());
+		const all = markerEntries(this.markerService.read());
 		const filter = this.filterInput.value.trim().toLocaleLowerCase();
 		const visible = all.filter(entry => this.enabledSeverities.has(entry.marker.severity) && matchesFilter(entry, filter));
 		this.renderedProblems = visible;
@@ -146,12 +154,12 @@ export class ProblemsViewPane extends ViewPane {
 	private renderProblem(entry: ProblemEntry, index: number): HTMLLIElement {
 		const document = this.element.ownerDocument;
 		const item = h(document, "li");
-		item.className = `ash-problems-item ${entry.marker.severity}`;
+		item.className = `ash-problems-item ${severityClasses[entry.marker.severity]}`;
 		const button = h(document, "button");
 		button.type = "button";
 		button.className = "ash-problems-item-button";
 		button.dataset.problemIndex = String(index);
-		button.title = `${entry.marker.message} — ${resourceName(entry.marker.resource)}:${entry.marker.range.start.lineIndex + 1}:${entry.marker.range.start.columnIndex + 1}`;
+		button.title = `${entry.marker.message} — ${resourceName(entry.marker.resource)}:${entry.marker.startLineNumber}:${entry.marker.startColumn}`;
 		const marker = h(document, "span");
 		marker.className = "ash-problems-marker";
 		marker.setAttribute("aria-hidden", "true");
@@ -163,7 +171,7 @@ export class ProblemsViewPane extends ViewPane {
 		source.textContent = diagnosticSource(entry.marker);
 		const location = h(document, "span");
 		location.className = "ash-problems-location";
-		location.textContent = `[Ln ${entry.marker.range.start.lineIndex + 1}, Col ${entry.marker.range.start.columnIndex + 1}]`;
+		location.textContent = `[Ln ${entry.marker.startLineNumber}, Col ${entry.marker.startColumn}]`;
 		button.append(marker, message, source, location);
 		item.append(button);
 		return item;
@@ -172,7 +180,7 @@ export class ProblemsViewPane extends ViewPane {
 	private async openProblem(entry: ProblemEntry): Promise<void> {
 		this.navigationError = undefined;
 		try {
-			await this.editorService.openEditor({ resource: entry.marker.resource, label: resourceName(entry.marker.resource) }, { selection: toEditorRange(entry.marker.range) });
+			await this.editorService.openEditor({ resource: entry.marker.resource, label: resourceName(entry.marker.resource) }, { selection: new Range(entry.marker.startLineNumber, entry.marker.startColumn, entry.marker.endLineNumber, entry.marker.endColumn) });
 		} catch (error) {
 			if (this.isDisposed) return;
 			this.navigationError = error instanceof Error ? error.message : "Could not open problem location.";
@@ -181,12 +189,12 @@ export class ProblemsViewPane extends ViewPane {
 	}
 }
 
-function markerEntries(markers: readonly Marker[]): readonly ProblemEntry[] {
+function markerEntries(markers: readonly IMarker[]): readonly ProblemEntry[] {
 	return markers.map(marker => ({ marker })).sort(compareProblems);
 }
 
 function compareProblems(left: ProblemEntry, right: ProblemEntry): number {
-	return left.marker.resource.toString().localeCompare(right.marker.resource.toString()) || severities.indexOf(left.marker.severity) - severities.indexOf(right.marker.severity) || comparePositions(left.marker.range.start, right.marker.range.start) || left.marker.message.localeCompare(right.marker.message);
+	return left.marker.resource.toString().localeCompare(right.marker.resource.toString()) || severities.indexOf(left.marker.severity) - severities.indexOf(right.marker.severity) || left.marker.startLineNumber - right.marker.startLineNumber || left.marker.startColumn - right.marker.startColumn || left.marker.message.localeCompare(right.marker.message);
 }
 
 function groupProblems(problems: readonly ProblemEntry[]): readonly { readonly resource: URI; readonly problems: readonly ProblemEntry[]; }[] {
@@ -202,7 +210,8 @@ function groupProblems(problems: readonly ProblemEntry[]): readonly { readonly r
 function matchesFilter(entry: ProblemEntry, filter: string): boolean {
 	if (!filter) return true;
 	const marker = entry.marker;
-	return `${marker.message} ${marker.source ?? ""} ${marker.code ?? ""} ${resourceName(marker.resource)} ${resourceParent(marker.resource)}`.toLocaleLowerCase().includes(filter);
+	const code = typeof marker.code === 'object' ? marker.code.value : marker.code;
+	return `${marker.message} ${marker.source ?? ""} ${code ?? ""} ${resourceName(marker.resource)} ${resourceParent(marker.resource)}`.toLocaleLowerCase().includes(filter);
 }
 
 function statusMessage(total: number, visible: number, filter: string, enabledSeverityCount: number): string {
@@ -211,24 +220,12 @@ function statusMessage(total: number, visible: number, filter: string, enabledSe
 	return visible === total ? `${total} ${total === 1 ? "problem" : "problems"} in the workspace.` : `${visible} of ${total} problems shown.`;
 }
 
-function diagnosticSource(marker: Marker): string {
-	if (marker.source && marker.code !== undefined) return `${marker.source}(${marker.code})`;
+function diagnosticSource(marker: IMarker): string {
+	const code = typeof marker.code === 'object' ? marker.code.value : marker.code;
+	if (marker.source && code !== undefined) return `${marker.source}(${code})`;
 	if (marker.source) return marker.source;
-	if (marker.code !== undefined) return String(marker.code);
+	if (code !== undefined) return code;
 	return "";
-}
-
-function comparePositions(left: Marker["range"]["start"], right: Marker["range"]["start"]): number {
-	return left.lineIndex - right.lineIndex || left.columnIndex - right.columnIndex;
-}
-
-function toEditorRange(range: Marker["range"]): Range {
-	return new Range(
-		range.start.lineIndex + 1,
-		range.start.columnIndex + 1,
-		range.end.lineIndex + 1,
-		range.end.columnIndex + 1,
-	);
 }
 
 function resourceName(resource: URI): string {

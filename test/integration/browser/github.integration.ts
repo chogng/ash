@@ -24,7 +24,7 @@ import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme } from '../
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../src/ash/workbench/common/contributions.js';
 import { GitHubLinkPresentationContribution } from '../../../src/ash/workbench/contrib/github/browser/githubLinkPresentation.contribution.js';
 import { ChatListWidget } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatListWidget.js';
-import { MarkdownElement } from '../../../src/ash/base/browser/markdownRenderer.js';
+import { renderMarkdown } from '../../../src/ash/base/browser/markdownRenderer.js';
 import { ChatMarkdownDecorationsRenderer as CoworkMarkdownDecorationsRenderer } from '../../../src/ash/sessions/contrib/cowork/browser/widget/chatContentParts/chatMarkdownDecorationsRenderer.js';
 import { IGitHubConnectionService } from '../../../src/ash/workbench/services/accounts/common/gitHubConnectionService.js';
 import '../../../src/ash/workbench/services/dataChannel/browser/dataChannelService.js';
@@ -119,10 +119,12 @@ widget.setVisible(true);
 const render = (text: string): void => widget.render([{ id: 'message', type: 'agentMessage', text, transient: false }]);
 render(`[Repo](https://github.com/team/repo) [Issue](https://github.com/team/repo/issues/7) [PR](https://github.com/team/repo/pull/8) [Commit](https://github.com/team/repo/commit/${sha})`);
 if (new URL(location.href).searchParams.has('cowork')) {
-	const markdown = resources.add(new MarkdownElement({ ownerDocument: document, linkHandler: target => { void opener.open(target, { openExternal: true }); } }));
+	const markdown = resources.add(renderMarkdown({ value: '[PR](https://github.com/team/repo/pull/8)' }, {
+		ownerDocument: document,
+		actionHandler: target => { void opener.open(target, { openExternal: true }); }
+	}));
 	markdown.element.classList.add('cowork-test-message');
 	container.append(markdown.element);
-	markdown.setMarkdown('[PR](https://github.com/team/repo/pull/8)');
 	resources.add(services.createInstance(CoworkMarkdownDecorationsRenderer, markdown.element));
 }
 window.ashGitHubIntegration = {

@@ -1,6 +1,6 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
-import { MarkerSeverity, type IMarkerService } from "../../../../platform/markers/common/markers.js";
+import { type IMarkerService } from "../../../../platform/markers/common/markers.js";
 import type { IWorkbenchContribution } from "../../../common/contributions.js";
 import { StatusbarAlignment, type IStatusbarEntry, type IStatusbarEntryAccessor, type IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
 import type { IViewsService } from "../../../services/views/common/viewsService.js";
@@ -24,7 +24,7 @@ export class ProblemsStatusContribution extends Disposable implements IWorkbench
 			alignment: StatusbarAlignment.Left,
 			priority: ProblemsPriority,
 		}));
-		this._register(options.markerService.onDidChange(() => this.update()));
+		this._register(options.markerService.onMarkerChanged(() => this.update()));
 	}
 
 	private update(): void {
@@ -32,8 +32,7 @@ export class ProblemsStatusContribution extends Disposable implements IWorkbench
 	}
 
 	private entry(): IStatusbarEntry {
-		const errors = this.count(MarkerSeverity.Error);
-		const warnings = this.count(MarkerSeverity.Warning);
+		const { errors, warnings } = this.options.markerService.getStatistics();
 		const summaries: string[] = [];
 		if (errors > 0) summaries.push(`Errors: ${errors}`);
 		if (warnings > 0) summaries.push(`Warnings: ${warnings}`);
@@ -48,10 +47,6 @@ export class ProblemsStatusContribution extends Disposable implements IWorkbench
 			tooltip,
 			run: () => this.options.viewsService.focusView("ash.problems"),
 		};
-	}
-
-	private count(severity: MarkerSeverity): number {
-		return this.options.markerService.getAll().filter(marker => marker.severity === severity).length;
 	}
 }
 

@@ -3,7 +3,7 @@ import { LanguageDiagnosticSeverity, type LanguageDiagnostic, type LanguageDiagn
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { type URI } from '../../../base/common/uri.js';
-import { IMarkerService, MarkerSeverity, type Marker } from '../../../platform/markers/common/markers.js';
+import { IMarkerService, MarkerSeverity, type IMarker } from '../../../platform/markers/common/markers.js';
 import { Range } from '../core/range.js';
 import { type IModelDecoration, type IModelDeltaDecoration, type ITextModel, TrackedRangeStickiness, OverviewRulerLane, MinimapPosition } from '../model.js';
 import { type IMarkerDecorationsService } from './markerDecorations.js';
@@ -17,7 +17,7 @@ interface ModelMarkers {
 	references: number;
 	updating: boolean;
 	owned: string[];
-	markers: Map<string, Marker>;
+	markers: Map<string, IMarker>;
 	signature: string;
 }
 
@@ -30,9 +30,9 @@ export class MarkerDecorationsService extends Disposable implements IMarkerDecor
 
 	constructor(@IMarkerService private readonly markerService: IMarkerService) {
 		super();
-		this._register(markerService.onDidChange(event => {
+		this._register(markerService.onMarkerChanged(event => {
 			for (const [model, state] of this.models) {
-				if (event.resources.some(resource => resource.toString() === model.uri.toString())) this.synchronize(model, state, true);
+				if (event.some(resource => resource.toString() === model.uri.toString())) this.synchronize(model, state, true);
 			}
 		}));
 	}
@@ -61,15 +61,15 @@ export class MarkerDecorationsService extends Disposable implements IMarkerDecor
 		});
 	}
 
-	getMarker(uri: URI, decoration: IModelDecoration): Marker | null {
+	getMarker(uri: URI, decoration: IModelDecoration): IMarker | null {
 		return this.find(uri)?.[1].markers.get(decoration.id) ?? null;
 	}
 
-	getLiveMarkers(uri: URI): [Range, Marker][] {
+	getLiveMarkers(uri: URI): [Range, IMarker][] {
 		const found = this.find(uri);
 		if (!found) return [];
 		const [model, state] = found;
-		const result: [Range, Marker][] = [];
+		const result: [Range, IMarker][] = [];
 		for (const [id, marker] of state.markers) {
 			const range = model.getDecorationRange(id);
 			if (range && !this.isSuppressed(model, state, range)) result.push([range, marker]);
@@ -108,20 +108,20 @@ export class MarkerDecorationsService extends Disposable implements IMarkerDecor
 		try {
 			const tracked = new Map([...state.markers].map(([id, marker]) => [marker, model.getDecorationRange(id)]));
 			const decorations: IModelDeltaDecoration[] = [];
-			const markers: Marker[] = [];
-			const values = [...this.markerService.read(model.uri)];
+			const markers: IMarker[] = [];
+			const values = [...this.markerService.read({ resource: model.uri })];
 			const local = model instanceof TextModel ? model.diagnostics.results.result?.value.diagnostics ?? [] : [];
 			const external = state.diagnostics?.getDiagnostics(model.uri);
 			const diagnostics = [...local, ...(external?.revision === model.getVersionId() ? external.diagnostics : [])];
-			values.push(...diagnostics.map((diagnostic, index) => diagnosticMarker(model, diagnostic, index)));
+			values.push(...diagnostics.map(diagnostic => diagnosticMarker(model, diagnostic)));
 			const seen = new Set<string>();
 			for (const marker of values) {
-				const key = JSON.stringify([marker.range, marker.severity, marker.message, marker.source, marker.code]);
+				const key = JSON.stringify([marker.startLineNumber, marker.startColumn, marker.endLineNumber, marker.endColumn, marker.severity, marker.message, marker.source, marker.code]);
 				if (seen.has(key)) continue;
 				seen.add(key);
 				const range = (!resetRanges && tracked.get(marker)) || model.validateRange(new Range(
-					marker.range.start.lineIndex + 1, marker.range.start.columnIndex + 1,
-					marker.range.end.lineIndex + 1, marker.range.end.columnIndex + 1,
+					marker.startLineNumber, marker.startColumn,
+					marker.endLineNumber, marker.endColumn,
 				));
 				const suppressed = this.isSuppressed(model, state, range);
 				decorations.push({ range, options: suppressed ? { description: 'suppressed-marker', stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges } : markerOptions(marker) });
@@ -156,12 +156,18 @@ export class MarkerDecorationsService extends Disposable implements IMarkerDecor
 	}
 }
 
-function markerOptions(marker: Marker): IModelDeltaDecoration['options'] {
+function markerOptions(marker: IMarker): IModelDeltaDecoration['options'] {
 	const colorId = marker.severity === MarkerSeverity.Error ? errorForeground
 		: marker.severity === MarkerSeverity.Warning ? warningForeground : accentForeground;
 	const color = themeColorFromId(colorId);
-	const severity = marker.severity === MarkerSeverity.Information ? 'info' : marker.severity;
-	const prefix = [marker.source, marker.code].filter(value => value !== undefined).join(' ');
+	const severity = {
+		[MarkerSeverity.Error]: 'error',
+		[MarkerSeverity.Warning]: 'warning',
+		[MarkerSeverity.Info]: 'info',
+		[MarkerSeverity.Hint]: 'hint',
+	}[marker.severity];
+	const code = typeof marker.code === 'object' ? marker.code.value : marker.code;
+	const prefix = [marker.source, code].filter(value => value !== undefined).join(' ');
 	return {
 		description: 'marker-decoration',
 		className: `squiggly-${severity}`,
@@ -173,19 +179,20 @@ function markerOptions(marker: Marker): IModelDeltaDecoration['options'] {
 	};
 }
 
-function diagnosticMarker(model: ITextModel, diagnostic: LanguageDiagnostic, index: number): Marker {
+function diagnosticMarker(model: ITextModel, diagnostic: LanguageDiagnostic): IMarker {
 	return {
-		owner: 'editor-language', id: `diagnostic-${index}`, resource: model.uri,
-		range: {
-			start: { lineIndex: diagnostic.range.startLineNumber - 1, columnIndex: diagnostic.range.startColumn - 1 },
-			end: { lineIndex: diagnostic.range.endLineNumber - 1, columnIndex: diagnostic.range.endColumn - 1 },
-		},
+		owner: 'editor-language', resource: model.uri,
+		startLineNumber: diagnostic.range.startLineNumber,
+		startColumn: diagnostic.range.startColumn,
+		endLineNumber: diagnostic.range.endLineNumber,
+		endColumn: diagnostic.range.endColumn,
 		severity: ({
 			[LanguageDiagnosticSeverity.Error]: MarkerSeverity.Error,
 			[LanguageDiagnosticSeverity.Warning]: MarkerSeverity.Warning,
-			[LanguageDiagnosticSeverity.Information]: MarkerSeverity.Information,
+			[LanguageDiagnosticSeverity.Information]: MarkerSeverity.Info,
 			[LanguageDiagnosticSeverity.Hint]: MarkerSeverity.Hint,
 		})[diagnostic.severity],
-		message: diagnostic.message, source: diagnostic.source, code: diagnostic.code,
+		message: diagnostic.message, source: diagnostic.source,
+		...(diagnostic.code === undefined ? {} : { code: String(diagnostic.code) }),
 	};
 }

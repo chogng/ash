@@ -1,5 +1,40 @@
 import { expect, test } from '@playwright/test';
 
+test('Markdown service preserves chat code editors, text selection and focus during streaming', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/markdown.html');
+	const initial = 'Read this paragraph.\n\n```typescript\nconst first = 1;';
+	await page.evaluate(value => window.ashMarkdownIntegration.streamChat(value), initial);
+	const root = page.locator('#service-chat');
+	const paragraph = root.locator('p').first();
+	const paragraphNode = await paragraph.elementHandle();
+	const editor = root.locator('.stanza-editor');
+	const editorNode = await editor.elementHandle();
+	await editor.click();
+	await page.keyboard.press('ControlOrMeta+A');
+	const selection = await page.evaluate(() => window.ashMarkdownIntegration.chatSelection());
+	const input = editor.locator('.stanza-editor-input');
+	await expect(input).toBeFocused();
+	await page.evaluate(value => window.ashMarkdownIntegration.streamChat(value, true), `${initial}\nconst second = 2;\n\x60\x60\x60`);
+	expect(await editor.evaluate((element, previous) => element === previous, editorNode)).toBe(true);
+	expect(await paragraph.evaluate((element, previous) => element === previous, paragraphNode)).toBe(true);
+	await expect(input).toBeFocused();
+	expect(await page.evaluate(() => window.ashMarkdownIntegration.chatSelection())).toEqual(selection);
+	await paragraph.click();
+	await paragraph.evaluate(element => { const selection = window.getSelection()!; selection.setBaseAndExtent(element.firstChild!, 5, element.firstChild!, 9); });
+	await page.evaluate(value => window.ashMarkdownIntegration.streamChat(value, true), `${initial}\nconst second = 2;\n\x60\x60\x60\n\nComplete.`);
+	expect(await page.evaluate(() => window.getSelection()!.toString())).toBe('this');
+	expect(await page.evaluate(() => window.ashMarkdownIntegration.chatState())).toEqual({ editors: 1, defaultCodeCalls: 0 });
+	await page.evaluate(() => window.ashMarkdownIntegration.streamChat('Replacement', true));
+	await expect(editor).toHaveCount(0);
+	expect(await page.evaluate(() => window.ashMarkdownIntegration.chatState())).toEqual({ editors: 0, defaultCodeCalls: 0 });
+	await page.evaluate(() => window.ashMarkdownIntegration.dispose());
+	await editorNode?.dispose();
+	await paragraphNode?.dispose();
+	expect(errors).toEqual([]);
+});
+
 test('Markdown honors raw HTML opt in and preserves safe parsed content', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));

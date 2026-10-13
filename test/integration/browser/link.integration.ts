@@ -1,7 +1,7 @@
 import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
-import { MarkdownElement } from '../../../src/ash/base/browser/markdownRenderer.js';
+import { renderMarkdown } from '../../../src/ash/base/browser/markdownRenderer.js';
 import { ILogService, NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
@@ -172,9 +172,9 @@ window.ashLinkIntegration = {
 		if (failure) commands.push('test.link.missing');
 		commands.push('test.link.second');
 		const href = `command:runCommands?${encodeURIComponent(JSON.stringify({ commands }))}`;
-		const rendered = resources.add(new MarkdownElement({
-			ownerDocument: document, markdown: { value: `[Run linked commands](${href})`, isTrusted: trusted },
-			linkHandler: target => { void router(target, opener, undefined).catch(error => { throw error; }); },
+		const rendered = resources.add(renderMarkdown({ value: `[Run linked commands](${href})`, isTrusted: trusted }, {
+			ownerDocument: document,
+			actionHandler: target => { void router(target, opener, undefined).catch(error => { throw error; }); }
 		}));
 		commandHost.replaceChildren(rendered.element);
 	},

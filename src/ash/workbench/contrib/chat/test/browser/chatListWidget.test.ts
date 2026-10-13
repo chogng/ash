@@ -3,7 +3,13 @@ import { ITextModelService } from '../../../../../editor/common/services/resolve
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { IPromptsService } from '../../common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../common/promptSyntax/service/promptsServiceImpl.js';
-import { Event } from '../../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
+import { MarkdownString } from '../../../../../base/common/htmlContent.js';
+import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
+import { IChatTipService } from '../../browser/chatTipService.js';
+import { ChatInputTipPresenter } from '../../browser/widget/input/chatInputTipPresenter.js';
+import { IChatTipService as ICoworkTipService } from '../../../../../sessions/contrib/cowork/browser/chatTipService.js';
+import { ChatInputTipPresenter as CoworkTipPresenter } from '../../../../../sessions/contrib/cowork/browser/widget/input/chatInputTipPresenter.js';
 import { IAgentCapabilitiesService } from '../../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { AccessibleViewType } from '../../../../../platform/accessibility/browser/accessibleView.js';
@@ -31,6 +37,31 @@ import { IFileService } from '../../../../../platform/files/common/files.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
 
 const document = browserEnvironment.window.document;
+
+test('Workbench and Cowork tips use injected Markdown opening and preserve dismissal', () => {
+	using resources = new DisposableStore();
+	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const dismissed = resources.add(new Emitter<void>());
+	let visible = true;
+	const tips = {
+		onDidDismissTip: dismissed.event,
+		getWelcomeTip: () => visible ? { id: 'documentation', content: new MarkdownString('[Docs](https://example.com/tip)') } : undefined,
+		dismissTip: () => { visible = false; dismissed.fire(); },
+	};
+	services.registerInstance(IChatTipService, tips);
+	services.registerInstance(ICoworkTipService, tips);
+	const opened: string[] = [];
+	services.get(IOpenerService).setDefaultExternalOpener({ openExternal: async href => { opened.push(href); return true; } });
+	const container = document.createElement('main');
+	const focused: string[] = [];
+	using workbench = services.createInstance(ChatInputTipPresenter, { container, isEligible: () => true, focusInput: () => { focused.push('workbench'); } });
+	using cowork = services.createInstance(CoworkTipPresenter, { container, isEligible: () => true, focusInput: () => { focused.push('cowork'); } });
+	workbench.current!.domNode.querySelector<HTMLAnchorElement>('a')!.click();
+	cowork.current!.domNode.querySelector<HTMLAnchorElement>('a')!.click();
+	assert.deepEqual(opened, ['https://example.com/tip', 'https://example.com/tip']);
+	workbench.current!.domNode.querySelector<HTMLButtonElement>('button')!.click();
+	assert.deepEqual({ children: container.childElementCount, focused }, { children: 0, focused: ['workbench'] });
+});
 
 test('code blocks inherit editor typography, retain their nodes on updates, and reset independently of message input', async () => {
 	using resources = new DisposableStore();
@@ -225,23 +256,23 @@ test('Skill diagnostic contribution handles open, edits, language changes and di
 	const markers = services.get(IMarkerService);
 	const uri = URI.file('/skills/review/SKILL.md');
 	const model = resources.add(models.createModel('---\nname: review\n---', languages.createById('markdown'), uri));
-	markers.changeOne('other', uri, [{ range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 1 } }, severity: MarkerSeverity.Warning, message: 'existing' }]);
+	markers.changeOne('other', uri, [{ startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 2, severity: MarkerSeverity.Warning, message: 'existing' }]);
 	services.registerInstance(IAgentCapabilitiesService, { isAvailable: true, read: async () => ({ tools: [{ name: 'read_file', description: 'Read authorized files', source: 'local', sourceDetails: ['Ash'], exposure: 'direct', authority: 'directoryRead' }, { name: 'internal_tool', description: 'Internal', source: 'local', sourceDetails: [], exposure: 'hidden', authority: 'providerDefined' }], toolSets: [], localProcessSandboxConfigured: false, directoryGrantsReadable: true, sandboxBackends: [], sandboxDiagnostics: [] }) });
 	services.registerInstance(IPromptsService, resources.add(new PromptsService({ onDidChangeSkills: Event.None, list: async () => ({ generation: 1, skills: [] }), read: async () => ({ revision: 0, catalog: { generation: 1, skills: [] }, diagnostics: [] }), setEnabled: async () => { }, readTextResource: async () => { throw new Error('No discovered Skill'); } })));
 	using contribution = services.createInstance(PromptLanguageFeaturesProvider);
-	assert.deepEqual(markers.read(uri, PromptLanguageFeaturesProvider.ID).map(marker => marker.code), ['requiredField']);
+	assert.deepEqual(markers.read({ resource: uri, owner: PromptLanguageFeaturesProvider.ID }).map(marker => marker.code), ['requiredField']);
 	model.setValue('---\nname: review\ndescription: Review changes\n---');
 	await new Promise(resolve => setTimeout(resolve, 150));
-	assert.equal(markers.read(uri, PromptLanguageFeaturesProvider.ID).length, 0);
+	assert.equal(markers.read({ resource: uri, owner: PromptLanguageFeaturesProvider.ID }).length, 0);
 	model.setValue('---\nname: review\n---');
 	model.setLanguage('plaintext');
 	await new Promise(resolve => setTimeout(resolve, 150));
-	assert.equal(markers.read(uri, PromptLanguageFeaturesProvider.ID).length, 0);
+	assert.equal(markers.read({ resource: uri, owner: PromptLanguageFeaturesProvider.ID }).length, 0);
 	model.setLanguage('markdown');
-	assert.equal(markers.read(uri, PromptLanguageFeaturesProvider.ID).length, 1);
+	assert.equal(markers.read({ resource: uri, owner: PromptLanguageFeaturesProvider.ID }).length, 1);
 	contribution.dispose();
-	assert.equal(markers.read(uri, PromptLanguageFeaturesProvider.ID).length, 0);
-	assert.equal(markers.read(uri, 'other').length, 1);
+	assert.equal(markers.read({ resource: uri, owner: PromptLanguageFeaturesProvider.ID }).length, 0);
+	assert.equal(markers.read({ resource: uri, owner: 'other' }).length, 1);
 });
 
 test('streamed memory references retain their buttons, code editor and focus as new references arrive', () => {

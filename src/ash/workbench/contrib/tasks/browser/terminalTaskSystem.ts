@@ -126,7 +126,7 @@ export class TerminalTaskSystem extends Disposable {
 			void this.terminate(run).catch(error => this.log('error', errorMessage(error)));
 		}
 		for (const owner of this.markerOwners.keys()) {
-			this.markers.remove(owner);
+			this.markers.changeAll(owner, []);
 		}
 		this.markerOwners.clear();
 	}
@@ -339,7 +339,7 @@ export class TerminalTaskSystem extends Disposable {
 		// producers keep separate owners until their own compilation or retirement.
 		for (const [owner, entry] of this.markerOwners) {
 			if (entry.taskId === task.id && !activeRunIds.has(entry.runId)) {
-				this.markers.remove(owner);
+				this.markers.changeAll(owner, []);
 				this.markerOwners.delete(owner);
 			}
 		}

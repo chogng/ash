@@ -1,5 +1,5 @@
 import { Marked, type MarkedExtension, type MarkedOptions, type Token, type Tokens } from "../common/marked/marked.js";
-import { addDisposableListener, reset, h } from "./dom.js";
+import { addDisposableListener, getDocument, reset, h } from "./dom.js";
 import {
 	type DomSanitizerConfig,
 	type SanitizeAttributeRule,
@@ -7,7 +7,7 @@ import {
 } from "./domSanitize.js";
 import { Checkbox } from "./ui/toggle/toggle.js";
 import { type IMarkdownString, parseHrefAndDimensions } from "../common/htmlContent.js";
-import { Disposable, DisposableStore, toDisposable } from "../common/lifecycle.js";
+import { Disposable, DisposableStore, toDisposable, type IDisposable } from "../common/lifecycle.js";
 import { markdownEscapeEscapedIcons } from '../common/iconLabels.js';
 import { onUnexpectedError } from '../common/errors.js';
 import { appendIcon, getRegisteredIcon } from "./ui/lxicons/lxicon.js";
@@ -17,10 +17,11 @@ import { URI } from '../common/uri.js';
 import { localize } from '../../nls.js';
 import { createObjectUrl } from './fileAccess.js';
 
-export interface MarkdownElementOptions {
-	readonly ownerDocument: Document;
-	readonly markdown?: string | IMarkdownString;
-	readonly breaks?: boolean;
+export type MarkdownActionHandler = (linkContent: string, markdown: IMarkdownString) => void;
+
+export interface MarkdownRenderOptions {
+	/** Selects the document when the caller does not supply an output element. */
+	readonly ownerDocument?: Document;
 	readonly markedOptions?: Pick<MarkedOptions, "breaks" | "gfm">;
 	readonly fillInIncompleteTokens?: boolean;
 	readonly markedExtensions?: readonly MarkedExtension[];
@@ -29,7 +30,7 @@ export interface MarkdownElementOptions {
 	readonly asyncRenderCallback?: () => void;
 	readonly transformUri?: (href: string, kind: 'link' | 'image') => string;
 	readonly sanitizerConfig?: MarkdownSanitizerConfig;
-	readonly linkHandler?: (href: string) => void;
+	readonly actionHandler?: MarkdownActionHandler;
 	readonly imageResourceLoader?: (resource: URI) => Promise<Blob>;
 }
 
@@ -47,11 +48,8 @@ export interface MarkdownSanitizerConfig {
 	readonly remoteImageIsAllowed?: (uri: URI) => boolean;
 }
 
-export interface MarkdownRenderOptions {
-	readonly markedOptions?: Pick<MarkedOptions, "breaks" | "gfm">;
-	readonly fillInIncompleteTokens?: boolean;
-	readonly markedExtensions?: readonly MarkedExtension[];
-	readonly transformUri?: (href: string, kind: 'link' | 'image') => string;
+export interface IRenderedMarkdown extends IDisposable {
+	readonly element: HTMLElement;
 }
 
 export interface PlaintextMarkdownOptions {
@@ -169,24 +167,22 @@ const ALERT_ICON_IDS = {
 const MARKDOWN_COMMAND_RESOURCE_ID = "_workbench.downloadResource";
 
 /**
- * Renders short Workbench Markdown into a normal DOM element.
+ * Owns one sanitized render and its pending code blocks and image resources.
  *
  * Parser output is always treated as untrusted and passed through DOMPurify
  * before it enters the document.
  */
-export class MarkdownElement extends Disposable {
+class RenderedMarkdown extends Disposable implements IRenderedMarkdown {
 	private readonly ownerDocument: Document;
-	private readonly breaks: boolean;
 	private readonly markedOptions: Pick<MarkedOptions, "breaks" | "gfm">;
 	private readonly fillInIncompleteTokens: boolean;
 	private readonly markedExtensions: readonly MarkedExtension[];
-	private readonly codeBlockRenderer: MarkdownElementOptions['codeBlockRenderer'];
-	private readonly codeBlockRendererSync: MarkdownElementOptions['codeBlockRendererSync'];
-	private readonly asyncRenderCallback: MarkdownElementOptions['asyncRenderCallback'];
-	private readonly transformUri: MarkdownElementOptions['transformUri'];
-	private readonly sanitizerConfig: MarkdownElementOptions['sanitizerConfig'];
-	private readonly linkHandler: ((href: string) => void) | undefined;
-	private readonly imageResourceLoader: MarkdownElementOptions['imageResourceLoader'];
+	private readonly codeBlockRenderer: MarkdownRenderOptions['codeBlockRenderer'];
+	private readonly codeBlockRendererSync: MarkdownRenderOptions['codeBlockRendererSync'];
+	private readonly asyncRenderCallback: MarkdownRenderOptions['asyncRenderCallback'];
+	private readonly transformUri: MarkdownRenderOptions['transformUri'];
+	private readonly sanitizerConfig: MarkdownRenderOptions['sanitizerConfig'];
+	private readonly imageResourceLoader: MarkdownRenderOptions['imageResourceLoader'];
 	private readonly parsers = new Map<string, MarkdownParserInstance>();
 	private readonly checkboxControls = this._register(new DisposableStore());
 	private readonly imageResources = this._register(new DisposableStore());
@@ -195,14 +191,10 @@ export class MarkdownElement extends Disposable {
 
 	readonly element: HTMLElement;
 
-	constructor(options: MarkdownElementOptions) {
+	constructor(markdown: IMarkdownString, options: MarkdownRenderOptions, target?: HTMLElement) {
 		super();
-		this.ownerDocument = options.ownerDocument;
-		this.breaks = options.breaks ?? false;
-		this.markedOptions = {
-			...options.markedOptions,
-			breaks: options.markedOptions?.breaks ?? this.breaks,
-		};
+		this.ownerDocument = target?.ownerDocument ?? options.ownerDocument ?? getDocument();
+		this.markedOptions = options.markedOptions ?? {};
 		this.fillInIncompleteTokens = options.fillInIncompleteTokens ?? false;
 		this.markedExtensions = options.markedExtensions ?? [];
 		this.codeBlockRenderer = options.codeBlockRenderer;
@@ -210,10 +202,9 @@ export class MarkdownElement extends Disposable {
 		this.asyncRenderCallback = options.asyncRenderCallback;
 		this.transformUri = options.transformUri;
 		this.sanitizerConfig = options.sanitizerConfig;
-		this.linkHandler = options.linkHandler;
 		this.imageResourceLoader = options.imageResourceLoader;
-		this.element = h(options.ownerDocument, "div");
-		this.element.className = "ash-markdown";
+		this.element = target ?? h(this.ownerDocument, "div");
+		this.element.classList.add("ash-markdown");
 		this._register(addDisposableListener<MouseEvent>(
 			this.element,
 			"click",
@@ -223,17 +214,23 @@ export class MarkdownElement extends Disposable {
 				event.preventDefault();
 				event.stopPropagation();
 				const href = anchor.getAttribute("href");
-				if (href) this.linkHandler?.(href);
+				if (href) options.actionHandler?.(href, markdown);
 			},
 		));
 		this._register(toDisposable(() => {
 			this.active = false;
-			this.element.remove();
+			// Supplied output elements belong to the caller and can be rendered into again.
+			if (!target) this.element.remove();
 		}));
-		this.setMarkdown(options.markdown ?? "");
+		try {
+			this.setMarkdown(markdown);
+		} catch (error) {
+			this.dispose();
+			throw error;
+		}
 	}
 
-	setMarkdown(markdown: string | IMarkdownString): void {
+	private setMarkdown(markdown: IMarkdownString): void {
 		this.requireActive();
 		const revision = ++this.renderRevision;
 		const markdownString = typeof markdown === "string" ? { value: markdown } : markdown;
@@ -331,9 +328,14 @@ export class MarkdownElement extends Disposable {
 
 	private requireActive(): void {
 		if (!this.active) {
-			throw new ReferenceError("MarkdownElement is already disposed");
+			throw new ReferenceError("Markdown render is already disposed");
 		}
 	}
+}
+
+/** The caller owns the render lifetime; disposing prevents late asynchronous DOM updates. */
+export function renderMarkdown(markdown: IMarkdownString, options: MarkdownRenderOptions = {}, target?: HTMLElement): IRenderedMarkdown {
+	return new RenderedMarkdown(markdown, options, target);
 }
 
 /** Parses Workbench Markdown; sanitize the returned HTML before inserting it into the DOM. */

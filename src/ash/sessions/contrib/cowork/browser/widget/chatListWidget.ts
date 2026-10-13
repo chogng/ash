@@ -1,5 +1,5 @@
 import './media/chatListWidget.css';
-import { MarkdownElement } from "../../../../../base/browser/markdownRenderer.js";
+import { IMarkdownRendererService } from '../../../../../platform/markdown/browser/markdownRenderer.js';
 import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
 import { ScrollableElement } from "../../../../../base/browser/ui/scrollbar/scrollableElement.js";
 import { Disposable, DisposableMap, DisposableStore } from "../../../../../base/common/lifecycle.js";
@@ -55,7 +55,7 @@ export class ChatListWidget extends DomWidget {
 
 	public get element(): HTMLElement { return this.domNode; }
 
-	constructor(container: HTMLElement, options: ChatListWidgetOptions, @IInstantiationService private readonly instantiationService: IInstantiationService) {
+	constructor(container: HTMLElement, options: ChatListWidgetOptions, @IInstantiationService private readonly instantiationService: IInstantiationService, @IMarkdownRendererService private readonly markdownRenderer: IMarkdownRendererService) {
 		super();
 		this.onDidRequestErrorAction = options.onDidRequestErrorAction;
 		this.onDidRequestMemoryReference = options.onDidRequestMemoryReference;
@@ -209,12 +209,11 @@ export class ChatListWidget extends DomWidget {
 			article.append(body);
 		}
 		if (item.type === "agentMessage" || item.type === "reasoning" || item.type === "plan" || item.type === "advisor") {
-			const markdown = disposables.add(new MarkdownElement({
+			const markdown = disposables.add(this.markdownRenderer.render({ value: item.text, supportThemeIcons: true, supportAlertSyntax: true }, {
 				ownerDocument: this.element.ownerDocument,
-				markdown: { value: item.text, supportThemeIcons: true, supportAlertSyntax: true },
-				breaks: true,
+				markedOptions: { breaks: true },
 				fillInIncompleteTokens: item.transient,
-				linkHandler: target => this.onDidRequestLink?.(target),
+				actionHandler: this.onDidRequestLink ? target => this.onDidRequestLink!(target) : undefined,
 				imageResourceLoader: this.imageResourceLoader,
 			}));
 			body.append(markdown.element);

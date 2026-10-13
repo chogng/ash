@@ -263,7 +263,7 @@ function severity(value: unknown): MarkerSeverity {
 		return MarkerSeverity.Warning;
 	}
 	if (value === 'info' || value === 'information') {
-		return MarkerSeverity.Information;
+		return MarkerSeverity.Info;
 	}
 	throw new TypeError('Invalid problem matcher severity');
 }

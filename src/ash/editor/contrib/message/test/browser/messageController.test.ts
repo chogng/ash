@@ -1,4 +1,4 @@
-import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { ICommandService, CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import { StandaloneCommandService } from '../../../../standalone/browser/standaloneServices.js';
 import '../../../../test/browser/testEditorDom.js';
 import { browserEnvironment as environment } from '../../../../test/browser/testEditorDom.js';
@@ -120,4 +120,44 @@ test('Markdown message URLs reach contributed openers and dismiss the message', 
 	messages.showMessage(new MarkdownString('[Documentation](https://example.com/docs)'), new Position(1, 1));
 	environment.window.document.querySelector<HTMLAnchorElement>('.stanza-editor-overlay-message a')!.click();
 	assert.deepEqual({ href: await opened, visible: messages.isVisible() }, { href: 'https://example.com/docs', visible: false });
+});
+
+test('Markdown message commands pass through opener validation and retain their arguments', async () => {
+	const container = h(environment.window.document, 'main');
+	environment.window.document.body.append(container);
+	using containerCleanup = toDisposable(() => container.remove());
+	using model = new TextModel('alpha');
+	using services = new InstantiationService();
+	using codeEditors = new StandaloneCodeEditorService();
+	services.registerInstance(ICodeEditorService, codeEditors);
+	services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
+	using opener = services.createInstance(OpenerService);
+	services.registerInstance(IOpenerService, opener);
+	const calls: (readonly unknown[])[] = [];
+	using command = CommandsRegistry.register('test.markdown.message', (_accessor, ...args) => { calls.push(args); });
+	let allowed = false;
+	let validations = 0;
+	using validator = opener.registerValidator({
+		shouldOpen: async (_target, options) => {
+			validations += 1;
+			assert.deepEqual(options?.allowCommands, ['test.markdown.message']);
+			return allowed;
+		}
+	});
+	using editor = createTestCodeEditor({ container, model, instantiationService: services });
+	editor.layout({ width: 400, height: 100 });
+	const messages = MessageController.get(editor)!;
+	const source = new MarkdownString(`[Run](command:test.markdown.message?${encodeURIComponent(JSON.stringify(['%20 中文']))})`);
+	source.isTrusted = { enabledCommands: ['test.markdown.message'] };
+	const activate = async (): Promise<void> => {
+		messages.showMessage(source, new Position(1, 1));
+		environment.window.document.querySelector<HTMLAnchorElement>('.stanza-editor-overlay-message a')!.click();
+		await Promise.resolve();
+		await Promise.resolve();
+	};
+	await activate();
+	assert.deepEqual({ validations, calls, visible: messages.isVisible() }, { validations: 1, calls: [], visible: false });
+	allowed = true;
+	await activate();
+	assert.deepEqual({ validations, calls, visible: messages.isVisible() }, { validations: 2, calls: [['%20 中文']], visible: false });
 });

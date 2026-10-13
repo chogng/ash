@@ -6,13 +6,15 @@ import { IExtensionManagementService, type ExtensionsInstalledPackage } from "..
 import { decodeBase64, normalizeLocale, parseLanguagePackCatalog } from "../common/languagePackCatalog.js";
 import { ILanguagePackStore } from "../common/languagePackStore.js";
 import type { ILanguagePackService, ILanguagePackItem } from "../common/languagePacks.js";
+import { IMeteredConnectionService } from '../../meteredConnection/common/meteredConnection.js';
 
 /** Browser client adapter that projects Extensions localization capabilities. */
 export class WebLanguagePacksService extends Disposable implements ILanguagePackService {
 	private readonly _onDidChange = this._register(new Emitter<void>());
 	private readonly builtinLocales: ReadonlySet<string>;
 	private readonly startupCatalogs = new Map<string, LanguagePackCatalog>();
-	private initialized = false;
+	private cacheInitialization: Promise<void> | undefined;
+	private automaticRefreshNeeded = true;
 	private refreshQueued = false;
 	private readonly catalogsByLocale = new Map<string, LanguagePackCatalog>();
 	private readonly installedProviders = new Map<string, string>();
@@ -26,6 +28,7 @@ export class WebLanguagePacksService extends Disposable implements ILanguagePack
 		private readonly preinstalled: readonly PreinstalledLanguagePack[],
 		@IExtensionManagementService private readonly extensionManagement: IExtensionManagementService,
 		@ILanguagePackStore private readonly store: ILanguagePackStore,
+		@IMeteredConnectionService private readonly meteredConnection: IMeteredConnectionService,
 	) {
 		super();
 		this.builtinLocales = new Set(builtinCatalogs.map(catalog => normalizeLocale(catalog.locale)));
@@ -34,7 +37,10 @@ export class WebLanguagePacksService extends Disposable implements ILanguagePack
 			if (locale) this.catalogsByLocale.set(locale, { ...catalog, locale });
 			this.startupCatalogs.set(locale, { ...catalog, locale });
 		}
-		this.whenReady = this.refresh().catch(() => undefined);
+		this.whenReady = this.refreshAutomatically().catch(() => undefined);
+		this._register(meteredConnection.onDidChangeIsConnectionMetered(isMetered => {
+			if (!isMetered && this.automaticRefreshNeeded) void this.refreshAutomatically().catch(() => undefined);
+		}));
 		this._register(extensionManagement.onDidChangeInstalled(() => {
 			void this.refresh().catch(() => undefined);
 		}));
@@ -46,6 +52,9 @@ export class WebLanguagePacksService extends Disposable implements ILanguagePack
 
 	public async getInstalledLanguages(): Promise<ILanguagePackItem[]> {
 		await this.whenReady;
+		// Requesting the language list is explicit intent, so a postponed startup
+		// sync must not prevent the user from choosing a newly installed pack.
+		if (this.automaticRefreshNeeded) await this.refresh().catch(() => undefined);
 		return this.catalogs.map(catalog => {
 			const extensionId = this.installedProviders.get(catalog.locale)
 				?? this.preinstalled.find(pack => pack.catalog.locale === catalog.locale)?.id;
@@ -73,6 +82,7 @@ export class WebLanguagePacksService extends Disposable implements ILanguagePack
 	}
 
 	public async refresh(): Promise<void> {
+		this.automaticRefreshNeeded = false;
 		this.refreshQueued = true;
 		if (this.refreshPromise) { return this.refreshPromise; }
 		this.refreshPromise = (async () => {
@@ -84,9 +94,19 @@ export class WebLanguagePacksService extends Disposable implements ILanguagePack
 		return this.refreshPromise;
 	}
 
-	private async load(): Promise<void> {
-		if (!this.initialized) {
+	private async refreshAutomatically(): Promise<void> {
+		// Loading local catalogs remains part of readiness. Fetching complete
+		// installed catalogs is optional startup work and may wait for another network.
+		await this.initializeCache();
+		await this.meteredConnection.whenConnectionStateInitialized;
+		if (this.isDisposed || !this.automaticRefreshNeeded || this.meteredConnection.isConnectionMetered) return;
+		await this.refresh();
+	}
+
+	private initializeCache(): Promise<void> {
+		this.cacheInitialization ??= (async () => {
 			const cached = await this.store.readIndex().catch(() => []);
+			if (this.isDisposed) return;
 			for (const entry of cached) {
 				if (this.builtinLocales.has(entry.locale)) { continue; }
 				const preinstalled = this.preinstalled.find(pack => pack.catalog.locale === entry.locale);
@@ -95,8 +115,13 @@ export class WebLanguagePacksService extends Disposable implements ILanguagePack
 				this.startupCatalogs.set(entry.locale, entry.catalog);
 				this.installedProviders.set(entry.locale, entry.extensionId);
 			}
-			this.initialized = true;
-		}
+		})();
+		return this.cacheInitialization;
+	}
+
+	private async load(): Promise<void> {
+		await this.initializeCache();
+		if (this.isDisposed) return;
 		const installed = await this.extensionManagement.listInstalled();
 		const candidates = new Map<string, LanguagePackIndexEntry | undefined>();
 		for (const entry of await loadInstalledCatalogs(this.extensionManagement, installed)) {

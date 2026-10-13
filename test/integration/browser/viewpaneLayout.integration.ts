@@ -33,7 +33,8 @@ import { ProblemsViewPane } from '../../../src/ash/workbench/contrib/problems/br
 import { TasksViewPane } from '../../../src/ash/workbench/contrib/tasks/browser/tasksViewPane.js';
 import { BulkEditPane } from '../../../src/ash/workbench/contrib/bulkEdit/browser/preview/bulkEditPane.js';
 import { TunnelPanel } from '../../../src/ash/workbench/contrib/remote/browser/tunnelView.js';
-import { MarkerService, MarkerSeverity } from '../../../src/ash/platform/markers/common/markers.js';
+import { MarkerSeverity } from '../../../src/ash/platform/markers/common/markers.js';
+import { MarkerService } from '../../../src/ash/platform/markers/common/markerService.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { type ITaskService } from '../../../src/ash/workbench/services/tasks/common/taskService.js';
@@ -105,7 +106,7 @@ const changes: TurnChangeDetails = {
 	files: Array.from({ length: 30 }, (_, index) => ({ path: `file-${index}.ts`, kind: 'modified', binary: false, additions: 1, deletions: 1 })),
 };
 const markers = resources.add(new MarkerService());
-markers.set('fixture', [{ resource: URI.file('/fixture/file.ts'), severity: MarkerSeverity.Error, message: 'Fixture problem', range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 1 } } }]);
+markers.changeAll('fixture', [{ resource: URI.file('/fixture/file.ts'), marker: { severity: MarkerSeverity.Error, message: 'Fixture problem', startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 2 } }]);
 const pane = resources.add(view === 'empty'
 	? new EmptyView(root, { id: 'fixture.empty', title: 'Files' }, {
 		canOpenFolder: true, canOpenWorkspace: false, openFolder: async () => { throw new Error('Folder opening failed. '.repeat(12)); },

@@ -118,7 +118,8 @@ suite('Workspace task progress signals', () => {
 	});
 });
 
-import { IMarkerService, MarkerService } from '../../../../../platform/markers/common/markers.js';
+import { IMarkerService } from '../../../../../platform/markers/common/markers.js';
+import { MarkerService } from '../../../../../platform/markers/common/markerService.js';
 import { IModelService } from '../../../../../editor/common/services/model.js';
 import { waitForTask } from '../../common/taskService.js';
 import { JSDOM } from 'jsdom';
@@ -835,7 +836,7 @@ for (const canceled of [false, true]) {
 		void reply.complete({ matches: [{ path: 'search[work]/nested/main.ts', resource: URI.file('/workspace/search[work]/nested/main.ts') }], totalMatches: 1 });
 		await termination;
 		await run.completion;
-		assert.deepEqual({ status: run.status, diagnostics: services.get(IMarkerService).getAll().map(marker => ({ path: marker.resource.path, message: marker.message })) }, {
+		assert.deepEqual({ status: run.status, diagnostics: services.get(IMarkerService).read().map(marker => ({ path: marker.resource.path, message: marker.message })) }, {
 			status: canceled ? 'canceled' : 'succeeded', diagnostics: canceled ? [] : [{ path: '/workspace/search[work]/nested/main.ts', message: 'nested diagnostic' }],
 		});
 	});
@@ -869,7 +870,7 @@ test('background search readiness waits for diagnostics before launching a depen
 	assert.equal(tasks.activeRuns[0].isReady, false);
 	void reply.complete({ matches: [{ path: 'nested/main.ts', resource: URI.file('/workspace/nested/main.ts') }], totalMatches: 1 });
 	const dependent = await launching;
-	assert.deepEqual({ terminals: terminals.instances.map(value => value.title), diagnostics: services.get(IMarkerService).getAll().map(value => value.resource.path) }, { terminals: ['Task: Watch', 'Task: After search'], diagnostics: ['/workspace/nested/main.ts'] });
+	assert.deepEqual({ terminals: terminals.instances.map(value => value.title), diagnostics: services.get(IMarkerService).read().map(value => value.resource.path) }, { terminals: ['Task: Watch', 'Task: After search'], diagnostics: ['/workspace/nested/main.ts'] });
 	await tasks.terminate(dependent);
 });
 
@@ -898,7 +899,7 @@ test('search failure waits for terminal release before completing a failed task'
 	await closeRequested.p;
 	assert.equal(run.status, 'failed');
 	assert.equal(completed, false);
-	assert.deepEqual(services.get(IMarkerService).getAll(), []);
+	assert.deepEqual(services.get(IMarkerService).read(), []);
 	void closeAcknowledged.complete(undefined);
 	assert.equal(await completion, failure);
 });
@@ -1666,7 +1667,7 @@ test('process tasks resolve literal arguments and cwd into a process spawn witho
 		execution: { type: 'process', program: 'node', args: ['', 'two words', '/execution/home', '$(touch injected)', '$HOME'] }, cwd: '/workspace/child', writes: [],
 	});
 	(terminals.instances[0] as FakeTerminalInstance).output('file.ts(1,2): error TS123: Broken\n');
-	assert.deepEqual(services.get(IMarkerService).getAll().map(marker => marker.resource.path), ['/execution/home/sources/file.ts']);
+	assert.deepEqual(services.get(IMarkerService).read().map(marker => marker.resource.path), ['/execution/home/sources/file.ts']);
 	(terminals.instances[0] as FakeTerminalInstance).exit(7);
 	assert.deepEqual({ status: run.status, exitCode: run.exitCode, active: service.activeRuns }, { status: 'failed', exitCode: 7, active: [] });
 	const unknown = await service.run(service.tasks[0]);
@@ -1698,8 +1699,8 @@ test('background matcher readiness starts a dependent task and termination close
 	assert.equal(terminals.instances.length, 1);
 	watch.output('DY\n');
 	const run = await launch;
-	assert.deepEqual({ labels: terminals.instances.map(instance => instance.title), markers: services.get(IMarkerService).getAll().map(marker => [marker.resource.path, marker.message, marker.range.start]) }, {
-		labels: ['Task: Watch', 'Task: Launch'], markers: [['/workspace/file.ts', 'warning', { lineIndex: 1, columnIndex: 2 }]],
+	assert.deepEqual({ labels: terminals.instances.map(instance => instance.title), markers: services.get(IMarkerService).read().map(marker => [marker.resource.path, marker.message, marker.startLineNumber, marker.startColumn]) }, {
+		labels: ['Task: Watch', 'Task: Launch'], markers: [['/workspace/file.ts', 'warning', 2, 3]],
 	});
 	await service.terminate(run);
 	assert.deepEqual(terminals.instances.map(instance => instance.state), ['exited', 'exited']);
@@ -1754,7 +1755,7 @@ test('dependency diagnostics prevent the parent task and retain errors in Proble
 	});
 	await service.refresh();
 	await assert.rejects(service.run(service.tasks.find(task => task.label === 'Launch')!), /Dependency 'Compile'.*failed/);
-	assert.deepEqual({ terminals: terminals.instances.length, errors: services.get(IMarkerService).getAll().map(marker => [marker.code, marker.message]) }, { terminals: 1, errors: [['1000', 'Broken']] });
+	assert.deepEqual({ terminals: terminals.instances.length, errors: services.get(IMarkerService).read().map(marker => [marker.code, marker.message]) }, { terminals: 1, errors: [['1000', 'Broken']] });
 });
 
 test('CustomExecution opens after task listeners, receives input and resize, and closes once on termination', async () => {
@@ -2672,24 +2673,24 @@ suite('Agent Task runs through the shared execution owner', () => {
 		const first = await service.run(task);
 		terminals.instances[0]!.output('first.ts(1,2): error TS1000: First failure\n');
 		const second = await service.run(task);
-		assert.deepEqual(markers.getAll().map(marker => marker.message), ['First failure'], 'starting a concurrent run preserves live diagnostics');
+		assert.deepEqual(markers.read().map(marker => marker.message), ['First failure'], 'starting a concurrent run preserves live diagnostics');
 		terminals.instances[1]!.output('second.ts(1,2): error TS1001: Second failure\n');
-		assert.deepEqual(markers.getAll().map(marker => marker.message).sort(), ['First failure', 'Second failure']);
-		assert.equal(new Set(markers.getAll().map(marker => marker.owner)).size, 2);
+		assert.deepEqual(markers.read().map(marker => marker.message).sort(), ['First failure', 'Second failure']);
+		assert.equal(new Set(markers.read().map(marker => marker.owner)).size, 2);
 		terminals.instances[0]!.exit(0);
 		await first.completion;
 		const third = await service.run(task);
-		assert.deepEqual(markers.getAll().map(marker => marker.message), ['Second failure'], 'rerun clears completed diagnostics but preserves the other live run');
+		assert.deepEqual(markers.read().map(marker => marker.message), ['Second failure'], 'rerun clears completed diagnostics but preserves the other live run');
 		terminals.instances.find(terminal => terminal.id === third.terminalId)!.output('third.ts(1,2): error TS1002: Third failure\n');
-		assert.deepEqual(markers.getAll().map(marker => marker.message).sort(), ['Second failure', 'Third failure']);
+		assert.deepEqual(markers.read().map(marker => marker.message).sort(), ['Second failure', 'Third failure']);
 		await service.terminate(second);
 		await service.terminate(third);
 		const fourth = await service.run(task);
-		assert.deepEqual(markers.getAll(), [], 'a sequential rerun clears all completed diagnostics for this task');
+		assert.deepEqual(markers.read(), [], 'a sequential rerun clears all completed diagnostics for this task');
 		terminals.instances.find(terminal => terminal.id === fourth.terminalId)!.output('fourth.ts(1,2): error TS1003: Fourth failure\n');
 		await service.terminate(fourth);
 		workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/replacement') });
-		assert.deepEqual(markers.getAll(), [], 'workspace retirement clears every run diagnostic owner');
+		assert.deepEqual(markers.read(), [], 'workspace retirement clears every run diagnostic owner');
 	});
 
 	test('returns a Run ID while dependencies run and cancels the same execution tree', async () => {

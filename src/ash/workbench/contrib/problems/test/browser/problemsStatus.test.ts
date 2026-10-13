@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { URI } from "../../../../../base/common/uri.js";
-import { MarkerService, MarkerSeverity } from "../../../../../platform/markers/common/markers.js";
+import { MarkerSeverity } from "../../../../../platform/markers/common/markers.js";
+import { MarkerService } from "../../../../../platform/markers/common/markerService.js";
 import { ProblemsStatusContribution } from "../../../../../workbench/contrib/problems/browser/problemsStatus.js";
 import { StatusbarAlignment, StatusbarService } from "../../../../../workbench/services/statusbar/browser/statusbar.js";
 import type { IViewsService } from "../../../../../workbench/services/views/common/viewsService.js";
@@ -9,11 +10,11 @@ import type { IViewsService } from "../../../../../workbench/services/views/comm
 test("Problems status projects and updates workspace error and warning counts", async () => {
 	using markerService = new MarkerService();
 	const resource = URI.file("C:\\project\\src\\main.rs");
-	markerService.set("fixture", [
+	markerService.changeAll("fixture", [
 		marker(resource, MarkerSeverity.Error, "first"),
 		marker(resource, MarkerSeverity.Error, "second"),
 		marker(resource, MarkerSeverity.Warning, "third"),
-		marker(resource, MarkerSeverity.Information, "fourth"),
+		marker(resource, MarkerSeverity.Info, "fourth"),
 	]);
 	const focusedViews: string[] = [];
 	const viewsService = {
@@ -27,7 +28,7 @@ test("Problems status projects and updates workspace error and warning counts", 
 	assert.equal(await statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.run?.(), true);
 	assert.deepEqual(focusedViews, ["ash.problems"]);
 
-	markerService.set("fixture", [
+	markerService.changeAll("fixture", [
 		marker(resource, MarkerSeverity.Warning, "fifth"),
 		marker(resource, MarkerSeverity.Warning, "sixth"),
 	]);
@@ -39,10 +40,5 @@ test("Problems status projects and updates workspace error and warning counts", 
 });
 
 function marker(resource: URI, severity: MarkerSeverity, message: string) {
-	return {
-		resource,
-		range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 1 } },
-		severity,
-		message,
-	};
+	return { resource, marker: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 2, severity, message } };
 }

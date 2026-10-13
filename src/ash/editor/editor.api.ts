@@ -24,9 +24,8 @@ export type { MonacoWebWorker, StandaloneWorkerContext, StandaloneWorkerMirrorMo
 export type { StandaloneWorkerOptions } from './standalone/browser/services/standaloneWebWorkerService.js';
 export type { ICommandDescriptor, IKeybindingRule } from './standalone/browser/standaloneEditor.js';
 export { KeyCode, KeyMod } from '../base/common/keyCodes.js';
-export type { StandaloneMarkerData } from './standalone/browser/standaloneEditor.js';
-export { MarkerSeverity } from '../platform/markers/common/markers.js';
-export type { Marker } from '../platform/markers/common/markers.js';
+export { MarkerSeverity, MarkerTag } from '../platform/markers/common/markers.js';
+export type { IMarker, IMarkerData, IMarkerReadOptions, IRelatedInformation } from '../platform/markers/common/markers.js';
 export type { IColorizerOptions, IColorizerElementOptions } from './standalone/browser/colorizer.js';
 export type { IStandaloneLanguagesApi, IToken, ILineTokens, IEncodedLineTokens, TokensProvider, EncodedTokensProvider, TokensProviderFactory } from './standalone/browser/standaloneLanguages.js';
 export type { IState } from './common/languages.js';

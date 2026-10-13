@@ -28,7 +28,7 @@ import { IFileTextModelService, type ITextModelSaveParticipant } from '../../../
 const diagnosticSeverity = {
 	[MarkerSeverity.Error]: LanguageDiagnosticSeverity.Error,
 	[MarkerSeverity.Warning]: LanguageDiagnosticSeverity.Warning,
-	[MarkerSeverity.Information]: LanguageDiagnosticSeverity.Information,
+	[MarkerSeverity.Info]: LanguageDiagnosticSeverity.Information,
 	[MarkerSeverity.Hint]: LanguageDiagnosticSeverity.Hint,
 };
 
@@ -132,9 +132,10 @@ class CodeActionOnSaveParticipant implements ITextModelSaveParticipant {
 		return {
 			...createLanguageFeatureRequest(model, model.getLanguageId(), signal),
 			resource: model.uri, range: model.getFullModelRange(), only: [kind.value],
-			diagnostics: this.markers.read(model.uri).map(marker => ({
-				range: new Range(marker.range.start.lineIndex + 1, marker.range.start.columnIndex + 1, marker.range.end.lineIndex + 1, marker.range.end.columnIndex + 1),
-				severity: diagnosticSeverity[marker.severity], message: marker.message, source: marker.source, code: marker.code,
+			diagnostics: this.markers.read({ resource: model.uri }).map(marker => ({
+				range: new Range(marker.startLineNumber, marker.startColumn, marker.endLineNumber, marker.endColumn),
+				severity: diagnosticSeverity[marker.severity], message: marker.message, source: marker.source,
+				code: typeof marker.code === 'object' ? marker.code.value : marker.code,
 			})),
 		};
 	}

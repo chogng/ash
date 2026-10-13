@@ -6,6 +6,7 @@ import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../pla
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService, type NotificationHandle } from '../../../../platform/notification/common/notification.js';
 import { IUpdateService, type UpdateCheckResult } from '../../../../platform/update/common/updateService.js';
+import { IMeteredConnectionService } from '../../../../platform/meteredConnection/common/meteredConnection.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 
 const CHECK_FOR_UPDATES_COMMAND_ID = 'update.checkForUpdate';
@@ -83,7 +84,9 @@ if (isWindows || isMacintosh) {
 	registerWorkbenchContribution('workbench.contrib.desktopAutomaticUpdate', WorkbenchPhase.AfterRestored, accessor => {
 		const update = accessor.get(IUpdateService);
 		const notifications = accessor.get(INotificationService);
+		const meteredConnection = accessor.get(IMeteredConnectionService);
 		let disposed = false;
+		let started = false;
 		const check = async (): Promise<void> => {
 			try {
 				const result = await update.checkAutomatically();
@@ -93,11 +96,15 @@ if (isWindows || isMacintosh) {
 			}
 		};
 		let interval: ReturnType<typeof setInterval> | undefined;
+		const networkChange = meteredConnection.onDidChangeIsConnectionMetered(isMetered => {
+			if (started && !isMetered) void check();
+		});
 		const initial = setTimeout(() => {
+			started = true;
 			void check();
 			interval = setInterval(() => { void check(); }, 24 * 60 * 60 * 1000);
 		}, 60_000);
-		return toDisposable(() => { disposed = true; clearTimeout(initial); if (interval) clearInterval(interval); });
+		return toDisposable(() => { disposed = true; networkChange.dispose(); clearTimeout(initial); if (interval) clearInterval(interval); });
 	});
 	MenusRegistry.appendMenuItem(MenuId.GlobalActivity, {
 		command: { id: CHECK_FOR_UPDATES_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'update.checkForUpdates' }, 'Check for Updates...') },

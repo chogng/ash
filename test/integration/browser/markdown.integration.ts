@@ -1,40 +1,54 @@
-import { MarkdownElement } from '../../../src/ash/base/browser/markdownRenderer.js';
+import { renderMarkdown } from '../../../src/ash/base/browser/markdownRenderer.js';
 import dompurify from '../../../src/ash/base/browser/dompurify/dompurify.js';
 import { safeSetInnerHtml, sanitizeHtml, sanitizeHtmlToFragment } from '../../../src/ash/base/browser/domSanitize.js';
 import '../../../src/ash/base/browser/markdownRenderer.css';
+import { DisposableStore, MutableDisposable } from '../../../src/ash/base/common/lifecycle.js';
+import { createCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
+import { createTestEditorServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
+import { ICodeEditorService } from '../../../src/ash/editor/browser/services/codeEditorService.js';
+import { IMarkdownRendererService } from '../../../src/ash/platform/markdown/browser/markdownRenderer.js';
+import { ChatMarkdownContentPart } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatContentParts/chatMarkdownContentPart.js';
+import '../../../src/ash/base/browser/ui/styles.css';
+
+// This isolates the Markdown service boundary from the full chat/voice fixture.
+const chatResources = new DisposableStore();
+const chatServices = chatResources.add(createTestEditorServices(undefined, createCodeEditorServices(chatResources)));
+const chatPart = chatResources.add(new MutableDisposable<ChatMarkdownContentPart>());
+let defaultCodeCalls = 0;
+chatServices.get(IMarkdownRendererService).setDefaultCodeBlockRenderer({
+	renderCodeBlock: async () => {
+		defaultCodeCalls += 1;
+		return document.createElement('code');
+	}
+});
 
 const markdown = 'a<em>b</em>c and `<span>code</span>`\n\n- [x] Done\n\n[Open](https://example.com)';
 const openedLinks: string[] = [];
-const plain = new MarkdownElement({
+const plain = renderMarkdown({ value: markdown }, {
 	ownerDocument: document,
-	markdown,
-	linkHandler: target => openedLinks.push(target),
+	actionHandler: target => openedLinks.push(target)
 });
-const supported = new MarkdownElement({
-	ownerDocument: document,
-	markdown: { value: markdown, supportHtml: true },
+const supported = renderMarkdown({ value: markdown, supportHtml: true }, {
+	ownerDocument: document
 });
-const advanced = new MarkdownElement({
+const advanced = renderMarkdown({
+	value: '> [!NOTE]\n> Read $(info)\n\n![pixel](data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=|width=32,height=16)\n\n**bold',
+	supportAlertSyntax: true,
+	supportThemeIcons: true,
+}, {
 	ownerDocument: document,
-	markdown: {
-		value: '> [!NOTE]\n> Read $(info)\n\n![pixel](data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=|width=32,height=16)\n\n**bold',
-		supportAlertSyntax: true,
-		supportThemeIcons: true,
-	},
-	fillInIncompleteTokens: true,
+	fillInIncompleteTokens: true
 });
-const resources = new MarkdownElement({
-	ownerDocument: document,
-	markdown: '[remote](ash-remote://ssh+host/src/file.ts) ![resource](ash-remote://ssh+host/images/pixel.gif|width=24)',
+const resources = renderMarkdown({ value: '[remote](ash-remote://ssh+host/src/file.ts) ![resource](ash-remote://ssh+host/images/pixel.gif|width=24)' }, {
+	ownerDocument: document
 });
 const loadedResources: string[] = [];
-const loadedResource = new MarkdownElement({
+let loadedResource = renderMarkdown({ value: '![pixel](ash-remote://ssh+host/images/pixel.gif)' }, {
 	ownerDocument: document,
-	markdown: '![pixel](ash-remote://ssh+host/images/pixel.gif)',
-	imageResourceLoader: async resource => {
+	imageResourceLoader: async (resource) => {
 		loadedResources.push(resource.toString());
 		return fetch('data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=').then(response => response.blob());
-	},
+	}
 });
 
 document.getElementById('default')!.append(plain.element);
@@ -52,11 +66,32 @@ declare global {
 			openedLinks(): string[];
 			loadedResources(): string[];
 			clearLoadedResource(): void;
+			streamChat(value: string, complete?: boolean): void;
+			chatState(): { editors: number; defaultCodeCalls: number; };
+			chatSelection(): readonly number[] | undefined;
 		};
 	}
 }
 
 window.ashMarkdownIntegration = {
+	streamChat(value: string, complete = false): void {
+		if (chatPart.value) {
+			chatPart.value.tryIncrementalUpdate({ value }, !complete);
+		} else {
+			chatPart.value = chatServices.createInstance(ChatMarkdownContentPart, { ownerDocument: document, markdown: { value }, fillInIncompleteTokens: !complete });
+			chatPart.value.domNode.id = 'service-chat';
+			chatPart.value.domNode.style.width = '400px';
+			document.body.append(chatPart.value.domNode);
+			for (const editor of chatServices.get(ICodeEditorService).listCodeEditors()) editor.layout({ width: 400, height: 100 });
+		}
+	},
+	chatState(): { editors: number; defaultCodeCalls: number; } {
+		return { editors: chatServices.get(ICodeEditorService).listCodeEditors().length, defaultCodeCalls };
+	},
+	chatSelection(): readonly number[] | undefined {
+		const selection = chatServices.get(ICodeEditorService).listCodeEditors()[0]?.getSelection();
+		return selection ? [selection.startLineNumber, selection.startColumn, selection.endLineNumber, selection.endColumn] : undefined;
+	},
 	openedLinks(): string[] {
 		return [...openedLinks];
 	},
@@ -64,7 +99,9 @@ window.ashMarkdownIntegration = {
 		return [...loadedResources];
 	},
 	clearLoadedResource(): void {
-		loadedResource.setMarkdown('Updated');
+		loadedResource.dispose();
+		loadedResource = renderMarkdown({ value: 'Updated' }, { ownerDocument: document });
+		document.getElementById('loaded-resource')!.replaceChildren(loadedResource.element);
 	},
 	checkSanitizerPolicy(): Record<string, string> {
 		const defaultHtml = sanitizeHtml('<div onclick="alert(1)"><a href="javascript:alert(1)">link</a><script>alert(1)</script></div>').toString();
@@ -117,6 +154,7 @@ window.ashMarkdownIntegration = {
 		}
 	},
 	dispose(): void {
+		chatResources.dispose();
 		plain.dispose();
 		supported.dispose();
 		advanced.dispose();

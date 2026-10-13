@@ -91,7 +91,8 @@ import { AbstractLifecycleService } from '../../../lifecycle/common/lifecycleSer
 import { ILifecycleService, LifecyclePhase } from '../../../lifecycle/common/lifecycle.js';
 import { IModelService } from '../../../../../editor/common/services/model.js';
 import { ILanguageService } from '../../../../../editor/common/languages/language.js';
-import { IMarkerService, MarkerService } from '../../../../../platform/markers/common/markers.js';
+import { IMarkerService } from '../../../../../platform/markers/common/markers.js';
+import { MarkerService } from '../../../../../platform/markers/common/markerService.js';
 import { ExtensionResourceLoaderService } from '../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
@@ -256,7 +257,7 @@ test('document highlights translate protocol kinds into editor kinds', async () 
 	using registration = languages.registerProviderBatch(createExtensionHostLanguageProviderBatch({
 		kind: 'languageProvider', registrationId: 'highlights', languageIds: ['markdown'], operations: ['documentHighlights'],
 	}, 'markdown', 'highlights', async () => [1, 2, 3].map(kind => ({
-		kind, range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 7 } },
+		kind, startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 8,
 	}))));
 	const result = await languages.documentHighlightProvider.ordered(model)[0]!.provideDocumentHighlights(model, new Position(1, 3), source.token);
 	assert.deepEqual(result?.map(highlight => highlight.kind), [0, 1, 2]);
@@ -319,16 +320,19 @@ test('diagnostic collections reject stale versions and keep extension ownership 
 	const signal = new AbortController().signal;
 	await api.clientHandler!({ operation: 'setDiagnostics', collection: 'lint', entries }, signal, source);
 	await api.clientHandler!({ operation: 'setDiagnostics', collection: 'lint', entries }, signal, other);
-	assert.equal(markers.read(model.uri).length, 2);
+	assert.equal(markers.read({ resource: model.uri }).length, 2);
+	assert.deepEqual(markers.read({ resource: model.uri }).map(marker => [marker.startLineNumber, marker.startColumn, marker.endLineNumber, marker.endColumn, marker.modelVersionId, marker.code]), [[1, 1, 1, 4, 1, 'W1'], [1, 1, 1, 4, 1, 'W1']]);
+	await assert.rejects(api.clientHandler!({ operation: 'setDiagnostics', collection: 'lint', entries: [{ ...entries[0]!, diagnostics: [{ ...diagnostic, message: '' }] }] }, signal, source), /Diagnostic message must not be empty/);
+	assert.equal(markers.read({ resource: model.uri }).length, 2, 'invalid replacement leaves current collections intact');
 	model.setValue('good');
 	await api.clientHandler!({ operation: 'setDiagnostics', collection: 'lint', entries: [{ ...entries[0]!, diagnostics: [] }] }, signal, source);
-	assert.equal(markers.read(model.uri).length, 2, 'old replacement cannot clear current diagnostics');
+	assert.equal(markers.read({ resource: model.uri }).length, 2, 'old replacement cannot clear current diagnostics');
 	await api.clientHandler!({ operation: 'setDiagnostics', collection: 'lint', entries: [] }, signal, source);
-	assert.equal(markers.read(model.uri).length, 1, 'other extension owns its collection');
+	assert.equal(markers.read({ resource: model.uri }).length, 1, 'other extension owns its collection');
 	api.current = { generation: 2, extensions: [{ ...api.current.extensions[0]!, incarnation: 4 }] };
 	api.emitChanged(2);
 	await waitFor(() => service.currentSnapshot.fleetGeneration === 2);
-	assert.equal(markers.read(model.uri).length, 0);
+	assert.equal(markers.read({ resource: model.uri }).length, 0);
 	await assert.rejects(api.clientHandler!({ operation: 'setDiagnostics', collection: 'lint', entries: [] }, signal, source), /retired extension/);
 	model.dispose();
 });

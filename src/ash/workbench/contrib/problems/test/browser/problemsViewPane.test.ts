@@ -5,7 +5,8 @@ import { JSDOM } from "jsdom";
 import { URI } from "../../../../../base/common/uri.js";
 import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../editor/common/core/range.js";
-import { MarkerService, MarkerSeverity } from "../../../../../platform/markers/common/markers.js";
+import { MarkerSeverity } from "../../../../../platform/markers/common/markers.js";
+import { MarkerService } from "../../../../../platform/markers/common/markerService.js";
 import { type EditorOpenOptions, type IEditorService } from "../../../../../workbench/services/editor/common/editorService.js";
 import { emptyEditorServiceState } from '../../../../../workbench/test/common/testEditorService.js';
 
@@ -15,10 +16,10 @@ test("ProblemsViewPane filters diagnostics and opens the selected range", async 
 	const main = URI.file("C:\\project\\src\\main.rs");
 	const library = URI.file("C:\\project\\src\\lib.rs");
 	using markerService = new MarkerService();
-	markerService.set("fixture", [
+	markerService.changeAll("fixture", [
 		marker(main, MarkerSeverity.Error, "cannot find value", 1),
 		marker(main, MarkerSeverity.Warning, "unused import", 2),
-		marker(library, MarkerSeverity.Information, "consider simplifying", 4),
+		marker(library, MarkerSeverity.Info, "consider simplifying", 4),
 	]);
 	let opened: { readonly input: IResourceEditorInput; readonly options?: EditorOpenOptions; } | undefined;
 	let focusCount = 0;
@@ -62,7 +63,7 @@ test("ProblemsViewPane filters diagnostics and opens the selected range", async 
 		assert.deepEqual(opened?.options?.selection, Range.fromPositions(new Position((1) + 1, (0) + 1), new Position((1) + 1, (4) + 1)));
 		assert.equal(focusCount, 1);
 
-		markerService.set("fixture", []);
+		markerService.changeAll("fixture", []);
 		assert.equal(pane.element.querySelectorAll(".ash-problems-item").length, 0);
 		assert.equal(pane.element.querySelector(".ash-problems-status")?.textContent, "No problems have been detected in the workspace.");
 	} finally {
@@ -72,13 +73,7 @@ test("ProblemsViewPane filters diagnostics and opens the selected range", async 
 });
 
 function marker(resource: URI, severity: MarkerSeverity, message: string, lineNumber: number) {
-	return {
-		resource,
-		range: { start: { lineIndex: lineNumber, columnIndex: 0 }, end: { lineIndex: lineNumber, columnIndex: 4 } },
-		severity,
-		message,
-		source: "fixture",
-	};
+	return { resource, marker: { startLineNumber: (lineNumber) + 1, startColumn: 1, endLineNumber: (lineNumber) + 1, endColumn: 5, severity, message, source: "fixture" } };
 }
 
 function installDomGlobals(browser: JSDOM): readonly string[] {

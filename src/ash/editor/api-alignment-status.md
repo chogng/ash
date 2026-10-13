@@ -450,9 +450,11 @@ Quick Diff 时限续批：独立默认值由不限时改为标准的 1000 毫秒
 - `standaloneServices.ts`：通用服务覆盖、动态按键注册、配置批量同步及其模型选项效果。当前 `initialize` 已返回实现 IInstantiationService 的唯一容器，withServices 延迟装配及释放已验证；工厂注入仍保留 Ash 扩展。
 - `standaloneCodeEditorService.ts`：显式 active editor 设置尚无对应 action 消费链；仍保留现有聚焦与最近活动语义。
 
-Marker API 续批准入：宿主通过 `editor.setModelMarkers` 更新一个已登记模型 → 窗口级 `MarkerService.changeOne` 只替换该 owner 的该资源 → 原 `MarkerDecorationsService` 更新波浪线。`getModelMarkers`、`removeAllMarkers` 和 `onDidChangeMarkers` 读取同一服务。修改路径为双方都有的 `platform/markers/common/markers.ts`、`editor/standalone/browser/standaloneEditor.ts`、`editor/editor.api.ts`，以及既有 marker 服务单测、standalone 浏览器场景和本台账；不增加第二个 marker owner。公开 marker 数据使用 Ash 平台已有的零基行列和 `MarkerSeverity`，未将上游不同的坐标与 severity 表示硬套在现有服务上。定向单测与浏览器场景验证单资源替换、其他资源保留、查询、事件、装饰显示和清除。
+Marker API：用户已确认迁移平台公开契约；原 `MarkerInput / Marker / MarkerRange / MarkerPosition / MarkerChange` 和 `StandaloneMarkerData` 退出，既有 Ash 诊断桥、Problems 消费方及测试文件保留其职责。`platform/markers/common/markers.ts` 拥有 `IMarkerData / IResourceMarker / IMarker / IMarkerReadOptions`、数值 `MarkerSeverity` 与服务标识；现有 owner/资源存储迁到上游对应的 `platform/markers/common/markerService.ts`，窗口仍只注册一份服务。数据使用一基行列，扩展的零基 UTF-16 坐标在 MainThreadDiagnostics 转换，语言诊断与任务编译器坐标直接进入平台契约；版本、关联信息、tags、origin 和结构化 code 随 marker 保留。
 
-本批 `typecheck:stanza`、`build:stanza`、marker 服务单测 4 项及 marker 浏览器场景 2 项通过。完整浏览器套件为 605 项通过、22 项失败；失败集中在括号、注释、inline completion 与 GPU 场景。注释快捷键失败可单独复现，现象是快捷键没有改变文本；该场景不调用本批 marker API。完整对齐检查因此未通过，不能把定向验证记作全套通过。
+语言、扩展、任务与 Prompt 诊断通过 `changeAll / changeOne` 写入；Problems、编辑器装饰、保存操作与无障碍信号通过 `read(filter) / onMarkerChanged` 消费同一 owner，状态栏通过 `getStatistics` 派生计数。Standalone 输入在公开边界验证整个批次后发布；移除整个 owner 使用 `changeAll(owner, [])`，多个资源使用 `remove(owner, resources)`。旧 `set / getAll / onDidChange` 入口退出。资源过滤尚无本地生产调用方，`installResourceFilter / ignoreResourceFilters` 保持待补；本批未添加对应空接口或实现。
+
+验证：11 个定向单测文件的 80 项行为测试通过，包含扩展诊断版本/坐标保留、非法替换和 owner 隔离、后台任务诊断与 Prompt 提供方释放；不引入 App Server 语音夹具的 7 个文件使用仓库相同编译选项通过严格类型检查。现有浏览器夹具在 Vite 开发服务器执行 4 项 Chromium 场景通过：3 项 Standalone 场景覆盖装饰显示/清除、其他模型保留、按严重级别查询、版本/code 保留以及非法批次不产生替换或事件，1 项 Problems 场景验证实际列表布局。标准 `pnpm test:unit` 的准备阶段被范围外的 `zh-CN/ash/chat.voice.userAction` 翻译阻塞；全量及包含宿主夹具的编译被范围外的 `voiceTranscriptRecorded` 类型差异阻塞；标准浏览器构建被缺失的语音模块阻塞。未将定向运行记作全量验证通过。
 
 命令注册续批准入：宿主调用 `editor.addCommand` / `registerCommand` → 原 `CommandsRegistry` 持有唯一 handler → `StandaloneCommandService` 在当前窗口作用域执行并传递参数 → 返回的注册句柄移除命令。双方都有的 `standalone/browser/standaloneEditor.ts` 与 `editor.api.ts` 接入公开入口；既有 standalone 浏览器场景验证物理快捷键触发、命令服务参数传递和注销，未改命令注册表或快捷键解析器。`typecheck:stanza`、`build:stanza`、对齐结构检查及相邻 F1/高对比度浏览器场景共 4 项通过。
 

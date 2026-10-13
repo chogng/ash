@@ -5,7 +5,8 @@ import { TasksViewPane } from '../../../src/ash/workbench/contrib/tasks/browser/
 import { IFileService, FileKind, FileNotFoundError } from '../../../src/ash/platform/files/common/files.js';
 import { ILogService, NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
 import { IOutputService } from '../../../src/ash/workbench/services/output/common/output.js';
-import { IMarkerService, MarkerService } from '../../../src/ash/platform/markers/common/markers.js';
+import { IMarkerService } from '../../../src/ash/platform/markers/common/markers.js';
+import { MarkerService } from '../../../src/ash/platform/markers/common/markerService.js';
 import { IModelService } from '../../../src/ash/editor/common/services/model.js';
 import { IFileSearchService } from '../../../src/ash/platform/search/common/fileSearch.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';

@@ -5039,6 +5039,24 @@ test('standalone marker API preserves other models when one owner updates a mode
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 });
 
+test('standalone marker boundary rejects an invalid batch without replacing current diagnostics', async ({ page }) => {
+	await page.goto('/standalone.html');
+	const result = await page.evaluate(() => window.ashStandaloneIntegration.exerciseMarkerBoundary());
+	expect(result.errors).toEqual([
+		'Marker positions must be positive integers',
+		'Marker positions must be positive integers',
+		'Marker positions must be positive integers',
+		'Marker message must not be empty',
+		'Unknown marker severity',
+		'Invalid marker code',
+	]);
+	expect(result.messages).toEqual(['retained']);
+	expect(result.changed).toBe(0);
+	expect(result.version).toBeGreaterThan(0);
+	expect(result.code).toBe('0');
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
 test('generic code action and organize imports commands apply their matching action once', async ({ page }) => {
 	await page.goto('/standalone.html');
 	for (const [command, args, text] of [

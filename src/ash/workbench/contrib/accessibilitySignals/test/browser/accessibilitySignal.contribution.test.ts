@@ -16,7 +16,8 @@ import { SpeechToTextState, ISpeechService } from '../../../speech/common/speech
 import { ITextFileService } from '../../../../services/textfile/common/textfiles.js';
 import { type ITextFileSaveEvent } from '../../../../services/textfile/common/textFileService.js';
 import { IDebugService, type IDebugSession, type DebugSessionState } from '../../../../services/debug/common/debugService.js';
-import { IMarkerService, MarkerService, MarkerSeverity } from '../../../../../platform/markers/common/markers.js';
+import { IMarkerService, MarkerSeverity } from '../../../../../platform/markers/common/markers.js';
+import { MarkerService } from '../../../../../platform/markers/common/markerService.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import type { ICodeEditor } from '../../../../../editor/browser/editorBrowser.js';
 import { ITerminalService, type ITerminalInstance, type ITerminalCommandStatusEvent } from '../../../../services/terminal/browser/terminal.js';
@@ -142,7 +143,7 @@ suite('Accessibility signal production contributions', () => {
 			fixture.services.registerInstance(IDebugService, { breakpoints: [], onDidChangeBreakpoints: Event.None } as unknown as IDebugService);
 			using host = WorkbenchContributionsRegistry.createHost(fixture.services, error => { throw error; }, ['workbench.contrib.editorTextPropertySignals']);
 			host.advance(WorkbenchPhase.AfterRestored);
-			markers.changeOne('diagnostics', resource, [{ severity: MarkerSeverity.Error, message: 'Error', range: { start: { lineIndex: 0, columnIndex: 2 }, end: { lineIndex: 0, columnIndex: 4 } } }]);
+			markers.changeOne('diagnostics', resource, [{ severity: MarkerSeverity.Error, message: 'Error', startLineNumber: 1, startColumn: 3, endLineNumber: 1, endColumn: 5 }]);
 			mock.timers.tick(250);
 			position = { lineNumber: 1, column: 3 };
 			positionChanged.fire();
@@ -151,9 +152,9 @@ suite('Accessibility signal production contributions', () => {
 			positionChanged.fire();
 			mock.timers.tick(250);
 			assert.deepEqual(fixture.cues, ['accessibility.signals.errorOnLine', 'accessibility.signals.errorAtPosition']);
-			markers.remove('diagnostics', resource);
+			markers.remove('diagnostics', [resource]);
 			mock.timers.tick(250);
-			markers.changeOne('diagnostics', resource, [{ severity: MarkerSeverity.Warning, message: 'Warning', range: { start: { lineIndex: 0, columnIndex: 2 }, end: { lineIndex: 0, columnIndex: 4 } } }]);
+			markers.changeOne('diagnostics', resource, [{ severity: MarkerSeverity.Warning, message: 'Warning', startLineNumber: 1, startColumn: 3, endLineNumber: 1, endColumn: 5 }]);
 			removed.fire(editor);
 			mock.timers.tick(1000);
 			assert.equal(fixture.cues.length, 2);

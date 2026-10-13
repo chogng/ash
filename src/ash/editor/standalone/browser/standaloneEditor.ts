@@ -12,7 +12,14 @@ import { ILanguageService } from '../../common/languages/language.js';
 import { createTextModel, StandaloneEditor, type IActionDescriptor, type IStandaloneCodeEditor, type IStandaloneEditorConstructionOptions } from './standaloneCodeEditor.js';
 import { StandaloneServices, type StandaloneServiceOverrides } from "./standaloneServices.js";
 import { Colorizer, type IColorizerElementOptions, type IColorizerOptions } from './colorizer.js';
-import { IMarkerService, type Marker, type MarkerInput } from '../../../platform/markers/common/markers.js';
+import {
+	IMarkerService,
+	MarkerSeverity,
+	MarkerTag,
+	type IMarker,
+	type IMarkerData,
+	type IMarkerReadOptions,
+} from '../../../platform/markers/common/markers.js';
 import { CommandsRegistry, type CommandHandler } from '../../../platform/commands/common/commands.js';
 import { KeybindingsRegistry } from '../../../platform/keybinding/common/keybindingsRegistry.js';
 import { EditorAction, EditorCommand, EditorExtensionsRegistry, type ServicesAccessor } from '../../browser/editorExtensions.js';
@@ -20,8 +27,6 @@ import { ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.j
 import { MenuId, MenusRegistry } from '../../../platform/actions/common/actions.js';
 import { createWebWorker as createStandaloneWebWorker, type MonacoWebWorker } from './standaloneWebWorker.js';
 import type { StandaloneWorkerOptions } from './services/standaloneWebWorkerService.js';
-
-export type StandaloneMarkerData = Omit<MarkerInput, 'resource'>;
 
 export interface ICommandDescriptor {
 	readonly id: string;
@@ -167,26 +172,78 @@ export function setModelLanguage(model: ITextModel, mimeTypeOrLanguageId: string
 	model.setLanguage(languageService.createById(languageId));
 }
 
-export function setModelMarkers(model: ITextModel, owner: string, markers: readonly StandaloneMarkerData[]): void {
+export function setModelMarkers(model: ITextModel, owner: string, markers: IMarkerData[]): void {
 	if (StandaloneServices.get(IModelService).getModel(model.uri) !== model) {
 		throw new ReferenceError('Standalone marker model is not registered with the model service');
 	}
+	validateMarkerOwner(owner);
+	if (!Array.isArray(markers)) throw new TypeError('Markers must be an array');
+	for (const marker of markers) validateMarkerData(marker);
 	StandaloneServices.get(IMarkerService).changeOne(owner, model.uri, markers);
 }
 
 export function removeAllMarkers(owner: string): void {
-	StandaloneServices.get(IMarkerService).remove(owner);
+	validateMarkerOwner(owner);
+	StandaloneServices.get(IMarkerService).changeAll(owner, []);
 }
 
-export function getModelMarkers(filter: { readonly owner?: string; readonly resource?: URI; readonly take?: number; } = {}): readonly Marker[] {
-	const markers = StandaloneServices.get(IMarkerService).read(filter.resource, filter.owner);
-	if (filter.take === undefined) return markers;
-	if (!Number.isSafeInteger(filter.take) || filter.take < 0) throw new RangeError('Marker take must be a non-negative integer');
-	return markers.slice(0, filter.take);
+export function getModelMarkers(filter: IMarkerReadOptions = {}): IMarker[] {
+	if (typeof filter !== 'object' || filter === null) throw new TypeError('Marker filter must be an object');
+	if (filter.owner !== undefined) validateMarkerOwner(filter.owner);
+	if (filter.resource !== undefined && !(filter.resource instanceof URI)) throw new TypeError('Marker resource must be a URI');
+	if (filter.take !== undefined && (!Number.isSafeInteger(filter.take) || filter.take < 0)) {
+		throw new RangeError('Marker take must be a non-negative integer');
+	}
+	if (filter.severities !== undefined && (!Number.isInteger(filter.severities) || filter.severities < 0 || filter.severities > 15)) {
+		throw new RangeError('Invalid marker severity filter');
+	}
+	return StandaloneServices.get(IMarkerService).read(filter);
 }
 
 export function onDidChangeMarkers(listener: (resources: readonly URI[]) => void): IDisposable {
-	return StandaloneServices.get(IMarkerService).onDidChange(event => listener(event.resources));
+	return StandaloneServices.get(IMarkerService).onMarkerChanged(listener);
+}
+
+function validateMarkerOwner(owner: string): void {
+	if (typeof owner !== 'string' || !owner.trim()) throw new TypeError('Marker owner must not be empty');
+}
+
+function validateMarkerData(marker: IMarkerData): void {
+	if (typeof marker !== 'object' || marker === null) throw new TypeError('Marker must be an object');
+	if (![MarkerSeverity.Error, MarkerSeverity.Warning, MarkerSeverity.Info, MarkerSeverity.Hint].includes(marker.severity)) {
+		throw new TypeError('Unknown marker severity');
+	}
+	validateMarkerLocation(marker);
+	if (marker.source !== undefined && typeof marker.source !== 'string') throw new TypeError('Marker source must be a string');
+	if (marker.origin !== undefined && typeof marker.origin !== 'string') throw new TypeError('Marker origin must be a string');
+	if (marker.modelVersionId !== undefined && (!Number.isSafeInteger(marker.modelVersionId) || marker.modelVersionId < 1)) {
+		throw new RangeError('Invalid marker model version');
+	}
+	if (marker.code !== undefined && typeof marker.code !== 'string') {
+		if (typeof marker.code !== 'object' || marker.code === null || typeof marker.code.value !== 'string' || !(marker.code.target instanceof URI)) {
+			throw new TypeError('Invalid marker code');
+		}
+	}
+	if (marker.tags !== undefined && (!Array.isArray(marker.tags) || marker.tags.some(tag => tag !== MarkerTag.Unnecessary && tag !== MarkerTag.Deprecated))) {
+		throw new TypeError('Invalid marker tags');
+	}
+	if (marker.relatedInformation !== undefined) {
+		if (!Array.isArray(marker.relatedInformation)) throw new TypeError('Marker related information must be an array');
+		for (const info of marker.relatedInformation) {
+			if (typeof info !== 'object' || info === null || !(info.resource instanceof URI)) throw new TypeError('Invalid marker related resource');
+			validateMarkerLocation(info);
+		}
+	}
+}
+
+function validateMarkerLocation(marker: Pick<IMarkerData, 'message' | 'startLineNumber' | 'startColumn' | 'endLineNumber' | 'endColumn'>): void {
+	if (typeof marker.message !== 'string' || !marker.message.trim()) throw new TypeError('Marker message must not be empty');
+	if ([marker.startLineNumber, marker.startColumn, marker.endLineNumber, marker.endColumn].some(value => !Number.isSafeInteger(value) || value < 1)) {
+		throw new RangeError('Marker positions must be positive integers');
+	}
+	if (marker.endLineNumber < marker.startLineNumber || marker.endLineNumber === marker.startLineNumber && marker.endColumn < marker.startColumn) {
+		throw new RangeError('Marker range end must not precede its start');
+	}
 }
 
 export function addCommand(descriptor: ICommandDescriptor): IDisposable {

@@ -30,7 +30,7 @@ import { ExtensionDebugAdapterRegistry } from "../../common/extensionDebugAdapte
 import { DebugAdapterFactoriesRegistry } from "../../../debug/common/debugAdapterFactory.js";
 import { parseProblemMatchers } from '../../../tasks/common/problemMatcher.js';
 import { WatchingProblemCollector } from '../../../../contrib/tasks/common/problemCollectors.js';
-import { MarkerService } from '../../../../../platform/markers/common/markers.js';
+import { MarkerService } from '../../../../../platform/markers/common/markerService.js';
 import type { ITextMateService } from "../../../textMate/common/textMateService.js";
 import type { TextMateGrammarDefinition } from "../../../textMate/common/textMateGrammarRegistry.js";
 import { TextMateGrammarService } from "../../../textMate/common/textMateGrammarService.js";
@@ -741,7 +741,7 @@ test('declarative extension problem contributions activate, roll back failed rel
 	using collector = new WatchingProblemCollector(parseProblemMatchers(['$extension-service-matcher']), URI.file('/workspace'), markers, 'extension-service', () => false);
 	collector.accept(new TextEncoder().encode('BUILD\napp.ts:1:2 extension issue\nREADY\n'));
 	assert.equal(collector.isReady, true);
-	assert.equal(markers.getAll()[0].message, 'extension issue');
+	assert.equal(markers.read()[0].message, 'extension issue');
 	invalid = true;
 	generation++;
 	await assert.rejects(service.reload(), /Unknown problem pattern '\$missing-pattern'/);

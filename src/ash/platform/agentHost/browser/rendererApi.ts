@@ -31,6 +31,7 @@ import { createDisconnectedExtensionHostApi } from './extensionHostApi.js';
 import { createDisconnectedExtensionsApi } from "../../extensionManagement/browser/extensionManagementApi.js";
 import { createDisconnectedDirPermissionsApi } from "../../dirPermissions/browser/dirPermissionsApi.js";
 import { createDisconnectedAgentCapabilitiesApi } from '../../agentCapabilities/browser/agentCapabilitiesApi.js';
+import { createDisconnectedMcpServerStatusApi } from '../../mcp/browser/mcpServerStatusApi.js';
 import { createDisconnectedTraceSettingsApi } from '../../trace/browser/traceSettingsApi.js';
 import { createDisconnectedAccountApi } from "../../accounts/browser/accountApi.js";
 import { createDisconnectedTurnChangesApi } from "../../turnChanges/browser/turnChangesApi.js";
@@ -91,6 +92,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
 		issueReporter: createDisconnectedIssueReporterService(unavailableOperation),
 		github: createDisconnectedGitHubService(),
 		agentCapabilities: createDisconnectedAgentCapabilitiesApi(unavailableOperation),
+		mcpServerStatus: createDisconnectedMcpServerStatusApi(unavailableOperation),
 		traceSettings: createDisconnectedTraceSettingsApi(unavailableOperation),
 		executionSettings: createDisconnectedExecutionSettingsService(unavailableOperation),
 		hooks: createDisconnectedHooksApi(unavailableOperation),

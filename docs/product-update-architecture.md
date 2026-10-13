@@ -168,6 +168,13 @@ TS 的 `platform/update` 定义服务契约、设置和 Electron adapter，`work
 `update.policy` 存在本机 UI profile：`latest` 或 `stable` 每天自动检查，`never` 停止自动检查；
 手动检查在 `never` 下仍使用 `latest`。Remote workspace 不改变此策略。
 
+应用级 `network.meteredConnection` 同样保存在本机 `settings.json`：`auto` 使用浏览器明确的
+`saveData` 或 `metered` 信号，`on` 始终视为计费网络，`off` 始终视为非计费网络。网速不参与判断。
+Renderer 上报初始观察及其变化，`platform/meteredConnection` 的 Main 服务统一解释配置并广播有效状态。
+`checkAutomatically()` 等待初始状态，在计费网络下跳过检查且不占用每日冷却期；自动检查启动后，
+恢复非计费状态会触发重试。手动检查和下载不受此策略限制。浏览器没有明确计费信号时，
+用户可以用 `on` 覆盖；这里没有直接读取操作系统的计费网络设置。
+
 禁止以下调用链：
 
 ```text

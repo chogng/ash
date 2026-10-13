@@ -3,7 +3,7 @@ import { type Event } from '../../../base/common/event.js';
 import { type IDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
 import { createDecorator } from '../../../platform/instantiation/common/instantiation.js';
-import { type Marker } from '../../../platform/markers/common/markers.js';
+import { type IMarker } from '../../../platform/markers/common/markers.js';
 import { Range } from '../core/range.js';
 import { type IModelDecoration, type ITextModel } from '../model.js';
 
@@ -14,7 +14,7 @@ export interface IMarkerDecorationsService {
 	/** Holds the model while at least one editor displays its markers. */
 	acquire(model: ITextModel, diagnostics?: LanguageDiagnosticsSource): IDisposable;
 	readonly onDidChangeMarker: Event<ITextModel>;
-	getMarker(uri: URI, decoration: IModelDecoration): Marker | null;
-	getLiveMarkers(uri: URI): [Range, Marker][];
+	getMarker(uri: URI, decoration: IModelDecoration): IMarker | null;
+	getLiveMarkers(uri: URI): [Range, IMarker][];
 	addMarkerSuppression(uri: URI, range: Range): IDisposable;
 }

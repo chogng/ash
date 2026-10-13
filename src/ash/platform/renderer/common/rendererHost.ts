@@ -43,6 +43,7 @@ import type { IExtensionManagementApi } from "../../extensionManagement/common/e
 import type { IDirPermissionsApi } from "../../dirPermissions/common/dirPermissionsApi.js";
 import type { IHooksService } from '../../hooks/common/hooksService.js';
 import type { IAgentCapabilitiesService } from '../../agentCapabilities/common/agentCapabilitiesService.js';
+import type { IMcpServerStatusService } from '../../mcp/common/mcpServerStatusService.js';
 import type { IAgentExecutionSettingsService } from '../../agentHost/common/agentExecutionSettingsService.js';
 import type { ITraceSettingsService } from '../../trace/common/traceSettingsService.js';
 import type { IAccountApi } from "../../accounts/common/accountApi.js";
@@ -128,6 +129,7 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly toolSearch: IToolSearchApi;
 	readonly dirPermissions: IDirPermissionsApi;
 	readonly agentCapabilities: IAgentCapabilitiesService;
+	readonly mcpServerStatus: IMcpServerStatusService;
 	readonly traceSettings: ITraceSettingsService;
 	readonly executionSettings: IAgentExecutionSettingsService;
 	readonly networkDiagnostics: INetworkDiagnosticsService;

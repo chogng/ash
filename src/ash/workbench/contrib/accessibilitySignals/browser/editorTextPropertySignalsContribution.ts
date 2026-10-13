@@ -27,22 +27,28 @@ export class EditorTextPropertySignalsContribution extends Disposable {
 				const model = editor.getModel();
 				const position = editor.getPosition();
 				if (!model || !position) { return; }
-				const line = position.lineNumber - 1;
-				const column = position.column - 1;
-				const onLine = markers.read(model.uri).filter(marker => marker.range.start.lineIndex <= line && marker.range.end.lineIndex >= line
-					&& (marker.range.end.lineIndex > line || marker.range.end.columnIndex > 0 || marker.range.start.lineIndex === line));
+				const line = position.lineNumber;
+				const column = position.column;
+				const onLine = markers.read({ resource: model.uri }).filter(marker => marker.startLineNumber <= line && marker.endLineNumber >= line
+					&& (marker.endLineNumber > line || marker.endColumn > 1 || marker.startLineNumber === line));
 				const next = new Map<AccessibilitySignal, string>();
 				for (const severity of [MarkerSeverity.Error, MarkerSeverity.Warning]) {
 					const matched = onLine.filter(marker => marker.severity === severity);
 					if (!matched.length) { continue; }
-					const atPosition = matched.filter(marker => (marker.range.start.lineIndex < line || marker.range.start.columnIndex <= column)
-						&& (marker.range.end.lineIndex > line || column < marker.range.end.columnIndex
-							|| (marker.range.start.lineIndex === line && marker.range.start.columnIndex === column && marker.range.end.columnIndex === column)));
+					const atPosition = matched.filter(marker => (marker.startLineNumber < line || marker.startColumn <= column)
+						&& (marker.endLineNumber > line || column < marker.endColumn
+							|| (marker.startLineNumber === line && marker.startColumn === column && marker.endColumn === column)));
 					let signal = atPosition.length ? AccessibilitySignal.errorAtPosition : AccessibilitySignal.errorOnLine;
 					if (severity === MarkerSeverity.Warning) {
 						signal = atPosition.length ? AccessibilitySignal.warningAtPosition : AccessibilitySignal.warningOnLine;
 					}
-					const signature = JSON.stringify([model.uri.toString(), line, (atPosition.length ? atPosition : matched).map(marker => [marker.owner, marker.id])]);
+					const markerKeys = (atPosition.length ? atPosition : matched).map(marker => [
+						marker.owner,
+						marker.startLineNumber, marker.startColumn,
+						marker.endLineNumber, marker.endColumn,
+						marker.message, marker.source, marker.code,
+					]);
+					const signature = JSON.stringify([model.uri.toString(), line, markerKeys]);
 					next.set(signal, signature);
 				}
 				if (debug.breakpoints.some(point => 'resource' in point && point.enabled && point.lineNumber === position.lineNumber && point.resource.toString() === model.uri.toString())) {
@@ -57,7 +63,7 @@ export class EditorTextPropertySignalsContribution extends Disposable {
 			lifetime.add(editor.onDidFocusEditorText(() => timer.schedule()));
 			lifetime.add(editor.onDidBlurEditorText(() => { timer.cancel(); previous.clear(); }));
 			lifetime.add(editor.onDidChangeModel(() => { previous.clear(); timer.schedule(); }));
-			lifetime.add(markers.onDidChange(() => timer.schedule()));
+			lifetime.add(markers.onMarkerChanged(() => timer.schedule()));
 			lifetime.add(debug.onDidChangeBreakpoints(() => timer.schedule()));
 		};
 		this._register(codeEditors.onCodeEditorAdd(attach));

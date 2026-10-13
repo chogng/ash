@@ -4,8 +4,9 @@ import { createReadStream } from 'node:fs';
 import { lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
-import { app } from 'electron/main';
+import type { App } from 'electron/main';
 import { AbstractDisposable } from '../../../base/common/lifecycle.js';
+import { IMeteredConnectionService } from '../../meteredConnection/common/meteredConnection.js';
 import type { UpdateCheckResult, UpdateReadyResult } from '../common/updateService.js';
 
 const MAX_OUTPUT_BYTES = 4096;
@@ -29,9 +30,13 @@ export class UpdateMainService extends AbstractDisposable {
 	private staged: StagedUpdate | undefined;
 	private installing = false;
 
-	constructor(private readonly prepareRestart: (version: string) => Promise<void>) {
+	constructor(
+		private readonly prepareRestart: (version: string) => Promise<void>,
+		private readonly application: Pick<App, 'isPackaged' | 'getPath' | 'getVersion' | 'getAppPath' | 'quit' | 'relaunch'>,
+		@IMeteredConnectionService private readonly meteredConnection: IMeteredConnectionService,
+	) {
 		super();
-		if (app.isPackaged && process.platform === 'darwin') {
+		if (application.isPackaged && process.platform === 'darwin') {
 			void this.cleanupPreviousMacUpdate().catch(error => console.error('Could not clean up previous Ash update', error));
 		}
 	}
@@ -46,16 +51,21 @@ export class UpdateMainService extends AbstractDisposable {
 		return checking;
 	}
 
-	public checkAutomatically(policy: 'latest' | 'stable'): Promise<UpdateCheckResult | undefined> {
+	public async checkAutomatically(policy: 'latest' | 'stable'): Promise<UpdateCheckResult | undefined> {
 		this.assertNotDisposed();
-		if (!app.isPackaged || Date.now() - this.lastAutomaticCheck < 24 * 60 * 60 * 1000) return Promise.resolve(undefined);
+		if (!this.application.isPackaged) return undefined;
+		await this.meteredConnection.whenConnectionStateInitialized;
+		this.assertNotDisposed();
+		// A skipped check must not consume the shared cooldown: reconnecting
+		// to an unmetered network should allow the postponed check immediately.
+		if (this.meteredConnection.isConnectionMetered || Date.now() - this.lastAutomaticCheck < 24 * 60 * 60 * 1000) return undefined;
 		this.lastAutomaticCheck = Date.now();
 		return this.checkForUpdates(policy);
 	}
 
 	public downloadUpdate(policy: 'latest' | 'stable'): Promise<UpdateReadyResult> {
 		this.assertNotDisposed();
-		if (!app.isPackaged) throw new Error('Desktop updates require an installed Ash application');
+		if (!this.application.isPackaged) throw new Error('Desktop updates require an installed Ash application');
 		if (this.installing) throw new Error('An update is already being installed');
 		if (!this.downloading) {
 			this.downloading = this.download(policy).finally(() => { this.downloading = undefined; });
@@ -65,7 +75,7 @@ export class UpdateMainService extends AbstractDisposable {
 
 	public async installUpdate(): Promise<void> {
 		this.assertNotDisposed();
-		if (!app.isPackaged) throw new Error('Desktop updates require an installed Ash application');
+		if (!this.application.isPackaged) throw new Error('Desktop updates require an installed Ash application');
 		if (this.installing || this.downloading) throw new Error('The update is not ready to install');
 		const staged = this.staged;
 		if (!staged) throw new Error('No verified desktop update has been downloaded');
@@ -93,7 +103,7 @@ export class UpdateMainService extends AbstractDisposable {
 	}
 
 	private async download(policy: 'latest' | 'stable'): Promise<UpdateReadyResult> {
-		const root = join(app.getPath('userData'), 'updates');
+		const root = join(this.application.getPath('userData'), 'updates');
 		await mkdir(root, { recursive: true });
 		const directory = await mkdtemp(join(root, 'release-'));
 		try {
@@ -117,16 +127,16 @@ export class UpdateMainService extends AbstractDisposable {
 		const target = process.platform === 'win32'
 			? 'x86_64-pc-windows-msvc'
 			: process.arch === 'arm64' ? 'aarch64-apple-darwin' : 'x86_64-apple-darwin';
-		const key = app.isPackaged
+		const key = this.application.isPackaged
 			? (await readFile(join(process.resourcesPath, 'update-public-key'), 'utf8')).trim()
 			: process.env.ASH_UPDATE_PUBLIC_KEY;
 		if (!key || !/^[a-fA-F0-9]{64}$/.test(key)) {
 			throw new Error('Ash Desktop update public key is not configured');
 		}
-		const executable = app.isPackaged
+		const executable = this.application.isPackaged
 			? join(process.resourcesPath, 'bin', process.platform === 'win32' ? 'ash-update-host.exe' : 'ash-update-host')
-			: join(app.getAppPath(), '.build', 'cargo', 'debug', process.platform === 'win32' ? 'ash-update-host.exe' : 'ash-update-host');
-		return { executable, request: { command, currentVersion: app.getVersion(), publicKey: key, target, policy, ...(stagingDirectory ? { stagingDirectory } : {}) } };
+			: join(this.application.getAppPath(), '.build', 'cargo', 'debug', process.platform === 'win32' ? 'ash-update-host.exe' : 'ash-update-host');
+		return { executable, request: { command, currentVersion: this.application.getVersion(), publicKey: key, target, policy, ...(stagingDirectory ? { stagingDirectory } : {}) } };
 	}
 
 	private runHost(executable: string, request: object, timeoutMs: number): Promise<unknown> {
@@ -174,7 +184,7 @@ export class UpdateMainService extends AbstractDisposable {
 			installer.once('error', reject);
 			installer.once('spawn', () => { installer.unref(); resolveSpawn(); });
 		});
-		app.quit();
+		this.application.quit();
 	}
 
 	private async installMac(staged: StagedUpdate): Promise<void> {
@@ -188,7 +198,7 @@ export class UpdateMainService extends AbstractDisposable {
 		if (entries.length !== 1 || entries[0] !== 'Ash.app') throw new Error('Verified macOS update has an unexpected bundle layout');
 		const replacement = join(dirname(current), `.Ash-update-new-${randomUUID()}.app`);
 		const previous = join(dirname(current), `.Ash-update-backup-${randomUUID()}.app`);
-		const marker = join(app.getPath('userData'), 'updates', 'mac-cleanup.json');
+		const marker = join(this.application.getPath('userData'), 'updates', 'mac-cleanup.json');
 		try {
 			await runFile('ditto', [join(extraction, 'Ash.app'), replacement], { timeout: 300_000 });
 			await runFile('codesign', ['--verify', '--deep', '--strict', replacement], { timeout: 120_000 });
@@ -201,15 +211,15 @@ export class UpdateMainService extends AbstractDisposable {
 				await rm(marker, { force: true });
 				throw error;
 			}
-			app.relaunch();
-			app.quit();
+			this.application.relaunch();
+			this.application.quit();
 		} finally {
 			await rm(replacement, { recursive: true, force: true });
 		}
 	}
 
 	private async cleanupPreviousMacUpdate(): Promise<void> {
-		const marker = join(app.getPath('userData'), 'updates', 'mac-cleanup.json');
+		const marker = join(this.application.getPath('userData'), 'updates', 'mac-cleanup.json');
 		let record: { current: string; previous: string; };
 		try { record = JSON.parse(await readFile(marker, 'utf8')); }
 		catch (error) { if (isMissing(error)) return; throw error; }

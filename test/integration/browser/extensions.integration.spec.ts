@@ -519,6 +519,108 @@ test('MCP pane merges installed and registered servers and opens owning package 
 	await expect(details.getByRole('heading', { name: 'Web tools', exact: true })).toBeVisible();
 });
 
+for (const [locale, states, statusLabel, diagnosticLabel, refreshLabel] of [
+	['en', ['Disabled', 'Disconnected', 'Connected', 'Tool catalog out of date', 'Unavailable'], 'Status', 'Diagnostic', 'Refresh'],
+	['zh-CN', ['已禁用', '已断开', '已连接', '工具目录已过期', '不可用'], '状态', '诊断', '刷新'],
+] as const) {
+	test(`MCP lists backend servers without tools and shows status and diagnostics in ${locale}`, async ({ page }) => {
+		await page.goto(`/extensions.html?locale=${locale}`);
+		await page.evaluate(() => window.ashExtensionsIntegration.setMcpServers(
+			(['disabled', 'disconnected', 'connected', 'stale', 'unavailable'] as const).map((status, index) => ({
+				id: `configured-${index}`, displayName: `Configured ${index}`, httpOrigin: index === 4 ? 'https://example.com' : null,
+				state: status === 'unavailable' ? { status, reason: 'Connection refused <script>unsafe()</script>' } : { status },
+				catalogGeneration: 7, connectionGeneration: status === 'connected' ? 2 : null, toolCount: index === 2 ? 17 : 0,
+			}))
+		));
+		const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
+		await mcp.getByRole('button', { name: 'MCP Servers', exact: true }).click();
+		await expect(mcp.getByRole('option')).toHaveCount(5);
+		for (let index = 0; index < states.length; index++) {
+			await expect(mcp.getByRole('option').filter({ hasText: `Configured ${index}` })).toContainText(states[index]);
+		}
+		const list = mcp.getByRole('listbox');
+		await list.focus();
+		await list.press('Home');
+		await list.press('Enter');
+		const details = page.locator('.ash-extension-editor');
+		await expect(details.getByRole('heading', { name: 'Configured 0', exact: true })).toBeVisible();
+		await expect(details.getByRole('status')).toHaveText(states[0]);
+		await mcp.getByRole('option').filter({ hasText: 'Configured 2' }).click();
+		await expect(details.locator('dt').filter({ hasText: /^Tools$|^工具$/ }).locator('xpath=following-sibling::dd[1]')).toHaveText('17');
+		await mcp.getByRole('option').filter({ hasText: 'Configured 4' }).click();
+		await expect(details.locator('dt').filter({ hasText: diagnosticLabel }).locator('xpath=following-sibling::dd[1]')).toHaveText('Connection refused <script>unsafe()</script>');
+		await expect(details).toContainText('https://example.com');
+		await expect(details.locator('script')).toHaveCount(0);
+		await page.evaluate(() => window.ashExtensionsIntegration.setMcpServers([{ id: 'configured-4', displayName: 'Recovered server', httpOrigin: 'https://example.com', state: { status: 'connected' }, catalogGeneration: 8, connectionGeneration: 3, toolCount: 0 }]));
+		await details.getByRole('button', { name: refreshLabel, exact: true }).click();
+		await expect(details.getByRole('status')).toHaveText(states[2]);
+		await expect(details.getByRole('heading', { name: 'Recovered server', exact: true })).toBeVisible();
+		await expect(details.getByRole('button', { name: refreshLabel, exact: true })).toBeFocused();
+		await expect(details.locator('dt').filter({ hasText: statusLabel }).locator('xpath=following-sibling::dd[1]')).toHaveText(states[2]);
+		await expect(details).not.toContainText('Connection refused');
+		await page.evaluate(() => window.ashExtensionsIntegration.refreshMcp());
+		await expect(mcp.getByRole('option')).toHaveCount(1);
+		await expect(mcp.getByRole('option')).toContainText('Recovered server');
+		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.some((entry: any) => entry[0] === 'mcp/server/status' && Object.keys(entry[1]).length === 0))).toBe(true);
+	});
+}
+
+test('MCP status failures retain installed packages and never infer connection state from tools', async ({ page }) => {
+	await page.goto('/extensions.html');
+	await page.evaluate(() => { window.ashExtensionsIntegration.addMcpPackage(); window.ashExtensionsIntegration.failMcpStatus(); });
+	const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
+	await mcp.getByRole('button', { name: 'MCP Servers', exact: true }).click();
+	await expect(mcp.getByRole('option')).toHaveCount(1);
+	await expect(mcp.getByRole('status')).toContainText('Could not load MCP server status: Error: Status connection lost');
+	await expect(mcp.getByRole('option')).not.toContainText('Connected');
+	await mcp.getByRole('option').click();
+	const details = page.locator('.ash-extension-editor');
+	await expect(details.getByRole('status')).toContainText('MCP server status is unavailable.');
+	await expect(details).toContainText('Status connection lost');
+	await details.getByRole('tab', { name: 'Tools', exact: true }).click();
+	await expect(details).toContainText('fixture_search');
+	await expect(details.getByRole('status')).not.toContainText('Connected');
+	await details.getByRole('button', { name: 'Open package', exact: true }).click();
+	await expect(details.getByRole('heading', { name: 'Web tools', exact: true })).toBeVisible();
+});
+
+test('MCP server status remains visible when tool descriptions fail and unsupported backends do not receive status requests', async ({ page }) => {
+	await page.goto('/extensions.html');
+	await page.evaluate(() => window.ashExtensionsIntegration.failMcpTools());
+	const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
+	await mcp.getByRole('button', { name: 'MCP Servers', exact: true }).click();
+	await mcp.getByRole('option').click();
+	const details = page.locator('.ash-extension-editor');
+	await expect(details.getByRole('status')).toHaveText('Connected');
+	await details.getByRole('tab', { name: 'Tools', exact: true }).click();
+	await expect(details).toContainText('Could not load tool descriptions: Error: Tool catalog unavailable');
+	await page.evaluate(() => { window.ashExtensionsIntegration.addMcpPackage(); window.ashExtensionsIntegration.setMcpSupported(false); window.ashExtensionsIntegration.requests.length = 0; });
+	await page.evaluate(() => window.ashExtensionsIntegration.refreshMcp());
+	await expect(mcp.getByRole('status')).toContainText('MCP server status is unavailable.');
+	expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'mcp/server/status'))).toEqual([]);
+});
+
+test('MCP detail changes discard a delayed status response for the previous server', async ({ page }) => {
+	await page.goto('/extensions.html');
+	await page.evaluate(() => window.ashExtensionsIntegration.setMcpServers([
+		{ id: 'first', displayName: 'First server', httpOrigin: null, state: { status: 'unavailable', reason: 'Retired diagnostic' }, catalogGeneration: 1, connectionGeneration: null, toolCount: 0 },
+		{ id: 'second', displayName: 'Second server', httpOrigin: null, state: { status: 'disabled' }, catalogGeneration: 1, connectionGeneration: null, toolCount: 0 },
+	]));
+	const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
+	await mcp.getByRole('button', { name: 'MCP Servers', exact: true }).click();
+	await expect(mcp.getByRole('option')).toHaveCount(2);
+	await page.evaluate(() => window.ashExtensionsIntegration.holdMcpStatus());
+	await mcp.getByRole('option').filter({ hasText: 'First server' }).click();
+	await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.mcpStatusStarted())).toBe(true);
+	await mcp.getByRole('option').filter({ hasText: 'Second server' }).click();
+	const details = page.locator('.ash-extension-editor');
+	await expect(details.getByRole('heading', { name: 'Second server', exact: true })).toBeVisible();
+	await expect(details.getByRole('status')).toHaveText('Disabled');
+	await page.evaluate(() => window.ashExtensionsIntegration.completeMcpStatus());
+	await expect(details.getByRole('heading', { name: 'Second server', exact: true })).toBeVisible();
+	await expect(details).not.toContainText('Retired diagnostic');
+});
+
 test('Plugins pane includes packages without editor extensions and retains independent search', async ({ page }) => {
 	await page.goto('/extensions.html');
 	await page.evaluate(() => window.ashExtensionsIntegration.addSkillOnlyPlugin());

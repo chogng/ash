@@ -9,7 +9,8 @@ import { IInlineCompletionsService, InlineCompletionsService } from '../../brows
 import { IDataChannelService, NullDataChannelService } from '../../../platform/dataChannel/common/dataChannel.js';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry.js';
 import { NullTelemetryService } from '../../../platform/telemetry/common/telemetryUtils.js';
-import { MarkerService, IMarkerService } from '../../../platform/markers/common/markers.js';
+import { IMarkerService } from '../../../platform/markers/common/markers.js';
+import { MarkerService } from '../../../platform/markers/common/markerService.js';
 import { MarkerDecorationsService } from '../../common/services/markerDecorationsService.js';
 import { IMarkerDecorationsService } from '../../common/services/markerDecorations.js';
 import { Disposable, DisposableStore, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
@@ -25,6 +26,8 @@ import { VersionedEditorWorkerClient, type VersionedEditorWorkerFactory } from "
 import { ILanguageFeaturesService } from '../../common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../common/services/languageFeaturesService.js';
 import { IOpenerService } from '../../../platform/opener/common/opener.js';
+import { IMarkdownRendererService } from '../../../platform/markdown/browser/markdownRenderer.js';
+import { EditorMarkdownCodeBlockRenderer } from '../../browser/widget/markdownRenderer/browser/editorMarkdownCodeBlockRenderer.js';
 import { OpenerService } from '../../browser/services/openerService.js';
 import { ILanguageService, type IAshLanguageService } from '../../common/languages/language.js';
 import { LanguageService } from '../../common/services/languageService.js';
@@ -236,6 +239,7 @@ export class StandaloneServiceCollection extends InstantiationService {
 				this.registerInstance(id, descriptor);
 			}
 		}
+		this.get(IMarkdownRendererService).setDefaultCodeBlockRenderer(this.createInstance(EditorMarkdownCodeBlockRenderer));
 		this._register(FormattingConflicts.setFormatterSelector(async formatters => formatters[0]));
 	}
 }

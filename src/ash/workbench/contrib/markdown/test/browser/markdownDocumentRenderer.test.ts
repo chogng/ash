@@ -5,7 +5,7 @@ import { JSDOM } from "jsdom";
 import { URI } from '../../../../../base/common/uri.js';
 import { MarkdownString } from '../../../../../base/common/htmlContent.js';
 import {
-	MarkdownElement,
+	renderMarkdown,
 	renderAsPlaintext,
 	renderWorkbenchMarkdown,
 	resolveMarkdownLinkTarget,
@@ -72,14 +72,13 @@ test("workbench Markdown exposes Marked options and renderer extensions", () => 
 
 test("Markdown sanitizes HTML returned by custom Marked renderers", () => {
 	const dom = createDom();
-	const markdown = new MarkdownElement({
+	const markdown = renderMarkdown({ value: "**unsafe output**" }, {
 		ownerDocument: dom.window.document,
-		markdown: "**unsafe output**",
 		markedExtensions: [{
 			renderer: {
 				strong: () => '<img src="javascript:alert(1)" onerror="alert(1)">',
 			},
-		}],
+		}]
 	});
 
 	const image = markdown.element.querySelector("img");
@@ -106,13 +105,12 @@ test("Markdown completes an incomplete streaming tail without changing closed co
 
 test("Markdown alerts and theme icons become accessible Ash presentation", () => {
 	const dom = createDom();
-	const markdown = new MarkdownElement({
-		ownerDocument: dom.window.document,
-		markdown: {
-			value: "> [!WARNING]\n> Read $(info) and `$(info)`",
-			supportAlertSyntax: true,
-			supportThemeIcons: true,
-		},
+	const markdown = renderMarkdown({
+		value: "> [!WARNING]\n> Read $(info) and `$(info)`",
+		supportAlertSyntax: true,
+		supportThemeIcons: true,
+	}, {
+		ownerDocument: dom.window.document
 	});
 
 	const alert = markdown.element.querySelector("blockquote.ash-markdown-alert-warning");
@@ -131,9 +129,8 @@ test("Markdown supports all five GitHub alert severities", () => {
 	const value = ['NOTE', 'TIP', 'IMPORTANT', 'WARNING', 'CAUTION']
 		.map(severity => `> [!${severity}]\n> Alert body`)
 		.join('\n\n');
-	const markdown = new MarkdownElement({
-		ownerDocument: dom.window.document,
-		markdown: { value, supportAlertSyntax: true },
+	const markdown = renderMarkdown({ value, supportAlertSyntax: true }, {
+		ownerDocument: dom.window.document
 	});
 	const alerts = [...markdown.element.querySelectorAll('blockquote.ash-markdown-alert')];
 
@@ -158,7 +155,9 @@ test("MarkdownString.appendText keeps literal theme icon syntax", () => {
 	const value = new MarkdownString('', { supportThemeIcons: true })
 		.appendText('literal $(info)')
 		.appendMarkdown(' and $(info)');
-	const markdown = new MarkdownElement({ ownerDocument: dom.window.document, markdown: value });
+	const markdown = renderMarkdown(value, {
+		ownerDocument: dom.window.document
+	});
 
 	assert.equal(markdown.element.querySelectorAll('svg.ash-icon').length, 1);
 	const renderedText = (markdown.element.textContent ?? '').replaceAll('\u00a0', ' ');
@@ -177,10 +176,11 @@ test('Markdown plaintext keeps readable structure and optional code fences', () 
 test('workbench Markdown strips raw HTML by default and honors explicit HTML support', () => {
 	const dom = createDom();
 	const source = 'a<em>b</em>c and `<span>code</span>`';
-	const plain = new MarkdownElement({ ownerDocument: dom.window.document, markdown: source });
-	const supported = new MarkdownElement({
-		ownerDocument: dom.window.document,
-		markdown: { value: source, supportHtml: true },
+	const plain = renderMarkdown({ value: source }, {
+		ownerDocument: dom.window.document
+	});
+	const supported = renderMarkdown({ value: source, supportHtml: true }, {
+		ownerDocument: dom.window.document
 	});
 
 	assert.equal(plain.element.querySelector('em'), null);
@@ -342,13 +342,12 @@ test('Markdown link policy gates commands and resolves relative links', () => {
 	});
 });
 
-test("MarkdownElement owns DOM updates and delegates link activation", () => {
+test("Markdown render owns its DOM and delegates link activation", () => {
 	const dom = createDom();
 	const activated: string[] = [];
-	const markdown = new MarkdownElement({
+	const markdown = renderMarkdown({ value: "[Ash](https://example.com/ash)" }, {
 		ownerDocument: dom.window.document,
-		markdown: "[Ash](https://example.com/ash)",
-		linkHandler: (href) => activated.push(href),
+		actionHandler: (href) => activated.push(href)
 	});
 	dom.window.document.body.append(markdown.element);
 
@@ -362,27 +361,23 @@ test("MarkdownElement owns DOM updates and delegates link activation", () => {
 	assert.equal(click.defaultPrevented, true);
 	assert.deepEqual(activated, ["https://example.com/ash"]);
 
-	markdown.setMarkdown("Changed");
-	assert.equal(markdown.element.textContent?.trim(), "Changed");
 	markdown.dispose();
 	assert.equal(markdown.element.isConnected, false);
-	assert.throws(() => markdown.setMarkdown("late"), /already disposed/);
 	dom.window.close();
 });
 
-test('MarkdownElement replaces sanitized code blocks with a synchronous renderer', () => {
+test('Markdown render replaces sanitized code blocks with a synchronous renderer', () => {
 	const dom = createDom();
 	const seen: Array<[string, string, string | undefined]> = [];
-	const markdown = new MarkdownElement({
+	const markdown = renderMarkdown({ value: '```ts\nconst value = 1;\n```' }, {
 		ownerDocument: dom.window.document,
-		markdown: '```ts\nconst value = 1;\n```',
 		codeBlockRendererSync: (languageId, value, raw) => {
 			seen.push([languageId, value, raw]);
 			const rendered = dom.window.document.createElement('span');
 			rendered.className = 'highlighted-code';
 			rendered.textContent = value;
 			return rendered;
-		},
+		}
 	});
 	assert.deepEqual(seen, [['ts', 'const value = 1;', '```ts\nconst value = 1;\n```']]);
 	assert.equal(markdown.element.querySelector('.highlighted-code')?.textContent, 'const value = 1;');
@@ -390,39 +385,37 @@ test('MarkdownElement replaces sanitized code blocks with a synchronous renderer
 	dom.window.close();
 });
 
-test('MarkdownElement ignores an asynchronous code block after Markdown changes', async () => {
+test('Markdown render ignores an asynchronous code block after disposal', async () => {
 	const dom = createDom();
 	let resolveCodeBlock!: (element: HTMLElement) => void;
 	let callbackCount = 0;
-	const markdown = new MarkdownElement({
+	const markdown = renderMarkdown({ value: '```ts\nold\n```' }, {
 		ownerDocument: dom.window.document,
-		markdown: '```ts\nold\n```',
 		codeBlockRenderer: () => new Promise(resolve => { resolveCodeBlock = resolve; }),
-		asyncRenderCallback: () => { callbackCount += 1; },
+		asyncRenderCallback: () => { callbackCount += 1; }
 	});
 	dom.window.document.body.append(markdown.element);
-	markdown.setMarkdown('new text');
+	markdown.dispose();
 	const staleElement = dom.window.document.createElement('span');
 	staleElement.textContent = 'old';
 	resolveCodeBlock(staleElement);
 	await Promise.resolve();
 	await Promise.resolve();
-	assert.deepEqual({ text: markdown.element.textContent?.trim(), callbackCount }, { text: 'new text', callbackCount: 0 });
+	assert.deepEqual({ text: markdown.element.textContent?.trim(), callbackCount }, { text: 'old', callbackCount: 0 });
 	markdown.dispose();
 	dom.window.close();
 });
 
-test('MarkdownElement mounts an asynchronous code block and signals completion', async () => {
+test('Markdown render mounts an asynchronous code block and signals completion', async () => {
 	const dom = createDom();
 	let resolveCodeBlock!: (element: HTMLElement) => void;
 	let resolveCompletion!: () => void;
 	const completion = new Promise<void>(resolve => { resolveCompletion = resolve; });
 	let callbackCount = 0;
-	const markdown = new MarkdownElement({
+	const markdown = renderMarkdown({ value: '```ts\nconst value = 2;\n```' }, {
 		ownerDocument: dom.window.document,
-		markdown: '```ts\nconst value = 2;\n```',
 		codeBlockRenderer: () => new Promise(resolve => { resolveCodeBlock = resolve; }),
-		asyncRenderCallback: () => { callbackCount += 1; resolveCompletion(); },
+		asyncRenderCallback: () => { callbackCount += 1; resolveCompletion(); }
 	});
 	dom.window.document.body.append(markdown.element);
 	const rendered = dom.window.document.createElement('span');
@@ -440,9 +433,8 @@ test('MarkdownElement mounts an asynchronous code block and signals completion',
 
 test("Markdown task lists use the shared Checkbox presentation", () => {
 	const dom = createDom();
-	const markdown = new MarkdownElement({
-		ownerDocument: dom.window.document,
-		markdown: "- [x] Done\n- [ ] Todo",
+	const markdown = renderMarkdown({ value: "- [x] Done\n- [ ] Todo" }, {
+		ownerDocument: dom.window.document
 	});
 	dom.window.document.body.append(markdown.element);
 
@@ -456,9 +448,9 @@ test("Markdown task lists use the shared Checkbox presentation", () => {
 	assert.equal(controls[1]?.querySelector<HTMLInputElement>("input")?.disabled, true);
 	assert.equal(controls[1]?.querySelector<HTMLInputElement>("input")?.getAttribute('aria-label'), 'Todo');
 
-	markdown.setMarkdown({ value: '<input type="checkbox" checked>', supportHtml: true });
-	assert.equal(markdown.element.querySelector<HTMLInputElement>('.ash-markdown-checkbox input')?.disabled, true);
-	assert.equal(markdown.element.querySelector<HTMLInputElement>('.ash-markdown-checkbox input')?.getAttribute('aria-label'), 'Task');
+	using html = renderMarkdown({ value: '<input type="checkbox" checked>', supportHtml: true }, { ownerDocument: dom.window.document });
+	assert.equal(html.element.querySelector<HTMLInputElement>('.ash-markdown-checkbox input')?.disabled, true);
+	assert.equal(html.element.querySelector<HTMLInputElement>('.ash-markdown-checkbox input')?.getAttribute('aria-label'), 'Task');
 
 	markdown.dispose();
 	dom.window.close();

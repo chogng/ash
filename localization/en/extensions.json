@@ -135,7 +135,7 @@
     "detailInstructions": "Instructions",
     "detailResources": "Resources",
     "detailHomepage": "Homepage",
-    "detailsHelp": "These are the selected extension, plugin, skill or MCP server details. The header contains identity and actions. Use Tab to reach the tabs, then Left and Right to move and Enter to select. Details shows the description or README; other tabs show features, permissions, tools or skill instructions and diagnostics. Additional information is beside the content and moves below it in a narrow editor. Open package opens the owning package for installation and permission management.",
+    "detailsHelp": "These are the selected extension, plugin, skill or MCP server details. The header contains identity and actions. Use Tab to reach the tabs, then Left and Right to move and Enter to select. Details shows the description or README; other tabs show features, permissions, tools or skill instructions and diagnostics. Additional information is beside the content and moves below it in a narrow editor. Open package opens the owning package for installation and permission management. MCP server details show backend connection status and diagnostics. Refresh reloads server status.",
     "detailAbout": "About",
     "detailCategories": "Categories",
     "installGitExtension": "Install plugin from Git repository",
@@ -149,6 +149,20 @@
     "gitInstallProgress": "Installing plugin from Git. Press Escape to cancel.",
     "cancelGitInstall": "Cancel installation",
     "invalidGitPackagePath": "Enter a package path within the repository, using forward slashes.",
-    "unsafeGitPackageEntry": "The package contains a symbolic link or unsupported file: {0}"
+    "unsafeGitPackageEntry": "The package contains a symbolic link or unsupported file: {0}",
+    "mcpDisabled": "Disabled",
+    "mcpDisconnected": "Disconnected",
+    "mcpConnected": "Connected",
+    "mcpStale": "Tool catalog out of date",
+    "mcpUnavailable": "Unavailable",
+    "mcpStatusUnavailable": "MCP server status is unavailable.",
+    "mcpStatusNotReported": "No runtime status reported",
+    "mcpStatusReadFailed": "Could not load MCP server status: {0}",
+    "mcpPackagesReadFailed": "Could not load installed packages: {0}",
+    "mcpToolsReadFailed": "Could not load tool descriptions: {0}",
+    "mcpState": "Status",
+    "mcpDiagnostic": "Diagnostic",
+    "mcpOrigin": "HTTP origin",
+    "capabilityHelp": "Extensions contains collapsible Extensions, Plugins, Skills, MCP Servers and Recommended panes. Use Left and Right on a pane header to collapse or expand it, and Up and Down to move between headers. Search within a pane, use arrow keys to select an item, and Enter to open details in the editor. Skill enablement and diagnostics are in its details. Package installation, permissions and removal are in package details. Refresh reloads the current catalog. Run Install plugin from Git repository in the Command Palette to choose a repository revision and package directory. Press Escape during installation to cancel. MCP server details show backend connection status and diagnostics. Refresh reloads server status."
   }
 }

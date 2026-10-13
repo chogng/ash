@@ -1,5 +1,5 @@
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
-import { MarkdownElement } from '../../../../base/browser/markdownRenderer.js';
+import { IMarkdownRendererService } from '../../../../platform/markdown/browser/markdownRenderer.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { createObjectUrl } from '../../../../base/browser/fileAccess.js';
 import { TabList } from '../../../../base/browser/ui/tablist/tabList.js';
@@ -24,10 +24,11 @@ import { IExtensionApi, type ExtensionDescriptor } from '../../../../platform/ex
 import { toExtensionResourceURI } from '../../../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { URI } from '../../../../base/common/uri.js';
-import { changeExtensionEnablement, describePluginPermission, extensionEnablementLabel, reviewExtensionExecution, reviewLocalExtensionPermissions } from './extensionsActions.js';
+import { changeExtensionEnablement, describeMcpServerState, describePluginPermission, extensionEnablementLabel, reviewExtensionExecution, reviewLocalExtensionPermissions } from './extensionsActions.js';
 import type { ParsedPromptFile } from '../../chat/common/promptSyntax/promptFileParser.js';
 import { IPromptsService } from '../../chat/common/promptSyntax/service/promptsService.js';
 import { IAgentCapabilitiesService } from '../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
+import { IMcpServerStatusService } from '../../../../platform/mcp/common/mcpServerStatusService.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -119,9 +120,11 @@ export class ExtensionsEditor extends EditorPane {
 		@IPluginManagementService private readonly plugins: IPluginManagementService,
 		@IPromptsService private readonly prompts: IPromptsService,
 		@IAgentCapabilitiesService private readonly agentCapabilities: IAgentCapabilitiesService,
+		@IMcpServerStatusService private readonly mcpStatus: IMcpServerStatusService,
 		@IEditorService private readonly editors: IEditorService,
 		@IExtensionApi private readonly editorExtensions: IExtensionApi,
 		@IOpenerService private readonly opener: IOpenerService,
+		@IMarkdownRendererService private readonly markdownRenderer: IMarkdownRendererService,
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IThemeService theme: IThemeService, @IStorageService storage: IStorageService) {
@@ -188,7 +191,7 @@ export class ExtensionsEditor extends EditorPane {
 				getProvider: () => {
 					const focused = mainWindow.document.activeElement;
 					if (!this.currentInput || !(focused instanceof HTMLElement) || !this.domNode.contains(focused)) { return undefined; }
-					return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type }, () => type === AccessibleViewType.View ? this.domNode.innerText : localize({ bundle: 'ash.extensions', key: 'detailsHelp' }, 'These are the selected extension, plugin, skill or MCP server details. The header contains identity and actions. Use Tab to reach the tabs, then Left and Right to move and Enter to select. Details shows the description or README; other tabs show features, permissions, tools or skill instructions and diagnostics. Additional information is beside the content and moves below it in a narrow editor. Open package opens the owning package for installation and permission management.'), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
+					return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type }, () => type === AccessibleViewType.View ? this.domNode.innerText : localize({ bundle: 'ash.extensions', key: 'detailsHelp' }, 'These are the selected extension, plugin, skill or MCP server details. The header contains identity and actions. Use Tab to reach the tabs, then Left and Right to move and Enter to select. Details shows the description or README; other tabs show features, permissions, tools or skill instructions and diagnostics. Additional information is beside the content and moves below it in a narrow editor. Open package opens the owning package for installation and permission management. MCP server details show backend connection status and diagnostics. Refresh reloads server status.'), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
 				},
 			}));
 		}
@@ -283,36 +286,59 @@ export class ExtensionsEditor extends EditorPane {
 				return;
 			}
 			this.contentHeading.textContent = localize({ bundle: 'ash.extensions', key: 'mcpToolsHeading' }, 'Tools');
-			const installed = await this.extensions.listInstalled();
+			const [installedResult, statusResult, catalogResult] = await Promise.allSettled([
+				this.extensions.listInstalled(),
+				this.mcpStatus.isAvailable ? this.mcpStatus.read() : Promise.resolve(undefined),
+				this.agentCapabilities.isAvailable ? this.agentCapabilities.read() : Promise.resolve(undefined),
+			]);
+			if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
+			const installed = installedResult.status === 'fulfilled' ? installedResult.value : [];
 			const installation = installed.find(entry => entry.installationId === target.installationId);
 			const capability = installation?.capabilities.find(entry => entry.kind === 'mcp' && entry.reference.id === target.capabilityId);
-			const catalog = this.agentCapabilities.isAvailable ? await this.agentCapabilities.read() : undefined;
-			if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
+			const snapshot = statusResult.status === 'fulfilled' ? statusResult.value : undefined;
+			const server = snapshot?.servers.find(server => server.id === target.serverId);
+			const statusLabel = server ? describeMcpServerState(server.state) : snapshot
+				? localize({ bundle: 'ash.extensions', key: 'mcpStatusNotReported' }, 'No runtime status reported')
+				: localize({ bundle: 'ash.extensions', key: 'mcpStatusUnavailable' }, 'MCP server status is unavailable.');
+			const diagnostic = statusResult.status === 'rejected'
+				? localize({ bundle: 'ash.extensions', key: 'mcpStatusReadFailed' }, 'Could not load MCP server status: {0}', String(statusResult.reason))
+				: server?.state.status === 'unavailable' ? server.state.reason : '';
+			const catalog = catalogResult.status === 'fulfilled' ? catalogResult.value : undefined;
 			const tools = catalog?.tools.filter(tool => tool.source === 'mcp' && tool.sourceDetails.includes(target.serverId)) ?? [];
-			this.title.textContent = capability?.id ?? target.serverId;
+			this.title.textContent = server?.displayName || capability?.id || target.serverId;
 			this.metadata.textContent = installation ? `${installation.package.id} · ${installation.package.version}` : target.serverId;
 			this.description.textContent = localize({ bundle: 'ash.extensions', key: 'detailMcpDescription' }, 'Tools provided by {0}.', this.title.textContent);
 			this.renderOverview();
 			this.renderInfo([{
 				label: localize({ bundle: 'ash.extensions', key: 'detailServer' }, 'Server'), rows: [
 					{ label: localize({ bundle: 'ash.extensions', key: 'detailIdentifier' }, 'Identifier'), value: target.serverId },
+					{ label: localize({ bundle: 'ash.extensions', key: 'mcpState' }, 'Status'), value: statusLabel },
+					{ label: localize({ bundle: 'ash.extensions', key: 'mcpDiagnostic' }, 'Diagnostic'), value: diagnostic },
+					{ label: localize({ bundle: 'ash.extensions', key: 'mcpOrigin' }, 'HTTP origin'), value: server?.httpOrigin ?? '' },
 					{ label: localize({ bundle: 'ash.extensions', key: 'detailPackage' }, 'Package'), value: installation?.package.id ?? '' },
 					{ label: localize({ bundle: 'ash.extensions', key: 'detailVersion' }, 'Version'), value: installation?.package.version ?? '' },
 					{ label: localize({ bundle: 'ash.extensions', key: 'detailContract' }, 'Contract version'), value: capability?.contractVersion ?? '' },
-					{ label: localize({ bundle: 'ash.extensions', key: 'mcpToolsHeading' }, 'Tools'), value: String(tools.length) },
+					{ label: localize({ bundle: 'ash.extensions', key: 'mcpToolsHeading' }, 'Tools'), value: server ? String(server.toolCount) : '' },
 				]
 			}]);
-			this.status.textContent = tools.length ? localize({ bundle: 'ash.extensions', key: 'mcpToolsCount' }, '{0} registered tools', tools.length) : localize({ bundle: 'ash.extensions', key: 'mcpNoTools' }, 'No tools are currently registered for this server.');
+			this.status.textContent = [statusLabel, diagnostic,
+				installedResult.status === 'rejected' ? localize({ bundle: 'ash.extensions', key: 'mcpPackagesReadFailed' }, 'Could not load installed packages: {0}', String(installedResult.reason)) : '',
+			].filter(Boolean).join(' · ');
 			this.capabilities.textContent = [
 				...(capability ? [localize({ bundle: 'ash.extensions', key: 'mcpContract' }, 'Contract version: {0}', capability.contractVersion), localize({ bundle: 'ash.extensions', key: 'localExtensionPermissions' }, 'Requested permissions: {0}', capability.permissions.join(', '))] : []),
+				catalogResult.status === 'rejected' ? localize({ bundle: 'ash.extensions', key: 'mcpToolsReadFailed' }, 'Could not load tool descriptions: {0}', String(catalogResult.reason)) : '',
+				server?.toolCount === 0 ? localize({ bundle: 'ash.extensions', key: 'mcpNoTools' }, 'No tools are currently registered for this server.') : '',
 				...tools.map(tool => `${tool.name}\n${tool.description}`),
-			].join('\n\n');
+			].filter(Boolean).join('\n\n');
 			if (installation && capability) {
 				button(localize({ bundle: 'ash.extensions', key: 'openPackage' }, 'Open package'), async () => {
 					await this.editors.openEditor(new ExtensionsInput({ id: installation.package.id, version: installation.package.version, displayName: installation.package.id, description: '', packageType: 'plugin' }, installation.installationId));
 				});
 			}
-			button(localize({ bundle: 'ash.extensions', key: 'refresh' }, 'Refresh'), async () => { await this.setInput(input, signal); });
+			button(localize({ bundle: 'ash.extensions', key: 'refresh' }, 'Refresh'), async () => {
+				await this.setInput(input, signal);
+				if (!signal.aborted && !this.isDisposed && this.currentInput === input) { this.focus(); }
+			});
 			return;
 		}
 
@@ -486,12 +512,12 @@ export class ExtensionsEditor extends EditorPane {
 
 	private renderDocument(container: HTMLElement, markdown: string, source?: { readonly resource: URI; readonly api: IExtensionApi; } | { readonly prompt: ParsedPromptFile; }): void {
 		const version = this.loadVersion;
-		const document = this.documentResources.add(new MarkdownElement({
-			ownerDocument: mainWindow.document, markdown: { value: markdown, isTrusted: false, supportHtml: true },
+		const document = this.documentResources.add(this.markdownRenderer.render({ value: markdown, isTrusted: false, supportHtml: true }, {
+			ownerDocument: mainWindow.document,
 			sanitizerConfig: { allowedLinkSchemes: { augment: ['ash-extension-resource', ...(source && 'prompt' in source ? ['private'] : [])] }, remoteImageIsAllowed: () => false },
 			transformUri: source ? href => 'prompt' in source ? source.prompt.body?.resolveFilePath(href)?.toString() ?? href : /^[a-z][a-z\d+.-]*:/iu.test(href) ? href : URI.joinPath(source.resource, '..', href).toString() : undefined,
 			imageResourceLoader: source && 'api' in source ? async resource => new Blob([new Uint8Array(await source.api.resources.readExtensionResourceBytes(resource))]) : undefined,
-			linkHandler: href => { void this.opener.open(href, { allowCommands: false, fromUserGesture: true }).catch(error => { if (!this.isDisposed && version === this.loadVersion) { this.status.textContent = String(error); } }); },
+			actionHandler: href => { void this.opener.open(href, { allowCommands: false, fromUserGesture: true, allowContributedOpeners: true }).catch(error => { if (!this.isDisposed && version === this.loadVersion) { this.status.textContent = String(error); } }); },
 		}));
 		container.replaceChildren(document.element);
 	}

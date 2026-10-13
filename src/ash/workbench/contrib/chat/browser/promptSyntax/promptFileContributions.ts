@@ -68,15 +68,19 @@ export class PromptLanguageFeaturesProvider extends Disposable {
 		const validate = () => {
 			const diagnostics = this.validator.validate(this.parser.parse(model.uri, model.getValue()));
 			this.markerService.changeOne(PromptLanguageFeaturesProvider.ID, model.uri, diagnostics.map(diagnostic => ({
-				range: { start: { lineIndex: diagnostic.range.startLineNumber - 1, columnIndex: diagnostic.range.startColumn - 1 }, end: { lineIndex: diagnostic.range.endLineNumber - 1, columnIndex: diagnostic.range.endColumn - 1 } },
+				startLineNumber: diagnostic.range.startLineNumber,
+				startColumn: diagnostic.range.startColumn,
+				endLineNumber: diagnostic.range.endLineNumber,
+				endColumn: diagnostic.range.endColumn,
 				severity: diagnostic.severity === 'warning' ? MarkerSeverity.Warning : MarkerSeverity.Error,
-				message: diagnostic.message, source: diagnostic.source, code: diagnostic.code,
+				message: diagnostic.message, source: diagnostic.source,
+				...(diagnostic.code === undefined ? {} : { code: String(diagnostic.code) }),
 			})));
 		};
 		const scheduled = lifetime.add(new RunOnceScheduler(validate, 100));
 		lifetime.add(model.onDidChangeContent(() => scheduled.schedule()));
 		lifetime.add(model.onWillDispose(() => this.models.deleteAndDispose(model)));
-		lifetime.add(toDisposable(() => this.markerService.remove(PromptLanguageFeaturesProvider.ID, model.uri)));
+		lifetime.add(toDisposable(() => this.markerService.remove(PromptLanguageFeaturesProvider.ID, [model.uri])));
 		validate();
 	}
 }

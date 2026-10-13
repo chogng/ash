@@ -6,11 +6,20 @@ import { test } from "mocha";
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { Emitter } from "../../../../base/common/event.js";
+import { Event } from '../../../../base/common/event.js';
+import { IMeteredConnectionService } from '../../../meteredConnection/common/meteredConnection.js';
+import { DeferredPromise } from '../../../../base/common/async.js';
+import { MeteredConnectionService } from '../../../meteredConnection/browser/meteredConnectionService.js';
+import { IConfigurationService } from '../../../configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../configuration/common/inMemoryConfigurationService.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { IExtensionManagementService } from "../../../../platform/extensionManagement/common/extensionManagementService.js";
 import { WebLanguagePacksService } from "../../browser/languagePacks.js";
 import { parseLanguagePackCatalog, parseLanguagePackIndexEntry, resolveLanguagePackCatalog } from "../../common/languagePackCatalog.js";
 import type { LanguagePackCatalog } from "../../common/languagePackContract.js";
 import { builtinLanguagePackCatalogs, preinstalledLanguagePacks, productLanguagePackCatalogs } from "../../../../workbench/services/localization/common/localizationCatalogs.js";
+
+ensureNoDisposablesAreLeakedInTestSuite();
 
 test("English and preinstalled language packs remain available without Extensions", async () => {
 	const extensionManagement = createExtensions([]);
@@ -56,7 +65,6 @@ test("Extensions localization capability resources become installed language pac
 });
 
 function createExtensions(catalogs: readonly LanguagePackCatalog[]): IExtensionManagementService {
-	const changes = new Emitter<void>();
 	const installed = catalogs.map((catalog, index) => ({
 		installationId: `installation.localization.${index}`,
 		package: { id: `example/localization-${catalog.locale.toLowerCase()}-${index}`, version: "1.0.0", digest: `sha256:${"a".repeat(64)}` },
@@ -71,7 +79,7 @@ function createExtensions(catalogs: readonly LanguagePackCatalog[]): IExtensionM
 		}],
 	}));
 	return {
-		onDidChangeInstalled: changes.event,
+		onDidChangeInstalled: Event.None,
 		sources: async () => ({ revision: 0, sources: [] }),
 		addSource: async () => { throw new Error("unused"); },
 		setSourceEnabled: async () => { throw new Error("unused"); },
@@ -98,12 +106,98 @@ function createExtensions(catalogs: readonly LanguagePackCatalog[]): IExtensionM
 	};
 }
 
-function createService(extensionManagement: IExtensionManagementService, store: Partial<ILanguagePackStore> = {}): WebLanguagePacksService {
+function createService(extensionManagement: IExtensionManagementService, store: Partial<ILanguagePackStore> = {}, meteredConnection: IMeteredConnectionService = { _serviceBrand: undefined, isConnectionMetered: false, onDidChangeIsConnectionMetered: Event.None }): WebLanguagePacksService {
 	using services = new InstantiationService();
+	services.registerInstance(IMeteredConnectionService, meteredConnection);
 	services.registerInstance(IExtensionManagementService, extensionManagement);
 	services.registerInstance(ILanguagePackStore, createTestLanguagePackStore(store));
 	return services.createInstance(WebLanguagePacksService, builtinLanguagePackCatalogs, preinstalledLanguagePacks);
 }
+
+test('metered startup retains cached language resources and resumes one catalog synchronization', async () => {
+	using services = new InstantiationService();
+	using configuration = new InMemoryConfigurationService();
+	services.registerInstance(IConfigurationService, configuration);
+	const connection = Object.assign(new EventTarget(), { metered: true });
+	using policy = services.createInstance(MeteredConnectionService, () => connection);
+	const catalog: LanguagePackCatalog = { schemaVersion: 1, locale: 'fr', languageName: 'French', localizedLanguageName: 'Français', catalogVersion: 'ash-1', bundles: { ash: { hello: 'Bonjour' } }, extensionTranslations: { example: { package: {}, bundle: { greeting: 'Bonjour' } } } };
+	const extensionManagement = createExtensions([catalog]);
+	let listCalls = 0;
+	let resourceCalls = 0;
+	const listInstalled = extensionManagement.listInstalled.bind(extensionManagement);
+	const openResource = extensionManagement.openResource.bind(extensionManagement);
+	extensionManagement.listInstalled = () => { listCalls++; return listInstalled(); };
+	extensionManagement.openResource = (...args) => { resourceCalls++; return openResource(...args); };
+	const synchronized = new DeferredPromise<void>();
+	using service = createService(extensionManagement, {
+		readIndex: async () => [{ locale: 'fr', extensionId: 'example/localization-fr-0', version: '0.9.0', digest: `sha256:${'b'.repeat(64)}`, catalog }],
+		replace: async () => { void synchronized.complete(); },
+	}, policy);
+	await service.whenReady;
+	assert.equal(service.catalogs.some(catalog => catalog.locale === 'fr'), true);
+	const translations = await service.getBuiltInExtensionTranslationsUri('example', 'fr');
+	assert.ok(translations?.path.includes('Bonjour'));
+	assert.deepEqual({ listCalls, resourceCalls }, { listCalls: 0, resourceCalls: 0 });
+	connection.metered = false;
+	connection.dispatchEvent(new globalThis.Event('change'));
+	connection.dispatchEvent(new globalThis.Event('change'));
+	await synchronized.p;
+	assert.deepEqual({ listCalls, resourceCalls }, { listCalls: 1, resourceCalls: 1 });
+	service.dispose();
+	connection.dispatchEvent(new globalThis.Event('change'));
+	assert.equal(listCalls, 1);
+});
+
+test('explicit language listing and refresh bypass metered startup deferral', async () => {
+	using changes = new Emitter<boolean>();
+	let isMetered = true;
+	const policy: IMeteredConnectionService = { _serviceBrand: undefined, get isConnectionMetered() { return isMetered; }, onDidChangeIsConnectionMetered: changes.event };
+	const catalog: LanguagePackCatalog = { schemaVersion: 1, locale: 'fr', languageName: 'French', localizedLanguageName: 'Français', catalogVersion: 'ash-1', bundles: { ash: { hello: 'Bonjour' } } };
+	const extensionManagement = createExtensions([catalog]);
+	const listInstalled = extensionManagement.listInstalled.bind(extensionManagement);
+	let listCalls = 0;
+	extensionManagement.listInstalled = () => { listCalls++; return listInstalled(); };
+	using service = createService(extensionManagement, {}, policy);
+	await service.whenReady;
+	assert.equal(listCalls, 0);
+	assert.ok((await service.getInstalledLanguages()).some(language => language.id === 'fr'));
+	await service.refresh();
+	assert.equal(listCalls, 2);
+	isMetered = false;
+	changes.fire(false);
+	await Promise.resolve();
+	assert.equal(listCalls, 2);
+});
+
+test('installation changes refresh language resources even while startup sync is deferred', async () => {
+	using installedChanges = new Emitter<void>();
+	const catalog: LanguagePackCatalog = { schemaVersion: 1, locale: 'fr', languageName: 'French', localizedLanguageName: 'Français', catalogVersion: 'ash-1', bundles: { ash: { hello: 'Bonjour' } } };
+	const extensionManagement = { ...createExtensions([catalog]), onDidChangeInstalled: installedChanges.event };
+	const saved = new DeferredPromise<void>();
+	using service = createService(extensionManagement, { replace: async () => { void saved.complete(); } }, {
+		_serviceBrand: undefined, isConnectionMetered: true, onDidChangeIsConnectionMetered: Event.None,
+	});
+	await service.whenReady;
+	installedChanges.fire();
+	await saved.p;
+});
+
+test('disposing before network recovery does not fetch deferred language resources', async () => {
+	using changes = new Emitter<boolean>();
+	let isMetered = true;
+	const extensionManagement = createExtensions([]);
+	let requests = 0;
+	extensionManagement.listInstalled = async () => { requests++; return []; };
+	using service = createService(extensionManagement, {}, {
+		_serviceBrand: undefined, get isConnectionMetered() { return isMetered; }, onDidChangeIsConnectionMetered: changes.event,
+	});
+	await service.whenReady;
+	service.dispose();
+	isMetered = false;
+	changes.fire(false);
+	await Promise.resolve();
+	assert.equal(requests, 0);
+});
 
 test('installed pack updates are saved for the next startup before they are advertised', async () => {
 	const catalogs: LanguagePackCatalog[] = [{ schemaVersion: 1, locale: 'fr', languageName: 'French', localizedLanguageName: 'Français', catalogVersion: 'ash-1', bundles: { ash: { hello: 'Bonjour' } } }];

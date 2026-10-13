@@ -15,6 +15,7 @@ import { ILogService, NullLoggerService } from '../../../platform/log/common/log
 import { LanguageFeaturesService } from "../../common/services/languageFeaturesService.js";
 import { ILanguageFeaturesService } from '../../common/services/languageFeatures.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
+import { IMarkdownRendererService } from '../../../platform/markdown/browser/markdownRenderer.js';
 import { ILayoutService } from '../../../platform/layout/browser/layoutService.js';
 import { ILanguageService } from '../../common/languages/language.js';
 import { EditorContributionInstantiation } from '../../browser/editorExtensions.js';
@@ -257,6 +258,35 @@ test('standalone colorization escapes markup, expands tabs and creates no model 
 	assert.equal(createdWorkerCount, workers);
 	await assert.rejects(stanza.editor.colorize('word', 'colorize-test', { tabSize: 0 }), /positive integer/);
 	stanza.editor.setTheme('ash-light');
+});
+
+test('standalone Markdown service highlights an alias in the output document without creating models or workers', async () => {
+	using resources = new DisposableStore();
+	resources.add(StandaloneServices.get(ILanguageService).registerLanguage({ id: 'markdown-highlight', aliases: ['MarkdownTest'] }));
+	resources.add(stanza.languages.setMonarchTokensProvider('markdown-highlight', { tokenizer: { root: [[/word/, 'keyword'], [/./, '']] } }));
+	stanza.editor.defineTheme('markdown-highlight-theme', { base: 'vs', inherit: true, rules: [{ token: 'keyword', foreground: '123456' }], colors: {} });
+	stanza.editor.setTheme('markdown-highlight-theme');
+	const models = stanza.editor.getModels().length;
+	const workers = createdWorkerCount;
+	const dom = createTestDom('<!doctype html><body></body>');
+	try {
+		let resolveCompleted!: () => void;
+		const completed = new Promise<void>(resolve => { resolveCompleted = resolve; });
+		using result = StandaloneServices.get(IMarkdownRendererService).render({ value: '```MarkdownTest\nword <img>\n```' }, {
+			ownerDocument: dom.window.document,
+			asyncRenderCallback: resolveCompleted,
+		});
+		await completed;
+		const code = result.element.querySelector('pre > code')!;
+		assert.equal(code.ownerDocument, dom.window.document);
+		assert.equal(code.textContent?.replaceAll('\u00a0', ' '), 'word <img>');
+		assert.equal(code.querySelector('img'), null);
+		assert.equal(code.firstElementChild?.getAttribute('style'), 'color: #123456;');
+		assert.deepEqual({ models: stanza.editor.getModels().length, workers: createdWorkerCount }, { models, workers });
+	} finally {
+		dom.window.close();
+		stanza.editor.setTheme('ash-light');
+	}
 });
 
 test("standalone theme APIs register, select, and project a named theme", () => {
