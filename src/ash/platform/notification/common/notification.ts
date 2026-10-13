@@ -15,12 +15,18 @@ export interface NotificationAction {
 	run(): void | Promise<void>;
 }
 
+/** Primary actions are buttons; secondary actions appear in the notification menu. */
+export interface INotificationActions {
+	readonly primary?: readonly NotificationAction[];
+	readonly secondary?: readonly NotificationAction[];
+}
+
 /** Input for one user-visible notification. */
 export interface NotificationOptions {
 	readonly severity: NotificationSeverity;
 	readonly message: string;
 	readonly source?: string;
-	readonly actions?: readonly NotificationAction[];
+	readonly actions?: INotificationActions;
 }
 
 /** Immutable notification state published by the service. */

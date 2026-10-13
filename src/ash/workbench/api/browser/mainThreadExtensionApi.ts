@@ -1,5 +1,6 @@
 import { MainThreadTerminalService, type ExtensionTerminalProfileRegistration, type ExtensionTerminalEnvironmentRegistration } from './mainThreadTerminalService.js';
 import { MainThreadLocalization } from './mainThreadLocalization.js';
+import { MainThreadMessageService } from './mainThreadMessageService.js';
 import { extensionMenuId } from '../../services/extensions/common/extensionMenus.js';
 import { MainThreadSCM } from './mainThreadSCM.js';
 import { MainThreadExtensionBackend } from './mainThreadExtensionBackend.js';
@@ -40,7 +41,6 @@ import { IConfigurationService, ConfigurationTarget } from '../../../platform/co
 import { IFileTextModelService } from '../../services/textmodelResolver/common/textModelResourceService.js';
 import { ITextModelService } from '../../../editor/common/services/resolverService.js';
 import { IBulkEditService, ResourceTextEdit } from '../../../editor/browser/services/bulkEditService.js';
-import { INotificationService, NotificationSeverity } from '../../../platform/notification/common/notification.js';
 import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
 import { URI } from '../../../base/common/uri.js';
 import { Range } from '../../../editor/common/core/range.js';
@@ -118,6 +118,7 @@ export class MainThreadExtensionApi extends Disposable {
 	private readonly scmApi: MainThreadSCM;
 	private readonly backendApi: MainThreadExtensionBackend;
 	private editorsApi: MainThreadEditors | undefined;
+	private readonly messages: MainThreadMessageService;
 	private readonly taskApi: MainThreadTask;
 	private readonly terminalApi: MainThreadTerminalService;
 	private readonly debugApi: MainThreadDebugService;
@@ -141,13 +142,13 @@ export class MainThreadExtensionApi extends Disposable {
 		@IFileTextModelService private readonly models: IFileTextModelService,
 		@ITextModelService private readonly textModels: ITextModelService,
 		@IBulkEditService private readonly bulkEdits: IBulkEditService,
-		@INotificationService private readonly notifications: INotificationService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@IRemoteConnectionService private readonly remoteConnections: IRemoteConnectionService,
 		@IDialogService private readonly dialogs: IDialogService,
 		@IHostService private readonly host: IHostService,
 	) {
 		super();
+		this.messages = this._register(instantiation.createInstance(MainThreadMessageService));
 		this.scmApi = this._register(instantiation.createInstance(MainThreadSCM, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
 		this.backendApi = this._register(instantiation.createInstance(MainThreadExtensionBackend));
 		this.terminalApi = this._register(instantiation.createInstance(MainThreadTerminalService));
@@ -292,8 +293,7 @@ export class MainThreadExtensionApi extends Disposable {
 				await this.configuration.updateValue(operation.section, operation.value, operation.target === 'user' ? ConfigurationTarget.USER_LOCAL : ConfigurationTarget.WORKSPACE);
 				return { result: 'done' };
 			case 'showMessage':
-				this.notifications.notify({ message: operation.message, severity: operation.severity === 'information' ? NotificationSeverity.Info : operation.severity === 'warning' ? NotificationSeverity.Warning : NotificationSeverity.Error });
-				return { result: 'done' };
+				return this.messages.handle(operation, source.extensionId, signal);
 			case 'showQuickPick':
 				return this.showQuickPick(operation.items, operation.placeholder, signal);
 		}

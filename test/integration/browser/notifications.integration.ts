@@ -1,6 +1,8 @@
 import '../../../src/ash/base/browser/ui/styles.css';
 import '../../../src/ash/workbench/browser/media/style.css';
 import { h } from '../../../src/ash/base/browser/dom.js';
+import { setNlsMessages } from '../../../src/ash/nls.js';
+import messages from '../../../extensions/language-pack-zh-cn/translations/editor.json' with { type: 'json' };
 import { Event } from '../../../src/ash/base/common/event.js';
 import { Disposable, DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import { IAccessibilityService } from '../../../src/ash/platform/accessibility/common/accessibility.js';
@@ -11,7 +13,9 @@ import { IMenuService } from '../../../src/ash/platform/actions/common/actions.j
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
 import { BrowserClipboardService } from '../../../src/ash/platform/clipboard/browser/clipboardService.js';
-import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
+import { CommandsRegistry, ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
+import { IExtensionApi } from '../../../src/ash/platform/extensions/common/extensionApi.js';
+import { OPEN_EXTENSIONS_COMMAND_ID } from '../../../src/ash/platform/extensionManagement/common/extensionManagementService.js';
 import { IContextKeyService, ContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { IContextMenuService, IContextViewService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { BrowserContextMenuService } from '../../../src/ash/platform/contextview/browser/contextMenuService.js';
@@ -26,6 +30,10 @@ import { NotificationsCenter } from '../../../src/ash/workbench/browser/parts/no
 import { NotificationActionRunner } from '../../../src/ash/workbench/browser/parts/notifications/notificationsCommands.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+import { StatusbarService } from '../../../src/ash/workbench/services/statusbar/browser/statusbar.js';
+import { MainThreadMessageService } from '../../../src/ash/workbench/api/browser/mainThreadMessageService.js';
+
+if (new URL(location.href).searchParams.has('zh')) setNlsMessages('zh-CN', messages);
 
 const resources = new DisposableStore();
 const root = h(document, 'main');
@@ -56,13 +64,27 @@ services.registerInstance(IContextMenuService, resources.add(services.createInst
 const runner = resources.add(services.createInstance(NotificationActionRunner));
 const themes = resources.add(new TestThemeService(lightColorTheme));
 resources.add(bindColorTheme(themes, root));
-const center = resources.add(services.createInstance(NotificationsCenter, root, feedback, runner, undefined, undefined));
+const statusbar = resources.add(new StatusbarService());
+const center = resources.add(services.createInstance(NotificationsCenter, root, feedback, runner, statusbar, undefined));
+services.registerInstance(IExtensionApi, { list: async () => ({ generation: 1, diagnostics: [], extensions: [{ id: 'fixture.git', displayName: 'Git' }] }) } as unknown as import('../../../src/ash/platform/extensions/common/extensionApi.js').IExtensionApi);
+const extensionMessages = resources.add(services.createInstance(MainThreadMessageService));
+let managed: unknown;
+resources.add(CommandsRegistry.register(OPEN_EXTENSIONS_COMMAND_ID, (_accessor, options) => { managed = options; }));
+let selection: number | null | undefined;
 let actionRuns = 0;
 
 const fixture = {
 	notify(message: string, severity: NotificationSeverity = NotificationSeverity.Info): number {
-		return notifications.notify({ severity, message, source: 'Fixture', actions: [{ id: 'fixture.action', label: 'Run action', run: () => { actionRuns++; } }] }).item.id;
+		return notifications.notify({ severity, message, source: 'Fixture', actions: { primary: [{ id: 'fixture.action', label: 'Run action', run: () => { actionRuns++; } }] } }).item.id;
 	},
+	extensionMessage(items: readonly string[]): void {
+		selection = undefined;
+		void extensionMessages.handle({ operation: 'showMessage', severity: 'error', message: 'Git operation failed. Open the current comparison from Source Control before selecting lines.', items }, 'fixture.git', new AbortController().signal).then(result => {
+			if (result.result === 'selection') selection = result.index;
+		});
+	},
+	get selection() { return selection; },
+	get managed() { return managed; },
 	show: () => center.show(),
 	hide: () => center.hide(),
 	clear: () => center.clearAll(),

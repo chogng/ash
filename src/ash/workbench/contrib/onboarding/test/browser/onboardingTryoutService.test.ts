@@ -47,9 +47,9 @@ suite('OnboardingTryoutService', () => {
 			onDidAdd: Event.None,
 			onDidRemove: Event.None,
 			notify,
-			info(message, actions) { return notify({ severity: NotificationSeverity.Info, message, actions }); },
-			warning(message, actions) { return notify({ severity: NotificationSeverity.Warning, message, actions }); },
-			error(message, actions) { return notify({ severity: NotificationSeverity.Error, message, actions }); },
+			info(message, actions) { return notify({ severity: NotificationSeverity.Info, message, actions: { primary: actions } }); },
+			warning(message, actions) { return notify({ severity: NotificationSeverity.Warning, message, actions: { primary: actions } }); },
+			error(message, actions) { return notify({ severity: NotificationSeverity.Error, message, actions: { primary: actions } }); },
 			getNotifications: () => [], remove: () => false, clear() { },
 		});
 		return {
@@ -88,7 +88,7 @@ suite('OnboardingTryoutService', () => {
 		});
 		const service = services.createInstance(OnboardingTryoutService);
 		assert.equal(await service.run('test.setup'), 'unavailable');
-		assert.deepEqual(fixture.notifications.map(item => item.actions?.[0]?.label), ['Open setup']);
+		assert.deepEqual(fixture.notifications.map(item => item.actions?.primary?.[0]?.label), ['Open setup']);
 	});
 
 	test('cancellation during preparation prevents late guidance', async () => {

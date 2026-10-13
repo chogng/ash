@@ -13,7 +13,15 @@ export class NotificationsModel extends Disposable {
 	readonly onDidRemove: Event<NotificationItem> = this._onDidRemove.event;
 
 	add(options: NotificationOptions): NotificationItem {
-		const item: NotificationItem = Object.freeze({ ...options, id: this.nextId++, createdAt: Date.now(), actions: Object.freeze([...(options.actions ?? [])]) });
+		const item: NotificationItem = Object.freeze({
+			...options,
+			id: this.nextId++,
+			createdAt: Date.now(),
+			actions: Object.freeze({
+				primary: Object.freeze([...(options.actions?.primary ?? [])]),
+				secondary: Object.freeze([...(options.actions?.secondary ?? [])]),
+			}),
+		});
 		this.items.set(item.id, item);
 		this._onDidAdd.fire(item);
 		return item;

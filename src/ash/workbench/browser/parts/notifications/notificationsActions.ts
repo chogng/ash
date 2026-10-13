@@ -1,7 +1,17 @@
-import type { IAction } from '../../../../base/common/actions.js';
+import { SubmenuAction, type IAction } from '../../../../base/common/actions.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import type { NotificationItem } from '../../../../platform/notification/common/notification.js';
 import { localize } from '../../../../nls.js';
+
+/** The notification's producer owns the operations exposed by this menu. */
+export class ConfigureNotificationAction extends SubmenuAction {
+	static readonly ID = 'workbench.action.configureNotification';
+
+	constructor(actions: readonly IAction[]) {
+		super(ConfigureNotificationAction.ID, localize('notifications.moreActions', 'More Actions'), actions, Lxicon.gear);
+	}
+}
 
 /** Copies the model's message; the menu execution owner reports clipboard failures. */
 export class CopyNotificationMessageAction implements IAction {

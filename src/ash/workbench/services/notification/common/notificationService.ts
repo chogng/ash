@@ -15,9 +15,9 @@ export class NotificationService extends Disposable implements INotificationServ
 		return { item, close: () => { this.remove(item.id); } };
 	}
 
-	info(message: string, actions?: readonly NotificationAction[]): NotificationHandle { return this.notify({ severity: NotificationSeverity.Info, message, actions }); }
-	warning(message: string, actions?: readonly NotificationAction[]): NotificationHandle { return this.notify({ severity: NotificationSeverity.Warning, message, actions }); }
-	error(message: string, actions?: readonly NotificationAction[]): NotificationHandle { return this.notify({ severity: NotificationSeverity.Error, message, actions }); }
+	info(message: string, actions?: readonly NotificationAction[]): NotificationHandle { return this.notify({ severity: NotificationSeverity.Info, message, actions: { primary: actions } }); }
+	warning(message: string, actions?: readonly NotificationAction[]): NotificationHandle { return this.notify({ severity: NotificationSeverity.Warning, message, actions: { primary: actions } }); }
+	error(message: string, actions?: readonly NotificationAction[]): NotificationHandle { return this.notify({ severity: NotificationSeverity.Error, message, actions: { primary: actions } }); }
 	getNotifications(): readonly NotificationItem[] { return this.model.getNotifications(); }
 	remove(id: number): boolean { return this.isDisposed ? false : this.model.remove(id); }
 	clear(): void { if (!this.isDisposed) this.model.clear(); }
@@ -26,10 +26,12 @@ export class NotificationService extends Disposable implements INotificationServ
 function validateNotification(options: NotificationOptions): void {
 	if (!Object.values(NotificationSeverity).includes(options.severity)) throw new TypeError("Unknown notification severity");
 	if (typeof options.message !== "string" || options.message.trim().length === 0) throw new TypeError("Notification message must not be empty");
+	if (options.source !== undefined && (typeof options.source !== "string" || options.source.trim().length === 0)) throw new TypeError("Notification source must not be empty");
 	const actionIds = new Set<string>();
-	for (const action of options.actions ?? []) {
+	for (const action of [...(options.actions?.primary ?? []), ...(options.actions?.secondary ?? [])]) {
 		if (!/^[A-Za-z][A-Za-z0-9._-]{0,127}$/.test(action.id)) throw new TypeError(`Invalid notification action ID: ${action.id}`);
-		if (!actionIds.add(action.id)) throw new RangeError(`Duplicate notification action ID: ${action.id}`);
+		if (actionIds.has(action.id)) throw new RangeError(`Duplicate notification action ID: ${action.id}`);
+		actionIds.add(action.id);
 		if (typeof action.label !== "string" || action.label.trim().length === 0) throw new TypeError("Notification action label must not be empty");
 		if (typeof action.run !== "function") throw new TypeError(`Notification action '${action.id}' must provide a callback`);
 	}

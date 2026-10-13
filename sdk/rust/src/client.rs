@@ -213,6 +213,7 @@ impl Client {
             ExtensionClientOperation::ShowMessage {
                 message: message.into(),
                 severity,
+                items: Vec::new(),
             },
             token,
         )

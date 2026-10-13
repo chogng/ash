@@ -38,6 +38,7 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 	private previousFocus: Element | null = null;
 	private readonly copyAction: CopyNotificationMessageAction;
 	private copyMenu: CancellationTokenSource | undefined;
+	private contextMenuVisible = false;
 
 	constructor(
 		root: HTMLElement,
@@ -99,10 +100,12 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 			}
 		}));
 		this._register(addDisposableListener(this.list, 'contextmenu', event => this.showCopyMenu(event)));
+		this._register(contextMenuService.onDidShowContextMenu(() => { this.contextMenuVisible = true; }));
+		this._register(contextMenuService.onDidHideContextMenu(() => { this.contextMenuVisible = false; }));
 		const onEscape = (event: KeyboardEvent): void => {
 			const dialogHasFocus = Boolean(document.activeElement?.closest('[role="dialog"]'));
 			const accessibleDialogOpen = Boolean(document.querySelector('.ash-accessible-view-dialog'));
-			if (this.open && event.key === "Escape" && !this.copyMenu && !dialogHasFocus && !accessibleDialogOpen) {
+			if (this.open && event.key === "Escape" && !this.contextMenuVisible && !this.copyMenu && !dialogHasFocus && !accessibleDialogOpen) {
 				event.preventDefault();
 				event.stopPropagation();
 				this.hide();

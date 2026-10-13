@@ -1376,7 +1376,8 @@ fn vscode_commonjs_commands_keep_standard_arguments_and_drain_unawaited_notifica
         messages,
         vec![ExtensionClientOperation::ShowMessage {
             message: "hello:world".into(),
-            severity: external_ext_protocol::ExtensionMessageSeverity::Information
+            severity: external_ext_protocol::ExtensionMessageSeverity::Information,
+            items: Vec::new(),
         }]
     );
 }
@@ -1409,6 +1410,41 @@ fn vscode_callbacks_can_handle_a_service_rejection() {
             .unwrap()
             .contains("Document read denied")
     );
+}
+
+#[test]
+fn vscode_message_buttons_return_the_original_item_or_undefined_on_dismissal() {
+    let running = start_vscode(r#"
+        const vscode = require('vscode');
+        exports.activate = context => context.subscriptions.push(vscode.commands.registerCommand('example.hello', async () => {
+            const output = { title: 'Output', isCloseAffordance: false };
+            const selected = await vscode.window.showErrorMessage('Git failed', 'Retry', output);
+            const dismissed = await vscode.window.showWarningMessage('Warning', 'Continue');
+            return { sameItem: selected === output, dismissed: dismissed === undefined };
+        }));
+    "#).unwrap();
+    let mut calls = 0;
+    let result = running
+        .supervisor
+        .begin_invoke(invocation("hello", json!([]), Duration::from_secs(5)))
+        .unwrap()
+        .wait_with_client(|operation, _, _| {
+            let ExtensionClientOperation::ShowMessage { items, .. } = operation else {
+                panic!("Expected a message");
+            };
+            calls += 1;
+            let index = if calls == 1 {
+                assert_eq!(items, vec!["Retry", "Output"]);
+                Some(1)
+            } else {
+                assert_eq!(items, vec!["Continue"]);
+                None
+            };
+            Ok(ExtensionClientResult::Selection { index })
+        })
+        .unwrap();
+    assert_eq!(calls, 2);
+    assert_eq!(result.payload, json!({"sameItem":true,"dismissed":true}));
 }
 
 #[test]

@@ -447,7 +447,13 @@ const v = require('vscode');
 require('node:fs').writeFileSync(__dirname + '/initialization.txt', String(v.workspace.getConfiguration().get('nodeIncarnation')));
 exports.activate = async context => {
   await Promise.all(Array.from({ length: 64 }, () => v.window.showInformationMessage('startup')));
-  context.subscriptions.push(v.commands.registerCommand('test.node', async () => {
+  context.subscriptions.push(v.commands.registerCommand('test.node', async mode => {
+    if (mode === 'notification') {
+      void v.window.showErrorMessage('Git failed', 'Output').then(selected => {
+        if (selected === 'Output') return v.commands.executeCommand('notification.output');
+      });
+      throw new Error('command failed');
+    }
     await Promise.all(Array.from({ length: 64 }, () => v.window.showInformationMessage('foreground')));
     setTimeout(() => { void v.commands.executeCommand('background.wait'); }, 20);
     return 'scheduled';
@@ -508,6 +514,8 @@ exports.activate = async context => {
     )
     .unwrap();
     let (sent, received) = std::sync::mpsc::channel();
+    let choice_released = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let choice_release = std::sync::Arc::clone(&choice_released);
     fn window_facts(value: u64) -> external_ext_protocol::ExtensionHostInitialization {
         external_ext_protocol::ExtensionHostInitialization {
             language: None,
@@ -529,13 +537,31 @@ exports.activate = async context => {
                         initialization: window_facts(1),
                     },
                 ),
-                external_ext_protocol::ExtensionClientOperation::ShowMessage { .. } => {
+                external_ext_protocol::ExtensionClientOperation::ShowMessage { items, .. } => {
+                    if !items.is_empty() {
+                        assert_eq!(items, vec!["Output"]);
+                        sent.send("choice pending").unwrap();
+                        while !choice_released.load(std::sync::atomic::Ordering::SeqCst) {
+                            assert!(
+                                !token.is_cancelled(),
+                                "Command return cancelled its notification"
+                            );
+                            std::thread::sleep(Duration::from_millis(2));
+                        }
+                        return Ok(external_ext_protocol::ExtensionClientResult::Selection {
+                            index: Some(0),
+                        });
+                    }
                     sent.send("startup").unwrap();
                     Ok(external_ext_protocol::ExtensionClientResult::Done)
                 }
                 external_ext_protocol::ExtensionClientOperation::ExecuteCommand {
                     command, ..
                 } => {
+                    if command == "notification.output" {
+                        sent.send("choice selected").unwrap();
+                        return Ok(external_ext_protocol::ExtensionClientResult::Done);
+                    }
                     assert_eq!(command, "background.wait");
                     sent.send("background").unwrap();
                     while !token.is_cancelled() {
@@ -564,6 +590,37 @@ exports.activate = async context => {
             "startup"
         );
     }
+    let failure = supervisor
+        .begin_invoke(crate::ExtensionInvocation {
+            registration_id: "test.node".into(),
+            operation: "execute".into(),
+            payload: json!({"arguments": ["notification"]}),
+            deadline_unix_millis: std::num::NonZeroU64::new(
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis() as u64
+                    + 5000,
+            )
+            .unwrap(),
+        })
+        .unwrap()
+        .wait_with_client(|_, _, _| panic!("A Node notification must use its activation owner"))
+        .unwrap_err();
+    assert!(matches!(failure, crate::ExtensionHostError::HostRejected {
+        code: crate::HostErrorCode::Internal,
+        ref message,
+    } if message == "Extension host operation failed"));
+    assert!(supervisor.snapshot().stderr.contains("command failed"));
+    assert_eq!(
+        received.recv_timeout(Duration::from_secs(5)).unwrap(),
+        "choice pending"
+    );
+    choice_release.store(true, std::sync::atomic::Ordering::SeqCst);
+    assert_eq!(
+        received.recv_timeout(Duration::from_secs(5)).unwrap(),
+        "choice selected"
+    );
     let result = supervisor
         .begin_invoke(crate::ExtensionInvocation {
             registration_id: "test.node".into(),

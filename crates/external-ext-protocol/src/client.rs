@@ -66,6 +66,18 @@ fn validate_operation(
     limits: &ProtocolLimits,
 ) -> Result<(), ProtocolError> {
     validate_encoded_size(operation, limits.maximum_payload_bytes)?;
+    if let ExtensionClientOperation::ShowMessage { message, items, .. } = operation {
+        if message.trim().is_empty()
+            || items.len() > 16
+            || items
+                .iter()
+                .any(|item| item.trim().is_empty() || item.len() > 2048)
+        {
+            return Err(ProtocolError::InvalidProtocol(
+                "invalid extension notification message or buttons".into(),
+            ));
+        }
+    }
     if let ExtensionClientOperation::OpenRemoteConnection { authority } = operation {
         let valid = authority.split_once('+').is_some_and(|(prefix, target)| {
             !prefix.is_empty()
@@ -386,6 +398,8 @@ pub enum ExtensionClientOperation {
     ShowMessage {
         message: String,
         severity: ExtensionMessageSeverity,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        items: Vec<String>,
     },
     ShowQuickPick {
         items: Vec<ExtensionQuickPickItem>,

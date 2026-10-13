@@ -37,7 +37,10 @@ export function registerGitCommands(context: ExtensionContext, git: GitService, 
 			try { await whenReady(); await provider(args[0])?.whenReady(); return await callback(...args); } catch (error) {
 				// Opening another workspace retires this callback; its cancellation is not a Git failure.
 				if (error instanceof CancellationError || error instanceof Error && (error.name === 'AbortError' || error.name === 'Canceled')) throw error;
-				ctx.notifications.error(localize('git.commandFailed', 'Git operation failed: {0}', gitErrorMessage(error)));
+				const outputLabel = localize('git.menu.showOutput', 'Show Git Output');
+				void window.showErrorMessage(localize('git.commandFailed', 'Git operation failed: {0}', gitErrorMessage(error)), outputLabel).then(selected => {
+					if (selected === outputLabel) showOutput();
+				});
 				throw error;
 			}
 		}));

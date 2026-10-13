@@ -1,4 +1,6 @@
 .ash-notification-toolbar {
+	grid-column: 3;
+	grid-row: 1;
 	flex: 0 0 auto;
 	margin-top: -2px;
 	margin-inline-end: -4px;
@@ -7,7 +9,8 @@
 	display: flex;
 	flex-wrap: wrap;
 	gap: 6px;
-	margin-top: 8px;
+	margin-inline-start: auto;
+	justify-content: flex-end;
 }
 .ash-notification-actions > .ash-notification-action {
 	min-width: 0;

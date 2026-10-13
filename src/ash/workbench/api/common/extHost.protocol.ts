@@ -47,7 +47,7 @@ export type ExtensionClientOperation =
 	| { operation: 'applyEdit'; documents: ExtensionDocumentEdit[]; }
 	| { operation: 'readConfiguration'; section: string; resource: string | null; }
 	| { operation: 'updateConfiguration'; section: string; value: JsonValue; target: 'user' | 'workspace'; }
-	| { operation: 'showMessage'; message: string; severity: 'information' | 'warning' | 'error'; }
+	| { operation: 'showMessage'; message: string; severity: 'information' | 'warning' | 'error'; items?: readonly string[]; }
 	| { operation: 'showQuickPick'; items: readonly ExtensionQuickPickItem[]; placeholder: string; };
 
 export type ExtensionClientResult =

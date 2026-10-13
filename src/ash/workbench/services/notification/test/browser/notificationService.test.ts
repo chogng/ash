@@ -56,7 +56,7 @@ test("clearing a toast removes only its shared record from the notification cent
 		let actionRuns = 0;
 		const removed: number[] = [];
 		service.onDidRemove(item => removed.push(item.id));
-		const handle = service.notify({ severity: NotificationSeverity.Warning, message: "Workspace needs attention", source: "fixture", actions: [{ id: "open", label: "Open", run: () => { actionRuns++; } }] });
+		const handle = service.notify({ severity: NotificationSeverity.Warning, message: "Workspace needs attention", source: "fixture", actions: { primary: [{ id: "open", label: "Open", run: () => { actionRuns++; } }] } });
 		assert.equal(toggle.hidden, false);
 		assert.equal(root.querySelectorAll(".ash-notification").length, 1);
 		const completed = new Promise<void>(resolve => runner.onDidRun(() => resolve()));
@@ -729,7 +729,7 @@ for (const input of ['mouse', 'ContextMenu', 'Shift+F10'] as const) {
 	test(`notification ${input} copies the raw message without source, actions, or presentation text`, async () => {
 		using fixture = new NotificationsFixture();
 		const message = 'First line\n[链接](https://example.test) <b>literal</b>\n第二行\t🙂';
-		const handle = fixture.service.notify({ severity: NotificationSeverity.Warning, message, source: 'Excluded source', actions: [{ id: 'primary', label: 'Excluded action', run() { } }] });
+		const handle = fixture.service.notify({ severity: NotificationSeverity.Warning, message, source: 'Excluded source', actions: { primary: [{ id: 'primary', label: 'Excluded action', run() { } }] } });
 		const copied = promiseWithResolvers<void>();
 		fixture.presentation.writeText = async value => { fixture.presentation.writes.push(value); copied.resolve(); };
 		const row = openCopyMenu(fixture, handle.item.id, input);

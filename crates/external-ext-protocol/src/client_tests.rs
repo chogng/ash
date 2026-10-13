@@ -8,6 +8,40 @@ use serde_json::Value;
 use serde_json::json;
 
 #[test]
+fn notification_buttons_round_trip_and_legacy_messages_keep_their_wire_shape() {
+    for wire in [
+        json!({"operation":"showMessage","message":"Git failed","severity":"error"}),
+        json!({"operation":"showMessage","message":"Git failed","severity":"error","items":["Output","Retry"]}),
+    ] {
+        let operation: ExtensionClientOperation = serde_json::from_value(wire.clone()).unwrap();
+        assert_eq!(serde_json::to_value(&operation).unwrap(), wire);
+        ExtensionClientRequest {
+            context: RequestContext::new(1, 2, 3),
+            call_id: 1,
+            operation,
+        }
+        .validate(&ProtocolLimits::default())
+        .unwrap();
+    }
+    for items in [vec![String::new()], vec!["Action".to_owned(); 17]] {
+        let operation = ExtensionClientOperation::ShowMessage {
+            message: "Choose".into(),
+            severity: super::ExtensionMessageSeverity::Warning,
+            items,
+        };
+        assert!(
+            ExtensionClientRequest {
+                context: RequestContext::new(1, 2, 3),
+                call_id: 1,
+                operation,
+            }
+            .validate(&ProtocolLimits::default())
+            .is_err()
+        );
+    }
+}
+
+#[test]
 fn quick_pick_preserves_descriptions_and_rejects_invalid_peer_items() {
     let wire = json!({"operation":"showQuickPick","placeholder":"Choose a branch","items":[{"label":"main"},{"label":"occupied","description":"origin/occupied","detail":"Checked out in another worktree"}]});
     let operation: ExtensionClientOperation = serde_json::from_value(wire.clone()).unwrap();

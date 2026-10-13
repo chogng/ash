@@ -394,13 +394,13 @@ export class StandaloneNotificationService extends Disposable implements INotifi
 	}
 
 	info(message: string, actions?: readonly NotificationAction[]): NotificationHandle {
-		return this.notify({ severity: NotificationSeverity.Info, message, actions });
+		return this.notify({ severity: NotificationSeverity.Info, message, actions: { primary: actions } });
 	}
 	warning(message: string, actions?: readonly NotificationAction[]): NotificationHandle {
-		return this.notify({ severity: NotificationSeverity.Warning, message, actions });
+		return this.notify({ severity: NotificationSeverity.Warning, message, actions: { primary: actions } });
 	}
 	error(message: string, actions?: readonly NotificationAction[]): NotificationHandle {
-		return this.notify({ severity: NotificationSeverity.Error, message, actions });
+		return this.notify({ severity: NotificationSeverity.Error, message, actions: { primary: actions } });
 	}
 	getNotifications(): readonly NotificationItem[] { return [...this.items.values()]; }
 	remove(id: number): boolean {

@@ -899,8 +899,24 @@ export function createApi(configuration, initialization) {
 	}
 	function message(severity, text, ...items) {
 		if (typeof text !== 'string') throw new TypeError('Message must be a string');
-		if (items.length) return unsupported('window message options/items');
-		return request({ operation: 'showMessage', message: text, severity }, 'done').then(() => undefined);
+		if (items.length === 0) return request({ operation: 'showMessage', message: text, severity }, 'done').then(() => undefined);
+		const labels = items.map(item => typeof item === 'string' ? item : item?.title);
+		if (labels.length > 16 || labels.some(label => typeof label !== 'string' || !label.trim() || label.length > 512)) {
+			throw new TypeError('Message buttons require at most 16 non-empty titles; message options are unsupported');
+		}
+		const operation = { operation: 'showMessage', message: text, severity, items: labels };
+		const selection = (async () => {
+			// Node choices outlive the command that produced them; the confined host retains invocation ownership.
+			if (typeof globalThis.__ashBackgroundRequest !== 'function') return request(operation, 'selection');
+			const result = JSON.parse(await globalThis.__ashBackgroundRequest(JSON.stringify(operation)));
+			if (result.result !== 'selection') throw new Error('Invalid result for showMessage');
+			return result;
+		})();
+		return selection.then(result => {
+			if (result.index === null) return undefined;
+			if (!Number.isInteger(result.index) || result.index < 0 || result.index >= items.length) throw new TypeError('Invalid message button selection');
+			return items[result.index];
+		});
 	}
 	class Disposable {
 		#callback;

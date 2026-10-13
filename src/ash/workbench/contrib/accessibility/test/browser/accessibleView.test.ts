@@ -159,7 +159,7 @@ test('screen reader commands update policy, status and notification choices thro
 	assert.equal(entry.id, 'status.editor.screenReaderMode');
 	await entry.entry.run!();
 	const notification = fixture.notifications.getNotifications()[0]!;
-	await notification.actions!.find(action => action.id === 'accessibility.screenReader.off')!.run();
+	await notification.actions!.primary!.find(action => action.id === 'accessibility.screenReader.off')!.run();
 	assert.deepEqual({ optimized: fixture.accessibility.isScreenReaderOptimized(), entries: fixture.statusbar.getEntries(StatusbarAlignment.Right), notifications: fixture.notifications.getNotifications() }, {
 		optimized: false,
 		entries: [],

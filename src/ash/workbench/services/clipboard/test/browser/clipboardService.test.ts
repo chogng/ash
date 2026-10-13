@@ -39,10 +39,10 @@ suite('Workbench browser clipboard', () => {
 		const added = fixture.nextNotification();
 		const reading = fixture.clipboard.readText();
 		const prompt = await added;
-		await prompt.actions![1]!.run();
+		await prompt.actions!.primary![1]!.run();
 		assert.deepEqual(fixture.opened, [['https://support.google.com/chrome/answer/114662', { openExternal: true }]]);
 		assert.equal(attempts, 1);
-		await prompt.actions![0]!.run();
+		await prompt.actions!.primary![0]!.run();
 		assert.deepEqual([await reading, attempts, fixture.notifications.getNotifications()], ['recovered', 2, []]);
 	});
 
@@ -52,7 +52,7 @@ suite('Workbench browser clipboard', () => {
 		const reading = fixture.clipboard.readText();
 		const first = await firstAdded;
 		const secondAdded = fixture.nextNotification();
-		await first.actions![0]!.run();
+		await first.actions!.primary![0]!.run();
 		const second = await secondAdded;
 		assert.notEqual(second.id, first.id);
 		fixture.notifications.remove(second.id);
@@ -86,7 +86,7 @@ suite('Workbench browser clipboard', () => {
 			const added = fixture.nextNotification();
 			const reading = fixture.clipboard.readText();
 			const prompt = await added;
-			assert.deepEqual([prompt.message, prompt.actions!.map(action => action.label)], ['无法读取剪贴板。请允许此网站访问剪贴板，然后重试。', ['重试', '了解详情']]);
+			assert.deepEqual([prompt.message, prompt.actions!.primary!.map(action => action.label)], ['无法读取剪贴板。请允许此网站访问剪贴板，然后重试。', ['重试', '了解详情']]);
 			fixture.notifications.remove(prompt.id);
 			assert.equal(await reading, '');
 		} finally {
@@ -106,7 +106,7 @@ suite('Workbench browser clipboard', () => {
 		const added = fixture.nextNotification();
 		const reading = fixture.clipboard.read();
 		const prompt = await added;
-		await prompt.actions![0]!.run();
+		await prompt.actions!.primary![0]!.run();
 		assert.deepEqual([await reading, attempts, fixture.notifications.getNotifications()], [
 			[{ type: 'text/html', data: new TextEncoder().encode('<b>recovered</b>') }], 2, [],
 		]);

@@ -530,16 +530,16 @@ Extensions 的“编辑器扩展（Open VSX）”筛选及安装确认说明：�
 
 Extensions 的“内置”列表包含所有预装扩展，包括没有脚本入口的声明式扩展。编辑器内置扩展通过客户端的 Profile enablement service 管理；语言包沿用 VS Code 的不可禁用例外，由显示语言设置管理。内置 Rust Provider 由后端同一 Profile policy 管理，列表与详情读取实际启用和进程状态；未在当前后端注册的 Provider 不显示可用的启停按钮。`ash.github-authentication` 禁用时取消在途登录、关闭共享实例并清空客户端账号视图，保留 SecretStore 凭据；重新启用后按消费者请求恢复。`LocalProfileRuntime` 为所有目录组合入口提供同一 policy，语言服务监听其变更，JS 宿主沿既有授权订阅停用旧实例。
 
-| 接口       | 当前支持范围                                                                                                                                                                                       |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 包入口     | 标准包优先 `main`，其次 `browser`；Node 负责 CJS/ESM、相对模块、JSON、package exports、依赖及缓存；宿主只提供标准 `vscode` 作者 API                                                                |
-| 激活与释放 | `activate(context)`、可选 `deactivate()`、`context.subscriptions`；按命令、语言或启动完成事件激活                                                                                                  |
-| 命令       | `commands.registerCommand`，命令须声明在 `contributes.commands`；标准参数和 `thisArg`                                                                                                              |
-| 界面       | 三种消息通知（无按钮或选项）；字符串或带 `label`、`description`、`detail` 项的单选 `window.showQuickPick` 与 `placeHolder`；`window.createStatusBarItem`                                           |
-| 文档       | `workspace.openTextDocument(Uri)`；打开、修改、关闭事件；UTF-16 `getText(range)`、`offsetAt`、`positionAt`、`lineAt`、单词范围                                                                     |
-| 诊断       | `languages.createDiagnosticCollection`、Diagnostic 四种严重度；set/delete/clear/dispose；资源版本与运行实例隔离                                                                                    |
-| 语言       | 语言 ID 的 Hover、Completion、definition、references、rename、symbols、folding、links、code actions、selection ranges、highlights；各 API 保留当前子集限制                                         |
-| 基础类型   | `Uri`、`Position`、`Range`、`Hover`、`MarkdownString`、`Diagnostic`、`CompletionItem`、`CompletionList`、`TextEdit`、`WorkspaceEdit`、`SnippetString`、`Disposable` 的上述用法，不提供完整类型成员 |
+| 接口       | 当前支持范围                                                                                                                                                                                                        |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 包入口     | 标准包优先 `main`，其次 `browser`；Node 负责 CJS/ESM、相对模块、JSON、package exports、依赖及缓存；宿主只提供标准 `vscode` 作者 API                                                                                 |
+| 激活与释放 | `activate(context)`、可选 `deactivate()`、`context.subscriptions`；按命令、语言或启动完成事件激活                                                                                                                   |
+| 命令       | `commands.registerCommand`，命令须声明在 `contributes.commands`；标准参数和 `thisArg`                                                                                                                               |
+| 界面       | 三种消息通知，支持字符串或带 `title` 的按钮项，选择返回原始项；暂不支持消息选项或 modal；字符串或带 `label`、`description`、`detail` 项的单选 `window.showQuickPick` 与 `placeHolder`；`window.createStatusBarItem` |
+| 文档       | `workspace.openTextDocument(Uri)`；打开、修改、关闭事件；UTF-16 `getText(range)`、`offsetAt`、`positionAt`、`lineAt`、单词范围                                                                                      |
+| 诊断       | `languages.createDiagnosticCollection`、Diagnostic 四种严重度；set/delete/clear/dispose；资源版本与运行实例隔离                                                                                                     |
+| 语言       | 语言 ID 的 Hover、Completion、definition、references、rename、symbols、folding、links、code actions、selection ranges、highlights；各 API 保留当前子集限制                                                          |
+| 基础类型   | `Uri`、`Position`、`Range`、`Hover`、`MarkdownString`、`Diagnostic`、`CompletionItem`、`CompletionList`、`TextEdit`、`WorkspaceEdit`、`SnippetString`、`Disposable` 的上述用法，不提供完整类型成员                  |
 
 激活上下文提供同一生命周期的 `subscriptions`、包快照对应的 `extensionUri`/`extensionPath`、
 `asAbsolutePath`、生产运行模式及自身 Extension 元数据。激活完成后，导出对象和激活 Promise
