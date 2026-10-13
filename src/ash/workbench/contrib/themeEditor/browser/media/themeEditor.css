@@ -44,21 +44,86 @@
 .ash-theme-editor-colors {
 	display: flex;
 	flex-direction: column;
-	gap: 8px;
-	padding: 12px;
 	box-sizing: border-box;
 	height: 100%;
 	min-height: 0;
 	background: var(--ash-sideBar-background);
 }
 
-.ash-theme-editor-category {
-	color: var(--ash-input-foreground);
-	background: var(--ash-input-background);
-	border: var(--ash-strokeThickness) solid var(--ash-input-border);
-	border-radius: var(--ash-cornerRadius-small);
-	padding: 6px 8px;
-	font: inherit;
+.ash-theme-editor-settings {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	min-width: 0;
+	min-height: 0;
+	border-right: var(--ash-strokeThickness) solid var(--ash-border);
+}
+
+.ash-theme-editor-settings > .ash-theme-editor-colors,
+.ash-theme-editor-settings > .ash-theme-editor-json {
+	flex: 1;
+	height: auto;
+	min-height: 0;
+}
+
+.ash-theme-editor-settings-tabs {
+	height: var(--ash-tab-height);
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
+	flex-shrink: 0;
+}
+
+.ash-theme-editor-settings > [hidden] {
+	display: none;
+}
+
+.ash-theme-editor-preview-host {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	width: 100%;
+	height: 100%;
+	min-width: 0;
+	min-height: 0;
+	padding: 28px;
+	background-color: var(--ash-sideBar-background);
+	background-image: radial-gradient(var(--ash-border) var(--ash-strokeThickness), transparent var(--ash-strokeThickness));
+	background-size: 12px 12px;
+}
+
+.ash-theme-editor-preview-tabs {
+	flex-shrink: 0;
+	background: var(--ash-editor-background);
+}
+
+.ash-theme-editor-preview-viewport {
+	flex: 1;
+	position: relative;
+	width: 100%;
+	height: 100%;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-large);
+	box-shadow: var(--ash-shadow-lg);
+}
+
+[data-color-scheme="hcDark"] .ash-theme-editor-preview-viewport,
+[data-color-scheme="hcLight"] .ash-theme-editor-preview-viewport {
+	border-color: var(--ash-contrastBorder);
+	box-shadow: none;
+}
+
+.ash-theme-editor-preview {
+	position: absolute;
+	display: block;
+	border: 0;
+	transform-origin: top left;
+}
+
+.ash-theme-editor-search {
+	padding: 8px 12px;
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
 }
 
 .ash-theme-editor-name-actions {
@@ -82,16 +147,77 @@
 .ash-theme-editor-list {
 	display: flex;
 	flex-direction: column;
-	gap: 4px;
+}
+
+.ash-theme-color-group {
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
+}
+
+.ash-theme-color-group-heading {
+	display: flex;
+	align-items: center;
+	width: 100%;
+	min-width: 0;
+	height: 36px;
+	gap: 8px;
+	padding: 0 12px;
+	border: 0;
+	color: var(--ash-foreground);
+	background: transparent;
+	font: inherit;
+	font-size: var(--ash-fontSize-label1);
+	text-align: left;
+	cursor: pointer;
+}
+
+.ash-theme-color-group-heading:hover {
+	background: var(--ash-list-hoverBackground);
+}
+
+.ash-theme-color-group-label {
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.ash-theme-color-group-count {
+	flex-shrink: 0;
+	padding: 0 4px;
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	border-radius: var(--ash-cornerRadius-xSmall);
+	font-size: var(--ash-fontSize-label3);
+	color: var(--ash-description-foreground);
+}
+
+.ash-theme-color-group-chevron {
+	display: flex;
+	margin-left: auto;
+	color: var(--ash-description-foreground);
+}
+
+.ash-theme-color-group-heading.collapsed .ash-theme-color-group-chevron {
+	transform: rotate(-90deg);
+}
+
+.ash-theme-color-group-body {
+	padding-bottom: 4px;
 }
 
 .ash-theme-color {
-	padding: 8px;
-	border-radius: var(--ash-cornerRadius-small);
-	border: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
+	position: relative;
+	display: grid;
+	grid-template-columns: 28px minmax(0, 1fr) 80px;
+	grid-template-rows: 18px 14px;
+	align-items: center;
+	column-gap: 12px;
+	padding: 6px 12px;
 }
 
-.ash-theme-color[hidden] {
+.ash-theme-color[hidden],
+.ash-theme-color-group[hidden],
+.ash-theme-color-group-body[hidden],
+.ash-theme-editor-empty[hidden] {
 	display: none;
 }
 
@@ -103,48 +229,142 @@
 	background: var(--ash-list-inactiveSelectionBackground);
 }
 
-.ash-theme-color .ash-theme-color-name {
-	display: block;
-	width: 100%;
+.ash-theme-color-name {
+	grid-column: 2;
+	grid-row: 1;
 	min-width: 0;
+	padding: 0;
+	border: 0;
+	color: var(--ash-foreground);
+	background: transparent;
+	font: inherit;
+	font-size: var(--ash-fontSize-label1);
 	text-align: left;
 	overflow: hidden;
 	white-space: nowrap;
 	text-overflow: ellipsis;
-}
-
-.ash-theme-color-fields {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	margin-top: 4px;
+	cursor: pointer;
 }
 
 .ash-theme-color-hex {
-	flex: 1;
+	grid-column: 3;
+	grid-row: 1;
+	box-sizing: border-box;
+	width: 100%;
 	min-width: 0;
+	height: 24px;
+	padding: 0 4px;
+	border: var(--ash-strokeThickness) solid transparent;
+	border-radius: var(--ash-cornerRadius-small);
+	color: var(--ash-description-foreground);
+	background: transparent;
+	font: inherit;
+	font-size: var(--ash-fontSize-body2);
+	text-align: right;
 }
 
-.ash-theme-color-fields > .ash-theme-color-picker {
+.ash-theme-color-hex:hover,
+.ash-theme-color-hex:focus {
+	border-color: var(--ash-input-border);
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
+}
+
+.ash-theme-color-hex[aria-invalid="true"] {
+	border-color: var(--ash-error-foreground);
+}
+
+.ash-theme-color > .ash-theme-color-picker {
 	position: relative;
+	grid-column: 1;
+	grid-row: 1 / 3;
 	width: 28px;
 	height: 28px;
 	min-width: 0;
 	padding: 0;
-	flex-shrink: 0;
-	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border: var(--ash-strokeThickness) solid var(--ash-border);
 	border-radius: var(--ash-cornerRadius-small);
-	background: var(--ash-input-background);
+	background-color: var(--ash-editor-background);
+	background-image: conic-gradient(var(--ash-border) 25%, transparent 0 50%, var(--ash-border) 0 75%, transparent 0);
+	background-size: 8px 8px;
 	cursor: pointer;
 }
 
 .ash-theme-color-swatch {
 	position: absolute;
-	width: 20px;
-	height: 20px;
-	border: var(--ash-strokeThickness) solid var(--ash-border);
+	inset: 2px;
 	border-radius: var(--ash-cornerRadius-xSmall);
 	pointer-events: none;
+}
+
+.ash-theme-color > .ash-theme-color-reset {
+	position: absolute;
+	right: 12px;
+	bottom: 4px;
+	width: 24px;
+	height: 24px;
+	min-width: 0;
+	padding: 0;
+	opacity: 0;
+	color: var(--ash-description-foreground);
+}
+
+.ash-theme-color:not(.modified) > .ash-theme-color-reset {
+	visibility: hidden;
+}
+
+.ash-theme-color.modified:hover > .ash-theme-color-reset,
+.ash-theme-color.modified:focus-within > .ash-theme-color-reset {
+	opacity: 1;
+}
+
+.ash-theme-color-source {
+	grid-column: 2;
+	grid-row: 2;
+	min-width: 0;
+	margin: 0;
+	font-size: var(--ash-fontSize-body2);
+	color: var(--ash-description-foreground);
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.ash-theme-color.linked > .ash-theme-color-source {
+	grid-column: 2 / 4;
+}
+
+.ash-theme-color-link-icon {
+	display: inline-flex;
+	margin-right: 4px;
+	vertical-align: -2px;
+}
+
+.ash-theme-color-link-icon .ash-icon-label-inline-icon,
+.ash-theme-color-link-icon svg {
+	width: 12px;
+	height: 12px;
+}
+
+.ash-theme-color-link {
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+
+.ash-theme-color-link:hover {
+	color: var(--ash-textLink-activeForeground);
+}
+
+.ash-theme-editor-empty {
+	margin: 0;
+	padding: 16px 12px;
+	color: var(--ash-description-foreground);
 }
 
 .ash-color-picker.ash-theme-editor-color-popup {
@@ -161,19 +381,10 @@
 	border-color: var(--ash-contrastBorder);
 }
 
-.ash-theme-color-alpha {
-	width: 100%;
-	accent-color: var(--ash-focusBorder);
-}
-
-.ash-theme-color-source {
-	margin: 0;
-	font-size: var(--ash-fontSize-body2);
-	color: var(--ash-description-foreground);
-}
-
 .ash-theme-editor input:focus-visible,
-.ash-theme-editor select:focus-visible {
+.ash-theme-color-name:focus-visible,
+.ash-theme-color-link:focus-visible,
+.ash-theme-color-group-heading:focus-visible {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }

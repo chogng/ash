@@ -782,6 +782,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "link",
+      "file": "link.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "link-external",
       "file": "link-external.svg",
       "rendering": "symbolic"

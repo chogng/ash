@@ -159,6 +159,7 @@ const iconLibraryFilled = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=
 const iconLightingFilled = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path fill=\"#000\" stroke=\"#000\" stroke-linejoin=\"round\" d=\"M2.5 8.5 11 1 9 6l4.5 1.5L5 15l2-5z\"/></svg>";
 const iconLightning = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"#000\" stroke-linejoin=\"round\" d=\"M2.5 8.5 11 1 9 6l4.5 1.5L5 15l2-5z\"/></svg>";
 const iconLightningFilled = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path fill=\"#000\" stroke=\"#000\" stroke-linejoin=\"round\" d=\"M2.5 8.5 11 1 9 6l4.5 1.5L5 15l2-5z\"/></svg>";
+const iconLink = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"#000\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"m6 10 4-4M5.5 7.5l-2 2A2.5 2.5 0 0 0 7 13l2-2M7 5l2-2a2.5 2.5 0 0 1 3.5 3.5l-2 2\"/></svg>";
 const iconLinkExternal = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"#000\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M5.805 5.305h4.64v4.75m0-4.75-5.14 5.25\"/><rect width=\"11\" height=\"11\" x=\"2.5\" y=\"2.5\" stroke=\"#000\" rx=\"1.5\"/></svg>";
 const iconListFilter = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"#000\" stroke-linecap=\"round\" d=\"M2.5 3.5h11m-9 4h7m-5 4h3\"/></svg>";
 const iconListUnordered = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path fill=\"#000\" d=\"M3.5 4.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2m0 4.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2m0 4.455a1 1 0 1 1 0-2 1 1 0 0 1 0 2\"/><path stroke=\"#000\" stroke-linecap=\"round\" d=\"M7 8h6m-6 4.5h6m-6-9h6\"/></svg>";
@@ -416,6 +417,7 @@ export function createProductIconLibrary<T>(register: (id: string, definition: P
     lightingFilled: register("lighting-filled", iconLightingFilled),
     lightning: register("lightning", iconLightning),
     lightningFilled: register("lightning-filled", iconLightningFilled),
+    link: register("link", iconLink),
     linkExternal: register("link-external", iconLinkExternal),
     listFilter: register("list-filter", iconListFilter),
     listUnordered: register("list-unordered", iconListUnordered),

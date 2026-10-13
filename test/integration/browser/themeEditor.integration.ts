@@ -1,3 +1,4 @@
+import '../../../src/ash/sessions/common/configuration.js';
 import '../../../src/ash/editor/editor.code.all.js';
 import '../../../src/ash/workbench/browser/media/style.css';
 import '../../../src/ash/workbench/contrib/codeEditor/browser/codeEditor.contribution.js';
@@ -42,15 +43,16 @@ import { EditorParts, IEditorPartsService } from '../../../src/ash/workbench/bro
 import { BrowserAuxiliaryWindowService } from '../../../src/ash/workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { CommandsRegistry } from '../../../src/ash/platform/commands/common/commands.js';
 import { ThemeEditor } from '../../../src/ash/workbench/contrib/themeEditor/browser/themeEditor.js';
-import { formatNlsMessage, setNlsResolver } from '../../../src/ash/nls.js';
+import { setNlsMessages } from '../../../src/ash/nls.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { ExtensionColorThemeService } from '../../../src/ash/workbench/services/extensions/browser/extensionColorThemeService.js';
 import { createBrowserExtensionApi } from '../../../src/ash/platform/extensions/browser/extensionApi.js';
+import { TokenizationRegistry } from '../../../src/ash/editor/common/languages.js';
 
 const locale = new URLSearchParams(location.search).get('locale');
 if (locale) {
 	const catalog = productLanguagePackCatalogs.find(item => item.locale === locale)!;
-	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? fallback, parameters));
+	setNlsMessages(locale, catalog.bundles);
 }
 const resources = new DisposableStore();
 const extensions = resources.add(new ExtensionColorThemeService(createBrowserExtensionApi(), { subscribe: () => toDisposable(() => { }) }));
@@ -60,7 +62,10 @@ const initial = '// keep this comment\n{\n  "name": "Aurora",\n  "type": "dark",
 
 /** Deterministic file boundary; the real theme and text-model services own parsing and writes. */
 class ThemeFiles implements IFileSystemProvider {
-	private readonly delegate = new MemoryFileService([[resource, initial]]);
+	private readonly delegate = new MemoryFileService([
+		[resource, initial],
+		[URI.file('/themes/includes/base.json'), '{ "colors": { "input.foreground": "#112233" } }'],
+	]);
 	private readonly paths = new Set([resource.toString()]);
 	public readonly capabilities = this.delegate.capabilities;
 	public readonly onDidChangeCapabilities = Event.None;
@@ -131,18 +136,23 @@ const parts = resources.add(services.createInstance(EditorParts, main, windows, 
 	return { titlebar, part: services.createInstance(EditorPart, container, editorOptions) };
 }, services.get(IAccessibilityService), services.get(IStorageService)));
 services.registerInstance(IEditorPartsService, parts);
-root.style.cssText = 'height:100vh; background:var(--ash-editor-background);color:var(--ash-foreground)';
+root.style.height = '100vh';
+root.style.background = 'var(--ash-editor-background)';
+root.style.color = 'var(--ash-foreground)';
 document.body.style.margin = '0';
 document.querySelector('#open')!.addEventListener('click', () => { void services.invokeFunction(accessor => CommandsRegistry.getCommand('workbench.action.openThemeEditor')!(accessor)); });
 declare global {
 	interface Window {
 		themeEditorTest: {
 			source(): string;
+			colorMap(): string[];
+			accessibleContent(): string;
 			persisted(file?: string): Promise<string>;
 			setSource(text: string): void;
 			undo(): void;
 			close(): Promise<boolean>;
 			selectTheme(id: string): Promise<void>;
+			setSetting(key: string, value: unknown): Promise<void>;
 			externalWrite(text: string): Promise<void>;
 		};
 	}
@@ -150,11 +160,14 @@ declare global {
 const pane = (): ThemeEditor => { const editor = parts.activePane; if (!(editor instanceof ThemeEditor)) throw new Error('No Theme Editor'); return editor; };
 window.themeEditorTest = {
 	source: () => pane().getControl()!.getValue(),
+	colorMap: () => TokenizationRegistry.getColorMap()?.map(color => color.toString()) ?? [],
+	accessibleContent: () => pane().getAccessibleContent(),
 	persisted: async (file = 'aurora.json') => (await files.readFile(URI.file('/themes/' + file))).content,
 	setSource: text => { const model = pane().getControl()!.getModel()!; model.pushStackElement(); pane().getControl()!.executeEdits('test.json', [{ range: model.getFullModelRange(), text }]); model.pushStackElement(); },
 	undo: () => { pane().getControl()!.getModel()!.undo(); },
 	close: () => parts.closeAuxiliaryEditorPart(parts.activePart),
 	selectTheme: id => themes.setColorTheme(id).then(() => { }),
+	setSetting: (key, value) => configuration.updateValue(key, value),
 	externalWrite: text => files.writeFile({ resource, content: text }).then(() => { }),
 };
 document.body.dataset.ready = 'true';

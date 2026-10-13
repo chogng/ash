@@ -40,7 +40,7 @@ registerAction2(class OpenThemeEditorAction extends Action2 {
 		const theme = accessor.get(IWorkbenchThemeService).getColorTheme();
 		const source = users.sourceFor(theme.id);
 		const input = createThemeEditorInput(source
-			? { resource: URI.file(users.directory! + '/' + source.file), label: source.file }
+			? { resource: URI.joinPath(users.directory!, source.file), label: source.file }
 			: { resource: URI.parse('untitled:/theme-' + crypto.randomUUID() + '.json'), label: localize('themeEditor.copyName', '{0} Copy', theme.label), initialText: serializeUserColorThemeDraft(theme, localize('themeEditor.copyName', '{0} Copy', theme.label)) });
 		const parts = accessor.get(IEditorPartsService);
 		const existing = parts.parts.find(part => part.editorsMru.some(({ input: editor }) => editor.editorId === ThemeEditorId && editor.resource.toString() === input.resource.toString()));

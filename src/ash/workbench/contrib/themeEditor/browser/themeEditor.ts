@@ -1,5 +1,4 @@
 import './media/themeEditor.css';
-import '../../../../base/browser/ui/splitview/splitview.css';
 import { addDisposableListener, getWindow, h, stopEvent } from '../../../../base/browser/dom.js';
 import type { IDimension } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -7,12 +6,16 @@ import { ColorPicker } from '../../../../base/browser/ui/colorPicker/colorPicker
 import { ContextViewFocusRestore } from '../../../../base/browser/ui/contextview/contextview.js';
 import { Dialog } from '../../../../base/browser/ui/dialog/dialog.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
+import { appendLabelIcon } from '../../../../base/browser/ui/iconlabel/iconLabels.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
+import { TabList } from '../../../../base/browser/ui/tablist/tabList.js';
+import { getThemeColorReferences, ThemePreview, type ThemeColorReferences } from './themePreview.js';
 import { SplitView } from '../../../../base/browser/ui/splitview/splitview.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { Color } from '../../../../base/common/color.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { findNodeAtLocation, parseTree } from '../../../../base/common/json.js';
 import { applyEdits, setProperty } from '../../../../base/common/jsonEdit.js';
@@ -20,6 +23,7 @@ import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '..
 import { URI } from '../../../../base/common/uri.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { localize } from '../../../../nls.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
@@ -54,13 +58,17 @@ export class ThemeEditor extends EditorPane {
 	private list: HTMLElement | undefined;
 	private message: HTMLElement | undefined;
 	private search: InputBox | undefined;
-	private category: HTMLSelectElement | undefined;
+	private empty: HTMLElement | undefined;
+	private readonly groups: ThemeColorGroup[] = [];
+	private filtering = false;
 	private scrollable: ScrollableElement | undefined;
 	private split: SplitView | undefined;
-	private previewButton: Button | undefined;
+	private preview: ThemePreview | undefined;
+	private settingsTabs: TabList<'colors' | 'json'> | undefined;
+	private colorPanel: HTMLElement | undefined;
+	private jsonPanel: HTMLElement | undefined;
 	private readonly rows = new Map<string, ThemeColorRow>();
 	private readonly inputLifetime = this._register(new DisposableStore());
-	private readonly preview = this._register(new MutableDisposable<ReturnType<IWorkbenchThemeService['previewColorTheme']>>());
 	private readonly nameDialog = this._register(new MutableDisposable<DisposableStore>());
 	private readonly pickerLifetime = this._register(new MutableDisposable<DisposableStore>());
 	private picker: ColorPicker | undefined;
@@ -71,7 +79,6 @@ export class ThemeEditor extends EditorPane {
 	private input: IResourceEditorInput | undefined;
 	private compiled: IColorTheme | undefined;
 	private valid = false;
-	private previewEnabled = true;
 	private operation = 0;
 	private saving = false;
 	private dimension: IDimension = { width: 0, height: 0 };
@@ -89,6 +96,7 @@ export class ThemeEditor extends EditorPane {
 		@IAccessibleViewService private readonly accessibleViews: IAccessibleViewService,
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
+		@IConfigurationService private readonly configuration: IConfigurationService,
 	) {
 		super(ThemeEditorId, themeService, storageService);
 		this._register(toDisposable(() => this.clearInput()));
@@ -146,32 +154,28 @@ export class ThemeEditor extends EditorPane {
 		const title = h(doc, 'h1');
 		title.textContent = localize('themeEditor.title', 'Theme Editor');
 		toolbar.append(title);
-		this.previewButton = this._register(new Button(toolbar, {
-			label: localize('themeEditor.preview', 'Live preview'), presentation: 'quiet', checked: true,
-			onClick: () => {
-				this.previewEnabled = !this.previewEnabled;
-				this.previewButton!.checked = this.previewEnabled;
-				this.applyPreview();
-			},
-		}));
-		this._register(new Button(toolbar, { label: localize('themeEditor.save', 'Save'), presentation: 'primary', onClick: () => this.runAction(() => this.save()) }));
+		this._register(new Button(toolbar, { label: localize('themeEditor.save', 'Save'), presentation: 'quiet', onClick: () => this.runAction(() => this.save()) }));
 		this._register(new Button(toolbar, { label: localize('themeEditor.saveAs', 'Save as…'), presentation: 'quiet', onClick: () => this.runAction(() => this.saveThemeAs()) }));
+		this._register(new Button(toolbar, { label: localize('themeEditor.saveApply', 'Save and Apply'), presentation: 'primary', onClick: () => this.runAction(() => this.saveAndApply()) }));
 		this.message = h(doc, 'p');
 		this.message.className = 'ash-theme-editor-message';
 		this.message.setAttribute('role', 'status');
-		this.message.textContent = localize('themeEditor.description', 'Adjust colors here and observe the main window. Changes stay unsaved until you save.');
+		this.message.textContent = localize('themeEditor.description', 'Changes appear only in the preview. Save writes the theme; Save and Apply also switches the main window.');
 		this.body = h(doc, 'div');
 		this.body.className = 'ash-theme-editor-body';
 		root.append(toolbar, this.message, this.body);
+		const settings = h(doc, 'section', { className: 'ash-theme-editor-settings' });
+		this.body.append(settings);
+		const tabsHost = h(doc, 'div', { className: 'ash-theme-editor-settings-tabs' });
+		settings.append(tabsHost);
+		this.settingsTabs = this._register(new TabList(tabsHost, { presentation: 'inset', ariaLabel: localize('themeEditor.settingsTabs', 'Theme editing controls'), onActivate: value => this.selectSettings(value) }));
 		const panel = h(doc, 'section');
+		this.colorPanel = panel;
 		panel.className = 'ash-theme-editor-colors';
-		this.search = this._register(new InputBox(panel, { type: 'search', placeholder: localize('themeEditor.search', 'Search colors'), ariaLabel: localize('themeEditor.search', 'Search colors') }));
+		const searchHost = h(doc, 'div', { className: 'ash-theme-editor-search' });
+		panel.append(searchHost);
+		this.search = this._register(new InputBox(searchHost, { presentation: 'compact', type: 'search', placeholder: localize('themeEditor.search', 'Search colors'), ariaLabel: localize('themeEditor.search', 'Search colors') }));
 		this._register(this.search.onDidChange(() => this.renderRows()));
-		this.category = h(doc, 'select');
-		this.category.className = 'ash-theme-editor-category';
-		this.category.setAttribute('aria-label', localize('themeEditor.category', 'Color category'));
-		panel.append(this.category);
-		this._register(addDisposableListener(this.category, 'change', () => this.renderRows()));
 		const scrollHost = h(doc, 'div');
 		scrollHost.className = 'ash-theme-editor-scroll';
 		panel.append(scrollHost);
@@ -180,13 +184,49 @@ export class ThemeEditor extends EditorPane {
 		this.list.className = 'ash-theme-editor-list';
 		this.scrollable.append(this.list);
 		scrollHost.append(this.scrollable.element);
+		const groups = [
+			{ id: 'surface', label: localize('themeEditor.group.surface', 'Surface'), pattern: /^(?:background$|workbench\.|widget\.|titleBar\.|commandCenter\.|window\.)/u },
+			{ id: 'text', label: localize('themeEditor.group.text', 'Text and borders'), pattern: /^(?:foreground$|description\.|muted\.|disabled|accent\.|error\.|warning\.|success\.|focusBorder$|contrast|border$|icon\.|selection\.|text)/u },
+			{ id: 'editor', label: localize('themeEditor.group.editor', 'Editor'), pattern: /^(?:editor(?!Group)|diffEditor|merge\.|peekView|problems\.|searchEditor)/u },
+			{ id: 'tabs', label: localize('themeEditor.group.tabs', 'Tabs'), pattern: /^(?:tab\.|tabList\.|editorGroup)/u },
+			{ id: 'sidebar', label: localize('themeEditor.group.sidebar', 'Sidebar and navigation'), pattern: /^(?:sideBar|activityBar|breadcrumb|navigation|files\.)/u },
+			{ id: 'panel', label: localize('themeEditor.group.panel', 'Panels'), pattern: /^(?:panel|auxiliaryBar|debugConsole|outputView)/u },
+			{ id: 'controls', label: localize('themeEditor.group.controls', 'Controls'), pattern: /^(?:input|button|checkbox|radio|dropdown|toolbar|keybinding|sash|badge)/u },
+			{ id: 'lists', label: localize('themeEditor.group.lists', 'Lists and menus'), pattern: /^(?:list\.|tree\.|menu\.|menubar\.|quickInput|quickPick)/u },
+			{ id: 'status', label: localize('themeEditor.group.status', 'Status and notifications'), pattern: /^(?:statusBar|notification|progressBar)/u },
+			{ id: 'terminal', label: localize('themeEditor.group.terminal', 'Terminal'), pattern: /^terminal/u },
+			{ id: 'scm', label: localize('themeEditor.group.scm', 'Version control'), pattern: /^(?:git|scm\.|diff\.)/u },
+			{ id: 'scrollbar', label: localize('themeEditor.group.scrollbar', 'Scrollbar and minimap'), pattern: /^(?:scrollbar|scrollView|scrollShadow|minimap)/u },
+			{ id: 'sessions', label: localize('themeEditor.group.sessions', 'Agent Window'), pattern: /^sessions\./u },
+			{ id: 'other', label: localize('themeEditor.group.other', 'Other'), pattern: /./u },
+		];
+		for (const group of groups) {
+			this.groups.push(this._register(new ThemeColorGroup(this.list, group.id, group.label, group.pattern, group.id === 'surface', () => {
+				this.pickerLifetime.clear();
+				this.scrollable?.layout();
+			})));
+		}
+		this.empty = h(doc, 'p', { className: 'ash-theme-editor-empty', attributes: { role: 'status' } }, localize('themeEditor.noColors', 'No matching colors'));
+		this.list.append(this.empty);
 		const json = h(doc, 'section');
+		this.jsonPanel = json;
 		json.className = 'ash-theme-editor-json';
 		json.setAttribute('aria-label', localize('themeEditor.json', 'Theme JSON'));
+		settings.append(panel, json);
 		this.textEditor.create(json);
+		this.selectSettings('colors');
+		const preview = h(doc, 'section', { className: 'ash-theme-editor-preview-host' });
+		this.body.append(preview);
+		this.preview = this._register(new ThemePreview(preview, help => {
+			if (root.ownerDocument.activeElement !== this.preview?.element) return;
+			// Entering an iframe can emit focusout with no related target in the parent document.
+			focused.set(true);
+			this.accessibleViews.show(help ? AccessibleViewType.Help : AccessibleViewType.View, root);
+		}, this.configuration));
+		this._register(this.preview.onDidChangeColors(() => this.renderRows()));
 		this.split = this._register(new SplitView(this.body, 'horizontal'));
-		this.split.addView({ element: panel, minimumSize: 260, maximumSize: 560, onDidChange: Event.None, layout: () => this.scrollable?.layout() }, 340);
-		this.split.addView({ element: json, minimumSize: 260, maximumSize: Infinity, onDidChange: Event.None, layout: (width, _offset, height) => this.textEditor.layout({ width, height }) }, { type: 'distribute' });
+		this.split.addView({ element: settings, minimumSize: 300, maximumSize: 440, onDidChange: Event.None, layout: (width, _offset, height) => { this.scrollable?.layout(); this.textEditor.layout({ width, height: Math.max(0, height - tabsHost.offsetHeight) }); } }, 360);
+		this.split.addView({ element: preview, minimumSize: 420, maximumSize: Infinity, onDidChange: Event.None, layout: () => { } }, { type: 'distribute' });
 	}
 
 	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
@@ -208,7 +248,6 @@ export class ThemeEditor extends EditorPane {
 		this.refresh.cancel();
 		this.inputLifetime.clear();
 		this.nameDialog.clear();
-		this.preview.clear();
 		this.compiled = undefined;
 		this.input = undefined;
 		this.valid = false;
@@ -225,7 +264,7 @@ export class ThemeEditor extends EditorPane {
 			this.split?.layout(dimension.width, Math.max(0, dimension.height - this.body.offsetTop + (this.root?.offsetTop ?? 0)));
 			if (this.initialSplitLayout && dimension.width > 520 && this.split) {
 				this.initialSplitLayout = false;
-				this.split.resizeView(0, 340);
+				this.split.resizeView(0, 360);
 			}
 		}
 	}
@@ -237,8 +276,9 @@ export class ThemeEditor extends EditorPane {
 	}
 	public revealRange(range: Range): void { this.textEditor.revealRange(range); }
 	public getAccessibleContent(): string {
+		if (this.root?.ownerDocument.activeElement === this.preview?.element) return this.preview?.getAccessibleContent() ?? '';
 		if (this.picker) return this.pickerRow!.accessibleText + '\n' + this.picker.getAccessibleContent();
-		return [this.message?.textContent ?? '', ...[...this.rows.values()].filter(row => !row.element.hidden).map(row => row.accessibleText)].join('\n');
+		return [this.message?.textContent ?? '', ...[...this.rows.values()].filter(row => !row.element.closest('[hidden]')).map(row => row.accessibleText)].join('\n');
 	}
 
 	public async save(options?: ISaveOptions): Promise<void> {
@@ -247,8 +287,14 @@ export class ThemeEditor extends EditorPane {
 		if (input.resource.scheme === 'untitled') return this.saveThemeAs();
 		await this.compile(this.textEditor.getValue());
 		if (this.input !== input) throw new CancellationError();
+		const id = this.themeIdForResource(input.resource);
+		if (id) this.themes.deferColorThemeApplication(id);
 		await this.textEditor.save(options);
 		await this.userThemes.reload();
+		if (this.input !== input) return;
+		// Finish a pending color edit before publishing the save result.
+		this.refresh.cancel();
+		await this.updatePreview();
 		this.showMessage(localize('themeEditor.saved', 'Theme saved.'));
 	}
 
@@ -256,11 +302,13 @@ export class ThemeEditor extends EditorPane {
 		const input = this.input;
 		await this.compile(this.textEditor.getValue());
 		if (this.input !== input) throw new CancellationError();
+		const id = this.themeIdForResource(resource);
+		if (id) this.themes.deferColorThemeApplication(id);
 		await this.textEditor.saveAs(resource);
 		await this.userThemes.reload();
 	}
 
-	private async saveThemeAs(): Promise<void> {
+	private async saveThemeAs(apply = false): Promise<void> {
 		const input = this.input;
 		const model = this.getControl()?.getModel();
 		if (!input || !model) return;
@@ -276,8 +324,16 @@ export class ThemeEditor extends EditorPane {
 			return;
 		}
 		const group = this.editorParts.groups.find(group => group.inputs.some(candidate => candidate === input));
-		if (group) await this.editorParts.replaceEditorResource(group, input, createThemeEditorInput({ resource: URI.file(this.userThemes.directory! + '/' + saved.file), label: saved.file }));
-		await this.themes.setColorTheme(saved.theme.id);
+		let savedEditor: ThemeEditor | undefined = this;
+		if (group) {
+			const replacement = createThemeEditorInput({ resource: URI.joinPath(this.userThemes.directory!, saved.file), label: saved.file });
+			await this.editorParts.replaceEditorResource(group, input, replacement);
+			// Saving an untitled copy can replace its pane. Feedback belongs to the saved editor.
+			const pane = group.activePane;
+			savedEditor = pane instanceof ThemeEditor && pane.input?.resource.toString() === replacement.resource.toString() ? pane : undefined;
+		}
+		if (apply) await this.themes.setColorTheme(saved.theme.id);
+		savedEditor?.showMessage(apply ? localize('themeEditor.applied', 'Theme saved and applied.') : localize('themeEditor.saved', 'Theme saved.'));
 	}
 
 	private async promptName(): Promise<string | undefined> {
@@ -303,12 +359,15 @@ export class ThemeEditor extends EditorPane {
 	}
 
 	private compile(source: string, input = this.input): Promise<IColorTheme> {
-		const resource = input?.resource;
-		const candidateId = resource?.scheme === 'file' ? userThemeId(resource.path.split('/').at(-1)!.replace(/\.json$/iu, '')) : undefined;
-		const existing = candidateId ? this.userThemes.sourceFor(candidateId) : undefined;
-		// A JSON file outside the profile must not borrow a same-named user theme's includes.
-		const id = existing && URI.file(this.userThemes.directory! + '/' + existing.file).toString() === resource?.toString() ? candidateId : undefined;
-		return this.userThemes.resolve(source, id);
+		return this.userThemes.resolve(source, this.themeIdForResource(input?.resource));
+	}
+
+	private themeIdForResource(resource: URI | undefined): string | undefined {
+		if (!resource || !this.userThemes.directory) return undefined;
+		const id = userThemeId(resource.path.split('/').at(-1)!.replace(/\.json$/iu, ''));
+		const existing = this.userThemes.sourceFor(id);
+		// An external JSON file must not borrow a profile theme's includes or applied-version state.
+		return existing && URI.joinPath(this.userThemes.directory, existing.file).toString() === resource.toString() ? id : undefined;
 	}
 
 	private async updatePreview(): Promise<void> {
@@ -322,7 +381,7 @@ export class ThemeEditor extends EditorPane {
 			this.valid = true;
 			this.applyPreview();
 			this.renderRows();
-			this.showMessage(localize('themeEditor.description', 'Adjust colors here and observe the main window. Changes stay unsaved until you save.'));
+			this.showMessage(localize('themeEditor.description', 'Changes appear only in the preview. Save writes the theme; Save and Apply also switches the main window.'));
 		} catch (error) {
 			if (operation !== this.operation || this.textEditor.getValue() !== source) return;
 			this.valid = false;
@@ -332,41 +391,68 @@ export class ThemeEditor extends EditorPane {
 	}
 
 	private applyPreview(): void {
-		if (!this.previewEnabled || !this.isVisible()) { this.preview.clear(); return; }
-		if (!this.compiled) return;
-		if (this.preview.value) this.preview.value.update(this.compiled);
-		else this.preview.value = this.themes.previewColorTheme(this.compiled);
+		if (this.compiled && this.valid) this.preview?.update(this.compiled, parseColorThemeDocument(parseJsonc(this.textEditor.getValue(), 'Color theme')).colors ?? {});
+	}
+
+	private selectSettings(value: 'colors' | 'json'): void {
+		if (!this.colorPanel || !this.jsonPanel) return;
+		this.colorPanel.hidden = value !== 'colors';
+		this.jsonPanel.hidden = value !== 'json';
+		this.settingsTabs?.setTabs([
+			{ id: 'colors', value: 'colors', label: localize('themeEditor.colorsTab', 'Colors'), tabId: 'theme-colors-tab' },
+			{ id: 'json', value: 'json', label: localize('themeEditor.json', 'Theme JSON'), tabId: 'theme-json-tab' },
+		], value);
+		this.layout(this.dimension);
+	}
+
+	private async saveAndApply(): Promise<void> {
+		const input = this.input;
+		if (!input) return;
+		const id = this.themeIdForResource(input.resource);
+		if (!id) {
+			return this.saveThemeAs(true);
+		}
+		const source = this.textEditor.getValue();
+		await this.save();
+		if (this.input !== input || this.textEditor.getValue() !== source) return;
+		await this.themes.setColorTheme(id);
+		this.showMessage(localize('themeEditor.applied', 'Theme saved and applied.'));
 	}
 
 	private renderRows(): void {
-		if (!this.list || !this.category) return;
+		if (!this.list) return;
 		let colors: Readonly<Record<string, string>> = {};
 		try { colors = parseColorThemeDocument(parseJsonc(this.textEditor.getValue(), 'Color theme')).colors ?? {}; } catch { }
-		const entries = Colors.getColors();
-		const categories = [...new Set(entries.map(entry => entry.id.split('.')[0]!))].sort();
-		const selected = this.category.value;
-		if (this.category.options.length !== categories.length + 1) {
-			this.category.replaceChildren();
-			const all = h(this.category.ownerDocument, 'option');
-			all.value = ''; all.textContent = localize('themeEditor.allColors', 'All colors'); this.category.append(all);
-			for (const category of categories) { const option = h(this.category.ownerDocument, 'option'); option.value = category; option.textContent = category; this.category.append(option); }
-			this.category.value = selected;
+		const previewColors = new Map(this.preview?.colors.map(entry => [entry.id, entry]));
+		const registeredColors = Colors.getColors();
+		const registeredIds = new Set(registeredColors.map(entry => entry.id));
+		const entries = [...registeredColors, ...[...previewColors.values()].filter(entry => !registeredIds.has(entry.id))];
+		const query = (this.search?.value ?? '').trim().toLowerCase();
+		// Searching temporarily opens the groups, then restores the user's layout on clear.
+		if (!!query !== this.filtering) {
+			this.filtering = !!query;
+			for (const group of this.groups) group.setFiltering(this.filtering);
 		}
-		const query = (this.search?.value ?? '').toLowerCase();
-		const current = this.preview.value ? this.themes.getColorTheme() : this.compiled;
+		const counts = new Map<ThemeColorGroup, number>();
+		const current = this.compiled;
 		for (const entry of entries) {
+			const group = this.groups.find(group => group.pattern.test(entry.id))!;
 			let row = this.rows.get(entry.id);
 			if (!row) {
 				row = new ThemeColorRow(this.list.ownerDocument, entry.id, entry.description, this.hoverService,
-					value => this.editColor(entry.id, value), () => this.revealColor(entry.id), row => this.showColorPicker(row));
+					value => this.editColor(entry.id, value), () => this.revealColor(entry.id), row => this.showColorPicker(row), id => this.revealDesignToken(id));
 				this.rows.set(entry.id, row);
-				this.list.append(row.element);
+				group.body.append(row.element);
 			}
-			row.element.hidden = (!!this.category.value && !entry.id.startsWith(this.category.value + '.')) || (!!query && !`${entry.id} ${entry.description}`.toLowerCase().includes(query));
-			row.update(colors[entry.id], current?.getColor(entry.id), this.valid && !this.input?.readOnly);
+			row.element.hidden = !!query && !`${entry.id} ${entry.description} ${group.label}`.toLowerCase().includes(query);
+			if (!row.element.hidden) counts.set(group, (counts.get(group) ?? 0) + 1);
+			const references = 'defaults' in entry ? current && getThemeColorReferences(current, entry) : entry.references;
+			row.update(colors[entry.id], previewColors.get(entry.id)?.value ?? current?.getColor(entry.id), this.valid && !this.input?.readOnly, references);
 		}
+		for (const group of this.groups) group.setCount(counts.get(group) ?? 0);
+		if (this.empty) this.empty.hidden = counts.size > 0;
 		if (this.picker && this.pickerRow) {
-			if (this.pickerRow.element.hidden || !this.pickerRow.picker.enabled) {
+			if (this.pickerRow.element.closest('[hidden]') || !this.pickerRow.picker.enabled) {
 				this.pickerLifetime.clear();
 			} else {
 				const color = this.pickerRow.color ?? Color.black;
@@ -381,6 +467,17 @@ export class ThemeEditor extends EditorPane {
 		this.scrollable?.layout();
 	}
 
+	private revealDesignToken(id: string): void {
+		const row = this.rows.get(id);
+		if (!row || !this.search) return;
+		this.search.value = '';
+		this.renderRows();
+		this.groups.find(group => group.pattern.test(id))?.setExpanded(true);
+		this.scrollable?.layout();
+		this.scrollable?.reveal(row.element);
+		row.focus();
+	}
+
 	private editColor(id: string, value: string | undefined): void {
 		if (!this.valid || this.input?.readOnly) return;
 		const control = this.getControl();
@@ -392,6 +489,8 @@ export class ThemeEditor extends EditorPane {
 		model.pushStackElement();
 		// The synchronous document edit is complete; a second color gesture can proceed.
 		this.valid = true;
+		// Picker gestures must read the edited color even while preview compilation is pending.
+		this.renderRows();
 		this.revealColor(id, false);
 	}
 
@@ -444,7 +543,7 @@ export class ThemeEditor extends EditorPane {
 		if (!node) return;
 		const range = Range.fromPositions(model.getPositionAt(node.offset), model.getPositionAt(node.offset + node.length));
 		control.setSelection(range); control.revealRange?.(range);
-		if (focus) control.focus();
+		if (focus) { this.selectSettings('json'); control.focus(); }
 	}
 
 	private syncSelection(): void {
@@ -470,79 +569,145 @@ export class ThemeEditor extends EditorPane {
 	}
 }
 
+/** Expansion is inspector state; edits continue to be owned by the theme document. */
+class ThemeColorGroup extends Disposable {
+	public readonly body: HTMLElement;
+	private readonly element: HTMLElement;
+	private readonly header: HTMLButtonElement;
+	private readonly count: HTMLElement;
+	private expandedBeforeSearch = false;
+
+	constructor(parent: HTMLElement, id: string, public readonly label: string, public readonly pattern: RegExp, expanded: boolean, changed: () => void) {
+		super();
+		const doc = parent.ownerDocument;
+		this.element = h(doc, 'section', { className: 'ash-theme-color-group' });
+		this.header = h(doc, 'button', { className: 'ash-theme-color-group-heading', attributes: { type: 'button', 'aria-label': label, 'aria-controls': `theme-color-group-${id}` } });
+		this.header.append(h(doc, 'span', { className: 'ash-theme-color-group-label' }, label));
+		this.header.title = label;
+		this.count = h(doc, 'span', { className: 'ash-theme-color-group-count', attributes: { 'aria-hidden': 'true' } });
+		this.header.append(this.count);
+		const chevron = h(doc, 'span', { className: 'ash-theme-color-group-chevron', attributes: { 'aria-hidden': 'true' } });
+		appendLabelIcon(chevron, Lxicon.chevronDown);
+		this.header.append(chevron);
+		this.body = h(doc, 'div', { className: 'ash-theme-color-group-body', attributes: { id: `theme-color-group-${id}` } });
+		this.element.append(this.header, this.body);
+		parent.append(this.element);
+		this.setExpanded(expanded);
+		this._register(addDisposableListener(this.header, 'click', () => { this.setExpanded(!!this.body.hidden); changed(); }));
+		this._register(toDisposable(() => this.element.remove()));
+	}
+
+	public setCount(count: number): void {
+		this.count.textContent = String(count);
+		this.element.hidden = count === 0;
+	}
+
+	public setFiltering(filtering: boolean): void {
+		if (filtering) this.expandedBeforeSearch = !this.body.hidden;
+		this.setExpanded(filtering || this.expandedBeforeSearch);
+	}
+
+	public setExpanded(expanded: boolean): void {
+		this.header.setAttribute('aria-expanded', String(expanded));
+		this.header.classList.toggle('collapsed', !expanded);
+		this.body.hidden = !expanded;
+	}
+}
+
 class ThemeColorRow extends Disposable {
 	public readonly element: HTMLElement;
-	private readonly hex: InputBox;
+	private readonly name: HTMLButtonElement;
+	private readonly hex: HTMLInputElement;
 	public readonly picker: Button;
 	private readonly swatch: HTMLElement;
-	private readonly alpha: HTMLInputElement;
 	private readonly reset: Button;
 	private readonly source: HTMLElement;
+	private readonly sourceLifetime = this._register(new DisposableStore());
+	private sourceKey: string | undefined;
 	private currentColor: Color | undefined;
 	private documentValue: string | undefined;
-	private updating = false;
 	public get accessibleText(): string { return `${this.id}: ${this.hex.value}. ${this.source.textContent ?? ''}`; }
 	public get color(): Color | undefined { return this.currentColor; }
 
-	constructor(doc: Document, public readonly id: string, description: string, hover: IHoverService, edit: (value: string | undefined) => void, reveal: () => void, pick: (row: ThemeColorRow) => void) {
+	constructor(doc: Document, public readonly id: string, description: string, hover: IHoverService, edit: (value: string | undefined) => void, reveal: () => void, pick: (row: ThemeColorRow) => void, private readonly navigate: (id: string) => void) {
 		super();
 		this.element = h(doc, 'div'); this.element.className = 'ash-theme-color';
-		const name = this._register(new Button(this.element, { label: id, presentation: 'quiet', onClick: reveal }));
-		name.domNode.classList.add('ash-theme-color-name');
-		this._register(hover.setupHover({ target: name.domNode, content: `${id}\n${description}` }));
-		const fields = h(doc, 'div'); fields.className = 'ash-theme-color-fields'; this.element.append(fields);
-		this.picker = this._register(new Button(fields, { label: '', iconOnly: true, ariaLabel: localize('themeEditor.pickColor', 'Choose color for {0}', id), onClick: () => pick(this) }));
+		this.picker = this._register(new Button(this.element, { label: '', iconOnly: true, ariaLabel: localize('themeEditor.pickColor', 'Choose color for {0}', id), onClick: () => pick(this) }));
 		this.picker.domNode.classList.add('ash-theme-color-picker');
 		this.picker.domNode.setAttribute('aria-haspopup', 'dialog');
 		this.picker.domNode.setAttribute('aria-expanded', 'false');
 		this.swatch = h(doc, 'span', { className: 'ash-theme-color-swatch', attributes: { 'aria-hidden': 'true' } });
 		this.picker.domNode.append(this.swatch);
-		this.hex = this._register(new InputBox(fields, { ariaLabel: localize('themeEditor.hexColor', 'Hex color for {0}', id) }));
-		this.hex.element.classList.add('ash-theme-color-hex');
-		this._register(this.hex.onDidChange(value => {
-			if (this.updating) return;
+		this.name = h(doc, 'button', { className: 'ash-theme-color-name', attributes: { type: 'button' } }, id);
+		this.element.append(this.name);
+		this._register(addDisposableListener(this.name, 'click', reveal));
+		this._register(hover.setupHover({ target: this.name, content: `${id}\n${description}` }));
+		this.hex = h(doc, 'input', { className: 'ash-theme-color-hex', attributes: { type: 'text', spellcheck: 'false', autocomplete: 'off', 'aria-label': localize('themeEditor.hexColor', 'Hex color for {0}', id) } });
+		this.element.append(this.hex);
+		this._register(addDisposableListener(this.hex, 'input', () => {
+			const value = this.hex.value;
 			const valid = /^#(?:[\da-f]{3}|[\da-f]{4}|[\da-f]{6}|[\da-f]{8})$/iu.test(value);
-			this.hex.inputElement.setAttribute('aria-invalid', String(!valid));
+			this.hex.setAttribute('aria-invalid', String(!valid));
 			if (valid) edit(value);
 		}));
-		this.reset = this._register(new Button(fields, { label: localize('themeEditor.reset', 'Reset'), presentation: 'quiet', ariaLabel: localize('themeEditor.resetColor', 'Remove the override for {0}', id), onClick: () => edit(undefined) }));
-		this.alpha = h(doc, 'input'); this.alpha.type = 'range'; this.alpha.min = '0'; this.alpha.max = '100';
-		this.alpha.className = 'ash-theme-color-alpha';
-		this.alpha.setAttribute('aria-label', localize('themeEditor.opacity', 'Opacity for {0}', id)); this.element.append(this.alpha);
-		const update = (): void => {
-			const rgb = Color.Format.CSS.formatHex(this.color ?? Color.black);
-			const alpha = Math.round(Number(this.alpha.value) * 255 / 100).toString(16).padStart(2, '0');
-			edit(Number(this.alpha.value) === 100 ? rgb : rgb + alpha);
-		};
-		this._register(addDisposableListener(this.alpha, 'input', update));
 		this.source = h(doc, 'p'); this.source.className = 'ash-theme-color-source'; this.element.append(this.source);
+		this.reset = this._register(new Button(this.element, { label: localize('themeEditor.reset', 'Reset'), icon: Lxicon.discard, iconOnly: true, size: 'small', presentation: 'quiet', ariaLabel: localize('themeEditor.resetColor', 'Remove the override for {0}', id), title: localize('themeEditor.resetColor', 'Remove the override for {0}', id), onClick: () => edit(undefined) }));
+		this.reset.domNode.classList.add('ash-theme-color-reset');
 		this._register(toDisposable(() => this.element.remove()));
 	}
 
-	public update(authored: string | undefined, effective: Color | undefined, enabled: boolean): void {
+	public focus(): void { (this.hex.disabled ? this.name : this.hex).focus({ preventScroll: true }); }
+
+	public update(authored: string | undefined, effective: Color | undefined, enabled: boolean, references: ThemeColorReferences | undefined): void {
 		this.currentColor = authored ? Color.fromHex(authored) : effective;
 		const value = authored ?? (effective ? Color.Format.CSS.formatHexA(effective, true) : '');
 		// Document changes (including Undo in JSON) win over the focused control.
 		// An incomplete hex input survives unrelated preview/catalog refreshes.
-		if (this.documentValue !== value || this.element.ownerDocument.activeElement !== this.hex.inputElement) {
-			this.updating = true;
-			try { this.hex.value = value; } finally { this.updating = false; }
-			this.hex.inputElement.removeAttribute('aria-invalid');
+		if (this.documentValue !== value || this.element.ownerDocument.activeElement !== this.hex) {
+			this.hex.value = value;
+			this.hex.removeAttribute('aria-invalid');
 		}
 		this.documentValue = value;
-		if (this.color) {
-			this.swatch.style.backgroundColor = Color.Format.CSS.formatHexA(this.color, true);
-			if (this.element.ownerDocument.activeElement !== this.alpha) this.alpha.value = String(Math.round(this.color.rgba.a * 100));
-		} else {
-			this.swatch.style.backgroundColor = Color.Format.CSS.formatHex(Color.black);
-			this.alpha.value = '100';
-		}
+		this.swatch.style.backgroundColor = this.color ? Color.Format.CSS.formatHexA(this.color, true) : 'transparent';
 		this.picker.enabled = enabled;
-		this.alpha.disabled = !enabled;
-		this.hex.enabled = enabled;
+		this.hex.disabled = !enabled;
 		this.reset.enabled = enabled && authored !== undefined;
-		this.source.textContent = authored === undefined ? localize('themeEditor.inherited', 'Inherited / default') : localize('themeEditor.explicit', 'Set in this file');
+		this.element.classList.toggle('modified', authored !== undefined);
+		const relation = authored === undefined ? references : undefined;
 		const final = effective ? Color.Format.CSS.formatHexA(effective, true) : undefined;
-		if (authored && final && !Color.fromHex(authored).equals(effective!)) this.source.textContent += ' · ' + localize('themeEditor.effective', 'Effective: {0}', final);
+		let label = authored === undefined ? localize('themeEditor.inherited', 'Inherited / default') : localize('themeEditor.explicit', 'Set in this file');
+		if (authored && final && !Color.fromHex(authored).equals(effective!)) label += ' · ' + localize('themeEditor.effective', 'Effective: {0}', final);
+		const key = JSON.stringify(relation ?? label);
+		// Keep focused links and their listeners stable across preview refreshes.
+		if (this.sourceKey === key) return;
+		this.sourceKey = key;
+		this.sourceLifetime.clear();
+		this.source.replaceChildren();
+		this.element.classList.toggle('linked', !!relation);
+		if (!relation) {
+			this.source.textContent = label;
+			this.source.title = label;
+			return;
+		}
+		const format = (tokens: string) => relation.kind === 'linked'
+			? localize('themeEditor.linkedTo', 'Linked to {0}', tokens)
+			: localize('themeEditor.derivedFrom', 'Derived from {0}', tokens);
+		this.source.title = format(relation.tokens.join(', '));
+		const icon = h(this.source.ownerDocument, 'span', { className: 'ash-theme-color-link-icon', attributes: { 'aria-hidden': 'true' } });
+		appendLabelIcon(icon, Lxicon.link);
+		this.source.append(icon);
+		// Insert controls at the translated placeholder; languages can put the label on either side.
+		const [before, after] = format('\uFFFC').split('\uFFFC');
+		this.source.append(before!);
+		for (const [index, token] of relation.tokens.entries()) {
+			if (index) this.source.append(', ');
+			const link = h(this.source.ownerDocument, 'button', {
+				className: 'ash-theme-color-link',
+				attributes: { type: 'button', 'aria-label': localize('themeEditor.goToToken', 'Go to design token {0}', token) },
+			}, token);
+			this.source.append(link);
+			this.sourceLifetime.add(addDisposableListener(link, 'click', () => this.navigate(token)));
+		}
+		if (after) this.source.append(after);
 	}
 }

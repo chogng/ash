@@ -1,10 +1,20 @@
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
 import { rendererOutput } from '../../../build/desktop/vite/rendererOutput.js';
+import { workbenchEntryPlugin } from '../../../build/desktop/vite/workbenchEntryPlugin.js';
 
 export default defineConfig({
 	define: { __ASH_WEB_APP_SERVER__: 'false' },
 	root: resolve(import.meta.dirname),
+	plugins: [workbenchEntryPlugin('/themeEditor.html', [{
+		url: '/browser/theme-preview/themePreview.html',
+		inputFile: resolve(import.meta.dirname, 'browser/theme-preview/themePreview.html'),
+		sourceFile: resolve(import.meta.dirname, '../../../src/ash/workbench/contrib/themeEditor/browser/themePreview.html'),
+	}, {
+		url: '/browser/theme-preview/sessionsThemePreview.html',
+		inputFile: resolve(import.meta.dirname, 'browser/theme-preview/sessionsThemePreview.html'),
+		sourceFile: resolve(import.meta.dirname, '../../../src/ash/sessions/contrib/themeEditor/browser/sessionsThemePreview.html'),
+	}])],
 	server: { host: "127.0.0.1", port: 5185, strictPort: true },
 	build: {
 		outDir: resolve(import.meta.dirname, "../../../.build/desktop/editor-browser"),
@@ -12,6 +22,8 @@ export default defineConfig({
 		rolldownOptions: {
 			output: rendererOutput,
 			input: {
+				themePreview: resolve(import.meta.dirname, 'browser/theme-preview/themePreview.html'),
+				sessionsThemePreview: resolve(import.meta.dirname, 'browser/theme-preview/sessionsThemePreview.html'),
 				changes: resolve(import.meta.dirname, 'changes.html'),
 				sessions: resolve(import.meta.dirname, 'sessions.html'),
 				scmHistory: resolve(import.meta.dirname, 'scmHistory.html'),

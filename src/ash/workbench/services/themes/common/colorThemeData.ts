@@ -179,13 +179,13 @@ export function parseSemanticTokenRules(colors: ColorThemeDocument['semanticToke
 	}));
 }
 
-/** Exports resolved colors, so user documents contain no aliases or transform expressions. */
+/** Keep registry defaults implicit so copies still follow their design tokens. Explicit overrides export as resolved hex colors. */
 export function serializeUserColorThemeDraft(theme: IColorTheme, label: string): string {
 	const document: ColorThemeDocument = {
 		$schema: colorThemeSchemaId,
 		name: label,
 		type: theme.colorScheme,
-		colors: Object.fromEntries(theme.colorEntries.flatMap(({ id, value }) => value ? [[id, Color.Format.CSS.formatHexA(value, true)]] : [])),
+		colors: Object.fromEntries(theme.colorEntries.flatMap(({ id, value }) => theme.defines(id) && value ? [[id, Color.Format.CSS.formatHexA(value, true)]] : [])),
 		tokenColors: theme.tokenColors?.map(rule => ({ scope: rule.scopes, settings: rule.settings })) ?? [],
 		...(theme.semanticHighlighting === undefined ? {} : { semanticHighlighting: theme.semanticHighlighting }),
 		...(theme.semanticTokenRules?.length ? { semanticTokenColors: Object.fromEntries(theme.semanticTokenRules.map(rule => [rule.selector, { foreground: rule.foreground, fontStyle: rule.fontStyle, bold: rule.bold, italic: rule.italic, underline: rule.underline, strikethrough: rule.strikethrough }])) } : {}),

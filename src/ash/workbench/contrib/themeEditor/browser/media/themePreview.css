@@ -1,0 +1,10 @@
+/* The preview has no desktop layout rules. Workbench, Parts and contributions
+   own their DOM and styles exactly as they do in the product window. */
+html,
+body,
+#app {
+	width: 100%;
+	height: 100%;
+	margin: 0;
+	overflow: hidden;
+}

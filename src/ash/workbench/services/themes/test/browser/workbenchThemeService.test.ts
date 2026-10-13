@@ -253,6 +253,21 @@ test('theme exports contain standard fields and resolved colors', () => {
 	assert.ok(jsonRegistry.getSchemaContributions().schemas[colorThemeSchemaId]?.properties?.colors?.properties?.['editor.background']);
 });
 
+test('theme copies retain default design token relationships and explicit overrides', () => {
+	const original = parseUserColorTheme(JSON.stringify({
+		name: 'Linked colors', type: 'dark',
+		colors: { foreground: '#123456', 'button.foreground': '#abcdef' },
+	}));
+	const document = JSON.parse(serializeUserColorThemeDraft(original, 'Linked copy'));
+	assert.deepEqual(document.colors, { foreground: '#123456', 'button.foreground': '#abcdef' });
+	document.colors.foreground = '#654321';
+	const copy = parseUserColorTheme(JSON.stringify(document));
+	assert.equal(copy.getColorCss('input.foreground'), '#654321');
+	assert.equal(copy.getColorCss('button.foreground'), '#abcdef');
+	delete document.colors['button.foreground'];
+	assert.equal(parseUserColorTheme(JSON.stringify(document)).getColorCss('button.foreground'), '#654321');
+});
+
 test('high contrast theme types round trip through user documents and color defaults', () => {
 	for (const [type, background] of [['hcDark', '#000000'], ['hcLight', '#ffffff']] as const) {
 		const theme = parseUserColorTheme(JSON.stringify({ name: 'Contrast Test', type, colors: { 'editor.foreground': '#123456' } }));

@@ -8,6 +8,7 @@
   "include": [
     "../../../src/typings/css.d.ts",
     "../../../src/typings/editContext.d.ts",
+    "../../../src/ash/sessions/contrib/themeEditor/browser/themePreviewPage.ts",
     "./**/*.ts"
   ]
 }

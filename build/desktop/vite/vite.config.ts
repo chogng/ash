@@ -64,6 +64,8 @@ export default defineConfig(({ mode, command }) => {
 	const browserInputs = {
 		[browserEntry]: resolve(sourceRoot, `${browserEntry}.html`),
 		[sessionsWebEntry]: resolve(sourceRoot, `${sessionsWebEntry}.html`),
+		'browser/theme-preview/themePreview': resolve(sourceRoot, 'browser/theme-preview/themePreview.html'),
+		'browser/theme-preview/sessionsThemePreview': resolve(sourceRoot, 'browser/theme-preview/sessionsThemePreview.html'),
 	};
 	const sessionsInputs = {
 		'sessions/electron-browser/sessions': resolve(sourceRoot, 'sessions/electron-browser/sessions.html'),
@@ -94,6 +96,14 @@ export default defineConfig(({ mode, command }) => {
 				url: `/${sessionsWebEntry}.html`,
 				inputFile: browserInputs[sessionsWebEntry],
 				html: sessionsWebHtml,
+			}, {
+				url: '/browser/theme-preview/themePreview.html',
+				inputFile: browserInputs['browser/theme-preview/themePreview'],
+				sourceFile: resolve(repositoryRoot, 'src/ash/workbench/contrib/themeEditor/browser/themePreview.html'),
+			}, {
+				url: '/browser/theme-preview/sessionsThemePreview.html',
+				inputFile: browserInputs['browser/theme-preview/sessionsThemePreview'],
+				sourceFile: resolve(repositoryRoot, 'src/ash/sessions/contrib/themeEditor/browser/sessionsThemePreview.html'),
 			}, ...(webOnly ? [] : [{
 				url: '/sessions/electron-browser/sessions.html',
 				sourceFile: resolve(sourceRoot, '../sessions/electron-browser/sessions.html'),
@@ -110,7 +120,8 @@ export default defineConfig(({ mode, command }) => {
 				transformIndexHtml: {
 					order: "post",
 					handler(html, context) {
-						if (!context.filename.replaceAll("\\", "/").includes("/electron-browser/")) return;
+						const file = context.filename.replaceAll("\\", "/");
+						if (!file.includes("/electron-browser/") && !file.includes('/browser/theme-preview/')) return;
 						// File-URL module preloads can prevent Linux Electron from loading its stylesheets.
 						return html.replace(/<link rel="modulepreload"[^>]*>\s*/g, "");
 					},
@@ -135,6 +146,8 @@ export default defineConfig(({ mode, command }) => {
 					.map(([entry, path]) => {
 						// HTML warmup reads disk directly, bypassing the virtual product-page loader.
 						if (entry === sessionsWebEntry) return resolve(repositoryRoot, 'src/ash/sessions/sessions.web.main.internal.ts');
+						if (entry === 'browser/theme-preview/sessionsThemePreview') return resolve(repositoryRoot, 'src/ash/sessions/contrib/themeEditor/browser/themePreviewPage.ts');
+						if (entry === 'browser/theme-preview/themePreview') return resolve(repositoryRoot, 'src/ash/workbench/contrib/themeEditor/browser/themePreviewPage.ts');
 						if (entry === 'sessions/electron-browser/sessions') return resolve(repositoryRoot, 'src/ash/sessions/electron-browser/sessions.ts');
 						return path;
 					}),

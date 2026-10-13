@@ -1,6 +1,7 @@
 import type { IColorTheme } from "../../platform/theme/common/themeService.js";
 import { createServiceIdentifier } from "../../platform/instantiation/common/instantiation.js";
 import type { ColorScheme } from "../../platform/theme/common/theme.js";
+import type { URI } from "../../base/common/uri.js";
 
 export interface IUserThemeLoadIssue {
 	readonly file: string;
@@ -25,7 +26,8 @@ export interface IUserThemeDeleteResult {
 /** Window capability for reading, creating, replacing, and reloading user themes. */
 export interface IUserThemeService {
 	readonly available: boolean;
-	readonly directory: string | undefined;
+	/** The profile resource URI, retaining the provider that owns theme files. */
+	readonly directory: URI | undefined;
 	readonly issues: readonly IUserThemeLoadIssue[];
 
 	sourceFor(themeId: string): IUserThemeSource | undefined;

@@ -30,6 +30,8 @@ export interface IColorCustomizations { [colorOrThemeScope: string]: string | Re
 /** Theme selection updates the currently active system preference when automatic appearance is enabled. */
 export interface IWorkbenchThemeService extends IThemeService {
 	setColorTheme(themeId: string): Promise<IColorTheme>;
+	/** Keeps the applied version of a theme across source saves until explicit selection. */
+	deferColorThemeApplication(themeId: string): void;
 	/** A window-shared, temporary theme; disposing restores the configured selection. */
 	previewColorTheme(theme: IColorTheme): IDisposable & { update(theme: IColorTheme): void; };
 }

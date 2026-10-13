@@ -13,6 +13,12 @@
 	height: 100%;
 }
 
+
+/* The viewport also paints the space below the last complete character row. */
+.ash-terminal-instance .xterm .xterm-viewport {
+	background-color: var(--ash-terminal-background);
+}
+
 .ash-terminal-command-status {
 	display: flex !important;
 	box-sizing: border-box;

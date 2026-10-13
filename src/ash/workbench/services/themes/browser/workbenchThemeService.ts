@@ -33,6 +33,7 @@ import { registerColorThemeSchemas } from '../common/colorThemeSchema.js';
 export class WorkbenchThemeService extends Disposable implements IWorkbenchThemeService, IResourceIconRenderer {
 	private readonly colorThemeChange = this._register(new Emitter<IColorTheme>());
 	private colorTheme: IColorTheme;
+	private deferredColorTheme: IColorTheme | undefined;
 	private readonly previews = new Map<object, IColorTheme>();
 	private initialized = false;
 	public readonly onDidColorThemeChange = this.colorThemeChange.event;
@@ -70,6 +71,9 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 		this._register(toDisposable(() => iconStyles.remove()));
 		this._register(registerColorThemeSchemas());
 		this._register(this.configurationService.onDidChangeConfiguration(event => {
+			if ([ThemeConfigurationSettings.colorTheme, ThemeConfigurationSettings.preferredDarkColorTheme, ThemeConfigurationSettings.preferredLightColorTheme, ThemeConfigurationSettings.preferredHighContrastColorTheme, ThemeConfigurationSettings.preferredHighContrastLightColorTheme].some(key => event.affectsConfiguration(key))) {
+				this.deferredColorTheme = undefined;
+			}
 			if (Object.values(ThemeConfigurationSettings).some(key => event.affectsConfiguration(key))) {
 				this.updateColorTheme();
 			}
@@ -83,7 +87,10 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 		this._register(WorkbenchProductIconThemesRegistry.onDidChange(() => this.updateProductIconTheme()));
 		setIconResolver(this.container.ownerDocument, icon => getIconDefinition(icon, defaultProductIconTheme.icons));
 		this._register(toDisposable(() => setIconResolver(this.container.ownerDocument, icon => getIconDefinition(icon, defaultProductIconTheme.icons))));
-		this._register(WorkbenchThemesRegistry.onDidChange(() => this.updateColorTheme()));
+		this._register(WorkbenchThemesRegistry.onDidChange(() => {
+			if (this.deferredColorTheme && !WorkbenchThemesRegistry.getColorTheme(this.deferredColorTheme.id)) this.deferredColorTheme = undefined;
+			this.updateColorTheme();
+		}));
 		this._register(Colors.onDidChange(() => {
 			const previous = this.colorTheme;
 			this.updateColorTheme();
@@ -105,6 +112,7 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 	public getFileIconTheme(): IFileIconTheme { return this.fileIconTheme ?? noFileIconTheme; }
 
 	public async setColorTheme(themeId: string): Promise<IColorTheme> {
+		this.deferredColorTheme = undefined;
 		const settings = ThemeConfigurationSettings;
 		let key = settings.colorTheme;
 		if (themeId !== SystemColorThemePreference) {
@@ -114,8 +122,17 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 				key = this.hostColorScheme.dark ? settings.preferredDarkColorTheme : settings.preferredLightColorTheme;
 			}
 		}
+		const previous = this.colorTheme;
 		await this.configurationService.updateValue(key, themeId);
+		// Selecting the same ID also applies a newly saved version.
+		if (this.colorTheme === previous) this.updateColorTheme();
 		return this.colorTheme;
+	}
+
+	public deferColorThemeApplication(themeId: string): void {
+		if (this.colorTheme.id === themeId && !this.deferredColorTheme) {
+			this.deferredColorTheme = WorkbenchThemesRegistry.getColorTheme(themeId);
+		}
 	}
 
 	public previewColorTheme(theme: IColorTheme): IDisposable & { update(theme: IColorTheme): void; } {
@@ -148,7 +165,10 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 			preference = this.configurationService.getValue(this.hostColorScheme.dark ? settings.preferredDarkColorTheme : settings.preferredLightColorTheme);
 		}
 		const registeredTheme = WorkbenchThemesRegistry.getColorTheme(preference);
-		const theme = registeredTheme ?? resolveWorkbenchColorTheme(SystemColorThemePreference, this.hostColorScheme.dark);
+		// The registry owns the available version; this service owns the version actually applied.
+		const theme = registeredTheme && this.deferredColorTheme?.id === registeredTheme.id
+			? this.deferredColorTheme
+			: registeredTheme ?? resolveWorkbenchColorTheme(SystemColorThemePreference, this.hostColorScheme.dark);
 		return applyThemeCustomizations(theme, this.configurationService);
 	}
 
@@ -225,7 +245,7 @@ class UserThemeResources extends Disposable implements IUserThemeService {
 		}));
 	}
 
-	public get directory(): string { return this.resource.fsPath; }
+	public get directory(): URI { return this.resource; }
 	public get issues(): readonly IUserThemeLoadIssue[] { return this.loadIssues; }
 	public sourceFor(id: string): IUserThemeSource | undefined { return this.sources.get(id); }
 	public getSource(id: string): string | undefined { return this.sources.get(id)?.fileContent.content; }

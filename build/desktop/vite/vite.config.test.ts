@@ -20,8 +20,13 @@ test('Web development and builds use only browser entries and preserve Desktop o
 	const desktop = (await loadConfigFromFile({ command: 'build', mode: 'production' }, path))!.config;
 	const inputs = web.build!.rolldownOptions!.input as Record<string, string>;
 	const desktopInputs = desktop.build!.rolldownOptions!.input as Record<string, string>;
-	assert.deepEqual(Object.keys(inputs), ['browser/workbench/workbench', 'browser/sessions/sessions']);
-	assert.deepEqual(web.server!.warmup!.clientFiles, [inputs['browser/workbench/workbench'], resolve(import.meta.dirname, '../../../src/ash/sessions/sessions.web.main.internal.ts')]);
+	assert.deepEqual(Object.keys(inputs), ['browser/workbench/workbench', 'browser/sessions/sessions', 'browser/theme-preview/themePreview', 'browser/theme-preview/sessionsThemePreview']);
+	assert.deepEqual(web.server!.warmup!.clientFiles, [
+		inputs['browser/workbench/workbench'],
+		resolve(import.meta.dirname, '../../../src/ash/sessions/sessions.web.main.internal.ts'),
+		resolve(import.meta.dirname, '../../../src/ash/workbench/contrib/themeEditor/browser/themePreviewPage.ts'),
+		resolve(import.meta.dirname, '../../../src/ash/sessions/contrib/themeEditor/browser/themePreviewPage.ts'),
+	]);
 	assert.match(web.build!.outDir!, /[\\/]web[\\/]ash$/);
 	assert.match(desktop.build!.outDir!, /[\\/]renderer[\\/]ash$/);
 	assert.ok(Object.keys(desktopInputs).some(entry => entry.startsWith('electron-browser/')));
