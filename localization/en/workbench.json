@@ -606,7 +606,9 @@
     "themeEditor.previewExplorer": "Explorer",
     "themeEditor.previewOnly": "Preview only",
     "themeEditor.previewToggleSidebar": "Toggle sample sidebar",
-    "themeEditor.previewTogglePanel": "Toggle sample panel"
+    "themeEditor.previewTogglePanel": "Toggle sample panel",
+    "chatEditing.savePending": "Rejected changes have not been saved. Retry saving to finish this review.",
+    "chatEditing.retrySave": "Retry saving reviewed changes"
   },
   "ash.views": {
     "explorer": "Explorer",

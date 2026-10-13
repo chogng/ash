@@ -55,7 +55,7 @@ registerAction2(class RestoreCheckpointAction extends Action2 {
 			store.add(picker.onDidHide(() => { resolve(undefined); store.dispose(); }));
 			picker.show();
 		});
-		if (!selected) { return; }
+		if (!selected || !viewingSource()) { return; }
 		const restored = await chat.restoreCheckpoint({
 			...source, itemId: selected.checkpoint.itemId, boundary: selected.boundary,
 			title: localize('chat.restoreCheckpoint.title', 'Restored checkpoint: {0}', selected.checkpoint.itemId),

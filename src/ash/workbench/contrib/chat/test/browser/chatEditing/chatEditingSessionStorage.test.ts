@@ -40,6 +40,7 @@ test('review storage rejects malformed snapshots and duplicate resource owners w
 		services.registerInstance(IStorageService, storage);
 		for (const invalid of [
 			'{', JSON.stringify({ ...state, version: 2 }),
+			JSON.stringify({ ...state, entries: [{ ...state.entries[0], pendingSaveSource: 1 }] }),
 			JSON.stringify({ ...state, entries: [state.entries[0], state.entries[0]] }),
 			JSON.stringify({ version: 1, entries: [{ ...state.entries[0], sources: [] }] }),
 			JSON.stringify({ version: 1, entries: [{ ...state.entries[0], sources: [{ threadId: 'chat', turnId: 'turn', outcome: 'unexpected' }] }] }),
@@ -64,5 +65,20 @@ test('a stale review storage writer cannot replace a newer saved snapshot', asyn
 		await first.storeState(state);
 		await assert.rejects(stale.storeState({ version: 1, entries: [] }), /Another window changed/);
 		assert.deepEqual(services.createInstance(ChatEditingSessionStorage).restoreState(), state);
+	} finally { dom.window.close(); }
+});
+
+
+test('review storage retains a pending rejection source for a later model-backed retry', async () => {
+	const dom = new JSDOM('', { url: 'https://ash.test' });
+	try {
+		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'review-retry', flushInterval: 0 });
+		using services = new InstantiationService();
+		services.registerInstance(IStorageService, storage);
+		const persistence = services.createInstance(ChatEditingSessionStorage);
+		persistence.restoreState();
+		const pending: StoredSessionState = { ...state, entries: [{ ...state.entries[0]!, kind: 'text', resource: 'file:///workspace/file.txt', original: 'original', current: 'original', pendingSaveSource: 'agent' }] };
+		await persistence.storeState(pending);
+		assert.deepEqual(services.createInstance(ChatEditingSessionStorage).restoreState(), pending);
 	} finally { dom.window.close(); }
 });

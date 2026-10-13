@@ -18,6 +18,8 @@ export interface ISessionsManagementService {
 	readonly state: SessionsManagementState;
 	readonly error: string | undefined;
 	initialize(): Promise<void>;
+	/** Hydrates current catalog directories without changing foreground selection. */
+	whenDirectoriesReady(signal?: AbortSignal): Promise<void>;
 	listAgents(): Promise<readonly ChatAgent[]>;
 	openThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;
 	selectThread(sessionId: SessionId, threadId: ThreadId): void;

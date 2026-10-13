@@ -1036,3 +1036,51 @@ test('closing the review service disposes its scheduled countdown', async () => 
 		assert.equal(host.editing.entries.length, 0);
 	} finally { mock.timers.reset(); }
 });
+
+
+test('a failed Agent rejection restores the same unsaved decision after restarting the document host', async () => {
+	const host = await fixture();
+	const resource = URI.file('c:/workspace/restart-failed-review.txt');
+	host.files.contents.set(resource.toString(), 'original');
+	const id = await snapshot(host.transport, resource);
+	await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: id, text: 'agent' }] });
+	const entry = host.editing.entries[0]!;
+	host.files.writeFile = async () => { throw new Error('Injected review save failure'); };
+	await assert.rejects(host.editing.rejectEntry(entry), /Injected review save failure/);
+	assert.equal(host.models.getModel(resource)!.getText(), 'original');
+	assert.equal(host.files.contents.get(resource.toString()), 'agent');
+	await host.lifecycle.shutdown('reload');
+	const { backend } = host;
+	const contents = new Map(host.files.contents);
+	host.dispose();
+	using reopened = await fixture({ backend, contents });
+	await flushReviews(reopened);
+	assert.equal(reopened.editing.entries.length, 1);
+	assert.equal(reopened.editing.entries[0]!.hasPendingSave, true);
+	assert.equal(reopened.models.getModel(resource)!.getText(), 'original');
+	assert.equal(reopened.files.contents.get(resource.toString()), 'agent');
+	await reviewSession(reopened).reject();
+	assert.equal(reopened.files.contents.get(resource.toString()), 'original');
+	assert.equal(reopened.editing.entries.length, 0);
+	assert.equal(reopened.storage.get('chatEditing.sessions', StorageScope.WORKSPACE), undefined);
+});
+
+test('saving the editor releases an Agent rejection that previously failed to reach the file', async () => {
+	using host = await fixture();
+	const resource = URI.file('c:/workspace/editor-save-review.txt');
+	host.files.contents.set(resource.toString(), 'original');
+	const id = await snapshot(host.transport, resource);
+	await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: id, text: 'agent' }] });
+	const write = host.files.writeFile.bind(host.files);
+	host.files.writeFile = async () => { throw new Error('Injected review save failure'); };
+	await assert.rejects(host.editing.rejectEntry(host.editing.entries[0]!));
+	host.files.writeFile = write;
+	using reference = await host.models.acquire({ resource }, new AbortController().signal);
+	await reference.save(new AbortController().signal);
+	await flushReviews(host);
+	assert.equal(host.files.contents.get(resource.toString()), 'original');
+	assert.equal(host.editing.entries.length, 0);
+	// Window shutdown joins the service's normal debounced persistence.
+	await host.lifecycle.shutdown('reload');
+	assert.equal(host.storage.get('chatEditing.sessions', StorageScope.WORKSPACE), undefined);
+});

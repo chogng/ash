@@ -148,3 +148,48 @@ test('history action waits for idle and does not act on a chat changed during lo
 	await expect(page.locator('.ash-aria-status').filter({ hasText: 'were undone' })).toHaveCount(0);
 	expect(await page.evaluate(() => window.ashChatEditingIntegration.historyState())).toEqual({ requests: [], opened: [] });
 });
+
+
+test('checkpoint selection cannot restore the source after switching to another chat', async ({ page }) => {
+	await page.goto('/chatEditing.html');
+	await page.waitForFunction(() => !!window.ashChatEditingIntegration);
+	await page.getByRole('button', { name: 'Restore checkpoint', exact: true }).click();
+	await expect(page.getByRole('combobox')).toBeVisible();
+	await page.evaluate(() => window.ashChatEditingIntegration.switchChat());
+	await page.keyboard.press('Enter');
+	await expect(page.getByRole('combobox')).toHaveCount(0);
+	expect(await page.evaluate(() => window.ashChatEditingIntegration.checkpointState())).toEqual({ requests: [], opened: [] });
+});
+
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`a failed rejection survives reload and its keyboard retry reaches the file (${locale})`, async ({ page }) => {
+		await page.goto(`/chatEditing.html?locale=${locale}&saveFailure`);
+		await page.waitForFunction(() => !!window.ashChatEditingIntegration);
+		await page.getByRole('button', { name: 'Reject this chat' }).click();
+		await page.getByRole('combobox').fill('first-chat');
+		await page.keyboard.press('Enter');
+		await expect(page.getByRole('status', { name: 'Review error' })).toContainText('Injected review save failure');
+		await expect.poll(() => page.evaluate(() => window.ashChatEditingIntegration.reviewState()[0])).toEqual({ resource: '/workspace/first.txt', pendingSave: true, hunks: 0 });
+		expect(await page.evaluate(() => window.ashChatEditingIntegration.diskTexts())).toEqual(['first change', 'second change']);
+		await page.evaluate(() => window.ashChatEditingIntegration.prepareReload());
+		await page.goto(`/chatEditing.html?locale=${locale}&reopen`);
+		await page.waitForFunction(() => !!window.ashChatEditingIntegration);
+		await expect.poll(() => page.evaluate(() => window.ashChatEditingIntegration.reviewState()[0])).toEqual({ resource: '/workspace/first.txt', pendingSave: true, hunks: 0 });
+		expect(await page.evaluate(() => window.ashChatEditingIntegration.snapshot().texts)).toEqual(['original', 'second change']);
+		expect(await page.evaluate(() => window.ashChatEditingIntegration.diskTexts())).toEqual(['first change', 'second change']);
+		await page.getByRole('button', { name: 'Review changes' }).click();
+		await page.getByRole('combobox').fill('first-chat');
+		await page.keyboard.press('Enter');
+		const retry = page.getByRole('button', { name: locale === 'en' ? 'Retry saving reviewed changes' : '重试保存已审阅的更改', exact: true });
+		await expect(retry).toBeVisible();
+		await expect(page.locator('.ash-quick-pick-row-detail')).toContainText(locale === 'en' ? 'Rejected changes have not been saved.' : '已撤销的更改尚未保存。');
+		await page.keyboard.press('Tab');
+		await page.keyboard.press('Tab');
+		await expect(retry).toBeFocused();
+		await page.keyboard.press('Enter');
+		await expect(page.getByRole('combobox')).toHaveCount(0);
+		await expect.poll(() => page.evaluate(() => window.ashChatEditingIntegration.diskTexts())).toEqual(['original', 'second change']);
+		await expect.poll(() => page.evaluate(() => window.ashChatEditingIntegration.reviewState())).toEqual([{ resource: '/workspace/second.txt', pendingSave: false, hunks: 1 }]);
+	});
+}

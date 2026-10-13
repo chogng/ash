@@ -123,6 +123,8 @@ class PendingSessionService implements ISessionsManagementService {
 		return this._untitledSessions.find((session) => session.untitledSessionId === this._activeUntitledSessionId);
 	}
 
+	whenDirectoriesReady(): Promise<void> { return Promise.resolve(); }
+
 	initialize(): Promise<void> { return this.pendingInitialization; }
 	listAgents(): Promise<readonly import('../../../workbench/services/chat/common/chatService.js').ChatAgent[]> { return Promise.resolve([]); }
 	openThread(_sessionId: SessionId, _threadId: ThreadId): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }

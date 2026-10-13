@@ -1672,7 +1672,9 @@
     "themeEditor.previewExplorer": "资源管理器",
     "themeEditor.previewOnly": "仅供预览",
     "themeEditor.previewToggleSidebar": "切换示例侧栏",
-    "themeEditor.previewTogglePanel": "切换示例面板"
+    "themeEditor.previewTogglePanel": "切换示例面板",
+    "chatEditing.savePending": "已撤销的更改尚未保存。请重试保存以完成此次审阅。",
+    "chatEditing.retrySave": "重试保存已审阅的更改"
   },
   "ash.menu": {
     "file": "文件",

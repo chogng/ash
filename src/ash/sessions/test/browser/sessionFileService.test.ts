@@ -5,6 +5,7 @@ import { WorkspaceContextService } from '../../../workbench/services/workspaces/
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
+import { DeferredPromise } from '../../../base/common/async.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
@@ -107,7 +108,7 @@ class MemoryProvider extends Disposable implements ISessionsProvider {
 	async list() { return this.items; }
 	async listAgents() { return []; }
 	async readCatalog(id: SessionId) { return this.items.find(session => session.sessionId === id); }
-	async subscribe(session: ISession) { return this.items.find(item => item.sessionId === session.sessionId)!; }
+	async subscribe(session: ISession): Promise<ISession> { const current = this.items.find(item => item.sessionId === session.sessionId)!; return { ...current, chats: current.chats.map(chat => ({ ...chat, workspace: chat.workspace ?? current.workspace ?? null })) }; }
 	async unsubscribe() { }
 	currentWorkspace() { return { type: 'current' as const }; }
 	async create(): Promise<never> { throw new Error('This test uses durable sessions'); }
@@ -129,6 +130,9 @@ test('Workbench file and content search retain Session directory authorization a
 	using workspace = new WorkspaceContextService({ id: 'session', folders: [folder] });
 	using services = new InstantiationService();
 	services.registerInstance(IWorkspaceContextService, workspace);
+	using provider = new MemoryProvider();
+	using management = new SessionsManagementService(provider);
+	services.registerInstance(ISessionsManagementService, management);
 	using editing = new BulkEditTestServices([]);
 	const host = createDisconnectedRendererApi();
 	const calls: unknown[] = [];
@@ -157,4 +161,36 @@ test('Workbench file and content search retain Session directory authorization a
 		assert.equal('dirId' in (call as object), false);
 	}
 	assert.equal(calls.length, 4);
+});
+
+
+test('restored file identity waits for the real Session directory instead of reading the source workspace', async () => {
+	const browser = new JSDOM('<!doctype html>', { url: 'https://sessions.test' });
+	try {
+		using services = new InstantiationService();
+		using provider = new MemoryProvider();
+		provider.items = [session('first', '/source')];
+		const directory = new DeferredPromise<ISession>();
+		provider.subscribe = async () => directory.p;
+		using management = new SessionsManagementService(provider);
+		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'directory-restore', flushInterval: 0 });
+		services.registerInstance(ISessionsManagementService, management);
+		services.registerInstance(IStorageService, storage);
+		using sessions = services.createInstance(SessionsService);
+		services.registerInstance(ISessionsService, sessions);
+		using workspace = services.createInstance(SessionsWorkspaceContextService, () => ({ id: 'source', folders: [{ id: 'source', index: 0, name: 'source', uri: URI.file('/source') }] }));
+		services.registerInstance(IWorkspaceContextService, workspace);
+		const calls: unknown[] = [];
+		const host = createDisconnectedRendererApi();
+		const fileHost: IRendererHost = { ...host, fs: { ...host.fs, readPathCaseSensitivity: async params => { calls.push(params); return { scopes: [{ path: '.', sensitivity: 'sensitive' }] }; } } };
+		using files = services.createInstance(SessionFileService, fileHost);
+		await sessions.initialize();
+		const resource = URI.file('/managed/first/main.ts');
+		const opening = files.resolvePathIdentity(resource).then(() => 'resolved', error => String(error));
+		assert.deepEqual(calls, []);
+		await directory.complete({ ...provider.items[0]!, chats: [{ ...provider.items[0]!.chats[0]!, workspace: { authorityId: 'local', root: '/managed/first' } }], agentTree: [] });
+		assert.equal(await opening, 'resolved');
+		assert.deepEqual(calls, [{ sessionDirectory: { sessionId: 'first', path: '/managed/first' }, path: 'main.ts' }]);
+		await assert.rejects(files.resolvePathIdentity(URI.file('/outside/main.ts')), /Resource must belong to a current workspace folder/);
+	} finally { browser.window.close(); }
 });

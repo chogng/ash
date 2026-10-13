@@ -52,7 +52,9 @@ export class SessionsWorkspaceContextService extends WorkspaceContextService {
 }
 
 function sessionFolder(session: ISession, threadId?: string): IWorkspaceFolder | undefined {
-	const workspace = (threadId ? session.chats.find(chat => chat.threadId === threadId)?.workspace : undefined) ?? session.workspace;
+	// Undefined Thread detail is not permission to use the source directory;
+	// null is an authoritative Thread without a filesystem directory.
+	const workspace = threadId ? session.chats.find(chat => chat.threadId === threadId)?.workspace : session.workspace;
 	if (!workspace) { return undefined; }
 	const uri = workspace.authorityId === 'local' ? URI.file(workspace.root) : createSshRemoteWorkspaceUri(workspace.authorityId, workspace.root);
 	// Bind the root into the folder identity: moving a Session must not redirect an already open file.

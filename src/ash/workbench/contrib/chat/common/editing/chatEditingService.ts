@@ -17,6 +17,8 @@ export interface ISnapshotEntry {
 	readonly resource: URI;
 	readonly original: string;
 	readonly current: string;
+	/** The last review source is retained until a rejected edit has reached the file. */
+	readonly pendingSaveSource?: string;
 }
 
 /** A review baseline, not a second editable document. File operations retain their atomic batch. */
@@ -27,6 +29,7 @@ export interface IModifiedFileEntry extends IDisposable {
 	readonly resources: readonly URI[];
 	readonly hunks: readonly IModifiedFileEntryChangeHunk[];
 	readonly isBusy: boolean;
+	readonly hasPendingSave: boolean;
 	readonly onDidChange: Event<void>;
 	accept(hunk?: IModifiedFileEntryChangeHunk): Promise<void>;
 	reject(hunk?: IModifiedFileEntryChangeHunk): Promise<void>;
@@ -60,6 +63,8 @@ export interface IChatEditingService {
 	cancelAutoAccept(entry: IModifiedFileEntry): void;
 	acceptEntry(entry: IModifiedFileEntry, hunk?: IModifiedFileEntryChangeHunk): Promise<void>;
 	rejectEntry(entry: IModifiedFileEntry, hunk?: IModifiedFileEntryChangeHunk): Promise<void>;
+	/** Persists an already made decision without rejecting other pending hunks. */
+	retrySaveEntry(entry: IModifiedFileEntry): Promise<void>;
 }
 
 export const IChatEditingService = createServiceIdentifier<IChatEditingService>('chatEditingService');

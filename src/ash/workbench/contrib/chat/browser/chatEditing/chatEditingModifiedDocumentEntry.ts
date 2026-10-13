@@ -29,6 +29,7 @@ export class ChatEditingModifiedDocumentEntry extends Disposable implements IMod
 	private changes: readonly ReviewHunk[] = [];
 	private agentEditing = false;
 	private expectedAgentText: string | undefined;
+	private rejectionSource: string | undefined;
 	public isBusy = false;
 	private readonly computer = new DefaultLinesDiffComputer();
 
@@ -40,6 +41,14 @@ export class ChatEditingModifiedDocumentEntry extends Disposable implements IMod
 		this.resources = [modifiedURI];
 		this.originalText = this.previousText = reference.model.getText();
 		if (snapshot) {
+			// Recover the unsaved decision only while the file still matches its
+			// recorded source. Existing dirty models and later file edits belong to
+			// their owner; they must not be replaced by review recovery.
+			if (snapshot.pendingSaveSource !== undefined && !reference.isDirty && reference.model.getText() === snapshot.pendingSaveSource) {
+				reference.model.pushStackElement();
+				reference.model.applyOperations([{ range: reference.model.getFullModelRange(), text: snapshot.current }]);
+				reference.model.pushStackElement();
+			}
 			this.originalText = snapshot.original;
 			this.changes = this.computeChanges(snapshot.original, snapshot.current);
 			this.previousText = snapshot.current;
@@ -49,13 +58,25 @@ export class ChatEditingModifiedDocumentEntry extends Disposable implements IMod
 				start: change.originalStart, end: change.originalEnd, text: change.modifiedText,
 			})));
 			this.updateDiff();
+			if (snapshot.pendingSaveSource !== undefined && reference.isDirty) { this.rejectionSource = snapshot.pendingSaveSource; }
 		}
+		this._register(reference.onDidChangeDirty(() => {
+			if (this.rejectionSource !== undefined && !reference.isDirty) {
+				this.rejectionSource = undefined;
+				this.changed.fire();
+				if (!this.isBusy && this.changes.length === 0) { this.complete(); }
+			}
+		}));
 		this._register(reference.model.onDidChangeContent(event => this.handleModelChange(event)));
 	}
 
 	public createSnapshot(): ISnapshotEntry {
-		return { resource: this.modifiedURI, original: this.originalText, current: this.reference.model.getText() };
+		// The source is a recovery precondition, not an editable document. It
+		// prevents a restart from treating a failed partial decision as accepted.
+		return { resource: this.modifiedURI, original: this.originalText, current: this.reference.model.getText(), ...(this.rejectionSource === undefined ? {} : { pendingSaveSource: this.rejectionSource }) };
 	}
+
+	public get hasPendingSave(): boolean { return this.rejectionSource !== undefined; }
 
 	public get hunks(): readonly ReviewHunk[] { return this.changes; }
 
@@ -72,7 +93,7 @@ export class ChatEditingModifiedDocumentEntry extends Disposable implements IMod
 		this.expectedAgentText = undefined;
 		this.isBusy = false;
 		this.updateDiff();
-		if (this.changes.length === 0) { this.complete(); }
+		if (this.changes.length === 0 && !this.hasPendingSave) { this.complete(); }
 	}
 
 	public beginRestore(): void {
@@ -83,6 +104,7 @@ export class ChatEditingModifiedDocumentEntry extends Disposable implements IMod
 	public async accept(hunk?: IModifiedFileEntryChangeHunk): Promise<void> {
 		this.assertNotDisposed();
 		if (this.isBusy) { return; }
+		if (this.hasPendingSave) { await this.saveRejectedChanges(); }
 		if (hunk) {
 			const current = this.requireHunk(hunk);
 			this.originalText = this.originalText.slice(0, current.originalStart) + current.modifiedText + this.originalText.slice(current.originalEnd);
@@ -95,6 +117,7 @@ export class ChatEditingModifiedDocumentEntry extends Disposable implements IMod
 		this.assertNotDisposed();
 		if (this.isBusy) { return; }
 		const changes = hunk ? [this.requireHunk(hunk)] : this.changes;
+		this.rejectionSource ??= this.reference.model.getText();
 		this.expectedAgentText = undefined;
 		this.agentEditing = this.isBusy = true;
 		this.changed.fire();
@@ -105,6 +128,7 @@ export class ChatEditingModifiedDocumentEntry extends Disposable implements IMod
 			this.agentEditing = false;
 			// A rejected tool edit must also disappear from the file read by subsequent commands.
 			await this.reference.save(new AbortController().signal);
+			this.rejectionSource = undefined;
 		} finally {
 			this.agentEditing = this.isBusy = false;
 			this.updateDiff();
@@ -112,8 +136,25 @@ export class ChatEditingModifiedDocumentEntry extends Disposable implements IMod
 		if (this.changes.length === 0) { this.complete(); }
 	}
 
+	public async retrySave(): Promise<void> {
+		this.assertNotDisposed();
+		if (this.isBusy || !this.hasPendingSave) { return; }
+		await this.saveRejectedChanges();
+		if (this.changes.length === 0) { this.complete(); }
+	}
+
+	private async saveRejectedChanges(): Promise<void> {
+		this.isBusy = true;
+		this.changed.fire();
+		try {
+			await this.reference.save(new AbortController().signal);
+			this.rejectionSource = undefined;
+		} finally { this.isBusy = false; this.changed.fire(); }
+	}
+
 	public getAccessibleContent(): string {
-		return this.changes.map((hunk, index) => localize('chatEditing.accessibleHunk', 'Change {0}, line {1}\nBefore:\n{2}\nAfter:\n{3}', index + 1, hunk.range.startLineNumber, hunk.originalText, hunk.modifiedText)).join('\n\n');
+		const changes = this.changes.map((hunk, index) => localize('chatEditing.accessibleHunk', 'Change {0}, line {1}\nBefore:\n{2}\nAfter:\n{3}', index + 1, hunk.range.startLineNumber, hunk.originalText, hunk.modifiedText)).join('\n\n');
+		return this.hasPendingSave ? localize('chatEditing.savePending', 'Rejected changes have not been saved. Retry saving to finish this review.') + (changes ? '\n\n' + changes : '') : changes;
 	}
 
 	private requireHunk(hunk: IModifiedFileEntryChangeHunk): ReviewHunk {
@@ -131,7 +172,7 @@ export class ChatEditingModifiedDocumentEntry extends Disposable implements IMod
 			this.adoptUserEdits(event.changes.map(change => ({ start: change.rangeOffset, end: change.rangeOffset + change.rangeLength, text: change.text })));
 		}
 		this.updateDiff();
-		if (!this.isBusy && this.changes.length === 0) { this.complete(); }
+		if (!this.isBusy && !this.hasPendingSave && this.changes.length === 0) { this.complete(); }
 	}
 
 	private adoptUserEdits(edits: { start: number; end: number; text: string; }[]): void {

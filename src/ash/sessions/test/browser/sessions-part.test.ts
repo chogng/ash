@@ -93,6 +93,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		get activeUntitledSession() { return untitledSessions.find(session => session.untitledSessionId === activeUntitledSessionId); },
 		state: "ready",
 		error: undefined,
+		whenDirectoriesReady(): Promise<void> { return Promise.resolve(); },
 		async initialize() { },
 		async listAgents() { return []; },
 		async openThread() { },

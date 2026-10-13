@@ -1,10 +1,11 @@
+import { URI } from '../../../../../base/common/uri.js';
 import { IPaneCompositePartService } from '../../../../../workbench/services/panecomposite/browser/panecomposite.js';
 import { ViewContainerLocation } from '../../../../../workbench/common/views.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
-import { DeferredPromise } from '../../../../../base/common/async.js';
+import { DeferredPromise, raceCancellationError } from '../../../../../base/common/async.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
@@ -96,6 +97,39 @@ suite('DesktopLayoutController', () => {
 		fixture.workspace.updateWorkspace({ id: 'b', folders: [] });
 		await fixture.controller.whenSettled();
 		assert.equal(fixture.editor.current, 'empty');
+	});
+
+	test('editor restoration waits for directory hydration and does not settle against a source folder', async () => {
+		using fixture = await createFixture();
+		const directory = new DeferredPromise<void>();
+		fixture.catalog.directoryReady = directory.p;
+		fixture.catalog.sessions = fixture.catalog.sessions.map(session => session.sessionId === 'b' ? { ...session, chats: session.chats.map(chat => ({ ...chat, workspace: { authorityId: 'local', root: '/managed/b' } })) } : session);
+		fixture.editor.set(workingSet('a', 'a.ts'));
+		fixture.sessions.openSession('b', 'b-thread');
+		fixture.workspace.updateWorkspace({ id: 'b', folders: [{ id: 'b-source', index: 0, name: 'source', uri: URI.file('/source/b') }] });
+		let settled = false;
+		const restoring = fixture.controller.whenSettled().then(() => { settled = true; });
+		await Promise.resolve();
+		assert.equal(settled, false);
+		assert.equal(fixture.editor.applied.length, 0);
+		fixture.workspace.updateWorkspace({ id: 'b', folders: [{ id: 'b-managed', index: 0, name: 'managed', uri: URI.file('/managed/b') }] });
+		await directory.complete();
+		await restoring;
+		assert.equal(fixture.editor.current, 'empty');
+	});
+
+	test('switching selection cancels the old directory wait before restoring the latest session', async () => {
+		using fixture = await createFixture();
+		const directory = new DeferredPromise<void>();
+		fixture.catalog.directoryReady = directory.p;
+		fixture.editor.set(workingSet('a', 'a.ts'));
+		fixture.sessions.openSession('b', 'b-thread');
+		fixture.catalog.directoryReady = undefined;
+		fixture.sessions.openSession('a', 'a-thread');
+		await fixture.controller.whenSettled();
+		assert.deepEqual(fixture.errors, []);
+		assert.equal(fixture.editor.applied.length, 0);
+		await directory.complete();
 	});
 
 	test('serializes rapid switches without attributing partially restored editors to the next session', async () => {
@@ -301,6 +335,14 @@ class TestCatalog extends Disposable {
 	public activeUntitledSession: IUntitledChatSession | undefined;
 	public readonly state = 'ready';
 	public readonly error = undefined;
+	public directoryReady: Promise<void> | undefined;
+	public async whenDirectoriesReady(signal?: AbortSignal): Promise<void> {
+		if (this.directoryReady) { await (signal ? raceCancellationError(this.directoryReady, signal) : this.directoryReady); }
+		if (this.sessions.some(session => session.chats.some(chat => chat.workspace === undefined))) {
+			this.sessions = this.sessions.map(session => ({ ...session, chats: session.chats.map(chat => ({ ...chat, workspace: chat.workspace ?? null })) }));
+			this.changed.fire();
+		}
+	}
 	public async initialize(): Promise<void> { }
 	public selectThread(sessionId: string, threadId: string): void {
 		this.active = { session: this.sessions.find(session => session.sessionId === sessionId)!, threadId };

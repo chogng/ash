@@ -1,3 +1,5 @@
+import { URI } from '../../../../../base/common/uri.js';
+import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { BrowserContentSearchService } from '../../../../../platform/search/browser/searchService.js';
 import type { IContentSearchOptions, IContentSearchQuery, IContentSearchService } from '../../../../../platform/search/common/search.js';
 import type { IWorkspaceFolder } from '../../../../../platform/workspace/common/workspace.js';
@@ -15,6 +17,7 @@ export class SessionFileService extends AppServerFileSystemProvider implements I
 	constructor(
 		host: IRendererHost,
 		@IWorkspaceContextService workspace: IWorkspaceContextService,
+		@ISessionsManagementService private readonly management: ISessionsManagementService,
 	) {
 		const target = <T extends { readonly dirId?: string; }>(params: T): Omit<T, 'dirId'> & { dirId?: string; sessionDirectory?: { sessionId: string; path: string; }; } => {
 			if (!params.dirId?.startsWith('session:')) { return params; }
@@ -63,6 +66,15 @@ export class SessionFileService extends AppServerFileSystemProvider implements I
 			read: params => host.contentSearch.read(target(params)),
 			cancel: params => host.contentSearch.cancel(target(params)),
 		});
+	}
+
+
+	public override async resolvePathIdentity(resource: URI): Promise<void> {
+		// Both editor deserialization and review model recovery canonicalize here.
+		// The strict provider still decides whether the hydrated catalog owns the URI.
+		await this.management.whenDirectoriesReady();
+		this.assertNotDisposed();
+		await super.resolvePathIdentity(resource);
 	}
 
 	public search(folder: IWorkspaceFolder, query: IContentSearchQuery, options?: IContentSearchOptions) {

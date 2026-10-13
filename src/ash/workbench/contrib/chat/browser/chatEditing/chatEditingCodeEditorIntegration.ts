@@ -71,7 +71,7 @@ export class ChatEditingCodeEditorIntegration extends Disposable implements IOve
 
 	private accessibleContent(type: AccessibleViewType): string {
 		if (type === AccessibleViewType.Help) {
-			return localize('chatEditing.help', 'Review Agent changes\nUse Left and Right arrows to move between toolbar actions. Previous and Next reveal each change. Accept or reject the current change or the file. File operations are reviewed as one atomic change set. Shared file changes affect all contributing chats. Accept all and Reject all apply to the chosen chat and require shared changes to be reviewed separately. Cancel automatic acceptance to keep reviewing when a countdown appears. Use Restore Checkpoint to create a new chat and directory at a recorded message boundary; Files follows that directory. Undo Last Request and Redo Last Request move the current chat history and restore its files. Save unsaved files first. Sending a new request clears Redo. Pending reviews are restored after reopening the workspace; their automatic acceptance stays paused. Press Escape to return to the editor. Use the Review Agent changes command to choose a chat and review closed or deleted files.');
+			return localize('chatEditing.help', 'Review Agent changes\nUse Left and Right arrows to move between toolbar actions. Previous and Next reveal each change. Accept or reject the current change or the file. File operations are reviewed as one atomic change set. Shared file changes affect all contributing chats. Accept all and Reject all apply to the chosen chat and require shared changes to be reviewed separately. Cancel automatic acceptance to keep reviewing when a countdown appears. Use Restore Checkpoint to create a new chat and directory at a recorded message boundary; Files follows that directory. Undo Last Request and Redo Last Request move the current chat history and restore its files. Save unsaved files first. Sending a new request clears Redo. Pending reviews are restored after reopening the workspace; their automatic acceptance stays paused. Press Escape to return to the editor. Use the Review Agent changes command to choose a chat and review closed or deleted files.') + '\n' + localize('chatEditing.savePending', 'Rejected changes have not been saved. Retry saving to finish this review.') + ' ' + localize('chatEditing.retrySave', 'Retry saving reviewed changes');
 		}
 		const chats = this.entry ? this.chatCount(this.entry) : 0;
 		const content = this.entry?.getAccessibleContent();
@@ -99,7 +99,7 @@ export class ChatEditingCodeEditorIntegration extends Disposable implements IOve
 			this.toolbar.setActions([]); this.editor.layoutOverlayWidget(this); return;
 		}
 		this.index = Math.min(this.index, Math.max(0, entry.hunks.length - 1));
-		this.labelDomNode.textContent = entry.hunks.length > 0 ? localize('chatEditing.counter', '{0} of {1}', this.index + 1, entry.hunks.length) : localize('chatEditing.fileSet', '{0} files', entry.resources.length);
+		this.labelDomNode.textContent = entry.hasPendingSave ? localize('chatEditing.retrySave', 'Retry saving reviewed changes') : entry.hunks.length > 0 ? localize('chatEditing.counter', '{0} of {1}', this.index + 1, entry.hunks.length) : localize('chatEditing.fileSet', '{0} files', entry.resources.length);
 		this.decorations.set(entry.hunks.map(hunk => ({ range: hunk.range, options: { description: 'chat-editing-review', isWholeLine: true, className: 'ash-chat-editing-added', linesDecorationsClassName: 'ash-chat-editing-gutter' } })));
 		this.editor.changeViewZones(accessor => {
 			for (const hunk of entry.hunks) {
@@ -133,7 +133,7 @@ export class ChatEditingCodeEditorIntegration extends Disposable implements IOve
 		}
 		const acceptFile = chats > 1 ? localize('chatEditing.acceptShared', 'Accept changes from {0} chats', chats)
 			: entry.isFileOperation ? localize('chatEditing.acceptSet', 'Accept change set') : localize('chatEditing.accept', 'Accept file changes');
-		const rejectFile = chats > 1 ? localize('chatEditing.rejectShared', 'Reject changes from {0} chats', chats)
+		const rejectFile = entry.hasPendingSave ? localize('chatEditing.retrySave', 'Retry saving reviewed changes') : chats > 1 ? localize('chatEditing.rejectShared', 'Reject changes from {0} chats', chats)
 			: entry.isFileOperation ? localize('chatEditing.rejectSet', 'Reject change set') : localize('chatEditing.reject', 'Reject file changes');
 		actions.push(
 			this.action('accept', acceptFile, Lxicon.check, () => this.decide(entry, true)),
@@ -182,7 +182,9 @@ export class ChatEditingCodeEditorIntegration extends Disposable implements IOve
 
 	private async decide(entry: IModifiedFileEntry, accept: boolean, hunk?: IModifiedFileEntryChangeHunk): Promise<void> {
 		try {
-			if (accept) { await this.editing.acceptEntry(entry, hunk); } else { await this.editing.rejectEntry(entry, hunk); }
+			if (accept) { await this.editing.acceptEntry(entry, hunk); }
+			else if (!hunk && entry.hasPendingSave) { await this.editing.retrySaveEntry(entry); }
+			else { await this.editing.rejectEntry(entry, hunk); }
 			status(accept ? localize('chatEditing.accepted', 'Changes accepted.') : localize('chatEditing.rejected', 'Changes rejected.'));
 			if (this.entry) { this.toolbar.focus(); } else { this.editor.focus(); }
 		} catch (error) { this.notifications.error(localize('chatEditing.failed', 'Could not review changes: {0}', String(error))); }

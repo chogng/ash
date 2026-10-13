@@ -21,6 +21,7 @@ export type StoredReviewEntry = {
 	readonly resource: string;
 	readonly original: string;
 	readonly current: string;
+	readonly pendingSaveSource?: string;
 } | {
 	readonly kind: 'files';
 	readonly files: readonly StoredFileReview[];
@@ -90,7 +91,7 @@ function validateState(value: unknown): asserts value is StoredSessionState {
 		}
 		if (entry.kind === 'text') {
 			claimResource(entry.resource);
-			if (typeof entry.original !== 'string' || typeof entry.current !== 'string') { invalid(); }
+			if (typeof entry.original !== 'string' || typeof entry.current !== 'string' || (entry.pendingSaveSource !== undefined && typeof entry.pendingSaveSource !== 'string')) { invalid(); }
 		} else if (entry.kind === 'files') {
 			if (!Array.isArray(entry.files) || entry.files.length === 0 || entry.files.length > 256) { invalid(); }
 			for (const file of entry.files) {

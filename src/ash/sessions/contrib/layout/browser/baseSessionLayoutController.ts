@@ -1,4 +1,7 @@
-import { Disposable } from '../../../../base/common/lifecycle.js';
+import { canceled, isCancellationError } from '../../../../base/common/errors.js';
+import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
+import { createSshRemoteWorkspaceUri } from '../../../../platform/remote/common/remote.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun, observableSignalFromEvent } from '../../../../base/common/observable.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -31,6 +34,7 @@ export abstract class BaseLayoutController extends Disposable {
 	private revision = 0;
 	private scheduledRevision = -1;
 	private pendingRestore = Promise.resolve();
+	private directoryRestore = new AbortController();
 	protected restoring = false;
 
 	constructor(
@@ -46,6 +50,7 @@ export abstract class BaseLayoutController extends Disposable {
 		@ILifecycleService private readonly lifecycle: ILifecycleService,
 	) {
 		super();
+		this._register(toDisposable(() => this.directoryRestore.abort()));
 		const raw = storage.get(layoutStateKey, StorageScope.WORKSPACE);
 		if (raw !== undefined) {
 			const entries: unknown = JSON.parse(raw);
@@ -126,6 +131,8 @@ export abstract class BaseLayoutController extends Disposable {
 			if (key !== this.requestedSession) {
 				this.captureEditors();
 				this.requestedSession = key;
+				this.directoryRestore.abort();
+				this.directoryRestore = new AbortController();
 				this.revision += 1;
 			}
 			workspaceChanged.read(reader);
@@ -147,9 +154,21 @@ export abstract class BaseLayoutController extends Disposable {
 			}
 			const revision = this.revision;
 			this.scheduledRevision = revision;
+			const signal = this.directoryRestore.signal;
 			this.pendingRestore = this.pendingRestore.then(async () => {
 				if (this.isDisposed || revision !== this.revision) {
 					return;
+				}
+				if (selection.kind === 'session') {
+					await this.management.whenDirectoriesReady(signal);
+					if (this.isDisposed || revision !== this.revision) { return; }
+					const latest = this.sessions.getSelection().activeSelection;
+					if (latest?.kind !== 'session' || latest.active.session.sessionId !== selection.active.session.sessionId || latest.active.threadId !== selection.active.threadId) { throw canceled(); }
+					const directory = latest.active.session.chats.find(chat => chat.threadId === latest.active.threadId)?.workspace;
+					const folders = this.workspace.getWorkspace().folders;
+					if (directory === undefined) { throw canceled(); }
+					const uri = directory ? directory.authorityId === 'local' ? URI.file(directory.root) : createSshRemoteWorkspaceUri(directory.authorityId, directory.root) : undefined;
+					if (uri ? folders.length !== 1 || !extUriBiasedIgnorePathCase.isEqual(folders[0]!.uri, uri) : folders.length !== 0) { throw canceled(); }
 				}
 				await this.restoreEditors(selection);
 				if (revision !== this.revision || this.isDisposed) {
@@ -165,7 +184,7 @@ export abstract class BaseLayoutController extends Disposable {
 					this.restored.fire();
 				}
 			}).catch(error => {
-				if (!this.isDisposed) {
+				if (!this.isDisposed && !isCancellationError(error)) {
 					this.notifications.error(localize('sessions.layout.restoreFailed', 'Could not restore the editors for this session: {0}', String(error)));
 				}
 			});

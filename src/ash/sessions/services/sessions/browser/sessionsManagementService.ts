@@ -1,3 +1,4 @@
+import { raceCancellationError } from '../../../../base/common/async.js';
 import { Emitter } from "../../../../base/common/event.js";
 import { canceled, isCancellationError } from "../../../../base/common/errors.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
@@ -54,6 +55,22 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	initialize(): Promise<void> {
 		if (!this.initializePromise || this._state === "error") this.initializePromise = this.loadSessions();
 		return this.initializePromise;
+	}
+
+
+	public whenDirectoriesReady(signal?: AbortSignal): Promise<void> {
+		if (this.isDisposed || signal?.aborted) { return Promise.reject(canceled()); }
+		const ready = (async () => {
+			await this.initialize();
+			if (this.isDisposed) { throw canceled(); }
+			if (this._state === 'error') { throw new Error(this._error); }
+			const generation = this.catalogGeneration;
+			// File restoration can refer to another known Session. Hydrate canonical
+			// snapshots rather than inferring a directory from the requested URI.
+			await Promise.all(this._sessions.filter(session => session.status === 'active').map(session => this.hydrateSession(session.sessionId)));
+			if (this.isDisposed || generation !== this.catalogGeneration) { throw canceled(); }
+		})();
+		return signal ? raceCancellationError(ready, signal) : ready;
 	}
 
 	listAgents(): Promise<readonly ChatAgent[]> {
@@ -328,7 +345,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		const generation = this.catalogGeneration;
 		const hydrate = (async () => {
 			const current = this._sessions.find(candidate => candidate.sessionId === sessionId && candidate.status === "active");
-			if (!current || current.agentTree) return;
+			if (!current || current.agentTree && current.chats.every(chat => chat.status !== 'active' || chat.workspace !== undefined)) return;
 			const session = await this.provider.subscribe(current);
 			if (this.isDisposed || generation !== this.catalogGeneration) return;
 			if (!this._sessions.some(candidate => candidate.sessionId === sessionId && candidate.status === "active")) {

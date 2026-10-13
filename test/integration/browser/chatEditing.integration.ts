@@ -60,6 +60,9 @@ declare global {
 			finishRestore(): void;
 			historyState(): { requests: MoveChatHistoryOptions[]; opened: string[]; };
 			dirtyFile(): Promise<void>;
+			setSaveFailure(fail: boolean): void;
+			reviewState(): { resource: string; pendingSave: boolean; hunks: number; }[];
+			diskTexts(): string[];
 		};
 	}
 }
@@ -152,6 +155,12 @@ if (!parameters.has('reopen')) {
 	if (parameters.has('shared')) { await write(first, 'second-chat', 'shared change'); }
 }
 await editing.finishTurn({ threadId: 'readiness', turnId: 'readiness' }, 'completed');
+let saveFailure = parameters.has('saveFailure');
+const saveFile = files.save.bind(files);
+files.save = async (request, signal) => {
+	if (saveFailure) { throw new Error('Injected review save failure'); }
+	return saveFile(request, signal);
+};
 
 for (const [selector, command] of [['#reject', 'chatEditing.rejectAll'], ['#review', 'chatEditing.reviewChanges'], ['#checkpoint', 'workbench.action.chat.restoreCheckpoint'], ['#undo', 'workbench.action.chat.undoEdit'], ['#redo', 'workbench.action.chat.redoEdit']] as const) {
 	resources.add(addDisposableListener(document.querySelector(selector)!, 'click', () => {
@@ -162,6 +171,9 @@ for (const [selector, command] of [['#reject', 'chatEditing.rejectAll'], ['#revi
 }
 window.ashChatEditingIntegration = {
 	historyState: () => ({ requests: historyRequests, opened }),
+	setSaveFailure: fail => { saveFailure = fail; },
+	reviewState: () => editing.entries.map(entry => ({ resource: entry.modifiedURI.path, pendingSave: entry.hasPendingSave, hunks: entry.hunks.length })),
+	diskTexts: () => [first, second].map(resource => files.read(resource)),
 	dirtyFile: async () => {
 		const reference = resources.add(await models.acquire({ resource: first }, new AbortController().signal));
 		resources.add(services.get(IWorkingCopyService).register({

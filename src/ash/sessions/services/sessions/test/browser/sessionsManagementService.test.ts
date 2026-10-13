@@ -1092,3 +1092,34 @@ test('creation failure uses the real Chinese catalog and releases its implicit s
 		assert.deepEqual(released, ['broken']);
 	} finally { resetNlsResolver(); }
 });
+
+
+test('directory readiness waits for authoritative snapshots without navigating and can be cancelled', async () => {
+	const fake = sessionHost([session('first', 'first-thread')]);
+	const snapshot = await fake.host.session.subscribe({ sessionId: 'first' });
+	let complete!: (value: typeof snapshot) => void;
+	fake.host.session.subscribe = () => new Promise(resolve => { complete = resolve; });
+	using provider = createProvider(fake);
+	using management = new SessionsManagementService(provider);
+	await management.initialize();
+	const before = management.active?.threadId;
+	const controller = new AbortController();
+	const waiting = management.whenDirectoriesReady(controller.signal);
+	controller.abort();
+	await assert.rejects(waiting, isCancellationError);
+	complete(snapshot);
+	await management.whenDirectoriesReady();
+	assert.equal(management.active?.threadId, before);
+	assert.notEqual(management.sessions[0]!.chats[0]!.workspace, undefined);
+});
+
+test('directory readiness fails on subscription errors and rejects after disposal', async () => {
+	const fake = sessionHost([session('first', 'first-thread')]);
+	fake.host.session.subscribe = async () => { throw new Error('directory detail unavailable'); };
+	using provider = createProvider(fake);
+	const management = new SessionsManagementService(provider);
+	await management.initialize();
+	await assert.rejects(management.whenDirectoriesReady(), /directory detail unavailable/);
+	management.dispose();
+	await assert.rejects(management.whenDirectoriesReady(), isCancellationError);
+});

@@ -62,11 +62,11 @@ registerAction2(class ReviewChangesAction extends Action2 {
 				return {
 					entry,
 					label: entry.resources.map(basename).join(', '),
-					description: entry.isFileOperation ? localize('chatEditing.atomic', 'Atomic file operation') : localize('chatEditing.changeCount', '{0} changes', entry.hunks.length),
+					description: entry.hasPendingSave ? localize('chatEditing.retrySave', 'Retry saving reviewed changes') : entry.isFileOperation ? localize('chatEditing.atomic', 'Atomic file operation') : localize('chatEditing.changeCount', '{0} changes', entry.hunks.length),
 					detail: seconds === undefined ? content : localize('chatEditing.autoAcceptPending', 'Automatic acceptance pending. {0}', content),
 					buttons: [
 						{ id: 'accept', label: chats > 1 ? localize('chatEditing.acceptShared', 'Accept changes from {0} chats', chats) : entry.isFileOperation ? localize('chatEditing.acceptSet', 'Accept change set') : localize('chatEditing.accept', 'Accept file changes') },
-						{ id: 'reject', label: chats > 1 ? localize('chatEditing.rejectShared', 'Reject changes from {0} chats', chats) : entry.isFileOperation ? localize('chatEditing.rejectSet', 'Reject change set') : localize('chatEditing.reject', 'Reject file changes') },
+						{ id: 'reject', label: entry.hasPendingSave ? localize('chatEditing.retrySave', 'Retry saving reviewed changes') : chats > 1 ? localize('chatEditing.rejectShared', 'Reject changes from {0} chats', chats) : entry.isFileOperation ? localize('chatEditing.rejectSet', 'Reject change set') : localize('chatEditing.reject', 'Reject file changes') },
 						...(seconds === undefined ? [] : [{ id: 'cancelAutoAccept', label: localize('chatEditing.cancelAutoAccept', 'Cancel automatic acceptance') }]),
 					],
 				};
@@ -83,7 +83,7 @@ registerAction2(class ReviewChangesAction extends Action2 {
 				status(localize('chatEditing.autoAcceptCancelled', 'Automatic acceptance cancelled. Changes remain available for review.'));
 				return;
 			}
-			void (button.id === 'accept' ? editing.acceptEntry(item.entry) : editing.rejectEntry(item.entry)).then(() => status(localize('chatEditing.reviewed', 'Changes reviewed.')), error => notifications.error(localize('chatEditing.failed', 'Could not review changes: {0}', String(error))));
+			void (button.id === 'accept' ? editing.acceptEntry(item.entry) : item.entry.hasPendingSave ? editing.retrySaveEntry(item.entry) : editing.rejectEntry(item.entry)).then(() => status(localize('chatEditing.reviewed', 'Changes reviewed.')), error => notifications.error(localize('chatEditing.failed', 'Could not review changes: {0}', String(error))));
 		}));
 		store.add(picker.onDidAccept(() => {
 			const item = picker.selectedItems[0];

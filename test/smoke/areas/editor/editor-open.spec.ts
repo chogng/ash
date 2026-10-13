@@ -1738,7 +1738,7 @@ test('Agent document requests preserve unsaved editor content, undo, BOM and CRL
 });
 
 
-test('Agent document requests use the Agents window model and save closed files through editor services', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
+test('Agent document requests use the Agents window model and save closed files through editor services', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench, runningApplication }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	await installDocumentProtocolProbe(page);
 	await workbench.reloadWindow(page);
@@ -1750,9 +1750,11 @@ test('Agent document requests use the Agents window model and save closed files 
 	expect(snapshot).toMatchObject({ kind: 'document', text: 'original\r\nsecond' });
 	expect(await request('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: snapshot.snapshot, text: 'agent\nsecond' }] })).toEqual({ kind: 'applied' });
 	await expect.poll(() => readFile(path)).toEqual(Buffer.from('\uFEFFagent\r\nsecond'));
+	await page.evaluate(() => (window as unknown as Window & { documentTurnFinished: (turnId: string) => void; }).documentTurnFinished('review-turn'));
 	const created = join(testWorkspace.directory, 'nested', 'agents-created.txt');
 	expect(await request('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'create', path: created, text: 'created\ntext' }] })).toEqual({ kind: 'applied' });
 	await expect.poll(() => readFile(created, 'utf8')).toBe('created\ntext');
+	expect(runningApplication.diagnostics.errors).toEqual([]);
 });
 
 test('Agent review commands are available without an App Server connection', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench, restartWorkbench }) => {
@@ -1884,15 +1886,23 @@ async function installDocumentProtocolProbe(page: Page): Promise<void> {
 			send.call(this, data);
 		};
 		const post = MessagePort.prototype.postMessage;
-		MessagePort.prototype.postMessage = function (message: { frame?: string; ack?: boolean; }, options?: Transferable[] | StructuredSerializeOptions): void {
-			if (message.frame) {
-				if (JSON.parse(message.frame).method === 'initialize') { port = this; }
-				if (takeReply(message.frame)) {
-					this.dispatchEvent(new MessageEvent('message', { data: { ack: true } }));
-					return;
+		MessagePort.prototype.postMessage = function (message: { data?: Uint8Array; ack?: boolean; }, options?: Transferable[] | StructuredSerializeOptions): void {
+			if (message.data instanceof Uint8Array) {
+				let frame: string | undefined;
+				let packet: { jsonrpc?: string; method?: string; } | undefined;
+				try {
+					frame = new TextDecoder('utf-8', { fatal: true }).decode(message.data);
+					packet = JSON.parse(frame);
+				} catch { /* Other MessagePorts may carry binary data; forward it unchanged. */ }
+				if (packet?.jsonrpc === '2.0' && frame !== undefined) {
+					if (packet.method === 'initialize') { port = this; }
+					if (this === port && takeReply(frame)) {
+						this.dispatchEvent(new MessageEvent('message', { data: { ack: true } }));
+						return;
+					}
 				}
 			}
-			if (injecting && message.ack) { return; }
+			if (this === port && injecting && message.ack) { return; }
 			post.call(this, message, Array.isArray(options) ? { transfer: options } : options);
 		};
 		(window as Window & { documentRequest?: (method: string, params: unknown) => Promise<unknown>; }).documentRequest = (method, params) => {
@@ -1901,7 +1911,7 @@ async function installDocumentProtocolProbe(page: Page): Promise<void> {
 			const frame = JSON.stringify({ jsonrpc: '2.0', id, method, params });
 			injecting = true;
 			try {
-				if (port) { port.dispatchEvent(new MessageEvent('message', { data: { frame } })); }
+				if (port) { port.dispatchEvent(new MessageEvent('message', { data: { data: new TextEncoder().encode(frame + '\n') } })); }
 				else if (socket) { socket.dispatchEvent(new MessageEvent('message', { data: frame })); }
 				else { throw new Error('Product document transport was not initialized'); }
 			} finally { injecting = false; }
@@ -1911,7 +1921,7 @@ async function installDocumentProtocolProbe(page: Page): Promise<void> {
 			const frame = JSON.stringify({ jsonrpc: '2.0', method: 'textDocument/turnFinished', params: { threadId: 'review-thread', turnId, outcome: 'completed' } });
 			injecting = true;
 			try {
-				if (port) { port.dispatchEvent(new MessageEvent('message', { data: { frame } })); }
+				if (port) { port.dispatchEvent(new MessageEvent('message', { data: { data: new TextEncoder().encode(frame + '\n') } })); }
 				else if (socket) { socket.dispatchEvent(new MessageEvent('message', { data: frame })); }
 				else { throw new Error('Product document transport was not initialized'); }
 			} finally { injecting = false; }
