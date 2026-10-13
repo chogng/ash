@@ -416,6 +416,258 @@ fn dirs_are_rendered_only_for_the_matching_session() {
 }
 
 #[test]
+fn thread_environment_matches_execution_authority_without_changing_session_roots() {
+    let source = TempDir::new().unwrap();
+    let managed = TempDir::new().unwrap();
+    let extra = TempDir::new().unwrap();
+    for (path, branch) in [
+        (source.path(), "source-main"),
+        (managed.path(), "managed-root"),
+    ] {
+        assert!(
+            std::process::Command::new("git")
+                .args(["init", "--quiet", "--initial-branch", branch])
+                .current_dir(path)
+                .status()
+                .unwrap()
+                .success()
+        );
+    }
+    fs::write(
+        source.path().join("AGENTS.md"),
+        "Source-owned instructions.",
+    )
+    .unwrap();
+    fs::write(managed.path().join("managed-only.txt"), "Managed contents.").unwrap();
+    let session = SessionId::new("thread-environment-session").unwrap();
+    let thread = ThreadId::new("thread-environment-root").unwrap();
+    let grants = Arc::new(DirGrants::default());
+    let extra_dir = Dir::open_local(extra.path()).unwrap();
+    grants
+        .add_dir(
+            session.clone(),
+            Grant::for_session_tree(
+                session.clone(),
+                extra_dir.clone(),
+                GrantSource::ExplicitUser,
+                ash_file_access::Permissions::new([ash_file_access::Permission::InspectRepository]),
+            ),
+        )
+        .unwrap();
+    let managed_dir = Dir::open_local(managed.path()).unwrap();
+    grants.bind_thread_dir(thread.clone(), managed_dir.clone());
+    let contributions = DirContributions::discover(
+        Dir::open_local(source.path()).unwrap().canonical_path(),
+        grants,
+        Some(load_instructions_authorization(source.path())),
+        None,
+    )
+    .unwrap();
+    let turn_id = TurnId::new("thread-environment-turn").unwrap();
+    let snapshot = HarnessContextProvider::snapshot(
+        contributions.as_ref(),
+        &HarnessContextRequest {
+            scope: ash_core::HarnessContextScope::Turn {
+                session_id: &session,
+                thread_id: &thread,
+                turn_id: &turn_id,
+            },
+            read_paths: &[],
+        },
+    )
+    .unwrap();
+    let environment = snapshot.environment().unwrap();
+    assert_eq!(environment.host().cwd(), managed_dir.canonical_path());
+    assert_eq!(
+        environment.dirs().as_slice(),
+        &[AbsolutePathBuf::from_absolute(extra_dir.canonical_path()).unwrap()]
+    );
+    let rendered = environment.render();
+    assert!(rendered.contains("<git_branch>managed-root</git_branch>"));
+    assert!(rendered.contains("managed-only.txt"));
+    assert!(!rendered.contains("<git_branch>source-main</git_branch>"));
+    assert!(
+        snapshot
+            .instructions()
+            .directory_instructions()
+            .unwrap()
+            .contains("Source-owned instructions.")
+    );
+    assert_eq!(
+        contributions.environment.cwd(),
+        Dir::open_local(source.path()).unwrap().canonical_path()
+    );
+    let thread_snapshot = HarnessContextProvider::snapshot(
+        contributions.as_ref(),
+        &HarnessContextRequest {
+            scope: ash_core::HarnessContextScope::Thread {
+                session_id: &session,
+                thread_id: &thread,
+            },
+            read_paths: &[],
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        thread_snapshot.environment().unwrap().host().cwd(),
+        managed_dir.canonical_path()
+    );
+}
+
+#[test]
+fn thread_environment_preserves_child_isolation_rebinding_and_snapshot_lifetime() {
+    let source = TempDir::new().unwrap();
+    let parent_root = TempDir::new().unwrap();
+    let child_root = TempDir::new().unwrap();
+    let next_root = TempDir::new().unwrap();
+    let session = SessionId::new("thread-environment-family").unwrap();
+    let parent = ThreadId::new("thread-environment-parent").unwrap();
+    let child = ThreadId::new("thread-environment-child").unwrap();
+    let grants = Arc::new(DirGrants::default());
+    let parent_dir = Dir::open_local(parent_root.path()).unwrap();
+    let child_dir = Dir::open_local(child_root.path()).unwrap();
+    let next_dir = Dir::open_local(next_root.path()).unwrap();
+    grants.bind_thread_dir(parent.clone(), parent_dir.clone());
+    grants.bind_thread_dir(child.clone(), child_dir.clone());
+    let contributions = DirContributions::discover(
+        Dir::open_local(source.path()).unwrap().canonical_path(),
+        Arc::clone(&grants),
+        None,
+        None,
+    )
+    .unwrap();
+    let turn = TurnId::new("thread-environment-family-turn").unwrap();
+    let snapshot = |thread| {
+        HarnessContextProvider::snapshot(
+            contributions.as_ref(),
+            &HarnessContextRequest {
+                scope: ash_core::HarnessContextScope::Turn {
+                    session_id: &session,
+                    thread_id: thread,
+                    turn_id: &turn,
+                },
+                read_paths: &[],
+            },
+        )
+        .unwrap()
+    };
+    let previous = snapshot(&parent);
+    assert_eq!(
+        previous.environment().unwrap().host().cwd(),
+        parent_dir.canonical_path()
+    );
+    assert_eq!(
+        snapshot(&child).environment().unwrap().host().cwd(),
+        child_dir.canonical_path()
+    );
+    grants.bind_thread_dir(parent.clone(), next_dir.clone());
+    assert_eq!(
+        snapshot(&parent).environment().unwrap().host().cwd(),
+        next_dir.canonical_path()
+    );
+    assert_eq!(
+        snapshot(&child).environment().unwrap().host().cwd(),
+        child_dir.canonical_path()
+    );
+    assert_eq!(
+        previous.environment().unwrap().host().cwd(),
+        parent_dir.canonical_path()
+    );
+    grants.bind_thread_dir(parent.clone(), parent_dir.clone());
+    assert_eq!(
+        snapshot(&parent).environment().unwrap().host().cwd(),
+        parent_dir.canonical_path()
+    );
+    grants.unbind_thread_dir(&parent);
+    assert_eq!(
+        snapshot(&parent).environment().unwrap().host().cwd(),
+        Dir::open_local(source.path()).unwrap().canonical_path()
+    );
+    assert_eq!(
+        snapshot(&child).environment().unwrap().host().cwd(),
+        child_dir.canonical_path()
+    );
+}
+
+#[test]
+fn thread_environment_without_binding_keeps_session_move_and_inspection_permissions() {
+    let source = TempDir::new().unwrap();
+    let selected = TempDir::new().unwrap();
+    assert!(
+        std::process::Command::new("git")
+            .args([
+                "init",
+                "--quiet",
+                "--initial-branch",
+                "private-session-branch"
+            ])
+            .current_dir(selected.path())
+            .status()
+            .unwrap()
+            .success()
+    );
+    let session = SessionId::new("thread-environment-moved-session").unwrap();
+    let other = SessionId::new("thread-environment-other-session").unwrap();
+    let thread = ThreadId::new("thread-environment-without-binding").unwrap();
+    let contributions = DirContributions::discover(
+        Dir::open_local(source.path()).unwrap().canonical_path(),
+        Arc::new(DirGrants::default()),
+        None,
+        None,
+    )
+    .unwrap();
+    let environment = contributions
+        .environment_for_directory(
+            Dir::open_local(selected.path()).unwrap().canonical_path(),
+            RepositoryInspection::Omit,
+        )
+        .unwrap();
+    contributions.move_session(session.clone(), environment);
+    let snapshot = |session| {
+        HarnessContextProvider::snapshot(
+            contributions.as_ref(),
+            &HarnessContextRequest {
+                scope: ash_core::HarnessContextScope::Thread {
+                    session_id: session,
+                    thread_id: &thread,
+                },
+                read_paths: &[],
+            },
+        )
+        .unwrap()
+    };
+    let moved = snapshot(&session);
+    let environment = moved.environment().unwrap();
+    assert_eq!(
+        environment.host().cwd(),
+        Dir::open_local(selected.path()).unwrap().canonical_path()
+    );
+    assert!(environment.dirs().as_slice().is_empty());
+    assert!(!environment.render().contains("private-session-branch"));
+    assert!(
+        environment
+            .render()
+            .contains("<is_git_repo>false</is_git_repo>")
+    );
+    assert_eq!(
+        snapshot(&other).environment().unwrap().host().cwd(),
+        Dir::open_local(source.path()).unwrap().canonical_path()
+    );
+    let global = HarnessContextProvider::snapshot(
+        contributions.as_ref(),
+        &HarnessContextRequest {
+            scope: ash_core::HarnessContextScope::Environment,
+            read_paths: &[],
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        global.environment().unwrap().host().cwd(),
+        Dir::open_local(source.path()).unwrap().canonical_path()
+    );
+}
+
+#[test]
 fn authorized_dir_contributions_are_session_scoped_refreshable_and_revocable() {
     let cwd = TempDir::new().unwrap();
     let dir = TempDir::new().unwrap();

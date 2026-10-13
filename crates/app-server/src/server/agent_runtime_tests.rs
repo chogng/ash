@@ -91,6 +91,128 @@ impl core_api::TurnExecutionObserver for ExecutionFinishedSignal {
 }
 
 #[test]
+fn explicit_product_turn_in_isolated_checkout_keeps_its_document_owner() {
+    for documents in [true, false] {
+        let profile = tempfile::tempdir().unwrap();
+        let source = tempfile::tempdir().unwrap();
+        std::fs::write(source.path().join("main.ts"), "const value = 1;\n").unwrap();
+        let (entered_tx, entered_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let model = Arc::new(InterruptibleModel {
+            calls: AtomicUsize::new(0),
+            entered: entered_tx,
+            release: Mutex::new(release_rx),
+        });
+        let mut server = crate::open_app_server(
+            crate::AppServerOptions::new(profile.path())
+                .without_built_in_skills()
+                .with_dir_root(source.path())
+                .with_agent_model_service(model),
+        )
+        .unwrap();
+        // The injected model executes locally; model discovery and authentication are
+        // unrelated to the document-source contract exercised by this admission.
+        server.model_catalog = crate::model_catalog::unavailable_model_catalog();
+        let mut owner = server.connection();
+        let mut other = server.connection();
+        for (connection, enabled) in [(&mut owner, documents), (&mut other, true)] {
+            let capabilities = if enabled {
+                json!({"textDocuments": {"version": 2}})
+            } else {
+                json!({})
+            };
+            let initialized = crate::tests::call(
+                &server,
+                connection,
+                json!({"jsonrpc":"2.0", "id":1, "method":"initialize", "params":{
+                    "clientInfo":{"name":"isolated-document-owner", "version":"1"},
+                    "capabilities":capabilities
+                }}),
+            );
+            assert!(initialized.get("result").is_some(), "{initialized}");
+        }
+        let created = crate::tests::call(
+            &server,
+            &mut owner,
+            json!({"jsonrpc":"2.0", "id":2, "method":"session/create", "params":{
+                "commandId":"isolated-document-session", "title":"Isolated editor",
+                "executionTarget":{"type":"local", "root":source.path()}
+            }}),
+        );
+        assert!(created.get("result").is_some(), "{created}");
+        let session = created["result"]["session"]["sessionId"].as_str().unwrap();
+        let thread = ThreadId::new(session).unwrap();
+        let directory = server
+            .git_turn_changes
+            .as_ref()
+            .unwrap()
+            .binding(&thread)
+            .unwrap();
+        assert_ne!(
+            directory.checkout_root(),
+            directory.source_repository_root()
+        );
+        assert_eq!(
+            std::fs::read_to_string(directory.dir().join("main.ts")).unwrap(),
+            "const value = 1;\n"
+        );
+        let params = json!({
+            "commandId":"isolated-document-turn", "sessionId":session, "request":{
+                "type":"startTurn", "threadId":thread, "expectedSequence":1,
+                "input":[{"type":"text", "text":"Read the current editor text"}]
+            }
+        });
+        let started = crate::tests::call(
+            &server,
+            &mut owner,
+            json!({"jsonrpc":"2.0", "id":3, "method":"session/request", "params":params}),
+        );
+        assert!(started.get("result").is_some(), "{started}");
+        let turn =
+            ash_protocol::TurnId::new(started["result"]["value"]["turnId"].as_str().unwrap())
+                .unwrap();
+        entered_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        let binding = server.client_host.binding(&thread, &turn).unwrap().unwrap();
+        let has_editor = ash_tools::TextDocumentEditorProvider::for_turn(
+            server.text_document_host.as_ref(),
+            &thread,
+            &turn,
+        )
+        .unwrap()
+        .is_some();
+        let replayed = crate::tests::call(
+            &server,
+            &mut other,
+            json!({"jsonrpc":"2.0", "id":4, "method":"session/request", "params":params}),
+        );
+        let replay_owner = server.client_host.binding(&thread, &turn).unwrap().unwrap();
+        let owner_id = owner.connection_id;
+        server.close_connection(owner);
+        let after_disconnect = ash_tools::TextDocumentEditorProvider::for_turn(
+            server.text_document_host.as_ref(),
+            &thread,
+            &turn,
+        );
+        let stays_unavailable = matches!(
+            &after_disconnect,
+            Err(ash_tools::TextDocumentError::Unavailable)
+        );
+        let stays_disk = matches!(&after_disconnect, Ok(None));
+        // Release the real model before assertions so a failing routing assertion
+        // cannot leave a fixture worker blocked during profile cleanup.
+        release_tx.send(()).unwrap();
+        assert_eq!(replayed["result"], started["result"]);
+        assert_eq!(binding.connection_id, owner_id);
+        assert_eq!(replay_owner.connection_id, owner_id);
+        assert_eq!(binding.text_documents, documents);
+        assert_eq!(has_editor, documents);
+        assert_eq!(stays_unavailable, documents);
+        assert_eq!(stays_disk, !documents);
+        server.close_connection(other);
+    }
+}
+
+#[test]
 fn repeated_turn_wakeups_remain_interruptible_through_rpc_and_allow_a_new_turn() {
     let (entered_tx, entered_rx) = mpsc::channel();
     let (release_tx, release_rx) = mpsc::channel();

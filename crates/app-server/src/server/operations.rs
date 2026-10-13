@@ -1791,16 +1791,10 @@ impl AppServer {
             .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?;
         let is_workflow = workflow.is_some();
         let mut workflow_child = None;
-        let document_mode = if self
-            .git_turn_changes
-            .as_ref()
-            .and_then(|runtime| runtime.binding(&thread_id))
-            .is_some_and(|binding| binding.checkout_root() != binding.source_repository_root())
-        {
-            crate::client_host::TextDocumentMode::FileSystem
-        } else {
-            crate::client_host::TextDocumentMode::Client
-        };
+        // Explicit product requests use their initiating host for the Turn's absolute
+        // directory paths, including managed checkouts. Capability negotiation selects
+        // disk for headless hosts; delegated Agents retain their own directory policy.
+        let document_mode = crate::client_host::TextDocumentMode::Client;
         let request = core_api::SubmitTurnRequest {
             context_policy: self
                 .config

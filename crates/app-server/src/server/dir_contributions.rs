@@ -11,6 +11,7 @@ use ash_app_server_protocol::protocol::fs::FsChanged;
 use ash_core::HarnessContext;
 use ash_core::HarnessContextProvider;
 use ash_core::HarnessContextRequest;
+use ash_core::HarnessContextScope;
 use ash_core::HarnessInstructions;
 use ash_file_access::Authorization;
 use ash_home::AshHome;
@@ -684,6 +685,28 @@ impl HarnessContextProvider for DirContributions {
             .cloned()
             .unwrap_or_else(|| self.environment.clone());
         drop(environments);
+        let thread_scope = match &request.scope {
+            HarnessContextScope::Environment => None,
+            HarnessContextScope::Thread { thread_id, .. }
+            | HarnessContextScope::Turn { thread_id, .. } => self
+                .dir_grants
+                .thread_scope(thread_id, ash_file_access::Permission::InspectRepository)
+                .map_err(|error| CoreError::Context(error.to_string()))?,
+        };
+        // The Session retains its source context. A bound Thread owns Tool-relative paths,
+        // so its invocation must describe that directory and its repository facts.
+        let source = if let Some(scope) = thread_scope
+            && source.cwd() != scope.primary().dir().canonical_path()
+        {
+            source
+                .for_directory(
+                    scope.primary().dir().canonical_path(),
+                    RepositoryInspection::Allowed,
+                )
+                .map_err(|error| CoreError::Context(error.to_string()))?
+        } else {
+            source
+        };
         let environment = source
             .snapshot(roots)
             .map_err(|error| CoreError::Context(error.to_string()))?;
