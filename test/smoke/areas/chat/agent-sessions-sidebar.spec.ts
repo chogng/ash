@@ -1,6 +1,55 @@
 import { expect, test } from "../../../automation/test.js";
 import type { Page } from '@playwright/test';
 
+test('Opening Sessions reserves workbench width without manually resizing Chat', { tag: ['@browser-ui', '@electron-ui'] }, async ({ driver, workbench }, testInfo) => {
+	const page = workbench.page;
+	await driver.setWindowSize({ width: 1800, height: 900 });
+	await workbench.openExplorer();
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	}
+	const auxiliary = page.locator('[data-part="auxiliarybar"]');
+	const editor = page.locator('[data-part="editor"]');
+	const primarySidebar = page.locator('[data-part="sidebar"]');
+	const body = page.locator('.ash-chat-body');
+	const chat = page.locator('.ash-chat-pane-host');
+	const sidebar = page.locator('.ash-chat-sessions-sidebar');
+	const toggle = page.locator('[data-action-id="agentSessions.toggleAgentSessionsSidebar"] button');
+	const originalAuxiliary = (await auxiliary.boundingBox())!;
+	const originalEditor = (await editor.boundingBox())!;
+	const originalPrimarySidebar = (await primarySidebar.boundingBox())!;
+	expect((await body.boundingBox())!.width).toBeLessThan(720);
+	await toggle.click();
+	await expect(sidebar).toBeVisible();
+	await expect(page.getByRole('separator', { name: 'Resize Sessions list', exact: true })).toBeVisible();
+	await expect.poll(async () => {
+		const listBounds = (await sidebar.boundingBox())!;
+		const chatBounds = (await chat.boundingBox())!;
+		const partBounds = (await auxiliary.boundingBox())!;
+		const editorBounds = (await editor.boundingBox())!;
+		const primaryBounds = (await primarySidebar.boundingBox())!;
+		return (await body.boundingBox())!.width >= 720
+			&& chatBounds.width >= 360 && listBounds.width === 320
+			&& chatBounds.x + chatBounds.width <= listBounds.x + 1
+			&& listBounds.x + listBounds.width <= partBounds.x + partBounds.width + 1
+			&& partBounds.width > originalAuxiliary.width
+			&& editorBounds.width < originalEditor.width
+			&& primaryBounds.width === originalPrimarySidebar.width && primaryBounds.x === originalPrimarySidebar.x
+			&& Math.abs(partBounds.width - originalAuxiliary.width - (originalEditor.width - editorBounds.width)) <= 1;
+	}).toBe(true);
+	await expect.poll(() => sidebar.evaluate(element => element.contains(document.activeElement))).toBe(true);
+	await page.screenshot({ path: testInfo.outputPath('sessions-reserved-workbench-width.png') });
+	await page.keyboard.press('Escape');
+	await expect(sidebar).toBeHidden();
+	await expect(toggle).toBeFocused();
+	await expect.poll(async () => (await auxiliary.boundingBox())!.width).toBeCloseTo(originalAuxiliary.width, 2);
+	await expect.poll(async () => (await editor.boundingBox())!.width).toBeCloseTo(originalEditor.width, 2);
+	await toggle.click();
+	await expect(page.getByRole('separator', { name: 'Resize Sessions list', exact: true })).toBeVisible();
+	await toggle.click();
+	await expect.poll(async () => (await auxiliary.boundingBox())!.width).toBeCloseTo(originalAuxiliary.width, 2);
+});
+
 test('Agent Sessions list shares Chat space and closes with Escape in Web and Electron', { tag: ['@browser-ui', '@electron-ui'] }, async ({ driver, target, workbench }, testInfo) => {
 	const page = workbench.page;
 	if (!await page.locator(".ash-chat-view-pane").isVisible()) {
@@ -84,7 +133,7 @@ test('Agent Sessions list shares Chat space and closes with Escape in Web and El
 	await expect(toggle).toBeFocused();
 });
 
-test('Chat More Actions remembers Sessions layout and narrow list selection returns to Chat', { tag: ['@browser-ui', '@electron-ui'] }, async ({ driver, target, workbench, reloadWorkbench }, testInfo) => {
+test('Chat More Actions remembers Sessions layout and narrow list selection returns to Chat', { tag: ['@browser-ui', '@electron-ui'] }, async ({ driver, application, workbench, reloadWorkbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -96,11 +145,9 @@ test('Chat More Actions remembers Sessions layout and narrow list selection retu
 	const paneHost = page.locator('.ash-chat-pane-host');
 	const body = page.locator('.ash-chat-body');
 	await toggle.click();
-	await more.click();
-	await page.getByRole('menuitem', { name: 'Sessions layout', exact: true }).click();
-	await expect(page.getByRole('menuitemcheckbox', { name: 'Automatic', exact: true })).toHaveAttribute('aria-checked', 'true');
-	await page.screenshot({ path: testInfo.outputPath('sessions-layout-menu.png') });
-	await page.getByRole('menuitemcheckbox', { name: 'Side by side', exact: true }).click();
+	const choices = await workbench.menus.inspect(application, () => more.click(), ['Sessions layout']);
+	expect(choices.map(({ label, checked }) => [label, checked])).toEqual([['Automatic', true], ['Side by side', false], ['Stacked', false]]);
+	await workbench.menus.select(application, () => more.click(), ['Sessions layout', 'Side by side']);
 	await expect(body).toHaveClass(/sessions-list-only/);
 	await expect(paneHost).toBeHidden();
 	await expect(sidebar).toBeVisible();
@@ -117,10 +164,10 @@ test('Chat More Actions remembers Sessions layout and narrow list selection retu
 	if (!await restoredPage.locator('.ash-chat-view-pane').isVisible()) {
 		await restoredPage.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
-	await restoredPage.locator('.ash-chat-title-actions .ash-toolbar-more-actions button').click();
-	await restoredPage.getByRole('menuitem', { name: 'Sessions layout', exact: true }).click();
-	await expect(restoredPage.getByRole('menuitemcheckbox', { name: 'Side by side', exact: true })).toHaveAttribute('aria-checked', 'true');
-	await restoredPage.getByRole('menuitemcheckbox', { name: 'Stacked', exact: true }).click();
+	const restoredMore = restoredPage.locator('.ash-chat-title-actions .ash-toolbar-more-actions button');
+	const restoredChoices = await restored.workbench.menus.inspect(restored.application, () => restoredMore.click(), ['Sessions layout']);
+	expect(restoredChoices.map(({ label, checked }) => [label, checked])).toEqual([['Automatic', false], ['Side by side', true], ['Stacked', false]]);
+	await restored.workbench.menus.select(restored.application, () => restoredMore.click(), ['Sessions layout', 'Stacked']);
 	await restoredPage.locator('[data-action-id="agentSessions.toggleAgentSessionsSidebar"] button').click();
 	await expect(restoredPage.locator('.ash-chat-body')).toHaveClass(/sessions-stacked/);
 	const restoredSidebar = restoredPage.locator('.ash-chat-sessions-sidebar');
@@ -131,23 +178,20 @@ test('Chat More Actions remembers Sessions layout and narrow list selection retu
 	await expect(restoredPage.locator('.ash-chat-pane-host')).toBeVisible();
 });
 
-test('Sessions layout menu uses the Chinese display language', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench, restartWorkbench }, testInfo) => {
+test('Sessions layout menu uses the Chinese display language', { tag: ['@browser-ui', '@electron-ui'] }, async ({ application, workbench, restartWorkbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 	const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
 	await language.fill('简体中文');
 	await language.press('Enter');
-	({ workbench } = await restartWorkbench());
+	({ application, workbench } = await restartWorkbench());
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: '显示辅助侧栏', exact: true }).click();
 	}
-	await page.locator('.ash-chat-title-actions .ash-toolbar-more-actions button').click();
-	await page.getByRole('menuitem', { name: '会话布局', exact: true }).click();
-	await expect(page.getByRole('menuitemcheckbox', { name: '自动', exact: true })).toHaveAttribute('aria-checked', 'true');
-	await expect(page.getByRole('menuitemcheckbox', { name: '左右排列', exact: true })).toBeVisible();
-	await expect(page.getByRole('menuitemcheckbox', { name: '上下排列', exact: true })).toBeVisible();
-	await page.screenshot({ path: testInfo.outputPath('sessions-layout-menu-zh-CN.png') });
-	await page.getByRole('menuitemcheckbox', { name: '上下排列', exact: true }).click();
+	const more = page.locator('.ash-chat-title-actions .ash-toolbar-more-actions button');
+	const choices = await workbench.menus.inspect(application, () => more.click(), ['会话布局']);
+	expect(choices.map(({ label, checked }) => [label, checked])).toEqual([['自动', true], ['左右排列', false], ['上下排列', false]]);
+	await workbench.menus.select(application, () => more.click(), ['会话布局', '上下排列']);
 	await page.locator('[data-action-id="agentSessions.toggleAgentSessionsSidebar"] button').click();
 	await expect(page.locator('.ash-chat-body')).toHaveClass(/sessions-stacked/);
 	await workbench.quickaccess.runCommand('workbench.action.chat.setAgentSessionsOrientationAuto');
@@ -165,7 +209,8 @@ test('Side by side Sessions width supports dragging, keyboard resizing, reset an
 	}
 	await page.locator('[data-action-id="agentSessions.toggleAgentSessionsSidebar"] button').click();
 	await driver.setWindowSize({ width: 1800, height: 900 });
-	await expandChat(page);
+	// Keep room for the widest tested list (450px) and the 360px Chat minimum.
+	await expandChat(page, 810);
 	const sidebar = () => page.locator('.ash-chat-sessions-sidebar');
 	const separator = () => page.getByRole('separator', { name: 'Resize Sessions list', exact: true });
 	const width = async (): Promise<number> => (await sidebar().boundingBox())!.width;
@@ -204,7 +249,7 @@ test('Side by side Sessions width supports dragging, keyboard resizing, reset an
 	await expect(separator()).toBeHidden();
 	await expect.poll(() => sidebar().evaluate(element => element.contains(document.activeElement))).toBe(true);
 	await driver.setWindowSize({ width: 1800, height: 900 });
-	await expandChat(page);
+	await expandChat(page, 810);
 	await expect(separator()).toBeVisible();
 	await expect.poll(width).toBe(440);
 	await workbench.quickaccess.runCommand('workbench.action.chat.setAgentSessionsOrientationStacked');
@@ -227,8 +272,8 @@ test('Side by side Sessions width supports dragging, keyboard resizing, reset an
 	await expect.poll(width).toBe(440);
 });
 
-async function expandChat(page: Page): Promise<void> {
-	if (await page.locator('.ash-chat-body').evaluate(element => element.getBoundingClientRect().width >= 720)) {
+async function expandChat(page: Page, minimumWidth = 720): Promise<void> {
+	if (await page.locator('.ash-chat-body').evaluate((element, width) => element.getBoundingClientRect().width >= width, minimumWidth)) {
 		return;
 	}
 	const auxiliary = (await page.locator('[data-part="auxiliarybar"]').boundingBox())!;
@@ -243,5 +288,5 @@ async function expandChat(page: Page): Promise<void> {
 	await page.mouse.down();
 	await page.mouse.move(sash.x - 500, sash.y + sash.height / 2, { steps: 5 });
 	await page.mouse.up();
-	await expect(page.locator('.ash-chat-body')).not.toHaveClass(/compact/);
+	await expect.poll(() => page.locator('.ash-chat-body').evaluate(element => element.getBoundingClientRect().width)).toBeGreaterThanOrEqual(minimumWidth);
 }

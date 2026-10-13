@@ -38,6 +38,7 @@ const sessionsSidebarWidthKey = 'chat.sessionsSidebarWidth';
 const defaultSessionsSidebarWidth = 320;
 const minimumSessionsSidebarWidth = 220;
 const minimumChatWidth = 360;
+const minimumSideBySideWidth = 720;
 
 interface ChatPaneEntry {
 	readonly label: string;
@@ -63,6 +64,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 	private readonly sessionsControl: AgentSessionsControl;
 	private readonly sessionsSash: Sash;
 	private sessionsSidebarWidth: number;
+	private auxiliaryBarWidthBeforeSessions: number | undefined;
 	private readonly sessionsSidebarVisible: IContextKey<boolean>;
 	private readonly sessionsOrientation: IContextKey<AgentSessionsOrientation>;
 	private readonly activePaneListener = this._register(new MutableDisposable());
@@ -409,6 +411,20 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		this.sessionsSidebarVisible.set(visible);
 		this.body.classList.toggle('sessions-sidebar-visible', visible);
 		this.sessionsSidebar.hidden = !visible;
+		const width = this.body.getBoundingClientRect().width;
+		if (visible && width > 0 && width < minimumSideBySideWidth && this.configuration.getValue<AgentSessionsOrientation>(AGENT_SESSIONS_ORIENTATION_SETTING) !== AgentSessionsOrientation.Stacked) {
+			const size = this.layoutService.getPartSize('auxiliarybar');
+			this.auxiliaryBarWidthBeforeSessions = size.width;
+			// Reserve list space in the owning Grid, including the Part's frame insets.
+			// If window constraints prevent this width, responsive layout still handles it.
+			const bodyWidth = Math.max(minimumSideBySideWidth, width + this.sessionsSidebarWidth);
+			this.layoutService.resizePart('auxiliarybar', { width: size.width + bodyWidth - width, height: size.height });
+		} else if (!visible && this.auxiliaryBarWidthBeforeSessions !== undefined) {
+			const size = this.layoutService.getPartSize('auxiliarybar');
+			const previousWidth = this.auxiliaryBarWidthBeforeSessions;
+			this.auxiliaryBarWidthBeforeSessions = undefined;
+			this.layoutService.resizePart('auxiliarybar', { width: previousWidth, height: size.height });
+		}
 		this.updateResponsiveLayout();
 		if (visible) this.sessionsControl.focus();
 		else {
@@ -419,7 +435,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 
 	private updateResponsiveLayout(): void {
 		const width = this.body.getBoundingClientRect().width;
-		const compact = width < 720;
+		const compact = width < minimumSideBySideWidth;
 		const orientation = this.configuration.getValue<AgentSessionsOrientation>(AGENT_SESSIONS_ORIENTATION_SETTING);
 		this.sessionsOrientation.set(orientation);
 		const isNewChat = this.activePane?.untitledSessionId !== undefined && this.activePane.model.items.length === 0 && this.activePane.model.state !== 'submitting';
