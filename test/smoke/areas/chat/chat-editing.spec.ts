@@ -162,10 +162,19 @@ test('Agent file edits preserve user text and a failed review save remains retry
 		await editor.waitForEditorFocus();
 		await editor.input.press('ControlOrMeta+End');
 		await editor.waitForTypeInEditor('// unsaved user note');
+		if (target.kind === 'electron' && 'windows' in application) {
+			const window = await application.browserWindow(page);
+			await window.evaluate(window => window.close());
+			const save = page.getByRole('dialog', { name: 'Save Changes', exact: true });
+			await expect(save).toContainText('Do you want to save the changes you made to main.ts?');
+			await save.getByRole('button', { name: 'Cancel', exact: true }).click();
+			await expect(save).toBeHidden();
+			await editor.waitForEditorContents(text => text.includes('// unsaved user note'));
+		}
 		if (target.kind === 'browser') { diagnostics.dirtyEditorModel = await captureEditorModel(page).catch(error => ({ status: 'unavailable', reason: String(error) })); }
 		expect(await readFile(file, 'utf8')).toBe('const value = 1;\n');
 		expect(await readFile(testWorkspace.file, 'utf8')).toBe('const value = 1;\n');
-		const composer = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
+		const composer = page.locator('.ash-sessions-chat-slot.active:visible [role=tabpanel][data-thread-id]');
 		await expect(composer).toHaveAttribute('data-thread-id', identity.threadId);
 		await composer.locator('.ash-chat-input-mode-action').click();
 		await page.locator('.ash-chat-input-mode-menu').getByRole('menuitemradio', { name: 'Agent', exact: true }).click();
@@ -254,12 +263,12 @@ test('Agent file edits preserve user text and a failed review save remains retry
 		await sessions.quickaccess.runCommand('workbench.action.chat.restoreCheckpoint');
 		await page.getByRole('option').filter({ has: page.getByText(`After checkpoint ${selected + 1}`, { exact: true }) }).click();
 		const title = `Restored checkpoint: ${points[selected]!.itemId}`;
-		await expect.poll(async () => (await client.request(APP_SERVER_METHODS['session/list'], {})).sessions.some(session => session.title === title)).toBe(true);
-		const restored = (await client.request(APP_SERVER_METHODS['session/list'], {})).sessions.find(session => session.title === title)!;
-		const restoredThread = restored.threads[0];
-		if (!restoredThread) { throw new Error('The restored Session has no root Thread'); }
-		await expect(page.locator('.ash-sessions-chat-slot.active:visible .ash-chat')).toHaveAttribute('data-thread-id', restoredThread.threadId);
-		const restoredRead = await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId: restored.sessionId, threadId: restoredThread.threadId });
+		await expect.poll(async () => (await client.request(APP_SERVER_METHODS['session/read'], { sessionId: identity.sessionId })).session.threads.some(thread => thread.title === title)).toBe(true);
+		const restoredSession = (await client.request(APP_SERVER_METHODS['session/read'], { sessionId: identity.sessionId })).session;
+		const restoredThread = restoredSession.threads.find(thread => thread.title === title)!;
+		expect(restoredThread.threadId).not.toBe(identity.threadId);
+		await expect(page.locator('.ash-sessions-chat-slot.active:visible [role=tabpanel][data-thread-id]')).toHaveAttribute('data-thread-id', restoredThread.threadId);
+		const restoredRead = await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId: identity.sessionId, threadId: restoredThread.threadId });
 		if (restoredRead.directory?.type !== 'local') { throw new Error('The restored checkpoint has no local directory'); }
 		expect(restoredRead.directory.root).not.toBe(before.directory.root);
 		expect(await readFile(join(restoredRead.directory.root, 'main.ts'), 'utf8')).toBe('const value = 42;\n// unsaved user note');

@@ -21,6 +21,8 @@ import { FileContentSearchService } from '../../platform/search/browser/searchSe
 import { ISearchService } from '../../workbench/services/search/common/search.js';
 import { SearchService } from '../../workbench/services/search/common/searchService.js';
 import { IAgentExecutionSettingsService } from '../../platform/agentHost/common/agentExecutionSettingsService.js';
+import { IChatEditingService } from '../../workbench/contrib/chat/common/editing/chatEditingService.js';
+import { IUriIdentityService } from '../../platform/uriIdentity/common/uriIdentity.js';
 import { IPromptsService } from '../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
 import { IDirPermissionsService } from '../../platform/dirPermissions/common/dirPermissionsService.js';
@@ -482,6 +484,7 @@ export abstract class Workbench extends Disposable {
 		options.container.replaceChildren();
 		this.domNode = h(ownerDocument, "main");
 		this.domNode.className = "ash-sessions-window ash-code-sessions-window";
+		this.domNode.setAttribute('aria-busy', 'true');
 		options.container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		const dialogs = services.get(IDialogService) as DialogService;
@@ -755,7 +758,14 @@ export abstract class Workbench extends Disposable {
 		]);
 		layout.createWorkbenchLayout(parts);
 		this._register(this.lifecycleService.onBeforeShutdown(event => {
-			event.veto(editor.confirmCloseAllEditors().then(confirmed => !confirmed), 'Sessions unsaved files');
+			event.veto(textModels.waitForSaveRecovery().then(() => false), 'Sessions text save recovery');
+			// Pending rejection decisions are captured by the review service's shutdown
+			// join. Ordinary dirty files still require an explicit save/discard decision.
+			const reviews = services.get(IChatEditingService).entries;
+			const identity = services.get(IUriIdentityService).extUri;
+			const recoverable = event.reason !== 'load' && workingCopies.getAll().filter(copy => copy.isDirty).every(copy =>
+				copy.backupKind === 'text' && reviews.some(entry => entry.hasPendingSave && entry.resources.some(resource => identity.isEqual(resource, copy.resource))));
+			if (!recoverable) event.veto(editor.confirmCloseAllEditors().then(confirmed => !confirmed), 'Sessions unsaved files');
 		}));
 		this._register(configurationService.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(SessionsConfiguration.activityBarLocation)) {
@@ -822,6 +832,7 @@ export abstract class Workbench extends Disposable {
 		contributions.advance(WorkbenchPhase.AfterRestored);
 		await contributions.workspaceRestored();
 		if (this.isDisposed) return;
+		this.domNode.setAttribute('aria-busy', 'false');
 		this.logService.info('lifecycle', 'Agents restored');
 		this._register(disposableWindowTimeout(ownerWindow, () => {
 			this.lifecycleService.phase = LifecyclePhase.Eventually;

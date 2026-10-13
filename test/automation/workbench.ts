@@ -45,6 +45,9 @@ export class Workbench {
 	async reloadWindow(page: Page = this.page): Promise<void> {
 		await page.reload();
 		await waitForWindowLoad(page);
+		if (new URL(page.url()).pathname.endsWith('/sessions.html')) {
+			await page.locator('.ash-sessions-window[aria-busy="false"]').waitFor({ state: 'visible' });
+		}
 	}
 
 	/** System appearance belongs to Main on Electron and media queries on Browser. */
@@ -95,7 +98,7 @@ export class Workbench {
 			]);
 		}
 		await waitForWindowLoad(page);
-		await page.locator('.ash-sessions-window').waitFor({ state: 'visible' });
+		await page.locator('.ash-sessions-window[aria-busy="false"]').waitFor({ state: 'visible' });
 		return page;
 	}
 
