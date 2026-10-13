@@ -287,17 +287,20 @@ fn product_node_process_speaks_the_shared_protocol_and_uses_real_node() {
     for (name, source) in [
         (
             "node.mjs",
-            include_str!("../../external-js-ext/src/node.mjs"),
+            include_str!("../../../resources/extension-host/node.mjs"),
         ),
         (
             "vscode.mjs",
-            include_str!("../../external-js-ext/src/vscode.js"),
+            include_str!("../../../resources/extension-host/vscode.js"),
         ),
         (
             "host.mjs",
-            include_str!("../../external-js-ext/src/host.mjs"),
+            include_str!("../../../resources/extension-host/host.mjs"),
         ),
-        ("scm.js", include_str!("../../external-js-ext/src/scm.js")),
+        (
+            "scm.js",
+            include_str!("../../../resources/extension-host/scm.js"),
+        ),
     ] {
         std::fs::write(root.join(name), source).unwrap();
     }

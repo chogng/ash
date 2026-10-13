@@ -59,7 +59,7 @@ test('browser Git packages publish their bundled frontend without a Rust runtime
 		await mkdir(join(directory, 'build/lib'), { recursive: true });
 		await copyFile(resolve(import.meta.dirname, '../lib/preparedInputs.ts'), join(directory, 'build/lib/preparedInputs.ts'));
 		await symlink(resolve(import.meta.dirname, '../node_modules'), join(directory, 'build/node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
-		for (const name of ['node_modules', 'crates']) {
+		for (const name of ['node_modules', 'resources']) {
 			await symlink(resolve(import.meta.dirname, '../../' + name), join(directory, name), process.platform === 'win32' ? 'junction' : 'dir');
 		}
 		await mkdir(join(directory, 'extensions/theme-defaults/themes'), { recursive: true });

@@ -3,7 +3,7 @@ load("//:defs.bzl", "ash_rust_crate")
 ash_rust_crate(
     name = "external-ext",
     crate_name = "ash_external_ext",
-    data = ["//crates/external-js-ext:src/node.mjs", "//crates/external-js-ext:src/vscode.js", "//crates/external-js-ext:src/host.mjs", "//crates/external-js-ext:src/scm.js"],
+    data = ["//resources/extension-host:node.mjs", "//resources/extension-host:vscode.js", "//resources/extension-host:host.mjs", "//resources/extension-host:scm.js"],
     # The process contract test launches the existing Node runtime.
     test_env_inherit = ["PATH"],
 )

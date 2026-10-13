@@ -37,10 +37,10 @@ LAYOUT = json.loads(
 LAYOUT_VERSION = LAYOUT["layoutVersion"]
 METADATA_FILE = "ash-package.json"
 EXTENSION_HOST_RESOURCES = (
-    ("crates/external-js-ext/src/node.mjs", "node.mjs"),
-    ("crates/external-js-ext/src/vscode.js", "vscode.mjs"),
-    ("crates/external-js-ext/src/host.mjs", "host.mjs"),
-    ("crates/external-js-ext/src/scm.js", "scm.js"),
+    ("resources/extension-host/node.mjs", "node.mjs"),
+    ("resources/extension-host/vscode.js", "vscode.mjs"),
+    ("resources/extension-host/host.mjs", "host.mjs"),
+    ("resources/extension-host/scm.js", "scm.js"),
 )
 SKILL_NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 

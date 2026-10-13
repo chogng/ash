@@ -158,6 +158,12 @@ class CiWorkflowTests(unittest.TestCase):
 
     def test_owned_sources_select_their_real_checks(self) -> None:
         cases = {
+            "resources/extension-host/vscode.js": {
+                "bazel",
+                "frontend",
+                "rust-warnings",
+                "tooling",
+            },
             "src/ash/editor/browser/view.ts": {"frontend"},
             "third_party/node/runtime-lock.json": {"frontend", "tooling"},
             "sdk/rust/src/lib.rs": {"bazel", "frontend"},
@@ -322,6 +328,21 @@ class CiWorkflowTests(unittest.TestCase):
             subprocess.run(command, env=environment, capture_output=True).returncode, 1
         )
 
+    def test_optional_v8_extension_host_has_separate_manual_validation(self) -> None:
+        required = (ROOT / ".github/workflows/rust-warnings.yml").read_text()
+        self.assertIn(
+            "--workspace --exclude ash-external-js-ext --all-targets", required
+        )
+        optional = (ROOT / ".github/workflows/external-js-ext.yml").read_text()
+        self.assertIn("workflow_dispatch:", optional)
+        self.assertNotIn("workflow_call:", optional)
+        self.assertIn("runner: [macos-15, windows-latest]", optional)
+        self.assertIn("just rust-warnings ash-external-js-ext", optional)
+        self.assertIn(
+            "just test ash-external-js-ext --bin ash-external-js-ext", optional
+        )
+        self.assertIn("just test-processes ash-external-js-ext --test host", optional)
+
     def test_unix_lifecycle_runs_in_the_required_rust_workflow(self) -> None:
         for path in (
             "cli/tests/stdio.rs",
@@ -356,11 +377,11 @@ class CiWorkflowTests(unittest.TestCase):
         )[1]
         self.assertNotIn("--no-run", stdio_run)
         self.assertNotIn("--no-run", library_run)
+        self.assertNotIn("ash-external-js-ext", lifecycle)
         for package, executable in (
             ("ash-cli", "ash"),
             ("ash-app-server", "ash-app-server"),
             ("ash-remote-server", "ash-remote-server"),
-            ("ash-external-js-ext", "ash-external-js-ext"),
         ):
             self.assertIn(f"-p {package} --bin {executable}", lifecycle)
 

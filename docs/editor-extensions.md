@@ -96,12 +96,12 @@ Workspace edit 的 `entries` 按顺序执行：`kind: textDocument` 带 `resourc
 
 执行位置与 Provider 类型决定生命周期机制，不能因实现语言是 TS 或 Rust 就把它们合并：
 
-| 路径 | 启动与激活 owner | 当前机制 |
-| --- | --- | --- |
-| 内置或显式可信的 TS/JS `browser` 包 | 窗口的 `WebWorkerExtensionHost` | reconcile 读取启用目录并启动 browser 入口；当前尚未按 manifest `activationEvents` 延迟创建 Worker |
-| 后端标准 JS 包（Node 或 Rust/V8 JS 宿主） | App Server 的 JS 扩展发现、授权与宿主监管 | 启用并授权后可保持 `dormant`，按已支持的命令、语言、启动完成等事件激活；Rust/V8 仍执行 JS |
-| 独立 Rust capability Provider | 共享运行时、来源授权与对应 supervisor | 按 Provider 声明、scope 和能力需求启动/握手，不套用浏览器包的 VS Code activation events |
-| 共享 Git 后端 | App Server 的目录级 `GitRuntime` / `GitService` | 由共享后端管理仓库、监听和状态；不依赖 `ash.git` Worker 的启用或激活事件 |
+| 路径                                      | 启动与激活 owner                                | 当前机制                                                                                          |
+| ----------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| 内置或显式可信的 TS/JS `browser` 包       | 窗口的 `WebWorkerExtensionHost`                 | reconcile 读取启用目录并启动 browser 入口；当前尚未按 manifest `activationEvents` 延迟创建 Worker |
+| 后端标准 JS 包（Node 或 Rust/V8 JS 宿主） | App Server 的 JS 扩展发现、授权与宿主监管       | 启用并授权后可保持 `dormant`，按已支持的命令、语言、启动完成等事件激活；Rust/V8 仍执行 JS         |
+| 独立 Rust capability Provider             | 共享运行时、来源授权与对应 supervisor           | 按 Provider 声明、scope 和能力需求启动/握手，不套用浏览器包的 VS Code activation events           |
+| 共享 Git 后端                             | App Server 的目录级 `GitRuntime` / `GitService` | 由共享后端管理仓库、监听和状态；不依赖 `ash.git` Worker 的启用或激活事件                          |
 
 浏览器 reconcile 是增量刷新：包版本、package/manifest digest、来源、执行位置/平台和窗口语言
 不变时保留健康 Worker、激活代次、进行中的调用及 SCM provider。移除、禁用或身份变更先撤销旧
@@ -224,12 +224,13 @@ Rust 扩展的边界是独立程序与版本化协议，不建立稳定 Rust dyn
 
 运行 crate 与作者 SDK 已按下表重命名和搬迁，Cargo package 沿用产品 `ash-` 前缀。标准作者 API 与内部 adapter 已统一接入 Host RPC；完整 VS Code/Node 兼容、App Server 运行管理提取和来源解耦仍是后续工作。
 
-| 当前目录 / 包名                                              | 职责                                                                                                                                    |
-| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `crates/external-ext` / `ash-external-ext`                   | 共用启动门禁、进程监管、取消、释放和有界恢复；产品组合与 fleet 仍在 App Server，后续按接入与路由职责提取，不复制领域业务或语言 API      |
-| `crates/external-js-ext` / `ash-external-js-ext`             | TS/JS 激活、模块与依赖加载、VS Code/Node API 兼容；当前 Node 与受限 V8 共用标准 API adapter，Electron 侧实现仍按前端平台职责放在 `src/` |
-| `crates/external-ext-protocol` / `ash-external-ext-protocol` | 扩展进程通信的版本化生命周期、调用身份、错误与取消；业务请求/响应保留 typed 领域契约                                                    |
-| `sdk/rust` / `ash-external-ext-sdk`                          | Rust 作者注册、typed capability 调用、回调与 stdio runtime；不依赖产品宿主或 V8                                                         |
+| 当前目录 / 包名                                              | 职责                                                                                                                               |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `crates/external-ext` / `ash-external-ext`                   | 共用启动门禁、进程监管、取消、释放和有界恢复；产品组合与 fleet 仍在 App Server，后续按接入与路由职责提取，不复制领域业务或语言 API |
+| `crates/external-js-ext` / `ash-external-js-ext`             | 可选的受限 Rust/V8 扩展宿主、包快照加载、内存限制与系统隔离；退出默认打包、必需 CI 检查和常规 V8 构建组                            |
+| `resources/extension-host`                                   | Node 入口与 Node、V8、可信浏览器 Worker 共用的标准 API facade、回调生命周期及 SCM 适配                                             |
+| `crates/external-ext-protocol` / `ash-external-ext-protocol` | 扩展进程通信的版本化生命周期、调用身份、错误与取消；业务请求/响应保留 typed 领域契约                                               |
+| `sdk/rust` / `ash-external-ext-sdk`                          | Rust 作者注册、typed capability 调用、回调与 stdio runtime；不依赖产品宿主或 V8                                                    |
 
 `host` 不必出现在 crate 名中；具体类型只有确实表达承载扩展的执行环境时才使用它。Rust 扩展运行自己的 executable，由共享接入层监管，不另建 `external-rs-ext` 执行器。`ash-external-ext::packages` 校验外部包快照和资源；内置编辑器资源由 TS 构建与加载，主题、语言、grammar 与 snippets 的解析和注册继续由 TS owner 承担；`ash-v8-runtime` 保持引擎初始化设施职责，不承担扩展管理、Node API 或 Code Mode/扩展的执行状态。
 
@@ -241,7 +242,7 @@ Rust 扩展的边界是独立程序与版本化协议，不建立稳定 Rust dyn
 
 #### 根目录 SDK 与运行时实现
 
-根目录只保留 `sdk/rust` 作者 SDK，TS/JS 作者沿用标准 VS Code / Node 契约。Rust SDK 封装通信、取消与公共对象的生命周期；V8 引擎、进程监管、Node API 模拟、模块解析和产品授权留在运行时 owner。产品提供的 `vscode`/Node 兼容实现属于 `external-js-ext` 与桌面兼容层，包含必要的内部协议 adapter；不能把原 `@ash/extension` 换名或搬目录后继续作为另一套公开作者接口。内置扩展、测试 fixtures、打包入口与示例均使用标准 API，公开 TS SDK 已退出。
+根目录只保留 `sdk/rust` 作者 SDK，TS/JS 作者沿用标准 VS Code / Node 契约。Rust SDK 封装通信、取消与公共对象的生命周期；V8 引擎、进程监管、Node API 模拟、模块解析和产品授权留在运行时 owner。产品提供的共享 `vscode` API、Node 入口与内部协议 adapter 位于 `resources/extension-host`，V8 专用加载与隔离留在 `external-js-ext`；不能把原 `@ash/extension` 换名或搬目录后继续作为另一套公开作者接口。内置扩展、测试 fixtures、打包入口与示例均使用标准 API，公开 TS SDK 已退出。
 
 当前目录布局：
 
@@ -250,9 +251,11 @@ sdk/
   rust/                       # Rust 作者 SDK
 crates/
   external-ext/               # 产品侧接入与监管
-  external-js-ext/            # Rust/V8 JS 执行与运行时兼容
+  external-js-ext/            # 可选的受限 Rust/V8 扩展宿主
   external-ext-protocol/      # 独立扩展进程通信契约
 ```
+
+Node、V8 与可信浏览器 Worker 的共享 JS 资源已移到 `resources/extension-host`，默认 Node 打包与浏览器构建不依赖可选 V8 crate 的源码目录。V8 crate 保留 Cargo/Bazel 显式目标和[手动兼容性 CI](../.github/workflows/external-js-ext.yml)；共享 Node 进程测试由常规 Build tooling CI 运行。
 
 上述目录已迁移。Rust SDK 仍属于根 Cargo workspace；目录移出 `crates/` 不改变依赖与构建约束。Cargo/Bazel、JS 包路径、构建与打包清单、消费者、示例、测试和文档链接已同步使用新名称；通信格式与现有授权、取消和恢复行为保持原契约。确有多个执行宿主需要复用同一兼容实现时再提取完整的兼容库，不为命名创建空壳；Rust 作者 SDK 不因此依赖 JS 运行时。
 

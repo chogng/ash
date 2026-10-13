@@ -43,3 +43,5 @@ jobs:
           sudo apt-get install --yes --no-install-recommends llvm
       - name: Test build, package, signing and repository contracts
         run: just test-python build scripts code
+      - name: Test shared Node extension runtime
+        run: node --test resources/extension-host/node.test.mjs

@@ -78,7 +78,7 @@ crates/
 ├── app-server-client/
 ├── app-server/
 ├── external-ext/         # 共用进程监管；产品组合仍在 App Server
-├── external-js-ext/      # TS/JS 执行；共享标准 API 的 Node 与受限 V8 路径
+├── external-js-ext/      # 可选的受限 Rust/V8 宿主；共享 JS 在 resources/extension-host
 ├── external-ext-protocol/ # 独立、版本化的扩展进程通信
 ├── queue/                # 持久用户消息队列、租约和交付恢复
 ├── features/             # 功能身份、阶段、默认值和用户覆盖

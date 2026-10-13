@@ -45,7 +45,8 @@ bazel info execution_root
 
 若 Bazel 无法自动识别 Visual Studio 安装，使用上游的
 `--repo_env=BAZEL_VC=<Visual Studio 安装目录>/VC`。ARM64 目标需要 ARM64
-工具组件。上述文件集合仅包含两个宿主，查询路径相对于 Bazel 的 execution root；
+工具组件。上述文件集合仅包含必需的 Code Mode 宿主；可选扩展宿主需显式构建并查询
+`//crates/external-js-ext:ash-external-js-ext`。查询路径相对于 Bazel 的 execution root；
 incoming platform 转换的输出可能位于带配置后缀的目录，不能拼接旧 wrapper 路径。
 将查询到的文件分别传给 `build/app_server.py`
 的 `--code-mode-host-bin`；需要显式装配受限扩展宿主时，另传 `--external-js-ext-bin`。打包器保留已选择的独立

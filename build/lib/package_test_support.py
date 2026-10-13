@@ -13,7 +13,12 @@ from build.lib.executable import ExecutableResolution
 from build.lib.package import EXTENSION_HOST_RESOURCES, LAYOUT, build_package_directory
 from build.lib.node import NodeResolution
 from build.lib.version import read_workspace_version
-from build.protocol.artifacts import SOURCE_MANIFEST, artifact_digests, portable_sources
+from build.protocol.artifacts import (
+    REQUIRED_ARTIFACTS,
+    SOURCE_MANIFEST,
+    artifact_digests,
+    portable_sources,
+)
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -57,6 +62,12 @@ def create_package_sources(root: Path) -> Path:
         path = directory / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(contents, encoding="utf-8")
+    # Keep the fixture complete as the exported TypeScript contract grows.
+    for name in REQUIRED_ARTIFACTS:
+        path = directory / name
+        if not path.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("export {};\n", encoding="utf-8")
     # Use the real source/artifact fingerprint contract, not a mock of its
     # validation. Tests must still reject stale or tampered prepared inputs.
     manifest = portable_sources(root, [str(protocol)])

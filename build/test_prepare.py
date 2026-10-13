@@ -24,14 +24,14 @@ class PrepareTests(unittest.TestCase):
             root = Path(temporary)
             for relative in (
                 "Cargo.toml",
-                "crates/external-js-ext/src/host.mjs",
+                "resources/extension-host/host.mjs",
                 "build/source-layout.json",
                 "build/download/artifacts.py",
                 "build/prepare.py",
-                "crates/external-js-ext/src/node.mjs",
-                "crates/external-js-ext/src/vscode.js",
-                "crates/external-js-ext/src/scm.js",
-                "crates/external-js-ext/src/host.mjs",
+                "resources/extension-host/node.mjs",
+                "resources/extension-host/vscode.js",
+                "resources/extension-host/scm.js",
+                "resources/extension-host/host.mjs",
                 "build/desktop/appServer.ts",
                 "build/lib/package-layout.json",
                 "build/lib/package.py",
@@ -51,11 +51,11 @@ class PrepareTests(unittest.TestCase):
             self.assertEqual(
                 first, prepare.package_input_digest(prepare.package_sources(root), {})
             )
-            (root / "crates/external-js-ext/src/node.mjs").write_text("updated host")
+            (root / "resources/extension-host/node.mjs").write_text("updated host")
             self.assertNotEqual(
                 first, prepare.package_input_digest(prepare.package_sources(root), {})
             )
-            (root / "crates/external-js-ext/src/node.mjs").write_text("first")
+            (root / "resources/extension-host/node.mjs").write_text("first")
             (root / "build/lib/package-layout.json").write_text("updated layout")
             self.assertNotEqual(
                 first, prepare.package_input_digest(prepare.package_sources(root), {})
@@ -63,7 +63,7 @@ class PrepareTests(unittest.TestCase):
             after_layout = prepare.package_input_digest(
                 prepare.package_sources(root), {}
             )
-            (root / "crates/external-js-ext/src/host.mjs").write_text(
+            (root / "resources/extension-host/host.mjs").write_text(
                 "updated embedded SDK"
             )
             self.assertNotEqual(
@@ -72,7 +72,7 @@ class PrepareTests(unittest.TestCase):
             )
 
             before_scm = prepare.package_input_digest(prepare.package_sources(root), {})
-            (root / "crates/external-js-ext/src/scm.js").write_text("updated SCM SDK")
+            (root / "resources/extension-host/scm.js").write_text("updated SCM SDK")
             self.assertNotEqual(
                 before_scm,
                 prepare.package_input_digest(prepare.package_sources(root), {}),

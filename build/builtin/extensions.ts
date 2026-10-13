@@ -149,7 +149,7 @@ async function preparePackages(): Promise<boolean> {
 							return resolved.id + '?webview';
 						},
 						async load(id) {
-							const facade = JSON.stringify(resolve(root, 'crates/external-js-ext/src/vscode.js'));
+							const facade = JSON.stringify(resolve(root, 'resources/extension-host/vscode.js'));
 							if (id === '\0ash-public-api') { return `import { bridge } from '\0ash-vscode-bridge'; export const { scm, backend, editors } = bridge.api.ash;`; }
 							if (id === '\0ash-vscode') {
 								const names = ['commands', 'workspace', 'window', 'languages', 'tasks', 'debug', 'env', 'l10n', 'Uri', 'Position', 'Range', 'Location', 'Hover', 'Disposable', 'EventEmitter', 'CancellationTokenSource', 'Diagnostic', 'DiagnosticSeverity', 'CompletionItem', 'CompletionList', 'CompletionItemKind', 'TextEdit', 'WorkspaceEdit', 'CodeActionKind', 'SymbolKind', 'FileType', 'Task', 'TaskGroup', 'TaskScope', 'ProcessExecution', 'ShellExecution', 'CustomExecution'];
@@ -159,7 +159,7 @@ async function preparePackages(): Promise<boolean> {
 								return `import { createApi } from ${facade}; export const bridge = createApi(globalThis.__ashConfiguration, globalThis.__ashInitialization);`;
 							}
 							if (id === '\0ash-browser-entry') {
-								return `import { __runtime } from ${JSON.stringify(resolve(root, 'crates/external-js-ext/src/host.mjs'))}; import { bridge } from '\0ash-vscode-bridge'; import * as extension from ${JSON.stringify(resolve(packageRoot, entry))}; export async function activate() { const context = __runtime.beginActivation(globalThis.__ashConfiguration.extensionId); await bridge.activate(context, extension.activate, extension, ['command', 'languageProvider', 'customTextEditor']); return JSON.parse(__runtime.sealActivation()); } export const invoke = (id, payload, requestId, operation) => __runtime.invoke(id, JSON.stringify(payload), requestId, operation).then(JSON.parse); export const cancel = id => __runtime.cancel(id); export const deactivate = () => __runtime.deactivate(() => { bridge.deactivate(); return extension.deactivate?.(); });`;
+								return `import { __runtime } from ${JSON.stringify(resolve(root, 'resources/extension-host/host.mjs'))}; import { bridge } from '\0ash-vscode-bridge'; import * as extension from ${JSON.stringify(resolve(packageRoot, entry))}; export async function activate() { const context = __runtime.beginActivation(globalThis.__ashConfiguration.extensionId); await bridge.activate(context, extension.activate, extension, ['command', 'languageProvider', 'customTextEditor']); return JSON.parse(__runtime.sealActivation()); } export const invoke = (id, payload, requestId, operation) => __runtime.invoke(id, JSON.stringify(payload), requestId, operation).then(JSON.parse); export const cancel = id => __runtime.cancel(id); export const deactivate = () => __runtime.deactivate(() => { bridge.deactivate(); return extension.deactivate?.(); });`;
 							}
 							if (!id.endsWith('?webview')) return;
 							const webview = await build({

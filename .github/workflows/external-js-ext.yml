@@ -1,0 +1,45 @@
+name: Optional Rust V8 extension host
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: external-js-ext-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compatibility:
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          workspaces: ". -> .build/cargo"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: true
+          cache-directories: third_party/.cache/v8
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.11"
+      - uses: taiki-e/install-action@a6b2e2dcd845ddd7f509ce4f3ed3d922b80cc5d9
+        with:
+          tool: just@1.46.0
+      - name: Restore complete V8 build inputs
+        shell: bash
+        run: |
+          cargo clean --package v8 --profile ci-test
+          cargo fetch --locked
+      - name: Check every optional host target
+        run: just rust-warnings ash-external-js-ext --profile ci-test --locked
+      - name: Test package loading and platform isolation
+        run: just test ash-external-js-ext --bin ash-external-js-ext --profile ci-test --locked
+      - name: Test supervised V8 processes
+        run: just test-processes ash-external-js-ext --test host --profile ci-test --locked

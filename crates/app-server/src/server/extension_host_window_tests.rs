@@ -127,7 +127,7 @@ fn install_node_fixture(root: &Path) -> (ProductNodeLauncher, EditorExtensionDep
         .expect("Node is required for standard extension lifecycle tests");
     assert!(output.status.success());
     let node = PathBuf::from(String::from_utf8(output.stdout).unwrap().trim());
-    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../external-js-ext/src");
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../resources/extension-host");
     for (from, to) in [
         ("node.mjs", "node.mjs"),
         ("vscode.js", "vscode.mjs"),

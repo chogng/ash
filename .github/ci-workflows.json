@@ -2,6 +2,8 @@
   "bazel": [
     "cli/**",
     "crates/**",
+    "resources/extension-host/*.js",
+    "resources/extension-host/*.mjs",
     "sdk/**",
     "examples/extensions/**",
     "build/**",
@@ -97,6 +99,8 @@
   ],
   "rust-warnings": [
     "**/*.rs",
+    "resources/extension-host/*.js",
+    "resources/extension-host/*.mjs",
     "cli/**/*.snap",
     "crates/**/*.snap",
     "**/Cargo.toml",

@@ -68,15 +68,18 @@ impl Package {
         );
         package.sources.clear();
         package.sources.insert(entry, wrapper);
-        package
-            .sources
-            .insert("@ash/host".into(), include_str!("host.mjs").into());
-        package
-            .sources
-            .insert("@ash/vscode".into(), include_str!("vscode.js").into());
-        package
-            .sources
-            .insert("@ash/scm.js".into(), include_str!("scm.js").into());
+        package.sources.insert(
+            "@ash/host".into(),
+            include_str!("../../../resources/extension-host/host.mjs").into(),
+        );
+        package.sources.insert(
+            "@ash/vscode".into(),
+            include_str!("../../../resources/extension-host/vscode.js").into(),
+        );
+        package.sources.insert(
+            "@ash/scm.js".into(),
+            include_str!("../../../resources/extension-host/scm.js").into(),
+        );
         package
             .sources
             .insert("@ash/commonjs".into(), include_str!("commonjs.js").into());
