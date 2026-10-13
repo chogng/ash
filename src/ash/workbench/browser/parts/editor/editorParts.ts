@@ -40,7 +40,8 @@ export interface IEditorPartsService extends IEditorPart {
 	readonly activePart: IEditorPart;
 	readonly onDidCreateAuxiliaryEditorPart: Event<IEditorPart>;
 	createAuxiliaryEditorPart(): Promise<IEditorPart>;
-	moveActiveEditorToNewWindow(): Promise<IEditorPart | undefined>;
+	/** Opens one window for the selected instances; copies share content but receive new instance identities. */
+	openEditorsInNewWindow(editors: readonly EditorIdentifier[], mode: 'move' | 'copy'): Promise<IEditorPart | undefined>;
 	closeAuxiliaryEditorPart(part: IEditorPart): Promise<boolean>;
 	replaceEditorResource(source: IEditorGroupView, input: IResourceEditorInput, replacement: IResourceEditorInput): Promise<void>;
 	savePartsState(): EditorPartsState;
@@ -182,26 +183,40 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		return creation.part;
 	}
 
-	async moveActiveEditorToNewWindow(): Promise<IEditorPart | undefined> {
-		const source = this._activePart;
-		const sourceGroup = source.activeGroup;
-		const input = source.activeInput;
-		if (!input) return undefined;
+	async openEditorsInNewWindow(editors: readonly EditorIdentifier[], mode: 'move' | 'copy'): Promise<IEditorPart | undefined> {
+		if (editors.length === 0) return undefined;
+		const previousActive = this._activePart;
 		const target = await this.createAuxiliaryEditorPart();
 		try {
-			// Popup styles load asynchronously. Move the editor that invoked the command,
-			// even if another tab became active while the window was opening.
-			if (!source.groups.includes(sourceGroup) || !sourceGroup.inputs.includes(input)) {
+			for (const editor of editors) {
+				const sourceGroup = this.groups.find(group => group.id === editor.groupId);
+				// Opening the popup is asynchronous. Keep the invocation's selection,
+				// but skip instances closed or replaced before the popup became ready.
+				const current = sourceGroup?.editors.find(candidate => candidate.instanceId === editor.instanceId);
+				if (!sourceGroup || !current) continue;
+				if (mode === 'move') {
+					await sourceGroup.moveEditorTo(current.input, target.activeGroup, target.activeGroup.inputs.length);
+				} else {
+					const viewState = sourceGroup.saveEditorViewState(current.input);
+					await target.activeGroup.openEditor(current.input, { pinned: true, preferredEditorId: current.paneId });
+					if (current.isSticky) target.activeGroup.stickEditor(current.input);
+					target.activeGroup.restoreEditorViewState(current.input, viewState);
+				}
+			}
+			if (target.activeGroup.inputs.length === 0) {
 				await this.closeAuxiliaryEditorPart(target);
 				return undefined;
 			}
-			await sourceGroup.moveEditorTo(input, target.activeGroup, target.activeGroup.inputs.length);
 			this.setActivePart(target);
 			target.focus();
 			return target;
 		} catch (error) {
-			await this.closeAuxiliaryEditorPart(target);
-			this.setActivePart(source);
+			// A partial move must keep the transferred editors reachable; copies
+			// can be closed because their source instances still own the content.
+			if (mode === 'copy' || target.activeGroup.inputs.length === 0) {
+				await this.closeAuxiliaryEditorPart(target);
+				this.setActivePart(previousActive);
+			}
 			throw error;
 		}
 	}

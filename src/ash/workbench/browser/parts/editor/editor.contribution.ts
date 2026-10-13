@@ -8,7 +8,7 @@ import { localize } from "../../../../nls.js";
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
 import { IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
 import { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
-import "./editorActions.js";
+import { CopyEditorToNewWindowCommandId, MoveEditorToNewWindowCommandId } from "./editorActions.js";
 import "./editorCommands.js";
 import "./diffEditor.workbench.contribution.js";
 import '../../../../editor/browser/widget/diffEditor/diffEditor.contribution.js';
@@ -36,6 +36,17 @@ MenusRegistry.appendMenuItem(MenuId.EditorTitleContext, {
 	submenu: MenuId.EditorSplitMoveSubmenu,
 	title: localize('workbench.splitMenu', 'Split'),
 	group: '5_split', order: 15,
+	when: EditorsVisibleContext.isEqualTo(true),
+});
+
+MenusRegistry.appendMenuItem(MenuId.EditorTitleContext, {
+	command: { id: MoveEditorToNewWindowCommandId, title: localize({ bundle: 'ash.workbench', key: 'editor.moveIntoNewWindow' }, 'Move into New Window') },
+	group: '7_new_window', order: 10,
+	when: EditorsVisibleContext.isEqualTo(true),
+});
+MenusRegistry.appendMenuItem(MenuId.EditorTitleContext, {
+	command: { id: CopyEditorToNewWindowCommandId, title: localize({ bundle: 'ash.workbench', key: 'editor.copyIntoNewWindow' }, 'Copy into New Window') },
+	group: '7_new_window', order: 20,
 	when: EditorsVisibleContext.isEqualTo(true),
 });
 

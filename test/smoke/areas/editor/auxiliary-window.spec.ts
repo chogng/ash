@@ -4,6 +4,69 @@ import { waitForElectronWindowState } from '../../../automation/electronDriver.j
 // Window switching must transfer OS focus to the detached editor.
 const focusTest = test.extend({ electronWindowMode: 'active' });
 
+for (const scenario of [
+	{ mode: 'move', locale: 'en', keyboard: false },
+	{ mode: 'copy', locale: 'en', keyboard: true },
+	{ mode: 'copy', locale: 'zh-CN', keyboard: true },
+] as const) {
+	test(`tab context menu ${scenario.mode === 'move' ? 'moves' : 'copies'} the clicked editor into a new window in ${scenario.locale}`, async ({ workbench, application, restartWorkbench }) => {
+		if (scenario.locale === 'zh-CN') {
+			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+			const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
+			await picker.getByRole('combobox').fill('简体中文');
+			await picker.getByRole('combobox').press('Enter');
+			({ workbench, application } = await restartWorkbench());
+		}
+		const page = workbench.page;
+		await page.keyboard.press('ControlOrMeta+N');
+		await workbench.editors.groupAt(0).editor.waitForEditorFocus();
+		await workbench.editors.groupAt(0).editor.waitForTypeInEditor('selected tab content');
+		const instanceId = await workbench.editors.groupAt(0).tabs.last().evaluate(element => element.closest<HTMLElement>('.ash-tab')!.dataset.actionId!);
+		await page.keyboard.press('ControlOrMeta+N');
+		const tab = page.locator(`.ash-tab[data-action-id="${instanceId}"]`).getByRole('tab');
+		await expect(tab).toHaveAttribute('aria-selected', 'false');
+		const remainingId = await workbench.editors.groupAt(0).element.locator('.ash-tab-label[aria-selected="true"]').evaluate(element => element.closest<HTMLElement>('.ash-tab')!.dataset.actionId!);
+		const remainingTab = page.locator(`.ash-tab[data-action-id="${remainingId}"]`).getByRole('tab');
+		const openMenu = async () => {
+			if (scenario.keyboard) {
+				await tab.focus();
+				await tab.press('Shift+F10');
+			} else {
+				await tab.click({ button: 'right' });
+			}
+		};
+		const labels = scenario.locale === 'en' ? ['Move into New Window', 'Copy into New Window'] : ['移至新窗口', '复制到新窗口'];
+		const menu = await workbench.menus.inspect(application, openMenu);
+		const splitIndex = menu.findIndex(item => item.label === (scenario.locale === 'en' ? 'Split' : '拆分'));
+		const moveIndex = menu.findIndex(item => item.label === labels[0]);
+		expect(splitIndex).toBeGreaterThanOrEqual(0);
+		expect(moveIndex).toBeGreaterThan(splitIndex);
+		expect(menu.slice(moveIndex, moveIndex + 2).map(item => ({ label: item.label, enabled: item.enabled }))).toEqual(labels.map(label => ({ label, enabled: true })));
+		const opened = page.context().waitForEvent('page');
+		await workbench.menus.select(application, openMenu, [labels[scenario.mode === 'move' ? 0 : 1]!]);
+		const popup = await opened;
+		try {
+			const input = popup.locator('.stanza-editor-input').first();
+			await expect(popup.locator('.view-lines')).toContainText('selected tab content');
+			await expect(input).toBeFocused();
+			await expect(tab).toHaveCount(scenario.mode === 'move' ? 0 : 1);
+			await expect(remainingTab).toHaveCount(1);
+			const popupId = await popup.getByRole('tab').first().evaluate(element => element.closest<HTMLElement>('.ash-tab')!.dataset.actionId!);
+			expect(popupId === instanceId).toBe(scenario.mode === 'move');
+			if (scenario.mode === 'copy') {
+				await input.press('ControlOrMeta+A');
+				await popup.keyboard.insertText('shared unsaved content');
+				await tab.click();
+				await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text.includes('shared unsaved content'));
+			}
+		} finally {
+			if (!popup.isClosed()) await popup.close();
+		}
+		await expect(tab).toHaveCount(1);
+		await expect(remainingTab).toHaveCount(1);
+	});
+}
+
 test('detached editor window inherits workbench theme and accessibility state', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');

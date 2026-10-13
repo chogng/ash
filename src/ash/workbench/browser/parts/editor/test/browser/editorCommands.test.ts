@@ -23,6 +23,50 @@ import type { IEditorGroup } from '../../../../../services/editor/common/editorG
 import { Direction } from '../../../../../../base/browser/ui/grid/grid.js';
 import { IHistoryService } from '../../../../../services/history/common/history.js';
 import { SubmenuAction } from '../../../../../../base/common/actions.js';
+import { IEditorPartsService } from '../../editorParts.js';
+import type { EditorIdentifier } from '../../../../../services/editor/common/editorState.js';
+
+test('new window tab menus resolve the clicked tab, multiselection and invalid targets', async () => {
+	await import('../../editor.contribution.js');
+	const { MoveEditorToNewWindowCommandId, CopyEditorToNewWindowCommandId } = await import('../../editorActions.js');
+	const inputs = ['first', 'clicked', 'active'].map(name => ({ resource: URI.file(`/project/${name}.ts`) }));
+	const editors = inputs.map((input, index) => ({ input, groupId: 'source', instanceId: `editor-${index}`, paneId: 'test.editor' }));
+	const group = { id: 'source', inputs, editors, activeInput: inputs[2], selectedInputs: [inputs[2]] } as unknown as IEditorGroup;
+	const opened: { editors: readonly EditorIdentifier[]; mode: string; }[] = [];
+	using services = new InstantiationService();
+	services.registerInstance(IEditorGroupsService, {
+		groups: [group], activeGroup: group, getGroup: (id: string) => id === group.id ? group : undefined,
+	} as unknown as IEditorGroupsService);
+	services.registerInstance(IEditorPartsService, {
+		openEditorsInNewWindow: async (editors, mode) => { opened.push({ editors, mode }); return undefined; },
+	} as IEditorPartsService);
+	using commands = new CommandService(services);
+	using context = new ContextKeyService();
+	context.setContext(EditorsVisibleContext.key, true);
+	const menus = new MenuService(commands, context);
+	const argument = { groupId: group.id, editorIndex: 1 };
+	const groups = menus.getMenuActions(MenuId.EditorTitleContext, { arg: argument });
+	assert.ok(groups.findIndex(([name]) => name === '7_new_window') > groups.findIndex(([name]) => name === '5_split'));
+	const actions = groups.find(([name]) => name === '7_new_window')![1];
+	assert.deepEqual(actions.map(action => [action.id, action.label]), [
+		[MoveEditorToNewWindowCommandId, 'Move into New Window'],
+		[CopyEditorToNewWindowCommandId, 'Copy into New Window'],
+	]);
+	await actions[0]!.run();
+	await actions[1]!.run();
+	assert.deepEqual(opened, [
+		{ editors: [editors[1]], mode: 'move' },
+		{ editors: [editors[1]], mode: 'copy' },
+	]);
+	Object.assign(group, { selectedInputs: [inputs[0], inputs[1]] });
+	await actions[1]!.run();
+	assert.deepEqual(opened.at(-1), { editors: editors.slice(0, 2), mode: 'copy' });
+	Object.assign(group, { selectedInputs: [inputs[2]] });
+	await commands.executeCommand(CopyEditorToNewWindowCommandId);
+	assert.deepEqual(opened.at(-1), { editors: [editors[2]], mode: 'copy' });
+	await commands.executeCommand(MoveEditorToNewWindowCommandId, { groupId: 'closed', editorIndex: 1 });
+	assert.deepEqual(opened.at(-1), { editors: [], mode: 'move' });
+});
 
 test('tab close and split menus operate on the clicked group and selected editors', async () => {
 	await import('../../editor.contribution.js');

@@ -391,6 +391,7 @@ registerAction2(class ShowAllEditorsAction extends Action2 {
 });
 
 export const MoveEditorToNewWindowCommandId = "workbench.action.moveEditorToNewWindow";
+export const CopyEditorToNewWindowCommandId = "workbench.action.copyEditorToNewWindow";
 
 registerAction2(class MoveEditorToNewWindowAction extends Action2 {
 	constructor() {
@@ -406,10 +407,32 @@ registerAction2(class MoveEditorToNewWindowAction extends Action2 {
 		});
 	}
 
-	override async run(accessor: ServicesAccessor): Promise<void> {
-		await accessor.get(IEditorPartsService).moveActiveEditorToNewWindow();
+	override async run(accessor: ServicesAccessor, ...args: readonly unknown[]): Promise<void> {
+		await openEditorsInNewWindow(accessor, args, 'move');
 	}
 });
+
+registerAction2(class CopyEditorToNewWindowAction extends Action2 {
+	constructor() {
+		super({
+			id: CopyEditorToNewWindowCommandId,
+			title: localize2({ bundle: 'ash.workbench', key: 'command.CopyEditorToNewWindowAction' }, "Copy to New Window"),
+			f1: true,
+			menu: { id: MenuId.EditorTitle, group: "2_open", order: 2 },
+		});
+	}
+
+	override async run(accessor: ServicesAccessor, ...args: readonly unknown[]): Promise<void> {
+		await openEditorsInNewWindow(accessor, args, 'copy');
+	}
+});
+
+async function openEditorsInNewWindow(accessor: ServicesAccessor, args: readonly unknown[], mode: 'move' | 'copy'): Promise<void> {
+	const parts = accessor.get(IEditorPartsService);
+	const context = resolveCommandsContext(args, accessor.get(IEditorGroupsService));
+	const editors = context.groupedEditors.flatMap(({ group, editors }) => group.editors.filter(editor => editors.includes(editor.input)));
+	await parts.openEditorsInNewWindow(editors, mode);
+}
 
 export const NewFileFromTemplateCommandId = "workbench.action.files.newFileFromTemplate";
 

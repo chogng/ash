@@ -3176,7 +3176,7 @@ test("EditorParts moves an editor to an auxiliary window without changing its in
 	assert.equal(contextKeys.getValue('resource'), resourceInput.resource.toString());
 	workingCopy.markDirty();
 
-	const auxiliary = await editorParts.moveActiveEditorToNewWindow();
+	const auxiliary = await editorParts.openEditorsInNewWindow([editorParts.getEditorState().activeEditor!], 'move');
 	assert.ok(auxiliary);
 	assert.equal(editorParts.parts.length, 2);
 	assert.equal(main.groups[0]?.inputs.length, 0);
@@ -3199,7 +3199,7 @@ test("EditorParts moves an editor to an auxiliary window without changing its in
 	assert.equal(main.groups[0]?.inputs.length, 2);
 	assert.equal(main.getEditorState().activeEditor?.instanceId, instanceId);
 	assert.equal(main.activeInput?.resource.fsPath, resourceInput.resource.fsPath);
-	const detachedAgain = await editorParts.moveActiveEditorToNewWindow();
+	const detachedAgain = await editorParts.openEditorsInNewWindow([editorParts.getEditorState().activeEditor!], 'move');
 	assert.ok(detachedAgain);
 	assert.equal(await editorParts.closeAuxiliaryEditorPart(detachedAgain), true);
 	assert.equal(editorParts.parts.length, 1);
@@ -3210,6 +3210,55 @@ test("EditorParts moves an editor to an auxiliary window without changing its in
 	workingCopy.dispose();
 	dom.window.close();
 });
+
+for (const mode of ['move', 'copy'] as const) {
+	test(`EditorParts ${mode === 'move' ? 'moves' : 'copies'} selected editors into one window preserving dirty content, pane choice and view state`, async () => {
+		const dom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost' });
+		try {
+			using registry = new EditorPaneRegistry();
+			using workingCopy = new TestWorkingCopy(URI.file('/project/first.ts'));
+			using defaultRegistration = registry.registerEditorPane(descriptor('test.default', '.ts', () => new TestEditorPane('test.default')));
+			using customRegistration = registry.registerEditorPane(descriptor('test.custom', '.ts', () => new TestViewStateEditorPane('test.custom', workingCopy)));
+			using main = createEditorPart(dom.window.document.body, { registry });
+			using windows = new TestAuxiliaryWindowService();
+			using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'workspace', flushInterval: 0 });
+			using parts = createEditorParts(main, windows, container => createAuxiliaryPart(container, registry), {
+				onDidChangeScreenReaderOptimized: Event.None, isScreenReaderOptimized: () => false,
+			} as unknown as IAccessibilityService, storage);
+			const first = input('/project/first.ts');
+			const second = input('/project/second.ts');
+			const remaining = input('/project/remaining.ts');
+			assert.equal(await parts.openEditorsInNewWindow([], mode), undefined);
+			assert.equal(windows.lastWindow, undefined);
+			const pane = await main.openEditor(first, { pinned: true, preferredEditorId: 'test.custom' }) as TestViewStateEditorPane;
+			pane.viewState = { cursor: 42, scrollTop: 700 };
+			main.activeGroup.stickEditor(first);
+			await main.openEditor(second, { pinned: true });
+			const selected = [...main.activeGroup.editors];
+			await main.openEditor(remaining, { pinned: true });
+			workingCopy.markDirty();
+			const target = await parts.openEditorsInNewWindow(selected, mode);
+			assert.ok(target);
+			assert.equal(parts.parts.length, 2);
+			assert.deepEqual(main.activeGroup.inputs, mode === 'move' ? [remaining] : [first, second, remaining]);
+			assert.deepEqual(target.activeGroup.inputs, [first, second]);
+			assert.equal(main.activeInput, remaining);
+			const copied = target.activeGroup.editors[0]!;
+			assert.equal(copied.paneId, 'test.custom');
+			assert.equal(copied.isDirty, true);
+			assert.equal(copied.isSticky, true);
+			assert.equal(copied.isPreview, false);
+			assert.equal(copied.instanceId === selected[0]!.instanceId, mode === 'move');
+			const targetPane = target.activateEditor(first) as TestViewStateEditorPane;
+			assert.deepEqual(targetPane.restoredViewState, pane.viewState);
+			assert.equal(targetPane.workingCopy, workingCopy);
+			await workingCopy.save();
+			assert.equal(target.activeGroup.editors[0]!.isDirty, false);
+			assert.equal(await parts.closeAuxiliaryEditorPart(target), true);
+			assert.equal(parts.parts.length, 1);
+		} finally { dom.window.close(); }
+	});
+}
 
 test('HistoryService reopens across editor windows in close order into the active part', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost' });
@@ -4112,7 +4161,7 @@ suite('Auxiliary editor lifecycle', () => {
 				const original = input('/project/original.ts');
 				const newer = input('/project/newer.ts');
 				await main.openEditor(original);
-				const moving = parts.moveActiveEditorToNewWindow();
+				const moving = parts.openEditorsInNewWindow([parts.getEditorState().activeEditor!], 'move');
 				if (outcome === 'switch tab') await main.openEditor(newer);
 				else if (outcome === 'close source') await main.closeEditor(original);
 				else parts.dispose();
