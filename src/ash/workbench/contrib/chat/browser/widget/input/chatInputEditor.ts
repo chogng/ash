@@ -7,7 +7,7 @@ import { addDisposableListener, stopEvent, h } from "../../../../../../base/brow
 import { Emitter, type Event } from "../../../../../../base/common/event.js";
 import { RunOnceScheduler } from "../../../../../../base/common/async.js";
 import { Disposable, toDisposable } from "../../../../../../base/common/lifecycle.js";
-import { EditorLineWrapping } from "../../../../../../editor/common/config/editorOptions.js";
+import { EditorLineWrapping, EditorOption } from "../../../../../../editor/common/config/editorOptions.js";
 import { CodeEditorWidget, type CodeEditorWidgetOptions } from "../../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js";
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { ChatInputConfiguration } from '../../../common/constants.js';
@@ -24,6 +24,9 @@ import { Range } from "../../../../../../editor/common/core/range.js";
 import { TextModel } from "../../../../../../editor/common/model/textModel.js";
 import { type ChatInputEditorOptions, type IChatInputEditor } from "./chatInputEditorRegistry.js";
 import { CHAT_INPUT_LANGUAGE_ID, createChatCommandCompletionProvider, createChatSkillCompletionProvider } from "./editor/chatInputCompletions.js";
+import type { ChatContextAttachment } from '../../../../../services/chat/common/chatContextService.js';
+import { InlineChatAttachmentWidget } from '../../attachments/chatAttachmentWidgets.js';
+import { IContextViewService } from '../../../../../../platform/contextview/browser/contextView.js';
 
 const CHAT_INPUT_EDITOR_PADDING = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
 // The input container owns the inset; editor heights exclude it to avoid applying it twice.
@@ -42,8 +45,9 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 	private height = CHAT_INPUT_MIN_HEIGHT;
 	private readonly minimumHeight: number;
 	private readonly maximumHeight: number;
+	private readonly referenceWidgets = new Map<string, InlineChatAttachmentWidget>();
 
-	constructor(options: ChatInputEditorOptions, @IInstantiationService instantiationService: IInstantiationService, @IConfigurationService private readonly configurationService: IConfigurationService) {
+	constructor(options: ChatInputEditorOptions, @IInstantiationService private readonly instantiationService: IInstantiationService, @IConfigurationService private readonly configurationService: IConfigurationService, @IContextViewService private readonly contextViews: IContextViewService) {
 		super();
 		this.minimumHeight = options.height?.minimum ?? CHAT_INPUT_MIN_HEIGHT;
 		this.maximumHeight = options.height?.maximum ?? CHAT_INPUT_MAX_HEIGHT;
@@ -93,6 +97,15 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 			contributions,
 		}));
 		const layout = this._register(new RunOnceScheduler(() => this.layout(), 0));
+		this._register(toDisposable(() => { for (const widget of this.referenceWidgets.values()) widget.dispose(); this.referenceWidgets.clear(); }));
+		this._register(this.editor.onMouseUp(event => {
+			if (!event.event.leftButton || !event.target.position || !this.editor.getSelection()?.isEmpty()) return;
+			const offset = this.model.getOffsetAt(event.target.position);
+			for (const widget of this.referenceWidgets.values()) {
+				const reference = widget.attachment.reference!;
+				if (offset >= reference.start && offset < reference.end) { widget.open(); break; }
+			}
+		}));
 		this._register(this.configurationService.onDidChangeConfiguration(event => {
 			if (!Object.values(ChatInputConfiguration).some(key => event.affectsConfiguration(key))) return;
 			this.editor.updateOptions(this.getFontOptions());
@@ -107,6 +120,17 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 			stopEvent(event);
 			this._onDidSubmit.fire();
 		}));
+		this._register(addDisposableListener(this.element, 'keydown', event => {
+			if (event.defaultPrevented || event.key !== 'Tab' || event.ctrlKey || event.metaKey || event.altKey || this.referenceWidgets.size === 0) return;
+			const buttons = [...this.referenceWidgets.values()].sort((a, b) => a.attachment.reference!.start - b.attachment.reference!.start).flatMap(widget => widget.widgets.map(control => control.getDomNode().querySelector('button')!));
+			if (event.target === this.editor.controller.element && !event.shiftKey) {
+				stopEvent(event);
+				buttons[0]!.focus();
+			} else if (event.target === buttons[0] && event.shiftKey) {
+				stopEvent(event);
+				this.focus();
+			}
+		}));
 		this._register(toDisposable(() => this.element.remove()));
 		const observer = new ResizeObserver(() => layout.schedule());
 		this._register(toDisposable(() => observer.disconnect()));
@@ -116,6 +140,28 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 
 	get value(): string {
 		return this.model.getText();
+	}
+
+	getModel(): TextModel {
+		return this.model;
+	}
+
+	renderContextReferences(references: readonly ChatContextAttachment[], remove: (id: string) => void): void {
+		if (references.length === 0 && this.referenceWidgets.size === 0) return;
+		const ids = new Set(references.map(reference => reference.id));
+		for (const [id, widget] of this.referenceWidgets) {
+			if (!ids.has(id)) { widget.dispose(); this.referenceWidgets.delete(id); }
+		}
+		for (const reference of references) {
+			let widget = this.referenceWidgets.get(reference.id);
+			if (!widget) {
+				widget = this.instantiationService.createInstance(InlineChatAttachmentWidget, this.editor, reference, this.contextViews, () => remove(reference.id));
+				this.referenceWidgets.set(reference.id, widget);
+			} else widget.attachment = reference;
+			for (const contentWidget of widget.widgets) this.editor.layoutContentWidget(contentWidget);
+		}
+		this.editor.updateOptions({ ...this.getFontOptions(), tabFocusMode: references.length > 0 });
+		this.layout();
 	}
 
 	set value(value: string) {
@@ -164,6 +210,7 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 	layout(): void {
 		const width = this.element.clientWidth;
 		if (width <= 0) return;
+		this.element.style.setProperty('--ash-chat-context-reference-height', `${this.editor.getOption(EditorOption.lineHeight)}px`);
 		this.editor.layout({ width, height: this.height });
 		this.syncHeight();
 	}
@@ -172,7 +219,7 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 		return {
 			fontFamily: this.configurationService.getValue<string>(ChatInputConfiguration.fontFamily) || DEFAULT_FONT_FAMILY,
 			fontSize: this.configurationService.getValue<number>(ChatInputConfiguration.fontSize),
-			lineHeight: this.configurationService.getValue<number>(ChatInputConfiguration.lineHeight),
+			lineHeight: Math.max(this.referenceWidgets.size > 0 ? 28 : 0, this.configurationService.getValue<number>(ChatInputConfiguration.lineHeight)),
 		};
 	}
 

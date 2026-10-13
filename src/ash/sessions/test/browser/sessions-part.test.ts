@@ -49,6 +49,8 @@ import { migrateNewChatDraftState, readNewChatDraftState, writeNewChatDraftState
 import type { SessionsPartOptions } from '../../browser/parts/sessions/sessionsPart.js';
 import { NewChatContextAttachments } from '../../contrib/chat/browser/newChatContextAttachments.js';
 import { NewChatInputPasteTarget } from '../../contrib/chat/browser/newChatInputPasteTarget.js';
+import { NewChatContextAttachments as CoworkContextAttachments } from '../../contrib/cowork/browser/newChatContextAttachments.js';
+import { NewChatInputPasteTarget as CoworkPasteTarget } from '../../contrib/cowork/browser/newChatInputPasteTarget.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>", { url: 'http://localhost/' });
 for (const [name, value] of Object.entries({
@@ -342,7 +344,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	assert.equal(part.domNode.querySelectorAll(".ash-sessions-chat-slot").length, 1);
 	assert.ok(part.domNode.querySelector('.ash-sessions-chat-view.single-chat'));
 	const retainedInput = part.domNode.querySelector('.ash-chat-input-part');
-	const draft = { mode: 'plan' as const, text: 'Keep this Chat draft', contexts: [{ id: 'chat-file', kind: 'file', name: 'chat.txt', content: 'Chat context' }, { id: 'tool-selection', kind: 'toolSelection', name: 'Tool selection: 1 disabled', content: '["read_file"]' }] };
+	const draft = { mode: 'plan' as const, text: 'Keep this Chat draft chat.txt Tool selection: 1 disabled ', contexts: [{ id: 'chat-file', kind: 'file', name: 'chat.txt', content: 'Chat context', reference: { start: 21, end: 29 } }, { id: 'tool-selection', kind: 'toolSelection', name: 'Tool selection: 1 disabled', content: '["read_file"]', reference: { start: 30, end: 56 } }] };
 	part.restoreDraft(draft);
 	const selected = viewService.activeSelection!;
 	assert.equal(selected.kind, 'untitled');
@@ -352,7 +354,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	assert.equal(inputs.length, 2);
 	assert.deepEqual((await part.captureActiveDraft())?.draft, draft);
 	const second = viewService.openNewSession('Another draft');
-	const separateDraft = { mode: 'plan' as const, text: 'Keep this second draft', contexts: [{ id: 'code-file', kind: 'file', name: 'code.ts', content: 'Code context' }] };
+	const separateDraft = { mode: 'plan' as const, text: 'Keep this second draft code.ts ', contexts: [{ id: 'code-file', kind: 'file', name: 'code.ts', content: 'Code context', reference: { start: 23, end: 30 } }] };
 	part.restoreDraft(separateDraft);
 	await part.captureActiveDraft();
 	assert.equal(part.domNode.querySelectorAll('.ash-chat-input-part').length, 1);
@@ -476,4 +478,27 @@ test('Sessions file paste reaches the shared composer once and text paste stays 
 	container.dispatchEvent(text);
 	assert.equal(text.defaultPrevented, false);
 	assert.equal(batches.length, 1);
+});
+
+test('Cowork routes picked and pasted files to the shared composer and releases its event sources', async () => {
+	const container = document.createElement('div');
+	const batches: (readonly File[])[] = [];
+	const files = [new browserEnvironment.window.File(['const captured = true;'], 'sample.ts', { type: 'text/plain' })];
+	using attachments = new CoworkContextAttachments(container, async selected => { batches.push(selected); });
+	using pasteTarget = new CoworkPasteTarget(container, attachments);
+	const picker = container.querySelector<HTMLInputElement>('input[type=file]')!;
+	Object.defineProperty(picker, 'files', { value: files });
+	picker.dispatchEvent(new browserEnvironment.window.Event('change'));
+	const paste = new browserEnvironment.window.Event('paste', { bubbles: true, cancelable: true });
+	Object.defineProperty(paste, 'clipboardData', { value: { files } });
+	container.dispatchEvent(paste);
+	assert.equal(paste.defaultPrevented, true);
+	assert.deepEqual(batches, [files, files]);
+	pasteTarget.dispose();
+	attachments.dispose();
+	container.dispatchEvent(paste);
+	picker.dispatchEvent(new browserEnvironment.window.Event('change'));
+	await attachments.attachFiles(files);
+	assert.equal(batches.length, 2);
+	assert.equal(container.childElementCount, 0);
 });

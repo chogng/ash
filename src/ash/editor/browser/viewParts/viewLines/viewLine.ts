@@ -10,6 +10,7 @@ import { CharacterMapping, DomPosition } from '../../../common/viewLayout/viewLi
 import { InlineDecorationType, type InlineDecoration } from '../../../common/viewModel/inlineDecorations.js';
 import { type ViewGpuContext } from '../../gpu/viewGpuContext.js';
 import { FloatHorizontalRange, VisibleRanges } from '../../view/renderingContext.js';
+import { Range } from '../../../common/core/range.js';
 
 interface MonospaceMetrics {
 	readonly spaceWidth: number;
@@ -291,7 +292,17 @@ export function projectStanzaSemanticTokenLine(
 	}
 	const ownerDocument = element.ownerDocument;
 	const fragment = createFragment(ownerDocument);
-	const lineDecorations = inlineDecorations.filter(decoration => decoration.range.startLineNumber <= lineNumber && decoration.range.endLineNumber >= lineNumber && decoration.range.startColumn - 1 <= visibleText.length);
+	// View ranges can span wrapped rows. Only the first and last row use the range's endpoint columns.
+	const lineDecorations = inlineDecorations
+		.filter(decoration => decoration.range.startLineNumber <= lineNumber && decoration.range.endLineNumber >= lineNumber)
+		.map(decoration => ({
+			...decoration,
+			range: new Range(
+				lineNumber, decoration.range.startLineNumber === lineNumber ? decoration.range.startColumn : 1,
+				lineNumber, decoration.range.endLineNumber === lineNumber ? decoration.range.endColumn : visibleText.length + 1,
+			),
+		}))
+		.filter(decoration => decoration.range.startColumn - 1 <= visibleText.length);
 	const boundary = (column: number) => Math.max(0, Math.min(visibleText.length, column));
 	const boundaries = [...new Set([0, visibleText.length, ...tokens.flatMap(token => [boundary(token.startColumn), boundary(token.endColumn)]), ...lineDecorations.flatMap(decoration => [boundary(decoration.range.startColumn - 1), boundary(decoration.range.endColumn - 1)])])].sort((left, right) => left - right);
 	const characterMapping = new CharacterMapping(visibleText.length + 1, Math.max(1, boundaries.length - 1));

@@ -1,5 +1,6 @@
 import { ChatResponseResourceFileSystemProvider, ChatResponseResourceWorkbenchContribution, IChatResponseResourceFileSystemProvider } from '../common/widget/chatResponseResourceFileSystemProvider.js';
 import { registerChatActions } from './actions/chatActions.js';
+import { registerChatContextActions } from './actions/chatContextActions.js';
 import { registerChatCodeBlockActions } from './actions/chatCodeblockActions.js';
 import { PromptLanguageFeaturesProvider } from './promptSyntax/promptFileContributions.js';
 import './chat.shared.contribution.js';
@@ -27,6 +28,7 @@ registerSingleton(IDictationOnboardingService, DictationOnboardingService, Insta
 registerSingleton(IChatResponseResourceFileSystemProvider, ChatResponseResourceFileSystemProvider, InstantiationType.Delayed);
 registerWorkbenchContribution(ChatResponseResourceWorkbenchContribution.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(ChatResponseResourceWorkbenchContribution));
 registerChatActions();
+registerWorkbenchContribution('workbench.contrib.chatContextActions', WorkbenchPhase.BlockStartup, () => registerChatContextActions());
 registerChatCodeBlockActions();
 registerSkillActions();
 registerHookActions();

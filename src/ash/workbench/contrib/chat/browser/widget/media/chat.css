@@ -241,17 +241,6 @@
 	flex: 1 1 auto;
 }
 
-.ash-chat-input-attachments {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 4px;
-	padding: 6px 8px 0;
-}
-
-.ash-chat-input-attachments.empty {
-	display: none;
-}
-
 .ash-chat-input-part .ash-chat-input-tip {
 	display: flex;
 	align-items: flex-start;

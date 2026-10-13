@@ -12,6 +12,22 @@ const { SemanticTokenPresentation } = await import('../../browser/viewParts/view
 const { ViewLine } = await import('../../browser/viewParts/viewLines/viewLine.js');
 const { DomReadingContext } = await import('../../browser/viewParts/viewLines/domReadingContext.js');
 
+test('ViewLine clips spanning inline decorations to each visible row', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using configuration = createTestConfiguration(dom.window.document.body, { renderWhitespace: 'none' });
+		const decoration = new InlineDecoration(new Range(1, 2, 3, 2), 'spanning-reference', InlineDecorationType.Regular);
+		for (const [index, text, marked] of [[0, 'first', 'irst'], [1, 'middle', 'middle'], [2, 'last', 'l']] as const) {
+			const line = new ViewLine(dom.window.document.body, index, new ViewLineOptions(configuration, ColorScheme.Dark), 4);
+			line.renderLine(text, [], 0, [decoration], index + 1);
+			assert.equal(line.getDomNode().textContent, text);
+			assert.equal(line.getDomNode().querySelector('.spanning-reference')?.textContent, marked);
+		}
+	} finally {
+		dom.window.close();
+	}
+});
+
 test('ViewLine owns rendering, character mapping, geometry, and width state', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using configuration = createTestConfiguration(dom.window.document.body, { renderWhitespace: 'none' });

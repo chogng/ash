@@ -1,5 +1,5 @@
 import { isRecord } from '../../../../base/common/types.js';
-import type { IOpenAgentsWindowOptions } from '../../../../platform/native/common/nativeHost.js';
+import { validateOpenAgentsWindow, type IOpenAgentsWindowOptions } from '../../../../platform/native/common/nativeHost.js';
 import { StorageScope, StorageTarget, type IStorageService } from '../../../../platform/storage/common/storage.js';
 
 type ChatDraft = NonNullable<IOpenAgentsWindowOptions['draft']>;
@@ -19,6 +19,7 @@ function parseChatDraft(raw: string): ChatDraft {
 			&& (context.resource === undefined || typeof context.resource === 'string'))) {
 		throw new TypeError('Invalid stored Chat draft');
 	}
+	validateOpenAgentsWindow({ draft });
 	return draft as unknown as ChatDraft;
 }
 

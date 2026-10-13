@@ -1,3 +1,4 @@
+import { setARIAContainer } from '../../../base/browser/ui/aria/aria.js';
 import { installEditorTestGlobals } from '../../../editor/test/browser/editorTestGlobals.js';
 import { StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import { createAppServerAgentThreadService, createDisconnectedAgentThreadService } from '../../../platform/agentHost/browser/appServerAgentService.js';
@@ -136,6 +137,7 @@ function createChatListWidget(container: HTMLElement, options: ConstructorParame
 	return services.createInstance(ChatListWidget, container, options);
 }
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+setARIAContainer(browserEnvironment.window.document.body);
 const unavailableFileService = {
 	readFileBytes: async () => { throw new Error('File read is unavailable in this test'); },
 } as unknown as IFileService;
@@ -707,7 +709,7 @@ test("Chat title and history switching retain conversations and drafts", async (
 	await chooseConversation(pane, dom, 0);
 	assert.equal(sessions.active?.session.sessionId, "session-1");
 	assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [false, true]);
-	assert.equal(composerInputs[0]?.value, "First draft");
+	assert.equal(composerInputs[0]?.value, "First draft first.txt ");
 	assert.equal(composerInputs[1]?.value, "Second draft");
 	assert.deepEqual((await pane.captureActiveDraft())?.draft.contexts?.map(context => context.name), ["first.txt"]);
 
@@ -721,9 +723,9 @@ test("Chat title and history switching retain conversations and drafts", async (
 	assert.equal(sessions.active?.session.sessionId, 'session-1');
 	await chooseConversation(pane, dom, 0);
 	assert.equal(sessions.activeUntitledSession?.untitledSessionId, pendingDraft.untitledSessionId);
-	assert.equal(draftInput.value, 'Unsent draft');
+	assert.equal(draftInput.value, 'Unsent draft draft.txt ');
 	assert.deepEqual((await pane.captureActiveDraft())?.draft.contexts?.map(context => context.name), ['draft.txt']);
-	assert.equal(composerInputs[0]?.value, 'First draft');
+	assert.equal(composerInputs[0]?.value, 'First draft first.txt ');
 	assert.equal(composerInputs[1]?.value, 'Second draft');
 	assert.deepEqual(fake.stopRequests, []);
 
@@ -813,6 +815,12 @@ test("Turn error cards invoke their typed action without interpreting message te
 });
 
 class SessionsInputForTest extends NewChatInputWidget {
+	removeContextForTest(id: string): void {
+		const reference = this.contexts.find(context => context.id === id)!.reference!;
+		this.input.setSelection({ anchor: reference.start, active: reference.end });
+		this.input.insertText('');
+	}
+
 	retireWhenInputChanges() {
 		return this.onDidChangeInput(() => this.invalidatePendingInput());
 	}
@@ -936,19 +944,19 @@ test('a removed Sessions attachment cannot report a stale draft persistence erro
 	const source = new DeferredPromise<{ name: string; content: string; }>();
 	fixture.input.addContext({ id: 'delayed', kind: 'file', name: 'delayed.txt', resolve: () => source.p });
 	const capture = fixture.input.captureDraft();
-	fixture.input.element.querySelector<HTMLButtonElement>('[aria-label="Remove delayed.txt"]')!.click();
+	fixture.input.removeContextForTest('delayed');
 	const rejected = assert.rejects(capture, /Source unavailable/u);
 	await source.error(new Error('Source unavailable'));
 	await rejected;
 	assert.deepEqual(fixture.notices.getNotifications(), []);
-	assert.deepEqual(readNewChatDraftState(fixture.storage, fixture.identity), { mode: 'agent', text: 'Keep this task', contexts: [] });
+	assert.deepEqual(readNewChatDraftState(fixture.storage, fixture.identity), { mode: 'agent', text: 'Keep this task  ', contexts: [] });
 });
 
 test('Sessions composer waits for file paste before sending and clears only the completed request', async () => {
 	using globals = installEditorTestGlobals({ FileReader: browserEnvironment.window.FileReader });
 	const sent: string[] = [];
 	using fixture = await sessionsInputFixture(async (text, _mode, _skills, contexts) => {
-		assert.equal(text, '');
+		assert.equal(text, 'source.txt ');
 		for (const context of contexts ?? []) sent.push((await context.resolve()).content);
 	});
 	const paste = new browserEnvironment.window.Event('paste', { bubbles: true, cancelable: true });
@@ -1064,14 +1072,15 @@ test('sending from one session preserves a later draft during first-session crea
 	chatWidget.setVisible(true);
 	const chatDraft = { mode: 'agent' as const, text: 'Keep my Chat draft', contexts: [{ id: 'chat-file', kind: 'file', name: 'chat.txt', content: 'Chat context', resource: 'file:///workspace/chat.txt' }] };
 	chatWidget.restoreDraft(chatDraft);
+	const restoredChatDraft = { ...chatDraft, text: 'Keep my Chat draft chat.txt ', contexts: chatDraft.contexts.map(context => ({ ...context, reference: { start: 19, end: 27 } })) };
 	await attachment.complete({ name: 'code.ts', content: 'Code context' });
 	await sending;
 	assert.equal(heading?.hidden, true);
 	assert.equal(input?.classList.contains('has-conversation'), true);
 	assert.equal(widget.element.querySelector('.ash-chat-input-part'), input);
 	assert.equal(widget.sessionId, 'session-1');
-	assert.deepEqual((await chatWidget.captureDraft())?.draft, chatDraft);
-	assert.deepEqual(readNewChatDraftState(composerStorage, `untitled:${chatSelection.session.untitledSessionId}`), chatDraft);
+	assert.deepEqual((await chatWidget.captureDraft())?.draft, restoredChatDraft);
+	assert.deepEqual(readNewChatDraftState(composerStorage, `untitled:${chatSelection.session.untitledSessionId}`), restoredChatDraft);
 	assert.equal(readNewChatDraftState(composerStorage, 'thread-1'), undefined);
 	assert.equal(view.activeSelection?.kind, 'untitled');
 	assert.equal(chatWidget.sessionId, undefined);
@@ -1170,8 +1179,9 @@ test("an empty Session list opens an untitled session and persists it on its fir
 			return { name: "Git commit abc1234", content: "diff --git a/file b/file" };
 		},
 	});
-	assert.equal(untitledPane.querySelector(".ash-chat-input-attachment-label")?.textContent, "abc1234 · Explain context transport");
-	typeChatText(dom.window, input, "Hello from an untitled session");
+	assert.equal(input.value, "abc1234 · Explain context transport ");
+	assert.equal(untitledPane.querySelector(".ash-chat-input-attachments"), null);
+	typeChatText(dom.window, input, "abc1234 · Explain context transport Hello from an untitled session");
 	input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
 		bubbles: true,
 		cancelable: true,
@@ -1193,7 +1203,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	assert.equal(contextResolutions, 1);
 	assert.deepEqual(fake.turnStartRequests[0]?.input, [
 		{ type: "context", name: "Git commit abc1234", content: "diff --git a/file b/file" },
-		{ type: "text", text: "Hello from an untitled session" },
+		{ type: "text", text: "abc1234 · Explain context transport Hello from an untitled session" },
 	]);
 	assert.equal(untitledPane.querySelector(".ash-chat-input-attachment-item"), null);
 	assert.equal(sessions.untitledSessions.length, 0);
@@ -1351,19 +1361,19 @@ test("failed first send keeps the untitled session and its input draft", async (
 		name: "failed commit",
 		resolve: async () => ({ name: "Git commit failed", content: "change" }),
 	});
-	typeChatText(dom.window, input, "Keep this draft");
+	typeChatText(dom.window, input, "failed commit Keep this draft");
 	input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
 		bubbles: true,
 		cancelable: true,
 		key: "Enter",
 	}));
-	await waitFor(() => input.value === "Keep this draft");
+	await waitFor(() => input.value === "failed commit Keep this draft");
 
 	assert.equal(fake.createSessionRequests.length, 1);
 	assert.equal(sessions.sessions.length, 0);
 	assert.equal(sessions.untitledSessions.length, 1);
-	assert.equal(pane.element.querySelector(".ash-chat-input-attachment-label")?.textContent, "failed commit");
-	assert.equal(input.value, "Keep this draft");
+	assert.equal(pane.element.querySelector(".ash-chat-input-attachments"), null);
+	assert.equal(input.value, "failed commit Keep this draft");
 	assert.equal(pane.element.querySelector<HTMLElement>("[role='region']")?.dataset.untitledSessionId, sessions.untitledSessions[0]?.untitledSessionId);
 	assert.equal(pane.element.querySelector<HTMLElement>("[role='region']")?.classList.contains("empty"), true);
 	assert.equal(pane.element.querySelector<HTMLElement>("[role='region']")?.classList.contains("has-conversation"), false);
@@ -4289,7 +4299,7 @@ test('composer navigation stable A sends held file context exactly once', async 
 	await sending;
 	assert.equal(fake.turnStartRequests.length, 1);
 	assert.equal(fake.turnStartRequests[0]!.threadId, 'thread-1');
-	assert.deepEqual(fake.turnStartRequests[0]!.input, [{ type: 'context', name: 'stable-A.txt', content: 'Stable A contents' }, { type: 'text', text: 'Stable A request' }]);
+	assert.deepEqual(fake.turnStartRequests[0]!.input, [{ type: 'context', name: 'stable-A.txt', content: 'Stable A contents' }, { type: 'text', text: 'Stable A request stable-A.txt' }]);
 	assert.equal(input.value, '');
 	assert.equal(chatPane.querySelectorAll('.ash-chat-input-attachment-item').length, 0);
 });
@@ -4467,8 +4477,9 @@ for (const navigate of [false, true]) {
 		const original = pane.element.querySelector<HTMLElement>('.ash-chat-pane-host > .ash-chat')!;
 		assert.ok(original);
 		let contextResolutions = 0;
+		typeChatText(dom.window, original.querySelector<HTMLTextAreaElement>('textarea')!, 'Original first request');
 		pane.addContext({ id: 'original-file', kind: 'file', name: 'original.txt', resolve: async () => { contextResolutions++; return { name: 'original.txt', content: 'Original request context' }; } });
-		const sending = pane.acceptInput('Original first request').then(() => undefined, error => {
+		const sending = pane.acceptInput().then(() => undefined, error => {
 			if (!navigate) throw error;
 			assert.ok(isCancellationError(error));
 		});
@@ -4497,7 +4508,7 @@ for (const navigate of [false, true]) {
 			assert.equal(contextResolutions, 1);
 			assert.deepEqual(fake.turnStartRequests[0]!.input, [
 				{ type: 'context', name: 'original.txt', content: 'Original request context' },
-				{ type: 'text', text: 'Original first request' },
+				{ type: 'text', text: 'Original first request original.txt' },
 			]);
 			assert.equal(original.querySelectorAll('.ash-chat-input-attachment-item').length, 0);
 		}

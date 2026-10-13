@@ -1,23 +1,12 @@
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
-import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
-import { createImageAttachment } from '../../../../workbench/contrib/chat/browser/chatImageUtils.js';
-import { createUuid } from '../../../../base/common/uuid.js';
-import { CancellationError } from '../../../../base/common/errors.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import { INotificationService } from '../../../../platform/notification/common/notification.js';
-import type { ChatAttachmentModel } from '../../../../workbench/contrib/chat/browser/attachments/chatAttachmentModel.js';
 
-/** Acquires file and clipboard content; the shared attachment model owns the resulting entries. */
+/** Sessions owns the picker; the shared composer owns reads, validation and cancellation. */
 export class NewChatContextAttachments extends Disposable {
 	private readonly filePicker: HTMLInputElement;
-	private readonly readers = new Set<FileReader>();
 
-	constructor(
-		container: HTMLElement,
-		private readonly model: ChatAttachmentModel,
-		private readonly supportsImages: () => boolean,
-		@INotificationService private readonly notifications: INotificationService,
-	) {
+	constructor(container: HTMLElement, private readonly acquireFiles: (files: readonly File[]) => Promise<void>) {
 		super();
 		this.filePicker = h(container.ownerDocument, 'input');
 		this.filePicker.type = 'file';
@@ -26,9 +15,6 @@ export class NewChatContextAttachments extends Disposable {
 		this.filePicker.setAttribute('aria-label', localize('chat.attach.files', 'Attach files'));
 		container.append(this.filePicker);
 		this._register(toDisposable(() => this.filePicker.remove()));
-		this._register(toDisposable(() => {
-			for (const reader of this.readers) reader.abort();
-		}));
 		this._register(addDisposableListener(this.filePicker, 'change', () => {
 			const files = [...(this.filePicker.files ?? [])];
 			this.filePicker.value = '';
@@ -40,59 +26,7 @@ export class NewChatContextAttachments extends Disposable {
 		this.filePicker.click();
 	}
 
-	public async attachFiles(files: readonly File[]): Promise<void> {
-		try {
-			const attachments = await Promise.all(files.map(async file => {
-				const image = /^image\/(png|jpeg|gif|webp)$/u.test(file.type);
-				if (image && !this.supportsImages()) throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
-				const bytes = await this.readFileContent(file);
-				if (image) return createImageAttachment(file.name, bytes, file.type);
-				let content: string;
-				try { content = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
-				catch { throw new Error(localize('chat.attach.binary', '{0} must be a UTF-8 text file or a PNG, JPEG, GIF, or WebP image', file.name)); }
-				if (!image && content.includes('\0')) {
-					throw new Error(localize('chat.attach.binary', '{0} must be a UTF-8 text file or a PNG, JPEG, GIF, or WebP image', file.name));
-				}
-				if (!content.trim()) {
-					throw new Error(localize('chat.attach.empty', '{0} is empty', file.name));
-				}
-				return {
-					id: createUuid(),
-					kind: 'file',
-					name: file.name,
-					resolve: async () => ({ name: file.name, content }),
-				};
-			}));
-			if (!this.isDisposed) {
-				this.model.addContext(...attachments);
-			}
-		} catch (error) {
-			if (!this.isDisposed) {
-				this.notifications.error(localize('chat.attach.failed', 'Could not attach files: {0}', String(error)));
-			}
-		}
-	}
-
-	private async readFileContent(file: File): Promise<Uint8Array> {
-		const reader = new FileReader();
-		const resources = new DisposableStore();
-		this.readers.add(reader);
-		try {
-			return await new Promise<Uint8Array>((resolve, reject) => {
-				resources.add(addDisposableListener(reader, 'load', () => {
-					try {
-						resolve(new Uint8Array(reader.result as ArrayBuffer));
-					} catch {
-						reject(new Error(localize('chat.attach.binary', '{0} must be a UTF-8 text file or a PNG, JPEG, GIF, or WebP image', file.name)));
-					}
-				}));
-				resources.add(addDisposableListener(reader, 'error', () => reject(reader.error)));
-				resources.add(addDisposableListener(reader, 'abort', () => reject(new CancellationError())));
-				reader.readAsArrayBuffer(file);
-			});
-		} finally {
-			resources.dispose();
-			this.readers.delete(reader);
-		}
+	public attachFiles(files: readonly File[]): Promise<void> {
+		return this.isDisposed ? Promise.resolve() : this.acquireFiles(files);
 	}
 }

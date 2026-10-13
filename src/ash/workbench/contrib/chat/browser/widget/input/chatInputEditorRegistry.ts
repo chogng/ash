@@ -2,8 +2,10 @@ import { addDisposableListener, h } from "../../../../../../base/browser/dom.js"
 import { Emitter, type Event } from "../../../../../../base/common/event.js";
 import { Disposable, type IDisposable, toDisposable } from "../../../../../../base/common/lifecycle.js";
 import { RunOnceScheduler } from '../../../../../../base/common/async.js';
+import type { ITextModel } from '../../../../../../editor/common/model.js';
 import type { SlashCommandCatalog } from "../../../common/slashCommands.js";
 import type { SkillSelectorCatalog } from '../../../common/skillSelectors.js';
+import type { ChatContextAttachment } from '../../../../../services/chat/common/chatContextService.js';
 
 /** Construction inputs shared by Chat input editor implementations. */
 export interface ChatInputEditorOptions {
@@ -31,6 +33,10 @@ export interface IChatInputEditor extends IDisposable {
 	isAtHistoryBoundary(direction: 'previous' | 'next'): boolean;
 	/** Insert recognized text at the current selection using the editor's edit lifecycle. */
 	insertText(text: string): void;
+	/** Rich inputs expose their own model for reference decorations and undo tracking. */
+	getModel?(): ITextModel;
+	/** Rich inputs render context actions in the space reserved by reference decorations. */
+	renderContextReferences?(references: readonly ChatContextAttachment[], remove: (id: string) => void): void;
 	focus(): void;
 	layout(): void;
 }

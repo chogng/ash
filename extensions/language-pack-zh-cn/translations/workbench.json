@@ -1686,7 +1686,9 @@
     "terminal.chat.attach": "终端：附加到聊天",
     "terminal.chat.preview": "预览终端快照",
     "terminal.chat.previewLabel": "已保存的终端输出：{0}",
-    "terminal.chat.previewInput": "已保存的终端输出（只读）"
+    "terminal.chat.previewInput": "已保存的终端输出（只读）",
+    "terminal.chat.previewClose": "关闭终端预览",
+    "terminal.chat.previewAccessibility": "已保存的终端输出：{0}\n此预览为只读，保留附加时捕获的输出。按 Escape 或选择“关闭终端预览”返回消息。\n\n{1}"
   },
   "ash.menu": {
     "file": "文件",

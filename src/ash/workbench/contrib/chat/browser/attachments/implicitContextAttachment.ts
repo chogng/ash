@@ -15,7 +15,7 @@ import { IEditorService } from '../../../../services/editor/common/editorService
 import { isResourceDiffEditorInput } from '../../../../common/editor.js';
 import { isBinaryDiffEditorInput } from '../../../../common/editor/diffEditorInput.js';
 import { FilesAndFoldersPickerPick } from '../../../search/browser/searchChatContext.js';
-import { ChatAttachmentModel } from './chatAttachmentModel.js';
+import type { ChatAttachmentModel } from './chatAttachmentModel.js';
 
 /** A suggestion reads editor state; only an explicit click creates a draft attachment. */
 export class ImplicitContextAttachmentWidget extends Disposable {
@@ -26,7 +26,7 @@ export class ImplicitContextAttachmentWidget extends Disposable {
 
 	constructor(
 		container: HTMLElement,
-		private readonly attachments: ChatAttachmentModel,
+		private readonly attachments: Pick<ChatAttachmentModel, 'attachments' | 'acquireContext' | 'onDidChange'>,
 		private readonly focusInput: () => void,
 		@IEditorService private readonly editors: IEditorService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,

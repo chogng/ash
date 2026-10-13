@@ -11,6 +11,24 @@ import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { PositionAffinity } from "../../common/model.js";
 import { type TextMeasurer } from '../../common/viewModel.js';
+import { LineInjectedText } from '../../common/textModelEvents.js';
+
+test('DOM wrapping reserves injected control widths instead of measuring their placeholder glyphs', () => {
+	using model = new TextModel('abcd');
+	const injections = [
+		new LineInjectedText(1, 1, 2, { content: '\uFFFC', widthInEm: 2 }, 0),
+		new LineInjectedText(1, 1, 4, { content: '\uFFFC', widthInEm: 2 }, 1),
+	];
+	const computer = createFactory(new FixedTextMeasurer()).createLineBreaksComputer({
+		getLineContent: line => model.getLineContent(line),
+		getLineInjectedText: () => injections,
+	}, TEST_FONT_INFO, 4, 4, WrappingIndent.None, 'normal', false);
+	computer.addRequest(1, null);
+	const data = computer.finalize()[0]!;
+	assert.deepEqual(data.breakOffsets, [3, 6]);
+	assert.deepEqual(data.injectionOffsets, [1, 3]);
+	assert.equal(model.getValue(), 'abcd');
+});
 
 test('DOM wrapping reuses one canvas for a batch of long lines and preserves word boundaries', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');

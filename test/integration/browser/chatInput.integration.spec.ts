@@ -1,6 +1,70 @@
 import { expect, test } from '@playwright/test';
 
 for (const locale of ['en', 'zh-CN']) {
+	for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
+		test(`Inline files and selected code use the message cursor and preserve snapshots in ${locale} ${theme}`, async ({ page }) => {
+			await page.goto(`/chatInput.html?inlineCode=1&locale=${locale}&theme=${theme}`);
+			await page.evaluate(() => window.ashChatInputIntegration.showModels());
+			const input = page.locator('.ash-chat-input-editor').getByRole('textbox');
+			await input.focus();
+			await page.keyboard.type('Explain  please');
+			await input.press('Home');
+			for (let index = 0; index < 8; index++) await input.press('ArrowRight');
+			await page.getByRole('button', { name: locale === 'en' ? 'Add context' : '添加上下文', exact: true }).press('Enter');
+			const picker = page.getByRole('dialog');
+			await picker.getByRole('combobox').fill('edited');
+			await picker.getByRole('option', { name: /edited.ts/ }).click();
+			const wholeFile = page.locator('.ash-chat-code-reference').filter({ hasText: /^edited.ts$/ });
+			await expect(wholeFile).toHaveText('edited.ts');
+			await expect(input).toBeFocused();
+			await page.locator('#add-code-selection').click();
+			const reference = page.locator('.ash-chat-code-reference').filter({ hasText: /^example.ts \(3-4\)$/ });
+			await expect(reference).toHaveText('example.ts (3-4)');
+			await expect(wholeFile).toHaveText('edited.ts');
+			await expect(input).toBeFocused();
+			await expect(page.locator('.ash-chat-input-attachments')).toHaveCount(0);
+			await expect(page.locator('.ash-aria-status').filter({ hasText: locale === 'en' ? 'Inserted example.ts (3-4) at the message cursor' : '已在消息光标处插入 example.ts (3-4)' })).toHaveCount(1);
+			const accessibility = await page.evaluate(() => window.ashChatInputIntegration.contextAccessibility());
+			expect(accessibility.help).toContain(locale === 'en' ? 'Add Selection to Chat' : '将选中代码加入聊天');
+			expect(accessibility.content).toContain('example.ts (3-4)');
+			const restored = await page.evaluate(() => window.ashChatInputIntegration.restoreCapturedDraft());
+			expect(restored).toBe('Explain edited.ts example.ts (3-4) please');
+			await expect(reference).toHaveText('example.ts (3-4)');
+			await input.press('Home');
+			for (let index = 0; index < 8; index++) await input.press('ArrowRight');
+			await input.press('ArrowRight');
+			await input.press('ArrowRight');
+			await input.press('Delete');
+			await expect(reference).toHaveCount(0);
+			await input.press('ControlOrMeta+z');
+			await expect(reference).toHaveText('example.ts (3-4)');
+			const referenceStyle = () => reference.evaluate(element => {
+				const { backgroundColor, color, outlineStyle } = getComputedStyle(element);
+				const luminance = (value: string) => {
+					const channels = value.match(/\d+/g)!.slice(0, 3).map(channel => Number(channel) / 255).map(channel => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+					return channels[0]! * 0.2126 + channels[1]! * 0.7152 + channels[2]! * 0.0722;
+				};
+				const foreground = luminance(color);
+				const background = luminance(backgroundColor);
+				return { foreground: color, background: backgroundColor, outline: outlineStyle, contrast: (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05) };
+			});
+			const selectedStyle = await referenceStyle();
+			await input.press('ArrowRight');
+			for (const style of [selectedStyle, await referenceStyle()]) {
+				expect(style.background).not.toBe('rgba(0, 0, 0, 0)');
+				expect(style.contrast, JSON.stringify(style)).toBeGreaterThanOrEqual(4.5);
+				if (theme.startsWith('hc')) expect(style.outline).toBe('solid');
+			}
+			await page.locator('main').screenshot({ path: test.info().outputPath('inline-file-references.png') });
+			await input.press('Enter');
+			await expect(page.getByLabel('Submission', { exact: true })).toHaveText(JSON.stringify([{ name: 'edited.ts', content: 'Unsaved editor text' }, { name: 'example.ts (3-4)', content: 'Source: file:///workspace/example.ts#3,1-5,1\n\nconst unsaved = 42;\nreturn unsaved;\n' }]));
+			await expect(reference).toHaveCount(0);
+			await expect(wholeFile).toHaveCount(0);
+		});
+	}
+}
+
+for (const locale of ['en', 'zh-CN']) {
 	for (const theme of ['light', 'hcDark']) {
 		for (const newChat of [true, false]) {
 			test(`Stacked Sessions retain a growing ${newChat ? 'new' : 'existing'} chat input in ${locale} ${theme}`, async ({ page }) => {
@@ -76,7 +140,8 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(row).toBeHidden();
 		const input = page.locator('.ash-chat-textarea-input');
 		await expect(input).toBeFocused();
-		await input.fill('Review this file');
+		await input.press('End');
+		await input.pressSequentially('Review this file');
 		await input.press('Enter');
 		await expect(page.getByLabel('Submission', { exact: true })).toHaveText(JSON.stringify([{ name: 'example.ts', content: 'Staged version' }]));
 		await expect(button).toBeVisible();
@@ -110,7 +175,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await input.fill('Read the unsaved file');
 			await input.press('Enter');
 			await expect(submission).toHaveText(JSON.stringify([{ name: 'edited.ts', content: 'Unsaved editor text' }]));
-			await expect(page.locator('.ash-chat-input-attachments')).toBeHidden();
+			await expect(page.locator('.ash-chat-input-attachments')).toHaveCount(0);
 			await expect(add).toBeVisible();
 			await input.fill('Following message');
 			await input.press('Enter');
@@ -1204,10 +1269,13 @@ for (const locale of ['en', 'zh-CN']) {
 			return prevented;
 		});
 		expect(prevented).toBe(true);
+		await expect(input).toHaveValue('Next draft pasted.txt ');
+		await expect(page.getByLabel('Submission', { exact: true })).toHaveText('');
+		await expect(page.locator('.ash-chat-input-attachments')).toHaveCount(0);
+		expect(await page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({ submissions: [] });
+		await input.press('Enter');
 		await expect(page.getByLabel('Submission', { exact: true })).toHaveText(JSON.stringify([{ name: 'pasted.txt', content: 'Pasted file contents' }]));
-		await expect(input).toHaveValue('Next draft');
-		await expect(page.locator('.ash-chat-input-attachments')).toBeHidden();
-		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({ submissions: [{ text: 'Original pasted request' }] });
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({ submissions: [{ text: 'Next draft pasted.txt ' }] });
 	});
 
 	test(`Pending file-only mouse Send waits for the real reader in ${locale}`, async ({ page }) => {
@@ -1245,7 +1313,7 @@ for (const locale of ['en', 'zh-CN']) {
 			expect(await page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({ submissions: [] });
 			await page.evaluate(() => (window as Window & { ashInputReadTest?: { release(): void; }; }).ashInputReadTest!.release());
 			await expect(page.getByLabel('Submission', { exact: true })).toHaveText(JSON.stringify([{ name: 'held-mouse.txt', content: 'Actual held reader contents' }]));
-			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({ submissions: [{ text: '' }] });
+			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({ submissions: [{ text: 'held-mouse.txt ' }] });
 			await expect(input).toHaveValue('');
 		} finally {
 			await page.evaluate(() => {
@@ -1269,7 +1337,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(page.getByLabel('Context error', { exact: true })).toContainText('invalid.bin');
 		await expect(input).toHaveValue('Keep this draft');
 		await expect(page.getByLabel('Submission', { exact: true })).toHaveText('');
-		await expect(page.locator('.ash-chat-input-attachments')).toBeHidden();
+		await expect(page.locator('.ash-chat-input-attachments')).toHaveCount(0);
 		expect(await page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({ submissions: [] });
 	});
 
@@ -1290,6 +1358,131 @@ for (const locale of ['en', 'zh-CN']) {
 				{ skills: [{ version: { type: 'pinnedDigest', digest: 'original' } }] },
 			]
 		});
+	});
+}
+
+for (const locale of ['en', 'zh-CN']) {
+	for (const method of ['paste', 'drop'] as const) {
+		test(`Mixed ${method} inserts code and images at the message cursor in ${locale}`, async ({ page }, testInfo) => {
+			await page.goto(`/chatInput.html?inlineCode=1&locale=${locale}&history=1&sendFailure=1`);
+			await page.evaluate(() => window.ashChatInputIntegration.showModels());
+			const input = page.locator('.ash-chat-input-editor').getByRole('textbox');
+			await input.focus();
+			await page.keyboard.type('Review  please');
+			await input.press('Home');
+			for (let index = 0; index < 7; index++) await input.press('ArrowRight');
+			const prevented = await input.evaluate((element, method) => {
+				const transfer = new DataTransfer();
+				transfer.items.add(new File(['const captured = 42;'], 'sample.ts', { type: 'text/plain' }));
+				const bytes = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DQAAAEgQGALFXOsAAAAABJRU5ErkJggg=='), char => char.charCodeAt(0));
+				transfer.items.add(new File([bytes], 'preview.png', { type: 'image/png' }));
+				const event = method === 'paste'
+					? new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true })
+					: new DragEvent('drop', { dataTransfer: transfer, bubbles: true, cancelable: true });
+				element.dispatchEvent(event);
+				return event.defaultPrevented;
+			}, method);
+			expect(prevented).toBe(true);
+			const reference = page.locator('.ash-chat-code-reference');
+			await expect(reference).toHaveText('sample.ts');
+			const bar = page.locator('.ash-chat-input-attachments');
+			await expect(bar).toHaveCount(0);
+			const thumbnail = page.locator('.ash-chat-image-reference-control').getByRole('img', { name: 'preview.png' });
+			await expect(thumbnail).toBeVisible();
+			await expect(input).toBeFocused();
+			const accessibility = await page.evaluate(() => window.ashChatInputIntegration.contextAccessibility());
+			expect(accessibility.help).toContain(locale === 'en' ? 'Activate the thumbnail or file name to preview the image' : '点击缩略图或文件名可预览图片');
+			await page.getByRole('button', { name: locale === 'en' ? 'Preview preview.png' : '预览 preview.png', exact: true }).click();
+			await expect(page.getByRole('dialog').getByRole('img', { name: 'preview.png' })).toBeVisible();
+			await page.keyboard.press('Escape');
+			await expect(page.getByRole('dialog')).toHaveCount(0);
+			await page.getByRole('button', { name: locale === 'en' ? 'Remove preview.png' : '移除 preview.png', exact: true }).click();
+			await expect(thumbnail).toHaveCount(0);
+			await expect(reference).toHaveText('sample.ts');
+			await input.press('ControlOrMeta+z');
+			await expect(thumbnail).toBeVisible();
+			expect(await page.evaluate(() => window.ashChatInputIntegration.restoreCapturedDraft())).toBe('Review sample.ts preview.png please');
+			await expect(reference).toHaveText('sample.ts');
+			await page.locator('main').screenshot({ path: testInfo.outputPath('mixed-file-context.png') });
+			await input.press('Enter');
+			await expect(page.getByLabel('Submission', { exact: true })).toContainText('const captured = 42;');
+			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({ submissions: [{ text: 'Review sample.ts preview.png please' }] });
+			const submitted = JSON.parse((await page.getByLabel('Submission', { exact: true }).textContent())!);
+			expect(submitted).toEqual([
+				{ name: 'sample.ts', content: 'const captured = 42;' },
+				expect.objectContaining({ name: 'preview.png', kind: 'image' }),
+			]);
+			await expect(reference).toHaveText('sample.ts');
+			await expect(thumbnail).toBeVisible();
+			await expect(bar).toHaveCount(0);
+		});
+	}
+}
+
+for (const theme of ['light', 'dark', 'hcLight', 'hcDark']) {
+	test(`Inline image controls follow wrapped names and support keyboard preview and deletion in ${theme}`, async ({ page }, testInfo) => {
+		await page.goto(`/chatInput.html?inlineCode=1&locale=zh-CN&theme=${theme}`);
+		await page.setViewportSize({ width: 400, height: 640 });
+		await page.locator('main').evaluate(element => { element.style.width = '320px'; });
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const input = page.locator('.ash-chat-input-editor').getByRole('textbox');
+		await input.focus();
+		await page.keyboard.insertText('对比图片：\n当前界面：\n参考设计：');
+		await input.press('Home');
+		await input.press('ArrowUp');
+		await input.press('End');
+		const name = 'current-layout-reference-with-a-long-file-name.png';
+		await input.evaluate((element, name) => {
+			const canvas = document.createElement('canvas'); canvas.width = 320; canvas.height = 180;
+			const context = canvas.getContext('2d')!;
+			context.fillStyle = '#e3edff'; context.fillRect(0, 0, 320, 180);
+			context.fillStyle = '#2c5b9c'; context.font = '24px sans-serif'; context.fillText('Current layout', 24, 52);
+			context.fillStyle = '#ffffff'; context.fillRect(24, 76, 272, 80);
+			const bytes = Uint8Array.from(atob(canvas.toDataURL('image/png').split(',')[1]!), char => char.charCodeAt(0));
+			const transfer = new DataTransfer(); transfer.items.add(new File([bytes], name, { type: 'image/png' }));
+			element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
+		}, name);
+		const labels = page.locator('.ash-chat-image-reference:not(.ash-chat-image-reference-space)');
+		await expect.poll(async () => (await labels.allTextContents()).join('')).toBe(name);
+		const preview = page.getByRole('button', { name: `预览 ${name}`, exact: true });
+		const remove = page.getByRole('button', { name: `移除 ${name}`, exact: true });
+		await expect(preview).toBeVisible();
+		await expect(remove).toBeVisible();
+		const placement = await page.locator('.ash-chat-input-editor').evaluate(element => {
+			const labels = [...element.querySelectorAll('.ash-chat-image-reference:not(.ash-chat-image-reference-space)')];
+			const controls = [...element.querySelectorAll('.ash-chat-image-reference-control')];
+			const bounds = element.getBoundingClientRect();
+			return { overflow: element.scrollWidth > element.clientWidth, clipped: labels.some(label => label.getBoundingClientRect().right > bounds.right + 1), firstLabel: labels[0]!.getBoundingClientRect().toJSON(), lastLabel: labels.at(-1)!.getBoundingClientRect().toJSON(), before: controls[0]!.getBoundingClientRect().toJSON(), after: controls[1]!.getBoundingClientRect().toJSON() };
+		});
+		expect(placement.overflow).toBe(false);
+		expect(placement.clipped).toBe(false);
+		expect(placement.before.right).toBeLessThanOrEqual(placement.firstLabel.left + 1);
+		expect(placement.after.left).toBeGreaterThanOrEqual(placement.lastLabel.right - 1);
+		await page.locator('main').screenshot({ path: testInfo.outputPath('inline-image-wrapped.png') });
+		await input.press('Tab');
+		await expect(preview).toBeFocused();
+		await preview.press('Enter');
+		const dialog = page.getByRole('dialog', { name: `预览 ${name}` });
+		await expect(dialog.getByRole('img', { name })).toBeVisible();
+		const accessiblePreview = await page.evaluate(() => window.ashChatInputIntegration.contextAccessibility());
+		expect(accessiblePreview.content).toContain(`图片预览：${name}`);
+		expect(accessiblePreview.content).toContain('尺寸：320 × 180');
+		await page.screenshot({ path: testInfo.outputPath('inline-image-preview.png') });
+		await page.keyboard.press('Escape');
+		await expect(preview).toBeFocused();
+		await preview.press('Tab');
+		await expect(remove).toBeFocused();
+		await remove.press('Enter');
+		await expect(preview).toHaveCount(0);
+		await expect(input).toBeFocused();
+		await input.press('ControlOrMeta+z');
+		await expect(preview).toBeVisible();
+		expect(await page.evaluate(() => window.ashChatInputIntegration.restoreCapturedDraft())).toContain(`当前界面： ${name}`);
+		await expect(page.locator('.ash-chat-input-attachments')).toHaveCount(0);
+		await labels.first().click();
+		await expect(dialog).toBeVisible();
+		await page.getByRole('button', { name: '关闭图片预览', exact: true }).click();
+		await expect(dialog).toHaveCount(0);
 	});
 }
 
@@ -1320,7 +1513,8 @@ for (const theme of ['light', 'dark', 'hcLight', 'hcDark']) {
 			element.dispatchEvent(new DragEvent('drop', { dataTransfer: transfer, bubbles: true, cancelable: true }));
 		});
 		await expect(overlay).toBeHidden();
-		await expect(composer.getByRole('listitem')).toHaveCount(1);
+		await expect(page.locator('.ash-chat-textarea-input')).toHaveValue('dropped.txt ');
+		await expect(composer.getByRole('listitem')).toHaveCount(0);
 		await page.locator('.ash-chat-textarea-input').press('Enter');
 		await expect(page.getByLabel('Submission', { exact: true })).toHaveText(JSON.stringify([{ name: 'dropped.txt', content: 'Dropped contents' }]));
 	});

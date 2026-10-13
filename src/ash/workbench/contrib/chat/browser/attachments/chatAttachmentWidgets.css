@@ -1,56 +1,53 @@
-.ash-chat-input-attachment-item {
-	display: flex;
-	align-items: center;
-	gap: var(--ash-spacing-size40);
-	min-width: 0;
-	max-width: 100%;
-	padding-left: var(--ash-spacing-size80);
-	color: var(--ash-foreground);
+.ash-chat-context-reference-control {
+	width: 2em;
+	height: var(--ash-chat-context-reference-height);
 	background: var(--ash-button-secondaryBackground);
-	border: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
 	border-radius: var(--ash-cornerRadius-small);
+	outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
 }
 
-.ash-chat-attachment-label {
-	flex: 1;
-	min-width: 0;
+.ash-chat-context-reference-control > .ash-button {
+	width: 100%;
+	height: 100%;
+	padding: 0;
 }
 
-.ash-chat-input-attachment-item > .ash-button {
-	flex-shrink: 0;
-}
-
-.ash-chat-attachment-image {
-	width: 32px;
-	height: 32px;
+.ash-chat-context-reference-control img {
+	width: 20px;
+	height: 20px;
+	max-width: 100%;
+	max-height: 100%;
 	object-fit: contain;
 }
 
-.ash-chat-input-attachment-item > .ash-chat-attachment-open {
-	flex: 1;
+.ash-chat-context-reference-preview {
+	box-sizing: border-box;
+	max-width: calc(100vw - 32px);
+	padding: var(--ash-spacing-size120);
+}
+
+.ash-chat-context-reference-preview-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--ash-spacing-size120);
+	margin-bottom: var(--ash-spacing-size80);
+}
+
+.ash-chat-context-reference-preview-header > span {
 	min-width: 0;
-	justify-content: flex-start;
-	overflow: hidden;
+	overflow-wrap: anywhere;
 }
 
-.ash-chat-input-attachment-item.has-terminal-preview {
-	flex-wrap: wrap;
+.ash-chat-image-reference-preview > img {
+	display: block;
+	max-width: min(600px, calc(100vw - 56px));
+	max-height: 55vh;
+	object-fit: contain;
 }
 
-.ash-chat-terminal-preview {
-	flex-basis: 100%;
-	min-width: 0;
-	padding-right: var(--ash-spacing-size80);
-	padding-bottom: var(--ash-spacing-size80);
-}
-
-.ash-chat-terminal-preview > summary {
-	cursor: pointer;
-}
-
-.ash-chat-terminal-preview > summary:focus-visible {
-	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
-	outline-offset: var(--ash-strokeThickness);
+.ash-chat-terminal-reference-preview {
+	width: min(600px, calc(100vw - 32px));
 }
 
 .ash-chat-terminal-preview-screen {

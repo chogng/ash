@@ -28,6 +28,20 @@ test('Attachment preparation waits for every batch and adds each batch atomicall
 	assert.deepEqual(model.attachments.map(entry => entry.id), ['first', 'second']);
 });
 
+test('Reference preparation commits through the message owner without adding a bar attachment', async () => {
+	using model = new ChatAttachmentModel();
+	const prepared = new DeferredPromise<readonly ChatContextAttachment[]>();
+	const acquiring = model.acquireContext(() => prepared.p, undefined, contexts => contexts.map(context => ({ ...context, reference: { start: 0, end: context.name.length } })));
+	assert.equal(model.hasPendingMessageContext, true);
+	const waiting = model.resolvePendingContext();
+	await prepared.complete([attachment('file.ts')]);
+	const contexts = await waiting;
+	assert.deepEqual((await acquiring)[0]?.reference, { start: 0, end: 7 });
+	assert.deepEqual(contexts[0]?.reference, { start: 0, end: 7 });
+	assert.equal(model.size, 0);
+	assert.equal(model.hasPendingMessageContext, false);
+});
+
 test('Clearing an empty draft cancels waiters and rejects results that ignore cancellation', async () => {
 	using model = new ChatAttachmentModel();
 	const result = new DeferredPromise<readonly ChatContextAttachment[]>();

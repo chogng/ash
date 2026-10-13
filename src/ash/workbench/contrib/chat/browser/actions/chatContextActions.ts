@@ -1,18 +1,30 @@
+import { createUuid } from '../../../../../base/common/uuid.js';
+import { KeyCode, KeyMod } from '../../../../../base/common/keyCodes.js';
+import { EditorAction2 } from '../../../../../editor/browser/editorExtensions.js';
+import type { ICodeEditor } from '../../../../../editor/browser/editorBrowser.js';
+import { EditorContextKeys } from '../../../../../editor/common/editorContextKeys.js';
+import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
+import { KeybindingWeight } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
+import { withSelection } from '../../../../../platform/opener/common/opener.js';
+import { IViewsService } from '../../../../services/views/common/viewsService.js';
+import type { IView } from '../../../../common/views.js';
+import { CHAT_VIEW_ID } from '../../common/chat.js';
+import { MenuId, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { ChatInstructionsPickerPick } from '../promptSyntax/attachInstructionsAction.js';
 import { pickFiles } from '../../../../../base/browser/fileAccess.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { ThemeIcon } from '../../../../../base/common/themables.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
-import { extUri } from '../../../../../base/common/resources.js';
-import { localize } from '../../../../../nls.js';
+import { basename, extUri } from '../../../../../base/common/resources.js';
+import { localize, localize2 } from '../../../../../nls.js';
 import { FileKind } from '../../../../../platform/files/common/files.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { IChatContextPickService } from '../../../../services/chat/common/chatContextService.js';
 import { IEditorGroupsService } from '../../../../services/editor/common/editorGroupsService.js';
-import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, type ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { type AnythingQuickAccessProviderRunOptions } from '../../../../../platform/quickinput/common/quickAccess.js';
 import { FilesAndFoldersPickerPick, SymbolsContextPickerPick, SearchViewResultChatContextPick } from '../../../search/browser/searchChatContext.js';
 import type { IAnythingQuickPickItem } from '../../../search/browser/anythingQuickAccess.js';
@@ -21,7 +33,43 @@ import { IChatSessionNavigationService } from '../../../../services/chat/common/
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { addDisposableListener } from '../../../../../base/browser/dom.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
-import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
+import type { ChatContextAttachment, IChatContextTarget } from '../../../../services/chat/common/chatContextService.js';
+
+/** Registers editor context commands for the lifetime of their Workbench host. */
+export function registerChatContextActions(): DisposableStore {
+	const store = new DisposableStore();
+	store.add(registerAction2(class AttachSelectionToChatAction extends EditorAction2 {
+		constructor() {
+			super({
+				id: 'workbench.action.chat.attachSelection',
+				title: localize2('chat.context.addSelection', 'Add Selection to Chat'),
+				f1: true,
+				precondition: ContextKeyExpr.and(EditorContextKeys.hasNonEmptySelection.isEqualTo(true), ContextKeyExpr.notEquals(EditorContextKeys.languageId.key, 'ash-chat-input')),
+				menu: { id: MenuId.EditorContext, group: 'z_chat', order: 1 },
+				keybinding: { primary: KeyMod.CtrlCmd | KeyCode.KeyL, weight: KeybindingWeight.WorkbenchContrib, when: EditorContextKeys.editorTextFocus.isEqualTo(true) },
+			});
+		}
+
+		override async runEditorCommand(accessor: ServicesAccessor, editor: ICodeEditor): Promise<void> {
+			const model = editor.getModel();
+			const selection = editor.getSelection();
+			if (!model || !selection || selection.isEmpty() || model.getLanguageId() === 'ash-chat-input') return;
+			// Capture before opening Chat can change focus, the active editor, or its unsaved text.
+			const code = model.getValueInRange(selection);
+			const lastLine = selection.endColumn === 1 && selection.endLineNumber > selection.startLineNumber ? selection.endLineNumber - 1 : selection.endLineNumber;
+			const file = basename(model.uri).replace(/\s/gu, ' ');
+			const name = selection.startLineNumber === lastLine
+				? localize('chat.context.selectionLine', '{0} ({1})', file, selection.startLineNumber)
+				: localize('chat.context.selectionLines', '{0} ({1}-{2})', file, selection.startLineNumber, lastLine);
+			const resource = withSelection(model.uri, selection);
+			const content = `Source: ${resource.toString()}\n\n${code}`;
+			const target = await accessor.get(IViewsService).openView<IView & IChatContextTarget>(CHAT_VIEW_ID);
+			target?.addContext({ id: `code-selection:${createUuid()}`, kind: 'codeSelection', name, resource, resolve: async () => ({ name, content }) });
+		}
+	}));
+
+	return store;
+}
 
 interface AttachContextHost {
 	readonly target: {

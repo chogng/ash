@@ -34,9 +34,43 @@ const { TextModel } = await import("../../../../../editor/common/model/textModel
 const { ICodeEditorService } = await import("../../../../../editor/browser/services/codeEditorService.js");
 const { ICommandService } = await import('../../../../../platform/commands/common/commands.js');
 const { Selection } = await import('../../../../../editor/common/core/selection.js');
+const { ChatDynamicVariableModel } = await import('../../browser/attachments/chatDynamicVariables.js');
 const { SelectAllCommand } = await import("../../../../../editor/browser/editorExtensions.js");
 
 suiteTeardown(() => browserEnvironment.window.close());
+
+test('Inline code references track edits, atomic deletion, undo and redo in the real Chat editor', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	using domCleanup = { [Symbol.dispose]: () => dom.window.close() };
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using editorServices = new DisposableStore();
+	const services = createCodeEditorServices(editorServices);
+	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() });
+	using references = new ChatDynamicVariableModel(editor);
+	editor.value = 'Explain  please';
+	editor.setSelection({ anchor: 8, active: 8 });
+	references.addReference({ id: 'selection', kind: 'codeSelection', name: 'file.ts (6-9)', resolve: async () => ({ name: 'file.ts (6-9)', content: 'Unsaved code' }) });
+	assert.equal(editor.value, 'Explain file.ts (6-9) please');
+	assert.deepEqual(references.variables[0]?.reference, { start: 8, end: 21 });
+	assert.equal(editor.getModel().getAllDecorations().filter(decoration => decoration.options.inlineClassName === 'ash-chat-code-reference').length, 1);
+	editor.setSelection({ anchor: 0, active: 0 });
+	editor.insertText('First: ');
+	assert.deepEqual(references.variables[0]?.reference, { start: 15, end: 28 });
+	editor.setSelection({ anchor: 28, active: 28 });
+	editor.element.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }));
+	assert.equal(editor.value, 'First: Explain  please');
+	assert.equal(references.variables.length, 0);
+	await editor.getModel().undo();
+	assert.equal(editor.value, 'First: Explain file.ts (6-9) please');
+	assert.deepEqual(references.variables[0]?.reference, { start: 15, end: 28 });
+	assert.equal((await references.variables[0]!.resolve()).content, 'Unsaved code');
+	await editor.getModel().redo();
+	assert.deepEqual(references.variables, []);
+	// Typing the old label after deletion must not silently resurrect its code snapshot.
+	editor.setSelection({ anchor: 15, active: 15 });
+	editor.insertText('file.ts (6-9)');
+	assert.deepEqual(references.variables, []);
+});
 
 test('Chat registers its focused editor for global commands and removes it on disposal', async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");

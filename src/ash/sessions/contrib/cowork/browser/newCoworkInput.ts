@@ -91,7 +91,7 @@ export class NewCoworkInputWidget extends ChatInputPart {
 		this.draftNotifications = notifications;
 		this.element.classList.add('ash-sessions-cowork-input', 'floating-card');
 		this.element.classList.add('cowork-composer');
-		this.contextAttachments = this._register(instantiationService.createInstance(NewChatContextAttachments, this.inputContainer, this.attachmentModel, () => this.supportsImages()));
+		this.contextAttachments = this._register(new NewChatContextAttachments(this.inputContainer, files => this.attachFiles(files)));
 		this._register(new NewChatInputPasteTarget(this.inputContainer, this.contextAttachments));
 		const dragAndDrop = this._register(new ChatDragAndDrop(files => this.contextAttachments.attachFiles(files)));
 		dragAndDrop.addOverlay(this.inputContainer, this.inputContainer);
@@ -190,7 +190,7 @@ export class NewCoworkInputWidget extends ChatInputPart {
 		this.draftWriteRevisions.set(draftId, revision);
 		const text = this.input.value;
 		const mode = this.model.inputState.mode;
-		const attachments = this.attachmentModel.attachments;
+		const attachments = this.contexts;
 		if (attachments.length === 0) {
 			writeNewChatDraftState(this.storage, { mode, text, contexts: [] }, draftId);
 			return;
@@ -198,6 +198,8 @@ export class NewCoworkInputWidget extends ChatInputPart {
 		const contexts = await Promise.all(attachments.map(async attachment => ({
 			id: attachment.id, kind: attachment.kind, name: attachment.name,
 			content: (await attachment.resolve()).content,
+			...(attachment.resource ? { resource: attachment.resource.toString() } : {}),
+			...(attachment.reference ? { reference: attachment.reference } : {}),
 		})));
 		if (revision !== this.draftWriteRevisions.get(draftId)) return;
 		writeNewChatDraftState(this.storage, { mode, text, contexts }, draftId);

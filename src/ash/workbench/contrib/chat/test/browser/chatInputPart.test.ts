@@ -40,6 +40,7 @@ import { ChatInputPart } from '../../browser/widget/input/chatInputPart.js';
 import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
 import type { ChatInputDelegate, ChatInputState } from '../../browser/widget/input/chatInput.js';
 import type { ChatAgent } from '../../../../services/chat/common/chatService.js';
+import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 for (const [name, value] of Object.entries({
@@ -155,6 +156,38 @@ test('Chat mode picker loads Agents before opening the shared action widget and 
 	assert.equal(part.element.querySelector('[data-action-id="ash.chat.input.mode"] button')!.getAttribute('aria-expanded'), 'false');
 });
 
+test('All context kinds insert at the cursor without an attachment bar; tool configuration persists without enabling Send', async () => {
+	const sent: ChatContextAttachment[][] = [];
+	const commands: string[] = [];
+	using part = inputPart(sharedNotifications, undefined, 'agent', {
+		send: async (_text, _mode, _skills, contexts) => { sent.push([...(contexts ?? [])]); },
+		executeCommand: async invocation => { commands.push(invocation.commandId); },
+	});
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	part.addContext({ id: 'tool-selection', kind: 'toolSelection', name: 'Tool selection: 1 disabled', resolve: async () => ({ name: 'Tools', kind: 'toolSelection', content: '["write_file"]' }) });
+	assert.equal(part.element.querySelector('[data-action-id="ash.chat.input.send"]'), null);
+	await part.acceptInput();
+	assert.equal(sent.length, 0);
+	edit(part, part.element.querySelector('textarea')!.value + 'Review ');
+	const input = part.element.querySelector('textarea')!;
+	input.setSelectionRange(input.value.length - 7, input.value.length - 7);
+	part.addContext({ id: 'folder', kind: 'directory', name: 'src', resource: URI.file('/workspace/src'), resolve: async () => ({ name: 'src', content: 'Directory snapshot' }) });
+	assert.equal(input.value, 'Tool selection: 1 disabled src Review ');
+	assert.equal(part.element.querySelector('.ash-chat-input-attachments'), null);
+	const draft = await part.captureDraft();
+	assert.deepEqual(draft?.draft.contexts[1]?.reference, { start: 27, end: 30 });
+	await part.acceptInput();
+	assert.deepEqual(sent[0]?.map(context => context.kind), ['toolSelection', 'directory']);
+	assert.equal(input.value, 'Tool selection: 1 disabled ');
+	assert.equal(part.element.querySelector('[data-action-id="ash.chat.input.send"]'), null);
+	await part.acceptInput('/config');
+	assert.equal(commands.length, 1);
+	assert.equal(input.value, 'Tool selection: 1 disabled ');
+	part.addContext({ id: 'tool-selection-new', kind: 'toolSelection', name: 'Tool selection: all enabled', resolve: async () => ({ name: 'Tools', kind: 'toolSelection', content: '[]' }) });
+	assert.equal(input.value, 'Tool selection: all enabled ');
+	assert.equal((await part.captureDraft())?.draft.contexts.length, 1);
+});
+
 test('Chat input sends attachments without text and rejects duplicate submissions while pending', async () => {
 	let complete!: () => void;
 	const sent: string[] = [];
@@ -174,19 +207,21 @@ test('Chat input sends attachments without text and rejects duplicate submission
 	edit(part, 'Next draft');
 	complete();
 	await pending;
-	assert.deepEqual(sent, ['']);
+	assert.deepEqual(sent, ['file.ts ']);
 	assert.equal(part.element.querySelector('textarea')?.value, 'Next draft');
-	assert.equal(part.element.querySelector('.ash-chat-input-attachments')?.textContent, '');
+	assert.equal(part.element.querySelector('.ash-chat-input-attachments'), null);
 });
 
 test('Chat input keeps failed attachments and restores text for retry', async () => {
 	using part = inputPart(sharedNotifications, undefined, 'agent', { send: async () => { throw new Error('Request failed'); } });
 	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	edit(part, 'Review image');
 	part.addContext({ id: 'image', kind: 'image', name: 'image.png', resolve: async () => ({ name: 'image.png', content: 'data:image/png;base64,aGVsbG8=', kind: 'image' }) });
-	await assert.rejects(part.acceptInput('Review image'), /Request failed/u);
+	await assert.rejects(part.acceptInput(), /Request failed/u);
 	const captured = await part.captureDraft();
-	assert.equal(captured?.draft.text, 'Review image');
+	assert.equal(captured?.draft.text, 'Review image image.png ');
 	assert.equal(captured?.draft.contexts[0]?.kind, 'image');
+	assert.deepEqual(captured?.draft.contexts[0]?.reference, { start: 13, end: 22 });
 });
 
 function edit(part: ChatInputPart, text: string): void {
@@ -253,7 +288,7 @@ test('Chat configuration requests append without sending or replacing draft atta
 	part.appendToDraft('Configure Hooks');
 	oldCapture?.clear();
 	assert.deepEqual((await part.captureDraft())?.draft, {
-		mode: 'debug', text: 'Existing draft\n\nConfigure Hooks', contexts: [{ id: 'file', kind: 'file', name: 'file.ts', content: 'const answer = 42;' }],
+		mode: 'debug', text: 'Existing draft file.ts \n\nConfigure Hooks', contexts: [{ id: 'file', kind: 'file', name: 'file.ts', content: 'const answer = 42;', reference: { start: 15, end: 22 } }],
 	});
 	assert.equal(sends, 0);
 });
@@ -267,13 +302,13 @@ test('Chat draft handoff moves text and resolved attachments after acknowledgeme
 	assert.ok(captured);
 	assert.deepEqual(captured.draft, {
 		mode: 'debug',
-		text: 'Review this file',
-		contexts: [{ id: 'src/file.ts', kind: 'file', name: 'file.ts', content: 'const answer = 42;', resource: 'file:///workspace/file.ts' }],
+		text: 'Review this file file.ts ',
+		contexts: [{ id: 'src/file.ts', kind: 'file', name: 'file.ts', content: 'const answer = 42;', resource: 'file:///workspace/file.ts', reference: { start: 17, end: 24 } }],
 	});
 	target.restoreDraft(captured.draft);
-	assert.equal(target.element.querySelector('textarea')?.value, 'Review this file');
+	assert.equal(target.element.querySelector('textarea')?.value, 'Review this file file.ts ');
 	assert.equal(target.element.querySelector('[data-action-id="ash.chat.input.mode"] button')?.textContent, 'Debug');
-	assert.match(target.element.querySelector('.ash-chat-input-attachments')?.textContent ?? '', /file\.ts/u);
+	assert.equal(target.element.querySelector('.ash-chat-input-attachments'), null);
 	assert.throws(() => target.restoreDraft(captured.draft), /already has an unsent draft/u);
 	captured.clear();
 	assert.equal(source.element.querySelector('textarea')?.value, '');
@@ -288,6 +323,76 @@ test('Chat draft handoff leaves text edited after capture in the source', async 
 	edit(source, 'Revised draft');
 	captured.clear();
 	assert.equal(source.element.querySelector('textarea')?.value, 'Revised draft');
+});
+
+test('Selected code is inserted at the message cursor and survives handoff without an attachment pill', async () => {
+	using source = inputPart(sharedNotifications);
+	using target = inputPart(sharedNotifications);
+	edit(source, 'Explain  please');
+	const input = source.element.querySelector('textarea')!;
+	input.setSelectionRange(8, 8);
+	source.addContext({ id: 'selection', kind: 'codeSelection', name: 'file.ts (6-9)', resource: URI.file('/workspace/file.ts').with({ fragment: 'L6,1-L9,2' }), resolve: async () => ({ name: 'file.ts (6-9)', content: 'Unsaved selected code' }) });
+	assert.equal(input.value, 'Explain file.ts (6-9) please');
+	assert.equal(input.selectionStart, 21);
+	assert.equal(source.element.querySelector('.ash-chat-input-attachments'), null);
+	assert.equal(document.activeElement, input);
+	const captured = await source.captureDraft();
+	assert.ok(captured);
+	assert.deepEqual(captured.draft.contexts[0]?.reference, { start: 8, end: 21 });
+	target.restoreDraft(captured.draft);
+	assert.deepEqual((await target.captureDraft())?.draft, captured.draft);
+	assert.equal(target.element.querySelector('.ash-chat-input-attachments'), null);
+	const restored = target.element.querySelector('textarea')!;
+	restored.setSelectionRange(21, 21);
+	restored.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }));
+	assert.equal(restored.value, 'Explain  please');
+	assert.deepEqual((await target.captureDraft())?.draft.contexts, []);
+});
+
+test('A pending file picker inserts its filename before submission captures the message', async () => {
+	const prepared = new DeferredPromise<readonly ChatContextAttachment[]>();
+	let sent: unknown;
+	using part = inputPart(sharedNotifications, undefined, 'agent', {
+		send: async (text, _mode, _skills, contexts) => {
+			sent = { text, contexts: await Promise.all(contexts!.map(context => context.resolve())) };
+		}
+	});
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	edit(part, 'Explain  please');
+	part.element.querySelector('textarea')!.setSelectionRange(8, 8);
+	const acquiring = part.acquireContext(() => prepared.p);
+	const sending = part.acceptInput();
+	await prepared.complete([{ id: 'picked-file', kind: 'file', name: 'file.ts', resource: URI.file('/workspace/file.ts'), resolve: async () => ({ name: 'file.ts', content: 'Unsaved whole file' }) }]);
+	await Promise.all([acquiring, sending]);
+	assert.deepEqual(sent, { text: 'Explain file.ts please', contexts: [{ name: 'file.ts', content: 'Unsaved whole file' }] });
+	assert.equal(part.element.querySelector('textarea')!.value, '');
+	assert.equal(part.element.querySelector('.ash-chat-input-attachments'), null);
+});
+
+test('Restoring an older file attachment draft adds a filename reference instead of a bar pill', async () => {
+	using part = inputPart(sharedNotifications);
+	part.restoreDraft({ mode: 'agent', text: 'Explain', contexts: [{ id: 'legacy', kind: 'file', name: 'file.ts', resource: 'file:///workspace/file.ts', content: 'Older unsaved snapshot' }] });
+	const draft = (await part.captureDraft())!.draft;
+	assert.equal(draft.text, 'Explain file.ts ');
+	assert.deepEqual(draft.contexts[0]?.reference, { start: 8, end: 15 });
+	assert.equal(draft.contexts[0]?.content, 'Older unsaved snapshot');
+	assert.equal(part.element.querySelector('.ash-chat-input-attachments'), null);
+});
+
+test('Sending a selected code reference forwards its snapshot and restores it after failure', async () => {
+	let submitted: unknown;
+	using part = inputPart(sharedNotifications, undefined, 'agent', {
+		send: async (text, _mode, _skills, contexts) => {
+			submitted = { text, contexts: await Promise.all(contexts!.map(context => context.resolve())) };
+			throw new Error('Send failed');
+		}
+	});
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	part.addContext({ id: 'selection', kind: 'codeSelection', name: 'file.ts (6-9)', resolve: async () => ({ name: 'file.ts (6-9)', content: 'Unsaved selected code' }) });
+	const draft = (await part.captureDraft())?.draft;
+	await assert.rejects(part.acceptInput(), /Send failed/);
+	assert.deepEqual(submitted, { text: 'file.ts (6-9) ', contexts: [{ name: 'file.ts (6-9)', content: 'Unsaved selected code' }] });
+	assert.deepEqual((await part.captureDraft())?.draft, draft);
 });
 
 test('Chat dictation startup failure appears in notifications and leaves input status clear', async () => {
@@ -598,12 +703,12 @@ test('Chat input failure does not restore over a new draft that was edited and e
 	assert.equal(part.element.querySelector('textarea')!.value, '');
 });
 
-test('Chat input waits for file preparation before sending an attachment-only request', async () => {
+test('Chat input waits for file preparation before sending its inline reference and snapshot', async () => {
 	using globals = installEditorTestGlobals({ FileReader: browserEnvironment.window.FileReader });
 	const sent: string[] = [];
 	using part = inputPart(sharedNotifications, undefined, 'agent', {
 		send: async (text, _mode, _skills, contexts) => {
-			assert.equal(text, '');
+			assert.equal(text, 'input.txt ');
 			for (const context of contexts ?? []) sent.push((await context.resolve()).content);
 		}
 	});
@@ -613,7 +718,7 @@ test('Chat input waits for file preparation before sending an attachment-only re
 	assert.deepEqual(sent, []);
 	await Promise.all([attaching, sending]);
 	assert.deepEqual(sent, ['file contents']);
-	assert.equal(part.element.querySelector('.ash-chat-input-attachments')!.textContent, '');
+	assert.equal(part.element.querySelector('.ash-chat-input-attachments'), null);
 });
 
 test('Failed file preparation blocks the waiting send and notifies once while preserving the draft', async () => {
@@ -652,7 +757,7 @@ test('Hiding an input cancels pending file preparation without sending or notify
 });
 
 
-test('Typing a newer draft during file preparation preserves it while sending the captured request', async () => {
+test('Editing a draft during file preparation cancels the waiting send and keeps both file references', async () => {
 	using globals = installEditorTestGlobals({ FileReader: browserEnvironment.window.FileReader });
 	const sent: { text: string; contents: string[]; }[] = [];
 	using part = inputPart(sharedNotifications, undefined, 'agent', {
@@ -667,10 +772,12 @@ test('Typing a newer draft during file preparation preserves it while sending th
 	edit(part, 'Next request');
 	const next = part.attachFiles([new browserEnvironment.window.File(['next contents'], 'next.txt')]);
 	await Promise.all([first, sending, next]);
-	assert.deepEqual(sent, [{ text: 'Original request', contents: ['first contents'] }]);
+	assert.deepEqual(sent, []);
 	const draft = await part.captureDraft();
-	assert.equal(draft?.draft.text, 'Next request');
-	assert.deepEqual(draft?.draft.contexts.map(context => context.name), ['next.txt']);
+	assert.equal(draft?.draft.text, 'Next request first.txt next.txt ');
+	assert.deepEqual(draft?.draft.contexts.map(context => context.name), ['first.txt', 'next.txt']);
+	await part.acceptInput();
+	assert.deepEqual(sent, [{ text: 'Next request first.txt next.txt ', contents: ['first contents', 'next contents'] }]);
 });
 
 
@@ -699,7 +806,7 @@ test('A local settings command executes while file context is still being prepar
 	assert.equal(commands.length, 1);
 	await Promise.all([command, attaching]);
 	const draft = await part.captureDraft();
-	assert.equal(draft?.draft.text, '');
+	assert.equal(draft?.draft.text, 'following.txt ');
 	assert.deepEqual(draft?.draft.contexts.map(context => context.name), ['following.txt']);
 });
 
@@ -726,7 +833,7 @@ test('Pending attachment-only context exposes mouse Send and waits for acquisiti
 	await preparation.complete([{ id: 'held-file', kind: 'file', name: 'held.txt', resolve: async () => ({ name: 'held.txt', content: 'held attachment contents' }) }]);
 	await acquiring;
 	await delivered.p;
-	assert.deepEqual(sent, [{ text: '', contents: ['held attachment contents'] }]);
+	assert.deepEqual(sent, [{ text: 'held.txt ', contents: ['held attachment contents'] }]);
 });
 
 test('Canceling pending attachment-only context restores the empty mouse toolbar', async () => {
@@ -818,7 +925,7 @@ test('Draft context resolved after retirement does not produce a new handoff', a
 	part.setVisible(true);
 	await resolving.complete({ name: 'slow.txt', content: 'Previous context' });
 	assert.equal(await capturing, undefined);
-	assert.equal(part.element.querySelector('textarea')!.value, 'Retained draft');
+	assert.equal(part.element.querySelector('textarea')!.value, 'Retained draft slow.txt ');
 });
 
 for (const submission of [

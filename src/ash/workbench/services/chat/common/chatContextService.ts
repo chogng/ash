@@ -20,6 +20,8 @@ export interface ChatContextAttachment {
 	/** Original source; the resolved content remains the selected snapshot. */
 	readonly resource?: URI;
 	readonly name: string;
+	/** Position of the visible reference in the message; older saved drafts may omit it. */
+	readonly reference?: { readonly start: number; readonly end: number; };
 	resolve(): Promise<ResolvedChatContext>;
 }
 

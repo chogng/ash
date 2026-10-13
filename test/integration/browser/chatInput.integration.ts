@@ -24,6 +24,7 @@ import { IMessageHistoryService, type MessageHistoryEntry, type MessageHistoryQu
 import '../../../src/ash/workbench/contrib/chat/browser/chat.shared.contribution.js';
 import { IAgentCapabilitiesService } from '../../../src/ash/platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { IInstructionService } from '../../../src/ash/platform/instructions/common/instructionService.js';
+import { IAppServerRemoteAgentService } from '../../../src/ash/workbench/services/remote/common/appServerRemoteAgentService.js';
 import { ILanguageFeaturesService } from '../../../src/ash/editor/common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../../src/ash/editor/common/services/languageFeaturesService.js';
 import { registerCodebaseSymbolsWorkspaceSymbolProvider } from '../../../src/ash/workbench/services/codebaseSymbols/browser/codebaseSymbolsWorkspaceSymbolProvider.js';
@@ -62,6 +63,13 @@ import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import '../../../src/ash/workbench/contrib/chat/browser/widget/media/chat.css';
 import { ChatInputPart } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import { ChatInputEditors } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
+import { ChatInputEditor } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputEditor.js';
+import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
+import { CodeEditorWidget } from '../../../src/ash/editor/browser/widget/codeEditor/codeEditorWidget.js';
+import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
+import { Selection } from '../../../src/ash/editor/common/core/selection.js';
+import { registerChatContextActions } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatContextActions.js';
+import { CHAT_VIEW_ID } from '../../../src/ash/workbench/contrib/chat/common/chat.js';
 import type { ChatInputDelegate, ChatInputState } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { IContextViewService, type IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
@@ -94,7 +102,7 @@ import { HoverService, IHoverService } from '../../../src/ash/platform/hover/bro
 import { setHoverDelegate } from '../../../src/ash/base/browser/ui/hover/hoverDelegate.js';
 
 declare global {
-	interface Window { ashChatInputIntegration: { setActiveFile(path?: string): void; setActiveDiff(original: string, modified: string, text?: string): void; setChanges(changes: ChatInputState['changes']): void; setVisible(visible: boolean): void; inputAccessibility(): string | undefined; contextAccessibility(): { help: string | undefined; content: string | undefined; }; setFooterPhase(phase: ChatInputState['phase'], error?: string): void; setContextUsage(available: boolean, capacity?: number, estimatedTokens?: number): void; setFooterStatus(visible: boolean): void; removeFooterStatus(): void; historyState(): unknown; holdNextHistoryRead(): void; releaseHistorySearch(query: string): void; addHistoryContext(): void; setHistorySkill(digest: string): void; refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; restoreCapturedDraft(): Promise<void>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; disposeContextTerminal(): void; }; }
+	interface Window { ashChatInputIntegration: { setActiveFile(path?: string): void; setActiveDiff(original: string, modified: string, text?: string): void; setChanges(changes: ChatInputState['changes']): void; setVisible(visible: boolean): void; inputAccessibility(): string | undefined; contextAccessibility(): { help: string | undefined; content: string | undefined; }; setFooterPhase(phase: ChatInputState['phase'], error?: string): void; setContextUsage(available: boolean, capacity?: number, estimatedTokens?: number): void; setFooterStatus(visible: boolean): void; removeFooterStatus(): void; historyState(): unknown; holdNextHistoryRead(): void; releaseHistorySearch(query: string): void; addHistoryContext(): void; setHistorySkill(digest: string): void; refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; restoreCapturedDraft(): Promise<string | undefined>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; disposeContextTerminal(): void; }; }
 }
 
 const locale = new URLSearchParams(location.search).get('locale');
@@ -114,6 +122,12 @@ if (new URLSearchParams(location.search).has('gestureAncestor')) {
 	resources.add(addDisposableListener(main, EventType.Tap, event => { stopEvent(event); document.querySelector('output')!.textContent = 'Ancestor tap'; }));
 }
 const services = resources.add(new InstantiationService());
+services.registerInstance(IAppServerRemoteAgentService, {
+	connection: undefined, connectionState: undefined,
+	onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None,
+	reconnect: async () => { throw new Error('This fixture has no remote connection'); },
+	rollbackRuntime: async () => { throw new Error('This fixture has no remote runtime'); },
+});
 const historyEnabled = new URLSearchParams(location.search).has('history');
 let historyEntries: MessageHistoryEntry[] = [
 	{ id: '3', text: 'third input', kind: 'agent', submittedAtMs: 3 },
@@ -154,7 +168,7 @@ document.body.append(destinations);
 const recordDestination = (value: unknown): void => { destinations.textContent = JSON.stringify([...JSON.parse(destinations.textContent!), value]); };
 services.registerInstance(IThemeService, theme);
 services.registerInstance(IOpenerService, { open: async (resource, options) => { recordDestination({ resource: resource.toString(), options }); return true; } } as IOpenerService);
-services.registerInstance(ICommandService, { executeCommand: async (id: string, resource?: unknown) => { if (id === 'git.getRepositoryContexts') { return CommandsRegistry.getCommand(id)!(services); } recordDestination({ command: id, ...(resource !== undefined ? { resource: URI.isUri(resource) ? resource.toString() : resource } : {}) }); } } as unknown as ICommandService);
+services.registerInstance(ICommandService, { executeCommand: async (id: string, resource?: unknown) => { if (id === 'git.getRepositoryContexts' || id === 'workbench.action.chat.attachSelection' || id === 'undo' || id === 'redo') { return CommandsRegistry.getCommand(id)!(services); } recordDestination({ command: id, ...(resource !== undefined ? { resource: URI.isUri(resource) ? resource.toString() : resource } : {}) }); } } as unknown as ICommandService);
 const contextKeys = resources.add(new ContextKeyService());
 services.registerInstance(IContextKeyService, contextKeys);
 services.registerSingleton(IMenuService, () => services.createInstance(MenuService));
@@ -385,6 +399,7 @@ terminalScreen?.write(`\x1b[32m${terminalSource}\x1b[0m\r\n`);
 const terminalInstances = hasContextSources ? [terminalInstance] : [];
 services.registerInstance(ITerminalService, { instances: terminalInstances } as unknown as ITerminalService);
 services.registerInstance(IViewsService, {
+	openView: async (id: string) => id === CHAT_VIEW_ID ? part : undefined,
 	getViewWithId: (id: string) => id === TERMINAL_VIEW_ID && terminalScreen ? { getTerminalOutput: (_instance: ITerminalInstance, limit: number, signal: AbortSignal) => terminalScreen.getBufferText(limit, signal) } : id === SEARCH_VIEW_ID && hasContextSources ? { getSearchResultSnapshot: () => searchSnapshot } : null,
 } as unknown as IViewsService);
 const root = URI.file('/workspace');
@@ -485,11 +500,35 @@ const delegate: ChatInputDelegate = {
 	resolveInteraction: async response => { if (response.type === 'approval') document.querySelector('output')!.textContent = response.response.decision; },
 };
 const cowork = new URLSearchParams(location.search).get('surface') === 'cowork';
-const part = resources.add(services.createInstance(ChatInputPart, document.querySelector('main')!, delegate, { contextMenuStyle: 'custom', showContextMenu: () => { }, hideContextMenu: () => { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None } satisfies IContextMenuService, services.get(IContextViewService), accessibleView, notifications, ChatInputEditors, [], {
+const inlineCode = new URLSearchParams(location.search).has('inlineCode');
+if (inlineCode) {
+	registerCodeEditorServices(services);
+	resources.add(registerChatContextActions());
+}
+const editorProvider = inlineCode ? { create: (options: Parameters<typeof ChatInputEditors.create>[0]) => services.createInstance(ChatInputEditor, options) } : ChatInputEditors;
+const part = resources.add(services.createInstance(ChatInputPart, document.querySelector('main')!, delegate, { contextMenuStyle: 'custom', showContextMenu: () => { }, hideContextMenu: () => { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None } satisfies IContextMenuService, services.get(IContextViewService), accessibleView, notifications, editorProvider, [], {
 	modePicker: cowork ? 'hidden' : 'visible',
 	modelPickerPosition: cowork ? 'trailing' : 'leading',
 	renderSecondaryToolbar: !cowork,
 }));
+if (inlineCode) {
+	const source = document.createElement('section');
+	source.id = 'code-selection-source';
+	source.style.cssText = 'width:600px;height:200px;margin-top:24px';
+	document.body.append(source);
+	const model = resources.add(new TextModel('first\nsecond\nconst unsaved = 42;\nreturn unsaved;\nlast', { resource: URI.file('/workspace/example.ts'), languageId: 'typescript' }));
+	const editor = resources.add(services.createInstance(CodeEditorWidget, { container: source, model }));
+	editor.layout({ width: 600, height: 200 });
+	const add = document.createElement('button');
+	add.id = 'add-code-selection';
+	add.textContent = 'Add selected code';
+	add.onclick = () => {
+		editor.setSelection(new Selection(3, 1, 5, 1));
+		editor.focus();
+		void services.get(ICommandService).executeCommand('workbench.action.chat.attachSelection');
+	};
+	document.body.append(add);
+}
 if (new URLSearchParams(location.search).has('sessionsLayout')) {
 	// Exercise the Chat host's production CSS with the real, auto-growing composer.
 	const body = document.querySelector('main')!;
@@ -582,7 +621,7 @@ window.ashChatInputIntegration = {
 	contextAccessibility: () => {
 		const content = (type: AccessibleViewType): string | undefined => {
 			for (const entry of AccessibleViewRegistry.getImplementations()) {
-				if (entry.type !== type || !entry.name.startsWith('chatContextUsage-')) continue;
+				if (entry.type !== type || !entry.name.startsWith(inlineCode ? 'chatAttachments-' : 'chatContextUsage-')) continue;
 				const provider = entry.getProvider(services);
 				if (!provider) continue;
 				try { return provider.provideContent(); }
@@ -613,7 +652,7 @@ window.ashChatInputIntegration = {
 		terminalInstances.length = 0;
 	},
 	releaseSymbolSearch: query => { const release = symbolWaiters.get(query)!; symbolWaiters.delete(query); release(); },
-	restoreCapturedDraft: async () => { const captured = await part.captureDraft(); if (captured) { captured.clear(); part.restoreDraft(captured.draft); } },
+	restoreCapturedDraft: async () => { const captured = await part.captureDraft(); if (captured) { captured.clear(); part.restoreDraft(captured.draft); } return captured?.draft.text; },
 	setImageCapability: capability => { models = models.map(entry => ({ ...entry, inputModalities: capability === 'unknown' ? null : capability === 'text' ? ['text'] : ['text', 'image'] })); renderModels(); modelChanged.fire(); },
 	releaseGitHubSearch: query => { const release = gitHubSearchWaiters.get(query)!; gitHubSearchWaiters.delete(query); release(); },
 	releaseFileSearch: index => {

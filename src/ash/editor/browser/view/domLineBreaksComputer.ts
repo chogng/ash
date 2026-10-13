@@ -69,7 +69,32 @@ function computeLineBreaks(
 	const wrappedTextIndentLength = computeWrappedTextIndentLength(text, wrappingColumn, wrappingIndent, tabSize);
 	const wrappedTextIndentWidth = wrappedTextIndentLength * fontInfo.spaceWidth;
 	const breakOffsets: number[] = [];
-	const boundaries = getTextGraphemeBoundaries(text);
+	const fixedWidths = LineInjectedText.getFixedWidthInjectedTextRanges(injectedTexts);
+	const boundaries = getTextGraphemeBoundaries(text).filter(offset => !fixedWidths.some(range => offset > range.startOffset && offset < range.endOffset));
+	// Canvas glyph widths cannot measure a control's reserved width. Measure ordinary runs between injections.
+	const measureRange = (start: number, end: number): number => {
+		if (fixedWidths.length === 0) return measure(text.slice(start, end));
+		let width = 0;
+		let cursor = start;
+		const appendText = (value: string): void => {
+			const runs = value.split('\t');
+			for (let index = 0; index < runs.length; index++) {
+				width += measure(runs[index]!);
+				if (index + 1 < runs.length) {
+					const tabWidth = fontInfo.spaceWidth * tabSize;
+					width = (Math.floor(width / tabWidth) + 1) * tabWidth;
+				}
+			}
+		};
+		for (const range of fixedWidths) {
+			if (range.startOffset < start || range.startOffset > end || range.startOffset === end && end !== text.length) continue;
+			appendText(text.slice(cursor, range.startOffset));
+			width += range.widthInEm * fontInfo.fontSize;
+			cursor = range.endOffset;
+		}
+		appendText(text.slice(cursor, end));
+		return width;
+	};
 	const preferredBreaks = getPreferredBreaks(text, boundaries, wordBreak);
 	let startOffset = 0;
 	let previousOffset = 0;
@@ -78,7 +103,7 @@ function computeLineBreaks(
 		const offset = boundaries[index]!;
 		if (preferredBreaks.has(previousOffset)) preferredOffset = previousOffset;
 		let availableWidth = startOffset === 0 ? wrapWidth : Math.max(0, wrapWidth - wrappedTextIndentWidth);
-		while (measure(text.slice(startOffset, offset)) > availableWidth && previousOffset > startOffset) {
+		while (measureRange(startOffset, offset) > availableWidth && previousOffset > startOffset) {
 			const breakOffset = preferredOffset > startOffset ? preferredOffset : previousOffset;
 			startOffset = breakOffset;
 			breakOffsets.push(startOffset);

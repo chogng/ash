@@ -1,7 +1,6 @@
 import { createChatFileAttachments } from './editor/chatPasteProviders.js';
 import { ChatDragAndDrop } from '../chatDragAndDrop.js';
 import { CancellationError, isCancellationError } from '../../../../../../base/common/errors.js';
-import { isTerminalChatAttachment } from '../../../../terminal/terminalContribChatExports.js';
 import { ChatChangesPill } from './chatChangesPill.js';
 import type { SkillReference } from '../../../../../../platform/agentHost/common/appServerApi.js';
 import { ChatHistoryNavigator } from '../../../common/widget/chatWidgetHistoryService.js';
@@ -18,7 +17,7 @@ import { ActionViewItem, ButtonActionViewItem } from "../../../../../../base/bro
 import type { IAction } from "../../../../../../base/common/actions.js";
 import { Separator } from "../../../../../../base/common/actions.js";
 import type { Icon } from "../../../../../../base/common/icon.js";
-import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from "../../../../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from "../../../../../../base/common/lifecycle.js";
 import { URI } from '../../../../../../base/common/uri.js';
 import { Emitter } from '../../../../../../base/common/event.js';
 import { Lxicon } from "../../../../../../base/common/lxicons.js";
@@ -38,9 +37,9 @@ import type { ModelCatalogEntry } from "../../../../../services/chat/common/chat
 import type { ChatAgent } from '../../../../../services/chat/common/chatService.js';
 import { AttachContextAction } from '../../actions/chatContextActions.js';
 import { createToolSelectionAttachment } from '../../actions/chatToolPicker.js';
-import { DefaultChatAttachmentWidget, ImageAttachmentWidget, TerminalAttachmentWidget } from '../../attachments/chatAttachmentWidgets.js';
 import { status as announceStatus } from '../../../../../../base/browser/ui/aria/aria.js';
 import { ChatAttachmentModel } from '../../attachments/chatAttachmentModel.js';
+import { ChatDynamicVariableModel } from '../../attachments/chatDynamicVariables.js';
 import { ImplicitContextAttachmentWidget } from '../../attachments/implicitContextAttachment.js';
 import type { ModelReasoningEffort } from '../../../../../services/chat/common/modelCatalog.js';
 import type { ChatContextAttachment } from "../../../../../services/chat/common/chatContextService.js";
@@ -140,7 +139,6 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private readonly delegate: ChatInputDelegate;
 	private readonly interactionListeners = this._register(new DisposableStore());
 	private renderedInteraction: ChatInputState['interaction'];
-	private readonly attachmentWidgets = this._register(new DisposableMap<string, DefaultChatAttachmentWidget>());
 	private readonly attachContext = this._register(new MutableDisposable<AttachContextAction>());
 	private readonly attachAction: IAction = {
 		id: 'ash.chat.input.attach', label: localize('chat.context.add', 'Add context'), tooltip: localize('chat.context.add', 'Add context'), icon: Lxicon.add, enabled: true,
@@ -148,7 +146,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			// The command creates the picker owner only when this composer opens it.
 			this.attachContext.value ??= this.instantiationService.createInstance(AttachContextAction, {
 				container: this.inputContainer, target: this, focusInput: () => this.focus(), supportsImages: () => this.supportsImages(), getDisabledTools: async () => {
-					const selection = this.attachmentModel.attachments.find(attachment => attachment.kind === 'toolSelection');
+					const selection = this.contexts.find(attachment => attachment.kind === 'toolSelection');
 					return selection ? JSON.parse((await selection.resolve()).content) as string[] : [];
 				}
 			});
@@ -156,10 +154,10 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		},
 	};
 	public readonly attachmentModel = this._register(new ChatAttachmentModel());
+	private readonly inlineContext: ChatDynamicVariableModel;
 	private readonly status: HTMLDivElement;
 	private readonly dictationPreview: HTMLDivElement;
 	private readonly interaction: HTMLDivElement;
-	private readonly attachmentList: HTMLDivElement;
 	private readonly suggestedContext: ImplicitContextAttachmentWidget;
 	protected readonly inputContainer: HTMLFormElement;
 	protected readonly input: IChatInputEditor;
@@ -189,6 +187,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private visible = true;
 	private draftRevision = 0;
 	private textRevision = 0;
+	private acceptingContext = false;
 	private submitting = false;
 	// Retained panes can change conversation without disposing their editor.
 	private inputLifecycle = new AbortController();
@@ -228,11 +227,6 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.interaction.setAttribute("aria-live", "polite");
 		this.inputContainer = h(ownerDocument, "form");
 		this.inputContainer.className = "ash-chat-input-container";
-		this.attachmentList = h(ownerDocument, "div");
-		this.attachmentList.className = "ash-chat-input-attachments";
-		this.attachmentList.setAttribute('role', 'list');
-		this.attachmentList.setAttribute('aria-label', localize('chat.context.attached', 'Attached context'));
-		this.suggestedContext = this._register(instantiationService.createInstance(ImplicitContextAttachmentWidget, this.inputContainer, this.attachmentModel, () => this.focus()));
 		const editorHost = h(ownerDocument, "div");
 		editorHost.className = "ash-chat-input-editor-host";
 		this.input = this._register(editorProvider.create({
@@ -242,6 +236,13 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			slashCommands: this.slashCommands,
 			skills: this.skills,
 		}));
+		this.inlineContext = this._register(new ChatDynamicVariableModel(this.input));
+		const owner = this;
+		this.suggestedContext = this._register(instantiationService.createInstance(ImplicitContextAttachmentWidget, this.inputContainer, {
+			get attachments() { return owner.contexts; },
+			onDidChange: this.onDidChangeInput,
+			acquireContext: (...args: Parameters<IChatInputPart['acquireContext']>) => this.acquireContext(...args),
+		}, () => this.focus()));
 		this.inputToolbar = this._register(new WorkbenchToolBar(this.inputContainer, contextMenuService, {
 			ariaLabel: localize('chat.input.actions', 'Chat input actions'),
 			actionViewItemProvider: action => this.createToolbarViewItem(action, contextViewService),
@@ -249,7 +250,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.inputToolbar.element.classList.add("ash-chat-input-toolbars");
 		this.inputToolbar.element.classList.toggle('model-picker-trailing', options.modelPickerPosition === 'trailing');
 		this.pickerResponsiveLayout = this._register(new ChatInputPickerResponsiveLayout(this.inputToolbar.element));
-		this.inputContainer.append(this.attachmentList, editorHost, this.inputToolbar.element);
+		this.inputContainer.append(editorHost, this.inputToolbar.element);
 		this.secondaryToolbarContainer = options.renderSecondaryToolbar === false
 			? undefined
 			: this.createSecondaryToolbar(contextMenuService, menuService);
@@ -263,12 +264,20 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 					const focused = this.element.ownerDocument.activeElement as HTMLElement | null;
 					const footerFocused = focused && this.secondaryToolbarContainer?.contains(focused);
 					const changesFocused = focused && this.changesPill.domNode.contains(focused);
-					if (!focused || (!footerFocused && !changesFocused && !this.input.element.contains(focused) && !this.attachmentList.contains(focused) && !this.suggestedContext.domNode.contains(focused) && !this.inputToolbar.element.querySelector('[data-action-id="ash.chat.input.attach"]')?.contains(focused))) { return undefined; }
+					const referencePreview = focused?.closest<HTMLElement>('.ash-chat-context-reference-preview');
+					const previewAttachment = referencePreview && this.inlineContext.variables.find(reference => reference.id === referencePreview.dataset.attachmentId);
+					const previewOwned = !!previewAttachment;
+					if (!focused || (!previewOwned && !footerFocused && !changesFocused && !this.input.element.contains(focused) && !this.suggestedContext.domNode.contains(focused) && !this.inputToolbar.element.querySelector('[data-action-id="ash.chat.input.attach"]')?.contains(focused))) { return undefined; }
 					if ((footerFocused || changesFocused) && type === AccessibleViewType.View) { return undefined; }
-					if (type === AccessibleViewType.View && this.attachmentModel.size === 0 && !this.suggestedContext.accessibleContent) { return undefined; }
+					if (type === AccessibleViewType.View && this.contexts.length === 0 && !this.suggestedContext.accessibleContent) { return undefined; }
 					return new AccessibleContentProvider(AccessibleViewProviderId.SessionsChat, { type }, () => {
-						const names = [...this.attachmentModel.attachments.map(attachment => attachment.name), ...(this.suggestedContext.accessibleContent ? [this.suggestedContext.accessibleContent] : [])].join('\n');
-						return type === AccessibleViewType.View ? names : localize('chat.context.help', 'Chat context\nUse Add context to search recent and workspace files, attach files or images, read an image from the clipboard, take a screenshot, select a session, issue or pull request, choose Files & Folders to include a directory, add open editors including unsaved text, or select another context source. Add context opens a searchable menu beside its button and focuses the search field. Press Enter or Space on Add context to open it; activate it again to close it. Type to search, use arrow keys to choose, Enter to attach, Ctrl or Command+Enter to attach and keep searching, and Escape to return from a source picker to attachment search. Escape in attachment search cancels and returns focus to the message. After attaching, focus returns to the message. Use Go back to return to the previous picker. Directory attachments include their path and file list. Session and GitHub attachments capture their content when selected. Terminal attaches selected text or recent output. Symbols attach their source range, including unsaved edits. Search Results attaches the completed search and its match locations. These attachments keep the content captured when selected; their source button returns to the terminal, code or Search view. Tools attaches an enabled tool or tool set. Choose Configure tools, use Enter to toggle a tool or set, then choose Apply to save for this chat. Escape discards changes. Selection applies to the next request and is retained after sending; remove its attachment to reset. Steering cannot change a running request’s selection. A tool reference’s source button opens Tools settings. Calls use the current tool catalog and execution permissions. Instructions selects from the authorized user and directory catalog; the backend loads the current instruction when sending. Its source button opens the instruction file. Browser screenshots ask you to choose a screen, window or tab and can be cancelled. GitHub pickers let you choose an account and repository, paste a link, enter a number or load more items. Use Tab to reach the source and Remove buttons on each attachment; Enter opens its source. Removing an attachment focuses the next attachment or returns to the message. Paste or drop files into the message to attach them. Sending waits until file preparation finishes; a failed preparation keeps the draft. Attachments can be sent without text and remain in the draft when sending fails.') + '\n' + localize('chat.tool.help', 'Tool calls appear as collapsed summaries. Use Tab to reach a summary and Enter or Space to expand its input, source, execution target, standard output, standard error and result. Streaming updates retain focus and expansion. Failed calls show an error; a finished turn without a result is never shown as successful.') + '\n' + localize('hooks.feedbackHelp', 'Hook summaries show running, allowed to continue, blocked, failed, or cancelled results. Allowed means the Hook permits the action to continue; it does not confirm that the tool or Turn succeeded. Blocked and failed Hooks are errors; cancellation is reported separately. Use Tab to reach a Hook summary and Enter or Space to expand a reason when one is available. Status updates preserve the summary focus and expanded details. Execution Trace shows the recorded status and duration; enable detailed recording to load commands and input/output on demand.') + '\n' + localize('chat.voice.help', 'Voice conversation: when available, focus Voice conversation and press Enter or Space to start. Stop voice conversation closes the microphone and reply playback. Interrupt voice reply retires the current reply and reconnects speech. Switching conversations stops voice. Spoken task requests use the current Chat mode, queue and approvals; unsent text and attachments remain in the draft. Your speech and voice replies appear as plain-text transcripts in the conversation.') + '\n' + localize('chat.history.help', 'Chat input: Enter sends; Shift+Enter inserts a line. At the first or last input row, Arrow Up and Arrow Down recall earlier inputs. Press Ctrl+R to search all input history; Enter restores the selected text without sending it. Escape restores the original draft, cursor, attachments and Skill bindings. Input history belongs to the local Profile and stores text only. In the Code window, use the conversation title or Show Chat History to switch conversations and unfinished drafts. Switching keeps their inputs. Press Escape to dismiss the picker and return to the title.') + '\n' + (this.secondaryToolbarContainer ? localize('chat.input.secondaryHelp', 'Below the input, Add context is to the left of the approval mode button. Added attachments appear inside the input. The approval mode button shows the current mode. Press Enter or Space to open its menu above the button, use arrow keys to choose a mode, and Escape to close the menu and return focus. Full access requires confirmation. The static context ring shows the estimated share of model capacity in use. Hover or focus it to read the percentage and token counts, or activate it to open the breakdown above the ring. Unknown capacity uses an empty ring and shows token counts without a percentage. Press Escape or activate Close to close the details and return to the ring. Loading, working and error status appears alongside extension status indicators. Use Tab to reach each toolbar, arrow keys to move between actions, and Enter or Space to activate an action.') : '') + '\n' + localize('chat.input.changesHelp', 'The changes button above the input shows the current conversation’s file changes and added and removed lines. Use Tab to reach it and Enter or Space to open Changes. It is hidden when there are no changes.') + '\n' + localize('chat.context.suggestedHelp', 'The current editor file is suggested above the message. Use Tab to reach its Add to context button and Enter or Space to attach it to the next message. Suggestions are not sent until attached. Switching editors updates the suggestion; files already attached are hidden from suggestions. Attaching captures unsaved text. Sending clears the attachment after success; a failed send keeps it for retry.') + '\n' + names;
+						if (previewOwned) {
+							if (previewAttachment?.terminalSnapshot) return localize('terminal.chat.previewAccessibility', 'Saved terminal output: {0}\nThis preview is read only and retains the output captured when attached. Press Escape or Close terminal preview to return to the message.\n\n{1}', previewAttachment.name, previewAttachment.terminalSnapshot.text);
+							const image = referencePreview!.querySelector('img')!;
+							return localize('chat.context.imagePreviewAccessibility', 'Image preview: {0}\nDimensions: {1} × {2}\nPress Escape or activate Close image preview to return. This view identifies the image; it does not describe its contents.', image.alt, image.naturalWidth, image.naturalHeight);
+						}
+						const names = [...this.contexts.map(attachment => attachment.name), ...(this.suggestedContext.accessibleContent ? [this.suggestedContext.accessibleContent] : [])].join('\n');
+						return type === AccessibleViewType.View ? names : localize('chat.context.help', 'Chat context\nUse Add context to search recent and workspace files, attach files or images, read an image from the clipboard, take a screenshot, select a session, issue or pull request, choose Files & Folders to include a directory, add open editors including unsaved text, or select another context source. Add context opens a searchable menu beside its button and focuses the search field. Press Enter or Space on Add context to open it; activate it again to close it. Type to search, use arrow keys to choose, Enter to attach, Ctrl or Command+Enter to attach and keep searching, and Escape to return from a source picker to attachment search. Escape in attachment search cancels and returns focus to the message. After attaching, focus returns to the message. Use Go back to return to the previous picker. Directory attachments include their path and file list. Session and GitHub attachments capture their content when selected. Terminal attaches selected text or recent output. Symbols attach their source range, including unsaved edits. Search Results attaches the completed search and its match locations. These attachments keep the content captured when selected; their source button returns to the terminal, code or Search view. Tools attaches an enabled tool or tool set. Choose Configure tools, use Enter to toggle a tool or set, then choose Apply to save for this chat. Escape discards changes. Selection applies to the next request and is retained after sending; remove its attachment to reset. Steering cannot change a running request’s selection. A tool reference’s source button opens Tools settings. Calls use the current tool catalog and execution permissions. Instructions selects from the authorized user and directory catalog; the backend loads the current instruction when sending. Its source button opens the instruction file. Browser screenshots ask you to choose a screen, window or tab and can be cancelled. GitHub pickers let you choose an account and repository, paste a link, enter a number or load more items. Context references are inserted at the message cursor. Use Tab to reach their source and Remove buttons; Enter opens its source. Removing a reference returns focus to the message. Paste or drop files into the message to attach them. Sending waits until file preparation finishes; a failed preparation keeps the draft. Attachments can be sent without text and remain in the draft when sending fails.') + '\n' + localize('chat.tool.help', 'Tool calls appear as collapsed summaries. Use Tab to reach a summary and Enter or Space to expand its input, source, execution target, standard output, standard error and result. Streaming updates retain focus and expansion. Failed calls show an error; a finished turn without a result is never shown as successful.') + '\n' + localize('hooks.feedbackHelp', 'Hook summaries show running, allowed to continue, blocked, failed, or cancelled results. Allowed means the Hook permits the action to continue; it does not confirm that the tool or Turn succeeded. Blocked and failed Hooks are errors; cancellation is reported separately. Use Tab to reach a Hook summary and Enter or Space to expand a reason when one is available. Status updates preserve the summary focus and expanded details. Execution Trace shows the recorded status and duration; enable detailed recording to load commands and input/output on demand.') + '\n' + localize('chat.history.help', 'Chat input: Enter sends; Shift+Enter inserts a line. At the first or last input row, Arrow Up and Arrow Down recall earlier inputs. Press Ctrl+R to search all input history; Enter restores the selected text without sending it. Escape restores the original draft, cursor, attachments and Skill bindings. Input history belongs to the local Profile and stores text only. In the Code window, use the conversation title or Show Chat History to switch conversations and unfinished drafts. Switching keeps their inputs. Press Escape to dismiss the picker and return to the title.') + '\n' + (this.secondaryToolbarContainer ? localize('chat.input.secondaryHelp', 'Below the input, Add context is to the left of the approval mode button. Added attachments appear inside the input. The approval mode button shows the current mode. Press Enter or Space to open its menu above the button, use arrow keys to choose a mode, and Escape to close the menu and return focus. Full access requires confirmation. The static context ring shows the estimated share of model capacity in use. Hover or focus it to read the percentage and token counts, or activate it to open the breakdown above the ring. Unknown capacity uses an empty ring and shows token counts without a percentage. Press Escape or activate Close to close the details and return to the ring. Loading, working and error status appears alongside extension status indicators. Use Tab to reach each toolbar, arrow keys to move between actions, and Enter or Space to activate an action.') : '') + '\n' + localize('chat.input.changesHelp', 'The changes button above the input shows the current conversation’s file changes and added and removed lines. Use Tab to reach it and Enter or Space to open Changes. It is hidden when there are no changes.') + '\n' + localize('chat.context.suggestedHelp', 'The current editor file is suggested above the message. Use Tab to reach its Add to context button and Enter or Space to attach it to the next message. Suggestions are not sent until attached. Switching editors updates the suggestion; files already attached are hidden from suggestions. Attaching captures unsaved text. Sending clears the attachment after success; a failed send keeps it for retry.') + '\n' + localize('chat.context.inlineSelectionHelp', 'Choose a file in Add context, including workspace files, Open editors or Attach files, or paste or drop a code file to insert its name at the message cursor. Images from Add context, paste or drop also insert their file name at the message cursor, with a thumbnail and Remove button. Activate the thumbnail or file name to preview the image; Escape or Close image preview returns to the message. Use Tab to reach the image Preview and Remove buttons. Select code in an editor and choose Add Selection to Chat, or press Ctrl or Command+L, to insert the file name and line range. All context references appear in the message. Arrow Left and Arrow Right move across a reference; Backspace or Delete removes it and its captured context. Undo in the rich input restores the reference and its captured code. Drafts retain references and unsaved code snapshots.') + '\n' + names;
 					}, () => focused.isConnected ? focused.focus() : this.focus(), AccessibilityVerbositySettingId.Chat);
 				},
 			}));
@@ -283,7 +292,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this._register(onboarding.registerHost({ container: this.element, focusTarget: this.element, isVisible: () => this.visible }));
 		this._register(addDisposableListener(this.inputContainer, "focusin", event => {
 			this.inputContainer.classList.add("focused");
-			if (this.attachmentList.contains(event.target as Node) || this.suggestedContext.domNode.contains(event.target as Node) || this.input.element.contains(event.target as Node)) {
+			if (this.suggestedContext.domNode.contains(event.target as Node) || this.input.element.contains(event.target as Node)) {
 				const hint = this.accessibleViewService.getOpenAriaHint(AccessibilityVerbositySettingId.Chat);
 				if (hint) { announceStatus(hint); }
 			}
@@ -307,10 +316,13 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		}));
 		this._register(addDisposableListener(this.input.element, "keydown", event => this.handleHistoryKey(event), true));
 		this._register(this.input.onDidSubmit(() => this.inputContainer.requestSubmit()));
+		this._register(this.inlineContext.onDidChangeReferences(() => {
+			this.draftRevision++;
+			this.renderToolbar();
+			this.inputChanges.fire();
+		}));
 		this._register(this.attachmentModel.onDidChange(() => {
 			this.draftRevision++;
-			if (!this.applyingHistory) { this.history.reset(); this.historyInputRevision++; }
-			this.renderAttachments();
 			this.renderToolbar();
 			this.inputChanges.fire();
 		}));
@@ -330,14 +342,13 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			this._register(new ChatDragAndDrop(files => this.attachFiles(files))).addOverlay(this.inputContainer, this.inputContainer);
 		}
 		this.renderToolbarActions();
-		this.renderAttachments();
 		this._register(toDisposable(() => this.element.remove()));
 		this._register(toDisposable(() => this.inputLifecycle.abort()));
 		this._register(toDisposable(() => { void this.stopDictation(); }));
 	}
 
 	private captureHistoryDraft(): InputHistoryDraft {
-		return { text: this.input.value, selection: this.input.getSelection(), attachments: this.attachmentModel.attachments, skills: this.draftSkills?.text === this.input.value ? this.draftSkills.references : this.skills.referencesIn(this.input.value) };
+		return { text: this.input.value, selection: this.input.getSelection(), attachments: this.contexts, skills: this.draftSkills?.text === this.input.value ? this.draftSkills.references : this.skills.referencesIn(this.input.value) };
 	}
 
 	private applyHistoryDraft(draft: InputHistoryDraft): void {
@@ -345,11 +356,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		try {
 			this.input.value = draft.text;
 			this.input.setSelection(draft.selection);
-			const attachments = this.attachmentModel.attachments;
-			if (attachments.length !== draft.attachments.length || attachments.some((attachment, index) => attachment !== draft.attachments[index])) {
-				this.attachmentModel.clear();
-				this.attachmentModel.addContext(...draft.attachments);
-			}
+			this.inlineContext.setInputState(draft.attachments);
 			this.draftSkills = { text: draft.text, references: draft.skills };
 		} finally {
 			this.applyingHistory = false;
@@ -361,7 +368,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		try {
 			this.input.value = entry.text;
 			this.input.setSelection({ anchor: entry.text.length, active: entry.text.length });
-			this.attachmentModel.clear();
+			this.attachmentModel.cancelPendingContext();
+			this.inlineContext.setInputState([]);
 			this.draftSkills = undefined;
 		} finally {
 			this.applyingHistory = false;
@@ -467,13 +475,18 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		void load('');
 	}
 
-	private async submit(draft: InputHistoryDraft, textRevision: number, contexts: readonly ChatContextAttachment[], lifecycle: AbortSignal, operation: () => Promise<void>): Promise<void> {
-		void this.history.record(draft.text, parseSlashCommandInput(draft.text, this.slashCommands).kind === 'command' ? 'command' : 'agent').catch(error => {
+	private async submit(draft: InputHistoryDraft, textRevision: number, lifecycle: AbortSignal, operation: () => Promise<void>): Promise<void> {
+		void this.history.record(draft.text, parseSlashCommandInput(this.commandText(draft.text, draft.attachments), this.slashCommands).kind === 'command' ? 'command' : 'agent').catch(error => {
 			if (!this.isDisposed && !lifecycle.aborted) this.notifications.error(localize('chat.history.saveFailed', 'Could not save input history: {0}', String(error)));
 		});
 		// Preparation can finish after the user has started another input; never erase that text.
 		const cleared = this.textRevision === textRevision;
-		if (cleared) this.input.value = "";
+		if (cleared) {
+			this.input.value = "";
+			if (this.isDisposed || lifecycle.aborted || !this.visible) return;
+			this.inlineContext.setInputState([]);
+			for (const attachment of draft.attachments.filter(context => context.kind === 'toolSelection')) this.inlineContext.addReference(attachment, false);
+		}
 		const revision = this.draftRevision;
 		this.renderToolbar();
 		try {
@@ -481,13 +494,10 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			if (this.isDisposed || lifecycle.aborted || !this.visible) return;
 			await operation();
 			if (this.isDisposed || lifecycle.aborted) return;
-			for (const context of contexts) {
-				if (context.kind !== 'toolSelection' && context.lifetime !== 'source' && this.attachmentModel.attachments.includes(context)) this.attachmentModel.delete(context.id);
-			}
-			this.renderAttachments();
+
 		} catch (error) {
 			if (!this.isDisposed && !lifecycle.aborted && cleared && this.draftRevision === revision) {
-				this.applyHistoryDraft({ ...draft, attachments: this.attachmentModel.attachments });
+				this.applyHistoryDraft(draft);
 				this.renderToolbar();
 			}
 			throw error;
@@ -499,13 +509,31 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	addContext(attachment: ChatContextAttachment): void {
-		this.attachmentModel.addContext(attachment);
+		this.inlineContext.addReference(attachment);
+		announceStatus(localize('chat.context.insertedReference', 'Inserted {0} at the message cursor', attachment.name));
+	}
+
+
+	protected get contexts(): readonly ChatContextAttachment[] {
+		// Draft references and live App-owned context have separate lifetimes. The App model
+		// remains authoritative for its content and can revoke it when its source closes.
+		return [...this.inlineContext.variables, ...this.attachmentModel.attachments];
 	}
 
 	/** Context selectors borrow this composer’s pending owner; they retain their own error presentation. */
 	acquireContext(prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>, signal?: AbortSignal): Promise<readonly ChatContextAttachment[]> {
 		if (!this.visible) return Promise.reject(new CancellationError());
-		return this.attachmentModel.acquireContext(prepare, signal);
+		return this.attachmentModel.acquireContext(prepare, signal, (attachments, acquisitionSignal) => {
+			this.acceptingContext = true;
+			try {
+				return attachments.map(attachment => {
+					if (acquisitionSignal.aborted) throw new CancellationError();
+					return this.inlineContext.addReference(attachment, false);
+				});
+			} finally {
+				this.acceptingContext = false;
+			}
+		});
 	}
 
 	/** Reports preparation failures once. Pending submissions still observe the original rejection. */
@@ -528,7 +556,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		if (this.isDisposed || lifecycle.aborted) return undefined;
 		const text = this.input.value;
 		const mode = this.mode;
-		const attachments = this.attachmentModel.attachments;
+		const attachments = this.contexts;
 		if (!text && attachments.length === 0) return undefined;
 		const revision = this.draftRevision;
 		const contexts = await Promise.all(attachments.map(async attachment => ({
@@ -538,6 +566,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			content: (await attachment.resolve()).content,
 			...(attachment.resource ? { resource: attachment.resource.toString() } : {}),
 			...(attachment.terminalSnapshot ? { terminalSnapshot: attachment.terminalSnapshot } : {}),
+			...(attachment.reference ? { reference: attachment.reference } : {}),
 		})));
 		if (this.isDisposed || lifecycle.aborted) return undefined;
 		if (this.draftRevision !== revision || this.mode !== mode) throw new Error(localize('chat.draftChangedDuringHandoff', 'The draft changed while opening Agents Window. Try again.'));
@@ -546,9 +575,9 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			clear: () => {
 				if (this.isDisposed || lifecycle.aborted || this.draftRevision !== revision || this.mode !== mode) return;
 				this.input.value = '';
-				this.attachmentModel.clear();
+				this.attachmentModel.cancelPendingContext();
+				this.inlineContext.setInputState([]);
 				this.draftRevision++;
-				this.renderAttachments();
 				this.renderToolbar();
 				this.inputChanges.fire();
 			},
@@ -562,63 +591,84 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>): void {
-		if (this.input.value || this.attachmentModel.size > 0) throw new Error(localize('chat.draftHandoffConflict', 'The Agents Window already has an unsent draft in this chat.'));
+		if (this.input.value || this.contexts.length > 0) throw new Error(localize('chat.draftHandoffConflict', 'The Agents Window already has an unsent draft in this chat.'));
 		this.delegate.selectMode(draft.mode);
 		this.input.value = draft.text;
+		const inline: ChatContextAttachment[] = [];
+		const legacyReferences: ChatContextAttachment[] = [];
 		for (const context of draft.contexts) {
-			this.attachmentModel.addContext({
+			const attachment: ChatContextAttachment = {
 				id: context.id,
 				kind: context.kind,
 				terminalSnapshot: context.terminalSnapshot,
 				name: context.name,
 				resource: context.resource ? URI.parse(context.resource) : undefined,
+				...(context.reference ? { reference: context.reference } : {}),
 				resolve: async () => ({ name: context.name, content: context.content, ...(context.kind === 'image' || context.kind === 'instruction' || context.kind === 'toolSelection' ? { kind: context.kind } : {}) }),
-			});
+			};
+			if (attachment.reference) inline.push(attachment);
+			else legacyReferences.push(attachment);
 		}
+		this.inlineContext.setInputState(inline);
+		// Older drafts have snapshots without text positions; retain each as a reference at the message end.
+		for (const attachment of legacyReferences) this.inlineContext.addReference(attachment, false);
 		this.draftRevision++;
-		this.renderAttachments();
 		this.renderToolbar();
 		this.inputChanges.fire();
 	}
 
 	async acceptInput(value?: string): Promise<void> {
-		const intent = parseSlashCommandInput(value ?? this.input.value, this.slashCommands);
+		const intent = parseSlashCommandInput(value ?? this.commandText(), this.slashCommands);
 		// Local product settings must remain available while the model catalog is loading.
 		const localCommand = intent.kind === 'command' && intent.binding.origin === 'local';
 		if (this.submitting || this.state.phase === 'submitting' || (this.state.phase === 'loading' && !localCommand)) return;
-		if (value !== undefined) this.input.value = value;
-		if (!this.input.value.trim() && !this.attachmentModel.hasPendingContext && !this.attachmentModel.attachments.some(attachment => attachment.kind !== 'toolSelection')) return;
+		if (value !== undefined) {
+			const tools = this.contexts.filter(context => context.kind === 'toolSelection');
+			this.input.value = value;
+			for (const attachment of tools) this.inlineContext.addReference(attachment, false);
+		}
+		if (!this.commandText().trim() && !this.attachmentModel.hasPendingContext && !this.contexts.some(attachment => attachment.kind !== 'toolSelection')) return;
 		const lifecycle = this.inputLifecycle.signal;
 		this.submitting = true;
 		this.renderToolbar();
 		try {
 			if (this.dictationSession.isActive) await this.stopDictation();
 			if (this.isDisposed || lifecycle.aborted || !this.visible) return;
+			// Prepared files become part of the message. Capture their text and metadata in the same revision.
+			if (intent.kind === 'message' && this.attachmentModel.hasPendingMessageContext) {
+				let edited = false;
+				using listener = this.input.onDidChange(() => { if (!this.acceptingContext) edited = true; });
+				await this.attachmentModel.resolvePendingContext();
+				// A waiting Send covers prepared references, never subsequent edits to an unsent draft.
+				if (edited) return;
+			}
+			if (this.isDisposed || lifecycle.aborted || !this.visible) return;
 			const draft = this.captureHistoryDraft();
 			const textRevision = this.textRevision;
 			const mode = this.mode;
-			const input = parseSlashCommandInput(draft.text, this.slashCommands);
+			const input = parseSlashCommandInput(this.commandText(draft.text, draft.attachments), this.slashCommands);
 			// Commands do not submit context. Their settings and management actions remain available during reads.
-			const contexts = input.kind === 'message' && this.attachmentModel.hasPendingContext ? await this.attachmentModel.resolvePendingContext() : draft.attachments;
+			const contexts = input.kind === 'message' && this.attachmentModel.hasPendingContext
+				? [...new Map([...draft.attachments, ...await this.attachmentModel.resolvePendingContext()].map(attachment => [attachment.id, attachment])).values()] : draft.attachments;
 			if (this.isDisposed || lifecycle.aborted || !this.visible) return;
 			const localCommand = input.kind === 'command' && input.binding.origin === 'local';
 			const currentState = this.state;
 			if (currentState.phase === 'submitting' || (currentState.phase === 'loading' && !localCommand)) return;
-			if (!draft.text.trim() && !contexts.some(attachment => attachment.kind !== 'toolSelection')) return;
+			if (!this.commandText(draft.text, contexts).trim() && !contexts.some(attachment => attachment.kind !== 'toolSelection')) return;
 			if (input.kind === "command" && input.binding.origin === "local") {
 				const invocation = { commandId: input.binding.actionId, argumentsText: input.argumentsText };
-				await this.submit(draft, textRevision, [], lifecycle, () => this.delegate.executeCommand(invocation));
+				await this.submit(draft, textRevision, lifecycle, () => this.delegate.executeCommand(invocation));
 				return;
 			}
 			if (input.kind === "command" && input.binding.origin === "server") {
-				await this.submit(draft, textRevision, [], lifecycle, () => this.delegate.executeServerCommand({ name: input.command.name, argumentsText: input.argumentsText }));
+				await this.submit(draft, textRevision, lifecycle, () => this.delegate.executeServerCommand({ name: input.command.name, argumentsText: input.argumentsText }));
 				return;
 			}
 			if (!this.supportsImages() && contexts.some(attachment => attachment.kind === 'image')) {
 				this.notifications.error(localize('chat.image.unsupported', 'The selected model does not support images'));
 				return;
 			}
-			await this.submit(draft, textRevision, contexts, lifecycle, () => this.delegate.send(draft.text, mode, draft.skills.length > 0 ? draft.skills : undefined, contexts, lifecycle));
+			await this.submit(draft, textRevision, lifecycle, () => this.delegate.send(draft.text, mode, draft.skills.length > 0 ? draft.skills : undefined, contexts, lifecycle));
 		} finally {
 			// An old send must not release the new conversation’s in-flight submission.
 			if (!lifecycle.aborted && !this.isDisposed) {
@@ -678,9 +728,17 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.renderToolbar();
 	}
 
+	/** Persistent tool configuration labels must not enable Send or obscure a leading slash command. */
+	private commandText(text = this.input.value, contexts = this.contexts): string {
+		for (const context of [...contexts].reverse()) {
+			if (context.kind === 'toolSelection' && context.reference) text = text.slice(0, context.reference.start) + text.slice(context.reference.end);
+		}
+		return text.trim();
+	}
+
 	private renderToolbar(): void {
-		const input = parseSlashCommandInput(this.input.value, this.slashCommands);
-		const canSubmitIntent = input.kind === "message" ? input.text.trim().length > 0 || this.attachmentModel.hasPendingContext || this.attachmentModel.attachments.some(attachment => attachment.kind !== 'toolSelection') : this.input.value.trim().length > 0;
+		const input = parseSlashCommandInput(this.commandText(), this.slashCommands);
+		const canSubmitIntent = input.kind === "message" ? input.text.trim().length > 0 || this.attachmentModel.hasPendingContext || this.contexts.some(attachment => attachment.kind !== 'toolSelection') : true;
 		const localCommand = input.kind === 'command' && input.binding.origin === 'local';
 		const state: ChatInputToolbarState = {
 			voiceAvailable: this.delegate.voiceConversation?.isAvailable === true,
@@ -921,34 +979,6 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				this.notifications.error(localize('chat.input.actionFailed', 'Could not open Chat action: {0}', String(error)));
 			}
 		}
-	}
-
-	private renderAttachments(): void {
-		const attachments = this.attachmentModel.attachments;
-		for (const [id, widget] of this.attachmentWidgets) {
-			if (!attachments.includes(widget.attachment)) { this.attachmentWidgets.deleteAndDispose(id); }
-		}
-		for (const attachment of attachments) {
-			if (this.attachmentWidgets.has(attachment.id)) { continue; }
-			const Widget = attachment.kind === 'image' ? ImageAttachmentWidget : isTerminalChatAttachment(attachment) ? TerminalAttachmentWidget : DefaultChatAttachmentWidget;
-			const widget = this.instantiationService.createInstance(Widget, this.attachmentList, attachment, () => {
-				const index = this.attachmentModel.attachments.indexOf(attachment);
-				this.attachmentModel.delete(attachment.id);
-				const remaining = this.attachmentModel.attachments;
-				const next = remaining[Math.min(index, remaining.length - 1)];
-				if (next) { this.attachmentWidgets.get(next.id)!.removeButton.domNode.focus(); }
-				else { this.focus(); }
-				announceStatus(localize('chat.context.removed', 'Removed {0}', attachment.name));
-			});
-			this.attachmentWidgets.set(attachment.id, widget);
-		}
-		for (const [index, attachment] of attachments.entries()) {
-			const domNode = this.attachmentWidgets.get(attachment.id)!.domNode;
-			if (this.attachmentList.children[index] !== domNode) { this.attachmentList.insertBefore(domNode, this.attachmentList.children[index] ?? null); }
-		}
-		const isEmpty = attachments.length === 0;
-		this.attachmentList.classList.toggle('empty', isEmpty);
-		this.attachmentList.hidden = isEmpty;
 	}
 
 	private createToolbarViewItem(action: IAction, contextViewService: IContextViewService): ActionViewItem | undefined {

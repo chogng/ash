@@ -78,6 +78,27 @@ test('Agents Window handoff preserves optional context sources and rejects malfo
 	}
 });
 
+test('Agents Window handoff validates inline code reference positions against the message', async () => {
+	const route = nativeHostIpcRoutes({ openAgentsWindow: async () => { } } as INativeHostMainService).find(route => route.channel === NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL)!;
+	const context = { id: 'selection', kind: 'codeSelection', name: 'file.ts (6-9)', content: 'Selected code', reference: { start: 8, end: 21 } };
+	const options = { draft: { mode: 'agent', text: 'Explain file.ts (6-9)', contexts: [context] } };
+	assert.deepEqual(route.validate(options), options);
+	assert.deepEqual(route.validate({ draft: { ...options.draft, contexts: [{ ...context, kind: 'file' }] } }), { draft: { ...options.draft, contexts: [{ ...context, kind: 'file' }] } });
+	assert.deepEqual(route.validate({ draft: { ...options.draft, contexts: [{ ...context, kind: 'image' }] } }), { draft: { ...options.draft, contexts: [{ ...context, kind: 'image' }] } });
+	for (const reference of [{ start: -1, end: 21 }, { start: 8.5, end: 21 }, { start: 8, end: 22 }, { start: 7, end: 21 }, { start: 8, end: 8 }, null, { start: 8, end: 21, extra: true }]) {
+		assert.throws(() => route.validate({ draft: { ...options.draft, contexts: [{ ...context, reference }] } }), /Invalid Agents Window context reference/);
+	}
+});
+
+test('Agents Window handoff accepts validated inline references for folders, sessions and tool configuration', () => {
+	const route = nativeHostIpcRoutes({ openAgentsWindow: async () => { } } as INativeHostMainService).find(route => route.channel === NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL)!;
+	for (const kind of ['directory', 'session', 'toolSelection', 'instruction', 'registeredSource']) {
+		const context = { id: kind, kind, name: 'context', content: 'snapshot', reference: { start: 7, end: 14 } };
+		assert.doesNotThrow(() => route.validate({ draft: { mode: 'agent', text: 'Review context please', contexts: [context] } }));
+	}
+});
+
+
 test('the Renderer Host transports shared dialog options, complete results, and cancellation through Main routes', async () => {
 	const original = Object.getOwnPropertyDescriptor(globalThis, 'ash');
 	const requests: unknown[] = [];
@@ -179,4 +200,14 @@ test('dialog boundaries reject legacy requests, non-transferable signals, and ma
 	assert.throws(() => validateMessageBoxResult({ response: 0, checkboxChecked: 'false' }), TypeError);
 	assert.deepEqual(validateOpenDialogResult({ canceled: true, filePaths: [] }), { canceled: true, filePaths: [] });
 	assert.deepEqual(validateSaveDialogResult({ canceled: true, filePath: '' }), { canceled: true, filePath: '' });
+});
+
+
+test('Agents Window handoff keeps terminal snapshots and inline positions in the same validated context', () => {
+	const context = { id: 'terminal', kind: 'terminal', name: 'Terminal: Shell', content: 'Captured output', terminalSnapshot: { text: 'captured', columns: 80 }, reference: { start: 7, end: 22 } };
+	const options = { draft: { mode: 'agent', text: 'Review Terminal: Shell ', contexts: [context] } };
+	const route = nativeHostIpcRoutes({ openAgentsWindow: async () => { } } as INativeHostMainService).find(route => route.channel === NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL)!;
+	assert.deepEqual(route.validate(options), options);
+	assert.throws(() => route.validate({ draft: { ...options.draft, contexts: [{ ...context, terminalSnapshot: { text: 'captured', columns: 0 } }] } }), /Invalid terminal snapshot/);
+	assert.throws(() => route.validate({ draft: { ...options.draft, contexts: [{ ...context, reference: { start: 0, end: 22 } }] } }), /Invalid Agents Window context reference/);
 });
