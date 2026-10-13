@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { expect, test as base } from '../../../automation/test.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { Editor } from '../../../automation/editor.js';
+import { connectProfile } from '../sessions/sessionProfileFixture.js';
 import { connectTraceAppServer } from '../sessions/traceFixture.js';
 import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index.js';
 import { createAppServerSkillOperations } from '../../../../src/ash/platform/agentHost/browser/appServerApi.js';
@@ -46,7 +47,10 @@ test('Real Prompt catalog pins nested resources, reports diagnostics and preserv
 		await new QuickAccess(page).runCommand('workbench.action.chat.configure.skills');
 		const list = page.locator('[data-view-id="ash.extensions.skills"]').getByRole('listbox');
 		await list.getByRole('option').filter({ hasText: 'c-review' }).click();
-		await page.locator('.ash-extension-editor').getByRole('button', { name: 'Open instructions', exact: true }).click();
+		const detail = page.locator('.ash-extension-editor');
+		await expect(detail.getByRole('heading', { name: 'c-review', exact: true })).toBeVisible();
+		await expect(detail.getByRole('status')).toHaveText('Disabled');
+		await detail.getByRole('button', { name: 'Open instructions', exact: true }).click();
 		const editor = page.getByRole('region', { name: 'c-review/SKILL.md', exact: true });
 		await expect(editor.locator('.stanza-editor-input')).toHaveAttribute('aria-readonly', 'true');
 		await expect(editor.locator('.view-lines')).toContainText('Reviews the synthetic C fixture.');
@@ -59,41 +63,64 @@ test('Real Prompt catalog pins nested resources, reports diagnostics and preserv
 	} finally { await connection.close(); }
 });
 
-test('Hook management observes a real TOML editor save without losing filter and disclosure', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench, testWorkspace }, testInfo) => {
+test('Hook management preserves filter and disclosure after its owning configuration changes', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, webAppServer, workbench, testWorkspace }, testInfo) => {
 	const page = await workbench.openAgentsWindow(target.kind);
-	const connection = await connectTraceAppServer(application, page, testWorkspace.directory);
+	const connection = target.kind === 'electron'
+		? await connectProfile(application, webAppServer, testWorkspace.directory, page, { directoryPermissionsHost: true })
+		: await connectTraceAppServer(application, page, testWorkspace.directory);
 	try {
 		const created = await connection.client.request(APP_SERVER_METHODS['session/create'], { commandId: 'c-hooks-session', title: 'C Hook fixture', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 		const sessionId = created.session.sessionId;
+		const threadId = created.session.threads[0]!.threadId;
+		const thread = await connection.client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId });
+		if (thread.directory?.type !== 'local') throw new Error('The Hook fixture requires its owning local Thread directory');
+		if (target.kind === 'electron') {
+			await connection.client.request(APP_SERVER_METHODS['session/dirs/add'], { sessionId, path: thread.directory.root, permissions: ['readFiles', 'writeFiles', 'browseFiles', 'watchFiles', 'executeCommands', 'loadConfig', 'discoverHooks'] });
+		}
 		await page.locator('.ash-sessions-list-item').filter({ hasText: 'C Hook fixture' }).click();
 		const sources = await connection.client.request(APP_SERVER_METHODS['hook/list'], { sessionId });
-		const source = sources.sources.find(item => item.namespace !== 'user' && item.configPath === join(testWorkspace.directory, '.ash', 'config.toml'))!;
+		const source = sources.sources.find(item => target.kind === 'electron' ? item.configPath === join(thread.directory!.root, '.ash', 'config.toml') : item.namespace === 'user')!;
 		expect(source).toBeDefined();
 		const hookId = `${source.namespace}:hook:c-review`;
+		const hook = { id: hookId, event: 'preToolUse' as const, matcher: { toolNames: [] }, enablement: 'enabled' as const, action: { type: 'process' as const, program: '/synthetic/c-review', args: [] } };
 		const config = `[hooks.hooks."${hookId}"]\nid = "${hookId}"\nevent = "preToolUse"\nenablement = "enabled"\n[hooks.hooks."${hookId}".action]\ntype = "process"\nprogram = "/synthetic/c-review"\n`;
-		await writeFile(source.configPath, config);
+		if (target.kind === 'electron') {
+			await mkdir(join(thread.directory.root, '.ash'), { recursive: true });
+			await writeFile(source.configPath, config);
+		} else {
+			const snapshot = await connection.client.request(APP_SERVER_METHODS['config/read'], {});
+			await connection.client.request(APP_SERVER_METHODS['hook/upsert'], { commandId: 'c-review-hook', expectedRevision: snapshot.revision, hook });
+		}
 		await new QuickAccess(page).runCommand('aiCustomization.openManagementEditor');
 		const pane = page.locator('.ash-ai-customization-management:visible');
 		await expect(pane).toHaveAttribute('aria-busy', 'false');
 		await pane.getByRole('searchbox').fill('c-review');
 		await pane.locator('[data-hook-event="preToolUse"] > summary').click();
-		const hook = pane.locator('.ash-hooks-declaration');
-		await hook.locator(':scope > summary').click();
-		await expect(hook).toHaveJSProperty('open', true);
-		await hook.locator('[data-hook-action="edit-hook"]').click();
-		const editor = new Editor(page.locator('.ash-editor-group-content:visible'));
-		await editor.waitForEditorFocus();
-		await editor.input.press('ControlOrMeta+A');
-		await page.keyboard.insertText(config.replace('enablement = "enabled"', 'enablement = "disabled"'));
-		await editor.input.press('ControlOrMeta+S');
-		await expect.poll(() => readFile(source.configPath, 'utf8')).toContain('enablement = "disabled"');
+		const declaration = pane.locator('.ash-hooks-declaration');
+		await declaration.locator(':scope > summary').click();
+		await expect(declaration).toHaveJSProperty('open', true);
+		const edit = declaration.locator('[data-hook-action="edit-hook"]');
+		if (target.kind === 'electron') {
+			await edit.click();
+			const editor = new Editor(page.locator('[data-part=editor]:not(.ash-sessions-chat-grid) .ash-editor-group-content:visible'));
+			await editor.waitForEditorFocus();
+			await editor.input.press('ControlOrMeta+A');
+			await page.keyboard.insertText(config.replace('enablement = "enabled"', 'enablement = "disabled"'));
+			await editor.input.press('ControlOrMeta+S');
+			await expect.poll(() => readFile(source.configPath, 'utf8')).toContain('enablement = "disabled"');
+		} else {
+			// Browser hosts cannot open the local profile's TOML in a system editor.
+			await expect(edit).toBeDisabled();
+			const snapshot = await connection.client.request(APP_SERVER_METHODS['config/read'], {});
+			await connection.client.request(APP_SERVER_METHODS['hook/upsert'], { commandId: 'c-disable-review-hook', expectedRevision: snapshot.revision, hook: { ...hook, enablement: 'disabled' } });
+		}
 		await expect.poll(async () => (await connection.client.request(APP_SERVER_METHODS['hook/list'], { sessionId })).sources.find(item => item.namespace === source.namespace)!.hooks.find(item => item.id === hookId)!.enablement).toBe('disabled');
 		await page.getByRole('tab', { name: 'Agent Customizations: Hooks', exact: true }).click();
 		await expect(pane.getByRole('searchbox')).toHaveValue('c-review');
-		await expect(hook).toHaveJSProperty('open', true);
-		await expect(hook).toContainText('Disabled');
-		const image = testInfo.outputPath('c-real-hook-editor-save.png');
+		await expect(declaration).toHaveJSProperty('open', true);
+		await expect(declaration).toContainText('Disabled');
+		const image = testInfo.outputPath('c-real-hook-configuration-change.png');
 		await page.screenshot({ path: image });
-		await testInfo.attach('c-real-hook-editor-save', { path: image, contentType: 'image/png' });
+		await testInfo.attach('c-real-hook-configuration-change', { path: image, contentType: 'image/png' });
 	} finally { await connection.close(); }
 });

@@ -74,6 +74,7 @@ export class SessionsBrowserMain extends Disposable {
 					'workbench.contrib.sessionsLayout',
 					'sessions.contrib.multiDiffSource',
 					'chat.edits.editorOverlay',
+					'chat.promptLanguageFeatures',
 					'workbench.contrib.dataChannels',
 					'workbench.contrib.output',
 					'workbench.contrib.githubLinkPresentations',

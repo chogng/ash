@@ -105,13 +105,8 @@ impl AppServer {
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
         let runtime = self.skills.as_ref().ok_or_else(skills_unavailable)?;
         let selected = SkillRef::pinned(params.skill_id, params.skill_content_digest);
-        let resource = params
-            .session_id
-            .as_ref()
-            .map_or_else(
-                || runtime.read_resource(&selected, &path),
-                |session_id| runtime.read_resource_for_session(session_id, &selected, &path),
-            )
+        let resource = runtime
+            .read_resource_for_management(params.session_id.as_ref(), &selected, &path)
             .map_err(skills_failed)?;
         let kind = skill_resource_kind_dto(resource.kind());
         let path = resource.path().display();

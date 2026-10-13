@@ -331,6 +331,31 @@ impl SkillRuntime {
             .map_err(|error| error.to_string())
     }
 
+    /// Reads an inert, digest-pinned resource for configuration inspection. Disabled Skills
+    /// remain inspectable; agent activation and Tool reads retain their enablement checks.
+    pub fn read_resource_for_management(
+        &self,
+        session_id: Option<&SessionId>,
+        selected: &SkillRef,
+        path: &SkillResourcePath,
+    ) -> Result<SkillResource, String> {
+        if let Some(session_id) = session_id {
+            let (catalog, _) = self.session_catalog(session_id)?;
+            return catalog
+                .read_resource(selected, path)
+                .map_err(|error| error.to_string());
+        }
+        self.reconcile(SkillCatalogReload::Refresh)?;
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| "Skill runtime lock poisoned".to_string())?;
+        state
+            .catalog
+            .read_resource(selected, path)
+            .map_err(|error| error.to_string())
+    }
+
     pub(crate) fn read_model_resource(
         &self,
         selected: &SkillRef,

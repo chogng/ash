@@ -148,6 +148,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				'workbench.contrib.nativeWindow',
 				OpenAgentsWindowSystemWideKeybindingContribution.ID,
 				'chat.edits.editorOverlay',
+				'chat.promptLanguageFeatures',
 				'workbench.contrib.dataChannels',
 				'workbench.contrib.output',
 				'workbench.contrib.githubLinkPresentations',

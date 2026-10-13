@@ -119,6 +119,24 @@ fn enablement_overlay_changes_projection_without_changing_content() {
 
     assert_eq!(disabled.generation, 2);
     assert_eq!(disabled.entries[0].enablement, SkillEnablement::Disabled);
+    let selected = SkillRef::pinned(
+        skill_id,
+        disabled.entries[0].catalog_entry.content_digest().clone(),
+    );
+    let path = ash_skills::SkillResourcePath::new("SKILL.md").unwrap();
+    let inspected = runtime
+        .read_resource_for_management(None, &selected, &path)
+        .unwrap();
+    assert_eq!(
+        inspected.bytes(),
+        fs::read(root.join("skill-creator/SKILL.md")).unwrap()
+    );
+    assert!(
+        runtime
+            .read_resource(&selected, &path)
+            .unwrap_err()
+            .contains("disabled")
+    );
     let _ = fs::remove_dir_all(root);
 }
 
