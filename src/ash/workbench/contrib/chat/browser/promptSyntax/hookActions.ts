@@ -1,5 +1,6 @@
 import { dirname, extUri } from '../../../../../base/common/resources.js';
 import { Schemas } from '../../../../../base/common/network.js';
+import { CancellationError, isCancellationError } from '../../../../../base/common/errors.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { localize, localize2 } from '../../../../../nls.js';
@@ -29,7 +30,9 @@ export interface IHookQuickPickOptions {
 export function getHookConfigurationResource(accessor: ServicesAccessor, source: HookConfigurationTarget): URI | undefined {
 	if (source.namespace === 'user') { return undefined; }
 	const connection = accessor.get(IAppServerRemoteAgentService).connection;
-	return connection?.kind === 'ssh' ? createSshRemoteWorkspaceUri(connection.host, source.configPath) : URI.file(source.configPath);
+	return connection?.kind === 'ssh' ? createSshRemoteWorkspaceUri(connection.host, source.configPath)
+		: connection?.kind === 'remote' ? URI.from({ scheme: Schemas.ashRemote, authority: connection.authority, path: source.configPath })
+			: URI.file(source.configPath);
 }
 
 export function canEditHookConfiguration(accessor: ServicesAccessor, source: HookConfigurationTarget): boolean {
@@ -48,11 +51,21 @@ export async function openHookConfiguration(accessor: ServicesAccessor, source: 
 		await accessor.get(IHooksService).userConfigurationEditor!();
 		return;
 	}
+	const remote = accessor.get(IAppServerRemoteAgentService);
+	const workspace = accessor.get(IWorkspaceContextService);
+	const connection = remote.connection;
+	const workspaceSnapshot = workspace.getWorkspace();
+	// File IO can outlive a workspace or connection; do not create or focus an old host's file.
+	const checkContext = (): void => {
+		if (connection !== remote.connection || workspaceSnapshot !== workspace.getWorkspace()) throw new CancellationError();
+	};
 	const resource = getHookConfigurationResource(accessor, source)!;
 	const files = accessor.get(IFileService);
 	const editors = accessor.get(IEditorService);
 	await files.createDirectory(dirname(resource));
+	checkContext();
 	await files.createFile(resource, 'ignore');
+	checkContext();
 	if (options?.openEditor) { await options.openEditor(resource); }
 	else { await editors.openEditor({ resource, languageId: 'toml' }, { pinned: true }); }
 }
@@ -90,12 +103,14 @@ export async function showConfigureHooksQuickPick(accessor: ServicesAccessor, op
 	const event = HookEvents[items.indexOf(selectedEvent)];
 	const connection = remote.connection;
 	const sessionId = chats.getActiveConversation()?.sessionId;
+	const workspaceSnapshot = workspace.getWorkspace();
+	const current = (): boolean => connection === remote.connection && workspaceSnapshot === workspace.getWorkspace() && sessionId === chats.getActiveConversation()?.sessionId;
 	picker.busy = true;
 	picker.items = [];
 	try {
 		// Backend reads cannot be cancelled. Release the picker immediately on dismissal and ignore late results.
 		const sources = await Promise.race([hooks.read(sessionId), dismissed]);
-		if (!sources || cancelled || connection !== remote.connection || sessionId !== chats.getActiveConversation()?.sessionId) { return; }
+		if (!sources || cancelled || !current()) { return; }
 		const targets = new Map<IQuickPickItem, HookConfigurationTarget>();
 		const entries: IQuickPickItem[] = [];
 		for (const source of sources) {
@@ -120,15 +135,16 @@ export async function showConfigureHooksQuickPick(accessor: ServicesAccessor, op
 		items = entries;
 		picker.ariaLabel = picker.placeholder = localize('hooks.selectHook', 'Select a Hook or configuration scope');
 		picker.value = '';
+		const choice = next();
 		picker.items = items;
 		picker.busy = false;
-		const chosen = await next();
-		if (!chosen || cancelled || connection !== remote.connection || sessionId !== chats.getActiveConversation()?.sessionId) { return; }
+		const chosen = await choice;
+		if (!chosen || cancelled || !current()) { return; }
 		opening = true;
 		picker.hide();
 		await instantiation.invokeFunction(openHookConfiguration, targets.get(chosen)!, options);
 	} catch (error) {
-		if (!cancelled || opening) { notifications.error(localize({ bundle: 'ash.settings', key: 'hooks.actionFailed' }, 'Could not configure Hooks: {0}', error instanceof Error ? error.message : String(error))); }
+		if ((!cancelled || opening) && !isCancellationError(error)) { notifications.error(localize({ bundle: 'ash.settings', key: 'hooks.actionFailed' }, 'Could not configure Hooks: {0}', error instanceof Error ? error.message : String(error))); }
 	} finally {
 		picker.hide();
 	}

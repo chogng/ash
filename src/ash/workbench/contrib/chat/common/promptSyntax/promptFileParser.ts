@@ -2,6 +2,7 @@ import { isAlias, isMap, isNode, isScalar, isSeq, parseDocument, type Node } fro
 import { localize } from '../../../../../nls.js';
 import { marked, type Token } from '../../../../../base/common/marked/marked.js';
 import { URI } from '../../../../../base/common/uri.js';
+import { Schemas } from '../../../../../base/common/network.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 
 /** Keeps the exact document and separates its Markdown body for readonly snapshot consumers. */
@@ -23,6 +24,7 @@ export interface ParseError {
 export interface IHeaderAttribute {
 	readonly range: Range;
 	readonly key: string;
+	readonly keyRange: Range;
 	readonly value: IValue;
 }
 
@@ -31,6 +33,7 @@ export interface IScalarValue {
 	readonly value: string;
 	readonly range: Range;
 	readonly format: 'single' | 'double' | 'none' | 'literal' | 'folded';
+	readonly missing?: boolean;
 }
 
 export interface ISequenceValue {
@@ -86,13 +89,18 @@ export class PromptBody {
 	}
 
 	public resolveFilePath(path: string, userHome?: URI): URI | undefined {
-		if (!path || path.startsWith('#') || path.includes('\0')) return undefined;
+		if (!path || path.startsWith('#') || /[\x00-\x1f\x7f\\]/u.test(path)) return undefined;
+		const packageResource = this.uri.scheme === Schemas.internal && this.uri.authority === 'skill';
+		// A pinned package reference never acquires access to host files or another package.
+		if (packageResource && (path.startsWith('/') || path.startsWith('~/') || /^[a-z][a-z\d+.-]*:/iu.test(path))) return undefined;
 		if (path.startsWith('~/')) return userHome ? URI.joinPath(userHome, path.slice(2)) : undefined;
 		try {
 			const hasScheme = /^[a-z][a-z\d+.-]*:/iu.test(path);
 			const target = URI.parse(hasScheme ? path : `relative:${path}`, true);
 			if (hasScheme) return target.scheme === 'file' || target.scheme === this.uri.scheme ? target : undefined;
-			return URI.joinPath(this.uri.with({ fragment: '' }), '..', target.path).with({ fragment: target.fragment });
+			const resolved = URI.joinPath(this.uri.with({ fragment: '' }), '..', target.path).with({ fragment: target.fragment });
+			if (packageResource && !resolved.path.startsWith(`/${this.uri.path.split('/')[1]}/`)) return undefined;
+			return resolved;
 		} catch { return undefined; }
 	}
 
@@ -114,7 +122,7 @@ export class PromptFileParser {
 				if (lines[index] === '---') {
 					bodyOffset = offset;
 					bodyLine = index / 2 + 2;
-					headerRange = new Range(2, 1, index / 2 + 1, 1);
+					headerRange = new Range(2, 1, Math.max(2, index / 2), index > 2 ? lines[index - 2]!.length + 1 : 1);
 					headerEnd = offset - lines[index]!.length - (lines[index + 1]?.length ?? 0);
 					headerClosed = true;
 					break;
@@ -152,13 +160,20 @@ function parseHeader(uri: URI, source: string, offset: number, end: number, rang
 	};
 	if (!closed) errors.push({ code: 'unclosedHeader', range: new Range(1, 1, 1, 4), message: localize('prompt.syntax.unclosed', 'Close the Skill header with a line containing --- before the Markdown body.') });
 	const text = source.slice(offset, end);
-	if (new TextEncoder().encode(text).length > 16 * 1024) {
-		errors.push({ code: 'headerTooLarge', range, message: localize('prompt.syntax.tooLarge', 'The Skill header exceeds 16 KiB. Move instructions into the Markdown body.') });
+	const encoder = new TextEncoder();
+	const headerLines = text.split(/\r\n|\n|\r/u);
+	const exceedsBytes = encoder.encode(text).length > 16 * 1024;
+	if (exceedsBytes || headerLines.filter((line, index) => index < headerLines.length - 1 || line.length > 0).length > 256 || headerLines.some(line => encoder.encode(line).length > 2048)) {
+		errors.push({
+			code: 'headerTooLarge', range, message: exceedsBytes
+				? localize('prompt.syntax.tooLarge', 'The Skill header exceeds 16 KiB. Move instructions into the Markdown body.')
+				: localize('prompt.syntax.catalogLimits', 'The Skill header exceeds the catalog limits (16 KiB, 256 lines, or 2 KiB per line). Move instructions into the Markdown body.')
+		});
 		return new PromptHeader(range, uri, attributes, errors);
 	}
 	const convert = (node: Node | null | undefined, depth: number): IValue => {
 		const nodeRange = at(node?.range?.[0] ?? 0, node?.range?.[1] ?? 0);
-		if (depth > 16 || isAlias(node) || node?.tag || (node && 'anchor' in node && node.anchor)) {
+		if (depth > 8 || isAlias(node) || node?.tag || (node && 'anchor' in node && node.anchor)) {
 			errors.push({ code: 'unsupportedYaml', range: nodeRange, message: localize('prompt.syntax.unsupported', 'Skill headers do not support YAML aliases, anchors, tags or deeply nested values.') });
 			return { type: 'scalar', value: '', format: 'none', range: nodeRange };
 		}
@@ -170,7 +185,7 @@ function parseHeader(uri: URI, source: string, offset: number, end: number, rang
 		};
 		if (isSeq(node)) return { type: 'sequence', range: nodeRange, items: node.items.map(item => convert(isNode(item) ? item : undefined, depth + 1)) };
 		const format = isScalar(node) ? ({ QUOTE_SINGLE: 'single', QUOTE_DOUBLE: 'double', BLOCK_LITERAL: 'literal', BLOCK_FOLDED: 'folded', PLAIN: 'none' } as const)[node.type ?? 'PLAIN'] : 'none';
-		return { type: 'scalar', value: isScalar(node) ? String(node.value ?? '') : '', format, range: nodeRange };
+		return { type: 'scalar', value: isScalar(node) ? String(node.value ?? '') : '', format, range: nodeRange, ...(isScalar(node) && node.type === 'PLAIN' && ['', '~', 'null', 'Null', 'NULL'].includes(String(node.value ?? '')) ? { missing: true } : {}) };
 	};
 	try {
 		const document = parseDocument(text, { schema: 'failsafe', prettyErrors: false, stringKeys: true });
@@ -179,7 +194,7 @@ function parseHeader(uri: URI, source: string, offset: number, end: number, rang
 		}
 		const root = convert(document.contents, 0);
 		if (root.type === 'map') {
-			for (const property of root.properties) attributes.push({ key: property.key.value, range: Range.fromPositions(property.key.range.getStartPosition(), property.value.range.getEndPosition()), value: property.value });
+			for (const property of root.properties) attributes.push({ key: property.key.value, keyRange: property.key.range, range: Range.fromPositions(property.key.range.getStartPosition(), property.value.range.getEndPosition()), value: property.value });
 		} else if (text.trim()) {
 			errors.push({ code: 'expectedMapping', range: root.range, message: localize('prompt.syntax.mapping', 'A Skill header must be a mapping of field names to values.') });
 		}

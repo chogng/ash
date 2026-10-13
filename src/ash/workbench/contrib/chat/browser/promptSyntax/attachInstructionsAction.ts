@@ -1,11 +1,12 @@
 import { URI } from '../../../../../base/common/uri.js';
+import { Schemas } from '../../../../../base/common/network.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../nls.js';
 import { IInstructionService } from '../../../../../platform/instructions/common/instructionService.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { filterQuickPickItems } from '../../../../../platform/quickinput/browser/quickInputList.js';
-import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
-import { isRemoteResource } from '../../../../../platform/remote/common/remote.js';
+import { createSshRemoteWorkspaceUri } from '../../../../../platform/remote/common/remote.js';
+import { IAppServerRemoteAgentService } from '../../../../services/remote/common/appServerRemoteAgentService.js';
 import { pickChatContextItem, type ChatContextSelection, type ChatContextSource } from '../actions/chatContext.js';
 
 export class ChatInstructionsPickerPick implements ChatContextSource {
@@ -16,7 +17,7 @@ export class ChatInstructionsPickerPick implements ChatContextSource {
 		private readonly sessionId: string | undefined,
 		@IInstructionService private readonly instructions: IInstructionService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
-		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
+		@IAppServerRemoteAgentService private readonly remote: IAppServerRemoteAgentService,
 	) { }
 
 	public isEnabled(): boolean {
@@ -26,6 +27,7 @@ export class ChatInstructionsPickerPick implements ChatContextSource {
 	public async asAttachment(signal: AbortSignal): Promise<ChatContextSelection | undefined> {
 		const sessionId = this.sessionId;
 		if (!this.isEnabled() || signal.aborted) { return undefined; }
+		const connection = this.remote.connection;
 		let catalog: ReturnType<IInstructionService['list']> | undefined;
 		const selected = await pickChatContextItem(this.quickInput, localize('chat.context.selectInstruction', 'Search instructions by name, description or path'), async query => {
 			catalog ??= this.instructions.list(sessionId);
@@ -36,10 +38,12 @@ export class ChatInstructionsPickerPick implements ChatContextSource {
 				instruction,
 			})), query);
 		}, signal);
-		if (signal.aborted || !selected || selected.kind === 'back') { return undefined; }
+		if (signal.aborted || connection !== this.remote.connection || !selected || selected.kind === 'back') { return undefined; }
 		const { name, path } = selected.item.instruction;
-		const root = this.workspace.getWorkspace().folders[0]?.uri;
-		const resource = root && isRemoteResource(root) ? root.with({ path, query: '', fragment: '' }) : URI.file(path);
+		// User instructions can live outside every workspace folder; the connection still owns their URI.
+		const resource = connection?.kind === 'ssh' ? createSshRemoteWorkspaceUri(connection.host, path)
+			: connection?.kind === 'remote' ? URI.from({ scheme: Schemas.ashRemote, authority: connection.authority, path })
+				: URI.file(path);
 		return {
 			acceptInBackground: selected.background,
 			attachment: {

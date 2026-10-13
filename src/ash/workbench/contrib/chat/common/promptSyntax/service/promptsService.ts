@@ -1,3 +1,4 @@
+import { localize } from '../../../../../../nls.js';
 import type { CancellationToken } from '../../../../../../base/common/cancellation.js';
 import type { Event } from '../../../../../../base/common/event.js';
 import type { IDisposable } from '../../../../../../base/common/lifecycle.js';
@@ -22,9 +23,19 @@ export interface SkillManagementSnapshot {
 export interface IPromptsService extends IDisposable {
 	readonly onDidChangeSkills: Event<void>;
 	findAgentSkills(token: CancellationToken, sessionId?: string): Promise<readonly IAgentSkill[]>;
+	/** Refreshes metadata with one bounded retry when that refresh invalidates its own response. */
 	readSkillManagement(sessionId?: string): Promise<SkillManagementSnapshot>;
+	/** Uses the displayed backend revision, with no automatic mutation retry on conflict. */
 	setSkillEnablement(skillId: SkillIdentity, enabled: boolean, expectedRevision: number, sessionId?: string): Promise<void>;
 	parseNew(uri: URI, token: CancellationToken): Promise<ParsedPromptFile>;
 }
 
 export const IPromptsService = createServiceIdentifier<IPromptsService>('IPromptsService');
+
+/** A rejected write leaves the backend configuration unchanged; the caller must refresh before retry. */
+export class SkillManagementConflictError extends Error {
+	constructor(public readonly expectedRevision: number) {
+		super(localize('prompt.management.conflict', 'Skill settings changed in another window or on disk. Refresh Skills and review the current state before trying again.'));
+		this.name = 'SkillManagementConflictError';
+	}
+}

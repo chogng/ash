@@ -4,10 +4,11 @@ import { Disposable } from '../../../../../../base/common/lifecycle.js';
 import { ResourceMap } from '../../../../../../base/common/map.js';
 import { Schemas } from '../../../../../../base/common/network.js';
 import { URI } from '../../../../../../base/common/uri.js';
+import { AppServerRemoteError } from '../../../../../../platform/agentHost/common/appServerError.js';
 import { CancellationError } from '../../../../../../base/common/errors.js';
 import { IAppServerSkillApi, type SkillDescriptor, type SkillReference } from '../../../../../../platform/agentHost/common/appServerApi.js';
 import { PromptFileParser, type ParsedPromptFile } from '../promptFileParser.js';
-import type { IAgentSkill, IPromptsService, SkillManagementSnapshot } from './promptsService.js';
+import { SkillManagementConflictError, type IAgentSkill, type IPromptsService, type SkillManagementSnapshot } from './promptsService.js';
 
 /** Owns discovered Prompt identities and readable snapshots; Rust owns catalog and enablement. */
 export class PromptsService extends Disposable implements IPromptsService {
@@ -30,6 +31,7 @@ export class PromptsService extends Disposable implements IPromptsService {
 
 	public async findAgentSkills(token: CancellationToken, sessionId?: string): Promise<readonly IAgentSkill[]> {
 		throwIfCancelled(token);
+		if (this.isDisposed) throw new CancellationError();
 		const epoch = this.epoch;
 		const catalog = await this.backend.list('cached', sessionId);
 		throwIfCancelled(token);
@@ -38,14 +40,28 @@ export class PromptsService extends Disposable implements IPromptsService {
 	}
 
 	public async readSkillManagement(sessionId?: string): Promise<SkillManagementSnapshot> {
-		const epoch = this.epoch;
-		const snapshot = await this.backend.read(sessionId);
-		if (this.isDisposed || epoch !== this.epoch) throw new CancellationError();
-		return { ...snapshot, catalog: { generation: snapshot.catalog.generation, skills: snapshot.catalog.skills.map(skill => this.discover(skill, sessionId)) } };
+		// Refresh may publish its own catalog invalidation before the response reaches this window.
+		// Re-read once so revision and descriptors come from a settled backend snapshot; never spin.
+		for (let attempt = 0; attempt < 2; attempt++) {
+			if (this.isDisposed) throw new CancellationError();
+			const epoch = this.epoch;
+			const snapshot = await this.backend.read(sessionId);
+			if (this.isDisposed) throw new CancellationError();
+			if (epoch !== this.epoch) continue;
+			return { ...snapshot, catalog: { generation: snapshot.catalog.generation, skills: Object.freeze(snapshot.catalog.skills.map(skill => this.discover(skill, sessionId))) } };
+		}
+		throw new CancellationError();
 	}
 
 	public async setSkillEnablement(skillId: SkillDescriptor['id'], enabled: boolean, expectedRevision: number, sessionId?: string): Promise<void> {
-		await this.backend.setEnabled(skillId, enabled, expectedRevision, sessionId);
+		if (this.isDisposed) throw new CancellationError();
+		// Do not retry a mutation: an expected-revision conflict must remain reviewable to the caller.
+		try {
+			await this.backend.setEnabled(skillId, enabled, expectedRevision, sessionId);
+		} catch (error) {
+			if (error instanceof AppServerRemoteError && error.errorName === 'ConfigRevisionConflict') throw new SkillManagementConflictError(expectedRevision);
+			throw error;
+		}
 	}
 
 	public async parseNew(uri: URI, token: CancellationToken = CancellationToken.None): Promise<ParsedPromptFile> {
@@ -54,7 +70,7 @@ export class PromptsService extends Disposable implements IPromptsService {
 		const instructions = match ? uri.with({ path: `/${match[1]}/SKILL.md`, fragment: '' }) : uri;
 		const target = this.references.get(instructions);
 		const path = match?.[2];
-		if (!target || !path || path.includes('\\') || path.split('/').some(segment => segment === '..' || segment === '.' || !segment) || this.isDisposed) throw new ReferenceError('Prompt URI was not discovered in this window');
+		if (!target || !path || (/[\x00-\x1f\x7f\\]/u.test(path)) || path.split('/').some(segment => segment === '..' || segment === '.' || !segment) || this.isDisposed) throw new ReferenceError('Prompt URI was not discovered in this window');
 		const controller = new AbortController();
 		this.reads.add(controller);
 		const cancelled = token.onCancellationRequested(() => controller.abort());

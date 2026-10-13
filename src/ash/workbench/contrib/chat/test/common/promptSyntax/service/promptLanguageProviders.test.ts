@@ -112,3 +112,21 @@ test('Prompt links use the original Skill URI and reject code, remote web links 
 	controller.abort();
 	assert.deepEqual(provider.provideLinks(request, controller.signal), []);
 });
+
+
+test('Skill name completion at an empty value never proposes an inverted replacement range', async () => {
+	for (const source of ['---\nname:\n---', '---\nname: \n---']) {
+		const line = source.split('\n')[1];
+		const result = await complete(source, new Position(2, line.length + 1));
+		assert.equal(result?.items[0].insertText.trim(), 'review');
+		assert.deepEqual(result?.items[0].range, new Range(2, line.length + 1, 2, line.length + 1));
+	}
+});
+
+test('Skill diagnostic hover uses the actual quoted key range when the key includes a colon', () => {
+	using model = new TextModel('---\n"custom:key": text\n---', { resource: URI.file('/skills/review/SKILL.md'), languageId: 'markdown' });
+	const signal = new AbortController().signal;
+	const hover = new PromptHoverProvider().provideHover({ model, snapshot: model.createVersionedSnapshot(), resource: model.uri, languageId: 'markdown', modelLanguageId: 'markdown', signal, position: new Position(2, 8) }, signal);
+	assert.equal(hover?.contents.length, 1);
+	assert.match(String(hover?.contents[0]), /custom:key/u);
+});

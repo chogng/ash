@@ -3,6 +3,8 @@ import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../../../base/browser/ui/inputbox/inputbox.js';
 import { SelectBox } from '../../../../../base/browser/ui/selectbox/selectbox.js';
 import { DisposableStore, DisposableMap, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { isCancellationError } from '../../../../../base/common/errors.js';
+import { RunOnceScheduler } from '../../../../../base/common/async.js';
 import { Schemas } from '../../../../../base/common/network.js';
 import { extUri } from '../../../../../base/common/resources.js';
 import { URI } from '../../../../../base/common/uri.js';
@@ -19,6 +21,7 @@ import { EditorPane } from '../../../../browser/parts/editor/editorPane.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { ILocalizationService } from '../../../../services/localization/common/localizationService.js';
+import { ITextFileService } from '../../../../services/textfile/common/textfiles.js';
 import { IAppServerRemoteAgentService } from '../../../../services/remote/common/appServerRemoteAgentService.js';
 import { canEditHookConfiguration, getHookConfigurationResource, openHookConfiguration, showConfigureHooksQuickPick, type HookConfigurationTarget } from '../promptSyntax/hookActions.js';
 import { AI_CUSTOMIZATION_MANAGEMENT_EDITOR_ID, CONTEXT_AI_CUSTOMIZATION_MANAGEMENT_EDITOR } from './aiCustomizationManagement.js';
@@ -56,12 +59,16 @@ export class AICustomizationManagementEditor extends EditorPane {
 	private readonly hookResources = this._register(new DisposableMap<string, DisposableStore>());
 	private readonly hookRows = new Map<string, HookRow>();
 	private sources: readonly HookSource[] | undefined;
+	private loadedSessionId: string | undefined;
+	private actionPending = false;
+	private readonly refreshAfterSave = this._register(new RunOnceScheduler(() => { if (this.visible) void this.refresh(); }, 100));
 	private statusMessage: { readonly key: string; readonly text: string; readonly parameters?: readonly (string | number)[]; } | undefined;
 	private visible = false;
 	private loadVersion = 0;
 
 	constructor(
 		@IHooksService private readonly hooks: IHooksService,
+		@ITextFileService private readonly textFiles: ITextFileService,
 		@IAppServerRemoteAgentService private readonly remote: IAppServerRemoteAgentService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IChatSessionNavigationService private readonly chats: IChatSessionNavigationService,
@@ -102,6 +109,11 @@ export class AICustomizationManagementEditor extends EditorPane {
 		for (const event of HookEvents) this.createEventRow(event);
 		this._register(this.scope.onDidSelect(() => this.updateActions()));
 		this._register(this.hooks.onDidChange(() => { if (this.visible) void this.refresh(); }));
+		this._register(this.textFiles.onDidSave(event => {
+			if (this.visible && this.sources?.some(source => source.namespace === 'user'
+				? source.configPath === event.resource.fsPath
+				: extUri.isEqual(this.sourceResource(source), event.resource))) this.refreshAfterSave.schedule();
+		}));
 		this._register(this.workspace.onDidChangeWorkspace(() => this.changeSourceContext()));
 		this._register(this.remote.onDidChangeConnectionState(state => {
 			this.loadVersion++;
@@ -139,7 +151,7 @@ export class AICustomizationManagementEditor extends EditorPane {
 		if (this.visible === visible) return;
 		this.visible = visible;
 		if (visible) void this.refresh();
-		else this.loadVersion++;
+		else { this.loadVersion++; this.refreshAfterSave.cancel(); }
 	}
 
 	private changeSourceContext(): void {
@@ -152,12 +164,15 @@ export class AICustomizationManagementEditor extends EditorPane {
 	private async refresh(): Promise<void> {
 		const version = ++this.loadVersion;
 		const sessionId = this.chats.getActiveConversation()?.sessionId;
+		if (sessionId !== this.loadedSessionId) this.sources = undefined;
+		this.domNode.setAttribute('aria-busy', 'true');
 		this.setStatus('loading', 'Loading Hooks…');
 		this.render();
 		try {
 			const sources = await this.hooks.read(sessionId);
 			if (version !== this.loadVersion || !this.visible || sessionId !== this.chats.getActiveConversation()?.sessionId) return;
 			this.sources = sources;
+			this.loadedSessionId = sessionId;
 			this.setStatus('loaded', '{0} event types · {1} configured Hooks', [HookEvents.length, sources.reduce((sum, source) => sum + source.hooks.length, 0)]);
 			this.render();
 		} catch (error) {
@@ -165,6 +180,8 @@ export class AICustomizationManagementEditor extends EditorPane {
 			this.sources = undefined;
 			this.setStatus('failed', 'Could not load Hooks: {0}', [error instanceof Error ? error.message : String(error)]);
 			this.render();
+		} finally {
+			if (version === this.loadVersion && !this.isDisposed) this.domNode.setAttribute('aria-busy', 'false');
 		}
 	}
 
@@ -329,10 +346,15 @@ export class AICustomizationManagementEditor extends EditorPane {
 	}
 
 	private async performAction(button: HTMLButtonElement): Promise<void> {
+		if (this.actionPending || this.isDisposed || !this.visible) return;
 		if (button.dataset.hookAction === 'refresh') { await this.refresh(); return; }
+		if (this.sources && this.loadedSessionId !== this.chats.getActiveConversation()?.sessionId) { await this.refresh(); return; }
+		const version = this.loadVersion;
 		const id = button.dataset.hookId;
 		const hookSource = id ? this.sources?.find(source => source.hooks.some(hook => hook.id === id)) : undefined;
 		const source = id ? hookSource : this.selectedConfiguration();
+		this.actionPending = true;
+		button.disabled = true;
 		try {
 			if (button.dataset.hookAction?.startsWith('ask-')) {
 				if (!source) return;
@@ -348,10 +370,13 @@ export class AICustomizationManagementEditor extends EditorPane {
 			const target = button.dataset.hookAction === 'edit-scope' && this.scope.value === 'user' ? { namespace: 'user', configPath: '' } : source;
 			if (!target) { return; }
 			await this.instantiation.invokeFunction(openHookConfiguration, target);
-			if (!this.isDisposed) { this.setStatus('opened', 'Configuration opened. Save it, then choose Refresh.'); }
+			if (!this.isDisposed && version === this.loadVersion && this.visible) { this.setStatus('opened', 'Configuration opened. Save it, then choose Refresh.'); }
 
 		} catch (error) {
-			if (!this.isDisposed) this.setStatus('actionFailed', 'Could not configure Hooks: {0}', [error instanceof Error ? error.message : String(error)]);
+			if (!isCancellationError(error) && !this.isDisposed && version === this.loadVersion && this.visible) this.setStatus('actionFailed', 'Could not configure Hooks: {0}', [error instanceof Error ? error.message : String(error)]);
+		} finally {
+			this.actionPending = false;
+			if (!this.isDisposed) { button.disabled = false; this.updateActions(); }
 		}
 	}
 

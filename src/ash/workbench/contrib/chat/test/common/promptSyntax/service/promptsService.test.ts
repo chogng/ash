@@ -7,6 +7,8 @@ import { Disposable } from '../../../../../../../base/common/lifecycle.js';
 import { isCancellationError } from '../../../../../../../base/common/errors.js';
 import { URI } from '../../../../../../../base/common/uri.js';
 import type { IAppServerSkillApi, SkillCatalog, SkillReference } from '../../../../../../../platform/agentHost/common/appServerApi.js';
+import { AppServerRemoteError } from '../../../../../../../platform/agentHost/common/appServerError.js';
+import { SkillManagementConflictError } from '../../../../common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../../../common/promptSyntax/service/promptsServiceImpl.js';
 import { CONFIGURE_SKILLS_ACTION_ID, registerSkillActions } from '../../../../browser/promptSyntax/skillActions.js';
 import { CommandsRegistry, ICommandService } from '../../../../../../../platform/commands/common/commands.js';
@@ -117,7 +119,51 @@ test('Prompt relative references preserve source, pinned digest and Session and 
 	const next = parsed.body!.resolveFilePath('nested/checks.md')!;
 	await prompts.parseNew(next);
 	assert.equal((backend.calls.at(-1) as unknown[])[2], 'references/nested/checks.md');
-	for (const invalid of [child.with({ query: 'forged' }), child.with({ authority: 'other' }), skill.uri.with({ path: '/review/../secret' }), skill.uri.with({ path: '/review/assets\\secret' }), root.body!.resolveFilePath('../escape.md')!]) {
+	for (const invalid of [child.with({ query: 'forged' }), child.with({ authority: 'other' }), skill.uri.with({ path: '/review/../secret' }), skill.uri.with({ path: '/review/assets\\secret' }), skill.uri.with({ path: '/escape.md' })]) {
 		await assert.rejects(prompts.parseNew(invalid), /not discovered/u);
 	}
+});
+
+
+test('Prompt management re-reads the catalog when its own refresh publishes a change, without retrying mutation conflicts', async () => {
+	using backend = new Backend();
+	using prompts = new PromptsService(backend);
+	let reads = 0;
+	backend.read = async () => {
+		reads++;
+		if (reads === 1) backend.changed.fire();
+		return { revision: 8, catalog, diagnostics: [] };
+	};
+	const snapshot = await prompts.readSkillManagement('session');
+	assert.equal(reads, 2);
+	assert.equal(snapshot.revision, 8);
+	assert.equal((await prompts.parseNew(snapshot.catalog.skills[0].uri)).content, instructions);
+	const conflict = new Error('ConfigRevisionConflict');
+	let mutations = 0;
+	backend.setEnabled = async () => { mutations++; throw conflict; };
+	await assert.rejects(prompts.setSkillEnablement(id, false, 7, 'session'), error => error === conflict);
+	assert.equal(mutations, 1);
+});
+
+test('Prompt management bounds continuous invalidation and cannot rediscover after disposal', async () => {
+	using backend = new Backend();
+	using prompts = new PromptsService(backend);
+	let reads = 0;
+	backend.read = async () => { reads++; backend.changed.fire(); return { revision: 8, catalog, diagnostics: [] }; };
+	await assert.rejects(prompts.readSkillManagement(), isCancellationError);
+	assert.equal(reads, 2);
+	prompts.dispose();
+	await assert.rejects(prompts.readSkillManagement(), isCancellationError);
+	await assert.rejects(prompts.setSkillEnablement(id, false, 8), isCancellationError);
+	assert.equal(reads, 2);
+});
+
+
+test('Skill enablement exposes a domain conflict with the displayed revision and does not overwrite a newer configuration', async () => {
+	using backend = new Backend();
+	using prompts = new PromptsService(backend);
+	let writes = 0;
+	backend.setEnabled = async () => { writes++; throw new AppServerRemoteError(-32031, 'ConfigRevisionConflict', { kind: 'ConfigRevisionConflict' }); };
+	await assert.rejects(prompts.setSkillEnablement(id, false, 7, 'session'), error => error instanceof SkillManagementConflictError && error.expectedRevision === 7 && /Refresh Skills/u.test(error.message));
+	assert.equal(writes, 1);
 });

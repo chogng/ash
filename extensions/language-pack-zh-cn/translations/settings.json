@@ -222,7 +222,7 @@
     "hooks.projectPrompt": "帮我在 {1} 中配置 {0} Hooks。先检查已有 TOML，保留其他设置。选择 Hook ID 前，通过 App Server 查询项目目录身份。说明触发时机、命令和范围，再校验配置。我的需求：",
     "hooks.opened": "已打开配置。保存后请选择“刷新”。",
     "hooks.actionFailed": "无法配置 Hooks：{0}",
-    "hooks.help": "Agent Hooks\n使用 Tab 和 Shift+Tab 在搜索、配置范围、编辑 TOML、让 Ash 配置、刷新、配置 Hooks 和事件之间移动。对事件或 Hook 按 Enter 或空格可展开详情。搜索支持事件名称、Hook ID、命令和路径。“配置 Hooks”先选择事件，再选择 Hook 或配置范围。“编辑 TOML”打开所选配置；保存后请选择“刷新”。“让 Ash 配置”把配置请求追加到当前聊天草稿，不会发送。已配置的 Hook 仍需执行权限。",
+    "hooks.help": "Agent Hooks\n此页面显示 Hook 声明及其已启用或已禁用的配置状态。使用 Tab 和 Shift+Tab 在搜索、配置范围、编辑 TOML、让 Ash 配置、刷新、配置 Hooks 和事件之间移动。对事件或 Hook 按 Enter 或空格可展开详情。搜索支持事件名称、Hook ID、命令和路径。“配置 Hooks”先选择事件，再选择 Hook 或配置范围。“编辑 TOML”打开所选配置。当此页面可见时，保存列表中的配置文件会刷新声明；“刷新”可手动重新读取声明。同一 ID 的声明会保留搜索内容和已展开的详情。“让 Ash 配置”把配置请求追加到当前聊天草稿，不会发送。已配置的 Hook 仍需执行权限。执行结果在对话中显示为执行中、允许继续、已阻断、失败或已取消；配置启停状态不表示执行成功。",
     "hooks.events.preToolUse": "工具执行前。",
     "hooks.events.postToolUse": "工具执行成功后。",
     "hooks.events.postToolUseFailure": "工具执行失败后。",

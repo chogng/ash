@@ -40,12 +40,14 @@ export class PromptLanguageFeaturesProvider extends Disposable {
 		this._register(textModels.registerTextModelContentProvider(Schemas.internal, {
 			provideTextContent: async resource => {
 				if (resource.authority !== 'skill') return null;
+				if (this.isDisposed) return null;
 				const existing = this.modelService.getModel(resource);
 				if (existing) return existing;
 				const cancellation = new CancellationTokenSource();
 				const cleanup = this.readers.add(toDisposable(() => cancellation.dispose(true)));
 				try {
 					const parsed = await prompts.parseNew(resource, cancellation.token);
+					if (this.isDisposed || cancellation.token.isCancellationRequested) return null;
 					return this.modelService.getModel(resource) ?? this.modelService.createModel(parsed.content, languages.createByFilepathOrFirstLine(resource, parsed.content.split('\n', 1)[0]), resource);
 				} finally { this.readers.delete(cleanup); cleanup.dispose(); }
 			},

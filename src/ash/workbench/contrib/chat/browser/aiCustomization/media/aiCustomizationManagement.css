@@ -19,9 +19,10 @@
 	margin-block: var(--ash-spacing-size120);
 }
 
-.ash-hooks-event summary:focus-visible {
+.ash-hooks-event summary:focus-visible,
+.ash-hooks-declaration summary:focus-visible {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
-	outline-offset: var(--ash-spacing-size20);
+	outline-offset: -1px;
 }
 
 .ash-hooks-event {

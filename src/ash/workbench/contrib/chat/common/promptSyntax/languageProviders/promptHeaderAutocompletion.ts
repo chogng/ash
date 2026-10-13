@@ -41,8 +41,8 @@ export class PromptHeaderAutocompletion implements LanguageCompletionProvider {
 		if (name?.range.startLineNumber === request.position.lineNumber && /^name:\s*[a-z0-9-]*$/u.test(line) && prefix.includes(':')) {
 			const parent = request.resource.path.split('/').at(-2)!;
 			const start = line.indexOf(':') + 2 + (line.slice(line.indexOf(':') + 1).match(/^\s*/u)?.[0].length ?? 0);
-			if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(parent)) return undefined;
-			return { items: [{ id: 'name-value', label: parent, insertText: line.endsWith(':') ? ` ${parent}` : parent, range: new Range(request.position.lineNumber, start, request.position.lineNumber, line.length + 1), kind: LanguageCompletionItemKind.Value, documentation: getAttributeDefinition('name')!.description }], isIncomplete: false };
+			if (parent.length > getAttributeDefinition('name')!.maximumCharacters! || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(parent)) return undefined;
+			return { items: [{ id: 'name-value', label: parent, insertText: line.endsWith(':') ? ` ${parent}` : parent, range: new Range(request.position.lineNumber, Math.min(start, line.length + 1), request.position.lineNumber, line.length + 1), kind: LanguageCompletionItemKind.Value, documentation: getAttributeDefinition('name')!.description }], isIncomplete: false };
 		}
 		if (!/^[a-z-]*$/u.test(prefix) || !/^[a-z-]*$/u.test(line)) return undefined;
 		const existing = new Set(parsed.header.attributes.map(attribute => attribute.key));

@@ -799,7 +799,13 @@
     "hooks.failedTool": "针对 {1} 的 {0} Hook 失败",
     "hooks.failed": "{0} Hook 失败",
     "hooks.cancelledTool": "针对 {1} 的 {0} Hook 已取消",
-    "hooks.cancelled": "{0} Hook 已取消"
+    "hooks.cancelled": "{0} Hook 已取消",
+    "prompt.validation.metadataLimits": "元数据最多支持 64 个条目，名称须为 1 到 128 个字符，值最多为 1024 个字符。",
+    "prompt.validation.name": "技能名称须为 1 到 64 个小写字母、数字或单个连字符。",
+    "prompt.validation.nameMismatch": "技能名称 {0} 必须与其父目录 {1} 一致。",
+    "prompt.validation.length": "技能字段 {0} 须为 1 到 {1} 个字符。",
+    "prompt.syntax.catalogLimits": "技能头部超过目录限制（16 KiB、256 行或每行 2 KiB）。请将说明移到 Markdown 正文中。",
+    "prompt.management.conflict": "Skill 设置已在其他窗口或磁盘上更改。请刷新技能列表并审阅当前状态，然后重试。"
   },
   "ash.workbench": {
     "command.OpenAutomations": "打开自动化",

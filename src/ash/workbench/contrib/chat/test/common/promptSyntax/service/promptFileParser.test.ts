@@ -81,3 +81,22 @@ test('Prompt file references use Markdown grammar, exact CRLF coordinates and ex
 	assert.equal(body.resolveFilePath('#heading'), undefined);
 	assert.equal(body.resolveFilePath('~/guide.md'), undefined);
 });
+
+
+test('Pinned package references remain inside the original package, including nested references and fragments', () => {
+	const uri = URI.parse('private://skill/review/references/guide.md?source=pinned');
+	const body = new PromptFileParser().parse(uri, 'Read the guide').body!;
+	assert.equal(body.resolveFilePath('../assets/text.txt#section')?.toString(), uri.with({ path: '/review/assets/text.txt', fragment: 'section' }).toString());
+	for (const path of ['../../escape.md', '/review/assets/text.txt', 'file:///host/secrets', 'private://skill/other/SKILL.md', 'https://example.com', '~/secret', 'a\\b', 'a\0b', 'a\nb']) assert.equal(body.resolveFilePath(path), undefined, path);
+	const local = new PromptFileParser().parse(URI.file('/work/review/SKILL.md'), 'Local').body!;
+	assert.equal(local.resolveFilePath('../shared.md')?.fsPath, '/work/shared.md');
+});
+
+test('YAML key ranges preserve quoted colons and missing scalars independently from empty text', () => {
+	const header = new PromptFileParser().parse(URI.file('/work/review/SKILL.md'), '---\n"custom:key": text\nlicense:\nmetadata: { owner: "" }\n---').header!;
+	assert.deepEqual(header.attributes[0].keyRange, new Range(2, 1, 2, 13));
+	const license = header.getAttribute('license')!.value;
+	assert.equal(license.type === 'scalar' && license.missing, true);
+	const metadata = header.getAttribute('metadata')!.value;
+	assert.equal(metadata.type === 'map' && metadata.properties[0].value.type === 'scalar' && metadata.properties[0].value.missing, undefined);
+});

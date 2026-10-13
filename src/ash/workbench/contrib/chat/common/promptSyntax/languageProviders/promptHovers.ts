@@ -1,4 +1,3 @@
-import { Range } from '../../../../../../editor/common/core/range.js';
 import type { LanguageHover, LanguageHoverProvider, LanguageHoverRequest } from '../../../../../../editor/common/languages.js';
 import { PromptValidator } from './promptValidator.js';
 import { PromptFileParser } from '../promptFileParser.js';
@@ -15,8 +14,7 @@ export class PromptHoverProvider implements LanguageHoverProvider {
 		const header = parsed.header;
 		if (!header?.range.containsPosition(request.position)) return undefined;
 		const attribute = header.attributes.find(attribute => attribute.range.startLineNumber === request.position.lineNumber && attribute.range.containsPosition(request.position));
-		const line = source.split(/\r\n|\n|\r/u)[request.position.lineNumber - 1]!;
-		const keyRange = attribute ? new Range(attribute.range.startLineNumber, attribute.range.startColumn, attribute.range.startLineNumber, line.indexOf(':', attribute.range.startColumn - 1) + 1) : undefined;
+		const keyRange = attribute?.keyRange;
 		const definition = attribute && keyRange?.containsPosition(request.position) ? getAttributeDefinition(attribute.key) : undefined;
 		const diagnostic = this.validator.validate(parsed).find(diagnostic => diagnostic.code !== 'requiredField' && diagnostic.range.containsPosition(request.position));
 		if (!definition && !diagnostic) return undefined;
