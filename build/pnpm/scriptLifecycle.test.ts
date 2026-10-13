@@ -39,6 +39,8 @@ test("aggregate, test and typecheck commands prepare inputs once and stop on pre
 		"test:smoke:ui:no-compile": "electron-ui-tests",
 		"test:smoke:desktop:no-compile": "electron-connected-tests",
 	})) scripts[name] = `node record.ts ${operation}`;
+	// The direct build owns preparation after its dependency rebuild lifecycle hook.
+	scripts.build = 'node build/prepare.ts && node record.ts desktop-build';
 	await writeFile(join(directory, "package.json"), JSON.stringify({ private: true, type: "module", scripts }));
 	await writeFile(join(directory, "record.ts"), `
     import { appendFileSync } from 'node:fs';
@@ -46,6 +48,13 @@ test("aggregate, test and typecheck commands prepare inputs once and stop on pre
     if (process.argv[2] === process.env.FAIL_OPERATION) process.exitCode = 1;
   `);
 	await mkdir(join(directory, 'build/builtin'), { recursive: true });
+	await writeFile(join(directory, 'build/prepare.ts'), `
+		import { spawnSync } from 'node:child_process';
+		for (const operation of ['protocol', 'localization', 'common', 'extensions', 'icons']) {
+			const result = spawnSync(process.execPath, ['record.ts', operation], { stdio: 'inherit' });
+			if (result.status !== 0) process.exit(result.status ?? 1);
+		}
+	`);
 	await writeFile(join(directory, 'build/builtin/extensions.ts'), `process.argv[2] = 'extensions'; await import('../../record.ts');`);
 	await mkdir(join(directory, 'node_modules/.bin'), { recursive: true });
 	const checker = join(directory, 'node_modules/.bin/bun');

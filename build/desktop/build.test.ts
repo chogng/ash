@@ -11,10 +11,15 @@ test('Desktop build stops at the failed host or renderer step before bundling', 
 	for (const directory of ['build/protocol', 'build/resources', 'build/desktop', 'build/lib', 'build/node_modules/vite/bin', 'node_modules/@ash/typescript-compiler/bin']) {
 		await mkdir(join(root, directory), { recursive: true });
 	}
-	for (const file of ['build/processes.ts', 'build/desktop/build.ts', 'build/desktop/host.ts', 'build/desktop/paths.ts']) {
+	for (const file of ['build/processes.ts', 'build/desktop/build.ts', 'build/desktop/host.ts', 'build/desktop/paths.ts', 'build/lib/incrementalOutput.ts']) {
 		await copyFile(resolve(import.meta.dirname, '../..', file), join(root, file));
 	}
 	await symlink(resolve(import.meta.dirname, '../../node_modules/bun'), join(root, 'node_modules/bun'), process.platform === 'win32' ? 'junction' : 'dir');
+	await symlink(resolve(import.meta.dirname, '../../node_modules/typescript'), join(root, 'node_modules/typescript'), process.platform === 'win32' ? 'junction' : 'dir');
+	for (const project of ['main', 'preload']) {
+		await writeFile(join(root, `tsconfig.${project}.json`), JSON.stringify({ compilerOptions: { incremental: true, outDir: `.build/desktop/${project}`, tsBuildInfoFile: `.build/desktop/${project}.tsbuildinfo` }, files: ['renderer.ts'] }));
+	}
+	await writeFile(join(root, 'build/prepare.ts'), `import { generateProtocol } from './protocol/generate.ts'; import { generateLocalization } from './resources/localization.ts'; export async function prepareGenerated() { await generateProtocol(); await generateLocalization(); }`);
 	await writeFile(join(root, 'tsconfig.renderer.json'), JSON.stringify({ compilerOptions: { strict: true, noEmit: true, types: [], lib: ['ES2022'] }, files: ['renderer.ts'] }));
 	await writeFile(join(root, 'build/protocol/generate.ts'), `import { appendFile } from 'node:fs/promises'; export async function generateProtocol() { await appendFile(new URL('../../operations.log', import.meta.url), 'protocol\\n'); if (process.env.FAILURE === 'protocol') throw new Error('export failed'); }`);
 	await writeFile(join(root, 'build/resources/localization.ts'), `import { appendFile } from 'node:fs/promises'; export async function generateLocalization() { await appendFile(new URL('../../operations.log', import.meta.url), 'localization\\n'); }`);

@@ -27,11 +27,11 @@ export function productIconsPlugin(options: ProductIconsPluginOptions = {}): Ash
 	const sourceDirectory = resolve(options.sourceDirectory ?? resolve(import.meta.dirname, "../../../resources/icons"));
 	const outputFile = resolve(options.outputFile ?? resolve(import.meta.dirname, "../../../src/ash/base/common/productIcons.ts"));
 	const debounceMilliseconds = options.debounceMilliseconds ?? 50;
-	let stopWatching: (() => void) | undefined;
+	let stopWatching: (() => Promise<void>) | undefined;
 
 	return {
 		name: "ash-product-icons",
-		closeBundle() { stopWatching?.(); },
+		async closeBundle() { await stopWatching?.(); },
 		configureServer(server) {
 			server.watcher.add(sourceDirectory);
 			stopWatching = watchRebuild(server, path => isDirectSvgChild(path, sourceDirectory), async () => {

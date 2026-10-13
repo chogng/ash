@@ -1,0 +1,45 @@
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { test } from 'node:test';
+import { prepareIncrementalOutput } from './incrementalOutput.ts';
+
+test('unit compilation reuses outputs, restores transitive emits and removes deleted tests', async t => {
+	const root = await mkdtemp(join(tmpdir(), 'ash-test-compile-'));
+	t.after(() => rm(root, { recursive: true, force: true }));
+	await mkdir(join(root, 'src'));
+	await writeFile(join(root, 'package.json'), '{"type":"module"}');
+	const config = join(root, 'tsconfig.json');
+	const settings = { compilerOptions: { module: 'NodeNext', target: 'ES2022', types: [], rootDir: '.', outDir: 'out', incremental: true, tsBuildInfoFile: 'test.tsbuildinfo' }, include: ['src/*.ts'] };
+	await writeFile(config, JSON.stringify(settings));
+	await writeFile(join(root, 'shared.ts'), 'export const value = 1;');
+	await writeFile(join(root, 'src/selected.test.ts'), "export { value } from '../shared.js';");
+	await writeFile(join(root, 'src/removed.test.ts'), 'export const value = 2;');
+	const compile = async () => {
+		await prepareIncrementalOutput(config);
+		const result = spawnSync(process.execPath, [resolve(import.meta.dirname, '../../node_modules/@ash/typescript-compiler/bin/tsc'), '-p', config], { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 10_000 });
+		assert.ifError(result.error);
+		assert.equal(result.status, 0, result.stdout + result.stderr);
+	};
+	await compile();
+	const emitted = join(root, 'out/src/selected.test.js');
+	const before = (await stat(emitted, { bigint: true })).mtimeNs;
+	await compile();
+	assert.equal((await stat(emitted, { bigint: true })).mtimeNs, before);
+	await rm(join(root, 'out/shared.js'));
+	await compile();
+	assert.match(await readFile(join(root, 'out/shared.js'), 'utf8'), /value = 1/);
+	await writeFile(config, JSON.stringify({ ...settings, include: ['src/selected.test.ts'] }));
+	await compile();
+	await assert.rejects(readFile(join(root, 'out/src/removed.test.js')), { code: 'ENOENT' });
+	await writeFile(config, JSON.stringify(settings));
+	await compile();
+	await rm(join(root, 'src/removed.test.ts'));
+	await compile();
+	await assert.rejects(readFile(join(root, 'out/src/removed.test.js')), { code: 'ENOENT' });
+	await writeFile(join(root, 'test.tsbuildinfo'), '{broken');
+	await compile();
+	assert.match(await readFile(emitted, 'utf8'), /shared.js/);
+});

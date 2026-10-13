@@ -90,7 +90,8 @@ export default defineConfig(({ mode, command }) => {
 		},
 		plugins: [
 			buildMetricsPlugin(),
-			localizationPlugin(),
+			// Extension preparation consumes language packs; one watcher publishes both before reloading.
+			localizationPlugin({ watch: false }),
 			hotReloadPlugin({ desktopRoot }),
 			workbenchEntryPlugin(browserEntryPath, [{
 				url: `/${sessionsWebEntry}.html`,

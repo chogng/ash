@@ -1,11 +1,12 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { lstat, mkdir, readFile, readdir, realpath, rm, symlink, unlink, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, readdir, realpath, symlink, unlink, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import { ProcessRun } from '../processes.ts';
 import { desktopBuildPath } from './paths.ts';
+import { prepareIncrementalOutput } from '../lib/incrementalOutput.ts';
 
 const repositoryRoot = resolve(import.meta.dirname, '../..');
 const sourceRoot = repositoryRoot;
@@ -145,9 +146,7 @@ export async function watchHost(onReady: (ready: boolean) => void): Promise<{ cl
 
 async function prepareHostBuild(): Promise<void> {
 	await prepareHostOutput();
-	// TypeScript trusts persisted build info even when outputs have been removed.
-	// Start each compiler with a full emit; subsequent watch builds remain incremental.
-	await Promise.all(['main.tsbuildinfo', 'preload.tsbuildinfo'].map(file => rm(join(outputRoot, file), { force: true })));
+	await Promise.all(projects.map(project => prepareIncrementalOutput(join(sourceRoot, project))));
 }
 
 async function verifyPreload(): Promise<void> {

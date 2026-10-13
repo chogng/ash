@@ -12,9 +12,11 @@ export interface RebuildServer {
 }
 
 /** Coalesces changes for generators that reread all their inputs on every run. */
-export function watchRebuild(server: RebuildServer, accepts: (path: string) => boolean, build: () => Promise<boolean>, debounceMilliseconds = 50): () => void {
+export function watchRebuild(server: RebuildServer, accepts: (path: string) => boolean, build: () => Promise<boolean>, debounceMilliseconds = 50): () => Promise<void> {
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	let running = false;
+	let completion: Promise<void> = Promise.resolve();
+	let changed = false;
 	let dirty = false;
 	let closed = false;
 
@@ -23,14 +25,18 @@ export function watchRebuild(server: RebuildServer, accepts: (path: string) => b
 		dirty = false;
 		running = true;
 		try {
-			const changed = await build();
-			if (!closed && changed) { server.ws.send({ type: 'full-reload' }); }
+			changed = await build() || changed;
+			// Keep changes from earlier passes, including when the final pass is a no-op.
+			if (!closed && !dirty && changed) {
+				server.ws.send({ type: 'full-reload' });
+				changed = false;
+			}
 		} catch (error) {
 			if (!closed) { server.config.logger.error(error instanceof Error ? error.message : String(error), { error }); }
 		} finally {
 			running = false;
 			// Keep one rerun for edits received during generation, respecting any remaining debounce.
-			if (dirty && timer === undefined && !closed) { void rebuild(); }
+			if (dirty && timer === undefined && !closed) { completion = rebuild(); }
 		}
 	}
 
@@ -40,16 +46,19 @@ export function watchRebuild(server: RebuildServer, accepts: (path: string) => b
 		clearTimeout(timer);
 		timer = setTimeout(() => {
 			timer = undefined;
-			void rebuild();
+			if (!running) { completion = rebuild(); }
 		}, debounceMilliseconds);
 	}
 
-	function close(): void {
+	async function close(): Promise<void> {
 		closed = true;
 		dirty = false;
 		clearTimeout(timer);
 		server.watcher.off('all', onChange);
 		server.httpServer?.off('close', close);
+		// Vite awaits closeBundle before restarting. Drain the active writer so an old
+		// server cannot publish resources after its replacement has started.
+		await completion;
 	}
 
 	server.watcher.on('all', onChange);

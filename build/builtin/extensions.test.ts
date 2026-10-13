@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { copyFile, mkdir, mkdtemp, open, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, open, readFile, readdir, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import test from 'node:test';
@@ -10,6 +10,8 @@ test('browser packaging excludes Rust-only extensions and rejects missing JS man
 	try {
 		await mkdir(join(directory, 'build/builtin'), { recursive: true });
 		await copyFile(resolve(import.meta.dirname, 'extensions.ts'), join(directory, 'build/builtin/extensions.ts'));
+		await mkdir(join(directory, 'build/lib'), { recursive: true });
+		await copyFile(resolve(import.meta.dirname, '../lib/preparedInputs.ts'), join(directory, 'build/lib/preparedInputs.ts'));
 		await symlink(resolve(import.meta.dirname, '../../node_modules'), join(directory, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
 		await mkdir(join(directory, 'extensions/theme-defaults/themes'), { recursive: true });
 		await writeFile(join(directory, 'extensions/theme-defaults/package.json'), JSON.stringify({ publisher: 'test', name: 'theme-defaults', version: '1.0.0' }));
@@ -54,6 +56,8 @@ test('browser Git packages publish their bundled frontend without a Rust runtime
 	try {
 		await mkdir(join(directory, 'build/builtin'), { recursive: true });
 		await copyFile(resolve(import.meta.dirname, 'extensions.ts'), join(directory, 'build/builtin/extensions.ts'));
+		await mkdir(join(directory, 'build/lib'), { recursive: true });
+		await copyFile(resolve(import.meta.dirname, '../lib/preparedInputs.ts'), join(directory, 'build/lib/preparedInputs.ts'));
 		await symlink(resolve(import.meta.dirname, '../node_modules'), join(directory, 'build/node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
 		for (const name of ['node_modules', 'crates']) {
 			await symlink(resolve(import.meta.dirname, '../../' + name), join(directory, name), process.platform === 'win32' ? 'junction' : 'dir');
@@ -65,14 +69,54 @@ test('browser Git packages publish their bundled frontend without a Rust runtime
 		await writeFile(join(directory, 'extensions/git/browser/main.ts'), "import { marker } from './helper.js'; export async function activate(): Promise<string> { return marker; }");
 		await writeFile(join(directory, 'extensions/git/browser/helper.ts'), "export const marker: string = 'combined-entry-marker';");
 		await writeFile(join(directory, 'extensions/git/browser/sample.ts'), 'export const sample = 1;');
-		const result = spawnSync(process.execPath, ['build/builtin/extensions.ts'], { cwd: directory, encoding: 'utf8', timeout: 30_000, env: { ...process.env, ASH_WEB_EXTENSION_PATHS: '' } });
-		assert.ifError(result.error);
-		assert.equal(result.status, 0, result.stderr);
+		const run = () => {
+			const result = spawnSync(process.execPath, ['build/builtin/extensions.ts'], { cwd: directory, encoding: 'utf8', timeout: 30_000, env: { ...process.env, ASH_WEB_EXTENSION_PATHS: '' } });
+			assert.ifError(result.error);
+			assert.equal(result.status, 0, result.stderr);
+		};
+		run();
 		const bundle = JSON.parse(await readFile(join(directory, 'src/ash/platform/extensions/common/generated/browser.json'), 'utf8'));
 		assert.deepEqual(Object.keys(bundle.resources['test.git']).sort(), ['browser/main.ts', 'browser/sample.ts', 'package.json']);
 		const module = Buffer.from(bundle.resources['test.git']['browser/main.ts'], 'base64').toString('utf8');
 		assert.match(module, /combined-entry-marker/);
 		assert.doesNotMatch(module, /from ['"]\.\/helper\.js['"]|Promise<string>/);
+		const cache = join(directory, '.build/browser-extensions');
+		const snapshots = async () => Object.fromEntries(await Promise.all((await readdir(cache)).map(async name => [name, (await stat(join(cache, name), { bigint: true })).mtimeNs])));
+		const first = await snapshots();
+		run();
+		assert.deepEqual(await snapshots(), first, 'a new process reuses the compiled package');
+		await mkdir(join(directory, 'extensions/other'));
+		await writeFile(join(directory, 'extensions/other/package.json'), JSON.stringify({ publisher: 'test', name: 'other', version: '1.0.0', browser: 'main.ts' }));
+		await writeFile(join(directory, 'extensions/other/main.ts'), 'export const activate = () => 2;');
+		run();
+		const both = await snapshots();
+		assert.equal(Object.keys(both).length, 2);
+		assert.equal(both[Object.keys(first)[0]!], Object.values(first)[0]);
+		const catalog = join(directory, 'src/ash/platform/extensions/common/generated/browser.json');
+		const published = (await stat(catalog, { bigint: true })).mtimeNs;
+		await writeFile(join(directory, 'extensions/git/browser/helper.ts'), "export const marker: 'combined-entry-marker' = 'combined-entry-marker';");
+		run();
+		assert.equal((await stat(catalog, { bigint: true })).mtimeNs, published, 'type-only edits do not publish a changed snapshot');
+		const edited = await snapshots();
+		assert.equal(Object.keys(edited).filter(key => edited[key] !== both[key]).length, 1, 'only the affected package is rebuilt');
+		await writeFile(join(directory, 'shared.ts'), "export const external = 'external-one';");
+		await writeFile(join(directory, 'extensions/git/browser/helper.ts'), "export { external as marker } from '../../../shared.ts';");
+		run();
+		const dependencies = await snapshots();
+		await writeFile(join(directory, 'shared.ts'), "export const external = 'external-two';");
+		run();
+		assert.equal(Object.keys(dependencies).filter(key => dependencies[key] !== (edited[key])).length, 1);
+		const dependentEdit = await snapshots();
+		assert.equal(Object.keys(dependentEdit).filter(key => dependentEdit[key] !== dependencies[key]).length, 1, 'external module edits invalidate only their consumer');
+		const latest = JSON.parse(await readFile(catalog, 'utf8'));
+		assert.match(Buffer.from(latest.resources['test.git']['browser/main.ts'], 'base64').toString('utf8'), /external-two/);
+		await rm(catalog);
+		run();
+		assert.deepEqual(await snapshots(), dependentEdit, 'a missing published catalog is restored from package caches');
+		await writeFile(join(directory, 'tsconfig.json'), JSON.stringify({ compilerOptions: { useDefineForClassFields: true } }));
+		run();
+		const configured = await snapshots();
+		assert.equal(Object.keys(configured).filter(key => configured[key] !== dependentEdit[key]).length, 2, 'shared compiler settings invalidate both bundles');
 	} finally {
 		await rm(directory, { recursive: true, force: true });
 	}
@@ -86,6 +130,8 @@ for (const resource of ['manifest', 'file'] as const) {
 			// language packs or other resources in the developer's checkout.
 			await mkdir(join(directory, 'build/builtin'), { recursive: true });
 			await copyFile(resolve(import.meta.dirname, 'extensions.ts'), join(directory, 'build/builtin/extensions.ts'));
+			await mkdir(join(directory, 'build/lib'), { recursive: true });
+			await copyFile(resolve(import.meta.dirname, '../lib/preparedInputs.ts'), join(directory, 'build/lib/preparedInputs.ts'));
 			await symlink(resolve(import.meta.dirname, '../../node_modules'), join(directory, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
 			const packageRoot = join(directory, 'extensions/budget');
 			await mkdir(packageRoot, { recursive: true });

@@ -3,7 +3,9 @@
   "compilerOptions": {
     "outDir": ".build/desktop/test",
     "rootDir": ".",
-    "types": ["node", "vite/client", "@webgpu/types", "electron"]
+    "types": ["node", "vite/client", "@webgpu/types", "electron"],
+    "incremental": true,
+    "tsBuildInfoFile": ".build/desktop/test.tsbuildinfo"
   },
   "include": [
     "src/typings/css.d.ts",

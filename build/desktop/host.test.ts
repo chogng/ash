@@ -48,6 +48,8 @@ for (const mode of ['build', 'watch'] as const) {
 			await copyFile(join(import.meta.dirname, file), join(root, 'build/desktop', file));
 		}
 		await copyFile(join(import.meta.dirname, '../processes.ts'), join(root, 'build/processes.ts'));
+		await mkdir(join(root, 'build/lib'), { recursive: true });
+		await copyFile(join(import.meta.dirname, '../lib/incrementalOutput.ts'), join(root, 'build/lib/incrementalOutput.ts'));
 		await symlink(resolve(import.meta.dirname, '../../node_modules'), join(desktop, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
 		await writeFile(join(root, 'package.json'), '{"type":"module"}');
 		await writeFile(join(desktop, 'src/main.ts'), 'export const version = 1;');
@@ -89,6 +91,15 @@ for (const mode of ['build', 'watch'] as const) {
 		}
 		assert.match(await readFile(join(output, 'main/src/main.js'), 'utf8'), /version = 1/u);
 		assert.match(await readFile(preloadOutput, 'utf8'), /require\("electron"\)/u);
+		if (mode === 'build') {
+			const paths = ['main/src/main.js', 'main.tsbuildinfo', 'preload.tsbuildinfo'].map(path => join(output, path));
+			const before = await Promise.all(paths.map(async path => (await stat(path, { bigint: true })).mtimeNs));
+			await host.buildHost();
+			assert.deepEqual(await Promise.all(paths.map(async path => (await stat(path, { bigint: true })).mtimeNs)), before, 'unchanged Host builds preserve emit and incremental state');
+			await rm(join(output, 'main/src/main.js'));
+			await host.buildHost();
+			assert.match(await readFile(join(output, 'main/src/main.js'), 'utf8'), /version = 1/u);
+		}
 
 		if (mode === 'watch') {
 			const preloadModified = (await stat(preloadOutput)).mtimeMs;

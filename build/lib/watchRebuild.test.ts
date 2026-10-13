@@ -45,14 +45,32 @@ test('changes during a rebuild coalesce into one serial run reading the latest i
 	await runs[0]!.promise;
 	await Promise.resolve();
 	assert.deepEqual(reads, [0, 8]);
+	assert.deepEqual(server.reloads, [], 'an intermediate generation must not reload');
 	runs[1]!.resolve(true);
 	await runs[1]!.promise;
 	await Promise.resolve();
 	t.mock.timers.tick(1000);
 	assert.equal(runs.length, 2, 'separate debounce windows must not queue redundant scans');
 	assert.equal(output, input, 'the final output includes the latest input');
-	assert.deepEqual(server.reloads, [{ type: 'full-reload' }, { type: 'full-reload' }]);
+	assert.deepEqual(server.reloads, [{ type: 'full-reload' }]);
 	assert.deepEqual(server.errors, []);
+});
+
+test('async shutdown waits for the active writer before a replacement server can start', async t => {
+	t.mock.timers.enable({ apis: ['setTimeout'] });
+	const server = serverFixture();
+	const finish = Promise.withResolvers<boolean>();
+	const close = watchRebuild(server, () => true, () => finish.promise);
+	server.watcher.emit('all', 'change', 'source.ts');
+	t.mock.timers.tick(50);
+	let stopped = false;
+	const closed = close().then(() => { stopped = true; });
+	await Promise.resolve();
+	assert.equal(stopped, false);
+	finish.resolve(true);
+	await closed;
+	assert.equal(stopped, true);
+	assert.deepEqual(server.reloads, []);
 });
 
 test('the trailing debounce still applies when generation finishes before the next timer', async t => {
@@ -73,13 +91,14 @@ test('the trailing debounce still applies when generation finishes before the ne
 	assert.equal(calls, 1);
 	server.watcher.emit('all', 'change', 'third.ts');
 	t.mock.timers.tick(49);
-	first.resolve(false);
+	first.resolve(true);
 	await first.promise;
 	assert.equal(calls, 1);
+	assert.deepEqual(server.reloads, [], 'intermediate changes wait for the trailing pass');
 	t.mock.timers.tick(1);
 	assert.equal(calls, 2);
 	await Promise.resolve();
-	assert.deepEqual(server.reloads, [], 'unchanged outputs do not reload');
+	assert.deepEqual(server.reloads, [{ type: 'full-reload' }], 'a no-op trailing pass retains earlier changes');
 });
 
 test('a failed generation reports its error and still processes pending and later edits', async t => {

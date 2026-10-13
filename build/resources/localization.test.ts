@@ -4,7 +4,20 @@ import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFi
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { test } from 'node:test';
-import { extractLocalizationMessages, validateLocalizationTranslation } from './localization.ts';
+import { setTimeout as delay } from 'node:timers/promises';
+import { pathToFileURL } from 'node:url';
+import { createServer } from 'vite';
+import { extractLocalizationMessages, isLocalizationInput, validateLocalizationTranslation } from './localization.ts';
+
+test('localization watches the same declarations that the scanner accepts', () => {
+	const repository = resolve(import.meta.dirname, '../..');
+	for (const [path, accepted] of [
+		['src/ash/sessions/dormant.ts', true], ['src/ash/test/ignored.ts', false],
+		['src/ash/generated/ignored.ts', false], ['src/ash/ignored.test.ts', false],
+		['src/ash/feature.css', false], ['extensions/pack/translations/messages.json', true],
+		['extensions/pack/test/messages.json', false], ['extensions/pack/node_modules/messages.json', false],
+	] as const) { assert.equal(isLocalizationInput(join(repository, path)), accepted, path); }
+});
 
 test('source extraction preserves bundle identities, aliases and original command titles', () => {
 	const messages = extractLocalizationMessages([{
@@ -120,7 +133,7 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 		await mkdir(dirname(join(root, name)), { recursive: true });
 		await writeFile(join(root, name), text);
 	}
-	for (const file of ['build/resources/localization.ts', 'build/lib/watchRebuild.ts', entry]) {
+	for (const file of ['build/resources/localization.ts', 'build/lib/watchRebuild.ts', 'build/lib/preparedInputs.ts', entry]) {
 		await mkdir(dirname(join(root, file)), { recursive: true });
 		await copyFile(join(repository, file), join(root, file));
 	}
@@ -163,6 +176,34 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 	assert.doesNotMatch(await readFile(join(generated, 'localizationCatalog.en.ts'), 'utf8'), /Hello again/u);
 	run(['build/resources/localization.ts']);
 	assert.match(await readFile(join(generated, 'localizationCatalog.en.ts'), 'utf8'), /Hello again/u);
+	// Use a real Vite watcher: this declaration is outside root and never enters the module graph.
+	await mkdir(join(root, 'src/ash/code'));
+	await writeFile(join(root, 'src/ash/code/entry.js'), 'export const entry = 1;');
+	const dormant = join(root, 'src/ash/nested/dormant.ts');
+	await writeFile(dormant, `import { localize } from '../nls.js'; localize('dormant', 'Before edit');`);
+	const { localizationPlugin } = await import(pathToFileURL(join(root, 'build/resources/localization.ts')).href) as typeof import('./localization.ts');
+	const server = await createServer({
+		configFile: false, root: join(root, 'src/ash/code'), logLevel: 'silent',
+		plugins: [localizationPlugin()], optimizeDeps: { noDiscovery: true },
+		server: { port: 0 },
+	});
+	try {
+		await server.listen();
+		const deadline = Date.now() + 5_000;
+		while (!server.watcher.getWatched()[dirname(dormant)]?.includes('dormant.ts') && Date.now() < deadline) { await delay(20); }
+		assert.ok(server.watcher.getWatched()[dirname(dormant)]?.includes('dormant.ts'));
+		await server.environments.client.transformRequest('/entry.js');
+		assert.equal(server.environments.client.moduleGraph.getModuleById(dormant.replaceAll('\\', '/')), undefined);
+		await writeFile(dormant, `import { localize } from '../nls.js'; localize('dormant', 'After edit');`);
+		const updatedBy = Date.now() + 5_000;
+		let catalog = '';
+		do {
+			catalog = await readFile(join(generated, 'localizationCatalog.en.ts'), 'utf8');
+			if (catalog.includes('After edit')) break;
+			await delay(20);
+		} while (Date.now() < updatedBy);
+		assert.match(catalog, /After edit/, 'unimported declarations update the language resource');
+	} finally { await server.close(); }
 	await writeFile(join(root, 'extensions/language-pack-zh-cn/translations/messages.json'), JSON.stringify({ ash: { unknown: '未知' } }));
 	const invalid = spawnSync(process.execPath, ['build/resources/localization.ts', '--check'], { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 30_000 });
 	assert.equal(invalid.error, undefined);

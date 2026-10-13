@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { copyFile, mkdir, mkdtemp, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, realpath, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -20,11 +20,15 @@ for (const profile of ['default', 'custom'] as const) {
 		for (const directory of ['build/desktop/launch', 'node_modules/@ash/typescript-compiler/bin', 'node_modules/electron']) {
 			await mkdir(join(root, directory), { recursive: true });
 		}
-		for (const name of ['build/source-layout.json', 'build/processes.ts', 'build/desktop/launch/electron.ts', 'build/desktop/host.ts', 'build/desktop/paths.ts', 'build/desktop/appServer.ts', 'build/python.ts', 'build/protocol/generate.ts']) {
+		for (const name of ['build/source-layout.json', 'build/processes.ts', 'build/desktop/launch/electron.ts', 'build/desktop/host.ts', 'build/desktop/paths.ts', 'build/desktop/appServer.ts', 'build/python.ts', 'build/protocol/generate.ts', 'build/lib/incrementalOutput.ts']) {
 			await mkdir(join(root, name, '..'), { recursive: true });
 			await copyFile(resolve(import.meta.dirname, '../../..', name), join(root, name));
 		}
 		await writeFile(join(root, 'package.json'), '{"type":"module"}');
+		await symlink(resolve(import.meta.dirname, '../../../node_modules/typescript'), join(root, 'node_modules/typescript'), process.platform === 'win32' ? 'junction' : 'dir');
+		for (const project of ['main', 'preload']) {
+			await writeFile(join(root, `tsconfig.${project}.json`), JSON.stringify({ compilerOptions: { incremental: true, outDir: `.build/desktop/${project}`, tsBuildInfoFile: `.build/desktop/${project}.tsbuildinfo` }, files: ['fixture.cjs'] }));
+		}
 		await writeFile(join(desktop, 'package.json'), '{"main":"fixture.cjs","type":"module"}');
 		await writeFile(join(desktop, 'node_modules/electron/index.js'), 'module.exports = process.execPath;');
 		await writeFile(join(desktop, 'fixture.cjs'), `

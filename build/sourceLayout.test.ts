@@ -82,13 +82,16 @@ test("frontend Node tools and backend package builders have separate language ow
 	}
 	for (const directory of ["code", "download", "lib", "darwin", "win32", "linux"]) {
 		const files = walk(join(import.meta.dirname, directory)).filter(path => extname(path) === ".ts");
-		const cssTooling = new Set([
+		const sharedTooling = new Set([
 			join(import.meta.dirname, 'lib/stylelint/validateVariableNames.ts'),
 			join(import.meta.dirname, 'lib/stylelint/validateHasSelectors.ts'),
 			join(import.meta.dirname, 'lib/stylelint/validateDesignTokens.ts'),
 			join(import.meta.dirname, 'lib/test/stylelint.test.ts'),
+			...['watchRebuild', 'preparedInputs', 'incrementalOutput'].flatMap(name => [
+				join(import.meta.dirname, `lib/${name}.ts`), join(import.meta.dirname, `lib/${name}.test.ts`),
+			]),
 		]);
-		assert.deepEqual(files.filter(path => !cssTooling.has(path)), [], directory);
+		assert.deepEqual(files.filter(path => !sharedTooling.has(path)), [], directory);
 	}
 	const scripts = join(repositoryRoot, "scripts");
 	assert.deepEqual(readdirSync(scripts, { withFileTypes: true }).filter(entry => entry.isFile() && extname(entry.name) === ".ts").map(entry => entry.name), []);

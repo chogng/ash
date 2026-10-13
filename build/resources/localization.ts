@@ -2,11 +2,36 @@ import ts from 'typescript';
 import type { Plugin } from 'vite';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { resolve, relative, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { LanguagePackCatalog } from '../../src/ash/platform/languagePacks/common/languagePackContract.ts';
 import { ASH_LOCALIZATION_CATALOG_VERSION } from '../../src/ash/platform/languagePacks/common/languagePackContract.ts';
-import { APPROVAL_MODE_DEFINITIONS } from '../../.build/protocol/typescript/ApprovalModes.ts';
 import { watchRebuild } from '../lib/watchRebuild.ts';
+import { fingerprintPaths, PreparedInputs } from '../lib/preparedInputs.ts';
+
+const repository = resolve(import.meta.dirname, '../..');
+const localizationInputs = new PreparedInputs(resolve(repository, '.build/localization-inputs.json'));
+export const localizationWatchRoots = ['src/ash', 'localization', 'extensions'].map(path => resolve(repository, path));
+
+export function isLocalizationInput(path: string): boolean {
+	const file = resolve(path);
+	const [sources, translations, extensions] = localizationWatchRoots;
+	return file.startsWith(`${translations}${sep}`) && file.endsWith('.json')
+		|| file.startsWith(`${extensions}${sep}`) && file.endsWith('.json') && !relative(extensions, file).split(sep).some(part => ['node_modules', 'test', 'generated', '.git', 'target'].includes(part))
+		|| file.startsWith(`${sources}${sep}`) && sourceInput(file, false);
+}
+
+function sourceInput(path: string, directory: boolean): boolean {
+	return !relative(resolve(repository, 'src/ash'), path).split(sep).some(part => part === 'test' || part === 'generated')
+		&& (directory || path.endsWith('.ts') && !path.endsWith('.test.ts'));
+}
+
+async function localizationFingerprint(): Promise<string> {
+	return (await fingerprintPaths([resolve(repository, 'src/ash')], sourceInput)) + await fingerprintPaths([
+		resolve(repository, 'localization'), resolve(repository, 'extensions'),
+		resolve(repository, '.build/protocol/typescript/ApprovalModes.ts'),
+		fileURLToPath(import.meta.url), resolve(repository, 'build/lib/preparedInputs.ts'), resolve(repository, 'pnpm-lock.yaml'),
+	], (path, directory) => directory ? !['node_modules', 'test', 'generated', '.git', 'target'].includes(path.split(sep).at(-1)!) : path.startsWith(`${resolve(repository, 'extensions')}${sep}`) ? path.endsWith('.json') : /\.(json|ts|yaml)$/.test(path));
+}
 
 type Bundles = Record<string, Record<string, string>>;
 export interface LocalizationSource { readonly path: string; readonly text: string; }
@@ -104,7 +129,15 @@ export function validateLocalizationTranslation(english: Bundles, translations: 
 
 /** Validates sources; check mode does not require or write build outputs. */
 export async function generateLocalization(check = false): Promise<boolean> {
-	const repository = resolve(import.meta.dirname, '../..');
+	if (check) { return generate(true); }
+	return localizationInputs.prepare(localizationFingerprint,
+		() => fingerprintPaths([resolve(repository, '.build/desktop/localization')]), () => generate(false));
+}
+
+async function generate(check: boolean): Promise<boolean> {
+	// Load only after protocol preparation, including a changed contract in a long-lived dev server.
+	const approvalModes = resolve(repository, '.build/protocol/typescript/ApprovalModes.ts');
+	const { APPROVAL_MODE_DEFINITIONS } = await import(`${pathToFileURL(approvalModes).href}?v=${await fingerprintPaths([approvalModes])}`) as typeof import('../../.build/protocol/typescript/ApprovalModes.ts');
 	const sourceRoot = resolve(repository, 'src/ash');
 	const resourceRoot = resolve(repository, 'localization');
 	const sources = await readSources(sourceRoot);
@@ -241,23 +274,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /** Rebuild the startup resource when a feature declaration or translation changes. */
-export function localizationPlugin(): Plugin {
-	const repository = resolve(import.meta.dirname, '../..');
-	const sources = resolve(repository, 'src/ash');
-	const translations = resolve(repository, 'localization');
-	const extensions = resolve(repository, 'extensions');
-	let stopWatching: (() => void) | undefined;
+export function localizationPlugin(options: { watch?: boolean; } = {}): Plugin {
+	let stopWatching: (() => Promise<void>) | undefined;
 	return {
 		name: 'ash-localization',
 		async buildStart() { await generateLocalization(); },
-		closeBundle() { stopWatching?.(); },
+		async closeBundle() { await stopWatching?.(); },
 		configureServer(server) {
-			server.watcher.add(translations);
-			server.watcher.add(extensions);
-			stopWatching = watchRebuild(server, path => {
-				const file = resolve(path);
-				return file.startsWith(`${translations}${sep}`) || file.startsWith(`${extensions}${sep}`) && file.endsWith('.json') || file.startsWith(`${sources}${sep}`) && file.endsWith('.ts');
-			}, generateLocalization);
+			if (options.watch === false) { return; }
+			server.watcher.add(localizationWatchRoots);
+			stopWatching = watchRebuild(server, isLocalizationInput, generateLocalization);
 		},
 	};
 }
@@ -328,8 +354,8 @@ async function readSources(sourceRoot: string): Promise<LocalizationSource[]> {
 		for (const entry of (await readdir(directory, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
 			const path = resolve(directory, entry.name);
 			if (entry.isDirectory()) {
-				if (!['test', 'generated'].includes(entry.name)) { await collect(path); }
-			} else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) {
+				if (sourceInput(path, true)) { await collect(path); }
+			} else if (sourceInput(path, false)) {
 				files.push(path);
 			}
 		}
