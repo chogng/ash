@@ -278,7 +278,7 @@ test("editor commands close the active tab and reopen it with a chosen editor", 
 		await commands.executeCommand(CLOSE_EDITOR_COMMAND_ID);
 		assert.deepEqual(closedInputs.slice(closeCount), [activeInput]);
 		cancelClose = false;
-		await commands.executeCommand(REOPEN_WITH_COMMAND_ID);
+		const reopening = commands.executeCommand(REOPEN_WITH_COMMAND_ID);
 		const picker = dom.window.document.querySelector(".ash-quick-pick");
 		assert.ok(picker);
 		assert.equal(picker.querySelector<HTMLInputElement>("input")?.placeholder, "Select an editor");
@@ -288,6 +288,7 @@ test("editor commands close the active tab and reopen it with a chosen editor", 
 			cancelable: true,
 			key: "Enter",
 		}));
+		await reopening;
 		assert.equal(chosen, "ash.editor.binary");
 		assert.equal(dom.window.document.querySelector(".ash-quick-pick"), null);
 

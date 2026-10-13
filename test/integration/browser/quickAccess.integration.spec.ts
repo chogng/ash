@@ -1,5 +1,34 @@
 import { expect, test } from '@playwright/test';
 
+for (const locale of ['en', 'zh-CN']) {
+	test(`Reopen With selects an editor, supports background acceptance and restores focus on cancel (${locale})`, async ({ page }) => {
+		await page.goto(`/quickAccess.html?locale=${locale}&reopen=1`);
+		const trigger = page.getByRole('button', { name: 'Reopen editor' });
+		await trigger.click();
+		const label = locale === 'zh-CN' ? '选择编辑器' : 'Select an editor';
+		const picker = page.getByRole('dialog');
+		const input = picker.getByRole('combobox', { name: label, exact: true });
+		await expect(input).toHaveAttribute('placeholder', label);
+		await expect(input).toBeFocused();
+		await input.fill('Other');
+		await input.press('Enter');
+		await expect(page.getByRole('status', { name: 'Executed commands' })).toHaveText(JSON.stringify({ preferredEditorId: 'test.other', preserveFocus: false, pinned: true }));
+		await expect(picker).toHaveCount(0);
+
+		await trigger.click();
+		await input.fill('Other');
+		await input.press('Control+Enter');
+		await expect(page.getByRole('status', { name: 'Executed commands' })).toHaveText(JSON.stringify({ preferredEditorId: 'test.other', preserveFocus: true, pinned: true }));
+		await expect(trigger).toBeFocused();
+
+		await trigger.click();
+		await input.press('Escape');
+		await expect(page.getByRole('status', { name: 'Executed commands' })).toHaveText('cancelled');
+		await expect(picker).toHaveCount(0);
+		await expect(trigger).toBeFocused();
+	});
+}
+
 for (const variant of [
 	{ locale: 'en', theme: 'light', os: 'mac' },
 	{ locale: 'zh-CN', theme: 'dark', os: 'windows' },

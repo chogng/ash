@@ -47,6 +47,9 @@ import { DialogService } from '../../../src/ash/workbench/services/dialogs/commo
 import { CodeEditorService } from '../../../src/ash/workbench/services/editor/browser/codeEditorService.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { TestQuickInputService } from '../../../src/ash/platform/quickinput/test/browser/testQuickInputService.js';
+import type { EditorOpenOptions } from '../../../src/ash/workbench/services/editor/common/editorService.js';
+import type { IResourceEditorInput } from '../../../src/ash/workbench/common/editor.js';
+import type { IEditorPart as EditorPartContract } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
 import '../../../src/ash/workbench/browser/media/style.css';
 import '../../../src/ash/base/browser/ui/inputbox/inputbox.css';
@@ -148,6 +151,41 @@ resources.add(CommandsRegistry.register('git.getRepositoryContexts', () => [{
 services.registerInstance(IMenuService, new MenuService(commands, contexts));
 const quickInput = resources.add(new TestQuickInputService({ instantiationService: services, container: document.body, contextKeyService: contexts }));
 services.registerInstance(IQuickInputService, quickInput);
+// Editor commands register additional palette entries and styles. Load them only for this scenario.
+if (parameters.get('reopen') === '1') {
+	const { EditorPaneRegistry } = await import('../../../src/ash/workbench/browser/editor.js');
+	const { REOPEN_WITH_COMMAND_ID } = await import('../../../src/ash/workbench/browser/parts/editor/editorCommands.js');
+	const { EditorPaneMatch } = await import('../../../src/ash/workbench/browser/parts/editor/editorPane.js');
+	const { IEditorPart } = await import('../../../src/ash/workbench/browser/parts/editor/editorPart.js');
+	const editorRegistry = resources.add(new EditorPaneRegistry());
+	for (const [id, name] of [['test.text', 'Text Editor'], ['test.other', 'Other Editor']] as const) {
+		resources.add(editorRegistry.registerEditorPane({
+			id, name,
+			canOpen: () => EditorPaneMatch.Optional,
+			create: () => { throw new Error('The picker fixture does not create editor panes'); },
+		}));
+	}
+	const reopenInput = { resource: URI.file('/workspace/main.ts') };
+	const reopenGroup = {
+		id: 'reopen', inputs: [reopenInput], activeInput: reopenInput,
+		openEditor: async (_input: unknown, options: EditorOpenOptions) => {
+			document.querySelector('output')!.textContent = JSON.stringify(options);
+		},
+	};
+	services.registerInstance(IEditorPart, {
+		groups: [reopenGroup], activeGroup: reopenGroup,
+		getEditorPaneChoices: (input: IResourceEditorInput | undefined) => input ? editorRegistry.getEditorPanesForInput(input) : [],
+	} as unknown as EditorPartContract);
+	const reopen = document.createElement('button');
+	reopen.textContent = 'Reopen editor';
+	document.body.insertBefore(reopen, document.querySelector('output'));
+	resources.add(addDisposableListener(reopen, 'click', () => {
+		document.querySelector('output')!.textContent = '';
+		void commands.executeCommand(REOPEN_WITH_COMMAND_ID).then(() => {
+			if (!document.querySelector('output')!.textContent) document.querySelector('output')!.textContent = 'cancelled';
+		});
+	}));
+}
 const quickAccess = quickInput.quickAccess;
 const theme = parameters.get('theme') === 'hc' ? highContrastDarkColorTheme : parameters.get('theme') === 'dark' ? darkColorTheme : lightColorTheme;
 resources.add(bindColorTheme(resources.add(new TestThemeService(theme)), document.body));
