@@ -35,7 +35,8 @@ suite('Desktop log files', () => {
 			using logger = client.createLogger('agents');
 			logger.info('connection', 'ready', { generation: 2 });
 			logger.error('connection', 'crashed', new Error('carrier exited'));
-			await client.flush();
+			// A caller flushes its logger; this must reach the authenticated Main queue.
+			await logger.flush();
 			const logs = (await readFile(join(owner.sessionPath, 'window-7.log'), 'utf8')).trim().split('\n').map(line => JSON.parse(line));
 			assert.deepEqual(logs.map(log => ({ source: log.source, category: log.category, level: log.level, message: log.message, processId: log.processId })), [
 				{ source: 'window-7', category: 'connection', level: LogLevel.Info, message: 'ready {"generation":2}', processId: process.pid },

@@ -1,4 +1,5 @@
 import type { IDisposable } from "../../../base/common/lifecycle.js";
+import { Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 
 export const LogLevel = Object.freeze({
@@ -43,7 +44,15 @@ export const ILogService = createServiceIdentifier<ILogService>("logService");
 export const ILoggerService = createServiceIdentifier<ILoggerService>("loggerService");
 
 export interface ILoggerService {
-	createLogger(category: string): ILogService;
+	createLogger(category: string): ILogger;
+}
+
+/** A logger owns its filtering and the lifetime of its sink subscriptions. */
+export interface ILogger extends ILogService, IDisposable {
+	readonly onDidChangeLogLevel: Event<LogLevel>;
+	getLevel(): LogLevel;
+	setLevel(level: LogLevel): void;
+	flush(): Promise<void>;
 }
 
 export function isLogLevel(value: unknown): value is LogLevel {
@@ -80,14 +89,20 @@ export class ConsoleLogger implements ILogService {
 	}
 }
 
-export class NullLoggerService implements ILogServiceHost, ILoggerService {
+export class NullLoggerService implements ILogServiceHost, ILoggerService, ILogger {
+	readonly onDidChangeLogLevel = Event.None;
+	getLevel(): LogLevel { return LogLevel.Off; }
+	setLevel(_level: LogLevel): void { }
+	async flush(): Promise<void> { }
+	dispose(): void { }
+	[Symbol.dispose](): void { this.dispose(); }
 	trace(_categoryOrMessage: string, _messageOrArgument?: unknown, ..._arguments: unknown[]): void { }
 	debug(_categoryOrMessage: string, _messageOrArgument?: unknown, ..._arguments: unknown[]): void { }
 	info(_categoryOrMessage: string, _messageOrArgument?: unknown, ..._arguments: unknown[]): void { }
 	warn(_categoryOrMessage: string, _messageOrArgument?: unknown, ..._arguments: unknown[]): void { }
 	error(_categoryOrError: string | Error, _messageOrArgument?: unknown, ..._arguments: unknown[]): void { }
 	registerSink(_sink: ILogSink): IDisposable { return { dispose() { }, [Symbol.dispose]() { } }; }
-	createLogger(_category: string): ILogService { return this; }
+	createLogger(_category: string): ILogger { return this; }
 }
 
 function logLevelOrder(level: LogLevel): number {

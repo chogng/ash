@@ -55,3 +55,23 @@ test("LogService accepts uncategorized messages without losing structured local 
 		["editor", "opened {\"id\":1}"],
 	]);
 });
+
+test('named loggers own filtering, string arguments and flush on the original sink', async () => {
+	const entries: LogEntry[] = [];
+	let flushes = 0;
+	using host = new LogService({ sinks: [{ log: entry => entries.push(entry) }], flush: async () => { flushes++; } });
+	using terminal = host.createLogger('terminal');
+	const levels: LogLevel[] = [];
+	using listener = terminal.onDidChangeLogLevel(level => levels.push(level));
+	terminal.setLevel(LogLevel.Warning);
+	terminal.setLevel(LogLevel.Warning);
+	terminal.info('filtered');
+	terminal.warn('message', 'argument');
+	await terminal.flush();
+	assert.deepEqual(levels, [LogLevel.Warning]);
+	assert.deepEqual(entries.map(entry => [entry.category, entry.message]), [['terminal', 'message argument']]);
+	assert.equal(flushes, 1);
+	terminal.dispose();
+	terminal.error('released');
+	assert.equal(entries.length, 1);
+});
