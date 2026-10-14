@@ -8,7 +8,7 @@ import type { ITextResourceStore } from '../../services/textmodelResolver/common
 import { BrowserPathService } from '../../services/path/browser/pathService.js';
 import { IPathService } from '../../../platform/path/common/pathService.js';
 import { IRendererHostService } from '../../../platform/renderer/common/rendererHost.js';
-import { createDisconnectedRendererApi } from '../../../platform/agentHost/browser/rendererApi.js';
+import { createDisconnectedRendererApi } from '../../browser/rendererApi.js';
 import { IElevatedFileService } from '../../services/files/common/elevatedFileService.js';
 import { BrowserElevatedFileService } from '../../services/files/browser/elevatedFileService.js';
 import { FileService } from '../../../platform/files/common/fileService.js';

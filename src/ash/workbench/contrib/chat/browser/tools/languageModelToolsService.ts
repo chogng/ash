@@ -1,4 +1,4 @@
-import type { ToolSourceProvenance } from '../../../../../../../.build/protocol/typescript/index.js';
+import type { ChatToolSource } from '../../../../../platform/agentHost/common/agentService.js';
 import { IAgentToolsApi } from '../../../../../platform/agentHost/common/agentToolsApi.js';
 import { IAppServerApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { canceled, isCancellationError, onUnexpectedError } from '../../../../../base/common/errors.js';
@@ -17,7 +17,7 @@ interface Catalog {
 
 const emptyCatalog: Catalog = Object.freeze({ tools: Object.freeze([]), sets: Object.freeze([]), names: new Map(), references: new Map() });
 
-/** Converts the transport catalog; the backend remains the only tool registry. */
+/** Builds the window view of the domain catalog; the backend remains the only tool registry. */
 export class LanguageModelToolsService extends Disposable implements ILanguageModelToolsService {
 	private readonly catalog = observableValue<Catalog>(this, emptyCatalog);
 	readonly toolSets = derived<Iterable<IToolSet>>(reader => this.catalog.read(reader).sets);
@@ -147,7 +147,7 @@ export class LanguageModelToolsService extends Disposable implements ILanguageMo
 	}
 }
 
-function sourceDetail(source: ToolSourceProvenance): string {
+function sourceDetail(source: ChatToolSource): string {
 	switch (source.type) {
 		case 'product': return source.component;
 		case 'plugin': return `${source.pluginId}@${source.version}`;

@@ -17,7 +17,7 @@ import { InstantiationService } from "../../platform/instantiation/common/instan
 import { addDisposableListener } from "../../base/browser/dom.js";
 import { DisposableStore, toDisposable, type IDisposable } from "../../base/common/lifecycle.js";
 import { onUnexpectedError } from "../../base/common/errors.js";
-import { createElectronRendererApi } from "../../platform/native/electron-browser/rendererApi.js";
+import { createElectronRendererApi } from "../../workbench/electron-browser/rendererApi.js";
 import { registerLocalTranscriptionService } from '../../workbench/services/localTranscription/electron-browser/localTranscriptionService.js';
 import { DirectoryPermissionDialog } from '../../workbench/electron-browser/parts/dialogs/directoryPermissionDialog.js';
 import { ElectronContextMenuService } from "../../workbench/services/contextmenu/electron-browser/contextMenuService.js";

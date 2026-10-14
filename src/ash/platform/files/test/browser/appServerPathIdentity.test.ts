@@ -5,7 +5,7 @@ import { Emitter } from '../../../../base/common/event.js';
 import { URI } from '../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { AppServerFileSystemProvider } from '../../../agentHost/browser/appServerFileSystemProvider.js';
-import { createDisconnectedRendererApi } from '../../../agentHost/browser/rendererApi.js';
+import { createDisconnectedRendererApi } from '../../../../workbench/browser/rendererApi.js';
 import { createSshRemoteWorkspaceUri } from '../../../remote/common/remote.js';
 import { IUriIdentityService } from '../../../uriIdentity/common/uriIdentity.js';
 import { TestUriIdentityServices } from '../../../uriIdentity/test/common/uriIdentityTestServices.js';

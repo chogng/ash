@@ -12,7 +12,7 @@ import { URI } from '../../../base/common/uri.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
-import { createDisconnectedRendererApi } from '../../../platform/agentHost/browser/rendererApi.js';
+import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
 import type { IRendererHost } from '../../../platform/renderer/common/rendererHost.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import { ISessionsService, SessionsService } from '../../services/sessions/browser/sessionsService.js';

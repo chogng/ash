@@ -1,7 +1,7 @@
 import { TestUriIdentityServices } from '../../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { operatingSystem, OperatingSystem } from '../../../../../../base/common/platform.js';
 import { BrowserPathService } from '../../../../../services/path/browser/pathService.js';
-import { createDisconnectedRendererApi } from '../../../../../../platform/agentHost/browser/rendererApi.js';
+import { createDisconnectedRendererApi } from '../../../../rendererApi.js';
 import type { IResourceEditorInput } from '../../../../../common/editor.js';
 import { isWindows } from '../../../../../../base/common/platform.js';
 import { Registry } from '../../../../../../platform/registry/common/platform.js';

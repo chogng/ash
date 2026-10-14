@@ -1,5 +1,5 @@
 import { BrowserPathService } from '../../services/path/browser/pathService.js';
-import { createDisconnectedRendererApi } from '../../../platform/agentHost/browser/rendererApi.js';
+import { createDisconnectedRendererApi } from '../../browser/rendererApi.js';
 import { createTestEditorServices } from '../common/testEditorServices.js';
 import { IUntitledTextEditorService } from '../../services/untitled/common/untitledTextEditorService.js';
 import { Lxicon } from '../../../base/common/lxicons.js';

@@ -13,7 +13,7 @@ import { createTestEditorServices } from '../../../../test/common/testEditorServ
 import { ChatListWidget } from '../../browser/widget/chatListWidget.js';
 import { chatTranscriptListItems } from '../../browser/widget/chatListItems.js';
 import { IAgentThreadService } from '../../../../../platform/agentHost/common/agentService.js';
-import { createDisconnectedRendererApi } from '../../../../../platform/agentHost/browser/rendererApi.js';
+import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.js';
 import type { ChatHookRun, ThreadTranscriptEntry } from '../../../../services/chat/common/chatService.js';
 import '../../browser/chat.shared.contribution.js';
 

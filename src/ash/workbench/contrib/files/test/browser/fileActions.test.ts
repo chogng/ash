@@ -3,7 +3,7 @@ import { OperatingSystem, isWindows, isMacintosh } from '../../../../../base/com
 import { KeybindingResolver } from '../../../../../platform/keybinding/common/keybindingResolver.js';
 import { getKeybindingLabel, KeybindingLabelStyle } from '../../../../../base/common/keybindingLabels.js';
 import type { IAction } from '../../../../../base/common/actions.js';
-import { createDisconnectedRendererApi } from '../../../../../platform/agentHost/browser/rendererApi.js';
+import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.js';
 import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { IRendererHostService } from '../../../../../platform/renderer/common/rendererHost.js';

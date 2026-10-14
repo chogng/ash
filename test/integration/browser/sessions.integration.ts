@@ -1,6 +1,6 @@
 import { errorHandler } from '../../../src/ash/base/common/errors.js';
 import { Event } from '../../../src/ash/base/common/event.js';
-import { createDisconnectedRendererApi } from '../../../src/ash/platform/agentHost/browser/rendererApi.js';
+import { createDisconnectedRendererApi } from '../../../src/ash/workbench/browser/rendererApi.js';
 import type { } from '../../../src/ash/workbench/browser/web.api.js';
 import { codeSessionsProfile } from '../../../src/ash/code/common/codeSessionsProfile.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';

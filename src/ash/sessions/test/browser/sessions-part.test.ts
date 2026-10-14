@@ -1,4 +1,4 @@
-import { createDisconnectedRendererApi } from '../../../platform/agentHost/browser/rendererApi.js';
+import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
 import { IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
 import { IRendererHostService } from '../../../platform/renderer/common/rendererHost.js';
 import { CustomViewService, ICustomViewService } from '../../services/customView/browser/customViewService.js';

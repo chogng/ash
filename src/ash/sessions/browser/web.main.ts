@@ -16,7 +16,7 @@ import { FileDialogService } from '../../workbench/services/dialogs/browser/file
 import { installBaseUiStyles } from "../../base/browser/ui/styles.js";
 import { onUnexpectedError } from "../../base/common/errors.js";
 import { Disposable } from "../../base/common/lifecycle.js";
-import { createDisconnectedRendererApi } from "../../platform/agentHost/browser/rendererApi.js";
+import { createDisconnectedRendererApi } from "../../workbench/browser/rendererApi.js";
 import { IndexedDbConfigurationApi } from '../../platform/configuration/browser/indexedDbConfigurationApi.js';
 import { BrowserLifecycleService } from '../../workbench/services/lifecycle/browser/lifecycleService.js';
 import { BrowserHostColorSchemeService } from '../../workbench/services/themes/browser/browserHostColorSchemeService.js';

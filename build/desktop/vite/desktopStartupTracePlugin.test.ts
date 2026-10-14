@@ -13,7 +13,7 @@ test('Desktop trace checks emitted marks without rewriting startup source', () =
 	const generateBundle = plugin.generateBundle as (_options: unknown, bundle: unknown) => void;
 	const files = [
 		'src/ash/code/electron-browser/workbench/workbench.ts',
-		'src/ash/platform/native/electron-browser/rendererApi.ts',
+		'src/ash/workbench/electron-browser/rendererApi.ts',
 		'src/ash/workbench/electron-browser/desktop.main.ts',
 		'src/ash/workbench/browser/workbench.ts',
 	];

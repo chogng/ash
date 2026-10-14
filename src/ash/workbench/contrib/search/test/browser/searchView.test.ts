@@ -1,6 +1,6 @@
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import { BrowserPathService } from '../../../../services/path/browser/pathService.js';
-import { createDisconnectedRendererApi } from '../../../../../platform/agentHost/browser/rendererApi.js';
+import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.js';
 import { BrowserFileSearchService } from '../../../../../platform/search/browser/browserFileSearchService.js';
 import { IFileSearchService } from '../../../../../platform/search/common/fileSearch.js';
 import { ISearchService } from '../../../../services/search/common/search.js';

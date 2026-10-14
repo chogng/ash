@@ -11,7 +11,7 @@ import { InstantiationService } from '../../../platform/instantiation/common/ins
 import type { IRendererHost } from '../../../platform/renderer/common/rendererHost.js';
 import { IAgentSessionService, IAgentTurnService } from '../../../platform/agentHost/common/agentService.js';
 import { IAgentModelsService } from '../../../platform/agentHost/common/agentModels.js';
-import { createDisconnectedRendererApi } from '../../../platform/agentHost/browser/rendererApi.js';
+import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
 import { IAppServerApi, IServerEventApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { Event } from '../../../base/common/event.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';

@@ -3,7 +3,7 @@ import { IWorkspaceContextService } from '../../../../../platform/workspace/comm
 import { afterEach, suiteTeardown } from 'mocha';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { OperatingSystem } from '../../../../../base/common/platform.js';
-import { createDisconnectedRendererApi } from '../../../../../platform/agentHost/browser/rendererApi.js';
+import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.js';
 import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';

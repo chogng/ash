@@ -3,7 +3,7 @@ import { createDiffEditorInput } from '../../../src/ash/workbench/common/editor/
 import { IPathService } from '../../../src/ash/platform/path/common/pathService.js';
 import { BrowserPathService } from '../../../src/ash/workbench/services/path/browser/pathService.js';
 import { IRendererHostService } from '../../../src/ash/platform/renderer/common/rendererHost.js';
-import { createDisconnectedRendererApi } from '../../../src/ash/platform/agentHost/browser/rendererApi.js';
+import { createDisconnectedRendererApi } from '../../../src/ash/workbench/browser/rendererApi.js';
 import { ISearchService } from '../../../src/ash/workbench/services/search/common/search.js';
 import { SearchService } from '../../../src/ash/workbench/services/search/common/searchService.js';
 import { IContentSearchService } from '../../../src/ash/platform/search/common/search.js';

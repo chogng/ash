@@ -1,7 +1,7 @@
 import { BrowserAuxiliaryWindowService, IAuxiliaryWindowService } from '../../../src/ash/workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { operatingSystem, OperatingSystem } from '../../../src/ash/base/common/platform.js';
 import { BrowserPathService } from '../../../src/ash/workbench/services/path/browser/pathService.js';
-import { createDisconnectedRendererApi } from '../../../src/ash/platform/agentHost/browser/rendererApi.js';
+import { createDisconnectedRendererApi } from '../../../src/ash/workbench/browser/rendererApi.js';
 import { BrowserFileSearchService } from '../../../src/ash/platform/search/browser/browserFileSearchService.js';
 import { IFileSearchService } from '../../../src/ash/platform/search/common/fileSearch.js';
 import { ISearchService } from '../../../src/ash/workbench/services/search/common/search.js';

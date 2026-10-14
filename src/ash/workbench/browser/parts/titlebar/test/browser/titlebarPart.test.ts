@@ -2,7 +2,7 @@ import { emptyEditorServiceState } from '../../../../../test/common/testEditorSe
 import { TestUriIdentityServices } from '../../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { operatingSystem, OperatingSystem } from '../../../../../../base/common/platform.js';
 import { BrowserPathService } from '../../../../../services/path/browser/pathService.js';
-import { createDisconnectedRendererApi } from '../../../../../../platform/agentHost/browser/rendererApi.js';
+import { createDisconnectedRendererApi } from '../../../../rendererApi.js';
 import { registerTestComponentServices } from '../../../../../test/common/testEditorServices.js';
 import type { IEditorGroup, IEditorGroupsContainer } from '../../../../../services/editor/common/editorGroupsService.js';
 import assert from "node:assert/strict";

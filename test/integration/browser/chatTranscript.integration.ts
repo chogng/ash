@@ -100,7 +100,7 @@ import { TestThemeService } from '../../../src/ash/platform/theme/test/common/te
 import { localize, setNlsMessages } from '../../../src/ash/nls.js';
 import type { IChatSessionHistoryStatus } from '../../../src/ash/platform/chat/common/chatSessionHistory.js';
 import { ChatSessionArchiveActionWordingSettingId } from '../../../src/ash/platform/chat/common/sessionArchiveActions.js';
-import { createDisconnectedRendererApi } from '../../../src/ash/platform/agentHost/browser/rendererApi.js';
+import { createDisconnectedRendererApi } from '../../../src/ash/workbench/browser/rendererApi.js';
 import { IAgentSessionService, IAgentTurnService, type AgentSession } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import { IAgentModelsService } from '../../../src/ash/platform/agentHost/common/agentModels.js';
 import { IAppServerApi, IServerEventApi } from '../../../src/ash/platform/agentHost/common/appServerApi.js';

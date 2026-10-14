@@ -30,7 +30,7 @@ import { ConfigurationResolverService } from '../../../../../services/configurat
 import { BrowserPathService } from '../../../../../services/path/browser/pathService.js';
 import { IPathService } from '../../../../../../platform/path/common/pathService.js';
 import { IRendererHostService } from '../../../../../../platform/renderer/common/rendererHost.js';
-import { createDisconnectedRendererApi } from '../../../../../../platform/agentHost/browser/rendererApi.js';
+import { createDisconnectedRendererApi } from '../../../../rendererApi.js';
 import { ITerminalProcessService } from '../../../../../../platform/terminal/common/terminal.js';
 import { IWorkspaceContextService } from '../../../../../../platform/workspace/common/workspace.js';
 import { ICommandService } from '../../../../../../platform/commands/common/commands.js';

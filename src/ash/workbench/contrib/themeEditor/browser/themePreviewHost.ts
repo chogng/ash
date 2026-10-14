@@ -7,7 +7,7 @@ import { SyncDescriptor } from '../../../../platform/instantiation/common/descri
 import { Event } from '../../../../base/common/event.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize, setNlsMessages } from '../../../../nls.js';
-import { createDisconnectedRendererApi } from '../../../../platform/agentHost/browser/rendererApi.js';
+import { createDisconnectedRendererApi } from '../../../browser/rendererApi.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { InMemoryFileSystemProvider } from '../../../../platform/files/common/inMemoryFilesystemProvider.js';
 import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';

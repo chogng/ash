@@ -1,5 +1,5 @@
 import { BrowserPathService } from '../../../../workbench/services/path/browser/pathService.js';
-import { createDisconnectedRendererApi } from '../../../agentHost/browser/rendererApi.js';
+import { createDisconnectedRendererApi } from '../../../../workbench/browser/rendererApi.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Emitter, Event } from '../../../../base/common/event.js';

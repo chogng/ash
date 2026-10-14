@@ -13,7 +13,7 @@ import { IContextViewService } from '../../../src/ash/platform/contextview/brows
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { IAppServerHookApi, IAppServerSkillApi, type HookSource } from '../../../src/ash/platform/agentHost/common/appServerApi.js';
-import { createDisconnectedRendererApi } from '../../../src/ash/platform/agentHost/browser/rendererApi.js';
+import { createDisconnectedRendererApi } from '../../../src/ash/workbench/browser/rendererApi.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';

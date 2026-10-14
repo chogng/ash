@@ -2,7 +2,7 @@ import { addDisposableListener, windowOpenNoOpener } from '../../base/browser/do
 import { toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
 import { URI } from '../../base/common/uri.js';
 import { authenticateWebAppServer, type AppServerWebSocketTransport } from '../../platform/agentHost/browser/appServerWebSocketTransport.js';
-import { connectWebRendererApi, type RendererCapabilityContribution } from '../../platform/agentHost/browser/webRendererApi.js';
+import { connectWebRendererApi, type RendererCapabilityContribution } from './webRendererApi.js';
 import { BrowserClipboardService } from '../../platform/clipboard/browser/clipboardService.js';
 import { normalizeExternalUrl } from '../../platform/opener/common/opener.js';
 import { AppServerWebWorkspaceClient } from '../services/workspaces/browser/appServerWebWorkspaceClient.js';

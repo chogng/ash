@@ -21,7 +21,7 @@ import { IExtensionService } from '../../../extensions/common/extensionService.j
 import type { IExtensionApi } from '../../../../../platform/extensions/common/extensionApi.js';
 import { IPathService } from '../../../../../platform/path/common/pathService.js';
 import { BrowserPathService } from '../../../path/browser/pathService.js';
-import { createDisconnectedRendererApi } from '../../../../../platform/agentHost/browser/rendererApi.js';
+import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.js';
 import { OperatingSystem } from '../../../../../base/common/platform.js';
 import { createExtensionHostTaskProvider } from '../../../../api/browser/extensionHostWorkflowBridge.js';
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';

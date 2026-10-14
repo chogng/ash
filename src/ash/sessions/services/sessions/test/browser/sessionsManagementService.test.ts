@@ -9,7 +9,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { IAgentSessionService, IAgentTurnService, type ThreadSubscription } from "../../../../../platform/agentHost/common/agentService.js";
 import { IAgentModelsService } from "../../../../../platform/agentHost/common/agentModels.js";
-import { createDisconnectedRendererApi } from '../../../../../platform/agentHost/browser/rendererApi.js';
+import { createDisconnectedRendererApi } from '../../../../../workbench/browser/rendererApi.js';
 import { SessionsManagementService } from "../../browser/sessionsManagementService.js";
 import { AppServerSessionsProvider } from "../../../../contrib/providers/agentHost/browser/appServerSessionsProvider.js";
 import type { IUntitledChatSession, ModelRef, SessionExecutionTarget, SessionWorkspaceSelection } from "../../common/session.js";

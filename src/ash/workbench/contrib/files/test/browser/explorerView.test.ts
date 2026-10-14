@@ -1,5 +1,5 @@
 import { BrowserPathService } from '../../../../services/path/browser/pathService.js';
-import { createDisconnectedRendererApi } from '../../../../../platform/agentHost/browser/rendererApi.js';
+import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.js';
 import { ILabelService, LabelService } from '../../../../../platform/label/common/labelService.js';
 import { IDecorationsService } from '../../../../services/decorations/common/decorations.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';

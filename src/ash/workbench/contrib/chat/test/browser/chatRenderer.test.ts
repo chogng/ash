@@ -19,7 +19,7 @@ import { emptyEditorServiceState } from '../../../../test/common/testEditorServi
 import { ChatResponseResourceFileSystemProvider, IChatResponseResourceFileSystemProvider, type IChatResourceAssociateOptions } from '../../common/widget/chatResponseResourceFileSystemProvider.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { IAgentThreadService } from '../../../../../platform/agentHost/common/agentService.js';
-import { createDisconnectedRendererApi } from '../../../../../platform/agentHost/browser/rendererApi.js';
+import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import '../../browser/chat.shared.contribution.js';
 

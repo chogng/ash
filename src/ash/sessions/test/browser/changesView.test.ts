@@ -28,7 +28,7 @@ import { IAccessibleViewService, AccessibleViewType } from '../../../platform/ac
 import { AccessibleViewRegistry } from '../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
-import { createDisconnectedRendererApi } from '../../../platform/agentHost/browser/rendererApi.js';
+import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
 import type { TurnChangesReadResult } from '../../../../../.build/protocol/typescript/index.js';
 import { WorkbenchConfigurationService } from '../../../workbench/services/configuration/browser/configurationService.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';

@@ -30,7 +30,7 @@ import { invoke, subscribe } from '../../platform/ipc/electron-browser/rendererI
 import { InstantiationService } from '../../platform/instantiation/common/instantiationService.js';
 import { IMainProcessService } from '../../platform/ipc/common/mainProcessService.js';
 import { ElectronIPCMainProcessService } from '../../platform/ipc/electron-browser/mainProcessService.js';
-import { createElectronRendererApi, type ElectronRendererCapabilityContribution } from '../../platform/native/electron-browser/rendererApi.js';
+import { createElectronRendererApi, type ElectronRendererCapabilityContribution } from './rendererApi.js';
 import { parseWorkspace } from '../../platform/workspace/common/workspace.js';
 import { showStartupError } from '../browser/startupError.js';
 import { NativeHostColorSchemeService } from '../services/themes/electron-browser/nativeHostColorSchemeService.js';

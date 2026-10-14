@@ -48,7 +48,7 @@ import { IPathService } from '../../../src/ash/platform/path/common/pathService.
 import { BrowserPathService } from '../../../src/ash/workbench/services/path/browser/pathService.js';
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
-import { createDisconnectedRendererApi } from '../../../src/ash/platform/agentHost/browser/rendererApi.js';
+import { createDisconnectedRendererApi } from '../../../src/ash/workbench/browser/rendererApi.js';
 import { IExtensionService } from '../../../src/ash/workbench/services/extensions/common/extensionService.js';
 import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
 import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';

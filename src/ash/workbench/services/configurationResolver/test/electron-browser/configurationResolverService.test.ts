@@ -10,7 +10,7 @@ import { ConfigurationRegistry } from '../../../../../platform/configuration/com
 import { WorkbenchConfigurationService } from '../../../configuration/browser/configurationService.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IRendererHostService, type IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
-import { createDisconnectedRendererApi } from '../../../../../platform/agentHost/browser/rendererApi.js';
+import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.js';
 import { BrowserPathService } from '../../../path/browser/pathService.js';
 import { IPathService } from '../../../../../platform/path/common/pathService.js';
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
