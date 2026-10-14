@@ -9,7 +9,6 @@ import { AppServerIssueReporterService } from '../../issue/browser/appServerIssu
 import { AppServerGitHubService } from '../../github/browser/appServerGitHubService.js';
 import { AppServerLocalGitService } from '../../git/browser/appServerLocalGitService.js';
 import { createAppServerNetworkDiagnosticsApi } from '../../networkDiagnostics/browser/networkDiagnosticsApi.js';
-import { createAppServerHooksApi } from '../../hooks/browser/hooksApi.js';
 import { AppServerTestExecutionService } from '../../testing/browser/appServerTestExecutionService.js';
 import { createAppServerLanguageServerService } from "../../language/browser/languageServerService.js";
 import { AppServerCallService } from '../../call/browser/appServerCallService.js';
@@ -17,7 +16,7 @@ import { AppServerApprovalEnvironmentService } from '../../approvalEnvironment/b
 import { AppServerMemoriesService } from '../../memories/browser/appServerMemoriesService.js';
 import { AppServerMemoryDiagnosticsService } from '../../memory/browser/appServerMemoryDiagnosticsService.js';
 import { generateUuid } from '../../../base/common/uuid.js';
-import { createAppServerAppServerApi, createAppServerResourceApi, createAppServerServerEventApi, createAppServerSkillOperations } from "./appServerApi.js";
+import { createAppServerAppServerApi, createAppServerResourceApi, createAppServerServerEventApi, createAppServerSkillOperations, createAppServerHookOperations } from "./appServerApi.js";
 import { type AppServerTransport } from "../common/appServerTransport.js";
 import { AppServerProtocolClient, type AppServerProtocolClientOptions, type AppServerConnectionMetadata } from "./appServerProtocolClient.js";
 import { createAppServerFileApi } from "../../files/browser/fileApi.js";
@@ -149,6 +148,6 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 		mcpServerStatus: createAppServerMcpServerStatusApi(connection),
 		traceSettings: createAppServerTraceSettingsApi(connection),
 		executionSettings: createAppServerExecutionSettingsService(connection),
-		hooks: createAppServerHooksApi(connection),
+		hooks: createAppServerHookOperations(connection),
 	};
 }

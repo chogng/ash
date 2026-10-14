@@ -27,12 +27,15 @@ import { LanguageModelsConfigurationService as CoworkModelPreferencesService } f
 import { SessionsChatAccessibilityHelp } from '../../contrib/chat/browser/sessionsChatAccessibilityHelp.js';
 import { initializeTestLocalization } from '../../../workbench/services/localization/test/common/localizationTestUtils.js';
 import { resetNlsResolver } from '../../../nls.js';
+import { AccessibleViewRegistry } from '../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { AccessibleViewType } from '../../../platform/accessibility/browser/accessibleView.js';
+import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
 import { IAccountService } from '../../../platform/accounts/common/accountService.js';
 import { AppServerAccountService } from '../../../workbench/services/accounts/browser/appServerAccountService.js';
 import { IAgentSessionService, IAgentThreadService, IAgentTurnService } from '../../../platform/agentHost/common/agentService.js';
 import { IAgentModelsService } from '../../../platform/agentHost/common/agentModels.js';
 import { ITurnChangesApi } from '../../../platform/turnChanges/common/turnChangesApi.js';
-import { IAppServerSkillApi } from '../../../platform/agentHost/common/appServerApi.js';
+import { IAppServerHookApi, IAppServerSkillApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { IAppServerApi, IServerEventApi, type AppServerConnectionState } from '../../../platform/agentHost/common/appServerApi.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
@@ -117,6 +120,7 @@ function createInputServices(contextView: IContextViewService, chat: IChatServic
 	const services = inputResources.add(createTestEditorServices(undefined, createCodeEditorServices(inputResources)));
 	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } });
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	services.registerInstance(IContextViewService, contextView);
 	services.registerInstance(IMenuService, menus ?? new MenuService(inputResources.add(new CommandService(services)), services.get(IContextKeyService)));
 	services.registerInstance(IContextMenuService, contextMenus ?? { showContextMenu: () => { } } as unknown as IContextMenuService);
@@ -153,6 +157,7 @@ class SessionsManagementService extends BaseSessionsManagementService {
 	constructor(api: IRendererHost) {
 		const services = inputResources.add(new InstantiationService());
 		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+		services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 		services.registerInstance(IAppServerApi, api.appServer);
 		services.registerInstance(IAgentSessionService, api.session);
 		services.registerInstance(IAgentModelsService, api.model);
@@ -271,6 +276,7 @@ test('Chat loads an Ash remote workspace image through the file service', async 
 		using contextKeys = new ContextKeyService();
 		const services = new InstantiationService();
 		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+		services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 		using commands = new CommandService(services);
 		const menuService = new MenuService(commands, contextKeys);
 		const contextMenuService = { showContextMenu: () => undefined } as unknown as IContextMenuService;
@@ -352,6 +358,7 @@ test("Chat title and history switching retain conversations and drafts", async (
 	}, contextKeys);
 	const services = new InstantiationService();
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	using configuration = new WorkbenchConfigurationService();
 	services.registerInstance(IConfigurationService, configuration);
 	let preferencesEditorTarget: import('../../../workbench/services/editor/common/editorService.js').EditorOpenTarget | undefined;
@@ -1136,6 +1143,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	const api = fake.api;
 	const services = new InstantiationService();
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	using sessions = new SessionsManagementService(api);
 	using contextKeys = new ContextKeyService();
 	using viewDescriptors = new ViewDescriptorService({
@@ -1258,6 +1266,7 @@ test("the New Chat slash command opens an untitled session", async () => {
 	const fake = fakeApi({ sessions: [initialSession] });
 	const services = new InstantiationService();
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	using sessions = new SessionsManagementService(fake.api);
 	using contextKeys = new ContextKeyService();
 	using viewDescriptors = new ViewDescriptorService({
@@ -1335,6 +1344,7 @@ test("failed first send keeps the untitled session and its input draft", async (
 	});
 	const services = new InstantiationService();
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	using sessions = new SessionsManagementService(fake.api);
 	using contextKeys = new ContextKeyService();
 	using viewDescriptors = new ViewDescriptorService({
@@ -1498,6 +1508,7 @@ test("Chat history selects an active Thread through Quick Pick", async () => {
 	}).api;
 	const services = new InstantiationService();
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	using sessions = new SessionsManagementService(api);
 	using contextKeys = new ContextKeyService();
 	using quickInput = new TestQuickInputService({
@@ -1605,6 +1616,7 @@ test("ViewsService resolves, opens, and focuses contributed views", async () => 
 	const { IViewDescriptorService } = await import('../../../workbench/common/views.js');
 	using services = new InstantiationService();
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	services.registerInstance(IViewDescriptorService, descriptors);
 	services.registerInstance(IContextKeyService, contextKeys);
 	services.registerInstance(IPaneCompositePartService, {
@@ -2111,6 +2123,7 @@ function modelsFor(chat: IChatService): ILanguageModelsService {
 function createWidgetModel(chat: IChatService, selection: import('../../browser/chatWidgetModel.js').ChatWidgetSelection, sessions: ISessionsManagementService, execution?: IAgentExecutionSettingsService): ChatWidgetModel {
 	const services = inputResources.add(new InstantiationService());
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
 	services.registerInstance(IAgentExecutionSettingsService, execution ?? { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IAppServerSkillApi, skillServices.get(chat)!);
@@ -2121,6 +2134,7 @@ function createChatService(api: IRendererHost, configurationService?: WorkbenchC
 	if (!storageService) testStorages.push(storage);
 	const services = inputResources.add(new InstantiationService());
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	registerChatBackend(services, api);
 	services.registerInstance(IAccountService, inputResources.add(new AppServerAccountService(api.accounts, api.events)));
 	services.registerInstance(IConfigurationService, configurationService ?? inputResources.add(new WorkbenchConfigurationService()));
@@ -2147,6 +2161,7 @@ for (const dependency of [IAgentModelsService, IAgentThreadService, IAgentTurnSe
 	test(`Chat rejects missing ${dependency.description} before allocating listeners`, () => {
 		using services = new InstantiationService();
 		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+		services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 		registerChatBackend(services, fakeApi().api, dependency);
 		assert.throws(() => services.createInstance(ChatService), { message: `Unknown service: ${dependency.description}` });
 	});
@@ -2442,6 +2457,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		using sessions = new SessionsManagementService(api);
 		using services = new InstantiationService();
 		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+		services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 		services.registerInstance(IAppServerSkillApi, api.skills);
 		services.registerInstance(ILanguageModelsService, modelsFor(chat));
 		services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
@@ -2543,6 +2559,7 @@ test('Cowork and Code keep independent defaults and model choices for the same d
 	using code = createWidgetModel(chat, { kind: 'untitled', session: draft }, sessions);
 	using services = new InstantiationService();
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IStorageService, storage);
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
@@ -2775,6 +2792,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		await sessions.openThread('session-1', 'thread-1');
 		using services = new InstantiationService();
 		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+		services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 		services.registerInstance(IAppServerSkillApi, fake.api.skills);
 		services.registerInstance(ILanguageModelsService, modelsFor(chat));
 		services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
@@ -2808,6 +2826,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		await sessions.openThread('session-1', 'thread-1');
 		using services = new InstantiationService();
 		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+		services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 		services.registerInstance(IAppServerSkillApi, fake.api.skills);
 		services.registerInstance(ILanguageModelsService, modelsFor(chat));
 		services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
@@ -3693,6 +3712,7 @@ test("Chat Settings toggles Advisor while keeping its selected model", async () 
 	using quickInput = new TestQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
 	const services = new InstantiationService();
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	services.registerInstance(IChatService, chat);
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
@@ -3739,6 +3759,7 @@ test('Chat Settings saves a masked provider key through the model API and refres
 	const messages: IMessageDialogOptions[] = [];
 	const services = new InstantiationService();
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	services.registerInstance(IChatService, chat);
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });

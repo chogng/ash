@@ -91,3 +91,64 @@ export interface IAppServerSkillApi {
 }
 
 export const IAppServerSkillApi = createServiceIdentifier<IAppServerSkillApi>('appServerSkillApi');
+
+export type HookEvent =
+	| 'preToolUse'
+	| 'postToolUse'
+	| 'postToolUseFailure'
+	| 'postToolBatch'
+	| 'permissionDenied'
+	| 'notification'
+	| 'userPromptSubmit'
+	| 'userPromptExpansion'
+	| 'sessionStart'
+	| 'stop'
+	| 'stopFailure'
+	| 'subagentStart'
+	| 'subagentStop'
+	| 'preCompact'
+	| 'postCompact'
+	| 'preModelSwitch'
+	| 'postModelSwitch'
+	| 'sessionEnd'
+	| 'permissionRequest'
+	| 'setup'
+	| 'teammateIdle'
+	| 'taskCreated'
+	| 'taskCompleted'
+	| 'elicitation'
+	| 'elicitationResult'
+	| 'configChange'
+	| 'instructionsLoaded'
+	| 'worktreeCreate'
+	| 'worktreeRemove'
+	| 'cwdChanged'
+	| 'fileChanged'
+	| 'directoryAdded'
+	| 'messageDisplay'
+	| 'beforeTool'
+	| 'afterTool'
+	| 'turnCompleted';
+
+export interface HookDeclaration {
+	readonly id: string;
+	readonly event: HookEvent;
+	readonly enabled: boolean;
+	readonly toolNames: readonly string[];
+	readonly program: string;
+	readonly args: readonly string[];
+}
+
+export interface HookSource {
+	readonly namespace: string;
+	readonly configPath: string;
+	readonly hooks: readonly HookDeclaration[];
+}
+
+/** Backend Hook declarations and invalidations; Prompt service owns their frontend consumption. */
+export interface IAppServerHookApi {
+	readonly onDidChangeHooks: Event<void>;
+	list(sessionId?: string): Promise<readonly HookSource[]>;
+}
+
+export const IAppServerHookApi = createServiceIdentifier<IAppServerHookApi>('appServerHookApi');

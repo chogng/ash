@@ -9,6 +9,8 @@ export interface WorkbenchTextDownload {
 /** Window-host operations available without exposing the Workbench DOM root. */
 export interface IWorkbenchHostService {
 	downloadText(download: WorkbenchTextDownload): void;
+	/** Opens the local profile TOML when this window's host provides an editor. */
+	readonly editUserConfiguration?: () => Promise<void>;
 }
 
 export const IWorkbenchHostService = createServiceIdentifier<IWorkbenchHostService>("workbenchHostService");

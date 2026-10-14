@@ -3,12 +3,12 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
-import { EDIT_USER_HOOKS_CONFIGURATION_CHANNEL } from '../common/hooksIpc.js';
+import { EDIT_USER_CONFIGURATION_CHANNEL } from '../common/configurationIpc.js';
 
 /** The host chooses the profile path; Renderer cannot request an arbitrary file or a remote path. */
-export function hooksConfigurationIpcRoute(profileRoot: string, isLocalConnection: () => boolean, openTextFile: (path: string) => Promise<void>): IpcRoute<unknown, void> {
+export function userConfigurationIpcRoute(profileRoot: string, isLocalConnection: () => boolean, openTextFile: (path: string) => Promise<void>): IpcRoute<unknown, void> {
 	return {
-		channel: EDIT_USER_HOOKS_CONFIGURATION_CHANNEL,
+		channel: EDIT_USER_CONFIGURATION_CHANNEL,
 		validate: value => { if (value !== undefined) throw new TypeError('Hooks configuration editing takes no arguments'); return undefined; },
 		invoke: async () => {
 			if (!isLocalConnection()) throw new Error('Edit the Hooks configuration on the connected remote host');
@@ -21,7 +21,7 @@ export function hooksConfigurationIpcRoute(profileRoot: string, isLocalConnectio
 	};
 }
 
-export async function openHooksTextFile(path: string): Promise<void> {
+export async function openUserConfigurationTextFile(path: string): Promise<void> {
 	let command: string[];
 	switch (process.platform) {
 		case 'darwin': command = ['open', '-t', path]; break;

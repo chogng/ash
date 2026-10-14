@@ -417,7 +417,7 @@ test('Hooks use the shared protocol, retain disabled declarations, and refresh o
 	const transport = new FakeTransport();
 	const connected = await connectWebRendererApi(transport, connectorHostServices);
 	using cleanup = toDisposable(() => connected.dispose());
-	const pending = connected.api.hooks.read('session-hooks');
+	const pending = connected.api.hooks.list('session-hooks');
 	assert.deepEqual(transport.requests.at(-1)?.params, { sessionId: 'session-hooks' });
 	assert.equal(transport.requests.at(-1)?.method, 'hook/list');
 	transport.respondAt(-1, {
@@ -432,18 +432,18 @@ test('Hooks use the shared protocol, retain disabled declarations, and refresh o
 			{ id: 'user:hook:check', event: 'preToolUse', enabled: false, toolNames: ['shell-command'], program: '/program with spaces', args: ['two words', '"quote"'] },
 		]
 	}]);
-	const userRead = connected.api.hooks.read();
+	const userRead = connected.api.hooks.list();
 	assert.deepEqual(transport.requests.at(-1)?.params, {});
 	transport.respondAt(-1, { sources: [{ namespace: 'user', configPath: '/profile/config.toml', hooks: [] }] });
 	assert.equal((await userRead)[0]?.hooks.length, 0);
 	let changes = 0;
-	const subscription = connected.api.hooks.onDidChange(() => changes++);
+	const subscription = connected.api.hooks.onDidChangeHooks(() => changes++);
 	transport.emitNotification({ method: 'config/changed', params: { revision: 2, generation: 2 } });
 	assert.equal(changes, 1);
 	subscription.dispose();
 	transport.emitNotification({ method: 'config/changed', params: { revision: 3, generation: 3 } });
 	assert.equal(changes, 1);
-	assert.equal(connected.api.hooks.userConfigurationEditor, undefined);
+	assert.equal(connected.api.editUserConfiguration, undefined);
 });
 
 test('review environment adapter preserves scope, provenance, cancellation, and revision conflicts', async () => {

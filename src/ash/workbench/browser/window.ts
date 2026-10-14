@@ -14,6 +14,7 @@ import { h } from "../../base/browser/dom.js";
 export interface WorkbenchWindowOptions {
 	readonly root: HTMLElement;
 	readonly workbenchState: WorkbenchState;
+	readonly editUserConfiguration?: () => Promise<void>;
 }
 
 /**
@@ -29,10 +30,12 @@ export class WorkbenchWindow
 	readonly root: HTMLElement;
 	readonly ownerDocument: Document;
 	readonly targetWindow: Window | null;
+	readonly editUserConfiguration: (() => Promise<void>) | undefined;
 
 	constructor(options: WorkbenchWindowOptions) {
 		super();
 		this.root = options.root;
+		this.editUserConfiguration = options.editUserConfiguration;
 		this.ownerDocument = options.root.ownerDocument;
 		this.targetWindow = this.ownerDocument.defaultView;
 

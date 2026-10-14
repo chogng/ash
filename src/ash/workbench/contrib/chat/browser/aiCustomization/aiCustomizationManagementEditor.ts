@@ -12,7 +12,10 @@ import { localize, localize2 } from '../../../../../nls.js';
 import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
-import { HookEvents, IHooksService, type HookDeclaration, type HookEvent, type HookSource } from '../../../../../platform/hooks/common/hooksService.js';
+import type { HookDeclaration, HookEvent, HookSource } from '../../../../../platform/agentHost/common/appServerApi.js';
+import { HookEvents } from '../../common/promptSyntax/hookTypes.js';
+import { IPromptsService } from '../../common/promptSyntax/service/promptsService.js';
+import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
@@ -67,7 +70,7 @@ export class AICustomizationManagementEditor extends EditorPane {
 	private loadVersion = 0;
 
 	constructor(
-		@IHooksService private readonly hooks: IHooksService,
+		@IPromptsService private readonly prompts: IPromptsService,
 		@ITextFileService private readonly textFiles: ITextFileService,
 		@IAppServerRemoteAgentService private readonly remote: IAppServerRemoteAgentService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
@@ -108,7 +111,7 @@ export class AICustomizationManagementEditor extends EditorPane {
 		this.domNode.prepend(title, this.note, toolbar, this.status);
 		for (const event of HookEvents) this.createEventRow(event);
 		this._register(this.scope.onDidSelect(() => this.updateActions()));
-		this._register(this.hooks.onDidChange(() => { if (this.visible) void this.refresh(); }));
+		this._register(this.prompts.onDidChangeHooks(() => { if (this.visible) void this.refresh(); }));
 		this._register(this.textFiles.onDidSave(event => {
 			if (this.visible && this.sources?.some(source => source.namespace === 'user'
 				? source.configPath === event.resource.fsPath
@@ -169,7 +172,7 @@ export class AICustomizationManagementEditor extends EditorPane {
 		this.setStatus('loading', 'Loading Hooks…');
 		this.render();
 		try {
-			const sources = await this.hooks.read(sessionId);
+			const sources = await this.prompts.getHooks(CancellationToken.None, sessionId);
 			if (version !== this.loadVersion || !this.visible || sessionId !== this.chats.getActiveConversation()?.sessionId) return;
 			this.sources = sources;
 			this.loadedSessionId = sessionId;

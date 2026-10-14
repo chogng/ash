@@ -65,8 +65,8 @@ import { WorkbenchLocaleService } from '../../workbench/services/localization/br
 import { ILocalizationService } from '../../workbench/services/localization/common/localizationService.js';
 import { WorkbenchLocalizationService } from '../../workbench/services/localization/browser/workbenchLocalizationService.js';
 import { builtinLanguagePackCatalogs, preinstalledLanguagePacks } from '../../workbench/services/localization/common/localizationCatalogs.js';
-import { IHooksService } from '../../platform/hooks/common/hooksService.js';
-import { IAppServerSkillApi } from '../../platform/agentHost/common/appServerApi.js';
+
+import { IAppServerHookApi, IAppServerSkillApi } from '../../platform/agentHost/common/appServerApi.js';
 import { IExtensionManagementService, OPEN_EXTENSIONS_COMMAND_ID, OPEN_INSTALLED_EXTENSIONS_COMMAND_ID, type ExtensionsOpenOptions } from '../../platform/extensionManagement/common/extensionManagementService.js';
 import { registerExtensionManagementActions } from '../../workbench/contrib/extensions/browser/extensionsActions.js';
 import { AppServerExtensionManagementService } from '../../workbench/services/extensionManagement/browser/appServerExtensionManagementService.js';
@@ -390,6 +390,7 @@ export abstract class Workbench extends Disposable {
 		const workbenchWindow = this._register(new WorkbenchWindow({
 			root: options.container,
 			workbenchState: WorkbenchState.EMPTY,
+			editUserConfiguration: options.api.editUserConfiguration,
 		}));
 		services.registerInstance(IWorkbenchHostService, workbenchWindow);
 		services.registerInstance(AppServerApiId, options.api.appServer);
@@ -473,7 +474,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IAgentCapabilitiesService, options.api.agentCapabilities);
 		services.registerInstance(IMcpServerStatusService, options.api.mcpServerStatus);
 		services.registerInstance(IDirPermissionsService, this._register(new AppServerDirPermissionsService(options.api.dirPermissions, options.api.events)));
-		services.registerInstance(IHooksService, options.api.hooks);
+		services.registerInstance(IAppServerHookApi, options.api.hooks);
 		services.registerInstance(ITraceSettingsService, options.api.traceSettings);
 		const localization = this._register(new WorkbenchLocalizationService());
 		services.registerInstance(ILocalizationService, localization);

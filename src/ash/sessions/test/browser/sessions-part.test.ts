@@ -5,7 +5,7 @@ import { BrowserPathService } from '../../../workbench/services/path/browser/pat
 import { IAgentExecutionSettingsService } from '../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
-import { IAppServerSkillApi } from '../../../platform/agentHost/common/appServerApi.js';
+import { IAppServerHookApi, IAppServerSkillApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
 import { emptyEditorServiceState } from '../../../workbench/test/common/testEditorService.js';
 import { createTestFileService, registerTestComponentServices, createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
@@ -232,6 +232,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	services.registerInstance(IRendererHostService, createDisconnectedRendererApi());
 	services.registerSingleton(IPathService, () => services.createInstance(BrowserPathService));
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	services.registerInstance(ISessionsGitHubService, {
 		onDidChange: Event.None,
 		getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { },

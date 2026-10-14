@@ -33,7 +33,7 @@ import { INotificationService } from '../../../../../platform/notification/commo
 import { NotificationService } from '../../../../services/notification/common/notificationService.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { DialogService } from '../../../../services/dialogs/common/dialogService.js';
-import { IAppServerSkillApi } from '../../../../../platform/agentHost/common/appServerApi.js';
+import { IAppServerHookApi, IAppServerSkillApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { IExtensionManagementService } from '../../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { ILanguageServerService } from '../../../../../platform/language/common/languageServerService.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
@@ -52,12 +52,12 @@ import type { IChatService } from '../../../../services/chat/common/chatService.
 import type { IAppServerRemoteAgentService } from '../../../../services/remote/common/appServerRemoteAgentService.js';
 import type { RemoteAgentConnection } from '../../../../../platform/remote/common/remoteAgentApi.js';
 import type { RemoteConnectionState } from '../../../../../platform/remote/common/remote.js';
-import type { IDirPermissionsService } from '../../../../../platform/dirPermissions/common/dirPermissionsService.js';
 import type { ILanguagePackService } from '../../../../../platform/languagePacks/common/languagePacks.js';
 import type { ILocalTranscriptionModelStatus, ILocalTranscriptionService as LocalTranscriptionService, LocalTranscriptionModelState as ModelState } from '../../../../../platform/localTranscription/common/localTranscription.js';
 
 import { DeferredPromise } from '../../../../../base/common/async.js';
-import { IHooksService, type HookSource } from '../../../../../platform/hooks/common/hooksService.js';
+import type { HookSource } from '../../../../../platform/agentHost/common/appServerApi.js';
+import { IWorkbenchHostService } from '../../../../services/host/common/workbenchHostService.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
@@ -1031,6 +1031,7 @@ test('Models Settings keeps loading API connections when the model catalog chang
 	} as unknown as IChatService;
 	const services = disposables.add(new InstantiationService());
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	services.registerInstance(ILocalTranscriptionService, disposables.add(new NullLocalTranscriptionService()));
 	services.registerInstance(ConfigurationServiceId, configuration);
 	services.registerInstance(ChatServiceId, chat);
@@ -1100,6 +1101,7 @@ test('Models Settings orders enabled models by catalog position and restores dis
 	};
 	const services = resources.add(new InstantiationService());
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	services.registerInstance(ILanguageModelsService, models);
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(ConfigurationServiceId, resources.add(new WorkbenchConfigurationService()));
@@ -1281,8 +1283,30 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		refreshModels: async () => [{ model, displayName: 'GPT Test' }],
 	} as unknown as IChatService;
 	const contextView = disposables.add(new BrowserContextViewService(root));
+	let hookReads = 0;
+	let hooksFailure = false;
+	let openUserToml = 0;
+	let sources: readonly HookSource[] = [{
+		namespace: 'user', configPath: '/profile/config.toml', hooks: [{
+			id: 'user:hook:check', event: 'preToolUse', enabled: false, toolNames: ['shell-command'], program: '/program with spaces', args: ['two words', '"quote"'],
+		}]
+	}];
+	const hooksChanged = disposables.add(new Emitter<void>());
+	let nextHooksRead: Promise<readonly HookSource[]> | undefined;
+	const hooksBackend: IAppServerHookApi = {
+		onDidChangeHooks: hooksChanged.event,
+		list: async sessionId => {
+			hookReads++;
+			assert.equal(sessionId, 'session-hooks');
+			if (hooksFailure) throw new Error('Invalid TOML');
+			const pending = nextHooksRead;
+			nextHooksRead = undefined;
+			return pending ?? sources;
+		},
+	};
 	const services = new InstantiationService();
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+	services.registerInstance(IAppServerHookApi, hooksBackend);
 	services.registerInstance(INotificationService, disposables.add(new NotificationService()));
 	services.registerInstance(IDictationService, undefined);
 	services.registerInstance(ConfigurationServiceId, configuration);
@@ -1378,28 +1402,6 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		configureHttp: async () => { },
 		run: async () => ({ network: { revision: 0, httpMode: 'http2', targets: [] }, checks: [] }),
 	});
-	let hookReads = 0;
-	let hooksFailure = false;
-	let openUserToml = 0;
-	let sources: readonly HookSource[] = [{
-		namespace: 'user', configPath: '/profile/config.toml', hooks: [{
-			id: 'user:hook:check', event: 'preToolUse', enabled: false, toolNames: ['shell-command'], program: '/program with spaces', args: ['two words', '"quote"'],
-		}]
-	}];
-	const hooksChanged = disposables.add(new Emitter<void>());
-	let nextHooksRead: Promise<readonly HookSource[]> | undefined;
-	const hooksService: IHooksService = {
-		onDidChange: hooksChanged.event,
-		userConfigurationEditor: async () => { openUserToml++; },
-		read: async sessionId => {
-			hookReads++;
-			assert.equal(sessionId, 'session-hooks');
-			if (hooksFailure) throw new Error('Invalid TOML');
-			const pending = nextHooksRead;
-			nextHooksRead = undefined;
-			return pending ?? sources;
-		},
-	};
 	const prompts: string[] = [];
 	services.registerInstance(IChatSessionNavigationService, {
 		getActiveConversation: () => ({ sessionId: 'session-hooks', threadId: 'thread-hooks' }),
@@ -1427,11 +1429,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(IGitHubService, { listAccounts: async () => [] } as unknown as IGitHubService);
 	services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async () => { }, cancel: async () => { } });
 	services.registerInstance(IGitHubReviewModel, disposables.add(services.createInstance(GitHubReviewModel)));
-	assert.throws(() => managementDescriptor.create({ instantiationService: editorServices }), /Unknown service: hooksService/);
-	const missingHooks = disposables.add(await descriptor.create({ instantiationService: editorServices }));
-	assert.doesNotThrow(() => missingHooks.create(h(ownerDocument, 'div')));
-	missingHooks.dispose();
-	services.registerInstance(IHooksService, hooksService);
+	services.registerInstance(IWorkbenchHostService, { downloadText: () => assert.fail('Unexpected download'), editUserConfiguration: async () => { openUserToml++; } });
 
 	await preferences.openSettings();
 	const host = root.querySelector<HTMLElement>('.ash-modal-editor-host');
@@ -1973,6 +1971,7 @@ test('Local model controls share translated snapshots and keep preparation runni
 	await configuration.updateValue(DictationConfiguration.localModel, 'imported-model');
 	const services = resources.add(new InstantiationService());
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	services.registerInstance(ConfigurationServiceId, configuration);
 	const changed = resources.add(new Emitter<void>());
 	let modelStatus: ILocalTranscriptionModelStatus | undefined;
@@ -2062,6 +2061,7 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 	const configuration = disposables.add(new WorkbenchConfigurationService());
 	const services = disposables.add(new InstantiationService());
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	services.registerInstance(ChatServiceId, chat);
 	services.registerInstance(INotificationService, disposables.add(new NotificationService()));
 	services.registerInstance(ILanguageModelsService, chat as unknown as ILanguageModelsService);

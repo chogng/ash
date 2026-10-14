@@ -15,7 +15,8 @@ import { WorkbenchLocalizationService } from '../../../../services/localization/
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import { BrowserContextViewService } from '../../../../../platform/contextview/browser/contextViewService.js';
 import { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
-import { IHooksService, type HookSource } from '../../../../../platform/hooks/common/hooksService.js';
+import { IAppServerHookApi, IAppServerSkillApi, type HookSource } from '../../../../../platform/agentHost/common/appServerApi.js';
+import { createDisconnectedRendererApi } from '../../../../../platform/agentHost/browser/rendererApi.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { darkColorTheme } from '../../../../../platform/theme/common/colorTheme.js';
@@ -38,9 +39,12 @@ function setup(resources: DisposableStore, read: () => Promise<readonly HookSour
 	const theme = resources.add(new TestThemeService(darkColorTheme));
 	const workspace = resources.add(new WorkspaceContextService({ id: 'fixture', folders: [{ id: 'folder', name: 'fixture', index: 0, uri: URI.file('/fixture') }] }));
 	const saved = resources.add(new Emitter<ITextFileSaveEvent>());
-	const hooks = { onDidChange: Event.None, userConfigurationEditor: undefined, read };
+	const hooks = { onDidChangeHooks: Event.None, list: read };
 	const remote = { connection: { kind: 'local' as const, generation: 1 }, connectionState: 'connected' as const, onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None, reconnect: async () => ({ kind: 'alreadyConnected' as const }), rollbackRuntime: async () => ({ kind: 'cancelled' as const }) };
-	services.registerInstance(IHooksService, hooks);
+	services.registerInstance(IAppServerHookApi, hooks);
+	services.registerInstance(IAppServerSkillApi, createDisconnectedRendererApi().skills);
+	services.registerInstance(IWorkbenchHostService, { downloadText: () => { throw new Error('Unexpected download'); } });
+	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IAppServerRemoteAgentService, remote);
 	services.registerInstance(IChatSessionNavigationService, { getActiveConversation: () => undefined } as IChatSessionNavigationService);

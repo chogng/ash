@@ -10,6 +10,27 @@
 
 文件集合差异和公开声明差异是待调查项，不等于对应行为全部缺失。完整路径、imports、exports、公开成员、CSS selector/token、生产与测试调用方已保存在 `.build/chat-alignment/inventory.json`；可读版为 `.build/chat-alignment/report.html`。不将未验证的上游公开成员计为已实现。
 
+## Hooks 职责归属
+
+用户确认让 `src/ash/platform/hooks` 退场，并保留 Ash 事件和 TOML 语义。前端事件集合迁至上游对应
+`common/promptSyntax/hookTypes.ts`；配置读取与变更通知由既有 `IPromptsService` / `PromptsService`
+拥有，`hookActions.ts` 和 `AICustomizationManagementEditor` 共用该服务。Ash 的读取返回完整后端
+声明并接受可选 Session，保留停用和历史事件；这不代表已实现上游完整的 `ChatRequestHooks`
+或 JSON / Claude / Copilot 配置兼容契约。
+
+后端领域值及薄适配归入既有 `platform/agentHost/common/appServerApi.ts` 和
+`browser/appServerApi.ts`，只使用原 `hook/list` 与 `config/changed`。本机 Profile TOML 编辑归入
+配置宿主可信路由，经 `IWorkbenchHostService.editUserConfiguration` 提供；普通工作区文件仍由原
+文件服务和文本编辑器拥有。Platform 不导入 Chat contribution；Rust 继续拥有权威配置与执行。
+
+旧目录的 `common/hooksService.ts`、`common/hooksIpc.ts`、`browser/hooksApi.ts`、
+`electron-main/hooksConfigurationIpc.ts` 和 `test/electron-main/hooksConfigurationIpc.test.ts`
+已迁移并删除，Git 可恢复。旧服务与路径不保留转发、别名或重复注册。
+
+本批验证：132 项单元测试通过，覆盖 Prompt/Hook、协议适配、TOML 内容保留与远程拒绝、
+Sessions Preferences、Skill 相关调用及 13 项分层检查；4 项 Chromium 场景通过，覆盖 en / zh-CN、
+键盘焦点、展开和搜索状态、保存刷新、编辑失败与取消、迟到工作区读取。Renderer、Main 和完整
+浏览器类型检查通过，定向单测使用仓库同一编译选项及 runner 编译执行；格式和 diff check 通过。
 ## 已确认的 Ash 归属
 
 用户已确认：按职责迁移，保留 Ash 后端领域语义和 Stanza 输入编辑器实现；有上游对应职责的实现回到准确 owner。此确认覆盖首次审计的 23 个仅 Ash 文件及其现有公开契约，不要求把前端领域值改成生成 transport DTO。

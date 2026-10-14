@@ -1,6 +1,9 @@
 import { type JsonValue, validateJsonValue } from "../../../base/common/jsonValue.js";
 import { parseJsonc } from '../../../base/common/jsonc.js';
 
+/** Path-free request: Main selects its profile TOML and system text editor. */
+export const EDIT_USER_CONFIGURATION_CHANNEL = 'ash:configuration:edit-user';
+
 export type ConfigurationValue = JsonValue;
 
 export interface IConfigurationOverrideValues {

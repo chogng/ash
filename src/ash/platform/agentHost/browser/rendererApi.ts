@@ -5,10 +5,9 @@ import { createDisconnectedFileSearchApi } from '../../search/browser/fileSearch
 import { createDisconnectedNetworkDiagnosticsApi } from '../../networkDiagnostics/browser/networkDiagnosticsApi.js';
 import { createDisconnectedIssueReporterService } from '../../issue/browser/appServerIssueReporterService.js';
 import { createDisconnectedGitHubService } from '../../github/browser/appServerGitHubService.js';
-import { createDisconnectedHooksApi } from '../../hooks/browser/hooksApi.js';
 import { Event } from '../../../base/common/event.js';
 import { createDisconnectedLanguageServerService } from "../../language/browser/languageServerService.js";
-import { createDisconnectedAppServerApi, createDisconnectedResourceApi, createDisconnectedServerEventApi, createDisconnectedSkillOperations } from "./appServerApi.js";
+import { createDisconnectedAppServerApi, createDisconnectedResourceApi, createDisconnectedServerEventApi, createDisconnectedSkillOperations, createDisconnectedHookOperations } from "./appServerApi.js";
 import { createDisconnectedFileApi } from "../../files/browser/fileApi.js";
 import { createDisconnectedExtensionApi } from "../../extensions/browser/extensionApi.js";
 import { createDisconnectedSyntaxApi } from "../../syntax/browser/syntaxApi.js";
@@ -93,6 +92,6 @@ export function createDisconnectedRendererApi(): IRendererHost {
 		mcpServerStatus: createDisconnectedMcpServerStatusApi(unavailableOperation),
 		traceSettings: createDisconnectedTraceSettingsApi(unavailableOperation),
 		executionSettings: createDisconnectedExecutionSettingsService(unavailableOperation),
-		hooks: createDisconnectedHooksApi(unavailableOperation),
+		hooks: createDisconnectedHookOperations(unavailableOperation),
 	};
 }

@@ -23,7 +23,7 @@ import type { IContentSearchConfigurationService } from '../../search/common/sea
 import type { IContentSearchApi } from "../../search/common/searchApi.js";
 import type { IAgentSessionService, IAgentThreadService, IAgentTurnService } from "../../agentHost/common/agentService.js";
 import type { IAgentModelsService } from "../../agentHost/common/agentModels.js";
-import type { IAppServerSkillApi } from "../../agentHost/common/appServerApi.js";
+import type { IAppServerSkillApi, IAppServerHookApi } from "../../agentHost/common/appServerApi.js";
 import type { ILanguageServerService } from "../../language/common/languageServerService.js";
 import type { ITerminalProcessService } from "../../terminal/common/terminal.js";
 import type { ITypstApi } from "../../typst/common/typstApi.js";
@@ -40,7 +40,7 @@ import type { IRemoteAgentApi } from "../../remote/common/remoteAgentApi.js";
 import type { IRemoteConnectionApi } from "../../remote/common/remoteConnectionService.js";
 import type { IExtensionManagementApi } from "../../extensionManagement/common/extensionManagementApi.js";
 import type { IDirPermissionsApi } from "../../dirPermissions/common/dirPermissionsApi.js";
-import type { IHooksService } from '../../hooks/common/hooksService.js';
+
 import type { IAgentCapabilitiesService } from '../../agentCapabilities/common/agentCapabilitiesService.js';
 import type { IMcpServerStatusService } from '../../mcp/common/mcpServerStatusService.js';
 import type { IAgentExecutionSettingsService } from '../../agentHost/common/agentExecutionSettingsService.js';
@@ -79,6 +79,8 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly hasAppServer: boolean;
 	/** Actual local OS user directory when supplied by the desktop host. */
 	readonly localUserHome?: URI;
+	/** Opens this host's profile TOML; absent when the host cannot edit a local profile. */
+	readonly editUserConfiguration?: () => Promise<void>;
 	/** Available when the host supplies profile-backed recovery storage. */
 	readonly backup?: IBackupService;
 	readonly assets: IAssetService;
@@ -135,7 +137,7 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly networkDiagnostics: INetworkDiagnosticsService;
 	readonly issueReporter: IIssueReporterService;
 	readonly github: IGitHubService;
-	readonly hooks: IHooksService;
+	readonly hooks: IAppServerHookApi;
 }
 
 export const IRendererHostService = createServiceIdentifier<IRendererHost>('rendererHostService');

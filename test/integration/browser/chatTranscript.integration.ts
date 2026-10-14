@@ -137,7 +137,7 @@ const prompts = resources.add(new PromptsService({
 		if (path === 'references/nested/checks.md') return 'Nested reference.';
 		throw new Error('Skill resource unavailable');
 	},
-}));
+}, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } }));
 services.registerInstance(IPromptsService, prompts);
 const promptContributions = resources.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['chat.promptLanguageFeatures', 'chatResponseResourceWorkbenchContribution']));
 promptContributions.advance(WorkbenchPhase.BlockStartup);

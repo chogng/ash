@@ -5,7 +5,7 @@ import { AppServerSocketTransport } from '../../agentHost/browser/appServerSocke
 import { IRemoteSocketFactoryService, RemoteSocketFactoryService } from '../../remote/common/remoteSocketFactoryService.js';
 import { ManagedRemoteConnection, RemoteConnectionType } from '../../remote/common/remoteAuthorityResolver.js';
 import { AppServerSymphonyService } from '../../symphony/browser/appServerSymphonyService.js';
-import { EDIT_USER_HOOKS_CONFIGURATION_CHANNEL } from '../../hooks/common/hooksIpc.js';
+import { EDIT_USER_CONFIGURATION_CHANNEL } from '../../configuration/common/configurationIpc.js';
 import { AppServerBackupService } from '../../backup/browser/appServerBackupService.js';
 import { AppServerCallService } from '../../call/browser/appServerCallService.js';
 import { AppServerAgentVoiceService } from '../../agentHost/browser/appServerAgentService.js';
@@ -225,7 +225,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			nativeContextMenu: { popup: popupContextMenu, close: closeContextMenu },
 			nativeHost: createNativeHostApi(mainProcessService),
 			nativeMenubar: createNativeMenubarApi(),
-			hooks: { ...backend.hooks, userConfigurationEditor: () => invoke<void>(EDIT_USER_HOOKS_CONFIGURATION_CHANNEL) },
+			editUserConfiguration: () => invoke<void>(EDIT_USER_CONFIGURATION_CHANNEL),
 			localFiles: resources.add(new DiskFileSystemProviderClient(mainProcessService.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME))),
 			userDataHome: URI.parse(await mainProcessService.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME).call<string>('userDataHome')),
 			localUserHome: URI.parse(await mainProcessService.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME).call<string>('userHome')),

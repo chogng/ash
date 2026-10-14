@@ -4,7 +4,7 @@ import type { Event } from '../../../../../../base/common/event.js';
 import type { IDisposable } from '../../../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../../../base/common/uri.js';
 import { createServiceIdentifier } from '../../../../../../platform/instantiation/common/instantiation.js';
-import type { SkillDescriptor, SkillIdentity } from '../../../../../../platform/agentHost/common/appServerApi.js';
+import type { HookSource, SkillDescriptor, SkillIdentity } from '../../../../../../platform/agentHost/common/appServerApi.js';
 import type { ParsedPromptFile } from '../promptFileParser.js';
 
 /** Discovered metadata plus a revision-pinned readable URI, without a private host path. */
@@ -22,6 +22,9 @@ export interface SkillManagementSnapshot {
 /** Current production Prompt operations; other upstream Prompt types are not implemented yet. */
 export interface IPromptsService extends IDisposable {
 	readonly onDidChangeSkills: Event<void>;
+	readonly onDidChangeHooks: Event<void>;
+	/** Reads authoritative TOML declarations, including disabled and legacy Hooks. */
+	getHooks(token: CancellationToken, sessionId?: string): Promise<readonly HookSource[]>;
 	findAgentSkills(token: CancellationToken, sessionId?: string): Promise<readonly IAgentSkill[]>;
 	/** Refreshes metadata with one bounded retry when that refresh invalidates its own response. */
 	readSkillManagement(sessionId?: string): Promise<SkillManagementSnapshot>;

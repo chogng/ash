@@ -36,9 +36,9 @@ test("disconnected Web renderer API rejects product operations explicitly", asyn
 			return true;
 		},
 	);
-	await assert.rejects(api.hooks.read(), (error: unknown) => {
+	await assert.rejects(api.hooks.list(), (error: unknown) => {
 		assert.ok(error instanceof WebAppServerUnavailableError);
-		assert.equal(error.operation, 'hooks.read');
+		assert.equal(error.operation, 'hooks.list');
 		return true;
 	});
 	await assert.rejects(

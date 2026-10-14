@@ -56,7 +56,7 @@ import { DialogService } from '../../../src/ash/workbench/services/dialogs/commo
 import { ILanguageServerService } from '../../../src/ash/platform/language/common/languageServerService.js';
 import type { IExtensionManagementApi } from '../../../src/ash/platform/extensionManagement/common/extensionManagementApi.js';
 import { IExtensionManagementService, OPEN_EXTENSIONS_COMMAND_ID, type ExtensionsInstalledPackage, type ExtensionsOpenOptions } from '../../../src/ash/platform/extensionManagement/common/extensionManagementService.js';
-import { IAppServerSkillApi } from '../../../src/ash/platform/agentHost/common/appServerApi.js';
+import { IAppServerHookApi, IAppServerSkillApi } from '../../../src/ash/platform/agentHost/common/appServerApi.js';
 import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { ILocalizationService } from '../../../src/ash/workbench/services/localization/common/localizationService.js';
@@ -106,6 +106,7 @@ if (new URLSearchParams(window.location.search).get('locale') === 'zh-CN') {
 const disposables = new DisposableStore();
 const services = disposables.add(new InstantiationService());
 services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 let activeSessionId: string | undefined;
 services.registerInstance(IChatSessionNavigationService, { getActiveConversation: () => activeSessionId ? { sessionId: activeSessionId, threadId: 'fixture-thread' } : undefined } as IChatSessionNavigationService);
 const changed = disposables.add(new Emitter<void>());

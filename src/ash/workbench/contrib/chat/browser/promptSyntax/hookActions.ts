@@ -6,7 +6,10 @@ import { URI } from '../../../../../base/common/uri.js';
 import { localize, localize2 } from '../../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
-import { HookEvents, IHooksService } from '../../../../../platform/hooks/common/hooksService.js';
+import { HookEvents } from '../../common/promptSyntax/hookTypes.js';
+import { IPromptsService } from '../../common/promptSyntax/service/promptsService.js';
+import { CancellationToken } from '../../../../../base/common/cancellation.js';
+import { IWorkbenchHostService } from '../../../../services/host/common/workbenchHostService.js';
 import { IInstantiationService, type ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
@@ -37,7 +40,7 @@ export function getHookConfigurationResource(accessor: ServicesAccessor, source:
 
 export function canEditHookConfiguration(accessor: ServicesAccessor, source: HookConfigurationTarget): boolean {
 	if (source.namespace === 'user') {
-		return accessor.get(IAppServerRemoteAgentService).connection?.kind === 'local' && accessor.get(IHooksService).userConfigurationEditor !== undefined;
+		return accessor.get(IAppServerRemoteAgentService).connection?.kind === 'local' && accessor.get(IWorkbenchHostService).editUserConfiguration !== undefined;
 	}
 	return accessor.get(IWorkspaceContextService).getWorkspaceFolder(getHookConfigurationResource(accessor, source)!) !== null;
 }
@@ -48,7 +51,7 @@ export async function openHookConfiguration(accessor: ServicesAccessor, source: 
 		throw new Error(localize({ bundle: 'ash.settings', key: 'hooks.editUnavailable' }, 'Edit this configuration on its owning host, or ask Ash to configure it.'));
 	}
 	if (source.namespace === 'user') {
-		await accessor.get(IHooksService).userConfigurationEditor!();
+		await accessor.get(IWorkbenchHostService).editUserConfiguration!();
 		return;
 	}
 	const remote = accessor.get(IAppServerRemoteAgentService);
@@ -73,7 +76,7 @@ export async function openHookConfiguration(accessor: ServicesAccessor, source: 
 /** Selects a lifecycle event, then opens an existing Hook or its configuration scope. */
 export async function showConfigureHooksQuickPick(accessor: ServicesAccessor, options?: IHookQuickPickOptions): Promise<void> {
 	const instantiation = accessor.get(IInstantiationService);
-	const hooks = accessor.get(IHooksService);
+	const prompts = accessor.get(IPromptsService);
 	const remote = accessor.get(IAppServerRemoteAgentService);
 	const workspace = accessor.get(IWorkspaceContextService);
 	const chats = accessor.get(IChatSessionNavigationService);
@@ -109,7 +112,7 @@ export async function showConfigureHooksQuickPick(accessor: ServicesAccessor, op
 	picker.items = [];
 	try {
 		// Backend reads cannot be cancelled. Release the picker immediately on dismissal and ignore late results.
-		const sources = await Promise.race([hooks.read(sessionId), dismissed]);
+		const sources = await Promise.race([prompts.getHooks(CancellationToken.None, sessionId), dismissed]);
 		if (!sources || cancelled || !current()) { return; }
 		const targets = new Map<IQuickPickItem, HookConfigurationTarget>();
 		const entries: IQuickPickItem[] = [];

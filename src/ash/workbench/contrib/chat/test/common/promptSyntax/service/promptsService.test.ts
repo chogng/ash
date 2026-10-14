@@ -1,3 +1,4 @@
+import { HookEvents } from '../../../../common/promptSyntax/hookTypes.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { CancellationToken, CancellationTokenSource } from '../../../../../../../base/common/cancellation.js';
@@ -6,7 +7,7 @@ import { Emitter, Event } from '../../../../../../../base/common/event.js';
 import { Disposable } from '../../../../../../../base/common/lifecycle.js';
 import { isCancellationError } from '../../../../../../../base/common/errors.js';
 import { URI } from '../../../../../../../base/common/uri.js';
-import type { IAppServerSkillApi, SkillCatalog, SkillReference } from '../../../../../../../platform/agentHost/common/appServerApi.js';
+import { IAppServerHookApi, IAppServerSkillApi, type HookSource, type SkillCatalog, type SkillReference } from '../../../../../../../platform/agentHost/common/appServerApi.js';
 import { AppServerRemoteError } from '../../../../../../../platform/agentHost/common/appServerError.js';
 import { SkillManagementConflictError } from '../../../../common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../../../common/promptSyntax/service/promptsServiceImpl.js';
@@ -31,7 +32,7 @@ class Backend extends Disposable implements IAppServerSkillApi {
 
 test('Prompt discovery is metadata-only and reading pins source, digest and Session', async () => {
 	using backend = new Backend();
-	using prompts = new PromptsService(backend);
+	using prompts = new PromptsService(backend, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	const [first] = await prompts.findAgentSkills(CancellationToken.None, 'first');
 	const [second] = await prompts.findAgentSkills(CancellationToken.None, 'second');
 	assert.notEqual(first.uri.toString(), second.uri.toString());
@@ -44,7 +45,7 @@ test('Prompt discovery is metadata-only and reading pins source, digest and Sess
 
 test('Prompt management uses the same discovered URIs and backend revision authority', async () => {
 	using backend = new Backend();
-	using prompts = new PromptsService(backend);
+	using prompts = new PromptsService(backend, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	const snapshot = await prompts.readSkillManagement('first');
 	const [skill] = await prompts.findAgentSkills(CancellationToken.None, 'first');
 	assert.equal(snapshot.catalog.skills[0].uri.toString(), skill.uri.toString());
@@ -54,8 +55,8 @@ test('Prompt management uses the same discovered URIs and backend revision autho
 
 test('Prompt URIs from another window or a changed catalog cannot open instructions', async () => {
 	using backend = new Backend();
-	using prompts = new PromptsService(backend);
-	using otherWindow = new PromptsService(backend);
+	using prompts = new PromptsService(backend, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
+	using otherWindow = new PromptsService(backend, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	const [skill] = await prompts.findAgentSkills(CancellationToken.None, 'first');
 	await assert.rejects(otherWindow.parseNew(skill.uri), /not discovered/u);
 	await assert.rejects(prompts.parseNew(URI.file('/private/SKILL.md')), /not discovered/u);
@@ -66,7 +67,7 @@ test('Prompt URIs from another window or a changed catalog cannot open instructi
 
 test('Prompt discovery discards a reply completed after catalog invalidation', async () => {
 	using backend = new Backend();
-	using prompts = new PromptsService(backend);
+	using prompts = new PromptsService(backend, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	const pending = new DeferredPromise<SkillCatalog>();
 	backend.list = () => pending.p;
 	const discovery = prompts.findAgentSkills(CancellationToken.None, 'first');
@@ -78,7 +79,7 @@ test('Prompt discovery discards a reply completed after catalog invalidation', a
 for (const reason of ['token', 'catalog', 'window'] as const) {
 	test(`Prompt body reading aborts and rejects a late reply after ${reason} cancellation`, async () => {
 		using backend = new Backend();
-		using prompts = new PromptsService(backend);
+		using prompts = new PromptsService(backend, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 		using cancellation = new CancellationTokenSource();
 		const pending = new DeferredPromise<string>();
 		let signal: AbortSignal | undefined;
@@ -108,7 +109,7 @@ test('Configure Skills opens the Extensions Skills pane without opening Settings
 test('Prompt relative references preserve source, pinned digest and Session and reject forged or escaping URIs', async () => {
 	using backend = new Backend();
 	backend.readTextResource = async (reference, path, signal, sessionId) => { backend.calls.push(['resource', reference, path, sessionId, signal.aborted]); return 'See [next](nested/checks.md).'; };
-	using prompts = new PromptsService(backend);
+	using prompts = new PromptsService(backend, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	const [skill] = await prompts.findAgentSkills(CancellationToken.None, 'reference-session');
 	const root = await prompts.parseNew(skill.uri);
 	const child = root.body!.resolveFilePath('references/guide.md')!;
@@ -127,7 +128,7 @@ test('Prompt relative references preserve source, pinned digest and Session and 
 
 test('Prompt management re-reads the catalog when its own refresh publishes a change, without retrying mutation conflicts', async () => {
 	using backend = new Backend();
-	using prompts = new PromptsService(backend);
+	using prompts = new PromptsService(backend, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	let reads = 0;
 	backend.read = async () => {
 		reads++;
@@ -147,7 +148,7 @@ test('Prompt management re-reads the catalog when its own refresh publishes a ch
 
 test('Prompt management bounds continuous invalidation and cannot rediscover after disposal', async () => {
 	using backend = new Backend();
-	using prompts = new PromptsService(backend);
+	using prompts = new PromptsService(backend, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	let reads = 0;
 	backend.read = async () => { reads++; backend.changed.fire(); return { revision: 8, catalog, diagnostics: [] }; };
 	await assert.rejects(prompts.readSkillManagement(), isCancellationError);
@@ -161,9 +162,75 @@ test('Prompt management bounds continuous invalidation and cannot rediscover aft
 
 test('Skill enablement exposes a domain conflict with the displayed revision and does not overwrite a newer configuration', async () => {
 	using backend = new Backend();
-	using prompts = new PromptsService(backend);
+	using prompts = new PromptsService(backend, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	let writes = 0;
 	backend.setEnabled = async () => { writes++; throw new AppServerRemoteError(-32031, 'ConfigRevisionConflict', { kind: 'ConfigRevisionConflict' }); };
 	await assert.rejects(prompts.setSkillEnablement(id, false, 7, 'session'), error => error instanceof SkillManagementConflictError && error.expectedRevision === 7 && /Refresh Skills/u.test(error.message));
 	assert.equal(writes, 1);
+});
+
+
+test('Prompt Hook discovery preserves every Ash event, disabled declarations, legacy events and owning TOML paths', async () => {
+	using backend = new Backend();
+	using changed = new Emitter<void>();
+	const sources: readonly HookSource[] = [{
+		namespace: 'directory:fixture', configPath: '/fixture/.ash/config.toml',
+		hooks: [...HookEvents, 'beforeTool', 'afterTool', 'turnCompleted'].map((event, index) => ({
+			id: `hook:${index}`, event: event as HookSource['hooks'][number]['event'], enabled: false,
+			toolNames: ['shell-command'], program: '/program with spaces', args: ['two words', '"quote"'],
+		})),
+	}];
+	assert.equal(HookEvents.length, 33);
+	const sessions: (string | undefined)[] = [];
+	using prompts = new PromptsService(backend, {
+		onDidChangeHooks: changed.event,
+		list: async sessionId => { sessions.push(sessionId); return sources; },
+	});
+	assert.deepEqual(await prompts.getHooks(CancellationToken.None, 'session-hooks'), sources);
+	assert.deepEqual(await prompts.getHooks(CancellationToken.None), sources);
+	assert.deepEqual(sessions, ['session-hooks', undefined]);
+	assert.deepEqual(backend.calls, []);
+	let changes = 0;
+	using subscription = prompts.onDidChangeHooks(() => changes++);
+	changed.fire();
+	assert.equal(changes, 1);
+	prompts.dispose();
+	assert.equal(changed.hasListeners(), false);
+	changed.fire();
+	assert.equal(changes, 1);
+});
+
+for (const reason of ['token', 'configuration', 'window'] as const) {
+	test(`Prompt Hook discovery rejects a late reply after ${reason} retirement`, async () => {
+		using backend = new Backend();
+		using changed = new Emitter<void>();
+		using cancellation = new CancellationTokenSource();
+		const pending = new DeferredPromise<readonly HookSource[]>();
+		let reads = 0;
+		using prompts = new PromptsService(backend, {
+			onDidChangeHooks: changed.event,
+			list: () => { reads++; return pending.p; },
+		});
+		const reading = prompts.getHooks(cancellation.token, 'retired-session');
+		if (reason === 'token') cancellation.cancel();
+		if (reason === 'configuration') changed.fire();
+		if (reason === 'window') prompts.dispose();
+		await pending.complete([]);
+		await assert.rejects(reading, isCancellationError);
+		if (reason === 'token' || reason === 'window') {
+			await assert.rejects(prompts.getHooks(cancellation.token), isCancellationError);
+			assert.equal(reads, 1);
+		}
+	});
+}
+
+test('Prompt service requires its Hook backend registration before creating subscriptions', () => {
+	using backend = new Backend();
+	using services = new InstantiationService();
+	services.registerInstance(IAppServerSkillApi, backend);
+	assert.throws(() => services.createInstance(PromptsService), /Unknown service: appServerHookApi/u);
+	assert.equal(backend.changed.hasListeners(), false);
+	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => [] });
+	using prompts = services.createInstance(PromptsService);
+	assert.equal(backend.changed.hasListeners(), true);
 });

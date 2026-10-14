@@ -12,7 +12,8 @@ import { ContextKeyService, IContextKeyService } from '../../../src/ash/platform
 import { IContextViewService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
-import { IHooksService, type HookSource } from '../../../src/ash/platform/hooks/common/hooksService.js';
+import { IAppServerHookApi, IAppServerSkillApi, type HookSource } from '../../../src/ash/platform/agentHost/common/appServerApi.js';
+import { createDisconnectedRendererApi } from '../../../src/ash/platform/agentHost/browser/rendererApi.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
@@ -50,10 +51,13 @@ let readFailure = false;
 let editOutcome: 'success' | 'failure' | 'cancelled' = 'success';
 let pending: DeferredPromise<readonly HookSource[]> | undefined;
 let sources: readonly HookSource[] = [{ namespace: 'directory:fixture', configPath: '/fixture/.ash/config.toml', hooks: [{ id: 'directory:fixture:hook:review', event: 'preToolUse', enabled: true, program: '/synthetic/review', args: ['<img src=x onerror="throw 1">'], toolNames: ['shell-command'] }] }];
-services.registerInstance(IHooksService, {
-	onDidChange: Event.None, userConfigurationEditor: undefined,
-	read: async () => { reads++; if (pending) return pending.p; if (readFailure) throw new Error('fixture catalog failed'); return sources; },
+services.registerInstance(IAppServerHookApi, {
+	onDidChangeHooks: Event.None,
+	list: async () => { reads++; if (pending) return pending.p; if (readFailure) throw new Error('fixture catalog failed'); return sources; },
 });
+services.registerInstance(IAppServerSkillApi, createDisconnectedRendererApi().skills);
+services.registerInstance(IWorkbenchHostService, { downloadText: () => { throw new Error('Unexpected download'); } });
+services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 services.registerInstance(IWorkspaceContextService, workspace);
 services.registerInstance(IAppServerRemoteAgentService, { connection: { kind: 'local', generation: 1 }, connectionState: 'connected', onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None, reconnect: async () => ({ kind: 'alreadyConnected' }), rollbackRuntime: async () => ({ kind: 'cancelled' }) });
 services.registerInstance(IChatSessionNavigationService, { getActiveConversation: () => undefined } as IChatSessionNavigationService);

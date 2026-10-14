@@ -37,13 +37,13 @@ import { ILanguageModelsConfigurationService } from '../contrib/chat/common/lang
 import { ChatModelPreferences, LanguageModelsConfigurationService } from '../contrib/chat/browser/languageModelsConfigurationService.js';
 import { IAgentVoiceService } from '../../platform/agentHost/common/agentService.js';
 import { IDictationService } from '../../platform/dictation/common/dictationService.js';
-import { IHooksService } from '../../platform/hooks/common/hooksService.js';
+
 import { ExtensionColorThemeService } from '../services/extensions/browser/extensionColorThemeService.js';
 import { IWorkbenchThemeService } from '../services/themes/common/workbenchThemeService.js';
 import { IHostColorSchemeService, type IHostColorSchemeService as HostColorSchemeService } from '../services/themes/common/hostColorSchemeService.js';
 import { BrowserHostColorSchemeService } from '../services/themes/browser/browserHostColorSchemeService.js';
 import { getActivityHoverPosition } from "./parts/compositeBarActions.js";
-import { IAppServerSkillApi } from "../../platform/agentHost/common/appServerApi.js";
+import { IAppServerHookApi, IAppServerSkillApi } from "../../platform/agentHost/common/appServerApi.js";
 import { ILanguageServerService } from "../../platform/language/common/languageServerService.js";
 import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../editor/common/services/languageFeatureDebounce.js';
 import { IInlineCompletionsService, InlineCompletionsService } from '../../editor/browser/services/inlineCompletionsService.js';
@@ -571,7 +571,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IAgentExecutionSettingsService, api.executionSettings);
 		services.registerInstance(INetworkDiagnosticsService, api.networkDiagnostics);
 		services.registerInstance(IContentSearchConfigurationService, api.contentSearchConfiguration);
-		services.registerInstance(IHooksService, api.hooks);
+		services.registerInstance(IAppServerHookApi, api.hooks);
 		const commandService = this._register(new CommandService(services));
 		services.registerInstance(ICommandService, commandService);
 		// Hosts can disable executable extensions while keeping declarative assets.
@@ -762,6 +762,7 @@ export class Workbench extends Disposable {
 		const workbenchWindow = this._register(new WorkbenchWindow({
 			root: workbenchRoot,
 			workbenchState,
+			editUserConfiguration: api.editUserConfiguration,
 		}));
 		services.registerInstance(IWorkbenchHostService, workbenchWindow);
 		const ownerDocument = workbenchWindow.ownerDocument;

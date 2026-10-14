@@ -6,7 +6,7 @@ import { Schemas } from '../../../../../../base/common/network.js';
 import { URI } from '../../../../../../base/common/uri.js';
 import { AppServerRemoteError } from '../../../../../../platform/agentHost/common/appServerError.js';
 import { CancellationError } from '../../../../../../base/common/errors.js';
-import { IAppServerSkillApi, type SkillDescriptor, type SkillReference } from '../../../../../../platform/agentHost/common/appServerApi.js';
+import { IAppServerHookApi, IAppServerSkillApi, type HookSource, type SkillDescriptor, type SkillReference } from '../../../../../../platform/agentHost/common/appServerApi.js';
 import { PromptFileParser, type ParsedPromptFile } from '../promptFileParser.js';
 import { SkillManagementConflictError, type IAgentSkill, type IPromptsService, type SkillManagementSnapshot } from './promptsService.js';
 
@@ -18,15 +18,35 @@ export class PromptsService extends Disposable implements IPromptsService {
 	private readonly parser = new PromptFileParser();
 	private readonly reads = new Set<AbortController>();
 	private epoch = 0;
+	private hookEpoch = 0;
+	private readonly hooksChanged = this._register(new Emitter<void>());
+	public readonly onDidChangeHooks = this.hooksChanged.event;
 
-	constructor(@IAppServerSkillApi private readonly backend: IAppServerSkillApi) {
+	constructor(
+		@IAppServerSkillApi private readonly backend: IAppServerSkillApi,
+		@IAppServerHookApi private readonly hooks: IAppServerHookApi,
+	) {
 		super();
+		this._register(hooks.onDidChangeHooks(() => {
+			this.hookEpoch++;
+			this.hooksChanged.fire();
+		}));
 		this._register(backend.onDidChangeSkills(() => {
 			this.epoch++;
 			for (const read of this.reads) read.abort();
 			this.references.clear();
 			this.changed.fire();
 		}));
+	}
+
+	public async getHooks(token: CancellationToken, sessionId?: string): Promise<readonly HookSource[]> {
+		throwIfCancelled(token);
+		if (this.isDisposed) throw new CancellationError();
+		const epoch = this.hookEpoch;
+		const sources = await this.hooks.list(sessionId);
+		throwIfCancelled(token);
+		if (this.isDisposed || epoch !== this.hookEpoch) throw new CancellationError();
+		return sources;
 	}
 
 	public async findAgentSkills(token: CancellationToken, sessionId?: string): Promise<readonly IAgentSkill[]> {

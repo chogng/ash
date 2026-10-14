@@ -1,4 +1,4 @@
-import type { IAppServerApi, IAppServerSkillApi, IResourceApi, IServerEventApi, SkillCatalog, SkillDescriptor, ResourceMetadataResult } from '../common/appServerApi.js';
+import type { IAppServerApi, IAppServerSkillApi, IAppServerHookApi, IResourceApi, IServerEventApi, SkillCatalog, SkillDescriptor, ResourceMetadataResult } from '../common/appServerApi.js';
 import { Event } from '../../../base/common/event.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { decodeBase64, VSBuffer } from '../../../base/common/buffer.js';
@@ -162,4 +162,31 @@ function record(value: unknown, owner: string): Record<string, unknown> {
 function boundedText(value: unknown, owner: string, maximum: number): string {
 	if (typeof value !== "string" || value.length === 0 || value.length > maximum) throw new TypeError(`${owner} is invalid`);
 	return value;
+}
+
+export function createAppServerHookOperations(connection: AppServerProtocolClient): IAppServerHookApi {
+	return {
+		onDidChangeHooks: (listener, thisArgs) => connection.onNotification(event => {
+			if (event.method === 'config/changed') listener.call(thisArgs);
+		}),
+		list: async sessionId => {
+			const result = await appServerRequest(connection, 'hook/list', sessionId ? { sessionId } : {});
+			return result.sources.map(source => ({
+				namespace: source.namespace,
+				configPath: source.configPath,
+				hooks: source.hooks.map(hook => ({
+					id: hook.id,
+					event: hook.event,
+					enabled: hook.enablement === 'enabled',
+					toolNames: hook.matcher.toolNames,
+					program: hook.action.program,
+					args: hook.action.args,
+				})),
+			}));
+		},
+	};
+}
+
+export function createDisconnectedHookOperations(unavailable: UnavailableOperation): IAppServerHookApi {
+	return { onDidChangeHooks: Event.None, list: () => unavailable('hooks.list') };
 }

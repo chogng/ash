@@ -553,6 +553,18 @@ execute(method: string, params?: unknown): Promise<unknown>
 | 窗口宿主操作      | `IWorkbenchHostService`                | `WorkbenchWindow`                                                                                                       | Workbench 注册当前窗口实现                                                                                                                                                     |
 | Code Mode 能力    | 各领域 `I*Service`                     | 对应 browser service implementation                                                                                     | `workbench.common.main.ts` 加载共同贡献与 Extension Host、Codebase Symbols；Web、Desktop 入口选择 Tasks 实现；Debug、Testing contribution 加载各自服务注册，窗口容器按依赖安装 |
 
+Hooks 的前端读取与变更通知由 Chat 的 `IPromptsService.getHooks` / `onDidChangeHooks` 提供，
+管理页和配置命令共用该服务。`platform/agentHost/common/appServerApi.ts` 的 `IAppServerHookApi`
+表达后端声明，browser adapter 通过现有 renderer protocol client 调用 `hook/list`；Rust 仍拥有
+配置发现、权限和执行。前端保留 Ash 全部事件、停用声明、历史事件及来源 TOML 路径，不套用
+上游 JSON 配置或缩减事件集合，也不持久化第二份 Hook catalog。
+
+本机 Profile TOML 编辑是 `IWorkbenchHostService.editUserConfiguration` 的可选窗口宿主能力，由
+`platform/configuration/electron-main/userConfigurationIpc.ts` 提供可信路由。Main 选择自己的
+`config.toml`，只创建缺失文件，不改写已有内容，并拒绝远程连接；Renderer 不能传入路径。
+工作区 TOML 继续由原文件服务和文本编辑器处理，保留远程 authority、dirty buffer 和保存边界。
+`platform/hooks` 及其旧服务注册已退出。
+
 `common/*Service.ts` 只能包含调用方使用的领域类型和 service identifier。IPC channel、生成 DTO、
 context bridge API 与 host validation 留在 `*Ipc.ts` 或具体运行时实现中。功能 contribution 可以加载
 所属 service 注册，但实例创建与释放由窗口容器统一负责。`workbenchServiceContributions.ts` 只描述 service、依赖与安装函数，composition root

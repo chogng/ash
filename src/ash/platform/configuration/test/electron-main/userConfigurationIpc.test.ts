@@ -3,13 +3,13 @@ import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { test } from 'mocha';
-import { hooksConfigurationIpcRoute } from '../../electron-main/hooksConfigurationIpc.js';
+import { userConfigurationIpcRoute } from '../../electron-main/userConfigurationIpc.js';
 
-test('Hooks editing creates only the host profile TOML and preserves its existing contents', async () => {
+test('User configuration editing creates only the host profile TOML and preserves its existing contents', async () => {
 	const root = await mkdtemp(join(tmpdir(), 'ash-hooks-'));
 	try {
 		const opened: string[] = [];
-		const route = hooksConfigurationIpcRoute(root, () => true, async path => { opened.push(path); });
+		const route = userConfigurationIpcRoute(root, () => true, async path => { opened.push(path); });
 		assert.throws(() => route.validate({ path: '/arbitrary/config.toml' }), /no arguments/);
 		await route.invoke(route.validate(undefined));
 		const path = join(root, 'config.toml');
@@ -22,13 +22,13 @@ test('Hooks editing creates only the host profile TOML and preserves its existin
 	} finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test('A remote connection cannot open or create the local profile Hooks TOML', async () => {
+test('A remote connection cannot open or create the local profile configuration TOML', async () => {
 	const root = await mkdtemp(join(tmpdir(), 'ash-hooks-remote-'));
 	try {
 		let local = true;
 		let opens = 0;
 		const path = join(root, 'new-profile');
-		const route = hooksConfigurationIpcRoute(path, () => local, async () => { opens++; });
+		const route = userConfigurationIpcRoute(path, () => local, async () => { opens++; });
 		local = false;
 		await assert.rejects(async () => { await route.invoke(undefined); }, /remote host/);
 		await assert.rejects(stat(path), { code: 'ENOENT' });

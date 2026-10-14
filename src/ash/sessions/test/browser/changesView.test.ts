@@ -35,7 +35,7 @@ import { NotificationService } from '../../../workbench/services/notification/co
 import { IAgentThreadService, IAgentTurnService } from '../../../platform/agentHost/common/agentService.js';
 import { IAgentModelsService } from '../../../platform/agentHost/common/agentModels.js';
 import { IAppServerApi, IServerEventApi } from '../../../platform/agentHost/common/appServerApi.js';
-import { IAppServerSkillApi } from '../../../platform/agentHost/common/appServerApi.js';
+import { IAppServerHookApi, IAppServerSkillApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { ITurnChangesApi } from '../../../platform/turnChanges/common/turnChangesApi.js';
 import { ChatService } from '../../../workbench/services/chat/browser/chatService.js';
 import { IChatService } from '../../../workbench/services/chat/common/chatService.js';
@@ -62,6 +62,7 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		using services = new InstantiationService();
 		registerChecksServices(services);
 		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+		services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 		using changed = new Emitter<void>();
 		using config = new WorkbenchConfigurationService();
 		using contexts = new ContextKeyService();
