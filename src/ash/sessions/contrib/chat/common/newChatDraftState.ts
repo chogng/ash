@@ -25,7 +25,7 @@ function parseChatDraft(raw: string): ChatDraft {
 
 export function writeNewChatDraftState(storage: IStorageService, draft: ChatDraft | undefined, draftId: string): void {
 	const key = `sessions.inputDraft:${draftId}`;
-	if (!draft || (!draft.text && draft.contexts.length === 0)) {
+	if (!draft || (!draft.text.trim() && draft.contexts.length === 0)) {
 		storage.remove(key, StorageScope.WORKSPACE);
 	} else {
 		storage.store(key, JSON.stringify(draft), StorageScope.WORKSPACE, StorageTarget.MACHINE);

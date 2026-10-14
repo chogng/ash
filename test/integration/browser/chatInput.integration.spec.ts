@@ -171,8 +171,9 @@ for (const locale of ['en', 'zh-CN']) {
 			await add.press('Space');
 			await expect(row).toBeHidden();
 			await expect(input).toBeFocused();
-			await expect(page.locator('.ash-chat-input-attachments')).toContainText('edited.ts');
-			await input.fill('Read the unsaved file');
+			await expect(input).toHaveValue('edited.ts ');
+			await input.press('End');
+			await input.pressSequentially('Read the unsaved file');
 			await input.press('Enter');
 			await expect(submission).toHaveText(JSON.stringify([{ name: 'edited.ts', content: 'Unsaved editor text' }]));
 			await expect(page.locator('.ash-chat-input-attachments')).toHaveCount(0);
@@ -196,20 +197,20 @@ test('Suggested file context follows editor changes, removes duplicates and keep
 	await page.goto('/chatInput.html?sendFailure=1');
 	await page.evaluate(() => { window.ashChatInputIntegration.showModels(); window.ashChatInputIntegration.setActiveFile('file:///workspace/edited.ts'); });
 	const row = page.locator('.ash-chat-suggested-context');
+	const input = page.locator('.ash-chat-textarea-input');
 	await row.getByRole('button').click();
 	await expect(row).toBeHidden();
-	await page.getByRole('button', { name: 'Remove edited.ts', exact: true }).click();
+	await input.fill('');
 	await expect(row).toBeVisible();
 	await row.getByRole('button').click();
 	await expect(row).toBeHidden();
 	await page.evaluate(() => window.ashChatInputIntegration.setActiveFile('file:///workspace/other.ts'));
 	await expect(row.getByRole('button')).toHaveAccessibleName('Add other.ts to context');
-	const input = page.locator('.ash-chat-textarea-input');
-	await input.fill('Keep for retry');
+	await input.press('End');
+	await input.pressSequentially('Keep for retry');
 	await input.press('Enter');
 	await expect(page.getByLabel('Submission', { exact: true })).toHaveText(JSON.stringify([{ name: 'edited.ts', content: 'Unsaved editor text' }]));
-	await expect(input).toHaveValue('Keep for retry');
-	await expect(page.getByRole('button', { name: 'Remove edited.ts', exact: true })).toBeVisible();
+	await expect(input).toHaveValue('edited.ts Keep for retry');
 	await page.evaluate(() => window.ashChatInputIntegration.setActiveFile('file:///workspace/edited.ts'));
 	await expect(row).toBeHidden();
 	await page.evaluate(() => window.ashChatInputIntegration.setActiveFile());
@@ -222,14 +223,14 @@ for (const locale of ['en', 'zh-CN']) {
 			await page.goto(`/chatInput.html?contextHover=1&locale=${locale}&theme=${theme}`);
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
 			await page.locator('main').evaluate(element => { element.style.width = '450px'; element.style.marginTop = '420px'; });
-			const context = page.getByRole('button', { name: locale === 'en' ? /^Context usage:/ : /^上下文用量：/ });
+			const context = page.locator('.ash-chat-context-usage-button');
 			await context.hover();
 			const hover = page.getByRole('tooltip').locator('.ash-chat-context-usage-hover');
 			for (const known of [true, false]) {
 				if (!known) await page.evaluate(() => window.ashChatInputIntegration.setContextUsage(true));
 				await expect(hover).toBeVisible();
 				const lines = known
-					? locale === 'en' ? ['Context usage: 20%', 'Estimated tokens: 200 / 1,000'] : ['上下文占用：20%', '估算 token 数：200 / 1,000']
+					? locale === 'en' ? ['Context budget: 25%', 'Estimated input tokens: 200 / 800'] : ['上下文预算：25%', '估算输入 token 数：200 / 800']
 					: locale === 'en' ? ['Estimated context: 200 tokens', 'Context capacity unavailable.'] : ['上下文估算：200 个 token', '容量未知'];
 				await expect(hover).toHaveText(lines.join('\n'));
 				await expect(hover).toHaveCSS('white-space', 'pre-line');
@@ -278,16 +279,16 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect(page.locator('.ash-chat-input-container').getByRole('button', { name: locale === 'en' ? 'Add context' : '添加上下文', exact: true })).toHaveCount(0);
 			await expect(add).toBeVisible();
 			const permissions = footer.getByRole('button', { name: locale === 'en' ? 'Permissions: Manual' : '权限：手动' });
-			const context = footer.getByRole('button', { name: locale === 'en' ? /^Context usage:/ : /^上下文用量：/ });
+			const context = footer.locator('.ash-chat-context-usage-button');
 			const status = footer.getByRole('button', { name: 'Extension status' });
 			await expect(footer.getByRole('button', { name: locale === 'en' ? 'Report an issue' : '报告问题' })).toHaveCount(0);
 			await expect(permissions).toBeVisible();
 			await expect(permissions).toHaveText(locale === 'en' ? 'Manual' : '手动');
 			await expect(context).toBeVisible();
 			await expect(context).toHaveText('');
-			await expect(context).toHaveAttribute('aria-label', locale === 'en' ? 'Context usage: 20%, 200 of 1,000 tokens' : '上下文用量：20%，200 / 1,000 个 token');
+			await expect(context).toHaveAttribute('aria-label', locale === 'en' ? 'Context budget: 25%, estimated input 200 of 800 tokens' : '上下文预算：25%，估算输入 200 / 800 个 token');
 			await context.hover();
-			await expect(context).toHaveAttribute('title', locale === 'en' ? 'Context usage: 20%\nEstimated tokens: 200 / 1,000' : '上下文占用：20%\n估算 token 数：200 / 1,000');
+			await expect(context).toHaveAttribute('title', locale === 'en' ? 'Context budget: 25%\nEstimated input tokens: 200 / 800' : '上下文预算：25%\n估算输入 token 数：200 / 800');
 			const ring = context.locator('svg');
 			const ringBounds = await ring.boundingBox();
 			expect([ringBounds!.width, ringBounds!.height]).toEqual([16, 16]);
@@ -361,11 +362,11 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect(details).toBeVisible();
 			await expect(details).toBeFocused();
 			await expect(context).toHaveAttribute('aria-expanded', 'true');
-			await expect(details.locator('.ash-chat-context-details-summary')).toHaveText(locale === 'en' ? '200 / 1,000 tokens · 20%' : '200 / 1,000 个 token · 20%');
+			await expect(details.locator('.ash-chat-context-details-summary')).toHaveText(locale === 'en' ? 'Estimated input: 200 / 800 tokens · 25%' : '估算输入：200 / 800 个 token · 25%');
 			const accessibleDetails = await page.evaluate(() => window.ashChatInputIntegration.contextAccessibility());
-			expect(accessibleDetails.content).toContain(locale === 'en' ? '200 / 1,000 tokens · 20%' : '200 / 1,000 个 token · 20%');
+			expect(accessibleDetails.content).toContain(locale === 'en' ? 'Estimated input: 200 / 800 tokens · 25%' : '估算输入：200 / 800 个 token · 25%');
 			expect(accessibleDetails.help).toContain('Escape');
-			await expect(details.getByRole('rowheader', { name: locale === 'en' ? 'Remaining space' : '剩余空间' }).locator('..')).toContainText('800');
+			await expect(details.getByRole('rowheader', { name: locale === 'en' ? 'Remaining input budget' : '剩余输入预算' }).locator('..')).toContainText('600');
 			const detailsBounds = (await details.boundingBox())!;
 			const contextBounds = (await context.boundingBox())!;
 			expect(detailsBounds.y + detailsBounds.height).toBeLessThanOrEqual(contextBounds.y);
@@ -432,7 +433,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect(details).not.toContainText('%');
 			await expect(details.getByRole('columnheader')).toHaveCount(2);
 			await expect(details.locator('.ash-chat-context-details-bar').locator('span')).toHaveCount(0);
-			await expect(details.getByRole('rowheader', { name: locale === 'en' ? 'Remaining space' : '剩余空间' })).toHaveCount(0);
+			await expect(details.getByRole('rowheader', { name: locale === 'en' ? 'Remaining input budget' : '剩余输入预算' })).toHaveCount(0);
 			await page.keyboard.press('Escape');
 			await context.focus();
 			const retainedButton = await context.elementHandle();
@@ -482,12 +483,14 @@ for (const locale of ['en', 'zh-CN']) {
 test('Input history pages older records and restores draft selection, attachments and pinned skills', async ({ page }) => {
 	await page.goto('/chatInput.html?history=1');
 	const input = page.locator('.ash-chat-textarea-input');
+	await input.fill('$commit draft ');
 	await page.evaluate(() => { window.ashChatInputIntegration.addHistoryContext(); window.ashChatInputIntegration.setHistorySkill('original'); });
-	await input.fill('$commit draft');
+	const draft = await input.inputValue();
+	expect(draft).toContain('draft.txt');
 	await input.evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(0, 0));
 	await input.press('ArrowUp');
 	await expect(input).toHaveValue('third input');
-	await expect(page.locator('.ash-chat-context-attachment')).toHaveCount(0);
+	await expect(input).not.toHaveValue(/draft\.txt/);
 	await input.press('ArrowUp');
 	await expect(input).toHaveValue('second input\nsecond line');
 	await input.press('ArrowUp');
@@ -496,13 +499,13 @@ test('Input history pages older records and restores draft selection, attachment
 	await expect(input).toHaveValue('second input\nsecond line');
 	await page.evaluate(() => window.ashChatInputIntegration.setHistorySkill('updated'));
 	await input.press('Escape');
-	await expect(input).toHaveValue('$commit draft');
-	await expect(page.getByRole('button', { name: 'Remove draft.txt' })).toBeVisible();
+	await expect(input).toHaveValue(draft);
 	expect(await input.evaluate((element: HTMLTextAreaElement) => [element.selectionStart, element.selectionEnd])).toEqual([0, 0]);
 	await input.press('Enter');
 	await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({
-		writes: ['$commit draft'], submissions: [{ text: '$commit draft', skills: [{ version: { type: 'pinnedDigest', digest: 'original' } }] }],
+		writes: [draft], submissions: [{ text: draft, skills: [{ version: { type: 'pinnedDigest', digest: 'original' } }] }],
 	});
+	await expect(page.getByLabel('Submission', { exact: true })).toHaveText(JSON.stringify([{ name: 'draft.txt', content: 'synthetic context' }]));
 });
 
 for (const locale of ['en', 'zh-CN']) {

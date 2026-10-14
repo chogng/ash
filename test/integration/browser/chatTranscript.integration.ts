@@ -9,6 +9,8 @@ import { readNewChatDraftState } from '../../../src/ash/sessions/contrib/chat/co
 import type { ChatInputDelegate } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { CoworkWidget } from '../../../src/ash/sessions/contrib/cowork/browser/widget/coworkWidget.js';
 import { NewCoworkInputWidget } from '../../../src/ash/sessions/contrib/cowork/browser/newCoworkInput.js';
+import { ChatInputEditor } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputEditor.js';
+import { ChatInputEditors } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
 import { ChatTipService, IChatTipService } from '../../../src/ash/sessions/contrib/cowork/browser/chatTipService.js';
 import { ILifecycleService } from '../../../src/ash/workbench/services/lifecycle/common/lifecycle.js';
 import { registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
@@ -450,7 +452,7 @@ declare global {
 			openReference(line: number, column: number): Promise<void>;
 			skillRequests(): readonly unknown[];
 			setFile(value: string, line: number, column: number): void;
-			diagnostics(): readonly { message: string; code?: string | number; }[];
+			diagnostics(): readonly { message: string; code?: ReturnType<IMarkerService['read']>[number]['code']; }[];
 			setReadonly(value: boolean): void;
 			setWrap(value: boolean): Promise<void>;
 			setCodeLineHeight(height: number): Promise<void>;
@@ -499,7 +501,8 @@ declare global {
 			setChatVisible(visible: boolean): void;
 			chatDraft(): Promise<string | undefined>;
 			chatDraftContexts(): Promise<readonly { name: string; content: string; }[] | undefined>;
-			persistedChatDraft(): unknown;
+			chatDraftContextNames(): Promise<readonly string[]>;
+			persistedChatDraft(): ReturnType<typeof readNewChatDraftState>;
 			appImagePending(): boolean;
 			delayAppImages(): void;
 			finishAppImages(): void;
@@ -650,6 +653,9 @@ window.ashChatTranscriptIntegration = {
 		chatServices.registerSingleton(IMenuService, () => chatServices.createInstance(MenuService));
 		const contextView = resources.add(new BrowserContextViewService(document.body));
 		chatServices.registerInstance(IContextViewService, contextView);
+		if (new URLSearchParams(location.search).has('richInput')) {
+			resources.add(ChatInputEditors.register({ id: 'integration', create: options => chatServices.createInstance(ChatInputEditor, options) }));
+		}
 		chatServices.registerInstance(IDialogService, { confirm: async () => ({ confirmed: false }) } as unknown as IDialogService);
 		const contextMenus: IContextMenuService = { contextMenuStyle: 'custom', showContextMenu() { }, hideContextMenu() { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None };
 		if (cowork) {
@@ -774,6 +780,7 @@ window.ashChatTranscriptIntegration = {
 	persistedChatDraft: () => readNewChatDraftState(services.get(IStorageService), appChatThread),
 	chatDraft: async () => (await appChat?.captureDraft())?.draft.text,
 	chatDraftContexts: async () => (await appChat?.captureDraft())?.draft.contexts,
+	chatDraftContextNames: async () => (await appChat?.captureDraft())?.draft.contexts.map(context => context.name) ?? [],
 	setChatVisible: visible => appChat?.setVisible(visible),
 	retireChat: () => { appChatGeneration++; composerChanges.fire(); appChatThread = 'replacement-thread'; chatChanges.fire(); },
 	voiceState: () => voiceControls,

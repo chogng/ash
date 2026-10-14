@@ -145,7 +145,7 @@ test('delayed media above the reader preserves the visible message position', as
 	const position = () => page.locator('[data-item-id="reading-4"]').evaluate(element => element.getBoundingClientRect().top);
 	const top = await position();
 	const before = await viewport.evaluate(element => element.scrollTop);
-	await page.locator('.ash-chat-media button').evaluate(element => (element as HTMLButtonElement).click());
+	await page.locator('.ash-chat-media').getByRole('button', { name: 'Load image', exact: true }).evaluate(element => (element as HTMLButtonElement).click());
 	await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.mediaState().requests.length)).toBe(1);
 	await page.evaluate(() => window.ashChatTranscriptIntegration.finishMedia());
 	await expect.poll(() => page.locator('.ash-chat-media img').evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(2);
@@ -161,7 +161,7 @@ test('delayed media keeps a following transcript at the bottom', async ({ page }
 	const viewport = page.locator('.ash-chat-list-widget .ash-scrollbar-viewport');
 	await expect.poll(() => viewport.evaluate(element => element.scrollHeight - element.scrollTop - element.clientHeight)).toBe(0);
 	await page.locator('.ash-chat-media img').evaluate(element => { element.style.width = '300px'; element.style.height = '400px'; });
-	await page.locator('.ash-chat-media button').evaluate(element => (element as HTMLButtonElement).click());
+	await page.locator('.ash-chat-media').getByRole('button', { name: 'Load image', exact: true }).evaluate(element => (element as HTMLButtonElement).click());
 	await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.mediaState().requests.length)).toBe(1);
 	await page.evaluate(() => window.ashChatTranscriptIntegration.finishMedia());
 	await expect.poll(() => page.locator('.ash-chat-media img').evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(2);

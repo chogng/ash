@@ -188,9 +188,8 @@ export class NewCoworkInputWidget extends ChatInputPart {
 		const draftId = this.displayedDraftId;
 		const revision = (this.draftWriteRevisions.get(draftId) ?? 0) + 1;
 		this.draftWriteRevisions.set(draftId, revision);
-		const text = this.input.value;
+		const { text, contexts: attachments } = this.snapshotDraftReferences();
 		const mode = this.model.inputState.mode;
-		const attachments = this.attachmentModel.attachments.filter(attachment => attachment.lifetime !== 'source');
 		if (attachments.length === 0) {
 			writeNewChatDraftState(this.storage, { mode, text, contexts: [] }, draftId);
 			return;

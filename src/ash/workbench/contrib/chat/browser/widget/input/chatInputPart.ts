@@ -589,15 +589,9 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		}
 	}
 
-	async captureDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined> {
-		const lifecycle = this.inputLifecycle.signal;
-		while (this.attachmentModel.hasPendingContext) {
-			await this.attachmentModel.resolvePendingContext();
-			if (lifecycle.aborted) return undefined;
-		}
-		if (this.isDisposed || lifecycle.aborted) return undefined;
+	/** Persistence and handoff retain user references; live producer references stay with their owner. */
+	protected snapshotDraftReferences(): { text: string; contexts: readonly ChatContextAttachment[]; } {
 		let text = this.input.value;
-		const mode = this.mode;
 		let attachments = this.contexts.filter(attachment => attachment.lifetime !== 'source');
 		// App references belong to their live producer. Removing their labels from the
 		// transferred text also shifts the positions of any user references that follow.
@@ -610,6 +604,18 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				reference: { start: context.reference.start - (end - start), end: context.reference.end - (end - start) },
 			} : context);
 		}
+		return { text, contexts: attachments };
+	}
+
+	async captureDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined> {
+		const lifecycle = this.inputLifecycle.signal;
+		while (this.attachmentModel.hasPendingContext) {
+			await this.attachmentModel.resolvePendingContext();
+			if (lifecycle.aborted) return undefined;
+		}
+		if (this.isDisposed || lifecycle.aborted) return undefined;
+		const { text, contexts: attachments } = this.snapshotDraftReferences();
+		const mode = this.mode;
 		if (!text.trim() && attachments.length === 0) return undefined;
 		const revision = this.draftRevision;
 		const contexts = await Promise.all(attachments.map(async attachment => ({

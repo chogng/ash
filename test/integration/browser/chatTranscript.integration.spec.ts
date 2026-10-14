@@ -617,6 +617,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect(frame.locator('#input')).toContainText('"value":7');
 			if (cowork) { await chat.locator('.stanza-editor-input').focus(); await page.keyboard.insertText('Unsent user draft'); } else await chat.locator('.ash-chat-input-part textarea').fill('Unsent user draft');
 			await page.evaluate(() => window.ashChatTranscriptIntegration.addUserContext());
+			const userDraft = await page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft());
 			await frame.getByRole('button', { name: 'Update context', exact: true }).click();
 			await expect(frame.locator('#context-ack')).toHaveText('{}');
 			await frame.getByRole('textbox', { name: 'App context text' }).fill('Latest context');
@@ -624,15 +625,16 @@ for (const locale of ['en', 'zh-CN']) {
 			await frame.getByRole('button', { name: 'Send Chat message', exact: true }).click();
 			await expect(frame.locator('#message-ack')).toHaveText('{}');
 			expect(await page.evaluate(() => window.ashChatTranscriptIntegration.chatMessages())).toEqual([{ text: 'Follow-up from App', mode: 'plan', commandId: undefined, source: { sessionId: 'app-session', threadId: 'app-thread' }, contexts: [{ name: locale === 'en' ? 'App context' : 'App 上下文', content: 'Latest context\n\n{"value":8}' }] }]);
-			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft())).toBe('Unsent user draft');
-			await expect(chat.getByRole('button', { name: locale === 'en' ? 'Remove App context' : '移除 App 上下文', exact: true })).toHaveCount(1);
-			await expect(chat.getByRole('button', { name: locale === 'en' ? 'Remove private.txt' : '移除 private.txt', exact: true })).toBeVisible();
+			// Captured drafts exclude live App references; their separating spaces
+			// do not change the user's text or the retained private file reference.
+			await expect.poll(async () => (await page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft()))?.trimEnd()).toBe(userDraft?.trimEnd());
+			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatDraftContextNames())).toEqual(['private.txt']);
 			await frame.getByRole('button', { name: 'Invalid role', exact: true }).click();
 			await expect(frame.locator('#error')).toContainText('-32602');
 			expect(await page.evaluate(() => window.ashChatTranscriptIntegration.chatMessages().length)).toBe(1);
 			await chat.getByRole('button', { name: locale === 'en' ? 'Close interactive view' : '关闭交互式视图' }).click();
-			await expect(chat.getByRole('button', { name: locale === 'en' ? 'Remove App context' : '移除 App 上下文', exact: true })).toHaveCount(0);
-			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft())).toBe('Unsent user draft');
+			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatDraftContextNames())).toEqual(['private.txt']);
+			await expect.poll(async () => (await page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft()))?.trimEnd()).toBe(userDraft?.trimEnd());
 			expect(errors).toEqual([]);
 		});
 	}
@@ -786,18 +788,21 @@ for (const locale of ['en', 'zh-CN']) {
 			const draft = chat.locator(cowork ? '.stanza-editor-input' : '.ash-chat-input-part textarea');
 			if (cowork) { await draft.focus(); await page.keyboard.insertText('Unsent user draft'); } else await draft.fill('Unsent user draft');
 			await page.evaluate(() => window.ashChatTranscriptIntegration.addUserContext());
+			const userDraft = await page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft());
 			await page.evaluate(() => window.ashChatTranscriptIntegration.proposeVoiceTask());
 			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatMessages())).toEqual([{
 				text: locale === 'en' ? 'Handle the request I just spoke.' : '处理我刚才说出的请求。', mode: 'plan', contexts: [{ name: locale === 'en' ? 'Voice request' : '语音请求', content: 'run tests <script>unsafe()</script>' }], commandId: 'voice-command', source: { sessionId: 'app-session', threadId: 'app-thread' },
 			}]);
-			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft())).toBe('Unsent user draft private.txt '); await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatDraftContexts())).toEqual([expect.objectContaining({ name: 'private.txt', content: 'private file body' })]);
+			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft())).toBe(userDraft);
+			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatDraftContextNames())).toEqual(['private.txt']);
+			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatDraftContexts())).toEqual([expect.objectContaining({ name: 'private.txt', content: 'private file body' })]);
 			await expect(chat.getByText('run tests <script>unsafe()</script>', { exact: true })).toBeVisible();
 			await expect(chat.locator('script')).toHaveCount(0);
 			await chat.getByRole('button', { name: locale === 'en' ? 'Interrupt voice reply' : '打断语音回复', exact: true }).click();
 			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.voiceState())).toEqual(['start', 'interrupt']);
 			await page.evaluate(() => window.ashChatTranscriptIntegration.retireChat());
 			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.voiceState())).toEqual(['start', 'interrupt', 'stop']);
-			if (cowork) await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft())).toBeUndefined(); else await expect(draft).toHaveValue('Unsent user draft private.txt '); expect(errors).toEqual([]);
+			if (cowork) await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft())).toBeUndefined(); else await expect(draft).toHaveValue(userDraft!); expect(errors).toEqual([]);
 		});
 	}
 
@@ -840,20 +845,25 @@ for (const locale of ['en', 'zh-CN']) {
 		test(`${cowork ? 'Cowork' : 'Chat'} MCP App image context uses the original image input and retires stale decoding in ${locale}`, async ({ page }) => {
 			const errors: string[] = [];
 			page.on('pageerror', error => errors.push(error.message));
-			await page.goto(`/chatTranscript.html?locale=${locale}`);
+			await page.goto(`/chatTranscript.html?locale=${locale}&richInput=1`);
 			await page.evaluate(cowork => window.ashChatTranscriptIntegration.showChatApp(false, cowork), cowork);
 			const chat = page.locator('#app-chat');
 			await chat.locator('.ash-chat-tool-invocation > summary').click();
 			await chat.getByRole('button', { name: locale === 'en' ? 'Open interactive view' : '打开交互式视图' }).click();
 			const frame = page.frameLocator('iframe[title="' + (locale === 'en' ? 'Interactive MCP App' : '交互式 MCP App') + '"]').frameLocator('iframe');
 			await expect(frame.locator('#capabilities')).toContainText('"updateModelContext":{"text":{},"image":{},"resource":{},"resourceLink":{},"structuredContent":{}}');
+			await chat.locator('.stanza-editor-input').focus();
+			await page.keyboard.insertText('Private draft');
 			await page.evaluate(() => window.ashChatTranscriptIntegration.addUserContext());
-			if (cowork) { await chat.locator('.stanza-editor-input').focus(); await page.keyboard.insertText('Private draft'); } else await chat.locator('.ash-chat-input-part textarea').fill('Private draft');
+			const userDraft = await page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft());
 			await frame.getByRole('button', { name: 'Image context', exact: true }).click();
 			await expect(frame.locator('#image-ack')).toHaveText('{}');
 			const removeImage = chat.getByRole('button', { name: locale === 'en' ? 'Remove App image 1' : '移除 App 图片 1', exact: true });
 			await expect(removeImage).toBeVisible();
-			if (cowork) await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.persistedChatDraft())).toMatchObject({ text: 'Private draft', contexts: [{ id: 'private-file', kind: 'file', name: 'private.txt', content: 'private file body' }] });
+			if (cowork) {
+				await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.persistedChatDraft())).toMatchObject({ contexts: [{ id: 'private-file', kind: 'file', name: 'private.txt', content: 'private file body' }] });
+				await expect.poll(async () => (await page.evaluate(() => window.ashChatTranscriptIntegration.persistedChatDraft()))?.text.trimEnd()).toBe(userDraft?.trimEnd());
+			}
 
 			await expect(chat.locator('img[alt="' + (locale === 'en' ? 'App image 1' : 'App 图片 1') + '"]')).toBeVisible();
 			await frame.getByRole('button', { name: 'Send Chat message', exact: true }).click();
@@ -881,8 +891,8 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatMessages().length)).toBe(2);
 			expect(await page.evaluate(() => window.ashChatTranscriptIntegration.chatMessages().at(-1))).toMatchObject({ contexts: [] });
 			await expect(removeImage).toHaveCount(0);
-			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft())).toBe('Private draft');
-			await expect(chat.getByRole('button', { name: locale === 'en' ? 'Remove private.txt' : '移除 private.txt', exact: true })).toBeVisible();
+			await expect.poll(async () => (await page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft()))?.trimEnd()).toBe(userDraft?.trimEnd());
+			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatDraftContextNames())).toEqual(['private.txt']);
 			await page.evaluate(() => window.ashChatTranscriptIntegration.delayAppImages());
 			await frame.getByRole('button', { name: 'Image context', exact: true }).click();
 			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.appImagePending())).toBe(true);
@@ -903,19 +913,19 @@ for (const locale of ['en', 'zh-CN']) {
 		await page.goto(`/chatTranscript.html?locale=${locale}`);
 		await page.evaluate(() => window.ashChatTranscriptIntegration.showChatApp(false, true));
 		await page.evaluate(() => window.ashChatTranscriptIntegration.addTerminalContext());
-		const context = { id: 'terminal:saved', kind: 'terminal', name: 'Terminal: saved', content: 'Saved terminal context', resource: 'internal://terminal?id=saved', terminalSnapshot: { text: 'Saved <script>unsafe()</script>\nTerminal output', columns: 80 } };
-		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.persistedChatDraft())).toEqual({ mode: 'plan', text: '', contexts: [context] });
+		const context = { id: 'terminal:saved', kind: 'terminal', name: 'Terminal: saved', content: 'Saved terminal context', resource: 'internal://terminal?id=saved', terminalSnapshot: { text: 'Saved <script>unsafe()</script>\nTerminal output', columns: 80 }, reference: { start: 0, end: 15 } };
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.persistedChatDraft())).toEqual({ mode: 'plan', text: 'Terminal: saved ', contexts: [context] });
 		await page.evaluate(() => window.ashChatTranscriptIntegration.showChatApp(false, true));
 		const chat = page.locator('#app-chat');
-		const preview = chat.getByText(locale === 'en' ? 'Preview terminal snapshot' : '预览终端快照', { exact: true });
+		const preview = chat.getByRole('button', { name: locale === 'en' ? 'Preview terminal snapshot' : '预览终端快照', exact: true });
 		await expect(preview).toBeVisible();
 		await preview.click();
-		const input = chat.getByRole('textbox', { name: locale === 'en' ? 'Saved terminal output (read only)' : '已保存的终端输出（只读）', exact: true });
+		const input = page.getByRole('textbox', { name: locale === 'en' ? 'Saved terminal output (read only)' : '已保存的终端输出（只读）', exact: true });
 		await expect(input).toHaveAttribute('readonly', '');
-		await expect(chat.locator('.ash-chat-terminal-preview-screen .xterm')).toBeVisible();
-		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.persistedChatDraft())).toEqual({ mode: 'plan', text: '', contexts: [context] });
+		await expect(page.locator('.ash-chat-terminal-preview-screen .xterm')).toBeVisible();
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.persistedChatDraft())).toEqual({ mode: 'plan', text: 'Terminal: saved ', contexts: [context] });
 		await chat.getByRole('button', { name: locale === 'en' ? 'Remove Terminal: saved' : '移除 Terminal: saved', exact: true }).click();
-		await expect(chat.locator('.ash-chat-terminal-preview-screen')).toHaveCount(0);
+		await expect(page.locator('.ash-chat-terminal-preview-screen')).toHaveCount(0);
 		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.persistedChatDraft())).toBeUndefined();
 		expect(errors).toEqual([]);
 	});
@@ -977,10 +987,11 @@ for (const locale of ['en', 'zh-CN']) {
 			await chat.getByRole('button', { name: locale === 'en' ? 'Open interactive view' : '打开交互式视图' }).click();
 			const frame = page.frameLocator('iframe[title="' + (locale === 'en' ? 'Interactive MCP App' : '交互式 MCP App') + '"]').frameLocator('iframe');
 			await expect(frame.locator('#capabilities')).toContainText('"message":{"text":{},"image":{},"resource":{},"resourceLink":{}}');
+			if (cowork) { await chat.locator('.stanza-editor-input').focus(); await page.keyboard.insertText('Private draft'); } else await chat.locator('.ash-chat-input-part textarea').fill('Private draft');
+			await page.evaluate(() => window.ashChatTranscriptIntegration.addUserContext());
+			const userDraft = await page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft());
 			await frame.getByRole('button', { name: 'Update context', exact: true }).click();
 			await expect(frame.locator('#context-ack')).toHaveText('{}');
-			await page.evaluate(() => window.ashChatTranscriptIntegration.addUserContext());
-			if (cowork) { await chat.locator('.stanza-editor-input').focus(); await page.keyboard.insertText('Private draft'); } else await chat.locator('.ash-chat-input-part textarea').fill('Private draft');
 			await frame.getByRole('button', { name: 'Send image message', exact: true }).click();
 			await expect(frame.locator('#message-ack')).toHaveText('{}');
 			const sourceContext = { name: locale === 'en' ? 'App context' : 'App 上下文', content: 'First context\n\n{"value":8}' };
@@ -992,8 +1003,8 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect(frame.locator('#message-ack')).toHaveText('{}');
 			expect(await page.evaluate(() => window.ashChatTranscriptIntegration.chatMessages())).toEqual([{ text, mode: 'plan', commandId: undefined, source, contexts: [sourceContext, image] }, { text: '', mode: 'plan', commandId: undefined, source, contexts: [sourceContext, image] }]);
 			await expect(chat.getByRole('button', { name: locale === 'en' ? 'Remove App image 1' : '移除 App 图片 1', exact: true })).toHaveCount(0);
-			await expect(chat.getByRole('button', { name: locale === 'en' ? 'Remove private.txt' : '移除 private.txt', exact: true })).toBeVisible();
-			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft())).toBe('Private draft');
+			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatDraftContextNames())).toEqual(['private.txt']);
+			await expect.poll(async () => (await page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft()))?.trimEnd()).toBe(userDraft?.trimEnd());
 			await page.evaluate(() => window.ashChatTranscriptIntegration.delayAppImages());
 			await frame.getByRole('button', { name: 'Send image message', exact: true }).click();
 			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.appImagePending())).toBe(true);

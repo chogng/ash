@@ -719,9 +719,10 @@ for (const locale of ['en', 'zh-CN']) {
 		await page.evaluate(() => { window.ashChatInputIntegration.changeContextSources(); });
 		await page.evaluate(() => window.ashChatInputIntegration.restoreCapturedDraft());
 		const names = [chinese ? '终端：Shell' : 'Terminal: Shell', 'attach', chinese ? '搜索结果：needle' : 'Search Results: needle'];
-		for (const name of names) await page.getByRole('button', { name: `${chinese ? '打开' : 'Open'} ${name}`, exact: true }).press('Enter');
+		// Terminal context opens its captured preview even after the source changes;
+		// symbol and search references still navigate to their owning services.
+		for (const name of names.slice(1)) await page.getByRole('button', { name: `${chinese ? '打开' : 'Open'} ${name}`, exact: true }).press('Enter');
 		await expect(page.getByLabel('Opened sources')).toHaveText(JSON.stringify([
-			{ command: 'workbench.action.terminal.focus', resource: 'context-shell' },
 			{ resource: 'file:///workspace/symbol.ts#2,1-4,2', options: { fromUserGesture: true, openExternal: false } },
 			{ command: 'workbench.action.findInFiles' },
 		]));

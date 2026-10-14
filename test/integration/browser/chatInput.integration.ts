@@ -15,6 +15,9 @@ import '../../../src/ash/workbench/browser/media/style.css';
 import '../../../src/ash/sessions/browser/media/chatViewPane.css';
 import { TerminalConfigurationService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalConfigurationService.js';
 import { ITerminalConfigurationService } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
+import { ITerminalLogService } from '../../../src/ash/platform/terminal/common/terminal.js';
+import { TerminalLogService } from '../../../src/ash/platform/terminal/common/terminalLogService.js';
+import { ILoggerService, NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
 import { IMenuService, MenusRegistry } from '../../../src/ash/platform/actions/common/actions.js';
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
 import { ContextKeyService, IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
@@ -46,6 +49,7 @@ import { ICommandService, CommandsRegistry } from '../../../src/ash/platform/com
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { FileKind, IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
+import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
 import { IEditorGroupsService } from '../../../src/ash/workbench/services/editor/common/editorGroupsService.js';
 import { IWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/common/workingCopyService.js';
 import { IHistoryService } from '../../../src/ash/workbench/services/history/common/history.js';
@@ -393,10 +397,16 @@ const terminalInstance: ITerminalInstance = {
 	start: () => { }, clearBuffer: () => terminalScreen?.clearBuffer(), reuseTerminal: async () => { throw new Error('Screen-only fixture has no process to reuse'); },
 	xterm: undefined, xtermReadyPromise: Promise.resolve(undefined), getContribution: () => null, attachToElement: () => { }, detachFromElement: () => { }, sendText: async () => { }, processBinary: async () => { }, resize: () => { }, close: async () => { },
 };
+const root = URI.file('/workspace');
+services.registerInstance(IWorkspaceContextService, resources.add(new WorkspaceContextService({ id: 'workspace', folders: [{ id: 'workspace', index: 0, uri: root, name: 'workspace' }] })));
 const terminalHost = document.createElement('div');
 document.body.append(terminalHost);
 services.registerInstance(IAccessibilitySignalService, { playSignal: async () => { }, playSignalLoop: () => Disposable.None });
 if (hasContextSources) services.registerInstance(ITerminalConfigurationService, resources.add(services.createInstance(TerminalConfigurationService)));
+if (hasContextSources) {
+	services.registerInstance(ILoggerService, resources.add(new NullLoggerService()));
+	services.registerSingleton(ITerminalLogService, () => services.createInstance(TerminalLogService));
+}
 if (hasContextSources) services.registerInstance(IHoverService, resources.add(new HoverService(services.get(IConfigurationService), services.get(IContextViewService), { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } })));
 const terminalScreen = hasContextSources ? resources.add(services.createInstance(XtermTerminal, terminalHost, terminalInstance)) : undefined;
 terminalScreen?.write(`\x1b[32m${terminalSource}\x1b[0m\r\n`);
@@ -406,9 +416,7 @@ services.registerInstance(IViewsService, {
 	openView: async (id: string) => id === CHAT_VIEW_ID ? part : undefined,
 	getViewWithId: (id: string) => id === TERMINAL_VIEW_ID && terminalScreen ? { getTerminalOutput: (_instance: ITerminalInstance, limit: number, signal: AbortSignal) => terminalScreen.getBufferText(limit, signal) } : id === SEARCH_VIEW_ID && hasContextSources ? { getSearchResultSnapshot: () => searchSnapshot } : null,
 } as unknown as IViewsService);
-const root = URI.file('/workspace');
 const edited = URI.file('/workspace/edited.ts');
-services.registerInstance(IWorkspaceContextService, { getWorkspace: () => ({ folders: [{ id: 'workspace', index: 0, uri: root, name: 'workspace' }] }) } as unknown as IWorkspaceContextService);
 if (hasContextSources) resources.add(registerCodebaseSymbolsWorkspaceSymbolProvider(languageFeatures, {
 	search: async (query: string, _limit: number, signal: AbortSignal) => {
 		const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(symbolSource));
