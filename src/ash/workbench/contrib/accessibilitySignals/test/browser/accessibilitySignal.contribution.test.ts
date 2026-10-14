@@ -12,7 +12,7 @@ import { IAccessibilitySignalService } from '../../../../../platform/accessibili
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../common/contributions.js';
 import { IChatService, type ThreadUpdateEnvelope } from '../../../../services/chat/common/chatService.js';
-import { SpeechToTextState, ISpeechService } from '../../../speech/common/speechService.js';
+import { ISpeechService } from '../../../speech/common/speechService.js';
 import { ITextFileService } from '../../../../services/textfile/common/textfiles.js';
 import { type ITextFileSaveEvent } from '../../../../services/textfile/common/textFileService.js';
 import { IDebugService, type IDebugSession, type DebugSessionState } from '../../../../services/debug/common/debugService.js';
@@ -78,21 +78,15 @@ suite('Accessibility signal production contributions', () => {
 	test('recording cues follow successful capture, stay quiet on startup failure, and stop once', () => {
 		using owner = new DisposableStore();
 		const fixture = services(owner);
-		const changes = owner.add(new Emitter<SpeechToTextState>());
-		let starting = true;
-		fixture.services.registerInstance(ISpeechService, { state: SpeechToTextState.Idle, get isStarting() { return starting; }, onDidChangeState: changes.event } as ISpeechService);
+		const started = owner.add(new Emitter<void>());
+		const ended = owner.add(new Emitter<void>());
+		fixture.services.registerInstance(ISpeechService, { hasActiveSpeechToTextSession: false, isStarting: false, onDidStartSpeechToTextSession: started.event, onDidEndSpeechToTextSession: ended.event } as ISpeechService);
 		using host = WorkbenchContributionsRegistry.createHost(fixture.services, error => { throw error; }, ['workbench.contrib.speechAccessibilitySignal']);
 		host.advance(WorkbenchPhase.AfterRestored);
-		changes.fire(SpeechToTextState.Recording);
-		changes.fire(SpeechToTextState.Idle);
+		ended.fire();
 		assert.deepEqual(fixture.cues, []);
-		changes.fire(SpeechToTextState.Recording);
-		starting = false;
-		changes.fire(SpeechToTextState.Recording);
-		changes.fire(SpeechToTextState.Recording);
-		changes.fire(SpeechToTextState.Transcribing);
-		changes.fire(SpeechToTextState.Idle);
-		changes.fire(SpeechToTextState.Idle);
+		started.fire(); started.fire();
+		ended.fire(); ended.fire();
 		assert.deepEqual(fixture.cues, ['accessibility.signals.voiceRecordingStarted', 'accessibility.signals.voiceRecordingStopped']);
 	});
 

@@ -1137,3 +1137,248 @@ fn ssh_resources_route_back_to_the_live_connection_without_a_session_parameter()
         .unwrap()
         .unwrap();
 }
+
+#[cfg(unix)]
+#[test]
+fn voice_media_stays_in_profile_while_the_gateway_resolves_the_original_directory_thread() {
+    let profile = tempfile::tempdir().unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let options = ash_app_server_daemon::ConnectionOptions::new(
+        profile.path(),
+        None,
+        ash_app_server_daemon::GrantSource::HostConfiguration,
+        None,
+    );
+    let registry = Arc::new(ProfileAppServerRegistry::open(options.clone()).unwrap());
+    let server = registry.server_for(options).unwrap();
+    let (mut client, stream) = crate::server::request_dispatch::tests::Client::pair();
+    let served = thread::spawn(move || {
+        let (reader, writer) = ash_app_server_transport::LocalStream::pair(stream).unwrap();
+        let result = serve(
+            registry,
+            server,
+            BufReader::new(reader),
+            writer,
+            RemoteLaunch::from_environment(),
+        );
+        assert!(
+            result.is_ok()
+                || result
+                    .as_ref()
+                    .is_err_and(crate::managed::is_peer_disconnect)
+        );
+    });
+    let call = |client: &mut crate::server::request_dispatch::tests::Client, id, method, params| {
+        client.send(id, method, params);
+        loop {
+            let message = client.read();
+            if message["id"] == id {
+                break message;
+            }
+        }
+    };
+    let initialized = call(
+        &mut client,
+        1,
+        "initialize",
+        serde_json::json!({"clientInfo":{"name":"voice-directory-test","version":"1"},"capabilities":{"dirPermissionsHost":{"version":1}}}),
+    );
+    assert!(initialized["result"].is_object());
+    let created = call(
+        &mut client,
+        2,
+        "session/create",
+        serde_json::json!({"commandId":"voice-directory","title":"Voice source","executionTarget":{"type":"local","root":root.path()}}),
+    );
+    assert!(created.get("result").is_some(), "{created}");
+    let session_id = created["result"]["session"]["sessionId"].clone();
+    let thread_id = created["result"]["session"]["threads"][0]["threadId"].clone();
+    let request = serde_json::json!({"resourceId":"media","operationId":"start","deviceId":"device","sessionId":session_id,"threadId":thread_id,"connectionId":"missing-voice-provider","locale":"en","taskLabels":{"queued":"queued","running":"running","waiting":"waiting","completed":"completed","failed":"failed","stopped":"stopped","rejected":"rejected"}});
+    let result = call(&mut client, 3, "voice/start", request);
+    assert_eq!(result["error"]["code"], -32000, "{result}");
+    assert!(
+        result
+            .to_string()
+            .contains("missing-voice-provider' is not registered"),
+        "the actual directory Core must be read before provider admission: {result}"
+    );
+    drop(client);
+    served.join().unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+#[ignore = "requires pinned local Call/LiveKit executables and the explicit AudioHost IPC fixture"]
+fn voice_gateway_real_room_records_directory_speech_and_stops_profile_media() {
+    use ash_protocol::CommandId;
+    use ash_protocol::ModelConnectionId;
+    use ash_secrets::SecretStore;
+    use futures::SinkExt;
+    use futures::StreamExt;
+    use std::time::Duration;
+    use std::time::Instant;
+    use tokio_tungstenite::tungstenite::Message;
+    for variable in [
+        "ASH_LIVEKIT_SERVER_PATH",
+        "ASH_COLLABORATION_SERVER_PATH",
+        "ASH_VOICE_HOST_PATH",
+    ] {
+        assert!(std::env::var_os(variable).is_some(), "missing {variable}");
+    }
+    let model_runtime = tokio::runtime::Runtime::new().unwrap();
+    let listener = model_runtime
+        .block_on(tokio::net::TcpListener::bind("127.0.0.1:0"))
+        .unwrap();
+    let base_url = format!("http://{}/v1", listener.local_addr().unwrap());
+    let model = model_runtime.spawn(async move {
+        let (tcp, _) = listener.accept().await.unwrap();
+        let mut socket = tokio_tungstenite::accept_async(tcp).await.unwrap();
+        let started: Value = serde_json::from_str(socket.next().await.unwrap().unwrap().to_text().unwrap()).unwrap();
+        let selected = started["session"]["model"].clone();
+        socket.send(Message::Text(serde_json::json!({"type":"session.started","session":{"id":"gateway-live","model":selected}}).to_string().into())).await.unwrap();
+        let mut heard = false;
+        while let Some(message) = socket.next().await {
+            let Ok(message) = message else { break }; if message.is_close() { break; }
+            let value: Value = serde_json::from_str(message.to_text().unwrap()).unwrap();
+            match value["type"].as_str().unwrap() {
+                "session.input_audio.append" if !heard => {
+                    heard = true;
+                    socket.send(Message::Text(serde_json::json!({"type":"session.input_transcript.delta","delta":"directory speech","start_ms":0,"end_ms":100}).to_string().into())).await.unwrap();
+                }
+                "session.close" => {
+                    socket.send(Message::Text(serde_json::json!({"type":"session.closed","session":{"id":"gateway-live"},"reason":"client","usage":{"seconds":0.5}}).to_string().into())).await.unwrap();
+                    break;
+                }
+                _ => {}
+            }
+        }
+    });
+    let profile = tempfile::tempdir().unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let store = Arc::new(
+        ash_config::ConfigStore::open(profile.path().join("voice-config.sqlite3")).unwrap(),
+    );
+    let mut config = model_provider_info::ModelProviderConfig::for_connection(
+        ModelConnectionId::new("openai").unwrap(),
+    );
+    config.base_url = Some(base_url);
+    store
+        .apply(ash_config::ConfigCommandRequest {
+            command_id: CommandId::new("voice-config").unwrap(),
+            expected_revision: ash_config::ConfigRevision::new(0),
+            command: ash_config::UserConfigCommand::ConfigureConnection {
+                connection: config.connection.clone(),
+                config: config.clone(),
+            },
+        })
+        .unwrap();
+    let secrets = Arc::new(ash_secrets::MemorySecretStore::default());
+    secrets
+        .store(
+            &ash_model_provider::provider_api_key_secret_key(&config.connection),
+            &ash_secrets::SecretValue::new(b"fixture-key".to_vec()),
+        )
+        .unwrap();
+    let provider = Arc::new(ash_model_provider::ModelProviderRuntime::with_secrets(
+        model_provider_info::ProviderConfigRegistry::builtin(),
+        secrets,
+    ));
+    let options = ash_app_server_daemon::ConnectionOptions::new(
+        profile.path(),
+        None,
+        ash_app_server_daemon::GrantSource::HostConfiguration,
+        None,
+    );
+    let registry = Arc::new(ProfileAppServerRegistry::open(options).unwrap());
+    let server = Arc::new(
+        crate::tests::server()
+            .with_config_store(store)
+            .with_home(Arc::new(ash_home::AshHome::new(
+                ash_utils_absolute_path::AbsolutePathBuf::try_from(profile.path()).unwrap(),
+            )))
+            .with_provider_runtime(provider),
+    );
+    let (mut client, stream) = crate::server::request_dispatch::tests::Client::pair();
+    let served = thread::spawn(move || {
+        let (reader, writer) = ash_app_server_transport::LocalStream::pair(stream).unwrap();
+        let result = serve(
+            registry,
+            server,
+            BufReader::new(reader),
+            writer,
+            RemoteLaunch::from_environment(),
+        );
+        assert!(
+            result.is_ok()
+                || result
+                    .as_ref()
+                    .is_err_and(crate::managed::is_peer_disconnect)
+        );
+    });
+    let call = |client: &mut crate::server::request_dispatch::tests::Client, id, method, params| {
+        client.send(id, method, params);
+        loop {
+            let message = client.read();
+            if message["id"] == id {
+                break message;
+            }
+        }
+    };
+    assert!(call(&mut client, 1, "initialize", serde_json::json!({"clientInfo":{"name":"voice-real-gateway","version":"1"},"capabilities":{"dirPermissionsHost":{"version":1}}}))["result"].is_object());
+    let created = call(
+        &mut client,
+        2,
+        "session/create",
+        serde_json::json!({"commandId":"voice-directory","title":"Directory voice","executionTarget":{"type":"local","root":root.path()}}),
+    );
+    assert!(created.get("result").is_some(), "{created}");
+    let session_id = created["result"]["session"]["sessionId"].clone();
+    let thread_id = created["result"]["session"]["threads"][0]["threadId"].clone();
+    let start = call(
+        &mut client,
+        3,
+        "voice/start",
+        serde_json::json!({"resourceId":"media","operationId":"start","deviceId":"device","sessionId":session_id,"threadId":thread_id,"connectionId":"openai","locale":"en","taskLabels":{"queued":"queued","running":"running","waiting":"waiting","completed":"completed","failed":"failed","stopped":"stopped","rejected":"rejected"}}),
+    );
+    assert_eq!(start["result"]["state"], "connected", "{start}");
+    let deadline = Instant::now() + Duration::from_secs(15);
+    let mut id = 4;
+    loop {
+        let read = call(
+            &mut client,
+            id,
+            "session/thread/read",
+            serde_json::json!({"sessionId":session_id,"threadId":thread_id}),
+        );
+        assert!(read.get("result").is_some(), "{read}");
+        assert_eq!(read["result"]["thread"]["turns"], serde_json::json!([]));
+        if read["result"]["transcript"]["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| {
+                entry["type"] == "voiceTranscript"
+                    && entry["transcript"]["text"] == "directory speech"
+            })
+        {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "speech did not enter the original directory journal: {read}"
+        );
+        id += 1;
+        thread::sleep(Duration::from_millis(20));
+    }
+    let stop = call(
+        &mut client,
+        id + 1,
+        "voice/stop",
+        serde_json::json!({"resourceId":"media","mediaEpoch":start["result"]["mediaEpoch"],"operationId":"stop"}),
+    );
+    assert_eq!(stop["result"]["state"], "ended", "{stop}");
+    assert_eq!(stop["result"]["usageMilliseconds"], 500);
+    model_runtime.block_on(model).unwrap();
+    drop(client);
+    served.join().unwrap();
+}

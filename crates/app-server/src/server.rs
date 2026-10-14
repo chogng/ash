@@ -193,6 +193,10 @@ mod thread_history_files;
 mod turn_backend_router;
 pub(crate) mod update_broker;
 pub(crate) mod update_plan_tool;
+mod voice_operations;
+#[cfg(test)]
+#[path = "server/voice_operations_tests.rs"]
+mod voice_operations_tests;
 
 const OUTBOUND_MESSAGE_QUEUE_CAPACITY: usize = 256;
 
@@ -234,7 +238,8 @@ pub struct AppServer {
     memories: Option<Arc<memories::Memories>>,
     approval_environment: Option<Arc<guardian_environment::Environment>>,
     pub(super) attachment_uploads: Mutex<AttachmentUploadStore>,
-    calls: call_runtime::Calls,
+    calls: Arc<call_runtime::Calls>,
+    voices: voice_operations::Voices,
     dictation: realtime_voice::DictationManager,
     dictation_models: realtime_voice::DictationModelManager,
     microphone_gate: Mutex<()>,
@@ -645,7 +650,8 @@ impl AppServer {
             memories: None,
             approval_environment: None,
             attachment_uploads: Mutex::new(AttachmentUploadStore::default()),
-            calls: call_runtime::Calls::default(),
+            calls: Arc::new(call_runtime::Calls::default()),
+            voices: voice_operations::Voices::default(),
             dictation: realtime_voice::DictationManager::default(),
             dictation_models: realtime_voice::DictationModelManager::default(),
             microphone_gate: Mutex::new(()),
@@ -1061,6 +1067,7 @@ impl AppServer {
         self.memory_diagnostics
             .close_owner(connection.connection_id);
         self.feedback.close(connection.connection_id);
+        self.voices.close(connection.connection_id);
         self.calls.close(connection.connection_id);
         self.dictation.close(connection.connection_id);
         self.request_scheduler
@@ -1876,7 +1883,9 @@ impl AppServer {
         mut self,
         policy: ash_http_client::OutboundNetworkPolicy,
     ) -> Self {
-        self.calls.set_network_policy(policy);
+        Arc::get_mut(&mut self.calls)
+            .expect("Call policy is installed before runtime dispatch")
+            .set_network_policy(policy);
         self
     }
 
@@ -2918,6 +2927,21 @@ impl AppServer {
             Some(ClientMethod::ResourceRelease) => {
                 self.resource_release(connection, &request.params)
             }
+            Some(ClientMethod::VoiceStart) => {
+                self.voice_start(connection, &request.params, cancellation)
+            }
+            Some(
+                ClientMethod::VoiceStartCancel
+                | ClientMethod::VoiceRead
+                | ClientMethod::VoiceStop
+                | ClientMethod::VoiceInterrupt
+                | ClientMethod::VoiceRejectDelegation
+                | ClientMethod::VoiceOptions,
+            ) => self.voice_operation(
+                connection,
+                client_method(&request.method).expect("matched Voice method"),
+                &request.params,
+            ),
             Some(ClientMethod::ToolAppList) => self.tool_app_list(&request.params),
             Some(ClientMethod::ToolAppCall) => {
                 self.tool_app_call(connection, &request.params, cancellation)

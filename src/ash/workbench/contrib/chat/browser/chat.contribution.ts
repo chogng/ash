@@ -1,3 +1,4 @@
+import { registerChatCopyActions } from './actions/chatCopyActions.js';
 import { ChatResponseResourceFileSystemProvider, ChatResponseResourceWorkbenchContribution, IChatResponseResourceFileSystemProvider } from '../common/widget/chatResponseResourceFileSystemProvider.js';
 import { registerChatActions } from './actions/chatActions.js';
 import { ChatSessionLinkOpener, registerChatCopyActions } from './actions/chatCopyActions.js';
@@ -33,6 +34,7 @@ registerChatCopyActions();
 registerWorkbenchContribution('workbench.contrib.chatSessionLinks', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ChatSessionLinkOpener));
 registerWorkbenchContribution('workbench.contrib.chatContextActions', WorkbenchPhase.BlockStartup, () => registerChatContextActions());
 registerChatCodeBlockActions();
+registerChatCopyActions();
 registerSkillActions();
 registerHookActions();
 

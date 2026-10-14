@@ -1,3 +1,4 @@
+import { IDictationService } from '../../../../../platform/dictation/common/dictationService.js';
 import { ILanguageModelsService } from '../../common/languageModels.js';
 import './media/dictationSettingsContent.css';
 import { h } from '../../../../../base/browser/dom.js';
@@ -64,6 +65,7 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IAccessibleViewService accessibleView: IAccessibleViewService,
 		@ISpeechService private readonly speech: ISpeechService,
+		@IDictationService private readonly backend: IDictationService | undefined,
 		@INotificationService private readonly notifications: INotificationService,
 	) {
 		super();
@@ -94,6 +96,7 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 			}
 			if (event.affectsConfiguration(DictationConfiguration.inputDevice) || event.affectsConfiguration(DictationConfiguration.language)) { this.updateVisibility(); }
 		}));
+		this._register(speech.onDidChangeHasSpeechProvider(() => this.updateVisibility()));
 		this._register(chat.onDidChangeModels(() => this.updateVisibility()));
 		const scoped = this._register(contextKeys.createScoped(this.controls.domNode));
 		scoped.createKey('dictationModelsFocused', true);
@@ -177,17 +180,19 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 	private async configure(key: string, value: string): Promise<void> {
 		try {
 			// Capture belongs to the selected device. Release it before persisting a new selection.
-			if (this.speech.isBusy) { await this.speech.stopAndTranscribe(); }
+			if (this.speech.hasActiveSpeechToTextSession) { await this.speech.stopAndTranscribe(); }
 			await this.configuration.updateValue(key, value);
 		} catch (error) { this.notifications.error(String(error)); }
 	}
 
 	private async readInputOptions(version: number): Promise<void> {
 		this.microphone.enabled = this.language.enabled = false;
-		if (!this.speech.isConfigured) { return; }
+		if (!this.speech.hasSpeechProvider && !this.backend) { return; }
 		try {
 			const options = await this.speech.getOptions();
 			if (this.isDisposed || version !== this.requestVersion) { return; }
+			this.inputOptions.hidden = !options;
+			if (!options) return;
 			this.microphone.setOptions([{ value: '', label: localize({ bundle: 'ash', key: 'dictation.systemMicrophone' }, 'System default microphone') }, ...options.inputDevices.map(device => ({ value: device.id, label: device.label }))]);
 			const configuredDevice = this.configuration.getValue<string>(DictationConfiguration.inputDevice);
 			if (configuredDevice && !options.inputDevices.some(device => device.id === configuredDevice)) {

@@ -3380,10 +3380,49 @@ fn voice_transcripts_merge_in_the_original_thread_without_starting_or_steering_a
             .text,
         "Review "
     );
+    let child = ThreadId::new("voice-fork").unwrap();
+    let fork = controller
+        .create_forked_thread(CreateForkedThreadRequest {
+            session_id: before.session_id.clone(),
+            thread_id: child.clone(),
+            title: "Voice fork".into(),
+            source_thread_id: thread.clone(),
+            source_sequence: first.sequence,
+        })
+        .unwrap();
+    assert_eq!(fork.voice_transcripts, vec![first.transcript.clone()]);
     let reopened = ThreadController::with_store(store);
+    assert_eq!(
+        reopened.read_thread(&child).unwrap().voice_transcripts,
+        fork.voice_transcripts
+    );
     assert_eq!(
         reopened.read_thread(&thread).unwrap().voice_transcripts,
         after.voice_transcripts
+    );
+    controller
+        .record_agent_message(
+            &thread,
+            &before.turns[0].turn_id,
+            "Execution continued".into(),
+        )
+        .unwrap();
+    let current = controller.read_thread(&thread).unwrap();
+    let next = controller
+        .record_voice_transcript(
+            &thread,
+            request(
+                ash_protocol::VoiceTranscriptSpeaker::User,
+                "A later request",
+                2,
+                200,
+            ),
+        )
+        .unwrap();
+    assert_ne!(next.transcript.item_id, restarted.transcript.item_id);
+    assert_eq!(
+        next.transcript.after_item_id,
+        current.items.last().map(|item| item.item_id().clone())
     );
     assert!(
         controller
@@ -3398,4 +3437,58 @@ fn voice_transcripts_merge_in_the_original_thread_without_starting_or_steering_a
             )
             .is_err()
     );
+}
+
+#[test]
+fn speech_committed_during_a_model_request_does_not_supersede_the_original_response() {
+    let controller = ThreadController::with_store(Arc::new(InMemoryThreadStore::default()));
+    let thread = create_thread(&controller, "Concurrent voice");
+    let turn = start_turn(&controller, &thread, "original-coding");
+    let requested = controller.read_thread(&thread).unwrap();
+    controller
+        .record_voice_transcript(
+            &thread,
+            crate::RecordVoiceTranscriptRequest {
+                voice_session_id: "voice-source".into(),
+                media_epoch: 1,
+                speaker: ash_protocol::VoiceTranscriptSpeaker::User,
+                text: "I am still speaking".into(),
+                start_ms: 0,
+                end_ms: 100,
+            },
+        )
+        .unwrap();
+    let result = controller
+        .commit_model_response(
+            &thread,
+            &turn,
+            requested.sequence,
+            vec![ThreadItem::AgentMessage {
+                item_id: ash_protocol::ItemId::new("original-response").unwrap(),
+                turn_id: turn.clone(),
+                text: "The original answer".into(),
+                phase: Some(ash_protocol::MessagePhase::FinalAnswer),
+            }],
+            ash_protocol::TurnLoopDecision {
+                action: ash_protocol::TurnLoopAction::Complete,
+                reason: ash_protocol::TurnLoopReason::FinalAnswer,
+                stop_reason: ash_protocol::StopReason::Completed,
+                message_phases: vec![None],
+                tool_call_count: 0,
+            },
+        )
+        .unwrap();
+    assert!(matches!(
+        result,
+        crate::thread_controller::CommitModelResponseResult::Completed(_)
+    ));
+    let completed = controller.read_thread(&thread).unwrap();
+    assert_eq!(completed.turns.len(), 1);
+    assert_eq!(
+        completed.turns[0].status,
+        ash_protocol::TurnStatus::Completed
+    );
+    assert_eq!(completed.commands, requested.commands);
+    assert_eq!(completed.voice_transcripts[0].text, "I am still speaking");
+    assert!(completed.items.iter().any(|item| matches!(item, ThreadItem::AgentMessage { text, .. } if text == "The original answer")));
 }

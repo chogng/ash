@@ -595,6 +595,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
             // Only the conversation used by the next request follows the history cursor.
             snapshot.turns = source.turns.clone();
             snapshot.items = source.items.clone();
+            snapshot.voice_transcripts = source.voice_transcripts.clone();
             snapshot.hook_runs = source.hook_runs.clone();
             snapshot.user_time_contexts = source.user_time_contexts.clone();
             snapshot.message_checkpoints = source.message_checkpoints.clone();
@@ -649,6 +650,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     .insert(item.item_id().clone(), envelope.sequence);
             }
             snapshot.advisor = source.advisor.clone();
+            snapshot.voice_transcripts = source.voice_transcripts.clone();
             snapshot.context_checkpoints = source.context_checkpoints.clone();
             snapshot.user_time_contexts = source
                 .user_time_contexts
@@ -1019,6 +1021,16 @@ pub(crate) fn reduce_thread_event_with_prefix(
         }
         ThreadEvent::VoiceTranscriptRecorded { transcript, .. } => {
             require_no_command(envelope)?;
+            if transcript.voice_session_id.is_empty()
+                || transcript.voice_session_id.len() > 128
+                || transcript.voice_session_id.chars().any(char::is_control)
+                || transcript.media_epoch == 0
+                || transcript.text.is_empty()
+                || transcript.text.len() > 64 * 1024
+                || transcript.end_ms < transcript.start_ms
+            {
+                return Err(CoreError::Journal("Invalid persisted voice span".into()));
+            }
             if let Some(existing) = snapshot
                 .voice_transcripts
                 .iter_mut()

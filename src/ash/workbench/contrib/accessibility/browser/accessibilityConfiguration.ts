@@ -1,3 +1,4 @@
+import { SPEECH_LANGUAGE_CONFIG, SPEECH_LANGUAGES } from '../../speech/common/speechService.js';
 import { localize } from '../../../../nls.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
@@ -439,4 +440,21 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	key: AccessibilityVerbositySettingId.Testing, defaultValue: true,
 	parse(value: unknown): boolean { if (typeof value !== 'boolean') { throw new TypeError('Testing verbosity must be boolean'); } return value; },
 	setting: { valueType: 'boolean', title: localize('testing.verbosityTitle', 'Testing accessibility help'), description: localize('testing.verbosityDescription', 'Announce how to open accessibility help when the test tree receives focus.') },
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<string>({
+	key: SPEECH_LANGUAGE_CONFIG,
+	scope: ConfigurationScope.RESOURCE,
+	defaultValue: 'auto',
+	schema: { type: 'string', enum: ['auto', ...Object.keys(SPEECH_LANGUAGES)] },
+	parse(value: unknown): string {
+		if (typeof value === 'string' && (value === 'auto' || Object.hasOwn(SPEECH_LANGUAGES, value))) return value;
+		throw new TypeError(localize('speech.language.invalid', 'Select auto or a supported speech language.'));
+	},
+	setting: {
+		valueType: 'select',
+		get options() { return [{ value: 'auto', label: localize('speech.language.auto', 'Display language') }, ...Object.entries(SPEECH_LANGUAGES).map(([value, language]) => ({ value, label: language.name }))]; },
+		get title() { return localize('speech.language.title', 'Speech language'); },
+		get description() { return localize('speech.language.description', 'Language used by Speech extensions for recognition and synthesis. Auto follows the display language when supported.'); },
+	},
 });

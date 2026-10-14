@@ -145,6 +145,12 @@ pub trait AgentRuntime {
     ) -> Result<ContextInspection, CoreError>;
 
     fn read_thread(&self, thread_id: &ThreadId) -> Result<ThreadView, CoreError>;
+    /// Returns speech facts from the same immutable journal boundary as a Thread history read.
+    fn read_voice_transcripts(
+        &self,
+        thread_id: &ThreadId,
+        sequence: u64,
+    ) -> Result<Vec<ash_protocol::VoiceTranscript>, CoreError>;
     fn read_thread_history(
         &self,
         thread_id: &ThreadId,

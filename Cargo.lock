@@ -519,6 +519,7 @@ dependencies = [
  "ash-utils-image",
  "ash-utils-path-uri",
  "ash-utils-sleep-inhibitor",
+ "ash-voice-agent",
  "ash-voice-host",
  "ash-web-search-extension",
  "ash-websocket-client",

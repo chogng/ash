@@ -25,6 +25,7 @@ use std::collections::BTreeMap;
 use std::io;
 use std::io::BufRead;
 use std::io::Write;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -170,6 +171,28 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
     writer: W,
     remote_launch: RemoteLaunch,
 ) -> io::Result<()> {
+    let source_registry = Arc::downgrade(&registry);
+    profile_server.bind_voice_source(move |session_id, cancellation| {
+        let source_registry = source_registry.clone();
+        async move {
+            let registry = source_registry
+                .upgrade()
+                .ok_or_else(|| "Voice Core route is unavailable".to_owned())?;
+            let Some(session) = registry.local_session(&session_id)? else {
+                return Ok(None);
+            };
+            match session.execution_target {
+                Some(SessionExecutionTarget::Local { root }) => registry
+                    .open_local_session(Path::new(&root), &cancellation)
+                    .await
+                    .map(Some),
+                Some(SessionExecutionTarget::Ssh { .. }) => {
+                    Err("Remote Voice Core routing is unavailable".to_owned())
+                }
+                None => Ok(None),
+            }
+        }
+    });
     let mut reader = JsonlReader::new(reader, DEFAULT_MAX_MESSAGE_BYTES);
     let (outbound, incoming) = crate::server::message_queue::outbound_queue(256);
     thread::scope(|scope| {
@@ -972,7 +995,14 @@ fn selected_execution_target(
     if matches!(
         method.and_then(client_method),
         Some(
-            ClientMethod::MessageHistoryAppend
+            ClientMethod::VoiceOptions
+                | ClientMethod::VoiceStart
+                | ClientMethod::VoiceStartCancel
+                | ClientMethod::VoiceRead
+                | ClientMethod::VoiceStop
+                | ClientMethod::VoiceInterrupt
+                | ClientMethod::VoiceRejectDelegation
+                | ClientMethod::MessageHistoryAppend
                 | ClientMethod::MessageHistoryRead
                 | ClientMethod::MessageHistoryClear
         )

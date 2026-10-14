@@ -149,6 +149,7 @@ pub enum EditorExtensionCapability {
     TerminalProfileProvider,
     TestProfileProvider,
     DataChannel,
+    SpeechProvider,
     LinkPresentationProvider,
     ExternalUriOpener,
 }

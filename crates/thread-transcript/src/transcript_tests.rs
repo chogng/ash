@@ -476,7 +476,7 @@ fn snapshot_transients_follow_visible_live_turns() {
             snapshot
                 .entries
                 .iter()
-                .all(|entry| entry.turn_id() == &visible_turn_id)
+                .all(|entry| entry.turn_id() == Some(&visible_turn_id))
         );
         assert!(
             accumulator
@@ -791,4 +791,79 @@ fn hook_completion_replaces_its_running_transcript_entry_and_replays_stably() {
             _ => unreachable!(),
         }]
     );
+}
+
+#[test]
+fn voice_transcripts_have_no_execution_owner_and_keep_their_original_snapshot_anchor() {
+    let committed = |durable_sequence, event| ThreadUpdateEnvelope {
+        session_id: session_id(),
+        thread_id: thread_id(),
+        durable_sequence,
+        stream_cursor: None,
+        update: ThreadUpdate::Committed { event },
+    };
+    let mut accumulator = TranscriptAccumulator::new(session_id(), thread_id());
+    let transcript = ash_protocol::VoiceTranscript {
+        item_id: ItemId::new("voice-1").unwrap(),
+        voice_session_id: "voice-source".into(),
+        media_epoch: 1,
+        speaker: ash_protocol::VoiceTranscriptSpeaker::User,
+        text: "Review these changes".into(),
+        start_ms: 0,
+        end_ms: 200,
+        after_item_id: None,
+    };
+    let TranscriptApplyResult::Applied(update) = apply(
+        &mut accumulator,
+        committed(
+            1,
+            ThreadEvent::VoiceTranscriptRecorded {
+                thread_id: thread_id(),
+                transcript: transcript.clone(),
+            },
+        ),
+    ) else {
+        panic!("voice update must be applied")
+    };
+    let ThreadTranscriptChange::Upsert { entry } = &update.changes[0] else {
+        panic!("voice must use original transcript mutations")
+    };
+    assert_eq!(entry.turn_id(), None);
+    assert!(!entry.is_transient());
+    assert_eq!(entry.entry_id(), "voice-1");
+    let mut next = transcript.clone();
+    next.text.push_str(" please");
+    next.end_ms = 300;
+    let TranscriptApplyResult::Applied(update) = apply(
+        &mut accumulator,
+        committed(
+            2,
+            ThreadEvent::VoiceTranscriptRecorded {
+                thread_id: thread_id(),
+                transcript: next.clone(),
+            },
+        ),
+    ) else {
+        panic!("voice update must be applied")
+    };
+    assert!(
+        matches!(&update.changes[0], ThreadTranscriptChange::Upsert { entry: ThreadTranscriptEntry::VoiceTranscript { transcript, .. } } if transcript == &next)
+    );
+    let empty = ThreadTranscriptSnapshot {
+        session_id: session_id(),
+        thread_id: thread_id(),
+        durable_sequence: 2,
+        revision: 0,
+        entries: Vec::new(),
+    };
+    assert_eq!(
+        empty
+            .clone()
+            .with_voice_transcripts(&[transcript])
+            .entries
+            .len(),
+        1
+    );
+    next.after_item_id = Some(ItemId::new("outside-history-page").unwrap());
+    assert!(empty.with_voice_transcripts(&[next]).entries.is_empty());
 }

@@ -1,3 +1,4 @@
+import { Selection } from '../../../../../editor/common/core/selection.js';
 import { localize2, localize } from '../../../../../nls.js';
 import { Keybinding, logicalKey } from '../../../../../base/common/keybindings.js';
 import { EditorContextKeys } from '../../../../../editor/common/editorContextKeys.js';
@@ -45,7 +46,8 @@ export class EditorDictation extends Disposable {
 				const selection = editor.getSelection();
 				if (!selection || editor.getOption(EditorOption.readOnly)) { return; }
 				editor.pushUndoStop();
-				editor.executeEdits('dictation', [{ range: selection, text }]);
+				editor.executeEdits('dictation', [{ range: selection, text }], inverseEdits =>
+					inverseEdits.map(edit => Selection.fromPositions(edit.range.getEndPosition())));
 				editor.pushUndoStop();
 			},
 			focus: (): void => editor.focus(),
@@ -67,7 +69,7 @@ export class EditorDictation extends Disposable {
 		const cancel = this._register(new Button(controls, { label: localize({ bundle: 'ash', key: 'dictation.cancel' }, 'Cancel dictation'), presentation: 'quiet' }));
 		this._register(stop.onDidClick(() => { void this.session.stop().catch(error => notifications.error(String(error))); }));
 		this._register(cancel.onDidClick(() => { void this.session.cancel().catch(error => notifications.error(String(error))); }));
-		this._register(this.session.onDidEnd(error => { if (error) { notifications.error(error); } }));
+		this._register(this.session.onDidEnd(error => { if (error) notifications.error(error); controls.hidden = !this.session.isActive; stop.enabled = !speech.isStarting && speech.state !== SpeechToTextState.Transcribing; }));
 		this._register(speech.onDidChangeState(() => {
 			controls.hidden = !this.session.isActive;
 			stop.enabled = !speech.isStarting && speech.state !== SpeechToTextState.Transcribing;

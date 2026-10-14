@@ -453,6 +453,16 @@ impl AppServer {
                 ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },
             );
         }
+        if self.home.is_some()
+            && self.provider_runtime.is_some()
+            && self.config.is_some()
+            && connection.allows_product_host_capabilities()
+        {
+            capabilities.contracts.insert(
+                "voiceConversation".into(),
+                ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },
+            );
+        }
         if self.home.is_some() {
             capabilities.contracts.insert(
                 "calls".into(),
@@ -1261,7 +1271,7 @@ impl AppServer {
             params.history,
         )?;
         let voice_transcripts = self
-            .threads
+            .agent_runtime()
             .read_voice_transcripts(&thread.thread_id, thread.sequence)
             .map_err(core_error)?;
         let transcript =
@@ -1349,7 +1359,7 @@ impl AppServer {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
         let voice_transcripts = self
-            .threads
+            .agent_runtime()
             .read_voice_transcripts(&thread.thread_id, thread.sequence)
             .map_err(core_error)?;
         let transcript =

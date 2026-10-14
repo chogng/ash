@@ -179,6 +179,7 @@ fn entry_text_bytes(
         ThreadTranscriptEntry::ToolOutput { text, .. } => text.len(),
         ThreadTranscriptEntry::TurnError { error, .. } => error.message.len(),
         ThreadTranscriptEntry::TurnPlan { .. } | ThreadTranscriptEntry::HookRun { .. } => 0,
+        ThreadTranscriptEntry::VoiceTranscript { transcript, .. } => transcript.text.len(),
     }
 }
 

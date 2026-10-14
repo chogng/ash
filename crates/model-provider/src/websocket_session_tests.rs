@@ -563,3 +563,35 @@ async fn responses_socket_admits_each_acceleration_option_before_connect_and_war
         }
     }
 }
+
+#[test]
+fn voice_preflight_uses_the_actual_direct_factory_without_opening_a_socket() {
+    let secrets = Arc::new(MemorySecretStore::default());
+    let runtime = ModelProviderRuntime::with_client_and_secrets(
+        ProviderConfigRegistry::builtin(),
+        Arc::new(FailingTransport),
+        secrets.clone(),
+    );
+    let config = ModelProviderConfig::for_connection(
+        ash_protocol::ModelConnectionId::new("openai").unwrap(),
+    );
+    assert!(
+        runtime
+            .check_voice_selection(&config, &model_provider_info::VoiceModelConfig::default())
+            .is_err()
+    );
+    secrets
+        .store(
+            &provider_api_key_secret_key(&config.connection),
+            &SecretValue::new(b"fixture-direct-voice".to_vec()),
+        )
+        .unwrap();
+    runtime
+        .check_voice_selection(&config, &model_provider_info::VoiceModelConfig::default())
+        .unwrap();
+    let text_model = model_provider_info::VoiceModelConfig {
+        model: Some(ash_protocol::ModelId::new("gpt-5.6").unwrap()),
+        voice: None,
+    };
+    assert!(runtime.check_voice_selection(&config, &text_model).is_err());
+}

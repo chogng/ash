@@ -1,3 +1,9 @@
+import { IExtensionService } from '../../services/extensions/common/extensionService.js';
+import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { IContextKeyService } from '../../../platform/contextkey/common/contextkey.js';
+import { ContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
+import { TestExtensionService } from './testExtensionServices.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../services/storage/browser/storageService.js';
@@ -5,6 +11,9 @@ import { DictationOnboardingService, IDictationOnboardingService } from '../../c
 
 /** Test profile storage is isolated from the browser's persistent user profile. */
 export function registerTestDictationOnboarding(services: InstantiationService, seen = true): void {
+	if (!services.has(IConfigurationService)) services.registerSingleton(IConfigurationService, () => new InMemoryConfigurationService());
+	if (!services.has(IContextKeyService)) services.registerSingleton(IContextKeyService, () => new ContextKeyService());
+	if (!services.has(IExtensionService)) services.registerSingleton(IExtensionService, () => new TestExtensionService());
 	if (!services.has(IStorageService)) {
 		const entries = new Map<string, string>();
 		services.registerSingleton(IStorageService, () => new BrowserStorageService({

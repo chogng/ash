@@ -25,6 +25,7 @@ call = { package = "ash-call", path = "../call", features = ["runtime"] }
 livekit-client = { package = "ash-livekit-client", path = "../livekit-client" }
 ash-screen-capture = { workspace = true }
 image = { workspace = true, features = ["jpeg"] }
+voice-agent = { package = "ash-voice-agent", path = "../voice-agent" }
 voice-host = { package = "ash-voice-host", path = "../voice-host" }
 realtime-voice = { package = "ash-realtime-voice", path = "../realtime-voice", features = ["cloud"] }
 file-search = { package = "ash-file-search", path = "../file-search" }

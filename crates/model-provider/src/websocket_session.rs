@@ -131,22 +131,8 @@ impl ModelProviderRuntime {
         cancellation: &CancellationToken,
     ) -> Result<VoiceModelSession, ModelProviderError> {
         super::check_cancellation(cancellation)?;
-        let runtime = self.with_configs([config])?;
-        let normalized = runtime.configs.normalize_for(config, &config.provider)?;
-        let definition = runtime
-            .configs
-            .get(&normalized.provider)
-            .expect("normalized provider exists");
-        if definition.live_api_profile != model_provider_info::LiveApiProfile::OpenAiLive {
-            return Err(ModelProviderError::Unavailable(
-                "provider has no declared voice session protocol".into(),
-            ));
-        }
-        let voice = definition.resolve_voice(selection)?;
-        let model = ModelRef::new(definition.id.clone(), voice.model.clone());
-        // This factory always resolves direct provider credentials, independently of text subscriptions.
-        let connection = runtime.direct_connection(&normalized)?;
-        let provider = runtime.instantiate_normalized_with_connection(normalized, connection)?;
+        let (provider, voice) = self.voice_provider(config, selection)?;
+        let model = ModelRef::new(provider.definition.id.clone(), voice.model.clone());
         let target = provider.target.resolve()?;
         let session = ash_api::LiveSession::connect(
             connector,
@@ -165,6 +151,40 @@ impl ModelProviderRuntime {
             voice: voice.voice,
             session,
         })
+    }
+
+    /// Prepares the same direct voice target as `connect_voice`, without starting media or a socket.
+    pub fn check_voice_selection(
+        &self,
+        config: &ModelProviderConfig,
+        selection: &model_provider_info::VoiceModelConfig,
+    ) -> Result<(), ModelProviderError> {
+        let (provider, _) = self.voice_provider(config, selection)?;
+        provider.target.resolve()?;
+        Ok(())
+    }
+
+    fn voice_provider(
+        &self,
+        config: &ModelProviderConfig,
+        selection: &model_provider_info::VoiceModelConfig,
+    ) -> Result<(Provider, model_provider_info::ResolvedVoiceModel), ModelProviderError> {
+        let runtime = self.with_configs([config])?;
+        let normalized = runtime.configs.normalize_for(config, &config.provider)?;
+        let definition = runtime
+            .configs
+            .get(&normalized.provider)
+            .expect("normalized provider exists");
+        if definition.live_api_profile != model_provider_info::LiveApiProfile::OpenAiLive {
+            return Err(ModelProviderError::Unavailable(
+                "provider has no declared voice session protocol".into(),
+            ));
+        }
+        let voice = definition.resolve_voice(selection)?;
+        // This factory always resolves direct provider credentials, independently of text subscriptions.
+        let connection = runtime.direct_connection(&normalized)?;
+        let provider = runtime.instantiate_normalized_with_connection(normalized, connection)?;
+        Ok((provider, voice))
     }
 
     /// Opens an explicitly declared Responses WebSocket service. Does not change HTTP defaults.

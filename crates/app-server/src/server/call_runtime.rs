@@ -71,7 +71,7 @@ impl Calls {
         self.network_policy.clone()
     }
 
-    fn executor(&self) -> Result<&tokio::runtime::Runtime, Failure> {
+    pub(super) fn executor(&self) -> Result<&tokio::runtime::Runtime, Failure> {
         if self.executor.get().is_none() {
             let runtime = tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(2)

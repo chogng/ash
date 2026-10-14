@@ -159,16 +159,6 @@ impl<'a> Runtime<'a> {
         })
     }
 
-    pub fn record_voice_transcript(
-        &self,
-        thread_id: &ThreadId,
-        request: crate::RecordVoiceTranscriptRequest,
-    ) -> Result<crate::RecordVoiceTranscriptResult, CoreError> {
-        let recorded = self.threads.record_voice_transcript(thread_id, request)?;
-        self.publish(thread_id, recorded.after_sequence)?;
-        Ok(recorded)
-    }
-
     fn publish(&self, thread_id: &ThreadId, after: u64) -> Result<(), CoreError> {
         for update in self.threads.thread_updates_after(thread_id, after)? {
             self.updates.publish(update);
@@ -707,6 +697,14 @@ impl AgentRuntime for Runtime<'_> {
     }
     fn read_thread(&self, thread_id: &ThreadId) -> Result<ThreadView, CoreError> {
         self.threads.read_thread(thread_id).map(Into::into)
+    }
+
+    fn read_voice_transcripts(
+        &self,
+        thread_id: &ThreadId,
+        sequence: u64,
+    ) -> Result<Vec<ash_protocol::VoiceTranscript>, CoreError> {
+        self.threads.read_voice_transcripts(thread_id, sequence)
     }
     fn read_started_thread(&self, command_id: &CommandId) -> Result<Option<ThreadView>, CoreError> {
         self.threads

@@ -64,7 +64,14 @@ async fn model_failure_survives_a_second_failure_during_finalization() {
     bridge(Ending::ModelFailure).await;
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "requires the pinned LiveKit Server executable"]
+async fn external_cancellation_finalizes_the_original_live_session_and_reports_usage() {
+    bridge(Ending::Cancel).await;
+}
+
 enum Ending {
+    Cancel,
     StopPlayback,
     Stop,
     Leave,
@@ -375,6 +382,10 @@ async fn bridge(ending: Ending) {
     let remaining_alice = match ending {
         Ending::Stop | Ending::StopPlayback => {
             commands.send(AgentCommand::Stop).await.unwrap();
+            Some(alice)
+        }
+        Ending::Cancel => {
+            cancellation.cancel();
             Some(alice)
         }
         Ending::Leave => {

@@ -63,3 +63,4 @@ pub mod text_document;
 pub mod transcript;
 pub mod turn;
 pub mod turn_changes;
+pub mod voice;

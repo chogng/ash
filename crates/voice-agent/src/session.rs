@@ -109,6 +109,9 @@ impl VoiceAgent {
     ) -> Result<(), AgentError> {
         let mut clock = tokio::time::interval(Duration::from_millis(10));
         clock.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        // Dropping a Live receive is cancellation-safe; cancelling its token retires the
+        // socket. Let the select cancellation branch drop the read so finalization can close it.
+        let receive_token = CancellationSource::new().token();
         let mut transcript = String::new();
         let mut delegations = BTreeSet::new();
         let mut humans = BTreeSet::new();
@@ -143,7 +146,7 @@ impl VoiceAgent {
                     }
                     _ => {}
                 },
-                event = self.model.receive(cancellation) => match event? {
+                event = self.model.receive(&receive_token) => match event? {
                     VoiceEvent::Audio { pcm16 } => self.audio.push_output(&pcm16)?,
                     VoiceEvent::InputTranscript { text, start_ms, end_ms } => {
                         transcript.push_str(&text);

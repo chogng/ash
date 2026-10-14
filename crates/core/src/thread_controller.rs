@@ -166,7 +166,6 @@ pub struct RecordVoiceTranscriptRequest {
 
 #[derive(Clone, Debug)]
 pub struct RecordVoiceTranscriptResult {
-    pub after_sequence: u64,
     pub sequence: u64,
     pub transcript: ash_protocol::VoiceTranscript,
 }
@@ -1929,6 +1928,57 @@ impl ThreadController {
         })
     }
 
+    /// Reads only the normal Core Turn that accepted one authorized voice task context.
+    pub fn read_voice_task_progress(
+        &self,
+        thread_id: &ThreadId,
+        command_id: &CommandId,
+        transcript: &str,
+    ) -> Result<Option<(TurnId, TurnStatus, Option<String>)>, CoreError> {
+        self.with_loaded_thread(thread_id, |loaded| {
+            let snapshot = &loaded.snapshot;
+            let turn_id = snapshot.items.iter().rev().find_map(|item| match item {
+                ThreadItem::UserContext {
+                    turn_id,
+                    client_id: Some(id),
+                    content,
+                    ..
+                } if id == command_id && content == transcript => Some(turn_id),
+                _ => None,
+            });
+            let Some(turn_id) = turn_id else {
+                return Ok(None);
+            };
+            let turn = snapshot
+                .turns
+                .iter()
+                .find(|turn| &turn.turn_id == turn_id)
+                .ok_or_else(|| {
+                    CoreError::Journal("Voice task context has no execution Turn".into())
+                })?;
+            let summary = snapshot
+                .items
+                .iter()
+                .rev()
+                .find_map(|item| match item {
+                    ThreadItem::AgentMessage {
+                        turn_id: owner,
+                        text,
+                        ..
+                    } if owner == turn_id => Some(text),
+                    _ => None,
+                })
+                .map(|text| {
+                    let mut end = text.len().min(500);
+                    while !text.is_char_boundary(end) {
+                        end -= 1;
+                    }
+                    text[..end].to_owned()
+                });
+            Ok(Some((turn_id.clone(), turn.status, summary)))
+        })
+    }
+
     /// Reads speech from the exact journal boundary used by a transcript/history snapshot.
     pub fn read_voice_transcripts(
         &self,
@@ -1970,11 +2020,12 @@ impl ThreadController {
             if snapshot.status == ash_protocol::ThreadStatus::Archived {
                 return Err(CoreError::InvalidInput("Voice target is archived".into()));
             }
-            let after_sequence = snapshot.sequence;
             let previous = snapshot.voice_transcripts.last().filter(|entry| {
                 entry.voice_session_id == request.voice_session_id
                     && entry.media_epoch == request.media_epoch
                     && entry.speaker == request.speaker
+                    && entry.after_item_id
+                        == snapshot.items.last().map(|item| item.item_id().clone())
                     && entry.text.len() + request.text.len() <= MAX_SPAN_BYTES
                     && entry.end_ms <= request.end_ms
             });
@@ -2004,7 +2055,6 @@ impl ThreadController {
                 }],
             )?;
             Ok(RecordVoiceTranscriptResult {
-                after_sequence,
                 sequence: snapshot.sequence,
                 transcript,
             })
