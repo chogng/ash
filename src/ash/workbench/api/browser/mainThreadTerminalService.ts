@@ -18,7 +18,7 @@ import { ILogService } from '../../../platform/log/common/log.js';
 import { RequestStore } from '../../../platform/terminal/common/requestStore.js';
 import { addDisposableListener } from '../../../base/browser/dom.js';
 
-type ProfileReply = { value: JsonValue } | { error: unknown };
+type ProfileReply = { value: JsonValue; } | { error: unknown; };
 
 export interface ExtensionTerminalProfileRegistration {
 	readonly runtimeId: string;
@@ -29,9 +29,9 @@ export interface ExtensionTerminalProfileRegistration {
 }
 
 export interface ExtensionTerminalEnvironmentRegistration {
- readonly runtimeId: string;
- readonly packageDigest: string;
- readonly invoke: ExtensionHostProviderInvoker;
+	readonly runtimeId: string;
+	readonly packageDigest: string;
+	readonly invoke: ExtensionHostProviderInvoker;
 }
 
 /** Binds incarnation-owned callbacks to the existing terminal profile and instance owners. */
@@ -57,35 +57,35 @@ export class MainThreadTerminalService extends Disposable {
 		this._register(workspace.onDidChangeWorkspace(() => this.workspaceGeneration++));
 	}
 
- replaceEnvironmentProviders(next: readonly ExtensionTerminalEnvironmentRegistration[]): void {
-  if (this.isDisposed) throw new CancellationError();
-  const keys = new Set(next.map(descriptor => descriptor.runtimeId));
-  if (keys.size !== next.length) throw invalid();
-  for (const key of this.environmentDescriptors.keys()) {
-   if (keys.has(key)) continue;
-   this.environmentRegistrations.deleteAndDispose(key);
-   this.environmentDescriptors.delete(key);
-  }
-  for (const descriptor of next) {
-   const key = descriptor.runtimeId;
-   if (this.environmentDescriptors.get(key) === descriptor) continue;
-   const extension = this.extensions.currentCatalog.extensions.find(extension => extension.packageSha256 === descriptor.packageDigest);
-   if (!extension) throw invalid();
-   this.environmentRegistrations.deleteAndDispose(key);
-   this.environmentDescriptors.delete(key);
-   const lifetime = new DisposableStore();
-   const controller = new AbortController();
-   lifetime.add(toDisposable(() => controller.abort()));
-   lifetime.add(this.environmentVariables.registerCollectionProvider(extension.id, async () => {
-    const snapshot = record(await descriptor.invoke('getTerminalEnvironment', {}, controller.signal));
-    if (Object.keys(snapshot).some(key => !['persistent', 'map', 'descriptionMap'].includes(key))) throw invalid();
-    if (typeof snapshot.persistent !== 'boolean') throw invalid();
-    return { persistent: snapshot.persistent, map: deserializeEnvironmentVariableCollection(snapshot.map), descriptionMap: snapshot.descriptionMap === undefined ? undefined : deserializeEnvironmentDescriptionMap(snapshot.descriptionMap) };
-   }));
-   this.environmentRegistrations.set(key, lifetime);
-   this.environmentDescriptors.set(key, descriptor);
-  }
- }
+	replaceEnvironmentProviders(next: readonly ExtensionTerminalEnvironmentRegistration[]): void {
+		if (this.isDisposed) throw new CancellationError();
+		const keys = new Set(next.map(descriptor => descriptor.runtimeId));
+		if (keys.size !== next.length) throw invalid();
+		for (const key of this.environmentDescriptors.keys()) {
+			if (keys.has(key)) continue;
+			this.environmentRegistrations.deleteAndDispose(key);
+			this.environmentDescriptors.delete(key);
+		}
+		for (const descriptor of next) {
+			const key = descriptor.runtimeId;
+			if (this.environmentDescriptors.get(key) === descriptor) continue;
+			const extension = this.extensions.currentCatalog.extensions.find(extension => extension.packageSha256 === descriptor.packageDigest);
+			if (!extension) throw invalid();
+			this.environmentRegistrations.deleteAndDispose(key);
+			this.environmentDescriptors.delete(key);
+			const lifetime = new DisposableStore();
+			const controller = new AbortController();
+			lifetime.add(toDisposable(() => controller.abort()));
+			lifetime.add(this.environmentVariables.registerCollectionProvider(extension.id, async () => {
+				const snapshot = record(await descriptor.invoke('getTerminalEnvironment', {}, controller.signal));
+				if (Object.keys(snapshot).some(key => !['persistent', 'map', 'descriptionMap'].includes(key))) throw invalid();
+				if (typeof snapshot.persistent !== 'boolean') throw invalid();
+				return { persistent: snapshot.persistent, map: deserializeEnvironmentVariableCollection(snapshot.map), descriptionMap: snapshot.descriptionMap === undefined ? undefined : deserializeEnvironmentDescriptionMap(snapshot.descriptionMap) };
+			}));
+			this.environmentRegistrations.set(key, lifetime);
+			this.environmentDescriptors.set(key, descriptor);
+		}
+	}
 
 	replaceProfiles(next: readonly ExtensionTerminalProfileRegistration[]): void {
 		if (this.isDisposed) throw new CancellationError();
@@ -107,7 +107,7 @@ export class MainThreadTerminalService extends Disposable {
 			const lifetime = new DisposableStore();
 			const controller = new AbortController();
 			lifetime.add(toDisposable(() => controller.abort()));
-			const requests = lifetime.add(this.instantiation.createInstance(RequestStore<ProfileReply, { signal: AbortSignal }>, undefined));
+			const requests = lifetime.add(this.instantiation.createInstance(RequestStore<ProfileReply, { signal: AbortSignal; }>, undefined));
 			lifetime.add(requests.onCreateRequest(({ requestId, signal }) => {
 				if (signal.aborted) { requests.acceptReply(requestId, { error: new CancellationError() }); return; }
 				const cancellation = addDisposableListener(signal, 'abort', () => {

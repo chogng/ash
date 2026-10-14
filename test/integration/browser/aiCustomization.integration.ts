@@ -26,6 +26,9 @@ import { ILocalizationService } from '../../../src/ash/workbench/services/locali
 import { IAppServerRemoteAgentService } from '../../../src/ash/workbench/services/remote/common/appServerRemoteAgentService.js';
 import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
+import { IWorkbenchHostService } from '../../../src/ash/workbench/services/host/common/workbenchHostService.js';
+import { IPromptsService } from '../../../src/ash/workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
+import { PromptsService } from '../../../src/ash/workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
 import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
 import { ITextFileService } from '../../../src/ash/workbench/services/textfile/common/textfiles.js';
 import type { ITextFileSaveEvent } from '../../../src/ash/workbench/services/textfile/common/textFileService.js';

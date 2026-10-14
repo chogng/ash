@@ -265,7 +265,7 @@ impl Workflow {
         let definition: Definition = if yaml.trim().is_empty() {
             Definition::default()
         } else {
-            serde_yaml::from_str(yaml)
+            serde_saphyr::from_str(yaml)
                 .map_err(|_| Error::Invalid("workflow YAML is invalid".into()))?
         };
         let options = definition.tracker;
@@ -426,7 +426,7 @@ impl Workflow {
         let token = if token_env.is_empty() {
             let source = read_source(Path::new(&self.path))?.replace("\r\n", "\n");
             let (yaml, _) = frontmatter(&source);
-            let definition: Definition = serde_yaml::from_str(yaml)
+            let definition: Definition = serde_saphyr::from_str(yaml)
                 .map_err(|_| Error::Invalid("workflow YAML is invalid".into()))?;
             if definition.tracker.provider.api_key.is_empty() {
                 definition.tracker.api_key

@@ -14,7 +14,7 @@ source declarations and translations without requiring or writing generated cata
 
 | Surface                                                              | Owner                                                                           | Contract                                                         |
 | -------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| Core English fallback                                                | Feature NLS declarations + shared protocol metadata                            | Always available                                                 |
+| Core English fallback                                                | Feature NLS declarations + shared protocol metadata                             | Always available                                                 |
 | Preinstalled Simplified Chinese extension                            | `extensions/language-pack-zh-cn`                                                | Static Ash extension, available offline                          |
 | Language-pack discovery, acquisition, leases, and catalog projection | `platform/languagePacks`                                                        | `ILanguagePackService`; Extensions `packageType: "localization"` |
 | Locale selection and persistence                                     | `workbench/services/localization/common/locale.ts` + `browser/localeService.ts` | `ILocaleService`, local-profile `workbench.locale`               |

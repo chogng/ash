@@ -377,7 +377,7 @@ schemars = "1.2.1"
 semver = { version = "1", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-serde_yaml = "0.9"
+serde-saphyr = { version = "2.0", default-features = false, features = ["deserialize"] }
 liquid = "=0.26.11"
 shell-words = "=1.1.1"
 signal-hook = "0.3"

@@ -2939,7 +2939,8 @@ impl AppServer {
         if let Some((session_id, path)) = Self::terminal_session_directory(dir_id)
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?
         {
-            let authorization = self.session_dir_authorization(&session_id, &path, Permission::ExecuteCommands)?;
+            let authorization =
+                self.session_dir_authorization(&session_id, &path, Permission::ExecuteCommands)?;
             return self.session_terminal_service(&session_id, &authorization);
         }
         let runtime = self
@@ -2992,7 +2993,9 @@ impl AppServer {
                 .map_err(|_| RpcError::new(-32064, AppServerErrorName::TerminalOperationFailed))?;
             runtime.execution.session_terminals = Some(Arc::new(service));
         }
-        Ok(Arc::clone(runtime.execution.session_terminals.as_ref().unwrap()))
+        Ok(Arc::clone(
+            runtime.execution.session_terminals.as_ref().unwrap(),
+        ))
     }
 
     pub(super) fn configured_terminal_services(

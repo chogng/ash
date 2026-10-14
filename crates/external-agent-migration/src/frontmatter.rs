@@ -1,18 +1,22 @@
+use serde::Deserialize;
 use serde::Deserializer;
+use serde::de::DeserializeOwned;
 use serde::de::DeserializeSeed;
 use serde::de::EnumAccess;
+use serde::de::IgnoredAny;
 use serde::de::MapAccess;
 use serde::de::SeqAccess;
 use serde::de::VariantAccess;
 use serde::de::Visitor;
+use serde::de::value::MapAccessDeserializer;
 use std::collections::BTreeMap;
 use std::fmt;
+use std::marker::PhantomData;
 
 use crate::AgentImportDiagnosticCode;
 use crate::source::MAX_DOCUMENT_DEPTH;
 use crate::source::MAX_DOCUMENT_NODES;
 use crate::source::MAX_FILE_BYTES;
-use serde_yaml::Value as YamlValue;
 
 /// One markdown document split into its frontmatter mapping and body.
 #[derive(Debug, Eq, PartialEq)]
@@ -90,41 +94,119 @@ fn parse_frontmatter(
     if let Err(code) = validate_yaml(raw_frontmatter) {
         return (BTreeMap::new(), Some(code));
     }
-    let parsed: YamlValue = match serde_yaml::from_str(raw_frontmatter) {
-        Ok(parsed) => parsed,
-        Err(_) => {
-            return (
-                BTreeMap::new(),
-                Some(AgentImportDiagnosticCode::InvalidContent),
-            );
-        }
-    };
-    let Some(mapping) = parsed.as_mapping() else {
-        return (
+    match serde_saphyr::from_str::<FrontmatterMapping>(raw_frontmatter) {
+        Ok(mapping) => (mapping.0, None),
+        Err(_) => (
             BTreeMap::new(),
             Some(AgentImportDiagnosticCode::InvalidContent),
-        );
-    };
-
-    let mut frontmatter = BTreeMap::new();
-    for (key, value) in mapping {
-        let Some(key) = key.as_str().map(str::trim).filter(|key| !key.is_empty()) else {
-            continue;
-        };
-        frontmatter.insert(key.to_string(), frontmatter_value_from_yaml(value));
+        ),
     }
-
-    (frontmatter, None)
 }
 
-fn frontmatter_value_from_yaml(value: &YamlValue) -> FrontmatterValue {
-    match value {
-        YamlValue::String(value) => FrontmatterValue::Scalar(value.trim().to_string()),
-        YamlValue::Bool(value) => FrontmatterValue::Scalar(value.to_string()),
-        YamlValue::Number(value) => FrontmatterValue::Scalar(value.to_string()),
-        YamlValue::Null | YamlValue::Sequence(_) | YamlValue::Mapping(_) | YamlValue::Tagged(_) => {
-            FrontmatterValue::Other
+// Importers only consume top-level scalar fields. Drain compound values without building
+// a second YAML tree, while retaining the distinction between string and non-string keys.
+struct FrontmatterMapping(BTreeMap<String, FrontmatterValue>);
+
+enum ScalarField {
+    Text(String),
+    NumberOrBool(String),
+    Other,
+}
+
+impl<'de> Deserialize<'de> for ScalarField {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_any(ScalarFieldVisitor)
+    }
+}
+
+struct ScalarFieldVisitor;
+
+impl<'de> Visitor<'de> for ScalarFieldVisitor {
+    type Value = ScalarField;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("a frontmatter field")
+    }
+
+    fn visit_str<E: serde::de::Error>(self, value: &str) -> Result<Self::Value, E> {
+        Ok(ScalarField::Text(value.trim().into()))
+    }
+
+    fn visit_bool<E: serde::de::Error>(self, value: bool) -> Result<Self::Value, E> {
+        Ok(ScalarField::NumberOrBool(value.to_string()))
+    }
+
+    fn visit_i64<E: serde::de::Error>(self, value: i64) -> Result<Self::Value, E> {
+        Ok(ScalarField::NumberOrBool(value.to_string()))
+    }
+
+    fn visit_u64<E: serde::de::Error>(self, value: u64) -> Result<Self::Value, E> {
+        Ok(ScalarField::NumberOrBool(value.to_string()))
+    }
+
+    fn visit_f64<E: serde::de::Error>(self, value: f64) -> Result<Self::Value, E> {
+        let value = if value.is_nan() {
+            ".nan".into()
+        } else if value == f64::INFINITY {
+            ".inf".into()
+        } else if value == f64::NEG_INFINITY {
+            "-.inf".into()
+        } else {
+            format!("{value:?}")
+        };
+        Ok(ScalarField::NumberOrBool(value))
+    }
+
+    fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+        Ok(ScalarField::Other)
+    }
+
+    fn visit_seq<A: SeqAccess<'de>>(self, mut sequence: A) -> Result<Self::Value, A::Error> {
+        while sequence.next_element::<IgnoredAny>()?.is_some() {}
+        Ok(ScalarField::Other)
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+        while map.next_entry::<IgnoredAny, IgnoredAny>()?.is_some() {}
+        Ok(ScalarField::Other)
+    }
+}
+
+impl<'de> Deserialize<'de> for FrontmatterMapping {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_map(FrontmatterMappingVisitor)
+    }
+}
+
+struct FrontmatterMappingVisitor;
+
+impl<'de> Visitor<'de> for FrontmatterMappingVisitor {
+    type Value = FrontmatterMapping;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("a frontmatter mapping")
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+        let mut fields = BTreeMap::new();
+        while let Some((key, value)) = map
+            .next_entry::<serde_saphyr::Tagged<ScalarField>, serde_saphyr::Tagged<ScalarField>>()?
+        {
+            if let serde_saphyr::Tagged(ScalarField::Text(key), None) = key {
+                if key.is_empty() {
+                    continue;
+                }
+                let value = match value {
+                    serde_saphyr::Tagged(
+                        ScalarField::Text(value) | ScalarField::NumberOrBool(value),
+                        None,
+                    ) => FrontmatterValue::Scalar(value),
+                    _ => FrontmatterValue::Other,
+                };
+                fields.insert(key, value);
+            }
         }
+        Ok(FrontmatterMapping(fields))
     }
 }
 
@@ -144,26 +226,43 @@ pub(crate) fn frontmatter_error(
     document.frontmatter_error
 }
 
-// Check expanded YAML before constructing Value: aliases can duplicate scalars and subtrees
-// without increasing file size. The seed walks the same deserializer without allocating a tree.
+// Check expanded YAML before typed decoding: aliases can duplicate scalars and subtrees
+// without increasing file size. The seed visits every field without allocating a tree.
 fn validate_yaml(raw: &str) -> Result<(), AgentImportDiagnosticCode> {
     let mut budget = YamlBudget {
         nodes: 0,
         bytes: 0,
         exceeded: false,
     };
-    let result = BoundedYaml {
-        budget: &mut budget,
-        depth: 0,
-    }
-    .deserialize(serde_yaml::Deserializer::from_str(raw));
-    result.map_err(|_| {
-        if budget.exceeded {
+    let result = serde_saphyr::with_deserializer_from_str(raw, |deserializer| {
+        BoundedYaml {
+            budget: &mut budget,
+            depth: 0,
+        }
+        .deserialize(deserializer)
+    });
+    result.map_err(|error| {
+        if budget.exceeded || yaml_limit_error(&error) {
             AgentImportDiagnosticCode::LimitExceeded
         } else {
             AgentImportDiagnosticCode::InvalidContent
         }
     })
+}
+
+// The parser can reject nesting or alias replay before our visitor reaches its own limit.
+// Preserve the import diagnostic even when the library supplies the earlier guard.
+fn yaml_limit_error(error: &serde_saphyr::Error) -> bool {
+    use serde_saphyr::Error;
+    match error.without_snippet() {
+        Error::Budget { .. }
+        | Error::AliasReplayCounterOverflow { .. }
+        | Error::AliasReplayLimitExceeded { .. }
+        | Error::AliasExpansionLimitExceeded { .. }
+        | Error::AliasReplayStackDepthExceeded { .. } => true,
+        Error::AliasError { error, .. } => yaml_limit_error(error),
+        _ => false,
+    }
 }
 
 struct YamlBudget {
@@ -271,23 +370,39 @@ impl<'de> Visitor<'de> for BoundedYaml<'_> {
 mod tests;
 
 /// Strict, bounded header parsing for instruction source formats.
-pub(crate) fn instruction_header(
+pub(crate) fn instruction_header<T: DeserializeOwned>(
     content: &str,
-) -> Result<(YamlValue, String), AgentImportDiagnosticCode> {
-    let Some(rest) = content
+) -> Result<(T, String), AgentImportDiagnosticCode> {
+    let (raw, body) = if let Some(rest) = content
         .strip_prefix("---\n")
         .or_else(|| content.strip_prefix("---\r\n"))
-    else {
-        return Ok((YamlValue::Mapping(Default::default()), content.into()));
+    {
+        let (end, body_start) =
+            frontmatter_end(rest).ok_or(AgentImportDiagnosticCode::InvalidContent)?;
+        (&rest[..end], &rest[body_start..])
+    } else {
+        ("{}", content)
     };
-    let (end, body_start) =
-        frontmatter_end(rest).ok_or(AgentImportDiagnosticCode::InvalidContent)?;
-    let raw = &rest[..end];
     validate_yaml(raw)?;
-    let header: YamlValue =
-        serde_yaml::from_str(raw).map_err(|_| AgentImportDiagnosticCode::InvalidContent)?;
-    if !header.is_mapping() {
-        return Err(AgentImportDiagnosticCode::InvalidContent);
+    let header = serde_saphyr::with_deserializer_from_str(raw, |deserializer| {
+        deserializer.deserialize_map(InstructionHeaderVisitor::<T>(PhantomData))
+    })
+    .map_err(|_| AgentImportDiagnosticCode::InvalidContent)?;
+    Ok((header, body.into()))
+}
+
+// Serde structs also accept positional sequences. External instruction headers require a
+// mapping, so enforce that shape before handing the fields to the format's typed contract.
+struct InstructionHeaderVisitor<T>(PhantomData<T>);
+
+impl<'de, T: Deserialize<'de>> Visitor<'de> for InstructionHeaderVisitor<T> {
+    type Value = T;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("an instruction header mapping")
     }
-    Ok((header, rest[body_start..].into()))
+
+    fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<T, A::Error> {
+        T::deserialize(MapAccessDeserializer::new(map))
+    }
 }

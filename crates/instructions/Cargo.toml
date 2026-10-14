@@ -14,7 +14,7 @@ path = "src/lib.rs"
 [dependencies]
 globset = { workspace = true }
 serde = { workspace = true }
-serde_yaml = { workspace = true }
+serde-saphyr = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

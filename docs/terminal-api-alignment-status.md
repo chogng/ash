@@ -88,6 +88,6 @@ Agent loop 全部由 Rust 后端拥有。前端保留 Workbench 交互、屏幕�
 
 本轮 macOS 验证：正常 `pnpm test:unit` 选择 TerminalService / TerminalBackend / TerminalProcessExtHostProxy / TerminalConfigurationService 四文件，**137 项通过**；Common / Renderer 类型检查通过。正常准备入口通过，中文语言包生成无缺译。
 
-正常浏览器入口的全 fixture 类型检查在范围外 `chatTranscript.integration.ts` 的 diagnostic code 类型、`textModel.integration.ts` 的 SyntaxToken fixture 上失败。终端切片继承原浏览器 compiler options 的 **2504** 文件检查通过；原 `test/integration/browser/run.ts` 执行 Chromium **3 场景通过**：粘贴与原始键盘输入、重新附着只订阅一次、鼠标原始高字节。没有将全浏览器类型检查记为通过。受影响 TS formatter、文档/NLS JSON Prettier 和 diff whitespace 检查通过。
+正常浏览器入口的全 fixture 类型检查已通过：diagnostic code fixture 提取领域标记的标量 code，SyntaxToken / folding / symbol / diagnostic fixture 使用原 SyntaxRange 的零基坐标。相关 Chromium **6 场景通过**，覆盖英文/中文诊断编辑、诊断日志、Rust syntax 与 symbol navigation、主题诊断颜色。原终端 Chromium **3 场景通过**：粘贴与原始键盘输入、重新附着只订阅一次、鼠标原始高字节。受影响 TS formatter、文档/NLS JSON Prettier 和 diff whitespace 检查通过。
 
 本轮未修改 Rust、协议、平台 Browser adapters 或视觉样式，也未声明 Electron、真实 SSH、Windows/Linux PTY 或 PowerShell runtime 验证。

@@ -527,7 +527,7 @@ fn parse_entry(
             return None;
         }
     };
-    let frontmatter: InstructionFrontmatter = match serde_yaml::from_str(frontmatter) {
+    let frontmatter: InstructionFrontmatter = match serde_saphyr::from_str(frontmatter) {
         Ok(frontmatter) => frontmatter,
         Err(_) => {
             diagnostics.push(diagnostic(

@@ -350,7 +350,9 @@ fn convert_message(message: &Message) -> Result<Value, ApiError> {
 
 fn convert_content(content: &ContentPart) -> Result<Value, ApiError> {
     match content {
-        ContentPart::Artifact { artifact } => convert_content(&ContentPart::Text(artifact.model_text())),
+        ContentPart::Artifact { artifact } => {
+            convert_content(&ContentPart::Text(artifact.model_text()))
+        }
         ContentPart::Text(text) => Ok(json!({"type": "text", "text": text})),
         ContentPart::AudioAttachment { .. } | ContentPart::AudioUrl { .. } => {
             Err(ApiError::InvalidRequest(
@@ -529,7 +531,9 @@ fn content_text(content: &[ContentPart]) -> String {
         .iter()
         .filter_map(|part| match part {
             ContentPart::Text(text) => Some(std::borrow::Cow::Borrowed(text.as_str())),
-            ContentPart::Artifact { artifact } => Some(std::borrow::Cow::Owned(artifact.model_text())),
+            ContentPart::Artifact { artifact } => {
+                Some(std::borrow::Cow::Owned(artifact.model_text()))
+            }
             ContentPart::ImageAttachment { .. }
             | ContentPart::AudioAttachment { .. }
             | ContentPart::AudioUrl { .. } => None,

@@ -454,7 +454,9 @@ fn content_text(content: &[ContentPart]) -> String {
         .iter()
         .filter_map(|part| match part {
             ContentPart::Text(text) => Some(std::borrow::Cow::Borrowed(text.as_str())),
-            ContentPart::Artifact { artifact } => Some(std::borrow::Cow::Owned(artifact.model_text())),
+            ContentPart::Artifact { artifact } => {
+                Some(std::borrow::Cow::Owned(artifact.model_text()))
+            }
             ContentPart::ImageAttachment { .. }
             | ContentPart::AudioAttachment { .. }
             | ContentPart::AudioUrl { .. } => None,

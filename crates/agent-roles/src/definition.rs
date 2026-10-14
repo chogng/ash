@@ -57,7 +57,7 @@ pub(crate) fn parse(
                 "Agent definition must start with YAML frontmatter",
             )
         })?;
-    let data: Frontmatter = serde_yaml::from_str(frontmatter).map_err(|_| {
+    let data: Frontmatter = serde_saphyr::from_str(frontmatter).map_err(|_| {
         error(
             AgentRoleDiagnosticCode::InvalidFrontmatter,
             "Agent definition frontmatter is invalid",

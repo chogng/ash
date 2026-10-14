@@ -361,29 +361,37 @@ fn target_status(
     }
 }
 
-fn render(document: &ExternalInstruction, body: &str) -> Result<String, serde_yaml::Error> {
+#[derive(serde::Serialize)]
+struct InstructionHeader<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    description: Option<&'a str>,
+    load: &'a str,
+    #[serde(skip_serializing_if = "<[String]>::is_empty")]
+    patterns: &'a [String],
+}
+
+fn render(
+    document: &ExternalInstruction,
+    body: &str,
+) -> Result<String, serde_saphyr::SerializeError> {
     if document.kind == ExternalInstructionKind::Root {
         return Ok(body.into());
     }
     let (load, patterns) = match &document.load {
-        ExternalInstructionLoad::Always => ("global", Vec::new()),
-        ExternalInstructionLoad::Files { patterns } => ("contextual", patterns.clone()),
-        ExternalInstructionLoad::Selected => ("on-demand", Vec::new()),
+        ExternalInstructionLoad::Always => ("global", &[][..]),
+        ExternalInstructionLoad::Files { patterns } => ("contextual", patterns.as_slice()),
+        ExternalInstructionLoad::Selected => ("on-demand", &[][..]),
     };
-    let mut header = BTreeMap::new();
-    header.insert("load", serde_yaml::Value::String(load.into()));
-    if let Some(description) = &document.description {
-        header.insert(
-            "description",
-            serde_yaml::Value::String(description.clone()),
-        );
-    }
-    if !patterns.is_empty() {
-        header.insert("patterns", serde_yaml::to_value(patterns)?);
-    }
+    let header = InstructionHeader {
+        description: document.description.as_deref(),
+        load,
+        patterns,
+    };
+    // Markdown frontmatter supplies its own delimiters and cannot contain a YAML directive.
+    let options = serde_saphyr::ser_options! { no_lang_directive: true };
     Ok(format!(
         "---\n{}---\n{}",
-        serde_yaml::to_string(&header)?,
+        serde_saphyr::to_string_with_options(&header, options)?,
         body
     ))
 }

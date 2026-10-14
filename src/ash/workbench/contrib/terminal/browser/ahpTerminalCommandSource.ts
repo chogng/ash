@@ -10,29 +10,29 @@ import type { ITerminalCommandStatusEvent, ITerminalShellIntegration } from '../
 export class AhpTerminalCommandSource extends Disposable {
 	private readonly metadataChanged = this._register(new Emitter<void>());
 	readonly onDidChangeMetadata = this.metadataChanged.event;
- private readonly commandStatusEmitter = this._register(new Emitter<ITerminalCommandStatusEvent>());
- readonly onDidChangeCommandStatus = this.commandStatusEmitter.event;
- private readonly pendingCommandEvents: ITerminalProcessCommandStatusEvent[] = [];
- private pendingCwd: ITerminalProcessReadResult['cwd'];
+	private readonly commandStatusEmitter = this._register(new Emitter<ITerminalCommandStatusEvent>());
+	readonly onDidChangeCommandStatus = this.commandStatusEmitter.event;
+	private readonly pendingCommandEvents: ITerminalProcessCommandStatusEvent[] = [];
+	private pendingCwd: ITerminalProcessReadResult['cwd'];
 	readonly cwdDetection = this._register(new CwdDetectionCapability());
 	readonly promptTypeDetection = this._register(new PromptTypeDetectionCapability());
- private pendingShellIntegration: ITerminalProcessReadResult['shellIntegration'];
- private currentShellIntegration: ITerminalShellIntegration | undefined;
- get shellIntegration(): ITerminalShellIntegration | undefined { return this.currentShellIntegration; }
- get cwd(): string | undefined { return this.cwdDetection.getCwd() || undefined; }
+	private pendingShellIntegration: ITerminalProcessReadResult['shellIntegration'];
+	private currentShellIntegration: ITerminalShellIntegration | undefined;
+	get shellIntegration(): ITerminalShellIntegration | undefined { return this.currentShellIntegration; }
+	get cwd(): string | undefined { return this.cwdDetection.getCwd() || undefined; }
 
- receive(result: Pick<ITerminalProcessReadResult, 'cwd' | 'shellIntegration' | 'commandEvents'>): void {
-  if (result.cwd) this.pendingCwd = result.cwd;
-  if (result.shellIntegration) this.pendingShellIntegration = result.shellIntegration;
-  this.pendingCommandEvents.push(...result.commandEvents);
- }
+	receive(result: Pick<ITerminalProcessReadResult, 'cwd' | 'shellIntegration' | 'commandEvents'>): void {
+		if (result.cwd) this.pendingCwd = result.cwd;
+		if (result.shellIntegration) this.pendingShellIntegration = result.shellIntegration;
+		this.pendingCommandEvents.push(...result.commandEvents);
+	}
 
- protected override disposeCore(): void {
-  this.pendingCommandEvents.length = 0;
-  this.pendingCwd = undefined;
-  this.pendingShellIntegration = undefined;
-  super.disposeCore();
- }
+	protected override disposeCore(): void {
+		this.pendingCommandEvents.length = 0;
+		this.pendingCwd = undefined;
+		this.pendingShellIntegration = undefined;
+		super.disposeCore();
+	}
 	commitThrough(sequence: number, token: CancellationToken): void {
 		let changed = false;
 		if (!token.isCancellationRequested && this.pendingCwd && this.pendingCwd.afterOutputSequence <= sequence) {

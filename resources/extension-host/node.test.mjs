@@ -565,7 +565,7 @@ exports.activate = context => {
 });
 
 test('standard Speech sessions preserve events, tokens, cancellation and registration disposal in Node', { timeout: 10000 }, async t => {
- const h = await host(t, `const v = require('vscode');
+	const h = await host(t, `const v = require('vscode');
 let registration; let cancelled = 0; let detached = 0; const sessions = new Map();
 function provide(kind, token, options) {
  const key = options?.language ?? kind; const emitter = new v.EventEmitter();
@@ -588,29 +588,29 @@ exports.activate = context => {
   return { cancelled, detached, sessions: [...sessions.keys()] };
  }));
 };`, 'extension.cjs', ['speechProvider', 'command']);
- const registration = h.registrations.find(value => value.kind === 'speechProvider');
- assert.deepEqual(registration, { registrationId: 'vscode.speech.1', kind: 'speechProvider', identifier: 'test.recognition' });
- const invoke = (operation, payload) => h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, operation, payload, deadlineUnixMillis: Date.now() + 30000 });
- const ids = ['a1234567-1234-1234-1234-123456789abc','b1234567-1234-1234-1234-123456789abc','c1234567-1234-1234-1234-123456789abc'];
- for (const [index, kind] of ['speechToText','textToSpeech','keywordRecognition'].entries()) assert.equal((await invoke('createSpeechSession', { sessionId: ids[index], kind }).result).status, 'success');
- assert.deepEqual((await h.invoke('test.node', ['emit','stt']).result).body.body.payload, { cancelled: 0, detached: 0, sessions: ['stt','tts','keyword'] });
- assert.deepEqual((await invoke('readSpeechSession', { sessionId: ids[0] }).result).body.body.payload, { events: [{ status: 3, text: '你好' }], closed: false });
- assert.equal((await invoke('synthesizeSpeech', { sessionId: ids[1], text: 'hello' }).result).status, 'success');
- assert.deepEqual((await invoke('readSpeechSession', { sessionId: ids[1] }).result).body.body.payload, { events: [{ status: 1, text: 'hello' }, { status: 2 }], closed: false });
- await h.invoke('test.node', ['emit','keyword']).result;
- assert.deepEqual((await invoke('readSpeechSession', { sessionId: ids[2] }).result).body.body.payload, { events: [{ status: 1, text: '你好' }], closed: false });
- const pending = invoke('createSpeechSession', { sessionId: 'd1234567-1234-1234-1234-123456789abc', kind: 'speechToText', language: 'pending' });
- assert.deepEqual((await h.invoke('test.node', []).result).body.body.payload.sessions, ['stt','tts','keyword','pending']);
- assert.equal((await h.request('cancel', { targetRequestId: pending.requestId, reason: 'caller' }).result).body.result, 'cancelled');
- assert.equal((await pending.result).status, 'failure');
- assert.deepEqual((await h.invoke('test.node', ['overflow','stt']).result).body.body.payload, { cancelled: 2, detached: 1, sessions: ['tts','keyword'] });
- assert.equal((await invoke('readSpeechSession', { sessionId: ids[0] }).result).status, 'failure');
- assert.deepEqual((await h.invoke('test.node', ['dispose']).result).body.body.payload, { cancelled: 4, detached: 3, sessions: [] });
- assert.equal((await invoke('readSpeechSession', { sessionId: ids[1] }).result).status, 'failure');
+	const registration = h.registrations.find(value => value.kind === 'speechProvider');
+	assert.deepEqual(registration, { registrationId: 'vscode.speech.1', kind: 'speechProvider', identifier: 'test.recognition' });
+	const invoke = (operation, payload) => h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, operation, payload, deadlineUnixMillis: Date.now() + 30000 });
+	const ids = ['a1234567-1234-1234-1234-123456789abc', 'b1234567-1234-1234-1234-123456789abc', 'c1234567-1234-1234-1234-123456789abc'];
+	for (const [index, kind] of ['speechToText', 'textToSpeech', 'keywordRecognition'].entries()) assert.equal((await invoke('createSpeechSession', { sessionId: ids[index], kind }).result).status, 'success');
+	assert.deepEqual((await h.invoke('test.node', ['emit', 'stt']).result).body.body.payload, { cancelled: 0, detached: 0, sessions: ['stt', 'tts', 'keyword'] });
+	assert.deepEqual((await invoke('readSpeechSession', { sessionId: ids[0] }).result).body.body.payload, { events: [{ status: 3, text: '你好' }], closed: false });
+	assert.equal((await invoke('synthesizeSpeech', { sessionId: ids[1], text: 'hello' }).result).status, 'success');
+	assert.deepEqual((await invoke('readSpeechSession', { sessionId: ids[1] }).result).body.body.payload, { events: [{ status: 1, text: 'hello' }, { status: 2 }], closed: false });
+	await h.invoke('test.node', ['emit', 'keyword']).result;
+	assert.deepEqual((await invoke('readSpeechSession', { sessionId: ids[2] }).result).body.body.payload, { events: [{ status: 1, text: '你好' }], closed: false });
+	const pending = invoke('createSpeechSession', { sessionId: 'd1234567-1234-1234-1234-123456789abc', kind: 'speechToText', language: 'pending' });
+	assert.deepEqual((await h.invoke('test.node', []).result).body.body.payload.sessions, ['stt', 'tts', 'keyword', 'pending']);
+	assert.equal((await h.request('cancel', { targetRequestId: pending.requestId, reason: 'caller' }).result).body.result, 'cancelled');
+	assert.equal((await pending.result).status, 'failure');
+	assert.deepEqual((await h.invoke('test.node', ['overflow', 'stt']).result).body.body.payload, { cancelled: 2, detached: 1, sessions: ['tts', 'keyword'] });
+	assert.equal((await invoke('readSpeechSession', { sessionId: ids[0] }).result).status, 'failure');
+	assert.deepEqual((await h.invoke('test.node', ['dispose']).result).body.body.payload, { cancelled: 4, detached: 3, sessions: [] });
+	assert.equal((await invoke('readSpeechSession', { sessionId: ids[1] }).result).status, 'failure');
 });
 
 test('completed Speech creation keeps a persistent token until its exact session is closed', { timeout: 10000 }, async t => {
- const h = await host(t, `const v = require('vscode');
+	const h = await host(t, `const v = require('vscode');
 let cancelled = 0;
 function provide(token) {
  const events = new v.EventEmitter();
@@ -625,20 +625,20 @@ exports.activate = context => context.subscriptions.push(
  }),
  v.commands.registerCommand('test.node', () => cancelled)
 );`, 'extension.cjs', ['speechProvider', 'command']);
- const registrationId = h.registrations.find(value => value.kind === 'speechProvider').registrationId;
- const invoke = (operation, sessionId) => h.request('invoke', { extensionId: 'test.node', registrationId, operation, payload: { sessionId, ...(operation === 'createSpeechSession' ? { kind: 'speechToText' } : {}) }, deadlineUnixMillis: Date.now() + 30000 });
- const first = 'a1234567-1234-1234-1234-123456789abc';
- const second = 'b1234567-1234-1234-1234-123456789abc';
- const created = invoke('createSpeechSession', first);
- assert.equal((await created.result).status, 'success');
- assert.equal((await invoke('createSpeechSession', second).result).status, 'success');
- await h.request('cancel', { targetRequestId: created.requestId, reason: 'caller' }).result;
- assert.equal((await h.invoke('test.node', []).result).body.body.payload, 0);
- assert.equal((await invoke('closeSpeechSession', first).result).status, 'success');
- assert.equal((await invoke('closeSpeechSession', first).result).status, 'success');
- assert.equal((await h.invoke('test.node', []).result).body.body.payload, 1);
- assert.equal((await invoke('readSpeechSession', first).result).status, 'failure');
- assert.equal((await invoke('readSpeechSession', second).result).status, 'success');
- assert.equal((await invoke('closeSpeechSession', second).result).status, 'success');
- assert.equal((await h.invoke('test.node', []).result).body.body.payload, 2);
+	const registrationId = h.registrations.find(value => value.kind === 'speechProvider').registrationId;
+	const invoke = (operation, sessionId) => h.request('invoke', { extensionId: 'test.node', registrationId, operation, payload: { sessionId, ...(operation === 'createSpeechSession' ? { kind: 'speechToText' } : {}) }, deadlineUnixMillis: Date.now() + 30000 });
+	const first = 'a1234567-1234-1234-1234-123456789abc';
+	const second = 'b1234567-1234-1234-1234-123456789abc';
+	const created = invoke('createSpeechSession', first);
+	assert.equal((await created.result).status, 'success');
+	assert.equal((await invoke('createSpeechSession', second).result).status, 'success');
+	await h.request('cancel', { targetRequestId: created.requestId, reason: 'caller' }).result;
+	assert.equal((await h.invoke('test.node', []).result).body.body.payload, 0);
+	assert.equal((await invoke('closeSpeechSession', first).result).status, 'success');
+	assert.equal((await invoke('closeSpeechSession', first).result).status, 'success');
+	assert.equal((await h.invoke('test.node', []).result).body.body.payload, 1);
+	assert.equal((await invoke('readSpeechSession', first).result).status, 'failure');
+	assert.equal((await invoke('readSpeechSession', second).result).status, 'success');
+	assert.equal((await invoke('closeSpeechSession', second).result).status, 'success');
+	assert.equal((await h.invoke('test.node', []).result).body.body.payload, 2);
 });

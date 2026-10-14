@@ -57,7 +57,9 @@ impl Budget {
         for part in parts {
             self.add(std::mem::size_of::<ContentPart>())?;
             match part {
-                ContentPart::Artifact { artifact } => self.json(&serde_json::to_value(artifact).map_err(|_| ())?, 0)?,
+                ContentPart::Artifact { artifact } => {
+                    self.json(&serde_json::to_value(artifact).map_err(|_| ())?, 0)?
+                }
                 ContentPart::Text(text)
                 | ContentPart::ImageUrl { url: text, .. }
                 | ContentPart::AudioUrl { url: text } => self.string(text)?,

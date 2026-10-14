@@ -155,17 +155,17 @@ disposables.add(new AppServerSyntaxProviders(languageFeaturesService, {
 			revision: params.revision,
 			hasErrors: true,
 			tokens: [
-				{ kind: "keyword", startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 3 },
-				{ kind: "function", startLineNumber: 1, startColumn: 4, endLineNumber: 1, endColumn: 8 },
+				{ kind: "keyword", range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 2 } } },
+				{ kind: "function", range: { start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } } },
 			],
-			foldingRanges: [{ startLineNumber: 1, startColumn: 1, endLineNumber: 3, endColumn: 2 }],
+			foldingRanges: [{ range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 2, columnIndex: 1 } } }],
 			symbols: [{
 				name: "main",
 				kind: "function",
-				startLineNumber: 1, startColumn: 1, endLineNumber: 3, endColumn: 2,
+				range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 2, columnIndex: 1 } },
 				selectionRange: { start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } },
 			}],
-			diagnostics: [{ kind: "missing", startLineNumber: 2, startColumn: 3, endLineNumber: 2, endColumn: 9 }],
+			diagnostics: [{ kind: "missing", range: { start: { lineIndex: 1, columnIndex: 2 }, end: { lineIndex: 1, columnIndex: 8 } } }],
 		};
 	},
 	selectionRanges: async params => ({ revision: params.revision, ranges: [] }),
@@ -195,7 +195,8 @@ services.registerInstance(ILanguageFeaturesService, languageFeaturesService);
 disposables.add(services.createInstance(WorkbenchLanguageFeatures));
 services.registerInstance(ILanguageConfigurationService, languageConfigurationService);
 services.registerInstance(ILogService, new NullLoggerService());
-services.registerInstance(IQuickInputService, disposables.add(new TestQuickInputService({ instantiationService: services,
+services.registerInstance(IQuickInputService, disposables.add(new TestQuickInputService({
+	instantiationService: services,
 	container: root,
 	contextKeyService: services.get(IContextKeyService),
 })));

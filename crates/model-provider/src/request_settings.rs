@@ -84,8 +84,12 @@ pub(crate) fn apply_settings(
                         .content
                         .iter()
                         .filter_map(|part| match part {
-                            ContentPart::Text(text) => Some(std::borrow::Cow::Borrowed(text.as_str())),
-                            ContentPart::Artifact { artifact } => Some(std::borrow::Cow::Owned(artifact.model_text())),
+                            ContentPart::Text(text) => {
+                                Some(std::borrow::Cow::Borrowed(text.as_str()))
+                            }
+                            ContentPart::Artifact { artifact } => {
+                                Some(std::borrow::Cow::Owned(artifact.model_text()))
+                            }
                             ContentPart::ImageUrl { .. }
                             | ContentPart::ImageAttachment { .. }
                             | ContentPart::AudioUrl { .. }

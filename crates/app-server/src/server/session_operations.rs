@@ -424,7 +424,7 @@ impl AppServer {
                     .thread_updates_after(&thread.thread_id, 0)
                     .map_err(core_error)?;
                 let voice_transcripts = self
-                    .threads
+                    .agent_runtime()
                     .read_voice_transcripts(&thread.thread_id, thread.sequence)
                     .map_err(core_error)?;
                 Ok(SessionThreadProjection {

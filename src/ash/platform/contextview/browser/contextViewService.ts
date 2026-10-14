@@ -33,7 +33,7 @@ export class BrowserContextViewService
 	show(options: ContextViewOptions): boolean {
 		if (this.layoutService) {
 			const targetWindow = isNode(options.anchor) ? getWindow(options.anchor) :
-				'targetWindow' in options.anchor ? (options.anchor as { targetWindow: Window }).targetWindow : getWindow(this.layoutService.activeContainer);
+				'targetWindow' in options.anchor ? (options.anchor as { targetWindow: Window; }).targetWindow : getWindow(this.layoutService.activeContainer);
 			const container = this.layoutService.getContainer(targetWindow);
 			if (this.contextView.element.parentElement !== container) {
 				this.hide();

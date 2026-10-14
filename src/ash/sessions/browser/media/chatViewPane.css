@@ -10,11 +10,13 @@
 	background: var(--ash-auxiliaryBar-background);
 }
 
-.ash-chat-body.sessions-sidebar-visible:not(.sessions-stacked) > .ash-chat-pane-host {
+.ash-chat-body.sessions-sidebar-visible:not(.sessions-stacked)
+	> .ash-chat-pane-host {
 	min-width: 300px;
 }
 
-.ash-chat-body.sessions-sidebar-visible:not(.sessions-stacked) > .ash-chat-sessions-sidebar {
+.ash-chat-body.sessions-sidebar-visible:not(.sessions-stacked)
+	> .ash-chat-sessions-sidebar {
 	min-width: 220px;
 	flex-shrink: 1;
 }

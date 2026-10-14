@@ -12,7 +12,8 @@
 	padding: 0 2px;
 	align-items: center;
 	justify-content: center;
-	border: var(--ash-strokeThickness) solid var(--ash-contrastBorder, transparent);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
 	border-radius: var(--ash-cornerRadius-small);
 	color: var(--ash-keybindingLabel-foreground);
 	background: var(--ash-keybindingLabel-background);

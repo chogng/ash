@@ -108,23 +108,31 @@
 
 /* Empty ranges use the same highlight as changed text; never inherit a text-colored border. */
 .stanza-diff-inline-removed-empty {
-	border-left: var(--ash-strokeThickness) solid var(--ash-diffEditor-removedTextBackground, transparent);
+	border-left: var(--ash-strokeThickness) solid
+		var(--ash-diffEditor-removedTextBackground, transparent);
 	background: var(--ash-diffEditor-removedTextBackground);
 }
 
 .stanza-diff-inline-added-empty {
-	border-left: var(--ash-strokeThickness) solid var(--ash-diffEditor-insertedTextBackground, transparent);
+	border-left: var(--ash-strokeThickness) solid
+		var(--ash-diffEditor-insertedTextBackground, transparent);
 	background: var(--ash-diffEditor-insertedTextBackground);
 }
 
 [data-color-scheme="hcDark"] .stanza-diff-inline-removed-empty,
 [data-color-scheme="hcLight"] .stanza-diff-inline-removed-empty {
-	border-left-color: var(--ash-diffEditor-removedLineMarker, var(--ash-contrastBorder, transparent));
+	border-left-color: var(
+		--ash-diffEditor-removedLineMarker,
+		var(--ash-contrastBorder, transparent)
+	);
 }
 
 [data-color-scheme="hcDark"] .stanza-diff-inline-added-empty,
 [data-color-scheme="hcLight"] .stanza-diff-inline-added-empty {
-	border-left-color: var(--ash-diffEditor-insertedLineMarker, var(--ash-contrastBorder, transparent));
+	border-left-color: var(
+		--ash-diffEditor-insertedLineMarker,
+		var(--ash-contrastBorder, transparent)
+	);
 }
 
 .stanza-diff-editor .stanza-diff-gutter-removed {

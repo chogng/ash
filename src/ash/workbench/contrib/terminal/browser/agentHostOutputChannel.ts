@@ -22,8 +22,10 @@ export class AgentHostOutputChannel extends Disposable implements IWorkbenchCont
 				this.channel ??= this._register(this.output.createChannel({ id: 'terminal-host', label: localize('terminal.output.host', 'Terminal Host'), kind: 'log', source: 'core' }));
 				this.channel.appendLine({
 					severity: data.status === 'failed' ? 'error' : 'information', category: 'terminal',
-					text: JSON.stringify({ terminalId: instance.id, commandId: data.commandId, status: data.status, exitCode: data.exitCode,
-						...(data.isTrusted && !instance.shellIntegration?.commandStorageDisabled ? { command: data.command } : {}) }),
+					text: JSON.stringify({
+						terminalId: instance.id, commandId: data.commandId, status: data.status, exitCode: data.exitCode,
+						...(data.isTrusted && !instance.shellIntegration?.commandStorageDisabled ? { command: data.command } : {})
+					}),
 				});
 			}));
 		};

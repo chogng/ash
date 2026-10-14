@@ -387,7 +387,9 @@ fn returned_output_with_policy(
         .content()
         .iter()
         .map(|content| match content {
-            ToolContent::Artifact(artifact) => Ok(ContentPart::Artifact { artifact: artifact.clone() }),
+            ToolContent::Artifact(artifact) => Ok(ContentPart::Artifact {
+                artifact: artifact.clone(),
+            }),
             ToolContent::Text(text) => {
                 sink.emit(ToolOutputStream::Stdout, text.clone())?;
                 Ok(ContentPart::Text(text.clone()))

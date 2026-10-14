@@ -35,7 +35,7 @@ core-api = { workspace = true }
 exec-server = { workspace = true, features = ["local-sandbox"] }
 exec-server-protocol = { workspace = true }
 external-agent-migration = { workspace = true }
-serde_yaml = { workspace = true }
+serde-saphyr = { workspace = true, features = ["serialize"] }
 pulldown-cmark = { workspace = true }
 iana-time-zone = { workspace = true }
 sleep = { workspace = true }

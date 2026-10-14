@@ -1177,7 +1177,9 @@ fn estimate_content(content: &[ContentPart]) -> ContextTokenCount {
         .iter()
         .fold(ContextTokenCount::new(TOOL_ITEM_OVERHEAD), |total, part| {
             let tokens = match part {
-                ContentPart::Artifact { artifact } => estimate_bytes(artifact.model_text().len(), 0),
+                ContentPart::Artifact { artifact } => {
+                    estimate_bytes(artifact.model_text().len(), 0)
+                }
                 ContentPart::Text(text) => estimate_bytes(text.len(), 0),
                 ContentPart::AudioAttachment { attachment } => {
                     estimate_audio(attachment.duration_ms)

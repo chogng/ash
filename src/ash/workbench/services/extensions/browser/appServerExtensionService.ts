@@ -113,12 +113,12 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	readonly debugAdapters: ExtensionDebugAdapterSource;
 	private manifests: readonly { readonly description: ExtensionDescriptor; readonly manifest: ExtensionManifest; }[] = [];
 
- getExtensionPointContributions<T>(name: string): readonly IExtensionPointUser<T>[] {
-  return this.manifests.flatMap(entry => {
-   const value = (entry.manifest.contributes as unknown as Readonly<Record<string, unknown>>)[name];
-   return value === undefined ? [] : [{ description: entry.description, value: value as T }];
-  });
- }
+	getExtensionPointContributions<T>(name: string): readonly IExtensionPointUser<T>[] {
+		return this.manifests.flatMap(entry => {
+			const value = (entry.manifest.contributes as unknown as Readonly<Record<string, unknown>>)[name];
+			return value === undefined ? [] : [{ description: entry.description, value: value as T }];
+		});
+	}
 
 	readonly onDidChange: Event<ExtensionCatalog> = this.changeEmitter.event;
 	readonly onDidFail: Event<ExtensionServiceFailure> = this.failureEmitter.event;

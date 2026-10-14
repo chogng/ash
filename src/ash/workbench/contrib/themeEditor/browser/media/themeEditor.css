@@ -86,7 +86,10 @@
 	min-height: 0;
 	padding: 28px;
 	background-color: var(--ash-sideBar-background);
-	background-image: radial-gradient(var(--ash-border) var(--ash-strokeThickness), transparent var(--ash-strokeThickness));
+	background-image: radial-gradient(
+		var(--ash-border) var(--ash-strokeThickness),
+		transparent var(--ash-strokeThickness)
+	);
 	background-size: 12px 12px;
 }
 
@@ -285,7 +288,12 @@
 	border: var(--ash-strokeThickness) solid var(--ash-border);
 	border-radius: var(--ash-cornerRadius-small);
 	background-color: var(--ash-editor-background);
-	background-image: conic-gradient(var(--ash-border) 25%, transparent 0 50%, var(--ash-border) 0 75%, transparent 0);
+	background-image: conic-gradient(
+		var(--ash-border) 25%,
+		transparent 0 50%,
+		var(--ash-border) 0 75%,
+		transparent 0
+	);
 	background-size: 8px 8px;
 	cursor: pointer;
 }

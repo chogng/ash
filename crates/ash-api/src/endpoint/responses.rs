@@ -418,11 +418,9 @@ fn convert_input(
             }
             InputItem::ToolResult(result) => {
                 let output = if cache == CacheSupport::Breakpoints
-                    || result
-                        .content
-                        .iter()
-                        .any(|part| !matches!(part, ContentPart::Text(_) | ContentPart::Artifact { .. }))
-                {
+                    || result.content.iter().any(|part| {
+                        !matches!(part, ContentPart::Text(_) | ContentPart::Artifact { .. })
+                    }) {
                     if !result.content.is_empty() {
                         candidates.push((
                             index,
@@ -471,7 +469,9 @@ mod tests;
 
 fn convert_content(role: MessageRole, part: &ContentPart) -> Value {
     match part {
-        ContentPart::Artifact { artifact } => convert_content(role, &ContentPart::Text(artifact.model_text())),
+        ContentPart::Artifact { artifact } => {
+            convert_content(role, &ContentPart::Text(artifact.model_text()))
+        }
         ContentPart::Text(text) => json!({
             "type": if role == MessageRole::Assistant {
                 "output_text"
@@ -742,7 +742,9 @@ fn content_text(content: &[ContentPart]) -> String {
         .iter()
         .filter_map(|part| match part {
             ContentPart::Text(text) => Some(std::borrow::Cow::Borrowed(text.as_str())),
-            ContentPart::Artifact { artifact } => Some(std::borrow::Cow::Owned(artifact.model_text())),
+            ContentPart::Artifact { artifact } => {
+                Some(std::borrow::Cow::Owned(artifact.model_text()))
+            }
             ContentPart::ImageAttachment { .. }
             | ContentPart::AudioAttachment { .. }
             | ContentPart::AudioUrl { .. } => None,

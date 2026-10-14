@@ -31,6 +31,7 @@
 Sessions Preferences、Skill 相关调用及 13 项分层检查；4 项 Chromium 场景通过，覆盖 en / zh-CN、
 键盘焦点、展开和搜索状态、保存刷新、编辑失败与取消、迟到工作区读取。Renderer、Main 和完整
 浏览器类型检查通过，定向单测使用仓库同一编译选项及 runner 编译执行；格式和 diff check 通过。
+
 ## 已确认的 Ash 归属
 
 用户已确认：按职责迁移，保留 Ash 后端领域语义和 Stanza 输入编辑器实现；有上游对应职责的实现回到准确 owner。此确认覆盖首次审计的 23 个仅 Ash 文件及其现有公开契约，不要求把前端领域值改成生成 transport DTO。
@@ -468,13 +469,13 @@ Speech 会话契约准入：原 SpeechService 唯一 recording 继续驱动 Dict
 
 当前语音对应关系：
 
-| 职责 | 当前实际 owner / 调用方 | 状态 |
-| --- | --- | --- |
-| 连接所属语音领域适配 | 原 agentHost common/agentService.ts、browser/appServerAgentService.ts；RendererHost.agentVoice 装配 | 已纠正归属，保留既有 optional 后端能力；不算 VS Code 新平台 Voice |
-| Widget 语音生命周期 / 选择 / 原任务提交 | Chat/browser/voiceClient/voiceSessionController.ts，ChatWidget/CoworkWidget 实际消费 | 已迁入 browser，原错误 common 控制器已删除；完整上游契约仍未宣告 |
-| 转写会话 / 标准状态 / 成功开始与结束事件 | 原 SpeechService，Chat/Editor/Terminal 的 DictationSession 与 onboarding | 原后端唯一 capture、会话 token 与事件隔离；旧全局 transcript/end API 退出 |
-| PTT/audio/session-context VoiceClient transport | 上游 Chat/common + browser VoiceClient 职责 | 当前无兼容 Ash producer；不以现有 App Server start/stop 伪装 PTT，不扩展自有媒体系统 |
-| Speech provider 注册 / TTS / keyword | 标准扩展 → 原 Host capability / 注册 / 精确代次 → MainThreadSpeech → SpeechService | 已接通真实 Node/V8 producer 与标准会话、注销和取消；dormant onSpeech、语言偏好和实际听写已验证。Desktop已完成响应的朗读、行/窗口停止、逐段Stopped与来源取消已接通；PTT、自动keyword与自动朗读仍沿实际caller前置推进，不创建自有媒体backend |
+| 职责                                            | 当前实际 owner / 调用方                                                                             | 状态                                                                                                                                                                                                                                       |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 连接所属语音领域适配                            | 原 agentHost common/agentService.ts、browser/appServerAgentService.ts；RendererHost.agentVoice 装配 | 已纠正归属，保留既有 optional 后端能力；不算 VS Code 新平台 Voice                                                                                                                                                                          |
+| Widget 语音生命周期 / 选择 / 原任务提交         | Chat/browser/voiceClient/voiceSessionController.ts，ChatWidget/CoworkWidget 实际消费                | 已迁入 browser，原错误 common 控制器已删除；完整上游契约仍未宣告                                                                                                                                                                           |
+| 转写会话 / 标准状态 / 成功开始与结束事件        | 原 SpeechService，Chat/Editor/Terminal 的 DictationSession 与 onboarding                            | 原后端唯一 capture、会话 token 与事件隔离；旧全局 transcript/end API 退出                                                                                                                                                                  |
+| PTT/audio/session-context VoiceClient transport | 上游 Chat/common + browser VoiceClient 职责                                                         | 当前无兼容 Ash producer；不以现有 App Server start/stop 伪装 PTT，不扩展自有媒体系统                                                                                                                                                       |
+| Speech provider 注册 / TTS / keyword            | 标准扩展 → 原 Host capability / 注册 / 精确代次 → MainThreadSpeech → SpeechService                  | 已接通真实 Node/V8 producer 与标准会话、注销和取消；dormant onSpeech、语言偏好和实际听写已验证。Desktop已完成响应的朗读、行/窗口停止、逐段Stopped与来源取消已接通；PTT、自动keyword与自动朗读仍沿实际caller前置推进，不创建自有媒体backend |
 
 以上为已验证行为和真实前置缺口，整个 Chat 对齐仍未标记完成。继续项必须从原 Chat/agentHost 真实调用方到唯一 owner 闭合，不能从路径差异反向制造模块。
 

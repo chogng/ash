@@ -187,7 +187,7 @@ export interface ITerminalCapabilityStore {
 }
 
 export interface TerminalShellIntegrationEnvironment {
-	value: { [key: string]: string | undefined } | undefined;
+	value: { [key: string]: string | undefined; } | undefined;
 	/** Provenance of the reported values, never execution or filesystem authority. */
 	isTrusted: boolean;
 }
@@ -196,7 +196,7 @@ export interface IShellEnvDetectionCapability {
 	readonly type: TerminalCapability.ShellEnvDetection;
 	readonly onDidChangeEnv: Event<TerminalShellIntegrationEnvironment>;
 	readonly env: TerminalShellIntegrationEnvironment;
-	setEnvironment(values: { [key: string]: string | undefined } | undefined, isTrusted: boolean): void;
+	setEnvironment(values: { [key: string]: string | undefined; } | undefined, isTrusted: boolean): void;
 	startEnvironmentSingleVar(clear: boolean, isTrusted: boolean): void;
 	setEnvironmentSingleVar(key: string, value: string | undefined, isTrusted: boolean): void;
 	deleteEnvironmentSingleVar(key: string, value: string | undefined, isTrusted: boolean): void;

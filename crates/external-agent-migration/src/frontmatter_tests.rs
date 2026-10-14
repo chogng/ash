@@ -127,3 +127,56 @@ fn yaml_node_budget_keeps_small_aliases_and_tags_but_rejects_large_sequences() {
         Some(crate::AgentImportDiagnosticCode::LimitExceeded)
     );
 }
+
+#[test]
+fn scalar_fields_preserve_tags_numbers_and_non_string_keys() {
+    let document = parse_frontmatter_document(
+        "---\nname: ' reviewer '\nenabled: true\ncount: 42\nratio: 1.0\ntagged: !custom text\nnull: null\n7: ignored\n? [a, b]\n: ignored\n---\nBody\n",
+    );
+    assert!(document.frontmatter_error.is_none());
+    for (key, expected) in [
+        ("name", "reviewer"),
+        ("enabled", "true"),
+        ("count", "42"),
+        ("ratio", "1.0"),
+    ] {
+        assert_eq!(
+            super::frontmatter_scalar(&document.frontmatter, key).as_deref(),
+            Some(expected)
+        );
+    }
+    assert!(matches!(
+        document.frontmatter.get("tagged"),
+        Some(super::FrontmatterValue::Other)
+    ));
+    assert!(
+        document
+            .frontmatter
+            .values()
+            .all(|value| value.as_scalar() != Some("ignored"))
+    );
+}
+
+#[test]
+fn instruction_headers_reject_sequences_unknown_fields_and_duplicate_keys() {
+    #[derive(Debug, serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Header {
+        name: String,
+    }
+    for raw in [
+        "[reviewer]",
+        "name: reviewer\nother: value",
+        "name: reviewer\nname: second",
+    ] {
+        let content = format!("---\n{raw}\n---\nBody");
+        assert_eq!(
+            super::instruction_header::<Header>(&content).unwrap_err(),
+            crate::AgentImportDiagnosticCode::InvalidContent
+        );
+    }
+    let (header, body) =
+        super::instruction_header::<Header>("---\nname: reviewer\n---\nBody").unwrap();
+    assert_eq!(header.name, "reviewer");
+    assert_eq!(body, "Body");
+}

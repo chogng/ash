@@ -46,7 +46,7 @@ pub(crate) fn parse_frontmatter(
     let text = std::str::from_utf8(bytes).map_err(|_| invalid_frontmatter())?;
     validate_yaml_resource_shape(text)?;
     let frontmatter: UncheckedFrontmatter =
-        serde_yaml::from_str(text).map_err(|_| invalid_frontmatter())?;
+        serde_saphyr::from_str(text).map_err(|_| invalid_frontmatter())?;
 
     let parsed_name = SkillName::new(frontmatter.name).map_err(|_| FormatFailure {
         code: SkillDiagnosticCode::InvalidSkillName,

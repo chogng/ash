@@ -60,8 +60,7 @@ fn parse_rule(text: &str) -> Result<ExternalInstruction, Code> {
     if !text.starts_with("---") {
         return Err(Code::InvalidContent);
     }
-    let (header, body) = crate::frontmatter::instruction_header(text)?;
-    let header: Header = serde_yaml::from_value(header).map_err(|_| Code::InvalidContent)?;
+    let (header, body) = crate::frontmatter::instruction_header::<Header>(text)?;
     let patterns = match header.globs {
         Some(Globs::Text(text)) if !text.trim().is_empty() => split_patterns(&text)?,
         Some(Globs::List(patterns)) => patterns,

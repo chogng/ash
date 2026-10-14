@@ -557,7 +557,8 @@ test('Workbench layout requires its services and hosts overlays before Parts cre
 	using layout = services.createInstance(WorkbenchLayout, container, options);
 	services.registerInstance(IWorkbenchLayoutService, layout);
 	using contextKeys = new ContextKeyService();
-	using quickInput = new TestQuickInputService({ instantiationService: services,
+	using quickInput = new TestQuickInputService({
+		instantiationService: services,
 		container,
 		contextKeyService: contextKeys,
 		layoutService: services.get(ILayoutService),

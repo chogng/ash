@@ -37,34 +37,34 @@ export function createApi(configuration, initialization) {
 		const entries = () => [...environmentMutators.values()].filter(entry => (entry.scope?.workspaceFolder?.uri.toString() ?? '') === scopeId);
 		const key = variable => JSON.stringify([scopeId, variable]);
 		const view = Object.freeze({
-		get persistent() { return environmentPersistent; },
-		set persistent(value) {
-			requireEnvironmentCapability();
-			if (typeof value !== 'boolean') throw new TypeError('Environment collection persistence must be a boolean');
-			environmentPersistent = value;
-		},
-		get description() { return environmentDescriptions.get(scopeId)?.description; },
-		set description(value) {
-			requireEnvironmentCapability();
-			if (value !== undefined && (typeof value !== 'string' || value.length > 32768 || value.includes('\0'))) throw new TypeError('Invalid terminal environment description');
-			if (value === undefined) environmentDescriptions.delete(scopeId);
-			else environmentDescriptions.set(scopeId, { description: value, ...(scope ? { scope } : {}) });
-		},
-		replace(variable, value, options) { setEnvironmentMutator(key(variable), variable, value, 1, scope, options); },
-		append(variable, value, options) { setEnvironmentMutator(key(variable), variable, value, 2, scope, options); },
-		prepend(variable, value, options) { setEnvironmentMutator(key(variable), variable, value, 3, scope, options); },
-		get(variable) { return environmentMutators.get(key(variable)); },
-		delete(variable) { requireEnvironmentCapability(); environmentMutators.delete(key(variable)); },
-		clear() { requireEnvironmentCapability(); for (const entry of entries()) environmentMutators.delete(key(entry.variable)); },
-		forEach(callback, thisArg) { for (const entry of entries()) callback.call(thisArg, entry.variable, entry, view); },
-		[Symbol.iterator]() { return entries().map(entry => [entry.variable, entry])[Symbol.iterator](); },
-		getScoped(scope) {
-			requireEnvironmentCapability();
-			if (scope === undefined || scope.workspaceFolder === undefined) return environmentVariableCollection;
-			const folder = scope.workspaceFolder;
-			if (!folder || !(folder.uri instanceof Uri) || typeof folder.name !== 'string' || !folder.name || !Number.isSafeInteger(folder.index) || folder.index < 0) throw new TypeError('Invalid terminal environment scope');
-			return environmentCollection(Object.freeze({ workspaceFolder: Object.freeze({ uri: folder.uri, name: folder.name, index: folder.index }) }));
-		},
+			get persistent() { return environmentPersistent; },
+			set persistent(value) {
+				requireEnvironmentCapability();
+				if (typeof value !== 'boolean') throw new TypeError('Environment collection persistence must be a boolean');
+				environmentPersistent = value;
+			},
+			get description() { return environmentDescriptions.get(scopeId)?.description; },
+			set description(value) {
+				requireEnvironmentCapability();
+				if (value !== undefined && (typeof value !== 'string' || value.length > 32768 || value.includes('\0'))) throw new TypeError('Invalid terminal environment description');
+				if (value === undefined) environmentDescriptions.delete(scopeId);
+				else environmentDescriptions.set(scopeId, { description: value, ...(scope ? { scope } : {}) });
+			},
+			replace(variable, value, options) { setEnvironmentMutator(key(variable), variable, value, 1, scope, options); },
+			append(variable, value, options) { setEnvironmentMutator(key(variable), variable, value, 2, scope, options); },
+			prepend(variable, value, options) { setEnvironmentMutator(key(variable), variable, value, 3, scope, options); },
+			get(variable) { return environmentMutators.get(key(variable)); },
+			delete(variable) { requireEnvironmentCapability(); environmentMutators.delete(key(variable)); },
+			clear() { requireEnvironmentCapability(); for (const entry of entries()) environmentMutators.delete(key(entry.variable)); },
+			forEach(callback, thisArg) { for (const entry of entries()) callback.call(thisArg, entry.variable, entry, view); },
+			[Symbol.iterator]() { return entries().map(entry => [entry.variable, entry])[Symbol.iterator](); },
+			getScoped(scope) {
+				requireEnvironmentCapability();
+				if (scope === undefined || scope.workspaceFolder === undefined) return environmentVariableCollection;
+				const folder = scope.workspaceFolder;
+				if (!folder || !(folder.uri instanceof Uri) || typeof folder.name !== 'string' || !folder.name || !Number.isSafeInteger(folder.index) || folder.index < 0) throw new TypeError('Invalid terminal environment scope');
+				return environmentCollection(Object.freeze({ workspaceFolder: Object.freeze({ uri: folder.uri, name: folder.name, index: folder.index }) }));
+			},
 		});
 		return view;
 	}
@@ -1326,15 +1326,17 @@ export function createApi(configuration, initialization) {
 		editors: Object.freeze({ request: payload => request({ operation: 'editorOperation', payload }, 'value').then(result => result.value) }),
 	});
 	const api = contract('vscode', {
-  SpeechToTextStatus: Object.freeze({ Started: 1, Recognizing: 2, Recognized: 3, Stopped: 4, Error: 5 }),
-  TextToSpeechStatus: Object.freeze({ Started: 1, Stopped: 2, Error: 3 }),
-  KeywordRecognitionStatus: Object.freeze({ Recognized: 1, Stopped: 2 }),
-  speech: Object.freeze({ registerSpeechProvider(identifier, provider) {
-   if (!speechAdmitted) throw new Error('Speech providers require the admitted speechProvider capability');
-   const registration = ashSpeech.registerSpeechProvider(`vscode.speech.${++providerSequence}`, identifier, provider);
-   subscriptions.push(registration);
-   return registration;
-  } }),
+		SpeechToTextStatus: Object.freeze({ Started: 1, Recognizing: 2, Recognized: 3, Stopped: 4, Error: 5 }),
+		TextToSpeechStatus: Object.freeze({ Started: 1, Stopped: 2, Error: 3 }),
+		KeywordRecognitionStatus: Object.freeze({ Recognized: 1, Stopped: 2 }),
+		speech: Object.freeze({
+			registerSpeechProvider(identifier, provider) {
+				if (!speechAdmitted) throw new Error('Speech providers require the admitted speechProvider capability');
+				const registration = ashSpeech.registerSpeechProvider(`vscode.speech.${++providerSequence}`, identifier, provider);
+				subscriptions.push(registration);
+				return registration;
+			}
+		}),
 		TerminalProfile: class TerminalProfile { constructor(options) { this.options = options; } },
 		ash: ashApi,
 		env: contract('env', { get language() { return windowFacts().language ?? 'en'; } }),

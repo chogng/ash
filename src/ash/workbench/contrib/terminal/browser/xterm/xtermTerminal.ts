@@ -103,8 +103,10 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 			commandListeners.value = listeners;
 			const decorate = (command: import('../../../../../platform/terminal/common/capabilities/capabilities.js').ITerminalCommand, running: boolean) => {
 				if (!command.id || !command.marker) return;
-				this.decorationAddon.registerCommandDecoration({ commandId: command.id, command: command.command, isTrusted: command.isTrusted, cwd: command.cwd,
-					status: running ? 'running' : command.exitCode === undefined ? 'completed' : command.exitCode === 0 ? 'succeeded' : 'failed', exitCode: command.exitCode }, this.instance.processId, command.marker);
+				this.decorationAddon.registerCommandDecoration({
+					commandId: command.id, command: command.command, isTrusted: command.isTrusted, cwd: command.cwd,
+					status: running ? 'running' : command.exitCode === undefined ? 'completed' : command.exitCode === 0 ? 'succeeded' : 'failed', exitCode: command.exitCode
+				}, this.instance.processId, command.marker);
 			};
 			listeners.add(capability.onCommandExecuted(command => decorate(command, true)));
 			listeners.add(capability.onCommandFinished(command => decorate(command, false)));

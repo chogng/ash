@@ -98,7 +98,7 @@ Workspace edit 的 `entries` 按顺序执行：`kind: textDocument` 带 `resourc
 
 | 路径                                      | 启动与激活 owner                                | 当前机制                                                                                          |
 | ----------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| 内置 TS/JS `browser` 包       | 窗口的 `WebWorkerExtensionHost`                 | reconcile 读取启用目录并启动 browser 入口；当前尚未按 manifest `activationEvents` 延迟创建 Worker |
+| 内置 TS/JS `browser` 包                   | 窗口的 `WebWorkerExtensionHost`                 | reconcile 读取启用目录并启动 browser 入口；当前尚未按 manifest `activationEvents` 延迟创建 Worker |
 | 后端标准 JS 包（Node 或 Rust/V8 JS 宿主） | App Server 的 JS 扩展发现、授权与宿主监管       | 启用并授权后可保持 `dormant`，按已支持的命令、语言、启动完成等事件激活；Rust/V8 仍执行 JS         |
 | 独立 Rust capability Provider             | 共享运行时、来源授权与对应 supervisor           | 按 Provider 声明、scope 和能力需求启动/握手，不套用浏览器包的 VS Code activation events           |
 | 共享 Git 后端                             | App Server 的目录级 `GitRuntime` / `GitService` | 由共享后端管理仓库、监听和状态；不依赖 `ash.git` Worker 的启用或激活事件                          |
@@ -396,6 +396,8 @@ flowchart TD
 
 当前标准 JS API 支持命令、文档事件与快照、诊断集合、Markdown 所需语言 Provider、Tasks/Debug 和 workspace/configuration 子集。`workspace.fs.readFile/stat/readDirectory` 对应 typed `readResourceFile/statResource/readResourceDirectory`，Rust SDK 提供同一组操作；Workbench 文件服务拥有资源 provider，App Server 验证调用窗口、工作区授权与身份。`stat.ctime` 当前无来源而为 0，写入与完整文件系统 API 仍不支持。打开的 dirty model 始终先于磁盘，改动保留版本、原文前置条件和已有撤销 owner。
 
+内置 `ash.academic` 使用声明式 `customEditors` 选择现有 Stanza Academic profile。扩展启用决定文件关联和新 editor 注册；停用不销毁已打开 tab 的模型、撤销或未保存内容。schema、引用视图和 reference-index plugin 仍由可信 TS renderer 组合；这是可停用的产品扩展，不向第三方开放内部 DOM/model API，也不包含分页或 PDF 导出。
+
 文本自定义编辑器通过 `customTextEditor` 注册，包声明决定 viewType、显示名称和 selector；provider 的标准 `resolveCustomTextEditor` 经统一 invocation 返回 HTML。Workbench 保留模型、readonly、撤销和消息路由。可信 Worker 的库资产沿有界对象 URL 传递，窗口在停用和关闭时回收；该路径不是完整 VS Code Webview API。
 
 独立 Remote Provider 位于 `extensions/remote-ssh/src/main.rs`，调用 `context.workspace.register_connection_resolver` 返回已保存连接名。标准 TS Remote 扩展继续使用 `workspace.registerRemoteAuthorityResolver` 返回 `ResolvedAuthority` 或 `ManagedResolvedAuthority`。两者是同一协议中的不同结果契约，不能把连接名冒充标准 endpoint。
@@ -539,7 +541,7 @@ Extensions 的“内置”列表包含所有预装扩展，包括没有脚本入
 | 文档       | `workspace.openTextDocument(Uri)`；打开、修改、关闭事件；UTF-16 `getText(range)`、`offsetAt`、`positionAt`、`lineAt`、单词范围                                                                                      |
 | 诊断       | `languages.createDiagnosticCollection`、Diagnostic 四种严重度；set/delete/clear/dispose；资源版本与运行实例隔离                                                                                                     |
 | 语言       | 语言 ID 的 Hover、Completion、definition、references、rename、symbols、folding、links、code actions、selection ranges、highlights；各 API 保留当前子集限制                                                          |
-| Speech     | `speech.registerSpeechProvider` 与标准 STT/TTS/keyword session、状态事件、语言 options 和持续取消 token；Node 与 Rust/V8 复用同一兼容层，Provider 拥有识别、合成与媒体访问 |
+| Speech     | `speech.registerSpeechProvider` 与标准 STT/TTS/keyword session、状态事件、语言 options 和持续取消 token；Node 与 Rust/V8 复用同一兼容层，Provider 拥有识别、合成与媒体访问                                          |
 | 基础类型   | `Uri`、`Position`、`Range`、`Hover`、`MarkdownString`、`Diagnostic`、`CompletionItem`、`CompletionList`、`TextEdit`、`WorkspaceEdit`、`SnippetString`、`Disposable` 的上述用法，不提供完整类型成员                  |
 
 Speech 注册必须在原包的 `speechProvider` capability ceiling 内。标准市场 JS 包仅在 `enabledApiProposals` 明确声明 `speech` 时请求此能力，实际执行仍受原包授权与宿主权限约束；Plugin 使用原 capability 声明。窗口的 SpeechService 消费精确 registration/incarnation 的有界会话事件，注销、撤权或断连取消该来源的 session。原 Dictation 输入在没有扩展注册时保留；多个活动注册明确拒绝未选择的请求。扩展会话不显示原 Dictation backend 的设备选项。兼容层不提供麦克风、播放器、识别服务商或新的 Voice RPC。 声明 `contributes.speechProviders` 的扩展在原 `onSpeech` 事件中激活；声明却未能注册时不会回落到另一麦克风。标准会话语言来自原窗口的 `accessibility.voice.speechLanguage`（`auto` 跟随显示语言），不双写旧 Dictation 配置。Desktop Chat 与 Cowork 可朗读已完成的回复；逐段等待扩展的 `Stopped`，消息隐藏、移除、修正或停止命令取消其原会话。
