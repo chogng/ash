@@ -19,6 +19,7 @@ import { localize } from '../../../../nls.js';
 import { type ModelProviderCredentialStatus } from '../../../services/chat/common/chatService.js';
 import type { ModelCatalogEntry } from '../../../services/chat/common/modelCatalog.js';
 import type { SettingsContent, SettingsContentItem, SettingsTreeNode } from '../../preferences/browser/settingsTreeModels.js';
+import { ISecretStorageStatusService, SecretStorageError, secretStorageMessage, type SecretStorageStatus } from '../../../../platform/secrets/common/secrets.js';
 
 /** Model and credential rows shared by Workbench and Sessions; the host owns navigation and search. */
 export class ModelSettingsContent extends Disposable implements SettingsContent {
@@ -31,6 +32,9 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 	private readonly modelSearch: InputBox;
 	private readonly modelSearchEmpty: HTMLElement;
 	private readonly providersStatus: HTMLElement;
+	private readonly storageStatus: HTMLElement;
+	private readonly storageMessage: HTMLElement;
+	private readonly storageRetry: Button;
 	private readonly rows = this._register(new DisposableMap<string, DisposableStore>());
 	private readonly apiRows = this._register(new DisposableMap<string, DisposableStore>());
 	private modelElements: readonly { readonly entry: ModelCatalogEntry; readonly row: HTMLElement; }[] = [];
@@ -45,7 +49,7 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 	private apiLoadVersion = 0;
 	public readonly categoryId = 'models';
 
-	constructor(container: HTMLElement, @ILanguageModelsService private readonly languageModels: ILanguageModelsService, @IAccessibleViewService accessibleView: IAccessibleViewService, @IConfigurationService configuration: IConfigurationService, @IInstantiationService private readonly instantiation: IInstantiationService, @INotificationService private readonly notifications: INotificationService) {
+	constructor(container: HTMLElement, @ILanguageModelsService private readonly languageModels: ILanguageModelsService, @ISecretStorageStatusService private readonly secretStorage: ISecretStorageStatusService, @IAccessibleViewService accessibleView: IAccessibleViewService, @IConfigurationService configuration: IConfigurationService, @IInstantiationService private readonly instantiation: IInstantiationService, @INotificationService private readonly notifications: INotificationService) {
 		super();
 		this.document = container.ownerDocument;
 		this.status = h(this.document, 'p');
@@ -73,6 +77,19 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 		this.providersStatus = h(this.document, 'p');
 		this.providersStatus.className = 'ash-models-settings-empty';
 		this.providersStatus.setAttribute('role', 'status');
+		this.storageStatus = h(this.document, 'div');
+		this.storageStatus.hidden = true;
+		this.storageMessage = h(this.document, 'p');
+		this.storageMessage.className = 'ash-models-settings-empty';
+		this.storageMessage.setAttribute('role', 'status');
+		this.storageStatus.append(this.storageMessage);
+		this.storageRetry = this._register(new Button(this.storageStatus, {
+			label: localize('credentials.storage.retry', 'Retry credential storage'), presentation: 'secondary',
+		}));
+		this._register(this.storageRetry.onDidClick(() => {
+			void this.loadApiConnections(++this.apiLoadVersion);
+			void this.loadModels(++this.modelLoadVersion);
+		}));
 		this.providerTitle = h(this.document, 'span');
 		this.providerTitle.className = 'ash-models-settings-provider-title';
 		const title = h(this.document, 'span');
@@ -83,6 +100,7 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 			const id = `custom-${createUuid()}`;
 			const card = this.instantiation.createInstance(ChatModelsWidget, this.document, { id, name: '', baseUrl: '', apiFormat: 'responses', order: Date.now(), models: [] }, false, true);
 			this.customProviders.set(id, card);
+			card.setCredentialStorageAvailable(this.storageStatus.hidden === true);
 			void card.initialize();
 			this.changed.fire();
 			card.focus();
@@ -119,13 +137,13 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 				getProvider: () => {
 					const focused = this.document.activeElement;
 					if (!this.visible || !isHTMLElement(focused)) return undefined;
-					const nodes = [this.modelTitle, this.providerTitle, this.expandRow, ...this.modelElements.map(model => model.row), ...this.apiElements.map(provider => provider.row), ...[...this.customProviders].map(([, card]) => card.domNode)];
+					const nodes = [this.modelTitle, this.providerTitle, this.expandRow, this.storageStatus, ...this.modelElements.map(model => model.row), ...this.apiElements.map(provider => provider.row), ...[...this.customProviders].map(([, card]) => card.domNode)];
 					if (!nodes.some(node => node.contains(focused))) return undefined;
 					const modelNames = (): string => this.getNodes()[0].children!
 						.filter(node => node.element.id !== 'models.catalog.expand')
 						.map(node => node.element.title).join('\n');
 					return new AccessibleContentProvider(AccessibleViewProviderId.ChatModelConfiguration, { type },
-						() => type === AccessibleViewType.View ? [...this.customProviders].map(([, card]) => card.getAccessibleContent()).join('\n\n') || modelNames() : localize('models.settings.help', 'Models shows the newest model from each provider. Enabled models appear first; each group keeps the catalog order. Turning a model off restores its place among disabled models. Search models filters the full list by model name or ID. Clear the search to restore the list. Use viewall models to expand or collapse the full list. API keys save when the field loses focus; clear the field to remove a key. New provider adds a card with provider name, Base URL, API key and API format. Test models tests the current table, fetching the endpoint list first when empty. Refresh models fetches the list again. Use Add model for a missing ID or to declare its context window. Edit context and delete manual declarations from the row actions. Each Enabled switch controls picker availability independently of test results. Test status: orange means it has not passed and green means it passed. Use Tab and Shift+Tab to move between fields and buttons.'),
+						() => type === AccessibleViewType.View ? [this.storageMessage.textContent, [...this.customProviders].map(([, card]) => card.getAccessibleContent()).join('\n\n') || modelNames()].filter(Boolean).join('\n\n') : localize('models.settings.help', 'Models shows the newest model from each provider. Enabled models appear first; each group keeps the catalog order. Turning a model off restores its place among disabled models. Search models filters the full list by model name or ID. Clear the search to restore the list. Use viewall models to expand or collapse the full list. API keys save when the field loses focus; clear the field to remove a key. If credential storage is unavailable, follow the storage message and use Retry credential storage. Existing credentials remain preserved. New provider adds a card with provider name, Base URL, API key and API format. Test models tests the current table, fetching the endpoint list first when empty. Refresh models fetches the list again. Use Add model for a missing ID or to declare its context window. Edit context and delete manual declarations from the row actions. Each Enabled switch controls picker availability independently of test results. Test status: orange means it has not passed and green means it passed. Use Tab and Shift+Tab to move between fields and buttons.'),
 						() => focused.focus(), AccessibilityVerbositySettingId.ChatModelConfiguration);
 				},
 			}));
@@ -159,7 +177,11 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 			},
 			{
 				element: { kind: 'group', id: `${this.categoryId}.providers`, title: localize('models.keys.title', 'API key'), titleDomNode: this.providerTitle, description: '' },
-				children: [...customNodes, ...(this.apiElements.length ? providerNodes : [item(`${this.categoryId}.providers.status`, localize('models.keys.title', 'API key'), this.providersStatus.textContent ?? '', this.providersStatus)])],
+				children: [
+					...(this.storageStatus.hidden ? [] : [item('models.credentials.storage', localize('models.keys.title', 'API key'), this.storageMessage.textContent ?? '', this.storageStatus)]),
+					...customNodes,
+					...(this.apiElements.length ? providerNodes : [item(`${this.categoryId}.providers.status`, localize('models.keys.title', 'API key'), this.providersStatus.textContent ?? '', this.providersStatus)]),
+				],
 			},
 			item(`${this.categoryId}.status`, localize('sessions.settings.models', 'Models'), this.status.textContent ?? '', this.status),
 		];
@@ -202,8 +224,14 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 				return { entry, row: this.modelRow(entry, resources) };
 			});
 			this.modelsStatus.textContent = localize('sessions.settings.noModels', 'No models available.');
-		} catch {
+		} catch (error) {
 			if (version !== this.modelLoadVersion || this.isDisposed) return;
+			if (error instanceof SecretStorageError) {
+				this.updateStorageStatus(error.status);
+				this.modelsStatus.textContent = '';
+				this.changed.fire();
+				return;
+			}
 			this.modelElements = [];
 			for (const [id] of this.rows) this.rows.deleteAndDispose(id);
 			this.modelsStatus.textContent = localize('sessions.settings.modelsLoadFailed', 'Could not load models.');
@@ -213,7 +241,17 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 	}
 
 	private async loadApiConnections(version: number): Promise<void> {
+		const restoreStorageFocus = this.storageStatus.contains(this.document.activeElement);
+		this.storageRetry.enabled = false;
 		try {
+			const storage = await this.secretStorage.readStatus();
+			if (version !== this.apiLoadVersion || this.isDisposed) return;
+			this.updateStorageStatus(storage);
+			if (storage !== 'available') {
+				this.providersStatus.textContent = '';
+				this.changed.fire();
+				return;
+			}
 			const [catalog, custom] = await Promise.all([this.languageModels.listModelProviders(), this.languageModels.listCustomModelProviders()]);
 			const providers = catalog.filter(provider => provider.apiKeyPolicy !== 'unsupported' && provider.connection !== 'openai-compatible' && !provider.connection.startsWith('custom-'));
 			if (version !== this.apiLoadVersion || this.isDisposed) return;
@@ -245,14 +283,38 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 				return { provider, ...this.apiConnectionRow(provider, resources) };
 			});
 			this.providersStatus.textContent = localize('sessions.settings.noApiConnections', 'No API key providers available.');
-		} catch {
+		} catch (error) {
 			if (version !== this.apiLoadVersion || this.isDisposed) return;
+			if (error instanceof SecretStorageError) {
+				this.updateStorageStatus(error.status);
+				this.providersStatus.textContent = '';
+				this.changed.fire();
+				return;
+			}
 			this.apiElements = [];
 			for (const [id] of this.apiRows) this.apiRows.deleteAndDispose(id);
 			this.providersStatus.textContent = localize('sessions.settings.apiLoadFailed', 'Could not load API keys.');
 			this.notifications.error(this.providersStatus.textContent);
+		} finally {
+			if (version === this.apiLoadVersion && !this.isDisposed) {
+				this.storageRetry.enabled = true;
+				if (restoreStorageFocus && !this.storageStatus.hidden) this.storageRetry.focus();
+			}
 		}
 		this.changed.fire();
+		if (restoreStorageFocus) {
+			if (this.apiElements.length) this.apiElements[0].key.input.focus();
+			else if (this.customProviders.size) [...this.customProviders][0][1].focus();
+			else this.modelSearch.focus();
+		}
+	}
+
+	private updateStorageStatus(status: SecretStorageStatus): void {
+		const available = status === 'available';
+		this.storageMessage.textContent = available ? '' : secretStorageMessage(status);
+		this.storageStatus.hidden = available;
+		for (const { key } of this.apiElements) key.setEnabled(available);
+		for (const [, card] of this.customProviders) card.setCredentialStorageAvailable(available);
 	}
 
 	private modelRow(entry: ModelCatalogEntry, resources: DisposableStore): HTMLElement {

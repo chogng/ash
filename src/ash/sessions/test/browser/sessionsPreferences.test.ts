@@ -1,3 +1,4 @@
+import { ISecretStorageStatusService } from '../../../platform/secrets/common/secrets.js';
 import { quickInputServiceTestControls } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { IExtensionService } from '../../../workbench/services/extensions/common/extensionService.js';
 import { TestExtensionService } from '../../../workbench/test/common/testExtensionServices.js';
@@ -136,6 +137,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	const { IChatService: ChatService } = await import('../../../workbench/services/chat/common/chatService.js');
 	services.registerInstance(ChatService, chat);
 	services.registerInstance(ILanguageModelsService, chat as unknown as ILanguageModelsService);
+	services.registerInstance(ISecretStorageStatusService, { readStatus: async () => 'available' });
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(ILocalTranscriptionService, transcription);

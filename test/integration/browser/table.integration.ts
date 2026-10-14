@@ -55,10 +55,16 @@ import type { IContextMenuService } from '../../../src/ash/platform/contextview/
 
 import type { ChatInputDelegate } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { ILanguageModelsService } from '../../../src/ash/workbench/contrib/chat/common/languageModels.js';
+import { ISecretStorageStatusService, type SecretStorageStatus } from '../../../src/ash/platform/secrets/common/secrets.js';
+import { ModelSettingsContent } from '../../../src/ash/workbench/contrib/chat/browser/modelSettingsContent.js';
+import { SettingsTreeModel, type SettingsContentItem } from '../../../src/ash/workbench/contrib/preferences/browser/settingsTreeModels.js';
+import { SettingsTree } from '../../../src/ash/workbench/contrib/preferences/browser/settingsTree.js';
 
 declare global {
 	interface Window {
 		ashTableIntegration: {
+			showCredentialSettings(): void;
+			setCredentialStorage(status: SecretStorageStatus): void;
 			progress(): void;
 			finish(): void;
 			theme(name: string): void;
@@ -100,13 +106,17 @@ if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
 const resources = new DisposableStore();
 const configuration = resources.add(new WorkbenchConfigurationService());
 const services = resources.add(new InstantiationService());
+const modelChanges = resources.add(new Emitter<void>());
+let credentialStorage: SecretStorageStatus = 'available';
+let credentialSettings = false;
 services.registerInstance(IMessageHistoryService, undefined);
 services.registerSingleton(IQuickInputService, () => new TestQuickInputService({ instantiationService: services, container: document.body }));
 services.registerInstance(IConfigurationService, configuration);
+services.registerInstance(ISecretStorageStatusService, { readStatus: async () => credentialStorage });
 services.registerInstance(ILanguageModelsService, {
-	onDidChangeModels: Event.None,
+	onDidChangeModels: modelChanges.event,
 	listModels: async () => [], listModelCatalog: async () => [], refreshModels: async () => [],
-	listAdvisorModels: async () => [], listModelProviders: async () => [], listCustomModelProviders: async () => [],
+	listAdvisorModels: async () => [], listModelProviders: async () => credentialSettings ? [{ connection: 'openai', provider: 'openai', displayName: 'OpenAI API', access: 'apiKey', active: true, configured: true, ready: true, apiKeyPolicy: 'required', apiKeyConfigured: true }] : [], listCustomModelProviders: async () => [],
 	getDefaultNewChatModel: () => undefined, rememberSelectedModel: async () => { }, isModelVisible: () => true,
 	readModelDefaults: async () => ({ revision: 1, model: null, reasoningEffort: null }), saveReasoningEffort: async () => { },
 	setModelVisible: async () => { }, setModelPreferences: async () => { },
@@ -254,6 +264,20 @@ resources.add(speechExtensions.registerActivationHandler(async (event, signal) =
 	speechBridge.update(speechSnapshot(true));
 }));
 window.ashTableIntegration = {
+	showCredentialSettings: () => {
+		credentialSettings = true;
+		const root = document.createElement('div');
+		root.id = 'credential-settings';
+		document.body.append(root);
+		const content = resources.add(services.createInstance(ModelSettingsContent, root));
+		const model = resources.add(new SettingsTreeModel<SettingsContentItem>());
+		resources.add(new SettingsTree(root, {
+			model, rootClassName: 'ash-models-settings', groupClassName: 'ash-settings-content-group', groupDescriptionClassName: 'ash-settings-group-description', itemsClassName: 'ash-settings-list', renderItem: item => item.value.domNode,
+		}));
+		resources.add(content.onDidChange(() => model.setChildren(content.getNodes())));
+		content.setVisible(true);
+	},
+	setCredentialStorage: status => { credentialStorage = status; modelChanges.fire(); },
 	extensionSpeech: async (admitted, lazy = false) => {
 		if (!lazy && !declaredSpeech) { speechBridge.update(speechSnapshot(admitted)); if (!admitted) extensionEmit = undefined; return; }
 		declaredSpeech = admitted && lazy;

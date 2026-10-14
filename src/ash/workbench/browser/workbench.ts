@@ -1,3 +1,4 @@
+import { ISecretStorageStatusService } from '../../platform/secrets/common/secrets.js';
 import { IMessageHistoryService } from '../../platform/messageHistory/common/messageHistory.js';
 import { GlobalExtensionEnablementService } from '../../platform/extensionManagement/common/extensionEnablementService.js';
 import { IGlobalExtensionEnablementService } from '../../platform/extensionManagement/common/extensionManagement.js';
@@ -821,6 +822,7 @@ export class Workbench extends Disposable {
 		this.workbenchLayout = layoutService;
 		services.registerInstance(IWorkbenchLayoutService, layoutService);
 		services.registerInstance(IAgentModelsService, api.model);
+		services.registerInstance(ISecretStorageStatusService, api.secretStorage);
 		services.registerInstance(IAgentSessionService, api.session);
 		services.registerInstance(IAgentThreadService, api.thread);
 		services.registerSingleton(ITraceService, () => services.createInstance(AppServerTraceService));

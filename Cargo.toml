@@ -226,6 +226,7 @@ testing = { package = "ash-testing", path = "crates/testing" }
 cli = { package = "ash-utils-cli", path = "crates/utils/cli" }
 cargo-bin = { package = "ash-utils-cargo-bin", path = "crates/utils/cargo-bin" }
 runfiles = { git = "https://github.com/dzbarsky/rules_rust", rev = "b56cbaa8465e74127f1ea216f813cd377295ad81" }
+aes = "0.8"
 aes-gcm = "0.10"
 whoami = "1"
 guardian-context = { package = "ash-guardian-context", path = "crates/guardian-context" }

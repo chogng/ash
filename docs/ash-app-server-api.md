@@ -343,6 +343,7 @@ Server → Client `app/request`，不增加 Main 中的业务分发。
 | `languageServer/configure` / `languageServer/remove`                                    | config                                    | revision-safe 修改或恢复 language-server mode/path preference                                                                                                                                             |
 | `provider/configure` / `provider/remove`                                                | config                                    | 按 connection ID 保存或移除配置；后续请求按已就绪凭据重新选择连接。                                                                                                                                       |
 | `provider/apiKey/set` / `provider/list`                                                 | model connection                          | 按 connection ID 保存独立凭据；列表返回所属厂商、接入类型、configured、active 和 ready，不返回密钥。`active` 表示当前自动选中的连接。                                                                     |
+| `secrets/status`                                                                        | profile                                   | Returns credential-storage availability and integrity; may initialize encryption and resume migration, so it uses global exclusive serialization. Never returns credentials or key material.              |
 | `provider/probe`                                                                        | model provider                            | 使用未保存的 `config` 和可选临时 `apiKey`；填写 `model` 时发起一次最小生成请求，省略时获取模型 ID 列表。返回 `passed`、`models` 或 `failed`；不保存配置和密钥，不重试其他路径。成功不证明完整上下文容量。 |
 | `provider/models/list`                                                                  | model observations                        | 按 connection 刷新观察目录，返回 models、empty 或 failed。缓存隔离接入、账户和配置；不改写内置目录、模型选择或当前接入。订阅账户的后台观察在模型变化时另发 `provider/models/updated`。                    |
 | `mcp/server/upsert` / `mcp/server/remove` / `mcp/server/enablement/set`                 | config                                    | 修改 standalone MCP desired config                                                                                                                                                                        |
@@ -1537,6 +1538,8 @@ factsAvailable/factsIncluded；客户端须显示覆盖量，读取量与事实�
 三个扩展来源默认关闭，Sessions 的整理选项默认开启。历史观察不能确认
 目标归属；`target` 是用户确认的精确归属说明，仍不授予操作权限。条目含来源种类、版本、接受状态
 和当前状态；详细范围与信任规则见 [准备项目审核环境](guardian.md#准备项目审核环境)。
+
+`secrets/status` returns `available`, `unavailable`, `accessDenied`, `keyMissing`, `corrupted`, `migrationFailed` or `failure`. Credential operations use structured error kinds `SecretStorageUnavailable`, `SecretStorageAccessDenied`, `SecretStorageKeyMissing`, `SecretStorageCorrupted`, `SecretStorageMigrationFailed` or `SecretStorageOperationFailed`. A failed read never becomes `apiKeyConfigured: false`. See [secret storage](secrets.md#5-backend-策略) for migration and recovery.
 
 ## 语音对话输入控制
 

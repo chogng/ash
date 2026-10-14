@@ -6,6 +6,32 @@ import type {
 	ModelPreferencesUpdateParams
 } from '../../../../../../.build/protocol/typescript/index.js';
 import { createAppServerAgentModelsService } from '../../browser/appServerAgentModels.js';
+import { SecretStorageError } from '../../../secrets/common/secrets.js';
+import { AppServerRemoteError } from '../../common/appServerError.js';
+import { setNlsMessages } from '../../../../nls.js';
+import { productLanguagePackCatalogs } from '../../../../workbench/services/localization/common/localizationCatalogs.js';
+
+test('Credential operations preserve storage failures as domain errors and translate Chinese recovery text', async () => {
+	const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsMessages(catalog.locale, catalog.bundles);
+	try {
+		const api = createAppServerAgentModelsService({
+			async request(): Promise<never> {
+				throw new AppServerRemoteError(-32094, 'Untrusted diagnostic', { kind: 'SecretStorageAccessDenied' });
+			},
+		} as unknown as AppServerProtocolClient);
+		for (const operation of [() => api.listProviders(), () => api.listModels(), () => api.setProviderApiKey({ connection: 'openai', apiKey: 'fake' }), () => api.removeProviderApiKey('openai')]) {
+			await assert.rejects(operation(), error => {
+				assert.ok(error instanceof SecretStorageError);
+				assert.equal(error.status, 'accessDenied');
+				assert.equal(error.message, '凭据存储访问被拒绝。请检查配置目录权限，解锁系统钥匙串并允许 Ash 访问，然后重试。');
+				return true;
+			});
+		}
+	} finally {
+		setNlsMessages('en', {});
+	}
+});
 
 test('Model preferences send a targeted update with the current revision', async () => {
 	const writes: ModelPreferencesUpdateParams[] = [];

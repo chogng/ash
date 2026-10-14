@@ -3,7 +3,7 @@
 > - 物理位置：`crates/secrets/`
 > - Rust crate：`ash_secrets`
 > - 层次：host secret persistence primitive
-> - 当前实现：typed key/value、`load/store/delete` port、profile 私有文件、OS keyring、ephemeral memory 与 unavailable backend
+> - 当前实现：typed key/value、availability 与 `load/store/delete` port、profile 加密文件、OS keyring、ephemeral memory 与 unavailable backend
 > - Crate 实现、安全义务与测试：[`crates/secrets/README.md`](../crates/secrets/README.md)
 > - OS keyring adapter：[`crates/keyring-store/README.md`](../crates/keyring-store/README.md)
 > - Direct-provider credential：[`model-provider.md`](model-provider.md#6-供应商凭据边界)
@@ -18,7 +18,7 @@
 | 调用方需求           | 秘密存储负责                                    | 秘密存储不负责                             |
 | -------------------- | ----------------------------------------------- | ------------------------------------------ |
 | 保存或读取一个敏感值 | 按不透明 `SecretKey` 执行 `load/store/delete`   | 解释它是 API key、OAuth token 还是其他凭据 |
-| 在不同宿主持久化     | 使用 profile 私有文件或调用方注入的临时 backend | 替调用方选择账户、供应商或授权范围         |
+| 在不同宿主持久化     | 使用 profile 加密文件或调用方注入的临时 backend | 替调用方选择账户、供应商或授权范围         |
 | 后端不可用           | 返回明确错误                                    | 静默降级到不安全文件或普通配置             |
 | 记录诊断信息         | 只记录脱敏错误和不敏感键                        | 输出秘密字节、认证标头或完整命令           |
 | 删除秘密             | 返回已删除或不存在的明确结果                    | 撤销远端 token 或完成供应商登出            |
@@ -93,6 +93,7 @@ wire and transport
 
 ```rust
 pub trait SecretStore: Send + Sync {
+    fn check_availability(&self) -> Result<(), SecretStoreError>;
     fn load(&self, key: &SecretKey) -> Result<Option<SecretValue>, SecretStoreError>;
     fn store(&self, key: &SecretKey, value: &SecretValue) -> Result<(), SecretStoreError>;
     fn delete(&self, key: &SecretKey)
@@ -124,15 +125,15 @@ MCP/Connector 使用自己的 namespace，不能把 Provider key schema 当成�
 
 长期 backend：
 
-| Host                     | 默认 backend         | 说明                                                         |
-| ------------------------ | -------------------- | ------------------------------------------------------------ |
-| Desktop                  | profile 私有文件     | `<profile>/secrets/values/`，hashed 文件名，不调用系统钥匙串 |
-| CLI/TUI interactive      | profile 私有文件     | 与 Desktop 共用同一 profile authority                        |
-| CI/exec                  | ephemeral / injected | secret 由进程环境或调用方注入，不自动落盘                    |
-| Standalone embedded host | injected             | host 必须显式注入与自己 authority 一致的 backend             |
-| Explicit keyring host    | OS keyring           | host 明确选择时注入 `KeyringSecretStore`，不是 daemon 默认   |
+| Host                     | 默认 backend          | 说明                                                               |
+| ------------------------ | --------------------- | ------------------------------------------------------------------ |
+| Desktop                  | 加密文件 + OS keyring | `<profile>/secrets/encrypted/values/` 保存密文，keyring 保存主密钥 |
+| CLI/TUI interactive      | 加密文件 + OS keyring | 与 Desktop 共用同一 profile authority；需可用的系统 keyring        |
+| CI/exec                  | ephemeral / injected  | secret 由进程环境或调用方注入，不自动落盘                          |
+| Standalone embedded host | injected              | host 必须显式注入与自己 authority 一致的 backend                   |
+| Explicit keyring host    | OS keyring            | host 明确选择时直接保存业务凭据；默认组合只在 keyring 保存主密钥   |
 
-生产 backend 必须一次实现完整的 `load/store/delete`。`LocalProfileRuntime` 为一个 profile 只打开一个 `FileSecretStore`，并把同一个 `Arc<dyn SecretStore>` 注入该 daemon 内所有 App Server connection、Connector、MCP 与 Provider credential adapter。
+生产 backend 必须一次实现完整的 `load/store/delete`。`LocalProfileRuntime` 为一个 profile 只打开一个 `EncryptedFileSecretStore`，并把同一个 `Arc<dyn SecretStore>` 注入该 daemon 内所有 App Server connection、Connector、MCP 与 Provider credential adapter。
 
 profile file backend 的最低要求：
 
@@ -143,7 +144,15 @@ profile file backend 的最低要求：
 - delete 清理 exact value file；
 - error、backup、fixture 和 telemetry 不包含 secret。
 
-`config.toml`、SQLite、Extensions cache 和普通 JSON 只保存 non-secret reference。daemon 默认的 secret bytes 只进入 `<profile>/secrets/values/` 下的 opaque hashed value file；显式 keyring host 只进入 OS credential facility。两者之间不做 fallback、双写或自动迁移。
+`config.toml`、SQLite、Extensions cache 和普通 JSON 只保存 non-secret reference。daemon 默认将凭据认证加密后写入 `<profile>/secrets/encrypted/values/`。256-bit 随机主密钥由 profile 隔离的 `KeyringSecretStore` 保存，每次操作重新读取，不缓存绕过钥匙串撤销。文件使用 AES-256-GCM、新随机 nonce、版本头及绑定文件名的附加认证数据；不同 key 的密文不能交换。私有权限、同步写入与原子替换继续适用，没有明文 fallback 或双写。
+
+`store.lock` 跨进程序列化主密钥创建、迁移和文件操作。第一次存储操作或 `check_availability` 将旧 `secrets/values/` 的明文逐项写入加密目录，重读校验持久密文后才删除对应旧文件。中断后可继续迁移，冲突时保留两份数据并返回错误。`key-check` 校验主密钥；已有密文但 keyring 条目丢失时不生成替代密钥。`FileSecretStore` 保留作为显式 backend 和迁移源。
+
+构造 store 不访问系统 keyring；无法访问 keyring 时 App Server 仍可启动。`secrets/status` 返回 available、unavailable、accessDenied、keyMissing、corrupted、migrationFailed 或 failure，并验证已有密文完整性。状态不包含凭据、主密钥、路径或原始系统错误。前端保留已有的凭据遮蔽值，显示本地化恢复提示并提供显式重试；操作时的存储错误也通过稳定 `data.kind` 返回。查询可能触发初始化和迁移，因此协议按全局写操作串行。
+
+备份或移动 profile 时必须同时考虑 keyring 中的原始密钥与 profile namespace；仅复制密文不能恢复凭据。没有自动重置丢失密钥或密钥轮换功能。
+
+Desktop 的通用存储状态与错误契约位于 `src/ash/platform/secrets/common/secrets.ts`。`ISecretStorageStatusService.readStatus()` 由同目录的 App Server adapter 对接 `secrets/status`，在 Editor 和 Agents 窗口各自的服务容器中注册；模型设置页直接消费该服务。模型等领域的 RPC adapter 通过 secrets adapter 统一转换结构化存储错误，领域接口不转发通用存储状态。当前没有通用凭据存取或变更事件接口，待真实消费者需要时再补充。
 
 ## 6. 生命周期与一致性
 
@@ -173,6 +182,8 @@ crates/secrets/
     ├── store.rs
     ├── memory.rs
     ├── file.rs
+    ├── encrypted_file.rs
+    ├── encrypted_file_tests.rs
     ├── file_windows.rs
     ├── secrets_tests.rs
     └── file_tests.rs
@@ -240,6 +251,8 @@ Desktop renderer ──▶ SecretStore
 - backend unavailable/access denied 分类；
 - OS keyring adapter contract 的完整 round trip；真实平台 keyring round trip 由 opt-in host test 验证；
 - file backend 的完整 round trip、permission、atomic replace 与 stale staging cleanup；
+- 加密文件的重启、明文迁移、并发初始化、密文篡改/交换、丢失/错误主密钥、迁移中断与不可用 keyring；
+- `secrets/status` 与操作错误不把存储失败解释为凭据缺失，不输出原始错误；
 - logout/delete 后 exact value file 不可读取；
 - 除明确的 `provider/apiKey/set` 和 `provider/probe` 输入外，App Server 响应、Thread event 和 rollout 不含 secret 值。
 
@@ -252,8 +265,8 @@ Desktop renderer ──▶ SecretStore
 4. secrets 只保存 opaque bytes，不理解 token 或 account。
 5. Config 只保存 reference，不保存 secret。
 6. API/client/Core 不读取 secret store。
-7. 本地 composition 默认使用 `<profile>/secrets` 下的私有文件 backend；Unix 强制 0700/0600，Windows 使用 owner-only protected DACL 和 write-through atomic replacement。
-8. `ash-keyring-store` 保留为可注入的平台 adapter；它不是 daemon 默认，不与文件 backend fallback 或双写。
+7. 本地 composition 默认使用认证加密文件，随机主密钥保存在系统 keyring；Unix 强制 0700/0600，Windows 使用 owner-only protected DACL 和 write-through atomic replacement。
+8. `ash-keyring-store` 是默认加密文件 backend 的主密钥 facility，也可由 host 显式注入为直接凭据 backend；两种模式不 fallback 或双写。
 9. `LocalProfileRuntime` 拥有一个 profile 的唯一 `SecretStore`；共享 profile runtime 时注入不同 store 会直接拒绝，不形成第二套 credential authority。
 10. `provider/apiKey/set` 与 `provider/probe` 可把新 key 交给受信任的 App Server；后端不提供读取已存 key 的接口。local composition 将同一个 `SecretStore` 注入模型、Connector、MCP 与订阅认证 adapter。订阅 token 只在本地 credential owner 与单次模型请求之间流动，不进入 Core Agent Loop 状态。
 

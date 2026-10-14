@@ -16,6 +16,14 @@ pub enum DeleteSecretOutcome {
 /// namespace from other products, sanitize all errors, and never copy secret values into ordinary
 /// configuration, logs, telemetry, command arguments, or durable product events.
 pub trait SecretStore: Send + Sync {
+    /// Checks the backing facility without exposing keys or secret values.
+    ///
+    /// Durable backends may initialize encryption and resume a pending migration. Availability
+    /// is an observation, not a guarantee that a subsequent operation will succeed.
+    fn check_availability(&self) -> Result<(), SecretStoreError> {
+        Ok(())
+    }
+
     fn load(&self, key: &SecretKey) -> Result<Option<SecretValue>, SecretStoreError>;
 
     fn store(&self, key: &SecretKey, value: &SecretValue) -> Result<(), SecretStoreError>;
@@ -28,6 +36,10 @@ pub trait SecretStore: Send + Sync {
 pub struct UnavailableSecretStore;
 
 impl SecretStore for UnavailableSecretStore {
+    fn check_availability(&self) -> Result<(), SecretStoreError> {
+        Err(unavailable())
+    }
+
     fn load(&self, _: &SecretKey) -> Result<Option<SecretValue>, SecretStoreError> {
         Err(unavailable())
     }

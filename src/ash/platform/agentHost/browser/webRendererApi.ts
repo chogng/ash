@@ -1,3 +1,4 @@
+import { createAppServerSecretStorageStatusService } from '../../secrets/browser/appServerSecretStorageStatusService.js';
 import { AppServerMessageHistoryService } from '../../messageHistory/browser/appServerMessageHistoryService.js';
 import { createExtensionBackendApi } from './extensionBackendApi.js';
 import { createAppServerExecutionSettingsService } from './appServerExecutionSettingsService.js';
@@ -111,6 +112,7 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 		session: createAppServerAgentSessionService(connection),
 		teams: createAppServerTeamApi(connection),
 		model: createAppServerAgentModelsService(connection),
+		secretStorage: createAppServerSecretStorageStatusService(connection),
 		thread: createAppServerAgentThreadService(connection),
 		turn: createAppServerAgentTurnService(connection),
 		turnChanges: createAppServerTurnChangesApi(connection),

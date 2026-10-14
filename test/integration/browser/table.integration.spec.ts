@@ -1,5 +1,33 @@
 import { expect, test } from '@playwright/test';
 
+for (const locale of ['en', 'zh-CN']) {
+	test(`credential storage failure preserves saved-key state and keyboard retry recovers (${locale})`, async ({ page }) => {
+		await page.goto(`/table.html?locale=${locale}`);
+		await page.evaluate(() => window.ashTableIntegration.showCredentialSettings());
+		const root = page.locator('#credential-settings');
+		const key = root.locator('input[type="password"]');
+		await expect(key).toHaveValue('••••••••');
+		for (const theme of ['light', 'hcDark', 'hcLight']) {
+			await page.evaluate(name => window.ashTableIntegration.theme(name), theme);
+			await page.evaluate(() => window.ashTableIntegration.setCredentialStorage('accessDenied'));
+			const retry = root.getByRole('button', { name: locale === 'zh-CN' ? '重试凭据存储' : 'Retry credential storage' });
+			await expect(retry).toBeVisible();
+			await expect(root.getByRole('status').filter({ hasText: locale === 'zh-CN' ? '访问被拒绝' : 'access was denied' })).toBeVisible();
+			await expect(key).toBeDisabled();
+			await expect(key).toHaveValue('••••••••');
+			await retry.focus();
+			await page.keyboard.press('Enter');
+			await expect(retry).toBeEnabled();
+			await expect(retry).toBeFocused();
+			await page.evaluate(() => window.ashTableIntegration.setCredentialStorage('available'));
+			await expect(retry).toHaveCount(0);
+			await expect(key).toBeEnabled();
+			await expect(key).toHaveValue('••••••••');
+			await expect(key).toBeFocused();
+		}
+	});
+}
+
 for (const scale of [1, 1.25, 1.5, 2]) {
 	test.describe(`Table layout at ${scale * 100}% display scale`, () => {
 		test.use({ deviceScaleFactor: scale });

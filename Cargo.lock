@@ -27,6 +27,7 @@ dependencies = [
  "cfg-if",
  "cipher",
  "cpufeatures 0.2.17",
+ "zeroize",
 ]
 
 [[package]]
@@ -41,6 +42,7 @@ dependencies = [
  "ctr",
  "ghash",
  "subtle",
+ "zeroize",
 ]
 
 [[package]]
@@ -462,6 +464,7 @@ dependencies = [
  "ash-image-generation",
  "ash-install-context",
  "ash-instructions",
+ "ash-keyring-store",
  "ash-kimi",
  "ash-livekit-client",
  "ash-login",
@@ -2514,7 +2517,10 @@ dependencies = [
 name = "ash-secrets"
 version = "0.1.0"
 dependencies = [
+ "aes",
+ "aes-gcm",
  "ash-utils-path",
+ "fs2",
  "getrandom 0.2.17",
  "sha2 0.10.9",
  "tempfile",

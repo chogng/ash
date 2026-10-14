@@ -615,6 +615,13 @@ impl AppServer {
 
     pub(super) fn model_list(&self, params: &Value) -> Result<Value, RpcError> {
         let _: ModelListParams = decode(params)?;
+        // The catalog resolves connection readiness from credentials. Preserve a typed storage
+        // failure before that domain resolution turns it into a general model error.
+        if let Some(store) = &self.secret_store {
+            store
+                .check_availability()
+                .map_err(|error| super::secret_operations::storage_error(error.kind()))?;
+        }
         result(&self.model_catalog.catalog_snapshot().map_err(core_error)?)
     }
 

@@ -10,6 +10,7 @@ import type { AppServerProtocolClient } from './appServerProtocolClient.js';
 import { appServerRequest } from './appServerRequest.js';
 import type { UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
 import type { CustomModelProvider, IAgentModelsService } from '../common/agentModels.js';
+import { withSecretStorageErrors } from '../../secrets/browser/appServerSecretStorageStatusService.js';
 
 export function createDisconnectedAgentModelsService(unavailable: UnavailableOperation): IAgentModelsService {
 	return {
@@ -142,13 +143,13 @@ export function createAppServerAgentModelsService(connection: AppServerProtocolC
 			return result.type === 'failed' ? result : { type: 'passed' };
 		},
 		listModels: async () => {
-			const result = await appServerRequest(connection, 'model/list', {});
+			const result = await withSecretStorageErrors(appServerRequest(connection, 'model/list', {}));
 			return {
 				models: result.models.map(modelCatalogEntry),
 				scopes: result.catalog_scopes?.map((scope) => ({ ...scope }))
 			};
 		},
-		listProviders: () => appServerRequest(connection, 'provider/list', {}),
+		listProviders: () => withSecretStorageErrors(appServerRequest(connection, 'provider/list', {})),
 		listProviderModels: async (provider) => {
 			const result = await appServerRequest(connection, 'provider/models/list', { connection: provider });
 			if (result.type === 'failed') {
@@ -156,9 +157,9 @@ export function createAppServerAgentModelsService(connection: AppServerProtocolC
 			}
 			return result.type === 'models' ? result.models.map(modelCatalogEntry) : [];
 		},
-		setProviderApiKey: (params) => appServerRequest(connection, 'provider/apiKey/set', params),
+		setProviderApiKey: (params) => withSecretStorageErrors(appServerRequest(connection, 'provider/apiKey/set', params)),
 		removeProviderApiKey: async (provider) => {
-			await appServerRequest(connection, 'provider/apiKey/remove', { connection: provider });
+			await withSecretStorageErrors(appServerRequest(connection, 'provider/apiKey/remove', { connection: provider }));
 		},
 		readModel: async () => (await appServerRequest(connection, 'config/read', {})).model,
 		readAdvisorDefault: async () => (await appServerRequest(connection, 'config/read', {})).advisor ?? null,

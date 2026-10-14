@@ -19,6 +19,11 @@ test("disconnected Web renderer API reports stopped without events", async () =>
 
 test("disconnected Web renderer API rejects product operations explicitly", async () => {
 	const api = createDisconnectedRendererApi();
+	await assert.rejects(api.secretStorage.readStatus(), (error: unknown) => {
+		assert.ok(error instanceof WebAppServerUnavailableError);
+		assert.equal(error.operation, 'secrets.status');
+		return true;
+	});
 	assert.equal(api.instructions.isAvailable, false);
 	await assert.rejects(api.instructions.list('session'), (error: unknown) => {
 		assert.ok(error instanceof WebAppServerUnavailableError);

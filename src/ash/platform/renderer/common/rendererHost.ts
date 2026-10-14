@@ -1,3 +1,4 @@
+import type { ISecretStorageStatusService } from '../../secrets/common/secrets.js';
 import type { IMessageHistoryService } from '../../messageHistory/common/messageHistory.js';
 import type { IExtensionBackendApi } from '../../agentHost/common/extensionBackendApi.js';
 import type { ISymphonyBackend } from '../../symphony/common/symphonyService.js';
@@ -102,6 +103,7 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly session: IAgentSessionService;
 	readonly teams: ITeamApi;
 	readonly model: IAgentModelsService;
+	readonly secretStorage: ISecretStorageStatusService;
 	readonly thread: IAgentThreadService;
 	readonly turn: IAgentTurnService;
 	readonly turnChanges: ITurnChangesApi;

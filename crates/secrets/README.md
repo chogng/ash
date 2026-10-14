@@ -7,17 +7,18 @@ request signing 和 Provider header materialization 均属于消费它的 domain
 
 ## 公共契约
 
-| Symbol                   | 职责                                | 安全语义                                                                                  |
-| ------------------------ | ----------------------------------- | ----------------------------------------------------------------------------------------- |
-| `SecretKey`              | 非 secret 的 stable lookup identity | 非空、最多 512 bytes、禁止 control character                                              |
-| `SecretValue`            | opaque secret bytes                 | 不实现 Clone/Display/Serialize；Debug 固定 redacted；Drop zeroize                         |
-| `SecretStore`            | `load / store / delete` port        | namespace isolation、sanitized error、完整三操作                                          |
-| `DeleteSecretOutcome`    | exact delete result                 | 区分 `Deleted` 与 `NotFound`                                                              |
-| `MemorySecretStore`      | process-local ephemeral backend     | replacement、delete、drop 时 zeroize stored bytes                                         |
-| `UnavailableSecretStore` | explicit fail-closed backend        | 所有操作返回 `BackendUnavailable`                                                         |
-| `FileSecretStore`        | profile-scoped durable backend      | hashed filenames、私有权限、有界读取、同步 staging 与 replace；所有值路径逐级拒绝 symlink |
-| `SecretStoreError`       | sanitized error                     | message 不能包含 secret/header/raw backend response                                       |
-| `SecretStoreErrorKind`   | stable caller classification        | unavailable、access denied、backend failure                                               |
+| Symbol                     | 职责                                       | 安全语义                                                                                  |
+| -------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| `SecretKey`                | 非 secret 的 stable lookup identity        | 非空、最多 512 bytes、禁止 control character                                              |
+| `SecretValue`              | opaque secret bytes                        | 不实现 Clone/Display/Serialize；Debug 固定 redacted；Drop zeroize                         |
+| `SecretStore`              | availability、`load / store / delete` port | namespace isolation、sanitized error、完整三操作                                          |
+| `DeleteSecretOutcome`      | exact delete result                        | 区分 `Deleted` 与 `NotFound`                                                              |
+| `MemorySecretStore`        | process-local ephemeral backend            | replacement、delete、drop 时 zeroize stored bytes                                         |
+| `UnavailableSecretStore`   | explicit fail-closed backend               | 所有操作返回 `BackendUnavailable`                                                         |
+| `FileSecretStore`          | profile-scoped durable backend             | hashed filenames、私有权限、有界读取、同步 staging 与 replace；所有值路径逐级拒绝 symlink |
+| `EncryptedFileSecretStore` | profile 加密文件 backend                   | 注入 keyring 主密钥、AES-256-GCM、跨进程锁、可恢复迁移，无 fallback                       |
+| `SecretStoreError`         | sanitized error                            | message 不能包含 secret/header/raw backend response                                       |
+| `SecretStoreErrorKind`     | stable caller classification               | unavailable、access denied、backend failure、key missing、invalid data、migration failed  |
 
 `SecretKey` 的内容会出现在 `Debug`，因此 key schema 不能包含 token、email 或其他敏感 identifier。
 Key schema 由调用 domain 拥有，本 crate 只验证基本安全 shape。
@@ -80,6 +81,10 @@ buffer 处理。
 
 ## 当前限制与演进
 
-当前具有 memory、unavailable 与 profile 私有文件 backend。`FileSecretStore` 是本地产品默认：Unix 使用 0700/0600 与原子 rename，Windows 使用 owner-only protected DACL 与 write-through atomic replacement。其他平台在 `open` 时明确返回 `BackendUnavailable`。OS keyring 位于独立 `ash-keyring-store`，供 host 显式注入，不是 daemon 默认。加密文件、跨进程锁、migration 与 rotation metadata 尚未实现。后续 backend 不得扩大 `SecretValue` 的复制、序列化或日志接口。
+当前具有 memory、unavailable、私有明文文件和认证加密文件 backend。`EncryptedFileSecretStore` 是本地产品默认，host 注入 `ash-keyring-store::KeyringSecretStore` 只保存随机主密钥。文件使用 AES-256-GCM，随机 nonce、版本头与绑定文件名的 AAD；AES key schedule 和 `SecretValue` 在释放时清理。Unix 使用 0700/0600 与原子 rename，Windows 使用 owner-only protected DACL 与 write-through atomic replacement。
+
+`open` 不访问 keyring。第一次操作或 `check_availability` 在跨进程文件锁下初始化主密钥并迁移旧 `values/`：密文进入 `encrypted/values/`，重读校验后才删除对应明文。中断后继续迁移，冲突时保留两份；key 缺失、错误或密文损坏返回稳定分类，绝不降级到明文或静默重置。每次操作重新读取 keyring，避免缓存绕过访问撤销。`check_availability` 同时验证现有密文。
+
+`FileSecretStore` 保留作为显式 backend 和迁移源；其他平台仍明确返回 `BackendUnavailable`。密钥轮换与 profile/keyring 备份恢复尚无自动管理。后续 backend 不得扩大 `SecretValue` 的复制、序列化或日志接口。
 
 产品入口现通过 [`ash-process-hardening`](../process-hardening/README.md) 在读取本 store 前执行进程保护；密钥存储不自行改变进程级环境或调试策略。

@@ -90,6 +90,7 @@ use ash_config::ToolSearchModeConfig;
 use ash_config::UserConfigCommand;
 use ash_file_access::Dir;
 use ash_model_provider::ModelId;
+use ash_model_provider::ModelProviderError;
 use ash_model_provider::ModelRef;
 use ash_model_provider::ProviderId;
 use ash_protocol::HookEvent;
@@ -262,16 +263,40 @@ impl AppServer {
             .read_snapshot()
             .map_err(config_error)?;
         if let Some(runtime) = &self.provider_runtime {
-            let selected = runtime
-                .preferred_connections(&snapshot.values.connections)
-                .map_err(|_| {
-                    RpcError::new(-32093, AppServerErrorName::ProviderCredentialsUnavailable)
-                })?;
-            snapshot.values.active_connections = selected
-                .iter()
-                .map(|(provider, config)| (provider.clone(), config.connection.clone()))
-                .collect();
-            snapshot.values.providers = selected;
+            match runtime.preferred_connections(&snapshot.values.connections) {
+                Ok(selected) => {
+                    snapshot.values.active_connections = selected
+                        .iter()
+                        .map(|(provider, config)| (provider.clone(), config.connection.clone()))
+                        .collect();
+                    snapshot.values.providers = selected;
+                }
+                Err(ModelProviderError::Credential(_)) => {
+                    // Reading window configuration must stay available so a locked keyring
+                    // can be recovered. Keep configured connections, but advertise none as
+                    // ready when their credentials cannot be checked; invocations still fail.
+                    snapshot.values.active_connections.clear();
+                    snapshot.values.providers.clear();
+                }
+                Err(
+                    ModelProviderError::ConfigurationMissing
+                    | ModelProviderError::InvalidRequest(_)
+                    | ModelProviderError::InvalidResponse(_)
+                    | ModelProviderError::ContextOverflow(_)
+                    | ModelProviderError::AuthFailed(_)
+                    | ModelProviderError::Config(_)
+                    | ModelProviderError::ModelNotRegistered { .. }
+                    | ModelProviderError::Api(_)
+                    | ModelProviderError::Cancelled(_)
+                    | ModelProviderError::Tokenization(_)
+                    | ModelProviderError::Unavailable(_),
+                ) => {
+                    return Err(RpcError::new(
+                        -32093,
+                        AppServerErrorName::ProviderCredentialsUnavailable,
+                    ));
+                }
+            }
         }
         result(&config_read_result(
             snapshot,

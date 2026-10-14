@@ -256,7 +256,7 @@
     "models.provider.models": "供应商模型",
     "models.provider.modelId": "Model ID",
     "models.provider.context": "1M 上下文",
-    "models.settings.help": "模型页显示每个供应商的最新模型。已开启的模型排在前面，两组内部保持目录原序；关闭后回到未开启组中的原有位置。模型搜索框按名称或 ID 筛选完整列表，清空搜索可恢复列表。viewall models 展开或收起完整列表。API key 在输入框失焦时保存；清空输入框会移除密钥。New provider 添加卡片，包含供应商名称、Base URL、API key 和 API 格式。Test models 测试当前表格中的模型，表格为空时先拉取列表。刷新模型可重新拉取列表。添加模型可补充模型 ID 和上下文长度，也可以开启 1M。行内操作用于编辑上下文或删除手动配置。启用开关控制模型是否出现在选择器中，与测试结果无关。测试状态：橙点表示尚未通过，绿点表示测试通过。用 Tab 和 Shift+Tab 切换输入框和按钮。",
+    "models.settings.help": "模型页显示每个供应商的最新模型。已开启的模型排在前面，两组内部保持目录原序；关闭后回到未开启组中的原有位置。模型搜索框按名称或 ID 筛选完整列表，清空搜索可恢复列表。viewall models 展开或收起完整列表。API key 在输入框失焦时保存；清空输入框会移除密钥。凭据存储不可用时，请按存储提示操作，并使用“重试凭据存储”。已存凭据会保留。New provider 添加卡片，包含供应商名称、Base URL、API key 和 API 格式。Test models 测试当前表格中的模型，表格为空时先拉取列表。刷新模型可重新拉取列表。添加模型可补充模型 ID 和上下文长度，也可以开启 1M。行内操作用于编辑上下文或删除手动配置。启用开关控制模型是否出现在选择器中，与测试结果无关。测试状态：橙点表示尚未通过，绿点表示测试通过。用 Tab 和 Shift+Tab 切换输入框和按钮。",
     "models.provider.untested": "尚未测试",
     "models.provider.testing": "正在测试模型…",
     "models.provider.passed": "模型测试通过",
@@ -904,7 +904,15 @@
     "chat.media.openFailed": "无法打开此媒体：{0}",
     "agentsVoice.command.mute": "语音：切换麦克风静音",
     "agentsVoice.command.ptt": "语音：按住说话",
-    "agentsVoice.inputBoxHelp": "使用 Tab 和 Shift+Tab 在语音控件间移动。“打断回复”会停止语音回复。“断开连接”会结束语音，同时保留聊天任务、草稿和附件。Escape 将焦点返回聊天输入框。"
+    "agentsVoice.inputBoxHelp": "使用 Tab 和 Shift+Tab 在语音控件间移动。“打断回复”会停止语音回复。“断开连接”会结束语音，同时保留聊天任务、草稿和附件。Escape 将焦点返回聊天输入框。",
+    "credentials.storage.available": "凭据存储可用。",
+    "credentials.storage.unavailable": "系统凭据存储不可用。请启动或解锁系统钥匙串，然后重试。",
+    "credentials.storage.accessDenied": "凭据存储访问被拒绝。请检查配置目录权限，解锁系统钥匙串并允许 Ash 访问，然后重试。",
+    "credentials.storage.keyMissing": "加密密钥已丢失。请恢复原有系统钥匙串条目。已保留加密凭据。",
+    "credentials.storage.corrupted": "无法解密已存凭据。请恢复原有钥匙串条目或匹配的备份。已保留存储文件。",
+    "credentials.storage.migrationFailed": "无法完成凭据存储迁移。请检查配置目录访问权限，然后重试。已保留尚未迁移的原文件。",
+    "credentials.storage.failure": "无法访问凭据存储。请检查系统钥匙串和配置目录权限，然后重试。",
+    "credentials.storage.retry": "重试凭据存储"
   },
   "ash.workbench": {
     "command.OpenAutomations": "打开自动化",

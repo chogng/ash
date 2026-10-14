@@ -8,6 +8,8 @@
 secret trait，不解释 credential 内容，也不拥有 OAuth、refresh、revoke、Connector account 或 Plugin
 credential slot lifecycle。
 
+本地默认组合将它注入 `EncryptedFileSecretStore`，只保存 profile 的随机主密钥；业务凭据保存在认证加密文件中。显式 host 仍可选择直接把业务凭据保存到 keyring。两种模式无自动 fallback 或双写。
+
 ## 公共契约
 
 | Symbol                                                       | 当前职责                                                   | 不承担                           |

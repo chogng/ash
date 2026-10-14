@@ -7,6 +7,12 @@ pub enum SecretStoreErrorKind {
     BackendUnavailable,
     AccessDenied,
     BackendFailure,
+    /// Encrypted data exists but its system-keyring key is missing.
+    KeyMissing,
+    /// A stored encryption key or authenticated ciphertext is invalid.
+    InvalidData,
+    /// Legacy values could not be safely committed to encrypted storage.
+    MigrationFailed,
 }
 
 /// A sanitized secret-store failure.

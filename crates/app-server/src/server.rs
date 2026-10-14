@@ -167,6 +167,7 @@ mod request_processing;
 mod request_serialization;
 mod runtime_extensions;
 mod search_operations;
+mod secret_operations;
 mod semantic_index_job;
 mod session_operations;
 mod skill_operations;
@@ -247,6 +248,7 @@ pub struct AppServer {
     pub(super) config: Option<Arc<ConfigStore>>,
     home: Option<Arc<ash_home::AshHome>>,
     pub(super) provider_credentials: Option<Arc<ProviderCredentialService>>,
+    secret_store: Option<Arc<dyn ash_secrets::SecretStore>>,
     pub(super) file_search: Arc<file_search::Service>,
     env_config: Arc<RwLock<environment_runtime::EnvRuntimeConfig>>,
     pub(super) connectors: Option<Arc<connectors::ConnectorCredentialService>>,
@@ -658,6 +660,7 @@ impl AppServer {
             config: None,
             home: None,
             provider_credentials: None,
+            secret_store: None,
             file_search: Arc::new(file_search::Service),
             env_config: Arc::new(RwLock::new(environment_runtime::EnvRuntimeConfig::default())),
             connectors: None,
@@ -1767,6 +1770,11 @@ impl AppServer {
         self
     }
 
+    pub(crate) fn with_secret_store(mut self, store: Arc<dyn ash_secrets::SecretStore>) -> Self {
+        self.secret_store = Some(store);
+        self
+    }
+
     /// Installs a synthetic backend for App Server unit tests.
     #[cfg(test)]
     pub(crate) fn with_turn_backend(
@@ -2802,6 +2810,7 @@ impl AppServer {
                 self.provider_probe(std::mem::take(&mut request.params))
             }
             Some(ClientMethod::ProviderList) => self.provider_list(),
+            Some(ClientMethod::SecretsStatus) => self.secrets_status(&request.params),
             Some(ClientMethod::ProviderApiKeySet) => {
                 self.provider_api_key_set(std::mem::take(&mut request.params))
             }

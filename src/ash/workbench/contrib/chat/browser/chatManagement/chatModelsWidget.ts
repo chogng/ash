@@ -11,6 +11,7 @@ import { IContextViewService } from '../../../../../platform/contextview/browser
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import type { CustomModelProvider, ModelProviderApiFormat } from '../../../../../platform/agentHost/common/agentModels.js';
+import { SecretStorageError } from '../../../../../platform/secrets/common/secrets.js';
 import { ILanguageModelsService } from '../../common/languageModels.js';
 import { ChatModelsViewModel, type ProviderModelItem } from './chatModelsViewModel.js';
 
@@ -73,7 +74,7 @@ export class ProviderApiKeyInput extends Disposable {
 			this.input.showValidation('');
 			await this.chat.refreshModels();
 		} catch (error) {
-			this.input.showValidation(this.dirty
+			this.input.showValidation(error instanceof SecretStorageError ? error.message : this.dirty
 				? localize('models.keys.saveFailed', 'Could not save API key. Change the field or leave it again to retry.')
 				: localize('chat.providerKeys.refreshFailed', 'API key saved, but models could not be refreshed'));
 			throw error;
@@ -109,6 +110,7 @@ export class ChatModelsWidget extends Disposable {
 	private structure = '';
 	private editing = false;
 	private savingModel = false;
+	private credentialStorageAvailable = true;
 
 	constructor(document: Document, provider: CustomModelProvider, configured: boolean, private readonly isNew: boolean,
 		@IContextViewService contextView: IContextViewService,
@@ -211,6 +213,10 @@ export class ChatModelsWidget extends Disposable {
 	public focus(): void { this.name.focus(); }
 	public get title(): string { return this.name.value.trim() || localize('models.provider.new', 'New provider'); }
 	public updateKeyConfigured(configured: boolean): void { this.key.updateConfigured(configured); }
+	public setCredentialStorageAvailable(available: boolean): void {
+		this.credentialStorageAvailable = available;
+		this.render();
+	}
 
 	public getAccessibleContent(): string {
 		return [this.title, this.viewModel.message, ...this.viewModel.rows.map(row => {
@@ -271,7 +277,7 @@ export class ChatModelsWidget extends Disposable {
 	private render(): void {
 		const busy = this.viewModel.busy || this.savingModel;
 		for (const control of [this.name, this.baseUrl, this.format, this.test, this.refresh, this.add, this.cancel, this.saveModel]) { control.enabled = !busy; }
-		this.key.setEnabled(!busy);
+		this.key.setEnabled(this.credentialStorageAvailable && !busy);
 		this.modelId.enabled = !busy && !this.editing;
 		this.upstreamModel.enabled = !busy;
 		this.contextWindow.enabled = !busy && !this.largeContext.checked;

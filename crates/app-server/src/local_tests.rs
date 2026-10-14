@@ -2038,15 +2038,25 @@ fn user_network_config_is_loaded_before_start_and_reconciled_on_edit() {
 }
 
 #[test]
-fn shared_profile_runtime_reuses_one_durable_secret_store_across_env_hosts() {
+fn encrypted_storage_shared_profile_runtime_reuses_one_store_across_env_hosts() {
     let profile = tempfile::tempdir().unwrap();
     let first_dir = tempfile::tempdir().unwrap();
     let second_dir = tempfile::tempdir().unwrap();
-    let runtime = Arc::new(LocalProfileRuntime::open(profile.path()).unwrap());
+    let keyring = Arc::new(ash_secrets::MemorySecretStore::default());
+    let mut runtime = LocalProfileRuntime::open(profile.path()).unwrap();
+    runtime.secrets = Arc::new(
+        ash_secrets::EncryptedFileSecretStore::open(
+            profile.path().join("secrets"),
+            keyring.clone(),
+        )
+        .unwrap(),
+    );
+    let runtime = Arc::new(runtime);
     let open = |dir: &Path| {
         open_app_server(
             AppServerOptions::new(profile.path())
                 .with_profile_runtime(Arc::clone(&runtime))
+                .with_codex_home(profile.path().join("codex"))
                 .with_dir_root(dir)
                 .without_built_in_skills(),
         )
@@ -2090,10 +2100,73 @@ fn shared_profile_runtime_reuses_one_durable_secret_store_across_env_hosts() {
             )
     );
     assert_eq!(
+        std::fs::read_dir(profile.path().join("secrets/encrypted/values"))
+            .unwrap()
+            .count(),
+        2
+    );
+    assert_eq!(
         std::fs::read_dir(profile.path().join("secrets/values"))
             .unwrap()
             .count(),
-        1
+        0
+    );
+    let listed = local_call(
+        &second,
+        &mut second_connection,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"secrets/status","params":{}}),
+    );
+    assert_eq!(listed["result"], serde_json::json!({"status":"available"}));
+    let key_name = ash_secrets::SecretKey::new("storage/file-encryption-key/v1").unwrap();
+    let master = keyring.load(&key_name).unwrap().unwrap();
+    keyring.delete(&key_name).unwrap();
+    let listed = local_call(
+        &first,
+        &mut first_connection,
+        serde_json::json!({"jsonrpc":"2.0","id":4,"method":"secrets/status","params":{}}),
+    );
+    assert_eq!(listed["result"], serde_json::json!({"status":"keyMissing"}));
+    keyring.store(&key_name, &master).unwrap();
+    let listed = local_call(
+        &first,
+        &mut first_connection,
+        serde_json::json!({"jsonrpc":"2.0","id":5,"method":"secrets/status","params":{}}),
+    );
+    assert_eq!(listed["result"], serde_json::json!({"status":"available"}));
+}
+
+#[test]
+fn encrypted_storage_unavailable_keyring_keeps_local_composition_running() {
+    let profile = tempfile::tempdir().unwrap();
+    let mut runtime = LocalProfileRuntime::open(profile.path()).unwrap();
+    runtime.secrets = Arc::new(
+        ash_secrets::EncryptedFileSecretStore::open(
+            profile.path().join("secrets"),
+            Arc::new(ash_secrets::UnavailableSecretStore),
+        )
+        .unwrap(),
+    );
+    let server = open_app_server(
+        AppServerOptions::new(profile.path())
+            .with_profile_runtime(Arc::new(runtime))
+            .with_codex_home(profile.path().join("codex"))
+            .without_built_in_skills(),
+    )
+    .unwrap();
+    let mut connection = server.connection();
+    local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"test","version":"1"},"capabilities":{}}}),
+    );
+    let response = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"secrets/status","params":{}}),
+    );
+    assert_eq!(
+        response["result"],
+        serde_json::json!({"status":"unavailable"})
     );
 }
 

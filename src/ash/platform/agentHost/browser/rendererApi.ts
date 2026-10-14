@@ -1,3 +1,4 @@
+import { createDisconnectedSecretStorageStatusService } from '../../secrets/browser/appServerSecretStorageStatusService.js';
 import { createDisconnectedLocalGitService } from '../../git/browser/appServerLocalGitService.js';
 import { createDisconnectedExecutionSettingsService } from './appServerExecutionSettingsService.js';
 import { createDisconnectedInstructionService } from '../../instructions/browser/appServerInstructionService.js';
@@ -47,6 +48,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
 		session: createDisconnectedAgentSessionService(unavailableOperation),
 		teams: createDisconnectedTeamApi(unavailableOperation),
 		model: createDisconnectedAgentModelsService(unavailableOperation),
+		secretStorage: createDisconnectedSecretStorageStatusService(unavailableOperation),
 		thread: createDisconnectedAgentThreadService(unavailableOperation),
 		turn: createDisconnectedAgentTurnService(unavailableOperation),
 		turnChanges: createDisconnectedTurnChangesApi(unavailableOperation),

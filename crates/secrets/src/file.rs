@@ -20,6 +20,10 @@ use crate::SecretStoreError;
 use crate::SecretStoreErrorKind;
 use crate::SecretValue;
 
+#[path = "encrypted_file.rs"]
+mod encrypted;
+pub use encrypted::EncryptedFileSecretStore;
+
 #[cfg(windows)]
 #[path = "file_windows.rs"]
 mod windows;
@@ -81,26 +85,7 @@ impl SecretStore for FileSecretStore {
     fn load(&self, key: &SecretKey) -> Result<Option<SecretValue>, SecretStoreError> {
         let _guard = self.operations.lock().map_err(lock_error)?;
         let path = self.value_path(key);
-        let metadata = match inspect_path(&self.boundary, &path)? {
-            NoSymlinkPathStatus::Existing => fs::symlink_metadata(&path).map_err(store_io)?,
-            NoSymlinkPathStatus::Missing => return Ok(None),
-        };
-        if !metadata.file_type().is_file() || metadata.len() > MAX_SECRET_BYTES {
-            return Err(backend_failure(
-                "secret store value is not a bounded regular file",
-            ));
-        }
-        let file = fs::File::open(path).map_err(store_io)?;
-        let mut value = Vec::with_capacity(metadata.len() as usize);
-        if let Err(error) = file.take(MAX_SECRET_BYTES + 1).read_to_end(&mut value) {
-            value.zeroize();
-            return Err(store_io(error));
-        }
-        if value.len() as u64 > MAX_SECRET_BYTES {
-            value.zeroize();
-            return Err(backend_failure("secret store value exceeds its size limit"));
-        }
-        Ok(Some(SecretValue::new(value)))
+        self.load_path(&path, MAX_SECRET_BYTES)
     }
 
     fn store(&self, key: &SecretKey, value: &SecretValue) -> Result<(), SecretStoreError> {
@@ -108,10 +93,44 @@ impl SecretStore for FileSecretStore {
             return Err(backend_failure("secret value exceeds its size limit"));
         }
         let _guard = self.operations.lock().map_err(lock_error)?;
-        let destination = self.value_path(key);
-        match inspect_path(&self.boundary, &destination)? {
+        self.store_path(&self.value_path(key), value)
+    }
+
+    fn delete(&self, key: &SecretKey) -> Result<DeleteSecretOutcome, SecretStoreError> {
+        let _guard = self.operations.lock().map_err(lock_error)?;
+        self.delete_path(&self.value_path(key))
+    }
+}
+
+impl FileSecretStore {
+    // Encrypted storage reuses the private-file boundary and atomic IO, with its envelope bound.
+    fn load_path(&self, path: &Path, limit: u64) -> Result<Option<SecretValue>, SecretStoreError> {
+        let metadata = match inspect_path(&self.boundary, path)? {
+            NoSymlinkPathStatus::Existing => fs::symlink_metadata(path).map_err(store_io)?,
+            NoSymlinkPathStatus::Missing => return Ok(None),
+        };
+        if !metadata.file_type().is_file() || metadata.len() > limit {
+            return Err(backend_failure(
+                "secret store value is not a bounded regular file",
+            ));
+        }
+        let file = fs::File::open(path).map_err(store_io)?;
+        let mut value = Vec::with_capacity(metadata.len() as usize);
+        if let Err(error) = file.take(limit + 1).read_to_end(&mut value) {
+            value.zeroize();
+            return Err(store_io(error));
+        }
+        if value.len() as u64 > limit {
+            value.zeroize();
+            return Err(backend_failure("secret store value exceeds its size limit"));
+        }
+        Ok(Some(SecretValue::new(value)))
+    }
+
+    fn store_path(&self, destination: &Path, value: &SecretValue) -> Result<(), SecretStoreError> {
+        match inspect_path(&self.boundary, destination)? {
             NoSymlinkPathStatus::Existing
-                if !fs::symlink_metadata(&destination)
+                if !fs::symlink_metadata(destination)
                     .map_err(store_io)?
                     .file_type()
                     .is_file() =>
@@ -134,7 +153,7 @@ impl SecretStore for FileSecretStore {
             let mut file = options.open(&staging).map_err(store_io)?;
             file.write_all(value.expose()).map_err(store_io)?;
             file.sync_all().map_err(store_io)?;
-            promote_file(&staging, &destination)?;
+            promote_file(&staging, destination)?;
             sync_directory(&self.values)
         })();
         if staging.exists() {
@@ -143,10 +162,8 @@ impl SecretStore for FileSecretStore {
         result
     }
 
-    fn delete(&self, key: &SecretKey) -> Result<DeleteSecretOutcome, SecretStoreError> {
-        let _guard = self.operations.lock().map_err(lock_error)?;
-        let path = self.value_path(key);
-        if inspect_path(&self.boundary, &path)? == NoSymlinkPathStatus::Missing {
+    fn delete_path(&self, path: &Path) -> Result<DeleteSecretOutcome, SecretStoreError> {
+        if inspect_path(&self.boundary, path)? == NoSymlinkPathStatus::Missing {
             return Ok(DeleteSecretOutcome::NotFound);
         }
         match fs::remove_file(path) {

@@ -48,6 +48,7 @@ pub mod queue;
 pub mod registry;
 pub mod resources;
 pub mod search;
+pub mod secrets;
 mod serde_helpers;
 pub mod session;
 pub mod skills;

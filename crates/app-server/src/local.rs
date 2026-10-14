@@ -72,7 +72,7 @@ use ash_protocol::ContextWindow;
 use ash_protocol::ModelAccess;
 use ash_protocol::ModelBillingScope;
 use ash_rollout::LocalStateRepository;
-use ash_secrets::FileSecretStore;
+use ash_secrets::EncryptedFileSecretStore;
 use ash_secrets::SecretStore;
 use ash_skills_extension::BuiltInSkillSource;
 use ash_skills_extension::SkillConfigSnapshotProvider;
@@ -904,8 +904,14 @@ impl LocalProfileRuntime {
             )))
             .map_err(open_error)?;
         let secrets: Arc<dyn SecretStore> = Arc::new(
-            FileSecretStore::open(profile_root.join("secrets"))
-                .map_err(|error| OpenAppServerError(error.to_string()))?,
+            EncryptedFileSecretStore::open(
+                profile_root.join("secrets"),
+                Arc::new(
+                    ash_keyring_store::KeyringSecretStore::for_profile(&profile_root)
+                        .map_err(|error| OpenAppServerError(error.to_string()))?,
+                ),
+            )
+            .map_err(|error| OpenAppServerError(error.to_string()))?,
         );
         let diagnostics = diagnostics::Diagnostics::default();
         let telemetry = ash_otel::Telemetry::new(diagnostics.clone());
@@ -1299,8 +1305,14 @@ pub fn open_app_server_with_codebase_providers(
         (Some(runtime), None) => Arc::clone(&runtime.secrets),
         (None, Some(connectors)) => Arc::clone(&connectors.secrets),
         (None, None) => Arc::new(
-            FileSecretStore::open(options.profile_root.join("secrets"))
-                .map_err(|error| OpenAppServerError(error.to_string()))?,
+            EncryptedFileSecretStore::open(
+                options.profile_root.join("secrets"),
+                Arc::new(
+                    ash_keyring_store::KeyringSecretStore::for_profile(&options.profile_root)
+                        .map_err(|error| OpenAppServerError(error.to_string()))?,
+                ),
+            )
+            .map_err(|error| OpenAppServerError(error.to_string()))?,
         ),
     };
     let mut connector_runtime = match options.connector_runtime.take() {
@@ -1591,9 +1603,16 @@ pub fn open_app_server_with_codebase_providers(
             model_provider: model_provider.clone(),
         }),
     });
-    let runtime_config = configured_model
-        .resolve_config(&user_config)
-        .map_err(|error| OpenAppServerError(error.to_string()))?;
+    let mut runtime_config = resolve_local_config(&user_config, dir_config.as_deref())
+        .map_err(|error| OpenAppServerError(error.0))?;
+    match model_provider.preferred_connections(&runtime_config.connections) {
+        Ok(connections) => runtime_config.providers.extend(connections),
+        // Initial host configuration can be installed without usable credentials. Invocation
+        // still resolves readiness normally; keeping the server alive exposes secrets/status
+        // so a locked, denied or damaged keyring can be recovered from the settings UI.
+        Err(ash_model_provider::ModelProviderError::Credential(_)) => {}
+        Err(error) => return Err(OpenAppServerError(error.to_string())),
+    }
     let approval_review_model: ash_core::ApprovalReviewerFactory = Arc::new(|model| {
         let Some((identity, runtime)) = model.approval_review_model()? else {
             return Ok(ash_extension_api::ApprovalReviewer::Unavailable);
@@ -1742,6 +1761,7 @@ pub fn open_app_server_with_codebase_providers(
     .with_network_diagnostics(network.clone(), application_http.clone(), network_services)
     .with_telemetry(diagnostics, telemetry, analytics)
     .with_model_catalog(direct_catalog)
+    .with_secret_store(Arc::clone(&profile_secrets))
     .with_provider_credentials(Arc::new(
         ash_model_provider::ProviderCredentialService::new(
             provider_configs.clone(),

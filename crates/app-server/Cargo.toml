@@ -148,6 +148,7 @@ ash-sandboxing = { workspace = true }
 ash-file-access = { workspace = true }
 grep = { workspace = true }
 ash-secrets = { workspace = true }
+ash-keyring-store = { workspace = true }
 ash-shell-command = { workspace = true }
 ash-slash-commands = { workspace = true }
 ash-skills = { workspace = true }

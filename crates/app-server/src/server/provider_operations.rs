@@ -227,10 +227,9 @@ fn provider_credential_error(error: ProviderCredentialError) -> RpcError {
         | ProviderCredentialError::InvalidApiKey => {
             RpcError::new(-32602, AppServerErrorName::InvalidParams)
         }
-        ProviderCredentialError::SecretStore(_) => RpcError::new(
-            -32094,
-            AppServerErrorName::ProviderCredentialOperationFailed,
-        ),
+        ProviderCredentialError::SecretStore(error) => {
+            super::secret_operations::storage_error(error.kind())
+        }
         ProviderCredentialError::ApiKeyMissing(_)
         | ProviderCredentialError::InvalidStoredApiKey(_) => RpcError::new(
             -32094,

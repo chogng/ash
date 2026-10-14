@@ -1,3 +1,4 @@
+import { ISecretStorageStatusService } from '../../platform/secrets/common/secrets.js';
 import { IAgentVoiceService } from '../../platform/agentHost/common/agentService.js';
 import { BrowserAuxiliaryWindowService, IAuxiliaryWindowService } from '../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../editor/common/services/languageFeatureDebounce.js';
@@ -402,6 +403,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IExtensionApi, enabledExtensions);
 		services.registerInstance(IExtensionBackendApi, options.api.extensionBackend);
 		services.registerInstance(IAgentModelsService, options.api.model);
+		services.registerInstance(ISecretStorageStatusService, options.api.secretStorage);
 		services.registerInstance(IAgentExecutionSettingsService, options.api.executionSettings);
 		services.registerInstance(IAgentSessionService, options.api.session);
 		services.registerInstance(IAgentThreadService, options.api.thread);

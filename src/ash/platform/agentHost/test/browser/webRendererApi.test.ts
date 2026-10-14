@@ -20,8 +20,82 @@ import type { BrowserCreateParams } from '../../../../../../.build/protocol/type
 import { createAppServerAppServerApi, createAppServerSkillOperations } from '../../browser/appServerApi.js';
 import { OperatingSystem } from '../../../../base/common/platform.js';
 import { createHash } from 'node:crypto';
+import { SecretStorageError } from '../../../secrets/common/secrets.js';
 
 const pinnedSkill = { id: { source: 'user:skill-source:test', name: 'review' }, version: { type: 'pinnedDigest' as const, digest: `sha256:${'a'.repeat(64)}` } };
+
+test('Secret storage status is assembled on the shared renderer connection', async () => {
+	const transport = new FakeTransport();
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	using cleanup = toDisposable(() => connected.dispose());
+	const pending = connected.api.secretStorage.readStatus();
+	assert.equal(transport.requests.at(-1)?.method, 'secrets/status');
+	assert.deepEqual(transport.requests.at(-1)?.params, {});
+	transport.respondAt(-1, { status: 'keyMissing' });
+	assert.equal(await pending, 'keyMissing');
+});
+
+test('Secret storage RPC failures reach status and model consumers and permit a fresh retry', async () => {
+	const transport = new FakeTransport();
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	using cleanup = toDisposable(() => connected.dispose());
+	for (const [kind, status] of [
+		['SecretStorageUnavailable', 'unavailable'],
+		['SecretStorageAccessDenied', 'accessDenied'],
+		['SecretStorageKeyMissing', 'keyMissing'],
+		['SecretStorageCorrupted', 'corrupted'],
+		['SecretStorageMigrationFailed', 'migrationFailed'],
+		['SecretStorageOperationFailed', 'failure'],
+	] as const) {
+		for (const operation of [
+			() => connected.api.secretStorage.readStatus(),
+			() => connected.api.model.listProviders(),
+			() => connected.api.model.listModels(),
+			() => connected.api.model.setProviderApiKey({ connection: 'openai', apiKey: 'fake' }),
+			() => connected.api.model.removeProviderApiKey('openai'),
+		]) {
+			const pending = operation();
+			transport.rejectAt(-1, { code: -32094, message: 'Private storage diagnostic', data: { kind } });
+			await assert.rejects(pending, error => {
+				assert.ok(error instanceof SecretStorageError);
+				assert.equal(error.status, status);
+				assert.doesNotMatch(error.message, /Private storage diagnostic/);
+				return true;
+			});
+		}
+	}
+	const retry = connected.api.secretStorage.readStatus();
+	transport.respondAt(-1, { status: 'available' });
+	assert.equal(await retry, 'available');
+	assert.equal(transport.requests.filter(request => request.method === 'initialize').length, 1);
+});
+
+test('Secret storage reads stay with their window connection and disposal rejects late results', async () => {
+	const firstTransport = new FakeTransport();
+	const firstWindow = await connectWebRendererApi(firstTransport, connectorHostServices);
+	using firstCleanup = toDisposable(() => firstWindow.dispose());
+	const secondTransport = new FakeTransport();
+	const secondWindow = await connectWebRendererApi(secondTransport, connectorHostServices);
+	using secondCleanup = toDisposable(() => secondWindow.dispose());
+	const firstRead = firstWindow.api.secretStorage.readStatus();
+	const secondRead = secondWindow.api.secretStorage.readStatus();
+	const firstFailure = assert.rejects(firstRead, error => {
+		assert.ok(error instanceof Error);
+		assert.ok(!(error instanceof SecretStorageError));
+		assert.equal(error.message, 'App Server client disposed');
+		return true;
+	});
+	firstWindow.dispose();
+	await firstFailure;
+	firstTransport.respondAt(-1, { status: 'corrupted' });
+	secondTransport.respondAt(-1, { status: 'keyMissing' });
+	assert.equal(await secondRead, 'keyMissing');
+	const retry = secondWindow.api.secretStorage.readStatus();
+	secondTransport.respondAt(-1, { status: 'available' });
+	assert.equal(await retry, 'available');
+	assert.equal(firstTransport.requests.filter(request => request.method === 'secrets/status').length, 1);
+	assert.equal(secondTransport.requests.filter(request => request.method === 'secrets/status').length, 2);
+});
 
 test('Skill body reading opens exact authorized bytes lazily and releases the connection handle', async () => {
 	const transport = new SkillResourceTransport(Buffer.from('# Review\n审阅 changes\n'));

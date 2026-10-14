@@ -163,7 +163,7 @@ connection generation；任何状态变化都必须同时推进 snapshot generat
 | OAuth state/PKCE/exchange 编排                                   | ✅ 已实现 provider port、App Server RPC 与 Desktop loopback callback                                                      |
 | refresh、远端 revoke                                             | ✅ 已实现通用 lifecycle 与 GitHub adapter；远端失败保留本地连接供重试                                                     |
 | `ash-secrets` memory/unavailable backend                         | ✅ 已实现                                                                                                                 |
-| profile 私有文件 backend                                         | ✅ 已实现并作为本地默认 Connector persistence                                                                             |
+| profile 加密文件 + keyring 主密钥 backend                        | ✅ 已实现并作为本地默认 Connector persistence                                                                             |
 | 系统钥匙串 backend                                               | ✅ 保留为显式 host 注入选项；daemon 默认不请求钥匙串许可                                                                  |
 | App Server list/connect/disconnect + changed notification        | ✅ 已实现                                                                                                                 |
 | Desktop API-token UI；TUI 列表/断开/通知刷新                     | ✅ 已实现                                                                                                                 |

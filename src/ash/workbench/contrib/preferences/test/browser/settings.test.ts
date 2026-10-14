@@ -1,3 +1,4 @@
+import { ISecretStorageStatusService } from '../../../../../platform/secrets/common/secrets.js';
 import type { IQuickPick, IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import gitMessages from '../../../../../../../extensions/git/package.nls.json' with { type: 'json' };
@@ -1009,6 +1010,12 @@ test('Settings table of contents follows modified result counts through reset', 
 	assert.ok(categories().includes('editor-fonts'), 'clearing the query restores the browsing directory');
 });
 
+test('Models Settings requires a separately registered secret storage status service', () => {
+	using services = new InstantiationService();
+	services.registerInstance(ILanguageModelsService, {} as ILanguageModelsService);
+	assert.throws(() => services.createInstance(ModelSettingsContent, h(browserEnvironment.window.document, 'div')), /Unknown service: secretStorageStatusService/);
+});
+
 test('Models Settings keeps loading API connections when the model catalog changes', async () => {
 	using disposables = new DisposableStore();
 	const ownerDocument = browserEnvironment.window.document;
@@ -1038,6 +1045,7 @@ test('Models Settings keeps loading API connections when the model catalog chang
 	services.registerInstance(ChatServiceId, chat);
 	services.registerInstance(INotificationService, disposables.add(new NotificationService()));
 	services.registerInstance(ILanguageModelsService, chat as unknown as ILanguageModelsService);
+	services.registerInstance(ISecretStorageStatusService, { readStatus: async () => 'available' });
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IContextViewService, disposables.add(new BrowserContextViewService(root)));
 	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
@@ -1104,6 +1112,7 @@ test('Models Settings orders enabled models by catalog position and restores dis
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	services.registerInstance(ILanguageModelsService, models);
+	services.registerInstance(ISecretStorageStatusService, { readStatus: async () => 'available' });
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(ConfigurationServiceId, resources.add(new WorkbenchConfigurationService()));
 	services.registerInstance(INotificationService, resources.add(new NotificationService()));
@@ -1341,6 +1350,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(IServerEventApi, { subscribe: listener => autoFetchChanged.event(() => listener({ method: 'config/changed', params: { revision: 1, generation: 1 } })) });
 	services.registerInstance(ChatServiceId, chatService);
 	services.registerInstance(ILanguageModelsService, chatService as unknown as ILanguageModelsService);
+	services.registerInstance(ISecretStorageStatusService, { readStatus: async () => 'available' });
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(ILocalTranscriptionService, disposables.add(new NullLocalTranscriptionService()));
 	const descriptor = EditorPanes.getEditorPanes().find(candidate => candidate.id === SettingsEditorId);
@@ -2067,6 +2077,7 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 	services.registerInstance(ChatServiceId, chat);
 	services.registerInstance(INotificationService, disposables.add(new NotificationService()));
 	services.registerInstance(ILanguageModelsService, chat as unknown as ILanguageModelsService);
+	services.registerInstance(ISecretStorageStatusService, { readStatus: async () => 'available' });
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IContextViewService, disposables.add(new BrowserContextViewService(root)));
 	services.registerInstance(ConfigurationServiceId, configuration);

@@ -12,6 +12,7 @@ mod value;
 
 pub use error::SecretStoreError;
 pub use error::SecretStoreErrorKind;
+pub use file::EncryptedFileSecretStore;
 pub use file::FileSecretStore;
 pub use memory::MemorySecretStore;
 pub use store::DeleteSecretOutcome;
