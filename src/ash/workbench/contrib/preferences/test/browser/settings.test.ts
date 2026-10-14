@@ -1721,6 +1721,10 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	const managementPane = editor.activePane!;
 	const hooksRoot = root.querySelector<HTMLElement>('.ash-ai-customization-management');
 	assert.ok(hooksRoot && !hooksRoot.hidden);
+	for (let attempt = 0; attempt < 20 && hooksRoot.getAttribute('aria-busy') !== 'false'; attempt++) {
+		await nextTurn();
+	}
+	assert.equal(hooksRoot.getAttribute('aria-busy'), 'false');
 	assert.equal(hooksRoot.querySelectorAll('[data-hook-event]').length, 33, hooksRoot.outerHTML);
 	assert.equal(hooksRoot.querySelector('[data-hook-event="preToolUse"] > summary')?.textContent, 'PreToolUse · 1 configured');
 	assert.equal(root.querySelectorAll('input[type="search"]').length, 1);

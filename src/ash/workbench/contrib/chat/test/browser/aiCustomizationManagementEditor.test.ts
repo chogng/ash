@@ -27,6 +27,9 @@ import { IChatSessionNavigationService } from '../../../../services/chat/common/
 import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
 import type { ITextFileSaveEvent } from '../../../../services/textfile/common/textFileService.js';
 import { ITextFileService } from '../../../../services/textfile/common/textfiles.js';
+import { IWorkbenchHostService } from '../../../../services/host/common/workbenchHostService.js';
+import { IPromptsService } from '../../common/promptSyntax/service/promptsService.js';
+import { PromptsService } from '../../common/promptSyntax/service/promptsServiceImpl.js';
 import { AICustomizationManagementEditor } from '../../browser/aiCustomization/aiCustomizationManagementEditor.js';
 
 const document = browserEnvironment.window.document;
@@ -64,6 +67,14 @@ function setup(resources: DisposableStore, read: () => Promise<readonly HookSour
 	return { pane, container, workspace, saved };
 }
 
+async function waitForHooks(container: HTMLElement): Promise<void> {
+	for (let attempt = 0; attempt < 20; attempt++) {
+		if (container.querySelector('section')?.getAttribute('aria-busy') === 'false') return;
+		await Promise.resolve();
+	}
+	assert.fail('Hook management did not finish loading');
+}
+
 test('Hook management renders source-owned event descriptions and status through the Chinese window catalog', async () => {
 	initializeTestLocalization('zh-CN');
 	try {
@@ -71,7 +82,7 @@ test('Hook management renders source-owned event descriptions and status through
 		const localization = resources.add(new WorkbenchLocalizationService());
 		const { pane, container } = setup(resources, async () => [source], localization);
 		pane.setVisible(true);
-		await Promise.resolve();
+		await waitForHooks(container);
 		assert.match(container.querySelector('[role="status"]')?.textContent ?? '', /^\d+ 种事件 · 已配置 1 个 Hook$/u);
 		assert.ok(container.querySelector('[data-hook-event="preToolUse"]')?.textContent?.includes('工具执行前。'));
 	} finally { resetNlsResolver(); }
@@ -82,7 +93,7 @@ test('Hook management refreshes a saved configuration through the owning text-fi
 	let reads = 0;
 	const { pane, container, saved } = setup(resources, async () => { reads++; return [source]; });
 	pane.setVisible(true);
-	await Promise.resolve();
+	await waitForHooks(container);
 	const row = container.querySelector<HTMLDetailsElement>(`[data-hook-id="${source.hooks[0].id}"]`)!;
 	assert.ok(row);
 	row.open = true;
@@ -96,7 +107,7 @@ test('Hook management refreshes a saved configuration through the owning text-fi
 		assert.equal(reads, 1);
 		saved.fire({ resource: URI.file(source.configPath), content: '', revision: '2' });
 		mock.timers.tick(100);
-		await Promise.resolve();
+		await waitForHooks(container);
 		assert.equal(reads, 2);
 		assert.equal(container.querySelector(`[data-hook-id="${source.hooks[0].id}"]`), row);
 		assert.equal(row.open, true);
