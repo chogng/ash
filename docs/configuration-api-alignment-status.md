@@ -17,7 +17,7 @@ TypeScript 的 `settings.json` 由配置系统解释。后端的 `config.toml` �
 - profile 路径与编辑器资源：`src/ash/platform/userDataProfile/common/userDataProfile.ts`、`src/ash/workbench/services/userDataProfile/browser/userDataProfileService.ts`、`src/ash/workbench/services/preferences/common/settingsEditorInput.ts`、`src/ash/workbench/contrib/preferences/common/preferencesContribution.ts`、`src/ash/workbench/services/preferences/browser/preferencesService.ts`（双方都有，设置资源改为真实 profile 文件）。
 - 产品装配与早期语言：`src/ash/code/electron-main/app.ts`、`src/ash/workbench/browser/workbench.ts`、`src/ash/workbench/browser/web.api.ts`、`src/ash/workbench/browser/web.factory.ts`、`src/ash/workbench/electron-browser/desktop.main.ts`、`src/ash/workbench/electron-browser/rendererApi.ts`、`src/ash/platform/native/common/rendererApi.ts`、`src/ash/platform/native/common/nativeHost.ts`、`src/ash/sessions/browser/workbench.ts`、`src/ash/sessions/browser/web.main.ts`、`src/ash/sessions/electron-browser/sessions.main.ts`、`src/ash/workbench/services/localization/browser/localizationBootstrap.ts`、`src/ash/platform/profile/node/localProfile.ts`（现有生产调用方，退出配置专用传输，保留原宿主和连接身份）。
 - 领域消费者：`src/ash/platform/dictation/browser/appServerDictationService.ts`、`src/ash/platform/dictation/common/dictationConfiguration.ts`、`src/ash/platform/meteredConnection/electron-main/meteredConnectionMainService.ts`、`src/ash/sessions/browser/chatViewPane.ts`（现有消费者，读取配置领域契约，编辑使用真实文件）。
-- 退出候选：`src/ash/platform/configuration/common/configurationIpc.ts`、`src/ash/platform/configuration/common/configurationResourceService.ts`、`src/ash/platform/configuration/electron-browser/configurationApi.ts`、`src/ash/platform/configuration/electron-main/configurationMainService.ts`、`src/ash/platform/configuration/browser/indexedDbConfigurationApi.ts`、`src/ash/workbench/contrib/preferences/common/settingsFilesystemProvider.ts`（前五个仅 Ash；Preferences provider 虽有上游同路径，但本地承担的用户设置虚拟写入并非上游职责；待生产调用归零并完成验证后清理）。`src/ash/platform/configuration/electron-main/userConfigurationIpc.ts` 仅调整后端编辑通道常量的归属，继续承担已存在的 `config.toml` 宿主能力。
+- 已清理：`src/ash/platform/configuration/common/configurationIpc.ts`、`src/ash/platform/configuration/common/configurationResourceService.ts`、`src/ash/platform/configuration/electron-browser/configurationApi.ts`、`src/ash/platform/configuration/electron-main/configurationMainService.ts`、`src/ash/platform/configuration/browser/indexedDbConfigurationApi.ts`、`src/ash/workbench/contrib/preferences/common/settingsFilesystemProvider.ts`（前五个仅 Ash；Preferences provider 虽有上游同路径，但本地承担的用户设置虚拟写入并非上游职责；生产调用归零并完成验证后，按用户确认的准确路径删除）。`src/ash/platform/configuration/electron-main/userConfigurationIpc.ts` 仅调整后端编辑通道常量的归属，继续承担已存在的 `config.toml` 宿主能力。
 
 验证使用现有配置、Settings JSONC、Sessions、语言初始化、dictation、metered connection、profile 迁移测试的对应准确路径；测试中旧传输 fixture 同批迁为真实通用文件 provider。新增同路径测试仅用于真实输入边界、文件冲突、外部无效输入保留快照、重启和旧浏览器数据迁移。最终复查旧 imports、通道注册、虚拟设置 scheme 与订阅释放。
 
@@ -31,7 +31,7 @@ TypeScript 的 `settings.json` 由配置系统解释。后端的 `config.toml` �
 
 端到端 smoke 尚未全部通过：程序设置选区后，编辑器辅助 live 文本仍报告旧位置；Appearance 下拉框报告 `Unknown select option 'ash-dark'`。外部文件更新用例已完成读写、跨窗口重载和配置标记断言，在末尾 diagnostics 断言被该 Appearance 错误阻断。Electron 的非法设置保存、脏草稿保护和实际文件冲突场景也走到用例结束，fixture 的错误检查仍被相同 Appearance 错误阻断。完整 smoke 准备还遇到当前 Rust App Server 的接口编译错误，单独前端构建成功。未把这些验证失败记为通过。
 
-以下 7 个文件在当前活动生产链中均为 0 调用方，均为 Git tracked，可恢复。配置目录的 6 个候选上游无同路径文件；Preferences 的 `settingsFilesystemProvider.ts` 有上游同路径，但上游只提供只读 schema／默认设置资源，本地整个实现却是用户设置虚拟读写。本地没有 schema／默认设置虚拟文件的生产调用链，删除该错误实现后不保留占位模块。前 6 个是已退出的专用传输／持久化实现，最后一个旧通道测试已被 `platform/configuration/test/common/configurationService.test.ts` 的真实通用文件 IPC 场景接替。文件尚未删除，等待准确路径确认：
+以下 7 个文件删除前均无活动生产调用方，均由 Git 跟踪，可从历史恢复。配置目录的 6 个路径上游无同路径文件；Preferences 的 `settingsFilesystemProvider.ts` 有上游同路径，但上游只提供只读 schema／默认设置资源，本地整个实现却是用户设置虚拟读写。本地没有 schema／默认设置虚拟文件的生产调用链，删除该错误实现后不保留占位模块。列表前 6 个是已退出的专用传输／持久化实现，最后一个旧通道测试已被 `platform/configuration/test/common/configurationService.test.ts` 的真实通用文件 IPC 场景接替。用户确认后已删除以下准确路径，并移除无调用方的 `SettingsFileSystemScheme` 常量；仅保留旧编辑器身份到真实 profile 文件的一次性恢复兼容：
 
 - `src/ash/platform/configuration/common/configurationIpc.ts`
 - `src/ash/platform/configuration/common/configurationResourceService.ts`
@@ -115,7 +115,7 @@ Policy 层已实现注册定义、实时值解析、最高优先级、写入限�
 
 系统及账户来源共 12 项定向单测通过，包括真实 Windows 固定路径只读探测、IPC 竞态、失败保留、注销取消、首次来源失败后启动和恢复，以及账户模型值穿过真实 registry／配置服务到新聊天消费者的验证。GitHub HTTP 契约的 2 项测试、账户只读和取消协议的 1 项测试通过；`ash-github` 和 `ash-app-server-protocol` 的全目标无警告检查通过。Main、Renderer 和生成协议类型检查通过。App Server 整体检查仍被 `app_tools_operations.rs`、`ide_operations.rs` 中既有的 8 处文件访问 API 错误阻挡（`PathOperation::Read`、`constrained_by`、`path_policy`），未修改该授权领域。尚未用真实登录账户请求远端服务，也未在 macOS／Linux 验证真实系统来源。
 
-平台 `configurationService.ts`、`ConfigurationModelParser` 和 `UserSettings` 承接真实文件读取链；Workbench 的模型构建复用 `ConfigurationModelParser.parseRaw`，不再自行构建值树与语言模型。`configurations.ts` 当前承接已到达的 Policy 读取链；`configurationVariables.ts`、remote、配置缓存默认值与实验覆盖、跨 profile 应用规则及其他公开端口仍未完成。用户配置专用资源及持久化链已退出生产装配，旧文件尚未删除。当前行为完成不代表全部 API 已对齐。
+平台 `configurationService.ts`、`ConfigurationModelParser` 和 `UserSettings` 承接真实文件读取链；Workbench 的模型构建复用 `ConfigurationModelParser.parseRaw`，不再自行构建值树与语言模型。`configurations.ts` 当前承接已到达的 Policy 读取链；`configurationVariables.ts`、remote、配置缓存默认值与实验覆盖、跨 profile 应用规则及其他公开端口仍未完成。用户配置专用资源及持久化链已退出生产装配，旧实现已按确认路径删除。当前行为完成不代表全部 API 已对齐。
 
 ## 已验证结果
 
@@ -142,3 +142,5 @@ Workspace／Folder／Policy 切片：6 个定向测试文件、74 项测试通�
 - `pnpm test:browser:integration:prepared files.integration.spec.ts --project=chromium --grep 'browser settings migration preserves data' --max-failures=1`：真实 Chromium 的 6 个 IndexedDB 迁移场景全部通过，包括无旧库、迁移、等值、冲突、非法数据和中断重试。
 - `pnpm exec tsc -p tsconfig.test.json --noEmit --incremental false`、Renderer（3,976 文件）、Main（1,888 文件）、生成协议（1,503 文件）、浏览器集成（3,887 文件）及自动化源码（2,713 文件）类型检查通过。
 - 125 个修改的 TypeScript 文件格式检查通过，策略收尾修改的定向格式检查通过，相关 Rust 模块格式检查通过；完整 `server.rs` 格式检查遇到既有 MCP 分发 hunk，未改动该无关格式。`git diff --check` 通过。
+
+旧文件清理后再次验证：`pnpm typecheck:renderer`（3,973 文件）、`pnpm exec tsc -p tsconfig.main.json --noEmit --pretty false` 和同选项单测编译通过。配置模型、通用文件 IPC、Sessions 配置、Settings JSONC 与层级边界共 5 个文件、47 项定向测试通过；已有测试覆盖本次移除的旧实现所替代的真实调用链，未新增重复测试。旧模块及其导出无生产引用，修改的 TypeScript 文件格式检查与 `git diff --check` 通过。复用此前前端构建和 6 项 Chromium 数据迁移结果；上述 smoke 失败仍保留为未解决项。

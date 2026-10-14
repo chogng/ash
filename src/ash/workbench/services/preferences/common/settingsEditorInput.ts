@@ -9,7 +9,6 @@ import { EditorInputSerializers } from '../../editor/common/editorInputSerialize
 
 export const SettingsEditorContentType = 'application/vnd.ash.settings-editor';
 export const SettingsEditorResource = URI.parse('ash-settings-editor:/settings');
-export const SettingsFileSystemScheme = 'ash-settings';
 export const UserSettingsResource = URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' });
 
 /** Preferences owns the fixed resource; the active pane owns its opening delegate. */
