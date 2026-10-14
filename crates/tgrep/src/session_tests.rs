@@ -61,6 +61,43 @@ fn search(session: &Session, pattern: &str) -> SearchResult {
 }
 
 #[test]
+fn zero_width_regexes_return_each_matching_line_once_on_both_servers() {
+    let token = CancellationSource::new().token();
+    for shared in [false, true] {
+        let (root, _index, session) = if shared {
+            fixture()
+        } else {
+            let root = tempfile::tempdir().unwrap();
+            let index = tempfile::tempdir().unwrap();
+            let session = Session::open(
+                Executable::resolve(&InstallContext::current()).unwrap(),
+                root.path(),
+                index.path(),
+                &token,
+            )
+            .unwrap();
+            (root, index, session)
+        };
+        fs::write(root.path().join("source.txt"), "aaa\nbbb\nccc\n").unwrap();
+        session.paths_changed(&[session.root.join("source.txt")]);
+        for pattern in [r"\b", r"\<", r"\s|\<"] {
+            let result = search(&session, pattern);
+            assert!(result.indexed);
+            assert!(!result.limit_hit);
+            assert_eq!(
+                result
+                    .matches
+                    .iter()
+                    .map(|found| (found.line_number, found.content.as_str()))
+                    .collect::<Vec<_>>(),
+                [(1, "aaa"), (2, "bbb"), (3, "ccc")],
+                "shared={shared}, pattern={pattern}"
+            );
+        }
+    }
+}
+
+#[test]
 fn file_view_includes_binary_hidden_and_unicode_paths_and_acknowledges_changes() {
     let (root, _index, session) = fixture();
     let token = CancellationSource::new().token();
@@ -801,6 +838,28 @@ fn dropping_session_reaps_server_and_allows_reopening_index() {
     )
     .unwrap();
     assert!(search(&session, "absent").matches.is_empty());
+}
+
+#[test]
+fn reopened_directory_reconciles_offline_edits_before_its_first_content_search() {
+    let root = tempfile::tempdir().unwrap();
+    let index = tempfile::tempdir().unwrap();
+    let token = CancellationSource::new().token();
+    let executable = Executable::resolve(&InstallContext::current()).unwrap();
+    fs::write(root.path().join("source.txt"), "before_marker\n").unwrap();
+    let session = Session::open(executable.clone(), root.path(), index.path(), &token).unwrap();
+    session.rebuild(&token).unwrap();
+    assert_eq!(search(&session, "before_marker").matches.len(), 1);
+    drop(session);
+
+    // These changes precede the new registration, so no live Session can receive hints.
+    fs::write(root.path().join("source.txt"), "latest_marker\n").unwrap();
+    fs::write(root.path().join("new.txt"), "latest_marker\n").unwrap();
+    let session = Session::open(executable, root.path(), index.path(), &token).unwrap();
+    let result = search(&session, "latest_marker");
+    assert!(result.indexed);
+    assert_eq!(result.matches.len(), 2);
+    assert!(search(&session, "before_marker").matches.is_empty());
 }
 
 #[test]

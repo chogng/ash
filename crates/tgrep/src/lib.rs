@@ -22,7 +22,7 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
-pub const VERSION: &str = "1.1.0-ash.b614b8c.4";
+pub const VERSION: &str = "1.2.1-ash.547f3c8.1";
 const TIMEOUT: Duration = Duration::from_secs(30);
 const INDEX_TIMEOUT: Duration = Duration::from_secs(600);
 
@@ -428,18 +428,28 @@ impl Session {
                     == "native",
             ),
             Registration::Released => return Err(failed("search registration was released")),
-            Registration::Directory => (
-                value["indexing"]
-                    .as_bool()
-                    .ok_or_else(|| failed("invalid indexing status"))?,
-                value["hidden_complete"]
-                    .as_bool()
-                    .ok_or_else(|| failed("invalid coverage status"))?
-                    && value["indexing"] == false,
-                value["watcher_active"]
-                    .as_bool()
-                    .ok_or_else(|| failed("invalid watcher status"))?,
-            ),
+            Registration::Directory => {
+                // A warm index has complete coverage before startup catches up with
+                // offline edits. Wait for this process's first successful reconciliation.
+                let reconciled = match value.get("last_reconcile_at") {
+                    Some(Value::Null) => false,
+                    Some(value) if value.is_u64() => true,
+                    _ => return Err(failed("invalid initial reconciliation status")),
+                };
+                (
+                    value["indexing"]
+                        .as_bool()
+                        .ok_or_else(|| failed("invalid indexing status"))?,
+                    value["hidden_complete"]
+                        .as_bool()
+                        .ok_or_else(|| failed("invalid coverage status"))?
+                        && value["indexing"] == false
+                        && reconciled,
+                    value["watcher_active"]
+                        .as_bool()
+                        .ok_or_else(|| failed("invalid watcher status"))?,
+                )
+            }
         };
         let status = Status {
             indexed_file_count: value["num_files"]
