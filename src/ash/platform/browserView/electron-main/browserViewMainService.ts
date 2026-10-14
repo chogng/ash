@@ -9,6 +9,7 @@ import { BrowserSession } from './browserSession.js';
 import type { SshPortForwardingService } from '../../remote/electron-main/sshPortForwardingService.js';
 import type { ISerializedBrowserHistoryEntriesSnapshot } from '../common/browserHistory.js';
 import { BrowserSessionHistory } from './browserSessionHistory.js';
+import type { IBrowserViewWindowConfiguration, IBrowserElementSelectionOptions, IBrowserElementCommentsUpdate, IBrowserViewCaptureScreenshotOptions, IBrowserViewFindInPageOptions } from '../common/browserView.js';
 
 export const IBrowserViewMainService = createServiceIdentifier<IBrowserViewMainService>('browserViewMainService');
 export interface IBrowserViewMainService extends IBrowserViewService {
@@ -28,6 +29,19 @@ export interface BrowserViewMainServiceOptions {
 }
 /** The window manager is the sole table of live pages; each page owns its own disposal. */
 export class BrowserViewMainService extends Disposable implements IBrowserViewMainService {
+	private preloadConfiguration: IBrowserViewWindowConfiguration | undefined;
+	public async updateWindowConfiguration(windowId: number, configuration: IBrowserViewWindowConfiguration): Promise<void> {
+		if (windowId !== this.options.window.id) { throw new Error('BrowserWindowAccessDenied'); }
+		this.preloadConfiguration = configuration;
+		for (const [, view] of this.targets) { view.configurePreload(configuration); }
+	}
+	public getSelectedText(id: string): Promise<string> { return this.target(id).getSelectedText(); }
+	public async findInPage(id: string, text: string, options?: IBrowserViewFindInPageOptions): Promise<void> { this.target(id).findInPage(text, options); }
+	public async stopFindInPage(id: string, keepSelection?: boolean): Promise<void> { this.target(id).stopFindInPage(keepSelection); }
+	public async toggleElementSelection(id: string, enabled?: boolean, options?: IBrowserElementSelectionOptions): Promise<void> { this.target(id).toggleElementSelection(enabled, options); }
+	public async setElementComments(id: string, update: IBrowserElementCommentsUpdate): Promise<void> { this.target(id).setElementComments(update); }
+	public async toggleAreaSelection(id: string, enabled?: boolean): Promise<void> { this.target(id).toggleAreaSelection(enabled); }
+	public captureScreenshot(id: string, options?: IBrowserViewCaptureScreenshotOptions) { return this.target(id).captureScreenshot(options); }
 	private readonly targets = this._register(new DisposableMap<string, BrowserView>());
 	private readonly events = this._register(new Emitter<BrowserViewEvent>());
 	readonly onDidEvent = this.events.event;
@@ -152,7 +166,10 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 			});
 		} catch (error) { network?.dispose(); throw error; }
 		this.targets.set(id, view);
-		try { view.initialize(); return view; }
+		try {
+			if (this.preloadConfiguration) { view.configurePreload(this.preloadConfiguration); }
+			view.initialize(); return view;
+		}
 		catch (error) { this.targets.deleteAndDispose(id); throw error; }
 	}
 	async getState(id: string) { return this.target(id).getState(); }

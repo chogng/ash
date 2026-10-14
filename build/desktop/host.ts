@@ -150,13 +150,16 @@ async function prepareHostBuild(): Promise<void> {
 }
 
 async function verifyPreload(): Promise<void> {
-	const source = await readFile(preload, 'utf8');
-	const imports = [...source.matchAll(/\brequire\(\s*(["'])(?<module>[^"']+)\1\s*\)/g)].map(match => match.groups?.module);
-	if ([...source.matchAll(/\brequire\s*\(/g)].length !== imports.length) {
-		throw new Error('Sandbox preload contains a non-literal runtime import');
+	for (const path of [preload, join(outputRoot, 'preload/src/ash/platform/browserView/electron-browser/preload-browserView.js')]) {
+		const source = await readFile(path, 'utf8');
+		if (path.endsWith('preload-browserView.js') && /(^|\n)\s*(export|import)\s/.test(source)) { throw new Error('Browser preload must be a standalone script'); }
+		const imports = [...source.matchAll(/\brequire\(\s*(["'])(?<module>[^"']+)\1\s*\)/g)].map(match => match.groups?.module);
+		if ([...source.matchAll(/\brequire\s*\(/g)].length !== imports.length) {
+			throw new Error('Sandbox preload contains a non-literal runtime import');
+		}
+		const unsupported = imports.filter(module => module !== 'electron');
+		if (unsupported.length) throw new Error(`Sandbox preload contains unsupported runtime imports: ${[...new Set(unsupported)].join(', ')}`);
+		if (!imports.includes('electron')) throw new Error('Sandbox preload does not import Electron');
+		if (/\bimport\s*\(/.test(source)) throw new Error('Sandbox preload contains a dynamic runtime import');
 	}
-	const unsupported = imports.filter(module => module !== 'electron');
-	if (unsupported.length) throw new Error(`Sandbox preload contains unsupported runtime imports: ${[...new Set(unsupported)].join(', ')}`);
-	if (!imports.includes('electron')) throw new Error('Sandbox preload does not import Electron');
-	if (/\bimport\s*\(/.test(source)) throw new Error('Sandbox preload contains a dynamic runtime import');
 }

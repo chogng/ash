@@ -18,6 +18,7 @@ import {
 
 import type { IBrowserViewService } from '../common/browserView.js';
 import { isRecord } from '../../../base/common/types.js';
+import type { IBrowserViewWindowConfiguration, IBrowserElementSelectionOptions, IBrowserElementCommentsUpdate, IBrowserViewCaptureScreenshotOptions, IBrowserViewFindInPageOptions } from '../common/browserView.js';
 
 /** The page owner stays in Main; sharing is authorized by the window's app-server adapter. */
 export function browserViewChannel(service: IBrowserViewService, sharing: IChannel): IServerChannel<string> {
@@ -37,6 +38,8 @@ export function browserViewChannel(service: IBrowserViewService, sharing: IChann
 	]);
 	return {
 		call: async <T>(_context: string, command: string, arg: unknown): Promise<T> => {
+			const preloadResult = callPreloadService(service, command, arg);
+			if (preloadResult) { return await preloadResult as T; }
 			if (command === 'setSharing') {
 				if (!Array.isArray(arg) || arg.length !== 2) { throw new TypeError('Invalid browser sharing arguments'); }
 				validateBrowserViewTargetRequest({ targetId: arg[0] });
@@ -57,6 +60,160 @@ export function browserViewChannel(service: IBrowserViewService, sharing: IChann
 			return service.onDidEvent as Event<T>;
 		},
 	};
+}
+
+/** This IPC boundary validates the renderer's page commands; preload messages have a separate frame boundary. */
+function callPreloadService(service: IBrowserViewService, command: string, value: unknown): Promise<unknown> | undefined {
+	const arity: Record<string, readonly [number, number]> = {
+		updateWindowConfiguration: [2, 2],
+		getSelectedText: [1, 1],
+		findInPage: [2, 3],
+		stopFindInPage: [1, 2],
+		toggleElementSelection: [1, 3],
+		setElementComments: [2, 2],
+		toggleAreaSelection: [1, 2],
+		captureScreenshot: [1, 2],
+	};
+	const count = Object.hasOwn(arity, command) ? arity[command] : undefined;
+	if (!count) {
+		return undefined;
+	}
+	const invalid = (): never => {
+		throw new TypeError('Invalid browser preload command: ' + command);
+	};
+	if (!Array.isArray(value) || value.length < count[0] || value.length > count[1]) {
+		invalid();
+	}
+	const args = value as unknown[];
+	if (command === 'updateWindowConfiguration') {
+		const configuration = args[1];
+		if (
+			!Number.isSafeInteger(args[0]) ||
+			!isRecord(configuration) ||
+			!isRecord(configuration.theme) ||
+			!isRecord(configuration.localizedStrings) ||
+			Object.values(configuration.theme).some((value) => typeof value !== 'string' || value.length > 256) ||
+			Object.values(configuration.localizedStrings).some((value) => typeof value !== 'string' || value.length > 2048) ||
+			[
+				'addComment',
+				'addCommentPlaceholder',
+				'commentOnSelectedElement',
+				'elementComment',
+				'elementCommentWithBody',
+				'emptyElementComment',
+				'removeComment',
+				'removeElementComment',
+				'cancel',
+				'selectionHelp',
+			].some((key) => typeof (configuration.localizedStrings as Record<string, unknown>)[key] !== 'string')
+		) {
+			invalid();
+		}
+		return service.updateWindowConfiguration(args[0] as number, configuration as unknown as IBrowserViewWindowConfiguration);
+	}
+	const { targetId } = validateBrowserViewTargetRequest({ targetId: args[0] });
+	const options = args[2] ?? undefined;
+	if (command === 'getSelectedText') {
+		return service.getSelectedText(targetId);
+	}
+	if (command === 'findInPage') {
+		if (
+			typeof args[1] !== 'string' ||
+			!args[1] ||
+			args[1].length > 65536 ||
+			(options !== undefined &&
+				(!isRecord(options) ||
+					Object.keys(options).some((key) => !['forward', 'matchCase', 'recompute'].includes(key)) ||
+					Object.values(options).some((value) => typeof value !== 'boolean')))
+		) {
+			invalid();
+		}
+		return service.findInPage(targetId, args[1] as string, options as IBrowserViewFindInPageOptions | undefined);
+	}
+	if (command === 'stopFindInPage' || command === 'toggleAreaSelection' || command === 'toggleElementSelection') {
+		if (args[1] != null && typeof args[1] !== 'boolean') {
+			invalid();
+		}
+		if (command === 'stopFindInPage') {
+			return service.stopFindInPage(targetId, (args[1] ?? undefined) as boolean | undefined);
+		}
+		if (command === 'toggleAreaSelection') {
+			return service.toggleAreaSelection(targetId, args[1] as boolean | undefined);
+		}
+		if (
+			options !== undefined &&
+			(!isRecord(options) ||
+				Object.keys(options).some((key) => !['highlightFocusedElement', 'continuous', 'mode'].includes(key)) ||
+				['highlightFocusedElement', 'continuous'].some(
+					(key) => options[key] !== undefined && typeof options[key] !== 'boolean',
+				) ||
+				(options.mode !== undefined && options.mode !== 'select' && options.mode !== 'comment'))
+		) {
+			invalid();
+		}
+		return service.toggleElementSelection(
+			targetId,
+			(args[1] ?? undefined) as boolean | undefined,
+			options as IBrowserElementSelectionOptions | undefined,
+		);
+	}
+	if (command === 'setElementComments') {
+		const update = args[1];
+		if (
+			!isRecord(update) ||
+			Object.keys(update).some((key) => !['comments', 'pendingCommentIdsToDiscard'].includes(key)) ||
+			(update.comments !== undefined &&
+				(!Array.isArray(update.comments) ||
+					update.comments.length > 100 ||
+					update.comments.some(
+						(item) =>
+							!isRecord(item) ||
+							typeof item.elementId !== 'string' ||
+							item.elementId.length > 140 ||
+							typeof item.body !== 'string' ||
+							item.body.length > 2048,
+					))) ||
+			(update.pendingCommentIdsToDiscard !== undefined &&
+				(!Array.isArray(update.pendingCommentIdsToDiscard) ||
+					update.pendingCommentIdsToDiscard.length > 100 ||
+					update.pendingCommentIdsToDiscard.some((id) => typeof id !== 'string' || id.length > 140)))
+		) {
+			invalid();
+		}
+		return service.setElementComments(targetId, update as IBrowserElementCommentsUpdate);
+	}
+	const capture: unknown = args[1] ?? {};
+	if (!isRecord(capture)) {
+		return invalid();
+	}
+	if (
+		!isRecord(capture) ||
+		Object.keys(capture).some((key) => !['screenRect', 'format', 'quality', 'awaitNextPaint'].includes(key)) ||
+		(capture.format !== undefined && capture.format !== 'png' && capture.format !== 'jpeg') ||
+		(capture.quality !== undefined &&
+			(typeof capture.quality !== 'number' ||
+				!Number.isInteger(capture.quality) ||
+				capture.quality < 0 ||
+				capture.quality > 100)) ||
+		(capture.awaitNextPaint !== undefined && typeof capture.awaitNextPaint !== 'boolean')
+	) {
+		invalid();
+	}
+	if (capture.screenRect !== undefined) {
+		const rect = capture.screenRect;
+		if (
+			!isRecord(rect) ||
+			['x', 'y', 'width', 'height'].some(
+				(key) => typeof rect[key] !== 'number' || !Number.isFinite(rect[key]) || rect[key] < 0 || rect[key] > 8192,
+			) ||
+			!rect.width ||
+			!rect.height ||
+			(rect.width as number) * (rect.height as number) > 16_777_216
+		) {
+			invalid();
+		}
+	}
+	return service.captureScreenshot(targetId, capture as IBrowserViewCaptureScreenshotOptions);
 }
 
 /** Validates page commands before they reach the main-owned view. */

@@ -562,6 +562,120 @@ for (const locale of ['en', 'zh-CN']) {
 
 }
 
+for (const locale of ['en', 'zh-CN'] as const) {
+	test(`browser preload preserves page keys and connects frame selection, comments and area attachments in ${locale}`, { tag: ['@electron-ui'] }, async ({ application: initialApplication, workbench: initialWorkbench, restartWorkbench }, testInfo) => {
+		let application = initialApplication;
+		let workbench = initialWorkbench;
+		if (locale === 'zh-CN') {
+			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+			const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
+			await picker.getByRole('combobox').fill('简体中文');
+			await picker.getByRole('combobox').press('Enter');
+			({ application, workbench } = await restartWorkbench());
+		}
+		await installMainChannelTestClient(workbench.page);
+		const labels = locale === 'en' ? { address: 'Browser address', more: 'More Actions', find: 'Find in Page', element: 'Select Element for Chat', comment: 'Comment on Elements', area: 'Select Area for Chat', captured: 'Selection captured.', areaCaptured: 'Area captured.', sidebar: 'Show Secondary Side Bar', add: 'Add context', search: 'Search attachments', other: 'Other context sources', image: 'Browser area 1', save: 'Add Comment' } : { address: '浏览器地址', more: '更多操作', find: '在页面中查找', element: '为聊天选取元素', comment: '批注网页元素', area: '为聊天选取区域', captured: '已捕获选取内容。', areaCaptured: '已捕获区域。', sidebar: '显示辅助侧栏', add: '添加上下文', search: '搜索附件', other: '其他上下文来源', image: '浏览器区域 1', save: '添加批注' };
+		const server = createServer((_request, response) => {
+			response.setHeader('Content-Type', 'text/html');
+			response.end(`<title>Preload integration</title><style>body { background:white; color:black; } #pick { width:240px; height:64px; margin:32px; }</style><h1 id="selection">Real selected words</h1><button id="pick" onclick="window.pageClicks=(window.pageClicks||0)+1">Pick target</button><iframe srcdoc="<input id='input' aria-label='Frame input'>"></iframe>`);
+		});
+		await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+		const address = server.address();
+		if (!address || typeof address === 'string') { throw new Error('Missing preload fixture endpoint'); }
+		const url = `http://127.0.0.1:${address.port}/`;
+		const electron = application as ElectronApplication;
+		const page = workbench.page;
+		try {
+			await workbench.quickaccess.runCommand('ash.browser.open');
+			const editor = page.locator('.ash-browser-editor');
+			await editor.getByRole('textbox', { name: labels.address, exact: true }).fill(url);
+			await editor.getByRole('textbox', { name: labels.address, exact: true }).press('Enter');
+			await expect(editor.getByRole('status')).toHaveText('Preload integration');
+			const view = await electron.evaluateHandle(({ BrowserWindow }, url) => BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).find(child => 'webContents' in child && (child as Electron.WebContentsView).webContents.getURL() === url) as Electron.WebContentsView, url);
+			try {
+				expect(await view.evaluate(view => view.webContents.executeJavaScript(`({ top: [typeof process, typeof require, typeof window.browserViewAPI], frame: [typeof document.querySelector('iframe').contentWindow.process, typeof document.querySelector('iframe').contentWindow.require] })`))).toEqual({ top: ['undefined', 'undefined', 'undefined'], frame: ['undefined', 'undefined'] });
+				const key = async (keyCode: string, modifiers: ('control' | 'meta' | 'shift')[] = []) => view.evaluate((view, { keyCode, modifiers }) => {
+					view.webContents.sendInputEvent({ type: 'keyDown', keyCode, modifiers });
+					if (keyCode === 'Enter') { view.webContents.sendInputEvent({ type: 'char', keyCode: '\r', modifiers }); }
+					view.webContents.sendInputEvent({ type: 'keyUp', keyCode, modifiers });
+				}, { keyCode, modifiers });
+				const command: ('control' | 'meta')[] = [process.platform === 'darwin' ? 'meta' : 'control'];
+				await view.evaluate(async view => {
+					await view.webContents.executeJavaScript(`document.body.tabIndex=0; document.body.focus(); const range=document.createRange(); range.selectNodeContents(document.querySelector('#selection')); const selection=window.getSelection(); selection.removeAllRanges(); selection.addRange(range); window.getSelection=()=>({toString:()=> 'Forged page selection'}); void 0;`);
+					view.webContents.focus();
+				});
+				await key('F', command);
+				const find = page.getByRole('dialog', { name: labels.find });
+				await expect(find.getByRole('textbox')).toHaveValue('Real selected words');
+				await page.keyboard.press('Escape');
+				await view.evaluate(async view => {
+					await view.webContents.executeJavaScript(`window.handled=0; const input=document.querySelector('iframe').contentDocument.querySelector('input'); input.focus(); window.frameBlocker=event=>{if ((event.ctrlKey||event.metaKey)&&event.shiftKey&&event.key.toLowerCase()==='p'){ event.preventDefault(); window.handled++; }}; document.querySelector('iframe').contentWindow.addEventListener('keydown', window.frameBlocker); void 0;`);
+					view.webContents.focus();
+				});
+				await key('P', [...command, 'shift']);
+				await expect.poll(() => view.evaluate(view => view.webContents.executeJavaScript('window.handled'))).toBe(1);
+				await expect(workbench.quickaccess.element).toBeHidden();
+				await view.evaluate(async view => {
+					await view.webContents.executeJavaScript(`(() => { const input=document.querySelector('iframe').contentDocument.querySelector('input'); document.querySelector('iframe').contentWindow.removeEventListener('keydown', window.frameBlocker); input.focus(); })();`);
+					view.webContents.focus();
+				});
+				await key('P', [...command, 'shift']);
+				await expect(workbench.quickaccess.element).toBeVisible();
+				await page.keyboard.press('Escape');
+				const select = async (label: string) => workbench.menus.select(application, () => editor.getByRole('button', { name: labels.more, exact: true }).click(), [label]);
+				const pick = async () => view.evaluate(async view => {
+					const point = await view.webContents.executeJavaScript(`(() => { const rect=document.querySelector('#pick').getBoundingClientRect(); return {x:Math.round(rect.x+rect.width/2),y:Math.round(rect.y+rect.height/2)}; })()`);
+					view.webContents.sendInputEvent({ type: 'mouseMove', ...point });
+					view.webContents.sendInputEvent({ type: 'mouseDown', ...point, button: 'left', clickCount: 1 });
+					view.webContents.sendInputEvent({ type: 'mouseUp', ...point, button: 'left', clickCount: 1 });
+				});
+				await select(labels.element);
+				await pick();
+				await expect(editor.getByRole('status')).toContainText(labels.captured);
+				expect(await view.evaluate(view => view.webContents.executeJavaScript('window.pageClicks||0'))).toBe(0);
+				await select(labels.comment);
+				await pick();
+				await expect.poll(() => view.evaluate(view => view.webContents.executeJavaScript('document.activeElement.className'))).toBe('ash-browser-selection');
+				await view.evaluate(view => view.webContents.insertText('Review spacing'));
+				await key('Tab');
+				await expect.poll(() => view.evaluate(async view => {
+					const attached = view.webContents.debugger.isAttached();
+					if (!attached) { view.webContents.debugger.attach('1.3'); }
+					try {
+						const result = await view.webContents.debugger.sendCommand('Accessibility.getFullAXTree') as { nodes: { role?: { value: string; }; name?: { value: string; }; properties?: { name: string; value: { value: unknown; }; }[]; }[]; };
+						return result.nodes.filter(node => node.role?.value === 'button' && node.properties?.some(property => property.name === 'focused' && property.value.value === true)).map(node => node.name?.value);
+					} finally { if (!attached) { view.webContents.debugger.detach(); } }
+				})).toEqual([labels.save]);
+
+				await key('Enter');
+				await expect(editor.getByRole('status')).toContainText(labels.captured);
+				await key('Escape');
+				await select(labels.area);
+				await expect.poll(() => view.evaluate(view => view.webContents.executeJavaScript('document.activeElement.className'))).toBe('ash-browser-selection');
+				await key('ArrowRight'); await key('Enter');
+				await expect(editor.getByRole('status')).toContainText(labels.areaCaptured);
+				if (!await page.locator('.ash-chat-view-pane').isVisible()) { await page.getByRole('button', { name: labels.sidebar, exact: true }).click(); }
+				const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
+				await chat.getByRole('button', { name: labels.add, exact: true }).click();
+				await page.getByRole('dialog', { name: labels.search, exact: true }).getByRole('option', { name: labels.other, exact: true }).click();
+				const picks = page.getByRole('dialog');
+				await expect(picks.getByRole('option', { name: /Review spacing/ })).toBeVisible();
+				await picks.getByRole('option', { name: new RegExp(labels.image) }).click();
+				const image = chat.getByRole('img', { name: labels.image, exact: true });
+				await expect(image).toHaveAttribute('src', /^data:image\/png;base64,/);
+				await expect.poll(() => image.evaluate((image: HTMLImageElement) => image.naturalWidth / image.naturalHeight)).toBe(1.5);
+				const views = await page.evaluate(() => globalThis.ashTestMainProcess.call<IBrowserViewInfo[]>('browserView', 'getBrowserViews', []));
+				expect(await page.evaluate(id => globalThis.ashTestMainProcess.call('browserView', 'getSharing', [id]), views[0]!.id)).toEqual([]);
+				await testInfo.attach(`browser-preload-selection-${locale}`, { body: await page.screenshot(), contentType: 'image/png' });
+			} finally { await view.dispose(); }
+		} finally {
+			server.closeAllConnections();
+			await new Promise<void>(resolve => server.close(() => resolve()));
+		}
+	});
+
+}
+
 test('desktop browser opens visible pages, navigates history, resizes and releases closed tabs', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, application, workbench }) => {
 	let finishSlowLoad: (() => void) | undefined;
 	const server = createServer((request, response) => {

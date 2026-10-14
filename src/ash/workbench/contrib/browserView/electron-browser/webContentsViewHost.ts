@@ -96,6 +96,12 @@ export class WebContentsViewHost extends Disposable {
 		return true;
 	}
 
+	/** Input follows the same host that owns the page's current compositor placement. */
+	public get isActive(): boolean { return !!this.model && WebContentsViewHost.getActiveHost(this.model) === this; }
+	private static getActiveHost(model: IBrowserViewModel): WebContentsViewHost | undefined {
+		return [...presentations.get(model)!.hosts].reverse().find(host => host.visible && host.container && !host.isDisposed);
+	}
+
 	protected override disposeCore(): void {
 		this.setModel(undefined);
 		super.disposeCore();
@@ -116,7 +122,7 @@ export class WebContentsViewHost extends Disposable {
 			presentation.queued = false;
 			if (presentation.closed) { return; }
 			const revision = presentation.revision;
-			const host = [...presentation.hosts].reverse().find(candidate => candidate.visible && candidate.container && !candidate.isDisposed);
+			const host = WebContentsViewHost.getActiveHost(model);
 			const container = host?.container;
 			const bounds = container?.getBoundingClientRect();
 			const visible = !!(host && container && bounds && bounds.width > 0 && bounds.height > 0 && host.overlays.getOverlappingOverlays(container).length === 0);

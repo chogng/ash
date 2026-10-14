@@ -16,6 +16,10 @@ import { IContextMenuService } from '../../../../platform/contextview/browser/co
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { WebContentsViewHost } from './webContentsViewHost.js';
+import { BrowserEditorChatIntegration } from './features/browserEditorChatFeatures.js';
+import { BrowserEditorFindFeature } from './features/browserEditorFindFeature.js';
+import { BrowserElementSelectionMode, type IBrowserViewWindowConfiguration } from '../../../../platform/browserView/common/browserView.js';
+import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import type { IAction } from '../../../../base/common/actions.js';
@@ -42,6 +46,8 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 	private visible = false;
 	private sharingToolbar!: WorkbenchToolBar;
 	private readonly historyPicker = this._register(new MutableDisposable<DisposableStore>());
+	private readonly chatIntegration: BrowserEditorChatIntegration;
+	private readonly findFeature: BrowserEditorFindFeature;
 
 	constructor(
 		@IConfigurationService private readonly configuration: IConfigurationService,
@@ -51,10 +57,16 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 		@IChatSessionNavigationService private readonly conversations: IChatSessionNavigationService,
 		@IBrowserViewService private readonly pageService: IBrowserViewService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
-		@IThemeService themeService: IThemeService,
+		@IEditorPart private readonly editorPart: IEditorPart,
+		@IThemeService private readonly browserThemes: IThemeService,
 		@IStorageService storageService: IStorageService,
 	) {
-		super(BrowserViewEditorId, themeService, storageService);
+		super(BrowserViewEditorId, browserThemes, storageService);
+		this.chatIntegration = this._register(instantiation.createInstance(BrowserEditorChatIntegration));
+		this.findFeature = this._register(instantiation.createInstance(BrowserEditorFindFeature));
+		this._register(browserThemes.onDidColorThemeChange(() => {
+			if (this.model) { void this.configurePreload(this.model).catch(error => this.report(error)); }
+		}));
 	}
 
 	public override create(container: HTMLElement): void {
@@ -105,6 +117,15 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 					() => this.helpContent(), () => focused.focus(), AccessibilityVerbositySettingId.Browser);
 			},
 		}));
+		this._register(AccessibleViewRegistry.register({
+			type: AccessibleViewType.View, priority: 100, name: 'browserSelections:' + crypto.randomUUID(),
+			when: ActiveEditorContext.isEqualTo(BrowserViewEditorId),
+			getProvider: () => {
+				const content = this.chatIntegration.getAccessibleContent();
+				if (!this.visible || !content) { return undefined; }
+				return new AccessibleContentProvider(AccessibleViewProviderId.Browser, { type: AccessibleViewType.View }, () => content, () => this.pageHost.tryFocus(), AccessibilityVerbositySettingId.Browser);
+			},
+		}));
 		const observer = new ResizeObserver(entries => {
 			// The root owns available width. Changing its child's height must not feed back into the observed size.
 			if (entries.some(entry => entry.target === this.domNode)) { toolbar.classList.toggle('compact', toolbar.clientWidth < 320); }
@@ -123,11 +144,24 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 		this.modelListeners.clear();
 		this.historyPicker.clear();
 		this.model = model;
+		await this.configurePreload(model);
+		signal.throwIfAborted();
+		this.findFeature.setModel(model);
+		this.chatIntegration.setModel(model, message => { if (this.model === model && !this.isDisposed) { this.statusDomNode.textContent = message; } });
 		this.addressInput.enabled = true;
 		this.pageHost.setModel(model);
 		this.setPageActions();
 		this.modelListeners.add(model.onDidChangeState(state => this.render(state)));
 		this.modelListeners.add(model.onDidEvent(event => {
+			if (event.type === 'keyDown' && this.pageHost.isActive) {
+				const group = this.editorPart.groups.find(group => group.activePane === this);
+				if (group) { this.editorPart.activateGroup(group.id); }
+				const key = event.event;
+				if (key.key === 'F6' || ((key.ctrlKey || key.metaKey) && key.key.toLowerCase() === 'l')) { this.focus(); }
+				else if ((key.ctrlKey || key.metaKey) && key.key.toLowerCase() === 'f') { void this.findFeature.show().catch(error => this.report(error)); }
+				else if (key.key === 'F3') { void this.findFeature.next(!key.shiftKey).catch(error => this.report(error)); }
+				else { this.viewportDomNode.dispatchEvent(new KeyboardEvent('keydown', { ...key, bubbles: true, cancelable: true })); }
+			}
 			if (event.type === 'focusAddress') { this.focus(); }
 			if (event.type === 'loadFailed') { this.statusDomNode.textContent = localize({ bundle: 'ash.workbench', key: 'browser.loadFailure' }, 'Unable to load page: {0}', event.errorDescription); }
 			if (event.type === 'renderProcessGone') { this.statusDomNode.textContent = localize({ bundle: 'ash.workbench', key: 'browser.processGone' }, 'Page stopped: {0}', event.reason); }
@@ -137,6 +171,8 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 		this.pageHost.layout();
 	}
 	public override clearInput(): void {
+		this.chatIntegration.setModel(undefined, () => { });
+		this.findFeature.setModel(undefined);
 		this.historyPicker.clear();
 		this.visible = false;
 		this.pageHost.setVisible(false);
@@ -197,6 +233,10 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 			{ id: 'browser.go', label: go, tooltip: go, icon: Lxicon.arrowRight, enabled: true, run: () => this.navigate().catch(error => this.report(error)) },
 			{ id: 'browser.help', label: help, tooltip: help, icon: Lxicon.question, enabled: true, run: () => this.showHelp().catch(error => this.report(error)) },
 		], [
+			{ id: 'browser.find', label: localize({ bundle: 'ash.workbench', key: 'browser.find' }, 'Find in Page'), enabled: !!this.model, tooltip: '', run: () => this.findFeature.show().catch(error => this.report(error)) },
+			{ id: 'browser.selectElement', label: localize({ bundle: 'ash.workbench', key: 'browser.selectElement' }, 'Select Element for Chat'), enabled: !!this.model, tooltip: '', run: () => this.target().toggleElementSelection(true, { highlightFocusedElement: true }).catch(error => this.report(error)) },
+			{ id: 'browser.commentElement', label: localize({ bundle: 'ash.workbench', key: 'browser.commentElement' }, 'Comment on Elements'), enabled: !!this.model, tooltip: '', run: () => this.target().toggleElementSelection(true, { continuous: true, mode: BrowserElementSelectionMode.Comment, highlightFocusedElement: true }).catch(error => this.report(error)) },
+			{ id: 'browser.selectArea', label: localize({ bundle: 'ash.workbench', key: 'browser.selectArea' }, 'Select Area for Chat'), enabled: !!this.model, tooltip: '', run: () => this.target().toggleAreaSelection(true).catch(error => this.report(error)) },
 			{ id: 'browser.share', label: localize({ bundle: 'ash.workbench', key: 'browser.share' }, 'Share with Agent'), enabled: this.model?.info.owner.type === 'user', tooltip: '', run: () => this.share().catch(error => this.report(error)) },
 			{ id: 'browser.permissions', label: localize({ bundle: 'ash.workbench', key: 'browser.resetPermissions' }, 'Reset all website permissions'), enabled: true, tooltip: '', run: () => this.pageService.clearPermissions(this.target().id).catch(error => this.report(error)) },
 			{ id: 'browser.cancelDownloads', label: localize({ bundle: 'ash.workbench', key: 'browser.cancelDownloads' }, 'Cancel downloads'), enabled: true, tooltip: '', run: () => this.pageService.cancelDownloads(this.target().id).catch(error => this.report(error)) },
@@ -256,8 +296,30 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 		this.statusDomNode.textContent = state.errorDescription ? localize({ bundle: 'ash.workbench', key: 'browser.loadFailure' }, 'Unable to load page: {0}', state.errorDescription) : state.loading ? localize({ bundle: 'ash.workbench', key: 'browser.loading' }, 'Loading page…') : state.title || state.url;
 	}
 	private report(error: unknown): void { if (!this.isDisposed) { this.statusDomNode.textContent = error instanceof Error ? error.message : String(error); } }
+	private configurePreload(model: IBrowserViewModel): Promise<void> {
+		const theme = this.browserThemes.getColorTheme();
+		const configuration: IBrowserViewWindowConfiguration = {
+			theme: {
+				focusBorder: theme.getColorCss('focusBorder'), buttonBackground: theme.getColorCss('button.background'), buttonForeground: theme.getColorCss('button.foreground'),
+				widgetBackground: theme.getColorCss('editorWidget.background'), widgetForeground: theme.getColorCss('editorWidget.foreground'), widgetBorder: theme.getColorCss('widget.border'), contrastBorder: theme.getColorCss('contrastBorder'),
+			},
+			localizedStrings: {
+				addComment: localize({ bundle: 'ash.workbench', key: 'browser.addComment' }, 'Add Comment'),
+				addCommentPlaceholder: localize({ bundle: 'ash.workbench', key: 'browser.commentPlaceholder' }, 'Add a comment'),
+				commentOnSelectedElement: localize({ bundle: 'ash.workbench', key: 'browser.commentOnSelectedElement' }, 'Comment on selected element'),
+				elementComment: localize({ bundle: 'ash.workbench', key: 'browser.elementComment' }, 'Element comment {0}'),
+				elementCommentWithBody: localize({ bundle: 'ash.workbench', key: 'browser.elementCommentWithBody' }, 'Element comment {0}: {1}'),
+				emptyElementComment: localize({ bundle: 'ash.workbench', key: 'browser.emptyElementComment' }, 'Empty element comment {0}'),
+				removeComment: localize({ bundle: 'ash.workbench', key: 'browser.removeComment' }, 'Remove Comment'),
+				removeElementComment: localize({ bundle: 'ash.workbench', key: 'browser.removeElementComment' }, 'Remove element comment'),
+				cancel: localize({ bundle: 'ash.workbench', key: 'browser.cancel' }, 'Cancel'),
+				selectionHelp: localize({ bundle: 'ash.workbench', key: 'browser.selectionHelp' }, 'Select with the mouse. For elements, use Tab to choose, Up or Down to move through ancestors, and Enter to select. For areas, use arrow keys to position the selection and Enter to capture. Escape cancels.'),
+			},
+		};
+		return this.pageService.updateWindowConfiguration(model.info.host.windowId, configuration);
+	}
 	private helpContent(): string {
-		return localize({ bundle: 'ash.workbench', key: 'browser.accessibilityHelp' }, 'Use Tab to move through browser controls. Enter in the address field navigates and focuses the webpage. Ctrl+Shift+P (Command+Shift+P on macOS) opens the Command Palette from the webpage. Ctrl+L (Command+L on macOS) or F6 in the webpage returns to the address field. Back and Forward navigate page history. Close the editor tab to close its webpage. Set workbench.externalUriOpeners to ash.browser.open for websites you want to open here. Webpages use the browser’s accessibility tree. The More Actions menu contains sharing, website permission reset, download cancellation and History. History lists visits in this storage session; type to search, use Up and Down to choose a page and Enter to open it. Clear browsing history removes this session’s recorded visits. Isolated Agent pages and ephemeral sessions do not record history. Share with Agent allows a chosen conversation to observe this page. Agent input and navigation require an isolated Agent page. Revoke all access ends that grant. Website permission dialogs name the requesting site. Reset all website permissions removes its decisions. Downloads ask for a save location; Cancel downloads stops active transfers.');
+		return localize({ bundle: 'ash.workbench', key: 'browser.accessibilityHelp' }, 'Use Tab to move through browser controls. Enter in the address field navigates and focuses the webpage. Ctrl+Shift+P (Command+Shift+P on macOS) opens the Command Palette from the webpage. Ctrl+L (Command+L on macOS) or F6 in the webpage returns to the address field. Back and Forward navigate page history. Close the editor tab to close its webpage. Set workbench.externalUriOpeners to ash.browser.open for websites you want to open here. Webpages use the browser’s accessibility tree. The More Actions menu contains sharing, website permission reset, download cancellation and History. History lists visits in this storage session; type to search, use Up and Down to choose a page and Enter to open it. Clear browsing history removes this session’s recorded visits. Isolated Agent pages and ephemeral sessions do not record history. Share with Agent allows a chosen conversation to observe this page. Agent input and navigation require an isolated Agent page. Revoke all access ends that grant. Website permission dialogs name the requesting site. Reset all website permissions removes its decisions. Downloads ask for a save location; Cancel downloads stops active transfers. Use Ctrl+F to find the selected text in the page and F3 or Shift+F3 to move between matches. More Actions also offers Select Element for Chat, Comment on Elements and Select Area for Chat. Use Tab and arrow keys to choose an element, Enter to select, and Escape to cancel. Area selection supports arrow keys and Enter. Comments support keyboard editing and removal. Captured selections remain private until you explicitly choose Browser selections in Chat’s Add Context menu.');
 	}
 
 	private showHelp(): Promise<void> {

@@ -71,6 +71,19 @@ suite('IPC channels', () => {
 		assert.throws(() => second.registerChannel('echo', channel), /already registered/);
 	});
 
+	test('a binary service result retains its bytes and VSBuffer behavior across IPC', async () => {
+		using resources = new DisposableStore();
+		const [a, b] = pair(resources);
+		const client = resources.add(new IPCClient(a, 'renderer'));
+		const server = resources.add(new IPCClient(b, 'main'));
+		const bytes = new Uint8Array([0, 137, 80, 78, 71, 255]);
+		server.registerChannel('capture', ProxyChannel.fromService({ captureScreenshot: async () => VSBuffer.wrap(bytes) }, resources));
+		const result = await client.getChannel('capture').call<VSBuffer>('captureScreenshot', []);
+		assert.ok(result instanceof VSBuffer);
+		assert.deepEqual(result.buffer, bytes);
+		assert.equal(result.byteLength, bytes.length);
+	});
+
 	test('cancelling a call cancels the server operation and discards its late result', async () => {
 		using resources = new DisposableStore();
 		const [a, b] = pair(resources);

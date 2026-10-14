@@ -1,9 +1,76 @@
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type { IDisposable } from '../../../base/common/lifecycle.js';
 import type { ISerializedBrowserHistoryEntriesSnapshot } from './browserHistory.js';
+import type { VSBuffer } from '../../../base/common/buffer.js';
 
 export const IBrowserViewService = createServiceIdentifier<IBrowserViewService>('browserViewService');
 export const ipcBrowserViewChannelName = 'browserView';
+export const browserViewIsolatedWorldId = 999;
+
+export interface IBrowserViewKeyDownEvent {
+	readonly key: string;
+	readonly keyCode: number;
+	readonly code: string;
+	readonly ctrlKey: boolean;
+	readonly shiftKey: boolean;
+	readonly altKey: boolean;
+	readonly metaKey: boolean;
+	readonly repeat: boolean;
+}
+
+export enum BrowserElementSelectionMode { Select = 'select', Comment = 'comment' }
+export interface IBrowserElementSelectionOptions {
+	readonly highlightFocusedElement?: boolean;
+	readonly continuous?: boolean;
+	readonly mode?: BrowserElementSelectionMode;
+}
+export interface IBrowserViewRect { readonly x: number; readonly y: number; readonly width: number; readonly height: number; }
+export interface IElementData {
+	readonly url?: string;
+	readonly elementId?: string;
+	readonly comment?: string;
+	readonly outerHTML: string;
+	readonly computedStyle: string;
+	readonly bounds: IBrowserViewRect;
+	readonly innerText?: string;
+}
+export interface IBrowserElementComment { readonly elementId: string; readonly body: string; }
+export interface IBrowserElementCommentsUpdate {
+	readonly comments?: readonly IBrowserElementComment[];
+	readonly pendingCommentIdsToDiscard?: readonly string[];
+}
+export interface IBrowserViewTheme {
+	readonly focusBorder?: string;
+	readonly buttonBackground?: string;
+	readonly buttonForeground?: string;
+	readonly widgetBackground?: string;
+	readonly widgetForeground?: string;
+	readonly widgetBorder?: string;
+	readonly contrastBorder?: string;
+}
+export interface IBrowserViewPreloadLocalizedStrings {
+	readonly addComment: string;
+	readonly addCommentPlaceholder: string;
+	readonly commentOnSelectedElement: string;
+	readonly elementComment: string;
+	readonly elementCommentWithBody: string;
+	readonly emptyElementComment: string;
+	readonly removeComment: string;
+	readonly removeElementComment: string;
+	readonly cancel: string;
+	readonly selectionHelp: string;
+}
+export interface IBrowserViewWindowConfiguration {
+	readonly theme: IBrowserViewTheme;
+	readonly localizedStrings: IBrowserViewPreloadLocalizedStrings;
+}
+export interface IBrowserViewCaptureScreenshotOptions {
+	readonly format?: 'jpeg' | 'png';
+	readonly quality?: number;
+	readonly screenRect?: IBrowserViewRect;
+	readonly awaitNextPaint?: boolean;
+}
+export interface IBrowserViewFindInPageOptions { readonly recompute?: boolean; readonly forward?: boolean; readonly matchCase?: boolean; }
 
 export type BrowserViewTargetId = string;
 
@@ -51,6 +118,11 @@ export interface IBrowserViewState {
 }
 
 export type BrowserViewEvent =
+	| { readonly type: 'keyDown'; readonly targetId: string; readonly event: IBrowserViewKeyDownEvent; }
+	| { readonly type: 'elementPicked'; readonly targetId: string; readonly data: IElementData; }
+	| { readonly type: 'elementCommentRemoved'; readonly targetId: string; readonly elementId: string; }
+	| { readonly type: 'areaPicked'; readonly targetId: string; readonly rect: IBrowserViewRect; }
+	| { readonly type: 'selectionStopped'; readonly targetId: string; }
 	| { readonly type: 'networkRequested'; readonly targetId: string; readonly requestId: string; readonly networkToken: string; readonly url: string; readonly method: string; }
 	| { readonly type: 'created'; readonly info: IBrowserViewInfo; }
 	| { readonly type: 'sharingChanged'; readonly targetId: string; readonly threadIds: readonly string[]; }
@@ -123,6 +195,14 @@ export interface IBrowserViewInfo {
  * serializable commands and state only.
  */
 export interface IBrowserViewService {
+	updateWindowConfiguration(windowId: number, configuration: IBrowserViewWindowConfiguration): Promise<void>;
+	getSelectedText(id: string): Promise<string>;
+	findInPage(id: string, text: string, options?: IBrowserViewFindInPageOptions): Promise<void>;
+	stopFindInPage(id: string, keepSelection?: boolean): Promise<void>;
+	toggleElementSelection(id: string, enabled?: boolean, options?: IBrowserElementSelectionOptions): Promise<void>;
+	setElementComments(id: string, update: IBrowserElementCommentsUpdate): Promise<void>;
+	toggleAreaSelection(id: string, enabled?: boolean): Promise<void>;
+	captureScreenshot(id: string, options?: IBrowserViewCaptureScreenshotOptions): Promise<VSBuffer>;
 	getBrowserHistory(id: string): Promise<ISerializedBrowserHistoryEntriesSnapshot>;
 	deleteBrowserHistory(id: string, entryIds?: readonly number[]): Promise<void>;
 	getSharing(id: string): Promise<readonly string[]>;

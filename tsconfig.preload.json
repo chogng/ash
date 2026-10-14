@@ -5,7 +5,8 @@
     "incremental": true,
     "tsBuildInfoFile": ".build/desktop/preload.tsbuildinfo",
     "rootDir": ".",
+    "moduleDetection": "legacy",
     "types": ["node", "electron"]
   },
-  "include": ["src/ash/base/parts/sandbox/electron-browser/preload.cts"]
+  "include": ["src/ash/base/parts/sandbox/electron-browser/preload.cts", "src/ash/platform/browserView/electron-browser/preload-browserView.ts"]
 }

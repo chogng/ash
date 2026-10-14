@@ -41,6 +41,7 @@ for (const mode of ['build', 'watch'] as const) {
 		const output = join(root, '.build/desktop');
 		const compiler = resolve(import.meta.dirname, '../../node_modules/@ash/typescript-compiler/bin/tsc');
 		const preloadSource = 'src/ash/base/parts/sandbox/electron-browser/preload.cts';
+		const browserPreloadSource = 'src/ash/platform/browserView/electron-browser/preload-browserView.ts';
 		const preloadOutput = join(output, 'preload', preloadSource.replace(/\.cts$/u, '.cjs'));
 		await mkdir(join(desktop, 'src/ash/base/parts/sandbox/electron-browser'), { recursive: true });
 		await mkdir(join(root, 'build/desktop'), { recursive: true });
@@ -53,14 +54,16 @@ for (const mode of ['build', 'watch'] as const) {
 		await symlink(resolve(import.meta.dirname, '../../node_modules'), join(desktop, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
 		await writeFile(join(root, 'package.json'), '{"type":"module"}');
 		await writeFile(join(desktop, 'src/main.ts'), 'export const version = 1;');
+		await mkdir(join(desktop, 'src/ash/platform/browserView/electron-browser'), { recursive: true });
+		await writeFile(join(desktop, browserPreloadSource), 'declare function require(name: string): unknown; (() => { require("electron"); })();');
 		await writeFile(join(desktop, preloadSource), 'declare function require(name: string): unknown; export const electron = require("electron");');
 		for (const [project, source] of [['main', 'src/main.ts'], ['preload', preloadSource]]) {
 			await writeFile(join(desktop, `tsconfig.${project}.json`), JSON.stringify({
 				compilerOptions: {
-					module: 'NodeNext', target: 'ES2022', types: [], rootDir: '.', incremental: true,
+					module: 'NodeNext', moduleDetection: 'legacy', target: 'ES2022', types: [], rootDir: '.', incremental: true,
 					outDir: `.build/desktop/${project}`, tsBuildInfoFile: `.build/desktop/${project}.tsbuildinfo`,
 				},
-				include: [source],
+				include: project === 'preload' ? [source, browserPreloadSource] : [source],
 			}));
 		}
 		const initial = spawnSync(process.execPath, [compiler, '--build', 'tsconfig.main.json', 'tsconfig.preload.json', '--pretty', 'false'], {

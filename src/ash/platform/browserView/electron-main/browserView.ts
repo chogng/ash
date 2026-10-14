@@ -1,13 +1,16 @@
-import type { BrowserWindow, WebContentsView, WebContents, Event as ElectronEvent } from 'electron/main';
+import type { BrowserWindow, WebContentsView, WebContents, WebFrameMain, IpcMainEvent, Event as ElectronEvent } from 'electron/main';
 import { addAbortListener, type EventEmitter } from 'node:events';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import type { IDisposable } from '../../../base/common/lifecycle.js';
 import { promiseWithResolvers, raceCancellationError } from '../../../base/common/async.js';
-import { type BrowserViewEvent, type IBrowserViewBounds, type IBrowserViewState, type IBrowserViewInfo, type IBrowserViewCreateOptions, normalizeBrowserViewUrl } from '../common/browserView.js';
+import { browserViewIsolatedWorldId, type BrowserViewEvent, type IBrowserViewBounds, type IBrowserViewState, type IBrowserViewInfo, type IBrowserViewCreateOptions, normalizeBrowserViewUrl } from '../common/browserView.js';
 import type { BrowserSession } from './browserSession.js';
 import { BrowserViewDebugger } from './browserViewDebugger.js';
 import type { IBrowserHistoryItemHandle } from '../common/browserHistory.js';
 import type { IBrowserSessionHistory } from './browserSessionHistory.js';
+import type { IBrowserViewWindowConfiguration, IBrowserViewKeyDownEvent, IBrowserElementSelectionOptions, IBrowserElementCommentsUpdate, IBrowserViewRect, IBrowserViewFindInPageOptions, IBrowserViewCaptureScreenshotOptions } from '../common/browserView.js';
+import { VSBuffer } from '../../../base/common/buffer.js';
+import { isRecord } from '../../../base/common/types.js';
 
 export interface BrowserViewOptions {
 	readonly id: string;
@@ -40,6 +43,273 @@ export class BrowserView extends Disposable {
 	private readonly history: IBrowserSessionHistory;
 	private historyItem: IBrowserHistoryItemHandle | undefined;
 	private explicitNavigation = true;
+	private readonly preloadFrames = new Map<WebFrameMain, string>();
+	private preloadConfiguration: IBrowserViewWindowConfiguration | undefined;
+	private selectionMode: 'element' | 'area' | undefined;
+	private selectionOptions: IBrowserElementSelectionOptions = {};
+	// Existing markers remain editable after the picker has stopped; only renderer-accepted IDs qualify.
+	private readonly commentIds = new Set<string>();
+	private readonly selectedTextRequests = new Map<
+		string,
+		{ readonly frame: WebFrameMain; readonly resolve: (text: string) => void; }
+	>();
+
+	public configurePreload(configuration: IBrowserViewWindowConfiguration): void {
+		this.preloadConfiguration = configuration;
+		this.broadcastPreload('configure', configuration);
+	}
+	private sendPreload(frame: WebFrameMain, command: string, data?: unknown): void {
+		if (!frame.detached) {
+			frame.send('ash:browserView:preload', { command, data });
+		}
+	}
+	private broadcastPreload(command: string, data?: unknown): void {
+		for (const frame of this.preloadFrames.keys()) {
+			if (frame.detached) {
+				this.preloadFrames.delete(frame);
+			} else {
+				this.sendPreload(frame, command, data);
+			}
+		}
+	}
+	public async getSelectedText(): Promise<string> {
+		const frame = this.webContents.focusedFrame ?? this.webContents.mainFrame;
+		if (!this.preloadFrames.has(frame)) {
+			throw new Error('BrowserPreloadUnavailable');
+		}
+		if (frame === this.webContents.mainFrame) {
+			const text: unknown = await raceCancellationError(
+				this.webContents.executeJavaScriptInIsolatedWorld(browserViewIsolatedWorldId, [
+					{ code: 'window.browserViewAPI.getSelectedText()' },
+				]),
+				this.signal,
+				'BrowserTargetUnavailable',
+			);
+			if (typeof text !== 'string' || text.length > 65536) {
+				throw new Error('Invalid browser selection');
+			}
+			return text;
+		}
+		const id = crypto.randomUUID();
+		const result = promiseWithResolvers<string>();
+		this.selectedTextRequests.set(id, { frame, resolve: result.resolve });
+		const timer = setTimeout(() => result.reject(new Error('BrowserSelectionTimedOut')), 3000);
+		try {
+			this.sendPreload(frame, 'getSelectedText', id);
+			return await raceCancellationError(result.promise, this.signal, 'BrowserTargetUnavailable');
+		} finally {
+			clearTimeout(timer);
+			this.selectedTextRequests.delete(id);
+		}
+	}
+	public findInPage(text: string, options?: IBrowserViewFindInPageOptions): void {
+		this.webContents.findInPage(text, {
+			forward: options?.forward,
+			matchCase: options?.matchCase,
+			findNext: options?.recompute !== true,
+		});
+	}
+	public stopFindInPage(keepSelection = false): void {
+		this.webContents.stopFindInPage(keepSelection ? 'keepSelection' : 'clearSelection');
+	}
+	public toggleElementSelection(enabled = this.selectionMode !== 'element', options: IBrowserElementSelectionOptions = {}): void {
+		this.broadcastPreload('stop');
+		this.selectionMode = enabled ? 'element' : undefined;
+		this.selectionOptions = options;
+		if (enabled) {
+			this.broadcastPreload('startElementPicker', options);
+			this.focus();
+		} else {
+			this.emit({ type: 'selectionStopped', targetId: this.id });
+		}
+	}
+	public toggleAreaSelection(enabled = this.selectionMode !== 'area'): void {
+		this.broadcastPreload('stop');
+		this.selectionMode = enabled ? 'area' : undefined;
+		// Area geometry is measured in the top frame's CSS viewport, including iframe pixels.
+		if (enabled) {
+			this.sendPreload(this.webContents.mainFrame, 'startAreaPicker');
+			this.focus();
+		} else {
+			this.emit({ type: 'selectionStopped', targetId: this.id });
+		}
+	}
+	public setElementComments(update: IBrowserElementCommentsUpdate): void {
+		if (update.comments) {
+			this.commentIds.clear();
+			for (const comment of update.comments) { this.commentIds.add(comment.elementId); }
+		}
+		for (const id of update.pendingCommentIdsToDiscard ?? []) { this.commentIds.delete(id); }
+		this.broadcastPreload('setElementComments', update);
+	}
+	public captureScreenshot(options: IBrowserViewCaptureScreenshotOptions = {}): Promise<VSBuffer> {
+		return this.runOperation(this.signal, async () => {
+			this.broadcastPreload('hideUI');
+			try {
+				if (options.awaitNextPaint) {
+					await raceCancellationError(
+						this.webContents.executeJavaScriptInIsolatedWorld(browserViewIsolatedWorldId, [
+							{
+								code: 'new Promise(resolve => { setTimeout(resolve, 100); requestAnimationFrame(() => requestAnimationFrame(resolve)); })',
+							},
+						]),
+						this.signal,
+						'BrowserTargetUnavailable',
+					);
+				}
+				const scale = this.webContents.getZoomFactor();
+				const bounds = options.screenRect;
+				const viewport = this.view.getBounds();
+				if (
+					bounds &&
+					(bounds.x < 0 ||
+						bounds.y < 0 ||
+						(bounds.x + bounds.width) * scale > viewport.width + 1 ||
+						(bounds.y + bounds.height) * scale > viewport.height + 1)
+				) {
+					throw new Error('BrowserScreenshotOutsideViewport');
+				}
+				const image = await this.webContents.capturePage(
+					bounds
+						? {
+							x: Math.round(bounds.x * scale),
+							y: Math.round(bounds.y * scale),
+							width: Math.round(bounds.width * scale),
+							height: Math.round(bounds.height * scale),
+						}
+						: undefined,
+				);
+				const bytes = options.format === 'jpeg' ? image.toJPEG(options.quality ?? 90) : image.toPNG();
+				if (bytes.byteLength > 16 * 1024 * 1024) {
+					throw new Error('BrowserScreenshotTooLarge');
+				}
+				return VSBuffer.wrap(new Uint8Array(bytes));
+			} finally {
+				this.broadcastPreload('showUI');
+			}
+		});
+	}
+
+	private acceptPreload(event: IpcMainEvent, message: unknown): void {
+		if (
+			!isRecord(message) ||
+			typeof message.frameToken !== 'string' ||
+			message.frameToken.length > 64 ||
+			typeof message.type !== 'string'
+		) {
+			return;
+		}
+		const frame = event.senderFrame;
+		if (!frame || frame.detached || !this.webContents.mainFrame.framesInSubtree.includes(frame)) {
+			return;
+		}
+		if (message.type === 'ready') {
+			this.preloadFrames.set(frame, message.frameToken);
+			if (this.preloadConfiguration) {
+				this.sendPreload(frame, 'configure', this.preloadConfiguration);
+			}
+			if (this.selectionMode === 'element') {
+				this.sendPreload(frame, 'startElementPicker', this.selectionOptions);
+			}
+			return;
+		}
+		if (this.preloadFrames.get(frame) !== message.frameToken) {
+			return;
+		}
+		const data = message.data;
+		if (message.type === 'selectedText') {
+			if (isRecord(data) && typeof data.requestId === 'string' && typeof data.text === 'string' && data.text.length <= 65536) {
+				const request = this.selectedTextRequests.get(data.requestId);
+				if (request?.frame === frame) {
+					request.resolve(data.text);
+				}
+			}
+		} else if (message.type === 'keyDown' && !this.selectionMode && this.webContents.isFocused()) {
+			if (
+				!isRecord(data) ||
+				typeof data.key !== 'string' ||
+				data.key.length > 64 ||
+				typeof data.code !== 'string' ||
+				data.code.length > 32 ||
+				!Number.isInteger(data.keyCode) ||
+				['ctrlKey', 'shiftKey', 'altKey', 'metaKey', 'repeat'].some((key) => typeof data[key] !== 'boolean')
+			) {
+				return;
+			}
+			const keyboardEvent: IBrowserViewKeyDownEvent = {
+				key: data.key,
+				code: data.code,
+				keyCode: data.keyCode as number,
+				ctrlKey: data.ctrlKey as boolean,
+				shiftKey: data.shiftKey as boolean,
+				altKey: data.altKey as boolean,
+				metaKey: data.metaKey as boolean,
+				repeat: data.repeat as boolean,
+			};
+			this.emit({ type: 'keyDown', targetId: this.id, event: keyboardEvent });
+		} else if (message.type === 'elementPicked' && (this.selectionMode === 'element' || (isRecord(data) && typeof data.elementId === 'string' && this.commentIds.has(data.elementId)))) {
+			if (
+				!isRecord(data) ||
+				typeof data.elementId !== 'string' ||
+				!data.elementId.startsWith(message.frameToken + ':') ||
+				data.elementId.length > 140 ||
+				typeof data.outerHTML !== 'string' ||
+				data.outerHTML.length > 16384 ||
+				typeof data.computedStyle !== 'string' ||
+				data.computedStyle.length > 4096 ||
+				(data.innerText !== undefined && (typeof data.innerText !== 'string' || data.innerText.length > 8192)) ||
+				(data.comment !== undefined && (typeof data.comment !== 'string' || data.comment.length > 2048)) ||
+				!validPreloadRect(data.bounds)
+			) {
+				return;
+			}
+			this.emit({
+				type: 'elementPicked',
+				targetId: this.id,
+				data: {
+					elementId: data.elementId,
+					outerHTML: data.outerHTML,
+					computedStyle: data.computedStyle,
+					...(typeof data.innerText === 'string' ? { innerText: data.innerText } : {}),
+					...(typeof data.comment === 'string' ? { comment: data.comment } : {}),
+					bounds: { x: data.bounds.x, y: data.bounds.y, width: data.bounds.width, height: data.bounds.height },
+					url: frame.url,
+				},
+			});
+		} else if (
+			message.type === 'areaPicked' &&
+			this.selectionMode === 'area' &&
+			frame === this.webContents.mainFrame &&
+			validPreloadRect(data)
+		) {
+			const bounds = this.view.getBounds();
+			const scale = this.webContents.getZoomFactor();
+			if (
+				data.x < 0 ||
+				data.y < 0 ||
+				data.x + data.width > bounds.width / scale + 1 ||
+				data.y + data.height > bounds.height / scale + 1
+			) {
+				return;
+			}
+			this.emit({
+				type: 'areaPicked',
+				targetId: this.id,
+				rect: { x: data.x, y: data.y, width: data.width, height: data.height },
+			});
+		} else if (
+			message.type === 'elementCommentRemoved' &&
+			typeof data === 'string' &&
+			data.startsWith(message.frameToken + ':') &&
+			data.length <= 140
+		) {
+			this.emit({ type: 'elementCommentRemoved', targetId: this.id, elementId: data });
+		} else if (message.type === 'selectionStopped') {
+			this.selectionMode = undefined;
+			this.broadcastPreload('stop');
+			this.emit({ type: 'selectionStopped', targetId: this.id });
+		}
+	}
 
 	constructor(options: BrowserViewOptions) {
 		super();
@@ -147,20 +417,14 @@ export class BrowserView extends Disposable {
 
 	private listen(): void {
 		const contents = this.view.webContents;
-		this.on(contents, "before-input-event", (event: ElectronEvent, input: Electron.Input) => {
-			if (input.type === 'keyDown' && (input.key === 'F6' || ((input.control || input.meta) && input.key.toLowerCase() === 'l'))) {
-				event.preventDefault();
-				this.window.webContents.focus();
-				this.emit({ type: 'focusAddress', targetId: this.id });
-			} else if (input.type === 'keyDown' && (input.control || input.meta) && input.shift && !input.alt && input.key.toLowerCase() === 'p') {
-				// The webpage has a separate WebContents; Workbench owns shortcut resolution and command execution.
-				event.preventDefault();
-				this.window.webContents.focus();
-				const modifiers: Electron.KeyboardInputEvent['modifiers'] = [];
-				if (input.control) { modifiers.push('control'); }
-				if (input.meta) { modifiers.push('meta'); }
-				modifiers.push('shift');
-				this.window.webContents.sendInputEvent({ type: 'keyDown', keyCode: input.key, modifiers });
+		this.on(contents, 'ipc-message', (event: IpcMainEvent, channel: string, message: unknown) => {
+			if (channel === 'ash:browserView:preload') { this.acceptPreload(event, message); }
+		});
+		this.on(contents, 'did-start-navigation', (_event: ElectronEvent, _url: string, inPlace: boolean, mainFrame: boolean) => {
+			if (mainFrame && !inPlace) {
+				this.selectionMode = undefined; this.preloadFrames.clear();
+				this.commentIds.clear();
+				this.emit({ type: 'selectionStopped', targetId: this.id });
 			}
 		});
 		this.on(contents, "did-start-loading", () => this.emitState());
@@ -336,4 +600,8 @@ async function waitForLoad(target: BrowserView, signal: AbortSignal): Promise<vo
 
 function throwIfAborted(signal: AbortSignal): void {
 	if (signal.aborted) throw signal.reason instanceof Error ? signal.reason : new Error("BrowserRequestCancelled");
+}
+
+function validPreloadRect(value: unknown): value is IBrowserViewRect {
+	return isRecord(value) && ['x', 'y', 'width', 'height'].every(key => typeof value[key] === 'number' && Number.isFinite(value[key]) && Math.abs(value[key]) <= 100000) && (value.width as number) > 0 && (value.height as number) > 0;
 }

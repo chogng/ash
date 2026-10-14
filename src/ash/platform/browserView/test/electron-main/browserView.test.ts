@@ -103,22 +103,43 @@ suite('Browser view ownership and operations', () => {
 		assert.deepEqual([f.children.size, f.events.filter(e => e.type === 'created').length, (await f.manager.getState(id)).url], [1, 1, 'https://example.test/']);
 	});
 
-	test('page command shortcuts return to Workbench while ordinary page input stays on the page', async () => {
+	test('preload messages require an owned frame, and picks require a selection mode or an accepted comment', async () => {
 		using f = fixture();
-		await f.create();
-		let prevented = 0;
-		const event = { preventDefault: () => { prevented++; } };
-		for (const modifier of ['control', 'meta'] as const) {
-			f.contents.emit('before-input-event', event, { type: 'keyDown', key: 'P', shift: true, [modifier]: true });
-		}
-		for (const input of [{ type: 'keyDown', key: 'p' }, { type: 'keyDown', key: 'P', control: true }, { type: 'keyUp', key: 'P', control: true, shift: true }]) {
-			f.contents.emit('before-input-event', event, input);
-		}
-		assert.deepEqual({ prevented, focused: f.workbenchFocused, input: f.workbenchInput, addressEvents: f.events.filter(event => event.type === 'focusAddress') }, {
-			prevented: 2, focused: 2,
-			input: [{ type: 'keyDown', keyCode: 'P', modifiers: ['control', 'shift'] }, { type: 'keyDown', keyCode: 'P', modifiers: ['meta', 'shift'] }],
-			addressEvents: [],
-		});
+		const view = await f.create();
+		const sent: unknown[] = [];
+		const frame = { detached: false, url: 'https://example.test/', framesInSubtree: [] as unknown[], send: (_channel: string, message: unknown) => sent.push(message) };
+		frame.framesInSubtree.push(frame);
+		Object.assign(f.contents, { mainFrame: frame, focusedFrame: frame, isFocused: () => true, executeJavaScriptInIsolatedWorld: async () => 'selected words', getZoomFactor: () => 1 });
+		const post = (type: string, data?: unknown, frameToken = 'frame-one', senderFrame: unknown = frame) => f.contents.emit('ipc-message', { senderFrame }, 'ash:browserView:preload', { type, data, frameToken });
+		const key = { key: 'P', code: 'KeyP', keyCode: 80, ctrlKey: true, shiftKey: true, altKey: false, metaKey: false, repeat: false };
+		post('keyDown', key);
+		post('ready');
+		post('keyDown', key, 'stale-frame');
+		post('keyDown', key, 'frame-one', { ...frame });
+		post('keyDown', { ...key, keyCode: '80' });
+		post('keyDown', key);
+		assert.deepEqual(f.events.filter(event => event.type === 'keyDown'), [{ type: 'keyDown', targetId: id, event: key }]);
+		assert.equal(await f.manager.getSelectedText(id), 'selected words');
+		const element = { elementId: 'frame-one:element', outerHTML: '<button>Pick</button>', computedStyle: '', innerText: 'Pick', bounds: { x: 0, y: 0, width: 40, height: 20 } };
+		post('elementPicked', element);
+		await f.manager.toggleElementSelection(id, true);
+		post('elementPicked', { ...element, bounds: { ...element.bounds, width: NaN } });
+		post('elementPicked', element);
+		assert.deepEqual(f.events.filter(event => event.type === 'elementPicked'), [{ type: 'elementPicked', targetId: id, data: { ...element, url: frame.url } }]);
+		assert.ok(sent.some(message => (message as { command: string; }).command === 'startElementPicker'));
+		await f.manager.toggleAreaSelection(id, true);
+		post('areaPicked', { x: 1000, y: 0, width: 40, height: 20 });
+		post('areaPicked', { x: 0, y: 0, width: 40, height: 20 });
+		assert.equal(f.events.filter(event => event.type === 'areaPicked').length, 1);
+		post('selectionStopped');
+		post('elementPicked', { ...element, comment: 'Unaccepted marker' });
+		assert.equal(f.events.filter(event => event.type === 'elementPicked').length, 1);
+		await f.manager.setElementComments(id, { comments: [{ elementId: element.elementId, body: 'Original comment' }] });
+		post('elementPicked', { ...element, comment: 'Edited after picker stopped' });
+		assert.equal(f.events.filter(event => event.type === 'elementPicked').length, 2);
+		await f.manager.destroyBrowserView(id);
+		assert.equal(view.signal.aborted, true);
+		assert.equal(f.contents.listenerCount('ipc-message'), 0);
 	});
 
 	test('layout precedes visibility and follows the host zoom', async () => {

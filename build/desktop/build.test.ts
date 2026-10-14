@@ -34,6 +34,9 @@ test('Desktop build stops at the failed host or renderer step before bundling', 
         const output = '.build/desktop/preload/src/ash/base/parts/sandbox/electron-browser/preload.cjs';
         fs.mkdirSync(path.dirname(output), { recursive: true });
         fs.writeFileSync(output, process.env.FAILURE === 'preload-import' ? "require('fs')" : "require('electron')");
+        const browserOutput = '.build/desktop/preload/src/ash/platform/browserView/electron-browser/preload-browserView.js';
+        fs.mkdirSync(path.dirname(browserOutput), { recursive: true });
+        fs.writeFileSync(browserOutput, "require('electron')");
       }
     }
   `);

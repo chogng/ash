@@ -13,6 +13,10 @@ import { IBrowserViewWorkbenchService } from '../../common/browserView.js';
 import { BrowserViewUri } from '../../../../../platform/browserView/common/browserViewUri.js';
 import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
+import { BrowserEditorChatIntegration } from '../../electron-browser/features/browserEditorChatFeatures.js';
+import { ChatContextPickService } from '../../../../services/chat/browser/chatContextPickService.js';
+import { IChatContextPickService } from '../../../../services/chat/common/chatContextService.js';
+import { VSBuffer } from '../../../../../base/common/buffer.js';
 
 const id = 'browser_target_123e4567-e89b-12d3-a456-426614174000';
 const data: IBrowserEditorInputData = { id, url: 'https://example.test/', title: 'Saved page', session: { scope: BrowserViewStorageScope.Workspace } };
@@ -106,6 +110,31 @@ suite('Browser editor page model and restoration', () => {
 		assert.deepEqual(input.serialize(), { ...data, url: 'https://example.test/latest', title: 'Latest title' });
 	});
 
+	test('split editors share one selection source and model disposal rejects a late screenshot', async () => {
+		using f = fixture();
+		const contexts = new ChatContextPickService();
+		f.instantiation.registerInstance(IChatContextPickService, contexts);
+		const input = f.input(data);
+		const model = await input.resolve();
+		using left = f.instantiation.createInstance(BrowserEditorChatIntegration);
+		using right = f.instantiation.createInstance(BrowserEditorChatIntegration);
+		left.setModel(model, () => { }); right.setModel(model, () => { });
+		assert.equal(contexts.items.length, 1);
+		f.events.fire({ type: 'elementPicked', targetId: id, data: { elementId: 'element-one', comment: 'Review spacing', outerHTML: '<button>Pick</button>', computedStyle: 'display: block', bounds: { x: 0, y: 0, width: 30, height: 20 } } });
+		const picks = await contexts.items[0]!.providePicks('Review');
+		assert.equal(picks.length, 1);
+		assert.match((await picks[0]!.attachment.resolve()).content, /Review spacing/);
+		left.dispose();
+		assert.equal(contexts.items.length, 1);
+		const screenshot = promiseWithResolvers<VSBuffer>();
+		f.service.captureScreenshot = () => screenshot.promise;
+		f.events.fire({ type: 'areaPicked', targetId: id, rect: { x: 0, y: 0, width: 30, height: 20 } });
+		input.dispose();
+		screenshot.resolve(VSBuffer.fromString('late screenshot'));
+		await screenshot.promise;
+		assert.equal(contexts.items.length, 0);
+	});
+
 	test('the blank browser tab uses the selected Chinese catalog', () => {
 		using f = fixture();
 		const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
@@ -123,6 +152,8 @@ function fixture() {
 		info: { id, host: { windowId: 1 }, owner: { type: 'user' }, session: data.session, state: { targetId: id, url: data.url, title: 'Live page', loading: false, visible: false, canGoBack: false, canGoForward: false } } as IBrowserViewInfo,
 	};
 	const service: BrowserService = {
+		updateWindowConfiguration: async () => { }, getSelectedText: async () => '', findInPage: async () => { }, stopFindInPage: async () => { },
+		toggleElementSelection: async () => { }, setElementComments: async () => { }, toggleAreaSelection: async () => { }, captureScreenshot: async () => { throw new Error('Unexpected screenshot'); },
 		getBrowserHistory: async () => ({ items: [] }), deleteBrowserHistory: async () => { },
 		getSharing: async () => [], setSharing: async () => { },
 		respondToPermission: async () => { }, clearPermissions: async () => { }, cancelDownloads: async () => { },

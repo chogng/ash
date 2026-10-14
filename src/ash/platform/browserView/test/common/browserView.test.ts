@@ -93,6 +93,8 @@ test("browser view proxies preserve validated commands, subscriptions and backen
 		visible: false,
 	};
 	const service: Parameters<typeof browserViewChannel>[0] = {
+		updateWindowConfiguration: async () => { }, getSelectedText: async () => '', findInPage: async () => { }, stopFindInPage: async () => { },
+		toggleElementSelection: async () => { }, setElementComments: async () => { }, toggleAreaSelection: async () => { }, captureScreenshot: async () => { throw new Error('Unexpected screenshot'); },
 		getBrowserHistory: async () => ({ items: [] }), deleteBrowserHistory: async () => { },
 		getSharing: async () => [], setSharing: async () => { throw new Error('Sharing must pass through the backend'); },
 		onDidEvent: events.event,

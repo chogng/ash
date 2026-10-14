@@ -1506,6 +1506,10 @@ export class AshApplication extends Disposable {
 			createSession: (partition: string) => electronSession.fromPartition(partition),
 			createView: (session: Electron.Session) => new WebContentsView({
 				webPreferences: {
+					preload: app.isPackaged
+						? join(app.getAppPath(), 'dist/preload/src/ash/platform/browserView/electron-browser/preload-browserView.js')
+						: developmentArtifactsPath(app.getAppPath(), 'preload', 'src/ash/platform/browserView/electron-browser/preload-browserView.js'),
+					nodeIntegrationInSubFrames: true,
 					contextIsolation: true,
 					nodeIntegration: false,
 					sandbox: true,

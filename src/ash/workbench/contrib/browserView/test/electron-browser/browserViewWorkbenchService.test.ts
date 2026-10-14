@@ -131,6 +131,8 @@ function fixture() {
 		closeEditor: async (input: IResourceEditorInput): Promise<boolean> => { f.groupInputs.splice(f.groupInputs.indexOf(input), 1); return true; },
 	};
 	const service: IBrowserViewService = {
+		updateWindowConfiguration: async () => { }, getSelectedText: async () => '', findInPage: async () => { }, stopFindInPage: async () => { },
+		toggleElementSelection: async () => { }, setElementComments: async () => { }, toggleAreaSelection: async () => { }, captureScreenshot: async () => { throw new Error('Unexpected screenshot'); },
 		getBrowserHistory: async () => ({ items: [] }), deleteBrowserHistory: async () => { },
 		getBrowserViews: async () => [f.info], getOrCreateBrowserView: async () => f.info, getState: async () => f.info.state,
 		getSharing: async () => [], setSharing: async () => { }, respondToPermission: async () => { }, clearPermissions: async () => { }, cancelDownloads: async () => { },

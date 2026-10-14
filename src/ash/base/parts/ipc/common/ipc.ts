@@ -1,4 +1,4 @@
-import { VSBuffer } from '../../../common/buffer.js';
+import { VSBuffer, decodeBase64, encodeBase64 } from '../../../common/buffer.js';
 import { CancellationToken, CancellationTokenSource } from '../../../common/cancellation.js';
 import { CancellationError, onUnexpectedError } from '../../../common/errors.js';
 import { Emitter, Event } from '../../../common/event.js';
@@ -75,7 +75,7 @@ interface PendingCall {
 
 type Packet =
 	| { type: 'call' | 'listen'; id: number; channel: string; name: string; arg?: unknown; }
-	| { type: 'result' | 'event'; id: number; data?: unknown; }
+	| { type: 'result' | 'event'; id: number; data?: unknown; format?: 'buffer'; }
 	| { type: 'error'; id: number; error: { name: string; message: string; }; }
 	| { type: 'cancel' | 'unsubscribe'; id: number; }
 	| { type: 'closed'; };
@@ -83,6 +83,10 @@ type Packet =
 function decode(buffer: VSBuffer): Packet {
 	const value: unknown = JSON.parse(buffer.toString());
 	if (!isRecord(value)) { throw new TypeError('Invalid IPC packet'); }
+	if (value.format !== undefined) {
+		if (value.type !== 'result' || value.format !== 'buffer' || typeof value.data !== 'string' || value.data.length > 24 * 1024 * 1024) { throw new TypeError('Invalid IPC buffer'); }
+		value.data = decodeBase64(value.data);
+	}
 	if (value.type === 'closed') { return { type: 'closed' }; }
 	if (!Number.isSafeInteger(value.id) || (value.id as number) <= 0) { throw new TypeError('Invalid IPC request ID'); }
 	switch (value.type) {
@@ -183,7 +187,13 @@ export class IPCClient<TContext = string> extends Disposable implements IChannel
 		if (failed) { call.reject(value as Error); } else { call.resolve(value); }
 	}
 
-	private send(packet: Packet): void { this.protocol.send(VSBuffer.fromString(JSON.stringify(packet))); }
+	private send(packet: Packet): void {
+		// Buffers are packet data, not JSON objects masquerading as process-local instances.
+		if (packet.type === 'result' && packet.data instanceof VSBuffer) {
+			packet = { ...packet, format: 'buffer', data: encodeBase64(packet.data) };
+		}
+		this.protocol.send(VSBuffer.fromString(JSON.stringify(packet)));
+	}
 
 	private receive(packet: Packet): void {
 		switch (packet.type) {

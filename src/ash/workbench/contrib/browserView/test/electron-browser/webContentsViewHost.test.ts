@@ -38,8 +38,10 @@ suite('Browser page presentation', () => {
 		second.setModel(model);
 		second.setVisible(true);
 		await settle(() => f.bounds.get('shared')?.x === 400 && f.visible.get('shared') === true);
+		assert.deepEqual([first.isActive, second.isActive], [false, true]);
 		second.setVisible(false);
 		await settle(() => f.bounds.get('shared')?.x === 10);
+		assert.deepEqual([first.isActive, second.isActive], [true, false]);
 		second.setVisible(true);
 		await settle(() => f.bounds.get('shared')?.x === 400);
 		second.dispose();
