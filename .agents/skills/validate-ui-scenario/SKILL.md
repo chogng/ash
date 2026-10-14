@@ -106,6 +106,7 @@ module.exports = {
 | `workspacePath` | Disposable synthetic folder to open.                                                   |
 | `userSettings`  | Settings seeded into the isolated Desktop profile before launch.                       |
 | `externalCodexHome` | Explicit absolute directory for a user-authorized real-model run through Ash’s read-only Codex connection. Default tests keep authentication isolated; do not copy or record credentials. |
+| `profileFixturePath` | Cold-start fixture inside `.build/ash-playwright-mcp/`, with `fixture.json` declaring `format: "ash-ui-profile-fixture-v1"` and `synthetic: true`. The runner copies only regular `state.sqlite3`, `config.toml`, and `settings.json` files into its new isolated profile. Capture a live SQLite database with its backup API before preparing a fixture. |
 | `extraArgs`     | Desktop arguments; cannot override `--user-data-dir` or `--folder`.                    |
 | `stepPauseMs`   | Hold after each finished step, default `1000`; use `0` for timing-sensitive scenarios. |
 

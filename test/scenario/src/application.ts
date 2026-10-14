@@ -10,6 +10,7 @@ import { launchElectron } from '../../automation/playwrightElectron.ts';
 import type { PlaywrightApplication, PlaywrightDriver } from '../../automation/playwrightDriver.ts';
 import type { Workbench } from '../../automation/workbench.ts';
 import type { RunnerOptions } from './options.ts';
+import { seedScenarioProfile } from './profileFixture.ts';
 
 export type JSONValue = string | number | boolean | null | JSONValue[] | { readonly [key: string]: JSONValue; };
 
@@ -19,6 +20,7 @@ export interface ApplicationLaunchOptions {
 	readonly userSettings?: Readonly<Record<string, JSONValue>>;
 	readonly extraArgs?: readonly string[];
 	readonly externalCodexHome?: string;
+	readonly profileFixturePath?: string;
 }
 
 export interface RunningApplication {
@@ -71,12 +73,13 @@ export class ApplicationService {
 
 	private async startDesktop(options: ApplicationLaunchOptions, videoDirectory: string): Promise<RunningApplication> {
 		const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-scenario-'));
-		if (options.userSettings) {
-			const settingsPath = join(userDataDirectory, 'profile', 'settings.json');
-			await mkdir(dirname(settingsPath), { recursive: true });
-			await writeFile(settingsPath, `${JSON.stringify(options.userSettings, undefined, 2)}\n`, 'utf8');
-		}
 		try {
+			if (options.profileFixturePath) await seedScenarioProfile(options.profileFixturePath, join(userDataDirectory, 'profile'));
+			if (options.userSettings) {
+				const settingsPath = join(userDataDirectory, 'profile', 'settings.json');
+				await mkdir(dirname(settingsPath), { recursive: true });
+				await writeFile(settingsPath, `${JSON.stringify(options.userSettings, undefined, 2)}\n`, 'utf8');
+			}
 			const launched = await launchElectron({
 				appServerMode: 'required',
 				windowMode: this.options.activeWindow ? 'active' : undefined,
@@ -103,6 +106,7 @@ export class ApplicationService {
 	}
 
 	private async startWeb(options: ApplicationLaunchOptions, videoDirectory: string): Promise<RunningApplication> {
+		if (options.profileFixturePath) throw new Error('Profile fixtures require a Desktop scenario.');
 		if (options.userSettings) {
 			throw new Error('Web scenarios do not yet support pre-seeding user settings.');
 		}

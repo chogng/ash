@@ -1,15 +1,35 @@
 import assert from 'node:assert/strict';
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
 import { promisify } from 'node:util';
 import { parseRunnerOptions } from '../test/scenario/src/options.ts';
+import { seedScenarioProfile } from '../test/scenario/src/profileFixture.ts';
 import { collectTests } from './playwright.ts';
 import { withProcessRun } from './processes.ts';
 
 const repository = resolve(import.meta.dirname, '..');
 const execute = promisify(execFile);
+
+test('scenario cold-start fixtures copy only declared synthetic persistence', async t => {
+	const root = join(repository, '.build/ash-playwright-mcp');
+	await mkdir(root, { recursive: true });
+	const fixture = await mkdtemp(join(root, 'profile-fixture-test-'));
+	const destination = join(fixture, 'isolated-profile');
+	t.after(() => rm(fixture, { recursive: true, force: true }));
+	await writeFile(join(fixture, 'fixture.json'), JSON.stringify({ format: 'ash-ui-profile-fixture-v1', synthetic: true }));
+	for (const file of ['state.sqlite3', 'config.toml', 'settings.json', 'secrets']) await writeFile(join(fixture, file), file);
+	await seedScenarioProfile(fixture, destination);
+	assert.equal(await readFile(join(destination, 'state.sqlite3'), 'utf8'), 'state.sqlite3');
+	await assert.rejects(readFile(join(destination, 'secrets')), { code: 'ENOENT' });
+	await rm(join(fixture, 'settings.json'));
+	await symlink(join(fixture, 'secrets'), join(fixture, 'settings.json'));
+	await assert.rejects(seedScenarioProfile(fixture, destination), /regular file/);
+	await writeFile(join(fixture, 'fixture.json'), JSON.stringify({ format: 'ash-ui-profile-fixture-v1', synthetic: false }));
+	await assert.rejects(seedScenarioProfile(fixture, destination), /declare synthetic/);
+	await assert.rejects(seedScenarioProfile(repository, destination), /inside .build/);
+});
 
 test('large browser collections retain their count without executing test bodies', { timeout: 15_000 }, async t => {
 	const directory = await mkdtemp(join(repository, 'test/.integration-runner-'));
