@@ -69,7 +69,7 @@ const test = base.extend<{ taskScenario: TaskScenario; taskKind: 'process' | 'sh
 		try { await use(model); } finally { await model.close(); }
 	},
 	taskSession: async ({ application, workbench, testWorkspace, mockModel, taskScenario }, use, testInfo) => {
-		const connection = await connectProfile(application, undefined, testWorkspace.directory, workbench.page, { directoryPermissionsHost: true });
+		const connection = await connectProfile(application, undefined, testWorkspace.directory, workbench.page, { directoryGrantsHost: true });
 		const { client } = connection;
 		let readThread: (() => Promise<Thread>) | undefined;
 		try {
@@ -87,6 +87,10 @@ const test = base.extend<{ taskScenario: TaskScenario; taskKind: 'process' | 'sh
 			await client.request(APP_SERVER_METHODS['provider/apiKey/set'], { connection: taskModel.provider, apiKey: 'synthetic-fixture-key' });
 			const config = await client.request(APP_SERVER_METHODS['config/read'], {});
 			await client.request(APP_SERVER_METHODS['config/update'], { commandId: 'task-fixture-model', expectedRevision: config.revision, model: taskModel, execution: { ...config.execution, approvalMode: 'manual' } });
+			// The fixture seeds the profile through a second connection after startup.
+			// Start the composer with the completed credential and model catalog.
+			await workbench.page.reload();
+			await expect(workbench.page.locator('.ash-sessions-window')).toBeVisible();
 			const permissions = ['readFiles', 'browseFiles', 'watchFiles', 'executeCommands'] as const;
 			const created = await client.request(APP_SERVER_METHODS['session/create'], { commandId: 'task-fixture-session', title: 'Mock Agent Task Regression', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 			const sessionId = created.session.sessionId;

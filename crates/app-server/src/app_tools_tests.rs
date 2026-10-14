@@ -276,7 +276,7 @@ fn development_task_tools_review_and_dispatch_on_the_bound_window() {
     .into_shared();
     let mut owner = server.product_host_connection();
     let mut other = server.product_host_connection();
-    let capability = json!({"appTools":{"version":1,"agents":true,"desktop":true},"dirPermissionsHost":{"version":1}});
+    let capability = json!({"appTools":{"version":1,"agents":true,"desktop":true},"directoryGrantsHost":{"version":1}});
     for connection in [&mut owner, &mut other] {
         let initialized = super::call(
             &server,
@@ -408,7 +408,7 @@ impl TaskToolHarness {
                 "jsonrpc":"2.0","id":1,"method":"initialize","params":{
                     "clientInfo":{"name":"task-regression","version":"1"},
                     "capabilities":{"appTools":{"version":1,"agents":true,"desktop":true},
-                        "dirPermissionsHost":{"version":1},"agentInteractions":{"version":1,"kinds":["approval"]}}
+                        "directoryGrantsHost":{"version":1},"agentInteractions":{"version":1,"kinds":["approval"]}}
                 }
             }),
         );

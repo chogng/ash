@@ -63,7 +63,7 @@ test('authenticated Web cannot claim directory authority or read an ungranted wo
 			const timeout = setTimeout(() => { socket.close(); reject(new Error('Authority check timed out')); }, 5_000);
 			socket.onopen = () => socket.send(JSON.stringify({
 				jsonrpc: '2.0', id: 1, method: 'initialize', params: {
-					clientInfo: { name: 'untrusted-browser', version: '1' }, capabilities: { dirPermissionsHost: { version: 1 } },
+					clientInfo: { name: 'untrusted-browser', version: '1' }, capabilities: { directoryGrantsHost: { version: 1 } },
 				}
 			}));
 			socket.onmessage = event => {

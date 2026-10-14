@@ -11,19 +11,15 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-// Legacy exported names and RPC paths remain stable for existing clients.
+/// Durable directory grants managed by profile configuration.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(rename = "DirPermissionsReadParams")]
-#[schemars(rename = "DirPermissionsReadParams")]
 pub struct DirectoryGrantsReadParams {
     pub path: PathBuf,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(rename = "DirPermissionsReadResult")]
-#[schemars(rename = "DirPermissionsReadResult")]
 pub struct DirectoryGrantsReadResult {
     pub dir: DirId,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -33,8 +29,6 @@ pub struct DirectoryGrantsReadResult {
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(rename = "DirPermissionsEntryDto")]
-#[schemars(rename = "DirPermissionsEntryDto")]
 pub struct DirectoryGrantsEntryDto {
     pub dir: DirId,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -45,8 +39,6 @@ pub struct DirectoryGrantsEntryDto {
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(rename = "DirPermissionsListResult")]
-#[schemars(rename = "DirPermissionsListResult")]
 pub struct DirectoryGrantsListResult {
     #[ts(type = "number")]
     pub revision: u64,
@@ -55,8 +47,6 @@ pub struct DirectoryGrantsListResult {
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(rename = "DirPermissionsSetParams")]
-#[schemars(rename = "DirPermissionsSetParams")]
 pub struct DirectoryGrantsSetParams {
     pub command_id: CommandId,
     #[schemars(range(min = 0))]
@@ -68,8 +58,6 @@ pub struct DirectoryGrantsSetParams {
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(rename = "DirPermissionsForgetParams")]
-#[schemars(rename = "DirPermissionsForgetParams")]
 pub struct DirectoryGrantsForgetParams {
     pub command_id: CommandId,
     #[schemars(range(min = 0))]

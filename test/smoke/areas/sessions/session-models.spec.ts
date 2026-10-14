@@ -480,13 +480,13 @@ for (const locale of ['en', 'zh-CN']) {
 		const copy = locale === 'zh-CN'
 			? { code: '代码', picker: '选择聊天模型', auto: '自动', high: '高', execution: '执行与权限', approval: '默认审批模式', files: '命令文件访问', readOnly: '只读', save: '保存执行默认值', refresh: '刷新', stale: '后端设置已变化', agents: '智能体', advisor: '顾问模型', enabledAdvisor: '启用顾问' }
 			: { code: 'Code', picker: 'Choose a chat model', auto: 'Auto', high: 'High', execution: 'Execution and permissions', approval: 'Default approval mode', files: 'Command file access', readOnly: 'Read only', save: 'Save execution defaults', refresh: 'Refresh', stale: 'Backend settings changed', agents: 'Agents', advisor: 'Advisor model', enabledAdvisor: 'Enable Advisor' };
-		const connection = await connectProfile(application, webAppServer, testWorkspace.directory, workbench.page, { directoryPermissionsHost: true });
+		const connection = await connectProfile(application, webAppServer, testWorkspace.directory, workbench.page, { directoryGrantsHost: true });
 		const { client } = connection;
 		try {
 			await client.request(APP_SERVER_METHODS['provider/apiKey/set'], { connection: 'openai', apiKey: 'isolated-defaults-fixture-key' });
 			if (webAppServer) {
-				const grants = await client.request(APP_SERVER_METHODS['config/dirPermissions/list'], {});
-				await client.request(APP_SERVER_METHODS['config/dirPermissions/set'], { commandId: `defaults-directory-${locale}`, expectedRevision: grants.revision, path: testWorkspace.directory, permissions: ['readFiles', 'watchFiles', 'browseFiles', 'searchFiles', 'inspectRepository'] });
+				const grants = await client.request(APP_SERVER_METHODS['config/directoryGrants/list'], {});
+				await client.request(APP_SERVER_METHODS['config/directoryGrants/set'], { commandId: `defaults-directory-${locale}`, expectedRevision: grants.revision, path: testWorkspace.directory, permissions: ['readFiles', 'watchFiles', 'browseFiles', 'searchFiles', 'inspectRepository'] });
 			}
 			const catalog = await client.request(APP_SERVER_METHODS['model/list'], {});
 			const primary = catalog.models.find(entry => entry.model.provider === 'openai' && entry.model.model === 'gpt-6.1-sol');

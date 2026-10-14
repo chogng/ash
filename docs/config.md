@@ -211,16 +211,20 @@ Hook 的配置示例、事件目录和浏览方式统一见 [Hooks crate](../cra
 保存 `Trusted / Restricted` 或目录级 Trust。
 
 ```text
-config/dirPermissions/list
-config/dirPermissions/read
-config/dirPermissions/set
-config/dirPermissions/forget
+config/directoryGrants/list
+config/directoryGrants/read
+config/directoryGrants/set
+config/directoryGrants/forget
 ```
 
 持久授权的协议 DTO 与 CRUD 由 config owner 管理；environment 只负责运行时 Grant 和撤权后的同步。
-内部字段为 `directory_grants`；`[dirPermissions]`、上述 RPC 名称和命令回执中的旧名称作为兼容边界保留，
+内部字段为 `directory_grants`；`[dirPermissions]` 和命令回执中的旧名称作为存储兼容边界保留，
 已有细粒度集合与显式空集合原样读取和保存。无版本的旧 `workspaceTrust` 继续走既有的一次性迁移，
 不会把当前 capability 集合重新压成布尔信任状态。
+
+产品宿主通过 `directoryGrantsHost: { version: 1 }` 声明目录授权管理能力；后端仍检查连接是否为可信产品宿主，
+Web 业务连接不能据此获得授权。旧 `config/dirPermissions/*` 方法已移除，旧 `dirPermissionsHost` 字段不授予宿主能力。
+客户端和后端必须匹配生成协议的 schema 指纹，旧产品连接在初始化兼容检查时失败，不回退到旧方法。
 
 `set` 接受完整 capability 集合，而不是一个 `trusted` 布尔值。App Server 将配置解析为 `Grant`，
 动作入口再为具体 Permission 取得 `Authorization`。Config 不签发 Authorization，也不执行动作。

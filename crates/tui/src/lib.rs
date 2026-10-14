@@ -72,7 +72,7 @@ use ash_app_server_client::ShutdownError;
 use ash_app_server_client::TakeEventsError;
 use ash_app_server_protocol::protocol::common::AgentInteractionCapability;
 use ash_app_server_protocol::protocol::common::ClientCapabilities;
-use ash_app_server_protocol::protocol::common::DirPermissionsHostCapability;
+use ash_app_server_protocol::protocol::common::DirectoryGrantsHostCapability;
 use ash_protocol::AgentInteractionKind;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
@@ -103,7 +103,7 @@ pub fn client_capabilities() -> ClientCapabilities {
         }),
         browser: None,
         app_tools: None,
-        dir_permissions_host: Some(DirPermissionsHostCapability { version: 1 }),
+        directory_grants_host: Some(DirectoryGrantsHostCapability { version: 1 }),
         text_documents: None,
     }
 }

@@ -444,7 +444,7 @@ use crate::protocol::common::ClientInfo;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::common::CommandId;
 #[cfg(any(test, feature = "export"))]
-use crate::protocol::common::DirPermissionsHostCapability;
+use crate::protocol::common::DirectoryGrantsHostCapability;
 use crate::protocol::common::EmptyParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::common::ItemId;
@@ -3347,22 +3347,22 @@ client_methods! {
         response: SessionDirMutationResult,
         serialization: SessionExclusive,
     },
-    DirectoryGrantsRead => "config/dirPermissions/read" {
+    DirectoryGrantsRead => "config/directoryGrants/read" {
         params: DirectoryGrantsReadParams,
         response: DirectoryGrantsReadResult,
         serialization: GlobalSharedRead,
     },
-    DirectoryGrantsList => "config/dirPermissions/list" {
+    DirectoryGrantsList => "config/directoryGrants/list" {
         params: EmptyParams,
         response: DirectoryGrantsListResult,
         serialization: GlobalSharedRead,
     },
-    DirectoryGrantsSet => "config/dirPermissions/set" {
+    DirectoryGrantsSet => "config/directoryGrants/set" {
         params: DirectoryGrantsSetParams,
         response: ConfigCommandResult,
         serialization: GlobalExclusive,
     },
-    DirectoryGrantsForget => "config/dirPermissions/forget" {
+    DirectoryGrantsForget => "config/directoryGrants/forget" {
         params: DirectoryGrantsForgetParams,
         response: ConfigCommandResult,
         serialization: GlobalExclusive,
@@ -5728,7 +5728,7 @@ typescript_bindings! {
     ClientInfo,
     AgentInteractionCapability,
     BrowserCapability,
-    DirPermissionsHostCapability,
+    DirectoryGrantsHostCapability,
     BrowserBinaryPayload,
     BrowserCloseParams,
     BrowserCreateParams,

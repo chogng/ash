@@ -246,7 +246,7 @@ fn terminal_prompt_type_remains_optional_and_round_trips_output_order() {
 }
 
 #[test]
-fn directory_grants_keep_legacy_wire_contracts() {
+fn directory_grants_use_canonical_contract_names_and_exact_permissions() {
     use crate::protocol::config::DirectoryGrantsReadResult;
     use crate::protocol::config::DirectoryGrantsSetParams;
     use crate::protocol::registry::ClientMethod;
@@ -254,23 +254,23 @@ fn directory_grants_keep_legacy_wire_contracts() {
 
     assert_eq!(
         ClientMethod::DirectoryGrantsRead.as_str(),
-        "config/dirPermissions/read"
+        "config/directoryGrants/read"
     );
     assert_eq!(
         ClientMethod::DirectoryGrantsList.as_str(),
-        "config/dirPermissions/list"
+        "config/directoryGrants/list"
     );
     assert_eq!(
         ClientMethod::DirectoryGrantsSet.as_str(),
-        "config/dirPermissions/set"
+        "config/directoryGrants/set"
     );
     assert_eq!(
         ClientMethod::DirectoryGrantsForget.as_str(),
-        "config/dirPermissions/forget"
+        "config/directoryGrants/forget"
     );
     assert_eq!(
         DirectoryGrantsSetParams::name(&ts_rs::Config::default()),
-        "DirPermissionsSetParams"
+        "DirectoryGrantsSetParams"
     );
     let request = serde_json::json!({"commandId":"directory-grant", "expectedRevision":7, "path":"/tmp/project", "permissions":["readFiles", "useLanguageServices"]});
     let decoded: DirectoryGrantsSetParams = serde_json::from_value(request.clone()).unwrap();
@@ -286,4 +286,41 @@ fn directory_grants_keep_legacy_wire_contracts() {
     let mut invalid = request;
     invalid["permissions"] = serde_json::json!(["unknownCapability"]);
     assert!(serde_json::from_value::<DirectoryGrantsSetParams>(invalid).is_err());
+}
+
+#[test]
+fn directory_grants_host_has_one_wire_name_and_old_methods_are_unregistered() {
+    use crate::protocol::common::ClientCapabilities;
+    use crate::protocol::common::DirectoryGrantsHostCapability;
+    use crate::protocol::registry::client_method;
+    use crate::protocol::registry::client_method_definition;
+    use ts_rs::TS;
+
+    let capabilities = ClientCapabilities {
+        directory_grants_host: Some(DirectoryGrantsHostCapability { version: 1 }),
+        ..ClientCapabilities::default()
+    };
+    let encoded = serde_json::to_value(&capabilities).unwrap();
+    assert_eq!(
+        encoded["directoryGrantsHost"],
+        serde_json::json!({"version":1})
+    );
+    assert!(encoded.get("dirPermissionsHost").is_none());
+    assert_eq!(
+        serde_json::from_value::<ClientCapabilities>(encoded).unwrap(),
+        capabilities
+    );
+    assert_eq!(
+        DirectoryGrantsHostCapability::name(&ts_rs::Config::default()),
+        "DirectoryGrantsHostCapability"
+    );
+    // Unknown initialize fields cannot become authority, even on a product connection.
+    let legacy: ClientCapabilities =
+        serde_json::from_value(serde_json::json!({"dirPermissionsHost":{"version":1}})).unwrap();
+    assert!(legacy.directory_grants_host.is_none());
+    for action in ["read", "list", "set", "forget"] {
+        assert!(client_method(&format!("config/dirPermissions/{action}")).is_none());
+        assert!(client_method_definition(&format!("config/dirPermissions/{action}")).is_none());
+        assert!(client_method(&format!("config/directoryGrants/{action}")).is_some());
+    }
 }

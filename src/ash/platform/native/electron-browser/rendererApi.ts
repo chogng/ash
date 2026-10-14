@@ -91,7 +91,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 		getAddress: async () => ({ connectTo: new ManagedRemoteConnection(connectionId), connectionToken: undefined }), getMetadata: () => carrier.connectionMetadata,
 	}));
 	// Initialization includes the local daemon's cold start, which can take 15 seconds.
-	const localClient = new AppServerProtocolClient(transport, { clientName: 'ash-desktop', initializeTimeoutMs: 30_000, capabilities: { agentInteractions: { version: 1, kinds: ['approval', 'userInput'] }, ...(hostCapabilities.browser ? { browser: { version: 3, observe: true, input: true } } : {}), ...(hostCapabilities.textDocuments ? { textDocuments: { version: 2 } } : {}), ...(hostCapabilities.appTools ? { appTools: { version: 1, agents: true, desktop: true } } : {}), dirPermissionsHost: { version: 1 } } });
+	const localClient = new AppServerProtocolClient(transport, { clientName: 'ash-desktop', initializeTimeoutMs: 30_000, capabilities: { agentInteractions: { version: 1, kinds: ['approval', 'userInput'] }, ...(hostCapabilities.browser ? { browser: { version: 3, observe: true, input: true } } : {}), ...(hostCapabilities.textDocuments ? { textDocuments: { version: 2 } } : {}), ...(hostCapabilities.appTools ? { appTools: { version: 1, agents: true, desktop: true } } : {}), directoryGrantsHost: { version: 1 } } });
 	resources.add(toDisposable(() => localClient.dispose()));
 	let client = localClient;
 	let localExtensions: IExtensionHostApi | undefined;

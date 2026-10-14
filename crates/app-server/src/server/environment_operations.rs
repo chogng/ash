@@ -39,7 +39,7 @@ impl AppServer {
         connection: &ConnectionState,
         params: &Value,
     ) -> Result<Value, RpcError> {
-        require_dir_permissions_host(connection)?;
+        require_directory_grants_host(connection)?;
         let params: SessionDirListParams = decode(params)?;
         let snapshot = self
             .list_session_dirs(&params.session_id)
@@ -55,7 +55,7 @@ impl AppServer {
         connection: &ConnectionState,
         params: &Value,
     ) -> Result<Value, RpcError> {
-        require_dir_permissions_host(connection)?;
+        require_directory_grants_host(connection)?;
         let params: SessionDirAddParams = decode(params)?;
         validate_path(&params.path, false)?;
         let permissions = permissions(params.permissions)?;
@@ -75,7 +75,7 @@ impl AppServer {
         connection: &ConnectionState,
         params: &Value,
     ) -> Result<Value, RpcError> {
-        require_dir_permissions_host(connection)?;
+        require_directory_grants_host(connection)?;
         let params: SessionDirMoveParams = decode(params)?;
         validate_path(&params.path, false)?;
         let permissions = permissions(params.permissions)?;
@@ -94,7 +94,7 @@ impl AppServer {
         connection: &ConnectionState,
         params: &Value,
     ) -> Result<Value, RpcError> {
-        require_dir_permissions_host(connection)?;
+        require_directory_grants_host(connection)?;
         let params: SessionDirRemoveParams = decode(params)?;
         validate_path(&params.path, false)?;
         let (mutation, snapshot) = self
@@ -112,7 +112,7 @@ impl AppServer {
         connection: &ConnectionState,
         params: &Value,
     ) -> Result<Value, RpcError> {
-        require_dir_permissions_host(connection)?;
+        require_directory_grants_host(connection)?;
         let params: SessionDirPermissionsSetParams = decode(params)?;
         validate_path(&params.path, false)?;
         let permissions = permissions(params.permissions)?;
@@ -177,7 +177,7 @@ impl AppServer {
             DirGrantDto::Host {
                 permissions: values,
             } => {
-                require_dir_permissions_host(connection)?;
+                require_directory_grants_host(connection)?;
                 Some((GrantSource::HostConfiguration, permissions(values)?))
             }
             DirGrantDto::User {
@@ -185,7 +185,7 @@ impl AppServer {
                 expected_revision,
                 permissions: values,
             } => {
-                require_dir_permissions_host(connection)?;
+                require_directory_grants_host(connection)?;
                 let dir = Dir::open_local(path)
                     .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
                 let permissions = permissions(values)?;
@@ -399,8 +399,8 @@ fn permission_dto(value: Permission) -> PermissionDto {
     }
 }
 
-pub(super) fn require_dir_permissions_host(connection: &ConnectionState) -> Result<(), RpcError> {
-    if connection.supports_dir_permissions_host() {
+pub(super) fn require_directory_grants_host(connection: &ConnectionState) -> Result<(), RpcError> {
+    if connection.supports_directory_grants_host() {
         Ok(())
     } else {
         Err(RpcError::new(

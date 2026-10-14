@@ -66,7 +66,7 @@ test('Real Prompt catalog pins nested resources, reports diagnostics and preserv
 test('Hook management preserves filter and disclosure after its owning configuration changes', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, webAppServer, workbench, testWorkspace }, testInfo) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	const connection = target.kind === 'electron'
-		? await connectProfile(application, webAppServer, testWorkspace.directory, page, { directoryPermissionsHost: true })
+		? await connectProfile(application, webAppServer, testWorkspace.directory, page, { directoryGrantsHost: true })
 		: await connectTraceAppServer(application, page, testWorkspace.directory);
 	try {
 		const created = await connection.client.request(APP_SERVER_METHODS['session/create'], { commandId: 'c-hooks-session', title: 'C Hook fixture', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });

@@ -44,7 +44,7 @@ pub struct ClientCapabilities {
     pub browser: Option<BrowserCapability>,
     #[serde(default)]
     #[ts(optional = nullable)]
-    pub dir_permissions_host: Option<DirPermissionsHostCapability>,
+    pub directory_grants_host: Option<DirectoryGrantsHostCapability>,
     #[serde(default)]
     #[ts(optional = nullable)]
     pub text_documents: Option<TextDocumentsCapability>,
@@ -91,7 +91,7 @@ pub struct BrowserCapability {
 /// connections must not declare it merely because they can display an approval prompt.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct DirPermissionsHostCapability {
+pub struct DirectoryGrantsHostCapability {
     pub version: u32,
 }
 

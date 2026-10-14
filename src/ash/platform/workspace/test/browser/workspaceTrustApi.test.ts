@@ -18,9 +18,9 @@ test('workspace trust reads exact capabilities and persists only explicit revisi
 		async request(definition: { method: string; }, params: unknown): Promise<unknown> {
 			requests.push({ method: definition.method, params });
 			switch (definition.method) {
-				case 'config/dirPermissions/read': return { dir: 'canonical-dir', permissions };
+				case 'config/directoryGrants/read': return { dir: 'canonical-dir', permissions };
 				case 'config/read': return { revision };
-				case 'config/dirPermissions/set':
+				case 'config/directoryGrants/set':
 					if (failure) { throw failure; }
 					return { revision: ++revision, generation: 2, disposition: 'updated' };
 				default: throw new Error(`Unexpected request: ${definition.method}`);
@@ -32,7 +32,7 @@ test('workspace trust reads exact capabilities and persists only explicit revisi
 		permissions = exact;
 		assert.deepEqual(await api.readDirectory('/alias'), { dir: 'canonical-dir', permissions: exact });
 	}
-	assert.ok(requests.every(request => request.method === 'config/dirPermissions/read'));
+	assert.ok(requests.every(request => request.method === 'config/directoryGrants/read'));
 	const selected = Object.freeze(['readFiles', 'executeCommands'] as const);
 	const grant = await api.createGrant('/alias', selected);
 	assert.equal(grant.type, 'user');
@@ -43,7 +43,7 @@ test('workspace trust reads exact capabilities and persists only explicit revisi
 	assert.deepEqual(requests.at(-1), { method: 'config/read', params: {} });
 	await api.persistGrant('/alias', grant);
 	assert.deepEqual(requests.at(-1), {
-		method: 'config/dirPermissions/set',
+		method: 'config/directoryGrants/set',
 		params: { path: '/alias', commandId: grant.commandId, expectedRevision: 7, permissions: selected },
 	});
 	const before = requests.length;
@@ -90,10 +90,10 @@ test('workspace trust lists partial grants and manages canonical identities with
 	const api = createAppServerWorkspaceTrustApi({
 		async request(definition: { method: string; }, params: unknown): Promise<unknown> {
 			requests.push({ method: definition.method, params });
-			if (definition.method === 'config/dirPermissions/list') {
+			if (definition.method === 'config/directoryGrants/list') {
 				return { revision: 4, entries: [{ dir: 'dir-1', path: null, permissions: [] }, { dir: 'dir-2', path: 'C:\\canonical', permissions: precise }] };
 			}
-			if (definition.method === 'config/dirPermissions/read') { return { dir: 'dir-2', permissions: precise }; }
+			if (definition.method === 'config/directoryGrants/read') { return { dir: 'dir-2', permissions: precise }; }
 			if (conflict) { throw failure; }
 			return { revision: 5, generation: 2, disposition: 'updated' };
 		},
@@ -104,14 +104,14 @@ test('workspace trust lists partial grants and manages canonical identities with
 		]
 	});
 	assert.deepEqual(await api.readDirectory('C:\\alias'), { dir: 'dir-2', permissions: precise });
-	assert.deepEqual(requests.at(-1), { method: 'config/dirPermissions/read', params: { path: 'C:\\alias' } });
+	assert.deepEqual(requests.at(-1), { method: 'config/directoryGrants/read', params: { path: 'C:\\alias' } });
 	assert.deepEqual(await api.setDirectoryPermissions('C:\\alias', precise, 4), { revision: 5, generation: 2, disposition: 'updated' });
 	const set = requests.at(-1)!;
 	const setParams = set.params as { commandId: string; permissions: readonly WorkspaceTrustPermission[]; };
 	assert.ok(setParams.commandId);
 	assert.notEqual(setParams.permissions, precise);
 	assert.deepEqual({ ...set, params: { ...setParams, commandId: 'command' } }, {
-		method: 'config/dirPermissions/set', params: { path: 'C:\\alias', permissions: precise, expectedRevision: 4, commandId: 'command' },
+		method: 'config/directoryGrants/set', params: { path: 'C:\\alias', permissions: precise, expectedRevision: 4, commandId: 'command' },
 	});
 	assert.deepEqual(await api.forgetDirectory('dir-2', 5), { revision: 5, generation: 2, disposition: 'updated' });
 	const forget = requests.at(-1)!;
@@ -119,7 +119,7 @@ test('workspace trust lists partial grants and manages canonical identities with
 	assert.ok(forgetParams.commandId);
 	assert.notEqual(forgetParams.commandId, setParams.commandId);
 	assert.deepEqual({ ...forget, params: { ...forgetParams, commandId: 'command' } }, {
-		method: 'config/dirPermissions/forget', params: { dir: 'dir-2', expectedRevision: 5, commandId: 'command' },
+		method: 'config/directoryGrants/forget', params: { dir: 'dir-2', expectedRevision: 5, commandId: 'command' },
 	});
 	conflict = true;
 	const before = requests.length;

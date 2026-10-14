@@ -34,10 +34,10 @@ const test = base.extend<{ symphonyModel: ModelFixture; }>({
 
 test('built-in Symphony concurrently runs tasks, pauses, resumes and preserves cumulative conversation totals', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench, testWorkspace, symphonyModel, webAppServer }) => {
 	if (webAppServer) {
-		const host = await test.step('Connect fixture directory permission host', () => connectProfile(application, webAppServer, testWorkspace.directory, workbench.page, { directoryPermissionsHost: true }));
+		const host = await test.step('Connect fixture directory permission host', () => connectProfile(application, webAppServer, testWorkspace.directory, workbench.page, { directoryGrantsHost: true }));
 		try {
-			const config = await test.step('Read fixture directory permissions', () => host.client.request(APP_SERVER_METHODS['config/dirPermissions/list'], {}));
-			await test.step('Grant fixture command execution', () => host.client.request(APP_SERVER_METHODS['config/dirPermissions/set'], { commandId: 'symphony-fixture-commands', expectedRevision: config.revision, path: testWorkspace.directory, permissions: ['readFiles', 'writeFiles', 'executeCommands', 'watchFiles', 'browseFiles', 'searchFiles', 'inspectRepository', 'mutateRepository'] }));
+			const config = await test.step('Read fixture directory permissions', () => host.client.request(APP_SERVER_METHODS['config/directoryGrants/list'], {}));
+			await test.step('Grant fixture command execution', () => host.client.request(APP_SERVER_METHODS['config/directoryGrants/set'], { commandId: 'symphony-fixture-commands', expectedRevision: config.revision, path: testWorkspace.directory, permissions: ['readFiles', 'writeFiles', 'executeCommands', 'watchFiles', 'browseFiles', 'searchFiles', 'inspectRepository', 'mutateRepository'] }));
 		} finally { await host.close(); }
 	}
 	const workflow = join(testWorkspace.directory, 'WORKFLOW.md');
@@ -146,12 +146,12 @@ test('Symphony keyboard help and controls use Chinese in the Agents Window', asy
 });
 
 test('Execution and permissions settings persist defaults, govern ordinary chats and Symphony, and edit host directory grants', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench, testWorkspace, webAppServer }) => {
-	const host = await connectProfile(application, webAppServer, testWorkspace.directory, workbench.page, { directoryPermissionsHost: true });
+	const host = await connectProfile(application, webAppServer, testWorkspace.directory, workbench.page, { directoryGrantsHost: true });
 	try {
 		// Browser transport does not acquire directory permission authority.
 		if (webAppServer) {
-			const grants = await host.client.request(APP_SERVER_METHODS['config/dirPermissions/list'], {});
-			await host.client.request(APP_SERVER_METHODS['config/dirPermissions/set'], { commandId: 'execution-fixture-workspace', expectedRevision: grants.revision, path: testWorkspace.directory, permissions: ['readFiles', 'writeFiles', 'executeCommands', 'watchFiles', 'browseFiles', 'searchFiles', 'inspectRepository', 'mutateRepository'] });
+			const grants = await host.client.request(APP_SERVER_METHODS['config/directoryGrants/list'], {});
+			await host.client.request(APP_SERVER_METHODS['config/directoryGrants/set'], { commandId: 'execution-fixture-workspace', expectedRevision: grants.revision, path: testWorkspace.directory, permissions: ['readFiles', 'writeFiles', 'executeCommands', 'watchFiles', 'browseFiles', 'searchFiles', 'inspectRepository', 'mutateRepository'] });
 		}
 		let page = await workbench.openAgentsWindow(target.kind);
 		await page.keyboard.press('ControlOrMeta+,');
@@ -182,12 +182,12 @@ test('Execution and permissions settings persist defaults, govern ordinary chats
 			await access.click(); await page.getByRole('option', { name: 'Read, write and run commands', exact: true }).click();
 			await settings.getByRole('button', { name: 'Save directory permissions', exact: true }).click();
 			await expect(settings).toContainText('Saved capabilities: Read files');
-			const grants = await host.client.request(APP_SERVER_METHODS['config/dirPermissions/list'], {});
+			const grants = await host.client.request(APP_SERVER_METHODS['config/directoryGrants/list'], {});
 			const canonicalExtra = await realpath(extra);
 			expect(grants.entries.find(entry => entry.path === canonicalExtra)?.permissions).toContain('executeCommands');
 			await settings.getByRole('button', { name: 'Revoke directory grant', exact: true }).click();
 			await expect(settings.getByRole('button', { name: 'Revoke directory grant', exact: true })).toBeDisabled();
-			expect((await host.client.request(APP_SERVER_METHODS['config/dirPermissions/list'], {})).entries.some(entry => entry.path === canonicalExtra)).toBe(false);
+			expect((await host.client.request(APP_SERVER_METHODS['config/directoryGrants/list'], {})).entries.some(entry => entry.path === canonicalExtra)).toBe(false);
 		}
 		await page.keyboard.press('Escape');
 		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();

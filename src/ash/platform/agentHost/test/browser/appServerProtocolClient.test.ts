@@ -3,6 +3,7 @@ import { test } from 'mocha';
 import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS } from '../../../../../../.build/protocol/typescript/index.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { AppServerProtocolClient } from '../../browser/appServerProtocolClient.js';
+import { AppServerProtocolIncompatibleError } from '../../common/appServerProtocolCompatibility.js';
 import { appServerRequest } from '../../browser/appServerRequest.js';
 import { type AppServerTransport, WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION } from '../../common/appServerTransport.js';
 import { createTestInitializeResult } from '../common/testAppServerProtocol.js';
@@ -339,4 +340,24 @@ test('frames emitted by a releasing carrier cannot start host work during shutdo
 	assert.equal(calls, 0);
 	assert.equal(transport.frames.some(frame => frame.id === 'during-release'), false);
 	assert.equal(client.state, 'stopped');
+});
+
+
+test('directory grant hosts declare the canonical capability during initialization', async () => {
+	const transport = new ProtocolTransport();
+	const client = new AppServerProtocolClient(transport, { capabilities: { directoryGrantsHost: { version: 1 } } });
+	using cleanup = toDisposable(() => client.dispose());
+	await client.connect();
+	const initialized = transport.frames.find(frame => frame.method === 'initialize')?.params as { capabilities: Record<string, unknown>; };
+	assert.deepEqual(initialized.capabilities.directoryGrantsHost, { version: 1 });
+	assert.equal(initialized.capabilities.dirPermissionsHost, undefined);
+});
+
+test('directory grant clients reject a different schema before sending domain requests', async () => {
+	const transport = new ProtocolTransport(() => ({ ...createTestInitializeResult(), schemaHash: '0'.repeat(64) }));
+	const client = new AppServerProtocolClient(transport, { capabilities: { directoryGrantsHost: { version: 1 } } });
+	using cleanup = toDisposable(() => client.dispose());
+	await assert.rejects(client.connect(), error => error instanceof AppServerProtocolIncompatibleError && error.incompatibility.kind === 'schemaHash');
+	assert.notEqual(client.state, 'ready');
+	assert.ok(transport.frames.every(frame => frame.method === 'initialize'));
 });

@@ -21,7 +21,7 @@ test('GitHub Rust extension shares a profile across directories and releases a d
 		first = await connectProfile(application, webAppServer, testWorkspace.directory, source);
 		// The browser transport is rooted in its workspace; the second trusted host
 		// exercises another directory of the same profile through the product daemon.
-		second = await connectProfile(application, webAppServer, otherDirectory, workbench.page, { directoryPermissionsHost: !!webAppServer });
+		second = await connectProfile(application, webAppServer, otherDirectory, workbench.page, { directoryGrantsHost: !!webAppServer });
 		const started = await first.client.request(APP_SERVER_METHODS['account/login/start'], { method: { type: 'gitHubBrowser' } });
 		expect(started.type).toBe('browser');
 		if (started.type !== 'browser') { throw new Error('Expected the GitHub browser grant'); }

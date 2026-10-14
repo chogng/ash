@@ -3,7 +3,7 @@ use ash_app_server::AppServer;
 use ash_app_server::SlashCommandCatalog;
 use ash_app_server_protocol::protocol::common::ClientCapabilities;
 use ash_app_server_protocol::protocol::common::ClientInfo;
-use ash_app_server_protocol::protocol::common::DirPermissionsHostCapability;
+use ash_app_server_protocol::protocol::common::DirectoryGrantsHostCapability;
 use ash_app_server_protocol::protocol::environment::PermissionDto;
 use ash_app_server_protocol::protocol::environment::SessionDirAddParams;
 use ash_app_server_protocol::protocol::environment::SessionDirListParams;
@@ -720,7 +720,7 @@ fn embedded_startup_accepts_product_host_capabilities() {
             },
         )
         .with_capabilities(ClientCapabilities {
-            dir_permissions_host: Some(DirPermissionsHostCapability { version: 1 }),
+            directory_grants_host: Some(DirectoryGrantsHostCapability { version: 1 }),
             ..ClientCapabilities::default()
         }),
     )

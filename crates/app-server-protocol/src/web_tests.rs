@@ -13,9 +13,11 @@ fn browser_session_metadata_has_no_daemon_authority() {
         value,
         json!({ "token": "a".repeat(64), "workspaceId": "workspace", "workspaceRoot": "/workspace" })
     );
-    let mut injected = value;
-    injected["dirPermissionsHost"] = json!(true);
-    assert!(serde_json::from_value::<WebSessionInfo>(injected).is_err());
+    for name in ["directoryGrantsHost", "dirPermissionsHost"] {
+        let mut injected = value.clone();
+        injected[name] = json!(true);
+        assert!(serde_json::from_value::<WebSessionInfo>(injected).is_err());
+    }
 }
 
 #[test]
@@ -69,7 +71,7 @@ fn workspace_selection_requires_explicit_approval_and_strict_fields() {
     missing.as_object_mut().unwrap().remove("approved");
     assert!(serde_json::from_value::<WebWorkspaceOpenRequest>(missing).is_err());
     let mut injected = value;
-    injected["dirPermissionsHost"] = json!(true);
+    injected["directoryGrantsHost"] = json!(true);
     assert!(serde_json::from_value::<WebWorkspaceOpenRequest>(injected).is_err());
 }
 

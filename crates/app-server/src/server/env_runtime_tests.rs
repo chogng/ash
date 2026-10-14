@@ -1,4 +1,5 @@
 use super::*;
+use crate::ConnectionState;
 use crate::local::ProviderModelService;
 use crate::local_tools::LocalToolComposition;
 use ash_action_policy::ActionReviewRequest;
@@ -372,7 +373,7 @@ fn env_dirs_set_routes_services_by_stable_folder_id() {
             "method": "initialize",
             "params": {
                 "clientInfo": {"name": "desktop", "version": "1"},
-                "capabilities": {"dirPermissionsHost": {"version": 1}}
+                "capabilities": {"directoryGrantsHost": {"version": 1}}
             }
         })
         .to_string(),
@@ -527,7 +528,7 @@ fn cwd_directory_can_be_added_explicitly() {
 }
 
 #[test]
-fn dir_mutation_requires_a_dir_permissions_host_connection() {
+fn dir_mutation_requires_a_directory_grants_host_connection() {
     let primary = TestDir::new("add-dir-capability-primary", "primary.txt");
     let session_dir = TestDir::new("add-dir-capability-extra", "extra.txt");
     let server = server().with_local_env_host(None, host_policy()).unwrap();
@@ -617,7 +618,7 @@ fn projectless_session_terminal_uses_its_grant_without_enabling_an_unscoped_term
         .unwrap();
     let mut connection = server.product_host_connection();
     server.handle_json(&mut connection, &serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{
-        "clientInfo":{"name":"fixture","version":"1"},"capabilities":{"dirPermissionsHost":{"version":1}}
+        "clientInfo":{"name":"fixture","version":"1"},"capabilities":{"directoryGrantsHost":{"version":1}}
     }}).to_string());
     let granted: serde_json::Value = serde_json::from_str(&server.handle_json(&mut connection, &serde_json::json!({
         "jsonrpc":"2.0","id":2,"method":"session/dirs/add","params":{
@@ -714,7 +715,7 @@ fn dir_permissions_are_revision_bound_and_filter_capability_snapshots() {
             "method": "initialize",
             "params": {
                 "clientInfo": {"name": "ash-code", "version": "1"},
-                "capabilities": {"dirPermissionsHost": {"version": 1}}
+                "capabilities": {"directoryGrantsHost": {"version": 1}}
             }
         })
         .to_string(),
@@ -2229,4 +2230,218 @@ fn semantic_rebuild_releases_directory_gate_before_joining_retired_watcher() {
         "another window must bind while the retired watcher is busy"
     );
     result.unwrap().unwrap();
+}
+
+#[test]
+fn directory_grants_protocol_requires_the_canonical_product_host_capability() {
+    let profile = tempfile::tempdir().unwrap();
+    let config = Arc::new(ConfigStore::open(profile.path().join("config.sqlite3")).unwrap());
+    let server = server().with_config_store(config);
+    let next_request = AtomicUsize::new(1);
+    let rpc = |connection: &mut ConnectionState, method: &str, params: serde_json::Value| {
+        serde_json::from_str::<serde_json::Value>(
+            &server.handle_json(
+                connection,
+                &serde_json::json!({
+                    "jsonrpc":"2.0", "id":next_request.fetch_add(1, Ordering::Relaxed), "method":method, "params":params,
+                })
+                .to_string(),
+            ),
+        )
+        .unwrap()
+    };
+    let initialize = |capabilities| serde_json::json!({"clientInfo":{"name":"fixture","version":"1"}, "capabilities":capabilities});
+    let mut untrusted = server.connection();
+    assert_eq!(
+        rpc(
+            &mut untrusted,
+            "initialize",
+            initialize(serde_json::json!({"directoryGrantsHost":{"version":1}}))
+        )["error"]["message"],
+        "PermissionRequired"
+    );
+    let mut invalid = server.product_host_connection();
+    assert_eq!(
+        rpc(
+            &mut invalid,
+            "initialize",
+            initialize(serde_json::json!({"directoryGrantsHost":{"version":2}}))
+        )["error"]["code"],
+        -32602
+    );
+    for capabilities in [
+        serde_json::json!({}),
+        serde_json::json!({"dirPermissionsHost":{"version":1}}),
+    ] {
+        let mut connection = server.product_host_connection();
+        assert!(
+            rpc(&mut connection, "initialize", initialize(capabilities))
+                .get("error")
+                .is_none()
+        );
+        assert_eq!(
+            rpc(
+                &mut connection,
+                "config/directoryGrants/list",
+                serde_json::json!({})
+            )["error"]["message"],
+            "PermissionRequired"
+        );
+    }
+    let mut product = server.product_host_connection();
+    assert!(
+        rpc(
+            &mut product,
+            "initialize",
+            initialize(serde_json::json!({"directoryGrantsHost":{"version":1}}))
+        )
+        .get("error")
+        .is_none()
+    );
+    assert_eq!(
+        rpc(
+            &mut product,
+            "config/directoryGrants/list",
+            serde_json::json!({})
+        )["result"]["entries"],
+        serde_json::json!([])
+    );
+    for action in ["read", "list", "set", "forget"] {
+        assert_eq!(
+            rpc(
+                &mut product,
+                &format!("config/dirPermissions/{action}"),
+                serde_json::json!({})
+            )["error"]["code"],
+            -32601
+        );
+    }
+}
+
+#[test]
+fn directory_grants_protocol_preserves_legacy_profiles_precise_grants_and_revisions() {
+    let dir = TestDir::new("canonical-directory-grants", "readable.txt");
+    let root = dir.root();
+    let profile = tempfile::tempdir().unwrap();
+    let database = profile.path().join("config.sqlite3");
+    // The storage key remains compatible although all live RPC names change.
+    std::fs::write(database.with_extension("toml"), format!("schemaVersion = 10\n[dirPermissions.entries]\n\"{}\" = [\"readFiles\", \"useLanguageServices\"]\n", root.id())).unwrap();
+    let config = Arc::new(ConfigStore::open(&database).unwrap());
+    let server = server().with_config_store(Arc::clone(&config));
+    let mut connection = server.product_host_connection();
+    let next_request = AtomicUsize::new(1);
+    let rpc = |connection: &mut ConnectionState, method: &str, params: serde_json::Value| {
+        serde_json::from_str::<serde_json::Value>(
+            &server.handle_json(
+                connection,
+                &serde_json::json!({
+                    "jsonrpc":"2.0", "id":next_request.fetch_add(1, Ordering::Relaxed), "method":method, "params":params,
+                })
+                .to_string(),
+            ),
+        )
+        .unwrap()
+    };
+    assert!(rpc(&mut connection, "initialize", serde_json::json!({"clientInfo":{"name":"fixture","version":"1"},"capabilities":{"directoryGrantsHost":{"version":1}}})).get("error").is_none());
+    let listed = rpc(
+        &mut connection,
+        "config/directoryGrants/list",
+        serde_json::json!({}),
+    );
+    assert_eq!(
+        listed["result"]["entries"][0]["permissions"],
+        serde_json::json!(["readFiles", "useLanguageServices"])
+    );
+    let revision = listed["result"]["revision"].as_u64().unwrap();
+    let read = rpc(
+        &mut connection,
+        "config/directoryGrants/read",
+        serde_json::json!({"path":dir.path.join(".")}),
+    );
+    assert_eq!(read["result"]["dir"], root.id().to_string());
+    assert_eq!(
+        read["result"]["permissions"],
+        listed["result"]["entries"][0]["permissions"]
+    );
+    let invalid = rpc(
+        &mut connection,
+        "config/directoryGrants/set",
+        serde_json::json!({"commandId":"invalid-grant","expectedRevision":revision,"path":dir.path,"permissions":["futurePermission"]}),
+    );
+    assert_eq!(invalid["error"]["code"], -32602);
+    assert_eq!(config.read_snapshot().unwrap().revision.get(), revision);
+    let permissions = serde_json::json!(["readFiles", "executeCommands", "useLanguageServices"]);
+    let request = serde_json::json!({"commandId":"set-precise-grant","expectedRevision":revision,"path":dir.path,"permissions":permissions});
+    let saved = rpc(
+        &mut connection,
+        "config/directoryGrants/set",
+        request.clone(),
+    );
+    assert_eq!(saved["result"]["disposition"], "updated");
+    let saved_revision = saved["result"]["revision"].as_u64().unwrap();
+    let replayed = rpc(&mut connection, "config/directoryGrants/set", request);
+    assert_eq!(replayed["result"]["disposition"], "replayed");
+    assert_eq!(replayed["result"]["revision"], saved_revision);
+    assert_eq!(
+        rpc(
+            &mut connection,
+            "config/directoryGrants/read",
+            serde_json::json!({"path":dir.path})
+        )["result"]["permissions"],
+        permissions
+    );
+    let stale = rpc(
+        &mut connection,
+        "config/directoryGrants/set",
+        serde_json::json!({"commandId":"stale-grant","expectedRevision":revision,"path":dir.path,"permissions":[]}),
+    );
+    assert_eq!(stale["error"]["message"], "ConfigRevisionConflict");
+    assert_eq!(
+        config.read_snapshot().unwrap().revision.get(),
+        saved_revision
+    );
+    let empty = rpc(
+        &mut connection,
+        "config/directoryGrants/set",
+        serde_json::json!({"commandId":"empty-grant","expectedRevision":saved_revision,"path":dir.path,"permissions":[]}),
+    );
+    let empty_revision = empty["result"]["revision"].as_u64().unwrap();
+    assert_eq!(
+        rpc(
+            &mut connection,
+            "config/directoryGrants/read",
+            serde_json::json!({"path":dir.path})
+        )["result"]["permissions"],
+        serde_json::json!([])
+    );
+    assert_eq!(
+        rpc(
+            &mut connection,
+            "config/directoryGrants/forget",
+            serde_json::json!({"commandId":"forget-grant","expectedRevision":empty_revision,"dir":root.id()})
+        )["result"]["disposition"],
+        "updated"
+    );
+    assert!(
+        rpc(
+            &mut connection,
+            "config/directoryGrants/read",
+            serde_json::json!({"path":dir.path})
+        )["result"]
+            .get("permissions")
+            .is_none()
+    );
+    assert!(
+        rpc(
+            &mut connection,
+            "config/directoryGrants/list",
+            serde_json::json!({})
+        )["result"]["entries"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    let persisted = std::fs::read_to_string(database.with_extension("toml")).unwrap();
+    assert!(persisted.contains("[dirPermissions"));
+    assert!(!persisted.contains("directoryGrants"));
 }

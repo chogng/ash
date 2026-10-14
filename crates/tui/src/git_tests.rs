@@ -289,7 +289,7 @@ fn creating_a_worktree_through_app_server_leaves_session_catalog_unchanged() {
         assert!(output.status.success());
     }
     let mut capabilities = crate::client_capabilities();
-    capabilities.dir_permissions_host = None;
+    capabilities.directory_grants_host = None;
     let session = AppServerSession::start_embedded(
         InProcessClientOptions::new(
             root.path().join("state"),

@@ -817,7 +817,7 @@ spawn 前执行 `env_clear`，所以 PTY 看不到最终 map 之外的 App Serve
 
 `agent/roles/list` 接受 `{}`，只读取当前环境中具备有效 `LoadInstructions` 授权的 `.ash/agents/*.md`。每项返回 `name`、`description` 与精确的 `source`；客户端把后两者中的来源和名称原样提交给 `session/create.agent`。每次读取刷新 catalog，失效或撤销的授权不会继续列出角色。该接口不授予权限，也不改变已有 Session 的冻结角色。
 
-`agent/capabilities/read` 接受 `{}`，读取当前已组合的工具注册表。`tools` 中每项包含名称、描述、来源类别、无凭据的 `sourceChain`、暴露方式与 `authority` 类别；其中本地文件工具区分目录读写、命令工具标记进程执行，扩展、MCP 等提供方工具的具体范围由提供方定义。`localProcessSandboxConfigured` 表示当前环境已启用本地进程执行；`sandboxBackends` 是已注册的候选后端，不保证任意请求能通过后端检查。`directoryGrantsReadable` 表示本连接有目录授权宿主权限；只有此时才能再通过 `config/dirPermissions/list` 读取目录路径与已保存授权。某个 Session 实际选中的目录和每次调用的参数、操作策略、沙箱策略还会进一步收窄权限。该接口不授予权限，也不预测单次执行的结果。Workbench 的 Settings > Agents > Tools / Sandbox 使用这两个只读接口。
+`agent/capabilities/read` 接受 `{}`，读取当前已组合的工具注册表。`tools` 中每项包含名称、描述、来源类别、无凭据的 `sourceChain`、暴露方式与 `authority` 类别；其中本地文件工具区分目录读写、命令工具标记进程执行，扩展、MCP 等提供方工具的具体范围由提供方定义。`localProcessSandboxConfigured` 表示当前环境已启用本地进程执行；`sandboxBackends` 是已注册的候选后端，不保证任意请求能通过后端检查。`directoryGrantsReadable` 表示本连接有目录授权宿主权限；只有此时才能再通过 `config/directoryGrants/list` 读取目录路径与已保存授权。某个 Session 实际选中的目录和每次调用的参数、操作策略、沙箱策略还会进一步收窄权限。该接口不授予权限，也不预测单次执行的结果。Workbench 的 Settings > Agents > Tools / Sandbox 使用这两个只读接口。
 
 ### 读取执行 Trace
 

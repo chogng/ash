@@ -878,7 +878,7 @@ test("connects, initializes, maps renderer requests, and disposes the Web connec
 	assert.deepEqual(await connected.api.appServer.getSlashCommands(), []);
 	assert.deepEqual(await connected.api.session.list(), { sessions: [] });
 	assert.deepEqual(hot.requests.map((request) => request.method), ["initialize", "session/list"]);
-	assert.equal((hot.requests[0]?.params as { capabilities: { dirPermissionsHost?: unknown; }; }).capabilities.dirPermissionsHost, undefined);
+	assert.equal((hot.requests[0]?.params as { capabilities: { directoryGrantsHost?: unknown; }; }).capabilities.directoryGrantsHost, undefined);
 	connected.dispose();
 	assert.equal(hot.sentEvents.at(-1), WEB_APP_SERVER_DISCONNECT_EVENT);
 });

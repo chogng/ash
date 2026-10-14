@@ -135,10 +135,10 @@ exports.activate = function(context) {
 	context.subscriptions.push(commands.registerCommand('fixture.remote.environment', async () => window.showInformationMessage('REMOTE_ENV:' + JSON.stringify(loaded))));
 }
 `);
-			const remoteProfile = await test.step('Connect remote profile for package installation', () => connectProfile(application, remote, testWorkspace.directory, workbench.page, { directoryPermissionsHost: true }));
+			const remoteProfile = await test.step('Connect remote profile for package installation', () => connectProfile(application, remote, testWorkspace.directory, workbench.page, { directoryGrantsHost: true }));
 			try {
-				const grants = await appServerRequest(remoteProfile.client, 'config/dirPermissions/list', {});
-				await test.step('Grant remote directory package discovery', () => appServerRequest(remoteProfile.client, 'config/dirPermissions/set', { commandId: 'remote-environment-grant', expectedRevision: grants.revision, path: testWorkspace.directory, permissions: ['readFiles', 'writeFiles', 'executeCommands', 'watchFiles', 'browseFiles', 'searchFiles', 'inspectRepository', 'mutateRepository', 'discoverPlugins'] }));
+				const grants = await appServerRequest(remoteProfile.client, 'config/directoryGrants/list', {});
+				await test.step('Grant remote directory package discovery', () => appServerRequest(remoteProfile.client, 'config/directoryGrants/set', { commandId: 'remote-environment-grant', expectedRevision: grants.revision, path: testWorkspace.directory, permissions: ['readFiles', 'writeFiles', 'executeCommands', 'watchFiles', 'browseFiles', 'searchFiles', 'inspectRepository', 'mutateRepository', 'discoverPlugins'] }));
 				const plugins = await appServerRequest(remoteProfile.client, 'plugin/list', {});
 				const installed = await appServerRequest(remoteProfile.client, 'plugin/installLocal', { commandId: 'remote-environment-install', expectedRevision: plugins.revision, path: 'remote-environment', dirId: null });
 				const enabled = await appServerRequest(remoteProfile.client, 'plugin/enable', { commandId: 'remote-environment-enable', expectedRevision: installed.command.revision, id: installed.id, version: installed.version, digest: installed.digest });

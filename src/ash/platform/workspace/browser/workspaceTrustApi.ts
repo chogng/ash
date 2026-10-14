@@ -20,7 +20,7 @@ export function createDisconnectedWorkspaceTrustApi(unavailable: UnavailableOper
 /** The existing Rust protocol remains an adapter detail while directory trust moves to its owner. */
 export function createAppServerWorkspaceTrustApi(connection: AppServerProtocolClient): IWorkspaceTrustApi {
 	const writePermissions = async (path: string, permissions: readonly WorkspaceTrustPermission[], expectedRevision: number, commandId: string): Promise<WorkspaceTrustCommandResult> => {
-		const result = await appServerRequest(connection, 'config/dirPermissions/set', {
+		const result = await appServerRequest(connection, 'config/directoryGrants/set', {
 			path, commandId, expectedRevision, permissions: [...permissions],
 		});
 		return { revision: result.revision, generation: result.generation, disposition: result.disposition };
@@ -35,16 +35,16 @@ export function createAppServerWorkspaceTrustApi(connection: AppServerProtocolCl
 			return subscription;
 		},
 		readDirectory: async path => {
-			const result = await appServerRequest(connection, 'config/dirPermissions/read', { path });
+			const result = await appServerRequest(connection, 'config/directoryGrants/read', { path });
 			return { dir: result.dir, permissions: result.permissions ?? undefined };
 		},
 		listDirectories: async () => {
-			const result = await appServerRequest(connection, 'config/dirPermissions/list', {});
+			const result = await appServerRequest(connection, 'config/directoryGrants/list', {});
 			return { revision: result.revision, entries: result.entries.map(entry => ({ dir: entry.dir, path: entry.path ?? undefined, permissions: entry.permissions })) };
 		},
 		setDirectoryPermissions: (path, permissions, expectedRevision) => writePermissions(path, permissions, expectedRevision, generateUuid()),
 		forgetDirectory: async (dir, expectedRevision) => {
-			const result = await appServerRequest(connection, 'config/dirPermissions/forget', { dir, expectedRevision, commandId: generateUuid() });
+			const result = await appServerRequest(connection, 'config/directoryGrants/forget', { dir, expectedRevision, commandId: generateUuid() });
 			return { revision: result.revision, generation: result.generation, disposition: result.disposition };
 		},
 		createGrant: async (_path, permissions) => {

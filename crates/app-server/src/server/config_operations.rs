@@ -5,7 +5,7 @@ use super::core_error;
 use super::decode;
 use super::environment_operations::permission_dtos;
 use super::environment_operations::permissions;
-use super::environment_operations::require_dir_permissions_host;
+use super::environment_operations::require_directory_grants_host;
 use super::environment_operations::validate_path;
 use super::extension_config_operations::hook_config_dto;
 use super::extension_config_operations::plugin_request_dto;
@@ -143,7 +143,7 @@ impl AppServer {
         connection: &ConnectionState,
         params: &Value,
     ) -> Result<Value, RpcError> {
-        require_dir_permissions_host(connection)?;
+        require_directory_grants_host(connection)?;
         let params: DirectoryGrantsReadParams = decode(params)?;
         validate_path(&params.path, true)?;
         let dir = Dir::open_local(params.path)
@@ -164,7 +164,7 @@ impl AppServer {
         &self,
         connection: &ConnectionState,
     ) -> Result<Value, RpcError> {
-        require_dir_permissions_host(connection)?;
+        require_directory_grants_host(connection)?;
         let snapshot = self.directory_grants_snapshot()?;
         let entries = snapshot
             .values
@@ -192,7 +192,7 @@ impl AppServer {
         connection: &ConnectionState,
         params: &Value,
     ) -> Result<Value, RpcError> {
-        require_dir_permissions_host(connection)?;
+        require_directory_grants_host(connection)?;
         let params: DirectoryGrantsSetParams = decode(params)?;
         validate_path(&params.path, true)?;
         let dir = Dir::open_local(params.path)
@@ -220,7 +220,7 @@ impl AppServer {
         connection: &ConnectionState,
         params: &Value,
     ) -> Result<Value, RpcError> {
-        require_dir_permissions_host(connection)?;
+        require_directory_grants_host(connection)?;
         let params: DirectoryGrantsForgetParams = decode(params)?;
         let outcome = self
             .directory_grants_store()?

@@ -6303,7 +6303,7 @@ fn jsonl_transport_writes_response_before_causal_updates() {
 fn only_product_host_jsonl_transport_accepts_host_capabilities() {
     let server = server();
     let input = concat!(
-        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"clientInfo\":{\"name\":\"test\",\"version\":\"1\"},\"capabilities\":{\"dirPermissionsHost\":{\"version\":1}}}}\n",
+        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"clientInfo\":{\"name\":\"test\",\"version\":\"1\"},\"capabilities\":{\"directoryGrantsHost\":{\"version\":1}}}}\n",
     );
 
     let mut client_output = Vec::new();

@@ -380,7 +380,7 @@ struct ConnectionMutableState {
     initialized: bool,
     request_ids: BTreeSet<u64>,
     extension_packages_leases: BTreeSet<String>,
-    dir_permissions_host: bool,
+    directory_grants_host: bool,
 }
 
 impl ConnectionState {
@@ -407,8 +407,8 @@ impl ConnectionState {
         connection_state(self).request_ids.insert(request_id)
     }
 
-    fn set_dir_permissions_host(&self, supported: bool) {
-        connection_state(self).dir_permissions_host = supported;
+    fn set_directory_grants_host(&self, supported: bool) {
+        connection_state(self).directory_grants_host = supported;
     }
 
     fn allows_product_host_capabilities(&self) -> bool {
@@ -446,8 +446,8 @@ impl ConnectionState {
         )
     }
 
-    pub(super) fn supports_dir_permissions_host(&self) -> bool {
-        connection_state(self).dir_permissions_host
+    pub(super) fn supports_directory_grants_host(&self) -> bool {
+        connection_state(self).directory_grants_host
     }
 
     fn extension_packages_leases(&self) -> Vec<String> {
@@ -2352,7 +2352,7 @@ impl AppServer {
                 )
             }
             Some(ClientMethod::BrowserSharingSet) => {
-                if !connection.supports_dir_permissions_host() {
+                if !connection.supports_directory_grants_host() {
                     return Err(RpcError::new(-32000, AppServerErrorName::ResourceNotOwner));
                 }
                 let params: ash_app_server_protocol::protocol::browser::BrowserSharingSetParams =

@@ -983,7 +983,7 @@ fn directory_resources_remain_on_their_creating_gateway_connection() {
                         .is_err_and(crate::managed::is_peer_disconnect)
             );
         });
-        client.send(1, "initialize", serde_json::json!({"clientInfo":{"name":"resource-gateway-test","version":"1"},"capabilities":{"dirPermissionsHost":{"version":1}}}));
+        client.send(1, "initialize", serde_json::json!({"clientInfo":{"name":"resource-gateway-test","version":"1"},"capabilities":{"directoryGrantsHost":{"version":1}}}));
         assert!(client.read()["result"].is_object());
         (client, served)
     };
@@ -1181,7 +1181,7 @@ fn voice_media_stays_in_profile_while_the_gateway_resolves_the_original_director
         &mut client,
         1,
         "initialize",
-        serde_json::json!({"clientInfo":{"name":"voice-directory-test","version":"1"},"capabilities":{"dirPermissionsHost":{"version":1}}}),
+        serde_json::json!({"clientInfo":{"name":"voice-directory-test","version":"1"},"capabilities":{"directoryGrantsHost":{"version":1}}}),
     );
     assert!(initialized["result"].is_object());
     let created = call(
@@ -1324,7 +1324,7 @@ fn voice_gateway_real_room_records_directory_speech_and_stops_profile_media() {
             }
         }
     };
-    assert!(call(&mut client, 1, "initialize", serde_json::json!({"clientInfo":{"name":"voice-real-gateway","version":"1"},"capabilities":{"dirPermissionsHost":{"version":1}}}))["result"].is_object());
+    assert!(call(&mut client, 1, "initialize", serde_json::json!({"clientInfo":{"name":"voice-real-gateway","version":"1"},"capabilities":{"directoryGrantsHost":{"version":1}}}))["result"].is_object());
     let created = call(
         &mut client,
         2,

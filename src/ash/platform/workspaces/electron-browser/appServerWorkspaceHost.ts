@@ -44,7 +44,7 @@ export function registerAppServerWorkspaceHost(client: AppServerProtocolClient, 
 					return workspaceTrust.requestWorkspaceTrust(params.path);
 				}
 				case 'readPermissions': {
-					const request = decodeAppServerRequestParams('config/dirPermissions/read', params);
+					const request = decodeAppServerRequestParams('config/directoryGrants/read', params);
 					return (await trustApi.readDirectory(request.path)).permissions;
 				}
 				case 'createGrant': {
@@ -58,7 +58,7 @@ export function registerAppServerWorkspaceHost(client: AppServerProtocolClient, 
 					if (!isRecord(params.grant)) throw new TypeError('Invalid directory grant');
 					if (params.grant.type === 'config') return;
 					if (params.grant.type !== 'user') throw new TypeError('Invalid directory grant');
-					const request = decodeAppServerRequestParams('config/dirPermissions/set', {
+					const request = decodeAppServerRequestParams('config/directoryGrants/set', {
 						commandId: params.grant.commandId,
 						expectedRevision: params.grant.expectedRevision,
 						path: params.path,

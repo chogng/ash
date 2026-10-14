@@ -19,10 +19,15 @@ test('message phases and loop decisions survive the generated notification bound
 	assert.throws(() => decodeAppServerNotification({ ...committed, params: { ...committed.params, update: { ...committed.params.update, event: { ...committed.params.update.event, decision: { ...decision, action: 'unknown' } } } } }), AppServerProtocolDecodeError);
 });
 
-test('directory permissions reject unknown enum values at the generated boundary', () => {
+test('directory grants reject unknown capabilities and retired names at the generated boundary', () => {
 	const params = { commandId: 'set-permissions', expectedRevision: 1, path: '/workspace', permissions: ['readFiles'] };
-	assert.deepEqual(decodeAppServerRequestParams('config/dirPermissions/set', params), params);
-	assert.throws(() => decodeAppServerRequestParams('config/dirPermissions/set', { ...params, permissions: ['futurePermission'] }), AppServerProtocolDecodeError);
+	assert.deepEqual(decodeAppServerRequestParams('config/directoryGrants/set', params), params);
+	assert.throws(() => decodeAppServerRequestParams('config/directoryGrants/set', { ...params, permissions: ['futurePermission'] }), AppServerProtocolDecodeError);
+	assert.throws(() => Reflect.apply(decodeAppServerRequestParams, undefined, ['config/dirPermissions/set', params]), AppServerProtocolDecodeError);
+	const initialized = { clientInfo: { name: 'fixture', version: '1' }, capabilities: { directoryGrantsHost: { version: 1 } } };
+	assert.deepEqual(decodeAppServerRequestParams('initialize', initialized), initialized);
+	const legacy = decodeAppServerRequestParams('initialize', { ...initialized, capabilities: { dirPermissionsHost: { version: 1 } } });
+	assert.equal(legacy.capabilities.directoryGrantsHost, undefined);
 });
 
 test('search reads accept optional index diagnostics and validate their counts', () => {

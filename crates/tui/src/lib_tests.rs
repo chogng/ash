@@ -38,7 +38,7 @@ use std::path::PathBuf;
 fn tui_declares_the_host_authority_required_by_add_dir() {
     assert_eq!(
         crate::client_capabilities()
-            .dir_permissions_host
+            .directory_grants_host
             .map(|capability| capability.version),
         Some(1)
     );
