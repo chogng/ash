@@ -888,16 +888,27 @@ fn linked_worktrees_share_storage_until_the_last_registration_is_released() {
     );
     let common = Dir::open_local(root.canonical_path().join(".git")).unwrap();
     let directory = storage.index_directory(&common.id(), DirIndexKind::Grep);
-    assert_eq!(
-        fs::read_dir(
-            directory
-                .join(format!("tgrep-{}", tgrep::VERSION))
-                .join("bases")
-        )
+    let namespaces = fs::read_dir(
+        directory
+            .join(format!("tgrep-{}", tgrep::VERSION))
+            .join("tgrep-managed-v2"),
+    )
+    .unwrap()
+    .map(|entry| entry.unwrap().path())
+    .collect::<Vec<_>>();
+    assert_eq!(namespaces.len(), 1);
+    let bases = fs::read_dir(namespaces[0].join("objects"))
         .unwrap()
-        .count(),
-        1
-    );
+        .filter(|entry| {
+            entry
+                .as_ref()
+                .unwrap()
+                .path()
+                .join("generation.tgm")
+                .is_file()
+        })
+        .count();
+    assert_eq!(bases, 1);
     assert_eq!(
         service.clear_index(&worktree, &token).unwrap(),
         ash_state::ClearOutcome::InUse

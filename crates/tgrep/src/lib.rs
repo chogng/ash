@@ -1,6 +1,8 @@
 //! Process and protocol boundary for Ash's pinned tgrep runtime.
 
+mod managed;
 mod process;
+pub use managed::ManagementError;
 
 use ash_async_utils::CancellationToken;
 use ash_install_context::ExecutableCandidates;
@@ -22,12 +24,13 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
-pub const VERSION: &str = "1.2.1-ash.547f3c8.1";
+pub const VERSION: &str = "1.2.1-ash.547f3c8.2";
 const TIMEOUT: Duration = Duration::from_secs(30);
 const INDEX_TIMEOUT: Duration = Duration::from_secs(600);
 
 #[derive(Debug)]
 pub enum Error {
+    Management(ManagementError),
     Failed(String),
     /// A view was invalidated; reconcile before retrying within the same deadline.
     NotReady(String),
@@ -36,6 +39,7 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Management(error) => error.fmt(f),
             Self::Failed(message) | Self::NotReady(message) | Self::Cancelled(message) => {
                 f.write_str(message)
             }
@@ -264,6 +268,7 @@ pub struct FileMatch {
     pub indices: Vec<u32>,
 }
 enum Registration {
+    Managed(std::sync::Arc<managed::Session>),
     Directory,
     Released,
     Shared {
@@ -324,10 +329,56 @@ impl Session {
         cancellation: &CancellationToken,
         lifetime: impl Send + 'static,
     ) -> Result<Self, Error> {
+        Self::open_runtime(
+            executable,
+            root,
+            index,
+            cancellation,
+            lifetime,
+            process::Runtime::Managed,
+        )
+    }
+
+    #[cfg(test)]
+    fn open_legacy(
+        executable: Executable,
+        root: &Path,
+        index: &Path,
+        cancellation: &CancellationToken,
+    ) -> Result<Self, Error> {
+        Self::open_runtime(
+            executable,
+            root,
+            index,
+            cancellation,
+            (),
+            process::Runtime::Legacy,
+        )
+    }
+    fn open_runtime(
+        executable: Executable,
+        root: &Path,
+        index: &Path,
+        cancellation: &CancellationToken,
+        lifetime: impl Send + 'static,
+        runtime: process::Runtime,
+    ) -> Result<Self, Error> {
         let root = dunce::canonicalize(root)?;
-        let process = process::Server::shared(&executable, &root, index, cancellation)?;
+        let process = process::Server::shared(&executable, &root, index, cancellation, runtime)?;
         let deadline = Instant::now() + TIMEOUT;
-        let registration = if process.is_shared() {
+        let registration = if process.is_managed() {
+            let identity = executable.identity(&root, cancellation)?;
+            Registration::Managed(managed::Session::open(
+                std::sync::Arc::clone(&process),
+                &executable,
+                &root,
+                &identity
+                    .revision
+                    .ok_or_else(|| failed("managed worktree has no commit"))?,
+                cancellation,
+                lifetime,
+            )?)
+        } else if process.is_shared() {
             let identity = executable.identity(&root, cancellation)?;
             static NEXT_LEASE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
             let number = NEXT_LEASE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -377,6 +428,9 @@ impl Session {
         Ok(session)
     }
     fn wait_ready(&self, cancellation: &CancellationToken, deadline: Instant) -> Result<(), Error> {
+        if let Registration::Managed(session) = &self.registration {
+            return session.wait_ready(cancellation, deadline);
+        }
         loop {
             check(cancellation, deadline)?;
             if self.status(cancellation)?.ready {
@@ -392,6 +446,11 @@ impl Session {
     pub fn close(&mut self, cancellation: &CancellationToken) -> Result<(), Error> {
         check(cancellation, Instant::now() + INDEX_TIMEOUT)?;
         if self.process.is_stopped()? {
+            self.registration = Registration::Released;
+            return Ok(());
+        }
+        if let Registration::Managed(session) = &self.registration {
+            session.close(cancellation, Instant::now() + INDEX_TIMEOUT)?;
             self.registration = Registration::Released;
             return Ok(());
         }
@@ -413,8 +472,16 @@ impl Session {
         Ok(())
     }
     pub fn status(&self, cancellation: &CancellationToken) -> Result<Status, Error> {
+        if let Registration::Managed(session) = &self.registration {
+            let status = session.status(cancellation)?;
+            if status.ready {
+                self.initial_content_ready.store(true, Ordering::Relaxed);
+            }
+            return Ok(status);
+        }
         let value = self.rpc("status", json!({}), cancellation, Instant::now() + TIMEOUT)?;
         let (indexing, ready, watcher_active) = match self.registration {
+            Registration::Managed(_) => unreachable!("managed status handled above"),
             Registration::Shared { .. } => (
                 value["reconcile_running"]
                     .as_bool()
@@ -478,7 +545,15 @@ impl Session {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .revision;
-        self.refresh(&[], cancellation, Instant::now() + INDEX_TIMEOUT)?;
+        if let Registration::Managed(session) = &self.registration {
+            session.rebuild(
+                &self.executable,
+                cancellation,
+                Instant::now() + INDEX_TIMEOUT,
+            )?;
+        } else {
+            self.refresh(&[], cancellation, Instant::now() + INDEX_TIMEOUT)?;
+        }
         {
             let mut changed = self.changed.lock().unwrap_or_else(|e| e.into_inner());
             changed.content_ack = changed.content_ack.max(revision);
@@ -499,6 +574,7 @@ impl Session {
         deadline: Instant,
     ) -> Result<(), Error> {
         match &self.registration {
+            Registration::Managed(session) => session.refresh(changed, cancellation, deadline)?,
             Registration::Shared {
                 root, view, lease, ..
             } => {
@@ -663,13 +739,18 @@ impl Session {
                 } => {
                     json!({"root":root,"view":view,"lease":lease,"changed":paths})
                 }
-                Registration::Directory => json!({"changed":paths}),
+                Registration::Managed(_) | Registration::Directory => {
+                    json!({"changed":paths,"full":paths.is_empty()})
+                }
                 Registration::Released => return Err(failed("search registration was released")),
             };
-            match self
-                .process
-                .rpc("files/refresh", params, cancellation, deadline)
-            {
+            let result = if let Registration::Managed(session) = &self.registration {
+                session.rpc("files/refresh", params, cancellation, deadline)
+            } else {
+                self.process
+                    .rpc("files/refresh", params, cancellation, deadline)
+            };
+            match result {
                 Ok(value) => {
                     if self.process.is_shared() {
                         self.validate_view(&value)?;
@@ -766,6 +847,7 @@ impl Session {
         deadline: Instant,
     ) -> Result<Value, Error> {
         match &self.registration {
+            Registration::Managed(session) => session.rpc(method, params, cancellation, deadline),
             Registration::Released => Err(failed("search registration was released")),
             Registration::Directory => self.process.rpc(method, params, cancellation, deadline),
             Registration::Shared { root, view, .. } => {
@@ -1028,6 +1110,20 @@ impl Session {
 }
 impl Drop for Session {
     fn drop(&mut self) {
+        if let Registration::Managed(session) = &self.registration {
+            let token = ash_async_utils::CancellationSource::new().token();
+            if session
+                .close(&token, Instant::now() + Duration::from_secs(1))
+                .is_err()
+            {
+                // Field owners still retain directory/storage leases during Drop. If cleanup
+                // cannot be confirmed, end the owned process before those leases are released.
+                while self.process.stop().is_err() {
+                    std::thread::sleep(Duration::from_millis(25));
+                }
+            }
+            return;
+        }
         if let Registration::Shared {
             root, view, lease, ..
         } = &self.registration

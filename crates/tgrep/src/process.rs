@@ -60,17 +60,40 @@ fn register(child: &SharedChild) {
 // A normal process exit must still release every owned server and its index lock.
 fn stop_owned_servers_at_exit() {
     if let Some(children) = CHILDREN.get() {
-        for child in children
+        let children = children
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .iter()
             .filter_map(Weak::upgrade)
-        {
+            .collect::<Vec<_>>();
+        let mut supervised = Vec::new();
+        for child in &children {
             let mut child = child.lock().unwrap_or_else(|e| e.into_inner());
-            let _ = child.0.kill();
+            supervised.push(child.0.stdin.take().is_some());
+        }
+        // Close every host/owner pipe first. Managed daemons can cancel and reap their
+        // producers before exit; plain servers retain the existing forced cleanup.
+        let deadline = Instant::now() + Duration::from_secs(10);
+        for (child, supervised) in children.into_iter().zip(supervised) {
+            let mut child = child.lock().unwrap_or_else(|e| e.into_inner());
+            if supervised {
+                while matches!(child.0.try_wait(), Ok(None)) && Instant::now() < deadline {
+                    thread::sleep(POLL);
+                }
+            }
+            if !matches!(child.0.try_wait(), Ok(Some(_))) {
+                let _ = child.0.kill();
+            }
             let _ = child.0.wait();
         }
     }
+}
+
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+pub(super) enum Runtime {
+    Managed,
+    #[cfg(test)]
+    Legacy,
 }
 
 pub(super) struct Server {
@@ -82,6 +105,7 @@ pub(super) struct Server {
 enum Protocol {
     Directory,
     Shared(Discovery),
+    Managed(ManagedIdentity),
 }
 #[derive(Deserialize)]
 struct Discovery {
@@ -93,6 +117,22 @@ struct Discovery {
     storage: PathBuf,
 }
 #[derive(Deserialize)]
+struct ManagedIdentity {
+    registration: ManagedDiscovery,
+    authorization: String,
+}
+#[derive(Deserialize, serde::Serialize)]
+struct ManagedDiscovery {
+    pid: u32,
+    port: u16,
+    protocol: u32,
+    namespace: String,
+    instance: String,
+    repository: String,
+    storage: PathBuf,
+}
+
+#[derive(Deserialize)]
 struct DirectoryDiscovery {
     pid: u32,
     port: u16,
@@ -103,11 +143,12 @@ impl Server {
         root: &Path,
         index: &Path,
         cancellation: &CancellationToken,
+        runtime: Runtime,
     ) -> Result<Arc<Self>, Error> {
         type Slot = Arc<Mutex<Weak<Server>>>;
-        type Pool = std::collections::BTreeMap<(PathBuf, PathBuf), Slot>;
+        type Pool = std::collections::BTreeMap<(PathBuf, PathBuf, Runtime), Slot>;
         static SERVERS: OnceLock<Mutex<Pool>> = OnceLock::new();
-        let key = (executable.0.clone(), index.to_path_buf());
+        let key = (executable.0.clone(), index.to_path_buf(), runtime);
         let slot = {
             let mut servers = SERVERS
                 .get_or_init(Mutex::default)
@@ -143,15 +184,31 @@ impl Server {
         if let Some(server) = pooled.upgrade() {
             return Ok(server);
         }
-        let server = Arc::new(Self::start(executable, root, index, cancellation)?);
+        let server = Arc::new(Self::start_runtime(
+            executable,
+            root,
+            index,
+            cancellation,
+            runtime,
+        )?);
         *pooled = Arc::downgrade(&server);
         Ok(server)
     }
+    #[cfg(test)]
     pub(super) fn start(
         executable: &Executable,
         root: &Path,
         index: &Path,
         cancellation: &CancellationToken,
+    ) -> Result<Self, Error> {
+        Self::start_runtime(executable, root, index, cancellation, Runtime::Managed)
+    }
+    fn start_runtime(
+        executable: &Executable,
+        root: &Path,
+        index: &Path,
+        cancellation: &CancellationToken,
+        runtime: Runtime,
     ) -> Result<Self, Error> {
         let deadline = Instant::now() + TIMEOUT;
         let mut version = Command::new(&executable.0);
@@ -166,7 +223,17 @@ impl Server {
         command.arg("serve").arg(root);
         let marker = if identity.revision.is_some() {
             command.arg("--shared").arg("--shared-storage").arg(index);
-            identity.directory.join("tgrep-daemon-v1.json")
+            if runtime == Runtime::Managed {
+                let policy = index.join("managed-policy.json");
+                std::fs::write(&policy, serde_json::to_vec(&super::managed::policy())?)?;
+                command
+                    .arg("--shared-policy")
+                    .arg(policy)
+                    .arg("--ash-parent");
+                identity.directory.join("tgrep-daemon-v2.json")
+            } else {
+                identity.directory.join("tgrep-daemon-v1.json")
+            }
         } else {
             command
                 .arg("--index-path")
@@ -174,13 +241,18 @@ impl Server {
                 .arg("--no-require-git");
             index.join("serve.json")
         };
-        let child = Arc::new(Mutex::new(OwnedChild(
-            command
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .spawn()?,
-        )));
+        let child = command
+            .stdin(
+                if identity.revision.is_some() && runtime == Runtime::Managed {
+                    Stdio::piped()
+                } else {
+                    Stdio::null()
+                },
+            )
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()?;
+        let child = Arc::new(Mutex::new(OwnedChild(child)));
         register(&child);
         let (address, protocol) = loop {
             check(cancellation, deadline)?;
@@ -194,7 +266,37 @@ impl Server {
             drop(process);
             if let Ok(bytes) = std::fs::read(&marker) {
                 if bytes.len() <= 4096 {
-                    if identity.revision.is_some() {
+                    if identity.revision.is_some() && runtime == Runtime::Managed {
+                        if let Ok(info) = serde_json::from_slice::<ManagedDiscovery>(&bytes)
+                            && info.pid == pid
+                            && info.port != 0
+                            && info.protocol == 2
+                            && !info.namespace.is_empty()
+                            && !info.instance.is_empty()
+                            && !info.repository.is_empty()
+                            && dunce::canonicalize(&info.storage)?
+                                .starts_with(dunce::canonicalize(index)?)
+                        {
+                            let mut credentials = Command::new(&executable.0);
+                            credentials.arg("managed-identity").arg(root);
+                            let lines = capture(credentials, cancellation, deadline, 1)?;
+                            let auth: ManagedIdentity = serde_json::from_str(
+                                lines
+                                    .first()
+                                    .ok_or_else(|| failed("missing managed identity"))?,
+                            )?;
+                            if serde_json::to_value(&info)?
+                                != serde_json::to_value(&auth.registration)?
+                                || auth.authorization.is_empty()
+                            {
+                                return Err(failed("managed credential identity changed"));
+                            }
+                            break (
+                                SocketAddr::from((Ipv4Addr::LOCALHOST, info.port)),
+                                Protocol::Managed(auth),
+                            );
+                        }
+                    } else if identity.revision.is_some() {
                         if let Ok(info) = serde_json::from_slice::<Discovery>(&bytes)
                             && info.pid == pid
                             && info.port != 0
@@ -227,7 +329,31 @@ impl Server {
             index: index.into(),
             protocol,
         };
-        if server.is_shared() {
+        if server.is_managed() {
+            let hello = server.rpc("hello", json!({}), cancellation, deadline)?;
+            if hello["storage_schema"] != 2
+                || hello["storage"] != "managed"
+                || hello["profile"] != super::profile()
+                || ![
+                    "versioned-views",
+                    "instance-owner-guards",
+                    "operation-replay",
+                    "private-rpc-authentication",
+                    "host-owner-lifetime",
+                    "file-fuzzy",
+                    "file-pages",
+                    "request-cancellation",
+                ]
+                .iter()
+                .all(|capability| {
+                    hello["capabilities"]
+                        .as_array()
+                        .is_some_and(|caps| caps.iter().any(|value| value == *capability))
+                })
+            {
+                return Err(failed("unsupported managed search protocol"));
+            }
+        } else if server.is_shared() {
             let hello = server.rpc("hello", json!({}), cancellation, deadline)?;
             if hello["capabilities"]
                 != json!([
@@ -250,6 +376,17 @@ impl Server {
     }
     pub(super) fn is_shared(&self) -> bool {
         matches!(self.protocol, Protocol::Shared(_))
+    }
+    pub(super) fn is_managed(&self) -> bool {
+        matches!(self.protocol, Protocol::Managed(_))
+    }
+    pub(super) fn managed_identity(&self) -> Result<(&str, &str), Error> {
+        match &self.protocol {
+            Protocol::Managed(info) => {
+                Ok((&info.registration.namespace, &info.registration.instance))
+            }
+            _ => Err(failed("not a managed search service")),
+        }
     }
     pub(super) fn index(&self) -> &Path {
         &self.index
@@ -297,13 +434,20 @@ impl Server {
         socket.set_read_timeout(Some(POLL))?;
         socket.set_write_timeout(Some(Duration::from_secs(1)))?;
         let mut envelope = json!({"jsonrpc":"2.0","id":1,"method":method,"params":params});
-        if matches!(method, "files/fuzzy" | "files/refresh" | "files/page") {
+        if !self.is_managed() && matches!(method, "files/fuzzy" | "files/refresh" | "files/page") {
             envelope["cancellable"] = json!(true);
         }
         if let Protocol::Shared(info) = &self.protocol {
             envelope["protocol"] = json!(info.protocol);
             envelope["instance"] = json!(info.instance);
             envelope["repository"] = json!(info.repository);
+        }
+        if let Protocol::Managed(info) = &self.protocol {
+            envelope["protocol"] = json!(2);
+            envelope["namespace"] = json!(info.registration.namespace);
+            envelope["instance"] = json!(info.registration.instance);
+            envelope["repository"] = json!(info.registration.repository);
+            envelope["authorization"] = json!(info.authorization);
         }
         let mut request = serde_json::to_vec(&envelope)?;
         if request.len() >= 1024 * 1024 {
@@ -348,6 +492,11 @@ impl Server {
             {
                 return Err(failed("invalid tgrep error response"));
             }
+            if self.is_managed() {
+                let failure: super::managed::ManagementError =
+                    serde_json::from_value(error["data"].clone())?;
+                return Err(failure.into_error());
+            }
             let message = format!(
                 "tgrep: {}",
                 error["message"].as_str().expect("validated message")
@@ -372,7 +521,76 @@ impl Server {
         {
             return Err(failed("stale or incompatible tgrep service"));
         }
+        if let Protocol::Managed(info) = &self.protocol {
+            if result["protocol"] != 2
+                || result["namespace"] != info.registration.namespace
+                || result["instance"] != info.registration.instance
+                || result["repository"] != info.registration.repository
+            {
+                return Err(failed("stale or incompatible managed service"));
+            }
+            return result
+                .get("data")
+                .cloned()
+                .ok_or_else(|| failed("missing managed response data"));
+        }
         Ok(result)
+    }
+}
+
+/// The stdin lifetime is the upstream OS owner guard, independent of RPC connections.
+pub(super) struct Owner {
+    _child: SharedChild,
+}
+impl Owner {
+    pub(super) fn start(
+        executable: &Executable,
+        claim: &Path,
+        cancellation: &CancellationToken,
+        deadline: Instant,
+    ) -> Result<Self, Error> {
+        let mut child = Command::new(&executable.0)
+            .args(["shared", "owner-hold", "--claim"])
+            .arg(claim)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()?;
+        if child.stdin.is_none() {
+            return Err(failed("missing owner input"));
+        }
+        let output = child
+            .stdout
+            .take()
+            .ok_or_else(|| failed("missing owner output"))?;
+        let child = Arc::new(Mutex::new(OwnedChild(child)));
+        register(&child);
+        let (sender, receiver) = mpsc::sync_channel(1);
+        thread::spawn(move || {
+            let mut line = Vec::new();
+            let result = BufReader::new(output.take(1024 * 1024 + 1))
+                .read_until(b'\n', &mut line)
+                .map(|_| line);
+            let _ = sender.send(result);
+        });
+        let line = loop {
+            check(cancellation, deadline)?;
+            match receiver.recv_timeout(POLL) {
+                Ok(result) => break result?,
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    return Err(failed("owner guard exited during startup"));
+                }
+            }
+        };
+        if line.len() > 1024 * 1024 {
+            return Err(failed("owner acknowledgement exceeds limit"));
+        }
+        let result: Value = serde_json::from_slice(&line)?;
+        if result["holding"] != true {
+            return Err(failed("owner guard was not acquired"));
+        }
+        Ok(Self { _child: child })
     }
 }
 

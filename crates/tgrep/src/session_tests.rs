@@ -2,7 +2,7 @@ use super::*;
 use ash_async_utils::CancellationSource;
 use std::fs;
 
-fn git(root: &Path, args: &[&str]) {
+pub(super) fn git(root: &Path, args: &[&str]) {
     let output = std::process::Command::new("git")
         .arg("-C")
         .arg(root)
@@ -34,7 +34,7 @@ fn fixture() -> (tempfile::TempDir, tempfile::TempDir, Session) {
     );
     let index = tempfile::tempdir().unwrap();
     let executable = Executable::resolve(&InstallContext::current()).unwrap();
-    let session = Session::open(
+    let session = Session::open_legacy(
         executable,
         root.path(),
         index.path(),
@@ -69,7 +69,7 @@ fn zero_width_regexes_return_each_matching_line_once_on_both_servers() {
         } else {
             let root = tempfile::tempdir().unwrap();
             let index = tempfile::tempdir().unwrap();
-            let session = Session::open(
+            let session = Session::open_legacy(
                 Executable::resolve(&InstallContext::current()).unwrap(),
                 root.path(),
                 index.path(),
@@ -159,7 +159,7 @@ fn file_pages_are_bounded_include_large_files_and_reject_a_changed_snapshot() {
     drop(large);
     let token = CancellationSource::new().token();
     let executable = Executable::resolve(&InstallContext::current()).unwrap();
-    let session = Session::open(executable, root.path(), index.path(), &token).unwrap();
+    let session = Session::open_legacy(executable, root.path(), index.path(), &token).unwrap();
     let mut cursor = session.file_cursor(&token).unwrap();
     assert_eq!(
         session.next_file(&mut cursor, &token).unwrap(),
@@ -223,7 +223,7 @@ fn file_view_reports_a_failed_content_initialization_without_waiting_for_backgro
     .unwrap();
     let token = CancellationSource::new().token();
     let executable = Executable::resolve(&InstallContext::current()).unwrap();
-    let session = Session::open(executable, root.path(), index.path(), &token).unwrap();
+    let session = Session::open_legacy(executable, root.path(), index.path(), &token).unwrap();
     assert_eq!(session.files(&token).unwrap(), [PathBuf::from("source.rs")]);
     let start = Instant::now();
     let result = session.search(
@@ -297,7 +297,7 @@ fn file_view_and_edits_remain_available_during_a_blocked_content_rebuild() {
         let _release = release_guard;
         scope.spawn(|| {
             let token = CancellationSource::new().token();
-            let session = Session::open(
+            let session = Session::open_legacy(
                 Executable::from_path(&wrapper).unwrap(),
                 root.path(),
                 index.path(),
@@ -458,7 +458,7 @@ fn shared_file_view_benchmark() {
     #[cfg(unix)]
     let executable = unwatched_engine(wrapper.path(), &executable);
     let start = Instant::now();
-    let session = Session::open(executable, root.path(), index.path(), &token).unwrap();
+    let session = Session::open_legacy(executable, root.path(), index.path(), &token).unwrap();
     let files = session.files(&token).unwrap();
     let cold_ms = start.elapsed().as_secs_f64() * 1000.0;
     assert_eq!(files.len(), 10_000);
@@ -830,7 +830,7 @@ fn dropping_session_reaps_server_and_allows_reopening_index() {
     let port = info["port"].as_u64().unwrap() as u16;
     drop(session);
     assert!(std::net::TcpStream::connect((std::net::Ipv4Addr::LOCALHOST, port)).is_err());
-    let session = Session::open(
+    let session = Session::open_legacy(
         Executable::resolve(&InstallContext::current()).unwrap(),
         root.path(),
         index.path(),
@@ -847,7 +847,8 @@ fn reopened_directory_reconciles_offline_edits_before_its_first_content_search()
     let token = CancellationSource::new().token();
     let executable = Executable::resolve(&InstallContext::current()).unwrap();
     fs::write(root.path().join("source.txt"), "before_marker\n").unwrap();
-    let session = Session::open(executable.clone(), root.path(), index.path(), &token).unwrap();
+    let session =
+        Session::open_legacy(executable.clone(), root.path(), index.path(), &token).unwrap();
     session.rebuild(&token).unwrap();
     assert_eq!(search(&session, "before_marker").matches.len(), 1);
     drop(session);
@@ -855,7 +856,7 @@ fn reopened_directory_reconciles_offline_edits_before_its_first_content_search()
     // These changes precede the new registration, so no live Session can receive hints.
     fs::write(root.path().join("source.txt"), "latest_marker\n").unwrap();
     fs::write(root.path().join("new.txt"), "latest_marker\n").unwrap();
-    let session = Session::open(executable, root.path(), index.path(), &token).unwrap();
+    let session = Session::open_legacy(executable, root.path(), index.path(), &token).unwrap();
     let result = search(&session, "latest_marker");
     assert!(result.indexed);
     assert_eq!(result.matches.len(), 2);
@@ -1007,8 +1008,9 @@ fn linked_worktrees_share_one_process_and_keep_committed_changes_private() {
     let index = tempfile::tempdir().unwrap();
     let executable = Executable::resolve(&InstallContext::current()).unwrap();
     let token = CancellationSource::new().token();
-    let first = Session::open(executable.clone(), root.path(), index.path(), &token).unwrap();
-    let second = Session::open(executable, &worktree, index.path(), &token).unwrap();
+    let first =
+        Session::open_legacy(executable.clone(), root.path(), index.path(), &token).unwrap();
+    let second = Session::open_legacy(executable, &worktree, index.path(), &token).unwrap();
     assert!(std::sync::Arc::ptr_eq(&first.process, &second.process));
     match (&first.registration, &second.registration) {
         (Registration::Shared { view: first, .. }, Registration::Shared { view: second, .. }) => {
@@ -1045,7 +1047,7 @@ fn plain_and_unborn_directories_use_the_single_directory_service() {
             executable.directory_identity(root.path(), &token).unwrap(),
             fs::canonicalize(root.path()).unwrap()
         );
-        let session = Session::open(executable, root.path(), index.path(), &token).unwrap();
+        let session = Session::open_legacy(executable, root.path(), index.path(), &token).unwrap();
         assert!(matches!(session.registration, Registration::Directory));
         let result = search(&session, "plain_marker");
         assert!(result.indexed && result.limit_hit);
@@ -1068,7 +1070,7 @@ fn independent_leases_release_only_their_own_registration() {
     let (root, index, first) = fixture();
     let token = CancellationSource::new().token();
     let second =
-        Session::open(first.executable.clone(), root.path(), index.path(), &token).unwrap();
+        Session::open_legacy(first.executable.clone(), root.path(), index.path(), &token).unwrap();
     let (first_view, first_lease, generation) = match &first.registration {
         Registration::Shared {
             root: wire_root,
@@ -1321,7 +1323,7 @@ fn cold_process_startup_waits_only_for_its_repository_and_observes_cancellation(
         let (first_tx, first_rx) = std::sync::mpsc::channel();
         scope.spawn(move || {
             first_tx
-                .send(Session::open(
+                .send(Session::open_legacy(
                     executable.clone(),
                     first_root,
                     first_index,
@@ -1340,7 +1342,7 @@ fn cold_process_startup_waits_only_for_its_repository_and_observes_cancellation(
         let (second_tx, second_rx) = std::sync::mpsc::channel();
         scope.spawn(move || {
             second_tx
-                .send(Session::open(
+                .send(Session::open_legacy(
                     executable.clone(),
                     second_root,
                     second_index,
@@ -1367,6 +1369,7 @@ fn cold_process_startup_waits_only_for_its_repository_and_observes_cancellation(
                     first_root,
                     first_index,
                     &cancelled_token,
+                    process::Runtime::Legacy,
                 ))
                 .unwrap();
         });
@@ -1425,7 +1428,7 @@ fn engine_fuzzy_returns_top_k_with_the_shared_ranker_scores_and_highlights() {
     fs::write(root.path().join(".gitignore"), "ignored-filepicker.rs\n").unwrap();
     fs::write(root.path().join("ignored-filepicker.rs"), "ignored").unwrap();
     let token = CancellationSource::new().token();
-    let session = Session::open(
+    let session = Session::open_legacy(
         Executable::resolve(&InstallContext::current()).unwrap(),
         root.path(),
         index.path(),
@@ -1504,7 +1507,7 @@ fn shared_content_refresh_benchmark() {
     let wrapper = tempfile::tempdir().unwrap();
     #[cfg(unix)]
     let engine = unwatched_engine(wrapper.path(), &engine);
-    let session = Session::open(engine, root.path(), index.path(), &token).unwrap();
+    let session = Session::open_legacy(engine, root.path(), index.path(), &token).unwrap();
     session.rebuild(&token).unwrap();
     let mut timings = Vec::new();
     let path = session.root.join("src/component_00000/main.rs");
@@ -1566,7 +1569,7 @@ fn content_fixture(
     );
     let engine = Executable::resolve(&InstallContext::current()).unwrap();
     let token = CancellationSource::new().token();
-    let session = Session::open(
+    let session = Session::open_legacy(
         unwatched_engine(wrapper.path(), &engine),
         root.path(),
         index.path(),
@@ -1824,7 +1827,7 @@ fn filename_repairs_keep_content_edits_local_and_reconcile_directory_and_ignore_
     fs::write(root.path().join(".ignore"), "*.ignored\n").unwrap();
     let engine = Executable::resolve(&InstallContext::current()).unwrap();
     let token = CancellationSource::new().token();
-    let session = Session::open(
+    let session = Session::open_legacy(
         unwatched_engine(wrapper.path(), &engine),
         root.path(),
         index.path(),
@@ -1970,14 +1973,14 @@ fn shared_worktrees_refresh_independently_while_final_detach_waits_for_cancelled
     fs::write(&wrapper, format!("#!/bin/sh\nexport PATH={}:\"$PATH\"\nfor argument in \"$@\"; do\nif [ \"$argument\" = serve ]; then\nexec {} \"$@\" --no-watch\nfi\ndone\nexec {} \"$@\"\n", shell_quote(shims.path()), shell_quote(&engine.0), shell_quote(&engine.0))).unwrap();
     fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).unwrap();
     let token = CancellationSource::new().token();
-    let a = Session::open(
+    let a = Session::open_legacy(
         Executable::from_path(&wrapper).unwrap(),
         root.path(),
         index.path(),
         &token,
     )
     .unwrap();
-    let b = Session::open(
+    let b = Session::open_legacy(
         Executable::from_path(&wrapper).unwrap(),
         &worktree,
         index.path(),
@@ -2167,7 +2170,7 @@ fn disconnected_filename_requests_stop_active_and_queued_catalog_work() {
     let wrappers = tempfile::tempdir().unwrap();
     let engine = Executable::resolve(&InstallContext::current()).unwrap();
     let token = CancellationSource::new().token();
-    let session = Session::open(
+    let session = Session::open_legacy(
         unwatched_engine(wrappers.path(), &engine),
         root.path(),
         index.path(),
@@ -2350,7 +2353,7 @@ fn filename_root_is_admitted_even_when_its_name_is_an_excluded_directory() {
     fs::create_dir(root.join("target")).unwrap();
     fs::write(root.join("target/hidden.rs"), "excluded").unwrap();
     let token = CancellationSource::new().token();
-    let session = Session::open(
+    let session = Session::open_legacy(
         Executable::resolve(&InstallContext::current()).unwrap(),
         &root,
         index.path(),

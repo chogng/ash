@@ -36,6 +36,9 @@ impl Session {
         self.synchronize_files(cancellation, deadline)?;
         let view = match &self.registration {
             Registration::Shared { view, .. } => Some(view.clone()),
+            Registration::Managed(session) => session.lookup(cancellation, deadline)?["view"]
+                .as_str()
+                .map(str::to_owned),
             Registration::Directory => None,
             Registration::Released => return Err(failed("search registration was released")),
         };
@@ -59,7 +62,12 @@ impl Session {
     ) -> Result<Option<PathBuf>, Error> {
         check(cancellation, cursor.deadline)?;
         let view = match &self.registration {
-            Registration::Shared { view, .. } => Some(view.as_str()),
+            Registration::Shared { view, .. } => Some(view.clone()),
+            Registration::Managed(session) => {
+                session.lookup(cancellation, cursor.deadline)?["view"]
+                    .as_str()
+                    .map(str::to_owned)
+            }
             Registration::Directory => None,
             Registration::Released => return Err(failed("search registration was released")),
         };
@@ -67,7 +75,7 @@ impl Session {
             .process
             .ptr_eq(&std::sync::Arc::downgrade(&self.process))
             || cursor.root != self.root
-            || cursor.view.as_deref() != view
+            || cursor.view != view
         {
             return Err(failed("file cursor belongs to another registration"));
         }

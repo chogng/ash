@@ -1,5 +1,5 @@
 diff --git a/Cargo.lock b/Cargo.lock
-index b17b708..b4f32bc 100644
+index b17b708..569439e 100644
 --- a/Cargo.lock
 +++ b/Cargo.lock
 @@ -922,6 +922,15 @@ dependencies = [
@@ -23,7 +23,7 @@ index b17b708..b4f32bc 100644
  [[package]]
  name = "tgrep-cli"
 -version = "1.2.1"
-+version = "1.2.1-ash.547f3c8.1"
++version = "1.2.1-ash.547f3c8.2"
  dependencies = [
   "anyhow",
   "assert_cmd",
@@ -40,7 +40,7 @@ index b17b708..b4f32bc 100644
  [[package]]
  name = "tgrep-core"
 -version = "1.2.1"
-+version = "1.2.1-ash.547f3c8.1"
++version = "1.2.1-ash.547f3c8.2"
  dependencies = [
   "anyhow",
   "blake3",
@@ -58,7 +58,7 @@ index b17b708..b4f32bc 100644
  name = "unicode-xid"
  version = "0.2.6"
 diff --git a/Cargo.toml b/Cargo.toml
-index 4b10d19..8f68890 100644
+index 4b10d19..fb43068 100644
 --- a/Cargo.toml
 +++ b/Cargo.toml
 @@ -4,7 +4,7 @@ exclude = ["vendor/ignore"]
@@ -66,7 +66,7 @@ index 4b10d19..8f68890 100644
 
  [workspace.package]
 -version = "1.2.1"
-+version = "1.2.1-ash.547f3c8.1"
++version = "1.2.1-ash.547f3c8.2"
  edition = "2024"
  rust-version = "1.88"
  license = "MIT"
@@ -85,10 +85,10 @@ index 8a81e09..c317c0b 100644
 
 diff --git a/tgrep-cli/src/ash.rs b/tgrep-cli/src/ash.rs
 new file mode 100644
-index 0000000..dab6297
+index 0000000..f33e847
 --- /dev/null
 +++ b/tgrep-cli/src/ash.rs
-@@ -0,0 +1,58 @@
+@@ -0,0 +1,91 @@
 +//! Ash packaging additions; indexing and worktree lifecycle remain upstream-owned.
 +use anyhow::{Context, Result, ensure};
 +use serde_json::json;
@@ -146,6 +146,39 @@ index 0000000..dab6297
 +        "revision": std::str::from_utf8(&revision.stdout).context("non-UTF-8 Git revision")?.trim()})
 +    );
 +    Ok(())
++}
++
++static PARENT_WATCHED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
++static PARENT_ENDED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
++
++pub fn watch_parent() {
++    PARENT_WATCHED.store(true, std::sync::atomic::Ordering::Release);
++    std::thread::spawn(|| {
++        use std::io::Read;
++        let mut byte = [0; 1];
++        loop {
++            match std::io::stdin().read(&mut byte) {
++                Ok(0) => {
++                    PARENT_ENDED.store(true, std::sync::atomic::Ordering::Release);
++                    return;
++                }
++                Ok(_) => {}
++                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {}
++                Err(error) => {
++                    eprintln!("supervised host input failed without EOF: {error}");
++                    return;
++                }
++            }
++        }
++    });
++}
++
++pub fn parent_ended() -> bool {
++    PARENT_ENDED.load(std::sync::atomic::Ordering::Acquire)
++}
++
++pub fn parent_watched() -> bool {
++    PARENT_WATCHED.load(std::sync::atomic::Ordering::Acquire)
 +}
 diff --git a/tgrep-cli/src/ash_files.rs b/tgrep-cli/src/ash_files.rs
 new file mode 100644
@@ -739,7 +772,7 @@ index 0000000..c18df6a
 +    action(&cancellation)
 +}
 diff --git a/tgrep-cli/src/main.rs b/tgrep-cli/src/main.rs
-index ae7293d..8d750b8 100644
+index ae7293d..5cc61b3 100644
 --- a/tgrep-cli/src/main.rs
 +++ b/tgrep-cli/src/main.rs
 @@ -1,5 +1,10 @@
@@ -753,10 +786,13 @@ index ae7293d..8d750b8 100644
  /// tgrep — trigram-indexed grep with client/server architecture.
  ///
  /// Usage:
-@@ -627,6 +632,11 @@ impl From<IndexStrategyArg> for builder::IndexStrategy {
+@@ -627,6 +632,14 @@ impl From<IndexStrategyArg> for builder::IndexStrategy {
 
  #[derive(Subcommand)]
  enum Command {
++    /// Read this user's authenticated managed registration for the supervised host.
++    #[command(hide = true)]
++    ManagedIdentity { path: PathBuf },
 +    /// Describe the directory identity and shared-service eligibility for Ash.
 +    Identity {
 +        #[arg(default_value = ".")]
@@ -765,14 +801,44 @@ index ae7293d..8d750b8 100644
      /// Build or rebuild the trigram index.
      Index {
          /// Root directory to index.
-@@ -1374,6 +1384,7 @@ fn run_cli() {
+@@ -677,6 +690,10 @@ enum Command {
+         #[arg(long, value_name = "FILE", requires_all = ["shared", "shared_storage"], conflicts_with_all = ["shared_max_views", "shared_max_leases", "max_memory_mb", "max_cpu_percent"])]
+         shared_policy: Option<PathBuf>,
+
++        /// Bind this supervised managed process to its host's stdin lifetime.
++        #[arg(long, hide = true, requires = "shared_policy")]
++        ash_parent: bool,
++
+         /// Maximum shared views; native watches and hint slots are divided by this.
+         #[arg(long, requires = "shared", default_value_t = 32, value_parser = clap::value_parser!(u32).range(1..=1024))]
+         shared_max_views: u32,
+@@ -1374,6 +1391,8 @@ fn run_cli() {
      }
 
      let result = match cli.command {
 +        Some(Command::Identity { path }) => ash::identity(&path),
++        Some(Command::ManagedIdentity { path }) => serve::shared::ash_identity(&path),
          Some(Command::Index {
              path,
              exclude,
+@@ -1399,6 +1418,7 @@ fn run_cli() {
+             path,
+             shared_storage,
+             shared_policy,
++            ash_parent,
+             shared_max_views,
+             shared_max_leases,
+             no_watch,
+@@ -1411,6 +1431,9 @@ fn run_cli() {
+             auto_save_mutations,
+             watcher_queue_cap,
+         }) => {
++            if ash_parent {
++                ash::watch_parent();
++            }
+             let memory_cap = max_memory_mb
+                 .map(|mb| mb.saturating_mul(1024 * 1024))
+                 .unwrap_or_else(mem::default_memory_cap_bytes);
 diff --git a/tgrep-cli/src/serve.rs b/tgrep-cli/src/serve.rs
 index 916b188..e61636b 100644
 --- a/tgrep-cli/src/serve.rs
@@ -1100,6 +1166,360 @@ index 367f38a..30b730f 100644
          let value: serde_json::Value = serde_json::from_str(&response).unwrap();
          let actual: BTreeSet<_> = value["result"]["files"]
              .as_array()
+diff --git a/tgrep-cli/src/serve/shared/managed.rs b/tgrep-cli/src/serve/shared/managed.rs
+index d530ff0..a5908a2 100644
+--- a/tgrep-cli/src/serve/shared/managed.rs
++++ b/tgrep-cli/src/serve/shared/managed.rs
+@@ -109,7 +109,7 @@ fn hello(namespace: &Namespace) -> Result<Value> {
+             "instance-owner-guards","catalog-pages","reference-aware-collection",
+             "versioned-allocations","bound-checkpoints","offline-maintenance","stop-if-idle",
+             "bounded-storage-inventory","namespace-discovery","maintenance-diagnostics",
+-            "private-rpc-authentication"
++            "private-rpc-authentication", "host-owner-lifetime", "file-pages", "file-fuzzy", "request-cancellation"
+         ],
+         "profile":IndexingProfile::default(),
+         "policy":namespace.policy()?,"allocation":namespace.allocation()?,
+@@ -308,6 +308,7 @@ pub(super) fn storage_request(
+ }
+
+ struct Monitor {
++    filenames: Arc<crate::ash_files::Catalog>,
+     watcher: Option<notify::RecommendedWatcher>,
+     watched: HashSet<PathBuf>,
+     fallback: Option<String>,
+@@ -368,6 +369,8 @@ struct State {
+     jobs: mpsc::SyncSender<Id>,
+     queued: Mutex<HashMap<Id, managed::OperationReadGuard>>,
+     admission: Mutex<bool>,
++    // Host association is a transport lifetime contract, not another owner catalog.
++    parent_owners: Mutex<HashMap<Id, OwnerClaim>>,
+     requests: AtomicU64,
+     queries: AtomicU64,
+     background_batches: AtomicU64,
+@@ -662,10 +665,24 @@ fn sync_monitor(
+     if monitor.watcher.is_none() {
+         let weak = Arc::downgrade(slot);
+         let watch_failure = Arc::clone(&monitor.watch_failure);
++        let filenames = Arc::clone(&monitor.filenames);
+         let watcher = notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
+             let Some(slot) = weak.upgrade() else {
+                 return;
+             };
++            match &event {
++                Ok(event) if matches!(event.kind, EventKind::Access(_)) => {}
++                Ok(event)
++                    if !event.need_rescan()
++                        && !event.paths.is_empty()
++                        && !matches!(event.kind, EventKind::Any | EventKind::Other) =>
++                {
++                    for path in &event.paths {
++                        filenames.invalidate_path(path);
++                    }
++                }
++                _ => filenames.invalidate(),
++            }
+             let result = watch_event(&slot, &metadata, &watch_failure, event);
+             if let Err(error) = result {
+                 eprintln!("managed watcher invalidation {}: {error}", slot.id());
+@@ -705,6 +722,49 @@ fn sync_monitor(
+ }
+
+ impl State {
++    fn stop_after_parent(&self) -> Result<()> {
++        let mut admission = self
++            .admission
++            .lock()
++            .map_err(|_| Error::corrupt("admission gate poisoned"))?;
++        *admission = false;
++        let result = (|| -> Result<_> {
++            let mut claims = self.parent_owners.lock().map_err(|_| Error::corrupt("host owner registry poisoned"))?;
++            // Explicit host binding authorizes release at stdin EOF even if the host
++            // died before registering its OS guard. Producers still have to drain.
++            for claim in claims.values() {
++                self.namespace.release_owner(claim)?;
++            }
++            claims.clear();
++            self.views.drain_released()?;
++            Ok(self.namespace.stop_if_idle(ExternalWork {
++                queries: self.queries.load(Ordering::Acquire),
++                queued_jobs: self
++                    .queued
++                    .lock()
++                    .map_err(|_| Error::corrupt("job registry poisoned"))?
++                    .len() as u64,
++                requests: self.requests.load(Ordering::Acquire),
++                background_batches: self.background_batches.load(Ordering::Acquire),
++            })?)
++        })();
++        match result {
++            Ok(outcome) if outcome.stopping && outcome.instance == self.registration.instance => {
++                self.stopping.store(true, Ordering::Release)
++            }
++            Ok(_) => *admission = true,
++            Err(error) => {
++                if self.namespace.stop_is_committed()? {
++                    self.stopping.store(true, Ordering::Release);
++                } else {
++                    *admission = true;
++                }
++                return Err(error.into());
++            }
++        }
++        Ok(())
++    }
++
+     fn legacy_registration(&self) -> super::protocol::Registration {
+         super::protocol::Registration {
+             protocol: 1,
+@@ -886,7 +946,7 @@ impl State {
+                     namespace: request.namespace.clone(), instance: request.instance.clone(),
+                     repository: request.repository.clone(), id: request.id.clone(), method: request.method.clone(),
+                     params: json!({"root":input.root,"view":input.view,"expected_version":record.version,"query":input.query}),
+-                })
++                }, &crate::ash_request::Cancellation::Disabled)
+             }
+             _ => Err(Error::invalid("unknown legacy management method").into()),
+         }
+@@ -1101,7 +1161,7 @@ impl State {
+                     .and_then(|pin| pin.incarnation.as_ref());
+                 Ok(
+                     json!({"root":input.root,"view":view.id,"generation":intent.key,"version":view.version,
+-                    "incarnation":incarnation,"commit":intent.commit,"ready":self.views.status(&view.id)?.ready}),
++                    "incarnation":incarnation,"commit":intent.commit,"active":view.active,"ready":self.views.status(&view.id)?.ready}),
+                 )
+             }
+             "stop-if-idle" => {
+@@ -1162,16 +1222,36 @@ impl State {
+                     )
+                     .into());
+                 }
++                let mut params = request.params.clone();
++                let parent_bound = if method == "owners.prepare" {
++                    params.as_object_mut().and_then(|params| params.remove("ash_parent"))
++                        .map(|value| value.as_bool().ok_or_else(|| Error::invalid("ash_parent must be boolean")))
++                        .transpose()?.unwrap_or(false)
++                } else { false };
++                let mut host_claims = if parent_bound {
++                    let claims = self.parent_owners.lock().map_err(|_| Error::corrupt("host owner registry poisoned"))?;
++                    if !crate::ash::parent_watched() || crate::ash::parent_ended() {
++                        return Err(Error::busy("host-lifetime-ended").into());
++                    }
++                    Some(claims)
++                } else { None };
+                 let mut result = storage_request(
+                     &self.namespace,
+                     method,
+-                    request.params.clone(),
++                    params,
+                     StorageContext::Live,
+                 )?;
++                if let Some(claims) = host_claims.as_mut() {
++                    let claim: OwnerClaim = serde_json::from_value(result["claim"].clone())?;
++                    claims.insert(claim.owner.clone(), claim);
++                }
+                 if matches!(method, "metadata.start" | "collections.start") {
+                     self.enqueue(&serde_json::from_value(result.clone())?)?;
+                 }
+                 if matches!(method, "owners.release" | "owners.reap") {
++                    if let Some(owner) = result["owner"]["claim"]["owner"].as_str() {
++                        self.parent_owners.lock().map_err(|_| Error::corrupt("host owner registry poisoned"))?.remove(&Id::parse(owner)?);
++                    }
+                     self.views
+                         .drain_released()
+                         .map_err(|error| error.committed(managed::CommitState::Committed))?;
+@@ -1195,7 +1275,11 @@ impl State {
+         }
+     }
+
+-    fn query(&self, request: &Request) -> Result<Value> {
++    fn query(
++        &self,
++        request: &Request,
++        cancellation: &crate::ash_request::Cancellation<'_>,
++    ) -> Result<Value> {
+         #[derive(Deserialize)]
+         #[serde(deny_unknown_fields)]
+         struct Query {
+@@ -1214,12 +1298,53 @@ impl State {
+             )
+             .into());
+         }
++        if matches!(
++            request.method.as_str(),
++            "files/page" | "files/fuzzy" | "files/refresh"
++        ) {
++            let _root = slot.read_root(input.expected_version)?;
++            let monitor = self
++                .monitors
++                .lock()
++                .map_err(|_| Error::corrupt("monitor registry poisoned"))?
++                .get(slot.id())
++                .cloned()
++                .ok_or_else(|| Error::busy("view-not-loaded"))?;
++            let catalog = Arc::clone(
++                &monitor
++                    .lock()
++                    .map_err(|_| Error::corrupt("monitor poisoned"))?
++                    .filenames,
++            );
++            let mut result = match request.method.as_str() {
++                "files/page" => catalog.page(&input.query, self.watches.interval, cancellation)?,
++                "files/fuzzy" => {
++                    catalog.fuzzy(&input.query, self.watches.interval, cancellation)?
++                }
++                "files/refresh" => {
++                    let params: crate::ash_files::RefreshParams =
++                        serde_json::from_value(input.query)?;
++                    let epoch = catalog.refresh(&params.changed, params.full, cancellation)?;
++                    json!({"files_ready":true,"processed_epoch":epoch,"epoch":epoch})
++                }
++                _ => unreachable!(),
++            };
++            let record = self.views.recover(slot.id())?;
++            if record.version != input.expected_version {
++                return Err(Error::stale_version(record.version).into());
++            }
++            result["root"] = json!(slot.root());
++            result["view"] = json!(slot.id());
++            result["generation"] = json!(record.intent()?.key);
++            result["version"] = json!(record.version);
++            return Ok(result);
++        }
+         if request.method == "status" {
+-            let status = self.views.status(slot.id())?;
++            let mut status = self.views.status(slot.id())?;
+             if status.authoritative.version != input.expected_version {
+                 return Err(Error::stale_version(status.authoritative.version).into());
+             }
+-            let pin = status.authoritative.pin()?;
++            let pin = status.authoritative.intent()?;
+             let monitor = self
+                 .monitors
+                 .lock()
+@@ -1234,7 +1359,26 @@ impl State {
+                         .map_err(|_| Error::corrupt("monitor poisoned"))
+                 })
+                 .transpose()?;
++            let (files_ready, file_count) = monitor
++                .as_ref()
++                .map_or((false, 0), |m| m.filenames.status());
++            let num_files = if status.ready {
++                match slot.query(input.expected_version) {
++                    Ok(query) => query.with_snapshot(|snapshot| snapshot.files("", true).len())?,
++                    Err(error) if error.category == tgrep_core::managed::ErrorCategory::Busy => {
++                        // An input invalidation can race the status read. Keep status usable
++                        // during reconciliation; the next read captures the newer epoch.
++                        status.ready = false;
++                        0
++                    }
++                    Err(error) => return Err(error.into()),
++                }
++            } else {
++                0
++            };
+             return Ok(json!({
++                "num_files":num_files,"files_ready":files_ready,"file_count":file_count,
++                "reconcile_running":status.work.is_some(),
+                 "root":slot.root(),"view":slot.id(),"generation":pin.key,"version":status.authoritative.version,
+                 "ready":status.ready,"epoch":status.input_epoch,"backend":"shared-v2","status":status,
+                 "watch_mode":if self.watches.no_watch { "disabled" } else if monitor.as_ref().is_some_and(|monitor| monitor.watcher.is_some()) { "native" } else { "poll" },
+@@ -1608,6 +1752,13 @@ pub(super) fn run(root: &Path, options: Options<'_>, policy: Policy) -> Result<(
+         };
+         let sentinel_identity = managed::publish_private_control_file(&sentinel, &sentinel_value)?;
+         let monitor = Arc::new(Mutex::new(Monitor {
++            filenames: Arc::new(crate::ash_files::Catalog::new(
++                slot.root(),
++                tgrep_core::walker::MetaWalkOptions {
++                    exclude_paths: vec![observer_storage.clone()],
++                    ..Default::default()
++                },
++            )),
+             watcher: None,
+             watched: HashSet::new(),
+             fallback: None,
+@@ -1670,6 +1821,7 @@ pub(super) fn run(root: &Path, options: Options<'_>, policy: Policy) -> Result<(
+         jobs,
+         queued: Mutex::new(HashMap::new()),
+         admission: Mutex::new(true),
++        parent_owners: Mutex::new(HashMap::new()),
+         requests: AtomicU64::new(0),
+         queries: AtomicU64::new(0),
+         background_batches: AtomicU64::new(0),
+@@ -1778,7 +1930,11 @@ pub(super) fn run(root: &Path, options: Options<'_>, policy: Policy) -> Result<(
+                             let result = if request.protocol == 1 {
+                                 query_state.legacy(&request)
+                             } else {
+-                                query_state.query(&request)
++                                crate::ash_request::run(
++                                    &stream,
++                                    crate::ash_request::enabled(&request.method, true),
++                                    |cancellation| query_state.query(&request, cancellation),
++                                )
+                             };
+                             respond(stream, Some(&request), &query_state, result);
+                         }
+@@ -1871,7 +2027,15 @@ pub(super) fn run(root: &Path, options: Options<'_>, policy: Policy) -> Result<(
+                         }
+                     };
+                     if request.protocol == 1
+-                        || matches!(request.method.as_str(), "search" | "files" | "status")
++                        || matches!(
++                            request.method.as_str(),
++                            "search"
++                                | "files"
++                                | "status"
++                                | "files/page"
++                                | "files/fuzzy"
++                                | "files/refresh"
++                        )
+                     {
+                         let sender = if request.protocol == 1
+                             && matches!(request.method.as_str(), "attach" | "detach" | "refresh")
+@@ -1939,6 +2103,9 @@ pub(super) fn run(root: &Path, options: Options<'_>, policy: Policy) -> Result<(
+                         collection_requested = true;
+                         collection_schedule.request();
+                     }
++                    // EOF requests retirement; only positive owner-death proof and the
++                    // upstream idle fence authorize exit after active Git/read work drains.
++                    if crate::ash::parent_ended() { recovery_schedule.request(); }
+                     if recovery_schedule.due(now, retry) {
+                         match scheduler.namespace.recover_pass(recovery.clone()) {
+                             Ok(progress) => {
+@@ -2033,6 +2200,12 @@ pub(super) fn run(root: &Path, options: Options<'_>, policy: Policy) -> Result<(
+                     });
+                     Ok(())
+                 })();
++                if crate::ash::parent_ended() {
++                    if let Err(error) = scheduler.stop_after_parent() {
++                        eprintln!("managed parent retirement deferred: {error}");
++                    }
++                }
++
+                 let mut diagnostics = scheduler.scheduler_diagnostics.lock().expect("scheduler diagnostics");
+                 if diagnostics.observe(started.elapsed(), tick.err().map(|error| format!("{error:#}"))) {
+                     eprintln!("managed scheduler: {}", diagnostics.last_error_detail.as_deref().expect("observed error"));
+diff --git a/tgrep-cli/src/serve/shared/mod.rs b/tgrep-cli/src/serve/shared/mod.rs
+index c100b5d..6f5c5e8 100644
+--- a/tgrep-cli/src/serve/shared/mod.rs
++++ b/tgrep-cli/src/serve/shared/mod.rs
+@@ -73,3 +73,17 @@ pub fn status(root: &Path, index_path: Option<&Path>) -> Result<()> {
+     println!("{}", serde_json::to_string_pretty(&result)?);
+     Ok(())
+ }
++
++/// Export credentials only through the packaged helper, using the upstream private-file checks.
++pub(crate) fn ash_identity(root: &std::path::Path) -> anyhow::Result<()> {
++    use std::io::Read;
++    let repository = tgrep_core::generations::Repository::discover(root)?;
++    let file = std::fs::File::open(repository.common_dir().join(protocol_v2::MARKER))?;
++    let registration: protocol_v2::Registration = serde_json::from_reader(file.take(4096))?;
++    let auth = protocol_v2::Authentication::read(&repository, &registration)?;
++    println!(
++        "{}",
++        serde_json::json!({"registration":registration,"authorization":auth.token})
++    );
++    Ok(())
++}
 diff --git a/tgrep-cli/src/serve/shared/protocol.rs b/tgrep-cli/src/serve/shared/protocol.rs
 index bca1776..4817441 100644
 --- a/tgrep-cli/src/serve/shared/protocol.rs
@@ -2268,6 +2688,100 @@ index 2401c5e..8fc27cc 100644
      /// Open only this exact published key. Missing, partial or invalid generations
      /// error; they are never repaired/replaced while another reader could map them.
      pub fn open(&self, key: &GenerationKey) -> Result<Arc<Generation>> {
+diff --git a/tgrep-core/src/managed/views.rs b/tgrep-core/src/managed/views.rs
+index 7fc0a7d..17cdd59 100644
+--- a/tgrep-core/src/managed/views.rs
++++ b/tgrep-core/src/managed/views.rs
+@@ -909,7 +909,7 @@ impl ViewManager {
+                     return Err(Error::stale_version(record.version));
+                 }
+             }
+-            if request.profile != *record.pin()?.key.profile() {
++            if request.profile != *record.intent()?.key.profile() {
+                 return Err(Error::incompatible(
+                     "joining profile differs from current pin",
+                 ));
+@@ -1921,6 +1921,44 @@ impl ViewSlot {
+     pub fn root(&self) -> &Path {
+         &self.root
+     }
++    /// Pin the worktree root for metadata queries before content publication.
++    /// Final detach cannot drop its observer or original root until this read ends.
++    pub fn read_root(self: &Arc<Self>, expected_version: u64) -> Result<RootRead> {
++        let mut state = self
++            .state
++            .lock()
++            .map_err(|_| Error::corrupt("view lock poisoned"))?;
++        if state.closing || state.draining {
++            return Err(Error::busy("view-closing"));
++        }
++        if state.queries >= self.namespace.policy()?.policy.work.queue_items {
++            return Err(Error::pressure("view-query-limit"));
++        }
++        let record = self.namespace.authoritative_view(&self.id)?;
++        if !record.active {
++            return Err(Error::busy("view-closing"));
++        }
++        if record.version != expected_version {
++            return Err(Error::stale_version(record.version));
++        }
++        let root = RootedDir::open(&self.root)?;
++        if FileIdentity::of(&root.directory_handle()?)? != record.root_identity {
++            return Err(Error::new(
++                ErrorCategory::StaleIdentity,
++                "worktree-replaced",
++                "metadata root differs from its registered identity",
++            ));
++        }
++        state.queries = state
++            .queries
++            .checked_add(1)
++            .ok_or_else(|| Error::pressure("query-count-overflow"))?;
++        Ok(RootRead {
++            slot: Arc::clone(self),
++            root: Some(root),
++        })
++    }
++
+     pub fn input_epoch(&self) -> u64 {
+         self.epoch.load(Ordering::Acquire)
+     }
+@@ -2148,6 +2186,35 @@ impl Drop for ViewWork<'_> {
+     }
+ }
+
++/// A metadata read shares the content query drain without requiring a ready index.
++pub struct RootRead {
++    slot: Arc<ViewSlot>,
++    root: Option<RootedDir>,
++}
++impl Drop for RootRead {
++    fn drop(&mut self) {
++        // Close the metadata handle while its query count still fences final detach.
++        self.root.take();
++        let result = (|| -> Result<()> {
++            let mut state = self
++                .slot
++                .state
++                .lock()
++                .map_err(|_| Error::corrupt("view lock poisoned"))?;
++            state.queries = state
++                .queries
++                .checked_sub(1)
++                .ok_or_else(|| Error::corrupt("query count underflow"))?;
++            drop(state);
++            self.slot.drain()?;
++            Ok(())
++        })();
++        if let Err(error) = result {
++            eprintln!("managed root drain {} failed: {error}", self.slot.id);
++        }
++    }
++}
++
+ pub struct ViewQuery {
+     slot: Arc<ViewSlot>,
+     published: Arc<PublishedView>,
 diff --git a/tgrep-core/src/visibility.rs b/tgrep-core/src/visibility.rs
 index 2f140f8..fa62628 100644
 --- a/tgrep-core/src/visibility.rs

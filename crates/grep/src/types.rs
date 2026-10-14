@@ -149,6 +149,7 @@ impl From<tgrep::Error> for Error {
     fn from(error: tgrep::Error) -> Self {
         match error {
             tgrep::Error::Cancelled(reason) => Self::Cancelled(reason),
+            tgrep::Error::Management(error) => Self::Failed(error.to_string()),
             tgrep::Error::Failed(message) | tgrep::Error::NotReady(message) => {
                 Self::Failed(message)
             }

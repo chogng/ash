@@ -170,3 +170,142 @@ fn shared_rpc_validates_response_instances_ids_and_null_id_errors() {
         });
     }
 }
+
+#[test]
+fn managed_protocol_authenticates_and_rejects_wrong_identity_and_untyped_errors() {
+    use std::net::TcpListener;
+    let root = tempfile::tempdir().unwrap();
+    let index = tempfile::tempdir().unwrap();
+    let token = CancellationSource::new().token();
+    let mut server = Server::start(
+        &Executable::resolve(&InstallContext::current()).unwrap(),
+        root.path(),
+        index.path(),
+        &token,
+    )
+    .unwrap();
+    server.protocol = Protocol::Managed(ManagedIdentity {
+        registration: ManagedDiscovery {
+            pid: 0,
+            port: 1,
+            protocol: 2,
+            namespace: "namespace".into(),
+            instance: "instance".into(),
+            repository: "repository".into(),
+            storage: index.path().into(),
+        },
+        authorization: "test-private-token".into(),
+    });
+    let success = json!({"jsonrpc":"2.0","id":1,"result":{"protocol":2,"namespace":"namespace","instance":"instance","repository":"repository","data":{"verified":true}}});
+    let mut wrong_identity = success.clone();
+    wrong_identity["result"]["namespace"] = json!("another-namespace");
+    let failure = |category: &str, reason: &str| json!({"jsonrpc":"2.0","id":1,"error":{"code":-32001,"message":"test failure","data":{"category":category,"reason_code":reason,"retryable":true,"committed_state":"not-committed","detail":"test failure"}}});
+    for (response, expected) in [
+        (success, "success"),
+        (wrong_identity, "identity"),
+        (failure("busy", "view-not-ready"), "readiness"),
+        (failure("busy", "query-limit"), "typed"),
+        (failure("corrupt-metadata", "view-not-ready"), "typed"),
+        (
+            json!({"jsonrpc":"2.0","id":1,"error":{"code":-32001,"message":"view not ready"}}),
+            "untyped",
+        ),
+    ] {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        server.address = listener.local_addr().unwrap();
+        thread::scope(|scope| {
+            scope.spawn(|| {
+                let (socket, _) = listener.accept().unwrap();
+                socket
+                    .set_read_timeout(Some(Duration::from_secs(5)))
+                    .unwrap();
+                let mut reader = BufReader::new(socket);
+                let mut request = String::new();
+                reader.read_line(&mut request).unwrap();
+                let request: Value = serde_json::from_str(&request).unwrap();
+                assert_eq!(request["protocol"], 2);
+                assert_eq!(request["namespace"], "namespace");
+                assert_eq!(request["instance"], "instance");
+                assert_eq!(request["repository"], "repository");
+                assert_eq!(request["authorization"], "test-private-token");
+                writeln!(reader.get_mut(), "{response}").unwrap();
+            });
+            let result = server.rpc("hello", json!({}), &token, Instant::now() + TIMEOUT);
+            match expected {
+                "success" => assert_eq!(result.unwrap()["verified"], true),
+                "identity" => assert!(
+                    result
+                        .unwrap_err()
+                        .to_string()
+                        .contains("stale or incompatible")
+                ),
+                "readiness" => assert!(matches!(result, Err(Error::NotReady(_)))),
+                "typed" => assert!(matches!(result, Err(Error::Management(_)))),
+                "untyped" => assert!(matches!(result, Err(Error::Failed(_)))),
+                _ => unreachable!(),
+            }
+        });
+    }
+}
+
+#[test]
+fn supervised_shutdown_keeps_an_unbound_live_owner_until_its_guard_ends() {
+    let root = tempfile::tempdir().unwrap();
+    let index = tempfile::tempdir().unwrap();
+    crate::tests::git(root.path(), &["init", "-b", "main"]);
+    std::fs::write(root.path().join("source.rs"), "marker\n").unwrap();
+    crate::tests::git(root.path(), &["add", "."]);
+    crate::tests::git(
+        root.path(),
+        &[
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.test",
+            "commit",
+            "-m",
+            "fixture",
+        ],
+    );
+    let executable = Executable::resolve(&InstallContext::current()).unwrap();
+    let token = CancellationSource::new().token();
+    let server = Server::start(
+        &executable,
+        &dunce::canonicalize(root.path()).unwrap(),
+        index.path(),
+        &token,
+    )
+    .unwrap();
+    let deadline = Instant::now() + TIMEOUT;
+    let owner = server
+        .rpc(
+            "owners.prepare",
+            json!({"token":"unbound-owner"}),
+            &token,
+            deadline,
+        )
+        .unwrap();
+    let path = index.path().join("external-claim.json");
+    std::fs::write(&path, serde_json::to_vec(&owner["claim"]).unwrap()).unwrap();
+    let guard = Owner::start(&executable, &path, &token, deadline).unwrap();
+    server
+        .rpc(
+            "owners.register",
+            json!({"claim":owner["claim"]}),
+            &token,
+            deadline,
+        )
+        .unwrap();
+    drop(server.child.lock().unwrap().0.stdin.take());
+    thread::sleep(Duration::from_millis(250));
+    assert!(!server.is_stopped().unwrap());
+    server.rpc("hello", json!({}), &token, deadline).unwrap();
+    drop(guard);
+    while !server.is_stopped().unwrap() {
+        assert!(
+            Instant::now() < deadline,
+            "ended external owner was not reaped"
+        );
+        thread::sleep(POLL);
+    }
+}
