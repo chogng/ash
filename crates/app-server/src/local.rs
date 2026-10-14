@@ -788,6 +788,7 @@ impl std::error::Error for OpenAppServerError {}
 /// terminal, Git, language, and execution services remain in separately composed [`AppServer`]
 /// instances.
 pub struct LocalProfileRuntime {
+    ide_registry: Arc<crate::ide_registry::IdeRegistry>,
     diagnostics: diagnostics::Diagnostics,
     telemetry: ash_otel::Telemetry,
     analytics: Arc<analytics::Analytics>,
@@ -934,6 +935,7 @@ impl LocalProfileRuntime {
         )
         .map_err(open_error)?;
         Ok(Self {
+            ide_registry: Arc::new(crate::ide_registry::IdeRegistry::default()),
             editor_extension_policy,
             session_runtimes,
             diagnostics,
@@ -1765,6 +1767,11 @@ pub fn open_app_server_with_codebase_providers(
         ),
         None => AppServer::new(threads, agent_model),
     }
+    .with_ide_registry(
+        profile_runtime
+            .as_ref()
+            .map(|profile| profile.ide_registry.clone()),
+    )
     .with_trace_recorder(trace_recorder)
     .with_home(home)
     .with_network_diagnostics(network.clone(), application_http.clone(), network_services)

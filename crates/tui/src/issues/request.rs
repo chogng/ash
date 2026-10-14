@@ -227,6 +227,7 @@ fn start_session<T: ash_app_server_client::JsonRpcTransport>(
         command_id: ash_protocol::CommandId::new(format!("{}:first-turn", command_id.as_str())).map_err(|error| error.to_string())?,
         session_id: session_id.clone(),
         request: ash_app_server_protocol::protocol::session::SessionRequest::StartTurn {
+            ide_window_id: None,
             thread_id: root.thread_id.clone(), expected_sequence: created.agent_tree.roots.iter().find(|entry| entry.thread_id == root.thread_id).ok_or("Created root Thread is missing from the Agent tree")?.thread_sequence,
             mode: ash_protocol::CollaborationMode::default(),
             approval_mode: Some(ash_protocol::ApprovalMode::default()), model: None, reasoning_effort: None, tool_mode: None,

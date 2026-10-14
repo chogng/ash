@@ -9,9 +9,9 @@ expression: rendered
                                                                                 
                                                                                 
                                                                                 
-  ───────────────────────────────────────────────────────────────────── 38/38   
+  ───────────────────────────────────────────────────────────────────── 39/39   
   /pr                        ask the Agent to create or inspect a pull request │
-  /extensions               find and install Extensions packages             │
+  /extensions                find and install Extensions packages              │
   /plugins                   manage installed packages and exact versions      │
   /lsp                       manage language servers and find packages         │
   /voice                     dictate into the current draft; run again to stop │

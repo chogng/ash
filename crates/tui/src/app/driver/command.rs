@@ -154,6 +154,16 @@ impl AppDriver {
                     origin,
                 );
             }
+            AppCommand::Ide(command) => {
+                let mut client = self.client.clone();
+                self.requests.spawn_presentation(
+                    request_key,
+                    "ash-tui-ide",
+                    move || crate::ide::execute(&mut client, command),
+                    &mut self.app,
+                    origin,
+                );
+            }
             AppCommand::Connectors(command) => {
                 let name = command.request_name();
                 let mut client = self.client.clone();

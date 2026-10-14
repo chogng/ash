@@ -236,6 +236,7 @@ fn registry_method_and_notification_names_are_unique() {
         host_methods,
         BTreeSet::from([
             "app/request",
+            "ide/hostRequest",
             "browser/close",
             "browser/sharing/set",
             "extensionClient/request",

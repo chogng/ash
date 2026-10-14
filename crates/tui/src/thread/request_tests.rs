@@ -31,8 +31,14 @@ fn request_scope_matches_only_the_session_and_thread_that_started_it() {
 
 impl JsonRpcTransport for RecordingTransport {
     fn round_trip(&mut self, request: &str) -> Result<String, ClientError> {
+        let message: serde_json::Value = serde_json::from_str(request).unwrap();
+        if message["method"] == "ide/request" {
+            return Ok(serde_json::json!({"jsonrpc":"2.0", "id":message["id"], "result":{"type":"context", "window":null, "context":null}}).to_string());
+        }
         *self.request.lock().expect("request lock is available") = Some(request.into());
-        Ok(self.response.clone())
+        let mut response: serde_json::Value = serde_json::from_str(&self.response).unwrap();
+        response["id"] = message["id"].clone();
+        Ok(response.to_string())
     }
 }
 
@@ -230,5 +236,71 @@ fn compact_submission_uses_the_typed_operation_and_retention_prompt() {
         assert_eq!(thread_id.as_str(), "thread");
         assert_eq!(expected_sequence, 7);
         assert_eq!(retention_prompt.as_deref(), retention);
+    }
+}
+
+#[test]
+fn ide_context_is_fresh_per_submission_and_pins_the_window_without_changing_user_text() {
+    struct IdeTransport {
+        requests: Arc<Mutex<Vec<serde_json::Value>>>,
+    }
+    impl JsonRpcTransport for IdeTransport {
+        fn round_trip(&mut self, raw: &str) -> Result<String, ClientError> {
+            let request: serde_json::Value = serde_json::from_str(raw).unwrap();
+            self.requests.lock().unwrap().push(request.clone());
+            let value = match request["method"].as_str().unwrap() {
+                "ide/request" => {
+                    serde_json::json!({"type":"context", "window":{"id":"01234567890123456789012345678901", "title":"Project", "roots":["/project"]}, "context":{"activeFile":{"path":"/project/lib.rs", "version":2, "selections":[{"startLine":2,"startColumn":1,"endLine":2,"endColumn":4,"text":"new"}]},"openTabs":["/project/lib.rs"],"dirtyFiles":["/project/lib.rs"]}})
+                }
+                "session/request" => {
+                    serde_json::json!({"type":"turn", "value":{"turnId":"turn", "sequence":8}})
+                }
+                method => panic!("unexpected request {method}"),
+            };
+            Ok(
+                serde_json::json!({"jsonrpc":"2.0", "id":request["id"], "result":value})
+                    .to_string(),
+            )
+        }
+    }
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let mut client = AppServerClient::new(IdeTransport {
+        requests: requests.clone(),
+    });
+    for index in 0..2 {
+        super::submit_prompt(
+            &mut client,
+            ThreadRequestScope::new(
+                &SessionId::new("session").unwrap(),
+                &ThreadId::new("thread").unwrap(),
+                7,
+            ),
+            ChatSubmission {
+                mode: Default::default(),
+                command_id: ash_protocol::CommandId::new(format!("submit-{index}")).unwrap(),
+                display_text: "explain this".into(),
+                input: vec![ChatInputItem::Text("explain this".into())],
+            },
+            ash_protocol::ApprovalMode::Manual,
+        )
+        .unwrap();
+    }
+    let requests = requests.lock().unwrap();
+    assert_eq!(requests.len(), 4);
+    for pair in requests.chunks(2) {
+        assert_eq!(pair[0]["params"]["sessionId"], "session");
+        let turn = &pair[1]["params"]["request"];
+        assert_eq!(turn["ideWindowId"], "01234567890123456789012345678901");
+        assert_eq!(
+            turn["input"][0],
+            serde_json::json!({"type":"text","text":"explain this"})
+        );
+        let context: serde_json::Value =
+            serde_json::from_str(turn["input"][1]["content"].as_str().unwrap()).unwrap();
+        assert_eq!(
+            context["context"]["activeFile"]["selections"][0]["text"],
+            "new"
+        );
+        assert_eq!(context["context"]["dirtyFiles"][0], "/project/lib.rs");
     }
 }

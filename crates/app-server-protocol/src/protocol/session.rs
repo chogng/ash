@@ -232,6 +232,10 @@ pub enum SessionRequest {
         input: Vec<InputItem>,
     },
     StartTurn {
+        /// Pins the editor used to capture this submission; a changed selection rejects admission.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        ide_window_id: Option<String>,
         thread_id: ThreadId,
         #[ts(type = "number")]
         expected_sequence: u64,

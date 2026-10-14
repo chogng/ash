@@ -152,6 +152,25 @@ where
     if text.is_none() && submission.display_text.trim().starts_with("/advisor ") {
         return Err(ClientError::Protocol("Advisor questions must be text; send attachments to the conversation before consulting.".into()));
     }
+    let ide = if command.is_none() {
+        match client.request_ide(
+            ash_app_server_protocol::protocol::ide::IdeRequest::Context {
+                session_id: scope.session_id.clone(),
+                thread_id: scope.thread_id.clone(),
+            },
+        )? {
+            ash_app_server_protocol::protocol::ide::IdeResult::Context { window, context } => {
+                window.zip(context)
+            }
+            _ => {
+                return Err(ClientError::Protocol(
+                    "Unexpected IDE context response".into(),
+                ));
+            }
+        }
+    } else {
+        None
+    };
     let request = match command {
         Some(("/compact", arguments)) => SessionRequest::CompactContext {
             thread_id: scope.thread_id,
@@ -164,6 +183,7 @@ where
             question: question.to_owned(),
         },
         _ => SessionRequest::StartTurn {
+            ide_window_id: ide.as_ref().map(|(window, _)| window.id.clone()),
             thread_id: scope.thread_id,
             expected_sequence: scope.expected_sequence,
             mode: submission.mode,
@@ -171,7 +191,19 @@ where
             model: None,
             reasoning_effort: None,
             tool_mode: None,
-            input: materialize_submission(client, submission)?,
+            input: {
+                let mut input = materialize_submission(client, submission)?;
+                if let Some((window, context)) = ide {
+                    input.push(InputItem::Context {
+                        name: "Ash IDE context".into(),
+                        content: serde_json::to_string(
+                            &serde_json::json!({ "window": window, "context": context }),
+                        )
+                        .map_err(|error| ClientError::Protocol(error.to_string()))?,
+                    });
+                }
+                input
+            },
         },
     };
     match client.request_session(SessionRequestParams {

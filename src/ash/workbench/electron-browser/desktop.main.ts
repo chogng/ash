@@ -14,6 +14,7 @@ import { WorkingCopyBackupService } from '../services/workingCopy/browser/workin
 import { IndexedDbWorkingCopyBackupService } from '../services/workingCopy/browser/indexedDbWorkingCopyBackupService.js';
 import { AppServerProtocolClient } from '../../platform/agentHost/browser/appServerProtocolClient.js';
 import { AppServerTextDocumentHost } from '../services/textfile/browser/appServerTextDocumentHost.js';
+import { AppServerIdeHost } from '../services/editor/browser/appServerIdeHost.js';
 import { IChatEditingService } from '../contrib/chat/common/editing/chatEditingService.js';
 import { addDisposableListener } from '../../base/browser/dom.js';
 import { installBaseUiStyles } from '../../base/browser/ui/styles.js';
@@ -131,7 +132,10 @@ export class DesktopMain extends Disposable {
 				},
 				createTextDocumentHost: documentClient ? services => {
 					const editing = services.get(IChatEditingService);
-					return services.createInstance(AppServerTextDocumentHost, documentClient!, { applyEdits: editing.applyEdits.bind(editing), finishTurn: editing.finishTurn.bind(editing) });
+					const hosts = new DisposableStore();
+					hosts.add(services.createInstance(AppServerTextDocumentHost, documentClient!, { applyEdits: editing.applyEdits.bind(editing), finishTurn: editing.finishTurn.bind(editing) }));
+					hosts.add(services.createInstance(AppServerIdeHost, documentClient!));
+					return hosts;
 				} : undefined,
 				createLogService: () => logger.createLogger('workbench'),
 				createWorkingCopyBackupService: (services, workspaceId) => {

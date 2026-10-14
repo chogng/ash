@@ -888,6 +888,49 @@ pub(crate) fn spinner_verb(index: usize) -> &'static str {
 /// identifiers, and code are intentionally absent so they remain byte-for-byte source text.
 const UI_TRANSLATIONS: &[Translation] = &[
     translation(
+        "Could not update IDE connection: {0}",
+        "IDE の接続を更新できませんでした: {0}",
+        "无法更新 IDE 连接：{0}",
+        "Impossible de modifier la connexion IDE : {0}",
+    ),
+    translation("IDE windows", "IDE ウィンドウ", "IDE 窗口", "Fenêtres IDE"),
+    translation(
+        "Disconnect IDE",
+        "IDE を切断",
+        "断开 IDE",
+        "Déconnecter l’IDE",
+    ),
+    translation(
+        "Open a project in Ash IDE to connect. Press Esc to return.",
+        "Ash IDE でプロジェクトを開いて接続します。Esc で戻ります。",
+        "在 Ash IDE 中打开项目即可连接。按 Esc 返回。",
+        "Ouvrez un projet dans Ash IDE pour vous connecter. Échap pour revenir.",
+    ),
+    translation(
+        "Connected to {0}. New messages include editor context.",
+        "{0} に接続しました。新しいメッセージにエディターのコンテキストを含めます。",
+        "已连接 {0}。新消息将附带编辑器上下文。",
+        "Connexion à {0}. Les nouveaux messages incluent le contexte de l’éditeur.",
+    ),
+    translation(
+        "IDE is disconnected. Use /ide to choose a window.",
+        "IDE は未接続です。/ide でウィンドウを選択します。",
+        "IDE 未连接。使用 /ide 选择窗口。",
+        "IDE déconnecté. Utilisez /ide pour choisir une fenêtre.",
+    ),
+    translation(
+        "Usage: /ide [status|disconnect]",
+        "使い方: /ide [status|disconnect]",
+        "用法：/ide [status|disconnect]",
+        "Utilisation : /ide [status|disconnect]",
+    ),
+    translation(
+        "connect to Ash IDE for editor context and result displays",
+        "Ash IDE に接続してエディターのコンテキストと結果を表示",
+        "连接 Ash IDE，获取编辑器上下文并展示结果",
+        "se connecter à Ash IDE pour le contexte et l’affichage des résultats",
+    ),
+    translation(
         "Announcement: {0}",
         "お知らせ: {0}",
         "公告：{0}",

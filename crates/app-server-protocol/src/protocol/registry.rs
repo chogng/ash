@@ -3560,6 +3560,7 @@ client_methods! {
         response: SessionSubscribeResult,
         serialization: SessionSharedRead,
     },
+    IdeRequest => "ide/request" { params: crate::protocol::ide::IdeRequest, response: crate::protocol::ide::IdeResult, serialization: ConnectionExclusive("ide"), },
     SessionRequest => "session/request" {
         params: SessionRequestParams,
         response: SessionRequestResult,
@@ -5260,6 +5261,7 @@ macro_rules! host_methods {
 }
 
 host_methods! {
+    IdeHostRequest => "ide/hostRequest" { params: crate::protocol::ide::IdeHostRequest, response: crate::protocol::ide::IdeHostResult, },
     AppHostRequest => "app/request" { params: crate::protocol::app_tools::AppHostRequestParams, response: crate::protocol::app_tools::AppHostResult, },
     ExtensionClientRequest => "extensionClient/request" { params: ExtensionClientRequestParams, response: ExtensionClientResult, },
     TextDocumentList => "textDocument/list" { params: TextDocumentListParams, response: TextDocumentListResult, },
@@ -5808,6 +5810,14 @@ typescript_bindings! {
     BrowserTextInputTargetDto,
     ClientCapabilities,
     crate::protocol::common::HostRequestCancelParams,
+    crate::protocol::ide::IdeWindow,
+    crate::protocol::ide::IdeRequest,
+    crate::protocol::ide::IdeResult,
+    crate::protocol::ide::IdeContext,
+    crate::protocol::ide::IdeActiveFile,
+    crate::protocol::ide::IdeSelection,
+    crate::protocol::ide::IdeHostRequest,
+    crate::protocol::ide::IdeHostResult,
     crate::protocol::app_tools::AppToolsCapability,
     crate::protocol::app_tools::AppHostRequestParams,
     crate::protocol::app_tools::AppHostOperation,

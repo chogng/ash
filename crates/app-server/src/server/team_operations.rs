@@ -249,6 +249,7 @@ impl AppServer {
             .map_err(|error| team_error(TeamError::InvalidInput(error.to_string())))?;
         self.start_agent_turn_request(
             ThreadMutation {
+                ide_window_id: None,
                 connection_id: Some(connection.connection_id),
                 command_id: turn_command,
                 session_id: run.session_id.clone(),

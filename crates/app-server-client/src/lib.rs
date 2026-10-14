@@ -889,6 +889,14 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         self.call(ClientMethod::ApprovalEnvironmentSave, params)
     }
 
+    /// Discovers and explicitly attaches this client to a live editor window.
+    pub fn request_ide(
+        &mut self,
+        params: ash_app_server_protocol::protocol::ide::IdeRequest,
+    ) -> Result<ash_app_server_protocol::protocol::ide::IdeResult, ClientError> {
+        self.call(ClientMethod::IdeRequest, params)
+    }
+
     /// Sends the canonical typed mutation request scoped to one product Session.
     pub fn request_session(
         &mut self,

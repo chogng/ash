@@ -3550,3 +3550,20 @@ fn dictation_model_preparation_shows_real_download_bytes_in_chinese() {
     );
     crate::tui_assert_snapshot!(app = &app; "dictation_model_downloading_zh", render(&app, 80, 20));
 }
+
+#[test]
+fn ide_picker_shows_window_roots_connection_status_and_disconnect_action() {
+    struct IdeTransport;
+    impl ash_app_server_client::JsonRpcTransport for IdeTransport {
+        fn round_trip(&mut self, raw: &str) -> Result<String, ash_app_server_client::ClientError> {
+            let request: serde_json::Value = serde_json::from_str(raw).unwrap();
+            let window = serde_json::json!({"id":"01234567890123456789012345678901","title":"Ash workspace","roots":["/workspace/ash"]});
+            Ok(serde_json::json!({"jsonrpc":"2.0","id":request["id"],"result":{"type":"windows","windows":[window.clone()],"selected":window}}).to_string())
+        }
+    }
+    let mut client = ash_app_server_client::AppServerClient::new(IdeTransport);
+    let mut app = App::new();
+    app.update(crate::ide::open(&mut client, "").unwrap());
+    assert_eq!(app.list_selection().unwrap().title(), "Ash IDE");
+    crate::tui_assert_snapshot!(app = &app; "ide_connected_window_picker", render(&app, 90, 20));
+}

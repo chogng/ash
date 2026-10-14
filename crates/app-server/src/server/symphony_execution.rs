@@ -333,6 +333,7 @@ impl AppServer {
             };
             let started = self.start_turn_request(
                 ThreadMutation {
+                    ide_window_id: None,
                     connection_id: None,
                     command_id: turn_command.clone(),
                     session_id: snapshot.session_id.clone(),
@@ -469,6 +470,7 @@ impl AppServer {
         {
             self.interrupt_turn_request(
                 ThreadMutation {
+                    ide_window_id: None,
                     connection_id: None,
                     command_id: command(
                         &format!("stop-{}", job.turn_number),

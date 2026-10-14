@@ -1,0 +1,24 @@
+---
+source: crates/tui/src/app/fullscreen/frame_tests.rs
+expression: "render(&app, 90, 20)"
+---
+  .                                                                          [Dashboard]  
+                                                                                          
+           ┌── Ash IDE ──────────────────────────────────────────────────[✗]─┐            
+           │                                                                 │            
+           │   IDE windows                                                   │            
+           │                                                                 │            
+           │  Disconnect IDE                                                 │            
+           │                                                                 │            
+           │> Ash workspace  ·  Connected · /workspace/ash                   │            
+           │                                                                 │            
+           │                                                                 │            
+           │                                                                 │            
+           │                                                                 │            
+           │                                                                 │            
+           │                                                                 │            
+  ─────────│                                                                 │──────────  
+  > Build a└─────────────────────────────────────────────────────────────────┘            
+  ───────────────────────────────────────────────────────────────────── Automatic model   
+                                                                                          
+  Enter to confirm  ·  Tab/Shift+Tab to switch  ·  Esc to close

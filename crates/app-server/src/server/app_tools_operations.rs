@@ -1,3 +1,7 @@
+#[cfg(test)]
+#[path = "ide_display_tests.rs"]
+mod ide_display_tests;
+
 use super::AppServer;
 use super::operations::SessionMutation;
 use super::project_projection;
@@ -147,6 +151,62 @@ impl AppServer {
         Ok(path.to_string_lossy().into_owned())
     }
 
+    /// Uses execution's live read grants: the Thread checkout and environment root are both
+    /// available for absolute paths, with configured and explicit Session directories additive.
+    pub(super) fn display_read_authorizations(
+        &self,
+        session: &ash_protocol::SessionId,
+        thread: &ash_protocol::ThreadId,
+    ) -> Result<Vec<ash_file_access::Authorization>, CoreError> {
+        let runtime = self
+            .env_runtime
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut authorizations: Vec<ash_file_access::Authorization> = match runtime
+            .dir_grants
+            .thread_scope(thread, ash_file_access::Permission::ReadFiles)
+            .map_err(|error| CoreError::Policy(error.to_string()))?
+        {
+            Some(scope) => scope.authorizations().cloned().collect(),
+            None => runtime
+                .selected_grant
+                .as_ref()
+                .and_then(|grant| grant.authorize(ash_file_access::Permission::ReadFiles).ok())
+                .into_iter()
+                .collect(),
+        };
+        if let Some(default) = runtime
+            .selected_grant
+            .as_ref()
+            .and_then(|grant| grant.authorize(ash_file_access::Permission::ReadFiles).ok())
+            && !authorizations
+                .iter()
+                .any(|authorization| authorization.dir() == default.dir())
+        {
+            authorizations.push(default);
+        }
+        authorizations.extend(
+            runtime
+                .dirs
+                .values()
+                .filter_map(|grant| grant.authorize(ash_file_access::Permission::ReadFiles).ok()),
+        );
+        if let Some(snapshot) = runtime
+            .dir_grants
+            .snapshot_for(session, ash_file_access::Permission::ReadFiles)
+            .map_err(|error| CoreError::Policy(error.to_string()))?
+        {
+            authorizations.extend(snapshot.authorizations().iter().cloned());
+        }
+        if let Some(primary) = &runtime.selected_grant {
+            authorizations = authorizations
+                .into_iter()
+                .map(|authorization| authorization.constrained_by(primary.path_policy()))
+                .collect();
+        }
+        Ok(authorizations)
+    }
+
     fn validate_app_path(&self, path: &str, context: &AppToolContext) -> Result<(), CoreError> {
         let path = std::path::Path::new(path);
         if !path.is_absolute() {
@@ -158,19 +218,18 @@ impl AppServer {
         let path = path
             .canonicalize()
             .map_err(|error| CoreError::Execution(error.to_string()))?;
-        let runtime = self
-            .env_runtime
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if !runtime
-            .dir_grants
-            .list(&context.session_id)
+        if !self
+            .display_read_authorizations(&context.session_id, &context.thread_id)?
             .iter()
-            .any(|entry| {
-                entry
-                    .permissions()
-                    .allows(ash_file_access::Permission::ReadFiles)
-                    && path.starts_with(entry.dir().canonical_path())
+            .any(|authorization| {
+                authorization.ensure_active().is_ok()
+                    && path
+                        .strip_prefix(authorization.dir().canonical_path())
+                        .is_ok_and(|relative| {
+                            authorization
+                                .path_policy()
+                                .allows(relative, ash_file_access::PathOperation::Read)
+                        })
             })
         {
             return Err(CoreError::Policy(
@@ -261,6 +320,58 @@ impl AppServer {
             .binding(&context.thread_id, &context.turn_id)
             .map_err(host_error)?
             .ok_or_else(|| CoreError::Execution("this turn has no application window".into()))?;
+        if let Some(target) = binding.ide.as_ref() {
+            let request = match &operation {
+                AppHostOperation::OpenFile { path, line } => Some(
+                    ash_app_server_protocol::protocol::ide::IdeHostRequest::OpenFile {
+                        path: path.clone(),
+                        line: *line,
+                    },
+                ),
+                AppHostOperation::OpenReview { original, modified } => Some(
+                    ash_app_server_protocol::protocol::ide::IdeHostRequest::OpenReview {
+                        original: original.clone(),
+                        modified: modified.clone(),
+                    },
+                ),
+                _ => None,
+            };
+            if let Some(request) = request {
+                let paths = match &request {
+                    ash_app_server_protocol::protocol::ide::IdeHostRequest::OpenFile {
+                        path,
+                        ..
+                    } => vec![path],
+                    ash_app_server_protocol::protocol::ide::IdeHostRequest::OpenReview {
+                        original,
+                        modified,
+                    } => vec![original, modified],
+                    ash_app_server_protocol::protocol::ide::IdeHostRequest::Context { .. } => {
+                        unreachable!()
+                    }
+                };
+                if paths.iter().any(|path| {
+                    !std::fs::canonicalize(path).is_ok_and(|canonical| {
+                        target.window.roots.iter().any(|root| {
+                            canonical.starts_with(root)
+                                && std::path::Path::new(path).starts_with(root)
+                        })
+                    })
+                }) {
+                    return Err(CoreError::Policy(
+                        "IDE display target is outside the selected workspace".into(),
+                    ));
+                }
+                return match target.request(&request, cancellation).map_err(host_error)? {
+                    ash_app_server_protocol::protocol::ide::IdeHostResult::Opened {} => {
+                        Ok(json!({ "opened": true }))
+                    }
+                    ash_app_server_protocol::protocol::ide::IdeHostResult::Context { .. } => {
+                        Err(CoreError::Execution("unexpected IDE display result".into()))
+                    }
+                };
+            }
+        }
         let capability = self
             .client_host
             .app_tools_capability(binding.connection_id)

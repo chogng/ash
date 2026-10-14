@@ -267,6 +267,7 @@ impl AppServer {
             .map_err(|error| format!("{:?}", error.message))?;
         let start = self.start_agent_turn_request(
             ThreadMutation {
+                ide_window_id: None,
                 connection_id: None,
                 command_id: request.command_id.clone(),
                 session_id: request.session_id.clone(),

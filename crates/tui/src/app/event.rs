@@ -13,6 +13,7 @@ pub(crate) enum AppEvent {
     },
     Config(crate::config::Event),
     Connectors(crate::connectors::Event),
+    Ide(crate::ide::Event),
     Dirs(crate::dirs::Event),
     Git(crate::git::Event),
     Host(crate::host::Event),
@@ -50,6 +51,7 @@ macro_rules! app_event_from {
 
 app_event_from!(crate::config::Event, Config);
 app_event_from!(crate::connectors::Event, Connectors);
+app_event_from!(crate::ide::Event, Ide);
 app_event_from!(crate::dirs::Event, Dirs);
 app_event_from!(crate::git::Event, Git);
 app_event_from!(crate::host::Event, Host);

@@ -205,6 +205,11 @@ where
                 .into(),
             );
         }
+        TuiSlashCommandAction::Ide => {
+            output
+                .events
+                .push(crate::ide::open(client, &arguments)?.into());
+        }
         TuiSlashCommandAction::Connectors => {
             output.events.push(
                 crate::connectors::Event::PickerOpened(crate::connectors::load_selection(client)?)

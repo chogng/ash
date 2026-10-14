@@ -11,6 +11,7 @@ pub(crate) enum AppCommand {
     DictationStop { resource_id: String },
     Config(crate::config::Command),
     Connectors(crate::connectors::Command),
+    Ide(crate::ide::Command),
     Dirs(crate::dirs::Command),
     Git(crate::git::Command),
     Host(crate::host::Command),
@@ -68,6 +69,7 @@ impl AppCommand {
                     TuiSlashCommandAction::Mcp => Some("MCP"),
                     TuiSlashCommandAction::Hooks => Some("Hooks"),
                     TuiSlashCommandAction::Connectors => Some("Connectors"),
+                    TuiSlashCommandAction::Ide => Some("Ash IDE"),
                     TuiSlashCommandAction::Context => Some("Context"),
                     TuiSlashCommandAction::DebugContext => Some("Developer: Context diagnostics"),
                     TuiSlashCommandAction::Status => Some("Session status"),
@@ -94,6 +96,7 @@ macro_rules! app_command_from {
 
 app_command_from!(crate::config::Command, Config);
 app_command_from!(crate::connectors::Command, Connectors);
+app_command_from!(crate::ide::Command, Ide);
 app_command_from!(crate::dirs::Command, Dirs);
 app_command_from!(crate::git::Command, Git);
 app_command_from!(crate::host::Command, Host);

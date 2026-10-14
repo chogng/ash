@@ -39,8 +39,9 @@ pub(crate) enum TextDocumentMode {
     FileSystem,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(crate) struct TurnHostBinding {
+    pub(crate) ide: Option<crate::ide_registry::IdeTarget>,
     pub(crate) connection_id: u64,
     pub(crate) text_documents: bool,
 }
@@ -58,6 +59,7 @@ struct ClientHostOwner {
     app_tools: Option<ash_app_server_protocol::protocol::app_tools::AppToolsCapability>,
     outbound: NotificationQueue,
     text_documents: bool,
+    ide: Option<crate::ide_registry::IdeTarget>,
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -122,6 +124,7 @@ impl ClientHost {
                     app_tools: None,
                     outbound,
                     text_documents,
+                    ide: None,
                 },
             );
     }
@@ -154,6 +157,38 @@ impl ClientHost {
             .and_then(|owner| owner.app_tools.clone())
     }
 
+    pub(crate) fn select_ide(
+        &self,
+        connection_id: u64,
+        target: Option<crate::ide_registry::IdeTarget>,
+    ) -> Result<(), ClientHostError> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| ClientHostError::Failed("client host state lock poisoned".into()))?;
+        let owner = state
+            .owners
+            .get_mut(&connection_id)
+            .ok_or(ClientHostError::CapabilityUnavailable)?;
+        owner.ide = target;
+        Ok(())
+    }
+
+    pub(crate) fn selected_ide(
+        &self,
+        connection_id: u64,
+    ) -> Result<Option<crate::ide_registry::IdeTarget>, ClientHostError> {
+        Ok(self
+            .state
+            .lock()
+            .map_err(|_| ClientHostError::Failed("client host state lock poisoned".into()))?
+            .owners
+            .get(&connection_id)
+            .ok_or(ClientHostError::CapabilityUnavailable)?
+            .ide
+            .clone())
+    }
+
     pub(crate) fn unregister(&self, connection_id: u64) {
         let pending = {
             let mut state = self
@@ -183,11 +218,23 @@ impl ClientHost {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn submit_turn(
         &self,
         thread: &ash_protocol::ThreadId,
         connection: Option<u64>,
         document_mode: TextDocumentMode,
+        submit: impl FnOnce() -> Result<TurnReceipt, CoreError>,
+    ) -> Result<TurnReceipt, CoreError> {
+        self.submit_turn_with_ide(thread, connection, document_mode, None, submit)
+    }
+
+    pub(crate) fn submit_turn_with_ide(
+        &self,
+        thread: &ash_protocol::ThreadId,
+        connection: Option<u64>,
+        document_mode: TextDocumentMode,
+        expected_ide: Option<&str>,
         submit: impl FnOnce() -> Result<TurnReceipt, CoreError>,
     ) -> Result<TurnReceipt, CoreError> {
         // Tool workers cannot resolve a host before the receipt is bound to its originating client.
@@ -197,17 +244,32 @@ impl ClientHost {
             .map_err(|_| CoreError::Execution("client Turn binding lock poisoned".into()))?;
         let binding = connection
             .map(|connection_id| -> Result<TurnHostBinding, CoreError> {
-                let state = self
-                    .state
-                    .lock()
-                    .map_err(|_| CoreError::Execution("client host state lock poisoned".into()))?;
-                let owner = state.owners.get(&connection_id).ok_or_else(|| {
-                    CoreError::Execution("initiating client is unavailable".into())
-                })?;
+                let (ide, text_documents) = {
+                    let state = self.state.lock().map_err(|_| {
+                        CoreError::Execution("client host state lock poisoned".into())
+                    })?;
+                    let owner = state.owners.get(&connection_id).ok_or_else(|| {
+                        CoreError::Execution("initiating client is unavailable".into())
+                    })?;
+                    (owner.ide.clone(), owner.text_documents)
+                };
+                // The selected window may share this ClientHost. Check it after releasing state
+                // to avoid taking the same mutex recursively across two connections.
+                if let Some(expected) = expected_ide {
+                    if !ide
+                        .as_ref()
+                        .is_some_and(|target| target.window.id == expected && target.is_connected())
+                    {
+                        return Err(CoreError::Execution(
+                            "IDE connection changed before submission; reconnect and send again"
+                                .into(),
+                        ));
+                    }
+                }
                 Ok(TurnHostBinding {
+                    ide,
                     connection_id,
-                    text_documents: owner.text_documents
-                        && document_mode == TextDocumentMode::Client,
+                    text_documents: text_documents && document_mode == TextDocumentMode::Client,
                 })
             })
             .transpose()?;
@@ -264,7 +326,7 @@ impl ClientHost {
             .lock()
             .map_err(|_| ClientHostError::Failed("client Turn binding lock poisoned".into()))?
             .get(&(thread.clone(), turn.clone()))
-            .copied()
+            .cloned()
             .ok_or(ClientHostError::CapabilityUnavailable)?)
     }
 
@@ -284,22 +346,24 @@ impl ClientHost {
         let mut binding = match replayed_turn
             .and_then(|turn| turns.get(&(child_thread.clone(), turn.clone())))
         {
-            Some(binding) => *binding,
+            Some(binding) => binding.clone(),
             None => match document_mode {
-                TextDocumentMode::Client => *turns
+                TextDocumentMode::Client => turns
                     .get(&(parent_thread.clone(), parent_turn.clone()))
                     .ok_or_else(|| {
                         CoreError::Execution("parent Turn execution context is unavailable".into())
-                    })?,
+                    })?
+                    .clone(),
                 TextDocumentMode::FileSystem => turns
                     .get(&(parent_thread.clone(), parent_turn.clone()))
-                    .copied()
+                    .cloned()
                     .flatten(),
             },
         };
         if document_mode == TextDocumentMode::FileSystem {
             if let Some(binding) = &mut binding {
                 binding.text_documents = false;
+                binding.ide = None;
             }
         }
         // Keep selection and admission under the same gate: child workers may start immediately.

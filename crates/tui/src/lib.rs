@@ -12,6 +12,7 @@ mod git;
 mod guardian;
 mod hooks;
 mod host;
+mod ide;
 mod issues;
 mod keymap;
 mod keymap_setup;

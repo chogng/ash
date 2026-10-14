@@ -514,6 +514,7 @@ fn in_process_client_uses_session_first_contract_and_canonical_updates() {
             command_id: CommandId::new("turn-one").expect("test ID is non-empty"),
             session_id: session.session.session_id.clone(),
             request: SessionRequest::StartTurn {
+                ide_window_id: None,
                 thread_id: thread.thread_id.clone(),
                 expected_sequence: 1,
                 mode: ash_protocol::CollaborationMode::Agent,

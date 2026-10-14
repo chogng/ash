@@ -109,6 +109,7 @@ pub(super) struct SessionMutation {
 
 pub(super) struct ThreadMutation {
     pub(super) connection_id: Option<u64>,
+    pub(super) ide_window_id: Option<String>,
     pub(super) command_id: ash_protocol::CommandId,
     pub(super) session_id: ash_protocol::SessionId,
     pub(super) expected_sequence: u64,
@@ -813,6 +814,7 @@ impl AppServer {
                 )?,
             )),
             SessionRequest::StartTurn {
+                ide_window_id,
                 thread_id,
                 expected_sequence,
                 mode,
@@ -822,7 +824,10 @@ impl AppServer {
                 tool_mode,
                 input,
             } => result(&SessionRequestResult::Turn(self.start_turn_request(
-                thread_mutation(mutation, expected_sequence, connection.connection_id),
+                ThreadMutation {
+                    ide_window_id,
+                    ..thread_mutation(mutation, expected_sequence, connection.connection_id)
+                },
                 thread_id,
                 match approval_mode {
                     Some(mode) => mode,
@@ -1232,6 +1237,7 @@ impl AppServer {
             Some(replayed) => turn_start_result(replayed),
             None => self.start_turn_request(
                 ThreadMutation {
+                    ide_window_id: None,
                     connection_id: Some(connection_id),
                     command_id: start_command_id,
                     session_id: mutation.session_id.clone(),
@@ -1845,6 +1851,7 @@ impl AppServer {
                     request,
                     mutation.connection_id,
                     document_mode,
+                    mutation.ide_window_id.as_deref(),
                 )
                 .map_err(core_error)?;
             workflow_child = result.child;
@@ -1855,7 +1862,13 @@ impl AppServer {
         } else {
             self.agent_runtime()
                 .submit_turn_with_admission(&thread_id, request, |thread, request| {
-                    self.admit_bound_turn(thread, request, mutation.connection_id, document_mode)
+                    self.admit_bound_turn_with_ide(
+                        thread,
+                        request,
+                        mutation.connection_id,
+                        document_mode,
+                        mutation.ide_window_id.as_deref(),
+                    )
                 })
                 .map_err(core_error)?
         };
@@ -2232,6 +2245,7 @@ fn thread_mutation(
     connection_id: u64,
 ) -> ThreadMutation {
     ThreadMutation {
+        ide_window_id: None,
         connection_id: Some(connection_id),
         command_id: mutation.command_id,
         session_id: mutation.session_id,

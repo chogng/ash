@@ -83,6 +83,7 @@ fn embedded_session_delivers_idle_notifications_without_a_polling_request() {
             command_id: command_id("turn"),
             session_id: created_session.session.session_id,
             request: SessionRequest::StartTurn {
+                ide_window_id: None,
                 thread_id: created_thread.thread_id,
                 expected_sequence: 1,
                 mode: ash_protocol::CollaborationMode::Agent,

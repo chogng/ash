@@ -97,6 +97,7 @@ impl AppServer {
         let snapshot = if accepted.is_none() {
             let start = self.start_turn_request(
                 ThreadMutation {
+                    ide_window_id: None,
                     connection_id: None,
                     command_id: command.clone(),
                     session_id: snapshot.session_id.clone(),
@@ -169,6 +170,7 @@ impl AppServer {
         {
             self.interrupt_turn_request(
                 ThreadMutation {
+                    ide_window_id: None,
                     connection_id: None,
                     command_id: command_id("stop", &run.id)?,
                     session_id: snapshot.session_id,

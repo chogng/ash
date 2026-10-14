@@ -132,6 +132,7 @@ mod github_issue_tests;
 mod github_processor;
 mod home_context;
 mod hook_events;
+mod ide_operations;
 mod instruction_import;
 mod instruction_operations;
 mod interaction_runtime;
@@ -300,6 +301,7 @@ pub struct AppServer {
     execution_tool_port: Option<crate::tool_composition::ToolPort>,
     extension_tool_port: Option<crate::tool_composition::ToolPort>,
     browser_host: Arc<BrowserHost>,
+    ide_registry: Arc<crate::ide_registry::IdeRegistry>,
     pub(super) client_host: Arc<crate::client_host::ClientHost>,
     pub(super) text_document_host: Arc<crate::text_document_host::TextDocumentHost>,
     browser_tool_port: crate::tool_composition::ToolPort,
@@ -544,6 +546,16 @@ impl ConnectionNotifications {
 }
 
 impl AppServer {
+    pub(crate) fn with_ide_registry(
+        mut self,
+        registry: Option<Arc<crate::ide_registry::IdeRegistry>>,
+    ) -> Self {
+        if let Some(registry) = registry {
+            self.ide_registry = registry;
+        }
+        self
+    }
+
     pub(crate) fn with_backup_store(mut self, backups: Arc<ash_state::SqliteBackupStore>) -> Self {
         self.backups = Some(backups);
         self
@@ -724,6 +736,7 @@ impl AppServer {
             execution_tool_port: None,
             extension_tool_port: None,
             browser_host,
+            ide_registry: Arc::new(crate::ide_registry::IdeRegistry::default()),
             client_host,
             text_document_host,
             browser_tool_port,
@@ -1061,6 +1074,8 @@ impl AppServer {
         self.request_scheduler
             .cancel_connection(connection.connection_id);
         // Pending host calls must be woken before joining their request workers.
+        self.ide_registry
+            .unregister(&self.client_host, connection.connection_id);
         self.browser_host.unregister(connection.connection_id);
     }
 
@@ -1116,6 +1131,8 @@ impl AppServer {
                 }
             }
         }
+        self.ide_registry
+            .unregister(&self.client_host, connection.connection_id);
         self.browser_host.unregister(connection.connection_id);
         if let Err(error) = self.synchronize_browser_tool_availability()
             && let Some(host) = &self.local_env_host
@@ -2028,6 +2045,7 @@ impl AppServer {
         }
     }
 
+    #[cfg(test)]
     pub(super) fn admit_bound_turn(
         &self,
         thread: &ash_protocol::ThreadId,
@@ -2035,9 +2053,24 @@ impl AppServer {
         connection: Option<u64>,
         document_mode: crate::client_host::TextDocumentMode,
     ) -> Result<ash_core::StartTurnResult, CoreError> {
+        self.admit_bound_turn_with_ide(thread, request, connection, document_mode, None)
+    }
+
+    pub(super) fn admit_bound_turn_with_ide(
+        &self,
+        thread: &ash_protocol::ThreadId,
+        request: ash_core::StartTurnRequest,
+        connection: Option<u64>,
+        document_mode: crate::client_host::TextDocumentMode,
+        expected_ide: Option<&str>,
+    ) -> Result<ash_core::StartTurnResult, CoreError> {
         let mut started = None;
-        self.client_host
-            .submit_turn(thread, connection, document_mode, || {
+        self.client_host.submit_turn_with_ide(
+            thread,
+            connection,
+            document_mode,
+            expected_ide,
+            || {
                 let result = self.threads.start_turn(thread, request)?;
                 let receipt = core_api::TurnReceipt {
                     turn_id: result.turn_id.clone(),
@@ -2045,7 +2078,8 @@ impl AppServer {
                 };
                 started = Some(result);
                 Ok(receipt)
-            })?;
+            },
+        )?;
         Ok(started.expect("successful admission retains its receipt"))
     }
 
@@ -2056,6 +2090,7 @@ impl AppServer {
         request: core_api::SubmitTurnRequest,
         connection: Option<u64>,
         document_mode: crate::client_host::TextDocumentMode,
+        expected_ide: Option<&str>,
     ) -> Result<workflows::Receipt, CoreError> {
         self.workflow_runtime().execute_with_turn_submission(
             thread,
@@ -2077,7 +2112,15 @@ impl AppServer {
                 activated_skills: request.activated_skills,
                 input: request.input,
             },
-            |thread, request| self.admit_bound_turn(thread, request, connection, document_mode),
+            |thread, request| {
+                self.admit_bound_turn_with_ide(
+                    thread,
+                    request,
+                    connection,
+                    document_mode,
+                    expected_ide,
+                )
+            },
         )
     }
 
@@ -2316,6 +2359,8 @@ impl AppServer {
                 self.cancel_connection_requests(&connection);
             } else {
                 // EOF cannot provide another host reply, even when accepted stdio requests drain.
+                self.ide_registry
+                    .unregister(&self.client_host, connection.connection_id);
                 self.browser_host.unregister(connection.connection_id);
             }
             let request_result = requests.finish();
@@ -3073,6 +3118,9 @@ impl AppServer {
                 self.syntax_selection_ranges(connection, &request.params)
             }
             Some(ClientMethod::SyntaxClose) => self.syntax_close(connection, &request.params),
+            Some(ClientMethod::IdeRequest) => {
+                self.ide_request(connection, &request.params, cancellation)
+            }
             Some(ClientMethod::LanguageServers) => self.language_servers(&request.params),
             Some(ClientMethod::LanguageSynchronize) => {
                 self.language_synchronize(&request.params, cancellation)

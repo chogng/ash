@@ -661,6 +661,10 @@ impl App {
                 Some(DirCommand::SetPermissions(params).into())
             }
             CommandPanelOutcome::Config(outcome) => self.handle_config_editor_outcome(outcome),
+            CommandPanelOutcome::Ide(command) => {
+                self.close_command_panel();
+                Some(command.into())
+            }
             CommandPanelOutcome::Connectors(ConnectorSelectionAction::ConnectDeviceOAuth {
                 connector_id,
                 connection_generation,
@@ -2711,6 +2715,14 @@ impl App {
             AppEvent::Usage(crate::usage::Event::Opened(model)) => {
                 self.open_command_panel(CommandPanel::usage(model));
             }
+            AppEvent::Ide(event) => match event {
+                crate::ide::Event::Opened(view) => self.open_command_panel(CommandPanel::ide(view)),
+                crate::ide::Event::Notice(mut text) => {
+                    text.localize(self.language());
+                    self.chat_panel
+                        .show_notice(text.to_string(), Instant::now());
+                }
+            },
             AppEvent::Connectors(event) => self.apply_connector_event(event),
             AppEvent::Guardian(event) => self.open_command_panel(CommandPanel::Guardian(event.0)),
             AppEvent::Memories(event) => match event {
@@ -2901,6 +2913,7 @@ impl App {
             | AppEvent::Connectors(
                 ConnectorEvent::PickerOpened(_) | ConnectorEvent::PickerUpdated(_),
             )
+            | AppEvent::Ide(crate::ide::Event::Opened(_))
             | AppEvent::Extensions(_)
             | AppEvent::Lsp(_)
             | AppEvent::Memories(_)

@@ -29,6 +29,7 @@ pub(super) enum RequestKey {
     Keymap,
     StatusLine,
     Connectors,
+    Ide,
     Directories,
     Projects,
     Sessions,
@@ -213,6 +214,7 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
         AppCommand::Status(StatusCommand::OpenLineEditor | StatusCommand::EditLine(_)) => {
             Some(RequestKey::StatusLine)
         }
+        AppCommand::Ide(_) => Some(RequestKey::Ide),
         AppCommand::Connectors(
             ConnectorCommand::ConnectDeviceOAuth { .. } | ConnectorCommand::Disconnect { .. },
         ) => Some(RequestKey::Connectors),

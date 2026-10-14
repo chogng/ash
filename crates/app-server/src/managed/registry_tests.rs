@@ -577,3 +577,132 @@ async fn failed_directory_initialization_completes_waiters_and_allows_a_new_atte
     assert!(Arc::ptr_eq(&server, &found));
     assert_eq!(registry.ready_servers().unwrap().len(), 1);
 }
+
+#[test]
+fn ide_windows_are_discovered_across_real_profile_directory_runtimes() {
+    let profile = tempfile::tempdir().unwrap();
+    let first = tempfile::tempdir().unwrap();
+    let second = tempfile::tempdir_in(first.path()).unwrap();
+    let active_file = second.path().canonicalize().unwrap().join("lib.rs");
+    std::fs::write(&active_file, "disk").unwrap();
+    let registry = ProfileAppServerRegistry::open(ConnectionOptions::new(
+        profile.path(),
+        None,
+        GrantSource::HostConfiguration,
+        None,
+    ))
+    .unwrap();
+    let editor_server = registry
+        .server_for(ConnectionOptions::new(
+            profile.path(),
+            Some(first.path().to_path_buf()),
+            GrantSource::HostConfiguration,
+            None,
+        ))
+        .unwrap();
+    let tui_server = registry
+        .server_for(ConnectionOptions::new(
+            profile.path(),
+            Some(second.path().to_path_buf()),
+            GrantSource::HostConfiguration,
+            None,
+        ))
+        .unwrap();
+    assert!(!Arc::ptr_eq(&editor_server, &tui_server));
+    let mut editor = editor_server.product_host_connection();
+    let mut tui = tui_server.product_host_connection();
+    for (server, connection) in [(&editor_server, &mut editor), (&tui_server, &mut tui)] {
+        let initialized = crate::tests::call(
+            server,
+            connection,
+            serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"ide-test","version":"1"}}}),
+        );
+        assert!(initialized.get("error").is_none(), "{initialized}");
+    }
+    let registered = crate::tests::call(
+        &editor_server,
+        &mut editor,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"ide/request","params":{"type":"register","title":"First project","roots":[first.path()]}}),
+    );
+    assert!(registered.get("error").is_none(), "{registered}");
+    let listed = crate::tests::call(
+        &tui_server,
+        &mut tui,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"ide/request","params":{"type":"list"}}),
+    );
+    assert_eq!(
+        listed["result"]["windows"][0]["id"],
+        registered["result"]["window"]["id"]
+    );
+
+    let connected = crate::tests::call(
+        &tui_server,
+        &mut tui,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"ide/request","params":{"type":"connect","windowId":registered["result"]["window"]["id"]}}),
+    );
+    assert!(connected.get("error").is_none(), "{connected}");
+    let session = crate::tests::call(
+        &tui_server,
+        &mut tui,
+        serde_json::json!({"jsonrpc":"2.0","id":4,"method":"session/create","params":{"commandId":"ide-context-session","title":"IDE context","executionTarget":{"type":"local","root":second.path()}}}),
+    );
+    assert!(session.get("error").is_none(), "{session}");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let thread_id = tui_server
+        .threads()
+        .list_threads()
+        .unwrap()
+        .into_iter()
+        .find(|thread| thread.session_id.as_str() == session_id)
+        .unwrap()
+        .thread_id;
+    let params = serde_json::json!({"type":"context","sessionId":session_id,"threadId":thread_id});
+    let notifications = editor_server.connection_notifications(&editor);
+    std::thread::scope(|scope| {
+        let context = scope.spawn(|| {
+            let response = tui_server.handle_json(
+                &mut tui,
+                &serde_json::json!({"jsonrpc":"2.0","id":5,"method":"ide/request","params":params})
+                    .to_string(),
+            );
+            // A failed context request must also wake the test's reverse-RPC reader.
+            notifications.close();
+            response
+        });
+        let mut requested = false;
+        while notifications.wait() {
+            for raw in notifications.drain() {
+                let request: serde_json::Value = serde_json::from_str(&raw).unwrap();
+                if request["method"] != "ide/hostRequest" {
+                    continue;
+                }
+                requested = true;
+                assert_eq!(
+                    request["params"]["roots"],
+                    serde_json::json!([second.path().canonicalize().unwrap()])
+                );
+                editor_server.handle_product_host_response(&editor, serde_json::json!({"jsonrpc":"2.0","id":request["id"],"result":{"type":"context","context":{"activeFile":{"path":active_file,"version":2,"selections":[{"startLine":1,"startColumn":1,"endLine":1,"endColumn":8,"text":"unsaved","truncated":false}]},"openTabs":[active_file],"dirtyFiles":[active_file]}}})).unwrap();
+            }
+        }
+        let response: serde_json::Value = serde_json::from_str(&context.join().unwrap()).unwrap();
+        assert!(response.get("error").is_none(), "{response}");
+        assert!(requested, "IDE context must reach the selected window");
+        assert_eq!(
+            response["result"]["context"]["activeFile"]["selections"][0]["text"],
+            "unsaved"
+        );
+        assert_eq!(
+            response["result"]["window"]["id"],
+            registered["result"]["window"]["id"]
+        );
+    });
+    editor_server.close_connection(editor);
+    let listed = crate::tests::call(
+        &tui_server,
+        &mut tui,
+        serde_json::json!({"jsonrpc":"2.0","id":6,"method":"ide/request","params":{"type":"list"}}),
+    );
+    assert!(listed.get("error").is_none(), "{listed}");
+    assert_eq!(listed["result"]["windows"], serde_json::json!([]));
+    tui_server.close_connection(tui);
+}

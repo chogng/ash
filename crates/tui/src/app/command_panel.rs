@@ -152,6 +152,7 @@ pub(crate) enum CommandPanel {
     GitWorktrees(WorktreePanel),
     Config(ConfigEditor),
     Connectors(ListSelection<ConnectorSelectionAction>),
+    Ide(ListSelection<crate::ide::Command>),
     Keymap(KeymapEditor),
     Extensions(crate::extension_packages::Panel),
     Lsp(crate::lsp::Panel),
@@ -181,6 +182,7 @@ pub(crate) enum CommandPanelOutcome {
     GitWorktree(WorktreeSelectionAction),
     Config(ConfigEditorOutcome),
     Connectors(ConnectorSelectionAction),
+    Ide(crate::ide::Command),
     Keymap(KeymapEditorOutcome),
     Extensions(crate::extension_packages::Command),
     Lsp(crate::lsp::Outcome),
@@ -212,6 +214,7 @@ impl CommandPanel {
             Self::GitWorktrees(content) => content,
             Self::Config(content) => content,
             Self::Connectors(content) => content,
+            Self::Ide(content) => content,
             Self::Keymap(content) => content,
             Self::Extensions(content) => content,
             Self::Lsp(content) => content,
@@ -244,6 +247,7 @@ impl CommandPanel {
             Self::GitWorktrees(content) => content,
             Self::Config(content) => content,
             Self::Connectors(content) => content,
+            Self::Ide(content) => content,
             Self::Keymap(content) => content,
             Self::Extensions(content) => content,
             Self::Lsp(content) => content,
@@ -398,6 +402,12 @@ impl CommandPanel {
         Self::Config(ConfigEditor::new(spec))
     }
 
+    pub(crate) fn ide(
+        spec: crate::widgets::list_selection::ListSelectionSpec<crate::ide::Command>,
+    ) -> Self {
+        Self::Ide(ListSelection::new(spec.model, spec.actions))
+    }
+
     pub(crate) fn connectors(spec: ConnectorChoices) -> Self {
         Self::Connectors(ListSelection::new(spec.model, spec.actions))
     }
@@ -488,6 +498,7 @@ impl CommandPanel {
                 map_selection(content.handle_key(key), CommandPanelOutcome::GitWorktree)
             }
             Self::Config(content) => CommandPanelOutcome::Config(content.handle_key(key)),
+            Self::Ide(content) => map_selection(content.handle_key(key), CommandPanelOutcome::Ide),
             Self::Connectors(content) => {
                 map_selection(content.handle_key(key), CommandPanelOutcome::Connectors)
             }
