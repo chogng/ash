@@ -232,6 +232,16 @@
       "rendering": "multicolor"
     },
     {
+      "id": "clockface",
+      "file": "clockface.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "clockface-filled",
+      "file": "clockface-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "close",
       "file": "close.svg",
       "rendering": "symbolic"
