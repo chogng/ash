@@ -1396,6 +1396,10 @@ use crate::protocol::extension_packages::ExtensionsResourceContentDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::ExtensionsResourceRefDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsSearchPageParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsSearchPageResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::ExtensionsSearchParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::ExtensionsSearchResult;
@@ -3853,6 +3857,11 @@ client_methods! {
         response: ExtensionsSourcesResult,
         serialization: GlobalExclusive,
     },
+    ExtensionsSearchPage => "extensions/searchPage" {
+        params: ExtensionsSearchPageParams,
+        response: ExtensionsSearchPageResult,
+        serialization: None,
+    },
     ExtensionsSearch => "extensions/search" {
         params: ExtensionsSearchParams,
         response: ExtensionsSearchResult,
@@ -5657,6 +5666,8 @@ typescript_bindings! {
     ExtensionsPackageSummaryDto,
     ExtensionsSearchParams,
     ExtensionsSearchResult,
+    ExtensionsSearchPageParams,
+    ExtensionsSearchPageResult,
     ExtensionsSourcesResult,
     ExtensionsSourceDto,
     ExtensionRegistryKindDto,

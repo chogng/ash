@@ -465,6 +465,17 @@ fn providers(provider: Arc<dyn ExtensionSource>) -> crate::ExtensionSources {
 struct VersionProvider(&'static str);
 
 impl ExtensionSource for VersionProvider {
+    fn search_page(
+        &self,
+        request: crate::SearchPackagesPageRequest,
+    ) -> Result<crate::SearchPackagesPageResult, ExtensionsClientError> {
+        let found = self.search(request.search)?;
+        Ok(crate::SearchPackagesPageResult {
+            total: found.packages.len(),
+            packages: found.packages,
+            next_cursor: None,
+        })
+    }
     fn search(
         &self,
         request: SearchPackagesRequest,
@@ -501,6 +512,33 @@ fn named_providers() -> crate::ExtensionSources {
         ),
     ])
     .unwrap()
+}
+
+#[test]
+fn catalog_pages_route_one_source_and_reject_disabled_or_invalid_requests() {
+    let mut sources = named_providers();
+    let mut request = crate::SearchPackagesPageRequest {
+        source_id: "team".into(),
+        cursor: None,
+        search: SearchPackagesRequest {
+            query: "中".repeat(2000),
+            limit: Some(30),
+            ..Default::default()
+        },
+    };
+    let page = sources.search_page(request.clone()).unwrap();
+    assert_eq!(page.packages[0].id, "demo@team");
+    assert_eq!(page.packages[0].version, "1.0.0");
+    request.search.limit = Some(0);
+    assert!(sources.search_page(request.clone()).is_err());
+    request.search.limit = Some(30);
+    request.source_id = "unknown".into();
+    assert!(sources.search_page(request.clone()).is_err());
+    request.source_id = "team".into();
+    sources
+        .disabled
+        .insert(ash_plugin::ExtensionSourceId::new("team").unwrap());
+    assert!(sources.search_page(request).is_err());
 }
 
 #[test]

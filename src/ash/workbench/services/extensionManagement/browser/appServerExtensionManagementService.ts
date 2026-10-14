@@ -1,9 +1,10 @@
 import { Emitter } from "../../../../base/common/event.js";
+import { localize } from '../../../../nls.js';
 import type { ExtensionsBuiltInProviders, ExtensionsEditorExtensionPolicy, ExtensionsEditorExtensionPolicyAction, ExtensionsEditorExtensions } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
 import type { IExtensionManagementApi } from "../../../../platform/extensionManagement/common/extensionManagementApi.js";
-import type { IExtensionManagementService, ExtensionsAcquiredCapability, ExtensionsBrowseSnapshot, ExtensionsInstalledPackage, ExtensionsPackageDetails, ExtensionsPackageSummary, ExtensionsSearchOptions, ExtensionRegistrySources, AshExtensionSource } from "../../../../platform/extensionManagement/common/extensionManagementService.js";
+import type { IExtensionManagementService, ExtensionsAcquiredCapability, ExtensionsBrowseSnapshot, ExtensionsInstalledPackage, ExtensionsPackageDetails, ExtensionsPackageSummary, ExtensionsSearchOptions, ExtensionsSearchPage, ExtensionRegistrySources, AshExtensionSource } from "../../../../platform/extensionManagement/common/extensionManagementService.js";
 
 /** App Server adapter and owner of path-free Renderer browse snapshots. */
 export class AppServerExtensionManagementService extends Disposable implements IExtensionManagementService {
@@ -18,6 +19,15 @@ export class AppServerExtensionManagementService extends Disposable implements I
 	readonly onDidChangeInstalled = this._onDidChangeInstalled.event;
 
 	sources(): Promise<ExtensionRegistrySources> { return this.api.sources(); }
+
+	async searchPage(query: string, options: ExtensionsSearchOptions & { readonly sourceId: string; readonly pageSize: number; readonly cursor?: string; }): Promise<ExtensionsSearchPage> {
+		const page = await this.api.searchPage({ query, sourceId: options.sourceId, pageSize: options.pageSize, cursor: options.cursor ?? null, packageType: options.packageType ?? null, capabilityKind: options.capabilityKind ?? null, languageId: options.languageId ?? null });
+		const total = Number(page.total);
+		if (!Number.isSafeInteger(total) || total < 0) {
+			throw new TypeError(localize({ bundle: 'ash.extensions', key: 'marketplaceInvalidCount' }, 'The registry returned an invalid result count.'));
+		}
+		return { packages: page.packages, total, nextCursor: page.nextCursor ?? undefined };
+	}
 
 	async addSource(source: AshExtensionSource, expectedRevision: number): Promise<ExtensionRegistrySources> {
 		const result = await this.api.addSource({ ...source, expectedRevision });

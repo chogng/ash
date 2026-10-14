@@ -112,6 +112,136 @@ test('MCP failed mutations refresh actual state and stale revisions never overwr
 	await expect(mcp.getByRole('option').filter({ hasText: 'Reviewed server' })).toContainText('Connection refused');
 });
 
+for (const [locale, title, discover, sourceLabel, allSources, loadMore] of [
+	['en', 'Skills', 'Discover skills', 'Marketplace source', 'All sources', 'Load more'],
+	['zh-CN', '技能', '发现技能', '市场来源', '全部来源', '加载更多'],
+]) {
+	test(`Marketplace continues beyond 100 results and source selection starts a new cursor in ${locale}`, async ({ page }) => {
+		await page.goto(`/extensions.html?marketplace&pagedDiscovery&locale=${locale}`);
+		const pane = page.locator('[data-view-id="ash.extensions.skills"]');
+		await pane.getByRole('button', { name: title, exact: true }).click();
+		await pane.getByRole('button', { name: discover, exact: true }).click();
+		const count = (shown: number, total: number) => locale === 'en' ? `Showing ${shown} of ${total} results` : `显示 ${shown} 条，共 ${total} 条结果`;
+		await expect(pane.getByRole('status')).toHaveText(count(30, 146));
+		for (const shown of [60, 90, 120, 146]) {
+			const more = pane.getByRole('button', { name: loadMore, exact: true });
+			await more.focus();
+			await page.keyboard.press('Enter');
+			await expect(pane.getByRole('status')).toHaveText(count(shown, 146));
+		}
+		await expect(pane.getByRole('button', { name: loadMore, exact: true })).toBeHidden();
+		await expect(pane.getByRole('listbox')).toBeFocused();
+		const picker = pane.getByRole('combobox', { name: sourceLabel, exact: true });
+		await picker.focus(); await page.keyboard.press('Enter');
+		await expect(page.getByRole('option', { name: allSources, exact: true })).toBeVisible();
+		await expect(page.getByRole('option', { name: 'open-vsx', exact: true })).toHaveCount(0);
+		await page.getByRole('option', { name: 'other', exact: true }).click();
+		await expect(pane.getByRole('status')).toHaveText(count(30, 73));
+		const requests = await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'searchPage'));
+		const last = requests.at(-1) as any;
+		expect(last[1]).toMatchObject({ sourceId: 'other', cursor: null });
+		await pane.getByRole('searchbox').fill('Item 7');
+		await pane.getByRole('searchbox').press('Enter');
+		await expect(pane.getByRole('status')).toHaveText(count(4, 4));
+		await expect(pane.getByRole('button', { name: loadMore, exact: true })).toBeHidden();
+	});
+}
+
+for (const [locale, installedLabel, installLabel] of [['en', 'Installed', 'Install'], ['zh-CN', '已安装', '安装']]) {
+	for (const [view, paneTitle, discoveryLabel, query, name, packageId] of [
+		['skills', locale === 'zh-CN' ? '技能' : 'Skills', locale === 'zh-CN' ? '发现技能' : 'Discover skills', 'Web', 'Web tools', 'example/web'],
+		['mcp', 'MCP Servers', locale === 'zh-CN' ? '发现 MCP 服务器' : 'Discover MCP servers', 'Docs', 'Docs MCP', 'catalog/docs@ash'],
+	]) {
+		test(`Marketplace ${view} discovery opens reviewed package installation and updates its row in ${locale}`, async ({ page }) => {
+			await page.goto(`/extensions.html?marketplace&locale=${locale}`);
+			const pane = page.locator(`[data-view-id="ash.extensions.${view}"]`);
+			await pane.getByRole('button', { name: paneTitle, exact: true }).click();
+			await pane.getByRole('button', { name: discoveryLabel, exact: true }).focus();
+			await page.keyboard.press('Enter');
+			const search = pane.getByRole('searchbox');
+			await search.fill(query);
+			await search.press('Enter');
+			await expect(pane.getByRole('option')).toHaveCount(1);
+			await expect(pane.getByRole('option')).toContainText(name);
+			await search.press('ArrowDown');
+			await page.keyboard.press('Enter');
+			const editor = page.locator('.ash-extension-editor');
+			await expect(editor.locator('.extension-detail-header')).toContainText(name);
+			expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.some((entry: any) => entry[0] === 'install'))).toBe(false);
+			await editor.getByRole('button', { name: installLabel, exact: true }).click();
+			const review = page.getByRole('dialog', { name: installLabel, exact: true });
+			await expect(review).toContainText(packageId);
+			await review.getByRole('button', { name: installLabel, exact: true }).click();
+			await expect(pane.getByRole('option')).toContainText(installedLabel);
+			const requests = await page.evaluate(() => window.ashExtensionsIntegration.requests);
+			expect(requests).toContainEqual(['install', { packageId, version: '1.0.0' }]);
+			expect(requests.some((entry: any) => entry[0] === 'searchPage' && entry[1].query === query && entry[1].capabilityKind === (view === 'skills' ? 'skill' : 'mcp'))).toBe(true);
+			const showInstalled = pane.getByRole('button', { name: locale === 'zh-CN' ? '显示已安装' : 'Show installed', exact: true });
+			await showInstalled.focus();
+			await page.keyboard.press('Enter');
+			await search.fill('');
+			await expect(pane.getByRole('button', { name: discoveryLabel, exact: true })).toBeVisible();
+			await expect(pane.getByRole('option').filter({ hasText: view === 'skills' ? 'review' : 'docs-server' })).toHaveCount(1);
+		});
+	}
+}
+
+test('Marketplace source failures preserve healthy discovery results', async ({ page }) => {
+	await page.goto('/extensions.html?marketplace&partialDiscoveryFailure');
+	const pane = page.locator('[data-view-id="ash.extensions.skills"]');
+	await pane.getByRole('button', { name: 'Skills', exact: true }).click();
+	await pane.getByRole('button', { name: 'Discover skills', exact: true }).click();
+	await expect(pane.getByRole('option')).toContainText('Web tools');
+	await expect(pane.getByRole('status')).toContainText('Catalog unavailable');
+});
+
+test('Marketplace navigation retires a late failed discovery read', async ({ page }) => {
+	await page.goto('/extensions.html?marketplace');
+	const pane = page.locator('[data-view-id="ash.extensions.skills"]');
+	await pane.getByRole('button', { name: 'Skills', exact: true }).click();
+	await expect(pane.getByRole('option')).toContainText('review');
+	await page.evaluate(() => window.ashExtensionsIntegration.holdDiscoverySearch());
+	await pane.getByRole('button', { name: 'Discover skills', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.discoverySearchStarted())).toBe(true);
+	await pane.getByRole('button', { name: 'Show installed', exact: true }).click();
+	await expect(pane.getByRole('option')).toContainText('review');
+	const status = await pane.getByRole('status').textContent();
+	await page.evaluate(() => window.ashExtensionsIntegration.failHeldSearch());
+	await expect(pane.getByRole('status')).toHaveText(status!);
+	await expect(pane.getByRole('option')).not.toContainText('Web tools');
+});
+
+test('Marketplace visibility changes clear discovery while preserving installed resources', async ({ page }) => {
+	await page.goto('/extensions.html?marketplace');
+	const pane = page.locator('[data-view-id="ash.extensions.skills"]');
+	await pane.getByRole('button', { name: 'Skills', exact: true }).click();
+	await pane.getByRole('button', { name: 'Discover skills', exact: true }).click();
+	await expect(pane.getByRole('option')).toContainText('Web tools');
+	await page.evaluate(() => window.ashExtensionsIntegration.setDiscoveryEnabled(false));
+	await expect(pane.getByRole('option')).toHaveCount(0);
+	await expect(pane.getByRole('status')).toContainText('Discovery is disabled in Settings.');
+	await pane.getByRole('button', { name: 'Show installed', exact: true }).click();
+	await expect(pane.getByRole('option')).toContainText('review');
+});
+
+for (const theme of ['light', 'dark', 'hc']) {
+	test(`Marketplace discovery preserves keyboard focus and pane layout in ${theme}`, async ({ page }) => {
+		await page.goto(`/extensions.html?marketplace&theme=${theme}`);
+		const pane = page.locator('[data-view-id="ash.extensions.skills"]');
+		await pane.getByRole('button', { name: 'Skills', exact: true }).click();
+		const discovery = pane.getByRole('button', { name: 'Discover skills', exact: true });
+		await discovery.focus();
+		await expect(discovery).toBeFocused();
+		expect(await discovery.evaluate(element => Number.parseFloat(getComputedStyle(element).outlineWidth))).toBeGreaterThanOrEqual(1);
+		await page.keyboard.press('Enter');
+		await expect(pane.getByRole('option')).toContainText('Web tools');
+		expect(await pane.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+		await pane.getByRole('searchbox').focus();
+		await page.keyboard.press('ArrowDown');
+		await expect(pane.getByRole('listbox')).toBeFocused();
+	});
+}
+
 for (const [locale, title, urlLabel, refLabel, pathLabel] of [
 	['en', 'Install plugin from Git repository', 'Git repository URL', 'Branch, tag or full commit ID (optional)', 'Package directory (optional)'],
 	['zh-CN', '从 Git 仓库安装插件', 'Git 仓库地址', '分支、标签或完整提交 ID（可选）', '包目录（可选）'],

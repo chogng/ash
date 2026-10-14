@@ -562,6 +562,7 @@ fn extension_packages_search_supports_capabilities_and_exact_language_routes() {
     };
     capabilities.advertise_contracts();
     assert_eq!(capabilities.contracts["extensionsSearch"].version, 1);
+    assert_eq!(capabilities.contracts["extensionsPaging"].version, 1);
     assert_eq!(
         capabilities.contracts["extensionGalleryResources"].version,
         1

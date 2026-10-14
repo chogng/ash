@@ -139,6 +139,23 @@ pub struct SearchPackagesResult {
     pub packages: Vec<PackageSummary>,
 }
 
+/// One exact registry page; its cursor is bound to the query and verified catalog contents.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SearchPackagesPageRequest {
+    pub source_id: String,
+    pub search: SearchPackagesRequest,
+    pub cursor: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SearchPackagesPageResult {
+    pub packages: Vec<PackageSummary>,
+    pub total: usize,
+    pub next_cursor: Option<String>,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GetPackageRequest {

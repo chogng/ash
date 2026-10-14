@@ -13,6 +13,9 @@ import { TOCTree, TOCTreeModel } from '../../../src/ash/workbench/contrib/prefer
 import type { ISetting } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
 import '../../../src/ash/workbench/contrib/preferences/browser/media/settingsEditor.css';
 import { localize } from '../../../src/ash/nls.js';
+import { ICustomizationMarketplaceService } from '../../../src/ash/platform/customizationMarketplace/common/customizationMarketplaceService.js';
+import { CustomizationMarketplaceWorkbenchService } from '../../../src/ash/workbench/contrib/chat/browser/aiCustomization/customizationMarketplaceWorkbenchService.js';
+import '../../../src/ash/workbench/contrib/chat/browser/aiCustomization/customizationMarketplace.contribution.js';
 import chineseSettingsMessages from '../../../extensions/language-pack-zh-cn/translations/settings.json' with { type: 'json' };
 import '../../../src/ash/base/browser/ui/styles.css';
 import { IGlobalExtensionEnablementService } from '../../../src/ash/platform/extensionManagement/common/extensionManagement.js';
@@ -45,7 +48,7 @@ import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/
 import { ContextKeyService, IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { IContextViewService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
-import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
+import { IConfigurationService, type IConfigurationChangeEvent } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.js';
@@ -123,6 +126,8 @@ let offline = false;
 let holdSearch = false;
 let rejectSearch: ((error: Error) => void) | undefined;
 let heldOpen: Promise<void> | undefined;
+const configurationChanged = disposables.add(new Emitter<IConfigurationChangeEvent>());
+let discoveryEnabled = true;
 let installed: ExtensionsInstalledPackage[] = [];
 let generation = 1;
 const summary = { id: 'example/web', version: '1.0.0', packageType: 'plugin', displayName: 'Web tools', description: 'TypeScript server and review skill' };
@@ -132,6 +137,10 @@ const capabilities = [
 	{ kind: 'skill' as const, id: 'review', contractVersion: '1', permissions: [], authenticationProvider: null },
 ];
 const packageDetails = { package: reference, packageType: summary.packageType, displayName: summary.displayName, description: summary.description, license: 'MIT', source: 'thirdParty' as const, upstream: null, capabilities };
+const mcpSummary = { id: 'catalog/docs@ash', version: '1.0.0', packageType: 'mcp', displayName: 'Docs MCP', description: 'Documentation tools' };
+const mcpDetails = { ...packageDetails, ...mcpSummary, package: { ...reference, id: mcpSummary.id }, capabilities: [{ kind: 'mcp' as const, id: 'docs-server', contractVersion: '1', permissions: ['network'], authenticationProvider: null }] };
+const discoveryFixture = new URLSearchParams(location.search).has('marketplace');
+const partialDiscoveryFailure = new URLSearchParams(location.search).has('partialDiscoveryFailure');
 const extensionSummary = { ...summary, id: 'publisher.sample@open-vsx', packageType: 'editorExtension', displayName: 'Sample editor extension' };
 const extensionReference = { ...reference, id: extensionSummary.id };
 const extensionCapabilities = [{ kind: 'editorExtension' as const, id: 'publisher.sample', contractVersion: '1', permissions: [], authenticationProvider: null }];
@@ -183,12 +192,26 @@ function editorPolicySnapshot() {
 }
 let sourceRevision = 0;
 let sources = [{ id: 'ash', kind: 'ash' as const, enabled: true, productOwned: true }, { id: 'open-vsx', kind: 'openVsx' as const, enabled: true, productOwned: true }];
+if (partialDiscoveryFailure) { sources.push({ id: 'offline-source', kind: 'ash', enabled: true, productOwned: false }); }
+if (new URLSearchParams(location.search).has('pagedDiscovery')) { sources.push({ id: 'other', kind: 'ash', enabled: true, productOwned: false }); }
 let builtInProviderEnabled = true;
 let builtInProviderRunning = true;
 function builtInProviders() {
 	return { revision: editorPolicyRevision, providers: [{ id: 'ash.github-authentication', enabled: builtInProviderEnabled, running: builtInProviderRunning }] };
 }
 const api: IExtensionManagementApi = {
+	searchPage: async params => {
+		requests.push(['searchPage', params]);
+		if (holdSearch) { holdSearch = false; await new Promise<void>((_, reject) => { rejectSearch = reject; }); }
+		if (offline || params.sourceId === 'offline-source') { throw new Error('Catalog unavailable'); }
+		const base = params.capabilityKind === 'mcp' ? mcpSummary : summary;
+		const entries = new URLSearchParams(location.search).has('pagedDiscovery')
+			? Array.from({ length: 73 }, (_, index) => ({ ...base, id: 'catalog/item-' + index + '@' + params.sourceId, displayName: 'Item ' + index })) : [base];
+		const filtered = entries.filter(value => [value.id, value.displayName, value.description].some(text => text.toLowerCase().includes(params.query.toLowerCase())));
+		const offset = params.cursor ? Number(params.cursor) : 0;
+		const end = Math.min(offset + params.pageSize, filtered.length);
+		return { packages: filtered.slice(offset, end), total: BigInt(filtered.length), nextCursor: end < filtered.length ? String(end) : null };
+	},
 	builtInProviders: async () => builtInProviders(),
 	setBuiltInProviderEnablement: async params => {
 		requests.push(['builtInPolicy', params]);
@@ -231,14 +254,18 @@ const api: IExtensionManagementApi = {
 		requests.push(['search', params]);
 		if (holdSearch) { holdSearch = false; await new Promise<void>((_, reject) => { rejectSearch = reject; }); }
 		if (offline) { throw new Error('Catalog unavailable'); }
+		if (discoveryFixture && (params.capabilityKind === 'skill' || params.capabilityKind === 'mcp')) {
+			const entry = params.capabilityKind === 'skill' ? summary : mcpSummary;
+			return { packages: [entry].filter(value => [value.id, value.displayName, value.description].some(text => text.toLowerCase().includes(params.query.toLowerCase()))), unavailableSources: partialDiscoveryFailure ? ['offline-source'] : [] };
+		}
 		return { packages: [params.capabilityKind === 'editorExtension' || params.query === 'publisher.sample' ? extensionSummary : summary], unavailableSources: [] };
 	},
-	get: async params => { requests.push(['get', params]); if (offline) { throw new Error('Catalog unavailable'); } const details = params.packageId === extensionSummary.id ? extensionDetails : packageDetails; return { ...details, package: { ...details.package, version: params.version ?? '2.0.0' } }; },
+	get: async params => { requests.push(['get', params]); if (offline) { throw new Error('Catalog unavailable'); } const details = params.packageId === extensionSummary.id ? extensionDetails : params.packageId === mcpSummary.id ? mcpDetails : packageDetails; return { ...details, package: { ...details.package, version: params.version ?? '2.0.0' } }; },
 	listInstalled: async () => ({ instanceId: 'fixture', generation, packages: installed.map(entry => ({ ...entry, capabilities: entry.capabilities.map(capability => ({ ...capability, permissions: [...capability.permissions] })) })) }),
 	download: async () => { throw new Error('Install owns downloading'); },
 	install: async params => {
 		requests.push(['install', params]);
-		const details = params.packageId === extensionSummary.id ? extensionDetails : packageDetails;
+		const details = params.packageId === extensionSummary.id ? extensionDetails : params.packageId === mcpSummary.id ? mcpDetails : packageDetails;
 		const entry = { installationId: 'version-one', package: { ...details.package, version: params.version! }, state: 'installed' as const, capabilities: details.capabilities.map(capability => ({ ...capability, permissions: [...capability.permissions], reference: { id: `cap:${capability.id}` } })) };
 		installed.push(entry); generation++; changed.fire(); return entry;
 	},
@@ -251,7 +278,11 @@ const api: IExtensionManagementApi = {
 	acquireCapability: async () => { throw new Error('unused'); }, releaseCapability: async () => { }, openResource: async () => { throw new Error('unused'); },
 };
 services.registerInstance(IExtensionManagementService, disposables.add(new AppServerExtensionManagementService(api, { subscribe: listener => changed.event(() => listener({ method: 'extensions/changed', params: { instanceId: 'fixture', generation } })) })));
-services.registerInstance(IConfigurationService, { getValue: () => true, onDidChangeConfiguration: Event.None } as unknown as IConfigurationService);
+services.registerInstance(IConfigurationService, {
+	getValue: (key: string) => key === 'chat.customizations.marketplace.enabled' ? discoveryEnabled : true,
+	onDidChangeConfiguration: configurationChanged.event,
+} as unknown as IConfigurationService);
+services.registerSingleton(ICustomizationMarketplaceService, () => services.createInstance(CustomizationMarketplaceWorkbenchService));
 const dialogs = disposables.add(new DialogService());
 services.registerInstance(IDialogService, dialogs);
 services.registerInstance(IDialogsModel, dialogs.model);
@@ -567,6 +598,12 @@ window.ashExtensionsIntegration = {
 	setOffline: () => { offline = true; },
 	changeRevision: () => { revision++; },
 	startHeldSearch: () => { holdSearch = true; heldOpen = extensionManagement.open({ query: 'old query' }); },
+	holdDiscoverySearch: () => { holdSearch = true; },
+	discoverySearchStarted: () => !!rejectSearch,
+	setDiscoveryEnabled: value => {
+		discoveryEnabled = value;
+		configurationChanged.fire({ source: 1, affectedKeys: new Set(['chat.customizations.marketplace.enabled']), change: { keys: ['chat.customizations.marketplace.enabled'], overrides: [] }, affectsConfiguration: key => key === 'chat.customizations.marketplace.enabled' });
+	},
 	startHeldCommand: async () => { holdSearch = true; await commands.executeCommand(OPEN_EXTENSIONS_COMMAND_ID, 'held query'); },
 	executeCommand: id => commands.executeCommand(id),
 	failHeldSearch: async () => { rejectSearch!(new Error('Old request failed')); await heldOpen; },
@@ -577,6 +614,6 @@ window.ashExtensionsIntegration = {
 declare global {
 	interface Window {
 
-		ashExtensionsIntegration: { changeMcpRevision(): void; setMcpConnectFailure(): void; deferMcpConnection(): void; configureMcp(server: McpServerConfiguration): void; setMcpServers(servers: readonly McpServerStatus[]): void; failMcpStatus(): void; failMcpTools(): void; setMcpSupported(supported: boolean): void; refreshMcp(): Promise<void>; holdMcpStatus(): void; mcpStatusStarted(): boolean; completeMcpStatus(): void; prepareSettings(): void; readSetting(key: string): unknown; openEditorExtension(): Promise<void>; holdReadme(): void; readmeStarted(): boolean; completeReadme(): void; setRecommendations(content: string): Promise<void>; leaveWorkspace(): void; holdInstructions(): void; instructionsStarted(): boolean; instructionsAborted(): boolean; completeInstructions(): void; setSession(id: string): void; addMcpPackage(): void; addSkillOnlyPlugin(): void; requests: unknown[]; startCommand(id: string): void; waitCommand(): Promise<void>; changePluginRevision(): void; removeEditorEntrypoint(): void; localPackages(): PluginPackageDto[]; open(options: ExtensionsOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void; };
+		ashExtensionsIntegration: { holdDiscoverySearch(): void; discoverySearchStarted(): boolean; setDiscoveryEnabled(value: boolean): void; changeMcpRevision(): void; setMcpConnectFailure(): void; deferMcpConnection(): void; configureMcp(server: McpServerConfiguration): void; setMcpServers(servers: readonly McpServerStatus[]): void; failMcpStatus(): void; failMcpTools(): void; setMcpSupported(supported: boolean): void; refreshMcp(): Promise<void>; holdMcpStatus(): void; mcpStatusStarted(): boolean; completeMcpStatus(): void; prepareSettings(): void; readSetting(key: string): unknown; openEditorExtension(): Promise<void>; holdReadme(): void; readmeStarted(): boolean; completeReadme(): void; setRecommendations(content: string): Promise<void>; leaveWorkspace(): void; holdInstructions(): void; instructionsStarted(): boolean; instructionsAborted(): boolean; completeInstructions(): void; setSession(id: string): void; addMcpPackage(): void; addSkillOnlyPlugin(): void; requests: unknown[]; startCommand(id: string): void; waitCommand(): Promise<void>; changePluginRevision(): void; removeEditorEntrypoint(): void; localPackages(): PluginPackageDto[]; open(options: ExtensionsOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void; };
 	}
 }

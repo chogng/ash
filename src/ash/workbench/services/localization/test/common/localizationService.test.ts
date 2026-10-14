@@ -521,6 +521,7 @@ suite('Workbench localization', () => {
 
 	function createExtensions(): IExtensionManagementService {
 		return {
+			searchPage: async () => { throw new Error('Localization does not use customization paging'); },
 			onDidChangeInstalled: Event.None,
 			sources: async () => ({ revision: 0, sources: [] }),
 			addSource: async () => { throw new Error("unused"); },

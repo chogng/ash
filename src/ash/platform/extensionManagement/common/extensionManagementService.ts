@@ -10,6 +10,12 @@ export interface ExtensionsSearchOptions {
 	readonly languageId?: string;
 }
 
+export interface ExtensionsSearchPage {
+	readonly packages: readonly ExtensionsPackageSummary[];
+	readonly total: number;
+	readonly nextCursor?: string;
+}
+
 export interface ExtensionsOpenOptions extends Pick<ExtensionsSearchOptions, "capabilityKind" | "languageId"> {
 	readonly mode?: "browse" | "installed" | "builtIn";
 	readonly view?: "extensions" | "plugins" | "skills" | "mcp" | "recommended";
@@ -147,6 +153,7 @@ export interface AshExtensionSource {
 
 /** Frontend Extensions business capability, independent of distribution and package internals. */
 export interface IExtensionManagementService {
+	searchPage(query: string, options: ExtensionsSearchOptions & { readonly sourceId: string; readonly pageSize: number; readonly cursor?: string; }): Promise<ExtensionsSearchPage>;
 	readonly onDidChangeInstalled: Event<void>;
 	sources(): Promise<ExtensionRegistrySources>;
 	addSource(source: AshExtensionSource, expectedRevision: number): Promise<ExtensionRegistrySources>;

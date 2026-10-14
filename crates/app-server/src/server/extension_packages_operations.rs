@@ -319,6 +319,37 @@ impl AppServer {
         result(&extension_packages_projection::package_details(details))
     }
 
+    pub(super) fn extension_packages_search_page(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: ash_app_server_protocol::protocol::extension_packages::ExtensionsSearchPageParams = decode(params)?;
+        let found = self
+            .plugin_packages()?
+            .search_page(ash_core_plugins::SearchPackagesPageRequest {
+                source_id: params.source_id,
+                cursor: params.cursor,
+                search: SearchPackagesRequest {
+                    query: params.query,
+                    package_type: params.package_type,
+                    capability_kind: params
+                        .capability_kind
+                        .map(extension_packages_projection::domain_capability_kind),
+                    language_id: params.language_id,
+                    limit: Some(params.page_size as usize),
+                },
+            })
+            .map_err(extension_packages_error)?;
+        result(
+            &ash_app_server_protocol::protocol::extension_packages::ExtensionsSearchPageResult {
+                packages: found
+                    .packages
+                    .into_iter()
+                    .map(extension_packages_projection::package_summary)
+                    .collect(),
+                total: found.total as u64,
+                next_cursor: found.next_cursor,
+            },
+        )
+    }
+
     pub(super) fn extension_packages_download(&self, params: &Value) -> Result<Value, RpcError> {
         let params: ExtensionsDownloadParams = decode(params)?;
         let artifact = self

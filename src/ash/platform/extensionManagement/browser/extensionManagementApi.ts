@@ -2,13 +2,20 @@ import type { AppServerProtocolClient } from "../../agentHost/browser/appServerP
 import { appServerRequest, voidResult } from "../../agentHost/browser/appServerRequest.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
 import type { IExtensionManagementApi } from "../common/extensionManagementApi.js";
+import { localize } from '../../../nls.js';
 
 export function createDisconnectedExtensionsApi(unavailable: UnavailableOperation): IExtensionManagementApi {
-	return { builtInProviders: () => unavailable("extensions.builtInProviders"), setBuiltInProviderEnablement: () => unavailable("extensions.setBuiltInProviderEnablement"), sources: () => unavailable("extensions.sources"), addSource: () => unavailable("extensions.addSource"), setSourceEnabled: () => unavailable("extensions.setSourceEnabled"), search: () => unavailable("extensionManagement.search"), get: () => unavailable("extensionManagement.get"), download: () => unavailable("extensionManagement.download"), install: () => unavailable("extensionManagement.install"), update: () => unavailable("extensionManagement.update"), uninstall: () => unavailable("extensionManagement.uninstall"), listInstalled: () => unavailable("extensionManagement.listInstalled"), editorExtensions: () => unavailable("extensionManagement.editorExtensions"), setEditorExtensionPolicy: () => unavailable("extensionManagement.setEditorExtensionPolicy"), acquireCapability: () => unavailable("extensionManagement.acquireCapability"), releaseCapability: () => unavailable("extensionManagement.releaseCapability"), openResource: () => unavailable("extensionManagement.openResource") };
+	return { searchPage: () => unavailable('extensionManagement.searchPage'), builtInProviders: () => unavailable("extensions.builtInProviders"), setBuiltInProviderEnablement: () => unavailable("extensions.setBuiltInProviderEnablement"), sources: () => unavailable("extensions.sources"), addSource: () => unavailable("extensions.addSource"), setSourceEnabled: () => unavailable("extensions.setSourceEnabled"), search: () => unavailable("extensionManagement.search"), get: () => unavailable("extensionManagement.get"), download: () => unavailable("extensionManagement.download"), install: () => unavailable("extensionManagement.install"), update: () => unavailable("extensionManagement.update"), uninstall: () => unavailable("extensionManagement.uninstall"), listInstalled: () => unavailable("extensionManagement.listInstalled"), editorExtensions: () => unavailable("extensionManagement.editorExtensions"), setEditorExtensionPolicy: () => unavailable("extensionManagement.setEditorExtensionPolicy"), acquireCapability: () => unavailable("extensionManagement.acquireCapability"), releaseCapability: () => unavailable("extensionManagement.releaseCapability"), openResource: () => unavailable("extensionManagement.openResource") };
 }
 
 export function createAppServerExtensionManagementApi(connection: AppServerProtocolClient): IExtensionManagementApi {
 	return {
+		searchPage: params => {
+			if (connection.capabilities?.contracts.extensionsPaging?.version !== 1) {
+				return Promise.reject(new Error(localize({ bundle: 'ash.extensions', key: 'marketplacePagingUnsupported' }, 'This App Server does not support paged extension catalogs. Update the App Server.')));
+			}
+			return appServerRequest(connection, 'extensions/searchPage', params);
+		},
 		builtInProviders: () => appServerRequest(connection, 'extensions/builtInProviders', {}),
 		setBuiltInProviderEnablement: params => appServerRequest(connection, 'extensions/setBuiltInProviderEnablement', params),
 		sources: () => appServerRequest(connection, 'extensions/sources/list', {}),

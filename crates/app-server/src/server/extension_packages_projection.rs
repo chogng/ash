@@ -135,7 +135,7 @@ pub(super) fn resource_content(value: ResourceContent) -> ExtensionsResourceCont
     }
 }
 
-fn package_summary(value: PackageSummary) -> ExtensionsPackageSummaryDto {
+pub(super) fn package_summary(value: PackageSummary) -> ExtensionsPackageSummaryDto {
     ExtensionsPackageSummaryDto {
         id: value.id,
         version: value.version,

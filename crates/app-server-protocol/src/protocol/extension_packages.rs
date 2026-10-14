@@ -98,6 +98,26 @@ pub struct ExtensionsSearchResult {
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
+pub struct ExtensionsSearchPageParams {
+    pub source_id: String,
+    pub query: String,
+    pub package_type: Option<String>,
+    pub capability_kind: Option<ExtensionsCapabilityKindDto>,
+    pub language_id: Option<String>,
+    pub page_size: u32,
+    pub cursor: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtensionsSearchPageResult {
+    pub packages: Vec<ExtensionsPackageSummaryDto>,
+    pub total: u64,
+    pub next_cursor: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
 pub struct ExtensionsGetParams {
     /// Exact `<name>@<extension_packages>` returned by search; unqualified names are rejected.
     pub package_id: String,

@@ -39,3 +39,59 @@ fn provider_names_preserve_the_signed_registry_identity() {
         assert!(super::package_id(invalid).is_err(), "{invalid}");
     }
 }
+
+#[test]
+fn verified_catalog_pages_continue_beyond_the_legacy_search_cap_and_bind_the_query() {
+    let packages = (0..257)
+        .map(|index| crate::PackageSummary {
+            id: format!("example.item-{index:03}"),
+            version: "1.0.0".into(),
+            package_type: "skill".into(),
+            display_name: format!("Item {index}"),
+            description: String::new(),
+        })
+        .collect::<Vec<_>>();
+    let mut request = crate::SearchPackagesPageRequest {
+        source_id: "ash".into(),
+        cursor: None,
+        search: crate::SearchPackagesRequest {
+            limit: Some(100),
+            ..Default::default()
+        },
+    };
+    let identities = [crate::PackageRef {
+        id: "example.item-000".into(),
+        version: "1.0.0".into(),
+        digest: "sha256:original-archive".into(),
+    }];
+    let first = super::catalog_page(&request, packages.clone(), &identities).unwrap();
+    assert_eq!(first.total, 257);
+    assert_eq!(first.packages, packages[..100]);
+    request.cursor = first.next_cursor;
+    let changed_archive = crate::PackageRef {
+        id: "example.item-000".into(),
+        version: "1.0.0".into(),
+        digest: "sha256:new-permissions-with-the-same-summary".into(),
+    };
+    assert!(super::catalog_page(&request, packages.clone(), &[changed_archive]).is_err());
+    let second = super::catalog_page(&request, packages.clone(), &identities).unwrap();
+    assert_eq!(second.packages, packages[100..200]);
+    let mut changed = request.clone();
+    changed.source_id = "other".into();
+    assert!(super::catalog_page(&changed, packages.clone(), &identities).is_err());
+    changed = request.clone();
+    changed.search.query = "changed".into();
+    assert!(super::catalog_page(&changed, packages.clone(), &identities).is_err());
+    changed = request.clone();
+    changed.search.limit = Some(30);
+    assert!(super::catalog_page(&changed, packages.clone(), &identities).is_err());
+    assert!(super::catalog_page(&request, packages[..256].to_vec(), &identities).is_err());
+    let prefix = request.cursor.as_ref().unwrap().split(':').next().unwrap();
+    changed = request.clone();
+    changed.cursor = Some(format!("{prefix}:100:0"));
+    assert!(super::catalog_page(&changed, packages.clone(), &identities).is_err());
+    request.cursor = second.next_cursor;
+    let third = super::catalog_page(&request, packages.clone(), &identities).unwrap();
+    assert_eq!(third.packages, packages[200..]);
+    assert!(third.next_cursor.is_none());
+}

@@ -30,6 +30,7 @@ import "./contrib/modernUI/browser/modernUI.contribution.js";
 import './contrib/mediaPreview/browser/mediaPreview.contribution.js';
 
 import './contrib/extensions/browser/extensions.contribution.js';
+import './contrib/chat/browser/aiCustomization/customizationMarketplace.contribution.js';
 import './contrib/extensions/browser/extensionRecommendations.contribution.js';
 import './contrib/language/browser/languageServers.contribution.js';
 import './contrib/localization/common/localization.contribution.js';

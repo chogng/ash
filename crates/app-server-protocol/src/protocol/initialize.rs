@@ -261,6 +261,8 @@ impl ServerCapabilities {
         }
         if self.extension_management {
             self.contracts
+                .insert("extensionsPaging".into(), CapabilityContract { version: 1 });
+            self.contracts
                 .insert("extensionsSearch".into(), CapabilityContract { version: 1 });
         }
     }

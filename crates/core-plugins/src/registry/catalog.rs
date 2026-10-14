@@ -284,6 +284,34 @@ impl Catalog {
         Ok(ExtensionsDownloadedPackage::new(release, contents))
     }
 
+    /// Read one coherent catalog view. Archive identities bind pages even when metadata changes
+    /// without changing a package's display summary or version.
+    pub(crate) fn search_snapshot(
+        &self,
+        request: &crate::SearchPackagesRequest,
+    ) -> Result<(Vec<PackageSummary>, Vec<PackageRef>), ExtensionsClientError> {
+        self.refresh_remote_if_stale()?;
+        let query = request.query.trim().to_ascii_lowercase();
+        let releases = self
+            .releases
+            .lock()
+            .map_err(|_| ExtensionsClientError::unavailable())?;
+        let packages = releases
+            .values()
+            .filter_map(|versions| versions.last_key_value().map(|(_, release)| release))
+            .filter(|release| {
+                release.manifest.matches_filters(request) && release.manifest.matches(&query)
+            })
+            .map(Release::summary)
+            .collect();
+        let identities = releases
+            .values()
+            .flat_map(|versions| versions.values())
+            .map(|release| release.target.package().clone())
+            .collect();
+        Ok((packages, identities))
+    }
+
     fn refresh_remote(&self) -> Result<(), ExtensionsClientError> {
         let releases = index_releases(self.remote.releases()?)?;
         *self

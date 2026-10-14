@@ -5,6 +5,18 @@ import type { IServerEventApi } from "../../../../../platform/agentHost/common/a
 import type { IExtensionManagementApi } from "../../../../../platform/extensionManagement/common/extensionManagementApi.js";
 import { AppServerExtensionManagementService } from "../../browser/appServerExtensionManagementService.js";
 
+test('Extensions paged adapter preserves source, cursor and filters without keeping a second catalog', async () => {
+	const requests: unknown[] = [];
+	const api: Pick<IExtensionManagementApi, 'searchPage'> = {
+		searchPage: async params => { requests.push(params); return { packages: [], total: 257n, nextCursor: 'backend-page-two' }; },
+	};
+	using service = new AppServerExtensionManagementService(api as IExtensionManagementApi, { subscribe: () => ({ dispose() { } }) } as IServerEventApi);
+	assert.deepEqual(await service.searchPage('review', { sourceId: 'signed', capabilityKind: 'skill', pageSize: 30, cursor: 'backend-page-one' }), {
+		packages: [], total: 257, nextCursor: 'backend-page-two',
+	});
+	assert.deepEqual(requests, [{ query: 'review', sourceId: 'signed', capabilityKind: 'skill', pageSize: 30, cursor: 'backend-page-one', packageType: null, languageId: null }]);
+});
+
 test("Extensions browse snapshots survive view recreation and invalidate after lifecycle changes", async () => {
 	let searches = 0;
 	const requests: Parameters<IExtensionManagementApi["search"]>[0][] = [];
@@ -17,6 +29,7 @@ test("Extensions browse snapshots survive view recreation and invalidate after l
 	const detailRequests: string[] = [];
 	const installed = { installationId: "installed-1", package: packageReference, state: "installed" as const, capabilities: [] };
 	const api = {
+		searchPage: async () => { throw new Error('This test exercises the existing browse API'); },
 		builtInProviders: async () => ({ revision: 1, providers: [] }),
 		setBuiltInProviderEnablement: async () => { throw new Error('unused'); },
 		sources: async () => ({ revision: 0, sources: [] }),

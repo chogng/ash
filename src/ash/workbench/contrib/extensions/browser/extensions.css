@@ -9,6 +9,19 @@
 .ash-extensions .extensions-search {
 	padding: 8px 12px 4px;
 }
+.ash-extensions .extensions-marketplace-controls {
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size120);
+	min-width: 0;
+}
+.ash-extensions .extensions-marketplace-controls[hidden] {
+	display: none;
+}
+.ash-extensions .extensions-marketplace-controls .ash-select-box {
+	max-width: 100%;
+}
+.ash-extensions > .extensions-marketplace-more[hidden] {
+	display: none;
+}
 .ash-extensions .extensions-controls-host {
 	flex-shrink: 0;
 	height: 24px;

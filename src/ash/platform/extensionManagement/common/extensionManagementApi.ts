@@ -2,6 +2,7 @@ import type { ExtensionsAcquireCapabilityParams, ExtensionsAcquiredCapabilityDto
 
 /** Transport API mirroring the generic App Server Extensions contract. */
 export interface IExtensionManagementApi {
+	searchPage(params: import('../../../../../.build/protocol/typescript/index.js').ExtensionsSearchPageParams): Promise<import('../../../../../.build/protocol/typescript/index.js').ExtensionsSearchPageResult>;
 	builtInProviders(): Promise<import('../../../../../.build/protocol/typescript/index.js').ExtensionsBuiltInProvidersResult>;
 	setBuiltInProviderEnablement(params: import('../../../../../.build/protocol/typescript/index.js').ExtensionsBuiltInProviderEnablementParams): Promise<import('../../../../../.build/protocol/typescript/index.js').ExtensionsBuiltInProvidersResult>;
 	sources(): Promise<import('../../../../../.build/protocol/typescript/index.js').ExtensionsSourcesResult>;

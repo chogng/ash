@@ -47,6 +47,8 @@ pub use model::ReleaseCapabilityOutcome;
 pub use model::ReleaseCapabilityRequest;
 pub use model::ResourceContent;
 pub use model::ResourceRef;
+pub use model::SearchPackagesPageRequest;
+pub use model::SearchPackagesPageResult;
 pub use model::SearchPackagesRequest;
 pub use model::SearchPackagesResult;
 pub use model::SkillActivationSpec;

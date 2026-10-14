@@ -2745,6 +2745,7 @@ impl AppServer {
                 }
             }
             Some(ClientMethod::ExtensionsSearch) => self.extension_packages_search(&request.params),
+            Some(ClientMethod::ExtensionsSearchPage) => self.extension_packages_search_page(&request.params),
             Some(ClientMethod::ExtensionsGet) => self.extension_packages_get(&request.params),
             Some(ClientMethod::ExtensionsDownload) => {
                 self.extension_packages_download(&request.params)

@@ -568,6 +568,13 @@ impl ExtensionPackageManager {
 }
 
 impl ExtensionPackageService for ExtensionPackageManager {
+    fn search_page(
+        &self,
+        request: crate::SearchPackagesPageRequest,
+    ) -> Result<crate::SearchPackagesPageResult, ExtensionsClientError> {
+        self.source_providers()?.search_page(request)
+    }
+
     fn search(
         &self,
         request: SearchPackagesRequest,

@@ -91,6 +91,8 @@ pub use registry::ReleaseCapabilityRequest;
 pub use registry::RemoteExtensionsConfig;
 pub use registry::ResourceContent;
 pub use registry::ResourceRef;
+pub use registry::SearchPackagesPageRequest;
+pub use registry::SearchPackagesPageResult;
 pub use registry::SearchPackagesRequest;
 pub use registry::SearchPackagesResult;
 pub use registry::SkillActivationSpec;

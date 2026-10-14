@@ -57,6 +57,23 @@ fn app_server_exposes_only_the_manager_business_contract() {
         json!({"query": "github", "packageType": "plugin", "capabilityKind": "skill", "languageId": "typescriptreact", "limit": 20}),
     );
     assert_eq!(found["result"]["packages"][0]["id"], "extensions/github");
+    let paged = call(
+        &server,
+        &mut connection,
+        22,
+        "extensions/searchPage",
+        json!({
+            "sourceId": "ash", "query": "github", "packageType": "plugin", "capabilityKind": "skill",
+            "languageId": "typescriptreact", "pageSize": 20, "cursor": null
+        }),
+    );
+    assert_eq!(paged["result"]["packages"][0]["id"], "extensions/github");
+    assert_eq!(paged["result"]["total"], 1);
+    assert_eq!(paged["result"]["nextCursor"], Value::Null);
+    assert_eq!(
+        initialized["result"]["capabilities"]["contracts"]["extensionsPaging"]["version"],
+        1
+    );
 
     let details = call(
         &server,
@@ -179,6 +196,18 @@ fn app_server_exposes_only_the_manager_business_contract() {
 struct FakeExtensionPackageManager;
 
 impl ExtensionPackageService for FakeExtensionPackageManager {
+    fn search_page(
+        &self,
+        request: ash_core_plugins::SearchPackagesPageRequest,
+    ) -> Result<ash_core_plugins::SearchPackagesPageResult, ash_core_plugins::ExtensionsClientError>
+    {
+        let found = self.search(request.search)?;
+        Ok(ash_core_plugins::SearchPackagesPageResult {
+            total: found.packages.len(),
+            packages: found.packages,
+            next_cursor: None,
+        })
+    }
     fn search(
         &self,
         request: ash_core_plugins::SearchPackagesRequest,

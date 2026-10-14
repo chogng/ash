@@ -8,6 +8,7 @@ import { ViewsRegistry } from '../../../common/views.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { registerExtensionManagementActions } from './extensionsActions.js';
 import { ExtensionsViewPane, registerExtensionsViewContainer } from './extensionsViewlet.js';
+import { SkillsViewPane, McpServersViewPane } from './extensionsViews.js';
 
 registerWorkbenchContribution('workbench.contrib.extensions', WorkbenchPhase.BlockStartup, () => {
 	const registrations = new DisposableStore();
@@ -17,7 +18,9 @@ registerWorkbenchContribution('workbench.contrib.extensions', WorkbenchPhase.Blo
 		public override async run(accessor: ServicesAccessor, options?: ExtensionsOpenOptions | string): Promise<void> {
 			const view = await accessor.get(IViewsService).openView(options && typeof options !== 'string' && options.view && options.view !== 'extensions' ? `ash.extensions.${options.view}` : 'ash.extensions.view', true);
 			// Catalog loading and its errors belong to the view; navigation must release the Chat composer immediately.
-			if (view instanceof ExtensionsViewPane) { void view.open(typeof options === 'string' ? { query: options.trim() } : options); }
+			if (view instanceof ExtensionsViewPane || view instanceof SkillsViewPane || view instanceof McpServersViewPane) {
+				void view.open(typeof options === 'string' ? { query: options.trim() } : options);
+			}
 		}
 	}));
 	registrations.add(registerAction2(class OpenInstalledExtensions extends Action2 {

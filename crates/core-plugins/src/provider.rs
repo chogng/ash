@@ -56,6 +56,16 @@ pub trait ExtensionSource: Send + Sync {
         request: SearchPackagesRequest,
     ) -> Result<SearchPackagesResult, ExtensionsClientError>;
 
+    /// Optional verified-catalog paging. Sources without this capability fail explicitly.
+    fn search_page(
+        &self,
+        _request: crate::SearchPackagesPageRequest,
+    ) -> Result<crate::SearchPackagesPageResult, ExtensionsClientError> {
+        Err(ExtensionsClientError::invalid_request(
+            "source does not support catalog paging",
+        ))
+    }
+
     fn get(&self, request: GetPackageRequest) -> Result<PackageDetails, ExtensionsClientError>;
 
     fn download(
@@ -75,6 +85,53 @@ pub struct ExtensionSources {
 }
 
 impl ExtensionSources {
+    pub(crate) fn search_page(
+        &self,
+        request: crate::SearchPackagesPageRequest,
+    ) -> Result<crate::SearchPackagesPageResult, ExtensionsClientError> {
+        let source = ExtensionSourceId::new(request.source_id.clone())
+            .map_err(|_| ExtensionsClientError::invalid_request("invalid source ID"))?;
+        if self.disabled.contains(&source) {
+            return Err(ExtensionsClientError::invalid_request(
+                "extension source is disabled",
+            ));
+        }
+        let provider = self.providers.get(&source).ok_or_else(|| {
+            ExtensionsClientError::invalid_request("extension source is not configured")
+        })?;
+        if request.search.query.chars().count() > 4096
+            || !matches!(request.search.limit, Some(1..=200))
+            || request
+                .cursor
+                .as_ref()
+                .is_some_and(|cursor| cursor.len() > 256)
+        {
+            return Err(ExtensionsClientError::invalid_request(
+                "invalid catalog page query",
+            ));
+        }
+        let limit = request.search.limit.unwrap_or(0);
+        let mut page = provider.search_page(request)?;
+        if page.packages.len() > limit
+            || page.total < page.packages.len()
+            || page
+                .next_cursor
+                .as_ref()
+                .is_some_and(|cursor| cursor.is_empty() || cursor.len() > 256)
+        {
+            return Err(ExtensionsClientError::package_untrusted());
+        }
+        let mut identities = std::collections::BTreeSet::new();
+        for package in &mut page.packages {
+            package.id = source_id(&package.id, &source)?.to_string();
+            semver::Version::parse(&package.version)
+                .map_err(|_| ExtensionsClientError::package_untrusted())?;
+            if !identities.insert((&package.id, &package.version)) {
+                return Err(ExtensionsClientError::package_untrusted());
+            }
+        }
+        Ok(page)
+    }
     pub(crate) fn extension_gallery(
         &self,
     ) -> Result<Option<(&ExtensionSourceId, &dyn ExtensionSource, String)>, ExtensionsClientError>

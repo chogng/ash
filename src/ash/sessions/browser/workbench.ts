@@ -95,6 +95,7 @@ import { mainWindow } from '../../base/browser/window.js';
 import type { Event } from '../../base/common/event.js';
 import { SessionsViewRegistry } from '../common/views.js';
 import { ExtensionsViewPane, registerExtensionsViewContainer } from '../../workbench/contrib/extensions/browser/extensionsViewlet.js';
+import { SkillsViewPane, McpServersViewPane } from '../../workbench/contrib/extensions/browser/extensionsViews.js';
 import { ViewContainerLocation } from '../../workbench/common/views.js';
 import { DesignEditorService, IDesignEditorService } from '../contrib/creator/browser/designEditorService.js';
 import { Disposable, toDisposable, type IDisposable } from "../../base/common/lifecycle.js";
@@ -586,7 +587,7 @@ export abstract class Workbench extends Disposable {
 			await commandService.executeCommand('sessions.open.code');
 			const viewId = options.view && options.view !== 'extensions' ? `ash.extensions.${options.view}` : 'ash.extensions.view';
 			const view = await services.get(IViewsService).openView(viewId, true);
-			if (view instanceof ExtensionsViewPane) { void view.open(options); }
+			if (view instanceof ExtensionsViewPane || view instanceof SkillsViewPane || view instanceof McpServersViewPane) { void view.open(options); }
 		};
 		this._register(CommandsRegistry.register(OPEN_INSTALLED_EXTENSIONS_COMMAND_ID, (_accessor, options) => openExtensions({ ...options as ExtensionsOpenOptions | undefined, view: 'plugins', mode: 'installed' })));
 		this._register(CommandsRegistry.register(OPEN_EXTENSIONS_COMMAND_ID, (_accessor, value: unknown) => {

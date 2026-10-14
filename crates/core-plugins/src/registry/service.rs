@@ -22,6 +22,11 @@ use crate::UpdatePackageRequest;
 /// Core Plugins uses this interface for remote discovery and local lifecycle operations.
 /// Implementations must keep remote protocol, cache, package paths, and filesystem layout private.
 pub trait ExtensionPackageService: Send + Sync {
+    fn search_page(
+        &self,
+        request: crate::SearchPackagesPageRequest,
+    ) -> Result<crate::SearchPackagesPageResult, ExtensionsClientError>;
+
     fn search(
         &self,
         request: SearchPackagesRequest,

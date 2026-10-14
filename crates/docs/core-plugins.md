@@ -262,6 +262,18 @@ Manager 仍核对解压后的内容摘要、文件数与大小。来源校验不
 只保留 path-free、Renderer-ready 的内存展示快照，因此 Settings 重开可以同步绘制；它不保存 catalog
 manifest、TUF metadata 或 package bytes。用户显式 Browse/Search 时才要求 service 重新读取目录。
 
+Desktop 的 Skills/MCP 窗格通过 `platform/customizationMarketplace` 的公共契约发现资源。
+`CustomizationMarketplaceWorkbenchService` 使用已有 `IExtensionManagementService` 的 capability
+筛选与目录读取，不另存目录或安装状态；每个已启用的 Ash 签名 registry 是可独立选择的来源。
+发现结果打开已有包详情页，审阅与安装仍经过包管理服务；`extensions/changed` 使发现列表重新读取
+安装标签，返回已安装模式后由 Skill/MCP owner 提供运行状态。`extensions/searchPage` 按精确来源
+返回总量与游标；游标绑定查询、页大小、来源和已验证目录内容，30 分钟后过期，目录变化时失效。
+Renderer 的 `CustomizationMarketplaceService` 仅拥有有上限的短期分页续读状态，按来源保留缓冲结果
+和失败信息，不重建目录；“加载更多”持续读取后续页，不受原先 100 条展示上限限制。
+Open VSX 的编辑器扩展不冒充 Skills/MCP 来源。取消只结束窗口对目录读取的等待，不宣称停止后端读取。
+`chat.customizations.marketplace.enabled` 是 TypeScript UI 的 profile 发现偏好，保存于既有
+`settings.json`；它不修改后端源启停、安装、信任或权限。
+
 Desktop 只打包 `product-services.json` 和 `extensions-root.json`，不编译、不复制、不监督任何
 Core Plugins 子进程。`ash-app-server-client` 统一发现该发行资源，但产品宿主仍显式选择
 是否注入：Desktop/独立 `ash-app-server`、`ash code`/TUI 和 app 的本地 authority 都注入同一
