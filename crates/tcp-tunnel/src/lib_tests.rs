@@ -185,7 +185,7 @@ impl ProxyFixture {
         let mut roots = RootCertStore::empty();
         roots.add(certified.cert.der().clone()).unwrap();
         let mut tls = rustls::ServerConfig::builder_with_provider(Arc::new(
-            rustls::crypto::ring::default_provider(),
+            rustls::crypto::aws_lc_rs::default_provider(),
         ))
         .with_safe_default_protocol_versions()
         .unwrap()

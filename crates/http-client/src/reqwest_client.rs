@@ -64,7 +64,7 @@ impl ReqwestHttpClient {
     /// The provider is explicit so feature unification cannot pick another crypto backend.
     pub fn sdk_client_builder() -> Result<reqwest::ClientBuilder, HttpClientError> {
         let tls = rustls::ClientConfig::builder_with_provider(Arc::new(
-            rustls::crypto::ring::default_provider(),
+            rustls::crypto::aws_lc_rs::default_provider(),
         ))
         .with_safe_default_protocol_versions()
         .and_then(|builder| builder.with_platform_verifier())

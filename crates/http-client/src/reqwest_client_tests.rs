@@ -198,7 +198,7 @@ fn http_compatibility_switch_changes_the_wire_alpn_without_replacing_the_shared_
     let worker = std::thread::spawn(move || {
         let mut offers = Vec::new();
         let mut config = rustls::ServerConfig::builder_with_provider(Arc::new(
-            rustls::crypto::ring::default_provider(),
+            rustls::crypto::aws_lc_rs::default_provider(),
         ))
         .with_safe_default_protocol_versions()
         .unwrap()

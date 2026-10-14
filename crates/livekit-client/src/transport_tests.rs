@@ -19,7 +19,7 @@ async fn custom_trust_is_shared_by_http_and_websocket_and_does_not_leak_between_
         include_bytes!("../tests/fixtures/server-key.der").to_vec(),
     );
     let config = rustls::ServerConfig::builder_with_provider(Arc::new(
-        rustls::crypto::ring::default_provider(),
+        rustls::crypto::aws_lc_rs::default_provider(),
     ))
     .with_safe_default_protocol_versions()
     .unwrap()

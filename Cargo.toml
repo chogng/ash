@@ -385,7 +385,9 @@ shell-words = "=1.1.1"
 signal-hook = "0.3"
 syntect = { version = "5.3.0", default-features = false, features = ["default-fancy"] }
 sysinfo = { version = "0.39.6", default-features = false, features = ["system"] }
-rustls = { version = "0.23.45", default-features = false, features = ["ring", "std", "tls12"] }
+# AWS-LC verifies P-521/SHA-512 certificate chains used by some enterprise TLS proxies.
+# Client configs select it explicitly because upstream dependencies may also enable ring.
+rustls = { version = "0.23.46", default-features = false, features = ["aws_lc_rs", "std", "tls12"] }
 rustls-native-certs = "0.8.4"
 rustls-platform-verifier = "0.7.0"
 rustix = "1.1.4"

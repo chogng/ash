@@ -9,7 +9,7 @@ body 和 safe telemetry。上层通过 `HttpClient` 执行一个已经完整构�
 
 它还公开构造时冻结的 `OutboundNetworkSnapshot`，供独立
 [`ash-websocket-client`](../websocket-client/README.md) 复用 proxy、TLS/mTLS、connect timeout 与 target filtering。
-`ReqwestHttpClient::sdk_client_builder` 为必须使用 reqwest 的 SDK 显式选择 ring，并保留 reqwest 原有的系统证书验证器；RMCP 使用此入口，SDK 继续拥有 HTTP framing 与其客户端设置。纯 HTTP 不提前创建系统证书验证器。普通 Ash 调用仍通过 `HttpClient`，不接触后端 TLS 类型。
+`ReqwestHttpClient::sdk_client_builder` 为必须使用 reqwest 的 SDK 显式选择 AWS-LC，并保留 reqwest 原有的系统证书验证器；RMCP 使用此入口，SDK 继续拥有 HTTP framing 与其客户端设置。纯 HTTP 不提前创建系统证书验证器。普通 Ash 调用仍通过 `HttpClient`，不接触后端 TLS 类型。
 
 它不解释 provider JSON，不拥有 model operation retry，也不实现 SSE/NDJSON/WebSocket framing。
 
@@ -189,6 +189,7 @@ ALL_PROXY → all_proxy → HTTPS_PROXY → https_proxy → HTTP_PROXY → http_
 
 TLS 使用 rustls：
 
+- HTTP、WebSocket 与 SDK TLS 配置及其 verifier 显式选择 AWS-LC，支持企业代理使用的 P-521/SHA-512 签名；不依赖进程全局 provider 或 Cargo feature 自动选择；
 - `SystemRoots` 在首次 HTTPS route 创建系统证书验证器；
 - `SystemPlus` 在系统信任规则上增加 DER CA；
 - `CustomOnly` 只使用 supplied DER CA；

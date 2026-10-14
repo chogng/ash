@@ -27,6 +27,42 @@ use std::time::Instant;
 
 const WAIT: Duration = Duration::from_secs(5);
 
+#[test]
+fn p521_signed_certificates_work_in_both_http_transports() {
+    // The fixture's RSA server key is signed by a P-521/SHA-512 CA. Trusting
+    // that CA must also enable its signature algorithm in each transport.
+    for reqwest in [false, true] {
+        let server = Server::reply(http_test_support::response(200, "ok"));
+        let config = HttpClientConfig::new()
+            .with_proxy_policy(ProxyPolicy::Direct)
+            .with_tls_policy(TlsPolicy::CustomOnly(
+                CertificateBundle::from_der(vec![CA_DER.to_vec()]).unwrap(),
+            ));
+        let client: Box<dyn HttpClient> = if reqwest {
+            Box::new(
+                ReqwestHttpClient::with_network(
+                    crate::OutboundNetworkSnapshot::new(config).unwrap(),
+                )
+                .unwrap(),
+            )
+        } else {
+            Box::new(UreqHttpClient::with_config(config).unwrap())
+        };
+        let request = HttpRequest::new(
+            HttpMethod::Get,
+            format!("{}/p521", server.url()),
+            Vec::new(),
+            Vec::new(),
+        )
+        .unwrap();
+        let response = client.execute(&request).unwrap();
+        assert_eq!(response.status(), 200);
+        assert_eq!(response.body(), b"ok");
+        assert_eq!(server.request().line, "GET /p521 HTTP/1.1");
+        server.assert_no_more_requests();
+    }
+}
+
 fn client(timeout: Duration) -> UreqHttpClient {
     let ca = CertificateBundle::from_der(vec![CA_DER.to_vec()]).unwrap();
     UreqHttpClient::with_config(
@@ -76,6 +112,8 @@ fn redirect_selects_the_destination_proxy_route_without_forwarding_credentials()
             loop {
                 match proxy.accept() {
                     Ok((mut stream, _)) => {
+                        // macOS can inherit the listener's nonblocking mode.
+                        stream.set_nonblocking(false).unwrap();
                         stream.set_read_timeout(Some(WAIT)).unwrap();
                         let mut headers = Vec::new();
                         while !headers.ends_with(b"\r\n\r\n") {
@@ -514,6 +552,8 @@ fn proxy_redirect_to_a_bypassed_target_does_not_forward_credentials() {
             loop {
                 match proxy.accept() {
                     Ok((mut stream, _)) => {
+                        // macOS can inherit the listener's nonblocking mode.
+                        stream.set_nonblocking(false).unwrap();
                         stream.set_read_timeout(Some(WAIT)).unwrap();
                         stream.set_write_timeout(Some(WAIT)).unwrap();
                         let mut headers = Vec::new();

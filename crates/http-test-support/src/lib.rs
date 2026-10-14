@@ -68,18 +68,20 @@ impl Server {
         let (stop, stopped) = mpsc::channel();
         let (send, requests) = mpsc::channel();
         let config = Arc::new(
-            ServerConfig::builder_with_provider(Arc::new(rustls::crypto::ring::default_provider()))
-                .with_safe_default_protocol_versions()
-                .unwrap()
-                .with_no_client_auth()
-                .with_single_cert(
-                    vec![CertificateDer::from(
-                        include_bytes!("../fixtures/server.der").to_vec(),
-                    )],
-                    PrivatePkcs8KeyDer::from(include_bytes!("../fixtures/server-key.der").to_vec())
-                        .into(),
-                )
-                .unwrap(),
+            ServerConfig::builder_with_provider(Arc::new(
+                rustls::crypto::aws_lc_rs::default_provider(),
+            ))
+            .with_safe_default_protocol_versions()
+            .unwrap()
+            .with_no_client_auth()
+            .with_single_cert(
+                vec![CertificateDer::from(
+                    include_bytes!("../fixtures/server.der").to_vec(),
+                )],
+                PrivatePkcs8KeyDer::from(include_bytes!("../fixtures/server-key.der").to_vec())
+                    .into(),
+            )
+            .unwrap(),
         );
         let worker = thread::spawn(move || {
             loop {

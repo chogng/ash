@@ -434,7 +434,7 @@ fn build_tls_config(
     system_verifier_factory: &SystemVerifierFactory,
 ) -> Result<Arc<rustls::ClientConfig>, HttpClientError> {
     let builder = rustls::ClientConfig::builder_with_provider(
-        rustls::crypto::ring::default_provider().into(),
+        rustls::crypto::aws_lc_rs::default_provider().into(),
     )
     .with_protocol_versions(&[&rustls::version::TLS12, &rustls::version::TLS13])
     .map_err(|_| {
@@ -481,7 +481,7 @@ fn system_certificate_verifier(
 ) -> Result<Arc<dyn rustls::client::danger::ServerCertVerifier>, HttpClientError> {
     rustls_platform_verifier::Verifier::new_with_extra_roots(
         extra_roots,
-        Arc::new(rustls::crypto::ring::default_provider()),
+        Arc::new(rustls::crypto::aws_lc_rs::default_provider()),
     )
     .map(|verifier| Arc::new(verifier) as Arc<dyn rustls::client::danger::ServerCertVerifier>)
     .map_err(|_| {
@@ -513,7 +513,7 @@ fn system_certificate_verifier(
     add_certificate_bundle(&mut roots, extra_roots)?;
     rustls::client::WebPkiServerVerifier::builder_with_provider(
         Arc::new(roots),
-        Arc::new(rustls::crypto::ring::default_provider()),
+        Arc::new(rustls::crypto::aws_lc_rs::default_provider()),
     )
     .build()
     .map(|verifier| verifier as Arc<dyn rustls::client::danger::ServerCertVerifier>)
