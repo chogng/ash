@@ -56,7 +56,10 @@ export class SlashCommandCatalog {
 			if (entriesByName.has(normalized.name)) throw new RangeError(`Duplicate Slash Command name: /${normalized.name}`);
 			const entry = Object.freeze({ command: normalized, binding });
 			entriesByName.set(normalized.name, entry);
-			commands.push(normalized);
+			// Extensions discovery belongs in the sidebar; retain the old slash binding for compatibility.
+			if (binding.origin !== 'local' || binding.actionId !== OPEN_EXTENSIONS_COMMAND_ID) {
+				commands.push(normalized);
+			}
 		};
 		for (const local of this.local) {
 			if (!local.actionId.trim()) throw new TypeError(`Local Slash Command /${local.definition.name} requires an action ID`);

@@ -24,7 +24,7 @@ registerWorkbenchContribution('workbench.contrib.extensions', WorkbenchPhase.Blo
 		}
 	}));
 	registrations.add(registerAction2(class OpenInstalledExtensions extends Action2 {
-		constructor() { super({ id: OPEN_INSTALLED_EXTENSIONS_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.OpenPlugins' }, 'Manage installed packages'), f1: true }); }
+		constructor() { super({ id: OPEN_INSTALLED_EXTENSIONS_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.OpenPlugins' }, 'Manage Installed Extensions'), f1: true }); }
 		public override async run(accessor: ServicesAccessor, options?: ExtensionsOpenOptions): Promise<void> {
 			const view = await accessor.get(IViewsService).openView('ash.extensions.plugins', true);
 			if (view instanceof ExtensionsViewPane) { void view.open({ ...options, mode: 'installed' }); }

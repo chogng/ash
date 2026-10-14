@@ -1,4 +1,6 @@
-# 插件系统
+# Plugin 包与来源授权
+
+本页中的 Plugin 是包格式、来源授权和集成 bundle 的技术概念；所属产品分类见 [Extensions 的产品层级](editor-extensions.md#extensions-的产品层级)。
 
 > 物理位置：`crates/plugin/`、`crates/core-plugins/`
 > Rust crate：`ash_plugin`、`ash_core_plugins`
@@ -47,7 +49,7 @@ Plugin 是可同时携带多种 capability 的集成 bundle。`ash-plugin` 定�
 
 ## 1. 结论
 
-App 命令面板提供“从 Git 仓库安装插件”。用户选择仓库 URL、可选分支／标签／完整提交 ID，
+App 命令面板提供“从 Git 仓库安装扩展”。用户选择仓库 URL、可选分支／标签／完整提交 ID，
 以及仓库内的包目录；包目录默认为根目录，必须包含 `.ash-plugin/plugin.json`。
 App 在捕获的工作区文件夹中临时检出，通过文件服务建立排除 `.git` 元数据的包快照，
 再调用现有本地安装契约；安装不隐含启用或权限授权。成功后清理临时检出与快照，
@@ -140,7 +142,7 @@ Package store 安全保存既有 local-development immutable object，
 Skill source、Connector catalog、durable authority 和 package-rooted MCP provider。Plugin authority
 分别持久化 installed/enabled/granted/effective refs 和 command receipts，并驱动 live activation 切换；
 App Server 通过 `extensions/*` 统一提供远端来源、搜索、精确版本安装、更新、卸载和租约。
-`plugin/*` 继续提供本地兼容 Plugin 的启用、授权和领域管理。Workbench、Sessions 和 TUI 使用 `/extensions` 进入包管理；`/plugins` 保留为已安装包的快捷入口。
+`plugin/*` 继续提供本地兼容 Plugin 的启用、授权和领域管理。Workbench、Sessions 的用户入口与 TUI 命令接入见 [Extensions 与领域管理入口](slash-commands.md#extensions-与领域管理入口)。
 
 已有可复用边界：
 

@@ -18,7 +18,7 @@ for (const window of ['Code', 'Agents']) {
 		const command = window === 'Code' ? 'ash.extensions.open' : 'workbench.action.chat.configure.skills';
 		await quickaccess.runCommand(command);
 		let mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
-		await mcp.getByRole('button', { name: 'MCP Servers', exact: true }).click();
+		await mcp.getByRole('button', { name: 'Connections', exact: true }).click();
 		const search = mcp.getByRole('searchbox');
 		await search.focus();
 		await search.press('Alt+F1');
@@ -38,7 +38,7 @@ for (const window of ['Code', 'Agents']) {
 		await workbench.reloadWindow(page);
 		await quickaccess.runCommand(command);
 		mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
-		const header = mcp.getByRole('button', { name: 'MCP Servers', exact: true });
+		const header = mcp.getByRole('button', { name: 'Connections', exact: true });
 		if (await header.getAttribute('aria-expanded') !== 'true') { await header.click(); }
 		await mcp.getByRole('option').filter({ hasText: 'Persistent MCP test' }).click();
 		details = page.locator('.ash-extension-editor');
@@ -103,7 +103,7 @@ test('Skills command opens Extensions with keyboard help and no Settings managem
 	await search.focus();
 	await search.press('Alt+F1');
 	const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
-	await expect(help.getByRole('textbox')).toHaveValue(/collapsible Extensions, Plugins, Skills, MCP Servers and Recommended panes/u);
+	await expect(help.getByRole('textbox')).toHaveValue(/collapsible Extensions, Installed Extensions, Skills, Connections and Recommended panes/u);
 	await page.keyboard.press('Escape');
 	await expect(search).toBeFocused();
 });

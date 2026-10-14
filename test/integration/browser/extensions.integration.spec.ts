@@ -7,7 +7,7 @@ for (const labels of [
 	test(`Independent MCP configuration and lifecycle actions refresh the pane and details in ${labels.locale}`, async ({ page }) => {
 		await page.goto(`/extensions.html?locale=${labels.locale}`);
 		const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
-		await mcp.getByRole('button', { name: 'MCP Servers', exact: true }).click();
+		await mcp.getByRole('button', { name: /^(Connections|连接)$/u }).click();
 		await mcp.getByRole('button', { name: labels.add, exact: true }).click();
 		const add = page.getByRole('dialog', { name: labels.add, exact: true });
 		await add.getByRole('button', { name: labels.http, exact: true }).click();
@@ -60,7 +60,7 @@ for (const labels of [
 test('MCP stdio arguments are validated without losing the draft and Escape cancels editing', async ({ page }) => {
 	await page.goto('/extensions.html');
 	const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
-	await mcp.getByRole('button', { name: 'MCP Servers', exact: true }).click();
+	await mcp.getByRole('button', { name: /^(Connections|连接)$/u }).click();
 	await mcp.getByRole('button', { name: 'Add MCP server', exact: true }).click();
 	const dialog = page.getByRole('dialog', { name: 'Add MCP server', exact: true });
 	await dialog.getByRole('button', { name: 'Local process (stdio)', exact: true }).click();
@@ -93,7 +93,7 @@ test('MCP failed mutations refresh actual state and stale revisions never overwr
 		credential: { type: 'unauthenticated' }, enablement: 'enabled',
 	}));
 	const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
-	await mcp.getByRole('button', { name: 'MCP Servers', exact: true }).click();
+	await mcp.getByRole('button', { name: /^(Connections|连接)$/u }).click();
 	await mcp.getByRole('option').filter({ hasText: 'Reviewed server' }).click();
 	const details = page.locator('.ash-extension-editor');
 	await expect(details.getByRole('button', { name: 'Disable', exact: true })).toBeVisible();
@@ -150,7 +150,7 @@ for (const [locale, title, discover, sourceLabel, allSources, loadMore] of [
 for (const [locale, installedLabel, installLabel] of [['en', 'Installed', 'Install'], ['zh-CN', '已安装', '安装']]) {
 	for (const [view, paneTitle, discoveryLabel, query, name, packageId] of [
 		['skills', locale === 'zh-CN' ? '技能' : 'Skills', locale === 'zh-CN' ? '发现技能' : 'Discover skills', 'Web', 'Web tools', 'example/web'],
-		['mcp', 'MCP Servers', locale === 'zh-CN' ? '发现 MCP 服务器' : 'Discover MCP servers', 'Docs', 'Docs MCP', 'catalog/docs@ash'],
+		['mcp', locale === 'zh-CN' ? '连接' : 'Connections', locale === 'zh-CN' ? '发现连接' : 'Discover connections', 'Docs', 'Docs MCP', 'catalog/docs@ash'],
 	]) {
 		test(`Marketplace ${view} discovery opens reviewed package installation and updates its row in ${locale}`, async ({ page }) => {
 			await page.goto(`/extensions.html?marketplace&locale=${locale}`);
@@ -243,8 +243,8 @@ for (const theme of ['light', 'dark', 'hc']) {
 }
 
 for (const [locale, title, urlLabel, refLabel, pathLabel] of [
-	['en', 'Install plugin from Git repository', 'Git repository URL', 'Branch, tag or full commit ID (optional)', 'Package directory (optional)'],
-	['zh-CN', '从 Git 仓库安装插件', 'Git 仓库地址', '分支、标签或完整提交 ID（可选）', '包目录（可选）'],
+	['en', 'Install extension from Git repository', 'Git repository URL', 'Branch, tag or full commit ID (optional)', 'Package directory (optional)'],
+	['zh-CN', '从 Git 仓库安装扩展', 'Git 仓库地址', '分支、标签或完整提交 ID（可选）', '包目录（可选）'],
 ]) {
 	test(`Git plugin installation inputs are localized and keyboard cancellable in ${locale}`, async ({ page }) => {
 		await page.goto(`/extensions.html?locale=${locale}`);
@@ -267,7 +267,7 @@ for (const [locale, title, urlLabel, refLabel, pathLabel] of [
 test('Git plugin installation Escape cancels the running host operation before installing a package', async ({ page }) => {
 	await page.goto('/extensions.html?holdGitClone');
 	await page.evaluate(() => window.ashExtensionsIntegration.startCommand('ash.extensions.installFromGit'));
-	const dialog = page.getByRole('dialog', { name: 'Install plugin from Git repository', exact: true });
+	const dialog = page.getByRole('dialog', { name: 'Install extension from Git repository', exact: true });
 	await dialog.getByPlaceholder('Git repository URL', { exact: true }).fill('https://example.test/plugin.git');
 	await dialog.getByPlaceholder('Branch, tag or full commit ID (optional)', { exact: true }).fill('release');
 	await dialog.getByPlaceholder('Package directory (optional)', { exact: true }).press('Enter');
@@ -332,7 +332,7 @@ test('Plugins, Skills and MCP use the registered editor with their own content t
 	await page.goto('/extensions.html');
 	await page.evaluate(() => window.ashExtensionsIntegration.addSkillOnlyPlugin());
 	const plugins = page.locator('[data-view-id="ash.extensions.plugins"]');
-	await plugins.getByRole('button', { name: 'Plugins', exact: true }).click();
+	await plugins.getByRole('button', { name: 'Installed Extensions', exact: true }).click();
 	await plugins.getByRole('option').filter({ hasText: 'Skill-only plugin' }).click();
 	const editor = page.locator('.ash-extension-editor');
 	await editor.getByRole('tab', { name: 'Permissions', exact: true }).click();
@@ -346,7 +346,7 @@ test('Plugins, Skills and MCP use the registered editor with their own content t
 	await expect(editor.getByRole('tabpanel', { name: 'Diagnostics', exact: true })).toContainText('Invalid metadata');
 	await page.evaluate(() => window.ashExtensionsIntegration.addMcpPackage());
 	const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
-	await mcp.getByRole('button', { name: 'MCP Servers', exact: true }).click();
+	await mcp.getByRole('button', { name: /^(Connections|连接)$/u }).click();
 	await mcp.getByRole('option').click();
 	await editor.getByRole('tab', { name: 'Tools', exact: true }).click();
 	await expect(editor.getByRole('tabpanel', { name: 'Tools', exact: true })).toContainText('fixture_search');
@@ -777,7 +777,7 @@ test('MCP pane merges installed and registered servers and opens owning package 
 	await page.goto('/extensions.html');
 	await page.evaluate(() => window.ashExtensionsIntegration.addMcpPackage());
 	const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
-	await mcp.getByRole('button', { name: 'MCP Servers', exact: true }).click();
+	await mcp.getByRole('button', { name: /^(Connections|连接)$/u }).click();
 	await expect(mcp.getByRole('option')).toHaveCount(1);
 	await mcp.getByRole('option').click();
 	const details = page.locator('.ash-extension-editor');
@@ -802,7 +802,7 @@ for (const [locale, states, statusLabel, diagnosticLabel, refreshLabel] of [
 			}))
 		));
 		const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
-		await mcp.getByRole('button', { name: 'MCP Servers', exact: true }).click();
+		await mcp.getByRole('button', { name: /^(Connections|连接)$/u }).click();
 		await expect(mcp.getByRole('option')).toHaveCount(5);
 		for (let index = 0; index < states.length; index++) {
 			await expect(mcp.getByRole('option').filter({ hasText: `Configured ${index}` })).toContainText(states[index]);
@@ -838,7 +838,7 @@ test('MCP status failures retain installed packages and never infer connection s
 	await page.goto('/extensions.html');
 	await page.evaluate(() => { window.ashExtensionsIntegration.addMcpPackage(); window.ashExtensionsIntegration.failMcpStatus(); });
 	const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
-	await mcp.getByRole('button', { name: 'MCP Servers', exact: true }).click();
+	await mcp.getByRole('button', { name: /^(Connections|连接)$/u }).click();
 	await expect(mcp.getByRole('option')).toHaveCount(1);
 	await expect(mcp.getByRole('status')).toContainText('Could not load MCP server status: Error: Status connection lost');
 	await expect(mcp.getByRole('option')).not.toContainText('Connected');
@@ -857,7 +857,7 @@ test('MCP server status remains visible when tool descriptions fail and unsuppor
 	await page.goto('/extensions.html');
 	await page.evaluate(() => window.ashExtensionsIntegration.failMcpTools());
 	const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
-	await mcp.getByRole('button', { name: 'MCP Servers', exact: true }).click();
+	await mcp.getByRole('button', { name: /^(Connections|连接)$/u }).click();
 	await mcp.getByRole('option').click();
 	const details = page.locator('.ash-extension-editor');
 	await expect(details.getByRole('status')).toHaveText('Connected');
@@ -876,7 +876,7 @@ test('MCP detail changes discard a delayed status response for the previous serv
 		{ id: 'second', displayName: 'Second server', httpOrigin: null, state: { status: 'disabled' }, catalogGeneration: 1, connectionGeneration: null, toolCount: 0 },
 	]));
 	const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
-	await mcp.getByRole('button', { name: 'MCP Servers', exact: true }).click();
+	await mcp.getByRole('button', { name: /^(Connections|连接)$/u }).click();
 	await expect(mcp.getByRole('option')).toHaveCount(2);
 	await page.evaluate(() => window.ashExtensionsIntegration.holdMcpStatus());
 	await mcp.getByRole('option').filter({ hasText: 'First server' }).click();
@@ -890,16 +890,20 @@ test('MCP detail changes discard a delayed status response for the previous serv
 	await expect(details).not.toContainText('Retired diagnostic');
 });
 
-test('Plugins pane includes packages without editor extensions and retains independent search', async ({ page }) => {
+test('Installed Extensions includes packages with different capabilities and retains independent search', async ({ page }) => {
 	await page.goto('/extensions.html');
 	await page.evaluate(() => window.ashExtensionsIntegration.addSkillOnlyPlugin());
+	await page.evaluate(() => window.ashExtensionsIntegration.openEditorExtension());
+	await page.locator('.ash-extension-editor').getByRole('button', { name: 'Install', exact: true }).click();
+	await page.getByRole('dialog', { name: 'Install', exact: true }).getByRole('button', { name: 'Install', exact: true }).click();
 	await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.installed'));
 	const plugins = page.locator('[data-view-id="ash.extensions.plugins"]');
+	await expect(plugins.getByRole('option').filter({ hasText: 'publisher.sample' })).toHaveCount(1);
 	await plugins.getByRole('option').filter({ hasText: 'Skill-only plugin' }).click();
 	await expect(page.locator('.ash-extension-editor')).toContainText('acme/skills');
 	await plugins.getByRole('searchbox').fill('skills');
-	await plugins.getByRole('button', { name: 'Plugins', exact: true }).click();
-	await plugins.getByRole('button', { name: 'Plugins', exact: true }).click();
+	await plugins.getByRole('button', { name: 'Installed Extensions', exact: true }).click();
+	await plugins.getByRole('button', { name: 'Installed Extensions', exact: true }).click();
 	await expect(plugins.getByRole('searchbox')).toHaveValue('skills');
 	await expect(page.locator('[data-view-id="ash.extensions.view"]').getByRole('searchbox')).toHaveValue('');
 });
@@ -912,7 +916,7 @@ test('Changing the selected capability aborts a pending instructions read and di
 	await page.locator('.ash-extension-editor').getByRole('button', { name: 'Open instructions', exact: true }).click();
 	await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.instructionsStarted())).toBe(true);
 	const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
-	await mcp.getByRole('button', { name: 'MCP Servers', exact: true }).click();
+	await mcp.getByRole('button', { name: /^(Connections|连接)$/u }).click();
 	await mcp.getByRole('option').click();
 	await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.instructionsAborted())).toBe(true);
 	await page.evaluate(() => window.ashExtensionsIntegration.completeInstructions());
@@ -925,7 +929,7 @@ for (const theme of ['light', 'dark', 'hc']) {
 		await page.setViewportSize({ width: 1280, height: 840 });
 		await page.goto(`/extensions.html?preview&theme=${theme}`);
 		await page.evaluate(() => { window.ashExtensionsIntegration.addMcpPackage(); window.ashExtensionsIntegration.addSkillOnlyPlugin(); });
-		for (const name of ['Plugins', 'Skills', 'MCP Servers']) {
+		for (const name of ['Installed Extensions', 'Skills', 'Connections']) {
 			await page.locator('#extensions').getByRole('button', { name, exact: true }).click();
 		}
 		await page.locator('[data-view-id="ash.extensions.mcp"]').getByRole('option').click();
@@ -993,7 +997,7 @@ for (const labels of [
             window.ashExtensionsIntegration.configureMcp({ id: 'user:mcp:oauth', displayName: 'OAuth fixture', transport: { type: 'streamableHttp', url: 'https://mcp.test/rpc' }, credential: { type: 'unauthenticated' }, enablement: 'enabled' });
         });
         const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
-        await mcp.getByRole('button', { name: 'MCP Servers', exact: true }).click();
+        await mcp.getByRole('button', { name: /^(Connections|连接)$/u }).click();
         await mcp.getByRole('option').filter({ hasText: 'OAuth fixture' }).click();
         const details = page.locator('.ash-extension-editor');
         await details.getByRole('button', { name: labels.signIn, exact: true }).focus();

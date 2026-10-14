@@ -69,6 +69,7 @@ import { IAppServerRemoteAgentService } from '../../../src/ash/workbench/service
 import { createSettingsEditorInput } from '../../../src/ash/workbench/services/preferences/common/settingsEditorInput.js';
 import { CLOSE_EDITOR_COMMAND_ID } from '../../../src/ash/workbench/browser/parts/editor/editorCommands.js';
 import { AppServerExtensionManagementService } from '../../../src/ash/workbench/services/extensionManagement/browser/appServerExtensionManagementService.js';
+import { ViewsRegistry } from '../../../src/ash/workbench/common/views.js';
 import { ExtensionsViewPane } from '../../../src/ash/workbench/contrib/extensions/browser/extensionsViewlet.js';
 import '../../../src/ash/workbench/contrib/extensions/browser/extensions.contribution.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../src/ash/workbench/common/contributions.js';
@@ -487,11 +488,14 @@ const previewHeight = new URLSearchParams(location.search).has('preview') ? 780 
 if (new URLSearchParams(location.search).has('preview')) { document.getElementById('lsp')!.hidden = true; document.getElementById('details')!.style.width = '850px'; document.getElementById('details')!.style.height = `${previewHeight}px`; }
 host.style.width = paneLayout ? '280px' : '360px'; host.style.height = paneLayout ? '260px' : `${previewHeight}px`;
 const panes = disposables.add(new PaneView(host));
-const extensionManagement = disposables.add(services.createInstance(ExtensionsViewPane, host, { id: 'ash.extensions.view', title: 'Extensions' }));
-const plugins = disposables.add(services.createInstance(ExtensionsViewPane, host, { id: 'ash.extensions.plugins', title: new URLSearchParams(location.search).get('locale') === 'zh-CN' ? '插件' : 'Plugins', collapsed: true }));
-const skills = disposables.add(services.createInstance(SkillsViewPane, host, { id: 'ash.extensions.skills', title: new URLSearchParams(location.search).get('locale') === 'zh-CN' ? '技能' : 'Skills', collapsed: true }));
-const mcp = disposables.add(services.createInstance(McpServersViewPane, host, { id: 'ash.extensions.mcp', title: 'MCP Servers', collapsed: true }));
-const recommended = disposables.add(services.createInstance(RecommendedExtensionsView, host, { id: 'ash.extensions.recommended', title: new URLSearchParams(location.search).get('locale') === 'zh-CN' ? '推荐' : 'Recommended', collapsed: true }));
+// Use the localized product descriptors shared by IDE and Agents.
+const contributions = disposables.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }));
+contributions.advance(WorkbenchPhase.BlockStartup);
+const extensionManagement = disposables.add(services.createInstance(ExtensionsViewPane, host, ViewsRegistry.getView('ash.extensions.view')!));
+const plugins = disposables.add(services.createInstance(ExtensionsViewPane, host, ViewsRegistry.getView('ash.extensions.plugins')!));
+const skills = disposables.add(services.createInstance(SkillsViewPane, host, ViewsRegistry.getView('ash.extensions.skills')!));
+const mcp = disposables.add(services.createInstance(McpServersViewPane, host, ViewsRegistry.getView('ash.extensions.mcp')!));
+const recommended = disposables.add(services.createInstance(RecommendedExtensionsView, host, ViewsRegistry.getView('ash.extensions.recommended')!));
 for (const pane of [extensionManagement, plugins, skills, mcp, recommended]) { panes.addPane(pane, 350); pane.setVisible(true); }
 // Installation scenarios explicitly browse the fixture registry. Opening the product command
 // without filters is tested separately and shows installed packages, including built-ins.
@@ -504,8 +508,6 @@ services.registerInstance(IViewsService, {
 	}
 } as unknown as IViewsService);
 registerSkillActions();
-const contributions = disposables.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }));
-contributions.advance(WorkbenchPhase.BlockStartup);
 const commands = disposables.add(new CommandService(services));
 const lsp = disposables.add(services.createInstance(LanguageServerSettingsContent, document.getElementById('lsp')!));
 document.getElementById('lsp')!.append(lsp.domNode);

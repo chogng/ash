@@ -14,7 +14,7 @@
 
 目标扩展包括 Node 中的 Open VSX / VS Code 兼容 TS/JS 包与独立 Rust 程序中的能力包。ExtensionPackageManager 继续统一拥有包安装、完整性、来源授权与租约，能力 runtime 按有效授权注册 Provider，App/TUI 按需消费。Rust 包经 Ash 来源 adapter 接入，不要求 Open VSX 承载 Rust 或建立第二套包生命周期。现有 executable sidecar、统一 Host RPC 与标准 API 的 Node/V8 适配器是当前接入基础；Rust SDK 与产品 launcher 已被认证和 Remote Provider 复用，通用第三方 Rust 安装、隔离与其余业务拆分尚未完成，见 [扩展架构与编辑器接入](../../docs/editor-extensions.md#0-确定的产品方向)。
 
-Extensions 是统一的产品管理入口，远端 registry 是包来源。`ash-core-plugins` 聚合内置、远端和本地来源，
+Extensions 的总类、能力类型与 Marketplace 层级由[扩展产品层级](../../docs/editor-extensions.md#extensions-的产品层级)维护；远端 registry 是包来源。`ash-core-plugins` 聚合内置、远端和本地来源，
 远端签名 registry 只是其中一个 adapter；它们不是 client/server 进程对，也不通过 JSONL 相连。
 
 | 组件                        | 位置                                                                    | 职责                                                                      |

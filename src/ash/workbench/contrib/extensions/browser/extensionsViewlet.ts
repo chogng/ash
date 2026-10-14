@@ -83,12 +83,12 @@ class ExtensionsContent extends Disposable {
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		const search = h(mainWindow.document, 'div'); search.className = 'extensions-search'; this.domNode.append(search);
-		this.query = this._register(new InputBox(search, { type: 'search', presentation: 'compact', placeholder: this.isPluginsPane ? localize({ bundle: 'ash.extensions', key: 'searchPlugins' }, 'Search plugins') : localize({ bundle: 'ash.extensions', key: 'searchPackages' }, 'Search extensions'), ariaLabel: this.isPluginsPane ? localize({ bundle: 'ash.extensions', key: 'searchPlugins' }, 'Search plugins') : localize({ bundle: 'ash.extensions', key: 'searchExtensions' }, 'Search Extensions') }));
+		this.query = this._register(new InputBox(search, { type: 'search', presentation: 'compact', placeholder: this.isPluginsPane ? localize({ bundle: 'ash.extensions', key: 'searchPlugins' }, 'Search installed extensions') : localize({ bundle: 'ash.extensions', key: 'searchPackages' }, 'Search extensions'), ariaLabel: this.isPluginsPane ? localize({ bundle: 'ash.extensions', key: 'searchPlugins' }, 'Search installed extensions') : localize({ bundle: 'ash.extensions', key: 'searchExtensions' }, 'Search Extensions') }));
 		this.query.value = options.query ?? '';
 		this.status = h(mainWindow.document, 'div'); this.status.className = 'extensions-status'; this.status.setAttribute('role', 'status'); this.domNode.append(this.status);
 		const listContainer = h(mainWindow.document, 'div'); listContainer.className = 'extensions-list'; this.domNode.append(listContainer);
 		this.list = this._register(new List(listContainer, {
-			ariaLabel: this.isPluginsPane ? localize({ bundle: 'ash.extensions', key: 'pluginsPane' }, 'Plugins') : localize({ bundle: 'ash.extensions', key: 'extensionList' }, 'Extensions'), domFocusable: true, keyboardNavigation: true, focusOnMouseMove: false,
+			ariaLabel: this.isPluginsPane ? localize({ bundle: 'ash.extensions', key: 'pluginsPane' }, 'Installed Extensions') : localize({ bundle: 'ash.extensions', key: 'extensionList' }, 'Extensions'), domFocusable: true, keyboardNavigation: true, focusOnMouseMove: false,
 			getId: item => `${item.source ?? ExtensionsInputSource.Registry}/${item.installation?.installationId ?? item.summary.id}/${item.summary.version}`,
 			accessibilityProvider: { getAriaLabel: item => `${item.summary.displayName}, ${item.summary.version}, ${item.summary.description}, ${item.source === ExtensionsInputSource.BuiltIn ? localize({ bundle: 'ash.extensions', key: 'builtInFilter' }, 'Built-in') + ', ' : ''}${item.enabled === undefined ? '' : item.enabled ? localize({ bundle: 'ash.extensions', key: 'enabledState' }, 'Enabled') : localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled')}` },
 			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: item => item.summary.displayName },
@@ -115,7 +115,7 @@ class ExtensionsContent extends Disposable {
 			type: AccessibleViewType.Help, priority: 100, name: `extensions-help-${generateUuid()}`, when: ContextKeyExpr.has('extensionsFocused'), getProvider: () => {
 				const focused = mainWindow.document.activeElement;
 				if (!this.visible || !(focused instanceof HTMLElement) || !this.domNode.contains(focused)) { return undefined; }
-				return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type: AccessibleViewType.Help }, () => localize({ bundle: 'ash.extensions', key: 'accessibilityHelp' }, 'Extensions, Plugins, Skills, MCP Servers and Recommended are collapsible panes. Use Left and Right on headers to collapse or expand them. Open /extensions to browse and manage extensions. Use Tab to move between controls, arrow keys to select an extension, and Enter to open its details. Enable or Disable in a row or its details controls the whole editor extension, including scripts, themes, syntax and snippets. Language packs are managed through the display language setting. Execution authorization and permissions are reviewed separately in details. Escape closes this help. Run Install plugin from Git repository in the Command Palette to choose a repository revision and package directory. Press Escape during installation to cancel. Add MCP server opens a transport choice and configuration dialog. Independent server details provide Edit, Enable or Disable, Connect, Disconnect and Remove. Enablement is saved; Connect and Disconnect affect this running instance. HTTP server details provide Sign in, Cancel sign-in and Sign out when OAuth is available. Sign in opens a browser; credentials refresh automatically. Sign out deletes local credentials and cancels pending authorization. Operations refresh backend state. Escape cancels a dialog.'), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
+				return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type: AccessibleViewType.Help }, () => localize({ bundle: 'ash.extensions', key: 'accessibilityHelp' }, 'Extensions, Installed Extensions, Skills, Connections and Recommended are collapsible panes. Use Left and Right on headers to collapse or expand them. Open Extensions from the sidebar to search the Marketplace and manage installed extensions. Use Tab to move between controls, arrow keys to select an extension, and Enter to open its details. Enable or Disable in a row or its details controls the whole editor extension, including scripts, themes, syntax and snippets. Language packs are managed through the display language setting. Execution authorization and permissions are reviewed separately in details. Escape closes this help. Run Install extension from Git repository in the Command Palette to choose a repository revision and package directory. Press Escape during installation to cancel. Add MCP server opens a transport choice and configuration dialog. Independent server details provide Edit, Enable or Disable, Connect, Disconnect and Remove. Enablement is saved; Connect and Disconnect affect this running instance. HTTP server details provide Sign in, Cancel sign-in and Sign out when OAuth is available. Sign in opens a browser; credentials refresh automatically. Sign out deletes local credentials and cancels pending authorization. Operations refresh backend state. Escape cancels a dialog.'), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
 			}
 		}));
 	}
@@ -202,14 +202,14 @@ class ExtensionsContent extends Disposable {
 			if (this.options.mode === 'builtIn') {
 				items = builtInItems;
 			} else if (isInstalled) {
-				items = installed.filter(entry => (!this.isPluginsPane || !entry.capabilities.some(capability => capability.kind === 'editorExtension')) && (!this.options.capabilityKind || entry.capabilities.some(capability => capability.kind === this.options.capabilityKind))).map(installation => {
+				items = installed.filter(entry => (!this.options.capabilityKind || entry.capabilities.some(capability => capability.kind === this.options.capabilityKind))).map(installation => {
 					const policy = policies.extensions.find(value => value.installationId === installation.installationId);
 					return { installation, enabled: policy?.enabled, canChangeEnablement: !!policy, summary: { id: installation.package.id, version: installation.package.version, displayName: installation.package.id.split('@')[0], packageType: 'installed', description: installation.capabilities.map(capability => capability.kind).join(' · ') } };
 				});
 				items.push(...builtInItems);
 				if (this.isPluginsPane || !this.options.capabilityKind || this.options.capabilityKind === 'editorExtension') {
 					const catalog = await this.plugins.list();
-					items.push(...catalog.packages.filter(plugin => this.isPluginsPane || plugin.hasEditorExtensions).map(plugin => ({ source: ExtensionsInputSource.Local, enabled: plugin.enabled, canChangeEnablement: plugin.enabled || !plugin.revoked, summary: { id: plugin.id, version: plugin.version, packageType: 'editorExtension', displayName: plugin.displayName, description: this.isPluginsPane ? localize({ bundle: 'ash.extensions', key: 'localPlugin' }, 'Local plugin') : localize({ bundle: 'ash.extensions', key: 'localExtension' }, 'Local extension') } })));
+					items.push(...catalog.packages.filter(plugin => this.isPluginsPane || !this.options.capabilityKind || plugin.hasEditorExtensions).map(plugin => ({ source: ExtensionsInputSource.Local, enabled: plugin.enabled, canChangeEnablement: plugin.enabled || !plugin.revoked, summary: { id: plugin.id, version: plugin.version, packageType: 'editorExtension', displayName: plugin.displayName, description: localize({ bundle: 'ash.extensions', key: 'localExtension' }, 'Local extension') } })));
 				}
 			} else {
 				const options = { limit: 200, packageType: this.isPluginsPane ? 'plugin' : undefined, capabilityKind: this.options.capabilityKind, languageId: this.options.languageId };
@@ -225,7 +225,7 @@ class ExtensionsContent extends Disposable {
 			this.list.items = this.options.mode === 'browse' || this.options.mode === undefined ? items : items.filter(item => [item.summary.id, item.summary.displayName, item.summary.description].some(value => value.toLowerCase().includes(query.toLowerCase())));
 			this.loaded = true;
 			if (this.list.items.length) {
-				this.status.textContent = this.isPluginsPane ? localize({ bundle: 'ash.extensions', key: 'pluginResults' }, '{0} plugins', this.list.items.length) : localize({ bundle: 'ash.extensions', key: 'results' }, '{0} extensions', this.list.items.length);
+				this.status.textContent = this.isPluginsPane ? localize({ bundle: 'ash.extensions', key: 'pluginResults' }, '{0} extensions', this.list.items.length) : localize({ bundle: 'ash.extensions', key: 'results' }, '{0} extensions', this.list.items.length);
 			} else {
 				this.status.textContent = '';
 			}
@@ -250,9 +250,9 @@ export function registerExtensionsViewContainer(registry: WorkbenchViewRegistry,
 	registrations.add(registry.registerViewContainer({ id: 'ash.extensions', title: localize({ bundle: 'ash.extensions', key: 'extensionList' }, 'Extensions'), location, icon: Lxicon.extensions, order: 8 }));
 	registrations.add(registry.registerViews('ash.extensions', [
 		{ id: 'ash.extensions.view', title: localize({ bundle: 'ash.extensions', key: 'extensionList' }, 'Extensions'), canToggleVisibility: false, order: 0, ctorDescriptor: new SyncDescriptor(ExtensionsViewPane) },
-		{ id: 'ash.extensions.plugins', title: localize({ bundle: 'ash.extensions', key: 'pluginsPane' }, 'Plugins'), canToggleVisibility: false, order: 1, collapsed: true, ctorDescriptor: new SyncDescriptor(ExtensionsViewPane) },
+		{ id: 'ash.extensions.plugins', title: localize({ bundle: 'ash.extensions', key: 'pluginsPane' }, 'Installed Extensions'), canToggleVisibility: false, order: 1, collapsed: true, ctorDescriptor: new SyncDescriptor(ExtensionsViewPane) },
 		{ id: 'ash.extensions.skills', title: localize({ bundle: 'ash.extensions', key: 'filterSkills' }, 'Skills'), canToggleVisibility: false, order: 2, collapsed: true, ctorDescriptor: new SyncDescriptor(SkillsViewPane) },
-		{ id: 'ash.extensions.mcp', title: localize({ bundle: 'ash.extensions', key: 'mcpPane' }, 'MCP Servers'), canToggleVisibility: false, order: 3, collapsed: true, ctorDescriptor: new SyncDescriptor(McpServersViewPane) },
+		{ id: 'ash.extensions.mcp', title: localize({ bundle: 'ash.extensions', key: 'mcpPane' }, 'Connections'), canToggleVisibility: false, order: 3, collapsed: true, ctorDescriptor: new SyncDescriptor(McpServersViewPane) },
 		{ id: 'ash.extensions.recommended', title: localize({ bundle: 'ash.extensions', key: 'recommendedPane' }, 'Recommended'), canToggleVisibility: false, order: 4, collapsed: true, ctorDescriptor: new SyncDescriptor(RecommendedExtensionsView) },
 	]));
 	return registrations;

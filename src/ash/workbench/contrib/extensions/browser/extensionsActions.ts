@@ -190,7 +190,7 @@ export function registerExtensionManagementActions(): DisposableStore {
 	}));
 	registrations.add(registerAction2(class InstallGitExtension extends Action2 {
 		constructor() {
-			super({ id: 'ash.extensions.installFromGit', title: localize2({ bundle: 'ash.extensions', key: 'installGitExtension' }, 'Install plugin from Git repository'), f1: true });
+			super({ id: 'ash.extensions.installFromGit', title: localize2({ bundle: 'ash.extensions', key: 'installGitExtension' }, 'Install extension from Git repository'), f1: true });
 		}
 
 		public override async run(accessor: ServicesAccessor): Promise<void> {
@@ -199,7 +199,7 @@ export function registerExtensionManagementActions(): DisposableStore {
 			const quickInput = accessor.get(IQuickInputService);
 			const folders = accessor.get(IWorkspaceContextService).getWorkspace().folders;
 			if (folders.length === 0) {
-				await dialogs.info(localize({ bundle: 'ash.extensions', key: 'gitInstallWorkspace' }, 'Open a workspace folder to install a plugin from Git.'));
+				await dialogs.info(localize({ bundle: 'ash.extensions', key: 'gitInstallWorkspace' }, 'Open a workspace folder to install an extension from Git.'));
 				return;
 			}
 			let folder = folders[0]!;
@@ -221,7 +221,7 @@ export function registerExtensionManagementActions(): DisposableStore {
 				folder = folders.find(folder => folder.id === selected)!;
 			}
 			const input = await dialogs.input({
-				title: localize({ bundle: 'ash.extensions', key: 'installGitExtension' }, 'Install plugin from Git repository'),
+				title: localize({ bundle: 'ash.extensions', key: 'installGitExtension' }, 'Install extension from Git repository'),
 				message: localize({ bundle: 'ash.extensions', key: 'gitInstallSource' }, 'Enter the repository URL, optional branch, tag or full commit ID, and package directory.'),
 				detail: localize({ bundle: 'ash.extensions', key: 'gitInstallNotice' }, 'The package directory defaults to the repository root and must contain .ash-plugin/plugin.json. Installation uses a temporary checkout in {0}; enablement and permissions are managed separately.', folder.name),
 				inputs: [
@@ -238,7 +238,7 @@ export function registerExtensionManagementActions(): DisposableStore {
 			using running = new DisposableStore();
 			const controller = new AbortController();
 			const progress = running.add(quickInput.createQuickPick<IQuickPickItem>());
-			progress.ariaLabel = localize({ bundle: 'ash.extensions', key: 'gitInstallProgress' }, 'Installing plugin from Git. Press Escape to cancel.');
+			progress.ariaLabel = localize({ bundle: 'ash.extensions', key: 'gitInstallProgress' }, 'Installing extension from Git. Press Escape to cancel.');
 			progress.placeholder = progress.ariaLabel;
 			progress.busy = true;
 			progress.items = [{ label: localize({ bundle: 'ash.extensions', key: 'cancelGitInstall' }, 'Cancel installation') }];

@@ -117,16 +117,16 @@ Theme picker，带 ID 时静默直接切换；Theme picker 不启用搜索，通
 
 ## Extensions 与领域管理入口
 
-Web/Electron Workbench 和 Ash Code TUI 使用一个包管理入口，加上各领域的使用入口。命令只打开对应功能；安装状态由
+产品分类见 [Extensions 的产品层级](editor-extensions.md#extensions-的产品层级)。IDE 和 Agent Window 从侧边栏打开 Extensions，在 Marketplace 搜索和安装，在 Installed Extensions 管理已安装内容；Ash Code TUI 保留终端命令入口。命令只打开对应功能；安装状态由
 [`Core Plugins`](../crates/docs/core-plugins.md#一个包入口多个领域消费方) 统一持有。
 
-| 入口                | 用户操作                                                            | 安装相关操作                               |
-| ------------------- | ------------------------------------------------------------------- | ------------------------------------------ |
-| `/extensions`       | 搜索所有来源、查看包内容与版本、安装、更新、卸载                    | 使用同一个 Core Plugins 服务               |
-| `/skills`           | 查看可用 Skill、启用/停用、查看诊断；通过 `$name` 调用              | 在 TUI 中用 `/extensions` 搜索可安装 Skill |
-| `/lsp`              | 查看当前语言与服务器、配置启用状态和路径、检查运行故障              | “查找服务器”打开 Extensions 的语言筛选     |
-| `/plugins`          | Ash Code 管理已安装插件的启停；Workbench 打开 Extensions 的插件分类 | 包更新和卸载由 Extensions 提供             |
-| MCP、Connector 领域 | 管连接、认证、工具与运行状态；当前不新增 Desktop slash command      | Extensions 提供对应 capability 筛选        |
+| 入口                       | 用户操作                                                                                    | 安装相关操作                               |
+| -------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| Extensions / `/extensions` | Desktop 使用侧边栏；TUI 使用 `/extensions` 搜索所有来源、查看包内容与版本、安装、更新、卸载 | 使用同一个 Core Plugins 服务               |
+| `/skills`                  | 查看可用 Skill、启用/停用、查看诊断；通过 `$name` 调用                                      | 在 TUI 中用 `/extensions` 搜索可安装 Skill |
+| `/lsp`                     | 查看当前语言与服务器、配置启用状态和路径、检查运行故障                                      | “查找服务器”打开 Extensions 的语言筛选     |
+| `/plugins`                 | Ash Code 管理已安装插件的启停；IDE 和 Agent Window 打开 Installed Extensions                | 包更新和卸载由 Extensions 提供             |
+| MCP、Connector 领域        | 管连接、认证、工具与运行状态；当前不新增 Desktop slash command                              | Extensions 提供对应 capability 筛选        |
 
 - package 是版本和卸载单位；一个 Plugin 包携带的 Skill、MCP 等能力不分别安装，也不重复登记。
 - 领域页面可直接提供安装按钮，但必须调用同一个包管理服务，并明确显示实际安装的整个包。
@@ -135,8 +135,8 @@ Web/Electron Workbench 和 Ash Code TUI 使用一个包管理入口，加上各�
 - 搜索命中语言包不代表其中每种语言都有 LSP；服务器路由必须来自已验证 catalog 的明确声明。
 - 安装、更新和卸载通知使领域重新读取状态；进程、文档、认证、启用设置仍归各领域管理。
 
-Web/Electron Chat 与 Ash Code 共用 `ProductSlashCommand` 的命令定义；Rust 直接读取，TypeScript 由协议生成器生成 `PRODUCT_SLASH_COMMANDS`。名称、描述、参数模式和占位提示只在共享契约中声明，各端仅绑定自身面板，不加入服务端会话命令。
-`/extensions [query]` 打开并搜索包；Web/Electron 的 `/lsp [language-id]` 打开设置的“编辑器 → 语言服务器”并设置查找语言，日志与运行故障通过 Output 和状态栏查看，Ash Code 保留终端服务器面板；`/plugins` 与 `/skills` 不接受参数。
+Web/Electron Chat 与 Ash Code 共用 `ProductSlashCommand` 的命令定义；Rust 直接读取，TypeScript 由协议生成器生成 `PRODUCT_SLASH_COMMANDS`。名称、描述、参数模式和占位提示只在共享契约中声明，各端绑定自身面板，不加入服务端会话命令。Desktop 的 `/extensions` 仅保留手动输入兼容，不进入聊天补全候选；`/plugins` 仍可发现和调用。
+手动输入 `/extensions [query]` 仍打开并搜索包；Web/Electron 的 `/lsp [language-id]` 打开设置的“编辑器 → 语言服务器”并设置查找语言，日志与运行故障通过 Output 和状态栏查看，Ash Code 保留终端服务器面板；`/plugins` 与 `/skills` 不接受参数。
 页面提供 Tab/方向键导航、Alt+F1 帮助与独立 accessibility verbosity 设置。安装前展示完整包的版本和能力；
 已安装列表按安装记录 ID 管理，同包多版本不会混用；目录不可用时仍可读取本地安装列表并卸载。
 Skill 启用和 LSP 配置使用后端配置 revision；遇到冲突保留输入并提示刷新，不自动覆盖。

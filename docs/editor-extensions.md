@@ -118,17 +118,34 @@ provider 的首次状态读取，避免仓库或状态尚未就绪时静默无�
 
 ## 0. 确定的产品方向
 
+### Extensions 的产品层级
+
+Extensions（扩展）是 Ash 增加和管理可选能力的总类，覆盖 IDE 和 Agent Window；它不只指编辑器扩展。以下都是 Extensions 中的能力或接入类型，而不是与 Extensions 平级的产品体系：
+
+| 类型                        | 提供什么                               |
+| --------------------------- | -------------------------------------- |
+| [Skills](skills.md)         | Agent 的工作方法、指令和配套资源       |
+| [MCP](mcp.md)               | 通过 MCP 协议接入的工具、资源和提示    |
+| [Connectors](connectors.md) | 外部服务与账号连接、认证和连接状态     |
+| [LSP / 语言服务器](lsp.md)  | 语言分析、补全、诊断和其他语言能力     |
+| 编辑器扩展                  | 编辑器命令、视图、语言支持、调试等功能 |
+| 主题、语言包及其他静态资源  | 外观、界面翻译和资源贡献               |
+
+这些名称描述不同职责：MCP 和 LSP 是协议，Connector 管连接，Skill 管指令，不能把它们当作互斥的包格式。一个扩展可以组合多种能力；Plugin 是功能包或集成 bundle 的技术名称，TS/JS 与 Rust 是执行形态。统一产品分类不要求所有扩展使用 MCP，也不合并各领域的状态、授权或生命周期。
+
+Marketplace 是 Extensions 中发现、搜索和安装扩展的场所，Installed Extensions（已安装扩展）负责管理已安装内容。用户搜索所需服务或功能，再审阅和安装对应扩展；技术类型在详情和领域配置中保留。
+
 ### Extensions 包管理与开放来源
 
 产品统一使用 Extensions / 扩展作为获取、安装、更新和管理入口。远端来源只有两种协议：Open VSX 提供标准 VSIX；Ash 开放扩展源提供 Rust Provider、Skills、MCP、Connectors、主题、语言和多能力 Plugin bundle。每种协议可以配置多个命名来源，Ash 官方源、社区源和企业内部源使用同一个开放协议。Rust 是执行形态，不是来源类型；内置和本地内容保留来源身份，通过相同领域契约消费。
 
-Desktop 的 Extensions 入口包含可折叠的 Extensions、Plugins、Skills、MCP Servers 和 Recommended 窗格，选中项在右侧编辑器打开详情；Skills 管理由此入口承载。前端本地 Plugin 包管理契约归 `platform/extensionManagement`，后端仍拥有安装、启用和授权状态。
+IDE 和 Agent Window 共用 Extensions 入口，当前界面包含可折叠的 Extensions、Installed Extensions、Skills、Connections 和 Recommended 窗格，选中项在右侧编辑器打开详情；Connections 当前承载 MCP 服务器列表，详情和手动配置保留 MCP 技术名称。产品分类不意味着所有能力已有独立窗格或共用运行状态。前端本地 Plugin 包管理契约归 `platform/extensionManagement`，后端仍拥有安装、启用和授权状态。
 
 四类详情共用已注册的 Extensions Editor：头部展示身份与操作，标签栏切换详情、功能、权限、工具或技能说明与诊断，主内容旁展示安装／来源等信息；窄编辑器把信息栏移到内容下方。编辑器扩展通过现有资源加载服务读取 README、图标和发布者信息，README 经过 Markdown 清理且不执行命令链接；资源缺失时展示目录简介。缺少下载量、评分等元数据时不生成对应统计。Skills 说明按需读取，安装和授权动作继续使用原有领域服务。
 
 Recommended 读取各工作区文件夹的 `.ash/extensions.json`，以及多根工作区文件中的顶层 `extensions` 对象。配置支持 JSONC，`recommendations` 声明推荐 ID，`unwantedRecommendations` 排除 ID；合并时忽略大小写并去重，任一工作区声明的排除项适用于合并结果。标准 Open VSX 扩展可使用 `publisher.name`，Ash 包使用目录中的完整 ID。读取遵循当前文件服务的授权范围，不可访问的配置会显示诊断。文件修改自动刷新；无效编辑显示诊断并保留当前工作区的上次有效配置，删除文件则清空对应声明。推荐只提供发现入口，安装和权限审核继续由包详情处理。
 
-扩展包是安装、更新和卸载单位，capability 是发现和使用单位。Plugin 表示组合多种 capability 的包。纯 Skill 保留标准 `SKILL.md`，由 Skills authority 校验并加载；包含 executable Provider 的能力才进入 `external-ext`。Connector 账号、MCP 会话、Skill 上下文和编辑器文档分别保留原领域 owner。
+扩展包是安装、更新和卸载单位，capability 是发现和使用单位。纯 Skill 保留标准 `SKILL.md`，由 Skills authority 校验并加载；包含 executable Provider 的能力才进入 `external-ext`。Connector 账号、MCP 会话、Skill 上下文和编辑器文档分别保留原领域 owner。
 
 | Owner          | 职责                                                                             |
 | -------------- | -------------------------------------------------------------------------------- |
@@ -142,7 +159,7 @@ Recommended 读取各工作区文件夹的 `.ash/extensions.json`，以及多根
 
 第三方可以发布到官方源，也可以自建兼容源。公开发布规范沿现有签名 catalog 和不可变包契约演进，保留上游仓库、版本和内容身份。安装、启用、授权和调用分别检查；停用、撤权和更新使旧身份失效，由领域 owner 和 supervisor 取消任务并释放资源。
 
-产品协议统一到 `extensions/*`，`/extensions` 打开统一管理入口；`/skills`、`/mcp` 和 `/connectors` 继续承担领域使用和配置。旧产品与客户端一起更新，不保留并行入口。旧 profile 安装存储只做一次路径迁移，不重新下载或生成第二份安装记录。作者 SDK 和 Host RPC 保持独立版本，不因管理入口改名而改变外部包内容。
+包管理产品协议使用 `extensions/*`；各领域仍使用自己的技术契约。Desktop 从侧边栏进入 Extensions，不再在聊天补全中推荐 `/extensions`，手动输入仍保留兼容；`/plugins` 保留为已安装扩展的快捷命令。TUI 和领域命令的接入状态见 [Slash Commands](slash-commands.md#extensions-与领域管理入口)。旧 profile 安装存储只做一次路径迁移，不重新下载或生成第二份安装记录。作者 SDK 和 Host RPC 保持独立版本，不因管理入口改名而改变外部包内容。
 
 当前实现已使用 `IExtensionManagementService` 和 `extensions/*` 包管理协议，来源管理包括列出、添加和暂停／恢复。产品固定 Open VSX 与官方 Ash 源；第三方 Ash 源由 profile authority 保存独立地址和信任根，使用 revision 防止并发覆盖。Workbench 与 Sessions 共用搜索、能力筛选、已安装列表、详情编辑器和来源操作；TUI 使用同一后端包管理契约。产品服务配置版本为 3，App Server 协议主版本为 8，旧客户端必须与后端一起更新。
 
