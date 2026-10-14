@@ -1,5 +1,7 @@
 use super::codebase_runtime::CodebaseRuntime;
+use super::codebase_runtime::CodebaseRuntimeState;
 use super::semantic_index_job::SemanticIndexJobController;
+use super::semantic_index_job::SemanticIndexJobState;
 use super::symbol_index_runtime::SymbolIndexRuntime;
 use super::update_broker::UpdateBroker;
 use ash_app_server_protocol::protocol::fs::FsChanged;
@@ -112,6 +114,7 @@ impl CodebaseRefreshWorker {
                         .unwrap_or_else(|poisoned| poisoned.into_inner())
                         .take_event();
                     if let Some(event) = event {
+                        let full_rescan = matches!(event, FileWatcherEvent::RescanRequired { .. });
                         let previous_generation = worker_runtime
                             .index()
                             .snapshot()
@@ -123,7 +126,9 @@ impl CodebaseRefreshWorker {
                             .snapshot()
                             .map(|snapshot| snapshot.generation)
                             .ok();
-                        if previous_generation != current_generation {
+                        let verified_rescan = full_rescan
+                            && matches!(worker_runtime.state(), CodebaseRuntimeState::Ready(_));
+                        if previous_generation != current_generation || verified_rescan {
                             if let Err(error) = worker_runtime.index().handoff_matching_overlays() {
                                 log::warn!("codebase overlay handoff failed: {error}");
                             }
@@ -134,7 +139,18 @@ impl CodebaseRefreshWorker {
                                 log::warn!("symbol-index overlay reconcile failed: {error}");
                             }
                             if let Some(semantic) = &semantic {
-                                semantic.schedule();
+                                // A persisted source index can already match a startup rescan,
+                                // while the selected model still has no matching vectors. Do
+                                // not cancel a current sync or rebuild ready vectors for a
+                                // duplicate hint that leaves the source generation unchanged.
+                                if previous_generation != current_generation
+                                    || matches!(
+                                        semantic.snapshot().state,
+                                        SemanticIndexJobState::Idle | SemanticIndexJobState::Stale
+                                    )
+                                {
+                                    semantic.schedule();
+                                }
                             }
                         }
                     }

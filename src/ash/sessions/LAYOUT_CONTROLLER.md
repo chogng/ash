@@ -31,19 +31,19 @@ It is the detailed companion to the [layout-controller boundary](LAYOUT.md#layou
 
 ## 1. State ownership
 
-The Agents window keeps a single active session but lets the user move between many. Each session owns its editor working set. The desktop layout governs side-pane and bottom-panel visibility at the workbench level while remembering the relevant content per session.
+The Agents window keeps a single active selection but lets the user move between many. `sessions.experimental.layoutScope` defaults to `session-shared`: each Session owns its document working set and panel view, with shared visibility. `chat-shared` scopes those documents and views to a Session/Thread pair while sharing Editor/Details visibility. `chat` additionally remembers Editor/Details visibility for that pair. BaseLayoutController remains the only owner of these maps and the restore queue. A newly selected scope adopts current documents until it has its own saved working set.
 
-| State                          | Storage                             | Scope                       |
-| ------------------------------ | ----------------------------------- | --------------------------- |
-| Editor working set             | `sessions.singlePane.layoutState`   | Per session                 |
-| Panel view                     | `sessions.singlePane.layoutState`   | Per session                 |
-| Entry content visibility       | `sessions.layout.entryVisibility`   | Profile, per entry          |
-| Active entry's restore command | `sessions.layout.activeEntry`       | Workspace                   |
-| Creator workspace selection    | `sessions.creator.activeMode`       | Workspace, owned by Creator |
-| Last open Code side pane       | `sessions.layout.sidePane.lastOpen` | Profile                     |
-| Side-pane and panel visibility | Workbench part visibility           | Window                      |
+| State                          | Storage                             | Scope                                                        |
+| ------------------------------ | ----------------------------------- | ------------------------------------------------------------ |
+| Editor working set             | `sessions.singlePane.layoutState`   | Session or Session/Thread, by layout scope                   |
+| Panel view                     | `sessions.singlePane.layoutState`   | Session or Session/Thread, by layout scope                   |
+| Entry content visibility       | `sessions.layout.entryVisibility`   | Profile, per entry                                           |
+| Active entry's restore command | `sessions.layout.activeEntry`       | Workspace                                                    |
+| Creator workspace selection    | `sessions.creator.activeMode`       | Workspace, owned by Creator                                  |
+| Last open Code side pane       | `sessions.layout.sidePane.lastOpen` | Profile                                                      |
+| Side-pane and panel visibility | Workbench part visibility           | Window; Editor/Details also restore per Chat in `chat` scope |
 
-Session changes restore document working sets without selecting another product mode or changing its user visibility preferences. A Code composition with only managed inputs initially shows Details-only; opening an ordinary document reveals its content.
+Session changes restore document working sets without selecting another product mode. Shared scopes preserve visibility; `chat` restores the pair's saved Editor/Details visibility. A Code composition with only managed inputs initially shows Details-only; opening an ordinary document reveals its content. Persistence retains existing `session:<id>` keys and adds `chat:[sessionId,threadId]` entries with optional validated `partVisibility`. Draft materialization transfers all three maps to the durable scope key.
 
 All state flows from the `activeSession` observable. The controller derives session and visibility state and reacts with observables; events remain notifications for part and editor changes rather than a second state model.
 

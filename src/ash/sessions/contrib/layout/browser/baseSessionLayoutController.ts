@@ -1,8 +1,8 @@
 import { canceled, isCancellationError } from '../../../../base/common/errors.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
-import { createSshRemoteWorkspaceUri } from '../../../../platform/remote/common/remote.js';
+import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { autorun, observableSignalFromEvent } from '../../../../base/common/observable.js';
+import { autorun, constObservable, derived, observableSignalFromEvent } from '../../../../base/common/observable.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { URI } from '../../../../base/common/uri.js';
 import { Emitter } from '../../../../base/common/event.js';
@@ -11,6 +11,9 @@ import { ILayoutService } from '../../../../platform/layout/browser/layoutServic
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { ChatLayoutContext, ChatLayoutPresentation, chatLayoutOwnersEqual, type IChatLayoutOwner, type IChatLayoutSnapshot } from '../../../common/chatLayout.js';
+import '../../../common/sessionConfig.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import type { EditorWorkingSet } from '../../../../workbench/services/editor/common/editorWorkingSet.js';
@@ -27,10 +30,14 @@ const layoutStateKey = 'sessions.singlePane.layoutState';
 export abstract class BaseLayoutController extends Disposable {
 	private readonly workingSets = new Map<string, EditorWorkingSet>();
 	private readonly panelViews = new Map<string, string>();
+	private readonly chatVisibility = new Map<string, { readonly editor: boolean; readonly auxiliarybar: boolean; }>();
+	protected readonly chatLayoutPresentation: ChatLayoutPresentation;
+	private readonly chatLayoutContext: ChatLayoutContext;
 	private readonly restored = this._register(new Emitter<void>());
 	public readonly onDidEndSessionLayoutRestore = this.restored.event;
 	private editorSession: string | undefined;
 	private requestedSession: string | undefined;
+	private requestedLayout: IChatLayoutSnapshot | undefined;
 	private revision = 0;
 	private scheduledRevision = -1;
 	private pendingRestore = Promise.resolve();
@@ -48,8 +55,20 @@ export abstract class BaseLayoutController extends Disposable {
 		@IStorageService protected readonly storage: IStorageService,
 		@INotificationService protected readonly notifications: INotificationService,
 		@ILifecycleService private readonly lifecycle: ILifecycleService,
+		@IInstantiationService instantiation: IInstantiationService,
 	) {
 		super();
+		this.chatLayoutPresentation = this._register(instantiation.createInstance(ChatLayoutPresentation, true, constObservable(false)));
+		const owner = derived<IChatLayoutOwner | undefined>(reader => {
+			const selected = sessions.getSelection(reader).activeSelection;
+			if (!selected) { return undefined; }
+			const key = selected.kind === 'session' ? selected.active.session.sessionId : selected.session.untitledSessionId;
+			return {
+				sessionResource: URI.from({ scheme: 'ash-session', path: `/${key}` }),
+				chatResource: URI.from({ scheme: 'ash-chat', path: `/${selected.kind === 'session' ? selected.active.threadId : key}` }),
+			};
+		});
+		this.chatLayoutContext = this._register(new ChatLayoutContext(this.chatLayoutPresentation, owner));
 		this._register(toDisposable(() => this.directoryRestore.abort()));
 		const raw = storage.get(layoutStateKey, StorageScope.WORKSPACE);
 		if (raw !== undefined) {
@@ -67,6 +86,12 @@ export abstract class BaseLayoutController extends Disposable {
 				}
 				if (typeof entry.panelViewContainerId === 'string') {
 					this.panelViews.set(entry.sessionResource, entry.panelViewContainerId);
+				}
+				if (entry.partVisibility !== undefined) {
+					if (!isRecord(entry.partVisibility) || typeof entry.partVisibility.editor !== 'boolean' || typeof entry.partVisibility.auxiliarybar !== 'boolean') {
+						throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'));
+					}
+					this.chatVisibility.set(entry.sessionResource, { editor: entry.partVisibility.editor, auxiliarybar: entry.partVisibility.auxiliarybar });
 				}
 			}
 		}
@@ -105,7 +130,7 @@ export abstract class BaseLayoutController extends Disposable {
 		this._register(autorun(reader => {
 			for (const [draft, created] of this.management.materializedSessions.read(reader)) {
 				const from = `untitled:${draft}`;
-				const to = `session:${created.sessionId}`;
+				const to = this.persistedSessionKey(created.sessionId, created.threadId);
 				const saved = this.workingSets.get(from);
 				if (saved) {
 					this.workingSets.set(to, saved);
@@ -115,6 +140,11 @@ export abstract class BaseLayoutController extends Disposable {
 				if (panelView) {
 					this.panelViews.set(to, panelView);
 					this.panelViews.delete(from);
+				}
+				const visibility = this.chatVisibility.get(from);
+				if (visibility) {
+					this.chatVisibility.set(to, visibility);
+					this.chatVisibility.delete(from);
 				}
 				if (this.editorSession === from) {
 					this.editorSession = to;
@@ -126,11 +156,21 @@ export abstract class BaseLayoutController extends Disposable {
 				}
 			}
 			const selected = this.sessions.getSelection(reader);
+			const layoutSnapshot = this.chatLayoutContext.state.read(reader);
 			const selection = selected.activeSelection;
 			const key = selection ? this.sessionKey(selection) : undefined;
-			if (key !== this.requestedSession) {
+			if (key !== this.requestedSession || layoutSnapshot.presentation !== this.requestedLayout?.presentation) {
 				this.captureEditors();
+				if (key && this.editorSession && this.requestedLayout && layoutSnapshot.presentation.mode !== this.requestedLayout.presentation.mode
+					&& chatLayoutOwnersEqual(layoutSnapshot.owner, this.requestedLayout.owner) && !this.workingSets.has(key)) {
+					// A newly selected scope adopts the current documents. A setting change must
+					// not close live editors before that scope has ever acquired a working set.
+					this.workingSets.set(key, this.getWorkingSet(key));
+					const panel = this.panelViews.get(this.editorSession);
+					if (panel) { this.panelViews.set(key, panel); }
+				}
 				this.requestedSession = key;
+				this.requestedLayout = layoutSnapshot;
 				this.directoryRestore.abort();
 				this.directoryRestore = new AbortController();
 				this.revision += 1;
@@ -167,7 +207,7 @@ export abstract class BaseLayoutController extends Disposable {
 					const directory = latest.active.session.chats.find(chat => chat.threadId === latest.active.threadId)?.workspace;
 					const folders = this.workspace.getWorkspace().folders;
 					if (directory === undefined) { throw canceled(); }
-					const uri = directory ? directory.authorityId === 'local' ? URI.file(directory.root) : createSshRemoteWorkspaceUri(directory.authorityId, directory.root) : undefined;
+					const uri = directory ? sessionWorkspaceUri(directory) : undefined;
 					if (uri ? folders.length !== 1 || !extUriBiasedIgnorePathCase.isEqual(folders[0]!.uri, uri) : folders.length !== 0) { throw canceled(); }
 				}
 				await this.restoreEditors(selection);
@@ -202,6 +242,9 @@ export abstract class BaseLayoutController extends Disposable {
 	protected captureEditors(): void {
 		if (this.editorSession && this.canRestoreSessionEditors() && !this.isEditorAutoVisibilitySuppressed()) {
 			this.workingSets.set(this.editorSession, this.getWorkingSet(this.editorSession));
+			if (this.chatLayoutPresentation.configured === 'chat') {
+				this.chatVisibility.set(this.editorSession, { editor: this.layout.isPartVisible('editor'), auxiliarybar: this.layout.isPartVisible('auxiliarybar') });
+			}
 		}
 	}
 
@@ -216,8 +259,9 @@ export abstract class BaseLayoutController extends Disposable {
 	/** User transitions share the restore queue so they never mutate an incoming working set. */
 	protected enqueueLayoutOperation(operation: () => Promise<void>): Promise<void> {
 		const revision = this.revision;
+		const owner = this.chatLayoutContext.state.get();
 		this.pendingRestore = this.pendingRestore.then(async () => {
-			if (!this.isDisposed && revision === this.revision) {
+			if (!this.isDisposed && revision === this.revision && (!owner.presentation.active || this.chatLayoutContext.isCurrent(owner))) {
 				await operation();
 			}
 		}).catch(error => {
@@ -241,8 +285,15 @@ export abstract class BaseLayoutController extends Disposable {
 			return;
 		}
 		this.restoring = true;
+		const revision = this.revision;
 		try {
 			await this.applyWorkingSet(saved ?? 'empty');
+			const visibility = revision === this.revision && this.chatLayoutPresentation.configured === 'chat' ? this.chatVisibility.get(key) : undefined;
+			if (visibility) {
+				for (const part of ['editor', 'auxiliarybar'] as const) {
+					if (visibility[part]) { this.layout.showPart(part); } else { this.layout.hidePart(part); }
+				}
+			}
 			if (!this.isDisposed) {
 				this.editorSession = this.sessionKey(selection);
 			}
@@ -254,8 +305,8 @@ export abstract class BaseLayoutController extends Disposable {
 	private saveState(): void {
 		this.pruneWorkingSets();
 		this.captureEditors();
-		const keys = new Set([...this.workingSets.keys(), ...this.panelViews.keys()]);
-		this.storage.store(layoutStateKey, JSON.stringify([...keys].map(sessionResource => ({ sessionResource, editorWorkingSet: this.workingSets.get(sessionResource), panelViewContainerId: this.panelViews.get(sessionResource) }))), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		const keys = new Set([...this.workingSets.keys(), ...this.panelViews.keys(), ...this.chatVisibility.keys()]);
+		this.storage.store(layoutStateKey, JSON.stringify([...keys].map(sessionResource => ({ sessionResource, editorWorkingSet: this.workingSets.get(sessionResource), panelViewContainerId: this.panelViews.get(sessionResource), partVisibility: this.chatVisibility.get(sessionResource) }))), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	}
 
 	private pruneWorkingSets(): void {
@@ -265,6 +316,7 @@ export abstract class BaseLayoutController extends Disposable {
 		}
 		const live = new Set([
 			...this.management.sessions.filter(session => session.status === 'active').map(session => `session:${session.sessionId}`),
+			...this.management.sessions.filter(session => session.status === 'active').flatMap(session => session.chats.filter(chat => chat.status === 'active').map(chat => `chat:${JSON.stringify([session.sessionId, chat.threadId])}`)),
 			...this.management.untitledSessions.map(session => `untitled:${session.untitledSessionId}`),
 		]);
 		for (const key of this.workingSets.keys()) {
@@ -277,6 +329,9 @@ export abstract class BaseLayoutController extends Disposable {
 				this.panelViews.delete(key);
 			}
 		}
+		for (const key of this.chatVisibility.keys()) {
+			if (!live.has(key)) { this.chatVisibility.delete(key); }
+		}
 		if (this.editorSession && !live.has(this.editorSession)) {
 			this.editorSession = undefined;
 		}
@@ -284,10 +339,14 @@ export abstract class BaseLayoutController extends Disposable {
 
 	protected sessionKey(selection: SessionsViewSelection): string {
 		if (selection.kind === 'session') {
-			return `session:${selection.active.session.sessionId}`;
+			return this.persistedSessionKey(selection.active.session.sessionId, selection.active.threadId);
 		}
 		const created = this.management.materializedSessions.get().get(selection.session.untitledSessionId);
-		return created ? `session:${created.sessionId}` : `untitled:${selection.session.untitledSessionId}`;
+		return created ? this.persistedSessionKey(created.sessionId, created.threadId) : `untitled:${selection.session.untitledSessionId}`;
+	}
+
+	private persistedSessionKey(sessionId: string, threadId: string): string {
+		return this.chatLayoutPresentation.state.get().active ? `chat:${JSON.stringify([sessionId, threadId])}` : `session:${sessionId}`;
 	}
 }
 

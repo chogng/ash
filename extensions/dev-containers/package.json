@@ -1,0 +1,22 @@
+{
+  "name": "dev-containers",
+  "publisher": "ash",
+  "version": "1.0.0",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "engines": {
+    "vscode": "*"
+  },
+  "ashRuntime": {
+    "kind": "rust",
+    "entrypoint": "ash-dev-container-provider",
+    "scope": "profile",
+    "capabilities": [
+      "sessionRuntime.v1"
+    ],
+    "clients": [
+      "app",
+      "code"
+    ]
+  }
+}

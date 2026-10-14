@@ -190,7 +190,11 @@ import { ViewDescriptorService } from '../../workbench/services/views/browser/vi
 import { IViewsService } from '../../workbench/services/views/common/viewsService.js';
 import { ViewsService } from '../../workbench/services/views/browser/viewsService.js';
 import type { SessionWorkspaceSelection } from '../services/sessions/common/session.js';
-import { pickWorkspaceFolder } from './workspaceSelection.js';
+import { WorkspaceSelection } from './workspaceSelection.js';
+import { IDevContainerAgentHostService } from '../common/devContainerAgentHostService.js';
+import { DevContainerAgentHostService } from './devContainerAgentHostService.js';
+import { logSessionsInteraction } from '../common/sessionsTelemetry.js';
+import '../../workbench/services/workspaces/browser/workspacesService.js';
 import type { Part } from "../../workbench/browser/part.js";
 import { setHoverDelegate } from "../../base/browser/ui/hover/hoverDelegate.js";
 import { IMenuService } from "../../platform/actions/common/actions.js";
@@ -343,7 +347,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IContentSearchConfigurationService, options.api.contentSearchConfiguration);
 		services.registerInstance(ILanguageServerService, options.api.languageServers);
 		services.registerInstance(IExtensionHostApi, options.extensionHost ?? this._register(services.createInstance(WebWorkerExtensionHost, enabledExtensions, options.api.extensionHost)));
-		services.registerInstance(ITelemetryService, NullTelemetryService);
+		if (!serviceCollection.has(ITelemetryService)) { services.registerInstance(ITelemetryService, NullTelemetryService); }
 		if (options.api.approvalEnvironment) { services.registerInstance(IApprovalEnvironmentService, options.api.approvalEnvironment); }
 		services.registerInstance(IDictationService, options.api.dictation);
 		services.registerInstance(IAgentVoiceService, options.api.agentVoice);
@@ -404,6 +408,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(ISecretStorageStatusService, options.api.secretStorage);
 		services.registerInstance(IAgentExecutionSettingsService, options.api.executionSettings);
 		services.registerInstance(IAgentSessionService, options.api.session);
+		services.registerSingleton(IDevContainerAgentHostService, () => services.createInstance(DevContainerAgentHostService));
 		services.registerInstance(IAgentThreadService, options.api.thread);
 		services.registerSingleton(ITraceService, () => services.createInstance(AppServerTraceService));
 		services.registerInstance(IAgentTurnService, options.api.turn);
@@ -413,7 +418,10 @@ export abstract class Workbench extends Disposable {
 		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 		const sessions = this._register(new SessionsManagementService(services.createInstance(AppServerSessionsProvider, {
 			workspace: options.workspaceSelection,
-			selectWorkspace: folders => pickWorkspaceFolder(services.get(IQuickInputService), folders),
+			selectWorkspace: async folders => {
+				using selection = services.createInstance(WorkspaceSelection);
+				return await selection.pick(folders);
+			},
 		} satisfies AppServerSessionsProviderHost)));
 		const teams = new TeamsManagementService(new AppServerTeamsProvider(options.api.teams));
 		services.registerInstance(ITeamsManagementService, teams);
@@ -525,7 +533,10 @@ export abstract class Workbench extends Disposable {
 		services.get(IMarkdownRendererService).setDefaultCodeBlockRenderer(services.createInstance(EditorMarkdownCodeBlockRenderer));
 		const userKeyboardLayoutService = options.userKeyboardLayoutApi ?? UnavailableUserKeyboardLayoutService;
 		services.registerInstance(IUserKeyboardLayoutService, userKeyboardLayoutService);
-		this._register(CommandsRegistry.register(RETURN_TO_WORKBENCH_COMMAND_ID, () => options.returnToWorkbench()));
+		this._register(CommandsRegistry.register(RETURN_TO_WORKBENCH_COMMAND_ID, () => {
+			options.returnToWorkbench();
+			logSessionsInteraction(services.get(ITelemetryService), 'openInVSCode');
+		}));
 		const contextKeys = this._register(new ContextKeyService());
 		AppServerAvailableContext.bindTo(contextKeys).set(options.api.hasAppServer);
 		IsSessionsWindowContext.bindTo(contextKeys).set(true);
@@ -861,6 +872,7 @@ function sameWorkspace(first: SessionWorkspaceSelection, second: SessionWorkspac
 	if (first.type === 'current') return true;
 	if (first.type === 'multiple' && second.type === 'multiple') return first.folders.length === second.folders.length && first.folders.every((folder, index) => folder.label === second.folders[index]?.label && sameWorkspace(folder.target, second.folders[index]!.target));
 	if (first.type === 'local' && second.type === 'local') return first.root === second.root;
+	if (first.type === 'provider' && second.type === 'provider') return first.providerId === second.providerId && first.workspace === second.workspace && first.root === second.root;
 	return first.type === 'ssh' && second.type === 'ssh' && first.host === second.host && first.root === second.root;
 }
 

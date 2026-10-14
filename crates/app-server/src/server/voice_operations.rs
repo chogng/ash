@@ -347,7 +347,10 @@ impl AppServer {
         if snapshot.session_id != params.session_id
             || matches!(
                 snapshot.execution_target,
-                Some(ash_protocol::SessionExecutionTarget::Ssh { .. })
+                Some(
+                    ash_protocol::SessionExecutionTarget::Ssh { .. }
+                        | ash_protocol::SessionExecutionTarget::Provider { .. }
+                )
             )
             || snapshot.status == ash_protocol::ThreadStatus::Archived
         {

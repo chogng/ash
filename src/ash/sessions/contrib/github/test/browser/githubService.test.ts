@@ -70,6 +70,26 @@ function fixture(overrides: Partial<IGitHubService> = {}, gitOverrides: Partial<
 }
 
 suite('Session GitHub associations', () => {
+	test('discovery merges equivalent PR links across remotes without rewriting the open URL', async () => {
+		let reads = 0;
+		const urls = ['https://github.com/TEAM/Repo/pull/7/', 'https://github.com/team/repo/pull/7'];
+		using context = fixture({
+			readPullRequest: async () => ({ ...pullRequest, url: urls[reads++]! }),
+		}, {
+			graph: async () => ({
+				streamInstanceId: 'stream', historyRevision: 1, graphRevision: 1,
+				commits: [], references: [], hasMore: false, nextCursor: undefined,
+				remotes: [
+					{ name: 'origin', identity: { provider: 'github', host: 'github.com', owner: 'team', repository: 'repo' } },
+					{ name: 'upstream', identity: { provider: 'github', host: 'github.com', owner: 'team', repository: 'fork' } },
+				],
+			}),
+		});
+		const requests = await context.load();
+		assert.equal(reads, 2);
+		assert.deepEqual(requests.map(request => request.uri.toString()), [urls[1]]);
+	});
+
 	test('Issue references verify access, reject other resource URLs, and normalize Enterprise identities', async () => {
 		const writes: unknown[] = [];
 		using context = fixture({

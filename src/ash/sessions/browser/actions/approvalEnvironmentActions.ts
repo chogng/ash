@@ -45,7 +45,7 @@ registerAction2(class PrepareApprovalEnvironment extends Action2 {
 				workspace = folders[Number(selected.id)]!.target;
 			}
 			// Directory scope addresses the current backend. Dropping a remote host would read a different machine.
-			if (workspace?.type === 'ssh') { throw unsupportedRemote(); }
+			if (workspace?.type === 'ssh' || workspace?.type === 'provider') { throw unsupportedRemote(); }
 			if (workspace?.type === 'local') { selectedRoot = workspace.root; }
 		}
 		if (!threadId && !selectedRoot) { throw new Error(localize('approvalEnvironment.noProject', 'Choose a project for this chat before preparing its review environment.')); }

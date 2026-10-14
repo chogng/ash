@@ -2,6 +2,7 @@
 
 mod execution;
 mod gateway;
+pub(crate) use gateway::probe_runtime;
 mod registry;
 mod ssh;
 mod web;

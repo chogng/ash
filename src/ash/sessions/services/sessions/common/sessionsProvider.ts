@@ -1,10 +1,12 @@
 import type { Event } from "../../../../base/common/event.js";
 import type { IDisposable } from "../../../../base/common/lifecycle.js";
+import type { IObservable } from '../../../../base/common/observable.js';
 import type { IActiveSessionThread, ISession, ModelRef, SessionId, SessionWorkspaceSelection, ThreadId } from "./session.js";
 import type { ChatAgent } from '../../../../workbench/services/chat/common/chatService.js';
 
 /** Adapts one backend into frontend Session and Chat objects. */
 export interface ISessionsProvider extends IDisposable {
+	readonly connectionStatus?: IObservable<'connecting' | 'connected' | 'disconnected'>;
 	/** The catalog and its detail subscriptions must be read again; selection remains frontend-owned. */
 	readonly onDidChangeCatalog: Event<void>;
 	readonly onDidChangeSession: Event<{ sessionId: SessionId; detailChanged: boolean; }>;

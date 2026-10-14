@@ -11,7 +11,7 @@ import { IAccountService } from '../../../../platform/accounts/common/accountSer
 import { GitHubIssueState, IGitHubService as IGitHubApi, type GitHubRepository, type GitHubPullRequest, type GitHubPullRequestReference, type GitHubAccount, type GitHubIssueReference } from '../../../../platform/github/common/githubService.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
-import { createSshRemoteWorkspaceUri } from '../../../../platform/remote/common/remote.js';
+import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
 import { computePullRequestIcon, type IPullRequestIconStatus } from '../../../../workbench/common/chatPullRequest.js';
 import { ICommandService, CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { ISCMService } from '../../../../workbench/contrib/scm/common/scm.js';
@@ -20,6 +20,8 @@ import { getPullRequestChecksStatus, getPullRequestResourceStatus } from '../../
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import type { ISession, SessionId } from '../../../services/sessions/common/session.js';
+import { linkKey } from '../../../common/sessionLinks.js';
+import { agentHostSessionWorkspaceKey } from '../../../common/agentHostSessionWorkspace.js';
 import type { IResolvedSessionPullRequest, IResolvedSessionIssue } from '../common/types.js';
 
 export interface IGitHubService {
@@ -203,7 +205,7 @@ export class GitHubService extends Disposable implements IGitHubService {
 		}
 		const session = selected.active.session;
 		const workspace = session.workspace;
-		const root = workspace ? (workspace.authorityId === 'local' ? URI.file(workspace.root) : createSshRemoteWorkspaceUri(workspace.authorityId, workspace.root)) : undefined;
+		const root = workspace ? sessionWorkspaceUri(workspace) : undefined;
 		const cancellation = new CancellationTokenSource();
 		this.operation.value?.cancel();
 		this.operation.value = cancellation;
@@ -251,9 +253,9 @@ export class GitHubService extends Disposable implements IGitHubService {
 			if (token.isCancellationRequested || this.isDisposed) {
 				return;
 			}
-			const values = new Map(results.flat().filter(value => value !== undefined).map(value => [value.uri.toString().toLowerCase(), value]));
+			const values = new Map(results.flat().filter(value => value !== undefined).map(value => [linkKey(value.uri.toString()), value]));
 			for (const request of recorded) {
-				if (request) { values.set(request.uri.toString().toLowerCase(), request); }
+				if (request) { values.set(linkKey(request.uri.toString()), request); }
 			}
 			this.requests.set(session.sessionId, { directory: directoryKey(session), values: [...values.values()] });
 			this.branches.set(session.sessionId, branches);
@@ -414,7 +416,7 @@ export class GitHubService extends Disposable implements IGitHubService {
 }
 
 function directoryKey(session: ISession): string {
-	return session.workspace ? `${session.workspace.authorityId}:${session.workspace.root}` : '';
+	return agentHostSessionWorkspaceKey(session.workspace) ?? '';
 }
 
 function parsePullRequestReference(value: string): GitHubPullRequestReference {

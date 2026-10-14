@@ -1,43 +1,33 @@
-import type { CodebaseStatusResult, ConfigCommandResult, ConfigReadResult, ProviderConfigDto, CodebaseAutomaticContextDto, CodebaseModelsDto } from "../../../../../../.build/protocol/typescript/index.js";
+import type { CodebaseStatusResult, ConfigCommandResult, CodebaseModelsDto } from "../../../../../../.build/protocol/typescript/index.js";
 import type { ICodebaseApi } from "../../../../platform/codebase/common/codebaseApi.js";
-import type { CodebaseConfigurationCommandResult, CodebaseConfigurationSnapshot, CodebaseProviderConfiguration, CodebaseStatus, ICodebaseService, CodebaseAutomaticContext, CodebaseModels } from "../../../../platform/codebase/common/codebaseService.js";
+import type { CodebaseConfigurationCommandResult, CodebaseConfigurationSnapshot, CodebaseStatus, ICodebaseService, CodebaseAutomaticContext, CodebaseModels } from "../../../../platform/codebase/common/codebaseService.js";
 
 export class AppServerCodebaseService implements ICodebaseService {
 	constructor(private readonly api: ICodebaseApi) { }
 
-	async readConfig(): Promise<CodebaseConfigurationSnapshot> { return projectConfiguration(await this.api.readConfig()); }
-
-	async configureProvider(config: CodebaseProviderConfiguration, expectedRevision: number): Promise<CodebaseConfigurationCommandResult> {
-		const saved = await this.api.configureProvider({ commandId: commandId("provider"), expectedRevision, config: providerConfigurationDto(config) });
-		return projectCommandResult(saved);
+	async readConfig(): Promise<CodebaseConfigurationSnapshot> {
+		const config = await this.api.readConfig();
+		return {
+			revision: config.revision,
+			generation: config.generation,
+			codebase: {
+				models: config.codebase.models ? projectModels(config.codebase.models) : config.codebase.models,
+				automaticContext: config.codebase.automaticContext,
+			},
+		};
 	}
 
 	async configure(models: CodebaseModels | undefined, automaticContext: CodebaseAutomaticContext, expectedRevision: number): Promise<CodebaseConfigurationCommandResult> {
-		return projectCommandResult(await this.api.configure({ commandId: commandId("configure"), expectedRevision, models: models ? modelsDto(models) : null, automaticContext: automaticContext as CodebaseAutomaticContextDto }));
+		return projectCommandResult(await this.api.configure({
+			commandId: commandId("configure"),
+			expectedRevision,
+			models: models ? modelsDto(models) : null,
+			automaticContext,
+		}));
 	}
 
 	async status(): Promise<CodebaseStatus> { return projectStatus(await this.api.status()); }
 
-}
-
-function projectConfiguration(config: ConfigReadResult): CodebaseConfigurationSnapshot {
-	return {
-		revision: config.revision,
-		generation: config.generation,
-		providers: Object.fromEntries(Object.entries(config.providers).map(([id, provider]) => [id, projectProviderConfiguration(provider)])),
-		codebase: {
-			models: config.codebase.models ? projectModels(config.codebase.models) : config.codebase.models,
-			automaticContext: config.codebase.automaticContext,
-		},
-	};
-}
-
-function projectProviderConfiguration(config: ProviderConfigDto): CodebaseProviderConfiguration {
-	return { provider: config.provider, baseUrl: config.baseUrl, maxOutputTokens: config.maxOutputTokens, modelContext: config.modelContext ? Object.fromEntries(Object.entries(config.modelContext).map(([model, context]) => [model, { ...context }])) : undefined };
-}
-
-function providerConfigurationDto(config: CodebaseProviderConfiguration): ProviderConfigDto {
-	return { connection: config.provider, provider: config.provider, baseUrl: config.baseUrl, maxOutputTokens: config.maxOutputTokens, modelContext: config.modelContext ? Object.fromEntries(Object.entries(config.modelContext).map(([model, context]) => [model, { ...context }])) : undefined };
 }
 
 function projectModels(models: CodebaseModelsDto): CodebaseModels {
@@ -53,7 +43,7 @@ function projectCommandResult(result: ConfigCommandResult): CodebaseConfiguratio
 }
 
 function projectStatus(status: CodebaseStatusResult): CodebaseStatus {
-	return { ...status };
+	return { ...status, embedding: { ...status.embedding } };
 }
 
 function commandId(operation: string): string {

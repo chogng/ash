@@ -556,9 +556,13 @@ impl SqliteThreadStore {
                     ..
                 } => None,
                 ThreadEvent::ThreadCreated {
-                    execution_target: Some(SessionExecutionTarget::Ssh { .. }),
+                    execution_target:
+                        Some(
+                            SessionExecutionTarget::Ssh { .. }
+                            | SessionExecutionTarget::Provider { .. },
+                        ),
                     ..
-                } => return Err(error("remote history cannot contain another SSH authority")),
+                } => return Err(error("remote history cannot contain another execution authority")),
                 _ => return Err(error("imported Thread has no creation event")),
             };
             transaction

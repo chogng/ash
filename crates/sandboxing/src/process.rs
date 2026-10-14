@@ -95,6 +95,8 @@ use std::process::ExitStatus;
 /// Platform helpers keep their sandbox resources alive until their descendants terminate.
 struct CommandProcess {
     child: Child,
+    #[cfg(windows)]
+    job: ash_utils_pty::JobObject,
     closed: bool,
 }
 
@@ -104,8 +106,16 @@ impl CommandProcess {
         {
             ash_utils_pty::process_group::configure_command_session(&mut command);
         }
+        #[cfg(windows)]
+        let job = ash_utils_pty::JobObject::create()?;
+        #[cfg(windows)]
+        let child = job.spawn_contained_std(&mut command)?;
+        #[cfg(not(windows))]
+        let child = command.spawn()?;
         Ok(Self {
-            child: command.spawn()?,
+            child,
+            #[cfg(windows)]
+            job,
             closed: false,
         })
     }
@@ -141,7 +151,9 @@ impl CommandProcess {
         }
         #[cfg(unix)]
         let tree = ash_utils_pty::process_group::kill_process_session(self.child.id());
-        #[cfg(not(unix))]
+        #[cfg(windows)]
+        let tree = self.job.terminate();
+        #[cfg(not(any(unix, windows)))]
         let tree = ash_utils_pty::process_group::kill_process_group(self.child.id());
         let _ = self.child.kill();
         let reaped = self.child.wait();

@@ -3,7 +3,6 @@ import { ContextViewFocusRestore } from '../../../../base/browser/ui/contextview
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
-import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { IAccountService } from '../../../../platform/accounts/common/accountService.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
@@ -12,7 +11,7 @@ import { GitHubError, GitHubMergeMethod, IGitHubService, type GitHubRepository }
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
-import { createSshRemoteWorkspaceUri } from '../../../../platform/remote/common/remote.js';
+import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
 import { readLocalRepositories } from '../../../../workbench/contrib/github/common/localRepository.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import type { ISessionPullRequestCreation, ISessionPullRequestOptions, SessionPullRequestMergeMethod } from '../common/pullRequestCreation.js';
@@ -109,7 +108,7 @@ export class CreatePullRequestContextView extends Disposable {
 		const workspace = selected?.kind === 'session' ? selected.active.session.workspace : undefined;
 		if (!workspace || selected?.kind !== 'session') { return undefined; }
 		const sessionId = selected.active.session.sessionId;
-		const root = workspace.authorityId === 'local' ? URI.file(workspace.root) : createSshRemoteWorkspaceUri(workspace.authorityId, workspace.root);
+		const root = sessionWorkspaceUri(workspace);
 		const [accounts, repositories] = await Promise.all([this.github.listAccounts(this.pending.token), readLocalRepositories(this.commands)]);
 		if (this.isDisposed) { return undefined; }
 		const sessionRepositories = repositories.filter(repository =>

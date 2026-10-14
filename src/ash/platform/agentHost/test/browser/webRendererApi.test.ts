@@ -24,6 +24,35 @@ import { SecretStorageError } from '../../../secrets/common/secrets.js';
 
 const pinnedSkill = { id: { source: 'user:skill-source:test', name: 'review' }, version: { type: 'pinnedDigest' as const, digest: `sha256:${'a'.repeat(64)}` } };
 
+test('Session runtime adapter negotiates its contract and preserves cancellation identity', async () => {
+	const transport = new FakeTransport(value => ({ ...value, capabilities: { ...value.capabilities, contracts: { ...value.capabilities.contracts, sessionRuntimes: { version: 1 } } } }));
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	using cleanup = toDisposable(() => connected.dispose());
+	const cancellation = new AbortController();
+	const pending = connected.api.session.invokeRuntime!('ash.dev-containers', { operation: 'prepare', workspace: 'C:\\work' }, cancellation.signal);
+	const index = transport.requests.length - 1;
+	const request = transport.requests[index]!;
+	assert.equal(request.method, 'session/runtime/invoke');
+	const params = request.params as { operationId: string; providerId: string; request: unknown; };
+	assert.equal(params.providerId, 'ash.dev-containers');
+	assert.deepEqual(params.request, { operation: 'prepare', workspace: 'C:\\work' });
+	cancellation.abort();
+	assert.equal(transport.requests.at(-1)?.method, 'session/runtime/cancel');
+	assert.deepEqual(transport.requests.at(-1)?.params, { operationId: params.operationId });
+	transport.respondAt(-1, null);
+	transport.respondAt(index, { type: 'target', target: { type: 'provider', providerId: 'ash.dev-containers', workspace: 'C:\\work', root: '/workspace' } });
+	await assert.rejects(pending, error => error instanceof Error && error.name === 'AbortError');
+});
+
+test('Session runtime discovery reports unavailable when its contract was not negotiated', async () => {
+	const transport = new FakeTransport();
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	using cleanup = toDisposable(() => connected.dispose());
+	const before = transport.requests.length;
+	assert.deepEqual(await connected.api.session.invokeRuntime!('ash.dev-containers', { operation: 'probe', workspace: 'C:\\work' }, new AbortController().signal), { type: 'availability', available: false });
+	assert.equal(transport.requests.length, before);
+});
+
 test('Secret storage status is assembled on the shared renderer connection', async () => {
 	const transport = new FakeTransport();
 	const connected = await connectWebRendererApi(transport, connectorHostServices);

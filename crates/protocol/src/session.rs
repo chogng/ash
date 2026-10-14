@@ -11,9 +11,13 @@ use serde::Serialize;
 use std::path::PathBuf;
 use ts_rs::TS;
 
+mod runtime;
 mod status;
 mod summary;
 mod thread_origin;
+
+pub use runtime::SessionRuntimeRequest;
+pub use runtime::SessionRuntimeResult;
 
 pub use status::SessionStatus;
 pub use summary::SessionManagerActivity;
@@ -51,8 +55,19 @@ pub struct Session {
     rename_all_fields = "camelCase"
 )]
 pub enum SessionExecutionTarget {
-    Local { root: PathBuf },
-    Ssh { host: String, root: String },
+    Local {
+        root: PathBuf,
+    },
+    Ssh {
+        host: String,
+        root: String,
+    },
+    /// A product-admitted optional runtime owns provisioning; the gateway owns the route.
+    Provider {
+        provider_id: String,
+        workspace: PathBuf,
+        root: String,
+    },
 }
 
 /// One Thread grouped into a Session tree by `session_id`.

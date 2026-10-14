@@ -12,6 +12,8 @@ import type { SessionsViewSelection } from "../../../services/sessions/browser/s
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import type { IOpenAgentsWindowOptions } from '../../../../platform/native/common/nativeHost.js';
 import { localize } from '../../../../nls.js';
+import { IStorageService, StorageScope } from '../../../../platform/storage/common/storage.js';
+import { WELCOME_COMPLETE_KEY } from '../../../common/welcome.js';
 
 import { SessionGridLayout, type ISessionGridEntry } from './sessionGridLayout.js';
 
@@ -57,7 +59,7 @@ export class SessionsChatView extends Disposable {
 	private readonly activateSelection: (selection: SessionsViewSelection) => void;
 	private readonly closeSelection: (selection: SessionsViewSelection) => void;
 
-	constructor(container: HTMLElement, options: SessionsChatViewOptions, @IInstantiationService private readonly services: IInstantiationService) {
+	constructor(container: HTMLElement, options: SessionsChatViewOptions, @IInstantiationService private readonly services: IInstantiationService, @IStorageService storage: IStorageService) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this.sessionService = options.sessionService;
@@ -67,7 +69,10 @@ export class SessionsChatView extends Disposable {
 		this.domNode = h(ownerDocument, "section");
 		this.domNode.className = "ash-sessions-chat-view";
 		container.append(this.domNode);
-		this.empty = new SessionsChatEmptyView(this.domNode);
+		this.empty = new SessionsChatEmptyView(this.domNode, () => storage.getBoolean(WELCOME_COMPLETE_KEY, StorageScope.PROFILE, false));
+		this._register(storage.onDidChangeValue(event => {
+			if (event.scope === StorageScope.PROFILE && event.key === WELCOME_COMPLETE_KEY) { this.empty.update(this.sessionService.state, this.sessionService.error); }
+		}));
 		this.grid = this._register(services.createInstance(SessionGridLayout, this.domNode, this.empty));
 		this._register(toDisposable(() => {
 			for (const entry of this.entries.values()) entry.dispose();
@@ -206,7 +211,7 @@ class SessionsChatEmptyView implements IView {
 	private readonly heading: HTMLHeadingElement;
 	private readonly description: HTMLParagraphElement;
 
-	constructor(container: HTMLElement) {
+	constructor(container: HTMLElement, private readonly welcomeComplete: () => boolean) {
 		const ownerDocument = container.ownerDocument;
 		this.element = h(ownerDocument, "div");
 		this.element.className = "ash-sessions-chat-view-empty";
@@ -221,14 +226,16 @@ class SessionsChatEmptyView implements IView {
 
 	update(state: ISessionsManagementService["state"], error: string | undefined): void {
 		if (state === "loading") {
-			this.heading.textContent = "Loading sessions";
-			this.description.textContent = "Restoring your agent workspace…";
+			this.heading.textContent = localize('sessions.empty.loading', 'Loading sessions');
+			this.description.textContent = localize('sessions.empty.restoring', 'Restoring your agent workspace…');
 		} else if (error) {
-			this.heading.textContent = "Sessions unavailable";
+			this.heading.textContent = localize('sessions.empty.unavailable', 'Sessions unavailable');
 			this.description.textContent = error;
 		} else {
-			this.heading.textContent = "Start a code session";
-			this.description.textContent = "Create a session to plan, implement, or review work with the coding agent.";
+			this.heading.textContent = this.welcomeComplete() ? localize('sessions.empty.returning', 'Open a session') : localize('sessions.empty.welcome', 'Start a code session');
+			this.description.textContent = this.welcomeComplete()
+				? localize('sessions.empty.select', 'Select a session from the sidebar, or create a new one.')
+				: localize('sessions.empty.begin', 'Create a session to plan, implement, or review work with the coding agent.');
 		}
 	}
 }

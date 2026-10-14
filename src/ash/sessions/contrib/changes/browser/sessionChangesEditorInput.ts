@@ -2,19 +2,17 @@ import { URI } from '../../../../base/common/uri.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import type { SessionsViewSelection } from '../../../services/sessions/browser/sessionsService.js';
-import { EditorInputCapabilities, type IResourceEditorInput } from '../../../../workbench/common/editor.js';
+import { DockedEditorInput } from '../../../common/dockedEditorInput.js';
 import { EditorInputSerializers, requireRecord, requireString } from '../../../../workbench/services/editor/common/editorInputSerializer.js';
 import type { ISessionChangesEditorOptions } from '../common/sessionChangesService.js';
 import './media/sessionChangesEditorInput.css';
 
 /** Session identity persists independently of the resolved diff documents. */
-export class SessionChangesEditorInput implements IResourceEditorInput {
-	public capabilities = EditorInputCapabilities.None;
+export class SessionChangesEditorInput extends DockedEditorInput {
 	public readonly contentType = 'application/vnd.ash.session-changes';
-	public readonly readOnly = true;
-	public readonly showBreadcrumbs = false;
 	public readonly resource: URI;
 	constructor(selection: SessionsViewSelection | URI, public readonly changesetSelection?: ISessionChangesEditorOptions['changesetSelection']) {
+		super();
 		if (selection instanceof URI) {
 			this.resource = selection.with({ scheme: 'ash-session-changes' });
 		} else if (selection.kind === 'session') {

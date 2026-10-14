@@ -485,7 +485,8 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		this.assertNotDisposed();
 		if (sequence !== this.openSequence) throw new EditorOpenSupersededError(input);
 		const existing = this.entry(input);
-		if (!existing && this.model.editorLimit === 1 && this.activeInput && !await this.confirmCloseEditor(this.activeInput)) {
+		const limitedReplacement = this.model.editorLimit === 1 ? this.model.getEditorToReplace(input, options) : undefined;
+		if (!existing && limitedReplacement && !await this.confirmCloseEditor(limitedReplacement.input)) {
 			throw new CancellationError('Replacing the editor was cancelled');
 		}
 		if (sequence !== this.openSequence) throw new EditorOpenSupersededError(input);
@@ -619,8 +620,8 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		const pane = paneInstance.pane;
 		// Completed panes and error pages can commit; cancelled loads retain the previous tab.
 		const pinned = options.pinned !== false || getEditorWorkingCopies(pane).some(copy => copy.isDirty);
-		const preview = this.model.previewEditor;
-		const replacement = existing ?? (this.model.editorLimit === 1 ? this.entries[0] : !pinned && preview ? this.entry(preview) : undefined);
+		const replacing = this.model.getEditorToReplace(input, { ...options, pinned });
+		const replacement = replacing ? this.paneEntries.get(replacing.instanceId) : undefined;
 		const closedState = replacement ? this.editorState(replacement) : undefined;
 		const result = this.model.openEditor(input, { ...options, pinned, ...(instanceId === undefined ? {} : { instanceId }) });
 		const state = result.editor;

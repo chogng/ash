@@ -13,8 +13,12 @@ import { IAppServerApi, IServerEventApi } from "../../../../../platform/agentHos
 import { IAgentSessionService, IAgentTurnService } from "../../../../../platform/agentHost/common/agentService.js";
 import { IAgentModelsService } from "../../../../../platform/agentHost/common/agentModels.js";
 import type { AgentThreadExecutionStatus, AgentTreeNode, IActiveSessionThread, ISession, ModelRef, SessionExecutionTarget, SessionId, SessionWorkspaceSelection, ThreadId } from "../../../../services/sessions/common/session.js";
-import type { ISessionsProvider } from "../../../../services/sessions/common/sessionsProvider.js";
+import { observableValue } from '../../../../../base/common/observable.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID, type IAgentHostSessionsProvider } from '../../../../common/agentHostSessionsProvider.js';
+import type { AppServerConnectionState } from '../../../../../platform/agentHost/common/appServerApi.js';
 import type { ChatAgent } from '../../../../../workbench/services/chat/common/chatService.js';
+import { buildAgentHostChatWorkspace, buildAgentHostSessionWorkspace } from '../../../../common/agentHostSessionWorkspace.js';
+import { getSessionApplication } from '../../../../common/sessionApplication.js';
 
 export interface AppServerSessionsProviderHost {
 	readonly workspace: () => SessionWorkspaceSelection;
@@ -22,11 +26,13 @@ export interface AppServerSessionsProviderHost {
 }
 
 /** Adapts shared Agent execution records into Sessions product models. */
-export class AppServerSessionsProvider extends Disposable implements ISessionsProvider {
+export class AppServerSessionsProvider extends Disposable implements IAgentHostSessionsProvider {
+	public readonly id = LOCAL_AGENT_HOST_PROVIDER_ID;
+	public readonly connectionStatus = observableValue<'connecting' | 'connected' | 'disconnected'>(this, 'connecting');
 	private readonly subscribed = new Set<SessionId>();
 	private catalogSubscribed = false;
 	private connectionEpoch = 0;
-	private connectionReady = false;
+	private get connectionReady(): boolean { return this.connectionStatus.get() === 'connected'; }
 	private readonly initialConnectionState: Promise<void>;
 	private catalogSubscription: Promise<readonly ISession[]> | undefined;
 	private readonly subscriptions = new Map<SessionId, { readonly revision: number; readonly promise: Promise<ISession>; }>();
@@ -48,11 +54,11 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 		super();
 		let observedState = false;
 		this.initialConnectionState = appServer.getConnectionState().then(state => {
-			if (!observedState && !this.isDisposed) this.connectionReady = state === 'ready';
+			if (!observedState && !this.isDisposed) this.connectionStatus.set(connectionStatus(state));
 		});
 		const connection = appServer.onConnectionState(state => {
 			observedState = true;
-			this.connectionReady = state === 'ready';
+			this.connectionStatus.set(connectionStatus(state));
 			// Transport generation changes on connect, but a resolved response can outlive close.
 			if (state !== 'ready') this.connectionEpoch++;
 			// The server starts each connection with an empty subscription set.
@@ -289,16 +295,20 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 	}
 }
 
+function connectionStatus(state: AppServerConnectionState): 'connecting' | 'connected' | 'disconnected' {
+	if (state === 'ready') { return 'connected'; }
+	if (state === 'starting' || state === 'initializing' || state === 'restarting') { return 'connecting'; }
+	return 'disconnected';
+}
+
 function toSession(session: AgentSession, threads: readonly ThreadSubscription[] = [], previous?: ISession, agentTree?: readonly AgentExecutionNode[]): ISession {
 	const byId = new Map(threads.map(entry => [entry.thread.threadId, entry]));
 	return {
+		application: getSessionApplication('ash'),
 		sessionId: session.sessionId,
 		title: session.title,
 		status: session.status,
-		workspace: session.executionTarget === undefined || session.executionTarget === null ? null : {
-			authorityId: session.executionTarget.type === 'local' ? 'local' : session.executionTarget.host,
-			root: session.executionTarget.root,
-		},
+		workspace: buildAgentHostSessionWorkspace(session.executionTarget),
 		model: session.model,
 		management: { ...session.manager },
 		nextApprovalMode: previous?.nextApprovalMode ?? "manual",
@@ -308,10 +318,7 @@ function toSession(session: AgentSession, threads: readonly ThreadSubscription[]
 			const prior = previous?.chats.find(candidate => candidate.threadId === thread.threadId);
 			return {
 				threadId: thread.threadId,
-				workspace: snapshot ? (snapshot.directory ? {
-					authorityId: snapshot.directory.type === 'local' ? 'local' : snapshot.directory.host,
-					root: snapshot.directory.root,
-				} : null) : prior?.workspace,
+				workspace: snapshot ? buildAgentHostChatWorkspace(snapshot.directory ?? null) : prior?.workspace,
 				origin: thread.parentThreadId || thread.forkedFromId
 					? { type: "fork" as const, parentThreadId: thread.parentThreadId ?? thread.forkedFromId!, parentSequence: detail?.sequence ?? 0 }
 					: { type: "root" as const },

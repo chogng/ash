@@ -481,6 +481,12 @@ impl AppServer {
                 ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },
             );
         }
+        if self.session_runtimes.is_some() {
+            capabilities.contracts.insert(
+                "sessionRuntimes".into(),
+                ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },
+            );
+        }
         result(&InitializeResult {
             server_info: ServerInfo {
                 name: "ash-app-server".into(),

@@ -4,6 +4,7 @@ import { IEditorService } from '../../../../../workbench/services/editor/common/
 import { EditorInputCapabilities, type IResourceEditorInput } from '../../../../../workbench/common/editor.js';
 import { EmptyFileEditorInput } from '../../../editor/browser/emptyFileEditorInput.js';
 import { SessionChangesEditorInput } from '../../../changes/browser/sessionChangesEditorInput.js';
+import { DockedEditorInput } from '../../../../common/dockedEditorInput.js';
 import { ISessionsService, type SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
 import { ISessionChangesService } from '../../../changes/common/sessionChangesService.js';
 
@@ -53,7 +54,7 @@ export class DesktopDockedTabsCoordinator extends Disposable {
 		}
 		for (const group of this.documentGroups) {
 			for (const input of group.inputs) {
-				if (input instanceof EmptyFileEditorInput || input instanceof SessionChangesEditorInput) {
+				if (input instanceof DockedEditorInput) {
 					input.capabilities = detailsOnly ? EditorInputCapabilities.CannotClose : EditorInputCapabilities.None;
 					await this.editors.openEditor(input, { pinned: true, preserveFocus: true, inactive: true }, { groupId: group.id });
 					if (!this.isCurrent(selection) || !this.documentGroups.includes(group)) { return; }
@@ -84,6 +85,6 @@ export class DesktopDockedTabsCoordinator extends Disposable {
 	}
 
 	public isManaged(input: IResourceEditorInput): boolean {
-		return input.resource.scheme === 'ash-sessions-files' || input.resource.scheme === 'ash-session-changes';
+		return input instanceof DockedEditorInput;
 	}
 }

@@ -13,6 +13,7 @@ import type { ApprovalMode, IActiveSessionThread, ISession, IUntitledChatSession
 import { ISessionsManagementService, type SessionsManagementState } from "../../services/sessions/common/sessionsManagement.js";
 import { SessionsService } from "../../../sessions/services/sessions/browser/sessionsService.js";
 import type { SessionsViewSelection } from "../../../sessions/services/sessions/browser/sessionsService.js";
+import { WELCOME_COMPLETE_KEY } from '../../common/welcome.js';
 
 let storageResources: DisposableStore;
 setup(() => { storageResources = new DisposableStore(); });
@@ -31,6 +32,22 @@ function createView(sessions: ISessionsManagementService, storage: IStorageServi
 	services.registerInstance(IStorageService, storage);
 	return services.createInstance(SessionsService);
 }
+
+test('welcome completion persists for a durable catalog and stays incomplete for drafts alone', async () => {
+	using storage = createTestStorage();
+	using drafts = new FakeSessionService([]);
+	using draftView = createView(drafts, storage);
+	await draftView.initialize();
+	drafts.createUntitledSession('Draft');
+	assert.equal(storage.getBoolean(WELCOME_COMPLETE_KEY, StorageScope.PROFILE, false), false);
+	using catalog = new FakeSessionService([session('one', 'thread')]);
+	using catalogView = createView(catalog, storage);
+	await catalogView.initialize();
+	assert.equal(storage.getBoolean(WELCOME_COMPLETE_KEY, StorageScope.PROFILE, false), true);
+	using returning = createView(drafts, storage);
+	await returning.initialize();
+	assert.equal(storage.getBoolean(WELCOME_COMPLETE_KEY, StorageScope.PROFILE, false), true);
+});
 
 test("Sessions view service replaces visible sessions on open and Back/Forward navigation", async () => {
 	using sessions = new FakeSessionService([session("session-1", "thread-1"), session("session-2", "thread-2")]);

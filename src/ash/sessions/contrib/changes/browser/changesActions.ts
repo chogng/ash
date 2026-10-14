@@ -6,7 +6,7 @@ import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextke
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
-import { createSshRemoteWorkspaceUri } from '../../../../platform/remote/common/remote.js';
+import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { SessionChangesEditor } from './sessionChangesEditor.js';
 import { getChangesEditorLabels } from './changesEditorLabels.js';
@@ -32,7 +32,7 @@ class OpenChangedFileAction extends Action2 {
 		const session = accessor.get(ISessionsManagementService).sessions.find(session => session.sessionId === change.summary.sessionId);
 		const workspace = session?.chats.find(chat => chat.threadId === change.summary.threadId)?.workspace ?? session?.workspace;
 		if (!workspace) { return; }
-		const root = workspace.authorityId === 'local' ? URI.file(workspace.root) : createSshRemoteWorkspaceUri(workspace.authorityId, workspace.root);
+		const root = sessionWorkspaceUri(workspace);
 		const fileResource = root.with({ path: `${root.path.replace(/\/$/u, '')}/${change.file.path}` });
 		const labels = getChangesEditorLabels(fileResource, accessor.get(ILabelService));
 		await accessor.get(IEditorService).openEditor({ resource: fileResource, label: labels.label }, { pinned: true });

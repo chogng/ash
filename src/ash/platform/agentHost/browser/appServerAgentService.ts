@@ -114,6 +114,35 @@ export function createDisconnectedAgentTurnService(unavailable: UnavailableOpera
 
 export function createAppServerAgentSessionService(connection: AppServerProtocolClient): IAgentSessionService {
 	return {
+		async invokeRuntime(providerId, request, signal) {
+			signal.throwIfAborted();
+			if (connection.capabilities?.contracts.sessionRuntimes?.version !== 1) {
+				if (request.operation === 'probe') { return { type: 'availability', available: false }; }
+				throw new Error(localize({ bundle: 'ash.sessions', key: 'sessions.runtime.unavailable' }, 'Session runtime Providers are unavailable on this connection.'));
+			}
+			const operationId = createUuid();
+			const generation = connection.generation;
+			const cancel = (): void => {
+				if (generation === connection.generation) {
+					void appServerRequest(connection, 'session/runtime/cancel', { operationId }).catch(() => { });
+				}
+			};
+			signal.addEventListener('abort', cancel, { once: true });
+			try {
+				const value = await connection.request(APP_SERVER_METHODS['session/runtime/invoke'], { operationId, providerId, request }, { timeoutMs: 600_000 });
+				signal.throwIfAborted();
+				// Transport decoding has validated this closed result; copy only the domain fields.
+				switch (value.type) {
+					case 'targets': return { type: value.type, targets: value.targets.map(target => ({ ...target })) };
+					case 'availability': return { type: value.type, available: value.available };
+					case 'released': return { type: value.type };
+					case 'target': return { type: value.type, target: { ...value.target } };
+				}
+			} catch (error) {
+				signal.throwIfAborted();
+				throw error;
+			} finally { signal.removeEventListener('abort', cancel); }
+		},
 		create: (params) => appServerRequest(connection, 'session/create', params).then(toSessionResult),
 		listAgents: () => appServerRequest(connection, 'agent/roles/list', {}),
 		read: (params) => appServerRequest(connection, 'session/read', params).then(toSessionResult),

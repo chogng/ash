@@ -236,6 +236,24 @@ test.describe('Sessions settings components', () => {
 		await expect(empty).toBeHidden();
 	});
 
+	test('layout scope uses the shared settings owner and persists through window recreation', async ({ page }) => {
+		const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+		await settings.getByRole('button', { name: 'Appearance', exact: true }).click();
+		const scope = settings.locator('[data-configuration-key="sessions.experimental.layoutScope"]').getByRole('combobox');
+		await expect(scope).toHaveText('Session');
+		await scope.click();
+		await page.getByRole('option', { name: 'Chat', exact: true }).click();
+		await expect(scope).toHaveText('Chat');
+		await expect(scope).toBeEnabled();
+		await page.evaluate(() => window.ashSessionsIntegration.updateConfiguration('sessions.experimental.layoutScope', 'chat-shared'));
+		await expect(scope).toHaveText('Chat, shared visibility');
+		await page.evaluate(() => window.ashSessionsIntegration.remountAfterDirectDispose());
+		await page.getByRole('button', { name: 'Accounts', exact: true }).click();
+		await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
+		await settings.getByRole('button', { name: 'Appearance', exact: true }).click();
+		await expect(scope).toHaveText('Chat, shared visibility');
+	});
+
 	test('settings cards and responsive panes preserve their geometry', async ({ page }) => {
 		const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
 		await expect(settings).toBeVisible();
@@ -310,7 +328,8 @@ test.describe('Sessions settings components', () => {
 		await expect(settings.locator('.ash-sessions-settings-search svg[data-ash-icon-id="search"]')).toBeVisible();
 		await searchSettings.fill('layout');
 		await expect(settings.getByRole('heading', { name: 'Search results' })).toBeVisible();
-		await expect(settings.locator('.ash-configuration-setting')).toHaveCount(1);
+		await expect(settings.locator('.ash-configuration-setting')).toHaveCount(2);
+		await expect(settings.locator('[data-settings-item-id="sessions.experimental.layoutScope"]')).toBeVisible();
 		await searchSettings.fill('unmatched-setting');
 		await expect(settings.getByText('No settings found.')).toBeVisible();
 		await navigation.getByRole('button', { name: 'Appearance' }).click();

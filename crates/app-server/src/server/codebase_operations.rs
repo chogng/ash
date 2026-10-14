@@ -5,7 +5,10 @@ use super::codebase_runtime::CodebaseRuntimeError;
 use super::codebase_runtime::CodebaseRuntimeState;
 use super::decode;
 use super::result;
+use super::semantic_index_job::SemanticIndexJobState;
 use ash_app_server_protocol::protocol::codebase::CodebaseChunkSpanDto;
+use ash_app_server_protocol::protocol::codebase::CodebaseEmbeddingStateDto;
+use ash_app_server_protocol::protocol::codebase::CodebaseEmbeddingStatusDto;
 use ash_app_server_protocol::protocol::codebase::CodebaseSearchHitDto;
 use ash_app_server_protocol::protocol::codebase::CodebaseSearchParams;
 use ash_app_server_protocol::protocol::codebase::CodebaseSearchResult;
@@ -77,45 +80,75 @@ impl AppServer {
         &self,
         runtime: &CodebaseRuntime,
     ) -> CodebaseStatusResult {
-        let mut status = project_status(runtime);
-        if let Some(job) = self.codebase_semantic_job() {
-            use super::semantic_index_job::SemanticIndexJobState;
-            status.state = match (status.state, job.snapshot().state) {
-                (
-                    CodebaseStateDto::Ready | CodebaseStateDto::Stale,
-                    SemanticIndexJobState::Syncing,
-                ) => CodebaseStateDto::Indexing,
-                (
-                    CodebaseStateDto::Ready,
-                    SemanticIndexJobState::Stale
-                    | SemanticIndexJobState::Cancelled
-                    | SemanticIndexJobState::Failed,
-                ) => CodebaseStateDto::Stale,
-                (state, _) => state,
-            };
-        }
-        status
+        let (source_state, snapshot) = match runtime.state() {
+            CodebaseRuntimeState::Empty => (CodebaseStateDto::Empty, None),
+            CodebaseRuntimeState::Indexing { last_ready } => {
+                (CodebaseStateDto::Indexing, last_ready)
+            }
+            CodebaseRuntimeState::Ready(snapshot) => (CodebaseStateDto::Ready, Some(snapshot)),
+            CodebaseRuntimeState::Stale(snapshot) => (CodebaseStateDto::Stale, Some(snapshot)),
+            CodebaseRuntimeState::Failed => (CodebaseStateDto::Failed, None),
+        };
+        let generation = snapshot.as_ref().map_or(0, |snapshot| snapshot.generation);
+        project_snapshot(
+            runtime,
+            source_state,
+            snapshot.as_ref(),
+            self.codebase_embedding_status(generation),
+        )
     }
-}
 
-pub(super) fn project_status(runtime: &CodebaseRuntime) -> CodebaseStatusResult {
-    let (state, snapshot) = match runtime.state() {
-        CodebaseRuntimeState::Empty => (CodebaseStateDto::Empty, None),
-        CodebaseRuntimeState::Indexing { last_ready } => (CodebaseStateDto::Indexing, last_ready),
-        CodebaseRuntimeState::Ready(snapshot) => (CodebaseStateDto::Ready, Some(snapshot)),
-        CodebaseRuntimeState::Stale(snapshot) => (CodebaseStateDto::Stale, Some(snapshot)),
-        CodebaseRuntimeState::Failed => (CodebaseStateDto::Failed, None),
-    };
-    project_snapshot(runtime, state, snapshot.as_ref())
+    fn codebase_embedding_status(&self, source_generation: u64) -> CodebaseEmbeddingStatusDto {
+        let Some(job) = self.codebase_semantic_job() else {
+            let configured = self
+                .config
+                .as_ref()
+                .is_some_and(|config| config.committed_snapshot().values.codebase.models.is_some());
+            return if configured {
+                CodebaseEmbeddingStatusDto::Unavailable
+            } else {
+                CodebaseEmbeddingStatusDto::Disabled
+            };
+        };
+        let snapshot = job.snapshot();
+        let state = match snapshot.state {
+            SemanticIndexJobState::Idle => CodebaseEmbeddingStateDto::Idle,
+            SemanticIndexJobState::Syncing => CodebaseEmbeddingStateDto::Indexing,
+            // Source publication can precede the watcher's next semantic job. Never label
+            // vectors for an older source generation as current during that interval.
+            SemanticIndexJobState::Ready => {
+                if snapshot.published_generation == Some(source_generation) {
+                    CodebaseEmbeddingStateDto::Ready
+                } else {
+                    CodebaseEmbeddingStateDto::Stale
+                }
+            }
+            SemanticIndexJobState::Stale => CodebaseEmbeddingStateDto::Stale,
+            SemanticIndexJobState::Cancelled => CodebaseEmbeddingStateDto::Cancelled,
+            SemanticIndexJobState::Failed => CodebaseEmbeddingStateDto::Failed,
+        };
+        CodebaseEmbeddingStatusDto::Active {
+            state,
+            target_generation: snapshot.target_generation,
+            published_generation: snapshot.published_generation,
+            total_chunk_count: snapshot.total_chunk_count,
+            processed_chunk_count: snapshot.processed_chunk_count,
+            reused_embedding_count: snapshot.reused_embedding_count,
+            embedded_chunk_count: snapshot.embedded_chunk_count,
+            last_error_code: snapshot.last_error_code.map(str::to_owned),
+        }
+    }
 }
 
 fn project_snapshot(
     runtime: &CodebaseRuntime,
-    state: CodebaseStateDto,
+    source_state: CodebaseStateDto,
     snapshot: Option<&CodebaseSnapshot>,
+    embedding: CodebaseEmbeddingStatusDto,
 ) -> CodebaseStatusResult {
     CodebaseStatusResult {
-        state,
+        source_state,
+        embedding,
         root_id: runtime.root().id().as_str().to_owned(),
         generation: snapshot.map_or(0, |snapshot| snapshot.generation),
         indexed_file_count: snapshot.map_or(0, |snapshot| snapshot.indexed_file_count),

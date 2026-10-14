@@ -180,22 +180,78 @@ impl ProfileAppServerRegistry {
         self.profile_runtime.local_thread_session(thread_id)
     }
 
-    pub(crate) fn remote_profiles(&self) -> Result<Vec<RemoteProfile>, String> {
+    pub(crate) fn remote_profiles(&self) -> Result<Vec<super::gateway::RemoteEndpoint>, String> {
         let imported = self.profile_runtime.imported_history_hosts()?;
-        RemoteConnectionProfileStore::from_profile_root(self.host.profile_root())
-            .connections()
-            .map(|records| {
-                records
-                    .into_iter()
-                    .map(|record| record.active_profile())
-                    .filter(|profile| {
-                        !imported
-                            .iter()
-                            .any(|host| host == profile.target().host().as_str())
-                    })
-                    .collect()
-            })
-            .map_err(|error| error.to_string())
+        let mut profiles: Vec<super::gateway::RemoteEndpoint> =
+            RemoteConnectionProfileStore::from_profile_root(self.host.profile_root())
+                .connections()
+                .map(|records| {
+                    records
+                        .into_iter()
+                        .map(|record| record.active_profile())
+                        .filter(|profile| {
+                            !imported
+                                .iter()
+                                .any(|host| host == profile.target().host().as_str())
+                        })
+                        .map(super::gateway::RemoteEndpoint::Ssh)
+                        .collect()
+                })
+                .map_err(|error| error.to_string())?;
+        for target in self.profile_runtime.session_runtimes.targets() {
+            profiles.push(self.remote_endpoint(&target)?);
+        }
+        Ok(profiles)
+    }
+
+    pub(crate) fn remote_endpoint(
+        &self,
+        target: &ash_protocol::SessionExecutionTarget,
+    ) -> Result<super::gateway::RemoteEndpoint, String> {
+        match target {
+            ash_protocol::SessionExecutionTarget::Ssh { host, root } => self
+                .remote_profile(host, root)
+                .map(super::gateway::RemoteEndpoint::Ssh),
+            ash_protocol::SessionExecutionTarget::Provider {
+                provider_id,
+                workspace,
+                root,
+            } => {
+                let executable = self.profile_runtime.session_runtimes.executable(target)?;
+                Ok(super::gateway::RemoteEndpoint::Provider {
+                    key: super::gateway::RemoteKey::Provider {
+                        provider_id: provider_id.clone(),
+                        workspace: workspace.clone(),
+                        root: root.clone(),
+                    },
+                    executable,
+                    authority: self.profile_runtime.session_runtimes.clone(),
+                    generation: self.profile_runtime.session_runtimes.generation(),
+                    admission: super::gateway::ProviderConnectionAdmission::Admitted,
+                })
+            }
+            ash_protocol::SessionExecutionTarget::Local { .. } => {
+                Err("local target is not a remote endpoint".into())
+            }
+        }
+    }
+
+    pub(crate) fn admit_session_creation(
+        &self,
+        target: &ash_protocol::SessionExecutionTarget,
+    ) -> Result<(), String> {
+        if matches!(
+            target,
+            ash_protocol::SessionExecutionTarget::Provider { .. }
+        ) && !self
+            .profile_runtime
+            .session_runtimes
+            .targets()
+            .contains(target)
+        {
+            return Err("Session creation requires a prepared Provider workspace".into());
+        }
+        Ok(())
     }
 
     pub(crate) fn remote_profile(&self, host: &str, root: &str) -> Result<RemoteProfile, String> {

@@ -129,21 +129,33 @@ export type SessionWorkspaceSelection =
 	| { readonly type: 'current'; }
 	| { readonly type: 'local'; readonly root: string; }
 	| { readonly type: 'ssh'; readonly host: string; readonly root: string; }
+	| { readonly type: 'provider'; readonly providerId: string; readonly workspace: string; readonly root: string; }
 	| { readonly type: 'multiple'; readonly folders: readonly { readonly label: string; readonly target: SessionExecutionTarget; }[]; };
 
-export type SessionExecutionTarget = Extract<SessionWorkspaceSelection, { readonly type: 'local' | 'ssh'; }>;
+export type SessionExecutionTarget = Extract<SessionWorkspaceSelection, { readonly type: 'local' | 'ssh' | 'provider'; }>;
+
+/** Execution directory supplied by the Session or hydrated Thread domain snapshot. */
+export interface ISessionWorkspace {
+	readonly authorityId: string;
+	readonly root: string;
+	readonly runtime?: { readonly providerId: string; readonly workspace: string; };
+}
+
+/** Product application serving the Session catalog, independent of its execution authority. */
+export interface ISessionApplication {
+	readonly id: string;
+	readonly label: string;
+}
 
 /** Frontend product model for one App Server Session tree. */
 export interface ISession {
+	readonly application?: ISessionApplication;
 	readonly sessionId: SessionId;
 	readonly title: string;
 	readonly status: SessionStatus;
 	readonly model?: ModelRef | null;
 	readonly management?: SessionManagementInfo;
-	readonly workspace?: {
-		readonly authorityId: string;
-		readonly root: string;
-	} | null;
+	readonly workspace?: ISessionWorkspace | null;
 	readonly nextApprovalMode: ApprovalMode;
 	readonly chats: readonly IChat[];
 	/** Server-owned projection; absent only before an active Session has been subscribed. */

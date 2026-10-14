@@ -80,6 +80,7 @@ export interface SessionCreateParams {
 	readonly executionTarget:
 	| { readonly type: 'local'; readonly root: string; }
 	| { readonly type: 'ssh'; readonly host: string; readonly root: string; }
+	| { readonly type: 'provider'; readonly providerId: string; readonly workspace: string; readonly root: string; }
 	| null;
 	readonly agent:
 	| { readonly type: 'default'; }
@@ -723,6 +724,8 @@ export interface ThreadSubscription {
 }
 
 export interface IAgentSessionService {
+	/** Optional runtime capability; cancellation belongs to the originating connection. */
+	invokeRuntime?(providerId: string, request: SessionRuntimeRequest, signal: AbortSignal): Promise<SessionRuntimeResult>;
 	create(params: SessionCreateParams): Promise<SessionResult>;
 	listAgents(): Promise<AgentRoleListResult>;
 	read(params: SessionReadParams): Promise<SessionResult>;
@@ -737,6 +740,13 @@ export interface IAgentSessionService {
 	restore(params: SessionOperationInput<'restore'>): Promise<SessionResult>;
 	stop(params: SessionOperationInput<'stop'>): Promise<SessionResult>;
 }
+
+export type SessionRuntimeRequest = { readonly operation: 'list'; } | { readonly operation: 'probe' | 'prepare' | 'stop' | 'remove'; readonly workspace: string; };
+export type SessionRuntimeResult =
+	| { readonly type: 'targets'; readonly targets: readonly NonNullable<SessionCreateParams['executionTarget']>[]; }
+	| { readonly type: 'availability'; readonly available: boolean; }
+	| { readonly type: 'target'; readonly target: NonNullable<SessionCreateParams['executionTarget']>; }
+	| { readonly type: 'released'; };
 
 /** A backend-owned message boundary and its file restoration availability. */
 export interface IMessageCheckpoint {

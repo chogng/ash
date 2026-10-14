@@ -38,6 +38,10 @@ flowchart TD
 Config 只保存模型引用和行为意图。Secret Store 保存凭据。可重建索引由 Codebase Store 保存；
 Cloud grant、同步 generation、撤销和待删除状态由 Cloud Codebase state 保存。
 
+前端 `ICodebaseService` 只读写 Codebase 的模型选择和自动上下文策略。Provider 连接、地址、
+模型通用参数与凭据由原有配置和模型领域管理，不通过 Codebase 再维护一份。策略的持久化
+权威仍是 Rust Config Store；前端返回配置 revision，并在修改时使用该 revision 检查冲突。
+
 ## 身份与持久化
 
 | 键                                         | 含义                                      |
@@ -67,6 +71,30 @@ content hash。
 
 未保存文档通过 Document Overlay 替代同路径磁盘内容。关闭或保存后，索引按 content hash 与
 磁盘 generation 重新汇合。Overlay 是文档状态，不是新的目录或授权边界。
+
+watcher 的全量重扫会复核当前源码、chunk 身份和索引覆盖情况；事实未变时保留 generation，
+避免重复目录提示使已同步的向量或云端索引失效。源码内容、文件集合、分块或覆盖情况变化时
+才发布新的 generation。显式 `codebase/rebuild` 仍强制发布一代，并调度语义索引刷新。
+
+`codebase/status`、`search`、`retrieve` 和 `rebuild` 返回的状态使用 `sourceState` 表示源码索引
+的 `empty/indexing/ready/stale/failed`；文件、chunk 计数和 `generation` 也只描述源码索引。
+embedding 单独返回：
+
+| `embedding.type` | 含义                                              |
+| ---------------- | ------------------------------------------------- |
+| `disabled`       | 未选择语义模型，也没有宿主提供的模型运行时        |
+| `unavailable`    | 已选择模型，但 embedding 或 rerank 运行时无法绑定 |
+| `active`         | 已绑定运行时，另用 `state` 表示向量索引任务状态   |
+
+`active.state` 为 `idle/indexing/ready/stale/cancelled/failed`，并返回目标／已发布 generation、
+处理进度、embedding 复用计数与非敏感错误码。`ready` 只表示向量已发布到当前源码 generation，
+不保证后续模型查询不会失败。embedding 正在构建或失败不改变源码索引的 `sourceState`；
+文字与符号检索继续使用已发布源码，融合检索仍通过 `degradations` 报告可选候选来源失败。
+
+持久索引的分块、chunk 身份与源码复核由 `ash-codebase` 的 Rust 实现唯一拥有。
+Copilot 扩展的 `platform/chunking` 包含服务商远端分块／embedding 客户端，不作为 Ash 通用
+TS 平台的整目录迁移对象。前端将来需要按 token 对文本快照分块时，可以在
+`src/ash/platform/chunking` 提供独立能力；它不得另建 Codebase 索引或生成持久 chunk 身份。
 
 Cloud Codebase 状态如下：
 

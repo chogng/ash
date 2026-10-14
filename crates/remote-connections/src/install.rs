@@ -25,11 +25,11 @@ pub use progress::RemoteRuntimeInstallProgress;
 use progress::upload_archive;
 use protocol::INSTALL_ERROR_MARKER;
 use protocol::PLATFORM_UNSUPPORTED_MARKER;
-use protocol::parse_install_receipt;
-pub(crate) use protocol::parse_remote_platform;
+pub use protocol::parse_install_receipt;
+pub use protocol::parse_remote_platform;
 use protocol::remote_install_failure;
-pub(crate) use protocol::remote_platform_probe_command;
-pub(crate) use protocol::remote_runtime_install_command;
+pub use protocol::remote_platform_probe_command;
+pub use protocol::remote_runtime_install_command;
 
 const DEFAULT_CONNECT_TIMEOUT_SECONDS: NonZeroU16 = NonZeroU16::new(10).expect("non-zero");
 const MAX_DIAGNOSTIC_BYTES: usize = 64 * 1024;
@@ -127,6 +127,14 @@ pub struct RemoteRuntimeArtifact {
 }
 
 impl RemoteRuntimeArtifact {
+    /// Opens only a verified archive and rewinds it for a transport upload. Keeping the
+    /// descriptor open binds the upload to the checked file rather than a later path lookup.
+    pub fn open_verified(&self) -> Result<std::fs::File, RemoteRuntimeInstallError> {
+        let mut file = open_and_validate_artifact(self)?;
+        file.seek(SeekFrom::Start(0))
+            .map_err(RemoteRuntimeInstallError::artifact_unavailable)?;
+        Ok(file)
+    }
     /// Describes a trusted release artifact already present on the native host.
     pub fn new(
         archive: impl Into<PathBuf>,

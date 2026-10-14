@@ -14,6 +14,7 @@ import { CommandService } from '../../../../../workbench/services/commands/commo
 import { productLanguagePackCatalogs } from '../../../../../workbench/services/localization/common/localizationCatalogs.js';
 import { resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
 import { Menus } from '../../../../browser/menus.js';
+import { NEW_FILE_TAB_COMMAND_ID } from '../../../../common/sessionCommands.js';
 import type { IAgentWorkbenchLayoutService } from '../../../../browser/workbench.js';
 import type { DesktopLayoutController, IDesktopLayoutContext } from '../../../layout/browser/desktopLayoutController.js';
 import { EditorTitleMenuBridgeContribution } from '../../browser/editor.contribution.js';
@@ -67,7 +68,7 @@ test('editor contributions follow layout state, serialize Add tab commands and r
 	using palette = menus.createMenu(MenuId.CommandPalette);
 	const titleState = () => title.getActions().flatMap(([, actions]) => actions).map(action => [action.label, action.enabled, action.checked]);
 	assert.deepEqual(titleState(), [['Add tab', true, undefined], ['Toggle details', true, true], ['Show editor', true, undefined]]);
-	assert.deepEqual(addTab.getActions().flatMap(([, actions]) => actions).map(action => action.id), ['ash.sessions.openFilesTab', 'workbench.agentSessions.action.viewChanges']);
+	assert.deepEqual(addTab.getActions().flatMap(([, actions]) => actions).map(action => action.id), [NEW_FILE_TAB_COMMAND_ID, 'workbench.agentSessions.action.viewChanges']);
 	assert.equal(palette.getActions().flatMap(([, actions]) => actions).length, 5);
 
 	await commands.executeCommand('ash.sessions.showEditor');
@@ -81,7 +82,7 @@ test('editor contributions follow layout state, serialize Add tab commands and r
 	layoutChanged.fire();
 	assert.equal(contextKeys.getValue('sessions.editorContentVisible'), false);
 
-	const files = commands.executeCommand('ash.sessions.openFilesTab');
+	const files = commands.executeCommand(NEW_FILE_TAB_COMMAND_ID);
 	await started.p;
 	const changes = commands.executeCommand('workbench.agentSessions.action.viewChanges');
 	assert.deepEqual(effects, []);
@@ -97,7 +98,9 @@ test('editor contributions follow layout state, serialize Add tab commands and r
 	contribution.dispose();
 	assert.deepEqual(addTab.getActions(), []);
 	assert.equal(CommandsRegistry.getCommand('workbench.agentSessions.action.viewChanges'), undefined);
-	for (const id of ['toggleDetails', 'hideEditor', 'showEditor', 'toggleSidePane', 'openFilesTab']) {
+	assert.equal(CommandsRegistry.getCommand(NEW_FILE_TAB_COMMAND_ID), undefined);
+	assert.equal(CommandsRegistry.getCommand('ash.sessions.openFilesTab'), undefined);
+	for (const id of ['toggleDetails', 'hideEditor', 'showEditor', 'toggleSidePane']) {
 		assert.equal(CommandsRegistry.getCommand('ash.sessions.' + id), undefined);
 	}
 	assert.equal(layoutChanged.hasListeners(), false);

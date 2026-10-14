@@ -106,7 +106,10 @@ impl AppServer {
             self.session_view(&context.session_id)
                 .map_err(rpc_error)?
                 .execution_target,
-            Some(ash_protocol::SessionExecutionTarget::Ssh { .. })
+            Some(
+                ash_protocol::SessionExecutionTarget::Ssh { .. }
+                    | ash_protocol::SessionExecutionTarget::Provider { .. }
+            )
         ) {
             return Err(CoreError::Policy(
                 "IDE task execution is only available for local execution targets".into(),

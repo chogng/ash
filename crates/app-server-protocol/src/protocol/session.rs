@@ -23,6 +23,21 @@ use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 
+/// Selects an admitted runtime Provider, never an executable supplied by the client.
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SessionRuntimeParams {
+    pub operation_id: String,
+    pub provider_id: String,
+    pub request: ash_protocol::SessionRuntimeRequest,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SessionRuntimeCancelParams {
+    pub operation_id: String,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionCreateParams {

@@ -18,7 +18,8 @@ const INSTALL_MARKER: &str = "__ASH_REMOTE_RUNTIME_INSTALLED__:";
 const REUSED_MARKER: &str = "__ASH_REMOTE_RUNTIME_REUSED__:";
 pub(super) const INSTALL_ERROR_MARKER: &str = "__ASH_REMOTE_RUNTIME_INSTALL_ERROR__:";
 
-pub(crate) fn remote_platform_probe_command() -> String {
+/// POSIX platform probe shared by execution transports.
+pub fn remote_platform_probe_command() -> String {
     format!(
         "os=$(uname -s 2>/dev/null) || {{ printf '%s%s\\n' {unsupported} 'uname-unavailable'; exit 64; }}; arch=$(uname -m 2>/dev/null) || {{ printf '%s%s\\n' {unsupported} 'architecture-unavailable'; exit 64; }}; case \"$arch\" in arm64|aarch64) arch=aarch64 ;; amd64|x86_64) arch=x86_64 ;; *) printf '%s%s/%s\\n' {unsupported} \"$os\" \"$arch\"; exit 64 ;; esac; case \"$os\" in Darwin) printf '%s%s\\n' {supported} \"macos:$arch:none\" ;; Linux) if getconf GNU_LIBC_VERSION >/dev/null 2>&1; then libc=gnu; else ldd_output=$(ldd --version 2>&1 || true); case \"$ldd_output\" in *musl*) libc=musl ;; *) printf '%s%s/%s/%s\\n' {unsupported} \"$os\" \"$arch\" 'unknown-libc'; exit 64 ;; esac; fi; printf '%s%s\\n' {supported} \"linux:$arch:$libc\" ;; *) printf '%s%s/%s\\n' {unsupported} \"$os\" \"$arch\"; exit 64 ;; esac",
         supported = quote_posix_shell_argument(PLATFORM_MARKER),
@@ -26,7 +27,8 @@ pub(crate) fn remote_platform_probe_command() -> String {
     )
 }
 
-pub(crate) fn parse_remote_platform(stdout: &str) -> Option<RemotePlatform> {
+/// Decodes the platform receipt, rejecting unsupported architecture/libc combinations.
+pub fn parse_remote_platform(stdout: &str) -> Option<RemotePlatform> {
     let value = stdout
         .lines()
         .find_map(|line| line.strip_prefix(PLATFORM_MARKER))?
@@ -54,7 +56,8 @@ pub(crate) fn parse_remote_platform(stdout: &str) -> Option<RemotePlatform> {
     }
 }
 
-pub(crate) fn remote_runtime_install_command(
+/// Integrity-checked installer for a transport which supplies the archive on stdin.
+pub fn remote_runtime_install_command(
     artifact: &RemoteRuntimeArtifact,
     location: &RemoteRuntimeInstallLocation,
 ) -> String {
@@ -129,7 +132,8 @@ pub(crate) fn remote_runtime_install_command(
     )
 }
 
-pub(super) fn parse_install_receipt(
+/// Verifies the install receipt against the authorized artifact's exact identity.
+pub fn parse_install_receipt(
     stdout: &str,
     artifact: &RemoteRuntimeArtifact,
 ) -> Result<Option<RemoteInstalledRuntime>, RemoteRuntimeInstallError> {

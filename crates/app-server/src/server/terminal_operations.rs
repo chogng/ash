@@ -36,7 +36,10 @@ impl AppServer {
         let session =
             ash_protocol::SessionId::new(decode(session)?).map_err(|error| error.to_string())?;
         let path = decode(path)?;
-        if !std::path::Path::new(&path).is_absolute() || path.contains('\0') {
+        if (!std::path::Path::new(&path).is_absolute()
+            && ash_remote::RemoteDirPath::parse(&path).is_err())
+            || path.contains('\0')
+        {
             return Err("Session Terminal directory must be absolute".into());
         }
         Ok(Some((session, path.into())))

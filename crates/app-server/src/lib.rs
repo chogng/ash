@@ -23,6 +23,7 @@ mod network_policy;
 mod product_services;
 mod resource_store;
 mod server;
+mod session_runtime_provider;
 mod text_document_host;
 mod tool_composition;
 mod tool_executor_adapter;

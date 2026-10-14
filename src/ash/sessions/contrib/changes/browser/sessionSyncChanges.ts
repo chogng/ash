@@ -4,12 +4,11 @@ import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { getErrorMessage } from '../../../../base/common/errors.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
-import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { ICommandService, CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
-import { createSshRemoteWorkspaceUri } from '../../../../platform/remote/common/remote.js';
+import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
 import { readLocalRepositories, type LocalRepository } from '../../../../workbench/contrib/github/common/localRepository.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
@@ -64,7 +63,7 @@ export class SessionSyncChangesActionViewItem extends Disposable {
 			this.statusOwner = this.owner;
 		}
 		if (!workspace || !CommandsRegistry.hasCommand('git.getRepositoryContexts')) { return; }
-		const root = workspace.authorityId === 'local' ? URI.file(workspace.root) : createSshRemoteWorkspaceUri(workspace.authorityId, workspace.root);
+		const root = sessionWorkspaceUri(workspace);
 		const current = (): boolean => !this.isDisposed && request === this.statusRequest && generation === this.generation;
 		try {
 			const repositories = (await readLocalRepositories(this.commands)).filter(repository =>
@@ -132,7 +131,7 @@ export class SessionSyncChangesActionViewItem extends Disposable {
 		if (!workspace || this.running) { return; }
 		const generation = this.generation;
 		const current = (): boolean => !this.isDisposed && generation === this.generation;
-		const root = workspace.authorityId === 'local' ? URI.file(workspace.root) : createSshRemoteWorkspaceUri(workspace.authorityId, workspace.root);
+		const root = sessionWorkspaceUri(workspace);
 		this.running = true;
 		this.update();
 		try {

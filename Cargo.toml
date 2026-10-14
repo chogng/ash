@@ -51,6 +51,7 @@ members = [
     "crates/github",
     "extensions/github-authentication",
     "extensions/remote-ssh",
+    "extensions/dev-containers",
     "crates/external-agent-migration",
     "crates/agent-roles",
     "crates/ash-home",

@@ -2496,7 +2496,7 @@ fn local_composition_restores_codebase_generation_after_reopen() {
     );
     let generation = rebuilt["result"]["generation"].as_u64().unwrap();
     assert!(generation > 0);
-    assert_eq!(rebuilt["result"]["state"], "ready");
+    assert_eq!(rebuilt["result"]["sourceState"], "ready");
     let final_snapshot = {
         let dir_root = ash_file_access::Dir::open_local(dir.path()).unwrap();
         let state = ash_state::StateRuntime::open(profile.path()).unwrap();
@@ -2545,15 +2545,18 @@ fn local_composition_restores_codebase_generation_after_reopen() {
                 "jsonrpc":"2.0","id":request_id,"method":"codebase/status","params":{}
             }),
         );
-        if status["result"]["state"] == "ready" {
+        if status["result"]["sourceState"] == "ready" {
             break status;
         }
-        assert_eq!(status["result"]["state"], "indexing");
+        assert!(matches!(
+            status["result"]["sourceState"].as_str(),
+            Some("stale" | "indexing")
+        ));
         request_id += 1;
         assert!(request_id < 102, "restored codebase did not become ready");
         std::thread::sleep(Duration::from_millis(10));
     };
-    assert_eq!(status["result"]["state"], "ready");
+    assert_eq!(status["result"]["sourceState"], "ready");
     assert!(status["result"]["generation"].as_u64().unwrap() >= final_snapshot.generation);
     let search = local_call(
         &reopened,

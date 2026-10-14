@@ -35,6 +35,11 @@ export function createSshRemoteWorkspaceUri(host: string, path: string): URI {
 	return URI.parse(`${ASH_REMOTE_SCHEME}://${authority.authority}${encodedPath}`);
 }
 
+/** Optional Session runtimes use an opaque authority; SessionDirectory owns execution routing. */
+export function createProviderRemoteWorkspaceUri(providerId: string, workspace: string, path: string): URI {
+	return URI.from({ scheme: ASH_REMOTE_SCHEME, authority: `provider+${encodeURIComponent(JSON.stringify([providerId, workspace]))}`, path: normalizeRemoteWorkspacePath(path) });
+}
+
 /** Resolves the connection authority encoded by a Remote resource URI. */
 export function getRemoteAuthority(resource: URI): RemoteAuthority | undefined {
 	if (resource.scheme !== ASH_REMOTE_SCHEME) return undefined;

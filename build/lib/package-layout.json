@@ -18,6 +18,7 @@
     "remoteHost": "bin/ash-remote-host{exe}"
   },
   "optionalBinaries": {
+    "devContainerProvider": "bin/ash-dev-container-provider{exe}",
     "jsExtensionHost": "bin/ash-external-js-ext{exe}"
   },
   "licenses": [

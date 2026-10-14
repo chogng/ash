@@ -88,6 +88,11 @@ def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Names
         help="Prebuilt Rust Remote SSH extension.",
     )
     parser.add_argument(
+        "--dev-container-provider-bin",
+        type=Path,
+        help="Optional prebuilt Rust Dev Container Provider. If omitted, Cargo builds it.",
+    )
+    parser.add_argument(
         "--github-authentication-bin",
         type=Path,
         help="Prebuilt Rust GitHub authentication extension.",
@@ -218,6 +223,7 @@ def build_package(args: argparse.Namespace) -> int:
         "ash-code-mode-host": args.code_mode_host_bin,
         "ash-github-authentication": args.github_authentication_bin,
         "ash-remote-ssh-extension": args.remote_ssh_extension_bin,
+        "ash-dev-container-provider": args.dev_container_provider_bin,
         "ash-remote": args.remote_bin,
         "ash-remote-host": None,
         "ash-remote-server": args.remote_server_bin,
@@ -299,6 +305,7 @@ def build_package(args: argparse.Namespace) -> int:
         livekit=livekit,
         github_authentication_binary=binaries["ash-github-authentication"],
         remote_ssh_extension_binary=binaries["ash-remote-ssh-extension"],
+        dev_container_provider_binary=binaries["ash-dev-container-provider"],
         remote_host_binary=binaries["ash-remote-host"],
         voice_host_binary=binaries["ash-voice-host"],
         collaboration_server_binary=binaries["ash-collaboration-server"],

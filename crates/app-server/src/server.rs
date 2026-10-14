@@ -216,6 +216,8 @@ use update_broker::UpdateBroker;
 pub use ash_codebase::CodebaseModels;
 
 pub struct AppServer {
+    pub(crate) session_runtimes:
+        Option<Arc<crate::session_runtime_provider::SessionRuntimeProvider>>,
     pub(crate) task_delivery: Option<Arc<task_delivery::Runtime>>,
     backups: Option<Arc<ash_state::SqliteBackupStore>>,
     queue: Option<Arc<queue::QueueStore>>,
@@ -656,6 +658,7 @@ impl AppServer {
             model_instructions: ash_models_manager::ModelInstructionCatalog::built_in(),
             request_scheduler: RequestScheduler::default(),
             request_cancellations: RequestCancellationRegistry::default(),
+            session_runtimes: None,
             resources,
             assets: None,
             backups: None,
@@ -2517,6 +2520,22 @@ impl AppServer {
             Some(ClientMethod::IssueReporterSubmit) => self.issue_reporter_submit(&request.params),
             Some(ClientMethod::IssueRead) => self.issue_read(&request.params, cancellation),
             Some(ClientMethod::SessionCreate) => self.session_create(connection, &request.params),
+            Some(ClientMethod::SessionRuntimeInvoke) => Self::invoke_session_runtime(
+                self.session_runtimes.as_ref(),
+                &request.params,
+                cancellation,
+            ),
+            Some(ClientMethod::SessionRuntimeCancel) => {
+                let params: ash_app_server_protocol::protocol::session::SessionRuntimeCancelParams =
+                    decode(&request.params)?;
+                if params.operation_id.is_empty() || params.operation_id.len() > 128 {
+                    return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+                }
+                self.request_cancellations
+                    .cancel_operation(connection.connection_id, params.operation_id);
+                self.request_scheduler.cancel_waiting_requests();
+                result(&())
+            }
             Some(ClientMethod::SessionRead) => self.session_read(&request.params),
             Some(ClientMethod::SessionTraceRead) => self.session_trace_read(&request.params),
             Some(ClientMethod::SessionTraceDiagnosticsRead) => {
@@ -2761,7 +2780,9 @@ impl AppServer {
                 }
             }
             Some(ClientMethod::ExtensionsSearch) => self.extension_packages_search(&request.params),
-            Some(ClientMethod::ExtensionsSearchPage) => self.extension_packages_search_page(&request.params),
+            Some(ClientMethod::ExtensionsSearchPage) => {
+                self.extension_packages_search_page(&request.params)
+            }
             Some(ClientMethod::ExtensionsGet) => self.extension_packages_get(&request.params),
             Some(ClientMethod::ExtensionsDownload) => {
                 self.extension_packages_download(&request.params)
@@ -3363,6 +3384,25 @@ impl ThreadUpdateSink for AppServerThreadUpdates {
             }
             None => {}
         }
+    }
+}
+
+impl AppServer {
+    fn invoke_session_runtime(
+        runtimes: Option<&Arc<crate::session_runtime_provider::SessionRuntimeProvider>>,
+        params: &Value,
+        cancellation: &ash_async_utils::CancellationToken,
+    ) -> Result<Value, RpcError> {
+        let params: ash_app_server_protocol::protocol::session::SessionRuntimeParams =
+            decode(params)?;
+        let runtimes =
+            runtimes.ok_or_else(|| RpcError::new(-32601, AppServerErrorName::MethodNotFound))?;
+        let value = runtimes
+            .invoke(&params.provider_id, params.request, cancellation)
+            .map_err(|error| {
+                RpcError::with_details(-32603, AppServerErrorName::InternalError, error)
+            })?;
+        result(&value)
     }
 }
 

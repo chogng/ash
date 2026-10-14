@@ -7,12 +7,19 @@ import { SessionsManagementService } from '../../../../services/sessions/browser
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { AppServerSessionsProvider, type AppServerSessionsProviderHost } from './appServerSessionsProvider.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
-import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
-import { pickWorkspaceFolder, selectionFromWorkspace } from '../../../../browser/workspaceSelection.js';
+import { WorkspaceSelection, selectionFromWorkspace } from '../../../../browser/workspaceSelection.js';
+import { IDevContainerAgentHostService } from '../../../../common/devContainerAgentHostService.js';
+import { DevContainerAgentHostService } from '../../../../browser/devContainerAgentHostService.js';
 
 class WorkbenchSessionsManagementService extends SessionsManagementService {
-	constructor(@IWorkspaceContextService workspace: IWorkspaceContextService, @IQuickInputService quickInput: IQuickInputService, @IInstantiationService instantiationService: IInstantiationService) {
-		super(instantiationService.createInstance(AppServerSessionsProvider, { workspace: () => selectionFromWorkspace(workspace.getWorkspace()), selectWorkspace: folders => pickWorkspaceFolder(quickInput, folders) } satisfies AppServerSessionsProviderHost));
+	constructor(@IWorkspaceContextService workspace: IWorkspaceContextService, @IInstantiationService instantiationService: IInstantiationService) {
+		super(instantiationService.createInstance(AppServerSessionsProvider, {
+			workspace: () => selectionFromWorkspace(workspace.getWorkspace()),
+			selectWorkspace: async folders => {
+				using selection = instantiationService.createInstance(WorkspaceSelection);
+				return await selection.pick(folders);
+			},
+		} satisfies AppServerSessionsProviderHost));
 	}
 }
 
@@ -24,5 +31,6 @@ class WorkbenchSessionsStartupContribution extends Disposable {
 }
 
 registerSingleton(ISessionsManagementService, WorkbenchSessionsManagementService, InstantiationType.Delayed);
+registerSingleton(IDevContainerAgentHostService, DevContainerAgentHostService, InstantiationType.Delayed);
 registerWorkbenchContribution('sessions.contrib.workbenchStartup', WorkbenchPhase.BlockRestore,
 	accessor => accessor.get(IInstantiationService).createInstance(WorkbenchSessionsStartupContribution));

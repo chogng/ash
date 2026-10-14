@@ -11,6 +11,9 @@ import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.j
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { observableValue } from '../../../../../base/common/observable.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { SESSIONS_LAYOUT_SCOPE_SETTING } from '../../../../common/chatLayout.js';
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { NullLoggerService } from '../../../../../platform/log/common/log.js';
@@ -34,6 +37,53 @@ const storageKey = 'sessions.singlePane.layoutState';
 
 suite('DesktopLayoutController', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('a new layout scope adopts live documents before it has a saved working set', async () => {
+		using fixture = await createFixture();
+		fixture.editor.set(workingSet('live', 'unsaved.ts'));
+		await fixture.configuration.updateValue(SESSIONS_LAYOUT_SCOPE_SETTING, 'chat');
+		await fixture.controller.whenSettled();
+		assert.deepEqual(fixture.editor.current, workingSet('chat:["a","a-thread"]', 'unsaved.ts'));
+	});
+
+	for (const mode of ['chat', 'chat-shared'] as const) {
+		test(`Chat visibility restores only when scope owns visibility (${mode})`, async () => {
+			using fixture = await createFixture();
+			await fixture.configuration.updateValue(SESSIONS_LAYOUT_SCOPE_SETTING, mode);
+			await fixture.controller.whenSettled();
+			fixture.editorVisible = true; fixture.auxiliaryVisible = false;
+			fixture.partsChanged.fire();
+			await fixture.open('b');
+			fixture.editorVisible = false; fixture.auxiliaryVisible = true;
+			fixture.partsChanged.fire();
+			await fixture.open('a');
+			assert.deepEqual([fixture.editorVisible, fixture.auxiliaryVisible], mode === 'chat' ? [true, false] : [false, true]);
+			await fixture.storage.flush();
+			const saved = JSON.parse(fixture.storage.get(storageKey, StorageScope.WORKSPACE)!);
+			assert.deepEqual(saved.find((entry: { sessionResource: string; }) => entry.sessionResource === 'chat:["a","a-thread"]')?.partVisibility, mode === 'chat' ? { editor: true, auxiliarybar: false } : undefined);
+		});
+	}
+
+	for (const mode of ['chat-shared', 'chat'] as const) {
+		test(`restores document working sets independently for peer Chats (${mode})`, async () => {
+			using fixture = await createFixture();
+			await fixture.configuration.updateValue(SESSIONS_LAYOUT_SCOPE_SETTING, mode);
+			fixture.catalog.sessions = fixture.catalog.sessions.map(session => session.sessionId === 'a'
+				? { ...session, chats: [...session.chats, { threadId: 'peer', status: 'active', origin: { type: 'root' }, workspace: null }] }
+				: session);
+			await fixture.controller.whenSettled();
+			fixture.editor.set(workingSet('main', 'main.ts'));
+			fixture.sessions.openSession('a', 'peer');
+			await fixture.controller.whenSettled();
+			fixture.editor.set(workingSet('peer', 'peer.ts'));
+			fixture.sessions.openSession('a', 'a-thread');
+			await fixture.controller.whenSettled();
+			assert.deepEqual(fixture.editor.current, workingSet('chat:["a","a-thread"]', 'main.ts'));
+			fixture.sessions.openSession('a', 'peer');
+			await fixture.controller.whenSettled();
+			assert.deepEqual(fixture.editor.current, workingSet('chat:["a","peer"]', 'peer.ts'));
+		});
+	}
 	test('restoring an older Code working set removes page tabs and retains the selected file', async () => {
 		const saved = workingSet('session:b', 'retained.ts');
 		const file = saved.groups[0]!.editors[0]!;
@@ -372,6 +422,7 @@ class TestCatalog extends Disposable {
 }
 
 class LayoutFixture extends Disposable {
+	public readonly configuration = this._register(new InMemoryConfigurationService());
 	private readonly storageEnvironment = new JSDOM('', { url: 'https://sessions-layout.test' });
 	public readonly services = this._register(new InstantiationService());
 	public readonly storage = this._register(new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, workspaceId: 'sessions', backend: this.storageEnvironment.window.localStorage, flushInterval: 0 }));
@@ -386,6 +437,7 @@ class LayoutFixture extends Disposable {
 	public panelView: string | undefined;
 	public sessionsVisible = true;
 	public editorVisible = false;
+	public auxiliaryVisible = false;
 	public followWorkspace = true;
 	public readonly sessions: SessionsService;
 	public readonly controller: WorkingSetController;
@@ -396,6 +448,7 @@ class LayoutFixture extends Disposable {
 			this.storage.store(storageKey, JSON.stringify(saved), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		}
 		this.services.registerInstance(IStorageService, this.storage);
+		this.services.registerInstance(IConfigurationService, this.configuration);
 		this.services.registerInstance(ILifecycleService, this.lifecycle);
 		this.services.registerInstance(ISessionsManagementService, this.catalog as unknown as ISessionsManagementService);
 		this.sessions = this._register(this.services.createInstance(SessionsService));
@@ -405,9 +458,9 @@ class LayoutFixture extends Disposable {
 		this.services.registerInstance(IWorkspaceContextService, this.workspace);
 		this.services.registerInstance(ILayoutService, {
 			onDidChangePartVisibility: this.partsChanged.event,
-			isPartVisible: (part: string) => part === 'sessions' ? this.sessionsVisible : part === 'panel' ? this.panelVisible : this.editorVisible,
-			showPart: () => { this.editorVisible = true; },
-			hidePart: () => { this.editorVisible = false; },
+			isPartVisible: (part: string) => part === 'sessions' ? this.sessionsVisible : part === 'panel' ? this.panelVisible : part === 'auxiliarybar' ? this.auxiliaryVisible : this.editorVisible,
+			showPart: (part: string) => { if (part === 'auxiliarybar') { this.auxiliaryVisible = true; } else { this.editorVisible = true; } },
+			hidePart: (part: string) => { if (part === 'auxiliarybar') { this.auxiliaryVisible = false; } else { this.editorVisible = false; } },
 		} as unknown as ILayoutService);
 		this.services.registerInstance(INotificationService, { error: (message: string) => this.errors.push(message) } as unknown as INotificationService);
 		this._register(this.sessions.onDidChange(() => {

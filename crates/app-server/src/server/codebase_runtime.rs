@@ -26,6 +26,11 @@ pub(super) enum CodebaseRuntimeState {
     Failed,
 }
 
+enum SourceScan {
+    ManualRebuild,
+    FilesystemReconcile,
+}
+
 pub(super) struct CodebaseRuntime {
     index: Arc<Codebase>,
     retrieval: ash_codebase::CodebaseRetrievalService,
@@ -86,6 +91,10 @@ impl CodebaseRuntime {
     }
 
     pub fn rebuild(&self) -> Result<CodebaseSnapshot, CodebaseError> {
+        self.scan(SourceScan::ManualRebuild)
+    }
+
+    fn scan(&self, reason: SourceScan) -> Result<CodebaseSnapshot, CodebaseError> {
         let _operation = self
             .operation
             .lock()
@@ -97,7 +106,11 @@ impl CodebaseRuntime {
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = CodebaseRuntimeState::Indexing {
             last_ready: last_ready.clone(),
         };
-        match self.index.rebuild() {
+        let result = match reason {
+            SourceScan::ManualRebuild => self.index.rebuild(),
+            SourceScan::FilesystemReconcile => self.index.reconcile(),
+        };
+        match result {
             Ok(snapshot) => {
                 *self
                     .state
@@ -121,7 +134,9 @@ impl CodebaseRuntime {
     pub fn apply_watcher_event(&self, event: &FileWatcherEvent) {
         let result = match event {
             FileWatcherEvent::PathsChanged { paths } => self.refresh_paths(paths),
-            FileWatcherEvent::RescanRequired { .. } => self.rebuild().map(|_| ()),
+            FileWatcherEvent::RescanRequired { .. } => {
+                self.scan(SourceScan::FilesystemReconcile).map(|_| ())
+            }
         };
         if let Err(error) = result {
             log::warn!("codebase refresh failed: {error}");

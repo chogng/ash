@@ -1,4 +1,4 @@
-import type { IResourceEditorInput } from '../editor.js';
+import { EditorInputCapabilities, type IResourceEditorInput } from '../editor.js';
 import { extUri, type IExtUri } from '../../../base/common/resources.js';
 import { EditorInput } from './editorInput.js';
 
@@ -114,7 +114,7 @@ export class EditorGroupModel {
 
 	public openEditor(input: IResourceEditorInput, options: IEditorOpenOptions = {}): IEditorOpenResult {
 		const existing = this.editors[this.indexOf(input)];
-		const replaced = existing ?? (this.editorLimit === 1 ? this.editors[0] : options.pinned === false ? this.editors.find(editor => editor.preview) : undefined);
+		const replaced = this.getEditorToReplace(input, options);
 		const editor: EditorEntry = {
 			input,
 			instanceId: existing?.instanceId ?? options.instanceId ?? nextEditorInstanceId(),
@@ -136,6 +136,20 @@ export class EditorGroupModel {
 			this.editors.splice(index, 0, editor);
 		}
 		return { editor, replaced };
+	}
+
+	/** Opening confirmation and pane commit must agree on which input the limit can evict. */
+	public getEditorToReplace(input: IResourceEditorInput, options: IEditorOpenOptions = {}): IEditorGroupModelEntry | undefined {
+		const existing = this.findEditor(input);
+		if (existing) {
+			return existing;
+		}
+		if (this.editorLimit === 1) {
+			const excluded = (candidate: IResourceEditorInput): boolean =>
+				((candidate.capabilities ?? EditorInputCapabilities.None) & EditorInputCapabilities.ExcludeFromEditorLimit) !== 0;
+			return excluded(input) ? undefined : this.editors.find(editor => !excluded(editor.input));
+		}
+		return options.pinned === false ? this.editors.find(editor => editor.preview) : undefined;
 	}
 
 	public updateEditor(input: IResourceEditorInput, options: IEditorOpenOptions): void {

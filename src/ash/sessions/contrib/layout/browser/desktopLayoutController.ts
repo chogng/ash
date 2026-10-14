@@ -50,7 +50,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 		@ILifecycleService lifecycle: ILifecycleService,
 		@IInstantiationService instantiation: IInstantiationService,
 	) {
-		super(panes, sessions, management, editor, editors, workspace, layout, storage, notifications, lifecycle);
+		super(panes, sessions, management, editor, editors, workspace, layout, storage, notifications, lifecycle, instantiation);
 		this.tabs = this._register(instantiation.createInstance(DesktopDockedTabsCoordinator, pageGroupId));
 		this.detailPanel = instantiation.createInstance(DesktopDetailPanelCoordinator);
 		const lastOpen = storage.get(lastOpenKey, StorageScope.PROFILE);

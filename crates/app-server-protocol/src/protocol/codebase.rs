@@ -4,7 +4,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::path::PathBuf;
 
-/// Lifecycle state of the directory-side codebase projection.
+/// Lifecycle state of the directory's source index, independent of embedding work.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum CodebaseStateDto {
@@ -15,11 +15,51 @@ pub enum CodebaseStateDto {
     Failed,
 }
 
-/// Published counters for the current or most recent usable codebase generation.
+/// Background lifecycle of the bound embedding index.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum CodebaseEmbeddingStateDto {
+    Idle,
+    Indexing,
+    Ready,
+    Stale,
+    Cancelled,
+    Failed,
+}
+
+/// A configured model is not proof that its runtime or its vector index is usable.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum CodebaseEmbeddingStatusDto {
+    /// No semantic models were selected and no host-supplied runtime is bound.
+    Disabled,
+    /// Semantic models were selected, but the embedding/rerank runtime could not be bound.
+    Unavailable,
+    /// A runtime is bound; only Ready with the current source generation has current vectors.
+    Active {
+        state: CodebaseEmbeddingStateDto,
+        #[ts(type = "number")]
+        target_generation: u64,
+        #[ts(type = "number | null")]
+        published_generation: Option<u64>,
+        total_chunk_count: usize,
+        processed_chunk_count: usize,
+        reused_embedding_count: usize,
+        embedded_chunk_count: usize,
+        last_error_code: Option<String>,
+    },
+}
+
+/// Source counters and independent embedding readiness for the active directory.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct CodebaseStatusResult {
-    pub state: CodebaseStateDto,
+    pub source_state: CodebaseStateDto,
+    pub embedding: CodebaseEmbeddingStatusDto,
     pub root_id: String,
     #[ts(type = "number")]
     pub generation: u64,

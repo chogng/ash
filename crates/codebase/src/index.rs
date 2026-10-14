@@ -21,6 +21,7 @@ use crate::CodebaseOverlayDocument;
 use crate::CodebaseOverlaySnapshot;
 use crate::CodebaseQuery;
 use crate::CodebaseSnapshot;
+use crate::DirScan;
 use crate::IndexRootId;
 use crate::IndexedChunkReference;
 use crate::IndexedSourceReference;
@@ -110,8 +111,21 @@ impl Codebase {
         self.store.replace_sources(&self.root_id, scan)
     }
 
-    /// Applies coarse watcher hints, rebuilding when a directory-level change cannot be safely
-    /// represented as exact file updates.
+    /// Rescans current source facts, retaining the generation when nothing changed.
+    ///
+    /// The owning host serializes source mutations, as for incremental refresh. Coarse
+    /// filesystem hints do not by themselves invalidate a matching vector or cloud index.
+    pub fn reconcile(&self) -> Result<CodebaseSnapshot, CodebaseError> {
+        let scan = scan_dir(&self.root, &self.limits)?;
+        let manifest = self.store.manifest(&self.root_id)?;
+        if manifest.snapshot.generation > 0 && scan_matches_manifest(&scan, &manifest) {
+            return Ok(manifest.snapshot);
+        }
+        self.store.replace_sources(&self.root_id, scan)
+    }
+
+    /// Applies coarse watcher hints, reconciling a full scan when a directory-level change
+    /// cannot be safely represented as exact file updates.
     pub fn refresh_observed_paths(
         &self,
         observed_paths: &[PathBuf],
@@ -128,35 +142,35 @@ impl Codebase {
 
         let snapshot = self.snapshot()?;
         if snapshot.file_limit_hit || snapshot.source_bytes_limit_hit {
-            return self.rebuild().map(RefreshOutcome::Rebuilt);
+            return self.reconcile().map(RefreshOutcome::Rebuilt);
         }
 
         let mut updates = Vec::new();
         for relative_path in relative_paths {
             if relative_path.as_os_str().is_empty() || is_ignore_control_path(&relative_path) {
-                return self.rebuild().map(RefreshOutcome::Rebuilt);
+                return self.reconcile().map(RefreshOutcome::Rebuilt);
             }
             if is_hard_excluded_path(&relative_path) {
                 continue;
             }
             let candidate = self.root.canonical_path().join(&relative_path);
             if candidate.is_dir() {
-                return self.rebuild().map(RefreshOutcome::Rebuilt);
+                return self.reconcile().map(RefreshOutcome::Rebuilt);
             }
             if candidate.is_file() {
                 let Some(stored) = self.store.source(&relative_path)? else {
-                    return self.rebuild().map(RefreshOutcome::Rebuilt);
+                    return self.reconcile().map(RefreshOutcome::Rebuilt);
                 };
                 let Some(file) =
                     prepare_relative_file(&self.root, relative_path.clone(), &self.limits)?
                 else {
-                    return self.rebuild().map(RefreshOutcome::Rebuilt);
+                    return self.reconcile().map(RefreshOutcome::Rebuilt);
                 };
                 if stored.revision == file.source_revision {
                     continue;
                 }
                 if exceeds_source_limit(&snapshot, &stored, file.source_bytes, &self.limits) {
-                    return self.rebuild().map(RefreshOutcome::Rebuilt);
+                    return self.reconcile().map(RefreshOutcome::Rebuilt);
                 }
                 updates.push(FileUpdate::Upsert(file));
                 continue;
@@ -164,7 +178,7 @@ impl Codebase {
             if self.store.source(&relative_path)?.is_some() {
                 updates.push(FileUpdate::Remove(relative_path));
             } else if self.store.has_descendants(&relative_path)? {
-                return self.rebuild().map(RefreshOutcome::Rebuilt);
+                return self.reconcile().map(RefreshOutcome::Rebuilt);
             }
         }
         if updates.is_empty() {
@@ -378,6 +392,74 @@ impl Codebase {
             Err(CodebaseError::StorageRootMismatch)
         }
     }
+}
+
+fn scan_matches_manifest(scan: &DirScan, manifest: &CodebaseManifest) -> bool {
+    let snapshot = &manifest.snapshot;
+    let chunk_count: usize = scan.files.iter().map(|file| file.chunks.len()).sum();
+    if snapshot.indexed_file_count != scan.files.len()
+        || manifest.sources.len() != scan.files.len()
+        || snapshot.indexed_chunk_count != chunk_count
+        || manifest.chunks.len() != chunk_count
+        || snapshot.indexed_source_bytes
+            != scan
+                .files
+                .iter()
+                .map(|file| file.source_bytes)
+                .sum::<usize>()
+        || snapshot.skipped_file_count != scan.skipped_file_count
+        || snapshot.truncated_file_count
+            != scan
+                .files
+                .iter()
+                .filter(|file| file.chunk_limit_hit)
+                .count()
+        || snapshot.file_limit_hit != scan.file_limit_hit
+        || snapshot.source_bytes_limit_hit != scan.source_bytes_limit_hit
+    {
+        return false;
+    }
+
+    // Store manifests and filesystem scans can order paths differently. Compare by
+    // source identity and byte position, including chunker output and coverage limits.
+    let sources: BTreeMap<_, _> = manifest
+        .sources
+        .iter()
+        .map(|source| (&source.relative_path, source))
+        .collect();
+    let chunks: BTreeMap<_, _> = manifest
+        .chunks
+        .iter()
+        .map(|chunk| {
+            (
+                (
+                    &chunk.reference.relative_path,
+                    chunk.reference.span.start_byte,
+                ),
+                chunk,
+            )
+        })
+        .collect();
+    scan.files.iter().all(|file| {
+        sources.get(&file.relative_path).is_some_and(|source| {
+            source.root_id == snapshot.root_id
+                && source.source_revision == file.source_revision
+                && source.language == file.language
+                && source.source_bytes == file.source_bytes
+        }) && file.chunks.iter().all(|chunk| {
+            chunks
+                .get(&(&file.relative_path, chunk.span.start_byte))
+                .is_some_and(|indexed| {
+                    let reference = &indexed.reference;
+                    reference.root_id == snapshot.root_id
+                        && reference.source_revision == file.source_revision
+                        && reference.key == chunk.key
+                        && reference.content_hash == chunk.content_hash
+                        && reference.span == chunk.span
+                        && indexed.language == file.language
+                })
+        })
+    })
 }
 
 fn validate_overlay_path(relative_path: &Path) -> Result<(), CodebaseError> {

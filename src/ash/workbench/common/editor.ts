@@ -176,6 +176,7 @@ export const EditorResourceAccessor = new EditorResourceAccessorImpl();
 /** Input-owned restrictions enforced consistently by editor commands and tabs. */
 export const enum EditorInputCapabilities {
 	None = 0,
+	ExcludeFromEditorLimit = 1 << 12,
 	CannotClose = 1 << 13,
 }
 

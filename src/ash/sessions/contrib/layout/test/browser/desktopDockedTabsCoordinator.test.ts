@@ -24,7 +24,7 @@ suite('DesktopDockedTabsCoordinator', () => {
 		assert.deepEqual(fixture.documents.inputs.map(input => input.resource.scheme), ['ash-sessions-files', 'ash-session-changes']);
 		assert.deepEqual(fixture.pages.inputs.map(input => input.resource.scheme), ['ash-trace']);
 		assert.ok(fixture.opened.every(open => open.target === fixture.documents.id));
-		assert.ok(fixture.documents.inputs.every(input => input.capabilities === EditorInputCapabilities.CannotClose));
+		assert.ok(fixture.documents.inputs.every(input => input.capabilities === (EditorInputCapabilities.CannotClose | EditorInputCapabilities.ExcludeFromEditorLimit)));
 	});
 
 	test('disposing during the first managed open prevents subsequent opens', async () => {

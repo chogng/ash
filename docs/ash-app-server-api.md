@@ -723,8 +723,11 @@ read result 的 `error` 返回。完整 ownership 与当前 UI 限制见
 ### Directory 代码索引
 
 `initialize.capabilities.codebase` 表示 local composition 可以在当前 directory authority 内建立
-本地代码索引。`codebase/status` 返回 `empty/indexing/ready/stale/failed` 和 published
-generation counters；`codebase/search` 接受最多 8 KiB query 与 1–100 个结果上限，
+本地代码索引。`codebase/status` 的 `sourceState` 返回源码索引的
+`empty/indexing/ready/stale/failed`，计数和 `generation` 只描述源码索引。独立的 `embedding`
+返回 `disabled/unavailable/active`；active runtime 再返回向量任务状态、目标／已发布 generation、
+处理进度和非敏感错误码。embedding 的构建或失败不改变源码索引状态。
+`codebase/search` 接受最多 8 KiB query 与 1–100 个结果上限，
 返回 root-relative path、language、source revision、chunk key/hash、UTF-8 byte/line span、当前
 验证过的 content 与 lexical score。初始 generation 尚未发布时返回 `CodebaseNotReady`。
 
@@ -745,8 +748,9 @@ declarations。同一 dirty path 的磁盘 symbol、FTS、vector 和 cloud candi
 释放 overlay。响应只包含 generation 和 dirty document count，不泄露正文。
 
 `codebase/rebuild` 是 global-exclusive、同步 manual reconcile；通常由 watcher-driven
-runtime 自动维护，不应在每次查询前调用。该能力不创建 embedding/network 请求，也不等价于产品
-文字/正则搜索。完整 chunking、持久化、stale gate 与隐私边界见
+runtime 自动维护，不应在每次查询前调用。源码 reconcile 完成后，有已绑定的本机语义模型时会
+调度后台 embedding 刷新；响应不等待向量发布。它不等价于产品文字/正则搜索。
+完整 chunking、持久化、stale gate 与隐私边界见
 [`codebase.md`](codebase.md)。
 
 `initialize.capabilities.cloudCodebase` 表示 host 已注入非空 provider registry；当前 `Dir`

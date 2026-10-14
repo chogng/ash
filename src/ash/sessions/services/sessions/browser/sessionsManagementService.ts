@@ -36,6 +36,14 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	constructor(private readonly provider: ISessionsProvider) {
 		super();
 		this._register(provider);
+		if (provider.connectionStatus) {
+			this._register(provider.connectionStatus.onDidChange(status => {
+				if (!this.initializePromise || status === 'connected') { return; }
+				this._state = status === 'connecting' ? 'loading' : 'error';
+				this._error = status === 'disconnected' ? localize('sessions.connection.disconnected', 'The session host is disconnected. Reconnect to load your sessions.') : undefined;
+				this._onDidChange.fire();
+			}));
+		}
 		this._register(provider.onDidChangeCatalog(() => {
 			if (this.initializePromise) this.initializePromise = this.loadSessions();
 		}));
@@ -115,9 +123,9 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		await this.provider.interrupt(session, threadId);
 	}
 
-	createUntitledSession(title = "New Chat"): IUntitledChatSession {
+	createUntitledSession(title = "New Chat", workspace: SessionWorkspaceSelection = this.provider.currentWorkspace()): IUntitledChatSession {
 		this.selectionRevision++;
-		const session = { untitledSessionId: createUuid(), title, model: undefined, agent: undefined, workspace: this.provider.currentWorkspace() };
+		const session = { untitledSessionId: createUuid(), title, model: undefined, agent: undefined, workspace };
 		this._untitledSessions = [session, ...this._untitledSessions];
 		this._activeUntitledSessionId = session.untitledSessionId;
 		this._error = undefined;

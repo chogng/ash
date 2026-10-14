@@ -5,6 +5,7 @@ use std::os::windows::io::BorrowedHandle;
 use std::os::windows::io::FromRawHandle;
 use std::os::windows::io::OwnedHandle;
 use std::os::windows::io::RawHandle;
+use std::os::windows::process::CommandExt;
 use std::sync::Mutex;
 use tokio::process::Child;
 use tokio::process::Command;
@@ -92,13 +93,7 @@ impl JobObject {
     /// failure is returned to the caller; an unassigned child is never resumed. Dropping the
     /// returned child kills its root, while dropping this job also kills its descendants.
     pub fn spawn_contained(&self, command: &mut Command) -> io::Result<Child> {
-        let preserved = self
-            .preserve_descendants
-            .lock()
-            .map_err(|_| io::Error::other("job state lock poisoned"))?;
-        if *preserved {
-            return Err(io::Error::other("cannot spawn in a released process job"));
-        }
+        let _preserved = self.admit_spawn()?;
         command
             .creation_flags(CREATE_SUSPENDED | CREATE_NO_WINDOW)
             .kill_on_drop(true);
@@ -107,15 +102,7 @@ impl JobObject {
             let handle = child
                 .raw_handle()
                 .ok_or_else(|| io::Error::other("missing child process handle"))?;
-            self.assign_process(handle)?;
-            // The child owns this handle and remains suspended until the job assignment succeeds.
-            let status = unsafe { nt_resume_process(handle.cast()) };
-            if !NT_SUCCESS(status) {
-                return Err(io::Error::other(format!(
-                    "failed to resume contained process: NTSTATUS {status:#x}"
-                )));
-            }
-            Ok(())
+            self.assign_and_resume(handle)
         })();
         if let Err(error) = result {
             // Do not leave a suspended process alive if setup fails. Tokio reaps it on drop.
@@ -123,6 +110,46 @@ impl JobObject {
             return Err(error);
         }
         Ok(child)
+    }
+
+    /// Starts a synchronous child under the same suspend/assign/resume fence. Callers retain
+    /// this job with the child; terminating it also releases descendants holding inherited IO.
+    pub fn spawn_contained_std(
+        &self,
+        command: &mut std::process::Command,
+    ) -> io::Result<std::process::Child> {
+        let _preserved = self.admit_spawn()?;
+        command.creation_flags(CREATE_SUSPENDED | CREATE_NO_WINDOW);
+        let mut child = command.spawn()?;
+        if let Err(error) = self.assign_and_resume(child.as_raw_handle()) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(error);
+        }
+        Ok(child)
+    }
+
+    fn admit_spawn(&self) -> io::Result<std::sync::MutexGuard<'_, bool>> {
+        let preserved = self
+            .preserve_descendants
+            .lock()
+            .map_err(|_| io::Error::other("job state lock poisoned"))?;
+        if *preserved {
+            return Err(io::Error::other("cannot spawn in a released process job"));
+        }
+        Ok(preserved)
+    }
+
+    fn assign_and_resume(&self, handle: RawHandle) -> io::Result<()> {
+        self.assign_process(handle)?;
+        // The caller owns this suspended process handle until setup succeeds or it is reaped.
+        let status = unsafe { nt_resume_process(handle.cast()) };
+        if !NT_SUCCESS(status) {
+            return Err(io::Error::other(format!(
+                "failed to resume contained process: NTSTATUS {status:#x}"
+            )));
+        }
+        Ok(())
     }
 
     /// Allows contained descendants to keep running after the root exits normally.

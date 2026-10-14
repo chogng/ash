@@ -28,6 +28,71 @@ fn memory_index(directory: &TempDir) -> Codebase {
 }
 
 #[test]
+fn reconcile_retains_generation_for_identical_sources_and_detects_changes() {
+    let directory = dir();
+    let source = directory.path().join("lib.rs");
+    fs::write(&source, "pub fn original() {}\n").unwrap();
+    let index = memory_index(&directory);
+    let initial = index.reconcile().unwrap();
+    assert_eq!(initial.generation, 1);
+    assert_eq!(index.reconcile().unwrap(), initial);
+
+    fs::write(directory.path().join(".git/metadata"), "ignored metadata").unwrap();
+    assert_eq!(index.reconcile().unwrap(), initial);
+    let hint = index
+        .refresh_observed_paths(&[directory.path().to_path_buf()])
+        .unwrap();
+    assert_eq!(hint, RefreshOutcome::Rebuilt(initial.clone()));
+
+    fs::write(&source, "pub fn updated() {}\n").unwrap();
+    let updated = index.reconcile().unwrap();
+    assert_eq!(updated.generation, initial.generation + 1);
+    assert_eq!(
+        index.search(&CodebaseQuery::new("updated")).unwrap().len(),
+        1
+    );
+    fs::write(directory.path().join("added.rs"), "pub fn added() {}\n").unwrap();
+    let added = index.reconcile().unwrap();
+    assert_eq!(added.generation, updated.generation + 1);
+    assert_eq!(added.indexed_file_count, 2);
+    fs::remove_file(directory.path().join("added.rs")).unwrap();
+    let removed = index.reconcile().unwrap();
+    assert_eq!(removed.generation, added.generation + 1);
+    assert_eq!(removed.indexed_file_count, 1);
+
+    // Explicit rebuild remains a new publication even when source facts match.
+    assert_eq!(index.rebuild().unwrap().generation, removed.generation + 1);
+}
+
+#[test]
+fn reconcile_publishes_coverage_changes_without_changing_the_indexed_source() {
+    let directory = dir();
+    fs::write(directory.path().join("a.rs"), "fn indexed() {}\n").unwrap();
+    let index = Codebase::open_memory(
+        Dir::open_local(directory.path()).unwrap(),
+        CodebaseLimits {
+            max_files: 1,
+            ..CodebaseLimits::default()
+        },
+    )
+    .unwrap();
+    let initial = index.reconcile().unwrap();
+    let original_manifest = index.manifest().unwrap();
+    fs::write(directory.path().join("z.rs"), "fn omitted() {}\n").unwrap();
+    let limited = index.reconcile().unwrap();
+    assert_eq!(limited.generation, initial.generation + 1);
+    assert!(limited.file_limit_hit);
+    assert_eq!(limited.skipped_file_count, 1);
+    assert_eq!(index.manifest().unwrap().sources, original_manifest.sources);
+    assert_eq!(index.reconcile().unwrap(), limited);
+    fs::remove_file(directory.path().join("z.rs")).unwrap();
+    let restored = index.reconcile().unwrap();
+    assert_eq!(restored.generation, limited.generation + 1);
+    assert!(!restored.file_limit_hit);
+    assert_eq!(restored.skipped_file_count, 0);
+}
+
+#[test]
 fn rebuild_indexes_structural_chunks_and_searches_literal_text() {
     let directory = dir();
     fs::write(

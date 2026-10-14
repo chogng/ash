@@ -1,20 +1,9 @@
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
-
-export interface CodebaseModelReference {
-	readonly provider: string;
-	readonly model: string;
-}
-
-export interface CodebaseProviderConfiguration {
-	readonly provider: string;
-	readonly baseUrl?: string | null;
-	readonly maxOutputTokens?: number | null;
-	readonly modelContext?: Readonly<Record<string, { readonly contextWindow?: number | null; readonly longContext?: boolean | null; readonly autoCompactTokenLimit?: number | null; }>>;
-}
+import type { ModelRef } from "../../agentHost/common/agentModels.js";
 
 export interface CodebaseModels {
-	readonly embeddingModel: CodebaseModelReference;
-	readonly rerankModel?: CodebaseModelReference | null;
+	readonly embeddingModel: ModelRef;
+	readonly rerankModel?: ModelRef | null;
 }
 
 export type CodebaseAutomaticContext = "off" | "firstInvocation";
@@ -25,7 +14,6 @@ export const CodebaseSettingId = "codebase";
 export interface CodebaseConfigurationSnapshot {
 	readonly revision: number;
 	readonly generation: number;
-	readonly providers: Readonly<Record<string, CodebaseProviderConfiguration>>;
 	readonly codebase: {
 		readonly models?: CodebaseModels | null;
 		readonly automaticContext: CodebaseAutomaticContext;
@@ -38,8 +26,26 @@ export interface CodebaseConfigurationCommandResult {
 	readonly disposition: "updated" | "replayed";
 }
 
+/** Runtime binding and vector publication are independent of the source index. */
+export type CodebaseEmbeddingStatus =
+	| { readonly type: "disabled"; }
+	| { readonly type: "unavailable"; }
+	| {
+		readonly type: "active";
+		readonly state: "idle" | "indexing" | "ready" | "stale" | "cancelled" | "failed";
+		readonly targetGeneration: number;
+		readonly publishedGeneration: number | null;
+		readonly totalChunkCount: number;
+		readonly processedChunkCount: number;
+		readonly reusedEmbeddingCount: number;
+		readonly embeddedChunkCount: number;
+		readonly lastErrorCode: string | null;
+	};
+
 export interface CodebaseStatus {
-	readonly state: "empty" | "indexing" | "ready" | "stale" | "failed";
+	/** Source scanning and publication only; embedding failures do not change this state. */
+	readonly sourceState: "empty" | "indexing" | "ready" | "stale" | "failed";
+	readonly embedding: CodebaseEmbeddingStatus;
 	readonly rootId: string;
 	readonly generation: number;
 	readonly indexedFileCount: number;
@@ -51,10 +57,11 @@ export interface CodebaseStatus {
 	readonly sourceBytesLimitHit: boolean;
 }
 
-/** Frontend-owned semantic codebase configuration contract for the active Workspace. */
+/** Client contract for backend-owned Codebase policy and the active directory's index status.
+ * Provider connections and credentials are managed by their configuration and model owners.
+ */
 export interface ICodebaseService {
 	readConfig(): Promise<CodebaseConfigurationSnapshot>;
-	configureProvider(config: CodebaseProviderConfiguration, expectedRevision: number): Promise<CodebaseConfigurationCommandResult>;
 	configure(models: CodebaseModels | undefined, automaticContext: CodebaseAutomaticContext, expectedRevision: number): Promise<CodebaseConfigurationCommandResult>;
 	status(): Promise<CodebaseStatus>;
 }

@@ -378,6 +378,11 @@ fn draw_summary(
                     Some(ash_protocol::SessionExecutionTarget::Ssh { host, root }) => {
                         format!("{host}:{root}")
                     }
+                    Some(ash_protocol::SessionExecutionTarget::Provider {
+                        provider_id,
+                        root,
+                        ..
+                    }) => format!("{provider_id}:{root}"),
                     None => context.localize("No project").into_owned(),
                 };
                 lines.push(Line::styled(project, muted));

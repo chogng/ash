@@ -421,6 +421,38 @@ function createManagement(fake: ReturnType<typeof sessionHost>): SessionsManagem
 	return new SessionsManagementService(createProvider(fake));
 }
 
+test('connection transitions keep the catalog unavailable until provider reload completes', async () => {
+	const fake = sessionHost([session('one', 'thread')]);
+	using service = createManagement(fake);
+	await service.initialize();
+	assert.equal(service.state, 'ready');
+	fake.setConnectionState('stopped');
+	assert.equal(service.state, 'error');
+	assert.match(service.error ?? '', /disconnected/);
+	fake.setConnectionState('starting');
+	assert.equal(service.state, 'loading');
+	fake.setConnectionState('ready');
+	await new Promise(resolve => setTimeout(resolve, 0));
+	assert.equal(service.state, 'ready');
+	assert.equal(service.sessions.length, 1);
+});
+
+test('container drafts preserve their Provider target through first send', async () => {
+	const fake = sessionHost([]);
+	fake.host.session.create = async params => {
+		const created = { ...session('container', 'container-thread'), executionTarget: params.executionTarget };
+		fake.sessions.push(created);
+		return { session: created, agentTree: { roots: [] } };
+	};
+	using service = createManagement(fake);
+	await service.initialize();
+	const target = { type: 'provider' as const, providerId: 'ash.dev-containers', workspace: 'C:\\work', root: '/workspace' };
+	const draft = service.createUntitledSession('Container', target);
+	const active = await service.materializeUntitledSession(draft.untitledSessionId);
+	assert.deepEqual(active.session.workspace?.runtime, { providerId: target.providerId, workspace: target.workspace });
+	assert.equal(active.session.workspace?.root, target.root);
+});
+
 test("management initializes the catalog from provider-owned Session mapping", async () => {
 	const fake = sessionHost([session("session-1", "thread-1"), session("session-2", "thread-2")]);
 	using service = createManagement(fake);

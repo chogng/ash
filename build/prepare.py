@@ -342,6 +342,7 @@ def development_binary_inputs(spec: TargetSpec) -> dict[str, None]:
             "ash-code-mode-host",
             "ash-github-authentication",
             "ash-remote-ssh-extension",
+            "ash-dev-container-provider",
             "ash-voice-host",
             "ash-collaboration-server",
         ]
@@ -489,6 +490,7 @@ def prepare_development_package(args: argparse.Namespace, *, root: Path = ROOT) 
             windows_sandbox_service_binary=binaries.get("ash-windows-sandbox-service"),
             github_authentication_binary=binaries["ash-github-authentication"],
             remote_ssh_extension_binary=binaries["ash-remote-ssh-extension"],
+            dev_container_provider_binary=binaries["ash-dev-container-provider"],
             remote_host_binary=binaries["ash-remote-host"],
             voice_host_binary=binaries["ash-voice-host"],
             collaboration_server_binary=binaries["ash-collaboration-server"],

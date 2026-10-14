@@ -1,5 +1,6 @@
 use super::Catalogs;
 use super::PendingRemoteRequests;
+use super::RemoteKey;
 use super::RemotePending;
 use super::RemoteSessionIndex;
 use super::fail_remote_requests;
@@ -25,9 +26,8 @@ use std::collections::VecDeque;
 use std::ffi::OsString;
 use std::io;
 use std::io::BufReader;
-use std::process::Child;
+use std::path::PathBuf;
 use std::process::Command;
-use std::process::Stdio;
 use std::sync::Arc;
 use std::sync::Condvar;
 use std::sync::Mutex;
@@ -36,6 +36,44 @@ use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
+
+/// Transport launch metadata is selected by the profile's authority, never renderer arguments.
+pub(crate) enum RemoteEndpoint {
+    Ssh(RemoteProfile),
+    Provider {
+        key: RemoteKey,
+        executable: PathBuf,
+        authority: Arc<crate::session_runtime_provider::SessionRuntimeProvider>,
+        generation: u64,
+        admission: ProviderConnectionAdmission,
+    },
+}
+
+pub(crate) enum ProviderConnectionAdmission {
+    Admitted,
+    Preparing(ash_async_utils::CancellationToken),
+}
+impl From<RemoteProfile> for RemoteEndpoint {
+    fn from(value: RemoteProfile) -> Self {
+        Self::Ssh(value)
+    }
+}
+impl RemoteEndpoint {
+    pub(super) fn key(&self) -> RemoteKey {
+        match self {
+            Self::Ssh(profile) => remote_key(profile),
+            Self::Provider { key, .. } => key.clone(),
+        }
+    }
+    pub(super) fn catalog_key(&self) -> RemoteKey {
+        match self {
+            Self::Ssh(profile) => {
+                RemoteKey::Ssh(profile.target().host().as_str().into(), String::new())
+            }
+            Self::Provider { key, .. } => key.clone(),
+        }
+    }
+}
 
 const REQUEST_CAPACITY: usize = 64;
 const CONTROL_CAPACITY: usize = 16;
@@ -149,17 +187,16 @@ impl RemoteLaunch {
 #[derive(Default)]
 struct RemoteProcess {
     closed: AtomicBool,
-    child: Mutex<Option<Child>>,
+    child: Mutex<Option<ash_sandboxing::ProcessHandle>>,
 }
 
 impl RemoteProcess {
-    fn install(&self, mut child: Child) -> io::Result<()> {
+    fn install(&self, mut child: ash_sandboxing::ProcessHandle) -> io::Result<()> {
         let mut owned = self.child.lock().unwrap();
         // Closing may win while process creation is in progress. Registration and close share
         // this lock so no newly created child can escape its renderer's lifetime.
         if self.closed.load(Ordering::Acquire) {
-            let _ = child.kill();
-            let _ = child.wait();
+            let _ = child.close();
             return Err(io::Error::from(io::ErrorKind::ConnectionAborted));
         }
         *owned = Some(child);
@@ -169,7 +206,7 @@ impl RemoteProcess {
     fn close(&self) {
         self.closed.store(true, Ordering::Release);
         if let Some(child) = self.child.lock().unwrap().as_mut() {
-            let _ = child.kill();
+            let _ = child.close();
         }
     }
 
@@ -177,7 +214,7 @@ impl RemoteProcess {
         self.close();
         let child = self.child.lock().unwrap().take();
         if let Some(mut child) = child {
-            let _ = child.wait();
+            let _ = child.close();
         }
     }
 }
@@ -195,7 +232,7 @@ pub(super) struct RemoteTarget {
 impl RemoteTarget {
     pub(super) fn start<'scope, 'env: 'scope>(
         scope: &'scope thread::Scope<'scope, 'env>,
-        profile: RemoteProfile,
+        profile: impl Into<RemoteEndpoint>,
         initialize: IncomingRequest,
         route_id: usize,
         launch: RemoteLaunch,
@@ -206,6 +243,7 @@ impl RemoteTarget {
         pending: RemotePending,
         requirements: &'static [ash_app_server_protocol::protocol::initialize::CapabilityRequirement],
     ) -> Self {
+        let profile = profile.into();
         let input = Arc::new(RemoteMailbox::default());
         let incoming = Arc::clone(&input);
         let process = Arc::new(RemoteProcess::default());
@@ -333,7 +371,7 @@ impl Drop for RemoteTarget {
 mod tests;
 
 fn run(
-    profile: RemoteProfile,
+    profile: RemoteEndpoint,
     initialize: IncomingRequest,
     route_id: usize,
     launch: RemoteLaunch,
@@ -346,27 +384,86 @@ fn run(
     pending: RemotePending,
     requirements: &[ash_app_server_protocol::protocol::initialize::CapabilityRequirement],
 ) -> io::Result<()> {
-    let mut child = Command::new(launch.executable)
-        .args([
-            "-T",
-            "-o",
-            "BatchMode=yes",
-            "-o",
-            "ConnectTimeout=10",
-            profile.target().host().as_str(),
-        ])
-        .arg(remote_app_server_command(&profile))
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()?;
-    let stdin = child.stdin.take().expect("SSH stdin was piped");
-    let stdout = child.stdout.take().expect("SSH stdout was piped");
+    let command = match &profile {
+        RemoteEndpoint::Ssh(profile) => {
+            let mut command = Command::new(launch.executable);
+            command
+                .args([
+                    "-T",
+                    "-o",
+                    "BatchMode=yes",
+                    "-o",
+                    "ConnectTimeout=10",
+                    profile.target().host().as_str(),
+                ])
+                .arg(remote_app_server_command(profile));
+            command
+        }
+        RemoteEndpoint::Provider {
+            key, executable, ..
+        } => {
+            let RemoteKey::Provider {
+                workspace, root, ..
+            } = key
+            else {
+                return Err(io::Error::other("invalid Provider launch"));
+            };
+            let mut command = Command::new(executable);
+            command.arg("connect").arg(workspace).arg(root);
+            command
+        }
+    };
+    let launch_command = ash_sandboxing::SandboxCommand::new(
+        command.get_program(),
+        command.get_args(),
+        std::env::current_dir()?,
+    );
+    let environment = match &profile {
+        RemoteEndpoint::Ssh(_) => std::env::vars().collect::<Vec<_>>(),
+        RemoteEndpoint::Provider { authority, .. } => authority.environment(),
+    };
+    let mut child = ash_sandboxing::PreparedCommand::unrestricted(&launch_command)
+        .spawn(&environment)
+        .map_err(io::Error::other)?;
+    let stdin = child.take_stdin().expect("remote stdin was piped");
+    let stdout = child.take_stdout().expect("remote stdout was piped");
+    let stderr = child.take_stderr().expect("remote stderr was piped");
     process.install(child)?;
     thread::scope(|scope| {
+        if let RemoteEndpoint::Provider {
+            key,
+            authority,
+            generation,
+            admission,
+            ..
+        } = &profile
+        {
+            scope.spawn(move || {
+                while !process.closed.load(Ordering::Acquire) {
+                    let authorized = match admission {
+                        ProviderConnectionAdmission::Admitted => {
+                            authority.is_admitted(&key.target())
+                        }
+                        ProviderConnectionAdmission::Preparing(token) => {
+                            !token.is_cancelled() && authority.is_enabled()
+                        }
+                    };
+                    if authority.generation() != *generation || !authorized {
+                        process.close();
+                        break;
+                    }
+                    thread::sleep(CLOSE_POLL_INTERVAL);
+                }
+            });
+        }
+        scope.spawn(move || {
+            let _ = io::copy(&mut std::io::BufReader::new(stderr), &mut io::stderr());
+        });
         let (initialized, handshake) = mpsc::channel();
         let reader_output = outbound.clone();
         let reader_pending = Arc::clone(&pending);
         let mut writer = JsonlWriter::new(stdin, DEFAULT_MAX_MESSAGE_BYTES);
+        let key = profile.key();
         let reader = scope.spawn(move || {
             let mut reader = JsonlReader::new(BufReader::new(stdout), DEFAULT_MAX_MESSAGE_BYTES);
             let result = (|| {
@@ -386,7 +483,7 @@ fn run(
             }
             read_remote_messages(
                 reader,
-                remote_key(&profile),
+                key,
                 route_id,
                 alive,
                 reader_output,

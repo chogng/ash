@@ -380,6 +380,10 @@ use crate::protocol::codebase::CodebaseChunkSpanDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::codebase::CodebaseDeploymentModeDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::codebase::CodebaseEmbeddingStateDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::codebase::CodebaseEmbeddingStatusDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::codebase::CodebaseRetrievalDegradationDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::codebase::CodebaseRetrievalHitDto;
@@ -1901,6 +1905,10 @@ use crate::protocol::session::SessionResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::session::SessionRewriteResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::session::SessionRuntimeCancelParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::session::SessionRuntimeParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::session::SessionSubscribeParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::session::SessionSubscribeResult;
@@ -2540,6 +2548,10 @@ use ash_protocol::SessionManagerActivity;
 use ash_protocol::SessionManagerInfo;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::SessionManagerStatus;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::SessionRuntimeRequest;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::SessionRuntimeResult;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::SessionStatus;
 #[cfg(any(test, feature = "export"))]
@@ -3451,6 +3463,17 @@ client_methods! {
         params: SessionCreateParams,
         response: SessionResult,
         serialization: GlobalExclusive,
+    },
+    SessionRuntimeInvoke => "session/runtime/invoke" {
+        params: SessionRuntimeParams,
+        response: SessionRuntimeResult,
+        serialization: None,
+        cancellation: "operationId",
+    },
+    SessionRuntimeCancel => "session/runtime/cancel" {
+        params: SessionRuntimeCancelParams,
+        response: (),
+        serialization: None,
     },
     AgentRead => "agent/read" {
         params: AgentReadParams,
@@ -6122,6 +6145,10 @@ typescript_bindings! {
     SessionExecutionTarget,
     ApprovalMode,
     SessionCreateParams,
+    SessionRuntimeParams,
+    SessionRuntimeCancelParams,
+    SessionRuntimeResult,
+    SessionRuntimeRequest,
     SessionReadParams,
     SessionTraceReadParams,
     SessionTraceReadResult,
@@ -6842,6 +6869,8 @@ typescript_bindings! {
     ContentSearchReadResult,
     ContentSearchCancelParams,
     CodebaseStateDto,
+    CodebaseEmbeddingStateDto,
+    CodebaseEmbeddingStatusDto,
     CodebaseStatusResult,
     GrepIndexStatusResult,
     GrepIndexDisableAndDeleteParams,

@@ -210,6 +210,18 @@ fn rpc_exposes_dir_index_preview_consent_sync_and_revoke() {
     assert_eq!(synced["result"]["deploymentMode"], "cloud");
     assert_eq!(synced["result"]["state"], "ready");
 
+    // Duplicate rescan and directory hints must not invalidate an unchanged publication.
+    local_index.apply_watcher_event(&ash_file_watcher::FileWatcherEvent::RescanRequired {
+        watched_paths: vec![dir.path().to_path_buf()],
+    });
+    local_index.apply_watcher_event(&ash_file_watcher::FileWatcherEvent::PathsChanged {
+        paths: vec![dir.path().to_path_buf()],
+    });
+    assert_eq!(
+        local_index.index().snapshot().unwrap().generation,
+        synced["result"]["syncedLocalGeneration"].as_u64().unwrap(),
+    );
+
     let retrieval = call(
         &server,
         &mut connection,
@@ -218,7 +230,53 @@ fn rpc_exposes_dir_index_preview_consent_sync_and_revoke() {
         serde_json::json!({"query": "cloud_mode_selection", "maxResults": 10}),
     );
     assert!(retrieval["result"]["hits"][0].get("origins").is_none());
-    assert_eq!(retrieval["result"]["degradations"], serde_json::json!([]));
+    assert_eq!(
+        retrieval["result"]["degradations"],
+        serde_json::json!([]),
+        "retrieval={retrieval}; synced={synced}; cloud status={:?}; cloud query={:?}",
+        server.cloud_codebase_service().unwrap().status(),
+        server.cloud_codebase_service().unwrap().query(
+            &ash_cloud_codebase::CloudCodebaseQuery::new(
+                "cloud_mode_selection",
+                std::num::NonZeroUsize::new(10).unwrap(),
+            )
+            .unwrap(),
+        ),
+    );
+
+    std::fs::write(dir.path().join("lib.rs"), "pub fn changed_source() {}\n").unwrap();
+    local_index.apply_watcher_event(&ash_file_watcher::FileWatcherEvent::PathsChanged {
+        paths: vec![dir.path().join("lib.rs")],
+    });
+    let stale = call(
+        &server,
+        &mut connection,
+        71,
+        "codebase/cloud/status",
+        serde_json::json!({}),
+    );
+    assert_eq!(stale["result"]["state"], "stale");
+    let changed = call(
+        &server,
+        &mut connection,
+        72,
+        "codebase/retrieve",
+        serde_json::json!({
+            "query": "changed_source", "maxResults": 10
+        }),
+    );
+    assert!(
+        changed["result"]["hits"][0]["content"]
+            .as_str()
+            .unwrap()
+            .contains("changed_source")
+    );
+    assert!(
+        changed["result"]["degradations"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!({"type": "cloudCodebaseUnavailable"}))
+    );
 
     let conflict = call(
         &server,

@@ -809,6 +809,7 @@ pub struct LocalProfileRuntime {
     extension_packages: Mutex<Option<ProfileExtensionsAuthority>>,
     github_authentication: Mutex<Option<Arc<GitHubAuthenticationRuntime>>>,
     editor_extension_policy: Arc<ash_core_plugins::EditorExtensionPolicy>,
+    pub(crate) session_runtimes: Arc<crate::session_runtime_provider::SessionRuntimeProvider>,
 }
 
 struct ProfileExtensionsAuthority {
@@ -925,8 +926,16 @@ impl LocalProfileRuntime {
                 open_error(format!("editor extension policy unavailable: {error:?}"))
             })?,
         );
+        let session_runtimes = crate::session_runtime_provider::SessionRuntimeProvider::open(
+            &profile_root,
+            editor_extension_policy.clone(),
+            crate::session_runtime_provider::product_installation(),
+            crate::managed::probe_runtime,
+        )
+        .map_err(open_error)?;
         Ok(Self {
             editor_extension_policy,
+            session_runtimes,
             diagnostics,
             telemetry,
             analytics: Arc::new(analytics::Analytics::default()),
@@ -1926,6 +1935,7 @@ pub fn open_app_server_with_codebase_providers(
         .map_err(OpenAppServerError)?;
     if let Some(profile) = &profile_runtime {
         server = server.with_message_history_store(profile.message_history.clone());
+        server.session_runtimes = Some(profile.session_runtimes.clone());
         server = server.with_automation_store(profile.automation_store());
         server = server.with_symphony_store(profile.symphony_store(), application_http.clone());
     } else {

@@ -1,5 +1,6 @@
 {
   "ash": {
+    "quickAccess.categoryTitle": "{0}: {1}",
     "workbench.editor.goToFile": "打开文件",
     "workbench.editor.startWorking": "开始工作",
     "workbench.editor.emptyHelp": "空编辑器组提供打开文件、在文件中搜索和显示所有命令三个入口。按 Tab 选择操作，按 Enter 或空格执行。快捷键提示会跟随你的绑定；未绑定快捷键的操作仍然可用。",

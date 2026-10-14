@@ -5,6 +5,8 @@ import { MenusRegistry, MenuId } from '../../../../platform/actions/common/actio
 import type { ContextKeyExpression } from '../../../../platform/contextkey/common/contextkey.js';
 import { localize2 } from '../../../../nls.js';
 import { Menus } from '../../../browser/menus.js';
+import { NEW_FILE_TAB_COMMAND_ID } from '../../../common/sessionCommands.js';
+import { SessionsCategories } from '../../../common/categories.js';
 import { VIEW_SESSION_CHANGES_COMMAND_ID } from '../../changes/common/changes.js';
 
 /** Callbacks retain the window's layout queue; tab actions do not own layout state. */
@@ -16,7 +18,7 @@ export function registerAddTabActions(
 	const registrations = new DisposableStore();
 	const actions = [
 		{
-			id: 'ash.sessions.openFilesTab',
+			id: NEW_FILE_TAB_COMMAND_ID,
 			title: localize2({ bundle: 'ash', key: 'sessions.layout.openFiles' }, 'Open Files tab'),
 			icon: Lxicon.files,
 			run: openFiles,
@@ -38,7 +40,7 @@ export function registerAddTabActions(
 			...([MenuId.CommandPalette, MenuId.MenubarViewMenu].map(id => ({
 				id,
 				item: {
-					command: { id: action.id, title: action.title },
+					command: { id: action.id, title: action.title, category: SessionsCategories.Sessions },
 					when,
 					order: order + 4,
 					group: '2_code_layout',

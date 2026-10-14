@@ -481,6 +481,14 @@ fn manager_items<'a>(
                                     root: root.clone(),
                                 }
                             }
+                            Some(ash_protocol::SessionExecutionTarget::Provider {
+                                provider_id,
+                                workspace,
+                                root,
+                            }) => SessionGroup::RemoteProject {
+                                host: format!("{provider_id}:{}", workspace.display()),
+                                root: root.clone(),
+                            },
                             None => SessionGroup::NoProject,
                         },
                         SessionGrouping::Model => match &session.model {

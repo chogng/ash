@@ -44,6 +44,19 @@ const TARGET: RemotePlatform =
     RemotePlatform::linux(RemoteArchitecture::X86_64, RemoteLinuxLibc::Gnu);
 
 #[test]
+fn a_transport_upload_reads_the_exact_verified_archive_from_its_start() {
+    use std::io::Read;
+    let root = tempfile::tempdir().unwrap();
+    let artifact = package_artifact(root.path(), PackageVariant::Canonical);
+    let mut file = artifact.open_verified().unwrap();
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes).unwrap();
+    assert_eq!(bytes, fs::read(artifact.archive()).unwrap());
+    fs::write(artifact.archive(), b"changed after verification").unwrap();
+    assert!(artifact.open_verified().is_err());
+}
+
+#[test]
 fn platform_probe_parses_each_supported_package_target() {
     let probes = [
         ("linux:aarch64:gnu", "aarch64-unknown-linux-gnu"),

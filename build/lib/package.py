@@ -93,6 +93,7 @@ def build_package_directory(
     symbols_dir: Optional[Path] = None,
     github_authentication_binary: Optional[Path] = None,
     remote_ssh_extension_binary: Optional[Path] = None,
+    dev_container_provider_binary: Optional[Path] = None,
 ) -> None:
     if remote_ssh_extension_binary is None:
         raise RuntimeError(
@@ -149,6 +150,8 @@ def build_package_directory(
         }
         if js_extension_host_binary is not None:
             executables["jsExtensionHost"] = str(js_extension_host_binary)
+        if dev_container_provider_binary is not None:
+            executables["devContainerProvider"] = str(dev_container_provider_binary)
         if windows_sandbox_binary is not None:
             executables["windowsSandbox"] = str(windows_sandbox_binary)
             executables["windowsSandboxService"] = str(windows_sandbox_service_binary)
@@ -796,6 +799,7 @@ def record_system_signing(
             "jsExtensionHost",
             "githubAuthentication",
             "remoteSshExtension",
+            "devContainerProvider",
             "voiceHost",
             "collaborationServer",
             "livekit",

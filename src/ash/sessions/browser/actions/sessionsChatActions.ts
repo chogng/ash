@@ -144,7 +144,7 @@ registerAction2(class ShowSessionsChatHistoryAction extends Action2 {
 				sessionId: session.sessionId,
 				threadId: thread.threadId,
 				label: session.title.trim() || "Session",
-				description: [threads.length > 1 ? localize('sessions.history.thread', 'Thread {0}', index + 1) : undefined, sessionManagementLabel(thread.management)].filter(Boolean).join(' · ') || undefined,
+				description: [session.application?.label, threads.length > 1 ? localize('sessions.history.thread', 'Thread {0}', index + 1) : undefined, sessionManagementLabel(thread.management)].filter(Boolean).join(' · ') || undefined,
 				detail: thread.management?.activity?.text ?? thread.management?.summary ?? undefined,
 			}));
 		});

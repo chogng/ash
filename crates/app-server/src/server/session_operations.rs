@@ -176,9 +176,10 @@ impl AppServer {
                     root: selected.root.clone(),
                 })
             }
-            Some(SessionExecutionTarget::Ssh { .. }) => {
+            Some(SessionExecutionTarget::Ssh { .. } | SessionExecutionTarget::Provider { .. }) => {
                 return Err(core_error(core_api::CoreError::InvalidInput(
-                    "SSH Session execution target must be routed through the profile host".into(),
+                    "Remote Session execution target must be routed through the profile host"
+                        .into(),
                 )));
             }
         };

@@ -2,16 +2,13 @@ import { URI } from '../../../../base/common/uri.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 
-import { EditorInputCapabilities, type IResourceEditorInput } from '../../../../workbench/common/editor.js';
+import { DockedEditorInput } from '../../../common/dockedEditorInput.js';
 import { EditorInputSerializers } from '../../../../workbench/services/editor/common/editorInputSerializer.js';
 
 /** The Files landing tab has no document or working copy of its own. */
-export class EmptyFileEditorInput implements IResourceEditorInput {
-	public capabilities = EditorInputCapabilities.None;
+export class EmptyFileEditorInput extends DockedEditorInput {
 	public readonly resource = URI.parse('ash-sessions-files:/');
 	public readonly contentType = 'application/vnd.ash.sessions-files';
-	public readonly readOnly = true;
-	public readonly showBreadcrumbs = false;
 	public get label(): string { return localize('sessions.files.title', 'Files'); }
 	public getIcon(): typeof Lxicon.files { return Lxicon.files; }
 }

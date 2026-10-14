@@ -2,7 +2,7 @@ import { status } from '../../../../../base/browser/ui/aria/aria.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { extUriBiasedIgnorePathCase } from '../../../../../base/common/resources.js';
 import { URI } from '../../../../../base/common/uri.js';
-import { createSshRemoteWorkspaceUri } from '../../../../../platform/remote/common/remote.js';
+import { createSshRemoteWorkspaceUri, createProviderRemoteWorkspaceUri } from '../../../../../platform/remote/common/remote.js';
 import { localize, localize2 } from '../../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
@@ -92,7 +92,7 @@ for (const direction of ['undo', 'redo'] as const) {
 					return;
 				}
 				const directory = read.directory;
-				const root = directory ? (directory.type === 'local' ? URI.file(directory.root) : createSshRemoteWorkspaceUri(directory.host, directory.root)) : undefined;
+				const root = directory ? (directory.type === 'local' ? URI.file(directory.root) : directory.type === 'ssh' ? createSshRemoteWorkspaceUri(directory.host, directory.root) : createProviderRemoteWorkspaceUri(directory.providerId, directory.workspace, directory.root)) : undefined;
 				if (root && accessor.get(IWorkingCopyService).getAll().some(copy => copy.isDirty && extUriBiasedIgnorePathCase.isEqualOrParent(copy.resource, root))) {
 					notifications.info(localize('chatEditing.history.dirty', 'Save or revert unsaved files in this chat directory before changing its history.'));
 					return;

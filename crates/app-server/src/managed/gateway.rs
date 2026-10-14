@@ -36,13 +36,62 @@ struct Target {
     connection: ConnectionState,
 }
 
-type RemoteKey = (String, String);
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub(super) enum RemoteKey {
+    Ssh(String, String),
+    Provider {
+        provider_id: String,
+        workspace: PathBuf,
+        root: String,
+    },
+}
+
+impl RemoteKey {
+    fn root(&self) -> &str {
+        match self {
+            Self::Ssh(_, root) | Self::Provider { root, .. } => root,
+        }
+    }
+    fn target(&self) -> SessionExecutionTarget {
+        match self {
+            Self::Ssh(host, root) => SessionExecutionTarget::Ssh {
+                host: host.clone(),
+                root: root.clone(),
+            },
+            Self::Provider {
+                provider_id,
+                workspace,
+                root,
+            } => SessionExecutionTarget::Provider {
+                provider_id: provider_id.clone(),
+                workspace: workspace.clone(),
+                root: root.clone(),
+            },
+        }
+    }
+    fn with_root(&self, root: String) -> Self {
+        match self {
+            Self::Ssh(host, _) => Self::Ssh(host.clone(), root),
+            Self::Provider {
+                provider_id,
+                workspace,
+                ..
+            } => Self::Provider {
+                provider_id: provider_id.clone(),
+                workspace: workspace.clone(),
+                root,
+            },
+        }
+    }
+}
 type RemoteSessionIndex = Arc<Mutex<BTreeMap<String, RemoteKey>>>;
 
 mod local;
 use local::LocalTarget;
 
 mod remote;
+pub(super) use remote::ProviderConnectionAdmission;
+pub(super) use remote::RemoteEndpoint;
 pub(super) use remote::RemoteLaunch;
 use remote::RemoteTarget;
 
@@ -79,6 +128,68 @@ fn task_request_with_launch(
     cancellation: &ash_async_utils::CancellationToken,
     launch: RemoteLaunch,
 ) -> Result<Value, String> {
+    remote_request(
+        profile.into(),
+        method,
+        params,
+        cancellation,
+        launch,
+        TASK_CONTRACTS,
+    )
+}
+
+/// Preparation must complete the real runtime handshake before the target is persisted or
+/// published to a client. This temporary route uses the same bounded transport and cleanup.
+pub(crate) fn probe_runtime(
+    authority: Arc<crate::session_runtime_provider::SessionRuntimeProvider>,
+    target: &SessionExecutionTarget,
+    executable: PathBuf,
+    cancellation: &ash_async_utils::CancellationToken,
+) -> Result<(), String> {
+    let SessionExecutionTarget::Provider {
+        provider_id,
+        workspace,
+        root,
+    } = target
+    else {
+        return Err("invalid runtime probe target".into());
+    };
+    let endpoint = RemoteEndpoint::Provider {
+        key: RemoteKey::Provider {
+            provider_id: provider_id.clone(),
+            workspace: workspace.clone(),
+            root: root.clone(),
+        },
+        executable,
+        generation: authority.generation(),
+        authority,
+        admission: ProviderConnectionAdmission::Preparing(cancellation.clone()),
+    };
+    remote_request(
+        endpoint,
+        ClientMethod::SessionList,
+        serde_json::json!({}),
+        cancellation,
+        RemoteLaunch::from_environment(),
+        ash_app_server_protocol::protocol::initialize::REQUIRED_SESSION_CAPABILITIES,
+    )
+    .and_then(|value| {
+        serde_json::from_value::<ash_app_server_protocol::protocol::session::SessionListResult>(
+            value,
+        )
+        .map(|_| ())
+        .map_err(|error| format!("invalid runtime Session catalog: {error}"))
+    })
+}
+
+fn remote_request(
+    profile: RemoteEndpoint,
+    method: ClientMethod,
+    params: Value,
+    cancellation: &ash_async_utils::CancellationToken,
+    launch: RemoteLaunch,
+    requirements: &'static [ash_app_server_protocol::protocol::initialize::CapabilityRequirement],
+) -> Result<Value, String> {
     use std::time::Duration;
     use std::time::Instant;
     thread::scope(|scope| {
@@ -97,7 +208,7 @@ fn task_request_with_launch(
             Arc::new(Mutex::new(BTreeMap::new())),
             Arc::new(Mutex::new(BTreeMap::new())),
             Arc::new(Mutex::new(BTreeMap::new())),
-            TASK_CONTRACTS,
+            requirements,
         );
         let deadline = Instant::now() + Duration::from_secs(120);
         let receive = |id: u64| -> Result<Value, String> {
@@ -186,9 +297,9 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
                     .open_local_session(Path::new(&root), &cancellation)
                     .await
                     .map(Some),
-                Some(SessionExecutionTarget::Ssh { .. }) => {
-                    Err("Remote Voice Core routing is unavailable".to_owned())
-                }
+                Some(
+                    SessionExecutionTarget::Ssh { .. } | SessionExecutionTarget::Provider { .. },
+                ) => Err("Remote Voice Core routing is unavailable".to_owned()),
                 None => Ok(None),
             }
         }
@@ -337,7 +448,7 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
                     let mut by_host = BTreeMap::new();
                     for remote_profile in profiles {
                         by_host
-                            .entry(remote_profile.target().host().as_str().to_owned())
+                            .entry(remote_profile.catalog_key())
                             .or_insert(remote_profile);
                     }
                     let profiles = by_host.into_values().collect::<Vec<_>>();
@@ -382,7 +493,7 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
                         },
                     )?;
                     for remote_profile in profiles {
-                        let key = remote_key(&remote_profile);
+                        let key = remote_profile.key();
                         if remote.get(&key).is_some_and(|target| !target.is_alive()) {
                             remote.remove(&key);
                         }
@@ -555,8 +666,33 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
                         }
                         continue;
                     }
-                    Some(SessionExecutionTarget::Ssh { host, root }) => {
-                        let key = (host, root);
+                    Some(
+                        execution @ (SessionExecutionTarget::Ssh { .. }
+                        | SessionExecutionTarget::Provider { .. }),
+                    ) => {
+                        if method == Some("session/create") {
+                            if let Err(error) = registry.admit_session_creation(&execution) {
+                                outbound
+                                    .send(routing_error(id, &error).into())
+                                    .map_err(|_| io::Error::from(io::ErrorKind::BrokenPipe))?;
+                                continue;
+                            }
+                        }
+                        let key = match &execution {
+                            SessionExecutionTarget::Ssh { host, root } => {
+                                RemoteKey::Ssh(host.clone(), root.clone())
+                            }
+                            SessionExecutionTarget::Provider {
+                                provider_id,
+                                workspace,
+                                root,
+                            } => RemoteKey::Provider {
+                                provider_id: provider_id.clone(),
+                                workspace: workspace.clone(),
+                                root: root.clone(),
+                            },
+                            SessionExecutionTarget::Local { .. } => unreachable!(),
+                        };
                         if remote.get(&key).is_some_and(|target| !target.is_alive()) {
                             remote.remove(&key);
                         }
@@ -573,7 +709,7 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
                                 );
                                 continue;
                             }
-                            let remote_profile = match registry.remote_profile(&key.0, &key.1) {
+                            let remote_profile = match registry.remote_endpoint(&execution) {
                                 Ok(profile) => profile,
                                 Err(error) => {
                                     outbound
@@ -615,7 +751,7 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
                         let mut forwarded = request.clone();
                         if method == Some("session/create") {
                             forwarded["params"]["executionTarget"] =
-                                serde_json::json!({"type":"local","root":key.1.clone()});
+                                serde_json::json!({"type":"local","root":key.root()});
                         }
                         if let Err(error) = target.send(forwarded.clone()) {
                             reject_remote_request(&forwarded, &error, &catalogs, &outbound);
@@ -716,7 +852,7 @@ fn resource_owner_error(id: Value) -> String {
 }
 
 fn remote_key(profile: &RemoteProfile) -> RemoteKey {
-    (
+    RemoteKey::Ssh(
         profile.target().host().as_str().to_owned(),
         profile.target().dir().as_str().to_owned(),
     )
@@ -858,15 +994,33 @@ fn fail_remote_requests(
 fn annotate_remote_sessions(value: &mut Value, key: &RemoteKey, sessions: &RemoteSessionIndex) {
     match value {
         Value::Object(object) => {
+            if object
+                .get("thread")
+                .is_some_and(|thread| thread.get("threadId").is_some())
+            {
+                if let Some(root) = object
+                    .get("directory")
+                    .filter(|directory| {
+                        directory.get("type").and_then(Value::as_str) == Some("local")
+                    })
+                    .and_then(|directory| directory.get("root"))
+                    .and_then(Value::as_str)
+                {
+                    let directory = key.with_root(root.to_owned()).target();
+                    object.insert(
+                        "directory".into(),
+                        serde_json::to_value(directory).expect("typed directory target"),
+                    );
+                }
+            }
             if object.contains_key("threads") {
                 if let Some(id) = object.get("sessionId").and_then(Value::as_str) {
-                    let selected = (
-                        key.0.clone(),
+                    let selected = key.with_root(
                         object
                             .get("executionTarget")
                             .and_then(|target| target.get("root"))
                             .and_then(Value::as_str)
-                            .unwrap_or(&key.1)
+                            .unwrap_or(key.root())
                             .to_owned(),
                     );
                     sessions
@@ -886,7 +1040,7 @@ fn annotate_remote_sessions(value: &mut Value, key: &RemoteKey, sessions: &Remot
                     }
                     object.insert(
                         "executionTarget".into(),
-                        serde_json::json!({"type":"ssh","host":selected.0,"root":selected.1}),
+                        serde_json::to_value(selected.target()).expect("typed execution target"),
                     );
                 }
             }
@@ -1051,13 +1205,13 @@ fn selected_execution_target(
             // its requests back to that host would reopen the retired Agent owner after import.
             return Ok(local_history_target(session.execution_target));
         }
-        if let Some((host, root)) = remote_sessions
+        if let Some(key) = remote_sessions
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .get(session_id)
             .cloned()
         {
-            return Ok(Some(SessionExecutionTarget::Ssh { host, root }));
+            return Ok(Some(key.target()));
         }
         return Ok(None);
     }
@@ -1069,13 +1223,13 @@ fn selected_execution_target(
         if let Some(session) = registry.local_thread_session(&local_id)? {
             return Ok(local_history_target(session.execution_target));
         }
-        if let Some((host, root)) = remote_sessions
+        if let Some(key) = remote_sessions
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .get(thread_id)
             .cloned()
         {
-            return Ok(Some(SessionExecutionTarget::Ssh { host, root }));
+            return Ok(Some(key.target()));
         }
         return Ok(None);
     }
@@ -1085,7 +1239,8 @@ fn selected_execution_target(
 fn local_history_target(target: Option<SessionExecutionTarget>) -> Option<SessionExecutionTarget> {
     match target {
         Some(target @ SessionExecutionTarget::Local { .. }) => Some(target),
-        Some(SessionExecutionTarget::Ssh { .. }) | None => None,
+        Some(SessionExecutionTarget::Ssh { .. } | SessionExecutionTarget::Provider { .. })
+        | None => None,
     }
 }
 

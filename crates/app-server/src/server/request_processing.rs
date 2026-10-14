@@ -26,6 +26,7 @@ use std::time::SystemTime;
 impl RequestLane {
     fn for_method(method: Option<ClientMethod>) -> Self {
         match method {
+            Some(ClientMethod::SessionRuntimeInvoke) => Self::Network,
             Some(method) if super::github_processor::GitHubRequestProcessor::handles(method) => Self::Network,
             Some(
                 ClientMethod::VoiceStartCancel
@@ -35,6 +36,7 @@ impl RequestLane {
                 | ClientMethod::ToolAppCancel
                 | ClientMethod::ToolResourceCancel
                 | ClientMethod::GitHubCancel
+                | ClientMethod::SessionRuntimeCancel
                 | ClientMethod::ApprovalEnvironmentCancel
                 | ClientMethod::AssetImportCancel
                 | ClientMethod::DictationModelCancel
@@ -118,11 +120,35 @@ impl AppServer {
         prepared: &mut PreparedRequest,
         admission: &request_dispatch::RequestAdmission,
     ) -> request_dispatch::NetworkFuture {
-        let processor = self.github_processor().cloned();
         let method = client_method(&prepared.request.method).expect("network method is registered");
         let params = std::mem::take(&mut prepared.request.params);
         let token = prepared.cancellation.clone();
         let run = admission.permit.is_ok() && !token.is_cancelled();
+        if method == ClientMethod::SessionRuntimeInvoke {
+            let runtimes = self.session_runtimes.clone();
+            return Box::pin(async move {
+                if !run {
+                    return None;
+                }
+                // Provisioning has bounded network admission and its own profile owner.
+                // A build must not hold the global Session/Settings lock or a UI worker.
+                Some(
+                    match tokio::task::spawn_blocking(move || {
+                        Self::invoke_session_runtime(runtimes.as_ref(), &params, &token)
+                    })
+                    .await
+                    {
+                        Ok(result) => result,
+                        Err(error) => Err(RpcError::with_details(
+                            -32603,
+                            AppServerErrorName::InternalError,
+                            error.to_string(),
+                        )),
+                    },
+                )
+            });
+        }
+        let processor = self.github_processor().cloned();
         Box::pin(async move {
             if !run {
                 return None;

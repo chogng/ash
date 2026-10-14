@@ -22,8 +22,42 @@ use ash_model_provider::SemanticModelProvider;
 use ash_model_provider::SemanticRuntimeLocation;
 use ash_state::DirIndexKind;
 use std::sync::Arc;
+use std::sync::Condvar;
+use std::sync::Mutex;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use std::sync::mpsc;
+use std::time::Duration;
+use std::time::Instant;
+
+struct StatusTestEmbedding {
+    started: mpsc::Sender<()>,
+    gate: Arc<(Mutex<bool>, Condvar)>,
+    outcome: Result<(), &'static str>,
+}
+
+impl EmbeddingInvoker for StatusTestEmbedding {
+    fn embed(&self, request: &EmbeddingRequest) -> Result<EmbeddingResponse, ModelProviderError> {
+        let _ = self.started.send(());
+        let (released, changed) = &*self.gate;
+        let guard = released.lock().unwrap();
+        drop(changed.wait_while(guard, |released| !*released).unwrap());
+        self.outcome
+            .map_err(|message| ModelProviderError::InvalidResponse(message.into()))?;
+        SemanticTestEmbedding.embed(request)
+    }
+}
+
+// Release before the server's worker is joined, including when an assertion unwinds.
+struct ReleaseStatusEmbedding(Arc<(Mutex<bool>, Condvar)>);
+
+impl Drop for ReleaseStatusEmbedding {
+    fn drop(&mut self) {
+        let (released, changed) = &*self.0;
+        *released.lock().unwrap() = true;
+        changed.notify_all();
+    }
+}
 
 struct SemanticTestEmbedding;
 
@@ -139,7 +173,7 @@ fn rpc_reports_generation_and_returns_revision_bound_local_chunks() {
         serde_json::json!({}),
     );
     for request_id in 100..200 {
-        if status["result"]["state"] != "indexing" {
+        if status["result"]["sourceState"] != "indexing" {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
@@ -151,7 +185,11 @@ fn rpc_reports_generation_and_returns_revision_bound_local_chunks() {
             serde_json::json!({}),
         );
     }
-    assert_eq!(status["result"]["state"], "ready");
+    assert_eq!(status["result"]["sourceState"], "ready");
+    assert_eq!(
+        status["result"]["embedding"],
+        serde_json::json!({"type": "disabled"})
+    );
     assert!(status["result"]["generation"].as_u64().unwrap() >= 1);
     assert!(status["result"].get("semantic").is_none());
 
@@ -692,6 +730,229 @@ fn unavailable_rerank_keeps_codebase_model_runtime_inactive() {
         "rerank-v1"
     );
     assert!(server.codebase_semantic_service().is_none());
+
+    server.codebase_service().unwrap().rebuild().unwrap();
+    let status = call(
+        &server,
+        &mut connection,
+        5,
+        "codebase/status",
+        serde_json::json!({}),
+    );
+    assert_eq!(status["result"]["sourceState"], "ready");
+    assert_eq!(
+        status["result"]["embedding"],
+        serde_json::json!({"type": "unavailable"})
+    );
+}
+
+#[test]
+fn rpc_codebase_status_keeps_source_ready_during_embedding_work_and_failure() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir(dir.path().join(".git")).unwrap();
+    std::fs::write(dir.path().join("lib.rs"), "pub fn lexical_marker() {}\n").unwrap();
+    let (started, started_rx) = mpsc::channel();
+    let gate = Arc::new((Mutex::new(false), Condvar::new()));
+    let embedding = Arc::new(StatusTestEmbedding {
+        started,
+        gate: Arc::clone(&gate),
+        outcome: Err("test model failed with private diagnostic details"),
+    });
+    let models = CodebaseModels::new(
+        ash_codebase::EmbeddingIndexKey::new("status-test-v1").unwrap(),
+        embedding,
+    );
+    let server = server()
+        .with_codebase_models(models)
+        .with_local_env_host(
+            None,
+            DirGrantPolicy::HostSelectedDirs(GrantSource::HostConfiguration),
+        )
+        .unwrap();
+    let release = ReleaseStatusEmbedding(gate);
+    server
+        .switch_local_dir_root(dir.path().to_path_buf())
+        .unwrap();
+    started_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+    let mut connection = server.connection();
+    call(
+        &server,
+        &mut connection,
+        1,
+        "initialize",
+        serde_json::json!({
+            "clientInfo": {"name": "status-test", "version": "1"}, "capabilities": {}
+        }),
+    );
+
+    let indexing = call(
+        &server,
+        &mut connection,
+        2,
+        "codebase/status",
+        serde_json::json!({}),
+    );
+    assert_eq!(indexing["result"]["sourceState"], "ready");
+    assert_eq!(indexing["result"]["embedding"]["type"], "active");
+    assert_eq!(indexing["result"]["embedding"]["state"], "indexing");
+    assert_eq!(
+        indexing["result"]["embedding"]["targetGeneration"],
+        indexing["result"]["generation"]
+    );
+    assert_eq!(
+        indexing["result"]["embedding"]["publishedGeneration"],
+        serde_json::Value::Null
+    );
+    let search = call(
+        &server,
+        &mut connection,
+        3,
+        "codebase/search",
+        serde_json::json!({
+            "query": "lexical_marker", "maxResults": 10
+        }),
+    );
+    assert_eq!(search["result"]["hits"][0]["path"], "lib.rs");
+    assert_eq!(search["result"]["status"]["sourceState"], "ready");
+
+    drop(release);
+    let mut next_request_id = 100;
+    let failed = wait_for_embedding_state(&server, &mut connection, &mut next_request_id, "failed");
+    assert_eq!(failed["result"]["sourceState"], "ready");
+    assert_eq!(
+        failed["result"]["embedding"]["lastErrorCode"],
+        "modelInvocationFailed"
+    );
+    assert!(!failed.to_string().contains("private diagnostic details"));
+    let search = call(
+        &server,
+        &mut connection,
+        4,
+        "codebase/search",
+        serde_json::json!({
+            "query": "lexical_marker", "maxResults": 10
+        }),
+    );
+    assert_eq!(search["result"]["hits"][0]["path"], "lib.rs");
+    assert_eq!(search["result"]["status"]["embedding"]["state"], "failed");
+    let retrieval = call(
+        &server,
+        &mut connection,
+        5,
+        "codebase/retrieve",
+        serde_json::json!({"query": "lexical_marker", "maxResults": 10}),
+    );
+    assert_eq!(retrieval["result"]["hits"][0]["path"], "lib.rs");
+    assert_eq!(retrieval["result"]["status"]["sourceState"], "ready");
+    assert_eq!(
+        retrieval["result"]["degradations"],
+        serde_json::json!([
+            {"type": "codebaseIncomplete"}
+        ])
+    );
+}
+
+#[test]
+fn rpc_codebase_status_reports_vector_publication_and_source_generation_drift() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir(dir.path().join(".git")).unwrap();
+    std::fs::write(
+        dir.path().join("lib.rs"),
+        "pub fn hidden_semantic_target() {}\n",
+    )
+    .unwrap();
+    let models = CodebaseModels::new(
+        ash_codebase::EmbeddingIndexKey::new("publication-test-v1").unwrap(),
+        Arc::new(SemanticTestEmbedding),
+    );
+    let server = server()
+        .with_codebase_models(models)
+        .with_local_env_host(
+            None,
+            DirGrantPolicy::HostSelectedDirs(GrantSource::HostConfiguration),
+        )
+        .unwrap();
+    server
+        .switch_local_dir_root(dir.path().to_path_buf())
+        .unwrap();
+    let mut connection = server.connection();
+    call(
+        &server,
+        &mut connection,
+        1,
+        "initialize",
+        serde_json::json!({
+            "clientInfo": {"name": "publication-test", "version": "1"}, "capabilities": {}
+        }),
+    );
+    let mut next_request_id = 100;
+    let ready = wait_for_embedding_state(&server, &mut connection, &mut next_request_id, "ready");
+    assert_eq!(ready["result"]["sourceState"], "ready");
+    assert_eq!(
+        ready["result"]["embedding"]["publishedGeneration"],
+        ready["result"]["generation"]
+    );
+    assert_eq!(
+        ready["result"]["embedding"]["processedChunkCount"],
+        ready["result"]["indexedChunkCount"]
+    );
+
+    // Rebuilding identical sources publishes a new source generation without new model
+    // work. This exercises the interval before the watcher schedules semantic refresh.
+    server.codebase_service().unwrap().rebuild().unwrap();
+    let stale = call(
+        &server,
+        &mut connection,
+        2,
+        "codebase/status",
+        serde_json::json!({}),
+    );
+    assert_eq!(stale["result"]["sourceState"], "ready");
+    assert_eq!(stale["result"]["embedding"]["state"], "stale");
+    assert_ne!(
+        stale["result"]["generation"],
+        stale["result"]["embedding"]["publishedGeneration"]
+    );
+
+    server.codebase_semantic_job().unwrap().schedule();
+    let refreshed =
+        wait_for_embedding_state(&server, &mut connection, &mut next_request_id, "ready");
+    assert_eq!(
+        refreshed["result"]["embedding"]["publishedGeneration"],
+        refreshed["result"]["generation"]
+    );
+    assert_eq!(
+        refreshed["result"]["embedding"]["reusedEmbeddingCount"],
+        refreshed["result"]["indexedChunkCount"]
+    );
+}
+
+fn wait_for_embedding_state(
+    server: &AppServer,
+    connection: &mut super::super::ConnectionState,
+    next_request_id: &mut u64,
+    expected: &str,
+) -> serde_json::Value {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let request_id = *next_request_id;
+        *next_request_id += 1;
+        let status = call(
+            server,
+            connection,
+            request_id,
+            "codebase/status",
+            serde_json::json!({}),
+        );
+        if status["result"]["embedding"]["state"] == expected {
+            return status;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "embedding did not become {expected}: {status}"
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    }
 }
 
 fn server() -> AppServer {

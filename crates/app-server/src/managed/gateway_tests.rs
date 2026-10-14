@@ -16,7 +16,7 @@ fn message_history_keeps_local_profile_authority_with_remote_thread_origins() {
     let _server = registry.server_for(options).unwrap();
     let remote: RemoteSessionIndex = Arc::new(Mutex::new(BTreeMap::from([(
         "remote-thread".into(),
-        ("build-host".into(), "/work/source".into()),
+        RemoteKey::Ssh("build-host".into(), "/work/source".into()),
     )])));
     for method in [
         "messageHistory/append",
@@ -49,7 +49,7 @@ fn session_directory_file_requests_route_to_the_session_execution_authority() {
     let _server = registry.server_for(options).unwrap();
     let remote: RemoteSessionIndex = Arc::new(Mutex::new(BTreeMap::from([(
         "remote-session".into(),
-        ("build-host".into(), "/work/source".into()),
+        RemoteKey::Ssh("build-host".into(), "/work/source".into()),
     )])));
     for method in [
         "fs/readDirectory",
@@ -131,7 +131,7 @@ fn resource_handles_keep_their_opening_session_runtime_for_reads_and_release() {
         .unwrap();
     let remote: RemoteSessionIndex = Arc::new(Mutex::new(BTreeMap::from([(
         "remote-resource".into(),
-        ("build-host".into(), "/work/source".into()),
+        RemoteKey::Ssh("build-host".into(), "/work/source".into()),
     )])));
     for method in [
         "tool/resource/open",
@@ -637,7 +637,7 @@ fn agents_gateway_serves_the_catalog_while_another_request_is_running() {
 #[test]
 fn remote_catalog_preserves_each_session_root_and_deduplicates_host_views() {
     let index: RemoteSessionIndex = Arc::new(Mutex::new(BTreeMap::new()));
-    let key = ("build-host".to_owned(), "/work/first".to_owned());
+    let key = RemoteKey::Ssh("build-host".to_owned(), "/work/first".to_owned());
     let mut remote = serde_json::json!({
         "jsonrpc":"2.0", "id":catalog_request_id(1),
         "result":{"sessions":[
@@ -652,7 +652,7 @@ fn remote_catalog_preserves_each_session_root_and_deduplicates_host_views() {
     );
     assert_eq!(
         index.lock().unwrap().get("thread-two"),
-        Some(&("build-host".into(), "/work/second".into()))
+        Some(&RemoteKey::Ssh("build-host".into(), "/work/second".into()))
     );
 
     let catalogs: Catalogs = Arc::new(Mutex::new(BTreeMap::from([(
@@ -668,6 +668,110 @@ fn remote_catalog_preserves_each_session_root_and_deduplicates_host_views() {
     complete_catalog(&catalogs, 1, remote, &outbound);
     let merged: Value = serde_json::from_str(&received.recv().unwrap().raw).unwrap();
     assert_eq!(merged["result"]["sessions"].as_array().unwrap().len(), 2);
+}
+
+#[test]
+fn provider_catalog_and_thread_directories_keep_container_authority() {
+    let index: RemoteSessionIndex = Arc::new(Mutex::new(BTreeMap::new()));
+    let key = RemoteKey::Provider {
+        provider_id: "ash.dev-containers".into(),
+        workspace: std::env::temp_dir().join("source"),
+        root: "/workspace".into(),
+    };
+    let mut result = serde_json::json!({"result": {
+        "session": {"sessionId":"container-session","threads":[{"threadId":"container-thread"}],"executionTarget":{"type":"local","root":"/workspace"}},
+        "threadProjections": [{"thread":{"threadId":"container-thread"},"directory":{"type":"local","root":"/workspace/branch"}}, {"thread":{"threadId":"no-files"},"directory":null}]
+    }});
+    annotate_remote_sessions(&mut result, &key, &index);
+    assert_eq!(
+        result["result"]["session"]["executionTarget"]["type"],
+        "provider"
+    );
+    assert_eq!(
+        result["result"]["threadProjections"][0]["directory"]["providerId"],
+        "ash.dev-containers"
+    );
+    assert_eq!(
+        result["result"]["threadProjections"][0]["directory"]["root"],
+        "/workspace/branch"
+    );
+    assert!(result["result"]["threadProjections"][1]["directory"].is_null());
+    assert_eq!(index.lock().unwrap().get("container-thread"), Some(&key));
+}
+
+#[test]
+fn preparing_a_runtime_probes_the_real_protocol_and_rejects_incompatible_children() {
+    use ash_app_server_protocol::protocol::initialize::ProtocolVersion;
+    use ash_app_server_protocol::protocol::initialize::ServerCapabilities;
+    let mut capabilities = ServerCapabilities {
+        sessions: true,
+        threads: true,
+        turns: true,
+        ..Default::default()
+    };
+    capabilities.advertise_contracts();
+    for (compatible, valid_catalog) in [(true, true), (false, true), (true, false)] {
+        let profile = tempfile::tempdir().unwrap();
+        let executable = profile.path().join(if cfg!(windows) {
+            "runtime.cmd"
+        } else {
+            "runtime.sh"
+        });
+        let schema = if compatible {
+            ash_app_server_protocol::schema_hash()
+        } else {
+            format!("sha256:{}", "0".repeat(64))
+        };
+        let initialize = serde_json::json!({"jsonrpc":"2.0","id":1,"result":{"serverInfo":{"name":"ash-app-server","version":"test"},"protocolVersion":ProtocolVersion::current(),"schemaHash":schema,"capabilities":capabilities,"slashCommands":[]}});
+        let catalog = serde_json::json!({"jsonrpc":"2.0","id":2,"result": if valid_catalog { serde_json::json!({"sessions":[]}) } else { serde_json::json!({}) }});
+        let script = if cfg!(windows) {
+            format!(
+                "@echo off\r\nset /p initialize=\r\necho {initialize}\r\nset /p catalog=\r\necho {catalog}\r\n"
+            )
+        } else {
+            format!(
+                "#!/bin/sh\nIFS= read -r initialize\nprintf '%s\\n' '{initialize}'\nIFS= read -r catalog\nprintf '%s\\n' '{catalog}'\n"
+            )
+        };
+        std::fs::write(&executable, script).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        let policy = Arc::new(
+            ash_core_plugins::EditorExtensionPolicy::open(profile.path().join("policy.json"))
+                .unwrap(),
+        );
+        let environment = ["PATH", "SystemRoot", "COMSPEC", "TEMP"]
+            .into_iter()
+            .filter_map(|key| std::env::var_os(key).map(|value| (key.into(), value)))
+            .collect();
+        let authority = crate::session_runtime_provider::SessionRuntimeProvider::open(
+            profile.path(),
+            policy,
+            Some(
+                crate::session_runtime_provider::SessionRuntimeInstallation {
+                    executable: executable.clone(),
+                    environment,
+                },
+            ),
+            probe_runtime,
+        )
+        .unwrap();
+        let target = SessionExecutionTarget::Provider {
+            provider_id: "ash.dev-containers".into(),
+            workspace: profile.path().canonicalize().unwrap(),
+            root: "/workspace".into(),
+        };
+        let token = ash_async_utils::CancellationSource::new();
+        let result = probe_runtime(authority.clone(), &target, executable, &token.token());
+        assert_eq!(result.is_ok(), compatible && valid_catalog, "{result:?}");
+        assert!(
+            authority.targets().is_empty(),
+            "a probe owns no durable admission"
+        );
+    }
 }
 
 #[test]
@@ -934,7 +1038,7 @@ fn ssh_buffered_response_cannot_complete_an_id_already_finished_by_route_failure
     );
     read_remote_messages(
         reader,
-        ("host".into(), "/workspace".into()),
+        RemoteKey::Ssh("host".into(), "/workspace".into()),
         1,
         alive,
         outbound,

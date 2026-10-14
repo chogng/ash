@@ -656,6 +656,8 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(typescript.contains("export type TerminalReadResult ="));
     assert!(typescript.contains("export type ContentSearchMatch ="));
     assert!(typescript.contains("export type CodebaseStatusResult ="));
+    assert!(typescript.contains("sourceState: CodebaseStateDto"));
+    assert!(typescript.contains("embedding: CodebaseEmbeddingStatusDto"));
     assert!(typescript.contains("export type CodebaseSearchResult ="));
     assert!(typescript.contains("export type CodebaseRetrievalResult ="));
     assert!(typescript.contains("rrfScore: number"));
@@ -698,6 +700,7 @@ fn dto_driven_schema_contains_registered_rpc_envelopes() {
     assert!(definitions.contains_key("ContentSearchStartParams"));
     assert!(definitions.contains_key("ContentSearchReadResult"));
     assert!(definitions.contains_key("CodebaseStatusResult"));
+    assert!(definitions.contains_key("CodebaseEmbeddingStatusDto"));
     assert!(definitions.contains_key("CodebaseSearchParams"));
     assert!(definitions.contains_key("CodebaseSearchResult"));
     assert!(definitions.contains_key("CodebaseRetrievalParams"));

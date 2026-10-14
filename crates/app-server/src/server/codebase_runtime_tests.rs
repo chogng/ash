@@ -137,6 +137,51 @@ fn dir_fixture() -> TempDir {
 }
 
 #[test]
+fn full_rescan_keeps_sqlite_generation_for_unchanged_sources() {
+    let directory = dir_fixture();
+    fs::create_dir(directory.path().join("a")).unwrap();
+    fs::write(directory.path().join("a/lib.rs"), "pub fn nested() {}\n").unwrap();
+    fs::write(directory.path().join("a.rs"), "pub fn sibling() {}\n").unwrap();
+    let runtime = CodebaseRuntime::open(
+        Dir::open_local(directory.path()).unwrap(),
+        Arc::new(CodebaseStore::memory()),
+        None,
+    )
+    .unwrap();
+    let initial = runtime.rebuild().unwrap();
+    runtime.apply_watcher_event(&FileWatcherEvent::RescanRequired {
+        watched_paths: vec![directory.path().to_path_buf()],
+    });
+    assert_eq!(
+        runtime.state(),
+        CodebaseRuntimeState::Ready(initial.clone())
+    );
+    runtime.apply_watcher_event(&FileWatcherEvent::PathsChanged {
+        paths: vec![directory.path().to_path_buf()],
+    });
+    assert_eq!(
+        runtime.state(),
+        CodebaseRuntimeState::Ready(initial.clone())
+    );
+
+    fs::write(directory.path().join("a/lib.rs"), "pub fn changed() {}\n").unwrap();
+    runtime.apply_watcher_event(&FileWatcherEvent::RescanRequired {
+        watched_paths: vec![directory.path().to_path_buf()],
+    });
+    let CodebaseRuntimeState::Ready(changed) = runtime.state() else {
+        panic!("rescan must publish changed sources");
+    };
+    assert_eq!(changed.generation, initial.generation + 1);
+    assert_eq!(
+        runtime
+            .search(&CodebaseQuery::new("changed"))
+            .unwrap()
+            .len(),
+        1
+    );
+}
+
+#[test]
 fn search_revalidates_content_and_marks_a_lagging_projection_stale() {
     let directory = dir_fixture();
     let source_path = directory.path().join("lib.rs");

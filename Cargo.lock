@@ -517,6 +517,7 @@ dependencies = [
  "ash-utils-absolute-path",
  "ash-utils-home-dir",
  "ash-utils-image",
+ "ash-utils-path",
  "ash-utils-path-uri",
  "ash-utils-sleep-inhibitor",
  "ash-voice-agent",
@@ -1216,6 +1217,28 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.19",
  "tokio",
+]
+
+[[package]]
+name = "ash-dev-container-provider"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-core-plugins",
+ "ash-external-ext",
+ "ash-external-ext-protocol",
+ "ash-external-ext-sdk",
+ "ash-install-context",
+ "ash-protocol",
+ "ash-remote",
+ "ash-remote-connections",
+ "ash-sandboxing",
+ "ash-utils-path",
+ "dunce",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
 ]
 
 [[package]]

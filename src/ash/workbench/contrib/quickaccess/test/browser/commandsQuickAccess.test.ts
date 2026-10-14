@@ -72,6 +72,9 @@ test('Command Palette finds localized commands by their English title and report
 		resources.add(MenusRegistry.appendMenuItem(MenuId.CommandPalette, {
 			command: { id: 'test.commandFailure', title: localize2('debug.start', 'Start Debugging') },
 		}));
+		resources.add(MenusRegistry.appendMenuItem(MenuId.CommandPalette, {
+			command: { id: 'test.categorized', title: localize2('debug.start', 'Start Debugging'), category: localize2({ bundle: 'ash.menu', key: 'file' }, 'File') },
+		}));
 		using services = new InstantiationService();
 		registerHistoryServices(services, resources);
 		services.registerInstance(IEditorPartsService, { activePane: undefined } as unknown as IEditorPartsService);
@@ -99,6 +102,10 @@ test('Command Palette finds localized commands by their English title and report
 		assert.ok(item && !('type' in item));
 		assert.deepEqual([item.label, item.detail], ['启动调试', 'Start Debugging']);
 		assert.ok(filterQuickPickItems(picker.items.filter((candidate): candidate is IQuickPickItem => !('type' in candidate)), '启动调试').includes(item));
+		const categorized = picker.items.find(candidate => !('type' in candidate) && candidate.description === 'test.categorized');
+		assert.ok(categorized && !('type' in categorized));
+		assert.deepEqual([categorized.label, categorized.detail], ['文件: 启动调试', 'File: Start Debugging']);
+		assert.ok(filterQuickPickItems([categorized], 'File').includes(categorized));
 
 		picker.selectedItems = [item];
 		accept.fire({ inBackground: false });

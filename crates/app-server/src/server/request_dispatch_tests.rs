@@ -19,6 +19,30 @@ use std::net::Shutdown;
 use std::time::Duration;
 
 #[test]
+fn runtime_provisioning_uses_bounded_io_and_cancellation_keeps_control_priority() {
+    assert_eq!(
+        RequestLane::for_message(
+            "session/runtime/invoke",
+            &json!({"operationId":"build", "providerId":"ash.dev-containers", "request":{"operation":"prepare","workspace":"/workspace"}})
+        ),
+        RequestLane::Network
+    );
+    assert_eq!(
+        RequestLane::for_message("session/runtime/cancel", &json!({"operationId":"build"})),
+        RequestLane::Control
+    );
+    assert!(
+        ash_app_server_protocol::protocol::registry::client_method_definition(
+            "session/runtime/invoke"
+        )
+        .unwrap()
+        .serialization_scope(&json!({"operationId":"build"}))
+        .unwrap()
+        .is_none()
+    );
+}
+
+#[test]
 fn stalled_extension_packages_queries_leave_state_changes_available() {
     let server = Arc::new(server());
     let mut connection = server.connection();

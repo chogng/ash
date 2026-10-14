@@ -29,6 +29,7 @@ export interface ICommandActionToggleInfo {
 export interface ICommandAction {
 	readonly id: string;
 	readonly title: CommandActionTitle;
+	readonly category?: CommandActionTitle;
 	readonly metadata?: ICommandMetadata;
 	readonly shortTitle?: CommandActionTitle;
 	readonly tooltip?: CommandActionTitle;

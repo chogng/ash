@@ -8,6 +8,7 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../../platfo
 import type { IActiveSessionThread, IUntitledChatSession, SessionId, ThreadId } from "../common/session.js";
 import { ISessionsManagementService } from "../common/sessionsManagement.js";
 import type { SessionWorkspaceSelection } from '../common/session.js';
+import { WELCOME_COMPLETE_KEY } from '../../../common/welcome.js';
 
 /** One visible slot in the dedicated Sessions Workbench. */
 export type SessionsViewSelection =
@@ -159,6 +160,9 @@ export class SessionsService extends Disposable implements ISessionsService {
 	navigateForward(): void { this.navigate(1); }
 
 	private syncFromSessionService(): void {
+		if (this.sessionService.sessions.length && !this.storage.getBoolean(WELCOME_COMPLETE_KEY, StorageScope.PROFILE, false)) {
+			this.storage.store(WELCOME_COMPLETE_KEY, true, StorageScope.PROFILE, StorageTarget.USER);
+		}
 		// Catalog changes refresh identities without changing the foreground selection.
 		const state = this.current;
 		state.visibleReferences = state.visibleReferences.map(reference => this.materializedReference(reference));
@@ -439,7 +443,10 @@ function isWorkspaceSelection(value: unknown): value is SessionWorkspaceSelectio
 	if (value.type === 'ssh') {
 		return nonEmptyString(value.host) && nonEmptyString(value.root);
 	}
+	if (value.type === 'provider') {
+		return nonEmptyString(value.providerId) && nonEmptyString(value.workspace) && nonEmptyString(value.root);
+	}
 	return value.type === 'multiple' && Array.isArray(value.folders) && value.folders.length > 0
 		&& value.folders.every(folder => isRecord(folder) && typeof folder.label === 'string' && isRecord(folder.target)
-			&& (folder.target.type === 'local' || folder.target.type === 'ssh') && isWorkspaceSelection(folder.target));
+			&& (folder.target.type === 'local' || folder.target.type === 'ssh' || folder.target.type === 'provider') && isWorkspaceSelection(folder.target));
 }

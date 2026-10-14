@@ -239,6 +239,27 @@ test('single-content editor groups replace pinned and sticky content without cre
 	dom.window.close();
 });
 
+test('single-content limit preserves exempt tabs when ordinary documents are replaced', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using browserOwner = toDisposable(() => dom.window.close());
+	const panes: TestEditorPane[] = [];
+	using registry = new EditorPaneRegistry();
+	using registration = registry.registerEditorPane(descriptor('ash.test.exempt', '.ts', () => trackPane(panes, 'ash.test.exempt')));
+	using editor = createEditorPart(dom.window.document.body, { registry, editorLimit: 1 });
+	const files = { ...input('C:/project/files.ts'), capabilities: EditorInputCapabilities.ExcludeFromEditorLimit };
+	const changes = { ...input('C:/project/changes.ts'), capabilities: EditorInputCapabilities.ExcludeFromEditorLimit };
+	const first = input('C:/project/first.ts');
+	const second = input('C:/project/second.ts');
+	await editor.openEditor(files, { pinned: true });
+	await editor.openEditor(first, { pinned: true });
+	await editor.openEditor(changes, { pinned: true });
+	await editor.openEditor(second, { pinned: true });
+	assert.deepEqual(editor.activeGroup.inputs, [files, second, changes]);
+	assert.equal(panes[1]!.disposed, true);
+	assert.equal(panes[0]!.disposed, false);
+	assert.equal(panes[2]!.disposed, false);
+});
+
 test('single-content replacement retains a dirty editor when its close decision is cancelled', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const first = input('C:/project/dirty.ts');

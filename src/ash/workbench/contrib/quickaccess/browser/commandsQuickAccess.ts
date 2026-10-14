@@ -17,6 +17,7 @@ import { filterQuickPickItems } from '../../../../platform/quickinput/browser/qu
 import { IStorageService, StorageScope } from '../../../../platform/storage/common/storage.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { ShowAllCommandsCommandId } from '../../../browser/quickaccess.js';
+import { commandActionLabel } from '../../../../platform/action/common/action.js';
 
 interface ICommandQuickPickItem extends IPickerQuickAccessItem {
 	readonly commandId: string;
@@ -73,12 +74,18 @@ export class CommandsQuickAccessProvider extends PickerQuickAccessProvider<IComm
 			.filter(action => !editorCommandIds.has(action.id))
 			.map(action => {
 				const keybinding = this.keybindingService.lookupKeybinding(action.id);
-				const original = typeof action.item.title === 'string' ? undefined : action.item.title.original;
+				const category = action.item.category;
+				const title = action.item.title;
+				const label = category ? localize('quickAccess.categoryTitle', '{0}: {1}', commandActionLabel(category), action.label) : action.label;
+				const originalTitle = typeof title === 'string' ? title : title.original;
+				const original = category
+					? localize2('quickAccess.categoryTitle', '{0}: {1}', typeof category === 'string' ? category : category.original, originalTitle).original
+					: typeof title === 'string' ? undefined : originalTitle;
 				return {
 					commandId: action.id,
-					label: action.label,
+					label,
 					description: action.id,
-					detail: original !== action.label ? original : undefined,
+					detail: original !== label ? original : undefined,
 					keybinding,
 				};
 			});
