@@ -1642,9 +1642,9 @@ use crate::protocol::language::LanguageTextDocumentEditDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::language::LanguageTextEditDto;
 #[cfg(any(test, feature = "export"))]
-use crate::protocol::mcp::McpOAuthCompleteParams;
-#[cfg(any(test, feature = "export"))]
 use crate::protocol::mcp::McpOAuthCancelParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::mcp::McpOAuthCompleteParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::mcp::McpOAuthMutationParams;
 #[cfg(any(test, feature = "export"))]
