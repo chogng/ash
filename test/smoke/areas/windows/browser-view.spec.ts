@@ -1,11 +1,12 @@
 import { createServer } from 'node:http';
-import type { ElectronApplication } from '@playwright/test';
+import type { ElectronApplication, Page } from '@playwright/test';
 import { decodeAppServerServerRequestResult } from '../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import { expect, test } from '../../../automation/test.js';
 interface BrowserPrompt { options: Electron.MessageBoxOptions; respond: (result: Electron.MessageBoxReturnValue) => void; }
 
 import type { IBrowserViewInfo } from '../../../../src/ash/platform/browserView/common/browserView.js';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
 import { join } from 'node:path';
 import { browserNetworkToken, installBrowserNetworkPolicy } from '../../../automation/browserNetwork.js';
 import { installMainChannelTestClient } from '../../../automation/mainProcessIpc.js';
@@ -15,6 +16,137 @@ import type { Socket } from 'node:net';
 test.beforeEach(async ({ target, workbench }) => {
 	if (target.kind === 'electron') { await installMainChannelTestClient(workbench.page); }
 });
+
+for (const locale of ['en', 'zh-CN'] as const) {
+	test(`local browser files load through File Service, follow window zoom and reload in background in ${locale}`, { tag: ['@electron-app-server'] }, async ({ application: initialApplication, workbench: initialWorkbench, restartWorkbench, testWorkspace }) => {
+		let application = initialApplication;
+		let workbench = initialWorkbench;
+		if (locale === 'zh-CN') {
+			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+			const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
+			await picker.getByRole('combobox').fill('简体中文'); await picker.getByRole('combobox').press('Enter');
+			({ application, workbench } = await restartWorkbench());
+		}
+		const filename = join(testWorkspace.directory, 'browser-preview.html');
+		await writeFile(join(testWorkspace.directory, 'browser-preview.css'), '#preview { color: rgb(128, 0, 0); }');
+		await writeFile(filename, '<title>File first</title><link rel="stylesheet" href="browser-preview.css"><p id="preview">Preview</p>');
+		const url = pathToFileURL(filename).href;
+		const page = workbench.page;
+		const electron = application as ElectronApplication;
+		await workbench.quickaccess.runCommand('workbench.action.browser.open');
+		const editor = page.locator('.ash-browser-editor');
+		const address = editor.getByRole('textbox', { name: locale === 'en' ? 'Browser address' : '浏览器地址', exact: true });
+		await address.fill(url); await address.press('Enter');
+		await expect(editor.getByRole('status')).toHaveText('File first');
+		const view = await electron.evaluateHandle(({ BrowserWindow }, url) => BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).find(child => 'webContents' in child && (child as Electron.WebContentsView).webContents.getURL() === url) as Electron.WebContentsView, url);
+		try {
+			await expect.poll(() => view.evaluate(view => view.webContents.executeJavaScript("getComputedStyle(document.querySelector('#preview')).color"))).toBe('rgb(128, 0, 0)');
+			await workbench.quickaccess.runCommand('workbench.action.zoomIn');
+			await expect.poll(() => view.evaluate(view => view.webContents.getZoomFactor())).toBeCloseTo(1.25);
+			await workbench.quickaccess.runCommand('workbench.action.zoomReset');
+			await expect.poll(() => view.evaluate(view => view.webContents.getZoomFactor())).toBeCloseTo(1);
+			await workbench.quickaccess.open('main.ts');
+			await workbench.quickaccess.select('main.ts');
+			await expect(editor).toBeHidden();
+			await writeFile(filename, '<title>File second</title><link rel="stylesheet" href="browser-preview.css"><p id="preview">Changed on disk</p>');
+			await expect.poll(() => view.evaluate(view => view.webContents.getTitle())).toBe('File second');
+			await page.getByRole('tab', { name: 'File second', exact: true }).click();
+			await expect(editor.getByRole('status')).toHaveText('File second');
+			await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+			await expect.poll(() => electron.evaluate(({ webContents }, url) => webContents.getAllWebContents().some(contents => contents.getURL() === url), url)).toBe(false);
+		} finally { await view.dispose(); }
+	});
+}
+
+for (const locale of ['en', 'zh-CN'] as const) {
+	test(`desktop browser page preferences change Chromium and confirmed storage clearing in ${locale}`, { tag: ['@electron-ui'] }, async ({ application: initialApplication, workbench: initialWorkbench, restartWorkbench }) => {
+		let application = initialApplication;
+		let workbench = initialWorkbench;
+		if (locale === 'zh-CN') {
+			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+			const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
+			await picker.getByRole('combobox').fill('简体中文');
+			await picker.getByRole('combobox').press('Enter');
+			({ application, workbench } = await restartWorkbench());
+		}
+		const labels = locale === 'en' ? {
+			address: 'Browser address', more: 'More Actions', zoom: 'Page zoom', emulation: 'Device emulation', phone: 'Phone (390 × 844)', off: 'Disable emulation',
+			devTools: 'Developer Tools', favorite: 'Add or remove favorite', favorites: 'Favorites', clear: 'Clear data', clearTitle: 'Clear browser data',
+		} : {
+			address: '浏览器地址', more: '更多操作', zoom: '页面缩放', emulation: '设备模拟', phone: '手机（390 × 844）', off: '禁用模拟',
+			devTools: '开发者工具', favorite: '添加或移除收藏', favorites: '收藏', clear: '清除数据', clearTitle: '清除浏览器数据',
+		};
+		const server = createServer((request, response) => {
+			response.setHeader('Content-Type', 'text/html');
+			response.end(`<title>${request.url === '/' ? 'Page preferences' : 'Other page'}</title><meta name="viewport" content="width=device-width, initial-scale=1"><p>Preview page</p>`);
+		});
+		await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+		const endpoint = server.address();
+		if (!endpoint || typeof endpoint === 'string') { throw new Error('Missing preferences fixture endpoint'); }
+		const url = `http://127.0.0.1:${endpoint.port}/`;
+		const electron = application as ElectronApplication;
+		const page = workbench.page;
+		try {
+			await installMainChannelTestClient(page);
+			await workbench.quickaccess.runCommand('workbench.action.browser.open');
+			const editor = page.locator('.ash-browser-editor');
+			await expect(editor.locator('.ash-browser-welcome')).toBeVisible();
+			const address = editor.getByRole('textbox', { name: labels.address, exact: true });
+			await address.fill(url); await address.press('Enter');
+			await expect(editor.getByRole('status')).toHaveText('Page preferences');
+			await expect(editor.locator('.ash-browser-welcome')).toBeHidden();
+			const view = await electron.evaluateHandle(({ BrowserWindow }, url) => BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).find(child => 'webContents' in child && (child as Electron.WebContentsView).webContents.getURL() === url) as Electron.WebContentsView, url);
+			try {
+				const select = (label: string) => workbench.menus.select(application, () => editor.getByRole('button', { name: labels.more, exact: true }).click(), [label]);
+				const pick = async (title: string, choice: string): Promise<void> => {
+					await select(title);
+					const picker = page.getByRole('dialog', { name: title, exact: true });
+					await picker.getByRole('combobox').fill(choice);
+					await picker.getByRole('combobox').press('Enter');
+					await expect(picker).toBeHidden();
+				};
+				await pick(labels.zoom, '175%');
+				await expect.poll(() => view.evaluate(view => view.webContents.getZoomFactor())).toBeCloseTo(1.75);
+				await pick(labels.zoom, '100%');
+				await expect.poll(() => view.evaluate(view => view.webContents.getZoomFactor())).toBe(1);
+				await pick(labels.emulation, labels.phone);
+				await expect.poll(() => view.evaluate(view => view.webContents.executeJavaScript('innerWidth'))).toBe(390);
+				await pick(labels.emulation, labels.off);
+				await expect.poll(() => view.evaluate(view => view.webContents.executeJavaScript('innerWidth'))).toBeGreaterThan(390);
+				await select(labels.devTools);
+				await expect.poll(() => view.evaluate(view => view.webContents.isDevToolsOpened())).toBe(true);
+				await select(labels.devTools);
+				await expect.poll(() => view.evaluate(view => view.webContents.isDevToolsOpened())).toBe(false);
+				await select(labels.favorite);
+				await address.fill(`${url}other`); await address.press('Enter');
+				await expect(editor.getByRole('status')).toHaveText('Other page');
+				await pick(labels.favorites, 'Page preferences');
+				await expect(address).toHaveValue(url);
+				await expect(editor.getByRole('status')).toHaveText('Page preferences');
+				await view.evaluate(view => view.webContents.executeJavaScript("localStorage.setItem('preview', 'private'); document.cookie = 'preview=private; path=/'"));
+				await workbench.dialogs.expectMessage(application, labels.clearTitle, () => select(labels.clear));
+				expect(await view.evaluate(view => view.webContents.executeJavaScript("localStorage.getItem('preview')"))).toBe('private');
+				await workbench.dialogs.confirm(application, labels.clearTitle, labels.clear, () => select(labels.clear));
+				await expect.poll(() => view.evaluate(view => view.webContents.executeJavaScript("localStorage.getItem('preview')"))).toBe(null);
+				expect(await view.evaluate(view => view.webContents.executeJavaScript('document.cookie'))).toBe('');
+				await select(labels.emulation);
+				const devicePicker = page.getByRole('dialog', { name: labels.emulation, exact: true });
+				await expect(devicePicker).toBeVisible();
+				await page.evaluate(async url => {
+					const views = await globalThis.ashTestMainProcess.call<IBrowserViewInfo[]>('browserView', 'getBrowserViews', []);
+					const target = views.find(view => view.state.url === url)!;
+					await globalThis.ashTestMainProcess.call('browserView', 'destroyBrowserView', [target.id]);
+				}, url);
+				await expect(devicePicker).toBeHidden();
+				await expect(editor).toHaveCount(0);
+				await expect.poll(() => electron.evaluate(({ webContents }, url) => webContents.getAllWebContents().some(contents => contents.getURL() === url), url)).toBe(false);
+			} finally { await view.dispose(); }
+		} finally {
+			server.closeAllConnections();
+			await new Promise<void>(resolve => server.close(() => resolve()));
+		}
+	});
+}
 
 test('agent network authorizes subresources, rejects WebSocket and redirects and releases authority after the tool', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, application, workbench }) => {
 	const deniedRequests: string[] = [];
@@ -97,7 +229,7 @@ test('downloads report completion and cancellation and closing a page releases t
 	const electron = application as ElectronApplication;
 	const page = workbench.page;
 	try {
-		await workbench.quickaccess.runCommand('ash.browser.open');
+		await workbench.quickaccess.runCommand('workbench.action.browser.open');
 		const editor = page.locator('.ash-browser-editor');
 		const address = editor.getByRole('textbox', { name: 'Browser address' });
 		await address.fill(url); await address.press('Enter');
@@ -151,7 +283,7 @@ test('website permission dialogs allow, remember, reset and deny the requesting 
 	const prompt = () => electron.evaluate(() => (globalThis as unknown as { browserPrompts: BrowserPrompt[]; }).browserPrompts.map(item => item.options));
 	const answer = (response: number) => electron.evaluate((_electron, response) => (globalThis as unknown as { browserPrompts: BrowserPrompt[]; }).browserPrompts.shift()!.respond({ response, checkboxChecked: false }), response);
 	try {
-		await workbench.quickaccess.runCommand('ash.browser.open');
+		await workbench.quickaccess.runCommand('workbench.action.browser.open');
 		const editor = page.locator('.ash-browser-editor');
 		const location = editor.getByRole('textbox', { name: 'Browser address' });
 		await location.fill(url); await location.press('Enter');
@@ -183,7 +315,7 @@ test('website permission dialogs allow, remember, reset and deny the requesting 
 
 test('sharing a user page exposes only that page to the chosen thread and revocation retains the page', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, application, workbench }) => {
 	const page = workbench.page;
-	await workbench.quickaccess.runCommand('ash.browser.open');
+	await workbench.quickaccess.runCommand('workbench.action.browser.open');
 	const info = await page.evaluate(async () => {
 		const views = await globalThis.ashTestMainProcess.call('browserView', 'getBrowserViews', []) as IBrowserViewInfo[];
 		return views.find(view => view.owner.type === 'user')!;
@@ -269,7 +401,7 @@ test('desktop browser retains a live page through renderer reload and restores w
 	const url = `http://127.0.0.1:${address.port}/`;
 	try {
 		const page = workbench.page;
-		await workbench.quickaccess.runCommand('ash.browser.open');
+		await workbench.quickaccess.runCommand('workbench.action.browser.open');
 		const location = page.locator('.ash-browser-editor').getByRole('textbox', { name: 'Browser address' });
 		await location.fill(url); await location.press('Enter');
 		await expect(page.getByRole('tab', { name: 'Restored browser', exact: true })).toBeVisible();
@@ -302,7 +434,10 @@ test('desktop browser agent observes loaded pages, edits fields and follows navi
 			response.end('<title>Agent destination</title><h1>Navigation completed</h1>');
 			return;
 		}
-		response.end('<title>Agent fixture</title><input aria-label="Editable field"><input aria-label="Read-only field" readonly value="Original value"><a href="/next">Continue</a>');
+		response.end(`<title>Agent fixture</title><input aria-label="Editable field"><input aria-label="Read-only field" readonly value="Original value"><a href="/next">Continue</a>
+		<button onmouseover="window.hovered = true">Hover target</button>
+		<button onmousedown="window.dragging = true">Drag source</button><button onmouseup="window.dragged = !!window.dragging">Drag destination</button>
+		<button onclick="window.promptResult = confirm('Agent prompt')">Prompt target</button>`);
 	});
 	await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
 	const address = server.address();
@@ -310,6 +445,9 @@ test('desktop browser agent observes loaded pages, edits fields and follows navi
 	const url = `http://127.0.0.1:${address.port}/`;
 	const page = workbench.page;
 	const electron = application as ElectronApplication;
+	// The test's second CDP client must not auto-dismiss the dialog owned by the product tool.
+	const preserveDialog = (browserPage: Page): void => { browserPage.on('dialog', () => { }); };
+	electron.context().on('page', preserveDialog);
 	const hostCall = (method: string, params: Record<string, unknown>) => page.evaluate(({ method, params }) => {
 		return globalThis.ashTestMainProcess.call('browserHost', method, { id: crypto.randomUUID(), params: { threadId: 'browser-smoke-thread', ...params } });
 	}, { method, params: ['create', 'observe', 'perform'].includes(method) ? { networkToken: browserNetworkToken, ...params } : params });
@@ -319,6 +457,9 @@ test('desktop browser agent observes loaded pages, edits fields and follows navi
 		await expect(hostCall('observe', { threadId: 'other-thread', targetId: created.targetId, includeAccessibilityTree: true, includeDomSnapshot: false, includeScreenshot: false })).rejects.toThrow(/BrowserTargetAccessDenied/);
 		const observe = async (includeScreenshot = false) => decodeAppServerServerRequestResult('browser/observe', await hostCall('observe', { targetId: created.targetId, includeAccessibilityTree: true, includeDomSnapshot: false, includeScreenshot }));
 		const initial = await observe(true);
+		const listed = decodeAppServerServerRequestResult('browser/list', await hostCall('list', {}));
+		expect(listed.pages.map(page => page.targetId)).toEqual([created.targetId]);
+		expect(decodeAppServerServerRequestResult('browser/list', await hostCall('list', { threadId: 'other-thread' })).pages).toEqual([]);
 		expect({ url: initial.url, title: initial.title, loading: initial.loading }).toEqual({ url, title: 'Agent fixture', loading: false });
 		expect(Buffer.from(initial.screenshot!.dataBase64, 'base64').subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
 		const tree = JSON.parse(initial.accessibilityTree!) as { nodes: { role?: { value: string; }; name?: { value: string; }; backendDOMNodeId?: number; }[]; };
@@ -327,6 +468,21 @@ test('desktop browser agent observes loaded pages, edits fields and follows navi
 			if (!node?.backendDOMNodeId) { throw new Error(`Missing observed element: ${name}`); }
 			return String(node.backendDOMNodeId);
 		};
+		await hostCall('perform', { action: { type: 'hover', targetId: created.targetId, target: { nodeId: nodeId('button', 'Hover target') } } });
+		await hostCall('perform', { action: { type: 'drag', targetId: created.targetId, source: { nodeId: nodeId('button', 'Drag source') }, destination: { nodeId: nodeId('button', 'Drag destination') } } });
+		const scripted = decodeAppServerServerRequestResult('browser/perform', await hostCall('perform', {
+			action: { type: 'runPlaywright', targetId: created.targetId, code: "return { hovered: await page.evaluate(() => !!window.hovered), dragged: await page.evaluate(() => !!window.dragged), node: typeof process };" },
+		}));
+		expect(JSON.parse(scripted.output!)).toEqual({ hovered: true, dragged: true, node: 'undefined' });
+		await expect(hostCall('perform', { action: { type: 'runPlaywright', targetId: created.targetId, code: 'while (true) {}' } })).rejects.toThrow(/[Cc]ancelled|TimedOut/);
+		expect((await observe()).title).toBe('Agent fixture');
+		const prompt = hostCall('perform', { action: { type: 'click', targetId: created.targetId, target: { nodeId: nodeId('button', 'Prompt target') } } });
+		await hostCall('perform', { action: { type: 'handleDialog', targetId: created.targetId, accept: true, promptText: 'Agent answer' } });
+		await prompt;
+		const answered = decodeAppServerServerRequestResult('browser/perform', await hostCall('perform', {
+			action: { type: 'runPlaywright', targetId: created.targetId, code: 'return await page.evaluate(() => window.promptResult);' },
+		}));
+		expect(JSON.parse(answered.output!)).toBe(true);
 		await hostCall('perform', { action: { type: 'typeText', targetId: created.targetId, target: { type: 'element', target: { nodeId: nodeId('textbox', 'Editable field') } }, text: 'Agent input' } });
 		await expect(hostCall('perform', { action: { type: 'typeText', targetId: created.targetId, target: { type: 'element', target: { nodeId: nodeId('textbox', 'Read-only field') } }, text: 'Wrong field' } })).rejects.toThrow(/BrowserNodeNotEditable/);
 		const edited = await observe();
@@ -348,10 +504,96 @@ test('desktop browser agent observes loaded pages, edits fields and follows navi
 		await expect(page.getByRole('tab', { name: 'Agent destination', exact: true })).toHaveCount(0);
 		await expect.poll(() => electron.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).filter(view => 'webContents' in view).length)).toBe(0);
 	} finally {
+		electron.context().off('page', preserveDialog);
 		server.closeAllConnections();
 		await new Promise<void>(resolve => server.close(() => resolve()));
 	}
 });
+
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`browser command, suggestion, permission and full-page capture contracts in ${locale}`, { tag: ['@electron-app-server'] }, async ({ application: initialApplication, workbench: initialWorkbench, restartWorkbench }) => {
+		let application = initialApplication; let workbench = initialWorkbench;
+		if (locale === 'zh-CN') {
+			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+			const picker = workbench.page.getByRole('dialog', { name: 'Select display language' });
+			await picker.getByRole('combobox').fill('简体中文'); await picker.getByRole('combobox').press('Enter');
+			({ application, workbench } = await restartWorkbench());
+		}
+		const labels = locale === 'en' ? { address: 'Browser address', permission: 'Manage website permissions', location: 'Location', deny: 'Deny', reset: 'Restore default' } : { address: '浏览器地址', permission: '管理网站权限', location: '位置', deny: '拒绝', reset: '恢复默认' };
+		let visits = 0;
+		const server = createServer((_request, response) => {
+			visits++; response.setHeader('Content-Type', 'text/html');
+			response.end('<title>Browser audit</title><style>body{margin:0;height:2400px}</style><p>Browser audit</p><script>console.log("browser audit log")</script>');
+		});
+		await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+		const endpoint = server.address(); if (!endpoint || typeof endpoint === 'string') { throw new Error('No audit endpoint'); }
+		const url = `http://127.0.0.1:${endpoint.port}/`;
+		const page = workbench.page;
+		const electron = application as ElectronApplication;
+		const original = await electron.evaluateHandle(({ dialog }) => dialog.showMessageBox);
+		await electron.evaluate(({ dialog }) => {
+			const prompts: BrowserPrompt[] = [];
+			(globalThis as unknown as { browserPrompts: BrowserPrompt[]; }).browserPrompts = prompts;
+			dialog.showMessageBox = ((...args: [Electron.MessageBoxOptions] | [Electron.BrowserWindow, Electron.MessageBoxOptions]) => new Promise<Electron.MessageBoxReturnValue>(respond => prompts.push({ options: args.at(-1) as Electron.MessageBoxOptions, respond }))) as typeof dialog.showMessageBox;
+		});
+		const prompts = () => electron.evaluate(() => (globalThis as unknown as { browserPrompts: BrowserPrompt[]; }).browserPrompts.map(item => item.options));
+		const answer = (label: string) => electron.evaluate((_electron, label) => {
+			const prompt = (globalThis as unknown as { browserPrompts: BrowserPrompt[]; }).browserPrompts.shift()!;
+			const response = prompt.options.buttons!.indexOf(label);
+			if (response < 0) { throw new Error(`Missing permission action: ${label}`); }
+			prompt.respond({ response, checkboxChecked: false });
+		}, label);
+		try {
+			await installMainChannelTestClient(page);
+			await workbench.quickaccess.runCommand('workbench.action.browser.open');
+			const address = page.getByRole('textbox', { name: labels.address, exact: true });
+			await address.fill(url); await address.press('Enter');
+			await expect(page.locator('.ash-browser-editor').getByRole('status')).toHaveText('Browser audit');
+			await workbench.quickaccess.runCommand('workbench.action.browser.toggleFavorite');
+			await address.fill('Browser audit'); await address.press('ArrowDown');
+			const suggestions = page.getByRole('dialog', { name: labels.address, exact: true });
+			await expect(suggestions.getByRole('option').filter({ hasText: 'Browser audit' })).toHaveCount(3);
+			await suggestions.getByRole('combobox').press('Escape');
+			await address.press('Escape'); await expect(address).toHaveValue(url);
+			const before = visits;
+			await workbench.quickaccess.runCommand('workbench.action.browser.hardReload');
+			await expect.poll(() => visits).toBeGreaterThan(before);
+			await expect(page.locator('.ash-browser-editor').getByRole('status')).toHaveText('Browser audit');
+			const views = await page.evaluate(async () => globalThis.ashTestMainProcess.call('browserView', 'getBrowserViews', [])) as IBrowserViewInfo[];
+			const id = views.find(view => view.state.url === url)!.id;
+			const logs = await page.evaluate(id => globalThis.ashTestMainProcess.call('browserView', 'getConsoleLogs', [id]), id);
+			expect(logs).toContain('browser audit log');
+			await workbench.quickaccess.runCommand('workbench.action.browser.addConsoleLogsToChat');
+			await workbench.quickaccess.runCommand('workbench.action.browser.addFullPageScreenshotToChat');
+			const dimensions = await page.evaluate(async id => {
+				// This diagnostic client reads the IPC envelope directly; binary results are base64.
+				const image = await globalThis.ashTestMainProcess.call<string>('browserView', 'captureScreenshot', [id, { fullPage: true, format: 'png' }]);
+				const bytes = Uint8Array.from(atob(image), character => character.charCodeAt(0));
+				const header = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+				return { magic: [...bytes.subarray(0, 8)], width: header.getUint32(16), height: header.getUint32(20) };
+			}, id);
+			expect(dimensions.magic).toEqual([137, 80, 78, 71, 13, 10, 26, 10]); expect(dimensions.height).toBeGreaterThanOrEqual(2400);
+			for (const decision of [labels.deny, labels.reset]) {
+				await workbench.quickaccess.runCommand('workbench.action.browser.managePermissions');
+				await expect.poll(prompts).toMatchObject([{ title: labels.permission, buttons: expect.arrayContaining([labels.location]) }]);
+				await answer(labels.location);
+				await expect.poll(prompts).toMatchObject([{ title: labels.permission, buttons: expect.arrayContaining([decision]) }]);
+				await answer(decision);
+				await expect.poll(async () => {
+					const state = await page.evaluate(id => globalThis.ashTestMainProcess.call('browserView', 'getState', [id]), id) as IBrowserViewInfo['state'];
+					return state.permissions?.origins[new URL(url).origin]?.location;
+				}).toBe(decision === labels.deny ? 'deny' : undefined);
+			}
+			await workbench.quickaccess.runCommand('workbench.action.browser.closeAll');
+			await expect(page.locator('.ash-browser-editor')).toHaveCount(0);
+		} finally {
+			await electron.evaluate(({ dialog }, original) => { dialog.showMessageBox = original; }, original);
+			await original.dispose();
+			server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()));
+		}
+	});
+}
 
 for (const locale of ['en', 'zh-CN']) {
 	test(`desktop BrowserView navigation and accessibility stay usable in ${locale}`, { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, application: initialApplication, workbench: initialWorkbench, restartWorkbench }, testInfo) => {
@@ -395,7 +637,7 @@ for (const locale of ['en', 'zh-CN']) {
 		const page = workbench.page;
 		try {
 			await installBrowserNetworkPolicy(electron, url);
-			await workbench.quickaccess.runCommand('ash.browser.open');
+			await workbench.quickaccess.runCommand('workbench.action.browser.open');
 			const editor = page.locator('.ash-browser-editor');
 			await expect(editor).toBeVisible();
 			await expect(editor.getByRole('toolbar', { name: labels.toolbar, exact: true })).toBeVisible();
@@ -446,13 +688,13 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect(more).toBeFocused();
 			const sharing = await workbench.dialogs.expectMessage(application, labels.pageActions[0]!, async () => {
 				await more.press('Enter');
-				await page.keyboard.press('Home');
+				await page.getByRole('menuitem', { name: labels.pageActions[0]!, exact: true }).focus();
 				await page.keyboard.press('Enter');
 			});
 			expect(sharing.title).toBe(labels.pageActions[0]);
 			for (const index of [1, 2]) {
-				await more.focus(); await more.press('Enter'); await page.keyboard.press('Home');
-				for (let step = 0; step < index; step++) { await page.keyboard.press('ArrowDown'); }
+				await more.focus(); await more.press('Enter');
+				await page.getByRole('menuitem', { name: labels.pageActions[index]!, exact: true }).focus();
 				await page.keyboard.press('Enter');
 				await expect(page.getByRole('menu')).toHaveCount(0);
 				await expect(more).toBeFocused();
@@ -521,7 +763,7 @@ for (const locale of ['en', 'zh-CN']) {
 		const page = workbench.page;
 		try {
 			await installBrowserNetworkPolicy(electron, url);
-			await workbench.quickaccess.runCommand('ash.browser.open');
+			await workbench.quickaccess.runCommand('workbench.action.browser.open');
 			const editor = page.locator('.ash-browser-editor');
 			const addressField = editor.getByRole('textbox', { name: locale === 'en' ? 'Browser address' : '浏览器地址', exact: true });
 			await addressField.fill(url); await addressField.press('Enter');
@@ -586,7 +828,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		const electron = application as ElectronApplication;
 		const page = workbench.page;
 		try {
-			await workbench.quickaccess.runCommand('ash.browser.open');
+			await workbench.quickaccess.runCommand('workbench.action.browser.open');
 			const editor = page.locator('.ash-browser-editor');
 			await editor.getByRole('textbox', { name: labels.address, exact: true }).fill(url);
 			await editor.getByRole('textbox', { name: labels.address, exact: true }).press('Enter');
@@ -695,7 +937,7 @@ test('desktop browser opens visible pages, navigates history, resizes and releas
 	const page = workbench.page;
 	try {
 		await installBrowserNetworkPolicy(electron, url);
-		await workbench.quickaccess.runCommand('ash.browser.open');
+		await workbench.quickaccess.runCommand('workbench.action.browser.open');
 		const editor = page.locator('.ash-browser-editor');
 		await expect(editor).toBeVisible();
 		await expect(page.getByRole('navigation', { name: 'Editor breadcrumbs' })).toBeHidden();
@@ -720,7 +962,7 @@ test('desktop browser opens visible pages, navigates history, resizes and releas
 		}, url);
 		await location.fill(`${url}second`); await location.press('Enter');
 		await expect(editor.getByRole('status')).toHaveText('Second page');
-		await workbench.quickaccess.runCommand('ash.browser.open');
+		await workbench.quickaccess.runCommand('workbench.action.browser.open');
 		await expect(page.getByRole('tab', { name: 'Second page', exact: true })).toHaveCount(1);
 		await expect(page.getByRole('tab', { name: 'Browser', exact: true })).toHaveCount(1);
 		await expect.poll(async () => (await views()).filter(view => view.url === `${url}second` && view.visible).length).toBe(0);

@@ -12,7 +12,7 @@ fn browser_tools_are_complete_strict_and_require_one_time_approval() {
         ResourceStore::default(),
     )))));
     let definitions = service.definitions();
-    assert_eq!(definitions.len(), 10);
+    assert_eq!(definitions.len(), 15);
     assert!(definitions.iter().all(|definition| definition.strict));
     assert!(
         definitions
@@ -65,6 +65,56 @@ fn browser_tools_reject_privileged_urls_and_ambiguous_element_ids() {
                 ))
                 .is_err()
         );
+    }
+}
+
+#[test]
+fn additional_browser_tools_validate_input_before_requesting_authority() {
+    let service = BrowserToolService::new(Arc::new(browser_host(Arc::new(Mutex::new(
+        ResourceStore::default(),
+    )))));
+    for (name, arguments) in [
+        ("browser_list_pages", json!({})),
+        ("browser_hover", json!({"target_id":"page", "node_id":"1"})),
+        (
+            "browser_drag",
+            json!({"target_id":"page", "source_node_id":"1", "destination_node_id":"2"}),
+        ),
+        (
+            "browser_handle_dialog",
+            json!({"target_id":"page", "accept":true, "prompt_text":"answer"}),
+        ),
+        (
+            "browser_run_playwright",
+            json!({"target_id":"page", "code":"return await page.title();"}),
+        ),
+    ] {
+        let review = service.prepare(&call(name, arguments)).unwrap();
+        assert!(matches!(
+            BrowserToolPolicy.decide(&review, &CancellationSource::new().token()),
+            Ok(ExecutionDecision::AskUser(_))
+        ));
+    }
+    for (name, arguments) in [
+        ("browser_list_pages", json!({"thread_id":"other"})),
+        (
+            "browser_drag",
+            json!({"target_id":"page", "source_node_id":"1", "destination_node_id":"-2"}),
+        ),
+        (
+            "browser_handle_dialog",
+            json!({"target_id":"page", "accept":"true", "prompt_text":null}),
+        ),
+        (
+            "browser_run_playwright",
+            json!({"target_id":"page", "code":" "}),
+        ),
+        (
+            "browser_run_playwright",
+            json!({"target_id":"page", "code":"a".repeat(32769)}),
+        ),
+    ] {
+        assert!(service.prepare(&call(name, arguments)).is_err());
     }
 }
 

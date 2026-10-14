@@ -10,9 +10,34 @@ import type { WebContents } from 'electron/main';
 import type { BrowserViewEvent, IBrowserViewOwner } from '../common/browserView.js';
 import type { ISerializedBrowserHistoryEntriesSnapshot, ISerializedBrowserFaviconsSnapshot } from '../common/browserHistory.js';
 import type { BrowserSessionHistory } from './browserSessionHistory.js';
+import { getMediaOrTextMime } from '../../../base/common/mime.js';
 
 /** Storage and permission policy have the Electron session's lifetime, independent of any page. */
 export class BrowserSession {
+	private readonly fileReaders = new Map<string, (url: string) => Promise<Uint8Array>>();
+	/** File bytes come from the renderer File Service, which retains Rust directory authorization. */
+	public attachFileReader(id: string, read: (url: string) => Promise<Uint8Array>): IDisposable {
+		if (this.storageScope === BrowserViewStorageScope.Agent) { throw new Error('BrowserLocalFileAccessDenied'); }
+		if (this.fileReaders.size === 0) {
+			this.electronSession.protocol.handle('file', async request => {
+				// Remote websites cannot probe local files through this protocol handler.
+				const initiator: unknown = Reflect.get(request, 'initiatorOrigin');
+				if ((initiator !== undefined && initiator !== 'file://') || !['GET', 'HEAD'].includes(request.method) || request.url.length > 8192) { return new Response(null, { status: 403 }); }
+				const url = new URL(request.url);
+				const reader = this.fileReaders.values().next().value;
+				if (!reader || url.protocol !== 'file:' || (url.hostname && url.hostname !== 'localhost')) { return new Response(null, { status: 403 }); }
+				try {
+					const bytes = await reader(url.href);
+					return new Response(bytes as Uint8Array<ArrayBuffer>, { headers: { 'Content-Type': getMediaOrTextMime(url.pathname) ?? 'application/octet-stream', 'Cache-Control': 'no-store' } });
+				} catch { return new Response(null, { status: 403 }); }
+			});
+		}
+		this.fileReaders.set(id, read);
+		return toDisposable(() => {
+			this.fileReaders.delete(id);
+			if (this.fileReaders.size === 0) { this.electronSession.protocol.unhandle('file'); }
+		});
+	}
 	private static readonly sessions = new WeakMap<Session, BrowserSession>();
 	public readonly permissions: BrowserSessionPermissions;
 	private remote: BrowserSessionRemote | undefined;

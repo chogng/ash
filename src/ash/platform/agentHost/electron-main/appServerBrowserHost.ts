@@ -3,7 +3,7 @@ import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { raceCancellationError } from '../../../base/common/async.js';
 import { isRecord } from '../../../base/common/types.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
-import type { BrowserCreateParams, BrowserObserveParams, BrowserPerformParams, BrowserCloseParams } from '../../../../../.build/protocol/typescript/index.js';
+import type { BrowserCreateParams, BrowserObserveParams, BrowserPerformParams, BrowserCloseParams, BrowserListParams } from '../../../../../.build/protocol/typescript/index.js';
 import { IBrowserViewMainService } from '../../browserView/electron-main/browserViewMainService.js';
 import type { BrowserView } from '../../browserView/electron-main/browserView.js';
 import { IPlaywrightService } from '../../browserView/common/playwrightService.js';
@@ -36,6 +36,19 @@ export class AppServerBrowserHost extends Disposable {
 	}
 
 	private readonly hostedTargets = new Map<string, string>();
+	async list(params: BrowserListParams) {
+		const pages = [];
+		for (const info of await this.views.getBrowserViews()) {
+			try { this.views.validateAgentAccess(info.id, params.threadId); }
+			catch (error) {
+				if (error instanceof Error && /BrowserTarget(AccessDenied|Unavailable)/.test(error.message)) { continue; }
+				throw error;
+			}
+			pages.push({ targetId: info.id, url: info.state.url, title: info.state.title.slice(0, 8192), loading: info.state.loading });
+		}
+		if (pages.length > 256) { throw new Error('Browser page list exceeds its limit'); }
+		return { pages };
+	}
 	async create(params: BrowserCreateParams, context: { signal: AbortSignal; }) {
 		this.assertNotDisposed();
 		const signal = AbortSignal.any([context.signal, this.cancellation.signal]);
@@ -63,9 +76,20 @@ export class AppServerBrowserHost extends Disposable {
 	async perform(params: BrowserPerformParams, context: { signal: AbortSignal; }) {
 		const { view, signal } = this.target(params.action.targetId, params.threadId, context.signal);
 		if (view.getInfo().owner.type !== 'agent') { throw new Error('BrowserNetworkIsolationRequired'); }
+		if (params.action.type === 'handleDialog') {
+			// Dialog completion must not queue behind the operation interrupted by that dialog.
+			const id = randomUUID();
+			this.sessions.add(params.threadId);
+			using cancellation = addAbortListener(signal, () => { void this.playwright.cancelOperation(id).catch(() => { }); });
+			signal.throwIfAborted();
+			await this.playwright.performAction(id, params.threadId, view.id, params.action);
+			signal.throwIfAborted();
+			return { targetId: view.id };
+		}
+		let output: string | undefined;
 		if (params.action.type === 'navigate') { await view.loadURL(params.action.url, signal, params.networkToken ?? null); }
-		else { await this.automate(view, params.threadId, signal, id => this.playwright.performAction(id, params.threadId, view.id, params.action), params.networkToken ?? null); }
-		return { targetId: view.id };
+		else { output = await this.automate(view, params.threadId, signal, id => this.playwright.performAction(id, params.threadId, view.id, params.action), params.networkToken ?? null); }
+		return { targetId: view.id, ...(output === undefined ? {} : { output }) };
 	}
 	private automate<T>(view: BrowserView, sessionId: string, signal: AbortSignal, execute: (id: string) => Promise<T>, networkToken?: string | null): Promise<T> {
 		return view.runOperation(signal, async operationSignal => {
@@ -140,6 +164,7 @@ export class AppServerBrowserHost extends Disposable {
 			finally { clearTimeout(timer); this.operations.delete(request.id); }
 		};
 		return [
+			{ channel: 'list', validate: operation, invoke: value => run(value, params => this.list(decodeAppServerServerRequestParams('browser/list', params))) },
 			{
 				channel: 'disposeSession', validate: value => {
 					if (!isRecord(value) || Object.keys(value).length !== 1 || typeof value.threadId !== 'string' || !value.threadId || value.threadId.length > 512) { throw new TypeError('Invalid browser session'); }

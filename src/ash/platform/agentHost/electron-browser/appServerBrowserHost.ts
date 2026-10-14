@@ -42,10 +42,11 @@ export function registerAppServerBrowserHost(client: AppServerProtocolClient, pl
 		catch (error) { sharedPages.delete(params.targetId); throw error; }
 	}));
 	handlers.add(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], async (params, context) => decodeAppServerServerRequestResult('browser/create', await call(context.signal, playwrightService, id => channel.call('create', { id, params })))));
+	handlers.add(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/list'], async (params, context) => decodeAppServerServerRequestResult('browser/list', await call(context.signal, playwrightService, id => channel.call('list', { id, params })))));
 	handlers.add(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/observe'], (params, context) => call(context.signal, playwrightService, id => playwrightService.getObservation(id, params.threadId, params.targetId, params, params.networkToken))));
 	handlers.add(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/perform'], async (params, context) => {
-		await call(context.signal, playwrightService, id => playwrightService.performAction(id, params.threadId, params.action.targetId, params.action, params.networkToken));
-		return { targetId: params.action.targetId };
+		const output = await call(context.signal, playwrightService, id => playwrightService.performAction(id, params.threadId, params.action.targetId, params.action, params.networkToken));
+		return { targetId: params.action.targetId, ...(output === undefined ? {} : { output }) };
 	}));
 	handlers.add(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/close'], async (params, context) => decodeAppServerServerRequestResult('browser/close', await call(context.signal, playwrightService, id => channel.call('close', { id, params })))));
 	return handlers;

@@ -5,6 +5,8 @@ import { IElevatedFileService } from '../workbench/services/files/common/elevate
 import { localize2 } from '../nls.js';
 import '../workbench/electron-browser/desktop.contribution.js';
 import '../workbench/contrib/browserView/electron-browser/browserView.contribution.js';
+import '../workbench/services/browserView/electron-browser/playwrightWorkbenchService.js';
+import './contrib/browserView/browser/sessionBrowserView.contribution.js';
 import './sessions.common.main.js';
 import '../workbench/contrib/chat/electron-browser/actions/voiceChatActions.js';
 import { AgentsWindowInvitationContribution } from '../workbench/contrib/chat/electron-browser/agentSessions/agentsWindowInvitation.js';
@@ -24,9 +26,12 @@ import { NativeHostService } from '../workbench/services/host/electron-browser/n
 import { ILanguagePackStore } from '../platform/languagePacks/common/languagePackStore.js';
 import { BrowserLanguagePackStore } from '../platform/languagePacks/browser/languagePackStore.js';
 import { InstantiationType, registerSingleton } from '../platform/instantiation/common/extensions.js';
+import { IRemoteAuthorityResolverService } from '../platform/remote/common/remoteAuthorityResolver.js';
+import { RemoteAuthorityResolverService } from '../platform/remote/electron-browser/remoteAuthorityResolverService.js';
 
 registerSingleton(IHostService, NativeHostService, InstantiationType.Delayed);
 registerSingleton(ILanguagePackStore, BrowserLanguagePackStore, InstantiationType.Delayed);
+registerSingleton(IRemoteAuthorityResolverService, RemoteAuthorityResolverService, InstantiationType.Delayed);
 
 registerOpenAgentsWindowCommand();
 registerWorkbenchContribution(AgentsWindowInvitationContribution.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(AgentsWindowInvitationContribution));

@@ -2,23 +2,48 @@ import type { VSBuffer } from '../../../../base/common/buffer.js';
 import type { IBrowserViewFindInPageOptions, IBrowserElementSelectionOptions, IBrowserElementCommentsUpdate, IBrowserViewCaptureScreenshotOptions } from '../../../../platform/browserView/common/browserView.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, type IDisposable } from '../../../../base/common/lifecycle.js';
-import { IBrowserViewService, type BrowserViewEvent, type IBrowserViewBounds, type IBrowserViewCreateOptions, type IBrowserViewInfo, type IBrowserViewState } from '../../../../platform/browserView/common/browserView.js';
+import { IBrowserViewService, type BrowserViewEvent, type IBrowserViewBounds, type IBrowserViewCreateOptions, type IBrowserViewInfo, type IBrowserViewOwner, type IBrowserViewState } from '../../../../platform/browserView/common/browserView.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { BrowserEditorInput, IBrowserEditorInputData } from './browserEditorInput.js';
 import type { IntegratedBrowserOpenSource } from '../../../../platform/browserView/common/browserViewTelemetry.js';
+import type { EditorOpenOptions } from '../../../services/editor/common/editorService.js';
 
 export const BrowserViewEditorId = 'workbench.editor.browser';
 
 export const IBrowserViewWorkbenchService = createServiceIdentifier<IBrowserViewWorkbenchService>('browserViewWorkbenchService');
 
+export interface IBrowserViewFilterContext {
+	readonly sandboxSessionId?: string;
+	readonly activeSessionId?: string;
+}
+
+/** Presentation filters do not grant access to a page; Main still enforces agent authority. */
+export interface IBrowserViewContextualFilter {
+	include(input: BrowserEditorInput, context: IBrowserViewFilterContext): boolean;
+	readonly onDidChange?: Event<void>;
+}
+
+export interface IBrowserViewOpenHandler {
+	shouldOpenEditor(input: BrowserEditorInput, owner: IBrowserViewOwner, editorOptions: EditorOpenOptions): boolean;
+}
+
+export interface IBrowserViewWorkbenchCreateOptions extends Omit<IBrowserViewCreateOptions, 'session'> {
+	readonly session?: IBrowserViewCreateOptions['session'];
+}
+
 export interface IBrowserViewWorkbenchService {
+	readonly onDidChangeBrowserViews: Event<void>;
 	initialize(): Promise<void>;
 	getKnownBrowserViews(): ReadonlyMap<string, BrowserEditorInput>;
+	getContextualBrowserViews(context?: IBrowserViewFilterContext): Map<string, BrowserEditorInput>;
+	registerContextualFilter(filter: IBrowserViewContextualFilter): IDisposable;
+	registerOpenHandler(handler: IBrowserViewOpenHandler): IDisposable;
 	getOrCreateLazy(data: IBrowserEditorInputData): BrowserEditorInput;
-	createBrowserView(options: IBrowserViewCreateOptions, source?: IntegratedBrowserOpenSource): Promise<BrowserEditorInput>;
+	createBrowserView(options: IBrowserViewWorkbenchCreateOptions, source?: IntegratedBrowserOpenSource): Promise<BrowserEditorInput>;
 }
 
 export interface IBrowserViewModel extends IDisposable {
+	getConsoleLogs(): Promise<string>;
 	getSelectedText(): Promise<string>;
 	findInPage(text: string, options?: IBrowserViewFindInPageOptions): Promise<void>;
 	stopFindInPage(keepSelection?: boolean): Promise<void>;
@@ -37,7 +62,7 @@ export interface IBrowserViewModel extends IDisposable {
 	loadURL(url: string): Promise<void>;
 	goBack(): Promise<void>;
 	goForward(): Promise<void>;
-	reload(): Promise<void>;
+	reload(hard?: boolean): Promise<void>;
 	stop(): Promise<void>;
 	focus(): Promise<void>;
 	layout(bounds: IBrowserViewBounds): Promise<void>;
@@ -94,6 +119,7 @@ export class BrowserViewModel extends Disposable implements IBrowserViewModel {
 		}
 	}
 
+	public getConsoleLogs(): Promise<string> { return this.service.getConsoleLogs(this.id); }
 	public getSelectedText(): Promise<string> { return this.service.getSelectedText(this.id); }
 	public findInPage(text: string, options?: IBrowserViewFindInPageOptions): Promise<void> { return this.service.findInPage(this.id, text, options); }
 	public stopFindInPage(keepSelection?: boolean): Promise<void> { return this.service.stopFindInPage(this.id, keepSelection); }
@@ -105,7 +131,7 @@ export class BrowserViewModel extends Disposable implements IBrowserViewModel {
 	public loadURL(url: string): Promise<void> { return this.service.loadURL(this.id, url); }
 	public goBack(): Promise<void> { return this.service.goBack(this.id); }
 	public goForward(): Promise<void> { return this.service.goForward(this.id); }
-	public reload(): Promise<void> { return this.service.reload(this.id); }
+	public reload(hard?: boolean): Promise<void> { return this.service.reload(this.id, hard); }
 	public stop(): Promise<void> { return this.service.stop(this.id); }
 	public focus(): Promise<void> { return this.service.focus(this.id); }
 	public layout(bounds: IBrowserViewBounds): Promise<void> { return this.service.layout(this.id, bounds); }

@@ -33,6 +33,10 @@ export class BrowserViewDebugger extends Disposable {
 	public sendCommand(method: string, params?: Record<string, unknown>, sessionId?: string): Promise<unknown> {
 		this.assertNotDisposed();
 		const command = this.contents.debugger.sendCommand(method, params, sessionId);
+		if (method === 'Page.handleJavaScriptDialog') {
+			// Electron's dialog host keeps its own modal UI after Chromium receives a reply.
+			this.contents.emit('-cancel-dialogs');
+		}
 		this.pending.add(command);
 		void command.then(() => this.pending.delete(command), () => this.pending.delete(command));
 		return command;

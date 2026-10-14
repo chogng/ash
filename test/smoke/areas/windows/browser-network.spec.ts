@@ -137,7 +137,7 @@ startElectronApplication();
 });
 
 test('remote session proxies DNS, subresources, fetch, WebSocket and loopback, then rejects direct requests after disconnect', { tag: '@electron-ui' }, async ({ network: { application, page, workbench, port, hosts, requests, stopProxy } }) => {
-	await workbench.quickaccess.runCommand('ash.browser.open');
+	await workbench.quickaccess.runCommand('workbench.action.browser.open');
 	const editor = page.locator('.ash-browser-editor');
 	const address = editor.getByRole('textbox', { name: 'Browser address' });
 	const url = `http://localhost:${port}/`;
@@ -172,7 +172,7 @@ test('remote session proxies DNS, subresources, fetch, WebSocket and loopback, t
 	await page.keyboard.press('ControlOrMeta+w');
 	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { networkScenario: NetworkScenario; }).networkScenario.released)).toBe(1);
 	await application.evaluate(() => { (globalThis as unknown as { networkScenario: NetworkScenario; }).networkScenario.remote = false; });
-	await workbench.quickaccess.runCommand('ash.browser.open');
+	await workbench.quickaccess.runCommand('workbench.action.browser.open');
 	await address.fill(loopback); await address.press('Enter');
 	await expect(editor.getByRole('status')).toHaveText('Remote network fixture');
 	expect(await application.evaluate(async ({ BrowserWindow }, loopback) => {

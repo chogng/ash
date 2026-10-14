@@ -9,7 +9,7 @@ import {
 
 type Session =
 	| { type: 'browser'; parent?: string; }
-	| { type: 'page'; targetId: string; parent?: string; actual?: string; autoAttach: boolean; automatic: boolean; };
+	| { type: 'page'; targetId: string; parent?: string; actual?: string; childTargetId?: string; childTargetInfo?: CDPTargetInfo; autoAttach: boolean; automatic: boolean; };
 
 /** Handles one logical browser connection without owning its host's pages or Chromium attachment. */
 export class CDPBrowserProxy extends Disposable {
@@ -44,14 +44,17 @@ export class CDPBrowserProxy extends Disposable {
 	}
 
 	private info(target: CDPTargetInfo): CDPTargetInfo {
-		const attached = [...this.sessions.values()].some(session => session.type === 'page' && session.targetId === target.targetId);
+		const attached = [...this.sessions.values()].some(session => session.type === 'page' && (session.targetId === target.targetId || session.childTargetId === target.targetId));
 		return { ...target, attached };
 	}
 
 	private attach(targetId: string, parent?: string, automatic = false): string {
-		const target = this.host.getTargetInfo(targetId);
+		const child = [...this.sessions.values()].find(session => session.type === 'page' && session.childTargetId === targetId);
+		const target = child?.type === 'page' && child.childTargetInfo ? child.childTargetInfo : this.host.getTargetInfo(targetId);
 		const sessionId = generateUuid();
-		this.sessions.set(sessionId, { type: 'page', targetId: target.targetId, parent, autoAttach: false, automatic });
+		this.sessions.set(sessionId, child?.type === 'page'
+			? { ...child, parent, autoAttach: false, automatic }
+			: { type: 'page', targetId: target.targetId, parent, autoAttach: false, automatic });
 		this.event('Target.attachedToTarget', { sessionId, targetInfo: this.info(target), waitingForDebugger: false }, parent);
 		return sessionId;
 	}
@@ -67,7 +70,7 @@ export class CDPBrowserProxy extends Disposable {
 			if (child.parent === id && this.sessions.has(childId)) { this.detach(childId); }
 		}
 		if (session.type === 'page') {
-			this.event('Target.detachedFromTarget', { sessionId: id, targetId: session.targetId }, session.parent);
+			this.event('Target.detachedFromTarget', { sessionId: id, targetId: session.childTargetId ?? session.targetId }, session.parent);
 		}
 	}
 
@@ -79,13 +82,14 @@ export class CDPBrowserProxy extends Disposable {
 		for (const [id, session] of [...this.sessions]) {
 			if (session.type !== 'page' || session.targetId !== targetId || session.actual !== event.sessionId) { continue; }
 			if (event.method === 'Target.attachedToTarget' && isRecord(event.params)) {
-				if (!session.autoAttach || typeof event.params.sessionId !== 'string') { continue; }
+				if (!session.autoAttach || typeof event.params.sessionId !== 'string' || !isRecord(event.params.targetInfo) || typeof event.params.targetInfo.targetId !== 'string') { continue; }
+				// Route commands through the owning page, but retire the actual child target.
 				const childId = generateUuid();
-				this.sessions.set(childId, { type: 'page', targetId, parent: id, actual: event.params.sessionId, autoAttach: false, automatic: false });
+				this.sessions.set(childId, { type: 'page', targetId, parent: id, actual: event.params.sessionId, childTargetId: event.params.targetInfo.targetId, childTargetInfo: event.params.targetInfo as unknown as CDPTargetInfo, autoAttach: false, automatic: false });
 				this.event(event.method, { ...event.params, sessionId: childId }, id);
 			} else if (event.method === 'Target.detachedFromTarget' && isRecord(event.params)) {
 				for (const [childId, child] of [...this.sessions]) {
-					if (child.type === 'page' && child.parent === id && child.actual === event.params.sessionId) { this.detach(childId); }
+					if (child.type === 'page' && child.targetId === targetId && child.actual === event.params.sessionId) { this.detach(childId); }
 				}
 			} else { this.event(event.method, event.params, id); }
 		}
@@ -122,10 +126,11 @@ export class CDPBrowserProxy extends Disposable {
 		const browser = !session || session.type === 'browser';
 		if (method === 'Browser.getVersion') { return this.host.getVersion(); }
 		if (method === 'Target.getTargetInfo') {
-			const targetId = params.targetId ?? (session?.type === 'page' ? session.targetId : undefined);
+			const targetId = params.targetId ?? (session?.type === 'page' ? session.childTargetId ?? session.targetId : undefined);
+			const child = [...this.sessions.values()].find(value => value.type === 'page' && value.childTargetId === targetId);
 			const targetInfo = targetId === undefined
 				? this.host.targetInfo
-				: this.info(this.host.getTargetInfo(stringParam(targetId, 'targetId')));
+				: this.info(child?.type === 'page' && child.childTargetInfo ? child.childTargetInfo : this.host.getTargetInfo(stringParam(targetId, 'targetId')));
 			return { targetInfo };
 		}
 		if (method === 'Browser.getWindowForTarget') {

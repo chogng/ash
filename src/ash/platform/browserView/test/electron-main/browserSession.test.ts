@@ -17,6 +17,27 @@ import { BrowserSessionHistory } from '../../electron-main/browserSessionHistory
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
+test('local file protocol delegates reads, rejects website initiators and unregisters with its last page', async () => {
+	let handler: ((request: Request) => Promise<Response>) | undefined;
+	const electronSession = Object.assign(new EventEmitter(), {
+		setPermissionCheckHandler() { }, setPermissionRequestHandler() { }, setDevicePermissionHandler() { },
+		protocol: { handle: (_scheme: string, read: typeof handler) => { handler = read; }, unhandle: () => { handler = undefined; } },
+	}) as unknown as Session;
+	const session = BrowserSession.getOrCreate('local-files', BrowserViewStorageScope.Workspace, electronSession);
+	const reads: string[] = [];
+	using first = session.attachFileReader('first', async url => { reads.push(url); return new TextEncoder().encode('<title>File preview</title>'); });
+	using second = session.attachFileReader('second', async () => { throw new Error('First live reader owns this session'); });
+	const response = await handler!(new Request('file:///workspace/index.html'));
+	assert.deepEqual([response.headers.get('Content-Type'), await response.text(), reads], ['text/html', '<title>File preview</title>', ['file:///workspace/index.html']]);
+	const websiteRequest = Object.assign(new Request('file:///workspace/private.txt'), { initiatorOrigin: 'https://example.test' });
+	assert.equal((await handler!(websiteRequest)).status, 403);
+	assert.equal(reads.length, 1);
+	second.dispose();
+	assert.ok(handler);
+	first.dispose();
+	assert.equal(handler, undefined);
+});
+
 test('history leases share one session owner and preserve data after the final window retires', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'ash-browser-history-'));
 	try {
@@ -111,10 +132,15 @@ test('website grants bind both origins, reset removes decisions and closing canc
 	assert.equal(first.type, 'permissionRequested');
 	if (first.type !== 'permissionRequested') throw new Error('Missing website request');
 	assert.throws(() => policy.respond('another-page', first.requestId, true), /Unavailable/);
-	policy.respond('page', first.requestId, true);
+	policy.setPermissions('page', 'https://frame.test', [{ category: PermissionCategory.Location, state: 'allow' }]);
+	assert.deepEqual(policy.snapshot(contents).origins['https://frame.test'], { location: 'allow' });
 	assert.equal(granted, true);
 	assert.equal(check(contents, 'geolocation', 'https://frame.test/', { isMainFrame: false, embeddingOrigin: 'https://parent.test/' }), true);
 	assert.equal(check(contents, 'geolocation', 'https://frame.test/', { isMainFrame: false, embeddingOrigin: 'https://other.test/' }), false);
+	policy.setPermissions('page', 'https://frame.test', [{ category: PermissionCategory.Location, state: 'deny' }]);
+	assert.equal(check(contents, 'geolocation', 'https://frame.test/', { isMainFrame: false, embeddingOrigin: 'https://parent.test/' }), false);
+	policy.setPermissions('page', 'https://frame.test', [{ category: PermissionCategory.Location, state: null }]);
+	assert.deepEqual(policy.snapshot(contents), { origins: {} });
 	policy.clear();
 	assert.equal(check(contents, 'geolocation', 'https://frame.test/', { isMainFrame: false, embeddingOrigin: 'https://parent.test/' }), false);
 	ask();
@@ -165,3 +191,5 @@ test('a remote session retains one SOCKS policy until its last page closes and n
 	assert.equal(child.listenerCount('exit'), 0);
 	assert.equal(policies.length, 1);
 });
+
+import { PermissionCategory } from '../../common/browserPermissions.js';

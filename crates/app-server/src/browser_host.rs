@@ -563,7 +563,95 @@ impl BrowserCapability for BrowserHost {
                 "browser host changed target identity".into(),
             ));
         }
-        Ok(BrowserActionResult { target_id })
+        if result
+            .output
+            .as_ref()
+            .is_some_and(|output| output.len() > 1024 * 1024)
+        {
+            return Err(BrowserError::Failed(
+                "browser script result is too large".into(),
+            ));
+        }
+        Ok(BrowserActionResult {
+            target_id,
+            output: result.output,
+        })
+    }
+
+    fn list_targets(
+        &self,
+        cancellation: &CancellationToken,
+    ) -> Result<Vec<BrowserObservation>, BrowserError> {
+        let owner = self.create_owner()?;
+        let snapshot = self
+            .state
+            .lock()
+            .map_err(|_| BrowserError::CapabilityUnavailable)?
+            .target_owners
+            .clone();
+        let response: ash_app_server_protocol::protocol::browser::BrowserListResult = self
+            .request(
+                owner,
+                HostMethod::BrowserList,
+                &ash_app_server_protocol::protocol::browser::BrowserListParams {
+                    thread_id: self.thread_id()?.to_string(),
+                },
+                cancellation,
+            )?;
+        if response.pages.len() > 256
+            || response
+                .pages
+                .iter()
+                .any(|page| page.url.len() > 8192 || page.title.len() > 8192)
+        {
+            return Err(BrowserError::Failed(
+                "browser page list exceeds its limits".into(),
+            ));
+        }
+        let present = response
+            .pages
+            .iter()
+            .map(|page| page.target_id.clone())
+            .collect::<std::collections::BTreeSet<_>>();
+        if present.len() != response.pages.len() {
+            return Err(BrowserError::Failed(
+                "browser page list repeats a target".into(),
+            ));
+        }
+        let mut pages = Vec::new();
+        for page in response.pages {
+            let target_id = BrowserTargetId(page.target_id);
+            if self
+                .target_owner(&target_id, BrowserHostOperation::Observe)
+                .is_err()
+            {
+                continue;
+            }
+            pages.push(BrowserObservation {
+                target_id,
+                url: page.url,
+                title: page.title,
+                loading: page.loading,
+                accessibility_tree: None,
+                dom_snapshot: None,
+                screenshot: None,
+            });
+        }
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| BrowserError::CapabilityUnavailable)?;
+        // Only retire records that existed before this snapshot request, never a concurrent creation.
+        for (id, previous) in snapshot {
+            if previous.connection_id == owner
+                && &previous.thread_id == self.thread_id()?
+                && !present.contains(&id)
+                && state.target_owners.get(&id) == Some(&previous)
+            {
+                state.target_owners.remove(&id);
+            }
+        }
+        Ok(pages)
     }
 
     fn close_target(
@@ -594,6 +682,10 @@ fn action_target_id(action: &BrowserAction) -> &BrowserTargetId {
     match action {
         BrowserAction::Navigate { target_id, .. }
         | BrowserAction::Click { target_id, .. }
+        | BrowserAction::Hover { target_id, .. }
+        | BrowserAction::Drag { target_id, .. }
+        | BrowserAction::HandleDialog { target_id, .. }
+        | BrowserAction::RunPlaywright { target_id, .. }
         | BrowserAction::TypeText { target_id, .. }
         | BrowserAction::Scroll { target_id, .. }
         | BrowserAction::GoBack { target_id }
@@ -613,6 +705,40 @@ fn browser_action_dto(action: BrowserAction) -> BrowserPerformActionDto {
                 node_id: target.node_id,
             },
         },
+        BrowserAction::Hover { target_id, target } => BrowserPerformActionDto::Hover {
+            target_id: target_id.0,
+            target: BrowserElementTargetDto {
+                node_id: target.node_id,
+            },
+        },
+        BrowserAction::Drag {
+            target_id,
+            source,
+            destination,
+        } => BrowserPerformActionDto::Drag {
+            target_id: target_id.0,
+            source: BrowserElementTargetDto {
+                node_id: source.node_id,
+            },
+            destination: BrowserElementTargetDto {
+                node_id: destination.node_id,
+            },
+        },
+        BrowserAction::HandleDialog {
+            target_id,
+            accept,
+            prompt_text,
+        } => BrowserPerformActionDto::HandleDialog {
+            target_id: target_id.0,
+            accept,
+            prompt_text,
+        },
+        BrowserAction::RunPlaywright { target_id, code } => {
+            BrowserPerformActionDto::RunPlaywright {
+                target_id: target_id.0,
+                code,
+            }
+        }
         BrowserAction::TypeText {
             target_id,
             target,

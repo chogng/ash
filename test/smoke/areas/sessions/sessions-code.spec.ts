@@ -6,6 +6,51 @@ import { test as browserTest } from '@playwright/test';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { Workbench } from '../../../automation/workbench.js';
 import { captureElectronMenu } from '../../../automation/menus.js';
+import { installMainChannelTestClient } from '../../../automation/mainProcessIpc.js';
+import type { IBrowserViewInfo } from '../../../../src/ash/platform/browserView/common/browserView.js';
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`Sessions browser tabs support keyboard selection, reload and Main cleanup in ${locale}`, { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, workbench, restartWorkbench }) => {
+		if (locale === 'zh-CN') {
+			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+			const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
+			await language.fill('简体中文');
+			await language.press('Enter');
+			({ workbench } = await restartWorkbench());
+		}
+		const copy = locale === 'zh-CN'
+			? { code: '代码', browser: '浏览器', tabs: '浏览器标签页', newTab: '打开新的浏览器标签页' }
+			: { code: 'Code', browser: 'Browser', tabs: 'Browser tabs', newTab: 'Open new browser tab' };
+		const page = await workbench.openAgentsWindow(target.kind);
+		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: copy.code, exact: true }).click();
+		await installMainChannelTestClient(page);
+		const commands = new QuickAccess(page);
+		const tabs = page.getByRole('tab', { name: copy.browser, exact: true });
+		const readPages = () => page.evaluate(() => globalThis.ashTestMainProcess.call<readonly IBrowserViewInfo[]>('browserView', 'getBrowserViews', []));
+		await commands.runCommand('workbench.action.browser.open');
+		await expect(tabs).toHaveCount(1);
+		await commands.runCommand('workbench.action.browser.quickOpen');
+		const picker = page.getByRole('dialog', { name: copy.tabs, exact: true });
+		const search = picker.getByRole('combobox');
+		await search.fill(copy.newTab);
+		await search.press('Enter');
+		await expect(tabs).toHaveCount(2);
+		const ids = (await readPages()).map(view => view.id).sort();
+		expect(ids).toHaveLength(2);
+		await page.reload();
+		await expect(tabs).toHaveCount(2);
+		expect((await readPages()).map(view => view.id).sort()).toEqual(ids);
+		await commands.runCommand('workbench.action.browser.quickOpen');
+		await search.fill('about:blank');
+		await expect(picker.getByRole('option')).toHaveCount(3);
+		await search.press('Enter');
+		await expect(picker).toBeHidden();
+		await tabs.last().press('Delete');
+		await expect.poll(async () => (await readPages()).length).toBe(1);
+		await tabs.press('Delete');
+		await expect.poll(async () => (await readPages()).length).toBe(0);
+	});
+}
 
 test('Code Sessions runs Quick Diff commands through its editor services', async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);

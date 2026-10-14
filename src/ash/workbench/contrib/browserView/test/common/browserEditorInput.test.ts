@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
-import { Emitter } from '../../../../../base/common/event.js';
-import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
+import { Disposable, DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { promiseWithResolvers } from '../../../../../base/common/async.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { IBrowserViewService, BrowserViewStorageScope, type BrowserViewEvent, type IBrowserViewInfo, type IBrowserViewService as BrowserService } from '../../../../../platform/browserView/common/browserView.js';
@@ -152,7 +152,9 @@ function fixture() {
 		info: { id, host: { windowId: 1 }, owner: { type: 'user' }, session: data.session, state: { targetId: id, url: data.url, title: 'Live page', loading: false, visible: false, canGoBack: false, canGoForward: false } } as IBrowserViewInfo,
 	};
 	const service: BrowserService = {
-		updateWindowConfiguration: async () => { }, getSelectedText: async () => '', findInPage: async () => { }, stopFindInPage: async () => { },
+		setPermissions: async () => { }, respondToFileRequest: async () => { },
+		toggleDevTools: async () => { }, clearStorage: async () => { }, setBrowserZoomIndex: async () => { }, setDeviceEmulation: async () => { },
+		updateWindowConfiguration: async () => { }, getConsoleLogs: async () => '', getSelectedText: async () => '', findInPage: async () => { }, stopFindInPage: async () => { },
 		toggleElementSelection: async () => { }, setElementComments: async () => { }, toggleAreaSelection: async () => { }, captureScreenshot: async () => { throw new Error('Unexpected screenshot'); },
 		getBrowserHistory: async () => ({ items: [] }), deleteBrowserHistory: async () => { },
 		getSharing: async () => [], setSharing: async () => { },
@@ -163,6 +165,11 @@ function fixture() {
 	};
 	const instantiation = store.add(new InstantiationService(new ServiceCollection([IBrowserViewService, service])));
 	const input = (inputData: IBrowserEditorInputData) => store.add(instantiation.createInstance(BrowserEditorInput, inputData));
-	instantiation.registerInstance(IBrowserViewWorkbenchService, { initialize: async () => { }, getKnownBrowserViews: () => new Map(), getOrCreateLazy: input, createBrowserView: async () => { throw new Error('Not used in serializer fixture'); } });
+	instantiation.registerInstance(IBrowserViewWorkbenchService, {
+		onDidChangeBrowserViews: Event.None,
+		initialize: async () => { }, getKnownBrowserViews: () => new Map(), getContextualBrowserViews: () => new Map(),
+		registerContextualFilter: () => Disposable.None, registerOpenHandler: () => Disposable.None,
+		getOrCreateLazy: input, createBrowserView: async () => { throw new Error('Not used in serializer fixture'); },
+	});
 	return Object.assign(f, { service, instantiation, input });
 }

@@ -16,6 +16,10 @@ import type { EditorPartChangeEvent } from '../../../../services/editor/common/e
 import { BrowserViewWorkbenchService } from '../../electron-browser/browserViewWorkbenchService.js';
 import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
 import { NullTelemetryServiceShape } from '../../../../../platform/telemetry/common/telemetryUtils.js';
+import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
+import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
+import { IBrowserViewWorkbenchService } from '../../common/browserView.js';
+import '../../electron-browser/features/browserTabManagementFeatures.js';
 
 const id = 'browser_target_123e4567-e89b-12d3-a456-426614174000';
 const info: IBrowserViewInfo = {
@@ -25,6 +29,134 @@ const info: IBrowserViewInfo = {
 
 suite('Browser Workbench page lifecycle', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('new user pages resolve storage preferences, remote isolation and live backend trust', async () => {
+		using f = fixture();
+		const create = () => f.views.createBrowserView({ initialUrl: 'https://example.test/', owner: { type: 'user' } });
+		const first = await create();
+		assert.equal(first.model!.info.session.scope, BrowserViewStorageScope.Global);
+		await f.configuration.updateValue('workbench.browser.dataStorage', 'workspace', ConfigurationTarget.MEMORY);
+		assert.equal((await create()).model!.info.session.scope, BrowserViewStorageScope.Workspace);
+		assert.equal(first.model!.info.session.scope, BrowserViewStorageScope.Global);
+		await f.configuration.updateValue('workbench.browser.dataStorage', 'global', ConfigurationTarget.MEMORY);
+		f.remote = 'ssh-remote+test';
+		assert.equal((await create()).model!.info.session.scope, BrowserViewStorageScope.Workspace);
+		f.trusted = false;
+		assert.equal((await create()).model!.info.session.scope, BrowserViewStorageScope.Ephemeral);
+		f.trustUnavailable = true;
+		assert.equal((await create()).model!.info.session.scope, BrowserViewStorageScope.Ephemeral);
+		f.trustUnavailable = false;
+		f.trusted = true; f.remote = undefined; f.state = WorkbenchState.EMPTY;
+		await f.configuration.updateValue('workbench.browser.dataStorage', 'workspace', ConfigurationTarget.MEMORY);
+		assert.equal((await create()).model!.info.session.scope, BrowserViewStorageScope.Ephemeral);
+		const agent = await f.views.createBrowserView({ initialUrl: 'https://example.test/', owner: { type: 'agent', sessionId: 'thread-one' }, session: { scope: BrowserViewStorageScope.Agent, affinity: 'thread-one' } });
+		assert.deepEqual(agent.model!.info.session, { scope: BrowserViewStorageScope.Agent, affinity: 'thread-one' });
+	});
+
+	test('registered navigation commands call the current page owner and hard reload preserves cache bypass', async () => {
+		using f = fixture(); await f.views.initialize();
+		f.active = f.views.getKnownBrowserViews().get(id);
+		const calls: string[] = [];
+		f.service.goBack = async () => { calls.push('back'); };
+		f.service.goForward = async () => { calls.push('forward'); };
+		f.service.reload = async (_id, hard) => { calls.push(hard ? 'hard' : 'reload'); };
+		for (const command of ['goBack', 'goForward', 'reload', 'hardReload']) {
+			await f.services.invokeFunction(CommandsRegistry.getCommand('workbench.action.browser.' + command)!);
+		}
+		assert.deepEqual(calls, ['back', 'forward', 'reload', 'hard']);
+	});
+
+	test('the browser tab command lists contextual pages and rechecks ownership before opening a stale selection', async () => {
+		using f = fixture();
+		await f.views.initialize();
+		using resources = new DisposableStore();
+		const accepted = resources.add(new Emitter<void>());
+		const hidden = resources.add(new Emitter<void>());
+		const query = resources.add(new Emitter<string>());
+		const shown = promiseWithResolvers<void>();
+		type Pick = IQuickPickItem & { viewId?: string; };
+		const picker = {
+			items: [] as Pick[], activeItems: [] as Pick[], selectedItems: [] as Pick[], value: '',
+			ariaLabel: '', placeholder: '', sortByLabel: false,
+			onDidHide: hidden.event, onDidAccept: accepted.event, onDidChangeValue: query.event,
+			show: () => shown.resolve(), hide: () => hidden.fire(), dispose: () => { }, [Symbol.dispose]: () => { },
+		};
+		f.services.registerInstance(IBrowserViewWorkbenchService, f.views);
+		f.services.registerInstance(IQuickInputService, { createQuickPick: () => picker as unknown as IQuickPick<IQuickPickItem> } as unknown as IQuickInputService);
+		let included = true;
+		using changed = new Emitter<void>();
+		using filter = f.views.registerContextualFilter({ include: () => included, onDidChange: changed.event });
+		const command = Promise.resolve(f.services.invokeFunction(CommandsRegistry.getCommand('workbench.action.browser.quickOpen')!));
+		await shown.promise;
+		assert.deepEqual(picker.items.map(item => item.label), ['Original page', 'Open new browser tab']);
+		const selected = picker.items[0]!;
+		picker.activeItems = [selected];
+		f.events.fire({ type: 'stateChanged', state: { ...info.state, title: 'Changed title' } });
+		assert.equal(picker.activeItems[0]!.viewId, id);
+		assert.equal(picker.activeItems[0]!.label, 'Changed title');
+		picker.selectedItems = [selected];
+		included = false;
+		changed.fire();
+		assert.deepEqual(picker.items.map(item => item.label), ['Open new browser tab']);
+		accepted.fire();
+		await command;
+		assert.deepEqual(f.opened, []);
+	});
+
+	test('open handlers suppress background presentation while retaining the Main page and owner', async () => {
+		using f = fixture();
+		const calls: string[] = [];
+		using handler = f.views.registerOpenHandler({
+			shouldOpenEditor: (_input, owner) => {
+				calls.push(owner.type === 'agent' ? owner.sessionId : 'user');
+				return owner.type === 'user';
+			},
+		});
+		const input = await f.views.createBrowserView({
+			initialUrl: 'https://example.test/background',
+			owner: { type: 'agent', sessionId: 'background-thread' },
+			session: { scope: BrowserViewStorageScope.Agent, affinity: 'background-thread' },
+		});
+		assert.deepEqual([calls, f.opened, f.destroyed, input.model?.info.owner], [['background-thread'], [], [], { type: 'agent', sessionId: 'background-thread' }]);
+		assert.equal(f.views.getKnownBrowserViews().get(input.id), input);
+	});
+
+	test('Main-created pages consult the same open handlers and a removed handler permits the next page', async () => {
+		using f = fixture();
+		await f.views.initialize();
+		const evaluated = promiseWithResolvers<void>();
+		const handler = f.views.registerOpenHandler({ shouldOpenEditor: () => { evaluated.resolve(); return false; } });
+		const targetId = 'browser_target_123e4567-e89b-12d3-a456-426614174001';
+		f.events.fire({ type: 'created', info: { ...info, id: targetId, state: { ...info.state, targetId } } });
+		await evaluated.promise;
+		assert.deepEqual([f.opened, f.destroyed], [[], []]);
+		handler.dispose();
+		await f.views.createBrowserView({ initialUrl: 'about:blank', owner: { type: 'user' }, session: info.session });
+		assert.equal(f.opened.length, 1);
+	});
+
+	test('context filters compose, notify consumers and keep sandbox storage restricted to its owner', async () => {
+		using f = fixture();
+		await f.views.initialize();
+		const agentId = 'browser_target_123e4567-e89b-12d3-a456-426614174002';
+		const owner = { type: 'agent' as const, sessionId: 'thread-two' };
+		f.events.fire({ type: 'created', info: { ...info, id: agentId, owner, session: { scope: BrowserViewStorageScope.Agent, affinity: owner.sessionId }, state: { ...info.state, targetId: agentId } } });
+		await f.editorOpened.promise;
+		using changed = new Emitter<void>();
+		let allowedId = agentId;
+		let notifications = 0;
+		using listener = f.views.onDidChangeBrowserViews(() => notifications++);
+		const filter = f.views.registerContextualFilter({ include: input => input.id === allowedId, onDidChange: changed.event });
+		assert.deepEqual([...f.views.getContextualBrowserViews().keys()], [agentId]);
+		assert.deepEqual([...f.views.getContextualBrowserViews({ sandboxSessionId: 'thread-one' }).keys()], []);
+		assert.deepEqual([...f.views.getContextualBrowserViews({ sandboxSessionId: owner.sessionId }).keys()], [agentId]);
+		allowedId = id;
+		changed.fire();
+		assert.deepEqual([...f.views.getContextualBrowserViews().keys()], [id]);
+		filter.dispose();
+		assert.deepEqual([...f.views.getContextualBrowserViews().keys()], [id, agentId]);
+		assert.equal(notifications, 3);
+	});
 
 	test('new user pages record their source once without emitting a website address', async () => {
 		using f = fixture();
@@ -126,22 +258,27 @@ function fixture() {
 	const events = resources.add(new Emitter<BrowserViewEvent>());
 	const editorEvents = resources.add(new Emitter<EditorPartChangeEvent>());
 	const f = {
+		trusted: true, trustUnavailable: false, remote: undefined as string | undefined, state: WorkbenchState.FOLDER, active: undefined as IResourceEditorInput | undefined,
 		info, events, groupInputs: [] as IResourceEditorInput[], opened: [] as IResourceEditorInput[], destroyed: [] as string[],
 		editorOpened: promiseWithResolvers<void>(),
 		closeEditor: async (input: IResourceEditorInput): Promise<boolean> => { f.groupInputs.splice(f.groupInputs.indexOf(input), 1); return true; },
 	};
 	const service: IBrowserViewService = {
-		updateWindowConfiguration: async () => { }, getSelectedText: async () => '', findInPage: async () => { }, stopFindInPage: async () => { },
+		setPermissions: async () => { }, respondToFileRequest: async () => { },
+		toggleDevTools: async () => { }, clearStorage: async () => { }, setBrowserZoomIndex: async () => { }, setDeviceEmulation: async () => { },
+		updateWindowConfiguration: async () => { }, getConsoleLogs: async () => '', getSelectedText: async () => '', findInPage: async () => { }, stopFindInPage: async () => { },
 		toggleElementSelection: async () => { }, setElementComments: async () => { }, toggleAreaSelection: async () => { }, captureScreenshot: async () => { throw new Error('Unexpected screenshot'); },
 		getBrowserHistory: async () => ({ items: [] }), deleteBrowserHistory: async () => { },
-		getBrowserViews: async () => [f.info], getOrCreateBrowserView: async () => f.info, getState: async () => f.info.state,
+		getBrowserViews: async () => [f.info],
+		getOrCreateBrowserView: async (targetId, options) => ({ ...f.info, id: targetId, owner: options.owner, session: options.session, state: { ...f.info.state, targetId, url: options.initialUrl } }),
+		getState: async targetId => ({ ...f.info.state, targetId }),
 		getSharing: async () => [], setSharing: async () => { }, respondToPermission: async () => { }, clearPermissions: async () => { }, cancelDownloads: async () => { },
 		loadURL: async () => { }, goBack: async () => { }, goForward: async () => { }, reload: async () => { }, stop: async () => { }, focus: async () => { }, layout: async () => { }, setVisible: async () => { },
 		destroyBrowserView: async targetId => { f.destroyed.push(targetId); }, onDidEvent: events.event,
 	};
 	const editors: IEditorService = {
 		...emptyEditorServiceState,
-		onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [], focusActiveEditor: () => { },
+		onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, get activeEditor() { return f.active; }, visibleEditors: [], focusActiveEditor: () => { },
 		openEditor: async input => {
 			f.opened.push(input);
 			if ('resolve' in input && typeof input.resolve === 'function') { await input.resolve(); }
@@ -157,7 +294,21 @@ function fixture() {
 	const telemetryEvents: Array<{ name: string; data: unknown; }> = [];
 	const telemetry = new NullTelemetryServiceShape();
 	telemetry.publicLog2 = (name, data) => { telemetryEvents.push({ name, data }); };
-	const services = resources.add(new InstantiationService(new ServiceCollection([IBrowserViewService, service], [IEditorService, editors], [IEditorPart, editorPart], [IDialogsModel, dialogs], [ITelemetryService, telemetry])));
+	const configuration = resources.add(new InMemoryConfigurationService());
+	const services = resources.add(new InstantiationService(new ServiceCollection(
+		[IConfigurationService, configuration],
+		[IWorkspaceContextService, { onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: 'browser-test', folders: [], ...(f.remote ? { remoteAuthority: f.remote } : {}) }), getWorkbenchState: () => f.state, getWorkspaceFolder: () => null }],
+		[IWorkspaceTrustManagementService, { onDidChangeTrust: Event.None, getUriTrustInfo: async (uri: import('../../../../../base/common/uri.js').URI) => ({ uri, trusted: true, permissions: undefined }), getWorkspaceTrustInfo: async () => { if (f.trustUnavailable) { throw new Error('Backend unavailable'); } return { isTrusted: f.trusted, isReadOnly: false }; } }], [IFileService, { readFileBytes: async () => { throw new Error('No test file configured'); } } as unknown as IFileService], [IBrowserViewService, service], [IEditorService, editors], [IEditorPart, editorPart], [IDialogsModel, dialogs], [ITelemetryService, telemetry])));
 	const views = resources.add(services.createInstance(BrowserViewWorkbenchService));
-	return Object.assign(f, { [Symbol.dispose]: () => resources.dispose(), views, service, telemetryEvents });
+	return Object.assign(f, { [Symbol.dispose]: () => resources.dispose(), views, service, services, telemetryEvents, configuration });
 }
+
+import { IFileService } from '../../../../../platform/files/common/files.js';
+
+import { IConfigurationService, ConfigurationTarget } from '../../../../../platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { IWorkspaceContextService, WorkbenchState } from '../../../../../platform/workspace/common/workspace.js';
+import { IWorkspaceTrustManagementService } from '../../../../../platform/workspace/common/workspaceTrust.js';
+import '../../electron-browser/features/browserDataStorageFeatures.js';
+
+import '../../electron-browser/features/browserNavigationFeatures.js';

@@ -31,6 +31,8 @@ export class BrowserEditorChatIntegration extends Disposable {
 		this.binding.value = source.attach(changed);
 	}
 
+	public addConsoleLogsToChat(): Promise<void> { return this.current?.captureConsole() ?? Promise.resolve(); }
+	public addScreenshotToChat(fullPage: boolean): Promise<void> { return this.current?.capturePage(fullPage) ?? Promise.resolve(); }
 	public getAccessibleContent(): string { return this.current?.getAccessibleContent() ?? ''; }
 }
 
@@ -114,6 +116,23 @@ class BrowserPageSelections extends Disposable {
 		}
 	}
 
+	public async captureConsole(): Promise<void> {
+		const epoch = this.epoch; const url = this.model.state.url;
+		const content = await this.model.getConsoleLogs();
+		if (epoch !== this.epoch || this.isDisposed || !content) { return; }
+		const name = localize({ bundle: 'ash.workbench', key: 'browser.consoleContext' }, 'Browser console logs');
+		this.addSnapshot('console', { label: name, description: url, attachment: { id: this.model.id + ':console', name, kind: 'text', resource: URI.parse(url), resolve: async () => ({ name, content }) } });
+		this.status.fire(localize({ bundle: 'ash.workbench', key: 'browser.consoleCaptured' }, 'Console logs captured. Choose Browser selections in Chat to attach them.'));
+	}
+	public async capturePage(fullPage: boolean): Promise<void> {
+		const epoch = this.epoch; const url = this.model.state.url;
+		const image = await this.model.captureScreenshot({ format: 'png', fullPage, awaitNextPaint: true });
+		if (epoch !== this.epoch || this.isDisposed) { return; }
+		const name = fullPage ? localize({ bundle: 'ash.workbench', key: 'browser.fullPageContext' }, 'Full browser page screenshot') : localize({ bundle: 'ash.workbench', key: 'browser.pageContext' }, 'Browser page screenshot');
+		const content = 'data:image/png;base64,' + encodeBase64(image);
+		this.addSnapshot(fullPage ? 'full-page' : 'page', { label: name, description: url, attachment: { id: this.model.id + (fullPage ? ':full-page' : ':page'), name, kind: 'image', resource: URI.parse(url), resolve: async () => ({ name, kind: 'image', content }) } });
+		this.status.fire(localize({ bundle: 'ash.workbench', key: 'browser.pageCaptured' }, 'Screenshot captured. Choose Browser selections in Chat to attach it.'));
+	}
 	private addSnapshot(id: string, pick: ChatContextPick): void {
 		if (!this.snapshots.has(id) && this.snapshots.size >= 50) {
 			const retired = this.snapshots.keys().next().value!;
@@ -134,4 +153,25 @@ class BrowserPageSelections extends Disposable {
 		selections.delete(this.model);
 		super.disposeCore();
 	}
+}
+
+import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { BrowserViewCommandId } from '../../../../../platform/browserView/common/browserView.js';
+import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
+import { BrowserViewEditorId } from '../../common/browserView.js';
+import { ActiveEditorContext } from '../../../../common/contextkeys.js';
+import { localize2 } from '../../../../../nls.js';
+import type { BrowserEditor } from '../browserEditor.js';
+for (const command of [
+	{ id: BrowserViewCommandId.AddConsoleLogsToChat, title: localize2({ bundle: 'ash.workbench', key: 'browser.consoleCommand' }, 'Browser: Capture Console Logs for Chat'), run: (pane: BrowserEditor) => pane.addConsoleLogsToChat() },
+	{ id: BrowserViewCommandId.AddScreenshotToChat, title: localize2({ bundle: 'ash.workbench', key: 'browser.pageCommand' }, 'Browser: Capture Screenshot for Chat'), run: (pane: BrowserEditor) => pane.addScreenshotToChat(false) },
+	{ id: BrowserViewCommandId.AddFullPageScreenshotToChat, title: localize2({ bundle: 'ash.workbench', key: 'browser.fullPageCommand' }, 'Browser: Capture Full Page Screenshot for Chat'), run: (pane: BrowserEditor) => pane.addScreenshotToChat(true) },
+]) {
+	registerAction2(class BrowserCaptureAction extends Action2 {
+		constructor() { super({ id: command.id, title: command.title, f1: true, precondition: ActiveEditorContext.isEqualTo(BrowserViewEditorId) }); }
+		override async run(accessor: import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor): Promise<void> {
+			const pane = accessor.get(IEditorPart).activePane;
+			if (pane?.id === BrowserViewEditorId) { await command.run(pane as BrowserEditor); }
+		}
+	});
 }

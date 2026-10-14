@@ -1,3 +1,4 @@
+import type { IPermissionCategoryState } from '../common/browserPermissions.js';
 import type { BrowserWindow, WebContentsView, Session } from 'electron/main';
 import { createHash, randomUUID } from 'node:crypto';
 import { Disposable, DisposableMap, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
@@ -10,6 +11,7 @@ import type { SshPortForwardingService } from '../../remote/electron-main/sshPor
 import type { ISerializedBrowserHistoryEntriesSnapshot } from '../common/browserHistory.js';
 import { BrowserSessionHistory } from './browserSessionHistory.js';
 import type { IBrowserViewWindowConfiguration, IBrowserElementSelectionOptions, IBrowserElementCommentsUpdate, IBrowserViewCaptureScreenshotOptions, IBrowserViewFindInPageOptions } from '../common/browserView.js';
+import type { IBrowserDeviceProfile } from '../common/browserView.js';
 
 export const IBrowserViewMainService = createServiceIdentifier<IBrowserViewMainService>('browserViewMainService');
 export interface IBrowserViewMainService extends IBrowserViewService {
@@ -29,12 +31,17 @@ export interface BrowserViewMainServiceOptions {
 }
 /** The window manager is the sole table of live pages; each page owns its own disposal. */
 export class BrowserViewMainService extends Disposable implements IBrowserViewMainService {
+	public async setPermissions(id: string, origin: string, grants: readonly IPermissionCategoryState[]): Promise<void> {
+		const view = this.target(id);
+		view.session.permissions.setPermissions(id, origin, grants);
+	}
 	private preloadConfiguration: IBrowserViewWindowConfiguration | undefined;
 	public async updateWindowConfiguration(windowId: number, configuration: IBrowserViewWindowConfiguration): Promise<void> {
 		if (windowId !== this.options.window.id) { throw new Error('BrowserWindowAccessDenied'); }
 		this.preloadConfiguration = configuration;
 		for (const [, view] of this.targets) { view.configurePreload(configuration); }
 	}
+	public async getConsoleLogs(id: string): Promise<string> { return this.target(id).getConsoleLogs(); }
 	public getSelectedText(id: string): Promise<string> { return this.target(id).getSelectedText(); }
 	public async findInPage(id: string, text: string, options?: IBrowserViewFindInPageOptions): Promise<void> { this.target(id).findInPage(text, options); }
 	public async stopFindInPage(id: string, keepSelection?: boolean): Promise<void> { this.target(id).stopFindInPage(keepSelection); }
@@ -126,6 +133,7 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 		const signal = AbortSignal.any([requestSignal, this.cancellation.signal]);
 		signal.throwIfAborted();
 		const initialUrl = normalizeBrowserViewUrl(options.initialUrl);
+		if (options.owner.type === 'agent' && new URL(initialUrl).protocol === 'file:') { throw new Error('BrowserLocalFileAccessDenied'); }
 		const remoteNetwork = this.options.getRemoteNetwork();
 		let network: IDisposable | undefined;
 		let view: BrowserView;
@@ -154,6 +162,7 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 				this.histories.set(session, history);
 			}
 			view = this.instantiationService.createInstance(BrowserView, {
+				remoteAuthority: remoteNetwork?.authority,
 				id, window: this.options.window, view: this.options.createView(electronSession), initialUrl, network, creation: options, session, history,
 				emitEvent: (event: BrowserViewEvent) => {
 					if (event.type === 'closed') {
@@ -173,6 +182,16 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 		catch (error) { this.targets.deleteAndDispose(id); throw error; }
 	}
 	async getState(id: string) { return this.target(id).getState(); }
+	async respondToFileRequest(id: string, requestId: string, data: string | null) { this.target(id).respondToFileRequest(requestId, data); }
+	async setBrowserZoomIndex(id: string, index: number) { this.target(id).setBrowserZoomIndex(index); }
+	async toggleDevTools(id: string) { this.target(id).toggleDevTools(); }
+	async setDeviceEmulation(id: string, device: IBrowserDeviceProfile | undefined) { this.target(id).setDeviceEmulation(device); }
+	async clearStorage(id: string) {
+		const session = this.target(id).session;
+		await session.electronSession.clearStorageData();
+		await session.electronSession.clearCache();
+		session.permissions.clear();
+	}
 	public async getBrowserHistory(id: string): Promise<ISerializedBrowserHistoryEntriesSnapshot> {
 		return this.histories.get(this.target(id).session)!.entries.serialize();
 	}
@@ -187,7 +206,7 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 	loadURL(id: string, url: string, signal?: AbortSignal) { return this.target(id).loadURL(url, signal); }
 	goBack(id: string) { return this.target(id).goBack(); }
 	goForward(id: string) { return this.target(id).goForward(); }
-	reload(id: string) { return this.target(id).reload(); }
+	reload(id: string, hard?: boolean) { return this.target(id).reload(hard); }
 	async stop(id: string) { this.target(id).stop(); }
 	async focus(id: string) { this.target(id).focus(); }
 	async destroyBrowserView(id: string) { this.target(id); this.targets.deleteAndDispose(id); }

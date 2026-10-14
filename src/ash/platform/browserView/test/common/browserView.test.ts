@@ -28,6 +28,7 @@ test("browser view validators admit secure and loopback navigation", () => {
 		"http://localhost:3000/path",
 	);
 	assert.equal(normalizeBrowserViewUrl("about:blank"), "about:blank");
+	assert.equal(normalizeBrowserViewUrl("file:///workspace/index.html"), "file:///workspace/index.html");
 	assert.deepEqual(validateBrowserViewCreateRequest({ targetId, options }), { targetId, options });
 	assert.deepEqual(
 		validateBrowserViewNavigateRequest({
@@ -45,7 +46,7 @@ test("browser view validators reject privileged URLs and malformed geometry", ()
 	for (
 		const url of [
 			"http://example.com",
-			"file:///secret.txt",
+			"file://remote/secret.txt",
 			"javascript:alert(1)",
 			"https://user:password@example.com",
 		]
@@ -93,7 +94,9 @@ test("browser view proxies preserve validated commands, subscriptions and backen
 		visible: false,
 	};
 	const service: Parameters<typeof browserViewChannel>[0] = {
-		updateWindowConfiguration: async () => { }, getSelectedText: async () => '', findInPage: async () => { }, stopFindInPage: async () => { },
+		setPermissions: async () => { }, respondToFileRequest: async () => { },
+		toggleDevTools: async () => { }, clearStorage: async () => { }, setBrowserZoomIndex: async () => { }, setDeviceEmulation: async () => { },
+		updateWindowConfiguration: async () => { }, getConsoleLogs: async () => '', getSelectedText: async () => '', findInPage: async () => { }, stopFindInPage: async () => { },
 		toggleElementSelection: async () => { }, setElementComments: async () => { }, toggleAreaSelection: async () => { }, captureScreenshot: async () => { throw new Error('Unexpected screenshot'); },
 		getBrowserHistory: async () => ({ items: [] }), deleteBrowserHistory: async () => { },
 		getSharing: async () => [], setSharing: async () => { throw new Error('Sharing must pass through the backend'); },
@@ -139,6 +142,17 @@ test("browser view proxies preserve validated commands, subscriptions and backen
 	await proxy.deleteBrowserHistory(targetId);
 	await proxy.deleteBrowserHistory(targetId, undefined);
 	assert.deepEqual(calls, ['create', 'layout', 'visibility', 'navigate']);
+	const presentation: unknown[] = [];
+	service.setBrowserZoomIndex = async (id, index) => { presentation.push({ id, index }); };
+	service.setDeviceEmulation = async (id, device) => { presentation.push({ id, device }); };
+	await proxy.setBrowserZoomIndex(targetId, 9);
+	await proxy.setDeviceEmulation(targetId, { width: 390, height: 844, mobile: true });
+	await proxy.setDeviceEmulation(targetId, undefined);
+	assert.deepEqual(presentation, [{ id: targetId, index: 9 }, { id: targetId, device: { width: 390, height: 844, mobile: true } }, { id: targetId, device: undefined }]);
+	for (const index of [-1, 17, 1.5, Infinity]) { await assert.rejects(proxy.setBrowserZoomIndex(targetId, index), /Invalid browser zoom/); }
+	for (const device of [{ width: 0 }, { height: 8193 }, { deviceScaleFactor: Infinity }, { userAgent: 'a\nb' }, { unknown: true }]) {
+		await assert.rejects(channel.call('window:1', 'setDeviceEmulation', [targetId, device]), /Invalid browser device/);
+	}
 
 	const subscription = proxy.onDidEvent(event => received.push(event));
 	events.fire({ type: 'closed', targetId });
@@ -148,7 +162,7 @@ test("browser view proxies preserve validated commands, subscriptions and backen
 
 	await assert.rejects(proxy.setSharing(targetId, ['thread-one']), /Backend authorization denied/);
 	assert.deepEqual(grants, [{ command: 'setSharing', arg: [targetId, ['thread-one']] }]);
-	await assert.rejects(proxy.loadURL(targetId, 'file:///secret.txt'));
+	await assert.rejects(proxy.loadURL(targetId, 'file://remote/secret.txt'));
 	await assert.rejects(channel.call('window:1', 'getBrowserViews', [targetId]), /Invalid browser view arguments/);
 	await assert.rejects(channel.call('window:1', 'loadURL', [targetId]), /Invalid browser view arguments/);
 	await assert.rejects(channel.call('window:1', 'disposeCore', []), /Unknown browser view command/);

@@ -1,3 +1,4 @@
+import { toOriginKey, type IPermissionCategoryState } from '../common/browserPermissions.js';
 import type { Event } from '../../../base/common/event.js';
 import type { IChannel, IServerChannel } from '../../../base/parts/ipc/common/ipc.js';
 import type {
@@ -19,6 +20,7 @@ import {
 import type { IBrowserViewService } from '../common/browserView.js';
 import { isRecord } from '../../../base/common/types.js';
 import type { IBrowserViewWindowConfiguration, IBrowserElementSelectionOptions, IBrowserElementCommentsUpdate, IBrowserViewCaptureScreenshotOptions, IBrowserViewFindInPageOptions } from '../common/browserView.js';
+import { browserZoomFactors, type IBrowserDeviceProfile } from '../common/browserView.js';
 
 /** The page owner stays in Main; sharing is authorized by the window's app-server adapter. */
 export function browserViewChannel(service: IBrowserViewService, sharing: IChannel): IServerChannel<string> {
@@ -38,6 +40,40 @@ export function browserViewChannel(service: IBrowserViewService, sharing: IChann
 	]);
 	return {
 		call: async <T>(_context: string, command: string, arg: unknown): Promise<T> => {
+			if (command === 'setPermissions') {
+				if (!Array.isArray(arg) || arg.length !== 3 || typeof arg[1] !== 'string' || arg[1].length > 8192 || toOriginKey(arg[1]) !== arg[1] || !arg[1] || !Array.isArray(arg[2]) || arg[2].length > 7 || arg[2].some(value => !isRecord(value) || Object.keys(value).some(key => !['category', 'state'].includes(key)) || !['location', 'camera', 'microphone', 'notifications', 'sensors', 'clipboard', 'devices'].includes(value.category as string) || !['allow', 'deny', null].includes(value.state as string | null))) { throw new TypeError('Invalid browser site permissions'); }
+				const { targetId } = validateBrowserViewTargetRequest({ targetId: arg[0] });
+				return await service.setPermissions(targetId, arg[1], arg[2] as IPermissionCategoryState[]) as T;
+			}
+			if (command === 'reload') {
+				if (!Array.isArray(arg) || arg.length < 1 || arg.length > 2 || (arg[1] != null && typeof arg[1] !== 'boolean')) { throw new TypeError('Invalid browser reload arguments'); }
+				const { targetId } = validateBrowserViewTargetRequest({ targetId: arg[0] });
+				return await service.reload(targetId, arg[1] ?? undefined) as T;
+			}
+			if (command === 'respondToFileRequest') {
+				if (!Array.isArray(arg) || arg.length !== 3 || typeof arg[1] !== 'string' || !/^[a-f0-9-]{36}$/.test(arg[1]) || (arg[2] !== null && (typeof arg[2] !== 'string' || arg[2].length > 24 * 1024 * 1024 || !/^[A-Za-z0-9+/]*={0,2}$/.test(arg[2])))) { throw new TypeError('Invalid browser file response'); }
+				const { targetId } = validateBrowserViewTargetRequest({ targetId: arg[0] });
+				return await service.respondToFileRequest(targetId, arg[1], arg[2]) as T;
+			}
+			if (['toggleDevTools', 'clearStorage', 'setBrowserZoomIndex', 'setDeviceEmulation'].includes(command)) {
+				const arity = command === 'toggleDevTools' || command === 'clearStorage' ? 1 : 2;
+				if (!Array.isArray(arg) || arg.length !== arity) { throw new TypeError('Invalid browser presentation arguments'); }
+				const { targetId } = validateBrowserViewTargetRequest({ targetId: arg[0] });
+				if (command === 'toggleDevTools') { return await service.toggleDevTools(targetId) as T; }
+				if (command === 'clearStorage') { return await service.clearStorage(targetId) as T; }
+				if (command === 'setBrowserZoomIndex') {
+					if (!Number.isInteger(arg[1]) || arg[1] < 0 || arg[1] >= browserZoomFactors.length) { throw new TypeError('Invalid browser zoom index'); }
+					return await service.setBrowserZoomIndex(targetId, arg[1]) as T;
+				}
+				const device = arg[1] ?? undefined;
+				if (device !== undefined && (!isRecord(device)
+					|| Object.keys(device).some(key => !['width', 'height', 'mobile', 'deviceScaleFactor', 'userAgent'].includes(key))
+					|| ['width', 'height'].some(key => device[key] !== undefined && (!Number.isInteger(device[key]) || (device[key] as number) < 1 || (device[key] as number) > 8192))
+					|| (device.deviceScaleFactor !== undefined && (typeof device.deviceScaleFactor !== 'number' || !Number.isFinite(device.deviceScaleFactor) || device.deviceScaleFactor <= 0 || device.deviceScaleFactor > 5))
+					|| (device.mobile !== undefined && typeof device.mobile !== 'boolean')
+					|| (device.userAgent !== undefined && (typeof device.userAgent !== 'string' || device.userAgent.length > 2048 || /[\r\n]/u.test(device.userAgent))))) { throw new TypeError('Invalid browser device profile'); }
+				return await service.setDeviceEmulation(targetId, device as IBrowserDeviceProfile | undefined) as T;
+			}
 			const preloadResult = callPreloadService(service, command, arg);
 			if (preloadResult) { return await preloadResult as T; }
 			if (command === 'setSharing') {
@@ -66,7 +102,7 @@ export function browserViewChannel(service: IBrowserViewService, sharing: IChann
 function callPreloadService(service: IBrowserViewService, command: string, value: unknown): Promise<unknown> | undefined {
 	const arity: Record<string, readonly [number, number]> = {
 		updateWindowConfiguration: [2, 2],
-		getSelectedText: [1, 1],
+		getConsoleLogs: [1, 1], getSelectedText: [1, 1],
 		findInPage: [2, 3],
 		stopFindInPage: [1, 2],
 		toggleElementSelection: [1, 3],
@@ -113,6 +149,7 @@ function callPreloadService(service: IBrowserViewService, command: string, value
 	}
 	const { targetId } = validateBrowserViewTargetRequest({ targetId: args[0] });
 	const options = args[2] ?? undefined;
+	if (command === 'getConsoleLogs') { return service.getConsoleLogs(targetId); }
 	if (command === 'getSelectedText') {
 		return service.getSelectedText(targetId);
 	}
@@ -188,13 +225,14 @@ function callPreloadService(service: IBrowserViewService, command: string, value
 	}
 	if (
 		!isRecord(capture) ||
-		Object.keys(capture).some((key) => !['screenRect', 'format', 'quality', 'awaitNextPaint'].includes(key)) ||
+		Object.keys(capture).some((key) => !['screenRect', 'format', 'quality', 'awaitNextPaint', 'fullPage'].includes(key)) ||
 		(capture.format !== undefined && capture.format !== 'png' && capture.format !== 'jpeg') ||
 		(capture.quality !== undefined &&
 			(typeof capture.quality !== 'number' ||
 				!Number.isInteger(capture.quality) ||
 				capture.quality < 0 ||
 				capture.quality > 100)) ||
+		(capture.fullPage !== undefined && typeof capture.fullPage !== 'boolean') ||
 		(capture.awaitNextPaint !== undefined && typeof capture.awaitNextPaint !== 'boolean')
 	) {
 		invalid();

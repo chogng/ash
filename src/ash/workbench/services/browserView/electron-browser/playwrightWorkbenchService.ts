@@ -33,9 +33,9 @@ class PlaywrightChannelClient extends AbstractDisposable implements IPlaywrightS
 		return { ...observation, screenshot: { ...screenshot, mimeType: 'image/png' } };
 	}
 
-	public async performAction(operationId: string, sessionId: string, pageId: string, action: BrowserViewAction, networkToken?: string | null): Promise<void> {
+	public async performAction(operationId: string, sessionId: string, pageId: string, action: BrowserViewAction, networkToken?: string | null): Promise<string | undefined> {
 		const result = await this.run(operationId, sessionId, 'perform', { threadId: sessionId, action: { ...action, targetId: pageId }, networkToken: networkToken ?? null });
-		decodeAppServerServerRequestResult('browser/perform', result);
+		return decodeAppServerServerRequestResult('browser/perform', result).output ?? undefined;
 	}
 
 	public cancelOperation(operationId: string): Promise<void> {

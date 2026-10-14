@@ -313,6 +313,10 @@ use crate::protocol::browser::BrowserCreateResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::browser::BrowserElementTargetDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserListParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserListResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::browser::BrowserNetworkAuthorizeParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::browser::BrowserNetworkAuthorizeResult;
@@ -320,6 +324,8 @@ use crate::protocol::browser::BrowserNetworkAuthorizeResult;
 use crate::protocol::browser::BrowserObserveParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::browser::BrowserObserveResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserPageSummary;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::browser::BrowserPerformActionDto;
 #[cfg(any(test, feature = "export"))]
@@ -5246,6 +5252,7 @@ host_methods! {
     TextDocumentRead => "textDocument/read" { params: TextDocumentReadParams, response: TextDocumentReadResult, },
     TextDocumentApply => "textDocument/apply" { params: TextDocumentApplyParams, response: TextDocumentApplyResult, },
     TextDocumentRelease => "textDocument/release" { params: TextDocumentReleaseParams, response: (), },
+    BrowserList => "browser/list" { params: BrowserListParams, response: BrowserListResult, },
     BrowserCreate => "browser/create" {
         params: BrowserCreateParams,
         response: BrowserCreateResult,
@@ -5770,6 +5777,9 @@ typescript_bindings! {
     DirectoryGrantsHostCapability,
     BrowserBinaryPayload,
     BrowserCloseParams,
+    BrowserListParams,
+    BrowserListResult,
+    BrowserPageSummary,
     BrowserCreateParams,
     BrowserNetworkAuthorizeParams,
     BrowserNetworkAuthorizeResult,

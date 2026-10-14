@@ -165,7 +165,6 @@ interface WorkbenchWindowRecord {
 	readonly remoteConnections: IRemoteConnectionApi;
 	windowsStateHandler: WindowsStateHandler;
 	windowStateTracking: IDisposable;
-	browserHostChannel?: IServerChannel<string>;
 	openWorkspace?: (root: string) => Promise<void>;
 	replaceWorkspace?: (workspace: IAnyWorkspaceIdentifier) => Promise<boolean>;
 }
@@ -203,7 +202,7 @@ export class AshApplication extends Disposable {
 	private readonly mainProcessIpcServer = this._register(new MainProcessIPCServer());
 	private readonly remoteTunnel = this._register(new MutableDisposable<RemoteTunnelService>());
 	private readonly windowPortForwarding = new Map<string, SshPortForwardingService>();
-	private readonly browserViewChannels = new Map<string, IServerChannel<string>>();
+	private readonly browserChannels = new Map<string, { readonly view: IServerChannel<string>; readonly host: IServerChannel<string>; }>();
 	private readonly sharedProcess = this._register(new UtilityProcess({
 		name: 'Ash Browser Automation',
 		entryPoint: fileURLToPath(new URL('../electron-utility/sharedProcess/sharedProcessMain.js', import.meta.url)),
@@ -423,12 +422,12 @@ export class AshApplication extends Disposable {
 		});
 		this.mainProcessIpcServer.registerChannel(ipcBrowserViewChannelName, {
 			call: <T>(context: string, command: string, arg: unknown) => {
-				const channel = this.browserViewChannels.get(context);
+				const channel = this.browserChannels.get(context)?.view;
 				if (!channel) { throw new Error('BrowserCapabilityUnavailable'); }
 				return channel.call<T>(context, command, arg);
 			},
 			listen: <T>(context: string, event: string, arg: unknown) => {
-				const channel = this.browserViewChannels.get(context);
+				const channel = this.browserChannels.get(context)?.view;
 				if (!channel) { throw new Error('BrowserCapabilityUnavailable'); }
 				return channel.listen<T>(context, event, arg);
 			},
@@ -1266,23 +1265,7 @@ export class AshApplication extends Disposable {
 			sshExecutable: process.env.ASH_SSH_PATH ?? "ssh",
 			localEnvironment: process.env,
 		});
-		const browserServices = this.createBrowserServices(window, workspaceContext, remotePortForwardingService, windowDisposables);
-		const browserViewMainService = browserServices.get(IBrowserViewMainService);
-		const browserGroups = windowDisposables.add(browserServices.createInstance(BrowserViewGroupMainService));
-		const browserPort = this.sharedProcess.connect(`window:${window.id}`);
-		const browserClient = windowDisposables.add(new MessagePortClient({
-			postMessage: data => browserPort.postMessage(data), start: () => browserPort.start(), close: () => browserPort.close(),
-			addEventListener: (type, listener) => type === 'message' ? browserPort.on('message', listener) : browserPort.on('close', listener as () => void), removeEventListener: (type, listener) => type === 'message' ? browserPort.off('message', listener) : browserPort.off('close', listener as () => void),
-		}, `window:${window.id}`));
-		browserClient.registerChannel('browserViewGroup', ProxyChannel.fromService(browserGroups, windowDisposables));
-		browserServices.registerInstance(IPlaywrightService, ProxyChannel.toService<IPlaywrightService>(browserClient.getChannel('playwright')));
-		// A worker crash retires its debugger leases, while the user's live pages remain in Main.
-		browserPort.once('close', () => browserGroups.dispose());
-		const appServerBrowserHost = windowDisposables.add(browserServices.createInstance(AppServerBrowserHost));
-		record.browserHostChannel = appServerBrowserHost.getChannel();
-		windowDisposables.add(supervisor.onStateChange(state => {
-			if (state === 'crashed' || state === 'restarting' || state === 'stopping' || state === 'stopped') appServerBrowserHost.reset();
-		}));
+		const browserServices = this.createBrowserServices(window, workspaceContext, remotePortForwardingService, windowDisposables, supervisor);
 		windowDisposables.add(workspaceContext.onDidChangeWorkspace(({ workspace: nextWorkspace, resolvedWorkspace }) => {
 			if (window.isDestroyed()) return;
 			record.windowStateTracking.dispose();
@@ -1549,13 +1532,12 @@ export class AshApplication extends Disposable {
 	}
 
 	private getBrowserHostChannel(context: string): IServerChannel<string> {
-		const match = /^window:([1-9][0-9]*)$/.exec(context);
-		const channel = match ? this.workbenchWindowData.get(Number(match[1]))?.browserHostChannel : undefined;
+		const channel = this.browserChannels.get(context)?.host;
 		if (!channel) { throw new Error('BrowserCapabilityUnavailable'); }
 		return channel;
 	}
 
-	private createBrowserServices(window: BrowserWindow, workspaceContext: WorkspaceContextMainService, remotePortForwardingService: SshPortForwardingService, windowDisposables: DisposableStore): InstantiationService {
+	private createBrowserServices(window: BrowserWindow, workspaceContext: WorkspaceContextMainService, remotePortForwardingService: SshPortForwardingService, windowDisposables: DisposableStore, supervisor: AppServerConnectionRelay): InstantiationService {
 		const context = `window:${window.id}`;
 		this.windowPortForwarding.set(context, remotePortForwardingService);
 		windowDisposables.add(toDisposable(() => {
@@ -1587,9 +1569,23 @@ export class AshApplication extends Disposable {
 			}),
 		}));
 		const sharing = this.mainProcessIpcServer.getChannel('browserSharing', client => client.ctx === context);
-		this.browserViewChannels.set(context, browserViewChannel(browserViewMainService, sharing));
-		windowDisposables.add(toDisposable(() => this.browserViewChannels.delete(context)));
 		browserServices.registerInstance(IBrowserViewMainService, browserViewMainService);
+		const browserGroups = windowDisposables.add(browserServices.createInstance(BrowserViewGroupMainService));
+		const browserPort = this.sharedProcess.connect(context);
+		const browserClient = windowDisposables.add(new MessagePortClient({
+			postMessage: data => browserPort.postMessage(data), start: () => browserPort.start(), close: () => browserPort.close(),
+			addEventListener: (type, listener) => type === 'message' ? browserPort.on('message', listener) : browserPort.on('close', listener as () => void), removeEventListener: (type, listener) => type === 'message' ? browserPort.off('message', listener) : browserPort.off('close', listener as () => void),
+		}, context));
+		browserClient.registerChannel('browserViewGroup', ProxyChannel.fromService(browserGroups, windowDisposables));
+		browserServices.registerInstance(IPlaywrightService, ProxyChannel.toService<IPlaywrightService>(browserClient.getChannel('playwright')));
+		// A worker crash retires its debugger leases, while the user's live pages remain in Main.
+		browserPort.once('close', () => browserGroups.dispose());
+		const appServerBrowserHost = windowDisposables.add(browserServices.createInstance(AppServerBrowserHost));
+		this.browserChannels.set(context, { view: browserViewChannel(browserViewMainService, sharing), host: appServerBrowserHost.getChannel() });
+		windowDisposables.add(toDisposable(() => this.browserChannels.delete(context)));
+		windowDisposables.add(supervisor.onStateChange(state => {
+			if (state === 'crashed' || state === 'restarting' || state === 'stopping' || state === 'stopped') appServerBrowserHost.reset();
+		}));
 		return browserServices;
 	}
 
@@ -1675,7 +1671,7 @@ export class AshApplication extends Disposable {
 						sshExecutable: process.env.ASH_SSH_PATH ?? "ssh",
 						localEnvironment: process.env,
 					});
-					const browserServices = this.createBrowserServices(window, session.workspaceContext, remotePortForwardingService, windowDisposables);
+					const browserServices = this.createBrowserServices(window, session.workspaceContext, remotePortForwardingService, windowDisposables, sessionsRelay);
 					const remoteWindowContext = windowDisposables.add(new RemoteWindowMainContext({
 						supervisor: sessionsRelay,
 						workspaceContext: session.workspaceContext,

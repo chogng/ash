@@ -45,6 +45,12 @@ const TYPE_SCHEMA: &str = r#"{"type":"object","properties":{"target_id":{"type":
 const SCROLL_SCHEMA: &str = r#"{"type":"object","properties":{"target_id":{"type":"string"},"delta_x":{"type":"number"},"delta_y":{"type":"number"}},"required":["target_id","delta_x","delta_y"],"additionalProperties":false}"#;
 const TARGET_SCHEMA: &str = r#"{"type":"object","properties":{"target_id":{"type":"string"}},"required":["target_id"],"additionalProperties":false}"#;
 
+const DRAG_SCHEMA: &str = r#"{"type":"object","properties":{"target_id":{"type":"string"},"source_node_id":{"type":"string"},"destination_node_id":{"type":"string"}},"required":["target_id","source_node_id","destination_node_id"],"additionalProperties":false}"#;
+const DIALOG_SCHEMA: &str = r#"{"type":"object","properties":{"target_id":{"type":"string"},"accept":{"type":"boolean"},"prompt_text":{"type":["string","null"]}},"required":["target_id","accept","prompt_text"],"additionalProperties":false}"#;
+const SCRIPT_SCHEMA: &str = r#"{"type":"object","properties":{"target_id":{"type":"string"},"code":{"type":"string","minLength":1,"maxLength":32768}},"required":["target_id","code"],"additionalProperties":false}"#;
+const LIST_SCHEMA: &str =
+    r#"{"type":"object","properties":{},"required":[],"additionalProperties":false}"#;
+
 pub(crate) struct BrowserToolService {
     browser: Arc<crate::browser_host::BrowserHost>,
     definitions: Vec<ToolDefinition>,
@@ -55,6 +61,31 @@ impl BrowserToolService {
         Self {
             browser,
             definitions: vec![
+                definition(
+                    "browser_list_pages",
+                    "List browser pages owned by or explicitly shared with this task.",
+                    LIST_SCHEMA,
+                ),
+                definition(
+                    "browser_hover",
+                    "Hover an observed backend DOM node in one browser target.",
+                    ELEMENT_SCHEMA,
+                ),
+                definition(
+                    "browser_drag",
+                    "Drag between two observed backend DOM nodes in one browser target.",
+                    DRAG_SCHEMA,
+                ),
+                definition(
+                    "browser_handle_dialog",
+                    "Accept or dismiss the current JavaScript dialog, optionally supplying prompt text.",
+                    DIALOG_SCHEMA,
+                ),
+                definition(
+                    "browser_run_playwright",
+                    "Run concise JavaScript against the provided page facade in the page's isolated Chromium world. Supports page title/url/content/evaluate and Playwright locators, click/hover/fill/press, keyboard/mouse actions and text queries. No Node APIs, other pages, files, browser contexts or raw CDP. Execution is bounded to five seconds; return a JSON-serializable result.",
+                    SCRIPT_SCHEMA,
+                ),
                 definition(
                     "browser_open",
                     "Open an isolated embedded browser target and return its stable target ID.",
@@ -111,6 +142,56 @@ impl BrowserToolService {
 
     fn materialize(&self, call: &ToolCall) -> Result<BrowserToolRequest, CoreError> {
         match call.name.as_str() {
+            "browser_list_pages" => {
+                let _: EmptyArguments = decode(call)?;
+                Ok(BrowserToolRequest::List)
+            }
+            "browser_hover" => {
+                let args: ElementArguments = decode(call)?;
+                Ok(BrowserToolRequest::Interaction(BrowserAction::Hover {
+                    target_id: target_id(args.target_id)?,
+                    target: element_target(args.node_id)?,
+                }))
+            }
+            "browser_drag" => {
+                let args: DragArguments = decode(call)?;
+                Ok(BrowserToolRequest::Interaction(BrowserAction::Drag {
+                    target_id: target_id(args.target_id)?,
+                    source: element_target(args.source_node_id)?,
+                    destination: element_target(args.destination_node_id)?,
+                }))
+            }
+            "browser_handle_dialog" => {
+                let args: DialogArguments = decode(call)?;
+                if args
+                    .prompt_text
+                    .as_ref()
+                    .is_some_and(|text| text.len() > 32768)
+                {
+                    return Err(CoreError::Policy("browser prompt text is too large".into()));
+                }
+                Ok(BrowserToolRequest::Interaction(
+                    BrowserAction::HandleDialog {
+                        target_id: target_id(args.target_id)?,
+                        accept: args.accept,
+                        prompt_text: args.prompt_text,
+                    },
+                ))
+            }
+            "browser_run_playwright" => {
+                let args: ScriptArguments = decode(call)?;
+                if args.code.trim().is_empty() || args.code.len() > 32768 {
+                    return Err(CoreError::Policy(
+                        "browser script must contain between 1 and 32768 bytes".into(),
+                    ));
+                }
+                Ok(BrowserToolRequest::Interaction(
+                    BrowserAction::RunPlaywright {
+                        target_id: target_id(args.target_id)?,
+                        code: args.code,
+                    },
+                ))
+            }
             "browser_open" => {
                 let arguments: OpenArguments = decode(call)?;
                 Ok(BrowserToolRequest::Open {
@@ -314,6 +395,14 @@ impl BrowserToolService {
         browser: &dyn BrowserCapability,
     ) -> Result<ToolExecutionOutput, CoreError> {
         let output = match self.materialize(call)? {
+            BrowserToolRequest::List => {
+                json!({ "pages": browser.list_targets(cancellation).map_err(browser_error)?.into_iter().map(|page| json!({ "target_id": page.target_id.0, "url": page.url, "title": page.title, "loading": page.loading })).collect::<Vec<_>>() })
+            }
+            BrowserToolRequest::Interaction(action) => action_json(
+                browser
+                    .perform(action, cancellation)
+                    .map_err(browser_error)?,
+            ),
             BrowserToolRequest::Open { url } => {
                 let created = browser
                     .create_target(CreateBrowserTargetRequest { url }, cancellation)
@@ -469,6 +558,8 @@ impl ActionPolicyService for BrowserToolPolicy {
 }
 
 enum BrowserToolRequest {
+    List,
+    Interaction(BrowserAction),
     Open {
         url: String,
     },
@@ -512,7 +603,19 @@ enum BrowserToolRequest {
 impl BrowserToolRequest {
     fn target_id(&self) -> Option<&BrowserTargetId> {
         match self {
-            Self::Open { .. } => None,
+            Self::Open { .. } | Self::List => None,
+            Self::Interaction(action) => Some(match action {
+                BrowserAction::Navigate { target_id, .. }
+                | BrowserAction::Click { target_id, .. }
+                | BrowserAction::Hover { target_id, .. }
+                | BrowserAction::Drag { target_id, .. }
+                | BrowserAction::HandleDialog { target_id, .. }
+                | BrowserAction::RunPlaywright { target_id, .. }
+                | BrowserAction::TypeText { target_id, .. }
+                | BrowserAction::Scroll { target_id, .. }
+                | BrowserAction::GoBack { target_id }
+                | BrowserAction::Reload { target_id } => target_id,
+            }),
             Self::Observe { target_id, .. }
             | Self::Navigate { target_id, .. }
             | Self::Click { target_id, .. }
@@ -526,12 +629,20 @@ impl BrowserToolRequest {
     }
 
     fn capability_scope(&self) -> &str {
+        if matches!(self, Self::List) {
+            return "browser-page-list";
+        }
         self.target_id()
             .map_or("new-browser-target", |target| &target.0)
     }
 
     fn summary(&self) -> String {
         match self {
+            Self::List => "list browser pages available to this task".into(),
+            Self::Interaction(_) => format!(
+                "operate browser target {}",
+                self.target_id().expect("interaction has a target").0
+            ),
             Self::Open { url } => format!("open browser target at {url}"),
             Self::Observe { target_id, .. } => format!("observe browser target {}", target_id.0),
             Self::Navigate { target_id, url } => {
@@ -598,6 +709,30 @@ struct TargetArguments {
     target_id: String,
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct EmptyArguments {}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DragArguments {
+    target_id: String,
+    source_node_id: String,
+    destination_node_id: String,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DialogArguments {
+    target_id: String,
+    accept: bool,
+    prompt_text: Option<String>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ScriptArguments {
+    target_id: String,
+    code: String,
+}
+
 fn definition(name: &str, description: &str, parameters: &str) -> ToolDefinition {
     ToolDefinition {
         name: ToolName::new(name).expect("static browser tool name is valid"),
@@ -655,7 +790,7 @@ fn normalize_browser_url(value: &str) -> Result<String, CoreError> {
 }
 
 fn action_json(result: core_api::BrowserActionResult) -> Value {
-    json!({ "target_id": result.target_id.0 })
+    json!({ "target_id": result.target_id.0, "output": result.output })
 }
 
 fn observation_json(observation: core_api::BrowserObservation) -> Value {

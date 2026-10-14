@@ -52,6 +52,22 @@ suite('Playwright session lifetime', () => {
 				assert.ok(snapshot.documents[0].layout.styles.some((styles: unknown[]) => styles.length > 0));
 				assert.ok(snapshot.focusedElementStyles.rulesText.includes('color:var(--accent)'));
 				assert.ok(snapshot.focusedElementStyles.referencedVars.includes('--accent'));
+				const output = await playwright.performAction('script', 'thread', 'observed-page', {
+					type: 'runPlaywright', code: "await page.locator('input').fill('Script input'); return { value: await page.locator('input').inputValue(), node: typeof process, parent: (() => { try { return parent.document.title; } catch { return 'isolated'; } })() };",
+				});
+				assert.deepEqual(JSON.parse(output!), { value: 'Script input', node: 'undefined', parent: 'isolated' });
+				await assert.rejects(playwright.performAction('bad-script', 'thread', 'observed-page', { type: 'runPlaywright', code: 'return await page.context();' }), /method is unavailable/);
+				const cancellation = playwright.performAction('cancel-script', 'thread', 'observed-page', { type: 'runPlaywright', code: 'return new Promise(() => {});' });
+				const rejected = assert.rejects(cancellation, /BrowserScriptTimedOut/);
+				await new Promise<void>(resolve => {
+					const changed = (): void => {
+						if (page.frames().some(frame => frame.name().startsWith('ashScript'))) { page.off('framenavigated', changed); resolve(); }
+					};
+					page.on('framenavigated', changed); changed();
+				});
+				await playwright.cancelOperation('cancel-script');
+				await rejected;
+				assert.equal(page.frames().filter(frame => frame.name().startsWith('ashScript')).length, 0);
 				await playwright.disposeSession('thread');
 				assert.equal(page.isClosed(), false);
 			} finally { socket.removeEventListener('message', receive); socket.close(); }

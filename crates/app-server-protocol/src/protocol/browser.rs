@@ -108,6 +108,25 @@ pub enum BrowserPerformActionDto {
         target_id: String,
         target: BrowserElementTargetDto,
     },
+    Hover {
+        target_id: String,
+        target: BrowserElementTargetDto,
+    },
+    Drag {
+        target_id: String,
+        source: BrowserElementTargetDto,
+        destination: BrowserElementTargetDto,
+    },
+    HandleDialog {
+        target_id: String,
+        accept: bool,
+        prompt_text: Option<String>,
+    },
+    RunPlaywright {
+        target_id: String,
+        #[schemars(length(min = 1, max = 32768))]
+        code: String,
+    },
     TypeText {
         target_id: String,
         target: BrowserTextInputTargetDto,
@@ -131,6 +150,10 @@ impl BrowserPerformActionDto {
         match self {
             Self::Navigate { target_id, .. }
             | Self::Click { target_id, .. }
+            | Self::Hover { target_id, .. }
+            | Self::Drag { target_id, .. }
+            | Self::HandleDialog { target_id, .. }
+            | Self::RunPlaywright { target_id, .. }
             | Self::TypeText { target_id, .. }
             | Self::Scroll { target_id, .. }
             | Self::GoBack { target_id }
@@ -153,6 +176,10 @@ pub struct BrowserPerformParams {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct BrowserPerformResult {
+    #[schemars(length(max = 1048576))]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub output: Option<String>,
     #[schemars(length(min = 1))]
     pub target_id: String,
 }
@@ -182,4 +209,29 @@ pub struct BrowserNetworkAuthorizeParams {
 #[serde(rename_all = "camelCase")]
 pub struct BrowserNetworkAuthorizeResult {
     pub allowed: bool,
+}
+
+/// Current page metadata for the requesting Thread; this is not a global browser catalog.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BrowserListParams {
+    #[schemars(length(min = 1))]
+    pub thread_id: String,
+}
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserPageSummary {
+    #[schemars(length(min = 1))]
+    pub target_id: String,
+    #[schemars(length(max = 8192))]
+    pub url: String,
+    #[schemars(length(max = 8192))]
+    pub title: String,
+    pub loading: bool,
+}
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserListResult {
+    #[schemars(length(max = 256))]
+    pub pages: Vec<BrowserPageSummary>,
 }

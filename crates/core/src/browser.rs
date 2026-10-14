@@ -32,6 +32,9 @@ impl BrowserCapability for UnsupportedBrowserCapability {
     ) -> Result<BrowserActionResult, BrowserError> {
         Err(BrowserError::CapabilityUnavailable)
     }
+    fn list_targets(&self, _: &CancellationToken) -> Result<Vec<BrowserObservation>, BrowserError> {
+        Err(BrowserError::CapabilityUnavailable)
+    }
     fn close_target(&self, _: BrowserTargetId, _: &CancellationToken) -> Result<(), BrowserError> {
         Err(BrowserError::CapabilityUnavailable)
     }

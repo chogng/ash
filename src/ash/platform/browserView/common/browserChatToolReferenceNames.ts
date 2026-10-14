@@ -11,4 +11,5 @@ export const BrowserChatToolReferenceName = {
 export const browserChatToolReferenceNames: readonly string[] = [
 	...Object.values(BrowserChatToolReferenceName),
 	'browser_scroll', 'browser_back', 'browser_reload', 'browser_close',
+	'browser_list_pages', 'browser_hover', 'browser_drag', 'browser_handle_dialog', 'browser_run_playwright',
 ];

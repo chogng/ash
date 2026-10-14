@@ -48,6 +48,8 @@ import { parseWorkspace } from '../../platform/workspace/common/workspace.js';
 import { selectionFromWorkspace } from '../browser/workspaceSelection.js';
 import { NativeWorkbenchStorageService } from '../../workbench/services/storage/electron-browser/storageService.js';
 import { LoggerChannelClient } from '../../platform/log/common/logIpc.js';
+import { IPlaywrightService } from '../../platform/browserView/common/playwrightService.js';
+import { getSingletonServiceDescriptors } from '../../platform/instantiation/common/extensions.js';
 
 /** Starts the Code-specific Electron Sessions page. */
 export async function main(profile: SessionsProfile): Promise<IDisposable> {
@@ -87,7 +89,9 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 	sessions.add(toDisposable(() => handoffSubscription.dispose()));
 	const permissionDialog = sessions.add(new DirectoryPermissionDialog(container));
 	const transcriptionServices = sessions.add(new InstantiationService());
-	const profileServices = sessions.add(new InstantiationService());
+	const profileServices = sessions.add(new InstantiationService(new ServiceCollection(
+		...getSingletonServiceDescriptors().filter(([id]) => id === IPlaywrightService),
+	)));
 	const serviceCollection = new ServiceCollection();
 	let logger: LoggerChannelClient;
 	let api: Awaited<ReturnType<typeof createElectronRendererApi>>;
@@ -95,12 +99,15 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 	try {
 		const windowId = await invoke<unknown>('ash:ipc:window-id');
 		if (!Number.isSafeInteger(windowId) || (windowId as number) <= 0) { throw new TypeError('Invalid Main IPC window ID'); }
-		const mainProcessService = sessions.add(profileServices.createInstance(ElectronIPCMainProcessService, windowId as number));
-		profileServices.registerInstance(IMainProcessService, mainProcessService);
+		// Release automation dependencies before their Main IPC connection during window shutdown.
+		profileServices.registerSingleton(IMainProcessService, () => profileServices.createInstance(ElectronIPCMainProcessService, windowId as number));
+		const mainProcessService = profileServices.get(IMainProcessService);
+		const playwrightService = profileServices.get(IPlaywrightService);
 		serviceCollection.set(IMainProcessService, mainProcessService);
+		serviceCollection.set(IPlaywrightService, playwrightService);
 		serviceCollection.set(IBrowserViewService, ProxyChannel.toService<IBrowserViewService>(mainProcessService.getChannel(ipcBrowserViewChannelName)));
 		logger = profileServices.createInstance(LoggerChannelClient);
-		api = await createElectronRendererApi([client => { documentClient = client; return {}; }, client => registerLocalTranscriptionService(transcriptionServices, client)], { browser: false, textDocuments: true, appTools: true }, permissionDialog, mainProcessService);
+		api = await createElectronRendererApi([client => { documentClient = client; return {}; }, client => registerLocalTranscriptionService(transcriptionServices, client)], { browser: true, textDocuments: true, appTools: true }, permissionDialog, mainProcessService, undefined, undefined, playwrightService);
 	}
 	catch (error) { sessions.dispose(); return showStartupError(error, text => invoke<void>('ash:host:writeClipboard', text)); }
 	try {
@@ -161,6 +168,9 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				'workbench.contrib.url',
 				'workbench.contrib.externalUriOpener',
 				'workbench.contrib.browserView',
+				'workbench.contrib.browserView.windowZoomSynchronizer',
+				'workbench.contrib.browserView.autoReload',
+				'workbench.contrib.sessionBrowserViewController',
 				'workbench.contrib.browserView.restore',
 				'workbench.contrib.chatAccessibilitySignals',
 				'workbench.contrib.speechAccessibilitySignal',

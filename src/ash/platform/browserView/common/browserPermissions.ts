@@ -2,6 +2,8 @@ import { Emitter } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 
 export type PermissionDecision = 'allow' | 'deny';
+export interface IPermissionCategoryState { readonly category: PermissionCategory; readonly state: PermissionDecision | null; }
+export interface ISerializedBrowserPermissionsSnapshot { readonly origins: Readonly<Record<string, Partial<Record<PermissionCategory, PermissionDecision>>>>; }
 
 export const enum PermissionCategory {
 	Location = 'location',
@@ -27,7 +29,7 @@ export function electronPermissionToCategories(permission: string, mediaKinds?: 
 		case 'geolocation': case 'geolocation-approximate': return [PermissionCategory.Location];
 		case 'notifications': return [PermissionCategory.Notifications];
 		case 'sensors': return [PermissionCategory.Sensors];
-		case 'clipboard-read': return [PermissionCategory.Clipboard];
+		case 'clipboard-read': case 'clipboard-sanitized-write': return [PermissionCategory.Clipboard];
 		case 'usb': case 'serial': case 'hid': return [PermissionCategory.Devices];
 		case 'media': return [...new Set((mediaKinds ?? ['video', 'audio']).map(kind => kind === 'video' ? PermissionCategory.Camera : PermissionCategory.Microphone))];
 		default: return [];
@@ -58,6 +60,9 @@ export class BrowserPermissionStore extends Disposable {
 		this.changes.fire();
 	}
 
+	serialize(): ISerializedBrowserPermissionsSnapshot {
+		return { origins: Object.fromEntries([...this.decisions].map(([origin, values]) => [origin, Object.fromEntries(values)])) };
+	}
 	clear(): void {
 		if (!this.decisions.size) { return; }
 		this.decisions.clear();

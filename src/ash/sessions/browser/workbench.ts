@@ -28,7 +28,8 @@ import { IChatEditingService } from '../../workbench/contrib/chat/common/editing
 import { IUriIdentityService } from '../../platform/uriIdentity/common/uriIdentity.js';
 import { IPromptsService } from '../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
-import { IWorkspaceTrustApi } from '../../platform/workspace/common/workspaceTrust.js';
+import { IWorkspaceTrustApi, IWorkspaceTrustManagementService } from '../../platform/workspace/common/workspaceTrust.js';
+import { WorkspaceTrustManagementService } from '../../workbench/services/workspaces/common/workspaceTrust.js';
 import { IAgentCapabilitiesService } from '../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { IAgentToolsApi } from '../../platform/agentHost/common/agentToolsApi.js';
 import { IMcpServerStatusService } from '../../platform/mcp/common/mcpServerStatusService.js';
@@ -493,6 +494,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IMcpServerStatusService, options.api.mcpServerStatus);
 		services.registerInstance(IMcpServerManagementService, options.api.mcpServerManagement);
 		services.registerInstance(IWorkspaceTrustApi, options.api.workspaceTrust);
+		services.registerInstance(IWorkspaceTrustManagementService, this._register(services.createInstance(WorkspaceTrustManagementService)));
 		services.registerInstance(IAppServerHookApi, options.api.hooks);
 		services.registerInstance(ITraceSettingsService, options.api.traceSettings);
 		const localization = this._register(new WorkbenchLocalizationService());

@@ -240,6 +240,7 @@ fn registry_method_and_notification_names_are_unique() {
             "browser/sharing/set",
             "extensionClient/request",
             "browser/create",
+            "browser/list",
             "browser/observe",
             "browser/perform",
             "textDocument/apply",

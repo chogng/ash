@@ -2,11 +2,12 @@ import type { Session, WebContents, DownloadItem } from 'electron/main';
 import { randomUUID } from 'node:crypto';
 import { toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import type { BrowserViewEvent } from '../common/browserView.js';
-import { BrowserPermissionStore, electronPermissionToCategories, toOriginKey } from '../common/browserPermissions.js';
+import { BrowserPermissionStore, electronPermissionToCategories, toOriginKey, type IPermissionCategoryState, type ISerializedBrowserPermissionsSnapshot } from '../common/browserPermissions.js';
 
 interface Page {
 	readonly id: string;
 	readonly contents: WebContents;
+	readonly changed?: () => void;
 	readonly emit: (event: BrowserViewEvent) => void;
 }
 
@@ -15,7 +16,7 @@ export class BrowserSessionPermissions {
 	private readonly pages = new Map<WebContents, Page>();
 	private readonly grants = new Map<string, boolean>();
 	private readonly siteGrants = new Map<string, BrowserPermissionStore>();
-	private readonly pending = new Map<string, { page: Page; settle: (value: boolean | undefined) => void; }>();
+	private readonly pending = new Map<string, { page: Page; origin: string; embeddingOrigin: string; categories: readonly import('../common/browserPermissions.js').PermissionCategory[]; settle: (value: boolean | undefined) => void; }>();
 	private readonly downloads = new Map<string, { page: Page; item: DownloadItem; cleanup: () => void; }>();
 
 	constructor(session: Session) {
@@ -61,13 +62,14 @@ export class BrowserSessionPermissions {
 						for (const category of siteCategories) { store.set(origin, category, allowed ? 'allow' : 'deny'); }
 					} else { for (const key of keys) { this.grants.set(key, allowed); } }
 				}
+				for (const attached of this.pages.values()) { attached.changed?.(); }
 				callback(allowed === true);
 				page.emit({ type: 'permissionRequestClosed', targetId: page.id, requestId });
 			};
 			const revoke = (_event: Electron.Event, _url: string, inPlace: boolean, mainFrame: boolean): void => { if (mainFrame && !inPlace) settle(undefined); };
 			const timer = setTimeout(() => settle(undefined), 30_000);
 			contents.on('did-start-navigation', revoke);
-			this.pending.set(requestId, { page, settle });
+			this.pending.set(requestId, { page, origin, embeddingOrigin, categories: siteCategories, settle });
 			page.emit({ type: 'permissionRequested', targetId: page.id, requestId, origin, permission: categories.join(',') });
 		});
 		session.setDevicePermissionHandler(() => false);
@@ -86,14 +88,35 @@ export class BrowserSessionPermissions {
 		});
 	}
 
-	public attach(id: string, contents: WebContents, emit: Page['emit']): IDisposable {
-		const page = { id, contents, emit };
+	public attach(id: string, contents: WebContents, emit: Page['emit'], changed?: () => void): IDisposable {
+		const page = { id, contents, emit, changed };
 		this.pages.set(contents, page);
 		return toDisposable(() => {
 			this.pages.delete(contents);
 			for (const request of [...this.pending.values()]) { if (request.page === page) { request.settle(undefined); } }
 			this.cancelDownloads(id);
 		});
+	}
+	public snapshot(contents: WebContents): ISerializedBrowserPermissionsSnapshot {
+		return this.siteGrants.get(toOriginKey(contents.getURL()))?.serialize() ?? { origins: {} };
+	}
+	public setPermissions(id: string, origin: string, grants: readonly IPermissionCategoryState[]): void {
+		const page = [...this.pages.values()].find(page => page.id === id);
+		if (!page) { throw new Error('BrowserTargetUnavailable'); }
+		if (grants.length === 0) { return; }
+		const embeddingOrigin = toOriginKey(page.contents.getURL());
+		if (!embeddingOrigin) { throw new Error('BrowserPermissionOriginUnavailable'); }
+		let store = this.siteGrants.get(embeddingOrigin);
+		if (!store && grants.every(grant => grant.state === null)) { return; }
+		if (!store) { store = new BrowserPermissionStore(); this.siteGrants.set(embeddingOrigin, store); }
+		for (const grant of grants) { store.set(origin, grant.category, grant.state); }
+		for (const pending of [...this.pending.values()]) {
+			if (pending.embeddingOrigin !== embeddingOrigin || pending.origin !== origin || pending.categories.length === 0) { continue; }
+			const decisions = pending.categories.map(category => store.getDecision(origin, category));
+			if (decisions.some(value => value === 'deny')) { pending.settle(false); }
+			else if (decisions.every(value => value === 'allow')) { pending.settle(true); }
+		}
+		for (const attached of this.pages.values()) { attached.changed?.(); }
 	}
 	public respond(id: string, requestId: string, allowed: boolean): void {
 		const request = this.pending.get(requestId);
@@ -105,6 +128,7 @@ export class BrowserSessionPermissions {
 		this.grants.clear();
 		for (const store of this.siteGrants.values()) { store.dispose(); }
 		this.siteGrants.clear();
+		for (const page of this.pages.values()) { page.changed?.(); }
 	}
 	public cancelRequests(id: string): void {
 		for (const request of [...this.pending.values()]) { if (request.page.id === id) request.settle(undefined); }

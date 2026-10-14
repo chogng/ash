@@ -367,7 +367,7 @@ export const SettingsNavigation = [
 			{
 				id: 'browser',
 				label: localize({ bundle: 'ash.settings', key: 'categories.browser.label' }, 'Browser'),
-				description: localize({ bundle: 'ash.settings', key: 'categories.browser.description' }, 'Choose where website links open.'),
+				description: localize({ bundle: 'ash.settings', key: 'categories.browser.description' }, 'Configure website links and integrated browser pages.'),
 				presentation: 'general',
 				groups: [
 					{
@@ -375,6 +375,12 @@ export const SettingsNavigation = [
 						label: localize('externalUriOpener.settings.group', 'Links'),
 						description: localize('externalUriOpener.settings.groupDescription', 'Choose where website links open.'),
 						settings: ['workbench.externalUriOpeners'],
+					},
+					{
+						id: 'browser-controls',
+						label: localize({ bundle: 'ash.settings', key: 'categories.browser.label' }, 'Browser'),
+						description: localize({ bundle: 'ash.settings', key: 'browser.controls.description' }, 'Control page zoom, address bar search and reload on local file changes.'),
+						settings: ['workbench.browser.searchEngine', 'workbench.browser.pageZoom', 'workbench.browser.autoReloadOnFileChange', 'workbench.browser.dataStorage', 'workbench.browser.openLocalhostLinks'],
 					},
 				],
 			},

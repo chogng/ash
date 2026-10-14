@@ -54,6 +54,24 @@ pub enum BrowserAction {
         target_id: BrowserTargetId,
         target: BrowserElementTarget,
     },
+    Hover {
+        target_id: BrowserTargetId,
+        target: BrowserElementTarget,
+    },
+    Drag {
+        target_id: BrowserTargetId,
+        source: BrowserElementTarget,
+        destination: BrowserElementTarget,
+    },
+    HandleDialog {
+        target_id: BrowserTargetId,
+        accept: bool,
+        prompt_text: Option<String>,
+    },
+    RunPlaywright {
+        target_id: BrowserTargetId,
+        code: String,
+    },
     TypeText {
         target_id: BrowserTargetId,
         target: BrowserTextInputTarget,
@@ -75,6 +93,7 @@ pub enum BrowserAction {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BrowserActionResult {
     pub target_id: BrowserTargetId,
+    pub output: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -134,6 +153,11 @@ pub trait BrowserCapability: Send + Sync {
         action: BrowserAction,
         cancellation: &CancellationToken,
     ) -> Result<BrowserActionResult, BrowserError>;
+    /// Lists only targets the originating task may observe; page state still comes from the host.
+    fn list_targets(
+        &self,
+        cancellation: &CancellationToken,
+    ) -> Result<Vec<BrowserObservation>, BrowserError>;
     fn close_target(
         &self,
         target_id: BrowserTargetId,

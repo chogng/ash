@@ -11,8 +11,11 @@ import type { IBrowserSessionHistory } from './browserSessionHistory.js';
 import type { IBrowserViewWindowConfiguration, IBrowserViewKeyDownEvent, IBrowserElementSelectionOptions, IBrowserElementCommentsUpdate, IBrowserViewRect, IBrowserViewFindInPageOptions, IBrowserViewCaptureScreenshotOptions } from '../common/browserView.js';
 import { VSBuffer } from '../../../base/common/buffer.js';
 import { isRecord } from '../../../base/common/types.js';
+import { browserZoomFactors, browserZoomDefaultIndex, type IBrowserDeviceProfile } from '../common/browserView.js';
+import { randomUUID } from 'node:crypto';
 
 export interface BrowserViewOptions {
+	readonly remoteAuthority?: string;
 	readonly id: string;
 	readonly window: BrowserWindow;
 	readonly view: WebContentsView;
@@ -26,10 +29,29 @@ export interface BrowserViewOptions {
 
 /** Owns one page, its navigation resources and the ordered Chromium operations using it. */
 export class BrowserView extends Disposable {
+	private readonly fileRequests = new Map<string, (data: string | null) => void>();
+	public respondToFileRequest(requestId: string, data: string | null): void { this.fileRequests.get(requestId)?.(data); }
+	private readFile(url: string): Promise<Uint8Array> {
+		this.assertNotDisposed();
+		if (this.fileRequests.size >= 64) { return Promise.reject(new Error('Browser file request limit exceeded')); }
+		const requestId = randomUUID();
+		return new Promise((resolve, reject) => {
+			const finish = (data: string | null): void => {
+				if (!this.fileRequests.delete(requestId)) { return; }
+				clearTimeout(timer);
+				if (data === null) { reject(new Error('BrowserLocalFileAccessDenied')); }
+				else { resolve(Buffer.from(data, 'base64')); }
+			};
+			const timer = setTimeout(() => finish(null), 30000);
+			this.fileRequests.set(requestId, finish);
+			this.emit({ type: 'fileRequested', targetId: this.id, requestId, url });
+		});
+	}
 	readonly id: string;
 	readonly view: WebContentsView;
 	public readonly session: BrowserSession;
 	private readonly creation: IBrowserViewCreateOptions;
+	private readonly remoteAuthority: string | undefined;
 	private readonly window: BrowserWindow;
 	private readonly cancellation = new AbortController();
 	readonly signal = this.cancellation.signal;
@@ -46,6 +68,30 @@ export class BrowserView extends Disposable {
 	private readonly preloadFrames = new Map<WebFrameMain, string>();
 	private preloadConfiguration: IBrowserViewWindowConfiguration | undefined;
 	private selectionMode: 'element' | 'area' | undefined;
+	private deviceEmulation: IBrowserDeviceProfile | undefined;
+	private originalUserAgent: string | undefined;
+
+	public setBrowserZoomIndex(index: number): void {
+		this.webContents.setZoomFactor(browserZoomFactors[index]!);
+		this.emitState();
+	}
+	public toggleDevTools(): void {
+		if (this.webContents.isDevToolsOpened()) { this.webContents.closeDevTools(); }
+		else { this.webContents.openDevTools({ mode: 'detach' }); }
+	}
+	public setDeviceEmulation(device: IBrowserDeviceProfile | undefined): void {
+		this.originalUserAgent ??= this.webContents.getUserAgent();
+		if (device) {
+			const size = { width: device.width ?? 800, height: device.height ?? 600 };
+			this.webContents.enableDeviceEmulation({ screenPosition: device.mobile ? 'mobile' : 'desktop', screenSize: size, viewSize: size, viewPosition: { x: 0, y: 0 }, deviceScaleFactor: device.deviceScaleFactor ?? 1, scale: 1 });
+			this.webContents.setUserAgent(device.userAgent ?? this.originalUserAgent);
+		} else {
+			this.webContents.disableDeviceEmulation();
+			this.webContents.setUserAgent(this.originalUserAgent);
+		}
+		this.deviceEmulation = device;
+		this.emitState();
+	}
 	private selectionOptions: IBrowserElementSelectionOptions = {};
 	// Existing markers remain editable after the picker has stopped; only renderer-accepted IDs qualify.
 	private readonly commentIds = new Set<string>();
@@ -142,6 +188,9 @@ export class BrowserView extends Disposable {
 		for (const id of update.pendingCommentIdsToDiscard ?? []) { this.commentIds.delete(id); }
 		this.broadcastPreload('setElementComments', update);
 	}
+	private readonly consoleLogs: string[] = [];
+	private consoleBytes = 0;
+	public getConsoleLogs(): string { return this.consoleLogs.join('\n'); }
 	public captureScreenshot(options: IBrowserViewCaptureScreenshotOptions = {}): Promise<VSBuffer> {
 		return this.runOperation(this.signal, async () => {
 			this.broadcastPreload('hideUI');
@@ -156,6 +205,21 @@ export class BrowserView extends Disposable {
 						this.signal,
 						'BrowserTargetUnavailable',
 					);
+				}
+				if (options.fullPage && !options.screenRect) {
+					using attachment = this.debugger.acquire();
+					const metrics = await this.debugger.sendCommand('Page.getLayoutMetrics');
+					if (!isRecord(metrics) || !isRecord(metrics.cssContentSize)) { throw new Error('BrowserScreenshotUnavailable'); }
+					const { width, height } = metrics.cssContentSize;
+					if (typeof width !== 'number' || typeof height !== 'number' || !Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0 || Math.ceil(width) * Math.ceil(height) > 16_777_216) { throw new Error('BrowserScreenshotTooLarge'); }
+					const deviceScale: unknown = await this.webContents.executeJavaScriptInIsolatedWorld(browserViewIsolatedWorldId, [{ code: 'window.devicePixelRatio' }]);
+					if (typeof deviceScale !== 'number' || !Number.isFinite(deviceScale) || deviceScale <= 0 || deviceScale > 100) { throw new Error('BrowserScreenshotUnavailable'); }
+					// Normalize to CSS pixels so the pixel budget also applies on Retina and zoomed displays.
+					const capture = await this.debugger.sendCommand('Page.captureScreenshot', { format: options.format ?? 'png', ...(options.format === 'jpeg' && options.quality !== undefined ? { quality: options.quality } : {}), captureBeyondViewport: true, clip: { x: 0, y: 0, width: Math.ceil(width), height: Math.ceil(height), scale: 1 / deviceScale } });
+					if (!isRecord(capture) || typeof capture.data !== 'string' || capture.data.length > 24 * 1024 * 1024 || !/^[A-Za-z0-9+/]*={0,2}$/u.test(capture.data)) { throw new Error('BrowserScreenshotTooLarge'); }
+					const bytes = Buffer.from(capture.data, 'base64');
+					if (bytes.byteLength > 16 * 1024 * 1024) { throw new Error('BrowserScreenshotTooLarge'); }
+					return VSBuffer.wrap(bytes);
 				}
 				const scale = this.webContents.getZoomFactor();
 				const bounds = options.screenRect;
@@ -318,6 +382,7 @@ export class BrowserView extends Disposable {
 		this.session = options.session;
 		this.history = options.history;
 		this.creation = options.creation;
+		this.remoteAuthority = options.remoteAuthority;
 		this.window = options.window;
 		this.url = options.initialUrl;
 		if (options.network) { this._register(options.network); }
@@ -326,6 +391,7 @@ export class BrowserView extends Disposable {
 			this.webContents.setWebRTCIPHandlingPolicy('disable_non_proxied_udp');
 		}
 		this.emitEvent = options.emitEvent;
+		this._register(toDisposable(() => { for (const finish of this.fileRequests.values()) { finish(null); } }));
 	}
 
 	/** Called only after the manager has taken ownership, so synchronous page events can find this view. */
@@ -334,7 +400,8 @@ export class BrowserView extends Disposable {
 		this.view.setVisible(false);
 		this.window.contentView.addChildView(this.view);
 		this.configureSecurity();
-		this._register(this.session.permissions.attach(this.id, this.webContents, event => this.emit(event)));
+		if (this.creation.owner.type === 'user') { this._register(this.session.attachFileReader(this.id, url => this.readFile(url))); }
+		this._register(this.session.permissions.attach(this.id, this.webContents, event => this.emit(event), () => this.emitState()));
 		this._register(this.session.attachNetwork(this.id, this.webContents, this.creation.owner, () => this.networkToken, event => this.emit(event)));
 		this.listen();
 		this.emit({ type: 'created', info: this.getInfo() });
@@ -367,10 +434,14 @@ export class BrowserView extends Disposable {
 		if (visible === this.visible) return;
 		this.visible = visible; this.view.setVisible(visible); this.emitState();
 	}
-	loadURL(url: string, signal: AbortSignal = this.signal, networkToken?: string | null): Promise<void> { return this.runOperation(signal, s => this.navigate(normalizeBrowserViewUrl(url), s), networkToken); }
+	loadURL(url: string, signal: AbortSignal = this.signal, networkToken?: string | null): Promise<void> {
+		const normalized = normalizeBrowserViewUrl(url);
+		if (this.creation.owner.type === 'agent' && new URL(normalized).protocol === 'file:') { return Promise.reject(new Error('BrowserLocalFileAccessDenied')); }
+		return this.runOperation(signal, s => this.navigate(normalized, s), networkToken);
+	}
 	goBack(): Promise<void> { return this.runOperation(this.signal, async () => { const h = this.webContents.navigationHistory; if (h.canGoBack()) { this.errorDescription = undefined; h.goBack(); } }); }
 	goForward(): Promise<void> { return this.runOperation(this.signal, async () => { const h = this.webContents.navigationHistory; if (h.canGoForward()) { this.errorDescription = undefined; h.goForward(); } }); }
-	reload(): Promise<void> { return this.runOperation(this.signal, async () => { this.errorDescription = undefined; this.webContents.reload(); }); }
+	reload(hard = false): Promise<void> { return this.runOperation(this.signal, async () => { this.errorDescription = undefined; if (hard) { this.webContents.reloadIgnoringCache(); } else { this.webContents.reload(); } }); }
 	stop(): void { this.webContents.stop(); }
 	focus(): void { if (this.visible) this.webContents.focus(); }
 
@@ -417,11 +488,17 @@ export class BrowserView extends Disposable {
 
 	private listen(): void {
 		const contents = this.view.webContents;
+		this.on(contents, 'console-message', (event: Electron.Event<Electron.WebContentsConsoleMessageEventParams>) => {
+			const line = `${event.level}: ${event.message}`.slice(0, 8192);
+			this.consoleLogs.push(line); this.consoleBytes += Buffer.byteLength(line);
+			while (this.consoleBytes > 64 * 1024 || this.consoleLogs.length > 500) { this.consoleBytes -= Buffer.byteLength(this.consoleLogs.shift()!); }
+		});
 		this.on(contents, 'ipc-message', (event: IpcMainEvent, channel: string, message: unknown) => {
 			if (channel === 'ash:browserView:preload') { this.acceptPreload(event, message); }
 		});
 		this.on(contents, 'did-start-navigation', (_event: ElectronEvent, _url: string, inPlace: boolean, mainFrame: boolean) => {
 			if (mainFrame && !inPlace) {
+				this.consoleLogs.length = 0; this.consoleBytes = 0;
 				this.selectionMode = undefined; this.preloadFrames.clear();
 				this.commentIds.clear();
 				this.emit({ type: 'selectionStopped', targetId: this.id });
@@ -508,6 +585,7 @@ export class BrowserView extends Disposable {
 	}
 
 	private validateNavigation(event: ElectronEvent, url: string): void {
+		if (this.creation.owner.type === 'agent' && new URL(url).protocol === 'file:') { event.preventDefault(); return; }
 		try { normalizeBrowserViewUrl(url); this.errorDescription = undefined; }
 		catch { event.preventDefault(); }
 	}
@@ -549,7 +627,7 @@ export class BrowserView extends Disposable {
 	}
 
 	public getInfo(): IBrowserViewInfo {
-		return { id: this.id, host: { windowId: this.window.id }, owner: this.creation.owner, session: this.creation.session, state: this.getState() };
+		return { id: this.id, host: { windowId: this.window.id }, owner: this.creation.owner, session: this.creation.session, remoteAuthority: this.remoteAuthority, state: this.getState() };
 	}
 
 	getState(): IBrowserViewState {
@@ -560,6 +638,9 @@ export class BrowserView extends Disposable {
 		const history = contents.navigationHistory;
 		return {
 			targetId: this.id,
+			permissions: this.session.permissions.snapshot(contents),
+			browserZoomIndex: browserZoomFactors.reduce<number>((best, factor, index) => Math.abs(factor - contents.getZoomFactor()) < Math.abs(browserZoomFactors[best]! - contents.getZoomFactor()) ? index : best, browserZoomDefaultIndex),
+			deviceEmulation: this.deviceEmulation,
 			url: contents.getURL() || this.url,
 			title: contents.getTitle(),
 			loading: contents.isLoading(),

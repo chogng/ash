@@ -1,7 +1,35 @@
+import type { IPermissionCategoryState, ISerializedBrowserPermissionsSnapshot } from './browserPermissions.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type { IDisposable } from '../../../base/common/lifecycle.js';
 import type { ISerializedBrowserHistoryEntriesSnapshot } from './browserHistory.js';
 import type { VSBuffer } from '../../../base/common/buffer.js';
+
+/** Stable command IDs shared by browser controls, keybindings and external callers. */
+export enum BrowserViewCommandId {
+	Open = 'workbench.action.browser.open',
+	OpenExternal = 'workbench.action.browser.openExternal',
+	OpenSettings = 'workbench.action.browser.openSettings',
+	OpenFile = 'workbench.action.browser.openFile',
+	NewTab = 'workbench.action.browser.newTab',
+	QuickOpen = 'workbench.action.browser.quickOpen',
+	CloseAll = 'workbench.action.browser.closeAll',
+	CloseAllInGroup = 'workbench.action.browser.closeAllInGroup',
+	GoBack = 'workbench.action.browser.goBack',
+	GoForward = 'workbench.action.browser.goForward',
+	Reload = 'workbench.action.browser.reload',
+	HardReload = 'workbench.action.browser.hardReload',
+	FocusUrlInput = 'workbench.action.browser.focusUrlInput',
+	AddConsoleLogsToChat = 'workbench.action.browser.addConsoleLogsToChat',
+	AddScreenshotToChat = 'workbench.action.browser.addScreenshotToChat',
+	AddFullPageScreenshotToChat = 'workbench.action.browser.addFullPageScreenshotToChat',
+	ManagePermissions = 'workbench.action.browser.managePermissions',
+	ShowHistory = 'workbench.action.browser.showHistory',
+	ToggleFavorite = 'workbench.action.browser.toggleFavorite',
+	ShowFind = 'workbench.action.browser.showFind',
+	HideFind = 'workbench.action.browser.hideFind',
+	FindNext = 'workbench.action.browser.findNext',
+	FindPrevious = 'workbench.action.browser.findPrevious',
+}
 
 export const IBrowserViewService = createServiceIdentifier<IBrowserViewService>('browserViewService');
 export const ipcBrowserViewChannelName = 'browserView';
@@ -65,12 +93,23 @@ export interface IBrowserViewWindowConfiguration {
 	readonly localizedStrings: IBrowserViewPreloadLocalizedStrings;
 }
 export interface IBrowserViewCaptureScreenshotOptions {
+	readonly fullPage?: boolean;
 	readonly format?: 'jpeg' | 'png';
 	readonly quality?: number;
 	readonly screenRect?: IBrowserViewRect;
 	readonly awaitNextPaint?: boolean;
 }
 export interface IBrowserViewFindInPageOptions { readonly recompute?: boolean; readonly forward?: boolean; readonly matchCase?: boolean; }
+
+export const browserZoomFactors = [0.25, 1 / 3, 0.5, 2 / 3, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 5] as const;
+export const browserZoomDefaultIndex = browserZoomFactors.indexOf(1);
+export interface IBrowserDeviceProfile {
+	readonly width?: number;
+	readonly height?: number;
+	readonly mobile?: boolean;
+	readonly userAgent?: string;
+	readonly deviceScaleFactor?: number;
+}
 
 export type BrowserViewTargetId = string;
 
@@ -107,6 +146,9 @@ export interface IBrowserViewNavigateRequest
 
 /** Serializable host-authoritative state for one embedded browser. */
 export interface IBrowserViewState {
+	readonly permissions?: ISerializedBrowserPermissionsSnapshot;
+	readonly browserZoomIndex?: number;
+	readonly deviceEmulation?: IBrowserDeviceProfile;
 	readonly targetId: BrowserViewTargetId;
 	readonly url: string;
 	readonly title: string;
@@ -118,6 +160,7 @@ export interface IBrowserViewState {
 }
 
 export type BrowserViewEvent =
+	| { readonly type: 'fileRequested'; readonly targetId: string; readonly requestId: string; readonly url: string; }
 	| { readonly type: 'keyDown'; readonly targetId: string; readonly event: IBrowserViewKeyDownEvent; }
 	| { readonly type: 'elementPicked'; readonly targetId: string; readonly data: IElementData; }
 	| { readonly type: 'elementCommentRemoved'; readonly targetId: string; readonly elementId: string; }
@@ -181,6 +224,7 @@ export type IBrowserViewSessionOptions =
 	| { readonly scope: BrowserViewStorageScope.Agent; readonly affinity: string; };
 
 export interface IBrowserViewInfo {
+	readonly remoteAuthority?: string;
 	readonly id: string;
 	readonly host: { readonly windowId: number; };
 	readonly owner: IBrowserViewOwner;
@@ -195,7 +239,14 @@ export interface IBrowserViewInfo {
  * serializable commands and state only.
  */
 export interface IBrowserViewService {
+	setPermissions(id: string, origin: string, grants: readonly IPermissionCategoryState[]): Promise<void>;
+	respondToFileRequest(id: string, requestId: string, data: string | null): Promise<void>;
+	toggleDevTools(id: string): Promise<void>;
+	setBrowserZoomIndex(id: string, zoomIndex: number): Promise<void>;
+	setDeviceEmulation(id: string, device: IBrowserDeviceProfile | undefined): Promise<void>;
+	clearStorage(id: string): Promise<void>;
 	updateWindowConfiguration(windowId: number, configuration: IBrowserViewWindowConfiguration): Promise<void>;
+	getConsoleLogs(id: string): Promise<string>;
 	getSelectedText(id: string): Promise<string>;
 	findInPage(id: string, text: string, options?: IBrowserViewFindInPageOptions): Promise<void>;
 	stopFindInPage(id: string, keepSelection?: boolean): Promise<void>;
@@ -218,7 +269,7 @@ export interface IBrowserViewService {
 	loadURL(id: string, url: string): Promise<void>;
 	goBack(id: string): Promise<void>;
 	goForward(id: string): Promise<void>;
-	reload(id: string): Promise<void>;
+	reload(id: string, hard?: boolean): Promise<void>;
 	stop(id: string): Promise<void>;
 	focus(id: string): Promise<void>;
 	destroyBrowserView(id: string): Promise<void>;
@@ -241,6 +292,10 @@ export interface IBrowserViewObservation {
 	readonly screenshot?: { readonly mimeType: 'image/png'; readonly dataBase64: string; readonly decodedLength: number; };
 }
 export type BrowserViewAction =
+	| { readonly type: 'hover'; readonly target: { readonly nodeId: string; }; }
+	| { readonly type: 'drag'; readonly source: { readonly nodeId: string; }; readonly destination: { readonly nodeId: string; }; }
+	| { readonly type: 'handleDialog'; readonly accept: boolean; readonly promptText?: string | null; }
+	| { readonly type: 'runPlaywright'; readonly code: string; }
 	| { readonly type: 'navigate'; readonly url: string; }
 	| { readonly type: 'click'; readonly target: { readonly nodeId: string; }; }
 	| { readonly type: 'typeText'; readonly text: string; readonly target: { readonly type: 'focusedElement'; } | { readonly type: 'element'; readonly target: { readonly nodeId: string; }; }; }
@@ -381,13 +436,15 @@ export function normalizeBrowserViewUrl(value: unknown): string {
 		url.hostname === "localhost" ||
 		url.hostname === "127.0.0.1" ||
 		url.hostname === "[::1]";
+	const localFile = url.protocol === 'file:' && (url.hostname === '' || url.hostname === 'localhost');
 	if (
 		url.protocol !== "https:" &&
 		!(url.protocol === "http:" && localHttpHost) &&
+		!localFile &&
 		url.href !== "about:blank"
 	) {
 		throw new Error(
-			"browser view URL must use HTTPS, loopback HTTP, or about:blank",
+			"browser view URL must use HTTPS, loopback HTTP, a local file, or about:blank",
 		);
 	}
 	return url.href;

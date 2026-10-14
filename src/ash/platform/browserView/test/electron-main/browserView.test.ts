@@ -26,6 +26,44 @@ const signal = () => new AbortController().signal;
 suite('Browser view ownership and operations', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('console capture is bounded, isolated to one page and reset at a document navigation', async () => {
+		using f = fixture(); await f.create();
+		f.contents.emit('console-message', { level: 'info', message: 'captured message' });
+		assert.equal(await f.manager.getConsoleLogs(id), 'info: captured message');
+		for (let i = 0; i < 100; i++) { f.contents.emit('console-message', { level: 'error', message: '界'.repeat(8192) }); }
+		assert.ok(Buffer.byteLength(await f.manager.getConsoleLogs(id)) <= 64 * 1024 + 500);
+		f.contents.emit('did-start-navigation', {}, 'https://example.test/next', false, true);
+		assert.equal(await f.manager.getConsoleLogs(id), '');
+	});
+
+	test('full-page capture normalizes display scale and refuses an oversized document before requesting pixels', async () => {
+		using f = fixture(); await f.create();
+		f.manager.tryGetBrowserView(id)!.webContents.executeJavaScriptInIsolatedWorld = async () => 2;
+		let large = false;
+		f.command = async method => method === 'Page.getLayoutMetrics' ? { cssContentSize: { width: 1000, height: large ? 20000 : 2000 } } : { data: 'AA==' };
+		await f.manager.captureScreenshot(id, { fullPage: true });
+		const capture = f.commands.find(command => command.method === 'Page.captureScreenshot')!;
+		assert.deepEqual((capture.params as { clip: unknown; }).clip, { x: 0, y: 0, width: 1000, height: 2000, scale: 0.5 });
+		large = true; f.commands.length = 0;
+		await assert.rejects(f.manager.captureScreenshot(id, { fullPage: true }), /TooLarge/);
+		assert.equal(f.commands.some(command => command.method === 'Page.captureScreenshot'), false);
+	});
+
+	test('trusted reload IPC forwards cache bypass and rejects malformed flags', async () => {
+		using f = fixture(); await f.create();
+		const view = f.manager.tryGetBrowserView(id)!;
+		const calls: boolean[] = [];
+		view.webContents.reload = () => { calls.push(false); };
+		view.webContents.reloadIgnoringCache = () => { calls.push(true); };
+		const channel = browserViewChannel(f.manager, { call: async () => null, listen: () => Event.None } as unknown as import('../../../../base/parts/ipc/common/ipc.js').IChannel);
+		await channel.call('window:1', 'reload', [id]);
+		await channel.call('window:1', 'reload', [id, true]);
+		await channel.call('window:1', 'reload', [id, null]);
+		assert.deepEqual(calls, [false, true, false]);
+		await assert.rejects(channel.call('window:1', 'reload', [id, 'true']), /reload arguments/);
+		await assert.rejects(channel.call('window:1', 'reload', [id, false, true]), /reload arguments/);
+	});
+
 	test('committed user visits and title updates reach the session history through the trusted service', async () => {
 		using f = fixture();
 		await f.manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test/', owner: { type: 'user' }, session: { scope: BrowserViewStorageScope.Workspace } });
@@ -423,7 +461,7 @@ export function fixture(storageOverride?: IApplicationStorageMainService) {
 		getRemoteNetwork() { return f.remote ? { authority: 'ssh-remote+test', tunnels: { openProxy: () => f.proxy() } as unknown as import('../../../remote/electron-main/sshPortForwardingService.js').SshPortForwardingService } : undefined; }, createSession: (partition: string) => {
 			let session = partitions.get(partition);
 			if (!session) {
-				session = Object.assign(new EventEmitter(), { webRequest: { onBeforeRequest: () => { } }, setPermissionCheckHandler: () => { }, setPermissionRequestHandler: () => { }, setDevicePermissionHandler: () => { }, setProxy: async () => { }, closeAllConnections: async () => { } }) as unknown as Electron.Session;
+				session = Object.assign(new EventEmitter(), { protocol: { handle: () => { }, unhandle: () => { } }, webRequest: { onBeforeRequest: () => { } }, setPermissionCheckHandler: () => { }, setPermissionRequestHandler: () => { }, setDevicePermissionHandler: () => { }, setProxy: async () => { }, closeAllConnections: async () => { } }) as unknown as Electron.Session;
 				partitions.set(partition, session);
 			}
 			return session;
@@ -431,13 +469,15 @@ export function fixture(storageOverride?: IApplicationStorageMainService) {
 			const chromiumId = 'chromium-target-' + children.size;
 			const pageContents = children.size === 0 ? contents : new EventEmitter();
 			let destroyed = false;
+			let zoomFactor = 1;
 			let bounds = { x: 0, y: 0, width: 0, height: 0 };
 			Object.assign(pageContents, {
+				getZoomFactor: () => zoomFactor, setZoomFactor: (value: number) => { zoomFactor = value; },
 				id: children.size + 1,
 				setWebRTCIPHandlingPolicy: () => { },
 				session: browserStorage,
 				setWindowOpenHandler: () => { }, isDestroyed: () => destroyed, isLoading: () => f.loading,
-				getURL: () => f.url, getTitle: () => f.title, focus: () => { }, stop: () => { f.loading = false; }, reload: () => { },
+				getURL: () => f.url, getTitle: () => f.title, focus: () => { }, stop: () => { f.loading = false; }, reload: () => { }, reloadIgnoringCache: () => { },
 				navigationHistory: { canGoBack: () => false, canGoForward: () => false, goBack: () => { }, goForward: () => { } },
 				loadURL: (url: string) => f.load(url), capturePage: () => f.capture(),
 				close: () => { destroyed = true; pageContents.emit('destroyed'); },
@@ -449,10 +489,12 @@ export function fixture(storageOverride?: IApplicationStorageMainService) {
 	instantiation.registerInstance(IBrowserViewMainService, manager);
 	instantiation.registerInstance(IPlaywrightService, {
 		getObservation: async (_operationId, _sessionId, pageId) => { f.observations.push(pageId); return f.observe(pageId); },
-		performAction: async () => { },
+		performAction: async () => undefined,
 		cancelOperation: async operationId => { f.cancelled.push(operationId); },
 		disposeSession: async sessionId => { f.retired.push(sessionId); },
 	});
 	store.add(manager.onDidEvent(event => events.push(event)));
 	return Object.assign(f, { manager, instantiation, store, storage, createHost: () => instantiation.createInstance(AppServerBrowserHost), create: async () => { await manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test/', ...agent }); return manager.tryGetBrowserView(id)!; } });
 }
+
+import { browserViewChannel } from '../../electron-main/browserViewIpc.js';

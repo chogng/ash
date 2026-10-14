@@ -1,0 +1,23 @@
+.ash-browser-welcome {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	min-height: 100%;
+	padding: var(--ash-spacing-size160);
+	box-sizing: border-box;
+	text-align: center;
+	color: var(--ash-description-foreground);
+}
+.ash-browser-welcome[hidden] {
+	display: none;
+}
+.ash-browser-welcome h2 {
+	margin: 0;
+	font-size: var(--ash-fontSize-heading2);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+.ash-browser-welcome p {
+	margin: var(--ash-spacing-size80) 0 0;
+	font-size: var(--ash-fontSize-body1);
+}

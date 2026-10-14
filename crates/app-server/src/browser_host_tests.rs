@@ -288,6 +288,60 @@ fn next_request(outbound: &NotificationQueue) -> Value {
 }
 
 #[test]
+fn browser_page_list_filters_other_threads_and_retires_closed_targets() {
+    let mut host = browser_host(Arc::new(Mutex::new(ResourceStore::default())));
+    host.owner = Some(7);
+    let outbound = NotificationQueue::default();
+    host.register(
+        7,
+        ClientBrowserCapability {
+            version: 3,
+            observe: true,
+            input: true,
+        },
+        outbound.clone(),
+    );
+    {
+        let mut state = host.state.lock().unwrap();
+        let own = BrowserTargetOwner {
+            connection_id: 7,
+            thread_id: host.thread_id().unwrap().clone(),
+        };
+        state.target_owners.insert("own-page".into(), own.clone());
+        state.target_owners.insert("closed-page".into(), own);
+        state.target_owners.insert(
+            "private-page".into(),
+            BrowserTargetOwner {
+                connection_id: 7,
+                thread_id: ash_protocol::ThreadId::new("other-thread").unwrap(),
+            },
+        );
+    }
+    let host = Arc::new(host);
+    let worker_host = Arc::clone(&host);
+    let worker =
+        thread::spawn(move || worker_host.list_targets(&CancellationSource::new().token()));
+    let request = next_request(&outbound);
+    assert_eq!(request["method"], "browser/list");
+    assert_eq!(request["params"]["threadId"], "browser-thread");
+    host.clients.handle_response(7, json!({"jsonrpc":"2.0", "id":request["id"], "result":{"pages":[
+        {"targetId":"own-page", "url":"https://example.test/", "title":"Own page", "loading":false},
+        {"targetId":"private-page", "url":"https://private.test/", "title":"Private page", "loading":false}
+    ]}})).unwrap();
+    let pages = worker.join().unwrap().unwrap();
+    assert_eq!(
+        pages
+            .iter()
+            .map(|page| page.target_id.0.as_str())
+            .collect::<Vec<_>>(),
+        ["own-page"]
+    );
+    let state = host.state.lock().unwrap();
+    assert!(!state.target_owners.contains_key("closed-page"));
+    assert!(state.target_owners.contains_key("private-page"));
+}
+
+#[test]
 fn task_binding_never_borrows_another_window_or_a_replayed_command() {
     let host = browser_host(Arc::new(Mutex::new(ResourceStore::default())));
     for owner in [1, 2] {
