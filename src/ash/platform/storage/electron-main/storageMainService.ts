@@ -1,16 +1,34 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { Promises } from '../../../base/node/pfs.js';
 import { dirname } from 'node:path';
-import { Emitter } from '../../../base/common/event.js';
+import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { isRecord } from '../../../base/common/types.js';
-import { StorageScope } from '../common/storage.js';
+import { StorageScope, WillSaveStateReason, type IWillSaveStateEvent } from '../common/storage.js';
 import { storageIdentityKey, validateStorageEntries, validateStorageSnapshot, type IStorageIdentity, type IStorageEntry, type IStorageSnapshot } from '../common/storageIpc.js';
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
+
+export const IApplicationStorageMainService = createServiceIdentifier<IApplicationStorageMainService>('applicationStorageMainService');
+
+/** The application owns this writer; domain participants enqueue their final keys before it closes. */
+export interface IApplicationStorageMainService extends IDisposable {
+	readonly onDidChangeStorage: Event<IStorageSnapshot>;
+	readonly onWillSaveState: Event<IWillSaveStateEvent>;
+	initialize(): Promise<void>;
+	getItems(identity: IStorageIdentity, legacy?: Readonly<Record<string, IStorageEntry>>): Promise<IStorageSnapshot>;
+	updateItems(identity: IStorageIdentity, key: string, entry: IStorageEntry | null): Promise<IStorageSnapshot>;
+	cleanUpStorage(protectedWorkspaceIds: ReadonlySet<string>): Promise<void>;
+	use(identity: IStorageIdentity): IDisposable;
+	flush(): Promise<void>;
+	close(): Promise<void>;
+}
 
 /** One Desktop writer merges key mutations; renderer snapshots never replace an entire scope. */
-export class StorageMainService extends Disposable {
+export class StorageMainService extends Disposable implements IApplicationStorageMainService {
 	private readonly changes = this._register(new Emitter<IStorageSnapshot>());
 	public readonly onDidChangeStorage = this.changes.event;
+	private readonly saving = this._register(new Emitter<IWillSaveStateEvent>());
+	public readonly onWillSaveState = this.saving.event;
 	private readonly storages = new Map<string, IStorageSnapshot>();
 	private readonly users = new Map<string, number>();
 	private queue: Promise<void> = Promise.resolve();
@@ -105,9 +123,16 @@ export class StorageMainService extends Disposable {
 		});
 	}
 
-	public flush(): Promise<void> { return this.queue; }
+	public flush(): Promise<void> {
+		if (!this.closing) { this.saving.fire({ reason: WillSaveStateReason.PERIODIC }); }
+		return this.queue;
+	}
 	public close(): Promise<void> {
-		this.closing ??= this.queue;
+		if (!this.closing) {
+			// Participants enqueue synchronously, so the captured queue includes their pending domain writes.
+			this.saving.fire({ reason: WillSaveStateReason.SHUTDOWN });
+			this.closing = this.queue;
+		}
 		return this.closing;
 	}
 

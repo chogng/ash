@@ -9,7 +9,7 @@ import { EditorInput } from '../../../common/editor/editorInput.js';
 
 import { type EditorInputSerializer, requireRecord, requireString } from '../../../services/editor/common/editorInputSerializer.js';
 import { BrowserViewModel, IBrowserViewWorkbenchService, type IBrowserViewModel } from './browserView.js';
-export const BROWSER_RESOURCE_SCHEME = 'ash-browser';
+import { BrowserViewUri } from '../../../../platform/browserView/common/browserViewUri.js';
 
 export interface IBrowserEditorInputData {
 	readonly id: string;
@@ -36,7 +36,7 @@ export class BrowserEditorInput extends EditorInput {
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super();
-		this.resource = URI.parse(`${BROWSER_RESOURCE_SCHEME}:/${data.id}`);
+		this.resource = BrowserViewUri.forId(data.id);
 	}
 
 	public getName(): string {

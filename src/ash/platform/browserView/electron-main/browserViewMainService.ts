@@ -7,6 +7,8 @@ import { BrowserViewStorageScope, type IBrowserViewService, type BrowserViewEven
 import { BrowserView } from './browserView.js';
 import { BrowserSession } from './browserSession.js';
 import type { SshPortForwardingService } from '../../remote/electron-main/sshPortForwardingService.js';
+import type { ISerializedBrowserHistoryEntriesSnapshot } from '../common/browserHistory.js';
+import { BrowserSessionHistory } from './browserSessionHistory.js';
 
 export const IBrowserViewMainService = createServiceIdentifier<IBrowserViewMainService>('browserViewMainService');
 export interface IBrowserViewMainService extends IBrowserViewService {
@@ -33,6 +35,7 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 	private readonly creations = new Map<string, Promise<BrowserView>>();
 	private readonly audiences = new Map<string, readonly string[]>();
 	private readonly grants = new Map<string, Map<string, AbortController>>();
+	private readonly histories = new Map<BrowserSession, BrowserSessionHistory>();
 	constructor(private readonly options: BrowserViewMainServiceOptions,
 		@IInstantiationService private readonly instantiationService: IInstantiationService) {
 		super();
@@ -128,8 +131,16 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 			const session = BrowserSession.getOrCreate(contextId, storage.scope, electronSession);
 			network = remoteNetwork ? await session.acquireRemote(remoteNetwork.tunnels, signal) : undefined;
 			signal.throwIfAborted();
+			let history = this.histories.get(session);
+			if (!history) {
+				const lease = await session.acquireHistory(() => this.instantiationService.createInstance(BrowserSessionHistory, session));
+				try { signal.throwIfAborted(); this._register(lease); }
+				catch (error) { lease.dispose(); throw error; }
+				history = lease.history;
+				this.histories.set(session, history);
+			}
 			view = this.instantiationService.createInstance(BrowserView, {
-				id, window: this.options.window, view: this.options.createView(electronSession), initialUrl, network, creation: options, session,
+				id, window: this.options.window, view: this.options.createView(electronSession), initialUrl, network, creation: options, session, history,
 				emitEvent: (event: BrowserViewEvent) => {
 					if (event.type === 'closed') {
 						this.targets.deleteAndLeak(id);
@@ -145,6 +156,12 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 		catch (error) { this.targets.deleteAndDispose(id); throw error; }
 	}
 	async getState(id: string) { return this.target(id).getState(); }
+	public async getBrowserHistory(id: string): Promise<ISerializedBrowserHistoryEntriesSnapshot> {
+		return this.histories.get(this.target(id).session)!.entries.serialize();
+	}
+	public async deleteBrowserHistory(id: string, entryIds?: readonly number[]): Promise<void> {
+		await this.histories.get(this.target(id).session)!.delete(entryIds);
+	}
 	public async respondToPermission(id: string, requestId: string, allowed: boolean): Promise<void> { this.target(id).session.permissions.respond(id, requestId, allowed); }
 	public async clearPermissions(id: string): Promise<void> { this.target(id).session.permissions.clear(); }
 	public async cancelDownloads(id: string): Promise<void> { this.target(id).session.permissions.cancelDownloads(id); }

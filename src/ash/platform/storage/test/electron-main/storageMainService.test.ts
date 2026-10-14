@@ -14,6 +14,25 @@ suite('Desktop storage owner', () => {
 	const application: IStorageIdentity = { scope: StorageScope.APPLICATION, id: 'application' };
 	const entry = (value: string) => ({ value, target: StorageTarget.MACHINE });
 
+	test('close captures participant writes before rejecting late mutations', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'ash-store-'));
+		try {
+			const file = join(directory, 'state.json');
+			using storage = new StorageMainService(file);
+			await storage.initialize();
+			await storage.getItems(application);
+			let saves = 0;
+			let saving: Promise<unknown> | undefined;
+			using listener = storage.onWillSaveState(() => { saves++; saving = storage.updateItems(application, 'participant', entry('last change')); });
+			await storage.close();
+			await saving;
+			await storage.close();
+			assert.equal(saves, 1);
+			assert.equal(JSON.parse(await readFile(file, 'utf8')).storages[0].entries.participant.value, 'last change');
+			assert.throws(() => storage.updateItems(application, 'late', entry('rejected')), /closing/);
+		} finally { await rm(directory, { recursive: true, force: true }); }
+	});
+
 	test('close waits for startup migration and leaves no writes after closing', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'ash-store-'));
 		try {

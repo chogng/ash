@@ -2,6 +2,7 @@ import type { Session, WebContents, DownloadItem } from 'electron/main';
 import { randomUUID } from 'node:crypto';
 import { toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import type { BrowserViewEvent } from '../common/browserView.js';
+import { BrowserPermissionStore, electronPermissionToCategories, toOriginKey } from '../common/browserPermissions.js';
 
 interface Page {
 	readonly id: string;
@@ -13,38 +14,53 @@ interface Page {
 export class BrowserSessionPermissions {
 	private readonly pages = new Map<WebContents, Page>();
 	private readonly grants = new Map<string, boolean>();
+	private readonly siteGrants = new Map<string, BrowserPermissionStore>();
 	private readonly pending = new Map<string, { page: Page; settle: (value: boolean | undefined) => void; }>();
 	private readonly downloads = new Map<string, { page: Page; item: DownloadItem; cleanup: () => void; }>();
 
 	constructor(session: Session) {
 		session.setPermissionCheckHandler((contents, permission, origin, details) => {
 			if (!contents || !this.pages.has(contents)) { return false; }
-			const embeddingOrigin = details.embeddingOrigin ?? new URL(contents.getURL()).origin;
+			const embeddingOrigin = details.embeddingOrigin ?? contents.getURL();
 			// Opaque documents have no website identity to which a reusable grant can belong.
-			if (!URL.canParse(origin) || !URL.canParse(embeddingOrigin)) return false;
-			const requestingOrigin = new URL(origin).origin;
-			const embeddedOrigin = new URL(embeddingOrigin).origin;
-			if (requestingOrigin === 'null' || embeddedOrigin === 'null') return false;
-			const category = permission === 'media' ? `media:${details.mediaType}` : permission;
-			return this.grants.get(this.key(requestingOrigin, embeddedOrigin, category)) === true;
+			const requestingOrigin = toOriginKey(origin);
+			const embeddedOrigin = toOriginKey(embeddingOrigin);
+			if (!requestingOrigin || !embeddedOrigin) return false;
+			const media = details.mediaType === 'video' || details.mediaType === 'audio' ? [details.mediaType] : undefined;
+			const categories = electronPermissionToCategories(permission, media);
+			return categories.length > 0
+				? categories.every(category => this.siteGrants.get(embeddedOrigin)?.getDecision(requestingOrigin, category) === 'allow')
+				: this.grants.get(this.key(requestingOrigin, embeddedOrigin, permission)) === true;
 		});
 		session.setPermissionRequestHandler((contents, permission, callback, details) => {
 			const page = this.pages.get(contents);
 			if (!page) { callback(false); return; }
-			const origin = details.requestingUrl ? new URL(details.requestingUrl).origin : new URL(contents.getURL()).origin;
-			const embeddingOrigin = new URL(contents.getURL()).origin;
-			if (origin === 'null' || embeddingOrigin === 'null') { callback(false); return; }
+			const origin = toOriginKey(details.requestingUrl || contents.getURL());
+			const embeddingOrigin = toOriginKey(contents.getURL());
+			if (!origin || !embeddingOrigin) { callback(false); return; }
 			const categories = permission === 'media' && 'mediaTypes' in details && details.mediaTypes ? details.mediaTypes.map(type => `media:${type}`) : [permission];
 			const keys = categories.map(category => this.key(origin, embeddingOrigin, category));
 			if (!keys.length || this.pending.size >= 16 || !['geolocation', 'notifications', 'media', 'clipboard-read', 'clipboard-sanitized-write', 'fullscreen'].includes(permission)) { callback(false); return; }
-			if (keys.every(key => this.grants.has(key))) { callback(keys.every(key => this.grants.get(key) === true)); return; }
+			const media = permission === 'media' && 'mediaTypes' in details ? details.mediaTypes : undefined;
+			const siteCategories = electronPermissionToCategories(permission, media);
+			const decisions = siteCategories.map(category => this.siteGrants.get(embeddingOrigin)?.getDecision(origin, category));
+			if (decisions.some(decision => decision === 'deny')) { callback(false); return; }
+			if (siteCategories.length ? decisions.every(decision => decision === 'allow') : keys.every(key => this.grants.has(key))) {
+				callback(siteCategories.length > 0 || keys.every(key => this.grants.get(key) === true)); return;
+			}
 			const requestId = randomUUID();
 			const settle = (allowed: boolean | undefined): void => {
 				if (!this.pending.delete(requestId)) { return; }
 				clearTimeout(timer);
 				contents.removeListener('did-start-navigation', revoke);
 				// Closing or navigating a page cancels a request without recording a user's decision.
-				if (allowed !== undefined) for (const key of keys) { this.grants.set(key, allowed); }
+				if (allowed !== undefined) {
+					if (siteCategories.length) {
+						let store = this.siteGrants.get(embeddingOrigin);
+						if (!store) { store = new BrowserPermissionStore(); this.siteGrants.set(embeddingOrigin, store); }
+						for (const category of siteCategories) { store.set(origin, category, allowed ? 'allow' : 'deny'); }
+					} else { for (const key of keys) { this.grants.set(key, allowed); } }
+				}
 				callback(allowed === true);
 				page.emit({ type: 'permissionRequestClosed', targetId: page.id, requestId });
 			};
@@ -87,6 +103,8 @@ export class BrowserSessionPermissions {
 	public clear(): void {
 		for (const request of [...this.pending.values()]) { request.settle(undefined); }
 		this.grants.clear();
+		for (const store of this.siteGrants.values()) { store.dispose(); }
+		this.siteGrants.clear();
 	}
 	public cancelRequests(id: string): void {
 		for (const request of [...this.pending.values()]) { if (request.page.id === id) request.settle(undefined); }

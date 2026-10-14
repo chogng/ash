@@ -7,8 +7,42 @@ import { BrowserSession } from '../../electron-main/browserSession.js';
 import { BrowserViewStorageScope, type BrowserViewEvent } from '../../common/browserView.js';
 import { SshPortForwardingService } from '../../../remote/electron-main/sshPortForwardingService.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
+import { StorageMainService, IApplicationStorageMainService } from '../../../storage/electron-main/storageMainService.js';
+import { NullLoggerService, ILogService } from '../../../log/common/log.js';
+import { BrowserSessionHistory } from '../../electron-main/browserSessionHistory.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
+
+test('history leases share one session owner and preserve data after the final window retires', async () => {
+	const directory = await mkdtemp(join(tmpdir(), 'ash-browser-history-'));
+	try {
+		using storage = new StorageMainService(join(directory, 'state.json'));
+		await storage.initialize();
+		using services = new InstantiationService();
+		services.registerInstance(IApplicationStorageMainService, storage);
+		services.registerInstance(ILogService, new NullLoggerService());
+		const electronSession = Object.assign(new EventEmitter(), {
+			setPermissionCheckHandler: () => { }, setPermissionRequestHandler: () => { }, setDevicePermissionHandler: () => { },
+		}) as unknown as Session;
+		const session = BrowserSession.getOrCreate('history', BrowserViewStorageScope.Workspace, electronSession);
+		const acquire = () => session.acquireHistory(() => services.createInstance(BrowserSessionHistory, session));
+		const first = await acquire();
+		const second = await acquire();
+		assert.equal(first.history, second.history);
+		first.history.add('https://example.test/', 'Shared visit', 'data:image/png;base64,icon');
+		first.dispose();
+		const snapshot = second.history.entries.serialize();
+		second.dispose();
+		using restored = await acquire();
+		assert.deepEqual(restored.history.entries.serialize(), snapshot);
+		assert.equal(restored.history.favicons.get(snapshot.items[0]!.icon!), 'data:image/png;base64,icon');
+		await storage.close();
+	} finally { assert.equal(dirname(directory), tmpdir()); await rm(directory, { recursive: true, force: true }); }
+});
 
 test('agent requests require current authority for every resource and cannot be approved by another page', () => {
 	let intercept!: NonNullable<Parameters<Session['webRequest']['onBeforeRequest']>[0]>;

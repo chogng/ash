@@ -772,6 +772,12 @@ workspace identity 隔离 versioned `localStorage` 文档。Desktop 与 Agents �
 原子写入 Electron user-data 下的 `workbench-state.json`，再广播带 revision 的快照。
 Renderer 不提交整个 scope，因此不同窗口更新不同键不会互相覆盖。
 
+浏览器历史由 `platform/browserView/electron-main/browserSessionHistory.ts` 拥有，并复用
+应用存储的唯一磁盘写入器。Global/Workspace 会话按稳定的浏览器 session ID 分别保存
+访问记录和 favicon，目标为 Application/Machine；Ephemeral/Agent 会话不写入这些键。
+记录变化按两秒窗口合并，标题变化不提交 favicon 键；删除立即保存，应用存储退出前通知
+历史 owner 提交待写数据并等待队列完成。页面创建先等待恢复与校验，避免新导航覆盖旧历史。
+
 Desktop 第一次读取 scope 时校验并导入对应的旧 `localStorage` 文档。目标已存在且相等时
 完成旧项清理；值冲突或格式错误会报告错误并保留旧项。旧项只在目标落盘后移除，之后只读写
 主进程存储。Application 仍按产品隔离；普通 Workbench 使用默认 Profile，Agents 使用

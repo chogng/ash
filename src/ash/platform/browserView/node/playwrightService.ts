@@ -7,6 +7,7 @@ import type { CDPRequest } from '../common/cdp/types.js';
 import type { IPlaywrightService } from '../common/playwrightService.js';
 import type { BrowserViewAction, IBrowserViewObservation, IBrowserViewObservationOptions } from '../common/browserView.js';
 import { IInstantiationService } from '../../instantiation/common/instantiation.js';
+import { formatMatchedStyles, keyComputedProperties } from '../common/cssHelpers.js';
 
 interface ConnectedPage { readonly page: Page; readonly cdp: CDPSession; readonly id: string; }
 const MAX_OBSERVATION_BYTES = 8 * 1024 * 1024;
@@ -91,7 +92,24 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 			await page.waitForLoadState('load'); signal.throwIfAborted();
 			const accessibilityTree = options.includeAccessibilityTree ? boundedJson(await cdp.send('Accessibility.getFullAXTree')) : undefined;
 			signal.throwIfAborted();
-			const domSnapshot = options.includeDomSnapshot ? boundedJson(await cdp.send('DOMSnapshot.captureSnapshot', { computedStyles: [] })) : undefined;
+			let domSnapshot: string | undefined;
+			if (options.includeDomSnapshot) {
+				const snapshot = await cdp.send('DOMSnapshot.captureSnapshot', { computedStyles: [...keyComputedProperties] });
+				signal.throwIfAborted();
+				await cdp.send('DOM.enable');
+				await cdp.send('CSS.enable');
+				const { root } = await cdp.send('DOM.getDocument');
+				const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: root.nodeId, selector: ':focus' });
+				if (nodeId) {
+					const styles = formatMatchedStyles(await cdp.send('CSS.getMatchedStylesForNode', { nodeId }));
+					domSnapshot = boundedJson({
+						...snapshot, focusedElementStyles: {
+							rulesText: styles.rulesText, referencedVars: [...styles.referencedVars],
+							authorPropertyNames: [...styles.authorPropertyNames], userAgentPropertyNames: [...styles.userAgentPropertyNames],
+						}
+					});
+				} else { domSnapshot = boundedJson(snapshot); }
+			}
 			signal.throwIfAborted();
 			const png = options.includeScreenshot ? await page.screenshot({ type: 'png' }) : undefined;
 			signal.throwIfAborted();

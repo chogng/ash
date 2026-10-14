@@ -6,6 +6,7 @@ import type { AgentCapabilitiesSnapshot, AgentToolSetCapability, ToolSource } fr
 import { filterQuickPickItems } from '../../../../../platform/quickinput/browser/quickInputList.js';
 import type { IQuickInputService, IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
+import { browserChatToolReferenceNames } from '../../../../../platform/browserView/common/browserChatToolReferenceNames.js';
 
 interface ToolPick extends IQuickPickItem {
 	readonly names?: readonly string[];
@@ -54,6 +55,10 @@ export function showToolsPicker(quickInput: IQuickInputService, catalog: AgentCa
 				return count === names.length ? localize('chat.tools.enabled', 'Enabled') : count === 0 ? localize('chat.tools.disabled', 'Disabled') : localize('chat.tools.mixed', 'Partly enabled');
 			};
 			const items: ToolPick[] = [];
+			const browserTools = catalog.tools.filter(tool => tool.source === 'local' && tool.exposure !== 'hidden' && browserChatToolReferenceNames.includes(tool.name)).map(tool => tool.name);
+			if (browserTools.length) {
+				items.push({ label: localize('chat.tools.browser', 'Browser tools'), description: state(browserTools), picked: browserTools.every(name => !disabled.has(name)), names: browserTools });
+			}
 			for (const set of catalog.toolSets) {
 				items.push({ label: toolSetLabel(set), description: state(set.tools), picked: set.tools.every(name => !disabled.has(name)), detail: localize('chat.tools.setMembers', 'Tool set: {0}', set.tools.join(', ')), names: set.tools });
 			}

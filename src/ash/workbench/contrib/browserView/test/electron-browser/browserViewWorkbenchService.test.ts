@@ -14,6 +14,8 @@ import type { IResourceEditorInput } from '../../../../common/editor.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import type { EditorPartChangeEvent } from '../../../../services/editor/common/editorState.js';
 import { BrowserViewWorkbenchService } from '../../electron-browser/browserViewWorkbenchService.js';
+import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
+import { NullTelemetryServiceShape } from '../../../../../platform/telemetry/common/telemetryUtils.js';
 
 const id = 'browser_target_123e4567-e89b-12d3-a456-426614174000';
 const info: IBrowserViewInfo = {
@@ -23,6 +25,12 @@ const info: IBrowserViewInfo = {
 
 suite('Browser Workbench page lifecycle', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('new user pages record their source once without emitting a website address', async () => {
+		using f = fixture();
+		await f.views.createBrowserView({ initialUrl: 'https://private.example.test/', owner: { type: 'user' }, session: { scope: BrowserViewStorageScope.Workspace } });
+		assert.deepEqual(f.telemetryEvents, [{ name: 'integratedBrowser.open', data: { source: 'commandWithUrl' } }]);
+	});
 
 	test('close reaches model consumers and finishes closing the old editor before opening a replacement', async () => {
 		using f = fixture();
@@ -123,6 +131,7 @@ function fixture() {
 		closeEditor: async (input: IResourceEditorInput): Promise<boolean> => { f.groupInputs.splice(f.groupInputs.indexOf(input), 1); return true; },
 	};
 	const service: IBrowserViewService = {
+		getBrowserHistory: async () => ({ items: [] }), deleteBrowserHistory: async () => { },
 		getBrowserViews: async () => [f.info], getOrCreateBrowserView: async () => f.info, getState: async () => f.info.state,
 		getSharing: async () => [], setSharing: async () => { }, respondToPermission: async () => { }, clearPermissions: async () => { }, cancelDownloads: async () => { },
 		loadURL: async () => { }, goBack: async () => { }, goForward: async () => { }, reload: async () => { }, stop: async () => { }, focus: async () => { }, layout: async () => { }, setVisible: async () => { },
@@ -143,7 +152,10 @@ function fixture() {
 		groups: [{ inputs: f.groupInputs, closeEditor: (input: IResourceEditorInput) => f.closeEditor(input) }],
 	} as unknown as IEditorPart;
 	const dialogs = resources.add(new DialogsModel());
-	const services = resources.add(new InstantiationService(new ServiceCollection([IBrowserViewService, service], [IEditorService, editors], [IEditorPart, editorPart], [IDialogsModel, dialogs])));
+	const telemetryEvents: Array<{ name: string; data: unknown; }> = [];
+	const telemetry = new NullTelemetryServiceShape();
+	telemetry.publicLog2 = (name, data) => { telemetryEvents.push({ name, data }); };
+	const services = resources.add(new InstantiationService(new ServiceCollection([IBrowserViewService, service], [IEditorService, editors], [IEditorPart, editorPart], [IDialogsModel, dialogs], [ITelemetryService, telemetry])));
 	const views = resources.add(services.createInstance(BrowserViewWorkbenchService));
-	return Object.assign(f, { [Symbol.dispose]: () => resources.dispose(), views, service });
+	return Object.assign(f, { [Symbol.dispose]: () => resources.dispose(), views, service, telemetryEvents });
 }

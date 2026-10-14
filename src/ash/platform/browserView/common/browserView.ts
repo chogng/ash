@@ -1,5 +1,6 @@
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type { IDisposable } from '../../../base/common/lifecycle.js';
+import type { ISerializedBrowserHistoryEntriesSnapshot } from './browserHistory.js';
 
 export const IBrowserViewService = createServiceIdentifier<IBrowserViewService>('browserViewService');
 export const BROWSER_VIEW_CREATE_CHANNEL = "ash:browser-view:create";
@@ -23,6 +24,8 @@ export const BROWSER_VIEW_SHARING_CHANNEL = 'ash:browser-view:sharing';
 export const BROWSER_VIEW_PERMISSION_CHANNEL = 'ash:browser-view:permission';
 export const BROWSER_VIEW_PERMISSIONS_CLEAR_CHANNEL = 'ash:browser-view:permissions:clear';
 export const BROWSER_VIEW_DOWNLOAD_CANCEL_CHANNEL = 'ash:browser-view:download:cancel';
+export const BROWSER_VIEW_HISTORY_CHANNEL = 'ash:browser-view:history';
+export const BROWSER_VIEW_HISTORY_DELETE_CHANNEL = 'ash:browser-view:history:delete';
 
 export type BrowserViewTargetId = string;
 
@@ -118,6 +121,11 @@ export enum BrowserViewStorageScope {
 	Agent = 'agent',
 }
 
+export interface IBrowserViewStorageKeys {
+	readonly history?: string;
+	readonly favicons?: string;
+}
+
 export type IBrowserViewSessionOptions =
 	| { readonly scope: BrowserViewStorageScope.Global | BrowserViewStorageScope.Workspace | BrowserViewStorageScope.Ephemeral; }
 	| { readonly scope: BrowserViewStorageScope.Agent; readonly affinity: string; };
@@ -137,6 +145,8 @@ export interface IBrowserViewInfo {
  * serializable commands and state only.
  */
 export interface IBrowserViewService {
+	getBrowserHistory(id: string): Promise<ISerializedBrowserHistoryEntriesSnapshot>;
+	deleteBrowserHistory(id: string, entryIds?: readonly number[]): Promise<void>;
 	getSharing(id: string): Promise<readonly string[]>;
 	setSharing(id: string, threadIds: readonly string[]): Promise<void>;
 	respondToPermission(id: string, requestId: string, allowed: boolean): Promise<void>;

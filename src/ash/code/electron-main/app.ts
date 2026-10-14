@@ -109,7 +109,7 @@ import { createAppServerWorkspaceTransitionAdapter, reconnectAppServerWorkspace 
 import { DEVELOPMENT_DIR_PERMISSIONS, READ_DIR_PERMISSIONS, type WorkspaceTrustGrant } from '../../platform/workspace/common/workspaceTrust.js';
 import { type IWorkspaceTransitionFailure, type WorkspaceTransitionMainServiceOptions, WorkspaceTransitionFailureKind, WorkspaceTransitionMainService, WorkspaceTransitionStatus } from "../../platform/workspaces/electron-main/workspaceTransitionMainService.js";
 import { WorkspacesManagementMainService } from '../../platform/workspaces/electron-main/workspacesManagementMainService.js';
-import { StorageMainService } from '../../platform/storage/electron-main/storageMainService.js';
+import { StorageMainService, IApplicationStorageMainService } from '../../platform/storage/electron-main/storageMainService.js';
 import { StorageDatabaseChannel } from '../../platform/storage/electron-main/storageIpc.js';
 import { LoggerService } from '../../platform/log/node/loggerService.js';
 import { LoggerChannel } from '../../platform/log/electron-main/logIpc.js';
@@ -479,6 +479,8 @@ export class AshApplication extends Disposable {
 		const storage = this.storageMainService = this._register(new StorageMainService(join(app.getPath('userData'), 'workbench-state.json')));
 		await storage.initialize();
 		throwIfCancelled(token);
+		this.windowServices.registerInstance(IApplicationStorageMainService, storage);
+		this.windowServices.registerInstance(ILogService, this.logService);
 		this.mainProcessIpcServer.registerChannel('storage', new StorageDatabaseChannel(storage));
 		const launchServices = this._register(new InstantiationService());
 		launchServices.registerInstance(IStateService, this.services.state);

@@ -29,12 +29,23 @@ import type { IBrowserViewService } from '../common/browserView.js';
 import { BROWSER_VIEW_LIST_CHANNEL, BROWSER_VIEW_SHARING_CHANNEL } from '../common/browserView.js';
 import { BROWSER_VIEW_PERMISSION_CHANNEL, BROWSER_VIEW_PERMISSIONS_CLEAR_CHANNEL, BROWSER_VIEW_DOWNLOAD_CANCEL_CHANNEL } from '../common/browserView.js';
 import { isRecord } from '../../../base/common/types.js';
+import { BROWSER_VIEW_HISTORY_CHANNEL, BROWSER_VIEW_HISTORY_DELETE_CHANNEL } from '../common/browserView.js';
 
 /** Binds the main-owned browser-view service to trusted workbench IPC. */
 export function browserViewIpcRoutes(
 	service: Omit<IBrowserViewService, 'onDidEvent'>,
 ): readonly IpcRoute<unknown, unknown>[] {
 	return [
+		{ channel: BROWSER_VIEW_HISTORY_CHANNEL, validate: validateBrowserViewTargetRequest, invoke: value => service.getBrowserHistory((value as IBrowserViewTargetRequest).targetId) },
+		{
+			channel: BROWSER_VIEW_HISTORY_DELETE_CHANNEL,
+			validate: value => {
+				if (!isRecord(value) || Object.keys(value).some(key => key !== 'targetId' && key !== 'entryIds')) { throw new TypeError('Invalid browser history request'); }
+				if (value.entryIds !== undefined && (!Array.isArray(value.entryIds) || value.entryIds.length > 200 || value.entryIds.some(id => !Number.isSafeInteger(id) || id < 1))) { throw new TypeError('Invalid browser history entries'); }
+				return { ...validateBrowserViewTargetRequest({ targetId: value.targetId }), entryIds: value.entryIds };
+			},
+			invoke: value => { const request = value as IBrowserViewTargetRequest & { entryIds?: number[]; }; return service.deleteBrowserHistory(request.targetId, request.entryIds); },
+		},
 		{
 			channel: BROWSER_VIEW_PERMISSION_CHANNEL, validate: value => {
 				if (!isRecord(value) || Object.keys(value).length !== 3 || typeof value.requestId !== 'string' || typeof value.allowed !== 'boolean') { throw new TypeError('Invalid browser permission response'); }

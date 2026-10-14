@@ -6,6 +6,8 @@ import { promiseWithResolvers, raceCancellationError } from '../../../base/commo
 import { type BrowserViewEvent, type IBrowserViewBounds, type IBrowserViewState, type IBrowserViewInfo, type IBrowserViewCreateOptions, normalizeBrowserViewUrl } from '../common/browserView.js';
 import type { BrowserSession } from './browserSession.js';
 import { BrowserViewDebugger } from './browserViewDebugger.js';
+import type { IBrowserHistoryItemHandle } from '../common/browserHistory.js';
+import type { IBrowserSessionHistory } from './browserSessionHistory.js';
 
 export interface BrowserViewOptions {
 	readonly id: string;
@@ -15,6 +17,7 @@ export interface BrowserViewOptions {
 	readonly network?: IDisposable;
 	readonly creation: IBrowserViewCreateOptions;
 	readonly session: BrowserSession;
+	readonly history: IBrowserSessionHistory;
 	readonly emitEvent: (event: BrowserViewEvent) => void;
 }
 
@@ -34,12 +37,16 @@ export class BrowserView extends Disposable {
 	private visible = false;
 	private readonly emitEvent: (event: BrowserViewEvent) => void;
 	private networkToken: string | null = null;
+	private readonly history: IBrowserSessionHistory;
+	private historyItem: IBrowserHistoryItemHandle | undefined;
+	private explicitNavigation = true;
 
 	constructor(options: BrowserViewOptions) {
 		super();
 		this.id = options.id;
 		this.view = options.view;
 		this.session = options.session;
+		this.history = options.history;
 		this.creation = options.creation;
 		this.window = options.window;
 		this.url = options.initialUrl;
@@ -164,6 +171,7 @@ export class BrowserView extends Disposable {
 			url: string,
 		) => {
 			this.url = normalizeBrowserViewUrl(url);
+			this.recordVisit();
 			this.emitState();
 		});
 		this.on(contents, "did-navigate-in-page", (
@@ -173,10 +181,18 @@ export class BrowserView extends Disposable {
 		) => {
 			if (!isMainFrame) return;
 			this.url = normalizeBrowserViewUrl(url);
+			this.recordVisit();
 			this.emitState();
 		});
-		this.on(contents, "page-title-updated", () =>
-			this.emitState());
+		this.on(contents, "page-title-updated", () => {
+			this.historyItem?.update({ title: contents.getTitle() });
+			this.emitState();
+		});
+		this.on(contents, 'page-favicon-updated', (_event: ElectronEvent, favicons: string[]) => {
+			// Inline images can be retained without initiating a request outside the page's authority.
+			const favicon = favicons.find(value => value.startsWith('data:image/') && value.length <= 64 * 1024);
+			if (favicon) { this.historyItem?.update({ favicon }); }
+		});
 		this.on(
 			contents,
 			"did-fail-load",
@@ -244,10 +260,18 @@ export class BrowserView extends Disposable {
 		using cancellation = addAbortListener(signal, () => {
 			if (!this.webContents.isDestroyed()) this.webContents.stop();
 		});
+		this.explicitNavigation = true;
 		await this.webContents.loadURL(requestedUrl);
 		await this.waitForLoad(signal);
 		signal.throwIfAborted();
 		this.url = this.webContents.getURL() || requestedUrl;
+	}
+
+	private recordVisit(): void {
+		const explicit = this.explicitNavigation;
+		this.explicitNavigation = false;
+		if (this.url === 'about:blank') { return; }
+		this.historyItem = this.history.add(this.url, this.webContents.getTitle(), undefined, explicit);
 	}
 
 	private on(

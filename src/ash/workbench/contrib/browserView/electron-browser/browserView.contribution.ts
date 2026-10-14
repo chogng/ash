@@ -16,7 +16,8 @@ import { BrowserEditor } from './browserEditor.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 
-import { BrowserEditorSerializer, BROWSER_RESOURCE_SCHEME } from '../common/browserEditorInput.js';
+import { BrowserEditorSerializer } from '../common/browserEditorInput.js';
+import { BrowserViewUri } from '../../../../platform/browserView/common/browserViewUri.js';
 import { BrowserViewEditorId, IBrowserViewWorkbenchService } from '../common/browserView.js';
 import { BrowserViewWorkbenchService } from './browserViewWorkbenchService.js';
 import { EditorInputSerializers } from '../../../services/editor/common/editorInputSerializer.js';
@@ -53,7 +54,7 @@ registerWorkbenchContribution('workbench.contrib.browserView', WorkbenchPhase.Bl
 	void views.initialize().catch(error => console.error('Failed to read browser pages', error));
 	store.add(EditorPanes.registerEditorPane({
 		id: BrowserViewEditorId, name: 'Browser',
-		canOpen: input => input.resource.scheme === BROWSER_RESOURCE_SCHEME ? EditorPaneMatch.Default : EditorPaneMatch.None,
+		canOpen: input => BrowserViewUri.parse(input.resource) ? EditorPaneMatch.Default : EditorPaneMatch.None,
 		create: () => instantiation.createInstance(BrowserEditor),
 	}));
 	store.add(registerAction2(class OpenBrowser extends Action2 {

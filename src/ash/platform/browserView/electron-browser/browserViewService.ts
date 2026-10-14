@@ -5,9 +5,13 @@ import type { AppServerProtocolClient } from '../../agentHost/browser/appServerP
 import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
 import { BROWSER_VIEW_PERMISSION_CHANNEL, BROWSER_VIEW_PERMISSIONS_CLEAR_CHANNEL, BROWSER_VIEW_DOWNLOAD_CANCEL_CHANNEL } from '../common/browserView.js';
 import { toDisposable } from '../../../base/common/lifecycle.js';
+import { BROWSER_VIEW_HISTORY_CHANNEL, BROWSER_VIEW_HISTORY_DELETE_CHANNEL } from '../common/browserView.js';
+import type { ISerializedBrowserHistoryEntriesSnapshot } from '../common/browserHistory.js';
 
 export function createBrowserViewService(client: AppServerProtocolClient): IBrowserViewService {
 	return {
+		getBrowserHistory: id => invoke<ISerializedBrowserHistoryEntriesSnapshot>(BROWSER_VIEW_HISTORY_CHANNEL, { targetId: id }),
+		deleteBrowserHistory: (id, entryIds) => invoke<void>(BROWSER_VIEW_HISTORY_DELETE_CHANNEL, { targetId: id, entryIds }),
 		respondToPermission: (id, requestId, allowed) => invoke<void>(BROWSER_VIEW_PERMISSION_CHANNEL, { targetId: id, requestId, allowed }),
 		clearPermissions: id => invoke<void>(BROWSER_VIEW_PERMISSIONS_CLEAR_CHANNEL, { targetId: id }),
 		cancelDownloads: id => invoke<void>(BROWSER_VIEW_DOWNLOAD_CANCEL_CHANNEL, { targetId: id }),

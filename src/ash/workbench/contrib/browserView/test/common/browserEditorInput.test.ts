@@ -10,6 +10,7 @@ import { ServiceCollection } from '../../../../../platform/instantiation/common/
 import { EditorInputSerializerRegistry } from '../../../../services/editor/common/editorInputSerializer.js';
 import { BrowserEditorInput, BrowserEditorSerializer, type IBrowserEditorInputData } from '../../common/browserEditorInput.js';
 import { IBrowserViewWorkbenchService } from '../../common/browserView.js';
+import { BrowserViewUri } from '../../../../../platform/browserView/common/browserViewUri.js';
 import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 
@@ -22,6 +23,7 @@ suite('Browser editor page model and restoration', () => {
 	test('resolving a lazy input uses one page and mirrors subsequent Main state', async () => {
 		using f = fixture();
 		const input = f.input(data);
+		assert.equal(BrowserViewUri.getId(input.resource), id);
 		const [first, second] = await Promise.all([input.resolve(), input.resolve()]);
 		f.events.fire({ type: 'stateChanged', state: { ...first.state, title: 'Updated title', url: 'https://example.test/next' } });
 		assert.deepEqual([first === second, f.creations, input.label, input.serialize().url], [true, 1, 'Updated title', 'https://example.test/next']);
@@ -121,6 +123,7 @@ function fixture() {
 		info: { id, host: { windowId: 1 }, owner: { type: 'user' }, session: data.session, state: { targetId: id, url: data.url, title: 'Live page', loading: false, visible: false, canGoBack: false, canGoForward: false } } as IBrowserViewInfo,
 	};
 	const service: BrowserService = {
+		getBrowserHistory: async () => ({ items: [] }), deleteBrowserHistory: async () => { },
 		getSharing: async () => [], setSharing: async () => { },
 		respondToPermission: async () => { }, clearPermissions: async () => { }, cancelDownloads: async () => { },
 		getBrowserViews: async () => [f.info], getOrCreateBrowserView: async () => { f.creations++; return f.info; }, getState: async () => f.info.state,

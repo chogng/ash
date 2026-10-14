@@ -642,6 +642,7 @@
     "chat.tools.configureLabel": "配置工具",
     "chat.tools.configure": "配置工具…",
     "chat.tools.enabled": "已启用",
+    "chat.tools.browser": "浏览器工具",
     "chat.tools.disabled": "已禁用",
     "chat.tools.mixed": "部分启用",
     "chat.tools.setMembers": "工具集：{0}",

@@ -3,6 +3,7 @@ import { Disposable, type IDisposable } from '../../../../base/common/lifecycle.
 import { IBrowserViewService, type BrowserViewEvent, type IBrowserViewBounds, type IBrowserViewCreateOptions, type IBrowserViewInfo, type IBrowserViewState } from '../../../../platform/browserView/common/browserView.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { BrowserEditorInput, IBrowserEditorInputData } from './browserEditorInput.js';
+import type { IntegratedBrowserOpenSource } from '../../../../platform/browserView/common/browserViewTelemetry.js';
 
 export const BrowserViewEditorId = 'workbench.editor.browser';
 
@@ -12,7 +13,7 @@ export interface IBrowserViewWorkbenchService {
 	initialize(): Promise<void>;
 	getKnownBrowserViews(): ReadonlyMap<string, BrowserEditorInput>;
 	getOrCreateLazy(data: IBrowserEditorInputData): BrowserEditorInput;
-	createBrowserView(options: IBrowserViewCreateOptions): Promise<BrowserEditorInput>;
+	createBrowserView(options: IBrowserViewCreateOptions, source?: IntegratedBrowserOpenSource): Promise<BrowserEditorInput>;
 }
 
 export interface IBrowserViewModel extends IDisposable {

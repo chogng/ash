@@ -9,6 +9,9 @@ import { type IBrowserViewWorkbenchService } from '../common/browserView.js';
 import { IDialogsModel, type IDialogHandle } from '../../../common/dialogs.js';
 import { DialogResult } from '../../../../platform/dialogs/common/dialogs.js';
 import { localize } from '../../../../nls.js';
+import { BrowserViewUri } from '../../../../platform/browserView/common/browserViewUri.js';
+import { ITelemetryService } from '../../../../platform/telemetry/common/telemetry.js';
+import { logBrowserOpen, type IntegratedBrowserOpenSource } from '../../../../platform/browserView/common/browserViewTelemetry.js';
 
 /** Owns renderer inputs and reconnects them to pages which can outlive a renderer reload. */
 export class BrowserViewWorkbenchService extends Disposable implements IBrowserViewWorkbenchService {
@@ -26,6 +29,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 		@IEditorService private readonly editors: IEditorService,
 		@IEditorPart private readonly editorPart: IEditorPart,
 		@IDialogsModel private readonly dialogs: IDialogsModel,
+		@ITelemetryService private readonly telemetry: ITelemetryService,
 	) {
 		super();
 		this._register(service.onDidEvent(event => {
@@ -36,9 +40,10 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 			if (event.kind !== 'groupChanged' || event.event.kind !== 'editorClosed' || event.event.reason === 'move' || event.event.reason === 'reset') { return; }
 			const input = event.event.editor.input;
 			if (!(input instanceof BrowserEditorInput)) { return; }
-			if (this.inputs.get(input.resource.path.slice(1)) !== input) { return; }
+			const id = BrowserViewUri.getId(input.resource)!;
+			if (this.inputs.get(id) !== input) { return; }
 			if (editorPart.groups.some(group => group.inputs.some(candidate => extUri.isEqual(candidate.resource, input.resource)))) { return; }
-			void service.destroyBrowserView(input.resource.path.slice(1)).catch(error => console.error('Failed to close browser page', error));
+			void service.destroyBrowserView(id).catch(error => console.error('Failed to close browser page', error));
 		}));
 	}
 
@@ -77,7 +82,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 		return input;
 	}
 
-	public async createBrowserView(options: IBrowserViewCreateOptions): Promise<BrowserEditorInput> {
+	public async createBrowserView(options: IBrowserViewCreateOptions, source?: IntegratedBrowserOpenSource): Promise<BrowserEditorInput> {
 		await this.initialize();
 		const id = 'browser_target_' + crypto.randomUUID();
 		// Reserve the input before creation: the IPC result and created event can arrive in either order.
@@ -87,6 +92,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 			await this.openEditor(input);
 			this.assertNotDisposed();
 			if (this.inputs.get(id) !== input) { throw new Error('BrowserTargetUnavailable'); }
+			logBrowserOpen(this.telemetry, source ?? (options.initialUrl === 'about:blank' ? 'commandWithoutUrl' : 'commandWithUrl'));
 			return input;
 		} catch (error) {
 			if (this.inputs.get(id) === input) { this.inputs.deleteAndDispose(id); }
@@ -99,8 +105,9 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 	}
 
 	private async openEditor(input: BrowserEditorInput): Promise<void> {
-		await this.closingInputs.get(input.resource.path.slice(1));
-		if (this.isDisposed || this.inputs.get(input.resource.path.slice(1)) !== input) { return; }
+		const id = BrowserViewUri.getId(input.resource)!;
+		await this.closingInputs.get(id);
+		if (this.isDisposed || this.inputs.get(id) !== input) { return; }
 		await this.editors.openEditor(input, { pinned: true });
 	}
 
@@ -149,7 +156,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 			void this.service.getBrowserViews().then(views => {
 				const parent = views.find(view => view.id === event.targetId);
 				if (!parent) { throw new Error('BrowserTargetUnavailable'); }
-				return this.createBrowserView({ initialUrl: event.url, owner: parent.owner, session: parent.session });
+				return this.createBrowserView({ initialUrl: event.url, owner: parent.owner, session: parent.session }, 'browserLinkForeground');
 			}).catch(error => console.error('Failed to open browser popup', error));
 		}
 	}

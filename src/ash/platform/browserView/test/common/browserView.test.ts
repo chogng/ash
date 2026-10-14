@@ -93,6 +93,7 @@ test("browser view IPC routes delegate only validated commands", async () => {
 		visible: false,
 	};
 	const service: Parameters<typeof browserViewIpcRoutes>[0] = {
+		getBrowserHistory: async () => ({ items: [] }), deleteBrowserHistory: async () => { },
 		getSharing: async () => [], setSharing: async () => { },
 		respondToPermission: async () => { }, clearPermissions: async () => { }, cancelDownloads: async () => { },
 		getBrowserViews: async () => [],

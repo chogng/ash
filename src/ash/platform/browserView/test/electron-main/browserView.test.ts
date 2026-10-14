@@ -12,6 +12,11 @@ import { BrowserViewMainService, IBrowserViewMainService } from '../../electron-
 import { AppServerBrowserHost } from '../../../agentHost/electron-main/appServerBrowserHost.js';
 import { IPlaywrightService } from '../../common/playwrightService.js';
 import type { IBrowserViewObservation } from '../../common/browserView.js';
+import { Event } from '../../../../base/common/event.js';
+import { IApplicationStorageMainService } from '../../../storage/electron-main/storageMainService.js';
+import { ILogService, NullLoggerService } from '../../../log/common/log.js';
+import type { IStorageSnapshot } from '../../../storage/common/storageIpc.js';
+import { StorageScope } from '../../../storage/common/storage.js';
 
 const id = 'browser_target_123e4567-e89b-12d3-a456-426614174000';
 const observation = { includeAccessibilityTree: false, includeDomSnapshot: false, includeScreenshot: false };
@@ -20,6 +25,40 @@ const signal = () => new AbortController().signal;
 
 suite('Browser view ownership and operations', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('committed user visits and title updates reach the session history through the trusted service', async () => {
+		using f = fixture();
+		await f.manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test/', owner: { type: 'user' }, session: { scope: BrowserViewStorageScope.Workspace } });
+		f.contents.emit('did-navigate', {}, 'https://example.test/');
+		f.title = 'Visited title';
+		f.contents.emit('page-title-updated');
+		f.contents.emit('did-navigate-in-page', {}, 'https://other.test/frame', false);
+		const snapshot = await f.manager.getBrowserHistory(id);
+		assert.deepEqual(snapshot.items.map(entry => ({ url: entry.url, title: entry.title, explicit: entry.explicit })), [{ url: 'https://example.test/', title: 'Visited title', explicit: true }]);
+		await f.manager.deleteBrowserHistory(id, [snapshot.items[0]!.id]);
+		f.contents.emit('page-title-updated');
+		assert.deepEqual(await f.manager.getBrowserHistory(id), { items: [] });
+	});
+
+	test('agent navigation does not enter the user visit history', async () => {
+		using f = fixture();
+		await f.create();
+		f.contents.emit('did-navigate', {}, 'https://example.test/private');
+		assert.deepEqual(await f.manager.getBrowserHistory(id), { items: [] });
+	});
+
+	test('retiring a window during history restoration releases its lease without creating a native page', async () => {
+		using f = fixture();
+		const loading = promiseWithResolvers<void>();
+		const snapshot = promiseWithResolvers<IStorageSnapshot>();
+		f.storage.getItems = async () => { loading.resolve(); return snapshot.promise; };
+		const creating = f.manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test/', owner: { type: 'user' }, session: { scope: BrowserViewStorageScope.Workspace } });
+		await loading.promise;
+		f.manager.dispose();
+		snapshot.resolve({ identity: { scope: StorageScope.APPLICATION, id: 'application' }, revision: 0, isNew: true, entries: {} });
+		await assert.rejects(creating, /BrowserCapabilityUnavailable/);
+		assert.equal(f.children.size, 0);
+	});
 
 	test('construction requires the host page manager', () => {
 		using instantiation = new InstantiationService();
@@ -314,7 +353,7 @@ test('sharing grants only the chosen thread and revocation cancels its operation
 	assert.ok(f.manager.tryGetBrowserView(id));
 });
 
-export function fixture() {
+export function fixture(storageOverride?: IApplicationStorageMainService) {
 	const store = new DisposableStore();
 	const events: BrowserViewEvent[] = [];
 	const children = new Set<WebContentsView>();
@@ -335,6 +374,29 @@ export function fixture() {
 	};
 	const window = { id: 1, contentView: { addChildView: (view: WebContentsView) => children.add(view), removeChildView: (view: WebContentsView) => children.delete(view) }, webContents: { getZoomFactor: () => 2, focus: () => { f.workbenchFocused++; }, sendInputEvent: (input: Electron.KeyboardInputEvent) => { f.workbenchInput.push(input); } }, isDestroyed: () => false } as unknown as BrowserWindow;
 	const instantiation = store.add(new InstantiationService());
+	const snapshots = new Map<string, IStorageSnapshot>();
+	const storage: IApplicationStorageMainService = storageOverride ?? {
+		onDidChangeStorage: Event.None, onWillSaveState: Event.None,
+		initialize: async () => { },
+		getItems: async identity => {
+			const key = JSON.stringify(identity);
+			let snapshot = snapshots.get(key);
+			if (!snapshot) { snapshot = { identity, revision: 0, isNew: true, entries: {} }; snapshots.set(key, snapshot); }
+			return snapshot;
+		},
+		updateItems: async (identity, key, entry) => {
+			const previous = await storage.getItems(identity);
+			const entries = { ...previous.entries };
+			if (entry) { entries[key] = entry; } else { delete entries[key]; }
+			const snapshot = { ...previous, revision: previous.revision + 1, entries };
+			snapshots.set(JSON.stringify(identity), snapshot);
+			return snapshot;
+		},
+		cleanUpStorage: async () => { }, use: () => toDisposable(() => { }),
+		flush: async () => { }, close: async () => { }, dispose: () => { }, [Symbol.dispose]: () => { },
+	};
+	instantiation.registerInstance(IApplicationStorageMainService, storage);
+	instantiation.registerInstance(ILogService, new NullLoggerService());
 	const manager = store.add(instantiation.createInstance(BrowserViewMainService, {
 		window, getWorkspaceId: () => 'workspace-one',
 		getRemoteNetwork() { return f.remote ? { authority: 'ssh-remote+test', tunnels: { openProxy: () => f.proxy() } as unknown as import('../../../remote/electron-main/sshPortForwardingService.js').SshPortForwardingService } : undefined; }, createSession: (partition: string) => {
@@ -371,5 +433,5 @@ export function fixture() {
 		disposeSession: async sessionId => { f.retired.push(sessionId); },
 	});
 	store.add(manager.onDidEvent(event => events.push(event)));
-	return Object.assign(f, { manager, instantiation, store, createHost: () => instantiation.createInstance(AppServerBrowserHost), create: async () => { await manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test/', ...agent }); return manager.tryGetBrowserView(id)!; } });
+	return Object.assign(f, { manager, instantiation, store, storage, createHost: () => instantiation.createInstance(AppServerBrowserHost), create: async () => { await manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test/', ...agent }); return manager.tryGetBrowserView(id)!; } });
 }

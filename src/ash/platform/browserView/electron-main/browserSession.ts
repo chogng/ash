@@ -8,6 +8,8 @@ import { toDisposable, type IDisposable } from '../../../base/common/lifecycle.j
 import { randomUUID } from 'node:crypto';
 import type { WebContents } from 'electron/main';
 import type { BrowserViewEvent, IBrowserViewOwner } from '../common/browserView.js';
+import type { ISerializedBrowserHistoryEntriesSnapshot, ISerializedBrowserFaviconsSnapshot } from '../common/browserHistory.js';
+import type { BrowserSessionHistory } from './browserSessionHistory.js';
 
 /** Storage and permission policy have the Electron session's lifetime, independent of any page. */
 export class BrowserSession {
@@ -20,6 +22,11 @@ export class BrowserSession {
 	private readonly networkRequests = new Map<string, { contentsId: number; settle: (allowed: boolean) => void; }>();
 	private hasNetworkFilter = false;
 	private networkTurn: Promise<void> = Promise.resolve();
+	private history: BrowserSessionHistory | undefined;
+	private historyReady: Promise<void> | undefined;
+	private historyLoaded = false;
+	private historySnapshot: { entries: ISerializedBrowserHistoryEntriesSnapshot; favicons: ISerializedBrowserFaviconsSnapshot; } | undefined;
+	private historyUsers = 0;
 
 	private constructor(
 		public readonly id: string,
@@ -27,6 +34,34 @@ export class BrowserSession {
 		public readonly electronSession: Session,
 	) {
 		this.permissions = new BrowserSessionPermissions(electronSession);
+	}
+
+	/** Windows share one session store. A retired store leaves only its immutable data behind. */
+	public async acquireHistory(createHistory: () => BrowserSessionHistory): Promise<IDisposable & { readonly history: BrowserSessionHistory; }> {
+		if (!this.history) {
+			const history = this.history = createHistory();
+			this.historyReady = history.initialize().then(() => {
+				if (this.historySnapshot) {
+					history.favicons.hydrate(this.historySnapshot.favicons);
+					history.entries.hydrate(this.historySnapshot.entries);
+					this.historySnapshot = undefined;
+				}
+				this.historyLoaded = true;
+			});
+		}
+		this.historyUsers++;
+		const history = this.history;
+		const lease = Object.assign(toDisposable(() => {
+			if (--this.historyUsers === 0) {
+				if (this.historyLoaded) { this.historySnapshot = { entries: history.entries.serialize(), favicons: history.favicons.serialize() }; }
+				history.dispose();
+				this.history = undefined;
+				this.historyReady = undefined;
+				this.historyLoaded = false;
+			}
+		}), { history });
+		try { await this.historyReady; return lease; }
+		catch (error) { lease.dispose(); throw error; }
 	}
 
 	/** Requests are authorized by the backend; Chromium never receives its policy or credentials. */

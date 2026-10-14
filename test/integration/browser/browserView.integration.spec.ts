@@ -1,6 +1,30 @@
 import { expect, test } from '@playwright/test';
 
 for (const locale of ['en', 'zh-CN']) {
+	test(`browser history search opens recorded pages and clears the session in ${locale}`, async ({ page }) => {
+		await page.goto(`/browserView.html?locale=${locale}`);
+		await page.waitForFunction(() => !!window.ashBrowserViewIntegration);
+		const more = page.locator('.ash-browser-page-actions').getByRole('button', { name: locale === 'en' ? 'More Actions' : '更多操作', exact: true });
+		const historyLabel = locale === 'en' ? 'History' : '历史记录';
+		const openHistory = async (): Promise<void> => {
+			await more.focus();
+			await page.keyboard.press('Enter');
+			await page.getByRole('menuitem', { name: historyLabel, exact: true }).click();
+		};
+		await openHistory();
+		const search = page.getByRole('combobox', { name: historyLabel, exact: true });
+		await expect(search).toBeFocused();
+		await search.fill('Visited');
+		await page.keyboard.press('Enter');
+		await expect.poll(() => page.evaluate(() => [...window.ashBrowserViewIntegration.calls])).toEqual(['https://example.com/visited']);
+		await openHistory();
+		await search.fill(locale === 'en' ? 'Clear browsing history' : '清除浏览历史记录');
+		await page.keyboard.press('Enter');
+		await expect.poll(() => page.evaluate(() => [...window.ashBrowserViewIntegration.calls])).toEqual(['https://example.com/visited', 'clearHistory']);
+		await expect(more).toBeFocused();
+		await page.evaluate(() => window.ashBrowserViewIntegration.dispose());
+	});
+
 	for (const width of [1000, 500, 240]) {
 		test(`browser navigation leaves usable address space and keyboard page actions in ${locale} at ${width}px`, async ({ page }, testInfo) => {
 			await page.setViewportSize({ width, height: 600 });

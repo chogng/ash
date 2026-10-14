@@ -30,6 +30,9 @@ import { IChatSessionNavigationService } from '../../../src/ash/workbench/servic
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
+import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
+import { TestQuickInputService } from '../../../src/ash/platform/quickinput/test/browser/testQuickInputService.js';
+import workbenchTranslations from '../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 import '../../../src/ash/platform/theme/common/sizes/baseSizes.js';
 import '../../../src/ash/base/browser/ui/styles.css';
 
@@ -42,7 +45,9 @@ declare global {
 const locale = new URLSearchParams(location.search).get('locale');
 if (locale) {
 	const catalog = productLanguagePackCatalogs.find(candidate => candidate.locale === locale)!;
-	setNlsMessages(catalog.locale, catalog.bundles);
+	setNlsMessages(catalog.locale, locale === 'zh-CN'
+		? { ...catalog.bundles, 'ash.workbench': { ...catalog.bundles['ash.workbench'], ...workbenchTranslations['ash.workbench'] } }
+		: catalog.bundles);
 }
 const resources = new DisposableStore();
 const services = resources.add(new InstantiationService());
@@ -50,6 +55,7 @@ services.registerInstance(ILogService, new NullLoggerService());
 const calls: string[] = [];
 const contexts = resources.add(new ContextKeyService());
 services.registerInstance(IContextKeyService, contexts);
+services.registerInstance(IQuickInputService, resources.add(new TestQuickInputService({ container: document.body, contextKeyService: contexts })));
 services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
 services.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'browser-view-layout', backend: localStorage, flushInterval: 0 })));
 const theme = resources.add(new TestThemeService(darkColorTheme));
@@ -67,11 +73,14 @@ services.registerInstance(IDialogsModel, { dialogs: [], onWillShowDialog: Event.
 services.registerInstance(IDialogService, { prompt: async () => { calls.push('share'); return {}; } } as unknown as IDialogService);
 services.registerInstance(IChatSessionNavigationService, { getConversations: () => [] } as unknown as IChatSessionNavigationService);
 const info: IBrowserViewInfo = {
-	id: 'browser_target_00000000-0000-0000-0000-000000000000', host: { windowId: 1 }, owner: { type: 'user' }, session: { scope: BrowserViewStorageScope.Ephemeral },
+	id: 'browser_target_00000000-0000-0000-0000-000000000000', host: { windowId: 1 }, owner: { type: 'user' }, session: { scope: BrowserViewStorageScope.Workspace },
 	state: { targetId: 'browser_target_00000000-0000-0000-0000-000000000000', url: 'https://example.com/', title: 'Browser layout', loading: false, canGoBack: true, canGoForward: true, visible: true },
 };
 // Main-owned page operations stop at the service boundary; renderer, toolbar and context menu remain real.
 services.registerInstance(IBrowserViewService, {
+	getBrowserHistory: async () => ({ items: [{ id: 1, url: 'https://example.com/visited', title: 'Visited page', time: 1 }] }),
+	deleteBrowserHistory: async () => { calls.push('clearHistory'); },
+	loadURL: async (_id: string, url: string) => { calls.push(url); },
 	onDidEvent: Event.None, getOrCreateBrowserView: async () => info, getState: async () => info.state,
 	layout: async () => { }, setVisible: async () => { }, getSharing: async () => [],
 	clearPermissions: async () => { calls.push('permissions'); }, cancelDownloads: async () => { calls.push('downloads'); },

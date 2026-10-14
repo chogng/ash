@@ -6,8 +6,8 @@ import { AccessibleViewRegistry } from '../../../../platform/accessibility/brows
 import { ActiveEditorContext } from '../../../common/contextkeys.js';
 import { localize } from '../../../../nls.js';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
-import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
-import { IBrowserViewService, type IBrowserViewState } from '../../../../platform/browserView/common/browserView.js';
+import { DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { IBrowserViewService, BrowserViewStorageScope, type IBrowserViewState } from '../../../../platform/browserView/common/browserView.js';
 import { BrowserEditorInput } from '../common/browserEditorInput.js';
 import { BrowserViewEditorId, type IBrowserViewModel } from '../common/browserView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -21,6 +21,8 @@ import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.j
 import type { IAction } from '../../../../base/common/actions.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
+import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
+import { filterQuickPickItems } from '../../../../platform/quickinput/browser/quickInputList.js';
 import './media/browser.css';
 
 /** Workbench controls for one Main-owned web page. */
@@ -39,6 +41,7 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 	private pageHost!: WebContentsViewHost;
 	private visible = false;
 	private sharingToolbar!: WorkbenchToolBar;
+	private readonly historyPicker = this._register(new MutableDisposable<DisposableStore>());
 
 	constructor(
 		@IConfigurationService private readonly configuration: IConfigurationService,
@@ -47,6 +50,7 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 		@IContextMenuService private readonly menus: IContextMenuService,
 		@IChatSessionNavigationService private readonly conversations: IChatSessionNavigationService,
 		@IBrowserViewService private readonly pageService: IBrowserViewService,
+		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
 	) {
@@ -117,6 +121,7 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 		const model = await input.resolve();
 		signal.throwIfAborted();
 		this.modelListeners.clear();
+		this.historyPicker.clear();
 		this.model = model;
 		this.addressInput.enabled = true;
 		this.pageHost.setModel(model);
@@ -132,6 +137,7 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 		this.pageHost.layout();
 	}
 	public override clearInput(): void {
+		this.historyPicker.clear();
 		this.visible = false;
 		this.pageHost.setVisible(false);
 		this.pageHost.setModel(undefined);
@@ -194,7 +200,35 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 			{ id: 'browser.share', label: localize({ bundle: 'ash.workbench', key: 'browser.share' }, 'Share with Agent'), enabled: this.model?.info.owner.type === 'user', tooltip: '', run: () => this.share().catch(error => this.report(error)) },
 			{ id: 'browser.permissions', label: localize({ bundle: 'ash.workbench', key: 'browser.resetPermissions' }, 'Reset all website permissions'), enabled: true, tooltip: '', run: () => this.pageService.clearPermissions(this.target().id).catch(error => this.report(error)) },
 			{ id: 'browser.cancelDownloads', label: localize({ bundle: 'ash.workbench', key: 'browser.cancelDownloads' }, 'Cancel downloads'), enabled: true, tooltip: '', run: () => this.pageService.cancelDownloads(this.target().id).catch(error => this.report(error)) },
+			{ id: 'browser.history', label: localize({ bundle: 'ash.workbench', key: 'browser.history' }, 'History'), enabled: this.model?.info.session.scope === BrowserViewStorageScope.Workspace || this.model?.info.session.scope === BrowserViewStorageScope.Global, tooltip: '', run: () => this.showHistory().catch(error => this.report(error)) },
 		]);
+	}
+
+	private async showHistory(): Promise<void> {
+		const model = this.target();
+		const snapshot = await this.pageService.getBrowserHistory(model.id);
+		if (this.isDisposed || this.model !== model) { return; }
+		const resources = new DisposableStore();
+		this.historyPicker.value = resources;
+		const picker = resources.add(this.quickInput.createQuickPick<IQuickPickItem & { url?: string; }>());
+		resources.add(toDisposable(() => picker.hide()));
+		picker.ariaLabel = localize({ bundle: 'ash.workbench', key: 'browser.history' }, 'History');
+		picker.placeholder = localize({ bundle: 'ash.workbench', key: 'browser.historySearch' }, 'Search browsing history');
+		picker.sortByLabel = false;
+		const items = [...snapshot.items].reverse().map(entry => ({ label: entry.title || entry.url, description: entry.url, url: entry.url }));
+		const render = (): void => {
+			picker.items = [...filterQuickPickItems(items, picker.value), { label: localize({ bundle: 'ash.workbench', key: 'browser.clearHistory' }, 'Clear browsing history'), alwaysShow: true }];
+		};
+		resources.add(picker.onDidChangeValue(render));
+		resources.add(picker.onDidHide(() => { if (this.historyPicker.value === resources) { this.historyPicker.clear(); } }));
+		resources.add(picker.onDidAccept(() => {
+			const selected = picker.selectedItems[0];
+			if (!selected || this.model !== model) { return; }
+			picker.hide();
+			void (selected.url ? model.loadURL(selected.url) : this.pageService.deleteBrowserHistory(model.id)).catch(error => this.report(error));
+		}));
+		render();
+		picker.show();
 	}
 	private async share(): Promise<void> {
 		const model = this.target();
@@ -223,7 +257,7 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 	}
 	private report(error: unknown): void { if (!this.isDisposed) { this.statusDomNode.textContent = error instanceof Error ? error.message : String(error); } }
 	private helpContent(): string {
-		return localize({ bundle: 'ash.workbench', key: 'browser.accessibilityHelp' }, 'Use Tab to move through browser controls. Enter in the address field navigates and focuses the webpage. Ctrl+Shift+P (Command+Shift+P on macOS) opens the Command Palette from the webpage. Ctrl+L (Command+L on macOS) or F6 in the webpage returns to the address field. Back and Forward navigate page history. Close the editor tab to close its webpage. Set workbench.externalUriOpeners to ash.browser.open for websites you want to open here. Webpages use the browser’s accessibility tree. The More Actions menu contains sharing, website permission reset and download cancellation. Share with Agent allows a chosen conversation to observe this page. Agent input and navigation require an isolated Agent page. Revoke all access ends that grant. Website permission dialogs name the requesting site. Reset all website permissions removes its decisions. Downloads ask for a save location; Cancel downloads stops active transfers.');
+		return localize({ bundle: 'ash.workbench', key: 'browser.accessibilityHelp' }, 'Use Tab to move through browser controls. Enter in the address field navigates and focuses the webpage. Ctrl+Shift+P (Command+Shift+P on macOS) opens the Command Palette from the webpage. Ctrl+L (Command+L on macOS) or F6 in the webpage returns to the address field. Back and Forward navigate page history. Close the editor tab to close its webpage. Set workbench.externalUriOpeners to ash.browser.open for websites you want to open here. Webpages use the browser’s accessibility tree. The More Actions menu contains sharing, website permission reset, download cancellation and History. History lists visits in this storage session; type to search, use Up and Down to choose a page and Enter to open it. Clear browsing history removes this session’s recorded visits. Isolated Agent pages and ephemeral sessions do not record history. Share with Agent allows a chosen conversation to observe this page. Agent input and navigation require an isolated Agent page. Revoke all access ends that grant. Website permission dialogs name the requesting site. Reset all website permissions removes its decisions. Downloads ask for a save location; Cancel downloads stops active transfers.');
 	}
 
 	private showHelp(): Promise<void> {
