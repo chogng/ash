@@ -19,7 +19,7 @@ import { AppServerMessagePortTransport } from '../../agentHost/electron-browser/
 import { createRendererHost, type RendererCapabilityContribution } from '../../agentHost/browser/webRendererApi.js';
 import { ElectronRendererClipboardService } from '../../clipboard/electron-browser/electronRendererClipboardService.js';
 import { createDisconnectedRendererApi } from '../../agentHost/browser/rendererApi.js';
-import { AppServerAutomationService } from '../../automation/browser/appServerAutomationService.js';
+import { AppServerAutomationService } from '../../agentHost/browser/appServerAutomationService.js';
 import { registerAppServerBrowserHost } from '../../agentHost/electron-browser/appServerBrowserHost.js';
 import { registerAppServerWorkspaceHost, initializeWorkspace } from '../../workspaces/electron-browser/appServerWorkspaceHost.js';
 import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';

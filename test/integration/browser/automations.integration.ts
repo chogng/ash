@@ -7,7 +7,7 @@ import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import { observableValue, autorun } from '../../../src/ash/base/common/observable.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import translations from '../../../extensions/language-pack-zh-cn/translations/sessions.json' with { type: 'json' };
-import type { Automation, AutomationDefinition, AutomationRun, IAutomationBackendService } from '../../../src/ash/platform/automation/common/automationService.js';
+import type { Automation, AutomationDefinition, AutomationRun, IAutomationBackendService } from '../../../src/ash/platform/agentHost/common/automation.js';
 import { IRendererHostService, type IRendererHost } from '../../../src/ash/platform/renderer/common/rendererHost.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';

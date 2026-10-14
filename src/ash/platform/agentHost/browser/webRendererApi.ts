@@ -45,7 +45,7 @@ import { AppServerMcpServerManagementService } from '../../mcp/browser/appServer
 import { createAppServerTraceSettingsApi } from '../../trace/browser/traceSettingsApi.js';
 import { createAppServerAccountApi } from "../../accounts/browser/accountApi.js";
 import { createAppServerTurnChangesApi } from "../../turnChanges/browser/turnChangesApi.js";
-import { AppServerAutomationService } from '../../automation/browser/appServerAutomationService.js';
+import { AppServerAutomationService } from './appServerAutomationService.js';
 import { createAppServerTeamApi } from '../../teams/browser/teamApi.js';
 
 export type RendererCapabilityContribution = (connection: AppServerProtocolClient, appServer: IRendererHost["appServer"]) => RendererHostCapabilities;

@@ -35,7 +35,7 @@ export interface AutomationRun {
 	readonly message: string | null;
 }
 
-/** Schedules and run history belong to the shared backend profile. */
+/** Host automation operations; the Rust backend owns schedules and run history. */
 export interface IAutomationBackendService {
 	readonly onDidChange: Event<void>;
 	list(): Promise<readonly Automation[]>;

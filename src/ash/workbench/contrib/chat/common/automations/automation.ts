@@ -1,13 +1,15 @@
 import type { URI } from '../../../../../base/common/uri.js';
-import type { AutomationSchedule, AutomationSession } from '../../../../../platform/automation/common/automationService.js';
 
-/** Frontend values retain the scheduling formats supported by the Rust authority. */
-export type IAutomationSchedule = AutomationSchedule;
+/** Product schedule values are mapped to the owning provider's backend contract. */
+export type IAutomationSchedule =
+	| { readonly type: 'once'; readonly at: number; }
+	| { readonly type: 'interval'; readonly anchor: number; readonly minutes: number; }
+	| { readonly type: 'weekly'; readonly timezone: string; readonly weekdays: readonly number[]; readonly hour: number; readonly minute: number; };
 
 export interface AutomationTarget {
 	readonly providerId: string;
 	readonly directory: string;
-	readonly session: AutomationSession;
+	readonly session: { readonly type: 'new'; } | { readonly type: 'continue'; readonly sessionId: string; readonly threadId: string; };
 }
 
 export interface IAutomationDescriptor {

@@ -48,7 +48,7 @@ import type { IAgentExecutionSettingsService } from '../../agentHost/common/agen
 import type { ITraceSettingsService } from '../../trace/common/traceSettingsService.js';
 import type { IAccountApi } from "../../accounts/common/accountApi.js";
 import type { ITurnChangesApi } from "../../turnChanges/common/turnChangesApi.js";
-import type { IAutomationBackendService } from '../../automation/common/automationService.js';
+import type { IAutomationBackendService } from '../../agentHost/common/automation.js';
 import type { IAgentVoiceService } from '../../agentHost/common/agentService.js';
 import type { ITeamApi } from '../../teams/common/teamApi.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';

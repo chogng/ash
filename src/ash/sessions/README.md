@@ -115,8 +115,10 @@ creation and editing use a modal dialog that retains the reviewed revision.
 Startup restores the covered entry and session without closing the Custom View
 or stealing focus. Explicit navigation closes it; Back and Forward visit both.
 The provider registry borrows the window's existing App Server Sessions provider.
-Its automation store owns observable frontend snapshots; `platform/automation`
-remains the shared backend contract and adapter. Rust owns persistence,
+Its automation store owns observable frontend snapshots. Product contracts live in
+`workbench/contrib/chat/common/automations`; `platform/agentHost/common/automation.ts`
+and `platform/agentHost/browser/appServerAutomationService.ts` own the host contract
+and App Server adapter. Rust owns persistence,
 scheduling and execution. Closing a view or window does not stop its runs.
 See [Automation ownership and lifecycle](../../../crates/docs/automation.md).
 

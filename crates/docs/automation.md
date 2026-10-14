@@ -59,7 +59,8 @@ flowchart TD
 | `src/ash/sessions/contrib/sessions/browser/views/automationsView.ts` | 独立 Custom View 中的计划卡片和运行历史 | 不内嵌编辑表单，不创建执行 Session |
 | `src/ash/sessions/contrib/providers/agentHost/browser/agentHostAutomationStore.ts` | 单个 provider 的可观察目录、历史和操作路由 | 断连和移除不回退到其他 provider |
 | `src/ash/workbench/contrib/chat/common/automations/` | 前端产品领域契约 | 不依赖 Sessions 实现或线上 DTO |
-| `src/ash/platform/automation/`                                                                                  | 前端领域接口、订阅通知和 App Server adapter                      | 生成协议类型止于 adapter，不传入普通界面代码           |
+| `src/ash/platform/agentHost/common/automation.ts` | Host 自动化领域契约 | 不依赖 Workbench、Sessions 或线上 DTO |
+| `src/ash/platform/agentHost/browser/appServerAutomationService.ts` | 订阅通知和 App Server adapter | 生成协议类型止于 adapter，不传入普通界面代码 |
 | `app`、`ash-code` 的对应产品界面                                                                                | 消费同一后端能力并呈现产品交互                                   | 不另建调度器或计划存储                                 |
 
 automation 通过窄的执行请求和结果契约与现有 Agent 能力协作，App Server 完成装配。core 不反向依赖 automation；automation 不导入 App Server 传输实现。没有独立消费者前，不另建通用 scheduler、calendar 或 clock crate。
