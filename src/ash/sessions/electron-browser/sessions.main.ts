@@ -37,6 +37,8 @@ import { ElectronLifecycleService } from '../../workbench/services/lifecycle/ele
 import { NativeHostColorSchemeService } from '../../workbench/services/themes/electron-browser/nativeHostColorSchemeService.js';
 import { showStartupError } from "../../workbench/browser/startupError.js";
 import { invoke, subscribe } from '../../platform/ipc/electron-browser/rendererIpc.js';
+import { ProxyChannel } from '../../base/parts/ipc/common/ipc.js';
+import { IBrowserViewService, ipcBrowserViewChannelName } from '../../platform/browserView/common/browserView.js';
 import { IMainProcessService } from '../../platform/ipc/common/mainProcessService.js';
 import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
 import { ElectronIPCMainProcessService } from '../../platform/ipc/electron-browser/mainProcessService.js';
@@ -96,6 +98,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		const mainProcessService = sessions.add(profileServices.createInstance(ElectronIPCMainProcessService, windowId as number));
 		profileServices.registerInstance(IMainProcessService, mainProcessService);
 		serviceCollection.set(IMainProcessService, mainProcessService);
+		serviceCollection.set(IBrowserViewService, ProxyChannel.toService<IBrowserViewService>(mainProcessService.getChannel(ipcBrowserViewChannelName)));
 		logger = profileServices.createInstance(LoggerChannelClient);
 		api = await createElectronRendererApi([client => { documentClient = client; return {}; }, client => registerLocalTranscriptionService(transcriptionServices, client)], { browser: false, textDocuments: true, appTools: true }, permissionDialog, mainProcessService);
 	}
@@ -160,7 +163,6 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				'workbench.contrib.speechAccessibilitySignal',
 				'workbench.contrib.saveAccessibilitySignals',
 			],
-			browserViewService: api.browserView,
 			createLogService: () => logger.createLogger('agents'),
 			createStorageService: async options => {
 				const storage = profileServices.createInstance(NativeWorkbenchStorageService, options);

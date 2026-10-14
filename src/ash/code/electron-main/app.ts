@@ -35,8 +35,8 @@ import { DevelopmentAppServerReloader } from "../../platform/app-server-daemon/e
 import { AppServerDaemonLauncher, createAppServerDaemonLauncher } from "../../platform/app-server-daemon/electron-main/appServerDaemonLauncher.js";
 import { remoteExecutablePath } from "../../platform/remote/node/remotePackage.js";
 import { normalizeEntryUrl, TrustedIpcRouter, type IpcRoute } from "../../platform/ipc/electron-main/trustedIpcRouter.js";
-import { BROWSER_VIEW_EVENT_CHANNEL } from "../../platform/browserView/common/browserView.js";
-import { browserViewIpcRoutes } from "../../platform/browserView/electron-main/browserViewIpc.js";
+import { ipcBrowserViewChannelName } from "../../platform/browserView/common/browserView.js";
+import { browserViewChannel } from "../../platform/browserView/electron-main/browserViewIpc.js";
 import { BrowserViewMainService, IBrowserViewMainService } from "../../platform/browserView/electron-main/browserViewMainService.js";
 import { Client as MessagePortClient } from '../../base/parts/ipc/common/ipc.mp.js';
 import { ProxyChannel, type IServerChannel } from '../../base/parts/ipc/common/ipc.js';
@@ -200,6 +200,7 @@ export class AshApplication extends Disposable {
 	private readonly mainProcessIpcServer = this._register(new MainProcessIPCServer());
 	private readonly remoteTunnel = this._register(new MutableDisposable<RemoteTunnelService>());
 	private readonly windowPortForwarding = new Map<string, SshPortForwardingService>();
+	private readonly browserViewChannels = new Map<string, IServerChannel<string>>();
 	private readonly sharedProcess = this._register(new UtilityProcess({
 		name: 'Ash Browser Automation',
 		entryPoint: fileURLToPath(new URL('../electron-utility/sharedProcess/sharedProcessMain.js', import.meta.url)),
@@ -414,6 +415,18 @@ export class AshApplication extends Disposable {
 		this.mainProcessIpcServer.registerChannel('browserHost', {
 			call: <T>(context: string, command: string, arg: unknown) => this.getBrowserHostChannel(context).call<T>(context, command, arg),
 			listen: <T>(context: string, event: string, arg: unknown) => this.getBrowserHostChannel(context).listen<T>(context, event, arg),
+		});
+		this.mainProcessIpcServer.registerChannel(ipcBrowserViewChannelName, {
+			call: <T>(context: string, command: string, arg: unknown) => {
+				const channel = this.browserViewChannels.get(context);
+				if (!channel) { throw new Error('BrowserCapabilityUnavailable'); }
+				return channel.call<T>(context, command, arg);
+			},
+			listen: <T>(context: string, event: string, arg: unknown) => {
+				const channel = this.browserViewChannels.get(context);
+				if (!channel) { throw new Error('BrowserCapabilityUnavailable'); }
+				return channel.listen<T>(context, event, arg);
+			},
 		});
 		this.logService.info('lifecycle', 'Desktop startup', { appServer: this.appServerStartupMode });
 		await this.createPersistentServices(token);
@@ -1350,7 +1363,6 @@ export class AshApplication extends Disposable {
 			...rendererSystemHostRoutes(window, path => this.directoryPermissionPrompt(path), this.auxiliaryWindowsMainService),
 			userConfigurationIpcRoute(this.profileRoot, () => !getWorkspaceRemoteAuthority(workspaceContext.getWorkspace()), openUserConfigurationTextFile),
 			...remoteWindowContext.ipcRoutes,
-			...browserViewIpcRoutes(browserViewMainService),
 			windowOperationIpcRoute(this.windowsMainService, window),
 			windowCloseResponseIpcRoute(this.lifecycleMainService, window),
 			this.windowsMainService.fileOpenResponseIpcRoute(window),
@@ -1502,9 +1514,9 @@ export class AshApplication extends Disposable {
 				},
 			}),
 		}));
-		windowDisposables.add(browserViewMainService.onDidEvent(event => {
-			if (!window.isDestroyed()) window.webContents.send(BROWSER_VIEW_EVENT_CHANNEL, event);
-		}));
+		const sharing = this.mainProcessIpcServer.getChannel('browserSharing', client => client.ctx === context);
+		this.browserViewChannels.set(context, browserViewChannel(browserViewMainService, sharing));
+		windowDisposables.add(toDisposable(() => this.browserViewChannels.delete(context)));
 		browserServices.registerInstance(IBrowserViewMainService, browserViewMainService);
 		return browserServices;
 	}
@@ -1605,7 +1617,6 @@ export class AshApplication extends Disposable {
 						...sessionsRelay.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })),
 						...rendererSystemHostRoutes(window, path => this.directoryPermissionPrompt(path), this.auxiliaryWindowsMainService),
 						userConfigurationIpcRoute(this.profileRoot, () => !getWorkspaceRemoteAuthority(session.workspaceContext.getWorkspace()), openUserConfigurationTextFile),
-						...browserViewIpcRoutes(browserServices.get(IBrowserViewMainService)),
 						...remoteWindowContext.ipcRoutes,
 						windowOperationIpcRoute(this.windowsMainService, window),
 						...windowSplashIpcRoutes(this.themeMainService, () => `sessions:${session.workspaceContext.getWorkspace().id}`, color => window.setBackgroundColor(color)),

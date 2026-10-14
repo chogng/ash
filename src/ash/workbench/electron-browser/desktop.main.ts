@@ -45,6 +45,8 @@ import { registerLocalTranscriptionService } from '../services/localTranscriptio
 import { NativeWorkbenchStorageService } from '../services/storage/electron-browser/storageService.js';
 import { LoggerChannelClient } from '../../platform/log/common/logIpc.js';
 import { ElectronWorkbenchEnvironmentService } from '../services/environment/electron-browser/environmentService.js';
+import { ProxyChannel } from '../../base/parts/ipc/common/ipc.js';
+import { IBrowserViewService, ipcBrowserViewChannelName } from '../../platform/browserView/common/browserView.js';
 import { IPlaywrightService } from '../../platform/browserView/common/playwrightService.js';
 import { getSingletonServiceDescriptors } from '../../platform/instantiation/common/extensions.js';
 
@@ -117,7 +119,12 @@ export class DesktopMain extends Disposable {
 			performance.mark('ash.desktop.workbench-start');
 			const workbench = this._register(await startWorkbench({
 				...this.options,
-				serviceCollection: new ServiceCollection([IMainProcessService, mainProcessService], [IRemoteAuthorityResolverService, resolver], [IPlaywrightService, playwrightService]),
+				serviceCollection: new ServiceCollection(
+					[IBrowserViewService, ProxyChannel.toService<IBrowserViewService>(mainProcessService.getChannel(ipcBrowserViewChannelName))],
+					[IMainProcessService, mainProcessService],
+					[IRemoteAuthorityResolverService, resolver],
+					[IPlaywrightService, playwrightService],
+				),
 				environmentService: new ElectronWorkbenchEnvironmentService(),
 				createURLService: services => {
 					return services.createInstance(RelayURLService, windowId as number);
@@ -137,7 +144,6 @@ export class DesktopMain extends Disposable {
 					catch (error) { storage.dispose(); throw error; }
 				},
 				api,
-				browserViewService: api.browserView,
 				container,
 				workspace,
 				createLifecycleService: services => {

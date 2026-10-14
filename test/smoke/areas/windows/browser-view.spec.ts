@@ -1,6 +1,5 @@
 import { createServer } from 'node:http';
 import type { ElectronApplication } from '@playwright/test';
-import type { ISandboxGlobals } from "../../../../src/ash/base/parts/sandbox/electron-browser/sandboxTypes.js";
 import { decodeAppServerServerRequestResult } from '../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import { expect, test } from '../../../automation/test.js';
 interface BrowserPrompt { options: Electron.MessageBoxOptions; respond: (result: Electron.MessageBoxReturnValue) => void; }
@@ -186,7 +185,7 @@ test('sharing a user page exposes only that page to the chosen thread and revoca
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('ash.browser.open');
 	const info = await page.evaluate(async () => {
-		const views = await (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke('ash:browser-view:list') as IBrowserViewInfo[];
+		const views = await globalThis.ashTestMainProcess.call('browserView', 'getBrowserViews', []) as IBrowserViewInfo[];
 		return views.find(view => view.owner.type === 'user')!;
 	});
 	const call = (method: string, params: Record<string, unknown>) => page.evaluate(({ method, params }) => {

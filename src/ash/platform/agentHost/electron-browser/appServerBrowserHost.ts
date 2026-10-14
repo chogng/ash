@@ -1,15 +1,25 @@
 import { generateUuid } from '../../../base/common/uuid.js';
 import { APP_SERVER_SERVER_REQUESTS, APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
-import { decodeAppServerServerRequestResult } from '../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
+import { decodeAppServerRequestParams, decodeAppServerServerRequestResult } from '../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
 import type { IDisposable } from '../../../base/common/lifecycle.js';
 import type { AppServerProtocolClient } from '../browser/appServerProtocolClient.js';
 import type { BrowserViewEvent } from '../../browserView/common/browserView.js';
 import type { IPlaywrightService } from '../../browserView/common/playwrightService.js';
 import type { IMainProcessService } from '../../ipc/common/mainProcessService.js';
+import type { Event } from '../../../base/common/event.js';
 
 export function registerAppServerBrowserHost(client: AppServerProtocolClient, playwrightService: IPlaywrightService, mainProcessService: IMainProcessService): IDisposable {
 	const handlers = new DisposableStore();
+	mainProcessService.registerChannel('browserSharing', {
+		call: async <T>(_context: string, command: string, arg: unknown): Promise<T> => {
+			if (handlers.isDisposed) { throw new Error('BrowserCapabilityUnavailable'); }
+			if (command !== 'setSharing' || !Array.isArray(arg) || arg.length !== 2) { throw new TypeError('Invalid browser sharing command'); }
+			const params = decodeAppServerRequestParams('browser/sharing/set', { targetId: arg[0], threadIds: arg[1] });
+			return await client.request(APP_SERVER_METHODS['browser/sharing/set'], params) as T;
+		},
+		listen: <T>(): Event<T> => { throw new Error('Browser sharing has no events'); },
+	});
 	const channel = mainProcessService.getChannel('browserHost');
 	const sharedPages = new Set<string>();
 	handlers.add(channel.listen<BrowserViewEvent>('onDidEvent')(event => {

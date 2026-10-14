@@ -4,7 +4,7 @@ import { suite, test } from 'mocha';
 import { promiseWithResolvers } from '../../../../../base/common/async.js';
 import { Emitter, type Event } from '../../../../../base/common/event.js';
 import { AbstractDisposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
-import type { IChannel } from '../../../../../base/parts/ipc/common/ipc.js';
+import type { IServerChannel, IChannel } from '../../../../../base/parts/ipc/common/ipc.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { AppServerProtocolClient } from '../../../../../platform/agentHost/browser/appServerProtocolClient.js';
 import { registerAppServerBrowserHost } from '../../../../../platform/agentHost/electron-browser/appServerBrowserHost.js';
@@ -124,6 +124,18 @@ suite('Workbench Playwright service', () => {
 		await fixture.playwright.disposeSession('thread-one');
 	});
 
+	test('user sharing goes through backend authorization and rejects malformed or retired requests', async () => {
+		using fixture = hostFixture(async () => null);
+		await fixture.client.connect();
+		await fixture.sharing.call('main', 'setSharing', [targetId, ['thread-one']]);
+		assert.deepEqual(fixture.transport.backendRequests, [{ method: 'browser/sharing/set', params: { targetId, threadIds: ['thread-one'] } }]);
+		await assert.rejects(fixture.sharing.call('main', 'setSharing', [targetId, [1]]));
+		await assert.rejects(fixture.sharing.call('main', 'dispose', []), /Invalid browser sharing command/);
+		assert.equal(fixture.transport.backendRequests.length, 1);
+		fixture.dispose();
+		await assert.rejects(fixture.sharing.call('main', 'setSharing', [targetId, []]), /BrowserCapabilityUnavailable/);
+	});
+
 	test('Main network requests retain backend authorization and closed pages release their sharing grant', async () => {
 		const acknowledged = promiseWithResolvers<unknown>();
 		using fixture = hostFixture(async (command, arg) => {
@@ -147,7 +159,7 @@ function registrations(): ServiceCollection {
 	return new ServiceCollection(...descriptors);
 }
 
-function hostFixture(call: (command: string, arg: unknown) => Promise<unknown>): DisposableStore & { readonly playwright: IPlaywrightService; readonly transport: HostTransport; readonly client: AppServerProtocolClient; readonly events: Emitter<BrowserViewEvent>; } {
+function hostFixture(call: (command: string, arg: unknown) => Promise<unknown>): DisposableStore & { readonly playwright: IPlaywrightService; readonly transport: HostTransport; readonly client: AppServerProtocolClient; readonly events: Emitter<BrowserViewEvent>; readonly sharing: IServerChannel<string>; } {
 	const resources = new DisposableStore();
 	const events = resources.add(new Emitter<BrowserViewEvent>());
 	const services = resources.add(new InstantiationService(registrations()));
@@ -158,12 +170,13 @@ function hostFixture(call: (command: string, arg: unknown) => Promise<unknown>):
 	const client = new AppServerProtocolClient(transport);
 	resources.add(toDisposable(() => client.dispose()));
 	resources.add(registerAppServerBrowserHost(client, playwright, mainProcessService));
-	return Object.assign(resources, { playwright, transport, client, events });
+	return Object.assign(resources, { playwright, transport, client, events, sharing: (mainProcessService as TestMainProcessService).rendererChannels.get('browserSharing')! });
 }
 
 class TestMainProcessService extends AbstractDisposable implements IMainProcessService {
 	declare public readonly _serviceBrand: undefined;
 	private readonly channel: IChannel;
+	public readonly rendererChannels = new Map<string, IServerChannel<string>>();
 
 	constructor(call: (command: string, arg: unknown) => Promise<unknown>, events: Event<BrowserViewEvent>) {
 		super();
@@ -178,7 +191,7 @@ class TestMainProcessService extends AbstractDisposable implements IMainProcessS
 		return this.channel;
 	}
 
-	public registerChannel(): void { throw new Error('Unexpected renderer channel'); }
+	public registerChannel(name: string, channel: IServerChannel<string>): void { this.rendererChannels.set(name, channel); }
 	protected override disposeCore(): void { }
 }
 

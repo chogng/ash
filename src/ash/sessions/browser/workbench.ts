@@ -210,7 +210,6 @@ import { IQuickInputService } from "../../platform/quickinput/common/quickInput.
 import { IOpenerService } from "../../platform/opener/common/opener.js";
 import { IMarkdownRendererService } from '../../platform/markdown/browser/markdownRenderer.js';
 import { EditorMarkdownCodeBlockRenderer } from '../../editor/browser/widget/markdownRenderer/browser/editorMarkdownCodeBlockRenderer.js';
-import { IBrowserViewService } from '../../platform/browserView/common/browserView.js';
 import '../../workbench/contrib/externalUriOpener/common/externalUriOpener.contribution.js';
 import { OpenerService } from '../../editor/browser/services/openerService.js';
 import { CommandService } from "../../workbench/services/commands/common/commandService.js";
@@ -282,7 +281,6 @@ export interface IWorkbenchOptions {
 	readonly browserFileSystemProvider?: IFileSystemProvider;
 	/** Host-owned extension execution; embedders can supply a disconnected implementation. */
 	readonly extensionHost?: IExtensionHostApi;
-	readonly browserViewService?: IBrowserViewService;
 	readonly createFileDialogService: (services: IInstantiationService) => IFileDialogService;
 	readonly createLifecycleService: (services: IInstantiationService) => ILifecycleService & IDisposable;
 	readonly createStorageService: (options: BrowserStorageServiceOptions) => Promise<IStorageService & IDisposable>;
@@ -340,7 +338,6 @@ export abstract class Workbench extends Disposable {
 		const commandService = this._register(new CommandService(services));
 		services.registerInstance(ICommandService, commandService);
 		const serviceContributionReady: Promise<void>[] = [];
-		if (options.browserViewService) { services.registerInstance(IBrowserViewService, options.browserViewService); }
 		services.registerInstance(IAssetService, options.api.assets);
 		services.registerInstance(INetworkDiagnosticsService, options.api.networkDiagnostics);
 		services.registerInstance(IContentSearchConfigurationService, options.api.contentSearchConfiguration);

@@ -3,29 +3,7 @@ import type { IDisposable } from '../../../base/common/lifecycle.js';
 import type { ISerializedBrowserHistoryEntriesSnapshot } from './browserHistory.js';
 
 export const IBrowserViewService = createServiceIdentifier<IBrowserViewService>('browserViewService');
-export const BROWSER_VIEW_CREATE_CHANNEL = "ash:browser-view:create";
-export const BROWSER_VIEW_STATE_CHANNEL = "ash:browser-view:state";
-export const BROWSER_VIEW_LAYOUT_CHANNEL = "ash:browser-view:layout";
-export const BROWSER_VIEW_VISIBILITY_CHANNEL =
-	"ash:browser-view:visibility";
-export const BROWSER_VIEW_NAVIGATE_CHANNEL =
-	"ash:browser-view:navigate";
-export const BROWSER_VIEW_GO_BACK_CHANNEL =
-	"ash:browser-view:go-back";
-export const BROWSER_VIEW_GO_FORWARD_CHANNEL =
-	"ash:browser-view:go-forward";
-export const BROWSER_VIEW_RELOAD_CHANNEL = "ash:browser-view:reload";
-export const BROWSER_VIEW_STOP_CHANNEL = "ash:browser-view:stop";
-export const BROWSER_VIEW_FOCUS_CHANNEL = "ash:browser-view:focus";
-export const BROWSER_VIEW_CLOSE_CHANNEL = "ash:browser-view:close";
-export const BROWSER_VIEW_EVENT_CHANNEL = "ash:browser-view:event";
-export const BROWSER_VIEW_LIST_CHANNEL = 'ash:browser-view:list';
-export const BROWSER_VIEW_SHARING_CHANNEL = 'ash:browser-view:sharing';
-export const BROWSER_VIEW_PERMISSION_CHANNEL = 'ash:browser-view:permission';
-export const BROWSER_VIEW_PERMISSIONS_CLEAR_CHANNEL = 'ash:browser-view:permissions:clear';
-export const BROWSER_VIEW_DOWNLOAD_CANCEL_CHANNEL = 'ash:browser-view:download:cancel';
-export const BROWSER_VIEW_HISTORY_CHANNEL = 'ash:browser-view:history';
-export const BROWSER_VIEW_HISTORY_DELETE_CHANNEL = 'ash:browser-view:history:delete';
+export const ipcBrowserViewChannelName = 'browserView';
 
 export type BrowserViewTargetId = string;
 

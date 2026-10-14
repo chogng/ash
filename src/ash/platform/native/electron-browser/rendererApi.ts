@@ -29,7 +29,6 @@ import { subscribe } from '../../ipc/electron-browser/rendererIpc.js';
 import { ReconnectableTerminalProcessService } from '../../terminal/browser/reconnectableTerminalProcessService.js';
 import { operatingSystemFromNodePlatform } from "../../../base/common/environment.js";
 import { sandboxProcess } from "../../../base/parts/sandbox/electron-browser/globals.js";
-import { createBrowserViewService } from "../../browserView/electron-browser/browserViewService.js";
 import { createConfigurationApi } from "../../configuration/electron-browser/configurationApi.js";
 import { popup as popupContextMenu, close as closeContextMenu } from '../../../base/parts/contextmenu/electron-browser/contextmenu.js';
 import { createNativeKeyboardLayoutApi } from "../../keyboardLayout/electron-browser/nativeKeyboardLayoutApi.js";
@@ -220,7 +219,6 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			},
 			remote: createRemoteAgentApi(),
 			remoteConnections: createRemoteConnectionApi(),
-			browserView: createBrowserViewService(client),
 			configuration: createConfigurationApi(mainProcessService),
 			keyboardLayout: createNativeKeyboardLayoutApi(mainProcessService),
 			userKeyboardLayout: createUserKeyboardLayoutApi(mainProcessService),

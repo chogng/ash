@@ -95,7 +95,6 @@ import { IAgentCapabilitiesService } from '../../platform/agentCapabilities/comm
 import { IMcpServerStatusService } from '../../platform/mcp/common/mcpServerStatusService.js';
 import { IMcpServerManagementService } from '../../platform/mcp/common/mcpServerManagementService.js';
 import { ITraceSettingsService } from '../../platform/trace/common/traceSettingsService.js';
-import { IBrowserViewService } from '../../platform/browserView/common/browserView.js';
 import { IRemoteConnectionApi, IRemoteConnectionService, RemoteConnectionService } from "../../platform/remote/common/remoteConnectionService.js";
 import { UnavailableRemoteConnectionApi } from "../../platform/remote/common/remoteConnectionService.js";
 import type {
@@ -347,7 +346,6 @@ export interface IStartWorkbenchOptions {
 	/** Ephemeral hosts may supply workspace storage without OS file access. */
 	readonly workspaceFileSystemProvider?: IFileSystemProvider & IDisposable;
 	readonly webWorkspaceClient?: IWebWorkspaceClient;
-	readonly browserViewService?: IBrowserViewService;
 	readonly container: HTMLElement;
 	readonly workspace: IWorkspace;
 	/** The host selects its implementation; the Workbench supplies initialized window services. */
@@ -404,7 +402,6 @@ export async function startWorkbench({
 	userThemeService,
 	createContextMenuService,
 	createTitlebarPart,
-	browserViewService,
 }: IStartWorkbenchOptions): Promise<Workbench> {
 	const themes = new ExtensionColorThemeService(api.extensions, api.events);
 	const logger = createLogService();
@@ -436,7 +433,6 @@ export async function startWorkbench({
 			userThemeService,
 			createContextMenuService,
 			createTitlebarPart,
-			browserViewService,
 			browserFileSystemProvider,
 			workspaceFileSystemProvider,
 			webWorkspaceClient,
@@ -504,7 +500,6 @@ export class Workbench extends Disposable {
 		userThemeService: IUserThemeServiceContract | undefined,
 		createContextMenuService: (services: IInstantiationService) => IContextMenuService & IDisposable,
 		createTitlebarPart: TitlebarPartFactory,
-		browserViewService: IBrowserViewService | undefined,
 		browserFileSystemProvider: HTMLFileSystemProvider | undefined,
 		workspaceFileSystemProvider: (IFileSystemProvider & IDisposable) | undefined,
 		webWorkspaceClient: IWebWorkspaceClient | undefined,
@@ -546,7 +541,6 @@ export class Workbench extends Disposable {
 		// Editor contributions can resolve data-channel enablement while Parts are being constructed.
 		const contextKeys = this._register(new ContextKeyService());
 		services.registerInstance(IContextKeyService, contextKeys);
-		if (browserViewService) { services.registerInstance(IBrowserViewService, browserViewService); }
 		const instantiationService = services;
 		const logService = this._register(logger);
 		this.logService = logService;
