@@ -16,7 +16,9 @@ Unit tests run in Node/jsdom through Mocha. Use the Node version in `.nvmrc` and
 | Extension units                       | `pnpm test:extensions`  |
 | Build tools                           | `pnpm --dir build test` |
 
-The frontend, editor, and extension commands prepare resources and compile tests before running them. Build-tool tests use Node's test runner and do not accept the Mocha options below.
+The frontend, editor, and extension commands prepare resources and compile tests before running them. Build-tool tests use Node's test runner and do not accept the Mocha options below. After compiling tests, use `pnpm test:unit:runner` when changing the unit runner; `pnpm test:main` and frontend CI include this regression suite once. Selected business-unit runs do not rerun it.
+
+For repeated runs against unchanged sources and generated inputs, use `pnpm test:unit:no-compile` or `pnpm test:editor:unit:no-compile` with the same filters. These entries reuse `.build/desktop/test`, skip preparation and compilation, and do not rerun the runner's own regression suite. After source, generated input, compiler configuration or dependency changes, use the compiling entry again; `test:unit:prepared` skips generated preparation but still compiles tests. Compilation is incremental and repairs missing or removed outputs.
 
 ## Common options
 
@@ -32,7 +34,7 @@ pnpm test:unit --run src/ash/workbench/contrib/preferences/test/browser/settings
 pnpm test:unit --runGlob '**/localizationService.test.js'
 ```
 
-A single leading package-manager `--` separator is accepted. Unknown options, misplaced separators, and empty grep patterns fail before tests start. Use `--run` for file paths; bare positional paths and `--coverage` are unsupported. The runner fails if no tests execute. Check the selected suite's final test count and exit code; `test:unit` also runs the runner regression tests, which have their own summary.
+A single leading package-manager `--` separator is accepted. Unknown options, misplaced separators, and empty grep patterns fail before tests start. Use `--run` for file paths; bare positional paths and `--coverage` are unsupported. The runner fails if no tests execute. Check the selected suite's final test count and exit code. Runner regression tests have a separate summary.
 
 For test design and cleanup, read [Writing Tests](../../../.github/instructions/writing-tests.instructions.md) and [TypeScript Testing](../../../.github/instructions/typescript-testing.instructions.md). Real layout and input behavior belong in the Playwright browser integration suite; complete product flows belong in [smoke-tests](../smoke-tests/SKILL.md).
 

@@ -29,7 +29,14 @@ validation. `pnpm test:unit:prepared`, `pnpm build:stanza:prepared` and
 `pnpm test:browser:integration:prepared` also require current generated inputs and
 the common check from `pnpm prepare:generated`. CI uses these entries after
 explicit preparation to avoid repeated lifecycle checks; standalone build and
-test commands retain their complete preparation. `pnpm bundle:web` and `pnpm bundle:web:full` only run
+test commands retain their complete preparation. For repeated unit runs with unchanged
+sources and generated inputs, `pnpm test:unit:no-compile` and
+`pnpm test:editor:unit:no-compile` run the existing test artifacts with the usual
+filters, skipping preparation and compilation. The runner regression suite uses
+`pnpm test:unit:runner` after test compilation; `test:main` and frontend CI run it
+once separately from business units. Use a compiling
+entry again when sources, generated inputs, compiler configuration or dependencies change.
+`pnpm bundle:web` and `pnpm bundle:web:full` only run
 Vite against those prepared, checked sources; use `pnpm build:web` or
 `pnpm build:web:full` for a standalone build. The two bundles have different
 App Server compile-time flags and share an output directory, so CI runs each

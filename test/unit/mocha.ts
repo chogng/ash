@@ -18,6 +18,8 @@ export async function runUnitTests(patterns: readonly string[], editorEnvironmen
 	if (process.versions.node.split('.')[0] !== requiredVersion.split('.')[0]) {
 		throw new Error(`Unit tests require the Node major version specified in .nvmrc (${requiredVersion}); found ${process.version}.`);
 	}
+	// Reject invalid filters before creating a snapshot of the complete compiler output.
+	const selection = parseSelection(process.argv.slice(process.argv[2] === '--' ? 3 : 2));
 	// Keep this run's modules alive when another invocation cleans the compiler output.
 	const outputDirectory = mkdtempSync(resolve(desktopDirectory, '.build/desktop/test-run-'));
 	try {
@@ -28,7 +30,6 @@ export async function runUnitTests(patterns: readonly string[], editorEnvironmen
 			mkdirSync(dirname(output), { recursive: true });
 			copyFileSync(resolve(desktopDirectory, path), output);
 		}
-		const selection = parseSelection(process.argv.slice(process.argv[2] === '--' ? 3 : 2));
 		let names: string[];
 		if (selection.runs.length > 0) {
 			names = selection.runs.map(sourceFile);

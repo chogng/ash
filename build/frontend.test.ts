@@ -32,6 +32,7 @@ test('Frontend acceptance waits for shared contracts and unit tests', () => {
 	assert.match(contracts, /pnpm exec bun check -p tsconfig.renderer.json --all/u);
 	assert.match(contracts, /pnpm test:build/u);
 	assert.match(contracts, /pnpm run test:unit:prepared/u);
+	assert.match(contracts, /pnpm run test:unit:runner/u);
 });
 
 test('Frontend CI smoke commands collect applicable tests from configured Playwright projects', { timeout: 30_000 }, async () => {

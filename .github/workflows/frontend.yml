@@ -57,6 +57,7 @@ jobs:
         run: |
           pnpm run prepare:output
           pnpm run test:unit:prepared
+          pnpm run test:unit:runner
 
   desktop-runtime:
     needs: contracts

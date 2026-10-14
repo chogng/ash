@@ -9,13 +9,22 @@ test("aggregate, test and typecheck commands prepare inputs once and stop on pre
 	const directory = await mkdtemp(join(tmpdir(), "ash-lifecycle-"));
 	t.after(() => rm(directory, { recursive: true, force: true }));
 	const manifest = JSON.parse(await readFile(resolve(import.meta.dirname, "../../package.json"), "utf8"));
+	assert.equal(manifest.scripts['test:unit:no-compile'], 'node test/unit/run.ts');
+	assert.equal(manifest.scripts['test:editor:unit:no-compile'], 'node test/unit/editor.ts');
+	assert.equal(manifest.scripts['test:unit:runner'], 'node --test test/unit/mocha.test.ts');
+	for (const name of ['test:unit', 'test:unit:prepared']) {
+		assert.doesNotMatch(manifest.scripts[name], /mocha\.test\.ts/);
+	}
 	const scripts = { ...manifest.scripts };
 	for (const [name, operation] of Object.entries({
 		"stylelint": "styles",
 		"test:build-tools": "tools",
 		"test:unit": "unit",
 		"test:unit:prepared": "unit",
+		"test:unit:runner": "unit-runner",
+		"test:unit:no-compile": "unit-reuse",
 		"test:editor:unit": "editor",
+		"test:editor:unit:no-compile": "editor-reuse",
 		"test:extensions": "extension-tests",
 		"test:browser:integration": "browser",
 		"test:browser:integration:prepared": "browser",
@@ -70,11 +79,15 @@ test("aggregate, test and typecheck commands prepare inputs once and stop on pre
 	const executable = script ? process.execPath : pnpm;
 	const prefix = script ? [pnpm] : [];
 	for (const [command, expected, failure] of [
-		["test:main", ["styles", "tools", "output", "protocol", "localization", "common", "extensions", "icons", "unit"], ""],
+		["test:main", ["styles", "tools", "output", "protocol", "localization", "common", "extensions", "icons", "unit", "unit-runner"], ""],
+		["test:main", ["styles", "tools", "output", "protocol", "localization", "common", "extensions", "icons", "unit"], "unit"],
 		["test:main", ["styles"], "styles"],
 		["test:browser:integration", ["protocol"], "protocol"],
 		["test:unit", ["output", "protocol", "localization", "common", "extensions", "icons", "unit"], ""],
 		["test:unit:prepared", ["unit"], ""],
+		["test:unit:no-compile", ["unit-reuse"], ""],
+		["test:unit:no-compile", ["unit-reuse"], "unit-reuse"],
+		["test:editor:unit:no-compile", ["editor-reuse"], ""],
 		["build:prepared", ["desktop-build"], ""],
 		["test:editor:unit", ["output", "protocol", "localization", "common", "extensions", "icons", "editor"], ""],
 		["test:extensions", ["output", "protocol", "localization", "common", "extensions", "icons", "extension-tests"], ""],

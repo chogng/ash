@@ -32,9 +32,9 @@ writeFileSync(requiredRunner, `import { runUnitTests } from ${JSON.stringify(run
 await runUnitTests(${JSON.stringify([first, 'test/unit/missing-required.test.js'])}, false);
 `);
 
-function run(args: readonly string[], entrypoint = 'test/unit/run.ts'): { status: number | null; output: string; } {
+function run(args: readonly string[], entrypoint = 'test/unit/run.ts', compiledOutput = outputDirectory): { status: number | null; output: string; } {
 	const result = spawnSync(process.execPath, [entrypoint, ...args], {
-		cwd: desktopDirectory, encoding: 'utf8', timeout: 15_000, windowsHide: true, env: runnerEnvironment,
+		cwd: desktopDirectory, encoding: 'utf8', timeout: 15_000, windowsHide: true, env: { ...runnerEnvironment, ASH_UNIT_TEST_OUTPUT_DIRECTORY: compiledOutput },
 	});
 	if (result.error) { throw result.error; }
 	return { status: result.status, output: result.stdout + result.stderr };
@@ -61,10 +61,11 @@ test('a filter may select a test in only one of multiple isolated files', () => 
 	assert.match(result.output, /1 tests executed across 2 files; 0 failed files/);
 });
 
-test('invalid unit filters fail without starting the selected file', () => {
+test('invalid unit filters fail before copying outputs or starting the selected file', () => {
 	for (const args of [['--grep', ''], ['--grep', '   '], ['--grepp', 'selected'], ['--', '--grep', 'selected']]) {
-		const result = run(['--run', first, ...args]);
+		const result = run(['--run', first, ...args], 'test/unit/run.ts', join(directory, 'missing-compiler-output'));
 		assert.equal(result.status, 1, result.output);
+		assert.match(result.output, /Missing value for --grep|nonempty pattern|Unsupported unit test option/);
 		assert.doesNotMatch(result.output, /tests executed|runner regression sentinel/);
 	}
 });
