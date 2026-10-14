@@ -488,14 +488,6 @@ export const SettingsNavigation = [
 				groups: [],
 			},
 			{
-				id: 'tools',
-				label: localize({ bundle: 'ash.settings', key: 'categories.tools.label' }, 'Tools'),
-				description: localize({ bundle: 'ash.settings', key: 'categories.tools.description' }, 'Inspect registered tools and the authority each tool may request.'),
-				keywords: ['tool catalog', 'tool scope', 'tool permissions', 'mcp', 'model context protocol'],
-				presentation: 'general',
-				groups: [],
-			},
-			{
 				id: 'sandbox',
 				label: localize({ bundle: 'ash.settings', key: 'categories.sandbox.label' }, 'Sandbox'),
 				description: localize({ bundle: 'ash.settings', key: 'categories.sandbox.description' }, 'Inspect process isolation and configured directory grants.'),

@@ -30,6 +30,9 @@ pub enum InputItem {
     ToolSelection {
         #[schemars(length(max = 4096))]
         disabled: Vec<ash_protocol::ToolName>,
+        /// Capability groups and exact tools are resolved and frozen for the new Turn.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        scope: Option<ash_protocol::ToolScope>,
     },
     AudioAttachment {
         attachment: AudioAttachmentRef,

@@ -23,6 +23,7 @@ pub(crate) fn snapshot_tool_profile(
             .collect(),
         parallel_tool_calls: true,
         disabled_tools: Vec::new(),
+        allowed_tools: None,
     })
 }
 
@@ -47,6 +48,11 @@ pub(crate) fn validate_tool_profile_snapshot(profile: &ToolProfileSnapshot) -> R
             != profile.disabled_tools.len()
     {
         return Err("disabled tool names must be unique and contain at most 4096 entries".into());
+    }
+    if let Some(allowed) = &profile.allowed_tools
+        && (allowed.len() > 4096 || allowed.iter().collect::<BTreeSet<_>>().len() != allowed.len())
+    {
+        return Err("allowed tool names must be unique and contain at most 4096 entries".into());
     }
     Ok(())
 }

@@ -1143,6 +1143,14 @@ fn fixture_with_agent(
     tool_mode: ash_protocol::ToolMode,
     agent: Option<ash_protocol::AgentConfiguration>,
 ) -> Fixture {
+    fixture_with_profile(tool_mode, agent, None)
+}
+
+fn fixture_with_profile(
+    tool_mode: ash_protocol::ToolMode,
+    agent: Option<ash_protocol::AgentConfiguration>,
+    tool_profile: Option<ash_protocol::ToolProfileSnapshot>,
+) -> Fixture {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
     )));
@@ -1175,7 +1183,7 @@ fn fixture_with_agent(
                 policy_revision: "policy-v1".into(),
                 approval_mode: ash_protocol::ApprovalMode::Manual,
                 tool_mode,
-                tool_profile: None,
+                tool_profile,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "Delegate a review".into(),
@@ -1475,4 +1483,44 @@ fn full_context_uses_original_history_and_appends_delegation_after_the_prefix() 
     assert!(prefix.contains("Delegate a review"));
     assert!(!prefix.contains("This is delegated work"));
     assert!(suffix.contains("This is delegated work"));
+}
+
+#[test]
+fn positive_tool_scope_constrains_direct_child_creation_and_further_delegation() {
+    let name = |name: &str| ToolName::new(name).unwrap();
+    for (allowed, disabled, permits_spawn) in [
+        (vec![name("allowed"), name("delegated")], vec![], true),
+        (vec![name("allowed")], vec![], false),
+        (vec![], vec![], false),
+        (
+            vec![name("allowed"), name("delegated")],
+            vec![name("delegated")],
+            false,
+        ),
+    ] {
+        let mut profile = crate::tool_profile::snapshot_tool_profile(&[
+            tool_definition("allowed"),
+            tool_definition("delegated"),
+            tool_definition("blocked"),
+        ])
+        .unwrap();
+        profile.allowed_tools = Some(allowed);
+        profile.disabled_tools = disabled;
+        let fixture = fixture_with_profile(ash_protocol::ToolMode::Direct, None, Some(profile));
+        let mut forbidden = spawn_request_with_id(&fixture, "outside-own-scope");
+        forbidden.capability_scope.tools = vec![name("blocked")];
+        assert!(fixture.coordinator.spawn(forbidden).is_err());
+        let mut forbidden = spawn_request_with_id(&fixture, "outside-delegation-scope");
+        forbidden.capability_scope.delegation_tools = vec![name("blocked")];
+        assert!(fixture.coordinator.spawn(forbidden).is_err());
+        let parent = fixture
+            .threads
+            .read_thread(&fixture.parent_thread_id)
+            .unwrap();
+        assert!(parent.delegations.is_empty());
+        assert_eq!(
+            fixture.coordinator.spawn(spawn_request(&fixture)).is_ok(),
+            permits_spawn
+        );
+    }
 }

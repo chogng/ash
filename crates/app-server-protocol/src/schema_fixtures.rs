@@ -300,6 +300,7 @@ fn turn_input_items_preserve_ordered_text_context_image_and_skill_shapes() {
             content: "diff --git a/file b/file".into(),
         },
         InputItem::ToolSelection {
+            scope: None,
             disabled: vec![ash_protocol::ToolName::new("shell-command").unwrap()],
         },
         InputItem::Image {
@@ -611,8 +612,9 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(!typescript.contains(r#""turn/start": { method: "turn/start" }"#));
     assert!(!typescript.contains(r#""turn/shell/start": { method: "turn/shell/start" }"#));
     assert!(typescript.contains(
-        r#"export type InputItem = { "type": "issue", number: number, } | { "type": "text", text: string, } | { "type": "context", name: string, content: string, } | { "type": "toolSelection", disabled: Array<ToolName>, } | { "type": "audioAttachment", attachment: AudioAttachmentRef, } | { "type": "audio", url: string, } | { "type": "imageAttachment", attachment: ImageAttachmentRef, } | { "type": "image", url: string, } | { "type": "instruction", path: string, } | { "type": "skill", skill: SkillRef, };"#
+        r#"export type InputItem = { "type": "issue", number: number, } | { "type": "text", text: string, } | { "type": "context", name: string, content: string, } | { "type": "toolSelection", disabled: Array<ToolName>,"#
     ));
+    assert!(typescript.contains("scope?: ToolScope | null,"));
     assert!(!typescript.contains("InputItemKind"));
     assert!(typescript.contains(r#"{ "type": "userImage""#));
     assert!(typescript.contains(r#"{ "type": "userImageAttachment""#));

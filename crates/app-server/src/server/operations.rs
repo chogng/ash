@@ -520,9 +520,9 @@ impl AppServer {
         &self,
         connection: &ConnectionState,
     ) -> Result<Value, RpcError> {
-        let (tools, configured) = match self.local_env_tool_ports() {
+        let (tools, capability_sets, configured) = match self.local_env_tool_ports() {
             Some(ports) => ports.capabilities_snapshot(),
-            None => (Vec::new(), false),
+            None => (Vec::new(), Vec::new(), false),
         };
         #[cfg(windows)]
         let candidates = vec!["mxc".to_owned(), "windows".to_owned()];
@@ -605,7 +605,7 @@ impl AppServer {
             let id = serde_json::to_string(&(tool.source, &source_id))
                 .map_err(|_| RpcError::new(-32603, AppServerErrorName::InternalError))?;
             let group = tool_sets.entry(id.clone()).or_insert_with(|| {
-                ash_app_server_protocol::protocol::agent::AgentToolSetCapabilityDto {
+                ash_app_server_protocol::protocol::agent::AgentToolSourceGroupDto {
                     id,
                     source: tool.source,
                     source_id,
@@ -616,7 +616,9 @@ impl AppServer {
         }
         result(&AgentCapabilitiesReadResult {
             tools,
-            tool_sets: tool_sets.into_values().collect(),
+            source_groups: tool_sets.into_values().collect(),
+            tool_sets: capability_sets,
+            profiles: crate::tool_composition::product_tool_profiles(),
             local_process_sandbox_configured: configured,
             sandbox_backends,
             sandbox_diagnostics,
@@ -2290,7 +2292,7 @@ impl AppServer {
                     }
                     InputItem::Text { text } => UserInput::Text { text },
                     InputItem::Context { name, content } => UserInput::Context { name, content },
-                    InputItem::ToolSelection { disabled } => {
+                    InputItem::ToolSelection { disabled, scope } => {
                         if disabled.len() > 4096
                             || disabled
                                 .iter()
@@ -2302,7 +2304,16 @@ impl AppServer {
                                 "Tool selection must contain at most 4096 unique tool names".into(),
                             )));
                         }
-                        UserInput::ToolSelection { disabled }
+                        UserInput::ToolSelection {
+                            disabled,
+                            allowed: scope
+                                .as_ref()
+                                .map(|scope| {
+                                    self.turn_executor_snapshot().resolve_tool_scope(scope)
+                                })
+                                .transpose()
+                                .map_err(core_error)?,
+                        }
                     }
                     InputItem::AudioAttachment { attachment } => {
                         UserInput::AudioAttachment { attachment }

@@ -695,22 +695,26 @@ impl ToolScheduler {
             .code_mode
             .as_ref()
             .filter(|broker| broker.owns_control_binding(call, call_binding(snapshot, item_id)));
+        let facts = ToolExecutionFacts::for_turn(
+            snapshot,
+            turn_id,
+            self.tools
+                .definitions()
+                .into_iter()
+                .map(|definition| definition.name),
+        )?;
+        if !facts.allows_tool(&call.name) {
+            return Err(CoreError::Policy(format!(
+                "Tool '{}' is outside the current capability scope",
+                call.name
+            )));
+        }
         let (request, mut evidence) = match control_broker {
             Some(broker) => (broker.prepare_control(call)?, Vec::new()),
-            None => {
-                let facts = ToolExecutionFacts::for_turn(
-                    snapshot,
-                    turn_id,
-                    self.tools
-                        .definitions()
-                        .into_iter()
-                        .map(|definition| definition.name),
-                )?;
-                (
-                    self.tools.prepare_with_facts(call, &facts)?,
-                    self.tools.review_evidence(call)?,
-                )
-            }
+            None => (
+                self.tools.prepare_with_facts(call, &facts)?,
+                self.tools.review_evidence(call)?,
+            ),
         };
         let mode = snapshot
             .turns
@@ -799,17 +803,27 @@ impl ToolScheduler {
             Arc::clone(&self.updates),
             Arc::clone(&self.execution_observer),
         );
-        let persisted_binding = self
-            .threads
-            .read_thread(context.thread_id())?
-            .items
-            .iter()
-            .find_map(|item| match item {
-                ThreadItem::ToolCall {
-                    item_id, binding, ..
-                } if item_id == context.item_id() => binding.clone(),
-                _ => None,
-            });
+        let snapshot = self.threads.read_thread(context.thread_id())?;
+        let facts = ToolExecutionFacts::for_turn(
+            &snapshot,
+            context.turn_id(),
+            self.tools
+                .definitions()
+                .into_iter()
+                .map(|definition| definition.name),
+        )?;
+        if !facts.allows_tool(&call.name) {
+            return Err(CoreError::Policy(format!(
+                "Tool '{}' is outside the current capability scope",
+                call.name
+            )));
+        }
+        let persisted_binding = snapshot.items.iter().find_map(|item| match item {
+            ThreadItem::ToolCall {
+                item_id, binding, ..
+            } if item_id == context.item_id() => binding.clone(),
+            _ => None,
+        });
         let control_broker = self
             .code_mode
             .as_ref()

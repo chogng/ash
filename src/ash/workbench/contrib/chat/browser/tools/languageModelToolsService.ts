@@ -1,3 +1,4 @@
+import type { ToolProductProfile } from '../../../../../platform/agentHost/common/agentToolsApi.js';
 import type { ChatToolSource } from '../../../../../platform/agentHost/common/agentService.js';
 import { IAgentToolsApi } from '../../../../../platform/agentHost/common/agentToolsApi.js';
 import { IAppServerApi } from '../../../../../platform/agentHost/common/appServerApi.js';
@@ -8,6 +9,7 @@ import { derived, observableValue } from '../../../../../base/common/observable.
 import { isToolSet, type ILanguageModelToolsService, type IToolData, type IToolSet } from '../../common/tools/languageModelToolsService.js';
 
 interface Catalog {
+	readonly profiles: readonly ToolProductProfile[];
 	readonly tools: readonly IToolData[];
 	readonly sets: readonly IToolSet[];
 	/** Derived query indexes point to the objects above and are replaced with that snapshot. */
@@ -15,11 +17,12 @@ interface Catalog {
 	readonly references: ReadonlyMap<string, IToolData | IToolSet>;
 }
 
-const emptyCatalog: Catalog = Object.freeze({ tools: Object.freeze([]), sets: Object.freeze([]), names: new Map(), references: new Map() });
+const emptyCatalog: Catalog = Object.freeze({ profiles: Object.freeze([]), tools: Object.freeze([]), sets: Object.freeze([]), names: new Map(), references: new Map() });
 
 /** Builds the window view of the domain catalog; the backend remains the only tool registry. */
 export class LanguageModelToolsService extends Disposable implements ILanguageModelToolsService {
 	private readonly catalog = observableValue<Catalog>(this, emptyCatalog);
+	readonly profiles = derived(reader => this.catalog.read(reader).profiles);
 	readonly toolSets = derived<Iterable<IToolSet>>(reader => this.catalog.read(reader).sets);
 	private pending: Promise<void> | undefined;
 	private readAgain = false;
@@ -64,6 +67,7 @@ export class LanguageModelToolsService extends Disposable implements ILanguageMo
 			} while (this.readAgain);
 			const tools: readonly IToolData[] = Object.freeze(result.tools.map(tool => Object.freeze({
 				id: tool.name,
+				category: tool.category ?? undefined,
 				toolReferenceName: tool.name,
 				displayName: tool.name,
 				modelDescription: tool.description,
@@ -74,18 +78,23 @@ export class LanguageModelToolsService extends Disposable implements ILanguageMo
 				authority: tool.authority,
 			})));
 			const byId = new Map(tools.map(tool => [tool.id, tool]));
-			const sets = Object.freeze(result.toolSets.map(set => {
+			const sourceGroups = result.sourceGroups.map(set => {
 				const members = Object.freeze(set.tools.map(id => byId.get(id)).filter((tool): tool is IToolData => tool !== undefined && tool.exposure !== 'hidden'));
 				return Object.freeze({
-					id: set.id, source: set.source, sourceId: set.sourceId,
+					kind: 'source' as const, id: set.id, source: set.source, sourceId: set.sourceId,
 					// An empty source has a reserved segment; actual '@' IDs are encoded as '%40'.
 					referenceName: `${set.source}/${set.sourceId ? encodeURIComponent(set.sourceId) : '@'}`,
 					getTools: () => members,
 				});
-			}));
+			});
+			const namedSets: IToolSet[] = result.toolSets.map(set => {
+				const members = Object.freeze(set.tools.map(id => byId.get(id)).filter((tool): tool is IToolData => tool !== undefined && tool.exposure !== 'hidden'));
+				return Object.freeze({ kind: 'capability' as const, id: set.id, referenceName: set.id, source: 'host' as const, sourceId: 'product', getTools: () => members });
+			});
+			const sets = Object.freeze([...sourceGroups, ...namedSets]);
 			const externalGroups = new Map<IToolData, IToolSet>();
 			const references = new Map<string, IToolData | IToolSet>();
-			for (const set of sets) {
+			for (const set of sourceGroups) {
 				for (const tool of set.getTools()) {
 					if (!tool.canBeReferencedInPrompt) continue;
 					references.set(`${set.referenceName}/${tool.toolReferenceName}`, tool);
@@ -107,7 +116,7 @@ export class LanguageModelToolsService extends Disposable implements ILanguageMo
 				names.set(set, name);
 				references.set(name, set);
 			}
-			this.catalog.set({ tools, sets, names, references });
+			this.catalog.set({ profiles: Object.freeze(result.profiles.map(profile => Object.freeze({ ...profile, sets: Object.freeze([...profile.sets]) }))), tools, sets, names, references });
 			this.didChangeTools.fire();
 		})().finally(() => {
 			if (this.pending === pending) this.pending = undefined;

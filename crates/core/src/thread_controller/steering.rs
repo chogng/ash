@@ -31,14 +31,17 @@ impl ThreadController {
             ));
         }
         let input = user_input::normalize_attachments(&request.input, &self.attachments)?;
-        if let Some(disabled) = user_input::tool_selection(&input)? {
+        if let Some(selection) = user_input::tool_selection(&input)? {
             let thread = self.read_thread(thread_id)?;
             let profile = thread
                 .turns
                 .iter()
                 .find(|turn| turn.turn_id == request.turn_id)
                 .and_then(|turn| turn.tool_profile.as_ref());
-            if profile.is_none_or(|profile| profile.disabled_tools != disabled) {
+            if profile.is_none_or(|profile| {
+                profile.disabled_tools != selection.disabled
+                    || profile.allowed_tools.as_deref() != selection.allowed
+            }) {
                 return Err(CoreError::InvalidInput(
                     "Tool selection takes effect on the next Turn; steering cannot change it"
                         .into(),

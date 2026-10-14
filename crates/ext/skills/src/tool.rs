@@ -196,6 +196,14 @@ impl SkillReadTool {
 }
 
 impl ToolExecutor for SkillReadTool {
+    fn tool_set(&self) -> Option<&'static str> {
+        Some("core.skills")
+    }
+
+    fn category(&self) -> Option<ash_protocol::ToolCategory> {
+        Some(ash_protocol::ToolCategory::Skills)
+    }
+
     fn definition(&self) -> ToolDefinition {
         self.definition.clone()
     }

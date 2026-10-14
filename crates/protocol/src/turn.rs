@@ -30,7 +30,12 @@ pub use instructions::ModelInstructionSelection;
 pub use instructions::TurnInstructions;
 pub use review_target::ReviewTarget;
 pub use status::TurnStatus;
+pub use tool_profile::ToolCategory;
 pub use tool_profile::ToolProfileSnapshot;
+pub use tool_profile::ToolScope;
+pub use tool_profile::ToolProductProfile;
+pub use tool_profile::ToolProductStatus;
+pub use tool_profile::ToolSetDefinition;
 
 /// The Core decision for a validated model response, retained for replay and trace inspection.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

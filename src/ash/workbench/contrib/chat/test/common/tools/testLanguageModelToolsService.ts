@@ -7,7 +7,8 @@ import { Event } from '../../../../../../base/common/event.js';
 /** Test wire data keeps UI fixtures readable while exercising the production catalog adapter. */
 export interface ToolCatalogFixture {
 	readonly tools: readonly (Omit<AgentToolCapabilityDto, 'sourceChain'> & { readonly sourceDetails: readonly string[]; })[];
-	readonly toolSets: AgentCapabilitiesReadResult['toolSets'];
+	readonly sourceGroups: AgentCapabilitiesReadResult['sourceGroups'];
+	readonly toolSets?: AgentCapabilitiesReadResult['toolSets'];
 }
 
 /** The caller or a singleton registration owns the returned service. */
@@ -18,8 +19,10 @@ export function createTestLanguageModelToolsService(api: { readonly isAvailable:
 		read: async () => {
 			const catalog = await api.read();
 			return {
-				tools: catalog.tools.map(({ sourceDetails, ...tool }) => ({ ...tool, sourceChain: sourceDetails.map(id => ({ type: 'system' as const, id })) })),
-				toolSets: catalog.toolSets,
+				tools: catalog.tools.map(({ sourceDetails, ...tool }) => ({ ...tool, category: tool.category ?? undefined, sourceChain: sourceDetails.map(id => ({ type: 'system' as const, id })) })),
+				sourceGroups: catalog.sourceGroups,
+				toolSets: catalog.toolSets ?? [],
+				profiles: [],
 			};
 		},
 	}, createDisconnectedAppServerApi(unavailableOperation));

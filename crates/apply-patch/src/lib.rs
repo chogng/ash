@@ -17,9 +17,7 @@ use crate::parser::PatchOperation;
 use ash_file_access::Dir;
 use ash_file_system::FileTextDocuments;
 use ash_file_system::TextFileFormat;
-use ash_tools::{
-    TextDocumentChange, TextDocumentEditor, TextDocumentEditorProvider, TextDocumentError,
-};
+use ash_tools::{TextDocumentChange, TextDocumentEditor, TextDocumentEditorProvider, TextDocumentError};
 use ash_tools::{
     ToolConcurrency, ToolConflictClass, ToolDefinition, ToolExecutionFuture, ToolExecutionOutcome,
     ToolExecutor, ToolInputSchema, ToolInvocation, ToolLoading, ToolName, ToolOutput,
@@ -336,6 +334,14 @@ impl ApplyPatchTool {
 }
 
 impl ToolExecutor for ApplyPatchTool {
+    fn tool_set(&self) -> Option<&'static str> {
+        Some("core.files")
+    }
+
+    fn category(&self) -> Option<ash_tools::ToolCategory> {
+        Some(ash_tools::ToolCategory::Edit)
+    }
+
     fn activity(&self, _call: &ash_tools::ToolCall) -> Option<ash_tools::ToolActivity> {
         Some(ash_tools::ToolActivity::Edit {
             target: "files".into(),

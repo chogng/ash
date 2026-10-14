@@ -62,6 +62,7 @@ use crate::tool_search_embedding::ToolSearchEmbeddingRuntime;
 mod mcp_exposure;
 
 use mcp_exposure::MCP_SEARCH_TOOLS_NAME;
+use mcp_exposure::MCP_CALL_TOOL_NAME;
 use mcp_exposure::decide_mcp_catalog_search;
 use mcp_exposure::project_mcp_service;
 
@@ -361,6 +362,8 @@ impl ToolPort {
                 .into_iter()
                 .filter(|definition| !exposed_names.contains(&definition.name))
                 .map(|definition| ToolContribution {
+                    category: tools.tool_category(&definition.name),
+                    tool_set: tools.tool_set(&definition.name),
                     source_chain: tools.source_provenance(&definition.name),
                     definition,
                     exposure: ToolExposure::Hidden,
@@ -374,6 +377,7 @@ impl ToolPort {
             .into_iter()
             .filter(|tool| !exposed_names.contains(&tool.name))
             .map(|tool| AgentToolCapabilityDto {
+                category: tools.tool_category(&tool.name),
                 source_chain: tools.source_provenance(&tool.name),
                 name: tool.name.to_string(),
                 description: tool.description,
@@ -399,6 +403,8 @@ impl ToolPort {
             .map(|definition| {
                 let source_chain = tools.source_provenance(&definition.name);
                 ToolContribution {
+                    category: tools.tool_category(&definition.name),
+                    tool_set: tools.tool_set(&definition.name),
                     definition,
                     exposure,
                     search: search.clone(),
@@ -430,6 +436,8 @@ impl ToolPort {
         })?;
         let runtime = Arc::new(ToolExecutorRuntime::new(executor, environment_id, reviewer));
         let contribution = ToolContribution {
+            category: runtime.executor().category(),
+            tool_set: runtime.executor().tool_set(),
             source_chain: vec![self.kind.source_provenance(&definition.name)],
             definition,
             exposure: runtime.executor().exposure(),
@@ -486,6 +494,8 @@ impl ToolPort {
 
 #[derive(Clone)]
 struct ToolContribution {
+    tool_set: Option<&'static str>,
+    category: Option<ash_protocol::ToolCategory>,
     definition: ToolDefinition,
     exposure: ToolExposure,
     search: ToolSearchMetadata,
@@ -550,6 +560,16 @@ impl ReloadableToolPorts {
 
     pub(crate) fn catalog(&self) -> Vec<AgentToolCapabilityDto> {
         self.generation().catalog.clone()
+    }
+
+    pub(crate) fn capability_catalog(
+        &self,
+    ) -> (
+        Vec<AgentToolCapabilityDto>,
+        Vec<ash_protocol::ToolSetDefinition>,
+    ) {
+        let generation = self.generation();
+        (generation.catalog.clone(), generation.tools.tool_sets())
     }
 
     pub(crate) fn record_reconcile_failure(&self, error: impl Into<String>) {
@@ -712,6 +732,21 @@ impl ToolService for ReloadableToolService {
         self.ports.generation().tools.definitions()
     }
 
+    fn tool_sets(&self) -> Vec<ash_protocol::ToolSetDefinition> {
+        self.ports.generation().tools.tool_sets()
+    }
+
+    fn tool_category(&self, name: &ToolName) -> Option<ash_protocol::ToolCategory> {
+        self.ports.generation().tools.tool_category(name)
+    }
+
+    fn resolve_tool_scope(
+        &self,
+        scope: &ash_protocol::ToolScope,
+    ) -> Result<Vec<ToolName>, CoreError> {
+        self.ports.generation().tools.resolve_tool_scope(scope)
+    }
+
     fn model_definitions(
         &self,
         activated: &BTreeSet<ToolName>,
@@ -832,6 +867,13 @@ impl ToolService for ReloadableToolService {
         call: &ToolCall,
         facts: &ToolExecutionFacts,
     ) -> Result<ActionReviewRequest, CoreError> {
+        if !facts.allows_tool(&call.name) {
+            return Err(CoreError::Policy(format!(
+                "Tool '{}' is outside the current capability scope",
+                call.name
+            )));
+        }
+
         self.prepare_bound(call, Some(facts))
     }
 
@@ -1240,6 +1282,7 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
         // Hidden App routes reuse the existing metadata catalog row instead of exposing a second choice.
         .filter(|collected| !catalog_overlays.contains(&collected.contribution.definition.name))
         .map(|collected| AgentToolCapabilityDto {
+            category: collected.contribution.category,
             name: collected.contribution.definition.name.to_string(),
             description: collected.contribution.definition.description.clone(),
             source: match collected.kind {
@@ -1261,6 +1304,19 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
         })
         .collect::<Vec<_>>();
     catalog.append(&mut catalog_only);
+    let mut tool_sets = BTreeMap::<String, Vec<ToolName>>::new();
+    for collected in &definitions {
+        if let Some(id) = collected.contribution.tool_set {
+            tool_sets
+                .entry(id.into())
+                .or_default()
+                .push(collected.contribution.definition.name.clone());
+        }
+    }
+    let tool_sets = tool_sets
+        .into_iter()
+        .map(|(id, tools)| ash_protocol::ToolSetDefinition { id, tools })
+        .collect();
     let protocol_definitions = definitions
         .into_iter()
         .map(|collected| collected.contribution.definition)
@@ -1270,6 +1326,7 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
         .then(|| ToolSearchRuntime::new(Arc::clone(&registry), &search_options));
     if let Some(search) = &search {
         catalog.push(AgentToolCapabilityDto {
+            category: Some(ash_protocol::ToolCategory::Search),
             name: search.definition().name.to_string(),
             description: search.definition().description.clone(),
             source: ToolSourceDto::Host,
@@ -1280,9 +1337,20 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
             authority: ToolAuthorityDto::ProductService,
         });
     }
+    let categories = catalog
+        .iter()
+        .map(|tool| {
+            (
+                ToolName::new(tool.name.clone()).expect("validated catalog name"),
+                tool.category,
+            )
+        })
+        .collect();
     let search_enabled = search.is_some();
     Ok(Some(CombinedToolPorts {
         tools: Arc::new(CompositeToolService {
+            tool_sets,
+            categories,
             definitions: protocol_definitions,
             routes,
             registry,
@@ -1397,6 +1465,8 @@ fn build_registry(
 }
 
 struct CompositeToolService {
+    tool_sets: Vec<ash_protocol::ToolSetDefinition>,
+    categories: BTreeMap<ToolName, Option<ash_protocol::ToolCategory>>,
     definitions: Vec<ToolDefinition>,
     routes: BTreeMap<ToolRuntimeKey, ToolContributionRuntime>,
     registry: Arc<ToolRegistrySnapshot>,
@@ -1404,6 +1474,14 @@ struct CompositeToolService {
 }
 
 impl CompositeToolService {
+    fn excluded_tools(&self, facts: &ToolExecutionFacts) -> Vec<ToolName> {
+        self.categories
+            .keys()
+            .filter(|name| !facts.allows_tool(name))
+            .cloned()
+            .collect()
+    }
+
     fn runtime(
         &self,
         call: &ToolCall,
@@ -1435,7 +1513,150 @@ fn loading_for_exposure(exposure: ToolExposure) -> ToolLoading {
     }
 }
 
+/// Product composition is explicit. Future tools cannot join Code merely by sharing a category.
+pub(crate) fn product_tool_profiles() -> Vec<ash_protocol::ToolProductProfile> {
+    vec![
+        ash_protocol::ToolProductProfile {
+            id: "code".into(),
+            sets: [
+                "core.files",
+                "core.search",
+                "core.execution",
+                "core.browser",
+                "core.web",
+                "core.memory",
+                "core.skills",
+                "core.images",
+                "agent.control",
+                "agent.collaboration",
+                "agent.planning",
+                "agent.instructions",
+                "app.sessions",
+                "app.projects",
+                "app.automations",
+                "app.workbench",
+                "app.application",
+            ]
+            .into_iter()
+            .map(str::to_owned)
+            .collect(),
+            status: ash_protocol::ToolProductStatus::Ready,
+        },
+        ash_protocol::ToolProductProfile {
+            id: "cowork".into(),
+            sets: Vec::new(),
+            status: ash_protocol::ToolProductStatus::Planned,
+        },
+        ash_protocol::ToolProductProfile {
+            id: "design".into(),
+            sets: Vec::new(),
+            status: ash_protocol::ToolProductStatus::Planned,
+        },
+    ]
+}
+
 impl ToolService for CompositeToolService {
+    fn tool_sets(&self) -> Vec<ash_protocol::ToolSetDefinition> {
+        self.tool_sets.clone()
+    }
+    fn tool_category(&self, name: &ToolName) -> Option<ash_protocol::ToolCategory> {
+        self.categories.get(name).copied().flatten()
+    }
+
+    fn resolve_tool_scope(
+        &self,
+        scope: &ash_protocol::ToolScope,
+    ) -> Result<Vec<ToolName>, CoreError> {
+        scope.validate().map_err(CoreError::InvalidInput)?;
+        if scope
+            .tools
+            .iter()
+            .any(|name| !self.categories.contains_key(name))
+        {
+            return Err(CoreError::InvalidInput(
+                "Tool scope contains an unknown tool".into(),
+            ));
+        }
+        if scope
+            .sets
+            .iter()
+            .any(|id| !self.tool_sets.iter().any(|set| &set.id == id))
+        {
+            return Err(CoreError::InvalidInput(
+                "Tool scope contains an unknown tool set".into(),
+            ));
+        }
+        let members = self
+            .tool_sets
+            .iter()
+            .filter(|set| scope.sets.contains(&set.id))
+            .flat_map(|set| &set.tools)
+            .collect::<BTreeSet<_>>();
+        let profile_members = scope
+            .profile
+            .as_ref()
+            .map(|id| {
+                let profile = product_tool_profiles()
+                    .into_iter()
+                    .find(|profile| &profile.id == id)
+                    .ok_or_else(|| {
+                        CoreError::InvalidInput(format!("Unknown tool product profile: {id}"))
+                    })?;
+                if profile.status == ash_protocol::ToolProductStatus::Planned {
+                    return Err(CoreError::InvalidInput(format!(
+                        "Tool product profile {id} is planned and has no available capabilities"
+                    )));
+                }
+                Ok::<BTreeSet<ToolName>, CoreError>(
+                    self.tool_sets
+                        .iter()
+                        .filter(|set| profile.sets.contains(&set.id))
+                        .flat_map(|set| set.tools.iter().cloned())
+                        .collect(),
+                )
+            })
+            .transpose()?;
+
+        let mut names = self
+            .categories
+            .iter()
+            .filter(|(name, category)| {
+                (scope.tools.contains(name)
+                    || members.contains(name)
+                    || (scope.sets.is_empty()
+                        && scope.tools.is_empty()
+                        && profile_members.is_some()))
+                    && profile_members
+                        .as_ref()
+                        .is_none_or(|members| members.contains(name))
+                    && (scope.categories.is_empty()
+                        || category.is_some_and(|category| scope.categories.contains(&category)))
+            })
+            .map(|(name, _)| name.clone())
+            .collect::<BTreeSet<_>>();
+        // Discovery and MCP routing are infrastructure: their targets are still checked
+        // against the resolved scope, so selecting a bridge never grants its whole catalog.
+        if !names.is_empty() {
+            if let Some(search) = &self.search {
+                names.insert(search.definition().name.clone());
+            }
+            if names.iter().any(|name| {
+                !self
+                    .definitions
+                    .iter()
+                    .any(|definition| &definition.name == name)
+            }) {
+                for name in [MCP_SEARCH_TOOLS_NAME, MCP_CALL_TOOL_NAME] {
+                    let name = ToolName::new(name).expect("static MCP bridge name");
+                    if self.categories.contains_key(&name) {
+                        names.insert(name);
+                    }
+                }
+            }
+        }
+        Ok(names.into_iter().collect())
+    }
+
     fn list_app_tools(
         &self,
         origin: &ToolCall,
@@ -1682,6 +1903,13 @@ impl ToolService for CompositeToolService {
         call: &ToolCall,
         facts: &ToolExecutionFacts,
     ) -> Result<ActionReviewRequest, CoreError> {
+        if !facts.allows_tool(&call.name) {
+            return Err(CoreError::Policy(format!(
+                "Tool '{}' is outside the current capability scope",
+                call.name
+            )));
+        }
+
         if let Some(search) = &self.search
             && call.name == search.definition().name
         {
@@ -1766,7 +1994,7 @@ impl ToolService for CompositeToolService {
                 call,
                 authorization,
                 cancellation,
-                facts.disabled_tools(),
+                &self.excluded_tools(facts),
             );
         }
         let (binding, runtime) = self.runtime(call)?;
@@ -1800,7 +2028,7 @@ impl ToolService for CompositeToolService {
                 call,
                 authorization,
                 cancellation,
-                facts.disabled_tools(),
+                &self.excluded_tools(facts),
             );
         }
         let (binding, runtime) = self.runtime(call)?;
@@ -1830,7 +2058,7 @@ impl ToolService for CompositeToolService {
                 call,
                 authorization,
                 cancellation,
-                facts.disabled_tools(),
+                &self.excluded_tools(facts),
             );
         }
         let (binding, runtime) = self.runtime(call)?;

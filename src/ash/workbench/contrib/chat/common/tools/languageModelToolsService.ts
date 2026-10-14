@@ -1,3 +1,4 @@
+import type { ToolCategory, ToolProductProfile } from '../../../../../platform/agentHost/common/agentToolsApi.js';
 import { createServiceIdentifier } from '../../../../../platform/instantiation/common/instantiation.js';
 import type { IObservable, IReader } from '../../../../../base/common/observable.js';
 import type { Event } from '../../../../../base/common/event.js';
@@ -7,6 +8,7 @@ export type ToolSource = 'environment' | 'dynamic' | 'extension' | 'host' | 'loc
 export type ToolExposure = 'direct' | 'deferred' | 'modelOnly' | 'hidden';
 
 export interface IToolData {
+	readonly category?: ToolCategory;
 	readonly id: string;
 	readonly toolReferenceName: string;
 	readonly displayName: string;
@@ -20,6 +22,7 @@ export interface IToolData {
 }
 
 export interface IToolSet {
+	readonly kind?: 'source' | 'capability';
 	readonly id: string;
 	readonly referenceName: string;
 	readonly source: ToolSource;
@@ -36,6 +39,7 @@ export interface IToolSet {
  */
 export interface ILanguageModelToolsService {
 	readonly isAvailable: boolean;
+	readonly profiles: IObservable<readonly ToolProductProfile[]>;
 	/** Fires after the readable catalog is replaced, including connection invalidation. */
 	readonly onDidChangeTools: Event<void>;
 	/** Load before querying. Concurrent consumers share the same in-flight read. */

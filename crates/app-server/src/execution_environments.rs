@@ -258,6 +258,14 @@ fn validate_path(path: &str) -> Result<(), CoreError> {
 }
 
 impl ToolService for EnvironmentTools {
+    fn tool_set(&self, _: &ash_protocol::ToolName) -> Option<&'static str> {
+        Some("core.execution")
+    }
+
+    fn tool_category(&self, _: &ash_protocol::ToolName) -> Option<ash_protocol::ToolCategory> {
+        Some(ash_protocol::ToolCategory::Execute)
+    }
+
     fn definitions(&self) -> Vec<ToolDefinition> {
         vec![ToolDefinition {
             name: ToolName::new("environment").expect("static tool name"),

@@ -298,6 +298,14 @@ impl BrowserToolService {
 }
 
 impl ToolService for BrowserToolService {
+    fn tool_set(&self, _: &ash_protocol::ToolName) -> Option<&'static str> {
+        Some("core.browser")
+    }
+
+    fn tool_category(&self, _: &ash_protocol::ToolName) -> Option<ash_protocol::ToolCategory> {
+        Some(ash_protocol::ToolCategory::Browser)
+    }
+
     fn definitions(&self) -> Vec<ToolDefinition> {
         self.definitions.clone()
     }

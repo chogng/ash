@@ -1058,11 +1058,12 @@ impl ThreadController {
             return Err(CoreError::InvalidInput("advisor is off".into()));
         }
         validate_policy_revision(&request.policy_revision)?;
-        if let Some(disabled) = user_input::tool_selection(&request.input)? {
+        if let Some(selection) = user_input::tool_selection(&request.input)? {
             let profile = request.tool_profile.as_mut().ok_or_else(|| {
                 CoreError::InvalidInput("Tool selection requires a frozen tool profile".into())
             })?;
-            profile.disabled_tools = disabled.to_vec();
+            profile.disabled_tools = selection.disabled.to_vec();
+            profile.allowed_tools = selection.allowed.map(<[_]>::to_vec);
             crate::tool_profile::validate_tool_profile_snapshot(profile)
                 .map_err(CoreError::InvalidInput)?;
         }

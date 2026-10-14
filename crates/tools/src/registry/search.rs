@@ -162,14 +162,10 @@ impl SearchIndex {
         excluded: &[ToolName],
     ) -> Vec<(usize, u64)> {
         let mut ranked = match query.syntax() {
-            ToolSearchQuerySyntax::NaturalLanguage => self.search_bm25(
-                entries,
-                query.text(),
-                limit
-                    .saturating_add(excluded.len())
-                    .min(entries.len().max(1)),
-            ),
-            ToolSearchQuerySyntax::Regex => self.search_regex(entries, query.text()),
+            ToolSearchQuerySyntax::NaturalLanguage => {
+                self.search_bm25(entries, query.text(), limit, excluded)
+            }
+            ToolSearchQuerySyntax::Regex => self.search_regex(entries, query.text(), excluded),
         };
         // Disabled matches must not consume the caller's requested result slots.
         ranked.retain(|(index, _)| !excluded.contains(entries[*index].definition.name()));
@@ -190,12 +186,29 @@ impl SearchIndex {
         entries: &[RegisteredTool],
         query: &str,
         limit: usize,
+        excluded: &[ToolName],
     ) -> Vec<(usize, u64)> {
         let query_text = query.to_lowercase();
         // BM25 leaves equal-score matches in hash-set order. Resolve ties before
         // limiting or converting positions to reciprocal ranks, including ties
         // across the cutoff that a truncated upstream result would hide.
-        let mut matches = self.engine.search(query, None);
+        let scoped_engine = if excluded.is_empty() {
+            None
+        } else {
+            let documents = self
+                .documents
+                .iter()
+                .filter(|document| {
+                    !excluded.contains(entries[document.entry_index].definition.name())
+                })
+                .map(|document| Document::new(document.entry_index, document.text.clone()))
+                .collect::<Vec<_>>();
+            Some(SearchEngineBuilder::<usize>::with_documents(Language::English, documents).build())
+        };
+        let mut matches = scoped_engine
+            .as_ref()
+            .unwrap_or(self.engine.as_ref())
+            .search(query, None);
         matches.sort_by(|left, right| {
             right.score.total_cmp(&left.score).then_with(|| {
                 entries[left.document.id]
@@ -224,7 +237,11 @@ impl SearchIndex {
                 (entry_index, score)
             })
             .collect::<Vec<_>>();
-        for document in &self.documents {
+        for document in self
+            .documents
+            .iter()
+            .filter(|document| !excluded.contains(entries[document.entry_index].definition.name()))
+        {
             let name = entries[document.entry_index]
                 .definition
                 .name()
@@ -249,10 +266,16 @@ impl SearchIndex {
         ranked
     }
 
-    fn search_regex(&self, entries: &[RegisteredTool], pattern: &str) -> Vec<(usize, u64)> {
+    fn search_regex(
+        &self,
+        entries: &[RegisteredTool],
+        pattern: &str,
+        excluded: &[ToolName],
+    ) -> Vec<(usize, u64)> {
         let regex = Regex::new(pattern).expect("ToolSearchQuery validates regex syntax");
         self.documents
             .iter()
+            .filter(|document| !excluded.contains(entries[document.entry_index].definition.name()))
             .filter(|document| regex.is_match(&document.text))
             .map(|document| {
                 let name = entries[document.entry_index].definition.name().as_str();

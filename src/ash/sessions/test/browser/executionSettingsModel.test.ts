@@ -80,7 +80,7 @@ test('a directory revision conflict preserves the draft and never silently retri
 	using model = new ExecutionSettingsModel(
 		{ onDidChange: Event.None, read: async () => ({ revision: 3, settings: manualDefaults }), configure: async () => { } },
 		trust,
-		{ isAvailable: true, read: async () => ({ directoryGrantsReadable: true, tools: [], toolSets: [], sandboxBackends: [], sandboxDiagnostics: [], localProcessSandboxConfigured: true }) },
+		{ isAvailable: true, read: async () => ({ directoryGrantsReadable: true, tools: [], sourceGroups: [], sandboxBackends: [], sandboxDiagnostics: [], localProcessSandboxConfigured: true }) },
 		{ connectionState: 'connected', onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService,
 		{} as IDialogService, { translate: (_bundle, _key, fallback) => fallback } as ILocalizationService,
 	);

@@ -94,6 +94,7 @@ impl Fixture {
                 definition_digest: format!("sha256:{}", "a".repeat(64)),
                 parallel_tool_calls: true,
                 disabled_tools: Vec::new(),
+                allowed_tools: None,
                 tool_names: [
                     "read_file",
                     "grep",

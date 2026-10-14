@@ -248,7 +248,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	services.registerInstance(IGitHubReviewModel, githubReview);
 	services.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
 	services.registerInstance(IAgentCapabilitiesService, { isAvailable: true, read: async () => ({ localProcessSandboxConfigured: false, sandboxBackends: [], directoryGrantsReadable: false, sandboxDiagnostics: [] }) });
-	services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService({ isAvailable: true, read: async () => ({ toolSets: [], tools: [{ name: 'read_file', description: 'Read authorized files', source: 'local', sourceDetails: ['Ash'], exposure: 'direct', authority: 'directoryRead' }] }) }));
+	services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService({ isAvailable: true, read: async () => ({ sourceGroups: [], tools: [{ name: 'read_file', description: 'Read authorized files', source: 'local', sourceDetails: ['Ash'], exposure: 'direct', authority: 'directoryRead' }] }) }));
 	services.registerInstance(IWorkspaceTrustApi, { onDidChangeTrust: Event.None } as import('../../../platform/workspace/common/workspaceTrust.js').IWorkspaceTrustApi);
 	let editorReveals = 0;
 	using preferences = services.createInstance(SessionsPreferences, window.document.body, () => { editorReveals++; });
@@ -328,10 +328,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	cancelledMenu.menu.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 	assert.equal(cancelledMenu.menu.isConnected, false);
 	assert.equal(window.document.activeElement, cancelledMenu.more);
-	void preferences.open({ section: 'tools' });
-	await new Promise<void>(resolve => setImmediate(resolve));
-	assert.equal(window.document.querySelector('[aria-current="page"]')?.textContent, 'Tools');
-	assert.match(window.document.querySelector('.ash-agent-capabilities-list')?.textContent ?? '', /read_file/);
+	assert.equal([...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].some(button => button.textContent === 'Tools'), false);
 	const designButton = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === 'Design');
 	assert.ok(designButton);
 	designButton.click();

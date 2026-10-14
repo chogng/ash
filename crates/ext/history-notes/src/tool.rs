@@ -188,6 +188,14 @@ impl HistoryTool {
     }
 }
 impl ToolExecutor for HistoryTool {
+    fn tool_set(&self) -> Option<&'static str> {
+        Some("core.memory")
+    }
+
+    fn category(&self) -> Option<protocol::ToolCategory> {
+        Some(protocol::ToolCategory::Memory)
+    }
+
     fn activity(&self, _call: &tools::ToolCall) -> Option<tools::ToolActivity> {
         use tools::ToolActivity;
         match self.name {

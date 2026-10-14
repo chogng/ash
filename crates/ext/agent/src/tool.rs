@@ -496,6 +496,14 @@ impl MultiAgentToolService {
 }
 
 impl ToolService for MultiAgentToolService {
+    fn tool_set(&self, _: &protocol::ToolName) -> Option<&'static str> {
+        Some("agent.collaboration")
+    }
+
+    fn tool_category(&self, _: &protocol::ToolName) -> Option<protocol::ToolCategory> {
+        Some(protocol::ToolCategory::Agent)
+    }
+
     fn definitions(&self) -> Vec<ToolDefinition> {
         self.definitions.clone()
     }

@@ -198,3 +198,37 @@ fn configured_task_execution_requires_reviewed_authority() {
         &CapabilityKind::ProcessSpawn
     );
 }
+
+#[test]
+fn application_tools_declare_capability_categories_and_workflow_sets() {
+    let tools = AppToolService::new(Arc::new(Host));
+    for definition in tools.definitions() {
+        assert!(
+            tools.tool_category(&definition.name).is_some(),
+            "{} has no category",
+            definition.name
+        );
+        assert!(
+            tools.tool_set(&definition.name).is_some(),
+            "{} has no reusable set",
+            definition.name
+        );
+    }
+    let name = ToolName::new("read_thread").unwrap();
+    assert_eq!(
+        tools.tool_category(&name),
+        Some(ash_protocol::ToolCategory::Sessions)
+    );
+    assert_eq!(tools.tool_set(&name), Some("app.sessions"));
+    let scope = ash_protocol::ToolScope {
+        sets: vec!["app.sessions".into()],
+        ..Default::default()
+    };
+    assert!(tools.resolve_tool_scope(&scope).unwrap().contains(&name));
+    assert!(
+        !tools
+            .resolve_tool_scope(&scope)
+            .unwrap()
+            .contains(&ToolName::new("list_projects").unwrap())
+    );
+}

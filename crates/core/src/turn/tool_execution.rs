@@ -510,6 +510,12 @@ impl ToolExecutionOrchestrator {
                 .into_iter()
                 .map(|definition| definition.name),
         )?;
+        if !facts.allows_tool(&call.name) {
+            return Err(CoreError::Policy(format!(
+                "Tool '{}' is outside the current capability scope",
+                call.name
+            )));
+        }
         let mut stream = ToolUpdateStream {
             updates: self.updates.as_ref(),
             session_id: snapshot.session_id,

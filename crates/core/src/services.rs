@@ -189,10 +189,10 @@ impl ModelToolCatalogSnapshot {
         self
     }
 
-    /// The frozen binder rejects calls absent from the restricted definitions as well.
-    pub(crate) fn without_disabled_tools(mut self, names: &[ash_protocol::ToolName]) -> Self {
+    /// Applies the same frozen capability ceiling to direct and nested catalogs.
+    pub(crate) fn with_tool_scope(mut self, profile: &ash_protocol::ToolProfileSnapshot) -> Self {
         self.definitions
-            .retain(|definition| !names.contains(&definition.name));
+            .retain(|definition| profile.allows_tool(&definition.name));
         self
     }
 
@@ -317,6 +317,73 @@ impl OneTimeToolGrant {
 /// never mutate Thread state directly.
 pub trait ToolService: Send + Sync {
     fn definitions(&self) -> Vec<ToolDefinition>;
+
+    /// Semantic category contributed by the capability owner. Unclassified external tools
+    /// remain selectable by exact identity, without guessing their behavior from their names.
+    fn tool_category(&self, _: &ash_protocol::ToolName) -> Option<ash_protocol::ToolCategory> {
+        None
+    }
+
+    /// Product-authored reusable membership; external adapters cannot acquire membership by category.
+    fn tool_set(&self, _: &ash_protocol::ToolName) -> Option<&'static str> {
+        None
+    }
+
+    /// Reusable sets supplied by capability owners; provider groupings are separate metadata.
+    fn tool_sets(&self) -> Vec<ash_protocol::ToolSetDefinition> {
+        let mut sets = std::collections::BTreeMap::<String, Vec<ash_protocol::ToolName>>::new();
+        for definition in self.definitions() {
+            if let Some(id) = self.tool_set(&definition.name) {
+                sets.entry(id.into()).or_default().push(definition.name);
+            }
+        }
+        sets.into_iter()
+            .map(|(id, tools)| ash_protocol::ToolSetDefinition { id, tools })
+            .collect()
+    }
+
+    /// Resolves capability groups against the complete catalog, including deferred tools.
+    fn resolve_tool_scope(
+        &self,
+        scope: &ash_protocol::ToolScope,
+    ) -> Result<Vec<ash_protocol::ToolName>, CoreError> {
+        scope.validate().map_err(CoreError::InvalidInput)?;
+        if scope.profile.is_some() {
+            return Err(CoreError::InvalidInput(
+                "Product profiles require the product tool registry".into(),
+            ));
+        }
+        let definitions = self.definitions();
+        if scope.sets.iter().any(|id| {
+            !definitions
+                .iter()
+                .any(|definition| self.tool_set(&definition.name) == Some(id.as_str()))
+        }) {
+            return Err(CoreError::InvalidInput(
+                "Tool scope contains an unknown tool set".into(),
+            ));
+        }
+        if scope.tools.iter().any(|name| {
+            !definitions
+                .iter()
+                .any(|definition| &definition.name == name)
+        }) {
+            return Err(CoreError::InvalidInput(
+                "Tool scope contains an unknown tool".into(),
+            ));
+        }
+        Ok(definitions
+            .into_iter()
+            .filter(|definition| {
+                scope.includes(
+                    &definition.name,
+                    self.tool_category(&definition.name),
+                    self.tool_set(&definition.name),
+                )
+            })
+            .map(|definition| definition.name)
+            .collect())
+    }
 
     /// Definitions admitted for an App on this provider. They need not be available to models.
     fn app_tool_definitions(&self) -> Vec<ToolDefinition> {
@@ -607,6 +674,7 @@ pub struct ToolExecutionFacts {
     read_paths: BTreeSet<PathBuf>,
     available_tools: BTreeSet<ash_protocol::ToolName>,
     delegation_tools: BTreeSet<ash_protocol::ToolName>,
+    scope_ceiling: Option<BTreeSet<ash_protocol::ToolName>>,
     activated_skills: Vec<ash_protocol::FrozenSkillActivation>,
 }
 
@@ -692,7 +760,7 @@ impl ToolExecutionFacts {
                 .insert(ash_protocol::ToolName::new("wait").expect("Code Mode Tool name is valid"));
         }
         if let Some(profile) = &turn.tool_profile {
-            host_tools.retain(|name| !profile.disabled_tools.contains(name));
+            host_tools.retain(|name| profile.allows_tool(name));
         }
         let (available_tools, delegation_tools) = match snapshot.agent_configuration() {
             Some(seed) => {
@@ -737,6 +805,7 @@ impl ToolExecutionFacts {
             ))),
             available_tools,
             delegation_tools,
+            scope_ceiling: snapshot.agent_configuration().map(|seed| seed.capability_scope.tools.iter().cloned().collect()),
             activated_skills: turn.activated_skills.clone(),
         };
         Ok(facts)
@@ -749,6 +818,20 @@ impl ToolExecutionFacts {
     /// Returns the exact durable Thread/Turn identity executing the current Tool Call.
     pub fn execution_identity(&self) -> Option<&ToolExecutionIdentity> {
         self.execution.as_ref()
+    }
+
+    /// Checks discovery and nested targets against the same Turn and Agent ceilings.
+    /// Targets need not be loaded yet, so this deliberately does not test model exposure.
+    pub fn allows_tool(&self, name: &ash_protocol::ToolName) -> bool {
+        self.execution
+            .as_ref()
+            .and_then(|identity| identity.tool_profile.as_ref())
+            .is_none_or(|profile| profile.allows_tool(name))
+            && self.scope_ceiling.as_ref().is_none_or(|scope| {
+                scope.contains(name)
+                    || (matches!(name.as_str(), "exec" | "wait")
+                        && self.available_tools.contains(name))
+            })
     }
 
     /// Frozen user exclusions, independent of authorization for any remaining tool.

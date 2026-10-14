@@ -51,6 +51,8 @@ use super::combine_tool_ports_at_generation;
 use super::combine_tool_ports_at_generation_with_search;
 
 struct FakeTools {
+    category: Option<ash_protocol::ToolCategory>,
+    tool_set: Option<&'static str>,
     definitions: Vec<ToolDefinition>,
     app_only: Vec<ToolDefinition>,
     activity: Option<ToolActivity>,
@@ -61,6 +63,8 @@ struct FakeTools {
 impl FakeTools {
     fn new(name: &str, source: ActionSource, source_id: &'static str) -> Self {
         Self {
+            category: None,
+            tool_set: None,
             definitions: vec![ToolDefinition {
                 name: ToolName::new(name).unwrap(),
                 description: name.into(),
@@ -76,6 +80,8 @@ impl FakeTools {
 
     fn catalog(prefix: &str, count: usize, source: ActionSource, source_id: &'static str) -> Self {
         Self {
+            category: None,
+            tool_set: None,
             definitions: (0..count)
                 .map(|index| ToolDefinition {
                     name: ToolName::new(format!("{prefix}_{index}")).unwrap(),
@@ -101,6 +107,13 @@ impl FakeTools {
 }
 
 impl ToolService for FakeTools {
+    fn tool_category(&self, _: &ToolName) -> Option<ash_protocol::ToolCategory> {
+        self.category
+    }
+    fn tool_set(&self, _: &ToolName) -> Option<&'static str> {
+        self.tool_set
+    }
+
     fn definitions(&self) -> Vec<ToolDefinition> {
         self.definitions.clone()
     }
@@ -1739,4 +1752,70 @@ fn configured_hooks_route_to_the_local_policy_revision_and_other_user_actions_ar
             )
             .is_err()
     );
+}
+
+#[test]
+fn capability_scope_combines_named_sets_and_exact_tools_without_category_grants() {
+    let mut reader = FakeTools::new("read_document", ActionSource::BuiltInTool, "reader");
+    reader.category = Some(ash_protocol::ToolCategory::Read);
+    reader.tool_set = Some("core.files");
+    let mut unrelated = FakeTools::new("third_party_read", ActionSource::DynamicTool, "unrelated");
+    unrelated.category = Some(ash_protocol::ToolCategory::Read);
+    let combined = combine_tool_ports(vec![
+        ToolPort::local(Arc::new(reader), Arc::new(AskPolicy)),
+        ToolPort::dynamic(Arc::new(unrelated), Arc::new(AskPolicy)),
+    ])
+    .unwrap()
+    .unwrap();
+    let scope = ash_protocol::ToolScope {
+        sets: vec!["core.files".into()],
+        categories: vec![ash_protocol::ToolCategory::Read],
+        ..Default::default()
+    };
+    let names = combined.tools.resolve_tool_scope(&scope).unwrap();
+    assert!(names.iter().any(|name| name.as_str() == "read_document"));
+    assert!(names.iter().all(|name| name.as_str() != "third_party_read"));
+    let category_only = ash_protocol::ToolScope {
+        categories: vec![ash_protocol::ToolCategory::Read],
+        ..Default::default()
+    };
+    assert!(
+        combined
+            .tools
+            .resolve_tool_scope(&category_only)
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        combined
+            .tools
+            .resolve_tool_scope(&ash_protocol::ToolScope::default())
+            .unwrap()
+            .is_empty()
+    );
+    let unknown = ash_protocol::ToolScope {
+        sets: vec!["missing".into()],
+        ..Default::default()
+    };
+    assert!(combined.tools.resolve_tool_scope(&unknown).is_err());
+    for id in ["cowork", "design"] {
+        assert!(
+            combined
+                .tools
+                .resolve_tool_scope(&ash_protocol::ToolScope {
+                    profile: Some(id.into()),
+                    ..Default::default()
+                })
+                .is_err()
+        );
+    }
+    let code = combined
+        .tools
+        .resolve_tool_scope(&ash_protocol::ToolScope {
+            profile: Some("code".into()),
+            tools: vec![ToolName::new("third_party_read").unwrap()],
+            ..Default::default()
+        })
+        .unwrap();
+    assert!(!code.iter().any(|name| name.as_str() == "third_party_read"));
 }

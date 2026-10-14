@@ -312,7 +312,42 @@ impl AppToolService {
     }
 }
 
+/// Categories describe behavior; set membership is explicitly declared by this owner.
+fn app_tool_capability(name: &ToolName) -> Option<(ash_protocol::ToolCategory, &'static str)> {
+    use ash_protocol::ToolCategory;
+    match name.as_str() {
+        "tasks_list" | "tasks_run" | "tasks_status" | "tasks_output" | "tasks_cancel" => {
+            Some((ToolCategory::Execute, "core.execution"))
+        }
+        "list_threads"
+        | "read_thread"
+        | "create_thread"
+        | "fork_thread"
+        | "set_thread_archived"
+        | "navigate_to_ash_page"
+        | "list_sidebar_sections"
+        | "create_sidebar_section"
+        | "rename_sidebar_section"
+        | "delete_sidebar_section"
+        | "move_thread_to_sidebar_section"
+        | "reorder_section" => Some((ToolCategory::Sessions, "app.sessions")),
+        "list_projects" => Some((ToolCategory::Projects, "app.projects")),
+        "automation_update" => Some((ToolCategory::Automations, "app.automations")),
+        "open_in_ash" => Some((ToolCategory::Workbench, "app.workbench")),
+        "check_app_update" | "fire_confetti" => Some((ToolCategory::App, "app.application")),
+        _ => None,
+    }
+}
+
 impl ToolService for AppToolService {
+    fn tool_set(&self, name: &ToolName) -> Option<&'static str> {
+        app_tool_capability(name).map(|(_, set)| set)
+    }
+
+    fn tool_category(&self, name: &ToolName) -> Option<ash_protocol::ToolCategory> {
+        app_tool_capability(name).map(|(category, _)| category)
+    }
+
     fn definitions(&self) -> Vec<ToolDefinition> {
         definitions()
     }

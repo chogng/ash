@@ -394,7 +394,7 @@ impl CodeModeBroker {
             .find(|turn| &turn.turn_id == context.turn_id())
             .and_then(|turn| turn.tool_profile.as_ref())
         {
-            Some(profile) => frozen_catalog.without_disabled_tools(&profile.disabled_tools),
+            Some(profile) => frozen_catalog.with_tool_scope(profile),
             None => frozen_catalog,
         };
         // Nested execution checks the tool-owned definition; model wording belongs only to runtime declarations.

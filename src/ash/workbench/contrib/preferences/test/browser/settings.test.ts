@@ -187,7 +187,6 @@ const localizationService: ILocalizationService = {
 
 test('Sandbox diagnostics render Chinese readiness and preserve backend reasons as text', async () => {
 	const { AgentCapabilitiesSettings } = await import('../../browser/agentCapabilitiesSettings.js');
-	using tools = createTestLanguageModelToolsService({ isAvailable: true, read: async () => { throw new Error('Sandbox settings must not read tools'); } });
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	const root = h(browserEnvironment.window.document, 'div');
 	using panel = new AgentCapabilitiesSettings(root, {
@@ -196,7 +195,7 @@ test('Sandbox diagnostics render Chinese readiness and preserve backend reasons 
 			localProcessSandboxConfigured: true, sandboxBackends: ['mxc'], directoryGrantsReadable: false,
 			sandboxDiagnostics: [{ backend: 'mxc', network: 'managed', readiness: { type: 'unsupported', reason: '<script>diagnostic</script>' } }]
 		}),
-	}, tools, { onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService,
+	}, { onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService,
 		{ onDidChangeTrust: Event.None } as IWorkspaceTrustApi, {
 		whenReady: Promise.resolve(), translate: (bundle, key, fallback) => chinese.bundles[bundle]?.[key] ?? fallback,
 	});
@@ -207,26 +206,33 @@ test('Sandbox diagnostics render Chinese readiness and preserve backend reasons 
 	assert.equal(root.querySelector('script'), null);
 });
 
-test('Tools settings read only the tool service and discard late replies after disposal', async () => {
-	const { AgentCapabilitiesSettings } = await import('../../browser/agentCapabilitiesSettings.js');
-	const root = h(browserEnvironment.window.document, 'div');
-	let environmentReads = 0;
-	let toolReads = 0;
-	const pending = new DeferredPromise<import('../../../chat/test/common/tools/testLanguageModelToolsService.js').ToolCatalogFixture>();
-	using tools = createTestLanguageModelToolsService({ isAvailable: true, read: () => { toolReads++; return pending.p; } });
-	using panel = new AgentCapabilitiesSettings(root, {
-		isAvailable: true,
-		read: async () => { environmentReads++; throw new Error('Tools settings must not read environment diagnostics'); },
-	}, tools,
-		{ onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService,
-		{ onDidChangeTrust: Event.None } as IWorkspaceTrustApi, localizationService);
-	panel.setView('tools');
-	assert.equal(toolReads, 1);
-	assert.equal(environmentReads, 0);
-	panel.dispose();
-	await pending.complete({ toolSets: [], tools: [{ name: 'late_tool', description: 'Late reply', source: 'local', sourceDetails: [], exposure: 'direct', authority: 'directoryRead' }] });
-	await nextTurn();
-	assert.equal(root.textContent?.includes('late_tool'), false);
+test('developer command opens a grouped read-only tool snapshot outside ordinary settings', async () => {
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	using reset = toDisposable(resetNlsResolver);
+	using tools = createTestLanguageModelToolsService({
+		isAvailable: true, read: async () => ({
+			sourceGroups: [],
+			tools: [{ name: 'read_file', category: 'read', description: 'Read files', source: 'local', sourceDetails: ['ash-app-server'], exposure: 'direct', authority: 'directoryRead' }],
+		})
+	});
+	const opened: import('../../../../common/editor.js').IResourceEditorInput[] = [];
+	const command = CommandsRegistry.getCommand('workbench.action.chat.showToolCatalog');
+	assert.ok(command);
+	await command({ get: (id: unknown) => id === ILanguageModelToolsService ? tools : { openEditor: async (input: import('../../../../common/editor.js').IResourceEditorInput) => { opened.push(input); } } } as unknown as import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor);
+	assert.equal(opened[0].readOnly, true);
+	assert.equal(opened[0].resource.scheme, 'ash-tool-catalog');
+	assert.equal(opened[0].label, 'Agent 工具目录');
+	assert.match(JSON.parse(opened[0].initialText!).note, /已注册工具目录的只读快照/);
+	assert.equal(JSON.parse(opened[0].initialText!).categories.read[0].id, 'read_file');
+	const { matchCodeEditor } = await import('../../../codeEditor/browser/codeEditorInput.js');
+	const { EditorPaneMatch } = await import('../../../../browser/parts/editor/editorPane.js');
+	assert.equal(matchCodeEditor(opened[0]), EditorPaneMatch.Default);
+	using services = createTestEditorServices();
+	using model = await services.get(IFileTextModelService).acquire(opened[0], new AbortController().signal);
+	assert.equal(model.model.getText(), opened[0].initialText);
+
+	assert.equal(SettingsCategories.some(category => category.id === 'tools'), false);
 });
 
 test('Chinese indexed search settings explain engine scope in the control and accessibility help', async () => {
@@ -796,7 +802,6 @@ test('settingsLayout is the single projection from registered settings to catego
 		'agent-defaults',
 		'models',
 		'rules',
-		'tools',
 		'sandbox',
 		'execution-trace',
 		'hooks',
@@ -1435,12 +1440,11 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 			};
 		},
 	});
-	assert.throws(() => descriptor.create({ instantiationService: services }), /Unknown service: ILanguageModelToolsService/);
 	services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService({
 		isAvailable: true,
 		read: async () => {
 			capabilityReads++;
-			return { toolSets: [], tools: [{ name: 'read_file', description: 'Read a file.', source: 'local', sourceDetails: ['ash-app-server'], exposure: 'direct', authority: 'directoryRead' }] };
+			return { sourceGroups: [], tools: [{ name: 'read_file', category: 'read', description: 'Read a file.', source: 'local', sourceDetails: ['ash-app-server'], exposure: 'direct', authority: 'directoryRead' }] };
 		},
 	}));
 	assert.throws(() => descriptor.create({ instantiationService: services }), /Unknown service: appServerRemoteAgentService/);
@@ -1716,9 +1720,9 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	root.querySelector<HTMLElement>('[data-settings-group-id="agents"]')?.closest<HTMLElement>('.ash-tree-row')?.click();
 	assert.equal(root.querySelector('[data-tree-id="group.agents"]')?.getAttribute('aria-expanded'), 'true');
 	assert.deepEqual(
-		['agents', 'teams', 'agent-defaults', 'models', 'rules', 'tools', 'sandbox', 'execution-trace', 'hooks']
+		['agents', 'teams', 'agent-defaults', 'models', 'rules', 'sandbox', 'execution-trace', 'hooks']
 			.map(categoryId => root.querySelector<HTMLElement>(`[data-settings-category-id="${categoryId}"]`)?.textContent),
-		['Agents', 'Teams', 'Defaults', 'Models', 'Rules', 'Tools', 'Sandbox', 'Execution trace', 'Hooks'],
+		['Agents', 'Teams', 'Defaults', 'Models', 'Rules', 'Sandbox', 'Execution trace', 'Hooks'],
 	);
 	assert.equal(root.querySelector('[data-tree-id="general"]')?.getAttribute('aria-selected'), 'true');
 	assert.equal(root.querySelector('[data-settings-category-id="skills"]'), null);
@@ -1770,9 +1774,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(advisorWrites.length, 5, 'Hiding a model must not change the saved preference');
 	assert.ok(root.querySelector('.ash-advisor-settings.ash-settings-card'));
 	assert.equal(root.querySelector('.ash-advisor-settings')?.textContent?.includes('Refresh'), false);
-	root.querySelector<HTMLElement>('[data-settings-category-id="tools"]')?.click();
-	await nextTurn();
-	assert.match(root.querySelector('.ash-agent-capabilities-settings')?.textContent ?? '', /read_file/);
+	assert.equal(root.querySelector('[data-settings-category-id="tools"]'), null);
 	root.querySelector<HTMLElement>('[data-settings-category-id="sandbox"]')?.click();
 	await nextTurn();
 	assert.match(root.querySelector('.ash-agent-capabilities-settings')?.textContent ?? '', /\/workspace/);
@@ -1780,16 +1782,14 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.match(sandboxPanel.textContent ?? '', /Policy unsupported/);
 	assert.match(sandboxPanel.textContent ?? '', /<script>diagnostic<\/script>/);
 	assert.equal(sandboxPanel.querySelector('script'), null);
-	root.querySelector<HTMLElement>('[data-settings-category-id="tools"]')?.click();
-	await nextTurn();
-	assert.equal(capabilityReads, 3);
+	assert.equal(capabilityReads, 1);
 	connectionChanged.fire('disconnected');
 	assert.equal(root.querySelector('.ash-agent-capabilities-status')?.textContent, 'App Server is disconnected.');
 	assert.equal(root.querySelector('.ash-agent-capabilities-list'), null);
 	connectionChanged.fire('connected');
 	await nextTurn();
-	assert.equal(capabilityReads, 4);
-	assert.match(root.querySelector('.ash-agent-capabilities-settings')?.textContent ?? '', /read_file/);
+	assert.equal(capabilityReads, 2);
+	assert.match(root.querySelector('.ash-agent-capabilities-settings')?.textContent ?? '', /Policy unsupported/);
 	root.querySelector<HTMLElement>('[data-settings-category-id="hooks"]')?.click();
 	await nextTurn();
 	assert.equal(hookReads, 0, 'Settings only links to the Chat-owned editor');

@@ -21,6 +21,7 @@ mod schema;
 mod text_document;
 
 pub use ash_environment::EnvId;
+pub use ash_protocol::ToolCategory;
 pub use ash_file_system::TextDocumentChange;
 pub use ash_file_system::TextDocumentContent;
 pub use ash_file_system::TextDocumentEditor;

@@ -26,7 +26,7 @@ test('browser group selection uses available built-in names without disabling a 
 	] as const;
 	using service = createTestLanguageModelToolsService({
 		isAvailable: true, read: async () => ({
-			tools: tools.map(tool => ({ ...tool, name: tool.id, description: tool.modelDescription })), toolSets: [],
+			tools: tools.map(tool => ({ ...tool, name: tool.id, description: tool.modelDescription })), sourceGroups: [],
 		})
 	});
 	await service.refresh();
@@ -58,7 +58,7 @@ test('an open tools picker follows backend changes and retains search, focus and
 	using service = createTestLanguageModelToolsService({
 		isAvailable: true, onDidChangeTools: invalidated.event, read: async () => ({
 			tools: names.map(name => ({ name, description: name, source: 'local', sourceDetails: [], exposure: 'direct', authority: 'directoryRead' })),
-			toolSets: [{ id: 'directory', source: 'local', sourceId: 'directory', tools: names }],
+			sourceGroups: [{ id: 'directory', source: 'local', sourceId: 'directory', tools: names }],
 		})
 	});
 	await service.refresh();

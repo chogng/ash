@@ -167,6 +167,14 @@ impl InstructionToolService {
 }
 
 impl ash_core::ToolService for InstructionToolService {
+    fn tool_set(&self, _: &ash_protocol::ToolName) -> Option<&'static str> {
+        Some("agent.instructions")
+    }
+
+    fn tool_category(&self, _: &ash_protocol::ToolName) -> Option<ash_protocol::ToolCategory> {
+        Some(ash_protocol::ToolCategory::Read)
+    }
+
     fn definitions(&self) -> Vec<ash_protocol::ToolDefinition> {
         vec![ash_protocol::ToolDefinition {
             name: ash_protocol::ToolName::new("read_instruction").expect("valid tool name"),

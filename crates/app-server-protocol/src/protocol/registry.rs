@@ -55,7 +55,7 @@ use crate::protocol::agent::AgentThread;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::agent::AgentToolCapabilityDto;
 #[cfg(any(test, feature = "export"))]
-use crate::protocol::agent::AgentToolSetCapabilityDto;
+use crate::protocol::agent::AgentToolSourceGroupDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::agent::SandboxDiagnosticDto;
 #[cfg(any(test, feature = "export"))]
@@ -2657,7 +2657,17 @@ use ash_protocol::ToolOutputArtifactSource;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ToolOutputStream;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::ToolCategory;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::ToolProfileSnapshot;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ToolScope;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ToolSetDefinition;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ToolProductProfile;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ToolProductStatus;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ToolReplaySafety;
 #[cfg(any(test, feature = "export"))]
@@ -6041,7 +6051,7 @@ typescript_bindings! {
     SandboxNetworkModeDto,
     SandboxReadinessDto,
     AgentToolCapabilityDto,
-    AgentToolSetCapabilityDto,
+    AgentToolSourceGroupDto,
     ToolAuthorityDto,
     ToolExposureDto,
     ToolSourceDto,
@@ -6387,7 +6397,12 @@ typescript_bindings! {
     ModelReferenceCostSummary,
     RatedModelCost,
     ToolMode,
+    ToolCategory,
     ToolProfileSnapshot,
+    ToolScope,
+    ToolSetDefinition,
+    ToolProductProfile,
+    ToolProductStatus,
     ReviewTarget,
     TurnKind,
     TurnInstructions,

@@ -129,6 +129,14 @@ impl AdvisorToolService {
 }
 
 impl ToolService for AdvisorToolService {
+    fn tool_set(&self, _: &protocol::ToolName) -> Option<&'static str> {
+        Some("agent.control")
+    }
+
+    fn tool_category(&self, _: &protocol::ToolName) -> Option<protocol::ToolCategory> {
+        Some(protocol::ToolCategory::Agent)
+    }
+
     fn definitions(&self) -> Vec<ToolDefinition> {
         vec![ToolDefinition {
             strict: true,

@@ -1545,3 +1545,22 @@ fn mcp_app_metadata_is_only_visible_to_the_view_and_never_replayed_to_the_model(
         ""
     );
 }
+
+#[test]
+fn tool_scopes_validate_composition_and_preserve_empty_positive_ceilings() {
+    let scope: ToolScope = serde_json::from_value(
+        serde_json::json!({"sets":["core.files"],"categories":["read"],"tools":[]}),
+    )
+    .unwrap();
+    assert!(scope.validate().is_ok());
+    let name = ToolName::new("read_file").unwrap();
+    assert!(scope.includes(&name, Some(ToolCategory::Read), Some("core.files")));
+    assert!(!scope.includes(&name, Some(ToolCategory::Read), None));
+    assert!(serde_json::from_value::<ToolScope>(serde_json::json!({"unknown":true})).is_err());
+    let duplicate: ToolScope =
+        serde_json::from_value(serde_json::json!({"sets":["core.files","core.files"]})).unwrap();
+    assert!(duplicate.validate().is_err());
+    let profile: ToolProfileSnapshot = serde_json::from_value(serde_json::json!({"id":"coding","revision":"coding-v1","definitionDigest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","toolNames":[],"parallelToolCalls":true,"allowedTools":[]})).unwrap();
+    assert!(!profile.allows_tool(&name));
+    assert!(!profile.allows_tool(&ToolName::new("exec").unwrap()));
+}

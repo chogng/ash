@@ -92,7 +92,7 @@ test('allowed-tools suggestions read the real capability catalog, omit hidden an
 	const request = { requestId: 1, resource: model.uri, languageId: 'markdown', position: new Position(3, 26), context: { kind: LanguageCompletionTriggerKind.Invoke as const }, snapshot: model.createVersionedSnapshot() };
 	const first = provider.provideCompletions(request, controller.signal);
 	assert.equal(reads, 1);
-	const tools: ToolCatalogFixture = { tools: ['existing', 'read_file', 'restricted'].map((name, index) => ({ name, description: name + ' description', source: 'local', sourceDetails: [], exposure: index === 2 ? 'hidden' : 'direct', authority: 'directoryRead' })), toolSets: [] };
+	const tools: ToolCatalogFixture = { tools: ['existing', 'read_file', 'restricted'].map((name, index) => ({ name, description: name + ' description', source: 'local', sourceDetails: [], exposure: index === 2 ? 'hidden' : 'direct', authority: 'directoryRead' })), sourceGroups: [] };
 	await pending.complete(tools);
 	const result = await first;
 	assert.deepEqual(result?.items.map(item => ({ label: item.label, range: item.range })), [{ label: 'read_file', range: new Range(3, 25, 3, 32) }]);
@@ -120,7 +120,7 @@ test('Skill tool completion uses qualified references and tool set membership, i
 	using service = createTestLanguageModelToolsService({
 		isAvailable: true, read: async () => ({
 			tools: [{ name: 'search_docs', description: 'Search documents', source: 'mcp', sourceDetails: ['docs-server'], exposure: 'deferred', authority: 'providerDefined' }],
-			toolSets: [{ id: 'docs-set', source: 'mcp', sourceId: 'docs-server', tools: ['search_docs'] }],
+			sourceGroups: [{ id: 'docs-set', source: 'mcp', sourceId: 'docs-server', tools: ['search_docs'] }],
 		})
 	});
 	const provider = new PromptHeaderAutocompletion(service);

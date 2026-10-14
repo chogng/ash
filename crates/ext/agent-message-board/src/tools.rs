@@ -65,6 +65,14 @@ struct BoardTool {
 }
 
 impl ToolExecutor for BoardTool {
+    fn tool_set(&self) -> Option<&'static str> {
+        Some("agent.collaboration")
+    }
+
+    fn category(&self) -> Option<protocol::ToolCategory> {
+        Some(protocol::ToolCategory::Agent)
+    }
+
     fn definition(&self) -> ToolDefinition {
         self.access.definition()
     }

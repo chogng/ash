@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import type { AgentCapabilitiesReadResult } from '../../../../../../../../.build/protocol/typescript/index.js';
+import type { AgentToolsCatalog } from '../../../../../../platform/agentHost/common/agentToolsApi.js';
 import { createDisconnectedAgentToolsApi } from '../../../../../../platform/agentHost/browser/agentToolsApi.js';
 import { IAgentToolsApi } from '../../../../../../platform/agentHost/common/agentToolsApi.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
@@ -16,11 +16,16 @@ import { ILanguageModelToolsService, isToolSet } from '../../../common/tools/lan
 import { createTestLanguageModelToolsService } from '../../common/tools/testLanguageModelToolsService.js';
 import '../../../browser/chat.shared.contribution.js';
 
+type TestCatalog = Omit<AgentToolsCatalog, 'sourceGroups'> & {
+	sourceGroups: (Omit<AgentToolsCatalog['sourceGroups'][number], 'tools'> & { tools: string[]; })[];
+};
+
+
 test('Tool catalog service requires its transport API and reads current backend tools without an environment snapshot', async () => {
 	using services = new InstantiationService();
 	assert.throws(() => services.createInstance(LanguageModelToolsService), /Unknown service: agentToolsApi/);
 	services.registerInstance(IAppServerApi, createDisconnectedAppServerApi(unavailableOperation));
-	let catalog: Pick<AgentCapabilitiesReadResult, 'tools' | 'toolSets'> = {
+	let catalog: TestCatalog = {
 		tools: [{
 			name: 'search_docs', description: 'Search documents', source: 'mcp',
 			sourceChain: [
@@ -29,7 +34,7 @@ test('Tool catalog service requires its transport API and reads current backend 
 			],
 			exposure: 'deferred', authority: 'providerDefined',
 		}],
-		toolSets: [{ id: 'docs-set', source: 'mcp', sourceId: 'docs-server', tools: ['search_docs'] }],
+		toolSets: [], profiles: [], sourceGroups: [{ id: 'docs-set', source: 'mcp', sourceId: 'docs-server', tools: ['search_docs'] }],
 	};
 	let reads = 0;
 	services.registerInstance(IAgentToolsApi, {
@@ -44,11 +49,11 @@ test('Tool catalog service requires its transport API and reads current backend 
 	const set = [...service.toolSets.get()][0]!;
 	assert.deepEqual(first, [{
 		id: 'search_docs', toolReferenceName: 'search_docs', displayName: 'search_docs', modelDescription: 'Search documents',
-		canBeReferencedInPrompt: true, source: 'mcp', sourceDetails: ['docs@1.0.0', 'docs-server'], exposure: 'deferred', authority: 'providerDefined',
+		canBeReferencedInPrompt: true, category: undefined, source: 'mcp', sourceDetails: ['docs@1.0.0', 'docs-server'], exposure: 'deferred', authority: 'providerDefined',
 	}]);
 	assert.equal([...set.getTools()][0], first[0], 'Tool sets return the catalog object, not a second copy');
-	catalog.toolSets[0]!.tools.push('new_tool');
-	catalog = { tools: [], toolSets: [] };
+	catalog.sourceGroups[0]!.tools.push('new_tool');
+	catalog = { tools: [], toolSets: [], profiles: [], sourceGroups: [] };
 	await service.refresh();
 	assert.deepEqual([...service.getAllToolsIncludingDisabled()], []);
 	assert.deepEqual([...service.toolSets.get()], []);
@@ -75,7 +80,7 @@ test('Tool catalog read failures propagate and a later read can recover', async 
 		onDidChangeTools: Event.None,
 		read: async () => {
 			if (fail) throw failure;
-			return { tools: [], toolSets: [] };
+			return { tools: [], toolSets: [], profiles: [], sourceGroups: [] };
 		},
 	});
 	using service = services.createInstance(LanguageModelToolsService);
@@ -94,10 +99,10 @@ test('Shared contribution registers one delayed tools service with the real cons
 
 test('Backend invalidation refreshes the single catalog and collapses changes during an in-flight read', async () => {
 	using invalidated = new Emitter<void>();
-	const late = new DeferredPromise<Pick<AgentCapabilitiesReadResult, 'tools' | 'toolSets'>>();
-	const catalog = (name: string): Pick<AgentCapabilitiesReadResult, 'tools' | 'toolSets'> => ({
+	const late = new DeferredPromise<TestCatalog>();
+	const catalog = (name: string): TestCatalog => ({
 		tools: [{ name, description: name, source: 'local', sourceChain: [], exposure: 'direct', authority: 'directoryRead' }],
-		toolSets: [{ id: 'directory', source: 'local', sourceId: 'directory', tools: [name] }],
+		toolSets: [], profiles: [], sourceGroups: [{ id: 'directory', source: 'local', sourceId: 'directory', tools: [name] }],
 	});
 	let reads = 0;
 	using service = new LanguageModelToolsService({
@@ -134,7 +139,7 @@ test('References qualify external tools and tool sets, round-trip to catalog obj
 				{ name: 'hidden', description: 'Hidden', source: 'mcp', sourceDetails: [], exposure: 'hidden', authority: 'providerDefined' },
 				{ name: 'model_only', description: 'Model', source: 'mcp', sourceDetails: [], exposure: 'modelOnly', authority: 'providerDefined' },
 			],
-			toolSets: [
+			toolSets: [], profiles: [], sourceGroups: [
 				{ id: 'local-set', source: 'local', sourceId: 'directory', tools: ['read_file'] },
 				{ id: 'mcp-set', source: 'mcp', sourceId: 'docs/server', tools: ['search_docs', 'hidden', 'model_only'] },
 			],
@@ -164,7 +169,7 @@ test('An unscoped source reference cannot shadow a backend tool ID or a literal 
 	using service = createTestLanguageModelToolsService({
 		isAvailable: true, read: async () => ({
 			tools: ['local', 'another'].map(name => ({ name, description: name, source: 'local', sourceDetails: [], exposure: 'direct', authority: 'directoryRead' })),
-			toolSets: [
+			toolSets: [], profiles: [], sourceGroups: [
 				{ id: 'unscoped', source: 'local', sourceId: '', tools: ['local'] },
 				{ id: 'marker', source: 'local', sourceId: '@', tools: ['another'] },
 			],
@@ -180,7 +185,7 @@ test('An unscoped source reference cannot shadow a backend tool ID or a literal 
 for (const retire of ['disconnect', 'dispose'] as const) {
 	test(`Concurrent refreshes share the backend read and a late reply cannot survive ${retire}`, async () => {
 		using changed = new Emitter<'ready' | 'crashed'>();
-		const pending = new DeferredPromise<Pick<AgentCapabilitiesReadResult, 'tools' | 'toolSets'>>();
+		const pending = new DeferredPromise<TestCatalog>();
 		let reads = 0;
 		using service = new LanguageModelToolsService({ isAvailable: true, onDidChangeTools: Event.None, read: () => { reads++; return pending.p; } }, {
 			...createDisconnectedAppServerApi(unavailableOperation),
@@ -193,7 +198,7 @@ for (const retire of ['disconnect', 'dispose'] as const) {
 		const rejection = assert.rejects(first, isCancellationError);
 		if (retire === 'disconnect') changed.fire('crashed');
 		else service.dispose();
-		await pending.complete({ tools: [{ name: 'late', description: 'Late', source: 'local', sourceChain: [], exposure: 'direct', authority: 'directoryRead' }], toolSets: [] });
+		await pending.complete({ tools: [{ name: 'late', description: 'Late', source: 'local', sourceChain: [], exposure: 'direct', authority: 'directoryRead' }], toolSets: [], profiles: [], sourceGroups: [] });
 		await rejection;
 		assert.deepEqual([...service.getAllToolsIncludingDisabled()], []);
 	});
@@ -201,12 +206,12 @@ for (const retire of ['disconnect', 'dispose'] as const) {
 
 test('Tool sets observe actual snapshot replacement and a retired connection cannot overwrite a reconnected catalog', async () => {
 	using changed = new Emitter<'ready' | 'crashed'>();
-	const pending = new DeferredPromise<Pick<AgentCapabilitiesReadResult, 'tools' | 'toolSets'>>();
+	const pending = new DeferredPromise<TestCatalog>();
 	let generation = 1;
 	let reads = 0;
-	const catalog = (name: string): Pick<AgentCapabilitiesReadResult, 'tools' | 'toolSets'> => ({
+	const catalog = (name: string): TestCatalog => ({
 		tools: [{ name, description: name, source: 'local', sourceChain: [], exposure: 'direct', authority: 'directoryRead' }],
-		toolSets: [{ id: 'directory', source: 'local', sourceId: '', tools: [name] }],
+		toolSets: [], profiles: [], sourceGroups: [{ id: 'directory', source: 'local', sourceId: '', tools: [name] }],
 	});
 	using service = new LanguageModelToolsService({
 		isAvailable: true,
@@ -232,4 +237,29 @@ test('Tool sets observe actual snapshot replacement and a retired connection can
 	assert.deepEqual([...service.getAllToolsIncludingDisabled()].map(tool => tool.id), ['current']);
 	assert.deepEqual(observed, [['first'], [], ['current']]);
 	assert.equal(service.getToolByFullReferenceName('retired'), undefined);
+});
+
+
+test('Capability sets compose catalog members without changing provider references', async () => {
+	using service = new LanguageModelToolsService({
+		isAvailable: true, onDidChangeTools: Event.None,
+		read: async () => ({
+			tools: [
+				{ name: 'read_file', description: 'Read files', category: 'read', source: 'local', sourceChain: [], exposure: 'direct', authority: 'directoryRead' },
+				{ name: 'search_docs', description: 'Search docs', category: 'search', source: 'mcp', sourceChain: [], exposure: 'deferred', authority: 'providerDefined' },
+			],
+			sourceGroups: [{ id: 'docs', source: 'mcp', sourceId: 'docs', tools: ['search_docs'] }],
+			toolSets: [{ id: 'product.research', tools: ['read_file', 'search_docs'] }],
+			profiles: [{ id: 'code', sets: ['product.research'], status: 'ready' }, { id: 'design', sets: [], status: 'planned' }],
+		}),
+	}, createDisconnectedAppServerApi(unavailableOperation));
+	await service.refresh();
+	const sets = [...service.toolSets.get()];
+	assert.deepEqual(sets.map(set => [set.id, set.kind]), [['docs', 'source'], ['product.research', 'capability']]);
+	assert.deepEqual([...sets[1]!.getTools()].map(tool => [tool.id, tool.category]), [['read_file', 'read'], ['search_docs', 'search']]);
+	const search = service.getToolByFullReferenceName('search_docs')!;
+	assert.equal(service.getFullReferenceName(search), 'mcp/docs/search_docs');
+	assert.equal(service.getToolByFullReferenceName('product.research'), sets[1]);
+	assert.equal([...sets[1]!.getTools()][1], search);
+	assert.deepEqual(service.profiles.get(), [{ id: 'code', sets: ['product.research'], status: 'ready' }, { id: 'design', sets: [], status: 'planned' }]);
 });

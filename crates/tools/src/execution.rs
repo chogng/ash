@@ -289,6 +289,16 @@ pub trait ToolExecutor: Send + Sync {
     /// Returns immutable metadata captured when the host builds a registry snapshot.
     fn definition(&self) -> ToolDefinition;
 
+    /// Semantic capability supplied by the executor owner, independent of source and exposure.
+    fn category(&self) -> Option<ash_protocol::ToolCategory> {
+        None
+    }
+
+    /// Product-authored reusable membership, supplied by the executable contribution owner.
+    fn tool_set(&self) -> Option<&'static str> {
+        None
+    }
+
     /// Declares how a call appears in a transcript, independently of authorization policy.
     fn activity(&self, _call: &ash_protocol::ToolCall) -> Option<ash_protocol::ToolActivity> {
         None

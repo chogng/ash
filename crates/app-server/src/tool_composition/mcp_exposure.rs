@@ -32,7 +32,7 @@ use sha2::Digest;
 use sha2::Sha256;
 
 pub(super) const MCP_SEARCH_TOOLS_NAME: &str = "search_tools";
-const MCP_CALL_TOOL_NAME: &str = "call_mcp_tool";
+pub(super) const MCP_CALL_TOOL_NAME: &str = "call_mcp_tool";
 const MCP_DIRECT_TOOL_LIMIT: usize = 15;
 const MCP_DIRECT_TOKEN_LIMIT: usize = 5_000;
 const MCP_SEARCH_RESULT_LIMIT: usize = 5;
@@ -99,10 +99,10 @@ impl McpMetaToolService {
     ) -> Result<MetaCall, CoreError> {
         let parsed = self.parse(call)?;
         if let MetaCall::Invoke(nested) = &parsed
-            && facts.disabled_tools().contains(&nested.name)
+            && !facts.allows_tool(&nested.name)
         {
             return Err(CoreError::Policy(format!(
-                "Tool '{}' is disabled for this Turn",
+                "Tool '{}' is outside the current capability scope",
                 nested.name
             )));
         }
@@ -263,6 +263,7 @@ impl McpMetaToolService {
             let servers = self
                 .definitions
                 .iter()
+                .filter(|definition| !disabled.contains(&definition.name))
                 .filter_map(|definition| definition.name.as_str().split_once("__"))
                 .map(|(server, _)| server)
                 .collect::<BTreeSet<_>>()
@@ -332,6 +333,14 @@ impl ToolService for McpMetaToolService {
 
     fn definitions(&self) -> Vec<ToolDefinition> {
         self.meta_definitions.clone()
+    }
+
+    fn tool_category(&self, name: &ToolName) -> Option<ash_protocol::ToolCategory> {
+        match name.as_str() {
+            MCP_SEARCH_TOOLS_NAME => Some(ash_protocol::ToolCategory::Search),
+            MCP_CALL_TOOL_NAME => Some(ash_protocol::ToolCategory::Agent),
+            _ => self.tools.tool_category(name),
+        }
     }
 
     fn source_provenance(&self, _: &ToolName) -> Vec<ToolSourceProvenance> {
@@ -404,9 +413,17 @@ impl ToolService for McpMetaToolService {
         facts: &ToolExecutionFacts,
     ) -> Result<ToolExecutionOutput, CoreError> {
         match self.parse_selected(call, facts)? {
-            MetaCall::Search(query) => {
-                self.execute_search(&query, authorization, cancellation, facts.disabled_tools())
-            }
+            MetaCall::Search(query) => self.execute_search(
+                &query,
+                authorization,
+                cancellation,
+                &self
+                    .by_name
+                    .keys()
+                    .filter(|name| !facts.allows_tool(name))
+                    .cloned()
+                    .collect::<Vec<_>>(),
+            ),
             MetaCall::Invoke(call) => {
                 self.tools
                     .execute_with_facts(&call, authorization, cancellation, facts)
@@ -441,9 +458,17 @@ impl ToolService for McpMetaToolService {
         sink: &mut dyn ToolOutputSink,
     ) -> Result<ToolExecutionOutput, CoreError> {
         match self.parse_selected(call, facts)? {
-            MetaCall::Search(query) => {
-                self.execute_search(&query, authorization, cancellation, facts.disabled_tools())
-            }
+            MetaCall::Search(query) => self.execute_search(
+                &query,
+                authorization,
+                cancellation,
+                &self
+                    .by_name
+                    .keys()
+                    .filter(|name| !facts.allows_tool(name))
+                    .cloned()
+                    .collect::<Vec<_>>(),
+            ),
             MetaCall::Invoke(call) => self.tools.execute_streaming_with_facts(
                 &call,
                 authorization,
@@ -464,9 +489,17 @@ impl ToolService for McpMetaToolService {
         sink: &mut dyn ToolOutputSink,
     ) -> Result<ToolExecutionOutput, CoreError> {
         match self.parse_selected(call, facts)? {
-            MetaCall::Search(query) => {
-                self.execute_search(&query, authorization, cancellation, facts.disabled_tools())
-            }
+            MetaCall::Search(query) => self.execute_search(
+                &query,
+                authorization,
+                cancellation,
+                &self
+                    .by_name
+                    .keys()
+                    .filter(|name| !facts.allows_tool(name))
+                    .cloned()
+                    .collect::<Vec<_>>(),
+            ),
             MetaCall::Invoke(call) => self.tools.execute_streaming_with_facts_and_interactions(
                 &call,
                 authorization,

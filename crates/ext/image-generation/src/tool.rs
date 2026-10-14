@@ -117,6 +117,14 @@ impl ImageTool {
     }
 }
 impl ToolExecutor for ImageTool {
+    fn tool_set(&self) -> Option<&'static str> {
+        Some("core.images")
+    }
+
+    fn category(&self) -> Option<protocol::ToolCategory> {
+        Some(protocol::ToolCategory::Image)
+    }
+
     fn definition(&self) -> ToolDefinition {
         ToolDefinition::function(ToolName::new("imagegen").unwrap(),"Generate an image from a prompt, or edit up to five attached or previously generated images in this Thread. reference_images accepts attachment IDs from the input image catalog or saved_path values returned by this tool; use an empty array for a new image.",ToolInputSchema::parse(json!({"type":"object","properties":{"prompt":{"type":"string","maxLength":32000},"reference_images":{"type":"array","maxItems":5,"items":{"type":"string"}}},"required":["prompt","reference_images"],"additionalProperties":false})).unwrap(),ToolOutputSchema::Unspecified,ToolSchemaMode::Strict,ToolLoading::Eager).expect("valid image tool definition")
     }

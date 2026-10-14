@@ -82,6 +82,9 @@ pub enum ToolExposureDto {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentToolCapabilityDto {
+    /// Semantic capability; source and execution authority remain separate dimensions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub category: Option<ash_protocol::ToolCategory>,
     pub name: String,
     pub description: String,
     pub source: ToolSourceDto,
@@ -93,7 +96,7 @@ pub struct AgentToolCapabilityDto {
 /// One source-owned group from the same catalog snapshot as its member tools.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct AgentToolSetCapabilityDto {
+pub struct AgentToolSourceGroupDto {
     pub id: String,
     pub source: ToolSourceDto,
     pub source_id: String,
@@ -105,7 +108,9 @@ pub struct AgentToolSetCapabilityDto {
 #[serde(rename_all = "camelCase")]
 pub struct AgentCapabilitiesReadResult {
     pub tools: Vec<AgentToolCapabilityDto>,
-    pub tool_sets: Vec<AgentToolSetCapabilityDto>,
+    pub source_groups: Vec<AgentToolSourceGroupDto>,
+    pub tool_sets: Vec<ash_protocol::ToolSetDefinition>,
+    pub profiles: Vec<ash_protocol::ToolProductProfile>,
     pub local_process_sandbox_configured: bool,
     pub sandbox_backends: Vec<String>,
     pub sandbox_diagnostics: Vec<SandboxDiagnosticDto>,

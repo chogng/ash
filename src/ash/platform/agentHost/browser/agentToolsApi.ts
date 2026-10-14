@@ -16,8 +16,8 @@ export function createAppServerAgentToolsApi(connection: AppServerProtocolClient
 			return subscription;
 		},
 		read: async () => {
-			const { tools, toolSets } = await appServerRequest(connection, 'agent/capabilities/read', {});
-			return { tools, toolSets };
+			const { tools, toolSets, sourceGroups, profiles } = await appServerRequest(connection, 'agent/capabilities/read', {});
+			return { tools: tools.map(tool => ({ ...tool, category: tool.category ?? undefined })), toolSets, sourceGroups, profiles };
 		},
 	};
 }

@@ -1015,6 +1015,26 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
 }
 
 impl<B: ash_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
+    fn tool_set(&self, name: &ToolName) -> Option<&'static str> {
+        match name.as_str() {
+            "read_file" | "write_file" | "edit" => Some("core.files"),
+            "grep" | "glob" => Some("core.search"),
+            "shell-command" | "shell-session" => Some("core.execution"),
+            _ => None,
+        }
+    }
+
+    fn tool_category(&self, name: &ToolName) -> Option<ash_protocol::ToolCategory> {
+        use ash_protocol::ToolCategory;
+        match name.as_str() {
+            "read_file" => Some(ToolCategory::Read),
+            "write_file" | "edit" => Some(ToolCategory::Edit),
+            "grep" | "glob" => Some(ToolCategory::Search),
+            "shell-command" | "shell-session" => Some(ToolCategory::Execute),
+            _ => None,
+        }
+    }
+
     fn definitions(&self) -> Vec<ToolDefinition> {
         self.definitions.clone()
     }

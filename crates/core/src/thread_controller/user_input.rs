@@ -161,34 +161,37 @@ fn validate_skill_activations(
     Ok(())
 }
 
-pub(super) fn tool_selection(
-    input: &[UserInput],
-) -> Result<Option<&[ash_protocol::ToolName]>, CoreError> {
+/// Borrowed, already resolved tool selection supplied at Turn admission.
+pub(super) struct ToolSelection<'a> {
+    pub disabled: &'a [ash_protocol::ToolName],
+    pub allowed: Option<&'a [ash_protocol::ToolName]>,
+}
+
+pub(super) fn tool_selection(input: &[UserInput]) -> Result<Option<ToolSelection<'_>>, CoreError> {
     let mut selections = input.iter().filter_map(|item| match item {
-        UserInput::ToolSelection { disabled } => Some(disabled.as_slice()),
-        UserInput::Text { .. }
-        | UserInput::Context { .. }
-        | UserInput::AudioAttachment { .. }
-        | UserInput::Audio { .. }
-        | UserInput::ImageAttachment { .. }
-        | UserInput::Image { .. }
-        | UserInput::LocalImage { .. }
-        | UserInput::Skill { .. }
-        | UserInput::Mention { .. } => None,
+        UserInput::ToolSelection { disabled, allowed } => Some(ToolSelection {
+            disabled,
+            allowed: allowed.as_deref(),
+        }),
+        _ => None,
     });
     let selected = selections.next();
+    let valid_names = |names: &[ash_protocol::ToolName]| {
+        names.len() <= 4096
+            && names
+                .iter()
+                .collect::<std::collections::BTreeSet<_>>()
+                .len()
+                == names.len()
+    };
     if selections.next().is_some()
-        || selected.is_some_and(|names| {
-            names.len() > 4096
-                || names
-                    .iter()
-                    .collect::<std::collections::BTreeSet<_>>()
-                    .len()
-                    != names.len()
+        || selected.as_ref().is_some_and(|selection| {
+            !valid_names(selection.disabled)
+                || selection.allowed.is_some_and(|names| !valid_names(names))
         })
     {
         return Err(CoreError::InvalidInput(
-            "Tool selection must occur once with at most 4096 unique names".into(),
+            "Tool selection must occur once with at most 4096 unique names per scope".into(),
         ));
     }
     Ok(selected)

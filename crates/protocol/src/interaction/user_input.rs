@@ -33,6 +33,9 @@ pub enum UserInput {
     /// Narrows this Turn's tool surface without granting execution authority.
     ToolSelection {
         disabled: Vec<crate::ToolName>,
+        /// Positive scope resolved by the product, independent of model loading.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        allowed: Option<Vec<crate::ToolName>>,
     },
     ImageAttachment {
         attachment: ImageAttachmentRef,

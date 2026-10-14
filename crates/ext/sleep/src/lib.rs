@@ -38,6 +38,14 @@ impl ReadOnlyToolContributor for Sleep {
 }
 
 impl ToolExecutor for Sleep {
+    fn tool_set(&self) -> Option<&'static str> {
+        Some("agent.control")
+    }
+
+    fn category(&self) -> Option<tools::ToolCategory> {
+        Some(tools::ToolCategory::Agent)
+    }
+
     fn definition(&self) -> ToolDefinition {
         ToolDefinition::function(
             ToolName::new("sleep").unwrap(),

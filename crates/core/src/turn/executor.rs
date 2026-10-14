@@ -163,6 +163,14 @@ impl TurnExecutor {
         crate::tool_profile::snapshot_tool_profile(catalog.definitions())
     }
 
+    /// Resolves a product capability scope against the host's complete tool catalog.
+    pub fn resolve_tool_scope(
+        &self,
+        scope: &ash_protocol::ToolScope,
+    ) -> Result<Vec<ash_protocol::ToolName>, CoreError> {
+        self.tools.resolve_tool_scope(scope)
+    }
+
     /// Freezes an explicitly selected subset of the current tool definitions for a worker.
     pub fn tool_profile_for_names(
         &self,
@@ -223,7 +231,7 @@ impl TurnExecutor {
         };
         let catalog = self.code_mode.augment_catalog(catalog, mode)?;
         let catalog = match profile {
-            Some(profile) => catalog.without_disabled_tools(&profile.disabled_tools),
+            Some(profile) => catalog.with_tool_scope(profile),
             None => catalog,
         };
         Ok(match instructions {

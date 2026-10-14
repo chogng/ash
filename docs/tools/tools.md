@@ -30,6 +30,15 @@
 | 谁决定工具能不能执行？           | 权限系统决定授权；Core 调度；工具执行器落实调用                                                                      | [当前本地工具来源](#41-当前本地工具来源运行时) |
 | 当前完成到哪里？                 | 统一 registry/executor/search、durable provenance、结构化图片和 Code Mode 主链已落地；Plugin 安装 authority 尚未完成 | [当前仓库审计](#2-当前仓库审计)                |
 
+## 能力分类、工具集与有效范围
+
+分类、现有工具成员、产品组合和范围控制的阅读入口是[工具能力与范围](tool-capabilities.md)。
+该文档列出当前 16 个分类、17 个具名工具集、Code / Cowork / Design 的状态，以及开发者目录的查看方法。
+
+所有宿主复用一个注册体系；来源分组 `sourceGroups` 与具名能力集合 `toolSets` 分开。
+App Server 解析产品选择，Core 冻结本轮允许范围；搜索、直接调用、MCP、Code Mode 和委派沿用同一约束。
+分类与范围不替代来源绑定、动作权限、审批或沙箱。以下章节继续说明底层工具契约与执行机制。
+
 ## 当前 Turn 的模式切换
 
 内置工具 `switch_mode` 接收 `{ "mode": "plan", "reason": "先确认实现方案" }`，支持

@@ -145,6 +145,14 @@ impl CodebaseRetrievalTool {
 }
 
 impl ToolService for CodebaseRetrievalTool {
+    fn tool_set(&self, _: &ash_protocol::ToolName) -> Option<&'static str> {
+        Some("core.search")
+    }
+
+    fn tool_category(&self, _: &ash_protocol::ToolName) -> Option<ash_protocol::ToolCategory> {
+        Some(ash_protocol::ToolCategory::Search)
+    }
+
     fn definitions(&self) -> Vec<ToolDefinition> {
         vec![self.definition.clone()]
     }

@@ -872,6 +872,7 @@ impl EnvToolPorts {
         &self,
     ) -> (
         Vec<ash_app_server_protocol::protocol::agent::AgentToolCapabilityDto>,
+        Vec<ash_protocol::ToolSetDefinition>,
         bool,
     ) {
         // Replacement updates this state and the registry under the same lock.
@@ -879,7 +880,8 @@ impl EnvToolPorts {
             .state
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        (self.reloadable.catalog(), state.executables_enabled)
+        let (tools, sets) = self.reloadable.capability_catalog();
+        (tools, sets, state.executables_enabled)
     }
 
     #[cfg(test)]

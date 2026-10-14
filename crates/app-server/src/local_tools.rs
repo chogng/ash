@@ -450,6 +450,31 @@ struct ExtendedLocalTools {
 }
 
 impl ToolService for ExtendedLocalTools {
+    fn tool_set(&self, name: &ash_protocol::ToolName) -> Option<&'static str> {
+        if self
+            .extension
+            .definitions()
+            .iter()
+            .any(|tool| &tool.name == name)
+        {
+            self.extension.tool_set(name)
+        } else {
+            self.primary.tool_set(name)
+        }
+    }
+
+    fn tool_category(&self, name: &ash_protocol::ToolName) -> Option<ash_protocol::ToolCategory> {
+        self.extension
+            .tool_category(name)
+            .filter(|_| {
+                self.extension
+                    .definitions()
+                    .iter()
+                    .any(|tool| &tool.name == name)
+            })
+            .or_else(|| self.primary.tool_category(name))
+    }
+
     fn definitions(&self) -> Vec<ToolDefinition> {
         let mut definitions = self.primary.definitions();
         definitions.extend(self.extension.definitions());
@@ -972,6 +997,14 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
 }
 
 impl<B: SandboxBackend> ToolService for LocalShellToolService<B> {
+    fn tool_set(&self, _: &ash_protocol::ToolName) -> Option<&'static str> {
+        Some("core.execution")
+    }
+
+    fn tool_category(&self, _: &ash_protocol::ToolName) -> Option<ash_protocol::ToolCategory> {
+        Some(ash_protocol::ToolCategory::Execute)
+    }
+
     fn definitions(&self) -> Vec<ToolDefinition> {
         vec![self.definition.clone()]
     }

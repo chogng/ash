@@ -243,6 +243,14 @@ impl MemoryTool {
 }
 
 impl ToolExecutor for MemoryTool {
+    fn tool_set(&self) -> Option<&'static str> {
+        Some("core.memory")
+    }
+
+    fn category(&self) -> Option<protocol::ToolCategory> {
+        Some(protocol::ToolCategory::Memory)
+    }
+
     fn definition(&self) -> ToolDefinition {
         self.definition.clone()
     }

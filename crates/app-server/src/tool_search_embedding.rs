@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -18,7 +19,7 @@ struct EmbeddedTool {
 pub(super) struct ToolSearchEmbeddingRuntime {
     registry: Arc<ToolRegistrySnapshot>,
     invoker: Arc<dyn EmbeddingInvoker>,
-    documents: Mutex<Option<Vec<EmbeddedTool>>>,
+    documents: Mutex<BTreeMap<ToolName, EmbeddedTool>>,
 }
 
 impl ToolSearchEmbeddingRuntime {
@@ -29,7 +30,7 @@ impl ToolSearchEmbeddingRuntime {
         Self {
             registry,
             invoker,
-            documents: Mutex::new(None),
+            documents: Mutex::new(BTreeMap::new()),
         }
     }
 
@@ -52,13 +53,20 @@ impl ToolSearchEmbeddingRuntime {
             .documents
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if documents.is_none() {
-            *documents = Some(self.embed_documents()?);
+        let missing = self
+            .registry
+            .search_documents()
+            .iter()
+            .filter(|document| {
+                !excluded.contains(document.name()) && !documents.contains_key(document.name())
+            })
+            .collect::<Vec<_>>();
+        for document in self.embed_documents(&missing)? {
+            documents.insert(document.name.clone(), document);
         }
         let mut ranked = documents
-            .as_ref()
-            .expect("embedding documents initialized")
-            .iter()
+            .values()
+            .filter(|document| !excluded.contains(&document.name))
             .map(|document| {
                 cosine_similarity(query_vector.values(), &document.values)
                     .map(|score| (document.name.clone(), score))
@@ -75,8 +83,10 @@ impl ToolSearchEmbeddingRuntime {
             .search_hybrid_excluding(query, &semantic_ranking, excluded))
     }
 
-    fn embed_documents(&self) -> Result<Vec<EmbeddedTool>, String> {
-        let documents = self.registry.search_documents();
+    fn embed_documents(
+        &self,
+        documents: &[&ash_tools::ToolSearchDocument],
+    ) -> Result<Vec<EmbeddedTool>, String> {
         let mut embedded = Vec::with_capacity(documents.len());
         for chunk in documents.chunks(MAX_EMBEDDING_BATCH_ITEMS) {
             let request = EmbeddingRequest::new(

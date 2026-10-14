@@ -42,6 +42,14 @@ impl WebSearchTool {
 }
 
 impl ToolExecutor for WebSearchTool {
+    fn tool_set(&self) -> Option<&'static str> {
+        Some("core.web")
+    }
+
+    fn category(&self) -> Option<ash_tools::ToolCategory> {
+        Some(ash_tools::ToolCategory::Web)
+    }
+
     fn activity(&self, _call: &ash_tools::ToolCall) -> Option<ash_tools::ToolActivity> {
         Some(ash_tools::ToolActivity::Search {
             target: "web".into(),

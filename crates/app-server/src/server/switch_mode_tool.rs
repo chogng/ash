@@ -135,6 +135,14 @@ impl SwitchModeToolService {
 }
 
 impl ToolService for SwitchModeToolService {
+    fn tool_set(&self, _: &ash_protocol::ToolName) -> Option<&'static str> {
+        Some("agent.control")
+    }
+
+    fn tool_category(&self, _: &ash_protocol::ToolName) -> Option<ash_protocol::ToolCategory> {
+        Some(ash_protocol::ToolCategory::Agent)
+    }
+
     fn definitions(&self) -> Vec<ToolDefinition> {
         vec![self.definition.clone()]
     }

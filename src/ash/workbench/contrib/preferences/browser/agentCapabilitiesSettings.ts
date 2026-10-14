@@ -2,28 +2,25 @@ import './media/agentCapabilitiesSettings.css';
 import { h } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { AgentCapabilitiesSnapshot, IAgentCapabilitiesService } from '../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
-import type { IToolData, ILanguageModelToolsService } from '../../chat/common/tools/languageModelToolsService.js';
 import { workspaceTrustPermissionNames, type WorkspaceTrustEntry, type IWorkspaceTrustApi } from '../../../../platform/workspace/common/workspaceTrust.js';
 import type { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import type { IAppServerRemoteAgentService } from '../../../services/remote/common/appServerRemoteAgentService.js';
 
-type View = 'tools' | 'sandbox';
+type View = 'sandbox';
 
-/** Read-only Workbench view of the App Server's current tool catalog and directory grants. */
+/** Read-only Workbench view of process isolation and directory grants. */
 export class AgentCapabilitiesSettings extends Disposable {
 	public readonly domNode: HTMLElement;
 	private readonly status: HTMLParagraphElement;
 	private readonly content: HTMLElement;
 	private view: View | undefined;
 	private catalog: AgentCapabilitiesSnapshot | undefined;
-	private tools: readonly IToolData[] | undefined;
 	private directories: readonly WorkspaceTrustEntry[] = [];
 	private loadVersion = 0;
 
 	constructor(
 		container: HTMLElement,
 		private readonly capabilities: IAgentCapabilitiesService,
-		private readonly toolsService: ILanguageModelToolsService,
 		remoteAgentService: IAppServerRemoteAgentService,
 		private readonly workspaceTrust: IWorkspaceTrustApi,
 		private readonly localization: ILocalizationService,
@@ -44,7 +41,6 @@ export class AgentCapabilitiesSettings extends Disposable {
 			this.loadVersion++;
 			this.view = undefined;
 			this.catalog = undefined;
-			this.tools = undefined;
 			this.directories = [];
 		}));
 		this._register(this.workspaceTrust.onDidChangeTrust(() => {
@@ -55,7 +51,6 @@ export class AgentCapabilitiesSettings extends Disposable {
 			if (state !== 'connected') {
 				this.loadVersion++;
 				this.catalog = undefined;
-				this.tools = undefined;
 				this.directories = [];
 				this.status.textContent = this.label('capabilities.disconnected', 'App Server is disconnected.');
 				this.render();
@@ -75,13 +70,10 @@ export class AgentCapabilitiesSettings extends Disposable {
 		const view = this.view;
 		this.status.textContent = this.label('capabilities.loading', 'Loading capabilities…');
 		try {
-			if (view === 'tools') await this.toolsService.refresh();
-			const tools = view === 'tools' ? [...this.toolsService.getAllToolsIncludingDisabled()] : undefined;
 			const catalog = view === 'sandbox' ? await this.capabilities.read() : undefined;
 			const directories = catalog?.directoryGrantsReadable ? await this.workspaceTrust.listDirectories() : undefined;
 			if (version !== this.loadVersion || !this.view) return;
 			this.catalog = catalog;
-			this.tools = tools;
 			if (directories) this.directories = directories.entries;
 			this.status.textContent = '';
 			this.render();
@@ -94,32 +86,7 @@ export class AgentCapabilitiesSettings extends Disposable {
 
 	private render(): void {
 		this.content.replaceChildren();
-		if (this.view === 'tools' && this.tools) this.renderTools(this.tools);
-		else if (this.view === 'sandbox' && this.catalog) this.renderSandbox(this.catalog);
-	}
-
-	private renderTools(tools: readonly IToolData[]): void {
-		this.addNote(this.label('capabilities.tools.note', 'This tool catalog was read when you opened this category. Return to Tools to refresh it. Each call is checked against its arguments, directory grants, and action policy.'));
-		if (tools.length === 0) {
-			this.addNote(this.label('capabilities.tools.empty', 'No tools are registered.'));
-			return;
-		}
-		const list = h(this.content.ownerDocument, 'ul');
-		list.className = 'ash-agent-capabilities-list';
-		for (const tool of tools) {
-			const item = h(this.content.ownerDocument, 'li');
-			const name = h(this.content.ownerDocument, 'h4');
-			name.textContent = tool.displayName;
-			const description = h(this.content.ownerDocument, 'p');
-			description.textContent = tool.modelDescription;
-			const metadata = h(this.content.ownerDocument, 'p');
-			metadata.className = 'ash-agent-capabilities-metadata';
-			const source = tool.sourceDetails.join(' › ');
-			metadata.textContent = `${this.sourceLabel(tool.source)} (${source}) · ${this.authorityLabel(tool.authority)} · ${this.exposureLabel(tool.exposure)}`;
-			item.append(name, description, metadata);
-			list.append(item);
-		}
-		this.content.append(list);
+		if (this.view === 'sandbox' && this.catalog) this.renderSandbox(this.catalog);
 	}
 
 	private renderSandbox(catalog: AgentCapabilitiesSnapshot): void {
@@ -179,39 +146,6 @@ export class AgentCapabilitiesSettings extends Disposable {
 		note.className = 'ash-agent-capabilities-note';
 		note.textContent = message;
 		this.content.append(note);
-	}
-
-	private authorityLabel(authority: IToolData['authority']): string {
-		const labels = {
-			directoryRead: this.label('capabilities.authority.directoryRead', 'Directory read'),
-			directoryWrite: this.label('capabilities.authority.directoryWrite', 'Directory write'),
-			processExecution: this.label('capabilities.authority.processExecution', 'Process execution'),
-			productService: this.label('capabilities.authority.productService', 'Product service'),
-			providerDefined: this.label('capabilities.authority.providerDefined', 'Provider-defined scope'),
-		};
-		return labels[authority];
-	}
-
-	private sourceLabel(source: IToolData['source']): string {
-		const labels = {
-			environment: this.label('capabilities.source.environment', 'Execution environment'),
-			dynamic: this.label('capabilities.source.dynamic', 'Client tool'),
-			extension: this.label('capabilities.source.extension', 'Extension'),
-			host: this.label('capabilities.source.host', 'Product host'),
-			local: this.label('capabilities.source.local', 'Built-in directory tool'),
-			mcp: this.label('capabilities.source.mcp', 'MCP server'),
-		};
-		return labels[source];
-	}
-
-	private exposureLabel(exposure: IToolData['exposure']): string {
-		const labels = {
-			direct: this.label('capabilities.exposure.direct', 'Direct'),
-			deferred: this.label('capabilities.exposure.deferred', 'On search'),
-			modelOnly: this.label('capabilities.exposure.modelOnly', 'Model only'),
-			hidden: this.label('capabilities.exposure.hidden', 'Internal'),
-		};
-		return labels[exposure];
 	}
 
 	private label(key: string, fallback: string): string {

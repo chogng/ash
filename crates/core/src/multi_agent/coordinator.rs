@@ -274,6 +274,18 @@ impl MultiAgentCoordinator {
                 "A new delegation requires its active parent Turn and policy".into(),
             ));
         }
+        if parent_turn.tool_profile.as_ref().is_some_and(|profile| {
+            request
+                .capability_scope
+                .tools
+                .iter()
+                .chain(&request.capability_scope.delegation_tools)
+                .any(|name| !profile.allows_tool(name))
+        }) {
+            return Err(CoreError::Policy(
+                "Child tools exceed the parent Turn capability scope".into(),
+            ));
+        }
         if let Some(agent) = parent.agent_configuration() {
             let ceiling = agent
                 .capability_scope

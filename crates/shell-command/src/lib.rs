@@ -6,9 +6,7 @@
 
 mod ripgrep;
 
-pub use ripgrep::{
-    BuiltInRipgrepPolicy, RipgrepDiscoveryError, RipgrepExecutable, RipgrepRequestError,
-};
+pub use ripgrep::{BuiltInRipgrepPolicy, RipgrepDiscoveryError, RipgrepExecutable, RipgrepRequestError};
 
 use ash_async_utils::CancellationToken;
 use ash_file_access::Dir;
@@ -282,6 +280,14 @@ impl<P: ApprovalPolicy, B: SandboxBackend> ShellCommandTool<P, B> {
 }
 
 impl<P: ApprovalPolicy, B: SandboxBackend> ToolExecutor for ShellCommandTool<P, B> {
+    fn tool_set(&self) -> Option<&'static str> {
+        Some("core.execution")
+    }
+
+    fn category(&self) -> Option<ash_tools::ToolCategory> {
+        Some(ash_tools::ToolCategory::Execute)
+    }
+
     fn activity(&self, call: &ash_tools::ToolCall) -> Option<ash_tools::ToolActivity> {
         ShellCommandRequest::from_arguments(&ToolPayload::FunctionArguments(call.arguments.clone()))
             .ok()
