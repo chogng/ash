@@ -24,6 +24,8 @@ If the repository or publication target is unclear, ask before committing or pub
 
 Fill [the shared change template](../../../.github/pull_request_template.md) without leaving comments or placeholders. Keep one logical change per commit; do not split by file type.
 
+Commit messages and PR titles and descriptions must focus exclusively on Ash and never mention other projects.
+
 After committing, inspect the diff and SHA with `git show` and recheck `git status`. Do not bypass a failed hook. Verify that the commit excludes unrelated work and that unrelated working-tree changes remain intact. Stop here for commit-only requests.
 
 ## Publish to main
