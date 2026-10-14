@@ -29,7 +29,6 @@ export function createTestInitializeResult(): InitializeResult {
 			cloudCodebase: false,
 			terminal: true,
 			debugAdapter: true,
-			typst: true,
 			updateReplay: true,
 			extensions: true,
 			extensionHost: true,

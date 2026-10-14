@@ -56,7 +56,6 @@ import './contrib/codeEditor/browser/codeEditor.contribution.js';
 import './contrib/codeActions/browser/codeActions.contribution.js';
 import './contrib/callHierarchy/browser/callHierarchy.contribution.js';
 import './contrib/typeHierarchy/browser/typeHierarchy.contribution.js';
-import './contrib/documentEditor/browser/documentEditor.contribution.js';
 import './contrib/academic/browser/academicEditor.contribution.js';
 // Debug, testing and the extension host need tasks even when no Tasks view is loaded.
 import { registerTasksView } from './contrib/tasks/browser/tasks.contribution.js';

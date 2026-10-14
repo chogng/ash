@@ -182,7 +182,6 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
     "terminal": true,
     "mcp": true,
     "mcpOAuth": false,
-    "typst": true,
     "updateReplay": true,
     "contracts": {
       "memoryDiagnostics": { "version": 1 }
@@ -1373,16 +1372,6 @@ Rust DTO 与 registry 是唯一协议来源。Schema、TypeScript 与 metadata �
 生成类型只用于协议客户端、领域通信接口和运行时 adapter；领域服务、编辑器与 UI 使用前端自有类型。WebSocket 只传输消息，`initialize` 负责主版本、生成协议指纹和必需能力可用性检查。schema hash 不同会阻断连接；允许扩展的结果对象可增加字段，严格对象、未知枚举和未声明通知仍须经过解码规则校验，不会因握手通过而跳过。
 
 生成快照一致性测试、`pnpm typecheck:protocol`、协议行为测试和受影响的前端构建必须同时通过。
-
-## 13. Typst 文档编译
-
-`initialize.capabilities.typst` 表示支持 `document/typst/compile`。该方法接受
-`{ "source": string }`，返回由当前连接拥有的 `application/pdf` 资源和警告，或者类型化源码
-诊断。源码按 UTF-8 字节计算，最大 1 MiB。
-
-当前编译器只暴露内存中的 `/main.typ`，不暴露宿主文件、网络访问、包下载、系统字体或当前
-日期。PDF 字节沿用 `resource/metadata`、`resource/read` 和 `resource/release` 生命周期。
-跨进程所有权和计划演进见 [`typst.md`](typst.md)。
 
 ## Issue 浏览与 Agent Session
 

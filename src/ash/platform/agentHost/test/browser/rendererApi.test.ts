@@ -42,16 +42,6 @@ test("disconnected Web renderer API rejects product operations explicitly", asyn
 		return true;
 	});
 	await assert.rejects(
-		api.typst.compile({
-			source: "Hello",
-		}),
-		(error: unknown) => {
-			assert.ok(error instanceof WebAppServerUnavailableError);
-			assert.equal(error.operation, "typst.compile");
-			return true;
-		},
-	);
-	await assert.rejects(
 		api.contentSearch.start({
 			query: "needle",
 			patternKind: "literal",

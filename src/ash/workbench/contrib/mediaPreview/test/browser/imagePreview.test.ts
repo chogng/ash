@@ -56,7 +56,7 @@ class ImageFixture extends Disposable {
 		this.services.registerInstance(IContextKeyService, this._register(new ContextKeyService()));
 		this.services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom' as const, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } });
 		this.services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose: () => { }, [Symbol.dispose]: () => { } });
-		this.preview = this._register(getBuiltinEditorPaneFactory('ash.media-preview', IMAGE_PREVIEW_ID)!({ instantiationService: this.services }, 'Image preview') as ImagePreview);
+		this.preview = this._register(getBuiltinEditorPaneFactory('ash.media-preview', IMAGE_PREVIEW_ID)!.create({ instantiationService: this.services }, 'Image preview') as ImagePreview);
 		this.preview.create(this.browser.window.document.body);
 		const viewport = this.browser.window.document.querySelector('.ash-image-preview-viewport')!;
 		Object.defineProperties(viewport, { clientWidth: { value: 400 }, clientHeight: { value: 300 } });
@@ -65,7 +65,7 @@ class ImageFixture extends Disposable {
 
 test('Image preview factory requires production services', () => {
 	using services = new InstantiationService();
-	assert.throws(() => getBuiltinEditorPaneFactory('ash.media-preview', IMAGE_PREVIEW_ID)!({ instantiationService: services }, 'Image preview'), /fileService/);
+	assert.throws(() => getBuiltinEditorPaneFactory('ash.media-preview', IMAGE_PREVIEW_ID)!.create({ instantiationService: services }, 'Image preview'), /fileService/);
 });
 
 test('Image preview opens through the registered pane, zooms and releases its URL on closure', async () => {

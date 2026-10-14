@@ -1,0 +1,28 @@
+{
+  "name": "academic",
+  "publisher": "ash",
+  "version": "1.0.0",
+  "displayName": "%academic.displayName%",
+  "description": "%academic.description%",
+  "engines": {
+    "vscode": "*"
+  },
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "stanza.editor.document",
+        "displayName": "%academic.editor%",
+        "priority": "default",
+        "selector": [
+          {
+            "filenamePattern": "*.ash-academic",
+            "mimeType": "application/vnd.ash.academic-document+json"
+          },
+          {
+            "filenamePattern": "*.ash-paper"
+          }
+        ]
+      }
+    ]
+  }
+}

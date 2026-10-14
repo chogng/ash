@@ -20,7 +20,6 @@ pub mod debug;
 pub mod diagnostics;
 pub mod dictation;
 pub mod diff;
-pub mod document;
 pub mod environment;
 pub mod error;
 pub mod extension_host;

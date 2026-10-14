@@ -26,7 +26,6 @@ import type { IAgentModelsService } from "../../agentHost/common/agentModels.js"
 import type { IAppServerSkillApi, IAppServerHookApi } from "../../agentHost/common/appServerApi.js";
 import type { ILanguageServerService } from "../../language/common/languageServerService.js";
 import type { ITerminalProcessService } from "../../terminal/common/terminal.js";
-import type { ITypstApi } from "../../typst/common/typstApi.js";
 import type { IDocumentCollaborationApi } from "../../collaboration/common/documentCollaborationApi.js";
 import type { ICodebaseApi } from "../../codebase/common/codebaseApi.js";
 import type { IConnectorApi } from "../../connectors/common/connectorApi.js";
@@ -108,7 +107,6 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly skills: IAppServerSkillApi;
 	readonly instructions: IInstructionService;
 	readonly languageServers: ILanguageServerService;
-	readonly typst: ITypstApi;
 	readonly documentCollaboration: IDocumentCollaborationApi;
 	readonly resource: IResourceApi;
 	readonly extensions: IExtensionApi;

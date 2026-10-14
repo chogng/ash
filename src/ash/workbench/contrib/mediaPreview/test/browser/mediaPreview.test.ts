@@ -116,7 +116,7 @@ class MediaFixture extends Disposable {
 		this.services.registerInstance(IContextKeyService, this._register(new ContextKeyService()));
 		this.services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, ...toDisposable(() => { }) });
 		const id = kind === 'audio' ? AUDIO_PREVIEW_ID : VIDEO_PREVIEW_ID;
-		this.preview = this._register(getBuiltinEditorPaneFactory('ash.media-preview', id)!({ instantiationService: this.services }, kind === 'audio' ? 'Audio preview' : 'Video preview') as MediaPreview);
+		this.preview = this._register(getBuiltinEditorPaneFactory('ash.media-preview', id)!.create({ instantiationService: this.services }, kind === 'audio' ? 'Audio preview' : 'Video preview') as MediaPreview);
 		this.preview.create(this.browser.window.document.body);
 		const mediaPrototype = this.browser.window.HTMLMediaElement.prototype;
 		const fixture = this;

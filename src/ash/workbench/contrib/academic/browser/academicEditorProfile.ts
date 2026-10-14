@@ -11,10 +11,6 @@ export const academicProfile: EditorProfile = Object.freeze({
 	id: "academic",
 	contentType: ACADEMIC_DOCUMENT_CONTENT_TYPE,
 	collaborationSchemaId: "stanza-academic-v1",
-	input: Object.freeze({
-		contentTypes: [ACADEMIC_DOCUMENT_CONTENT_TYPE],
-		extensions: [".ash-academic", ".ash-paper"],
-	}),
 	createSchema: createAcademicDocumentSchema,
 	createEmptyDocument: createEmptyAcademicDocument,
 	outlineNavigator: true,

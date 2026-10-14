@@ -40,7 +40,6 @@ class Transport implements AppServerTransport {
 				cloudCodebase: true,
 				terminal: true,
 				debugAdapter: true,
-				typst: true,
 				updateReplay: true,
 				extensions: true,
 				extensionHost: true,

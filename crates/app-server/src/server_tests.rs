@@ -943,7 +943,6 @@ fn initialize_with_capabilities(
     );
     assert_eq!(response["result"]["capabilities"]["sessions"], true);
     assert_eq!(response["result"]["capabilities"]["codebase"], false);
-    assert_eq!(response["result"]["capabilities"]["typst"], true);
     assert_eq!(response["result"]["capabilities"]["updateReplay"], true);
 }
 
@@ -4913,65 +4912,6 @@ fn resources_remain_connection_owned_and_chunked() {
         }),
     );
     assert_eq!(denied["error"]["message"], "ResourceNotOwner");
-}
-
-#[test]
-fn typst_compilation_returns_a_connection_owned_pdf_resource() {
-    let server = server();
-    let mut connection = server.connection();
-    initialize(&server, &mut connection);
-
-    let compiled = call(
-        &server,
-        &mut connection,
-        serde_json::json!({
-            "jsonrpc":"2.0","id":2,"method":"document/typst/compile",
-            "params":{"source":"= Paper\n\nA formula: $x^2$."}
-        }),
-    );
-    assert_eq!(compiled["result"]["status"], "success");
-    assert_eq!(
-        compiled["result"]["resource"]["mimeType"],
-        "application/pdf"
-    );
-    let resource_id = compiled["result"]["resource"]["resourceId"]
-        .as_str()
-        .unwrap();
-
-    let bytes = call(
-        &server,
-        &mut connection,
-        serde_json::json!({
-            "jsonrpc":"2.0","id":3,"method":"resource/read",
-            "params":{"resourceId":resource_id,"offset":0,"maxBytes":16}
-        }),
-    );
-    let decoded = base64::engine::general_purpose::STANDARD
-        .decode(bytes["result"]["dataBase64"].as_str().unwrap())
-        .unwrap();
-    assert!(decoded.starts_with(b"%PDF-"));
-}
-
-#[test]
-fn typst_source_errors_are_typed_results_not_server_failures() {
-    let server = server();
-    let mut connection = server.connection();
-    initialize(&server, &mut connection);
-
-    let compiled = call(
-        &server,
-        &mut connection,
-        serde_json::json!({
-            "jsonrpc":"2.0","id":2,"method":"document/typst/compile",
-            "params":{"source":"#let ="}
-        }),
-    );
-    assert_eq!(compiled["result"]["status"], "failed");
-    assert!(
-        compiled["result"]["diagnostics"]
-            .as_array()
-            .is_some_and(|diagnostics| !diagnostics.is_empty())
-    );
 }
 
 #[test]

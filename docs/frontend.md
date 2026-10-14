@@ -222,4 +222,4 @@ pnpm dev
 
 ## 第三方许可证
 
-直接运行依赖及其源码许可证见 [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md)。发布包必须包含该清单和 `licenses/` 中的直接依赖许可证，从组件所属路径复制 Seti、Typst 许可证，并保留 Electron 和所选运行时的上游 notices；源码树不维护第二份发布副本。
+直接运行依赖及其源码许可证见 [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md)。发布包必须包含该清单和 `licenses/` 中的直接依赖许可证，从组件所属路径复制 Seti 许可证，并保留 Electron 和所选运行时的上游 notices；源码树不维护第二份发布副本。

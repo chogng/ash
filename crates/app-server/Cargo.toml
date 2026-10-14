@@ -157,7 +157,6 @@ ash-thread-transcript = { workspace = true }
 git-turn-changes = { workspace = true }
 ash-tools = { workspace = true }
 ash-web-search-extension = { workspace = true }
-ash-typst = { workspace = true }
 worktree = { workspace = true }
 
 [dev-dependencies]

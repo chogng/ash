@@ -747,16 +747,6 @@ use crate::protocol::diff::DiffRangeDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::diff::DiffRowKindDto;
 #[cfg(any(test, feature = "export"))]
-use crate::protocol::document::TypstCompileParams;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::document::TypstCompileResult;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::document::TypstDiagnosticDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::document::TypstDiagnosticSeverityDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::document::TypstSourceRangeDto;
-#[cfg(any(test, feature = "export"))]
 use crate::protocol::environment::DirContributionsDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::environment::DirGrantDto;
@@ -4213,11 +4203,6 @@ client_methods! {
         response: ExtensionHostInvokeCancelResult,
         serialization: None,
     },
-    TypstCompile => "document/typst/compile" {
-        params: TypstCompileParams,
-        response: TypstCompileResult,
-        serialization: GlobalExclusive,
-    },
     AssetCatalog => "asset/catalog" {
         params: AssetCatalogParams, response: AssetCatalogResult, serialization: GlobalExclusive,
     },
@@ -6513,11 +6498,6 @@ typescript_bindings! {
     TeamMessagePostResult,
     TeamMessageListParams,
     TeamMessageListResult,
-    TypstCompileParams,
-    TypstCompileResult,
-    TypstDiagnosticDto,
-    TypstDiagnosticSeverityDto,
-    TypstSourceRangeDto,
     AssetCatalogParams,
     AssetCatalogEntry,
     AssetCollection,

@@ -48,6 +48,6 @@ entrypoints must verify downloaded inputs and preserve the required licenses
 and notices. Review each component's README before updating it.
 
 License texts stay with the material they cover: runtime notices here,
-component assets such as fonts under `crates/utils/typst/licenses`, and Desktop
+component assets within their extension packages, and Desktop
 notices in the root `THIRD_PARTY_NOTICES.md` and `licenses/`. Source reuse still
 requires its upstream notice even when no upstream executable is shipped.

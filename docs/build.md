@@ -406,13 +406,15 @@ just dependency-security
 
 `dependency-security` 根据 [Ash 安全策略](../.cargo/deny.toml) 检查整个 workspace、全部 features 和所有目标平台的漏洞、停止维护及撤回版本、第三方许可证和来源。许可证集合与 Git 来源取自 Ash 实际依赖图；Git 依赖必须固定 revision。Ash 自身未发布的专有包不参与第三方 SPDX 许可证检查。重复版本和依赖方向仍由 `dependencies` 负责；安全例外需要逐项审查，不能用整体关闭检查来通过 CI。
 
-2026-10-10 安全修复将 rustls 的最低版本提高到 0.23.45，并将撤回的 chacha20 0.10.1 更新到 0.10.2。Typst 的间接依赖 citationberg 0.7.0 尚未发布 XML 修复，因此根 Cargo manifest 固定其 [上游修复提交](https://github.com/typst/citationberg/commit/06a591e2f237d25e1dfdedac3f3d1494c496c52d)，统一使用 quick-xml 0.41.0，修复 [重复属性检查的计算量问题](https://rustsec.org/advisories/RUSTSEC-2026-0194.html) 和 [命名空间分配无上限问题](https://rustsec.org/advisories/RUSTSEC-2026-0195.html)。该提交只升级 quick-xml，保持 citationberg 的版本与 API；发布兼容修复版本后移除 patch 及其 Git 来源许可。rustls 新版本要求升级 aws-lc-rs、aws-lc-sys 和 rustls-webpki，属于 TLS 修复的必要依赖变化。
+2026-10-10 安全修复将 rustls 的最低版本提高到 0.23.45，并将撤回的 chacha20 0.10.1 更新到 0.10.2。rustls 新版本要求升级 aws-lc-rs、aws-lc-sys 和 rustls-webpki，属于 TLS 修复的必要依赖变化。
 
-依赖整改优先采用兼容发布版或固定 revision 的上游修复，不为消除停止维护告警而复制整个依赖源码树。BM25、Syntect、Ratatui、tokenizers、V8、Typst 及其文献和 SVG/PDF 依赖继续使用发布版；Cargo 与 Bazel 由根 manifest 和 lockfile 选择相同来源。已撤掉 `third_party/rust` 的十二个副本及专用校验、源码准备器和 CI 路径规则。
+依赖整改优先采用兼容发布版或固定 revision 的上游修复，不为消除停止维护告警而复制整个依赖源码树。BM25、Syntect、Ratatui、tokenizers、V8 继续使用发布版；Cargo 与 Bazel 由根 manifest 和 lockfile 选择相同来源。已撤掉 `third_party/rust` 的十二个副本及专用校验、源码准备器和 CI 路径规则。
 
-停止维护报告按具体 advisory ID 审查，原因和移除条件只维护在 [安全策略](../.cargo/deny.toml)；它们不豁免其他漏洞、撤回版本、许可证或来源检查。Typst 字体迁移等待兼容上游发布，避免维护字体引擎分叉；字体集合、复杂文字、数学排版、SVG/PDF、语法高亮及 XML 边界保留消费者验证。
+停止维护报告按具体 advisory ID 审查，原因和移除条件只维护在 [安全策略](../.cargo/deny.toml)；它们不豁免其他漏洞、撤回版本、许可证或来源检查。消费者测试继续覆盖实际使用的语法高亮与搜索边界。
 
 BM25 的同分候选由上游 HashSet 顺序决定。Ash 在自己的搜索入口按原始分数和工具名称排序，再截断候选并转换 reciprocal rank，保证重建索引、单条结果和排除项不会受到哈希遍历顺序影响；无需修改或复制 BM25 源码。
+
+2026-10-14 移除内置 Typst 编译器及其协议、字体、许可证和 citationberg patch。Academic 改为可停用的声明式扩展，继续复用 Stanza 编辑模型；PDF 阅读器保留。下述 2026-10-11 验证记录描述当时的依赖图，不表示现版本仍提供 Typst。
 
 2026-10-11 在 Windows 恢复发布版后，CLI 的 40 项、Code Mode runtime 的 19 项及 tokenizer 的 12 项库测试首轮通过；搜索同分排序修复后，`just test ash-tools -p ash-typst -p ash-v8-poc --features ash-v8-poc/sandbox --profile ci-test --lib` 通过 tools 的 39 项、Typst 的 11 项和 V8 sandbox 的 7 项测试。`just test-tui-unit render::highlight::tests` 的 4 项与 `just test-tui-unit app::extensions_tests` 的 24 项通过，合计 156 项消费者测试。已移除随序列化补丁及字体回补一起撤掉的专用测试和资源，保留真实高亮、排版、搜索及 XML 边界覆盖。
 

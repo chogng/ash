@@ -62,6 +62,11 @@ start without a workspace. Installed packages use the same SDK and host with the
 workspace authorization; they cannot request the product authority. Browser Workers cannot
 register `ssh`, and there is no core resolver fallback.
 
+`academic` declares the optional Academic document editor, using the shared Stanza
+profile, model, undo, save and collaboration services. Its file associations and
+editor registration follow extension enablement; see [Academic](academic/README.md).
+Pagination and PDF export remain future work.
+
 `markdown-language-features` ships the Markdown preview browser extension. `media-preview`
 declares the image (PNG/JPEG/WebP), audio (MP3/WAV/OGG/OGA), and video (MP4/WebM) editors.
 TS packages and loads its metadata and resources in both Web and Electron. Its `customEditors` declarations select product-owned TS

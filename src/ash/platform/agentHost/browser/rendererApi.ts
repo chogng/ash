@@ -17,7 +17,6 @@ import { createDisconnectedContentSearchApi, createDisconnectedContentSearchConf
 import { createDisconnectedAgentSessionService, createDisconnectedAgentThreadService, createDisconnectedAgentTurnService } from "./appServerAgentService.js";
 import { createDisconnectedAgentModelsService } from "./appServerAgentModels.js";
 import { DisconnectedTerminalProcessService } from "../../terminal/browser/disconnectedTerminalProcessService.js";
-import { createDisconnectedTypstApi } from "../../typst/browser/typstApi.js";
 import { createDisconnectedDocumentCollaborationApi } from "../../collaboration/browser/documentCollaborationApi.js";
 import { createDisconnectedCodebaseApi } from "../../codebase/browser/codebaseApi.js";
 import { createDisconnectedCodebaseSymbolsApi } from "../../codebaseSymbols/browser/codebaseSymbolsApi.js";
@@ -52,7 +51,6 @@ export function createDisconnectedRendererApi(): IRendererHost {
 		turnChanges: createDisconnectedTurnChangesApi(unavailableOperation),
 		skills: createDisconnectedSkillOperations(unavailableOperation),
 		instructions: createDisconnectedInstructionService(unavailableOperation),
-		typst: createDisconnectedTypstApi(unavailableOperation),
 		documentCollaboration: createDisconnectedDocumentCollaborationApi(unavailableOperation),
 		resource: createDisconnectedResourceApi(unavailableOperation),
 		extensions: createDisconnectedExtensionApi(unavailableOperation),

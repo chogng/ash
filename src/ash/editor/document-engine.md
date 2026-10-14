@@ -122,7 +122,7 @@ Academic `codeBlock` 当前投影为父 `TextModel` 中的连续 code region。�
 
 ## Profile、codec 与持久化
 
-Workbench `EditorProfile` 组合 resource matcher、schema/semantic vocabulary、empty document factory、node/atom views、toolbar actions、plugins 与 collaboration schema identity。Profile 在 pane 生命周期内固定。
+Workbench `EditorProfile` 组合 schema/semantic vocabulary、empty document factory、node/atom views、toolbar actions、plugins 与 collaboration schema identity。Profile 在 pane 生命周期内固定。Academic 的文件关联与编辑器名称由可停用的 `ash.academic` 声明式扩展提供；启用时注册共享文档 editor，停用时撤下注册和文件路由，已打开的工作副本由原 tab 继续持有。扩展不创建第二份 TextModel 或 history。
 
 协作边界与 VS Code 的 Editor/Workbench 分层一致：Editor 定义文档事务、快照、远端选区和同步连接契约；Workbench 定义房间输入、邀请、成员角色与凭证管理。DocumentEditorPane 创建房间工具栏并选择连接方式，将已打开的连接交给 Widget；切换文档时取消房间请求并释放连接。
 

@@ -11,17 +11,14 @@ unused-ignored-advisory = "deny"
 # source trees solely to replace transitive dependencies. New advisories remain
 # checked; remove each exception when a compatible upstream release drops it.
 ignore = [
-    # Build-time macros in Ratatui, tokenizers, V8, biblatex and hayagriva.
+    # Build-time macros in Ratatui, tokenizers and V8.
     "RUSTSEC-2024-0436", # paste
     # BM25 hashes the rebuilt in-memory tool index; IDs are not persisted.
     "RUSTSEC-2025-0057", # fxhash
-    # Syntect's published syntax loader; custom YAML remains covered by Typst tests.
+    # Syntect's published syntax loader.
     "RUSTSEC-2024-0320", # yaml-rust
     # Syntect's published syntax/theme dump format and bundled assets.
     "RUSTSEC-2025-0141", # bincode
-    # Typst/usvg font shaping and parsing; follow their upstream migration together.
-    "RUSTSEC-2026-0206", # rustybuzz
-    "RUSTSEC-2026-0192", # ttf-parser
 ]
 
 [licenses]
@@ -58,5 +55,4 @@ allow-git = [
     "https://github.com/dzbarsky/rules_rust",
     "https://github.com/helix-editor/nucleo.git",
     "https://github.com/hyperium/h3",
-    "https://github.com/typst/citationberg",
 ]

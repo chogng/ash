@@ -142,7 +142,7 @@ Ash 文档宿主按修改来源的 Thread／Turn 标识等待回复完成；多�
 
 ## Academic 文档贡献归属（2026-10-03）
 
-Academic 已退出顶层工作台模式。通用 `workbench/contrib/documentEditor/browser/documentEditor.contribution.ts` 唯一注册文档 pane；`workbench/contrib/academic/browser/academicEditor.contribution.ts` 只登记论文配置。Academic 内容类型归 `workbench/contrib/academic/common/documentTypes.ts`，通用类型注册及文档模型服务契约归 `workbench/services/documentEditor/common/documentTypes.ts`。这些职责是 Ash 专属文档能力，不计为 VS Code API 对齐。
+Academic 已退出顶层工作台模式。通用 `workbench/contrib/documentEditor/browser/editorProfile.ts` 组合共享文档 pane；`workbench/contrib/academic/browser/academicEditor.contribution.ts` 提供论文 profile 的可信 factory，由 `extensions/academic` 的可停用声明注册 editor 和文件路由。Academic 内容类型归 `workbench/contrib/academic/common/documentTypes.ts`，通用类型注册及文档模型服务契约归 `workbench/services/documentEditor/common/documentTypes.ts`。这些职责是 Ash 专属文档能力，不计为 VS Code API 对齐。
 
 用户已确认删除以下无上游对应的旧模式文件，调用方同批迁移，Git 保留历史：
 

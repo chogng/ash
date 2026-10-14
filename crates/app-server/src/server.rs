@@ -38,7 +38,6 @@ use ash_protocol::ThreadUpdateEnvelope;
 use ash_skills_extension::SkillConfigSnapshotProvider;
 use ash_skills_extension::SkillRuntime;
 use ash_skills_extension::SkillWatcher;
-use ash_typst::TypstCompiler;
 use core_api::ActionPolicyService;
 use core_api::AgentRuntime;
 use core_api::CoreError;
@@ -309,7 +308,6 @@ pub struct AppServer {
     semantic_model_provider: Option<Arc<dyn ash_model_provider::SemanticModelProvider>>,
     cloud_codebase_storage_root: Option<std::path::PathBuf>,
     cloud_codebase_providers: ash_cloud_codebase::CloudCodebaseProviderRegistry,
-    pub(super) typst: TypstCompiler,
     pub(super) slash_commands: SlashCommandCatalog,
     agent_extensions: Arc<ExtensionRegistry>,
     notes: Option<Arc<history_notes::NotesStore>>,
@@ -720,7 +718,6 @@ impl AppServer {
             semantic_model_provider: None,
             cloud_codebase_storage_root: None,
             cloud_codebase_providers: ash_cloud_codebase::CloudCodebaseProviderRegistry::default(),
-            typst: TypstCompiler::new(),
             slash_commands: SlashCommandCatalog::default(),
             agent_extensions,
             notes: None,
@@ -2672,7 +2669,6 @@ impl AppServer {
             Some(ClientMethod::TeamMessageList) => {
                 self.team_message_list(connection, &request.params)
             }
-            Some(ClientMethod::TypstCompile) => self.typst_compile(connection, &request.params),
             Some(ClientMethod::ConfigRead) => self.config_read(),
             Some(ClientMethod::ApprovalEnvironmentRead) => {
                 self.approval_environment_read(connection, &request.params)

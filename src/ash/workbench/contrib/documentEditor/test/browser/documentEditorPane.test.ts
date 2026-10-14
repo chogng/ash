@@ -19,7 +19,7 @@ import { IOpenerService } from '../../../../../platform/opener/common/opener.js'
 import { OpenerService } from '../../../../../editor/browser/services/openerService.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import { StandaloneCodeEditorService } from '../../../../../editor/standalone/browser/standaloneCodeEditorService.js';
-import { EditorPanes } from '../../../../browser/editor.js';
+import { getBuiltinEditorPaneFactory } from '../../../../browser/editor.js';
 import { IDialogService as DialogServiceId } from '../../../../../platform/dialogs/common/dialogs.js';
 import { BrowserWorkingCopyService } from '../../../../services/workingCopy/browser/browserWorkingCopyService.js';
 import { DOCUMENT_EDITOR_ID } from "../../browser/documentEditorInput.js";
@@ -41,7 +41,6 @@ suiteTeardown(() => uriIdentityServices.dispose());
 
 await import("../../../../../editor/contrib/documentEditor.contribution.js");
 await import('../../../academic/browser/academicEditor.contribution.js');
-await import('../../browser/documentEditor.contribution.js');
 
 let dialogValues: readonly string[] = [];
 const testDialogs: IDialogService = {
@@ -77,7 +76,7 @@ class EditorPane extends DocumentEditorPane {
 	}
 }
 
-test('registered Academic panes share one model, save baseline and working copy until their last view closes', async () => {
+test('Academic package panes share one model, save baseline and working copy until their last view closes', async () => {
 	const environment = new JSDOM('<!doctype html><body></body>');
 	const schema = createAcademicDocumentSchema();
 	const document = createEmptyAcademicDocument(schema);
@@ -93,9 +92,9 @@ test('registered Academic panes share one model, save baseline and working copy 
 	using opener = services.createInstance(OpenerService);
 	services.registerInstance(IOpenerService, opener);
 	const input = { resource: URI.file('/paper.ash-academic') };
-	const descriptor = EditorPanes.getEditorPane(input)!;
-	using first = descriptor.create({ input, instantiationService: services }) as DocumentEditorPane;
-	using second = descriptor.create({ input, instantiationService: services }) as DocumentEditorPane;
+	const factory = getBuiltinEditorPaneFactory('ash.academic', DOCUMENT_EDITOR_ID)!;
+	using first = factory.create({ input, instantiationService: services }, 'Academic Document') as DocumentEditorPane;
+	using second = factory.create({ input, instantiationService: services }, 'Academic Document') as DocumentEditorPane;
 	try {
 		first.create(environment.window.document.body);
 		second.create(environment.window.document.body);

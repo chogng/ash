@@ -319,8 +319,8 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 				}
 				if (extension.sourceKind === 'builtIn') {
 					for (const editor of manifest.contributes.customEditors) {
-						const create = getBuiltinEditorPaneFactory(extension.id, editor.viewType);
-						if (!create) { continue; }
+						const factory = getBuiltinEditorPaneFactory(extension.id, editor.viewType);
+						if (!factory) { continue; }
 						let name = editor.displayName;
 						const key = /^%(.+)%$/.exec(name)?.[1];
 						if (key) {
@@ -330,7 +330,13 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 							name = messages[key];
 						}
 						editorPanes.push({
-							id: editor.viewType, name, create: options => create(options, name),
+							id: editor.viewType, name, create: options => factory.create(options, name),
+							...(factory.documentType ? {
+								documentType: {
+									...factory.documentType,
+									extensions: editor.selector.map(selector => selector.filenamePattern).filter(pattern => /^\*\.[A-Za-z0-9-]+$/.test(pattern)).map(pattern => pattern.slice(1).toLowerCase()),
+								}
+							} : {}),
 							canOpen: input => {
 								if (isResourceDiffEditorInput(input)) { return EditorPaneMatch.None; }
 								const mediaType = input.contentType?.split(';', 1)[0].trim().toLowerCase();

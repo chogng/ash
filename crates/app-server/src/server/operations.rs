@@ -9,11 +9,6 @@ use ash_app_server_protocol::protocol::agent::AgentCapabilitiesReadResult;
 use ash_app_server_protocol::protocol::common::SchemaHash;
 use ash_app_server_protocol::protocol::common::ServerInfo;
 use ash_app_server_protocol::protocol::common::ServerOperatingSystem;
-use ash_app_server_protocol::protocol::document::TypstCompileParams;
-use ash_app_server_protocol::protocol::document::TypstCompileResult;
-use ash_app_server_protocol::protocol::document::TypstDiagnosticDto;
-use ash_app_server_protocol::protocol::document::TypstDiagnosticSeverityDto;
-use ash_app_server_protocol::protocol::document::TypstSourceRangeDto;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::goal::ThreadGoalClearParams;
 use ash_app_server_protocol::protocol::goal::ThreadGoalClearResponse;
@@ -60,10 +55,6 @@ use ash_protocol::ModelAccess;
 use ash_protocol::Session;
 use ash_protocol::ThreadStatus;
 use ash_protocol::UserInput;
-use ash_typst::TypstCompileError;
-use ash_typst::TypstCompileOutcome;
-use ash_typst::TypstDiagnostic;
-use ash_typst::TypstDiagnosticSeverity;
 use base64::Engine;
 use core_api::AgentRuntime;
 use core_api::CreateBranchRequest;
@@ -79,7 +70,6 @@ use core_api::ShellTurnInvocation;
 use core_api::SteerTurnRequest;
 use core_api::ThreadView;
 use serde_json::Value;
-use std::time::Duration;
 
 pub(super) enum TurnInstructionSelection {
     Agent,
@@ -419,7 +409,6 @@ impl AppServer {
             cloud_codebase,
             terminal,
             debug_adapter,
-            typst: true,
             update_replay: true,
             extensions,
             extension_host: self.extension_hosts.is_some(),
@@ -2098,53 +2087,6 @@ impl AppServer {
         })
     }
 
-    pub(super) fn typst_compile(
-        &self,
-        connection: &ConnectionState,
-        params: &Value,
-    ) -> Result<Value, RpcError> {
-        let params: TypstCompileParams = decode(params)?;
-        let outcome = self
-            .typst
-            .compile(&params.source)
-            .map_err(|error| match error {
-                TypstCompileError::SourceTooLarge { .. } => {
-                    RpcError::new(-32602, AppServerErrorName::InvalidParams)
-                }
-            })?;
-        match outcome {
-            TypstCompileOutcome::Success(success) => {
-                let metadata = self
-                    .resources
-                    .lock()
-                    .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?
-                    .create(
-                        connection.connection_id,
-                        "application/pdf".into(),
-                        success.pdf,
-                        Duration::from_secs(300),
-                    )
-                    .map_err(resource_rpc_error)?;
-                result(&TypstCompileResult::Success {
-                    resource: ResourceMetadataResult {
-                        resource_id: metadata.resource_id,
-                        mime_type: metadata.mime_type,
-                        size: metadata.size,
-                        sha256: metadata.sha256,
-                    },
-                    warnings: success
-                        .warnings
-                        .into_iter()
-                        .map(typst_diagnostic_dto)
-                        .collect(),
-                })
-            }
-            TypstCompileOutcome::Failed { diagnostics } => result(&TypstCompileResult::Failed {
-                diagnostics: diagnostics.into_iter().map(typst_diagnostic_dto).collect(),
-            }),
-        }
-    }
-
     pub(super) fn resource_read(
         &self,
         connection: &ConnectionState,
@@ -2397,21 +2339,6 @@ pub(super) fn resource_rpc_error(error: crate::resource_store::ResourceError) ->
             ResourceError::InvalidOffset => AppServerErrorName::InvalidResourceOffset,
         },
     )
-}
-
-fn typst_diagnostic_dto(diagnostic: TypstDiagnostic) -> TypstDiagnosticDto {
-    TypstDiagnosticDto {
-        severity: match diagnostic.severity {
-            TypstDiagnosticSeverity::Error => TypstDiagnosticSeverityDto::Error,
-            TypstDiagnosticSeverity::Warning => TypstDiagnosticSeverityDto::Warning,
-        },
-        message: diagnostic.message,
-        hints: diagnostic.hints,
-        range: diagnostic.range.map(|range| TypstSourceRangeDto {
-            start: range.start,
-            end: range.end,
-        }),
-    }
 }
 
 fn turn_start_result(receipt: core_api::TurnReceipt) -> TurnStartResult {

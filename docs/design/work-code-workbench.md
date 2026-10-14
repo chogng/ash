@@ -96,7 +96,7 @@ Work 和 Code 是同一 Desktop 产品内的不同界面组合，不改变 [`ash
 
 ### 2. 保持共同编辑器注册（基础已完成）
 
-- [文档编辑器贡献](../../src/ash/workbench/contrib/documentEditor/browser/documentEditor.contribution.ts)只注册一次 `DOCUMENT_EDITOR_ID`；Academic 贡献只登记论文配置。匹配与实例化使用同一配置集合。
+- [文档编辑器 profile](../../src/ash/workbench/contrib/documentEditor/browser/editorProfile.ts)组合共享 pane；Academic 可信 factory 由 `ash.academic` 扩展的声明选择。启用与停用同步注册或撤下 editor 和文件关联，已有工作副本由原 tab 保留。
 - [Workbench 共同入口](../../src/ash/workbench/workbench.common.main.ts)已装配代码与文档编辑器；未来 Work 使用同一装配契约，再增加自身工具。代码匹配规则排除已注册的结构化文档，包括通过内容类型指定的未命名文档。
 - 当前验收是 Code 中代码和论文在同一窗口打开；增加普通文档后再验证两种文档配置，增加 Work 后再验证不同界面组合下的恢复。
 

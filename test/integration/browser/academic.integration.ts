@@ -46,6 +46,16 @@ import { ICodeEditorService } from '../../../src/ash/editor/browser/services/cod
 import { StandaloneCodeEditorService } from '../../../src/ash/editor/standalone/browser/standaloneCodeEditorService.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import messages from '../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
+import { createBuiltinExtensionFixture } from './builtinExtensionsFixture.js';
+import { withEnabledBuiltInExtensions } from '../../../src/ash/platform/extensions/browser/extensionApi.js';
+import { GlobalExtensionEnablementService } from '../../../src/ash/platform/extensionManagement/common/extensionEnablementService.js';
+import { AppServerExtensionService } from '../../../src/ash/workbench/services/extensions/browser/appServerExtensionService.js';
+import { createEmptyTestLanguagePacks } from '../../../src/ash/workbench/services/localization/test/common/localizationTestUtils.js';
+import type { ITextMateService } from '../../../src/ash/workbench/services/textMate/common/textMateService.js';
+import { EditorPanes } from '../../../src/ash/workbench/browser/editor.js';
+import { DocumentTypes } from '../../../src/ash/workbench/services/documentEditor/common/documentTypes.js';
+import { toDisposable } from '../../../src/ash/base/common/lifecycle.js';
+import '../../../src/ash/workbench/contrib/academic/browser/academicEditor.contribution.js';
 
 interface AcademicIntegrationHarness {
 	readonly apiDocumentType: string;
@@ -57,6 +67,10 @@ interface AcademicIntegrationHarness {
 	getOpenedLinks(): readonly string[];
 	saveCodeBlock(): Promise<void>;
 	getSavedCodeBlock(): string;
+	setAcademicEnabled(enabled: boolean): Promise<void>;
+	getAcademicRegistration(): { name: string | undefined; routed: boolean; };
+	saveStructured(): Promise<void>;
+	getSavedStructured(): string;
 	dispose(): void;
 }
 
@@ -167,7 +181,32 @@ const files: ITextFileService = {
 };
 services.registerInstance(IDocumentEditorTextModelService, disposables.add(new DocumentEditorTextModelService(files, copies)));
 const codeBlockPane = disposables.add(registerTestComponentServices(services).createInstance(DocumentEditorPane, { contentType: 'application/vnd.ash.document+json' }));
-const structuredPane = disposables.add(registerTestComponentServices(services).createInstance(DocumentEditorPane, { contentType: 'application/vnd.ash.document+json', createDocumentCollaborationService: () => new BrowserDocumentCollaborationService() }));
+let academicExtensionService: AppServerExtensionService | undefined;
+let academicEnablement: GlobalExtensionEnablementService | undefined;
+if (new URLSearchParams(location.search).has('academicExtension')) {
+	const fixture = createBuiltinExtensionFixture();
+	academicEnablement = disposables.add(services.createInstance(GlobalExtensionEnablementService));
+	const api = withEnabledBuiltInExtensions({
+		list: async () => {
+			const catalog = await fixture.list('cached');
+			return { ...catalog, extensions: catalog.extensions.filter(entry => entry.id === 'ash.academic') };
+		},
+		resources: fixture.resources,
+	}, academicEnablement);
+	academicExtensionService = disposables.add(new AppServerExtensionService({
+		api, textMateService: {
+			grammars: {
+				registerGrammars: () => ({ replace: () => { }, ...toDisposable(() => { }) }),
+				prepareGrammars: async () => ({ commit: () => ({}) }),
+				whenReady: async () => ({}),
+			},
+		} as unknown as ITextMateService
+	}, createEmptyTestLanguagePacks()));
+	await academicExtensionService.start();
+}
+const structuredPane = disposables.add(academicExtensionService
+	? EditorPanes.getEditorPane({ resource: structuredResource })!.create({ input: { resource: structuredResource }, instantiationService: services }) as DocumentEditorPane
+	: services.createInstance(DocumentEditorPane, { contentType: 'application/vnd.ash.document+json', createDocumentCollaborationService: () => new BrowserDocumentCollaborationService() }));
 
 codeBlockPane.create(requiredElement("#code-block"));
 structuredPane.create(requiredElement("#document-editor"));
@@ -186,6 +225,18 @@ window.ashAcademicIntegration = {
 	getOpenedLinks: () => openedLinks,
 	saveCodeBlock: () => codeBlockPane.save(),
 	getSavedCodeBlock: () => codeBlockFiles.read(codeBlockResource),
+	setAcademicEnabled: async enabled => {
+		if (!academicExtensionService || !academicEnablement) throw new Error('Academic extension fixture is not enabled');
+		if (enabled) await academicEnablement.enableExtension({ id: 'ash.academic' });
+		else await academicEnablement.disableExtension({ id: 'ash.academic' });
+		await academicExtensionService.reload();
+	},
+	getAcademicRegistration: () => ({
+		name: EditorPanes.getEditorPane({ resource: structuredResource })?.name,
+		routed: DocumentTypes.find({ resource: structuredResource }) !== undefined,
+	}),
+	saveStructured: () => structuredPane.save(),
+	getSavedStructured: () => structuredFiles.read(structuredResource),
 	dispose: () => {
 		apiModel.dispose();
 		disposables.dispose();

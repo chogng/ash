@@ -27,7 +27,6 @@ import { createAppServerContentSearchApi, createAppServerContentSearchConfigurat
 import { createAppServerAgentSessionService, createAppServerAgentThreadService, createAppServerAgentTurnService } from "./appServerAgentService.js";
 import { createAppServerAgentModelsService } from "./appServerAgentModels.js";
 import { AppServerTerminalProcessService } from "../../terminal/browser/appServerTerminalProcessService.js";
-import { createAppServerTypstApi } from "../../typst/browser/typstApi.js";
 import { createAppServerDocumentCollaborationApi } from "../../collaboration/browser/documentCollaborationApi.js";
 import { createAppServerCodebaseApi } from "../../codebase/browser/codebaseApi.js";
 import { createAppServerCodebaseSymbolsApi } from "../../codebaseSymbols/browser/codebaseSymbolsApi.js";
@@ -115,7 +114,6 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 		turnChanges: createAppServerTurnChangesApi(connection),
 		skills: createAppServerSkillOperations(connection),
 		instructions: createAppServerInstructionService(connection),
-		typst: createAppServerTypstApi(connection),
 		documentCollaboration: createAppServerDocumentCollaborationApi(connection),
 		resource,
 		extensions: createAppServerExtensionApi(connection, resource),

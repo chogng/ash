@@ -382,7 +382,6 @@ fn incompatible_initialize_response() -> String {
                 "cloudCodebase": false,
                 "terminal": false,
                 "debugAdapter": false,
-                "typst": false,
                 "updateReplay": false,
                 "extensions": false,
                 "extensionHost": false,

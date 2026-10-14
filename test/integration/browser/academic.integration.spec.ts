@@ -16,6 +16,36 @@ test.afterEach(async ({ page }) => {
 	expect(pageErrors.get(page) ?? []).toEqual([]);
 });
 
+for (const [locale, name] of [['en', 'Academic Document'], ['zh-CN', '学术论文文档']] as const) {
+	test(`Academic extension disablement preserves open editing and save in ${locale}`, async ({ page }) => {
+		await page.goto(`/academic.html?academicExtension&locale=${locale}`);
+		await page.waitForFunction(() => !!window.ashAcademicIntegration);
+		await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getAcademicRegistration())).toEqual({ name, routed: true });
+		const input = page.locator('#document-editor textarea.stanza-document-text-input').first();
+		await input.fill('Draft paper');
+		await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredBlockTexts())).toEqual(['Draft paper', 'Body']);
+		// A cursor move ends the typing group before the separate extension action.
+		await input.evaluate(element => {
+			const textarea = element as HTMLTextAreaElement;
+			textarea.setSelectionRange(0, 0);
+			textarea.dispatchEvent(new Event('select', { bubbles: true }));
+		});
+		await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredSelection())).toMatchObject({ head: { offset: 0 } });
+		await page.evaluate(() => window.ashAcademicIntegration.setAcademicEnabled(false));
+		expect(await page.evaluate(() => window.ashAcademicIntegration.getAcademicRegistration())).toEqual({ name: undefined, routed: false });
+		const bodyInput = page.locator('#document-editor textarea.stanza-document-text-input').nth(1);
+		await bodyInput.fill('Retained body');
+		await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredBlockTexts())).toEqual(['Draft paper', 'Retained body']);
+		await page.evaluate(() => window.ashAcademicIntegration.saveStructured());
+		expect(await page.evaluate(() => window.ashAcademicIntegration.getSavedStructured())).toContain('Retained body');
+		await page.evaluate(() => window.ashAcademicIntegration.setAcademicEnabled(true));
+		expect(await page.evaluate(() => window.ashAcademicIntegration.getAcademicRegistration())).toEqual({ name, routed: true });
+		await bodyInput.focus();
+		await bodyInput.press('ControlOrMeta+z');
+		await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredBlockTexts())).toEqual(['Draft paper', 'Body']);
+	});
+}
+
 test("TextModel API and Academic code-block editing run in real browsers", async ({ page }) => {
 	await page.goto("/academic.html");
 	await expect(page.locator("#code-block textarea.stanza-document-text-input")).toBeVisible();

@@ -175,13 +175,13 @@ fn registry_method_and_notification_names_are_unique() {
         "turn/shell/start",
         "turn/interrupt",
         "turn/interaction/resolve",
+        "document/typst/compile",
     ] {
         assert!(
             !methods.contains(obsolete),
             "obsolete method remains registered: {obsolete}"
         );
     }
-    assert!(methods.contains("document/typst/compile"));
     assert!(methods.contains("fs/getMetadata"));
     assert!(methods.contains("fs/readDirectory"));
     assert!(methods.contains("fs/readFile"));
@@ -618,9 +618,6 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
         !typescript
             .contains(r#""turn/interaction/resolve": { method: "turn/interaction/resolve" }"#)
     );
-    assert!(
-        typescript.contains(r#""document/typst/compile": { method: "document/typst/compile" }"#)
-    );
     assert!(typescript.contains(r#""fs/getMetadata": { method: "fs/getMetadata" }"#));
     assert!(typescript.contains(r#""fs/readDirectory": { method: "fs/readDirectory" }"#));
     assert!(typescript.contains(r#""fs/readFile": { method: "fs/readFile" }"#));
@@ -670,8 +667,6 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(typescript.contains("export type CloudCodebaseSelectionDto ="));
     assert!(typescript.contains("export type CloudCodebaseStatusResult ="));
     assert!(typescript.contains("syncedLocalGeneration: number | null"));
-    assert!(typescript.contains("export type TypstCompileResult ="));
-    assert!(typescript.contains(r#""status": "success""#));
     assert!(typescript.contains("export type TurnInteraction ="));
     assert!(typescript.contains("export type PendingInteraction ="));
     assert!(
@@ -700,8 +695,6 @@ fn dto_driven_schema_contains_registered_rpc_envelopes() {
     assert!(definitions.contains_key("Session"));
     assert!(definitions.contains_key("ThreadItem"));
     assert!(definitions.contains_key("ToolMode"));
-    assert!(definitions.contains_key("TypstCompileParams"));
-    assert!(definitions.contains_key("TypstCompileResult"));
     assert!(definitions.contains_key("ContentSearchStartParams"));
     assert!(definitions.contains_key("ContentSearchReadResult"));
     assert!(definitions.contains_key("CodebaseStatusResult"));

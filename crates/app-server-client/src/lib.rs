@@ -59,7 +59,6 @@ use ash_app_server_protocol::protocol::dictation::DictationStartParams;
 use ash_app_server_protocol::protocol::dictation::DictationStopResult;
 use ash_app_server_protocol::protocol::diff::DiffComputeParams;
 use ash_app_server_protocol::protocol::diff::DiffComputeResult;
-use ash_app_server_protocol::protocol::document::{TypstCompileParams, TypstCompileResult};
 use ash_app_server_protocol::protocol::environment::{
     DirPermissionsReadParams, DirPermissionsReadResult, EnvDirsSetParams, EnvDirsSetResult,
     SessionDirAddParams, SessionDirAddResult, SessionDirListParams, SessionDirListResult,
@@ -1368,13 +1367,6 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         params: SkillResourceOpenParams,
     ) -> Result<SkillResourceOpenResult, ClientError> {
         self.call(ClientMethod::SkillResourceOpen, params)
-    }
-
-    pub fn compile_typst(
-        &mut self,
-        params: TypstCompileParams,
-    ) -> Result<TypstCompileResult, ClientError> {
-        self.call(ClientMethod::TypstCompile, params)
     }
 
     pub fn start_memory_diagnostics(

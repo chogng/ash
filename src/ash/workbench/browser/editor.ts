@@ -2,12 +2,14 @@ import type { IResourceEditorInput } from '../common/editor.js';
 import { Emitter, type Event } from '../../base/common/event.js';
 import { AbstractDisposable, Disposable, type IDisposable } from '../../base/common/lifecycle.js';
 import type { EditorOpenOptions } from '../services/editor/common/editorService.js';
+import { DocumentTypes, type DocumentType } from '../services/documentEditor/common/documentTypes.js';
 import { EditorPaneMatch, type EditorPane, type EditorPaneCreationOptions } from './parts/editor/editorPane.js';
 
 /** Resource matchers are pure; Workbench inputs are values rather than input classes. */
 export interface IEditorPaneDescriptor {
 	readonly id: string;
 	readonly name: string;
+	readonly documentType?: DocumentType;
 	canOpen(input: IResourceEditorInput): EditorPaneMatch;
 	/** Creates a distinct tab identity when this editor opens beside the source. */
 	createInput?(source: IResourceEditorInput): IResourceEditorInput;
@@ -24,18 +26,22 @@ export interface IEditorPaneRegistry {
 
 /** Product renderers are selected only by declarations in their built-in package. */
 type BuiltinEditorPaneFactory = (options: EditorPaneCreationOptions, name: string) => EditorPane;
-const builtinEditorPaneFactories = new Map<string, BuiltinEditorPaneFactory>();
+interface BuiltinEditorPane {
+	readonly create: BuiltinEditorPaneFactory;
+	readonly documentType?: Pick<DocumentType, 'id' | 'contentType'>;
+}
+const builtinEditorPaneFactories = new Map<string, BuiltinEditorPane>();
 
-export function getBuiltinEditorPaneFactory(extensionId: string, editorId: string): BuiltinEditorPaneFactory | undefined {
+export function getBuiltinEditorPaneFactory(extensionId: string, editorId: string): BuiltinEditorPane | undefined {
 	return builtinEditorPaneFactories.get(`${extensionId}/${editorId}`);
 }
 
-export function registerBuiltinEditorPane(extensionId: string, editorId: string, create: BuiltinEditorPaneFactory): void {
+export function registerBuiltinEditorPane(extensionId: string, editorId: string, create: BuiltinEditorPaneFactory, documentType?: Pick<DocumentType, 'id' | 'contentType'>): void {
 	const key = `${extensionId}/${editorId}`;
 	if (builtinEditorPaneFactories.has(key)) {
 		throw new Error(`Built-in editor factory is already registered: ${key}`);
 	}
-	builtinEditorPaneFactories.set(key, create);
+	builtinEditorPaneFactories.set(key, { create, documentType });
 }
 
 /** Owns editor declarations and matching; editor groups own the created panes. */
@@ -51,6 +57,7 @@ export class EditorPaneRegistry extends Disposable implements IEditorPaneRegistr
 	/** Validate an entire package before changing the available editors. */
 	public registerEditorPanes(initial: readonly IEditorPaneDescriptor[]): IDisposable & { replace(descriptors: readonly IEditorPaneDescriptor[]): void; } {
 		let owned: readonly IEditorPaneDescriptor[] = [];
+		const documentTypes = DocumentTypes.registerTypes();
 		const replace = (descriptors: readonly IEditorPaneDescriptor[]): void => {
 			const identifiers = new Set<string>();
 			for (const descriptor of descriptors) {
@@ -62,13 +69,19 @@ export class EditorPaneRegistry extends Disposable implements IEditorPaneRegistr
 				identifiers.add(descriptor.id);
 			}
 			if (owned.length === 0 && descriptors.length === 0) { return; }
+			documentTypes.replace(descriptors.flatMap(descriptor => descriptor.documentType ? [descriptor.documentType] : []));
 			for (const descriptor of owned) { this.descriptors.delete(descriptor.id); }
 			owned = [...descriptors];
 			for (const descriptor of owned) { this.descriptors.set(descriptor.id, descriptor); }
 			this.changeEmitter.fire();
 		};
-		replace(initial);
-		return new EditorPaneRegistration(replace);
+		try {
+			replace(initial);
+		} catch (error) {
+			documentTypes.dispose();
+			throw error;
+		}
+		return new EditorPaneRegistration(replace, documentTypes);
 	}
 
 	/** Product contributions retain their declarations for the module lifetime. */
@@ -119,7 +132,7 @@ export class EditorPaneRegistry extends Disposable implements IEditorPaneRegistr
 }
 
 class EditorPaneRegistration extends AbstractDisposable {
-	constructor(private readonly update: (descriptors: readonly IEditorPaneDescriptor[]) => void) {
+	constructor(private readonly update: (descriptors: readonly IEditorPaneDescriptor[]) => void, private readonly documentTypes: IDisposable) {
 		super();
 	}
 
@@ -130,6 +143,7 @@ class EditorPaneRegistration extends AbstractDisposable {
 
 	protected override disposeCore(): void {
 		this.update([]);
+		this.documentTypes.dispose();
 	}
 }
 
