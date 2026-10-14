@@ -10,6 +10,21 @@
 
 文件集合差异和公开声明差异是待调查项，不等于对应行为全部缺失。完整路径、imports、exports、公开成员、CSS selector/token、生产与测试调用方已保存在 `.build/chat-alignment/inventory.json`；可读版为 `.build/chat-alignment/report.html`。不将未验证的上游公开成员计为已实现。
 
+## 输入框附件栏移除（2026-10-14）
+
+用户确认去掉输入框上方的当前编辑器文件推荐栏。Code 和 Sessions 共用的
+`ChatInputPart` 不再创建 `ImplicitContextAttachmentWidget`，切换普通编辑器或 SCM diff
+不会增加独立的文件栏，也不会自动附加文件。附件状态仍由原 `ChatAttachmentModel` 和
+`ChatDynamicVariableModel` 拥有；「添加上下文」、粘贴、拖放和代码选区继续插入消息内引用。
+同步移除无障碍帮助中的推荐栏说明。输入框文件在 Ash 和 VS Code 均存在；本批是明确的
+产品行为差异，不复制上游隐式上下文 UI。原推荐 widget 源文件和 CSS 未删除。
+
+验证：Chromium 16 项通过（en/zh-CN × 四种主题），覆盖无推荐栏、普通文件和 diff 切换、
+手动添加与发送、消息内选区、快照和键盘行为。完整 browser 类型检查（3832 文件）、NLS
+（zh-CN 零缺项）和本批 diff check 通过。spec 格式检查通过；输入框文件的格式差异与本批前
+完全一致，来自已有权限交互改动，未混入本批清理。证据位于
+`.build/desktop/playwright/editor-browser-Gp8EkJ`。
+
 ## Platform Chat 配置职责（2026-10-14）
 
 `src/ash/platform/chat/common/chatSettings.ts` 本批只建立有生产消费方的

@@ -19,7 +19,6 @@
     "color.scmGraph.historyItemHoverLabelForeground": "历史条目悬停标签的前景色。",
     "chat.context.suggestedFile": "建议的文件上下文：{0}",
     "chat.context.addSuggestedFile": "将 {0} 添加到上下文",
-    "chat.context.suggestedHelp": "消息上方会显示当前编辑文件的上下文建议。按 Tab 移至其添加上下文按钮，再按 Enter 或空格将文件加入下一条消息。建议只有在添加后才会发送。切换编辑器会更新建议；已添加的文件不会重复显示。添加时会捕获未保存的文本。发送成功后会清除附件，发送失败则保留以便重试。",
     "tasks.invalidOutputRange": "任务输出游标或读取上限无效。首次读取请使用 cursor=0，上限应为 1 到 65536。",
     "tasks.agentAlreadyRunning": "任务“{0}”已在运行。请使用 tasks_list 查找其运行 ID 并检查状态。",
     "tasks.runExitCode": "（退出代码 {0}）",
