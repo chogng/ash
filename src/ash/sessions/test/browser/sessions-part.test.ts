@@ -143,6 +143,9 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		async archiveSession() {
 			throw new Error("Session archiving is unavailable");
 		},
+		async restoreSession() {
+			throw new Error("Session restoration is unavailable");
+		},
 	};
 	const threadUpdates = new Emitter<ThreadUpdateEnvelope>();
 	const transcriptUpdates = new Emitter<import("../../../workbench/services/chat/common/chatService.js").ThreadTranscriptUpdateEnvelope>();
@@ -153,6 +156,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		readContextUsage: async () => { throw new Error('No active Thread'); },
 		readAdvisorDefault: async () => null,
 		saveAdvisorDefault: async () => { },
+		onDidSubmitRequest: () => toDisposable(() => { }),
 		onDidChangeSession: Event.None,
 		onDidUpdateThread: threadUpdates.event,
 		onDidUpdateThreadTranscript: transcriptUpdates.event,

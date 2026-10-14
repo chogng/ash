@@ -461,6 +461,7 @@ class FakeSessionService implements ISessionsManagementService {
 	async startNewSession(): Promise<IActiveSessionThread> { this.startNewSessionCalls++; throw new Error("Not implemented"); }
 	async stopSession(): Promise<void> { }
 	async archiveSession(): Promise<void> { }
+	async restoreSession(): Promise<void> { }
 	async setModel(): Promise<void> { }
 	async setNextApprovalMode(_sessionId: SessionId, _approvalMode: ApprovalMode): Promise<void> { }
 

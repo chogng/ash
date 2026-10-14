@@ -8,6 +8,7 @@ import type { IActiveSessionThread, IUntitledChatSession, ISession, SessionManag
 import type { ISessionsManagementService, SessionsManagementState } from "../common/sessionsManagement.js";
 import type { ISessionsProvider } from "../common/sessionsProvider.js";
 import type { ChatAgent } from '../../../../workbench/services/chat/common/chatService.js';
+import { localize } from '../../../../nls.js';
 
 /** Keeps the rendered Session list and drafts; App Server owns durable Session data. */
 export class SessionsManagementService extends Disposable implements ISessionsManagementService {
@@ -230,6 +231,22 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 
 	async archiveSession(sessionId: SessionId): Promise<void> { await this.finishSession(sessionId, "archiving"); }
 	async stopSession(sessionId: SessionId): Promise<void> { await this.finishSession(sessionId, "stopping"); }
+
+	async restoreSession(sessionId: SessionId): Promise<void> {
+		await this.initialize();
+		const session = this._sessions.find(candidate => candidate.sessionId === sessionId && candidate.status === 'archived');
+		if (!session) throw new Error(localize('chatSession.archived.missing', 'Archived session is unavailable: {0}', sessionId));
+		try {
+			const restored = await this.provider.restore(session);
+			if (this.isDisposed) throw canceled();
+			this.replaceSession(restored);
+			this._error = undefined;
+			this._onDidChange.fire();
+		} catch (error) {
+			if (!this.isDisposed && !isCancellationError(error)) this.setError(error);
+			throw error;
+		}
+	}
 
 	async setModel(model: ModelRef): Promise<void> {
 		await this.initialize();

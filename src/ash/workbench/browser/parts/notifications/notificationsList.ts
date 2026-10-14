@@ -14,6 +14,7 @@ export class NotificationsList extends Disposable {
 	private readonly removeEmitter = this._register(new Emitter<number>());
 	public readonly onDidRequestRemove = this.removeEmitter.event;
 	private readonly items: NotificationItem[] = [];
+	private readonly shown = new Set<number>();
 	private readonly emptyDomNode: HTMLElement;
 
 	constructor(
@@ -41,6 +42,7 @@ export class NotificationsList extends Disposable {
 		for (const [id] of this.renderers) {
 			if (!this.items.some(item => item.id === id)) {
 				this.renderers.deleteAndDispose(id);
+				this.shown.delete(id);
 			}
 		}
 		this.emptyDomNode.remove();
@@ -59,6 +61,10 @@ export class NotificationsList extends Disposable {
 			const position = this.domNode.children[index];
 			if (position !== renderer.domNode) {
 				this.domNode.insertBefore(renderer.domNode, position ?? null);
+			}
+			if (item.onDidShow && !this.shown.has(item.id) && renderer.domNode.isConnected && renderer.domNode.checkVisibility({ checkVisibilityCSS: true })) {
+				this.shown.add(item.id);
+				item.onDidShow?.();
 			}
 		}
 		if (this.presentation === 'center' && !this.items.length) {

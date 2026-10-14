@@ -40,9 +40,10 @@ export class OpenAgentsWindowTitleBarAction extends Action2 {
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
 		const navigation = accessor.get(IChatSessionNavigationService);
+		const host = accessor.get(INativeHostService);
 		const conversation = navigation.getActiveConversation();
 		const captured = await navigation.captureActiveDraft();
-		await accessor.get(INativeHostService).openAgentsWindow(conversation || captured ? { conversation, draft: captured?.draft } : undefined);
+		await host.openAgentsWindow(conversation || captured ? { conversation, draft: captured?.draft } : undefined);
 		// Only the target window's acknowledgement transfers ownership of an unsent draft.
 		captured?.clear();
 	}

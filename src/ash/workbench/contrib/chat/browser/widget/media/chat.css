@@ -17,6 +17,32 @@
 	flex: 1 1 auto;
 }
 
+.ash-chat-history-status {
+	display: flex;
+	flex: 0 0 auto;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	margin-top: auto;
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
+	color: var(--ash-error-foreground);
+	font-size: var(--ash-fontSize-label1);
+}
+
+.ash-chat-history-status[hidden] {
+	display: none;
+}
+
+.ash-chat-history-status > span {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.ash-chat-history-status:not([hidden]) + .ash-chat-input-part {
+	margin-top: 0;
+}
+
 .ash-chat-goal {
 	box-sizing: border-box;
 	flex: 0 0 auto;

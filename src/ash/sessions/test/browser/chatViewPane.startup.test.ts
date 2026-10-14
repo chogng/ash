@@ -154,6 +154,7 @@ class PendingSessionService implements ISessionsManagementService {
 	startNewSession(_title?: string): Promise<IActiveSessionThread> { return Promise.reject(new Error("Backend is unavailable")); }
 	stopSession(_sessionId: SessionId): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
 	archiveSession(_sessionId: SessionId): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
+	restoreSession(_sessionId: SessionId): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
 	setModel(_model: ModelRef): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
 	setNextApprovalMode(_sessionId: SessionId, _approvalMode: ApprovalMode): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
 }
@@ -186,6 +187,7 @@ function unavailableChatService(): IChatService & ILanguageModelsService {
 		readContextUsage: async () => { throw new Error('No active Thread'); },
 		readAdvisorDefault: async () => null,
 		saveAdvisorDefault: async () => { },
+		onDidSubmitRequest: () => toDisposable(() => { }),
 		onDidChangeSession: neverEvent<{ sessionId: string; agentTreeChanged: boolean; }>(),
 		onDidUpdateThread: neverEvent<ThreadUpdateEnvelope>(),
 		onDidUpdateThreadTranscript: neverEvent<ThreadTranscriptUpdateEnvelope>(),

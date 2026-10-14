@@ -25,6 +25,7 @@ export type AgentInput =
 interface SessionOperations {
 	readonly createThread: { readonly title: string; };
 	readonly archive: {};
+	readonly restore: {};
 	readonly stop: {};
 	readonly configureAdvisor: {
 		readonly threadId: string;
@@ -733,6 +734,7 @@ export interface IAgentSessionService {
 	unsubscribe(params: SessionReadParams): Promise<void>;
 	createThread(params: SessionOperationInput<'createThread'>): Promise<SessionThreadResult>;
 	archive(params: SessionOperationInput<'archive'>): Promise<SessionResult>;
+	restore(params: SessionOperationInput<'restore'>): Promise<SessionResult>;
 	stop(params: SessionOperationInput<'stop'>): Promise<SessionResult>;
 }
 

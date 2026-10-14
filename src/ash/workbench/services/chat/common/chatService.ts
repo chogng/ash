@@ -133,6 +133,8 @@ export interface ChatSubmissionOptions {
 }
 
 export interface StartTurnOptions {
+	/** Supplied by the owning composer from its loaded Thread, before the first accepted Turn. */
+	readonly isNewSession?: boolean;
 	/** An existing external request correlation uses the normal Core receipt and replay rules. */
 	readonly commandId?: string;
 	readonly sessionId: SessionId;
@@ -150,7 +152,7 @@ export interface StartTurnOptions {
 
 export type ChatMode = SessionMode;
 export interface ConfigureAdvisorOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly selection: AdvisorSelection; }
-export interface ConsultAdvisorOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly question: string; }
+export interface ConsultAdvisorOptions { readonly isNewSession?: boolean; readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly question: string; }
 export interface CompactContextOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly retentionPrompt?: string; }
 export interface SteerTurnOptions { readonly commandId?: string; readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number; readonly text: string; readonly contexts?: readonly ResolvedChatContext[]; }
 export interface InterruptTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number; }
@@ -228,8 +230,18 @@ export interface TurnChangesUpdate {
 	readonly changeSets: readonly TurnChangeSetSummary[];
 }
 
+export interface IChatRequestSubmittedEvent {
+	readonly sessionId: SessionId;
+	readonly threadId: ThreadId;
+	readonly isNewSession: boolean;
+	/** The submitting composer's journal revision fences replies arriving after a newer cross-window request. */
+	readonly requestSequence: number;
+}
+
 /** Frontend Chat operations, catalogs, and Thread update lifecycle. */
 export interface IChatService {
+	/** Only accepted local submissions establish window activity; broadcasts never establish ownership. */
+	readonly onDidSubmitRequest: Event<IChatRequestSubmittedEvent>;
 	readHistoryState(sessionId: SessionId, threadId: ThreadId): Promise<AgentThreadHistoryState>;
 	moveHistory(options: { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly direction: 'undo' | 'redo'; }): Promise<void>;
 	readCheckpoints(sessionId: SessionId, threadId: ThreadId): Promise<readonly ChatCheckpoint[]>;

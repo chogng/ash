@@ -23,6 +23,8 @@ export interface INotificationActions {
 
 /** Input for one user-visible notification. */
 export interface NotificationOptions {
+	/** Called when a presentation creates a visible row. Consumers handle repeated presentation; history insertion is insufficient. */
+	readonly onDidShow?: () => void;
 	readonly severity: NotificationSeverity;
 	readonly message: string;
 	readonly source?: string;

@@ -36,6 +36,7 @@ class Provider extends Disposable implements ISessionsProvider {
 	}
 	async setModel(): Promise<void> { }
 	async archive(value: ISession): Promise<ISession> { return { ...value, status: 'archived', agentTree: undefined }; }
+	async restore(value: ISession): Promise<ISession> { return { ...value, status: 'active', agentTree: undefined }; }
 	async stop(value: ISession): Promise<ISession> { return this.archive(value); }
 	async interrupt(): Promise<void> { }
 }

@@ -258,6 +258,15 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 		return toSession(result.session, [], session);
 	}
 
+	async restore(session: ISession): Promise<ISession> {
+		this.assertNotDisposed();
+		const generation = this.appServer.connectionGeneration;
+		const epoch = this.connectionEpoch;
+		const result = await this.sessionApi.restore({ commandId: commandId('restore-session'), sessionId: session.sessionId });
+		this.assertCurrentConnection(generation, epoch);
+		return toSession(result.session, [], session);
+	}
+
 	async interrupt(session: ISession, threadId: ThreadId): Promise<void> {
 		this.assertNotDisposed();
 		const generation = this.appServer.connectionGeneration;

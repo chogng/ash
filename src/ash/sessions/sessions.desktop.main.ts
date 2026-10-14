@@ -7,6 +7,9 @@ import '../workbench/electron-browser/desktop.contribution.js';
 import '../workbench/contrib/browserView/electron-browser/browserView.contribution.js';
 import './sessions.common.main.js';
 import '../workbench/contrib/chat/electron-browser/actions/voiceChatActions.js';
+import { AgentsWindowInvitationContribution } from '../workbench/contrib/chat/electron-browser/agentSessions/agentsWindowInvitation.js';
+import { registerWorkbenchContribution, WorkbenchPhase } from '../workbench/common/contributions.js';
+import { IInstantiationService } from '../platform/instantiation/common/instantiation.js';
 import '../workbench/contrib/terminal/electron-browser/terminal.contribution.js';
 import '../workbench/services/clipboard/electron-browser/clipboardService.js';
 import '../workbench/services/process/electron-browser/processService.js';
@@ -26,6 +29,7 @@ registerSingleton(IHostService, NativeHostService, InstantiationType.Delayed);
 registerSingleton(ILanguagePackStore, BrowserLanguagePackStore, InstantiationType.Delayed);
 
 registerOpenAgentsWindowCommand();
+registerWorkbenchContribution(AgentsWindowInvitationContribution.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(AgentsWindowInvitationContribution));
 
 MenusRegistry.appendMenuItem(Menus.MenubarFileMenu, {
 	command: { id: 'workbench.action.closeWindow', title: localize2({ bundle: 'ash', key: 'workbench.closeWindow' }, 'Close Window') },

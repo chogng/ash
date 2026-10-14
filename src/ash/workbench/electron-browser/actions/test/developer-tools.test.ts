@@ -43,6 +43,11 @@ test("native host routes validate folder picking and developer tools", async () 
 	const windowThemes: unknown[] = [];
 	const windowDimmed: boolean[] = [];
 	const routes = nativeHostIpcRoutes({
+		getAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
+		updateAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
+		claimAgentsWindowInvitation: () => { throw new Error('Unused invitation capability'); },
+		markAgentsWindowInvitationShown: () => { throw new Error('Unused invitation capability'); },
+		releaseAgentsWindowInvitation: () => { throw new Error('Unused invitation capability'); },
 		getTitleBarStyle: () => 'custom',
 		isAdmin: async () => false,
 		performDialogOperation: () => undefined,
@@ -169,6 +174,12 @@ test("desktop commands are available from the command palette", async () => {
 	const services = new InstantiationService();
 	let toggles = 0;
 	services.registerInstance(INativeHostService, {
+		getAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
+		updateAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
+		claimAgentsWindowInvitation: () => { throw new Error('Unused invitation capability'); },
+		markAgentsWindowInvitationShown: () => { throw new Error('Unused invitation capability'); },
+		releaseAgentsWindowInvitation: () => { throw new Error('Unused invitation capability'); },
+		onDidChangeAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
 		getTitleBarStyle: async () => 'custom',
 		isAdmin: async () => false,
 		onDidRequestOpenExternalUri: () => ({ dispose() { } }),

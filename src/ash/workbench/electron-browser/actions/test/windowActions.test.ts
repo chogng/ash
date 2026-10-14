@@ -13,6 +13,11 @@ import { CommandService } from '../../../services/commands/common/commandService
 test('desktop dialog and shell routes reject malformed requests', async () => {
 	const operations: unknown[] = [];
 	const routes = nativeHostIpcRoutes({
+		getAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
+		updateAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
+		claimAgentsWindowInvitation: () => { throw new Error('Unused invitation capability'); },
+		markAgentsWindowInvitationShown: () => { throw new Error('Unused invitation capability'); },
+		releaseAgentsWindowInvitation: () => { throw new Error('Unused invitation capability'); },
 		getTitleBarStyle: () => 'custom',
 		isAdmin: async () => false,
 		performDialogOperation: operation => { operations.push(operation); },
@@ -72,6 +77,12 @@ test('desktop window commands reach the window host', async () => {
 	let zoom = 0;
 	let alwaysOnTop = false;
 	services.registerInstance(INativeHostService, {
+		getAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
+		updateAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
+		claimAgentsWindowInvitation: () => { throw new Error('Unused invitation capability'); },
+		markAgentsWindowInvitationShown: () => { throw new Error('Unused invitation capability'); },
+		releaseAgentsWindowInvitation: () => { throw new Error('Unused invitation capability'); },
+		onDidChangeAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
 		getTitleBarStyle: async () => 'custom',
 		isAdmin: async () => false,
 		onDidRequestOpenExternalUri: () => ({ dispose() { } }),

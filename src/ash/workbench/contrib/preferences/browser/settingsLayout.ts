@@ -73,7 +73,7 @@ export const SettingsNavigation = [
 						id: 'interaction',
 						label: 'Interaction',
 						description: 'Tune hover feedback and resize handles.',
-						settings: ['workbench.hover.*', 'workbench.sash.*', 'workbench.commandPalette.history', 'onboarding.enabled', 'output.smartScroll.enabled'],
+						settings: ['workbench.hover.*', 'workbench.sash.*', 'workbench.commandPalette.history', 'onboarding.enabled', 'output.smartScroll.enabled', 'chat.disableAIFeatures'],
 					},
 				],
 			},
@@ -139,7 +139,7 @@ export const SettingsNavigation = [
 					id: 'layout',
 					label: localize('settings.workbench.layout.group.label', 'Workbench layout'),
 					description: localize('settings.workbench.layout.description', 'Configure the Workbench layout and window zoom.'),
-					settings: ['workbench.layoutStyle', 'workbench.activityBar.location', 'workbench.activityBar.badges', 'workbench.activityBar.compact', 'workbench.sideBar.location', 'chat.viewSessions.orientation', 'window.title', 'window.titleSeparator', 'window.titleBarStyle', 'window.menuStyle', 'window.zoomLevel', 'workbench.tree.*', 'workbench.list.smoothScrolling'],
+					settings: ['workbench.layoutStyle', 'workbench.activityBar.location', 'workbench.activityBar.badges', 'workbench.activityBar.compact', 'workbench.sideBar.location', 'chat.viewSessions.orientation', 'chat.experimental.sessionArchiveActionWording', 'window.title', 'window.titleSeparator', 'window.titleBarStyle', 'window.menuStyle', 'window.zoomLevel', 'workbench.tree.*', 'workbench.list.smoothScrolling'],
 				}],
 			},
 			{

@@ -114,6 +114,7 @@ class MemoryProvider extends Disposable implements ISessionsProvider {
 	async create(): Promise<never> { throw new Error('This test uses durable sessions'); }
 	async setModel() { }
 	async archive(session: ISession): Promise<ISession> { return { ...session, status: 'archived' }; }
+	async restore(session: ISession): Promise<ISession> { return { ...session, status: 'active' }; }
 	async stop(session: ISession) { return session; }
 	async interrupt() { }
 }

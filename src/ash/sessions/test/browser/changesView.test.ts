@@ -100,6 +100,7 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 			read: async params => { requests.push(params); return details; },
 			readFile: async params => { requests.push(params); return pendingRead ? pendingRead.p : { path: 'main.ts', binary: false, truncated, before: 'before', after: 'after' }; },
 		});
+		services.registerInstance(IConfigurationService, config);
 		using chat = services.createInstance(ChatService);
 		const opened: IResourceEditorInput[] = [];
 		const openOptions: (EditorOpenOptions | undefined)[] = [];
@@ -108,7 +109,6 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		services.registerInstance(ISessionsService, sessions);
 		services.registerInstance(IChatService, chat);
 		services.registerInstance(IEditorService, editors);
-		services.registerInstance(IConfigurationService, config);
 		services.registerInstance(IContextKeyService, contexts);
 		services.registerInstance(INotificationService, notifications);
 		services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => 'Press Alt+F1 for accessibility help.', disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });

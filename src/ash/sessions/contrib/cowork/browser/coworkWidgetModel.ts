@@ -19,6 +19,8 @@ import { getChatInputChanges, type ChatInputState } from '../../../../workbench/
 import { modelRefIdentity, type ModelReasoningEffort } from '../../../../workbench/services/chat/common/modelCatalog.js';
 import type { ApprovalMode } from '../../../../workbench/services/chat/common/chatService.js';
 import { observableValue } from '../../../../base/common/observable.js';
+import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 
 export type ChatWidgetState =
 	| "loading"
@@ -78,11 +80,14 @@ export class CoworkWidgetModel extends Disposable {
 	readonly onDidChange: Event<void> = this._onDidChange.event;
 	readonly onDidChangeComposer: Event<void> = this._onDidChangeComposer.event;
 
-	constructor(chatService: IChatService, selection: ChatWidgetSelection, sessionService: ISessionsManagementService, @IPromptsService private readonly skills: IPromptsService, @ILanguageModelsService private readonly languageModels: ILanguageModelsService, @ILanguageModelsConfigurationService private readonly modelPreferences: ILanguageModelsConfigurationService, @IAgentExecutionSettingsService private readonly execution: IAgentExecutionSettingsService) {
+	constructor(chatService: IChatService, selection: ChatWidgetSelection, sessionService: ISessionsManagementService, @IPromptsService private readonly skills: IPromptsService, @ILanguageModelsService private readonly languageModels: ILanguageModelsService, @ILanguageModelsConfigurationService private readonly modelPreferences: ILanguageModelsConfigurationService, @IAgentExecutionSettingsService private readonly execution: IAgentExecutionSettingsService, @IConfigurationService private readonly configuration: IConfigurationService) {
 		super();
 		this.chatService = chatService;
 		this.sessionService = sessionService;
 		this.selection = selection;
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(ChatAIDisabledSettingId)) this._onDidChange.fire();
+		}));
 		this._register(chatService.onDidUpdateThread((update) => this.acceptUpdate(update)));
 		this._register(chatService.onDidUpdateThreadTranscript((update) => this.acceptTranscriptUpdate(update)));
 		this._register(chatService.onDidUpdateGoal((update) => {
@@ -117,6 +122,8 @@ export class CoworkWidgetModel extends Disposable {
 
 	get inputState(): ChatInputState {
 		return {
+			inputBlocked: this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
+			aiDisabled: this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
 			mode: this.mode,
 			activeMode: activeTurn(this._thread)?.mode,
 			queuedMessages: this.queuedMessages,
@@ -344,9 +351,11 @@ export class CoworkWidgetModel extends Disposable {
 
 	/** Materializes the existing Untitled owner without submitting an empty model Turn. */
 	async prepareConversation(): Promise<{ readonly sessionId: string; readonly threadId: string; }> {
+		this.assertAIEnabled();
 		const identity = this.threadId ?? this.untitledSessionId;
 		await this.initialize();
 		if (this.isDisposed || identity !== (this.threadId ?? this.untitledSessionId)) throw canceled();
+		this.assertAIEnabled();
 		const active = await this.ensureActiveSession();
 		if (this.isDisposed || this.sessionId !== active.session.sessionId || this.threadId !== active.threadId) throw canceled();
 		return { sessionId: active.session.sessionId, threadId: active.threadId };
@@ -356,11 +365,13 @@ export class CoworkWidgetModel extends Disposable {
 		const generation = this.composerGeneration;
 		const input = text.trim();
 		if (!input && !contexts?.length) return;
+		this.assertAIEnabled();
 		try {
 			if (submissionOptions?.signal?.aborted) throw canceled();
 			await this.initialize();
 			if (this.isDisposed || generation !== this.composerGeneration || submissionOptions?.signal?.aborted) throw canceled();
 			this.setState("submitting");
+			this.assertAIEnabled();
 			const active = await this.ensureActiveSession();
 			if (this._thread?.threadId !== active.threadId) {
 				await this.subscribe(active);
@@ -372,6 +383,7 @@ export class CoworkWidgetModel extends Disposable {
 			if (this.isDisposed || generation !== this.composerGeneration || submissionOptions?.signal?.aborted || submissionOptions?.source && (active.session.sessionId !== submissionOptions.source.sessionId || active.threadId !== submissionOptions.source.threadId)) throw canceled();
 			const turn = activeTurn(thread);
 			const submission = {
+				isNewSession: thread.turns.length === 0,
 				...(submissionOptions?.commandId ? { commandId: submissionOptions.commandId } : {}),
 				sessionId: active.session.sessionId,
 				threadId: active.threadId,
@@ -403,6 +415,10 @@ export class CoworkWidgetModel extends Disposable {
 				this.setState('ready');
 				throw error;
 			}
+			if (this.configuration.getValue<boolean>(ChatAIDisabledSettingId)) {
+				this.setState('ready');
+				throw error;
+			}
 			this.setError(error);
 			throw error;
 		}
@@ -418,6 +434,7 @@ export class CoworkWidgetModel extends Disposable {
 	}
 
 	async executeServerCommand(name: string, argumentsText: string): Promise<void> {
+		this.assertAIEnabled();
 		if (name !== "compact" && name !== "advisor") {
 			await this.send(`/${name}${argumentsText ? ` ${argumentsText}` : ""}`);
 			return;
@@ -459,7 +476,7 @@ export class CoworkWidgetModel extends Disposable {
 				throw new Error("Chat Thread is not available");
 			}
 			if (name === "advisor") {
-				const options = { sessionId: active.session.sessionId, threadId: active.threadId, expectedSequence: thread.sequence };
+				const options = { sessionId: active.session.sessionId, threadId: active.threadId, expectedSequence: thread.sequence, isNewSession: thread.turns.length === 0 };
 				if (activeTurn(thread)) throw new Error(localize('chat.advisor.turnActive', 'Wait for the active Turn to finish before starting a consultation'));
 				if (!advisorDefault || !advisorDefault.enabled) throw new Error(localize('chat.advisor.configure', 'Configure an advisor model in Chat Settings before asking for a second opinion'));
 				await this.chatService.consultAdvisor({ ...options, question: argument });
@@ -856,6 +873,12 @@ export class CoworkWidgetModel extends Disposable {
 			"error",
 			error instanceof Error ? error.message : "Chat is unavailable.",
 		);
+	}
+
+	private assertAIEnabled(): void {
+		if (this.configuration.getValue<boolean>(ChatAIDisabledSettingId)) {
+			throw new Error(localize('chat.ai.disabled.message', 'AI features are disabled. Turn off Disable AI features in Settings to send messages.'));
+		}
 	}
 
 	private get activeSession(): IActiveSessionThread | undefined {

@@ -101,6 +101,10 @@ test('Agents Window handoff accepts validated inline references for folders, ses
 
 test('the Renderer Host transports shared dialog options, complete results, and cancellation through Main routes', async () => {
 	const original = Object.getOwnPropertyDescriptor(globalThis, 'ash');
+	const { AgentsWindowInvitationState } = await import('../../../chat/common/agentsWindowInvitation.js');
+	const { buildOpenSessionLinkUri } = await import('../../../agentHost/common/openSessionLink.js');
+	using invitations = new AgentsWindowInvitationState(() => 86_400_000, { editorSessionCount: 0, lastShown: undefined, agentsWindowSessionCount: 0, lastAgentsWindowSessionCreated: undefined });
+	let malformedState = false;
 	const requests: unknown[] = [];
 	let finish!: (result: MessageBoxReturnValue) => void;
 	let mainSignal: AbortSignal | undefined;
@@ -125,6 +129,11 @@ test('the Renderer Host transports shared dialog options, complete results, and 
 	});
 	let frameStyle: unknown = 'custom';
 	const routes = nativeHostIpcRoutes({
+		getAgentHostEditorState: () => malformedState ? { ...invitations.getState(), revision: NaN } : invitations.getState(),
+		updateAgentHostEditorState: async update => invitations.update(7, update),
+		claimAgentsWindowInvitation: resource => invitations.claim(7, resource),
+		markAgentsWindowInvitationShown: async id => invitations.markShown(7, id),
+		releaseAgentsWindowInvitation: id => invitations.release(7, id),
 		getTitleBarStyle: () => frameStyle,
 		showOpenDialog: options => dialogs.showOpenDialog(options, window),
 		showSaveDialog: options => dialogs.showSaveDialog(options, window),
@@ -153,6 +162,20 @@ test('the Renderer Host transports shared dialog options, complete results, and 
 			registerChannel: () => { throw new Error('Unexpected channel registration'); },
 		};
 		const host = createNativeHostApi(mainProcess);
+		const activityResource = buildOpenSessionLinkUri('s', 't', 'local').toJSON();
+		await host.updateAgentHostEditorState({ kind: 'request', resource: activityResource, isNewSession: true, requestSequence: 1 });
+		await host.updateAgentHostEditorState({ kind: 'sessions', sessions: [{ resource: activityResource, inProgress: true, needsInput: false }] });
+		assert.equal((await host.getAgentHostEditorState()).editorSessionCount, 1);
+		const invitation = await host.claimAgentsWindowInvitation(activityResource);
+		assert.equal(invitation?.windowId, 7);
+		assert.deepEqual(invitation?.resource, activityResource);
+		await host.markAgentsWindowInvitationShown(invitation!.id);
+		assert.deepEqual((await host.getAgentHostEditorState()).lastShown, { timestamp: 86_400_000, editorSessionCount: 1 });
+		await host.releaseAgentsWindowInvitation(invitation!.id);
+		assert.equal((await host.getAgentHostEditorState()).invitation, undefined);
+		malformedState = true;
+		await assert.rejects(host.getAgentHostEditorState(), /Invalid editor activity state/);
+		malformedState = false;
 		assert.equal(await host.getTitleBarStyle(), 'custom');
 		frameStyle = 'invalid';
 		await assert.rejects(host.getTitleBarStyle(), /Unknown window title bar style/);
@@ -210,4 +233,43 @@ test('Agents Window handoff keeps terminal snapshots and inline positions in the
 	assert.deepEqual(route.validate(options), options);
 	assert.throws(() => route.validate({ draft: { ...options.draft, contexts: [{ ...context, terminalSnapshot: { text: 'captured', columns: 0 } }] } }), /Invalid terminal snapshot/);
 	assert.throws(() => route.validate({ draft: { ...options.draft, contexts: [{ ...context, reference: { start: 0, end: 22 } }] } }), /Invalid Agents Window context reference/);
+});
+
+test('invitation IPC binds ownership to trusted windows and normalizes resources before activity updates', async () => {
+	const { TrustedIpcRouter } = await import('../../../ipc/electron-main/trustedIpcRouter.js');
+	const { AgentsWindowInvitationState } = await import('../../../chat/common/agentsWindowInvitation.js');
+	const { buildOpenSessionLinkUri } = await import('../../../agentHost/common/openSessionLink.js');
+	const channels = await import('../../common/nativeHost.js');
+	const handlers = new Map<string, (event: import('../../../ipc/electron-main/trustedIpcRouter.js').IpcMainInvokeEventLike, params: unknown) => unknown>();
+	using router = new TrustedIpcRouter({ handle: (channel, listener) => { handlers.set(channel, listener); }, removeHandler: channel => { handlers.delete(channel); } });
+	using state = new AgentsWindowInvitationState(() => 86_400_000, { editorSessionCount: 0, lastShown: undefined, agentsWindowSessionCount: 0, lastAgentsWindowSessionCreated: undefined });
+	const target = () => { const frame = { url: 'file:///trusted.html' }; return { webContents: { mainFrame: frame }, allowedEntryUrls: new Set([frame.url]) }; };
+	const first = target(); const second = target();
+	const routes = (windowId: number) => nativeHostIpcRoutes({
+		getAgentHostEditorState: () => state.getState(), updateAgentHostEditorState: async update => state.update(windowId, update),
+		claimAgentsWindowInvitation: resource => state.claim(windowId, resource), markAgentsWindowInvitationShown: async id => state.markShown(windowId, id), releaseAgentsWindowInvitation: id => state.release(windowId, id),
+	} as INativeHostMainService);
+	using firstRegistration = router.register(first, routes(1));
+	using secondRegistration = router.register(second, routes(2));
+	const call = (owner: typeof first, channel: string, value?: unknown) => handlers.get(channel)!({ sender: owner.webContents, senderFrame: owner.webContents.mainFrame }, structuredClone(value));
+	const resource = buildOpenSessionLinkUri('session', 'thread', 'local').toJSON();
+	const request = { kind: 'request', resource, isNewSession: true, requestSequence: 1 };
+	for (const malformed of [{ ...request, windowId: 2 }, { ...request, isNewSession: 'true' }, { ...request, requestSequence: -1 }, { ...request, requestSequence: NaN }, { ...request, resource: { ...resource, external: 'agent-host-session://local/open?sessionId=other&threadId=t' } }, { kind: 'sessions', sessions: [{ resource, windowId: 2, inProgress: true, needsInput: false }] }, { kind: 'sessions', sessions: new Array(129).fill({ resource, inProgress: true, needsInput: false }) }, { ...request, resource: { ...resource, query: 'sessionId=s&sessionId=other&threadId=t' } }]) {
+		assert.throws(() => call(first, channels.AGENT_HOST_EDITOR_UPDATE_CHANNEL, malformed));
+	}
+	assert.throws(() => call(target(), channels.AGENT_HOST_EDITOR_UPDATE_CHANNEL, request), /Untrusted/);
+	assert.throws(() => handlers.get(channels.AGENT_HOST_EDITOR_UPDATE_CHANNEL)!({ sender: first.webContents, senderFrame: { url: 'file:///trusted.html' } }, request), /main frame/);
+	assert.deepEqual(state.getState().sessions, []);
+	await call(first, channels.AGENT_HOST_EDITOR_UPDATE_CHANNEL, request);
+	await call(first, channels.AGENT_HOST_EDITOR_UPDATE_CHANNEL, { kind: 'sessions', sessions: [{ resource, inProgress: true, needsInput: false }] });
+	const claim = await call(first, channels.AGENTS_WINDOW_INVITATION_CLAIM_CHANNEL, resource) as import('../../../chat/common/agentsWindowInvitation.js').IAgentsWindowInvitation;
+	assert.equal(claim.windowId, 1);
+	await call(second, channels.AGENTS_WINDOW_INVITATION_SHOWN_CHANNEL, claim.id);
+	await call(second, channels.AGENTS_WINDOW_INVITATION_RELEASE_CHANNEL, claim.id);
+	assert.equal(state.getState().lastShown, undefined);
+	assert.equal(state.getState().invitation?.id, claim.id);
+	await call(first, channels.AGENTS_WINDOW_INVITATION_SHOWN_CHANNEL, claim.id);
+	assert.deepEqual(state.getState().lastShown, { timestamp: 86_400_000, editorSessionCount: 1 });
+	firstRegistration.dispose();
+	assert.throws(() => call(first, channels.AGENTS_WINDOW_INVITATION_RELEASE_CHANNEL, claim.id), /Untrusted/);
 });

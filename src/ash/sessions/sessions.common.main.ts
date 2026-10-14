@@ -11,6 +11,7 @@ import '../workbench/contrib/preferences/browser/preferences.contribution.js';
 import '../workbench/contrib/chat/browser/chat.shared.contribution.js';
 import '../workbench/contrib/chat/browser/chat.contribution.js';
 import '../workbench/contrib/agentsVoice/browser/agentsVoice.contribution.js';
+import './contrib/sessions/browser/views/sessionsViewActions.js';
 import '../workbench/contrib/speech/browser/speech.contribution.js';
 import '../workbench/contrib/accessibilitySignals/browser/accessibilitySignal.contribution.js';
 import '../workbench/services/dialogs/common/dialogService.js';

@@ -169,7 +169,7 @@ export class NewCoworkInputWidget extends ChatInputPart {
 
 	protected override statusText(state: ChatInputState): string {
 		// Catalog loading keeps the local draft's welcome content in place; aria-busy exposes readiness.
-		if (this.model.untitledSessionId !== undefined && state.phase === 'loading' && !state.error) {
+		if (!state.aiDisabled && this.model.untitledSessionId !== undefined && state.phase === 'loading' && !state.error) {
 			return '';
 		}
 		return super.statusText(state);

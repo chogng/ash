@@ -12,6 +12,12 @@ test('a system event wins over an older startup read and disposed windows ignore
 	const pending: ((value: IColorScheme) => void)[] = [];
 	const unexpected = (): never => { throw new Error('Unexpected window capability in appearance test'); };
 	const host: INativeHostApi = {
+		getAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
+		updateAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
+		claimAgentsWindowInvitation: () => { throw new Error('Unused invitation capability'); },
+		markAgentsWindowInvitationShown: () => { throw new Error('Unused invitation capability'); },
+		releaseAgentsWindowInvitation: () => { throw new Error('Unused invitation capability'); },
+		onDidChangeAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
 		getTitleBarStyle: async () => 'custom',
 		isAdmin: unexpected,
 		getOSColorScheme: () => new Promise(resolve => pending.push(resolve)),

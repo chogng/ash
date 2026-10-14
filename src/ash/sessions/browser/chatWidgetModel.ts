@@ -20,6 +20,9 @@ import { modelRefIdentity, type ModelReasoningEffort } from '../../workbench/ser
 import type { ApprovalMode } from '../../workbench/services/chat/common/chatService.js';
 import type { AgentModelDefaults } from '../../platform/agentHost/common/agentModels.js';
 import { observableValue } from '../../base/common/observable.js';
+import type { IChatSessionHistoryStatus } from '../../platform/chat/common/chatSessionHistory.js';
+import { ChatAIDisabledSettingId } from '../../platform/chat/common/chatSettings.js';
+import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 
 export type ChatWidgetState =
 	| "loading"
@@ -54,6 +57,7 @@ export class ChatWidgetModel extends Disposable {
 	private _interaction: TurnInteraction | undefined;
 	private _state: ChatWidgetState = "loading";
 	private _error: string | undefined;
+	private readonly _historyStatus = observableValue<IChatSessionHistoryStatus | undefined>(this, undefined);
 	private generation = 0;
 	private readPending = false;
 	private initializePromise: Promise<void> | undefined;
@@ -93,11 +97,14 @@ export class ChatWidgetModel extends Disposable {
 		return composer?.generation === this.composerGeneration && composer.threadId === this.threadId ? composer.untitledSessionId : undefined;
 	}
 
-	constructor(chatService: IChatService, selection: ChatWidgetSelection, sessionService: ISessionsManagementService, @IPromptsService private readonly skills: IPromptsService, @ILanguageModelsService private readonly languageModels: ILanguageModelsService, @IAgentExecutionSettingsService private readonly execution: IAgentExecutionSettingsService) {
+	constructor(chatService: IChatService, selection: ChatWidgetSelection, sessionService: ISessionsManagementService, @IPromptsService private readonly skills: IPromptsService, @ILanguageModelsService private readonly languageModels: ILanguageModelsService, @IAgentExecutionSettingsService private readonly execution: IAgentExecutionSettingsService, @IConfigurationService private readonly configuration: IConfigurationService) {
 		super();
 		this.chatService = chatService;
 		this.sessionService = sessionService;
 		this.selection = selection;
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(ChatAIDisabledSettingId)) this._onDidChange.fire();
+		}));
 		this._register(chatService.onDidUpdateThread((update) => this.acceptUpdate(update)));
 		this._register(chatService.onDidUpdateThreadTranscript((update) => this.acceptTranscriptUpdate(update)));
 		this._register(chatService.onDidUpdateGoal((update) => {
@@ -135,7 +142,9 @@ export class ChatWidgetModel extends Disposable {
 			activeMode: activeTurn(this._thread)?.mode,
 			queuedMessages: this.queuedMessages,
 			phase: this._state,
-			error: this._error,
+			inputBlocked: this.historyStatus !== undefined || this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
+			aiDisabled: this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
+			error: this.historyStatus ? undefined : this._error,
 			canInterrupt: this.canInterrupt,
 			changes: getChatInputChanges(this._changeSets),
 			contextUsage: this.contextUsage,
@@ -155,7 +164,11 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	get error(): string | undefined {
-		return this._error;
+		return this.historyStatus?.message ?? this._error;
+	}
+
+	get historyStatus(): IChatSessionHistoryStatus | undefined {
+		return this._historyStatus.get();
 	}
 
 	get thread(): Thread | undefined {
@@ -288,6 +301,7 @@ export class ChatWidgetModel extends Disposable {
 		const previousThreadId = current.threadId;
 		const previousModel = current.session.model;
 		if (previousThreadId !== active.threadId) {
+			this._historyStatus.set(undefined);
 			this._composerGeneration++;
 			this._onDidChangeComposer.fire();
 		}
@@ -383,9 +397,11 @@ export class ChatWidgetModel extends Disposable {
 
 	/** Materializes the existing Untitled owner without submitting an empty model Turn. */
 	async prepareConversation(): Promise<{ readonly sessionId: string; readonly threadId: string; }> {
+		this.assertAIEnabled();
 		const identity = this.threadId ?? this.untitledSessionId;
 		await this.initialize();
 		if (this.isDisposed || identity !== (this.threadId ?? this.untitledSessionId)) throw canceled();
+		this.assertAIEnabled();
 		const active = await this.ensureActiveSession();
 		if (this.isDisposed || this.sessionId !== active.session.sessionId || this.threadId !== active.threadId) throw canceled();
 		return { sessionId: active.session.sessionId, threadId: active.threadId };
@@ -394,6 +410,7 @@ export class ChatWidgetModel extends Disposable {
 	async send(text: string, mode: ChatMode = this.mode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], submissionOptions?: ChatSubmissionOptions): Promise<void> {
 		const input = text.trim();
 		if (!input && !contexts?.length) return;
+		this.assertAIEnabled();
 		const generation = this.composerGeneration;
 		let identity = this.composerIdentity;
 		try {
@@ -402,6 +419,8 @@ export class ChatWidgetModel extends Disposable {
 			if (this.isDisposed || generation !== this.composerGeneration || identity !== this.composerIdentity) throw canceled();
 			await this.initialize();
 			if (this.isDisposed || generation !== this.composerGeneration || identity !== this.composerIdentity) throw canceled();
+			if (this.historyStatus) throw new Error(this.historyStatus.message);
+			this.assertAIEnabled();
 			this.setState("submitting");
 			const active = await this.ensureActiveSession();
 			if (this.isDisposed || generation !== this.composerGeneration || active.session.sessionId !== this.sessionId || active.threadId !== this.threadId) throw canceled();
@@ -418,6 +437,7 @@ export class ChatWidgetModel extends Disposable {
 			if (submissionOptions?.signal?.aborted || submissionOptions?.source && (active.session.sessionId !== submissionOptions.source.sessionId || active.threadId !== submissionOptions.source.threadId)) throw canceled();
 			const turn = activeTurn(thread);
 			const submission = {
+				isNewSession: thread.turns.length === 0,
 				...(submissionOptions?.commandId ? { commandId: submissionOptions.commandId } : {}),
 				sessionId: active.session.sessionId,
 				threadId: active.threadId,
@@ -451,6 +471,10 @@ export class ChatWidgetModel extends Disposable {
 				this.setState('ready');
 				throw error;
 			}
+			if (this.configuration.getValue<boolean>(ChatAIDisabledSettingId)) {
+				this.setState(this.historyStatus ? 'error' : 'ready');
+				throw error;
+			}
 			this.setError(error);
 			throw error;
 		}
@@ -466,6 +490,7 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	async executeServerCommand(name: string, argumentsText: string): Promise<void> {
+		this.assertAIEnabled();
 		if (name !== "compact" && name !== "advisor") {
 			await this.send(`/${name}${argumentsText ? ` ${argumentsText}` : ""}`);
 			return;
@@ -507,7 +532,7 @@ export class ChatWidgetModel extends Disposable {
 				throw new Error("Chat Thread is not available");
 			}
 			if (name === "advisor") {
-				const options = { sessionId: active.session.sessionId, threadId: active.threadId, expectedSequence: thread.sequence };
+				const options = { sessionId: active.session.sessionId, threadId: active.threadId, expectedSequence: thread.sequence, isNewSession: thread.turns.length === 0 };
 				if (activeTurn(thread)) throw new Error(localize('chat.advisor.turnActive', 'Wait for the active Turn to finish before starting a consultation'));
 				if (!advisorDefault || !advisorDefault.enabled) throw new Error(localize('chat.advisor.configure', 'Configure an advisor model in Chat Settings before asking for a second opinion'));
 				await this.chatService.consultAdvisor({ ...options, question: argument });
@@ -529,6 +554,12 @@ export class ChatWidgetModel extends Disposable {
 		} catch (error) {
 			this.setError(error);
 			throw error;
+		}
+	}
+
+	private assertAIEnabled(): void {
+		if (this.configuration.getValue<boolean>(ChatAIDisabledSettingId)) {
+			throw new Error(localize('chat.ai.disabled.message', 'AI features are disabled. Turn off Disable AI features in Settings to send messages.'));
 		}
 	}
 
@@ -735,12 +766,13 @@ export class ChatWidgetModel extends Disposable {
 					this.acceptUpdate(update);
 				}
 			}
+			this._historyStatus.set(undefined);
 			this.setState("ready");
 			void this.loadTurnChanges(generation);
 			void this.loadQueue();
 		} catch (error) {
 			if (this.isDisposed || generation !== this.generation) return;
-			this.setError(error);
+			this.setHistoryError(error, 'history');
 		}
 	}
 
@@ -925,13 +957,40 @@ export class ChatWidgetModel extends Disposable {
 				this.transcriptRevision = result.transcript.revision;
 			}
 			this._error = undefined;
+			this._historyStatus.set(undefined);
 			this._state = "ready";
 			this._onDidChange.fire();
 		} catch (error) {
 			if (!this.isDisposed && generation === this.generation) {
-				this.setError(error);
+				this.setHistoryError(error, 'live');
 			}
 		}
+	}
+
+	private setHistoryError(error: unknown, kind: IChatSessionHistoryStatus['kind']): void {
+		const active = this.activeSession;
+		if (!active || isCancellationError(error)) return;
+		const generation = this.generation;
+		let recovery: Promise<void> | undefined;
+		const status: IChatSessionHistoryStatus = {
+			kind,
+			message: kind === 'history'
+				? localize('chat.history.loadFailed', 'Could not load chat history: {0}', String(error))
+				: localize('chat.history.updateFailed', 'Could not refresh this chat: {0}', String(error)),
+			action: {
+				label: localize('chat.history.retry', 'Retry loading chat'),
+				run: () => {
+					if (recovery) return recovery;
+					// A retained action must never recover a different selection or a newer connection.
+					if (this.isDisposed || generation !== this.generation || this.historyStatus !== status) return Promise.resolve();
+					this.setState('loading');
+					recovery = kind === 'history' ? this.subscribe(active) : this.refreshThread();
+					return recovery;
+				},
+			},
+		};
+		this._historyStatus.set(status);
+		this.setState('error');
 	}
 
 	private setState(state: ChatWidgetState, error?: string): void {
@@ -941,6 +1000,10 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	private setError(error: unknown): void {
+		if (this.historyStatus) {
+			this.setState('error');
+			return;
+		}
 		this.setState(
 			"error",
 			error instanceof Error ? error.message : "Chat is unavailable.",

@@ -61,6 +61,12 @@ class Fixture extends Disposable {
 		super();
 		this.resource.bindings = bindings;
 		const host: INativeHostApi = {
+			getAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
+			updateAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
+			claimAgentsWindowInvitation: () => { throw new Error('Unused invitation capability'); },
+			markAgentsWindowInvitationShown: () => { throw new Error('Unused invitation capability'); },
+			releaseAgentsWindowInvitation: () => { throw new Error('Unused invitation capability'); },
+			onDidChangeAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
 			getTitleBarStyle: async () => 'custom',
 			isAdmin: async () => false,
 			getOSColorScheme: async () => ({ dark: false, highContrast: false }),

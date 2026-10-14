@@ -3376,3 +3376,71 @@ test('Agents retains the system-wide shortcut after the Workbench closes and for
 		await rm(userDataDirectory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 	}
 });
+
+focusTest('Agents invitation IPC follows real window focus, close, reload and persistent cooldown', { tag: ['@electron-ui'] }, async ({ application, target, workbench, reloadWorkbench }) => {
+	if (!('windows' in application)) throw new Error('Expected an Electron application');
+	const page = workbench.page;
+	const invoke = (source: import('@playwright/test').Page, channel: string, params?: unknown): Promise<unknown> => source.evaluate(({ channel, params }) => {
+		const bridge = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
+		return bridge.invoke(channel, params);
+	}, { channel, params });
+	const resource = (threadId: string) => ({ scheme: 'agent-host-session', authority: 'local', path: '/open', query: new URLSearchParams({ sessionId: 'invitation-smoke', threadId }).toString() });
+	const read = async (source = page) => await invoke(source, 'ash:native-host:editor-state') as import('../../../../src/ash/platform/chat/common/agentsWindowInvitation.js').IAgentHostEditorState;
+	const submit = async (source: import('@playwright/test').Page, threadId: string) => {
+		await invoke(source, 'ash:native-host:editor-update', { kind: 'request', resource: resource(threadId), isNewSession: true, requestSequence: 1 });
+		await invoke(source, 'ash:native-host:editor-update', { kind: 'sessions', sessions: [{ resource: resource(threadId), inProgress: true, needsInput: false }] });
+	};
+	await application.evaluate(({ app, BrowserWindow }) => {
+		const window = BrowserWindow.getAllWindows()[0]!;
+		window.show(); app.focus({ steal: true }); window.focus();
+	});
+	await waitForElectronWindowState(application, page, { focused: true });
+	const owner = await application.browserWindow(page);
+	let ownerId: number;
+	try { ownerId = await owner.evaluate(window => window.id); } finally { await owner.dispose(); }
+	await submit(page, 'first');
+	expect((await read()).sessions.map(session => session.windowId)).toEqual([ownerId]);
+	const forged = await invoke(page, 'ash:native-host:editor-update', { kind: 'request', resource: resource('forged'), isNewSession: true, windowId: ownerId + 1 }).then(() => '', error => String(error));
+	expect(forged).toContain('Invalid editor activity update');
+	const claim = await invoke(page, 'ash:native-host:invitation-claim', resource('first')) as { id: string; windowId: number; };
+	expect(claim.windowId).toBe(ownerId);
+	expect((await read()).invitation?.id).toBe(claim.id);
+	expect((await read()).lastShown).toBeUndefined();
+	await waitForElectronWindowState(application, page, { focused: true });
+	await invoke(page, 'ash:native-host:invitation-shown', claim.id);
+	const impression = (await read()).lastShown!;
+	expect(impression.editorSessionCount).toBe(1);
+	expect(impression.timestamp).toBeGreaterThan(0);
+	const agents = await workbench.openAgentsWindow(target.kind);
+	await waitForElectronWindowState(application, agents, { focused: true });
+	expect(await invoke(page, 'ash:native-host:invitation-claim', resource('first'))).toBeUndefined();
+	expect(await invoke(agents, 'ash:native-host:invitation-claim', resource('first'))).toBeUndefined();
+	await invoke(agents, 'ash:native-host:invitation-release', claim.id);
+	expect((await read()).invitation?.id).toBe(claim.id);
+	await invoke(agents, 'ash:native-host:editor-update', { kind: 'request', resource: resource('first'), isNewSession: false, requestSequence: 2 });
+	await invoke(page, 'ash:native-host:editor-update', { kind: 'sessions', sessions: [{ resource: resource('first'), inProgress: true, needsInput: false }] });
+	expect((await read()).sessions).toEqual([]);
+	expect((await read()).invitation).toBeUndefined();
+	const secondaryOpened = application.waitForEvent('window');
+	await invoke(page, 'ash:window:open', { forceReuseWindow: false });
+	const secondary = await secondaryOpened;
+	await expect(secondary.locator('.ash-workbench')).toBeVisible();
+	await submit(secondary, 'secondary');
+	expect((await read()).sessions).toHaveLength(1);
+	const secondaryClosed = secondary.waitForEvent('close');
+	await invoke(secondary, 'ash:window:operation', { kind: 'close' });
+	await secondaryClosed;
+	await expect.poll(async () => (await read()).sessions).toEqual([]);
+	await submit(page, 'reload');
+	await page.reload();
+	await expect(page.locator('.ash-workbench')).toBeVisible();
+	expect((await read()).sessions).toEqual([]);
+	expect((await read()).editorSessionCount).toBe(3);
+	expect((await read()).lastShown).toEqual(impression);
+	const agentsClosed = agents.waitForEvent('close');
+	await invoke(agents, 'ash:window:operation', { kind: 'close' });
+	await agentsClosed;
+	const restarted = await reloadWorkbench();
+	const durable = await read(restarted.workbench.page);
+	expect({ count: durable.editorSessionCount, lastShown: durable.lastShown, sessions: durable.sessions, invitation: durable.invitation }).toEqual({ count: 3, lastShown: impression, sessions: [], invitation: undefined });
+});

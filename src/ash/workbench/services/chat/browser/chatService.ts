@@ -1,5 +1,7 @@
 import { IAgentExecutionSettingsService } from '../../../../platform/agentHost/common/agentExecutionSettingsService.js';
-import type { ChatContextUsage } from '../common/chatService.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
+import type { ChatContextUsage, IChatRequestSubmittedEvent } from '../common/chatService.js';
 import type { AgentInput } from '../../../../platform/agentHost/common/agentService.js';
 import { localize } from '../../../../nls.js';
 import type { TurnChangeSetSummary as TurnChangeSetSummaryDto, TurnChangesReadResult as TurnChangesReadResultDto } from '../../../../../../.build/protocol/typescript/index.js';
@@ -25,6 +27,8 @@ interface SharedThreadSubscription {
 }
 /** App Server-backed implementation of the frontend Chat service. */
 export class ChatService extends Disposable implements IChatService {
+	private readonly submitted = this._register(new Emitter<IChatRequestSubmittedEvent>());
+	readonly onDidSubmitRequest = this.submitted.event;
 	private readonly _onDidChangeSession = this._register(new Emitter<{ readonly sessionId: SessionId; readonly agentTreeChanged: boolean; }>());
 	private readonly _onDidUpdateThread = this._register(new Emitter<ThreadUpdateEnvelope>());
 	private readonly _onDidUpdateThreadTranscript = this._register(new Emitter<ThreadTranscriptUpdateEnvelope>());
@@ -52,6 +56,7 @@ export class ChatService extends Disposable implements IChatService {
 		@IAppServerApi private readonly appServerApi: IAppServerApi,
 		@IServerEventApi eventApi: IServerEventApi,
 		@IAgentExecutionSettingsService private readonly execution: IAgentExecutionSettingsService,
+		@IConfigurationService private readonly configuration: IConfigurationService,
 	) {
 		super();
 		this._register(threadApi.onDidUpdateThread(event => this._onDidUpdateThread.fire(event)));
@@ -170,16 +175,22 @@ export class ChatService extends Disposable implements IChatService {
 	}
 
 	async startTurn(options: StartTurnOptions): Promise<void> {
+		this.assertAIEnabled();
+		const epoch = this.connectionEpoch;
 		const input = turnInput(options);
 		await this.turnApi.start({ commandId: options.commandId ?? commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, mode: options.mode, approvalMode: options.approvalMode, model: options.model, reasoningEffort: options.reasoningEffort, input });
+		if (!this.isDisposed && epoch === this.connectionEpoch) this.submitted.fire({ sessionId: options.sessionId, threadId: options.threadId, isNewSession: options.isNewSession === true, requestSequence: options.expectedSequence });
 	}
 
 	async queueTurn(options: StartTurnOptions): Promise<void> {
+		this.assertAIEnabled();
 		const epoch = this.connectionEpoch;
 		const generation = this.appServerApi.connectionGeneration;
 		const approvalMode = options.approvalMode ?? (await this.execution.read()).settings.approvalMode;
 		if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServerApi.connectionGeneration) throw canceled();
+		this.assertAIEnabled();
 		await this.turnApi.enqueue({ commandId: options.commandId ?? commandId("queued-turn"), sessionId: options.sessionId, threadId: options.threadId, mode: options.mode, model: options.model, reasoningEffort: options.reasoningEffort, input: turnInput(options), approvalMode });
+		if (!this.isDisposed && epoch === this.connectionEpoch) this.submitted.fire({ sessionId: options.sessionId, threadId: options.threadId, isNewSession: false, requestSequence: options.expectedSequence });
 	}
 
 	async queuedMessageCount(sessionId: SessionId, threadId: ThreadId): Promise<number> {
@@ -192,7 +203,11 @@ export class ChatService extends Disposable implements IChatService {
 	}
 
 	async consultAdvisor(options: ConsultAdvisorOptions): Promise<void> {
-		await this.turnApi.consultAdvisor({ commandId: commandId("advisor-ask"), ...options });
+		this.assertAIEnabled();
+		const epoch = this.connectionEpoch;
+		const { isNewSession, ...request } = options;
+		await this.turnApi.consultAdvisor({ commandId: commandId("advisor-ask"), ...request });
+		if (!this.isDisposed && epoch === this.connectionEpoch) this.submitted.fire({ sessionId: options.sessionId, threadId: options.threadId, isNewSession: isNewSession === true, requestSequence: options.expectedSequence });
 	}
 
 	readAdvisorDefault(): Promise<AdvisorConfig | null> {
@@ -204,6 +219,7 @@ export class ChatService extends Disposable implements IChatService {
 	}
 
 	async compactContext(options: CompactContextOptions): Promise<void> {
+		this.assertAIEnabled();
 		await this.turnApi.compact({
 			commandId: commandId("compact"),
 			sessionId: options.sessionId,
@@ -214,6 +230,8 @@ export class ChatService extends Disposable implements IChatService {
 	}
 
 	async steerTurn(options: SteerTurnOptions): Promise<void> {
+		this.assertAIEnabled();
+		const epoch = this.connectionEpoch;
 		await this.turnApi.steer({
 			commandId: options.commandId ?? commandId("steer"),
 			sessionId: options.sessionId,
@@ -225,10 +243,17 @@ export class ChatService extends Disposable implements IChatService {
 				...(options.text.trim() ? [{ type: "text" as const, text: options.text }] : []),
 			],
 		});
+		if (!this.isDisposed && epoch === this.connectionEpoch) this.submitted.fire({ sessionId: options.sessionId, threadId: options.threadId, isNewSession: false, requestSequence: options.expectedSequence });
 	}
 
 	async interruptTurn(options: InterruptTurnOptions): Promise<void> {
 		await this.turnApi.interrupt({ commandId: commandId("interrupt"), ...options });
+	}
+
+	private assertAIEnabled(): void {
+		if (this.configuration.getValue<boolean>(ChatAIDisabledSettingId)) {
+			throw new Error(localize('chat.ai.disabled.message', 'AI features are disabled. Turn off Disable AI features in Settings to send messages.'));
+		}
 	}
 
 	async resolveInteraction(options: ResolveInteractionOptions): Promise<void> {
@@ -249,6 +274,7 @@ export class ChatService extends Disposable implements IChatService {
 	}
 
 	async generateTurnChangeMessage(sessionId: SessionId, threadId: ThreadId, changeSetId: string, expectedRevision: number): Promise<readonly TurnChangeSetSummary[]> {
+		this.assertAIEnabled();
 		const result = await this.turnChangesApi.generateMessage({ commandId: commandId("turn-changes-message"), sessionId, threadId, changeSetId, expectedRevision });
 		return result.changeSets.map(toTurnChangeSummary);
 	}

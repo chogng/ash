@@ -33,6 +33,11 @@ import {
 } from '../../window/common/window.js';
 import { showMessageBox } from '../../dialogs/electron-browser/dialog.js';
 import { normalizeExternalUrl } from '../../opener/common/opener.js';
+import {
+	AGENT_HOST_EDITOR_STATE_CHANNEL, AGENT_HOST_EDITOR_UPDATE_CHANNEL, AGENT_HOST_EDITOR_STATE_CHANGED_CHANNEL,
+	AGENTS_WINDOW_INVITATION_CLAIM_CHANNEL, AGENTS_WINDOW_INVITATION_SHOWN_CHANNEL, AGENTS_WINDOW_INVITATION_RELEASE_CHANNEL,
+	validateAgentHostEditorState, validateAgentsWindowInvitation,
+} from '../common/nativeHost.js';
 
 export function createNativeHostApi(mainProcessService: IMainProcessService): INativeHostApi {
 	const colors = mainProcessService.getChannel('colorScheme');
@@ -65,6 +70,12 @@ export function createNativeHostApi(mainProcessService: IMainProcessService): IN
 		openWorkspace: (root) => invoke<void>(NATIVE_HOST_OPEN_WORKSPACE_CHANNEL, root),
 		openWindow: options => invoke<void>(NATIVE_HOST_OPEN_WINDOW_CHANNEL, options),
 		openAgentsWindow: options => invoke<void>(NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL, options),
+		getAgentHostEditorState: async () => validateAgentHostEditorState(await invoke<unknown>(AGENT_HOST_EDITOR_STATE_CHANNEL)),
+		updateAgentHostEditorState: update => invoke<void>(AGENT_HOST_EDITOR_UPDATE_CHANNEL, update),
+		onDidChangeAgentHostEditorState: listener => subscribe<unknown>(AGENT_HOST_EDITOR_STATE_CHANGED_CHANNEL, value => listener(validateAgentHostEditorState(value))),
+		claimAgentsWindowInvitation: async resource => validateAgentsWindowInvitation(await invoke<unknown>(AGENTS_WINDOW_INVITATION_CLAIM_CHANNEL, resource)),
+		markAgentsWindowInvitationShown: id => invoke<void>(AGENTS_WINDOW_INVITATION_SHOWN_CHANNEL, id),
+		releaseAgentsWindowInvitation: id => invoke<void>(AGENTS_WINDOW_INVITATION_RELEASE_CHANNEL, id),
 		syncSystemWideKeybindings: async keybindings => validateSystemWideKeybindingsResult(await invoke<unknown>(NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL, keybindings)),
 		openExternal: target => invoke<boolean>('ash:host:openExternal', target),
 		onDidRequestOpenExternalUri: listener => subscribe<unknown>(WINDOW_OPEN_EXTERNAL_URI_CHANNEL, value => {

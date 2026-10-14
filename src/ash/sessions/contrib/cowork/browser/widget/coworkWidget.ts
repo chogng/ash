@@ -144,7 +144,17 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 		this.listWidget = listWidgets.get();
 		const voice = this.voiceSessionController;
 		const inputDelegate: ChatInputDelegate = {
-			voiceConversation: { get isAvailable() { return voice.isAvailable; }, get isActive() { return voice.isActive; }, get isConnected() { return voice.isConnected; }, toggle: () => this.runVoice(() => voice.isActive ? voice.disconnect() : voice.connect(ownerDocument.defaultView!, (connections, signal) => pickVoiceConversation(this.quickInput, connections, signal))), interrupt: () => this.runVoice(() => voice.stopSpeaking()) },
+			voiceConversation: {
+				get isAvailable() { return voice.isAvailable && !model.inputState.aiDisabled; },
+				get isActive() { return voice.isActive; },
+				get isConnected() { return voice.isConnected; },
+				toggle: () => this.runVoice(() => {
+					if (voice.isActive) return voice.disconnect();
+					if (model.inputState.aiDisabled) throw new Error(localize('chat.ai.disabled.message', 'AI features are disabled. Turn off Disable AI features in Settings to send messages.'));
+					return voice.connect(ownerDocument.defaultView!, (connections, signal) => pickVoiceConversation(this.quickInput, connections, signal));
+				}),
+				interrupt: () => this.runVoice(() => voice.stopSpeaking()),
+			},
 			send: (text, mode, skills, contexts, signal) => this.send(text, mode, skills, contexts, undefined, signal),
 			executeCommand: (invocation) => invocation.commandId === OPEN_CHAT_PERMISSIONS_COMMAND_ID || invocation.commandId === OPEN_GUARDIAN_SETUP_COMMAND_ID
 				? commandService.executeCommand(invocation.commandId, this.model, invocation.argumentsText)
@@ -185,7 +195,10 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 			this.listWidget = widget;
 			widget.restoreViewState(state, this.model.items);
 		}));
-		this._register(this.model.onDidChange(() => this.render()));
+		this._register(this.model.onDidChange(() => {
+			if (this.model.inputState.aiDisabled && this.voiceSessionController.isActive) void this.runVoice(() => this.voiceSessionController.disconnect());
+			this.render();
+		}));
 		this._register(this.model.onDidChangeComposer(() => this.inputPart.invalidatePendingInput()));
 		this._register(this.voiceSessionController.onDidChange(() => { if (!this.isDisposed) this.render(); }));
 		this._register(toDisposable(() => this.element.remove()));

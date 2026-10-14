@@ -5,6 +5,17 @@ import type { SessionMode } from '../../agentHost/common/agentService.js';
 import type { DisposableHandle } from "../../ipc/common/ipc.js";
 import type { FileFilter, MessageBoxOptions, MessageBoxReturnValue, OpenDialogOptions, OpenDialogReturnValue, SaveDialogOptions, SaveDialogReturnValue } from '../../../base/parts/sandbox/common/electronTypes.js';
 import type { IWorkbenchWindowInfo, IOpenEmptyWindowOptions } from '../../window/common/window.js';
+import type { AgentHostEditorUpdate, IAgentHostEditorState, IAgentsWindowInvitation } from '../../chat/common/agentsWindowInvitation.js';
+import { URI, type UriComponents } from '../../../base/common/uri.js';
+import { buildOpenSessionLinkUri, parseOpenSessionLinkUri } from '../../agentHost/common/openSessionLink.js';
+import { isRecord } from '../../../base/common/types.js';
+
+export const AGENT_HOST_EDITOR_STATE_CHANNEL = 'ash:native-host:editor-state';
+export const AGENT_HOST_EDITOR_STATE_CHANGED_CHANNEL = 'ash:native-host:editor-state-changed';
+export const AGENT_HOST_EDITOR_UPDATE_CHANNEL = 'ash:native-host:editor-update';
+export const AGENTS_WINDOW_INVITATION_CLAIM_CHANNEL = 'ash:native-host:invitation-claim';
+export const AGENTS_WINDOW_INVITATION_SHOWN_CHANNEL = 'ash:native-host:invitation-shown';
+export const AGENTS_WINDOW_INVITATION_RELEASE_CHANNEL = 'ash:native-host:invitation-release';
 
 export const NATIVE_HOST_GET_TITLE_BAR_STYLE_CHANNEL = 'ash:native-host:get-title-bar-style';
 
@@ -154,6 +165,12 @@ export interface INativeHostApi {
 	openWorkspace(root: string): Promise<void>;
 	openWindow(options: IOpenEmptyWindowOptions): Promise<void>;
 	openAgentsWindow(options?: IOpenAgentsWindowOptions): Promise<void>;
+	getAgentHostEditorState(): Promise<IAgentHostEditorState>;
+	updateAgentHostEditorState(update: AgentHostEditorUpdate): Promise<void>;
+	onDidChangeAgentHostEditorState(listener: (state: IAgentHostEditorState) => void): DisposableHandle;
+	claimAgentsWindowInvitation(resource: UriComponents): Promise<IAgentsWindowInvitation | undefined>;
+	markAgentsWindowInvitationShown(id: string): Promise<void>;
+	releaseAgentsWindowInvitation(id: string): Promise<void>;
 	syncSystemWideKeybindings(keybindings: readonly INativeSystemWideKeybinding[]): Promise<INativeSystemWideKeybindingResult>;
 	openExternal(target: string): Promise<boolean>;
 	onDidRequestOpenExternalUri(listener: (target: string) => void): DisposableHandle;
@@ -223,6 +240,73 @@ export function validateOpenAgentsWindow(value: unknown): IOpenAgentsWindowOptio
 		}
 	}
 	return value as IOpenAgentsWindowOptions;
+}
+
+export function validateAgentHostEditorResource(value: unknown): UriComponents {
+	if (!isRecord(value) || Object.keys(value).some(key => !['$mid', 'external', 'scheme', 'authority', 'path', 'query', 'fragment'].includes(key))
+		|| !['scheme', 'authority', 'path', 'query'].every(key => typeof value[key] === 'string')
+		|| value.$mid !== undefined && value.$mid !== 1
+		|| value.fragment !== undefined && typeof value.fragment !== 'string') throw new TypeError('Invalid editor conversation resource');
+	const resource = URI.from(value as unknown as UriComponents);
+	// Ash's URI serialization includes its encoded spelling. Neither representation may redirect the other.
+	if (value.external !== undefined && value.external !== resource.toString()) throw new TypeError('Inconsistent editor conversation resource');
+	const link = parseOpenSessionLinkUri(resource);
+	if (link.connectionAuthority !== 'local') throw new TypeError('Unknown editor conversation connection');
+	return buildOpenSessionLinkUri(link.sessionId, link.threadId, link.connectionAuthority).toJSON();
+}
+
+export function validateAgentHostEditorUpdate(value: unknown): AgentHostEditorUpdate {
+	if (!isRecord(value)) throw new TypeError('Invalid editor activity update');
+	if (value.kind === 'request' && Object.keys(value).sort().join(',') === 'isNewSession,kind,requestSequence,resource' && typeof value.isNewSession === 'boolean' && Number.isSafeInteger(value.requestSequence) && (value.requestSequence as number) >= 0) {
+		return { kind: 'request', resource: validateAgentHostEditorResource(value.resource), isNewSession: value.isNewSession, requestSequence: value.requestSequence as number };
+	}
+	if (value.kind === 'sessions' && Object.keys(value).sort().join(',') === 'kind,sessions' && Array.isArray(value.sessions) && value.sessions.length <= 128) {
+		return {
+			kind: 'sessions', sessions: value.sessions.map(session => {
+				if (!isRecord(session) || Object.keys(session).sort().join(',') !== 'inProgress,needsInput,resource'
+					|| typeof session.inProgress !== 'boolean' || typeof session.needsInput !== 'boolean') throw new TypeError('Invalid editor activity');
+				return { resource: validateAgentHostEditorResource(session.resource), inProgress: session.inProgress, needsInput: session.needsInput };
+			})
+		};
+	}
+	if (value.kind === 'delete' && Object.keys(value).sort().join(',') === 'kind,resources' && Array.isArray(value.resources) && value.resources.length <= 128) {
+		return { kind: 'delete', resources: value.resources.map(validateAgentHostEditorResource) };
+	}
+	throw new TypeError('Invalid editor activity update');
+}
+
+export function validateAgentsWindowInvitationId(value: unknown): string {
+	if (typeof value !== 'string' || !/^[a-zA-Z0-9-]{1,128}$/.test(value)) throw new TypeError('Invalid invitation ID');
+	return value;
+}
+
+export function validateAgentsWindowInvitation(value: unknown): IAgentsWindowInvitation | undefined {
+	if (value === undefined) return undefined;
+	if (!isRecord(value) || Object.keys(value).sort().join(',') !== 'id,resource,revision,shown,windowId'
+		|| !Number.isSafeInteger(value.revision) || (value.revision as number) < 0
+		|| !Number.isSafeInteger(value.windowId) || (value.windowId as number) <= 0 || typeof value.shown !== 'boolean') throw new TypeError('Invalid invitation');
+	return { id: validateAgentsWindowInvitationId(value.id), resource: validateAgentHostEditorResource(value.resource), revision: value.revision as number, windowId: value.windowId as number, shown: value.shown };
+}
+
+export function validateAgentHostEditorState(value: unknown): IAgentHostEditorState {
+	if (!isRecord(value) || Object.keys(value).sort().join(',') !== 'agentsWindowSessionCount,editorSessionCount,invitation,lastAgentsWindowSessionCreated,lastShown,revision,sessions'
+		|| !['revision', 'editorSessionCount', 'agentsWindowSessionCount'].every(key => Number.isSafeInteger(value[key]) && (value[key] as number) >= 0)
+		|| value.lastAgentsWindowSessionCreated !== undefined && (typeof value.lastAgentsWindowSessionCreated !== 'number' || !Number.isFinite(value.lastAgentsWindowSessionCreated) || value.lastAgentsWindowSessionCreated < 0)
+		|| !Array.isArray(value.sessions) || value.sessions.length > 4096) throw new TypeError('Invalid editor activity state');
+	const sessions = value.sessions.map(session => {
+		if (!isRecord(session) || Object.keys(session).sort().join(',') !== 'inProgress,needsInput,resource,windowId'
+			|| !Number.isSafeInteger(session.windowId) || (session.windowId as number) <= 0
+			|| typeof session.inProgress !== 'boolean' || typeof session.needsInput !== 'boolean') throw new TypeError('Invalid editor activity state');
+		return { resource: validateAgentHostEditorResource(session.resource), windowId: session.windowId as number, inProgress: session.inProgress, needsInput: session.needsInput };
+	});
+	if (value.lastShown !== undefined && (!isRecord(value.lastShown) || Object.keys(value.lastShown).sort().join(',') !== 'editorSessionCount,timestamp'
+		|| typeof value.lastShown.editorSessionCount !== 'number' || !Number.isSafeInteger(value.lastShown.editorSessionCount) || value.lastShown.editorSessionCount < 0
+		|| typeof value.lastShown.timestamp !== 'number' || !Number.isFinite(value.lastShown.timestamp) || value.lastShown.timestamp < 0)) throw new TypeError('Invalid invitation impression');
+	return {
+		revision: value.revision as number, editorSessionCount: value.editorSessionCount as number, agentsWindowSessionCount: value.agentsWindowSessionCount as number,
+		lastAgentsWindowSessionCreated: value.lastAgentsWindowSessionCreated as number | undefined, sessions,
+		invitation: validateAgentsWindowInvitation(value.invitation), lastShown: value.lastShown as IAgentHostEditorState['lastShown']
+	};
 }
 
 export function validatePickFolder(value: unknown): undefined {

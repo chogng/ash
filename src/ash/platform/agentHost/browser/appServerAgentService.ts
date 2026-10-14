@@ -68,6 +68,7 @@ export function createDisconnectedAgentSessionService(unavailable: UnavailableOp
 		unsubscribe: () => unavailable('session.unsubscribe'),
 		createThread: () => unavailable('session.createThread'),
 		archive: () => unavailable('session.archive'),
+		restore: () => unavailable('session.restore'),
 		stop: () => unavailable('session.stop')
 	};
 }
@@ -152,6 +153,10 @@ export function createAppServerAgentSessionService(connection: AppServerProtocol
 				.then((result) => ({ session: toAgentSession(result.session), threadId: result.threadId })),
 		archive: (params) =>
 			appServerRequest(connection, 'session/request', sessionRequest(params, { type: 'archive' }))
+				.then(sessionResult)
+				.then(toSessionResult),
+		restore: (params) =>
+			appServerRequest(connection, 'session/request', sessionRequest(params, { type: 'restore' }))
 				.then(sessionResult)
 				.then(toSessionResult),
 		stop: (params) =>

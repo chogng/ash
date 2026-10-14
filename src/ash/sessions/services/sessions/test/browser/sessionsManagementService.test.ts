@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { isCancellationError } from "../../../../../base/common/errors.js";
+import { DeferredPromise } from '../../../../../base/common/async.js';
 import type { AgentTreeNodeProjection, ModelUsageSummary, ServerNotification, Session as SessionDto } from "../../../../../../../.build/protocol/typescript/index.js";
 import { IAppServerApi, type AppServerConnectionState, IServerEventApi } from "../../../../../platform/agentHost/common/appServerApi.js";
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
@@ -689,6 +690,51 @@ test("archive sends only the Session grouping identity", async () => {
 	assert.equal(service.active?.session.sessionId, "session-2");
 });
 
+test('restoring a Session preserves the foreground draft and only restores the canonical root', async () => {
+	const first = session('first', 'root');
+	const fake = sessionHost([{ ...first, threads: [...first.threads, { ...first.threads[0]!, threadId: 'child', parentThreadId: 'root' }] }, session('second', 'second-root')]);
+	using service = createManagement(fake);
+	await service.initialize();
+	await service.archiveSession('first');
+	const draft = service.createUntitledSession('Keep this draft');
+	service.selectUntitledSession(draft.untitledSessionId);
+	const active = service.active;
+	await service.restoreSession('first');
+	assert.deepEqual(fake.restoreRequests, [{ commandId: fake.restoreRequests[0]!.commandId, sessionId: 'first' }]);
+	const restored = service.sessions.find(session => session.sessionId === 'first')!;
+	assert.deepEqual({ status: restored.status, threads: restored.chats.map(chat => [chat.threadId, chat.status]), active: service.active, draft: service.activeUntitledSession }, { status: 'active', threads: [['root', 'active'], ['child', 'archived']], active, draft });
+});
+
+test('a failed Session restore retains its archived catalog entry and can retry', async () => {
+	const fake = sessionHost([session('first', 'root')]);
+	using service = createManagement(fake);
+	await service.initialize();
+	await service.archiveSession('first');
+	const restore = fake.host.session.restore;
+	fake.host.session.restore = async () => { throw new Error('Synthetic restore failure'); };
+	await assert.rejects(service.restoreSession('first'), /Synthetic restore failure/u);
+	assert.equal(service.sessions[0]?.status, 'archived');
+	fake.host.session.restore = restore;
+	await service.restoreSession('first');
+	assert.equal(service.sessions[0]?.status, 'active');
+});
+
+for (const disposed of [false, true]) {
+	test(`a late Session restore cannot publish after ${disposed ? 'disposal' : 'connection loss'}`, async () => {
+		const initial = { ...session('first', 'root'), status: 'archived' as const };
+		const fake = sessionHost([initial]);
+		using provider = createProvider(fake);
+		const listed = (await provider.list())[0]!;
+		const pending = new DeferredPromise<Awaited<ReturnType<IAgentSessionService['restore']>>>();
+		fake.host.session.restore = () => pending.p;
+		const restoring = provider.restore(listed);
+		const rejected = assert.rejects(restoring, isCancellationError);
+		if (disposed) provider.dispose(); else fake.setConnectionState('crashed');
+		await pending.complete({ session: { ...initial, status: 'active' }, agentTree: { roots: [] } });
+		await rejected;
+	});
+}
+
 test("interrupt reads the current Thread sequence before sending the command", async () => {
 	const tree = agentNode();
 	const fake = sessionHost([session("session-1", "thread-1")], tree);
@@ -762,6 +808,7 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection, work
 	const sessions = [...initial];
 	const agentTree = { roots: tree ? [tree] : [] };
 	const archiveRequests: Parameters<IAgentSessionService["archive"]>[0][] = [];
+	const restoreRequests: Parameters<IAgentSessionService['restore']>[0][] = [];
 	const interruptRequests: Parameters<IAgentTurnService["interrupt"]>[0][] = [];
 	let subscribeCount = 0;
 	let catalogSubscriptionCount = 0;
@@ -789,10 +836,17 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection, work
 		async archive(params) {
 			archiveRequests.push(params);
 			const index = sessions.findIndex(candidate => candidate.sessionId === params.sessionId);
-			sessions[index] = { ...sessions[index]!, status: "archived" };
+			sessions[index] = { ...sessions[index]!, status: "archived", threads: sessions[index]!.threads.map(thread => ({ ...thread, status: "archived" })) };
 			return { session: sessions[index]!, agentTree };
 		},
 		async stop() { throw new Error("Not used"); },
+		async restore(params) {
+			restoreRequests.push(params);
+			const index = sessions.findIndex(candidate => candidate.sessionId === params.sessionId);
+			const previous = sessions[index]!;
+			sessions[index] = { ...previous, status: 'active', threads: previous.threads.map((thread, i) => ({ ...thread, status: i === 0 ? 'active' : 'archived' })) };
+			return { session: sessions[index]!, agentTree };
+		},
 	};
 	const turn: IAgentTurnService = {
 		enqueue: async () => { throw new Error("Queue is unavailable in this fixture"); },
@@ -826,6 +880,7 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection, work
 		host: { session: api, model: { ...createDisconnectedRendererApi().model, readModel: async (): Promise<ModelRef | null> => null }, turn, events, workspace, selectWorkspace: async (_folders: readonly { readonly label: string; readonly target: SessionExecutionTarget; }[]): Promise<SessionExecutionTarget | undefined> => undefined },
 		sessions,
 		archiveRequests,
+		restoreRequests,
 		interruptRequests,
 		get subscribeCount() { return subscribeCount; },
 		get catalogSubscriptionCount() { return catalogSubscriptionCount; },

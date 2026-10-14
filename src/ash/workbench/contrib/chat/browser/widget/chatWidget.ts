@@ -25,6 +25,11 @@ import type { ResolvedChatContext } from "../../../../services/chat/common/chatC
 import { getActiveWindow, h } from "../../../../../base/browser/dom.js";
 import { generateUuid } from '../../../../../base/common/uuid.js';
 import { AgentsVoiceWidget } from '../../../agentsVoice/browser/agentsVoiceWidget.js';
+import { Button } from '../../../../../base/browser/ui/button/button.js';
+import type { IChatSessionHistoryStatus } from '../../../../../platform/chat/common/chatSessionHistory.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { createUuid } from '../../../../../base/common/uuid.js';
 import type { ChatContextAttachment } from "../../../../services/chat/common/chatContextService.js";
 import type { IOpenerService } from "../../../../../platform/opener/common/opener.js";
 import type { IEditorService } from "../../../../services/editor/common/editorService.js";
@@ -52,6 +57,7 @@ export interface IChatWidgetModel extends IDisposable {
 	readonly goal: ThreadGoal | undefined;
 	readonly items: readonly IChatListItem[];
 	readonly inputState: ChatInputState;
+	readonly historyStatus?: IChatSessionHistoryStatus;
 	prepareConversation?(): Promise<{ readonly sessionId: string; readonly threadId: string; }>;
 	send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], submissionOptions?: ChatSubmissionOptions): Promise<void>;
 	executeServerCommand(name: string, argumentsText: string): Promise<void>;
@@ -76,6 +82,10 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	private listWidget: ChatListWidget;
 	private readonly inputPart: IChatInputPart;
 	private readonly goalElement: HTMLDivElement;
+	private readonly historyStatusElement: HTMLDivElement;
+	private readonly historyMessage: HTMLSpanElement;
+	private readonly historyAction: Button;
+	private historyRecovery: { readonly status: IChatSessionHistoryStatus; readonly generation: number; } | undefined;
 	private submittedMessage = false;
 	private displayedThreadId: ThreadId | undefined;
 
@@ -118,6 +128,30 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		this.goalElement = h(ownerDocument, "div");
 		this.goalElement.className = "ash-chat-goal";
 		this.goalElement.hidden = true;
+		this.historyStatusElement = h(ownerDocument, 'div');
+		this.historyStatusElement.className = 'ash-chat-history-status';
+		this.historyStatusElement.hidden = true;
+		this.historyMessage = h(ownerDocument, 'span');
+		this.historyMessage.setAttribute('role', 'status');
+		this.historyStatusElement.append(this.historyMessage);
+		this.historyAction = this._register(new Button(this.historyStatusElement, { label: '', size: 'small' }));
+		this._register(this.historyAction.onDidClick(() => void this.recoverHistory()));
+		const historyAccessibilityId = createUuid();
+		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
+			this._register(AccessibleViewRegistry.register({
+				type, priority: 100, name: `chatHistory-${type}-${historyAccessibilityId}`,
+				getProvider: () => {
+					const focused = ownerDocument.activeElement as HTMLElement | null;
+					if (!focused || !this.historyStatusElement.contains(focused)) return undefined;
+					const provider = new AccessibleContentProvider(AccessibleViewProviderId.SessionsChat, { type }, () => type === AccessibleViewType.Help
+						? localize('chat.history.recoveryHelp', 'When chat history or updates cannot load, use Tab to reach Retry loading chat and Enter or Space to retry. Recovery preserves your draft and attachments and never sends a message. Sending stays unavailable until loading succeeds. Closing accessibility help returns focus to recovery, or to the message input when recovery is complete.')
+						: [this.model.historyStatus?.message, this.model.historyStatus?.action.label].filter(Boolean).join('\n'),
+						() => { if (!this.isDisposed) { if (this.historyStatusElement.hidden) this.focus(); else focused.focus(); } }, AccessibilityVerbositySettingId.Chat);
+					provider.onDidChangeContent = this.model.onDidChange;
+					return provider;
+				},
+			}));
+		}
 		const listWidgets = ChatListWidget.instantiateObservable(instantiationService, this._store, h(ownerDocument, 'div'), {
 			imageResourceLoader,
 			mcpAppDelegate: {
@@ -154,7 +188,17 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		this.listWidget = listWidgets.get();
 		const voiceClient = this.voiceSessionController;
 		const inputDelegate: ChatInputDelegate = {
-			voiceConversation: { get isAvailable() { return voiceClient.isAvailable; }, get isActive() { return voiceClient.isActive; }, get isConnected() { return voiceClient.isConnected; }, toggle: () => this.runVoice(() => voiceClient.isActive ? voiceClient.disconnect() : voiceClient.connect(ownerDocument.defaultView!, (connections, signal) => pickVoiceConversation(this.quickInput, connections, signal))), interrupt: () => this.runVoice(() => voiceClient.stopSpeaking()) },
+			voiceConversation: {
+				get isAvailable() { return voiceClient.isAvailable && !model.inputState.aiDisabled; },
+				get isActive() { return voiceClient.isActive; },
+				get isConnected() { return voiceClient.isConnected; },
+				toggle: () => this.runVoice(() => {
+					if (voiceClient.isActive) return voiceClient.disconnect();
+					if (model.inputState.aiDisabled) throw new Error(localize('chat.ai.disabled.message', 'AI features are disabled. Turn off Disable AI features in Settings to send messages.'));
+					return voiceClient.connect(ownerDocument.defaultView!, (connections, signal) => pickVoiceConversation(this.quickInput, connections, signal));
+				}),
+				interrupt: () => this.runVoice(() => voiceClient.stopSpeaking()),
+			},
 			send: (text, mode, skills, contexts, submissionSignal) => this.send(text, mode, skills, contexts, undefined, submissionSignal),
 			executeCommand: (invocation) => invocation.commandId === OPEN_CHAT_PERMISSIONS_COMMAND_ID || invocation.commandId === OPEN_GUARDIAN_SETUP_COMMAND_ID
 				? commandService.executeCommand(invocation.commandId, this.model, invocation.argumentsText)
@@ -202,7 +246,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			closeWindow: () => this.inputPart.focus(),
 			showSessionsPicker: () => this.inputPart.focus(),
 		}, { showClose: false, showOnboarding: false, inputBoxLayout: true }));
-		this.element.append(this.goalElement, this.listWidget.element, voiceContainer, this.inputPart.element);
+		this.element.append(this.goalElement, this.listWidget.element, this.historyStatusElement, voiceContainer, this.inputPart.element);
 		this._register(listWidgets.onDidChange(widget => {
 			const previous = this.listWidget;
 			const state = previous.getViewState();
@@ -211,7 +255,10 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			widget.restoreViewState(state, this.model.items);
 		}));
 		this._register(this.model.onDidChangeComposer(() => this.inputPart.invalidatePendingInput()));
-		this._register(this.model.onDidChange(() => this.render()));
+		this._register(this.model.onDidChange(() => {
+			if (this.model.inputState.aiDisabled && this.voiceSessionController.isActive) void this.runVoice(() => this.voiceSessionController.disconnect());
+			this.render();
+		}));
 		this._register(this.voiceSessionController.onDidChange(() => { if (!this.isDisposed) this.render(); }));
 		this._register(toDisposable(() => this.element.remove()));
 		this.render();
@@ -344,10 +391,44 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 				: localize('agentsVoice.listening', 'Listening…')
 			: localize('agentsVoice.connecting', 'Connecting…'));
 		this.renderGoal();
+		this.renderHistoryStatus();
 		const items = this.model.items;
 		this.updateConversationState(items.length > 0);
 		this.listWidget.render(items);
 		this.inputPart.render(this.model.inputState);
+	}
+
+	private renderHistoryStatus(): void {
+		const status = this.model.historyStatus;
+		this.historyStatusElement.hidden = !status;
+		this.historyMessage.textContent = status?.message ?? '';
+		this.historyAction.label = status?.action.label ?? '';
+		const recovering = this.historyRecovery?.status === status && this.historyRecovery?.generation === this.model.composerGeneration;
+		this.historyAction.enabled = !!status && !recovering;
+		this.historyStatusElement.setAttribute('aria-busy', String(recovering));
+	}
+
+	private async recoverHistory(): Promise<void> {
+		const status = this.model.historyStatus;
+		if (!status || !this.historyAction.enabled) return;
+		const recovery = { status, generation: this.model.composerGeneration };
+		const wasFocused = this.historyAction.hasFocus();
+		this.historyRecovery = recovery;
+		this.renderHistoryStatus();
+		try {
+			await status.action.run();
+		} catch (error) {
+			if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(String(error));
+		} finally {
+			if (!this.isDisposed && this.historyRecovery === recovery) {
+				this.historyRecovery = undefined;
+				this.renderHistoryStatus();
+				const document = this.element.ownerDocument;
+				if (wasFocused && recovery.generation === this.model.composerGeneration && !this.element.hidden && (document.activeElement === this.historyAction.domNode || document.activeElement === document.body)) {
+					if (this.model.historyStatus) this.historyAction.focus(); else this.focus();
+				}
+			}
+		}
 	}
 
 	private renderGoal(): void {

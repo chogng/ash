@@ -38,6 +38,9 @@ import { ITurnChangesApi } from '../../../platform/turnChanges/common/turnChange
 import { IAppServerHookApi, IAppServerSkillApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { IAppServerApi, IServerEventApi, type AppServerConnectionState } from '../../../platform/agentHost/common/appServerApi.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
+import { ChatAIDisabledSettingId } from '../../../platform/chat/common/chatSettings.js';
+import { ChatContextKeys } from '../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
+import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../workbench/common/contributions.js';
 import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
 import { IDictationService } from '../../../platform/dictation/common/dictationService.js';
 import { ISpeechService } from '../../../workbench/contrib/speech/common/speechService.js';
@@ -117,7 +120,7 @@ const emptyConfigurationResource = {
 };
 suiteTeardown(() => inputResources.dispose());
 function createInputServices(contextView: IContextViewService, chat: IChatService, menus?: IMenuService, contextMenus?: IContextMenuService): InstantiationService {
-	const services = inputResources.add(createTestEditorServices(undefined, createCodeEditorServices(inputResources)));
+	const services = inputResources.add(createTestEditorServices(configurationServices.get(chat), createCodeEditorServices(inputResources)));
 	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } });
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
@@ -1265,6 +1268,7 @@ test("the New Chat slash command opens an untitled session", async () => {
 	const initialSession = session("session-1", "thread-1", "First Chat");
 	const fake = fakeApi({ sessions: [initialSession] });
 	const services = new InstantiationService();
+	services.registerInstance(IConfigurationService, inputResources.add(new WorkbenchConfigurationService()));
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	using sessions = new SessionsManagementService(fake.api);
@@ -1507,6 +1511,7 @@ test("Chat history selects an active Thread through Quick Pick", async () => {
 		],
 	}).api;
 	const services = new InstantiationService();
+	services.registerInstance(IConfigurationService, inputResources.add(new WorkbenchConfigurationService()));
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	using sessions = new SessionsManagementService(api);
@@ -1619,6 +1624,9 @@ test("ViewsService resolves, opens, and focuses contributed views", async () => 
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	services.registerInstance(IViewDescriptorService, descriptors);
 	services.registerInstance(IContextKeyService, contextKeys);
+	services.registerInstance(IConfigurationService, inputResources.add(new WorkbenchConfigurationService()));
+	using enablement = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.chatEnablement']);
+	enablement.advance(WorkbenchPhase.BlockStartup);
 	services.registerInstance(IPaneCompositePartService, {
 		onDidPaneCompositeOpen: Event.None,
 		onDidPaneCompositeClose: Event.None,
@@ -2116,17 +2124,19 @@ function createTestStorage(): InstanceType<typeof BrowserStorageService> {
 }
 
 const modelServices = new WeakMap<IChatService, ILanguageModelsService>();
+const configurationServices = new WeakMap<IChatService, WorkbenchConfigurationService>();
 const skillServices = new WeakMap<IChatService, IAppServerSkillApi>();
 function modelsFor(chat: IChatService): ILanguageModelsService {
 	return modelServices.get(chat)!;
 }
-function createWidgetModel(chat: IChatService, selection: import('../../browser/chatWidgetModel.js').ChatWidgetSelection, sessions: ISessionsManagementService, execution?: IAgentExecutionSettingsService): ChatWidgetModel {
+function createWidgetModel(chat: IChatService, selection: import('../../browser/chatWidgetModel.js').ChatWidgetSelection, sessions: ISessionsManagementService, execution?: IAgentExecutionSettingsService, configuration?: WorkbenchConfigurationService): ChatWidgetModel {
 	const services = inputResources.add(new InstantiationService());
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
 	services.registerInstance(IAgentExecutionSettingsService, execution ?? { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IAppServerSkillApi, skillServices.get(chat)!);
+	services.registerInstance(IConfigurationService, configuration ?? configurationServices.get(chat) ?? inputResources.add(new WorkbenchConfigurationService()));
 	return services.createInstance(ChatWidgetModel, chat, selection, sessions);
 }
 function createChatService(api: IRendererHost, configurationService?: WorkbenchConfigurationService, storageService?: InstanceType<typeof BrowserStorageService>): ChatService {
@@ -2135,18 +2145,21 @@ function createChatService(api: IRendererHost, configurationService?: WorkbenchC
 	const services = inputResources.add(new InstantiationService());
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
-	registerChatBackend(services, api);
+	registerChatBackend(services, api, IConfigurationService);
 	services.registerInstance(IAccountService, inputResources.add(new AppServerAccountService(api.accounts, api.events)));
-	services.registerInstance(IConfigurationService, configurationService ?? inputResources.add(new WorkbenchConfigurationService()));
+	const configuration = configurationService ?? inputResources.add(new WorkbenchConfigurationService());
+	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IStorageService, storage);
 	services.registerInstance(ILanguageModelsConfigurationService, inputResources.add(services.createInstance(LanguageModelsConfigurationService, ChatModelPreferences)));
 	const chat = services.createInstance(ChatService);
+	configurationServices.set(chat, configuration);
 	modelServices.set(chat, inputResources.add(services.createInstance(LanguageModelsService)));
 	skillServices.set(chat, api.skills);
 	return chat;
 }
 
-function registerChatBackend(services: InstantiationService, api: IRendererHost, omitted?: unknown): void {
+function registerChatBackend(services: InstantiationService, api: IRendererHost, omitted?: unknown, configuration?: WorkbenchConfigurationService): void {
+	if (omitted !== IConfigurationService) { services.registerInstance(IConfigurationService, configuration ?? inputResources.add(new WorkbenchConfigurationService())); }
 	if (omitted !== IAgentModelsService) { services.registerInstance(IAgentModelsService, api.model); }
 	if (omitted !== IAppServerApi) { services.registerInstance(IAppServerApi, api.appServer); }
 	if (omitted !== IAgentThreadService) { services.registerInstance(IAgentThreadService, api.thread); }
@@ -2157,7 +2170,7 @@ function registerChatBackend(services: InstantiationService, api: IRendererHost,
 	if (omitted !== IAgentExecutionSettingsService) { services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } }); }
 }
 
-for (const dependency of [IAgentModelsService, IAgentThreadService, IAgentTurnService, ITurnChangesApi, IAppServerApi, IServerEventApi, IAgentExecutionSettingsService]) {
+for (const dependency of [IAgentModelsService, IAgentThreadService, IAgentTurnService, ITurnChangesApi, IAppServerApi, IServerEventApi, IAgentExecutionSettingsService, IConfigurationService]) {
 	test(`Chat rejects missing ${dependency.description} before allocating listeners`, () => {
 		using services = new InstantiationService();
 		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
@@ -4196,7 +4209,7 @@ function navigationThreadSnapshot(threadId: string): import('../../../platform/a
 }
 
 
-async function createNavigationInputPane(configurationSource = '{}', configurationResource?: IConfigurationResourceService) {
+async function createNavigationInputPane(configurationSource = '{}', configurationResource?: IConfigurationResourceService, threadApi: Partial<IAgentThreadService> = {}) {
 	const resources = new DisposableStore();
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const contextView = resources.add(new BrowserContextViewService(dom.window.document.body));
@@ -4214,6 +4227,7 @@ async function createNavigationInputPane(configurationSource = '{}', configurati
 			...fake.api.thread,
 			read: async ({ threadId }) => navigationThreadSnapshot(threadId),
 			subscribe: async ({ threadId }) => ({ ...navigationThreadSnapshot(threadId), updates: [] }),
+			...threadApi,
 		},
 	};
 	const sessions = resources.add(new SessionsManagementService(api));
@@ -4225,10 +4239,11 @@ async function createNavigationInputPane(configurationSource = '{}', configurati
 	const commands = resources.add(new CommandService(commandServices));
 	const menu = new MenuService(commands, contextKeys);
 	const contextMenus = { showContextMenu: () => { } } as unknown as IContextMenuService;
-	const chat = resources.add(createChatService(api));
+	const chat = resources.add(createChatService(api, configuration));
+	const inputServices = createInputServices(contextView, chat, menu, contextMenus);
 	const pane = resources.add(new ChatViewPane(dom.window.document.body, { id: CHAT_VIEW_ID, title: 'Chat' }, chat, sessions,
 		menu, contextMenus, contextView, commands, testLayoutService(), unavailableFileService, unavailableAccessibleViewService, notifications,
-		createInputServices(contextView, chat, menu, contextMenus), configuration, inputResources.add(createTestStorage()), configurationResource ?? configuration));
+		inputServices, configuration, inputResources.add(createTestStorage()), configurationResource ?? configuration));
 	dom.window.document.body.append(pane.element);
 	await sessions.initialize();
 	await nextTask();
@@ -4238,6 +4253,121 @@ async function createNavigationInputPane(configurationSource = '{}', configurati
 	resources.add(toDisposable(() => dom.window.close()));
 	return { resources, dom, fake, pane, sessions, chatPane, input, configuration, commands };
 }
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`Chat history recovery preserves the draft and attachments without sending in ${locale}`, async () => {
+		initializeTestLocalization(locale);
+		try {
+			let subscriptions = 0;
+			const pending = new DeferredPromise<import('../../../platform/agentHost/common/agentService.js').ThreadSubscription>();
+			const fixture = await createNavigationInputPane('{}', undefined, {
+				subscribe: async () => {
+					subscriptions++;
+					if (subscriptions === 1) throw new Error('History fixture unavailable');
+					return pending.p;
+				},
+			});
+			using resources = fixture.resources;
+			const { pane, fake, chatPane, input, dom } = fixture;
+			const recovery = chatPane.querySelector<HTMLElement>('.ash-chat-history-status')!;
+			await waitFor(() => !recovery.hidden);
+			const retry = recovery.querySelector<HTMLButtonElement>('button')!;
+			assert.equal(retry.textContent, locale === 'en' ? 'Retry loading chat' : '重新加载聊天');
+			assert.match(recovery.textContent!, locale === 'en' ? /Could not load chat history/u : /无法加载聊天历史/u);
+			typeChatText(dom.window, input, 'Keep this draft');
+			pane.addContext({ id: 'history-file', kind: 'file', name: 'fixture.txt', resolve: async () => ({ name: 'fixture.txt', content: 'Synthetic context' }) });
+			const originalDraft = input.value;
+			await pane.acceptInput();
+			assert.equal(fake.turnStartRequests.length, 0);
+			retry.focus();
+			const help = AccessibleViewRegistry.getImplementations().find(provider => provider.type === AccessibleViewType.Help && provider.name.startsWith('chatHistory-'))!.getProvider({} as ServicesAccessor);
+			assert.ok(help);
+			assert.match(help.provideContent(), locale === 'en' ? /never sends a message/u : /不会发送消息/u);
+			retry.click();
+			retry.click();
+			assert.equal(retry.disabled, true);
+			assert.equal(recovery.getAttribute('aria-busy'), 'true');
+			assert.equal(subscriptions, 2);
+			await pending.complete({ ...navigationThreadSnapshot('thread-1'), updates: [] });
+			await waitFor(() => recovery.hidden === true);
+			await waitFor(() => dom.window.document.activeElement === input);
+			assert.equal(input.value, originalDraft);
+			assert.deepEqual((await pane.captureActiveDraft())?.draft.contexts?.map(context => context.name), ['fixture.txt']);
+			assert.equal(fake.turnStartRequests.length, 0);
+			await pane.acceptInput();
+			assert.deepEqual(fake.turnStartRequests.map(request => request.input), [[{ type: 'context', name: 'fixture.txt', content: 'Synthetic context' }, { type: 'text', text: originalDraft.trim() }]]);
+		} finally { resetNlsResolver(); }
+	});
+}
+
+test('Chat history recovery actions expire across A-B-A selection and pane disposal', async () => {
+	const activeSession = session('session-1', 'thread-1');
+	const fake = fakeApi({ sessions: [activeSession] });
+	const requested: string[] = [];
+	const released: string[] = [];
+	let pending: DeferredPromise<import('../../../platform/agentHost/common/agentService.js').ThreadSubscription> | undefined;
+	using chat = createChatService({
+		...fake.api, thread: {
+			...fake.api.thread,
+			subscribe: async ({ threadId }) => {
+				requested.push(threadId);
+				if (threadId === 'thread-1') {
+					if (pending) return pending.p;
+					throw new Error('Synthetic load failure');
+				}
+				return { ...navigationThreadSnapshot(threadId), updates: [] };
+			},
+			unsubscribe: async ({ threadId }) => { released.push(threadId); },
+		}
+	});
+	using sessions = new SessionsManagementService(fake.api);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+	await model.initialize();
+	const retired = model.historyStatus!;
+	await model.selectThread({ session: activeSession, threadId: 'thread-2' });
+	await model.selectThread({ session: activeSession, threadId: 'thread-1' });
+	await retired.action.run();
+	assert.deepEqual(requested, ['thread-1', 'thread-2', 'thread-1']);
+	assert.equal(model.historyStatus?.kind, 'history');
+	const current = model.historyStatus!;
+	pending = new DeferredPromise();
+	const retry = current.action.run();
+	assert.equal(current.action.run(), retry);
+	model.dispose();
+	await pending.complete({ ...navigationThreadSnapshot('thread-1'), updates: [] });
+	await retry;
+	await current.action.run();
+	await waitFor(() => released.includes('thread-1'));
+	assert.deepEqual(requested, ['thread-1', 'thread-2', 'thread-1', 'thread-1']);
+	assert.equal(model.thread, undefined);
+});
+
+test('Chat live-update recovery reloads retained content and keeps repeated failures recoverable', async () => {
+	const activeSession = session('session-1', 'thread-1');
+	const fake = fakeApi({ sessions: [activeSession] });
+	let reads = 0;
+	using chat = createChatService({
+		...fake.api, thread: {
+			...fake.api.thread,
+			read: async () => {
+				if (++reads < 3) throw new Error('Synthetic refresh failure');
+				return navigationThreadSnapshot('thread-1');
+			},
+		}
+	});
+	using sessions = new SessionsManagementService(fake.api);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+	await model.initialize();
+	const retained = model.thread;
+	fake.emit({ method: 'session/thread/update', params: { sessionId: 'session-1', threadId: 'thread-1', durableSequence: 2, update: { type: 'committed', event: { type: 'turnFailed', threadId: 'thread-1', turnId: 'turn-1', error: { code: 'modelInvocationFailed', message: 'Synthetic turn failure', retryable: true } } } } });
+	await waitFor(() => model.historyStatus?.kind === 'live');
+	assert.equal(model.thread?.threadId, retained?.threadId);
+	await model.historyStatus!.action.run();
+	assert.equal(model.historyStatus?.kind, 'live');
+	assert.equal(model.inputState.inputBlocked, true);
+	await model.historyStatus!.action.run();
+	assert.deepEqual({ reads, status: model.historyStatus, blocked: model.inputState.inputBlocked, phase: model.state, sent: fake.turnStartRequests.length }, { reads: 3, status: undefined, blocked: false, phase: 'ready', sent: 0 });
+});
 
 test('Sessions layout is explicit, persists across recreation and starts with full Chat', async () => {
 	const fixture = await createNavigationInputPane();
@@ -4616,4 +4746,178 @@ test('The original draft codec preserves terminal snapshots and rejects malforme
 	assert.deepEqual(readNewChatDraftState(storage, 'thread'), draft);
 	storage.store('sessions.inputDraft:thread', JSON.stringify({ ...draft, contexts: [{ ...draft.contexts[0], terminalSnapshot: { text: 'Saved output', columns: 0 } }] }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	assert.throws(() => readNewChatDraftState(storage, 'thread'), /Invalid terminal snapshot/);
+});
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`AI preference blocks Chat input without losing its draft or contexts in ${locale}`, async () => {
+		initializeTestLocalization(locale);
+		try {
+			const fixture = await createNavigationInputPane();
+			using resources = fixture.resources;
+			const { configuration, input, pane, fake, dom, chatPane } = fixture;
+			typeChatText(dom.window, input, 'Keep this AI-disabled draft');
+			pane.addContext({ id: 'ai-file', kind: 'file', name: 'fixture.txt', resolve: async () => ({ name: 'fixture.txt', content: 'Synthetic context' }) });
+			const originalDraft = input.value;
+			await configuration.updateValue(ChatAIDisabledSettingId, true);
+			assert.match(chatPane.querySelector('.ash-chat-status, .ash-chat-status-summary')!.textContent!, locale === 'en' ? /AI features are disabled/u : /AI 功能已禁用/u);
+			await pane.acceptInput();
+			assert.equal(fake.turnStartRequests.length, 0);
+			assert.equal(input.value, originalDraft);
+			assert.deepEqual((await pane.captureActiveDraft())?.draft.contexts?.map(context => context.name), ['fixture.txt']);
+			await configuration.updateValue(ChatAIDisabledSettingId, false);
+			await pane.acceptInput();
+			assert.equal(fake.turnStartRequests.length, 1);
+			assert.deepEqual(fake.turnStartRequests[0]!.input, [{ type: 'context', name: 'fixture.txt', content: 'Synthetic context' }, { type: 'text', text: originalDraft.trim() }]);
+		} finally { resetNlsResolver(); }
+	});
+}
+
+test('AI preference blocks direct dispatch, including a pending permission read, while history and interrupt remain usable', async () => {
+	const fake = fakeApi();
+	using configuration = new WorkbenchConfigurationService();
+	using services = new InstantiationService();
+	registerChatBackend(services, fake.api, IAgentExecutionSettingsService, configuration);
+	const permission = new DeferredPromise<Awaited<ReturnType<IAgentExecutionSettingsService['read']>>>();
+	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, configure: async () => { }, read: () => permission.p });
+	using chat = services.createInstance(ChatService);
+	const options = { sessionId: 'session-1', threadId: 'thread-1', expectedSequence: 1, text: 'Synthetic request', mode: 'agent' as const };
+	const pending = chat.queueTurn(options);
+	const rejected = assert.rejects(pending, /AI features are disabled/);
+	await configuration.updateValue(ChatAIDisabledSettingId, true);
+	await permission.complete({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'readOnly', commandNetworkAccess: 'denied' } });
+	await rejected;
+	for (const request of [
+		() => chat.startTurn(options), () => chat.queueTurn(options), () => chat.steerTurn({ ...options, turnId: 'turn-1' }),
+		() => chat.consultAdvisor({ ...options, question: 'Synthetic question' }), () => chat.compactContext(options),
+		() => chat.generateTurnChangeMessage('session-1', 'thread-1', 'change-1', 1),
+	]) await assert.rejects(request(), /AI features are disabled/);
+	assert.equal(fake.turnStartRequests.length + fake.queuedRequests.length + fake.turnSteerRequests.length + fake.consultRequests.length + fake.turnCompactRequests.length, 0);
+	await chat.readThread('session-1', 'thread-1');
+	await chat.interruptTurn({ ...options, turnId: 'turn-1' });
+	await configuration.updateValue(ChatAIDisabledSettingId, false);
+	await chat.startTurn(options);
+	assert.equal(fake.turnStartRequests.length, 1);
+});
+
+test('AI preference prevents an Untitled Chat from materializing and follows JSONC reload without changing execution defaults', async () => {
+	const fake = fakeApi({ createSession: session('created', 'created-thread'), thread: () => ({ ...thread(), threadId: 'created-thread' }) });
+	using configuration = new WorkbenchConfigurationService({ initialSnapshot: { revision: 1, document: { version: 1, source: '{\n // Keep this comment\n "chat.disableAIFeatures": true,\n "chat.input.fontSize": 17,\n}' } } });
+	using chat = createChatService(fake.api, configuration);
+	using sessions = new SessionsManagementService(fake.api);
+	using model = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
+	await model.initialize();
+	assert.equal(model.inputState.aiDisabled, true);
+	await assert.rejects(model.send('Preserved draft'), /AI features are disabled/);
+	await assert.rejects(model.prepareConversation(), /AI features are disabled/);
+	assert.equal(fake.createSessionRequests.length, 0);
+	await assert.rejects(configuration.updateValue(ChatAIDisabledSettingId, 'true'), /boolean/);
+	assert.equal(model.inputState.aiDisabled, true);
+	const saved = await configuration.read();
+	await configuration.write(saved.source.replace('true', 'false'), saved.revision);
+	assert.equal(model.inputState.aiDisabled, false);
+	assert.equal(configuration.getValue('chat.input.fontSize'), 17);
+	assert.match((await configuration.read()).source, /Keep this comment/);
+	assert.equal(model.inputState.approvalMode, 'manual');
+	await model.send('Preserved draft');
+	assert.equal(fake.createSessionRequests.length, 1);
+	assert.equal(fake.turnStartRequests.length, 1);
+});
+
+test('Chat configuration contribution hides the registered Code view and commands and releases its listener', async () => {
+	using configuration = new WorkbenchConfigurationService();
+	using contexts = new ContextKeyService();
+	using services = new InstantiationService();
+	services.registerInstance(IConfigurationService, configuration);
+	services.registerInstance(IContextKeyService, contexts);
+	using descriptors = new ViewDescriptorService({}, contexts);
+	const view = descriptors.getViewContainerModel(CHAT_VIEW_CONTAINER_ID);
+	const host = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.chatEnablement']);
+	try {
+		host.advance(WorkbenchPhase.BlockStartup);
+		assert.equal(contexts.getValue(ChatContextKeys.enabled.key), true);
+		assert.equal(view.activeViewDescriptors.some(view => view.id === CHAT_VIEW_ID), true);
+		await configuration.updateValue(ChatAIDisabledSettingId, true);
+		assert.equal(view.activeViewDescriptors.length, 0);
+		using commands = new CommandService(services);
+		assert.equal(await commands.executeCommand(NEW_CHAT_COMMAND_ID), false, 'Disabled direct calls need no Session service and cannot create a draft');
+		await configuration.updateValue(ChatAIDisabledSettingId, false);
+		assert.equal(view.activeViewDescriptors.some(view => view.id === CHAT_VIEW_ID), true);
+	} finally { host.dispose(); }
+	assert.equal(contexts.getValue(ChatContextKeys.enabled.key), false);
+	await configuration.updateValue(ChatAIDisabledSettingId, true);
+	await configuration.updateValue(ChatAIDisabledSettingId, false);
+	assert.equal(contexts.getValue(ChatContextKeys.enabled.key), false, 'Disposed contribution no longer mirrors settings');
+});
+
+for (const kind of ['Chat', 'Cowork']) {
+	test(`${kind} model observes the canonical AI preference before materializing an untitled conversation`, async () => {
+		const fake = fakeApi({ createSession: session('created', 'created-thread'), thread: () => ({ ...thread(), threadId: 'created-thread' }) });
+		using configuration = new WorkbenchConfigurationService();
+		using chat = createChatService(fake.api, configuration);
+		const submissions: { sessionId: string; threadId: string; isNewSession: boolean; requestSequence: number; }[] = [];
+		using submitted = chat.onDidSubmitRequest(event => submissions.push(event));
+		using sessions = new SessionsManagementService(fake.api);
+		using services = new InstantiationService();
+		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+		services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => [] });
+		services.registerInstance(IAppServerSkillApi, fake.api.skills);
+		services.registerInstance(ILanguageModelsService, modelsFor(chat));
+		services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'readOnly', commandNetworkAccess: 'denied' } }), configure: async () => { } });
+		services.registerInstance(IConfigurationService, configuration);
+		using storage = createTestStorage();
+		services.registerInstance(IStorageService, storage);
+		using preferences = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
+		services.registerInstance(ICoworkModelPreferences, preferences);
+		const selection = { kind: 'untitled' as const, session: sessions.createUntitledSession() };
+		using model = kind === 'Chat' ? services.createInstance(ChatWidgetModel, chat, selection, sessions) : services.createInstance(CoworkWidgetModel, chat, selection, sessions);
+		await model.initialize();
+		await configuration.updateValue(ChatAIDisabledSettingId, true);
+		assert.equal(model.inputState.aiDisabled, true);
+		assert.equal(model.inputState.inputBlocked, true);
+		await assert.rejects(model.prepareConversation(), /AI features are disabled/);
+		await assert.rejects(model.send('Synthetic draft'), /AI features are disabled/);
+		await assert.rejects(model.executeServerCommand('compact', ''), /AI features are disabled/);
+		assert.equal(fake.createSessionRequests.length, 0);
+		assert.deepEqual(submissions, []);
+		await configuration.updateValue(ChatAIDisabledSettingId, false);
+		assert.equal(model.inputState.inputBlocked, false);
+		await model.send('Synthetic draft');
+		assert.equal(fake.createSessionRequests.length, 1);
+		assert.equal(fake.turnStartRequests.length, 1);
+		assert.deepEqual(submissions, [{ sessionId: 'created', threadId: 'created-thread', isNewSession: true, requestSequence: 1 }]);
+	});
+}
+
+test('Chat accepted-request notifications follow backend success and exclude rejected or retired dispatches', async () => {
+	const fake = fakeApi();
+	const accepted = new DeferredPromise<Awaited<ReturnType<typeof fake.api.turn.start>>>();
+	let reject = false;
+	using chat = createChatService({ ...fake.api, turn: { ...fake.api.turn, start: async () => { if (reject) throw new Error('Controlled rejected submission'); return accepted.p; } } });
+	const submissions: { sessionId: string; threadId: string; isNewSession: boolean; requestSequence: number; }[] = [];
+	using listener = chat.onDidSubmitRequest(event => submissions.push(event));
+	const options = { sessionId: 'session-1', threadId: 'thread-1', expectedSequence: 1, text: 'Synthetic request', mode: 'agent' as const, isNewSession: true };
+	const starting = chat.startTurn(options);
+	assert.equal(submissions.length, 0);
+	await accepted.complete({ turnId: 'turn-1', sequence: 2 });
+	await starting;
+	await chat.queueTurn(options);
+	await chat.steerTurn({ ...options, turnId: 'turn-1' });
+	assert.deepEqual([...submissions], [
+		{ sessionId: 'session-1', threadId: 'thread-1', isNewSession: true, requestSequence: 1 },
+		{ sessionId: 'session-1', threadId: 'thread-1', isNewSession: false, requestSequence: 1 },
+		{ sessionId: 'session-1', threadId: 'thread-1', isNewSession: false, requestSequence: 1 },
+	]);
+	reject = true;
+	await assert.rejects(chat.startTurn(options), /Controlled rejected submission/);
+	await chat.consultAdvisor({ ...options, question: 'Synthetic consultation' });
+	assert.deepEqual(submissions.at(-1), { sessionId: 'session-1', threadId: 'thread-1', isNewSession: true, requestSequence: 1 });
+	assert.equal(submissions.length, 4);
+	const retiring = new DeferredPromise<Awaited<ReturnType<typeof fake.api.turn.start>>>();
+	using retired = createChatService({ ...fake.api, turn: { ...fake.api.turn, start: () => retiring.p } });
+	using retiredListener = retired.onDidSubmitRequest(event => submissions.push(event));
+	const pending = retired.startTurn(options);
+	fake.emitReady();
+	await retiring.complete({ turnId: 'old-turn', sequence: 2 });
+	await pending;
+	assert.equal(submissions.length, 4);
 });

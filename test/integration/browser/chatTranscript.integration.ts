@@ -80,16 +80,31 @@ import { IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/edi
 import { IUntitledTextEditorService } from '../../../src/ash/workbench/services/untitled/common/untitledTextEditorService.js';
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
+import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { BrowserClipboardService } from '../../../src/ash/platform/clipboard/browser/clipboardService.js';
 import { MainThreadSpeech } from '../../../src/ash/workbench/api/browser/mainThreadSpeech.js';
 import type { IExtensionHostApi, ExtensionHostFleetSnapshot, JsonValue } from '../../../src/ash/platform/agentHost/common/extensionHostApi.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
+import { ChatAIDisabledSettingId } from '../../../src/ash/platform/chat/common/chatSettings.js';
+import { ViewDescriptorService } from '../../../src/ash/workbench/services/views/browser/viewDescriptorService.js';
+import { CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID } from '../../../src/ash/workbench/contrib/chat/common/chat.js';
+import '../../../src/ash/sessions/browser/workbenchChat.contribution.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
-import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
+import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
-import { setNlsMessages } from '../../../src/ash/nls.js';
+import { localize, setNlsMessages } from '../../../src/ash/nls.js';
+import type { IChatSessionHistoryStatus } from '../../../src/ash/platform/chat/common/chatSessionHistory.js';
+import { ChatSessionArchiveActionWordingSettingId } from '../../../src/ash/platform/chat/common/sessionArchiveActions.js';
+import { createDisconnectedRendererApi } from '../../../src/ash/platform/agentHost/browser/rendererApi.js';
+import { IAgentSessionService, IAgentTurnService, type AgentSession } from '../../../src/ash/platform/agentHost/common/agentService.js';
+import { IAgentModelsService } from '../../../src/ash/platform/agentHost/common/agentModels.js';
+import { IAppServerApi, IServerEventApi } from '../../../src/ash/platform/agentHost/common/appServerApi.js';
+import { AppServerSessionsProvider } from '../../../src/ash/sessions/contrib/providers/agentHost/browser/appServerSessionsProvider.js';
+import { SessionsManagementService } from '../../../src/ash/sessions/services/sessions/browser/sessionsManagementService.js';
+import { ISessionsManagementService } from '../../../src/ash/sessions/services/sessions/common/sessionsManagement.js';
+import { WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/browser/configurationService.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 
 const locale = new URLSearchParams(location.search).get('locale');
@@ -103,7 +118,7 @@ const parentServices = resources.add(new InstantiationService());
 const windowLogger = resources.add(new LogService({ sinks: [{ log: entry => appLogs.push(entry) }] }));
 parentServices.registerInstance(ILogService, windowLogger);
 parentServices.registerInstance(ILoggerService, windowLogger);
-const services = resources.add(createTestEditorServices(undefined, parentServices, document));
+const services = resources.add(createTestEditorServices(resources.add(new WorkbenchConfigurationService()), parentServices, document));
 const theme = services.get(IThemeService) as TestThemeService;
 const dialogs = resources.add(new DialogService());
 services.registerInstance(IDialogService, dialogs);
@@ -140,8 +155,12 @@ const prompts = resources.add(new PromptsService({
 	},
 }, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } }));
 services.registerInstance(IPromptsService, prompts);
-const promptContributions = resources.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['chat.promptLanguageFeatures', 'chatResponseResourceWorkbenchContribution']));
+const promptContributions = resources.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['chat.promptLanguageFeatures', 'chatResponseResourceWorkbenchContribution', 'workbench.contrib.chatEnablement']));
 promptContributions.advance(WorkbenchPhase.BlockStartup);
+const chatViews = resources.add(services.createInstance(ViewDescriptorService, {}));
+resources.add(services.get(IConfigurationService).onDidChangeConfiguration(event => {
+	if (event.affectsConfiguration(ChatAIDisabledSettingId)) chatChanges.fire();
+}));
 const fileContainer = document.createElement('section');
 fileContainer.style.cssText = 'width:600px;height:140px';
 fileContainer.setAttribute('aria-label', 'File editor');
@@ -309,6 +328,13 @@ const createBitmap = window.createImageBitmap.bind(window);
 let completeImageDecode: (() => void) | undefined;
 let appChatThread = 'app-thread';
 let appChatGeneration = 0;
+let historyFailure: IChatSessionHistoryStatus | undefined;
+let finishHistory: (() => void) | undefined;
+let historyRecoveries = 0;
+let lifecycleSessions: SessionsManagementService | undefined;
+let lifecycleCommands: CommandService | undefined;
+const lifecycleRequests: { readonly operation: string; readonly sessionId: string; }[] = [];
+const lifecycleOpened: string[] = [];
 const appChatMessages: unknown[] = [];
 const composerChanges = resources.add(new Emitter<void>());
 const chatChanges = resources.add(new Emitter<void>());
@@ -428,7 +454,15 @@ declare global {
 			setReadonly(value: boolean): void;
 			setWrap(value: boolean): Promise<void>;
 			setCodeLineHeight(height: number): Promise<void>;
-			setTheme(value: 'dark' | 'light' | 'hc'): void;
+			setTheme(value: 'dark' | 'light' | 'hc' | 'hcLight'): void;
+			showHistoryFailure(): void;
+			setAIDisabled(value: boolean): Promise<void>;
+			isCodeChatActive(): boolean;
+			finishHistoryRecovery(): void;
+			historyRecoveries(): number;
+			prepareSessionLifecycle(wording: 'archive' | 'done'): Promise<void>;
+			runSessionAction(command: string): Promise<unknown>;
+			sessionLifecycleState(): { readonly requests: readonly unknown[]; readonly opened: readonly string[]; readonly sessions: readonly { readonly id: string; readonly status: string; readonly threads: readonly string[]; }[]; readonly drafts: readonly string[]; };
 			refresh(): void;
 			imageReadCount(): number;
 			renderItems(items: readonly IChatListItem[]): void;
@@ -545,7 +579,7 @@ window.ashChatTranscriptIntegration = {
 	setWrap: value => services.get(IConfigurationService).updateValue('chat.editor.wordWrap', value ? 'on' : 'off'),
 	setCodeLineHeight: height => services.get(IConfigurationService).updateValue('chat.editor.lineHeight', height),
 	setTheme: value => {
-		const palette = value === 'dark' ? darkColorTheme : value === 'light' ? lightColorTheme : highContrastDarkColorTheme;
+		const palette = value === 'dark' ? darkColorTheme : value === 'light' ? lightColorTheme : value === 'hcLight' ? highContrastLightColorTheme : highContrastDarkColorTheme;
 		theme.setColorTheme(palette);
 	},
 	imageReadCount: () => imageReads,
@@ -626,7 +660,11 @@ window.ashChatTranscriptIntegration = {
 		}
 		const model: IChatWidgetModel = {
 			onDidChange: chatChanges.event, onDidChangeComposer: composerChanges.event, get composerGeneration() { return appChatGeneration; }, sessionId: 'app-session', get threadId() { return appChatThread; }, untitledSessionId: undefined, goal: undefined, get items() { return appItems; },
-			inputState: { mode: 'plan', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false },
+			get historyStatus() { return historyFailure; },
+			get inputState() {
+				const aiDisabled = services.get(IConfigurationService).getValue<boolean>(ChatAIDisabledSettingId);
+				return { mode: 'plan' as const, queuedMessages: 0, approvalMode: 'manual' as const, phase: historyFailure ? 'error' as const : 'ready' as const, inputBlocked: !!historyFailure || aiDisabled, aiDisabled, canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false };
+			},
 			send: async (text, mode, _skills, contexts, submissionOptions) => { appChatMessages.push({ text, mode, contexts, ...(submissionOptions ? { commandId: submissionOptions.commandId, source: submissionOptions.source } : {}) }); },
 			executeServerCommand: async () => { }, interrupt: async () => { }, selectModel: async () => { }, selectReasoningEffort: async () => { }, selectAutomaticModel: async () => { },
 			listAgents: async () => [], selectAgent() { }, selectMode() { }, selectApprovalMode() { }, resolveInteraction: async () => { }, retryFailedTurn: async () => { }, dispose() { }, [Symbol.dispose]() { },
@@ -637,6 +675,68 @@ window.ashChatTranscriptIntegration = {
 		appChat = cowork ? resources.add(chatServices.createInstance(CoworkWidget, container, 'app-chat', model, () => { }, chatServices.get(ICommandService), undefined, undefined, undefined, (host: HTMLElement, delegate: ChatInputDelegate) => chatServices.createInstance(NewCoworkInputWidget, host, delegate, model))) : resources.add(chatServices.createInstance(ChatWidget, container, 'app-chat', model, () => { }, contextMenus, contextView, chatServices.get(ICommandService), accessibleView, chatServices.get(INotificationService), undefined, undefined, undefined, undefined));
 		appChat.setVisible(true);
 	},
+	showHistoryFailure: () => {
+		window.ashChatTranscriptIntegration.showChatApp();
+		historyFailure = {
+			kind: 'history', message: localize('chat.history.loadFailed', 'Could not load chat history: {0}', 'Synthetic history failure'),
+			action: {
+				label: localize('chat.history.retry', 'Retry loading chat'), run: async () => {
+					historyRecoveries++;
+					await new Promise<void>(resolve => { finishHistory = resolve; });
+					historyFailure = undefined;
+					chatChanges.fire();
+				}
+			},
+		};
+		chatChanges.fire();
+	},
+	setAIDisabled: value => services.get(IConfigurationService).updateValue(ChatAIDisabledSettingId, value),
+	isCodeChatActive: () => chatViews.getViewContainerModel(CHAT_VIEW_CONTAINER_ID).activeViewDescriptors.some(view => view.id === CHAT_VIEW_ID),
+	finishHistoryRecovery: () => { finishHistory?.(); finishHistory = undefined; },
+	historyRecoveries: () => historyRecoveries,
+	prepareSessionLifecycle: async wording => {
+		await import('../../../src/ash/sessions/contrib/sessions/browser/views/sessionsViewActions.js');
+		await services.get(IConfigurationService).updateValue(ChatSessionArchiveActionWordingSettingId, wording);
+		const lifecycleServices = resources.add(services.createChild());
+		lifecycleCommands = resources.add(new CommandService(lifecycleServices));
+		const disconnected = createDisconnectedRendererApi();
+		let catalog: AgentSession[] = [{ sessionId: 'lifecycle', title: 'Synthetic task', status: 'active', manager: { status: 'idle', statusChangedAtUnixMs: 0 }, threads: [{ threadId: 'lifecycle', title: 'Root', status: 'active' }, { threadId: 'lifecycle-child', title: 'Child', parentThreadId: 'lifecycle', status: 'active' }] }];
+		const read = () => ({ session: catalog[0]!, agentTree: { roots: [] } });
+		lifecycleServices.registerInstance(IAppServerApi, { connectionGeneration: 1, getConnectionState: async () => 'ready', getSlashCommands: async () => [], onConnectionState: () => Disposable.None });
+		lifecycleServices.registerInstance(IServerEventApi, { subscribe: () => Disposable.None });
+		lifecycleServices.registerInstance(IAgentModelsService, disconnected.model);
+		lifecycleServices.registerInstance(IAgentTurnService, disconnected.turn);
+		lifecycleServices.registerInstance(IAgentSessionService, {
+			...disconnected.session,
+			list: async () => ({ sessions: catalog }), subscribeCatalog: async () => ({ sessions: catalog }), unsubscribeCatalog: async () => { },
+			read: async () => read(), readCatalog: async () => ({ session: catalog[0] }),
+			subscribe: async () => ({ ...read(), threadSnapshots: [] }), unsubscribe: async () => { },
+			archive: async ({ sessionId }) => {
+				lifecycleRequests.push({ operation: 'archive', sessionId });
+				catalog = catalog.map(session => ({ ...session, status: 'archived', threads: session.threads.map(thread => ({ ...thread, status: 'archived' })) }));
+				return read();
+			},
+			restore: async ({ sessionId }) => {
+				lifecycleRequests.push({ operation: 'restore', sessionId });
+				catalog = catalog.map(session => ({ ...session, status: 'active', threads: session.threads.map(thread => ({ ...thread, status: thread.parentThreadId ? 'archived' : 'active' })) }));
+				return read();
+			},
+		});
+		lifecycleSessions = resources.add(new SessionsManagementService(lifecycleServices.createInstance(AppServerSessionsProvider, { workspace: () => ({ type: 'current' }), selectWorkspace: async () => undefined })));
+		await lifecycleSessions.initialize();
+		lifecycleServices.registerInstance(ISessionsManagementService, lifecycleSessions);
+		lifecycleServices.registerInstance(IChatSessionNavigationService, {
+			getConversations: () => [], appendToActiveDraft: () => { }, captureActiveDraft: async () => undefined,
+			startVoiceConversation: async () => { throw new Error('Voice is unavailable in the session lifecycle fixture'); },
+			getActiveConversation: () => lifecycleSessions!.activeUntitledSession ? undefined : lifecycleSessions!.active && { sessionId: lifecycleSessions!.active!.session.sessionId, threadId: lifecycleSessions!.active!.threadId },
+			openConversation: async (sessionId, threadId) => { lifecycleOpened.push(`${sessionId}/${threadId}`); await lifecycleSessions!.openThread(sessionId, threadId); },
+		});
+	},
+	runSessionAction: async command => {
+		await lifecycleCommands!.executeCommand(command);
+		if (command === 'agentSession.archive') lifecycleSessions!.createUntitledSession('Preserved synthetic draft');
+	},
+	sessionLifecycleState: () => ({ requests: lifecycleRequests, opened: lifecycleOpened, sessions: lifecycleSessions!.sessions.map(session => ({ id: session.sessionId, status: session.status, threads: session.chats.map(chat => `${chat.threadId}/${chat.status}`) })), drafts: lifecycleSessions!.untitledSessions.map(session => session.title) }),
 	showReadAloudMessage: async (text, cowork = false) => {
 		await import('../../../src/ash/workbench/contrib/chat/electron-browser/actions/voiceChatActions.js');
 		readBridge ??= resources.add(new MainThreadSpeech(1000, readApi, services.get(ISpeechService)));

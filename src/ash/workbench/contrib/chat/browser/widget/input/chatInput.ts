@@ -23,6 +23,9 @@ export interface ChatInputState {
 	readonly activeMode?: ChatMode;
 	readonly queuedMessages: number;
 	readonly phase: ChatInputPhase;
+	/** Keeps the draft editable when history or the window's AI preference prevents sending. */
+	readonly inputBlocked?: boolean;
+	readonly aiDisabled?: boolean;
 	readonly error?: string;
 	readonly canInterrupt: boolean;
 	readonly approvalMode: ApprovalMode;

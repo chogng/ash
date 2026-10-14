@@ -10,6 +10,48 @@
 
 文件集合差异和公开声明差异是待调查项，不等于对应行为全部缺失。完整路径、imports、exports、公开成员、CSS selector/token、生产与测试调用方已保存在 `.build/chat-alignment/inventory.json`；可读版为 `.build/chat-alignment/report.html`。不将未验证的上游公开成员计为已实现。
 
+## Platform Chat 配置职责（2026-10-14）
+
+`src/ash/platform/chat/common/chatSettings.ts` 本批只建立有生产消费方的
+`ChatAIDisabledSettingId`。上游导出按真实能力分组，不能将全部常量或 helper 清单直接作为实现队列：
+
+| 上游职责                                      | Ash 调用方与唯一 owner                                                                                                                              | 当前结果与下一项依赖                                                                                                    |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `chat.disableAIFeatures`                      | Code `registerChatViews` / Chat actions、Chat/Cowork model、共享 input/widget、`ChatService`；配置由 `IConfigurationService` 拥有                   | 已闭合设置、入口、输入和请求链。                                                                                        |
+| Microsoft 登录模式与旧 boolean 转换           | 当前没有 Microsoft Entra → GitHub 登录的 Provider 消费链                                                                                            | 不注册无效果的设置，不预先导出兼容 helper；先有认证 Provider 契约。                                                     |
+| 编辑自动审批 patterns/defaults/merge          | `IAgentExecutionSettingsService` → App Server `config/read` / `config/update`；Rust `crates/config`、`action-policy`、`execpolicy` 拥有最终执行决策 | 当前共享执行契约没有该组 edit glob 语义。先闭合 Rust 领域配置和权限消费，不能在 TS 注册第二套审批规则。                 |
+| Agent/Hook locations 的校验与敏感编辑目录合并 | `PromptsService` 消费 Rust skill catalog/enablement 和 Hook 声明；`crates/config` 拥有 `HooksConfig` 与 TOML                                        | 当前没有上游的工作区 JSON locations 合同；先由发现和权限 owner 定义共同领域契约，不能用前端 helper 改写后端已解析来源。 |
+| 外部 Session 时间筛选模式                     | 当前 Sessions catalog 没有区分外部来源的可筛选领域身份；迁移导入不等于外部 Session provider                                                         | 先建立来源身份和实际列表消费，再注册时间筛选配置。                                                                      |
+
+AI 开关属于 TypeScript UI 的持久偏好，沿用上游 `WINDOW` scope、boolean schema 和默认
+`false`；唯一资源是 UI Profile 的 JSONC `settings.json`，没有旧值迁移或 Rust TOML 副本。
+当前 `WorkbenchConfigurationService` 支持 Profile 写入，仍拒绝 workspace 写入；注册 scope
+不等于 workspace 配置基础设施已经齐备。修订、外部资源通知和完整值校验继续由原配置服务负责。
+
+生产链为 Settings/JSONC → `IConfigurationService` → 共享 contribution 的
+`ChatContextKeys.enabled` 和两个 model 的 input state → `ChatService` → 原 App Server adapter。
+`chatSettings.ts` 与 `common/actions/chatContextKeys.ts` 是缺失的上游同路径；其余改动在原
+owner 原地完成。已确认的 Ash Cowork model/widget 保留原路径和宿主职责。
+
+Code view 的条件失效时保留 pane，重新启用恢复原草稿；Open/New/History 命令从菜单退场并拒绝
+禁用时的直接调用。Agents Window 的 Chat/Cowork 输入仍可编辑并显示禁用原因，其 General 设置页
+直接编辑同一个注册开关。Desktop/Web 两个 Agents 启动白名单均装载监听。没有新增持久业务状态。
+
+model 在物化 Untitled 前检查配置；服务阻止 start、queue、steer、Advisor、compaction 和提交说明
+生成，queue 在异步权限读取后再次检查。禁用关闭当前窗口的活动或待连接语音会话。历史读取、
+草稿、停止与既有 Turn 的交互继续通过原 owner；该 UI 偏好不修改 Rust 执行权限，也不停止共享
+App Server。可访问性帮助与 en/zh-CN 文案均已更新。
+
+本批验证：相同 `tsconfig.test.json` 编译选项的定向编译及仓库 runner，四个受影响文件共
+187 项单测通过；分层与原 View 容器生命周期共 18 项通过。标准完整单测编译被任务外
+`platform/agentHost/test/common/app-server-protocol-decoder.test.ts` 仍引用已移除的
+`config/dirPermissions/set` 阻断，没有改该文件，也没有将完整单测编译计为通过。
+实际 Chromium 20 项通过，包括 Chat/Cowork × en/zh-CN 的关闭/恢复、键盘帮助、草稿和附件、
+语音停止，以及前两批 history/archive 回归。Renderer 3869 文件、完整 browser 3762 文件类型检查
+通过；24 个触及 TS 文件格式检查、NLS（zh-CN 零缺项）和 diff check 通过。本批没有 CSS 修改。
+证据在 `.build/chat-settings-*` 和 `.build/desktop/playwright/editor-browser-kOiN7y`。
+`chatSettings.ts` 其余导出仍待上述 owner 链成立，不能称为该文件全部对齐。
+
 ## Platform Chat 进程归因（2026-10-14）
 
 `platform/chat/common/aiAgentEnv.ts` 的真实 TS 消费方是
@@ -49,6 +91,38 @@ Main 1843 文件检查、4 个 TS 和 6 个 Rust 文件格式检查、diff check
 补齐后，最终标准 `pnpm test:unit --run …` 的完整编译和本批 9 项测试通过。本批没有修改这些
 fixture。没有 UI、NLS、配置或协议变化，因此不启动 UI 场景或生成协议。
 证据在 `.build/ai-agent-env-*`。本轮只验证本机进程行为，不将 Windows/Linux 实际运行计为通过。
+
+## Platform Chat 窗口邀请（2026-10-14）
+
+`platform/chat/common/agentsWindowInvitation.ts` 与 desktop invitation contribution
+均落在缺失的上游同路径。实现沿 Ash 的真实窗口、对话和存储 owner 编写，不复制上游私有实现。
+
+| 调用链 | 唯一 owner 与实际行为 |
+| --- | --- |
+| Chat / Cowork send、queue、steer、advisor → `ChatService.onDidSubmitRequest` | 仅在后端接受本窗口请求后报告对话坐标；失败、已释放对象和退休连接不登记。模型从已加载 Thread 判断首个请求，UI 元数据不进入后端请求。 |
+| contribution → native host → `TrustedIpcRouter` → Main `AgentsWindowInvitationState` | IPC 绑定真实 sender/main frame/入口 URL；窗口 ID 由 Main 闭包提供。校验 URI 的组件与 `external` 一致，按提交时的 Thread revision 隔离迟到回复。后台 catalog 更新不能建立或抢回窗口归属。 |
+| Main 状态 → `StorageMainService` Application/Machine scope | 只持久化首次成功使用的对话计数和曝光冷却；Session/Thread/Turn 及执行状态仍由 Rust 拥有。Main 不读取领域 RPC、不建立业务会话目录。 |
+| 状态广播 → focused/current conversation → existing `NotificationsList` | 单窗口活动等待 30 秒，并行活动等待 15 秒；只有一个跨窗口 claim。UI 真正建立可见通知行后记录曝光，保留既有通知键盘、焦点、Accessible View/Help 和主题机制。 |
+| 邀请 action → existing `openAgentsWindow` → `windowsMainService` handoff/ack | 目标坐标固定；选择改变或 claim 失效不交接。目标确认后才清理捕获的草稿；失败保留草稿和重试操作。标题栏 action 在 await 前解析服务，遵守 accessor 生命周期。 |
+
+窗口文档重载、崩溃或关闭撤销该文档的活动与 claim；后台执行继续由原业务 owner 管理。
+Agents 窗口的实际请求撤销编辑器归属，旧 catalog 和较旧 revision 的成功回复不能恢复它。
+等待审批、用户输入或 capability 的对话不领取邀请。AI 开关、失焦、连接退休和释放取消提示。
+流式 delta 不查询活动，durable invalidations 按资源合并；使用计数不是后端 Session 总数。
+曝光后的再次邀请同时要求至少五个新对话与一天；最近三次 Agents 对话使用在三十天内抑制提示，
+缺少历史日期的既有三次使用记录保持抑制。
+
+本批没有真实消费方的 Copilot harness introduction、实验 treatment、developer preview 与
+未提交草稿 commit 端口保持待审计，不添加声明或备用实现。Ash 的 draft 在成功请求前已由原模型
+物化为 Session/Thread；Main 通过现有异步 Desktop storage writer 装载历史，纯状态对象不伪造
+renderer `IStorageService`。
+
+验证：标准 `pnpm test:unit` 全量准备/编译后的 183 项通过（四个定向文件）；13 项分层检查通过。
+Chromium 7 项通过，包含中英文生产 contribution、四主题键盘焦点、真正呈现回执、取消隐藏提示
+及确认交接；真实 macOS Electron 1 项通过，覆盖 sender 约束、前后台窗口、Agents 接续、旧列表、
+窗口关闭、renderer reload 和完整退出后使用同一隔离 profile 启动的冷却持久化。
+Main/renderer 与 automation 全量类型检查、31 个 TS 格式检查通过。
+证据在 `.build/agents-window-invitation-*`；未将其他操作系统的实际运行计为通过。
 
 ## Hooks 职责归属
 
@@ -105,7 +179,7 @@ Sessions Preferences、Skill 相关调用及 13 项分层检查；4 项 Chromium
 
 ## 已完成的职责与行为修改
 
-- `common/constants.ts` 拥有输入字体、代码块字体及自动接受延迟的键；`chat.shared.contribution.ts` 仅注册设置，不再导出服务消费契约。
+- `common/constants.ts` 拥有输入字体、代码块字体及自动接受延迟的键；`chat.shared.contribution.ts` 注册设置与窗口配置消费，不再导出服务消费契约。
 - `chat.contribution.ts` 显式装载设置注册；输入编辑器、消息列表、编辑服务直接消费 common 常量。测试 assembly 显式装载设置，不依赖产品类导入时的注册副作用。
 - textarea 后备输入从空 `layout()` 改为根据内容和容器宽度自动调整高度；支持产品传入的最小/最大高度，调度器和 ResizeObserver 随编辑器释放。
 - Stanza 与 textarea 的默认文本高度均为 40px，默认工具栏布局总高 84px，最大文本高度 314px。保留用户确认的底部输入布局，输入变长时向上增长。

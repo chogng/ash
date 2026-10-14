@@ -110,6 +110,9 @@ import { DEVELOPMENT_DIR_PERMISSIONS, READ_DIR_PERMISSIONS, type WorkspaceTrustG
 import { type IWorkspaceTransitionFailure, type WorkspaceTransitionMainServiceOptions, WorkspaceTransitionFailureKind, WorkspaceTransitionMainService, WorkspaceTransitionStatus } from "../../platform/workspaces/electron-main/workspaceTransitionMainService.js";
 import { WorkspacesManagementMainService } from '../../platform/workspaces/electron-main/workspacesManagementMainService.js';
 import { StorageMainService, IApplicationStorageMainService } from '../../platform/storage/electron-main/storageMainService.js';
+import { StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
+import { AgentsWindowInvitationState, EDITOR_AGENT_HOST_SESSIONS_STORAGE_KEY, AGENTS_WINDOW_TOTAL_SESSIONS_STORAGE_KEY, AGENTS_WINDOW_LAST_SESSION_CREATED_STORAGE_KEY, AGENTS_WINDOW_INVITATION_IMPRESSION_STORAGE_KEY, type IAgentHostEditorState } from '../../platform/chat/common/agentsWindowInvitation.js';
+import { AGENT_HOST_EDITOR_STATE_CHANGED_CHANNEL, validateAgentHostEditorState } from '../../platform/native/common/nativeHost.js';
 import { StorageDatabaseChannel } from '../../platform/storage/electron-main/storageIpc.js';
 import { LoggerService } from '../../platform/log/node/loggerService.js';
 import { LoggerChannel } from '../../platform/log/electron-main/logIpc.js';
@@ -284,6 +287,8 @@ export class AshApplication extends Disposable {
 	private workspaces: WorkspacesManagementMainService | undefined;
 	private persistentServices: PersistentServices | undefined;
 	private storageMainService: StorageMainService | undefined;
+	private agentsWindowInvitations!: AgentsWindowInvitationState;
+	private invitationPersistence: Promise<void> = Promise.resolve();
 	private readonly loggerService = this._register(new LoggerService({ logsHome: app.getPath('logs') }));
 	private readonly logService = this._register(this.loggerService.createLogger('main'));
 	private readonly maintenance = this._register(new MutableDisposable<IDisposable>());
@@ -491,6 +496,43 @@ export class AshApplication extends Disposable {
 		this.activeLanguagePack = catalog;
 		const storage = this.storageMainService = this._register(new StorageMainService(join(app.getPath('userData'), 'workbench-state.json')));
 		await storage.initialize();
+		const invitationStorage = { scope: StorageScope.APPLICATION, id: 'application' };
+		const invitationItems = (await storage.getItems(invitationStorage)).entries;
+		let invitationHistory: Pick<IAgentHostEditorState, 'editorSessionCount' | 'lastShown' | 'agentsWindowSessionCount' | 'lastAgentsWindowSessionCreated'> = {
+			editorSessionCount: 0, lastShown: undefined, agentsWindowSessionCount: 0, lastAgentsWindowSessionCreated: undefined,
+		};
+		try {
+			const number = (key: string): number | undefined => invitationItems[key] ? JSON.parse(invitationItems[key]!.value) as number : undefined;
+			const restored = validateAgentHostEditorState({
+				...invitationHistory, revision: 0, sessions: [], invitation: undefined,
+				editorSessionCount: number(EDITOR_AGENT_HOST_SESSIONS_STORAGE_KEY) ?? 0,
+				agentsWindowSessionCount: number(AGENTS_WINDOW_TOTAL_SESSIONS_STORAGE_KEY) ?? 0,
+				lastAgentsWindowSessionCreated: number(AGENTS_WINDOW_LAST_SESSION_CREATED_STORAGE_KEY),
+				lastShown: invitationItems[AGENTS_WINDOW_INVITATION_IMPRESSION_STORAGE_KEY] ? JSON.parse(invitationItems[AGENTS_WINDOW_INVITATION_IMPRESSION_STORAGE_KEY]!.value) : undefined,
+			});
+			invitationHistory = { editorSessionCount: restored.editorSessionCount, lastShown: restored.lastShown, agentsWindowSessionCount: restored.agentsWindowSessionCount, lastAgentsWindowSessionCreated: restored.lastAgentsWindowSessionCreated };
+		} catch (error) { this.logService.error('windowInvitation', 'Ignoring invalid invitation history', error); }
+		this.agentsWindowInvitations = this._register(new AgentsWindowInvitationState(Date.now, invitationHistory));
+		this._register(this.agentsWindowInvitations.onDidChange(state => {
+			const history = { editorSessionCount: state.editorSessionCount, lastShown: state.lastShown, agentsWindowSessionCount: state.agentsWindowSessionCount, lastAgentsWindowSessionCreated: state.lastAgentsWindowSessionCreated };
+			if (JSON.stringify(history) === JSON.stringify(invitationHistory)) return;
+			const previousHistory = invitationHistory;
+			invitationHistory = history;
+			this.invitationPersistence = this.invitationPersistence.catch(() => { }).then(async () => {
+				for (const [key, value] of [
+					[EDITOR_AGENT_HOST_SESSIONS_STORAGE_KEY, history.editorSessionCount],
+					[AGENTS_WINDOW_TOTAL_SESSIONS_STORAGE_KEY, history.agentsWindowSessionCount],
+					[AGENTS_WINDOW_LAST_SESSION_CREATED_STORAGE_KEY, history.lastAgentsWindowSessionCreated],
+					[AGENTS_WINDOW_INVITATION_IMPRESSION_STORAGE_KEY, history.lastShown],
+				] as const) {
+					await storage.updateItems(invitationStorage, key, value === undefined ? null : { value: JSON.stringify(value), target: StorageTarget.MACHINE });
+				}
+			});
+			void this.invitationPersistence.catch(error => {
+				if (invitationHistory === history) invitationHistory = previousHistory;
+				this.logService.error('windowInvitation', 'Could not persist invitation history', error);
+			});
+		}));
 		throwIfCancelled(token);
 		this.windowServices.registerInstance(IApplicationStorageMainService, storage);
 		this.windowServices.registerInstance(ILogService, this.logService);
@@ -1369,7 +1411,7 @@ export class AshApplication extends Disposable {
 			...windowSplashIpcRoutes(this.themeMainService, () => `workbench:${workspaceContext.getWorkspace().id}`, color => window.setBackgroundColor(color)),
 			...nativeHostIpcRoutes({
 				getTitleBarStyle: () => titleBarStyle,
-				...this.windowHostOperations(window, windowControlsOverlay),
+				...this.windowHostOperations(window, windowControlsOverlay, windowDisposables),
 				openWindow: async options => {
 					const workspace = { ...createEmptyWorkspaceIdentifier(), ...(options.remoteAuthority ? { remoteAuthority: options.remoteAuthority } : {}) };
 					if (!options.forceReuseWindow) {
@@ -1424,8 +1466,34 @@ export class AshApplication extends Disposable {
 			});
 	}
 
-	private windowHostOperations(window: BrowserWindow, controls: WindowControlsOverlay): Omit<INativeHostMainService, 'getTitleBarStyle' | 'openWorkspace' | 'openWindow' | 'openAgentsWindow' | 'syncSystemWideKeybindings'> {
+	private windowHostOperations(window: BrowserWindow, controls: WindowControlsOverlay, windowDisposables: DisposableStore): Omit<INativeHostMainService, 'getTitleBarStyle' | 'openWorkspace' | 'openWindow' | 'openAgentsWindow' | 'syncSystemWideKeybindings'> {
+		const invitationContents = window.webContents;
+		const resetInvitation = (): void => this.agentsWindowInvitations.resetWindow(window.id);
+		const onInvitationNavigation = (_event: ElectronEvent, _url: string, inPlace: boolean, mainFrame: boolean): void => { if (mainFrame && !inPlace) resetInvitation(); };
+		invitationContents.on('did-start-navigation', onInvitationNavigation);
+		invitationContents.on('render-process-gone', resetInvitation);
+		windowDisposables.add(this.agentsWindowInvitations.onDidChange(state => {
+			if (!window.isDestroyed()) invitationContents.send(AGENT_HOST_EDITOR_STATE_CHANGED_CHANNEL, state);
+		}));
+		windowDisposables.add(toDisposable(() => {
+			invitationContents.off('did-start-navigation', onInvitationNavigation);
+			invitationContents.off('render-process-gone', resetInvitation);
+			resetInvitation();
+		}));
 		return {
+			getAgentHostEditorState: () => this.agentsWindowInvitations.getState(),
+			updateAgentHostEditorState: async update => {
+				// The router binds this closure to the sender; renderer payloads never choose a window ID.
+				if (this.workbenchWindowData.has(window.id)) this.agentsWindowInvitations.update(window.id, update);
+				else if (update.kind === 'request') this.agentsWindowInvitations.update(undefined, update);
+				await this.invitationPersistence;
+			},
+			claimAgentsWindowInvitation: resource => !window.isDestroyed() && window.isFocused() && this.workbenchWindowData.has(window.id) ? this.agentsWindowInvitations.claim(window.id, resource) : undefined,
+			markAgentsWindowInvitationShown: async id => {
+				if (!window.isDestroyed() && window.isFocused()) this.agentsWindowInvitations.markShown(window.id, id);
+				await this.invitationPersistence;
+			},
+			releaseAgentsWindowInvitation: id => this.agentsWindowInvitations.release(window.id, id),
 			isAdmin,
 			performDialogOperation: operation => this.dialogs.perform(window, operation),
 			performShellCommand: operation => performShellCommand(operation, { isPackaged: app.isPackaged, executablePath: process.execPath }),
@@ -1626,7 +1694,7 @@ export class AshApplication extends Disposable {
 						...windowSplashIpcRoutes(this.themeMainService, () => `sessions:${session.workspaceContext.getWorkspace().id}`, color => window.setBackgroundColor(color)),
 						...nativeHostIpcRoutes({
 							getTitleBarStyle: () => titleBarStyle,
-							...this.windowHostOperations(window, windowControlsOverlay),
+							...this.windowHostOperations(window, windowControlsOverlay, windowDisposables),
 							openWindow: async options => {
 								const workspace = { ...createEmptyWorkspaceIdentifier(), ...(options.remoteAuthority ? { remoteAuthority: options.remoteAuthority } : {}) };
 								// An empty Workbench requires its own window kind even when the requesting Agents window asks for reuse.
@@ -1915,7 +1983,7 @@ export class AshApplication extends Disposable {
 		const services = this.persistentServices;
 		this.closePersistentServicesPromise ??= Promise.all([
 			this.remoteTunnel.value?.stopTunnel(),
-			this.storageMainService?.close(),
+			this.invitationPersistence.catch(() => { }).then(() => this.storageMainService?.close()),
 			this.stateService.close(),
 			...(services ? [
 				services.configuration.close(),

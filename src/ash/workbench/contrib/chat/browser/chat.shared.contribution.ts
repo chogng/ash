@@ -1,3 +1,8 @@
+import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { ChatContextKeys } from '../common/actions/chatContextKeys.js';
+import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { ChatInputConfiguration, ChatEditorConfiguration, autoAcceptDelaySetting } from '../common/constants.js';
 import { localize } from '../../../../nls.js';
 import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
@@ -6,9 +11,63 @@ import { InstantiationType, registerSingleton } from '../../../../platform/insta
 import { ILanguageModelToolsService } from '../common/tools/languageModelToolsService.js';
 import { LanguageModelToolsService } from './tools/languageModelToolsService.js';
 
+import { ChatSessionArchiveActionWording, ChatSessionArchiveActionWordingSettingId } from '../../../../platform/chat/common/sessionArchiveActions.js';
+import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
+
 registerSingleton(ILanguageModelToolsService, LanguageModelToolsService, InstantiationType.Delayed);
 
+registerWorkbenchContribution('workbench.contrib.chatEnablement', WorkbenchPhase.BlockStartup, accessor => {
+	const configuration = accessor.get(IConfigurationService);
+	const enabled = ChatContextKeys.enabled.bindTo(accessor.get(IContextKeyService));
+	const resources = new DisposableStore();
+	const update = (): void => enabled.set(configuration.getValue<boolean>(ChatAIDisabledSettingId) !== true);
+	update();
+	resources.add(configuration.onDidChangeConfiguration(event => {
+		if (event.affectsConfiguration(ChatAIDisabledSettingId)) update();
+	}));
+	resources.add(toDisposable(() => enabled.reset()));
+	return resources;
+});
+
 const configurationRegistry = Registry.as<IConfigurationRegistry>(Extensions.Configuration);
+
+configurationRegistry.registerConfiguration<boolean>({
+	key: ChatAIDisabledSettingId,
+	defaultValue: false,
+	scope: ConfigurationScope.WINDOW,
+	schema: { type: 'boolean' },
+	parse(value: unknown): boolean {
+		if (typeof value === 'boolean') return value;
+		throw new TypeError(localize('chat.ai.disabled.invalid', 'Disable AI features must be a boolean.'));
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('chat.ai.disabled.title', 'Disable AI features'); },
+		get description() { return localize('chat.ai.disabled.description', 'Hide Chat in the Code window and prevent new built-in Chat requests in all windows. History and drafts are kept. Active voice conversations stop; already running work continues and can still be stopped.'); },
+	},
+});
+
+configurationRegistry.registerConfiguration<ChatSessionArchiveActionWording>({
+	key: ChatSessionArchiveActionWordingSettingId,
+	defaultValue: ChatSessionArchiveActionWording.MarkAsDone,
+	scope: ConfigurationScope.WINDOW,
+	schema: { type: 'string', enum: ['archive', 'done'] },
+	parse(value: unknown): ChatSessionArchiveActionWording {
+		if (value === ChatSessionArchiveActionWording.Archive || value === ChatSessionArchiveActionWording.MarkAsDone) return value;
+		throw new TypeError(localize('chatSession.wording.invalid', 'Choose Archive or Mark as Done for session actions.'));
+	},
+	setting: {
+		valueType: 'select',
+		get title() { return localize('chatSession.wording.title', 'Session action wording'); },
+		get description() { return localize('chatSession.wording.description', 'Choose the labels for archiving and restoring sessions. Archiving interrupts running work; restoring makes the root conversation available again without resuming its work.'); },
+		get options() {
+			return [
+				{ value: ChatSessionArchiveActionWording.Archive, label: localize('chatSession.archive', 'Archive') },
+				{ value: ChatSessionArchiveActionWording.MarkAsDone, label: localize('chatSession.markAsDone', 'Mark as Done') },
+			];
+		},
+	},
+});
 
 /** Prompt typography belongs to the user's UI, independently of file and reply-code editors. */
 configurationRegistry.registerConfiguration<string>({

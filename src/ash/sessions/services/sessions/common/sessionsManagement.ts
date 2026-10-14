@@ -38,6 +38,8 @@ export interface ISessionsManagementService {
 	startNewSession(title?: string): Promise<IActiveSessionThread>;
 	stopSession(sessionId: SessionId): Promise<void>;
 	archiveSession(sessionId: SessionId): Promise<void>;
+	/** Restores the canonical catalog entry without changing foreground selection or drafts. */
+	restoreSession(sessionId: SessionId): Promise<void>;
 	setModel(model: ModelRef): Promise<void>;
 }
 

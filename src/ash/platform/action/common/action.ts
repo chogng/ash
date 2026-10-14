@@ -8,6 +8,11 @@ export type { ILocalizedString } from '../../../nls.js';
 
 export type CommandActionTitle = string | ILocalizedString;
 
+/** A localized command title with an optional menu mnemonic. */
+export interface ICommandActionTitle extends ILocalizedString {
+	mnemonicTitle?: string;
+}
+
 export interface ICommandActionToggleInfo {
 	readonly condition: ContextKeyExpression;
 	readonly icon?: Icon;

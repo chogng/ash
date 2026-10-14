@@ -45,6 +45,13 @@ import {
 } from "../common/nativeHost.js";
 
 import { validateOpenEmptyWindowOptions, type IOpenEmptyWindowOptions, type TitleBarStyleConfiguration } from '../../window/common/window.js';
+import type { AgentHostEditorUpdate, IAgentHostEditorState, IAgentsWindowInvitation } from '../../chat/common/agentsWindowInvitation.js';
+import { URI, type UriComponents } from '../../../base/common/uri.js';
+import {
+	AGENT_HOST_EDITOR_STATE_CHANNEL, AGENT_HOST_EDITOR_UPDATE_CHANNEL, AGENTS_WINDOW_INVITATION_CLAIM_CHANNEL,
+	AGENTS_WINDOW_INVITATION_SHOWN_CHANNEL, AGENTS_WINDOW_INVITATION_RELEASE_CHANNEL,
+	validateAgentHostEditorUpdate, validateAgentHostEditorResource, validateAgentsWindowInvitationId,
+} from '../common/nativeHost.js';
 
 /** Main-process implementation of native operations for one window. */
 export interface INativeHostMainService {
@@ -57,6 +64,11 @@ export interface INativeHostMainService {
 	openWorkspace(root: string): Promise<void>;
 	openWindow(options: IOpenEmptyWindowOptions): Promise<void>;
 	openAgentsWindow(options?: IOpenAgentsWindowOptions): Promise<void>;
+	getAgentHostEditorState(): IAgentHostEditorState;
+	updateAgentHostEditorState(update: AgentHostEditorUpdate): Promise<void>;
+	claimAgentsWindowInvitation(resource: URI): IAgentsWindowInvitation | undefined;
+	markAgentsWindowInvitationShown(id: string): Promise<void>;
+	releaseAgentsWindowInvitation(id: string): void;
 	revealFile(path: string): void;
 	showSaveDialog(options: SaveDialogOptions): Promise<SaveDialogReturnValue>;
 	isAccessibilitySupportEnabled(): boolean;
@@ -71,6 +83,15 @@ export function nativeHostIpcRoutes(
 	service: INativeHostMainService,
 ): readonly IpcRoute<unknown, unknown>[] {
 	return [
+		{
+			channel: AGENT_HOST_EDITOR_STATE_CHANNEL,
+			validate: value => { if (value !== undefined) throw new TypeError('Editor state reads accept no arguments'); return undefined; },
+			invoke: () => service.getAgentHostEditorState(),
+		},
+		{ channel: AGENT_HOST_EDITOR_UPDATE_CHANNEL, validate: validateAgentHostEditorUpdate, invoke: update => service.updateAgentHostEditorState(update as AgentHostEditorUpdate) },
+		{ channel: AGENTS_WINDOW_INVITATION_CLAIM_CHANNEL, validate: validateAgentHostEditorResource, invoke: resource => service.claimAgentsWindowInvitation(URI.revive(resource as UriComponents)) },
+		{ channel: AGENTS_WINDOW_INVITATION_SHOWN_CHANNEL, validate: validateAgentsWindowInvitationId, invoke: id => service.markAgentsWindowInvitationShown(id as string) },
+		{ channel: AGENTS_WINDOW_INVITATION_RELEASE_CHANNEL, validate: validateAgentsWindowInvitationId, invoke: id => service.releaseAgentsWindowInvitation(id as string) },
 		{
 			channel: NATIVE_HOST_GET_TITLE_BAR_STYLE_CHANNEL,
 			validate: value => {

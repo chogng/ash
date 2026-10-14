@@ -122,3 +122,57 @@ test('severity icons and source/menu labels use the Chinese catalog and fit narr
 	await error.getByRole('button', { name: '更多操作', exact: true }).click();
 	await expect(page.getByRole('menuitem', { name: '管理扩展', exact: true })).toBeVisible();
 });
+
+for (const locale of ['en', 'zh']) {
+	test(`Agents invitation records a visible row and preserves its draft until acknowledgement (${locale})`, async ({ page }) => {
+		await page.clock.install();
+		await page.goto(`/notifications.html${locale === 'zh' ? '?zh' : ''}`);
+		await page.evaluate(() => window.ashNotificationsIntegration.invite());
+		await expect.poll(() => page.evaluate(() => window.ashNotificationsIntegration.invitation().sessions[0]?.inProgress)).toBe(true);
+		expect(await page.evaluate(() => window.ashNotificationsIntegration.invitation().lastShown)).toBeUndefined();
+		await page.clock.fastForward(30_000);
+		await page.clock.runFor(32);
+		const toast = page.locator('.ash-notification');
+		const label = locale === 'zh' ? '在智能体窗口中继续' : 'Continue in Agents Window';
+		const action = toast.getByRole('button', { name: label, exact: true });
+		await expect(action).toBeVisible();
+		await expect(toast.locator('.ash-notification-message')).toHaveText(locale === 'zh' ? '在智能体窗口中继续，统一查看各个项目的智能体对话。' : 'Continue in the Agents Window to keep track of your agent conversations across projects.');
+		await expect.poll(() => page.evaluate(() => window.ashNotificationsIntegration.invitation().lastShown?.editorSessionCount)).toBe(1);
+		for (let theme = 0; theme < 4; theme++) {
+			await page.evaluate(index => window.ashNotificationsIntegration.theme(index), theme);
+			await action.focus();
+			await expect(action).toBeFocused();
+			await expect(action).toHaveCSS('outline-style', 'solid');
+			expect(await toast.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+		}
+		await page.keyboard.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashNotificationsIntegration.openRequests)).toBe(1);
+		expect(await page.evaluate(() => window.ashNotificationsIntegration.draftCleared)).toBe(0);
+		await expect(toast).toBeVisible();
+		await page.evaluate(() => window.ashNotificationsIntegration.acknowledgeHandoff());
+		await expect.poll(() => page.evaluate(() => window.ashNotificationsIntegration.draftCleared)).toBe(1);
+		await expect(toast).toHaveCount(0);
+	});
+}
+
+test('notification history insertion, removal before a frame and hidden DOM do not report presentation', async ({ page }) => {
+	await page.clock.install();
+	await page.goto('/notifications.html');
+	await page.evaluate(() => {
+		const fixture = window.ashNotificationsIntegration;
+		const removed = fixture.notify('Removed before presentation', undefined, true);
+		fixture.remove(removed);
+		fixture.notify('Hidden presentation', undefined, true);
+		document.querySelector<HTMLElement>('.ash-workbench')!.style.display = 'none';
+	});
+	await page.clock.runFor(32);
+	expect(await page.evaluate(() => window.ashNotificationsIntegration.presented())).toEqual([]);
+	await page.evaluate(() => {
+		window.ashNotificationsIntegration.clear();
+		document.querySelector<HTMLElement>('.ash-workbench')!.style.display = '';
+		window.ashNotificationsIntegration.notify('Visible presentation', undefined, true);
+	});
+	await page.clock.runFor(32);
+	await expect(page.locator('.ash-notification')).toBeVisible();
+	expect(await page.evaluate(() => window.ashNotificationsIntegration.presented())).toEqual(['Visible presentation']);
+});

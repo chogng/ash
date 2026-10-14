@@ -1,5 +1,6 @@
 import { ISecretStorageStatusService } from '../../../platform/secrets/common/secrets.js';
 import { createTestLanguageModelToolsService } from '../../../workbench/contrib/chat/test/common/tools/testLanguageModelToolsService.js';
+import '../../../workbench/contrib/chat/browser/chat.shared.contribution.js';
 import { quickInputServiceTestControls } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { IExtensionService } from '../../../workbench/services/extensions/common/extensionService.js';
 import { TestExtensionService } from '../../../workbench/test/common/testExtensionServices.js';
@@ -253,6 +254,20 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await preferences.open({ query: 'Preferences: Open User Settings (JSON)' });
 	assert.ok(window.document.querySelector('.ash-sessions-customize'), 'global search discovers lazily created Settings actions');
 	await preferences.open({ section: 'general' });
+	const aiToggle = window.document.querySelector<HTMLInputElement>('input[data-configuration-key="chat.disableAIFeatures"]');
+	assert.ok(aiToggle, 'General exposes the registered AI preference so disabled Chat can be restored');
+	assert.equal(aiToggle.getAttribute('aria-label'), 'Disable AI features');
+	const aiChanged = new Promise<void>(resolve => {
+		const listener = configuration.onDidChangeConfiguration(event => {
+			if (!event.affectsConfiguration('chat.disableAIFeatures')) return;
+			listener.dispose();
+			resolve();
+		});
+	});
+	aiToggle.click();
+	await aiChanged;
+	assert.equal(configuration.getValue('chat.disableAIFeatures'), true);
+	await configuration.updateValue('chat.disableAIFeatures', undefined);
 	const categoryButton = (id: string): HTMLButtonElement => window.document.querySelector<HTMLButtonElement>(`[data-settings-category-id="${id}"]`)!;
 	assert.equal(categoryButton('worktree'), null, 'unsupported worktree management is not offered as an empty page');
 	assert.equal(categoryButton('archived-chats'), null);

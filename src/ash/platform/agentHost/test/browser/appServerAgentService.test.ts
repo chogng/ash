@@ -114,6 +114,19 @@ test('Session catalog and subscriptions share the Agent domain snapshot boundary
 	assert.deepEqual(requests, ['session/read', 'session/list', 'session/catalog/subscribe', 'session/subscribe']);
 });
 
+test('Session restoration uses the existing typed lifecycle request', async () => {
+	const session = { sessionId: 'session', title: 'Restored', status: 'active' as const, manager: { status: 'idle' as const, statusChangedAtUnixMs: 0 }, threads: [{ threadId: 'session', title: 'Root', status: 'active' as const }] };
+	const requests: { method: string; params: unknown; }[] = [];
+	const api = createAppServerAgentSessionService({
+		async request(definition: { method: string; }, params: unknown): Promise<unknown> {
+			requests.push({ method: definition.method, params });
+			return { type: 'session', value: { session, agentTree: { roots: [] } } };
+		},
+	} as unknown as AppServerProtocolClient);
+	const restored = await api.restore({ sessionId: 'session', commandId: 'restore-session' });
+	assert.deepEqual({ requests, restored }, { requests: [{ method: 'session/request', params: { sessionId: 'session', commandId: 'restore-session', request: { type: 'restore' } } }], restored: { session: { ...session, executionTarget: undefined, model: undefined, threads: [{ ...session.threads[0]!, forkedFromId: undefined, manager: undefined, parentThreadId: undefined }] }, agentTree: { roots: [] } } });
+});
+
 test('Turn interruption keeps the Session, Thread and accepted sequence on the existing request', async () => {
 	const requests: { method: string; params: unknown; }[] = [];
 	const service = createAppServerAgentTurnService({

@@ -145,6 +145,14 @@ by agents are not automatically recorded by this service.
 | Session chat commands                 | `browser/actions/sessionsChatActions.ts`                                                                                                                                                       | maps the reused ChatWidget New Chat and History commands to the Sessions window's draft and active-chat selection                                                                                                                                                                                                                                                                                                                                        |
 | Open Agents Window                    | `code/browser/workbench/workbench.ts`, `workbench/contrib/chat/electron-browser/`, `contrib/openAgentsWindow/electron-browser/`, and `workbench/browser/parts/titlebar/`                       | the browser product entry owns page navigation; the Chat desktop contribution owns the titlebar action, hover label, and window command; the Sessions desktop contribution owns system-wide shortcut synchronization; the Workbench titlebar owns the shared mark and motion. Shared shortcut selection lives in `workbench/contrib/keybindings/`, while `platform/globalKeybindings/` owns operating-system registrations                               |
 
+Desktop invitation activity and its single cross-window claim belong to Main's
+`platform/chat/common/agentsWindowInvitation.ts` state, assembled in
+`code/electron-main/app.ts`. Only accepted renderer requests establish the originating
+window document; catalog broadcasts do not. Window reload, crash and close retire that
+activity. Desktop storage owns usage and impression persistence, while Rust continues
+to own Session, Thread and execution state. The Workbench contribution reuses notification
+Parts and the existing window handoff acknowledgment before clearing an unsent draft.
+
 The [shared Parts contract](LAYOUT.md#shared-parts-and-mode-content) gives every desktop mode a SidebarPart and shared editor and view-container hosts for its pages. [Activity Bar entry switching](LAYOUT.md#activity-bar-entry-switching) activates a sidebar ViewContainer and coordinates the central editor page and right-hand container through feature-owned entry commands. SessionsPart remains the conversation host; Library and Creator use retained EditorPanes. The boundary between shared window assembly, concrete layout families and page compositions is defined in [Layout implementation boundary](LAYOUT.md#layout-implementation-boundary). The phone implementation remains planned.
 
 Code keeps the existing Workbench Chat and Sessions chat contributions. Chat and
@@ -313,6 +321,13 @@ displays the stored root and does not grant access.
 - Session and Thread mutations remain App Server-owned; management routes
   operations to the provider; the window Sessions service owns only local
   visibility, active selection, focus, and navigation history.
+- Chat loading failures expose a history or live-update recovery action through
+  the shared Chat widget. Recovery reloads content without sending a Turn or
+  consuming the draft; selection changes and disposal retire the old action.
+- Archive actions interrupt the Session tree through the management service.
+  Restore uses the backend's root-Thread operation and does not restart work or
+  restore child branches. Bulk restoration leaves foreground selection and
+  drafts with their existing UI owner.
 - Each runtime, Part, retained Chat pane, App Server event subscription, and
   interaction service is disposed with the Sessions window.
 - An Electron process has one Sessions window. Opening it from another
@@ -376,6 +391,6 @@ The Sessions Part opens visible conversations in a horizontal row of shared edit
 groups; editor drag and drop can arrange them vertically. The complete split tree
 and conversation bindings restore when the window reopens, using the shared
 EditorPart's layout serialization. Provider grouping,
-search/filtering, archived history, and cross-window view-state persistence are
+additional search/filtering and cross-window view-state persistence are
 future work. They should extend the Sessions view/layout owners without moving
 product policy into base modules or the regular Workbench layout.

@@ -3,7 +3,7 @@ import '../../../src/ash/workbench/browser/media/style.css';
 import { h } from '../../../src/ash/base/browser/dom.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import messages from '../../../extensions/language-pack-zh-cn/translations/editor.json' with { type: 'json' };
-import { Event } from '../../../src/ash/base/common/event.js';
+import { Event, Emitter } from '../../../src/ash/base/common/event.js';
 import { Disposable, DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import { IAccessibilityService } from '../../../src/ash/platform/accessibility/common/accessibility.js';
 import { AccessibilityService } from '../../../src/ash/platform/accessibility/browser/accessibilityService.js';
@@ -32,8 +32,20 @@ import { CommandService } from '../../../src/ash/workbench/services/commands/com
 import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
 import { StatusbarService } from '../../../src/ash/workbench/services/statusbar/browser/statusbar.js';
 import { MainThreadMessageService } from '../../../src/ash/workbench/api/browser/mainThreadMessageService.js';
+import chatMessages from '../../../extensions/language-pack-zh-cn/translations/chat.json' with { type: 'json' };
+import { AgentsWindowInvitationContribution } from '../../../src/ash/workbench/contrib/chat/electron-browser/agentSessions/agentsWindowInvitation.js';
+import { AgentsWindowInvitationState } from '../../../src/ash/platform/chat/common/agentsWindowInvitation.js';
+import { ChatAIDisabledSettingId } from '../../../src/ash/platform/chat/common/chatSettings.js';
+import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
+import { INativeHostService } from '../../../src/ash/workbench/common/services.js';
+import { URI } from '../../../src/ash/base/common/uri.js';
+import { IChatService } from '../../../src/ash/workbench/services/chat/common/chatService.js';
+import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
+import { IHostService } from '../../../src/ash/workbench/services/host/browser/host.js';
+import { IAppServerApi } from '../../../src/ash/platform/agentHost/common/appServerApi.js';
+import type { INativeHostApi } from '../../../src/ash/platform/native/common/nativeHost.js';
 
-if (new URL(location.href).searchParams.has('zh')) setNlsMessages('zh-CN', messages);
+if (new URL(location.href).searchParams.has('zh')) setNlsMessages('zh-CN', { ...messages, ...chatMessages, ash: { ...messages.ash, ...chatMessages.ash } });
 
 const resources = new DisposableStore();
 const root = h(document, 'main');
@@ -72,10 +84,48 @@ let managed: unknown;
 resources.add(CommandsRegistry.register(OPEN_EXTENSIONS_COMMAND_ID, (_accessor, options) => { managed = options; }));
 let selection: number | null | undefined;
 let actionRuns = 0;
+const invitationScope = resources.add(services.createChild());
+const invitationState = resources.add(new AgentsWindowInvitationState(Date.now, { editorSessionCount: 0, lastShown: undefined, agentsWindowSessionCount: 0, lastAgentsWindowSessionCreated: undefined }));
+const submissions = resources.add(new Emitter<{ sessionId: string; threadId: string; isNewSession: boolean; requestSequence: number; }>());
+const invitationRegistry = new ConfigurationRegistry();
+invitationRegistry.registerConfiguration({ key: ChatAIDisabledSettingId, defaultValue: false, parse: value => { if (typeof value !== 'boolean') throw new TypeError('Invalid fixture preference'); return value; } });
+invitationScope.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService(invitationRegistry)));
+invitationScope.registerInstance(IChatService, {
+	onDidSubmitRequest: submissions.event, onDidUpdateThread: Event.None, onDidChangeSession: Event.None,
+	readThread: async (sessionId: string, threadId: string) => ({ thread: { sessionId, threadId, status: 'active', turns: [{ status: 'running' }] } }),
+} as unknown as IChatService);
+let draftCleared = 0;
+let openRequests = 0;
+let acknowledgeHandoff: (() => void) | undefined;
+invitationScope.registerInstance(IChatSessionNavigationService, {
+	getActiveConversation: () => ({ sessionId: 'invitation-session', threadId: 'invitation-thread' }),
+	captureActiveDraft: async () => ({ draft: { mode: 'agent', text: 'Synthetic unsent draft', contexts: [] }, clear: () => { draftCleared++; } }),
+} as unknown as IChatSessionNavigationService);
+invitationScope.registerInstance(IHostService, { hasFocus: true, onDidChangeFocus: Event.None } as IHostService);
+invitationScope.registerInstance(IAppServerApi, { onConnectionState: () => Disposable.None } as unknown as IAppServerApi);
+const invitationHost: Pick<INativeHostApi, 'getAgentHostEditorState' | 'onDidChangeAgentHostEditorState' | 'updateAgentHostEditorState' | 'claimAgentsWindowInvitation' | 'markAgentsWindowInvitationShown' | 'releaseAgentsWindowInvitation' | 'openAgentsWindow'> = {
+	getAgentHostEditorState: async () => invitationState.getState(),
+	onDidChangeAgentHostEditorState: listener => invitationState.onDidChange(listener),
+	updateAgentHostEditorState: async update => invitationState.update(1, update),
+	claimAgentsWindowInvitation: async resource => invitationState.claim(1, URI.revive(resource)),
+	markAgentsWindowInvitationShown: async id => invitationState.markShown(1, id),
+	releaseAgentsWindowInvitation: async id => invitationState.release(1, id),
+	openAgentsWindow: async () => { openRequests++; await new Promise<void>(resolve => { acknowledgeHandoff = resolve; }); },
+};
+invitationScope.registerInstance(INativeHostService, invitationHost as INativeHostApi);
+resources.add(invitationScope.createInstance(AgentsWindowInvitationContribution));
+const presented: string[] = [];
+
 
 const fixture = {
-	notify(message: string, severity: NotificationSeverity = NotificationSeverity.Info): number {
-		return notifications.notify({ severity, message, source: 'Fixture', actions: { primary: [{ id: 'fixture.action', label: 'Run action', run: () => { actionRuns++; } }] } }).item.id;
+	invite: () => submissions.fire({ sessionId: 'invitation-session', threadId: 'invitation-thread', isNewSession: true, requestSequence: 1 }),
+	invitation: () => invitationState.getState(),
+	get draftCleared() { return draftCleared; },
+	get openRequests() { return openRequests; },
+	acknowledgeHandoff: () => acknowledgeHandoff?.(),
+	presented: () => [...presented],
+	notify(message: string, severity: NotificationSeverity = NotificationSeverity.Info, trackPresentation = false): number {
+		return notifications.notify({ severity, message, onDidShow: trackPresentation ? () => { presented.push(message); } : undefined, source: 'Fixture', actions: { primary: [{ id: 'fixture.action', label: 'Run action', run: () => { actionRuns++; } }] } }).item.id;
 	},
 	extensionMessage(items: readonly string[]): void {
 		selection = undefined;

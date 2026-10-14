@@ -10,7 +10,9 @@ import { IViewsService } from '../../workbench/services/views/common/viewsServic
 import { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
 import { ChatViewPane } from './chatViewPane.js';
 import './actions/chatActions.js';
+import { ChatContextKeys } from '../../workbench/contrib/chat/common/actions/chatContextKeys.js';
 import './actions/chatLayoutActions.js';
+import '../contrib/sessions/browser/views/sessionsViewActions.js';
 
 class ChatSessionNavigationService implements IChatSessionNavigationServiceContract {
 	constructor(
@@ -74,6 +76,7 @@ export function registerChatViews(registry: WorkbenchViewRegistry = ViewsRegistr
 		localizationKey: { bundle: 'ash.views', key: 'chat' },
 		order: 1,
 		canToggleVisibility: false,
+		when: ChatContextKeys.enabled.isEqualTo(true),
 		ctorDescriptor: new SyncDescriptor(ChatViewPane),
 	}]);
 }
