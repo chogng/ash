@@ -183,7 +183,11 @@ fn real_hook_processes_publish_results_and_replay_without_reexecution() {
         );
         let transcript = server
             .updates
-            .thread_transcript_snapshot(&snapshot.public_thread(), true);
+            .thread_transcript_snapshot(
+                &snapshot.public_thread(),
+                true,
+                &snapshot.voice_transcripts,
+            );
         assert!(transcript.entries.iter().any(|entry| matches!(entry, ash_thread_transcript::ThreadTranscriptEntry::HookRun { run: observed, .. } if observed == run)));
         let diagnostics = server
             .trace_reader()

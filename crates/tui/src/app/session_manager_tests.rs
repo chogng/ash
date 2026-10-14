@@ -796,6 +796,7 @@ fn preview_result(
         thread,
         transcript,
         history: Some(boundary),
+        directory: None,
     }
 }
 
