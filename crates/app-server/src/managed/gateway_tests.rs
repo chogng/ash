@@ -235,7 +235,7 @@ fn imported_ssh_history_is_read_by_the_local_gateway_without_opening_a_remote_ag
     // A cached remote catalog entry cannot take ownership of a local historical identity.
     let stale: RemoteSessionIndex = Arc::new(Mutex::new(BTreeMap::from([(
         "known".into(),
-        ("wrong-host".into(), "/wrong/root".into()),
+        RemoteKey::Ssh("wrong-host".into(), "/wrong/root".into()),
     )])));
     assert_eq!(
         selected_execution_target(
