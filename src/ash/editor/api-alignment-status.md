@@ -159,6 +159,10 @@ Academic 已退出顶层工作台模式。通用 `workbench/contrib/documentEdit
 
 Quick Fix 的生产调用已经接入 `platform/actionWidget/browser/actionWidget.ts` 与 `actionList.ts`。`ActionWidgetService` 管理当前菜单，复用现有 `ContextView` 的定位、视口裁剪与外部点击关闭；`ActionList` 管理类型化动作及异步执行的忙碌状态，复用 `Menu` 的按钮、禁用态和键盘导航。Code Action 控制器继续管理提供者、原始 action、快照、取消与编辑提交，滚动或布局变化会关闭菜单。
 
+`CodeActionSet` 继承 `platform/actionWidget/common/actionWidget.ts` 的共享 `ActionSet<CodeActionItem>`。语言 provider 可返回原有数组或带释放能力的 `LanguageCodeActionList`；查询结果拥有 provider 列表与取消监听，`CodeActionModel` 持有当前集合，菜单取消、请求替换、文档失效和模型释放均回收资源，迟到结果立即释放。预览等待期间保留集合，直到确认、取消或请求失效；保存调用方在应用完成或异常退出时释放集合。`LanguageCodeAction.isAI` 在 provider 边界校验，`hasAIFix` 和 `allAIFixes` 从可用动作读取，禁用动作不参与；空可用集合的 `allAIFixes` 为 true，与共享契约的全称判断一致。
+
+该集合契约批次（2026-10-14）通过 93 项定向单测，覆盖原 provider 解析、AI 标记、资源释放、迟到结果、预览等待、保存和 App Server 数组兼容性；`tsconfig.test.json` 编译、Stanza 类型检查、结构对齐和格式检查通过。标准脚本最初被并行改动中的重复翻译键阻塞，单测随后使用同一测试配置编译并经现有 runner 执行。额外的全量 common 检查被本批范围外 `platform/agentHost/common/openSessionLink.ts` 的 4 项类型错误阻塞，未计为通过。
+
 动作菜单支持打开、替换、关闭、焦点恢复，以及方向键、Home/End、Enter/Space 和 Alt+F1 帮助。Quick Fix 根据动作 kind 显示快速修复、重构、源代码操作和其他操作的分组；菜单可按名称和分组名称进行多词筛选，隐藏空分组并播报匹配数量。Ctrl/Cmd+F 进入筛选，方向键返回动作列表；分组标题和禁用项不参与键盘导航。帮助提示由 `accessibility.verbosity.actionWidget` 控制，新增筛选、分组、预览与帮助文案接入英文和简体中文语言包。
 
 注册了预览处理器的宿主提供预览按钮和 Ctrl/Cmd+Enter，通过已有 `IBulkEditService` 打开批量编辑预览面板。控制器保留原提供者解析和版本有效性检查；关闭动作菜单不会取消待确认的预览，文档变化或编辑器释放会取消它。确认后提交由工作区编辑事务负责，提交自身产生的模型变化不能中途取消已确认的多文件编辑；提交错误仍向调用方报告。未注册预览处理器的独立编辑器只显示直接执行能力。

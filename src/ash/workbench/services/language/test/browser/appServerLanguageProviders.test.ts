@@ -172,6 +172,7 @@ test("App Server rename and code actions preserve ordered workspace file operati
 	assert.equal(preparation?.placeholder, "value");
 	assert.equal(edit.entries[0]!.kind, "create");
 	assert.equal(edit.entries[1]!.kind, "textDocument");
+	assert.ok(Array.isArray(available), 'the App Server provider continues to return an action array');
 	assert.equal(available[0]!.edit?.entries[0]!.kind, "rename");
 	assert.equal(api.codeActionRequests[0]!.diagnostics[0]!.severity, "warning");
 });

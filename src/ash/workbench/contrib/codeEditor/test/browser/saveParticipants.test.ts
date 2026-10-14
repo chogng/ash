@@ -15,7 +15,7 @@ import { Range } from '../../../../../editor/common/core/range.js';
 import { Selection } from '../../../../../editor/common/core/selection.js';
 import { EndOfLineSequence } from '../../../../../editor/common/model.js';
 import type { TextModel } from '../../../../../editor/common/model/textModel.js';
-import { LanguageDiagnosticSeverity, type LanguageCodeAction, type LanguageCodeActionRequest } from '../../../../../editor/common/languages.js';
+import { LanguageDiagnosticSeverity, type LanguageCodeAction, type LanguageCodeActionList, type LanguageCodeActionRequest } from '../../../../../editor/common/languages.js';
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../../../../editor/common/services/languageFeaturesService.js';
 import { SnippetController2 } from '../../../../../editor/contrib/snippet/browser/snippetController2.js';
@@ -445,7 +445,8 @@ test('cancelled providers release the save queue, and removing the contribution 
 	using reference = await fixture.bulk.models.acquire({ resource }, signal());
 	reference.model.setValue('edited');
 	const started = new DeferredPromise<void>();
-	const ready = new DeferredPromise<readonly LanguageCodeAction[]>();
+	const ready = new DeferredPromise<LanguageCodeActionList>();
+	let released = 0;
 	using provider = fixture.features.codeActionProvider.register('*', { provideCodeActions: () => { void started.complete(); return ready.p; } });
 	const controller = new AbortController();
 	const saving = reference.save(controller.signal);
@@ -455,9 +456,36 @@ test('cancelled providers release the save queue, and removing the contribution 
 	assert.equal(fixture.bulk.store.saved.length, 0);
 	fixture.host.dispose();
 	await reference.save(signal());
-	await ready.complete([]);
+	await ready.complete({ actions: [], ...toDisposable(() => released++) });
+	assert.equal(released, 1, 'a late result is released even after the save has rejected');
 	assert.equal(fixture.bulk.store.text(resource), 'edited');
 });
+
+for (const outcome of ['apply', 'resolve error'] as const) {
+	test('save actions release provider resources after ' + outcome, async () => {
+		using fixture = new SaveTestServices();
+		await fixture.configuration.updateValue('editor.codeActionsOnSave', { 'source.fixAll': 'explicit' });
+		using reference = await fixture.bulk.models.acquire({ resource }, signal());
+		reference.model.setValue('edited');
+		let released = 0;
+		using provider = fixture.features.codeActionProvider.register('*', {
+			provideCodeActions: () => ({ actions: [{ title: 'Fix', kind: 'source.fixAll', isAI: true }], ...toDisposable(() => released++) }),
+			resolveCodeAction: (_original, request) => {
+				assert.equal(released, 0, 'provider data remains available during resolution');
+				if (outcome === 'resolve error') { throw new Error('resolve failed'); }
+				return action(request, 'fixed');
+			},
+		});
+		if (outcome === 'resolve error') {
+			await assert.rejects(reference.save(signal()), /resolve failed/);
+			assert.equal(reference.isDirty, true);
+		} else {
+			await reference.save(signal());
+			assert.equal(fixture.bulk.store.text(resource), 'fixed');
+		}
+		assert.equal(released, 1);
+	});
+}
 
 test('save action failures preserve dirty text and propagate before persistence', async () => {
 	using fixture = new SaveTestServices();

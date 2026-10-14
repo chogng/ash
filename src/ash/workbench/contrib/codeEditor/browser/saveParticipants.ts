@@ -106,7 +106,7 @@ class CodeActionOnSaveParticipant implements ITextModelSaveParticipant {
 			// Providers must query after preceding providers' edits, rather than share stale versions.
 			for (const provider of this.features.codeActionProvider.ordered(model)) {
 				const context = this.request(model, kind, requestSignal);
-				const actions = await raceCancellationError(getCodeActions({ ordered: () => [provider] }, context, {
+				using actions = await raceCancellationError(getCodeActions({ ordered: () => [provider] }, context, {
 					include: kind, excludes, includeSourceActions: true,
 				}, error => { throw error; }), requestSignal);
 				assertCurrent(context);

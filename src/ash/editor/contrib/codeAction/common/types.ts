@@ -1,6 +1,7 @@
 import { HierarchicalKind } from '../../../../base/common/hierarchicalKind.js';
 import { CodeActionTriggerType, normalizeLanguageWorkspaceEdit, type LanguageCodeAction, type LanguageCodeActionProvider, type LanguageCodeActionRequest, } from '../../../common/languages.js';
 import { localize } from '../../../../nls.js';
+import type { ActionSet } from '../../../../platform/actionWidget/common/actionWidget.js';
 
 export const CodeActionKind = Object.freeze({
 	QuickFix: new HierarchicalKind('quickfix'),
@@ -86,15 +87,14 @@ export class CodeActionItem {
 	}
 }
 
-export interface CodeActionSet {
-	readonly allActions: readonly CodeActionItem[];
-	readonly validActions: readonly CodeActionItem[];
-	readonly hasAutoFix: boolean;
-}
+export interface CodeActionSet extends ActionSet<CodeActionItem> { }
 
 function normalizeAction(action: LanguageCodeAction): LanguageCodeAction {
 	if (!action || typeof action.title !== 'string' || action.title.trim().length === 0) {
 		throw new TypeError('Code action title must be a non-empty string');
+	}
+	if (action.isAI !== undefined && typeof action.isAI !== 'boolean') {
+		throw new TypeError('Code action AI marker must be boolean');
 	}
 	return Object.freeze({
 		...action,

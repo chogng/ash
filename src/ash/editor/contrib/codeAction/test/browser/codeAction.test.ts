@@ -222,8 +222,9 @@ for (const outcome of ['accept', 'cancel', 'change', 'dispose', 'commit error'] 
 			using reference = await fixture.models.acquire({ resource: URI.file('/workspace/preview.ts'), languageId: 'typescript' }, new AbortController().signal);
 			const model = reference.model;
 			using features = new LanguageFeaturesService();
+			let released = 0;
 			using provider = features.codeActionProvider.register('typescript', {
-				provideCodeActions: () => [{ title: 'Replace value', kind: 'refactor.rewrite', edit: { entries: [{ kind: 'textDocument', resource: model.uri, version: model.getVersionId(), edits: [{ range: model.getFullModelRange(), text: 'result' }] }] } }],
+				provideCodeActions: () => ({ actions: [{ title: 'Replace value', kind: 'refactor.rewrite', isAI: true, edit: { entries: [{ kind: 'textDocument', resource: model.uri, version: model.getVersionId(), edits: [{ range: model.getFullModelRange(), text: 'result' }] }] } }], ...toDisposable(() => released++) }),
 			});
 			const bulkEdits = fixture.service;
 			if (outcome === 'commit error') {
@@ -248,6 +249,7 @@ for (const outcome of ['accept', 'cancel', 'change', 'dispose', 'commit error'] 
 			await flushPromises();
 			assert.deepEqual(fixture.store.saved, []);
 			assert.equal(previewSignal?.aborted, false);
+			assert.equal(released, 0, 'preview retains provider resources while awaiting approval');
 			assert.equal(dom.window.document.querySelector('.ash-action-widget'), null);
 			if (outcome === 'change') model.setValue('changed');
 			if (outcome === 'dispose') editor.dispose();
@@ -257,6 +259,7 @@ for (const outcome of ['accept', 'cancel', 'change', 'dispose', 'commit error'] 
 			await new Promise<void>(resolve => setImmediate(resolve));
 			assert.equal(fixture.store.saved.length, outcome === 'accept' || outcome === 'commit error' ? 1 : 0);
 			assert.equal(previewSignal!.aborted, true);
+			assert.equal(released, 1);
 			assert.deepEqual(errors.map(error => (error as Error).message), outcome === 'commit error' ? ['Approved edit failed after retiring its request'] : []);
 		} finally {
 			dom.window.close();

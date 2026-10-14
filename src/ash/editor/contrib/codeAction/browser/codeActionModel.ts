@@ -1,6 +1,6 @@
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { Emitter } from '../../../../base/common/event.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { EditorOption, ShowLightbulbIconMode } from '../../../common/config/editorOptions.js';
@@ -29,6 +29,7 @@ export namespace CodeActionsState {
 /** One request owner for manual menus and automatic suggestions. */
 export class CodeActionModel extends Disposable {
 	private current: CodeActionsState.State = CodeActionsState.Empty;
+	private readonly results = this._register(new MutableDisposable<CodeActionSet>());
 	private readonly changed = this._register(new Emitter<CodeActionsState.State>());
 	public readonly onDidChangeState = this.changed.event;
 	private readonly automatic = this._register(new RunOnceScheduler(() => this.trigger({
@@ -77,8 +78,17 @@ export class CodeActionModel extends Disposable {
 			...(trigger.filter?.include?.value ? { only: [trigger.filter.include.value] } : {}),
 			diagnostics: this.diagnostics.decorations.filter(item => Range.areIntersectingOrTouching(item.range, range)).map(item => item.metadata),
 		});
-		const state = new CodeActionsState.Triggered(trigger, range.getStartPosition(),
-			getCodeActions(this.features.codeActionProvider, context, trigger.filter ?? {}, this.onError), context, request);
+		// The model retains results for both the lightbulb and manual menus. Late results
+		// must never replace the collection belonging to a newer request.
+		const actions = getCodeActions(this.features.codeActionProvider, context, trigger.filter ?? {}, this.onError).then(result => {
+			if (request.signal.aborted) {
+				result.dispose();
+			} else {
+				this.results.value = result;
+			}
+			return result;
+		});
+		const state = new CodeActionsState.Triggered(trigger, range.getStartPosition(), actions, context, request);
 		this.current = state;
 		this.changed.fire(state);
 		return state;
@@ -87,6 +97,7 @@ export class CodeActionModel extends Disposable {
 	public reset(): void {
 		this.automatic.cancel();
 		if (this.current.type === CodeActionsState.Type.Triggered) { this.current.cancel(); }
+		this.results.clear();
 		this.current = CodeActionsState.Empty;
 		this.changed.fire(this.current);
 	}

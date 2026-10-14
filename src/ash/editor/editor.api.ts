@@ -54,7 +54,7 @@ export type { LanguageCreateFileEdit, LanguageDeleteFileEdit, LanguageDeleteMode
 export { type SyntaxProvider, type SyntaxProviderRequest, type SyntaxRequest } from './common/languages.js';
 export type { LanguageWorkspaceSymbol, LanguageWorkspaceSymbolKind, LanguageWorkspaceSymbolProvider } from './common/languages.js';
 export type { LanguageCallHierarchyEntry, LanguageCallHierarchyProvider, LanguageHierarchyFollowupRequest, LanguageHierarchyItem, LanguageHierarchyRequest, LanguageTypeHierarchyProvider } from './common/languages.js';
-export type { LanguageCodeAction, LanguageCodeActionProvider, LanguageCodeActionRequest } from './common/languages.js';
+export type { LanguageCodeAction, LanguageCodeActionList, LanguageCodeActionProvider, LanguageCodeActionRequest } from './common/languages.js';
 export type { LanguageColorPresentationRequest, LanguageColorProvider, LanguageColorRequest } from './common/languages.js';
 export type { LanguageDocumentSymbol, LanguageDocumentSymbolProvider, LanguageDocumentSymbolRequest, LanguageSymbolKind } from './common/languages.js';
 export type { LanguageFoldingRange, LanguageFoldingRangeKind, LanguageFoldingRangeProvider, LanguageFoldingRangeRequest } from './common/languages.js';

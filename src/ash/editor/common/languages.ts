@@ -483,6 +483,7 @@ export interface LanguageCodeAction {
 	readonly title: string;
 	readonly kind?: string;
 	readonly isPreferred?: boolean;
+	readonly isAI?: boolean;
 	readonly disabledReason?: string;
 	readonly edit?: LanguageWorkspaceEdit;
 	readonly data?: unknown;
@@ -495,10 +496,15 @@ export interface LanguageCodeActionRequest extends LanguageFeatureRequest {
 	readonly only?: readonly string[];
 }
 
+/** Provider resources remain alive until the consuming action set is disposed. */
+export interface LanguageCodeActionList extends IDisposable {
+	readonly actions: readonly LanguageCodeAction[];
+}
+
 export interface LanguageCodeActionProvider {
 	/** Declared kinds supply configuration suggestions without requesting actions from a document. */
 	readonly providedCodeActionKinds?: readonly string[];
-	provideCodeActions(request: LanguageCodeActionRequest, signal: AbortSignal): readonly LanguageCodeAction[] | Promise<readonly LanguageCodeAction[]>;
+	provideCodeActions(request: LanguageCodeActionRequest, signal: AbortSignal): readonly LanguageCodeAction[] | LanguageCodeActionList | Promise<readonly LanguageCodeAction[] | LanguageCodeActionList>;
 	resolveCodeAction?(action: LanguageCodeAction, request: LanguageCodeActionRequest, signal: AbortSignal): LanguageCodeAction | Promise<LanguageCodeAction>;
 }
 
