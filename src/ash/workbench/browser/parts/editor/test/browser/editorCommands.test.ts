@@ -25,6 +25,45 @@ import { IHistoryService } from '../../../../../services/history/common/history.
 import { SubmenuAction } from '../../../../../../base/common/actions.js';
 import { IEditorPartsService } from '../../editorParts.js';
 import type { EditorIdentifier } from '../../../../../services/editor/common/editorState.js';
+import { IPreferencesService, type IOpenSettingsOptions } from '../../../../../services/preferences/common/preferences.js';
+import { ConfigureEditorAction } from '../../../../actions/layoutActions.js';
+import { resetNlsResolver, setNlsMessages } from '../../../../../../nls.js';
+import { productLanguagePackCatalogs } from '../../../../../services/localization/common/localizationCatalogs.js';
+
+test('Configure Editors menu opens filtered settings and is hidden in the modal editor', async () => {
+	await import('../../editor.contribution.js');
+	await import('../../../../../contrib/preferences/browser/preferencesActions.js');
+	const opened: (IOpenSettingsOptions | undefined)[] = [];
+	using services = new InstantiationService();
+	services.registerInstance(IPreferencesService, {
+		openSettings: async options => { opened.push(options); },
+		openUserSettings: async () => assert.fail('Unexpected JSON settings'),
+		openGlobalKeybindingSettings: async () => assert.fail('Unexpected keyboard shortcuts'),
+	});
+	using commands = new CommandService(services);
+	using context = new ContextKeyService();
+	context.setContext('editorPartModalVisible', false);
+	const menus = new MenuService(commands, context);
+	const editorActions = () => menus.getMenuActions(MenuId.EditorTitle).flatMap(([, actions]) => actions);
+	const configure = editorActions().find(action => action.id === ConfigureEditorAction.ID);
+	assert.ok(configure);
+	assert.equal(configure.label, 'Configure Editors');
+	assert.equal(editorActions().some(action => action.id === 'workbench.action.openSettings'), false);
+	await configure.run({ groupId: 'source' });
+	assert.deepEqual(opened, [{ query: 'workbench.editor' }]);
+	context.setContext('editorPartModalVisible', true);
+	assert.equal(editorActions().some(action => action.id === ConfigureEditorAction.ID), false);
+	await commands.executeCommand('workbench.action.openSettings');
+	assert.deepEqual(opened, [{ query: 'workbench.editor' }, undefined]);
+
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	try {
+		setNlsMessages('zh-CN', chinese.bundles);
+		assert.deepEqual(new ConfigureEditorAction().desc.title, { original: 'Configure Editors', value: '配置编辑器' });
+	} finally {
+		resetNlsResolver();
+	}
+});
 
 test('new window tab menus resolve the clicked tab, multiselection and invalid targets', async () => {
 	await import('../../editor.contribution.js');

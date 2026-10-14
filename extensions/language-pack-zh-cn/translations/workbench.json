@@ -698,6 +698,7 @@
     "workbench.reopenWithEditor": "重新打开方式...",
     "workbench.focusTerminal": "聚焦终端",
     "workbench.settings": "Ash 设置",
+    "workbench.configureEditors": "配置编辑器",
     "workbench.manage": "管理",
     "workbench.activityBarGlobalActions": "活动栏全局操作",
     "workbench.titleBarGlobalActions": "标题栏全局操作",

@@ -15,11 +15,6 @@ registerAction2(class OpenSettingsAction extends Action2 {
 			icon: Lxicon.gear,
 			menu: [
 				{
-					id: MenuId.EditorTitle,
-					group: 'settings',
-					order: 100,
-				},
-				{
 					id: MenuId.MenubarFileMenu,
 					group: '5_preferences',
 					order: 1,

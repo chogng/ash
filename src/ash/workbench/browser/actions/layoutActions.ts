@@ -8,6 +8,23 @@ import type { ServicesAccessor } from '../../../platform/instantiation/common/in
 import { ActivityBarPosition, WorkbenchConfiguration, type SideBarLocation } from '../../common/configuration.js';
 import { IsSessionsWindowContext } from '../../common/contextkeys.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../common/contributions.js';
+import { IPreferencesService } from '../../services/preferences/common/preferences.js';
+
+export class ConfigureEditorAction extends Action2 {
+	static readonly ID = 'workbench.action.configureEditor';
+
+	constructor() {
+		super({
+			id: ConfigureEditorAction.ID,
+			title: localize2('workbench.configureEditors', 'Configure Editors'),
+		});
+	}
+
+	override run(accessor: ServicesAccessor): Promise<void> {
+		return accessor.get(IPreferencesService).openSettings({ query: 'workbench.editor' });
+	}
+}
+registerAction2(ConfigureEditorAction);
 
 export const ActivityBarContextMenu = MenuId.for('ActivityBarContext');
 const activityBarSizeMenu = MenuId.for('ActivityBarSize');

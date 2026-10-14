@@ -142,6 +142,7 @@ const { EditorPart } = await import('../../../../browser/parts/editor/editorPart
 const { EditorPaneRegistry, EditorPanes } = await import('../../../../browser/editor.js');
 const { SettingsSearchQuery } = await import('../../browser/settingsSearch.js');
 await import('../../browser/preferencesActions.js');
+await import('../../../../browser/actions/layoutActions.js');
 const { createSettingsLayout, settingsRootNodes, SettingsCategories, SettingsLayout } = await import('../../browser/settingsLayout.js');
 
 // The canonical module above captures English. Chinese metadata tests need the
@@ -1978,6 +1979,12 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(search.value, '');
 	assert.ok(root.querySelectorAll('.ash-settings-content-tree [data-settings-item-id]').length > 1);
 	const commands = editorServices.get(ICommandService);
+	await commands.executeCommand('workbench.action.configureEditor');
+	assert.equal(search.value, 'workbench.editor');
+	assert.equal(ownerDocument.activeElement, search);
+	const editorSettings = [...root.querySelectorAll<HTMLElement>('.ash-settings-content-tree [data-settings-item-id]')];
+	assert.ok(editorSettings.length > 0);
+	assert.ok(editorSettings.every(row => row.dataset.settingsItemId?.startsWith('workbench.editor')));
 	await commands.executeCommand('workbench.action.openSettings', 'editor.fontFamily');
 	assert.equal(root.querySelector('.ash-settings-search input'), search, 'query opening reuses the search owner');
 	assert.equal(search.value, 'editor.fontFamily');

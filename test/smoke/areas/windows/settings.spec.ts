@@ -1,5 +1,33 @@
 import { expect, test } from '../../../automation/test.js';
 
+test('Configure Editors opens workbench editor settings from the title menu in English and Chinese', async ({ workbench, application, restartWorkbench }) => {
+	for (const locale of ['en', 'zh-CN']) {
+		const page = workbench.page;
+		await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
+		const more = page.locator('.ash-editor-title-actions:visible').getByRole('button', { name: locale === 'en' ? 'More Actions' : '更多操作', exact: true });
+		const title = locale === 'en' ? 'Configure Editors' : '配置编辑器';
+		const items = await workbench.menus.inspect(application, () => more.press('Enter'));
+		expect(items.filter(item => item.label === title)).toHaveLength(1);
+		expect(items.some(item => item.label === (locale === 'en' ? 'Ash Settings' : 'Ash 设置'))).toBe(false);
+		await workbench.menus.select(application, () => more.press('Enter'), [title]);
+		const settings = page.getByRole('dialog', { name: locale === 'en' ? 'Ash Settings' : 'Ash 设置', exact: true });
+		const search = settings.locator('.ash-settings-search input');
+		await expect(search).toHaveValue('workbench.editor');
+		await expect(search).toBeFocused();
+		const rows = settings.locator('.ash-settings-content-tree [data-settings-item-id]');
+		await expect(rows.first()).toBeVisible();
+		expect(await rows.evaluateAll(elements => elements.every(element => element.getAttribute('data-settings-item-id')?.startsWith('workbench.editor')))).toBe(true);
+		await settings.locator('.ash-modal-editor-close').click();
+		if (locale === 'en') {
+			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+			const picker = page.getByRole('dialog', { name: 'Select Display Language' });
+			await picker.getByRole('combobox').fill('简体中文');
+			await picker.getByRole('combobox').press('Enter');
+			({ workbench, application } = await restartWorkbench());
+		}
+	}
+});
+
 test('accessibility signal settings validate modes and survive restart in Chinese', async ({ workbench, restartWorkbench }) => {
 	let page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
