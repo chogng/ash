@@ -859,9 +859,28 @@ async function sessionsInputFixture(send: ChatInputDelegate['send'] = async () =
 		};
 		const input = resources.add(services.createInstance(SessionsInputForTest, document.body, delegate, model));
 		input.render(model.inputState);
-		return { input, storage, notices, identity, [Symbol.dispose]() { resources.dispose(); } };
+		return { input, model, storage, notices, identity, [Symbol.dispose]() { resources.dispose(); } };
 	} catch (error) { resources.dispose(); throw error; }
 }
+
+test('Sessions custom composer footer displays and clears the shared context budget', async () => {
+	using fixture = await sessionsInputFixture();
+	const state = fixture.model.inputState;
+	fixture.input.render({
+		...state, contextUsage: {
+			estimatedTokens: 800, autoCompactAt: 800, contextWindow: 1000,
+			categories: [{ category: 'conversation', tokens: 800 }],
+		}
+	});
+	const ring = fixture.input.element.querySelector<HTMLButtonElement>('.ash-sessions-chat-input-footer .ash-chat-context-usage-button');
+	assert.ok(ring);
+	assert.equal(ring.hidden, false);
+	assert.equal(ring.disabled, false);
+	assert.equal(ring.getAttribute('aria-label'), 'Context budget: 100%, estimated input 800 of 800 tokens');
+	assert.equal(fixture.input.element.querySelectorAll('.ash-chat-context-usage-button').length, 1);
+	fixture.input.render(state);
+	assert.equal(fixture.input.element.querySelector('.ash-chat-context-usage-button'), null);
+});
 
 test('Sessions composer forwards its original submission lifetime to the owning widget', async () => {
 	let submittedSignal: AbortSignal | undefined;

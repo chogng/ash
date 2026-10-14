@@ -5,7 +5,7 @@ import { Disposable, toDisposable } from '../../../../../../base/common/lifecycl
 import { Lxicon } from '../../../../../../base/common/lxicons.js';
 import { createUuid } from '../../../../../../base/common/uuid.js';
 import { localize } from '../../../../../../nls.js';
-import type { ChatContextUsage } from '../../../../../services/chat/common/chatService.js';
+import { getContextInputBudget, type ChatContextUsage } from '../../../../../services/chat/common/chatService.js';
 
 /** Renders the context breakdown; the usage widget owns its floating presentation. */
 export class ChatContextUsageDetails extends Disposable {
@@ -41,7 +41,7 @@ export class ChatContextUsageDetails extends Disposable {
 	update(usage: ChatContextUsage): void {
 		const body = this.body;
 		const document = body.ownerDocument;
-		const capacity = usage.contextWindow && usage.contextWindow > 0 ? usage.contextWindow : undefined;
+		const capacity = getContextInputBudget(usage);
 		const categoryLabels = {
 			systemPrompt: localize('chat.input.context.systemPrompt', 'System prompt'),
 			systemTools: localize('chat.input.context.systemTools', 'Tools'),
@@ -53,7 +53,7 @@ export class ChatContextUsageDetails extends Disposable {
 		const summary = h(document, 'p');
 		summary.className = 'ash-chat-context-details-summary';
 		summary.textContent = capacity !== undefined
-			? localize('chat.input.contextSummary', '{0} / {1} tokens · {2}%', usage.estimatedTokens.toLocaleString(), capacity.toLocaleString(), Math.round(usage.estimatedTokens / capacity * 100))
+			? localize('chat.input.contextSummary', 'Estimated input: {0} / {1} tokens · {2}%', usage.estimatedTokens.toLocaleString(), capacity.toLocaleString(), Math.round(usage.estimatedTokens / capacity * 100))
 			: localize('chat.input.contextSummaryUnknown', '{0} tokens · Capacity unavailable', usage.estimatedTokens.toLocaleString());
 		const bar = h(document, 'div');
 		bar.className = 'ash-chat-context-details-bar';
@@ -72,7 +72,7 @@ export class ChatContextUsageDetails extends Disposable {
 		table.setAttribute('aria-label', localize('chat.input.contextBreakdown', 'Context breakdown'));
 		const tableHead = table.createTHead().insertRow();
 		const headings = [localize('chat.input.contextCategoryHeading', 'Category'), localize('chat.input.contextTokensHeading', 'Tokens')];
-		if (capacity !== undefined) headings.push(localize('chat.input.contextShareHeading', 'Capacity share'));
+		if (capacity !== undefined) headings.push(localize('chat.input.contextShareHeading', 'Input budget share'));
 		for (const label of headings) {
 			const heading = h(document, 'th');
 			heading.scope = 'col';
@@ -94,7 +94,7 @@ export class ChatContextUsageDetails extends Disposable {
 			if (capacity !== undefined) row.insertCell().textContent = `${(tokens / capacity * 100).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`;
 		};
 		for (const { category, tokens } of usage.categories) appendRow(categoryLabels[category], tokens, category);
-		if (capacity !== undefined) appendRow(localize('chat.input.contextRemaining', 'Remaining space'), Math.max(0, capacity - usage.estimatedTokens));
+		if (capacity !== undefined) appendRow(localize('chat.input.contextRemaining', 'Remaining input budget'), Math.max(0, capacity - usage.estimatedTokens));
 		const notes = h(document, 'div');
 		notes.className = 'ash-chat-context-details-notes';
 		const addNote = (text: string): void => {
@@ -103,6 +103,7 @@ export class ChatContextUsageDetails extends Disposable {
 			notes.append(note);
 		};
 		if (usage.model) addNote(localize('chat.input.contextModel', 'Model: {0}/{1}', usage.model.provider, usage.model.model));
+		if (usage.contextWindow !== undefined) addNote(localize('chat.input.contextCapacity', 'Model context capacity: {0} tokens', usage.contextWindow.toLocaleString()));
 		if (usage.autoCompactAt !== undefined) addNote(localize('chat.input.contextCompaction', 'Automatic compaction at: {0} tokens', usage.autoCompactAt.toLocaleString()));
 		if (usage.latestRequestTokens !== undefined) addNote(localize('chat.input.contextLatest', 'Latest request measurement: {0} tokens', usage.latestRequestTokens.toLocaleString()));
 		addNote(localize('chat.input.contextDraft', 'The unsent draft is not included in this estimate.'));

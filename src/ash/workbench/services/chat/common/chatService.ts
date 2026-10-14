@@ -112,6 +112,12 @@ export interface ChatContextUsage {
 	}[];
 }
 
+/** The same admissible input boundary Core uses to decide automatic compaction. */
+export function getContextInputBudget(usage: ChatContextUsage): number | undefined {
+	const budget = usage.autoCompactAt ?? usage.contextWindow;
+	return budget !== undefined && budget > 0 ? budget : undefined;
+}
+
 /** User-facing Hook feedback; process evidence remains in Execution trace. */
 export interface IChatHookPart {
 	readonly kind: 'hook';

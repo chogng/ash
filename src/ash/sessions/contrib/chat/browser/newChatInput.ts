@@ -125,6 +125,7 @@ export class NewChatInputWidget extends ChatInputPart {
 		this.permissionButton.setAttribute('aria-haspopup', 'menu');
 		this.permissionButton.setAttribute('aria-expanded', 'false');
 		footer.append(this.permissionButton);
+		this.createContextUsageToolbar(footer, contextMenus);
 		this.element.append(footer);
 		this._register(instantiationService.createInstance(NewChatPermissionPicker, this.permissionButton, this.model));
 		this._register(AccessibleViewRegistry.register(new SessionsChatAccessibilityHelp(this.element, () => this.focus())));

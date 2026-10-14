@@ -4593,6 +4593,8 @@ fn encrypted_reasoning_survives_tool_results_and_reloading_thread_history() {
     let (threads, thread_id, turn_id) =
         started_turn_with_store(ash_protocol::ToolMode::Direct, store.clone());
     let state = ash_protocol::ReasoningState {
+        token_estimate: None,
+        context: None,
         scope: "account-model-scope".into(),
         item: serde_json::json!({"type":"reasoning","id":"reasoning-1","summary":[],"encrypted_content":"opaque"}),
     };

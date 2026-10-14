@@ -79,7 +79,12 @@
 
 .ash-sessions-chat-input-footer {
 	display: flex;
+	align-items: center;
 	padding-top: var(--ash-spacing-size80);
+}
+
+.ash-sessions-chat-input-footer .ash-chat-input-context-toolbar {
+	margin-inline-start: auto;
 }
 
 .ash-sessions-chat-input-footer > button:focus-visible {

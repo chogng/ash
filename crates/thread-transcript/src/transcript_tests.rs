@@ -704,6 +704,8 @@ fn encrypted_reasoning_without_a_summary_has_no_visible_transcript_entry() {
         turn_id: turn_id(),
         text: String::new(),
         state: vec![ash_protocol::ReasoningState {
+            token_estimate: None,
+            context: None,
             scope: "scope".into(),
             item: serde_json::json!({"type":"reasoning","encrypted_content":"opaque"}),
         }],

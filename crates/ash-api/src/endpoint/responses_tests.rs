@@ -2,6 +2,78 @@ use super::*;
 use crate::Message;
 
 #[test]
+fn reasoning_replay_estimates_partition_usage_and_preserve_effective_context() {
+    let response = parse_response(json!({
+        "status": "completed",
+        "reasoning": {"context": "all_turns"},
+        "output": [
+            {"type": "reasoning", "id": "r1", "encrypted_content": "first", "summary": []},
+            {"type": "reasoning", "id": "r2", "encrypted_content": "second", "summary": []}
+        ],
+        "usage": {"input_tokens": 900, "output_tokens": 11, "output_tokens_details": {"reasoning_tokens": 11}}
+    })).unwrap();
+    let states = response
+        .output
+        .iter()
+        .filter_map(|item| match item {
+            OutputItem::ReasoningState(state) => Some(state),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(states.len(), 2);
+    assert_eq!(
+        states
+            .iter()
+            .map(|state| state.token_estimate.unwrap())
+            .sum::<u64>(),
+        11
+    );
+    assert!(
+        states
+            .iter()
+            .all(|state| state.context == Some(ash_protocol::ReasoningReplayContext::AllTurns))
+    );
+
+    let mut request = ModelRequest::text("continue");
+    request.input.splice(
+        0..0,
+        states
+            .iter()
+            .map(|state| InputItem::Reasoning((*state).clone())),
+    );
+    let body = build_count_request("test", &request).unwrap();
+    for (wire, state) in body["input"].as_array().unwrap().iter().zip(states) {
+        // Accounting metadata is local. Both preflight and invocation replay only the wire item.
+        assert_eq!(wire, &state.item);
+        assert!(wire.get("tokenEstimate").is_none());
+    }
+    assert_eq!(response.usage.unwrap().input_tokens, Some(900));
+}
+
+#[test]
+fn reasoning_replay_does_not_guess_a_missing_effective_mode_or_usage() {
+    for (wire, expected) in [
+        (
+            json!("current_turn"),
+            Some(ash_protocol::ReasoningReplayContext::CurrentTurn),
+        ),
+        (json!("auto"), None),
+        (Value::Null, None),
+    ] {
+        let response = parse_response(json!({
+            "status": "completed", "reasoning": {"context": wire},
+            "output": [{"type": "reasoning", "encrypted_content": "opaque", "summary": []}]
+        }))
+        .unwrap();
+        let OutputItem::ReasoningState(state) = &response.output[0] else {
+            panic!("expected replay state")
+        };
+        assert_eq!(state.context, expected);
+        assert_eq!(state.token_estimate, None);
+    }
+}
+
+#[test]
 fn responses_encode_explicit_verbosity_and_summary_without_enabling_effort() {
     let mut request = ModelRequest::text("hello");
     request.verbosity = Some(ash_protocol::ModelVerbosity::High);

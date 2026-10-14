@@ -729,6 +729,8 @@ fn absent_reasoning_stays_hidden_until_a_public_summary_arrives() {
             turn_id: turn.clone(),
             text: text.into(),
             state: vec![ash_protocol::ReasoningState {
+                token_estimate: None,
+                context: None,
                 scope: "provider".into(),
                 item: serde_json::json!({"opaque":"state"}),
             }],

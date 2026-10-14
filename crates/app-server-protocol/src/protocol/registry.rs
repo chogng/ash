@@ -2483,6 +2483,8 @@ use ash_protocol::RatedModelCost;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ReasoningEffort;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::ReasoningReplayContext;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::ReasoningState;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::RepositoryCheckpoint;
@@ -6125,6 +6127,7 @@ typescript_bindings! {
     ReasoningEffort,
     ModelReasoningEffortOption,
     ReasoningState,
+    ReasoningReplayContext,
     Personality,
     ModelCatalogEntry,
     ModelListParams,

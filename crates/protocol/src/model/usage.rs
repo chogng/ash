@@ -23,6 +23,8 @@ pub struct ModelUsage {
     #[serde(default)]
     #[ts(type = "number | null")]
     pub cache_write_input_tokens: Option<u64>,
+    /// Provider-reported reasoning output, a breakdown of output usage rather than a second
+    /// allowance to add to input or output totals. Replayed reasoning belongs in input usage.
     #[serde(default)]
     #[ts(type = "number | null")]
     pub reasoning_tokens: Option<u64>,

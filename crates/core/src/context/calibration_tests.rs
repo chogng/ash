@@ -131,3 +131,21 @@ fn usage(input_tokens: u64) -> ModelUsage {
         reasoning_tokens: None,
     }
 }
+
+#[test]
+fn full_request_usage_does_not_acquire_a_second_reasoning_allowance() {
+    let mut reported = usage(750);
+    reported.reasoning_tokens = Some(700);
+    reported.output_tokens = Some(720);
+    // The local request estimate already includes replayed reasoning. Provider input and
+    // cached input are full-request values; output reasoning is not an additional input term.
+    reported.cached_input_tokens = Some(750);
+    let calibrations = next_context_calibrations(
+        &[],
+        &model_ref("model"),
+        &estimate("reasoning-v3", 750),
+        Some(&reported),
+    )
+    .unwrap();
+    assert_eq!(calibrations[0].correction_ratio_ppm(), 1_000_000);
+}

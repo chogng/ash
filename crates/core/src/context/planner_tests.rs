@@ -30,6 +30,195 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
 #[test]
+fn reasoning_replay_uses_one_budget_for_planning_and_inspection() {
+    let previous = id::<TurnId>("previous");
+    let current = id::<TurnId>("current");
+    let mut totals = Vec::new();
+    for mode in [
+        Some(ash_protocol::ReasoningReplayContext::CurrentTurn),
+        Some(ash_protocol::ReasoningReplayContext::AllTurns),
+        None,
+    ] {
+        let state = |tokens| ash_protocol::ReasoningState {
+            scope: "scope".into(),
+            item: serde_json::json!({"type":"reasoning", "encrypted_content":"opaque"}),
+            token_estimate: Some(tokens),
+            context: mode,
+        };
+        let snapshot = snapshot(
+            current.clone(),
+            vec![
+                user_item("previous-user", previous.clone(), "earlier"),
+                ThreadItem::Reasoning {
+                    item_id: id("previous-reasoning"),
+                    turn_id: previous.clone(),
+                    text: "summary".into(),
+                    state: vec![state(700)],
+                },
+                agent_item("previous-answer", previous.clone(), "answer"),
+                user_item("current-user", current.clone(), "now"),
+                ThreadItem::Reasoning {
+                    item_id: id("current-reasoning"),
+                    turn_id: current.clone(),
+                    text: String::new(),
+                    state: vec![state(40)],
+                },
+            ],
+        );
+        let input = ContextInput::new(
+            &snapshot,
+            current.clone(),
+            Vec::new(),
+            Vec::new(),
+            budget(1_000),
+        );
+        let ContextPreparation::Ready(plan) = ContextPlanner::prepare(&input).unwrap() else {
+            panic!("input should fit")
+        };
+        let categories = ContextPlanner::inspect_categories(&[], &[], "", Some(&input));
+        let inspected = categories
+            .iter()
+            .map(|category| category.tokens)
+            .sum::<u64>();
+        assert_eq!(inspected, u64::from(plan.budget().total_input().get()));
+        let retained = plan
+            .selected_items()
+            .iter()
+            .filter_map(|item| match item {
+                ThreadItem::Reasoning { state, .. } => Some(state.len()),
+                _ => None,
+            })
+            .sum::<usize>();
+        assert_eq!(
+            retained,
+            if mode == Some(ash_protocol::ReasoningReplayContext::CurrentTurn) {
+                1
+            } else {
+                2
+            }
+        );
+        totals.push(inspected);
+
+        // Leave enough hard capacity for the independent compaction request while lowering
+        // the ordinary pressure boundary. This exercises actual compaction, not exhaustion.
+        let pressured = input.with_budget(ContextBudget::core_managed(
+            ContextTokenCount::new(5_000),
+            ContextTokenCount::new(20),
+            ContextTokenCount::new(10),
+            ContextCompactionLimit::Tokens(ContextTokenCount::new(500)),
+        ));
+        let result = ContextPlanner::prepare(&pressured).unwrap();
+        assert_eq!(
+            matches!(result, ContextPreparation::Ready(_)),
+            mode == Some(ash_protocol::ReasoningReplayContext::CurrentTurn)
+        );
+    }
+    assert_eq!(totals[1] - totals[0], 700);
+    assert_eq!(totals[2], totals[1]);
+}
+
+#[test]
+fn legacy_reasoning_is_estimated_and_summary_only_reasoning_is_not_replayed() {
+    let legacy: ash_protocol::ReasoningState = serde_json::from_value(serde_json::json!({
+        "scope":"scope", "item":{"type":"reasoning", "encrypted_content":"opaque"}
+    }))
+    .unwrap();
+    assert_eq!(legacy.token_estimate, None);
+    assert_eq!(legacy.context, None);
+    let item = ThreadItem::Reasoning {
+        item_id: id("reasoning"),
+        turn_id: id("turn"),
+        text: "visible summary".into(),
+        state: vec![legacy],
+    };
+    assert!(super::estimate_item(&item) > ContextTokenCount::ZERO);
+    let ThreadItem::Reasoning { mut state, .. } = item.clone() else {
+        unreachable!()
+    };
+    state[0].token_estimate = Some(u64::MAX);
+    assert_eq!(
+        super::estimate_item(&ThreadItem::Reasoning {
+            item_id: id("huge"),
+            turn_id: id("turn"),
+            text: String::new(),
+            state
+        }),
+        ContextTokenCount::new(u32::MAX)
+    );
+    assert_eq!(
+        super::estimate_item(&ThreadItem::Reasoning {
+            item_id: id("summary"),
+            turn_id: id("turn"),
+            text: "visible summary".into(),
+            state: Vec::new()
+        }),
+        ContextTokenCount::ZERO
+    );
+}
+
+#[test]
+fn replay_filters_known_model_changes_but_preserves_unknown_provenance() {
+    let previous = id::<TurnId>("previous");
+    let current = id::<TurnId>("current");
+    let selected = ash_protocol::ModelRef::new(
+        ash_protocol::ProviderId::new("provider").unwrap(),
+        ash_protocol::ModelId::new("selected").unwrap(),
+    );
+    for origin in [
+        None,
+        Some(selected.clone()),
+        Some(ash_protocol::ModelRef::new(
+            selected.provider.clone(),
+            ash_protocol::ModelId::new("other").unwrap(),
+        )),
+    ] {
+        let mut snapshot = snapshot(
+            current.clone(),
+            vec![
+                user_item("previous-user", previous.clone(), "earlier"),
+                ThreadItem::Reasoning {
+                    item_id: id("previous-reasoning"),
+                    turn_id: previous.clone(),
+                    text: String::new(),
+                    state: vec![ash_protocol::ReasoningState {
+                        scope: "scope".into(),
+                        item: serde_json::json!({"type":"reasoning","encrypted_content":"opaque"}),
+                        token_estimate: Some(20),
+                        context: Some(ash_protocol::ReasoningReplayContext::AllTurns),
+                    }],
+                },
+                user_item("current-user", current.clone(), "now"),
+            ],
+        );
+        snapshot.turns[0].model = origin.clone();
+        snapshot.turns[1].model = Some(selected.clone());
+        let input = ContextInput::new(
+            &snapshot,
+            current.clone(),
+            Vec::new(),
+            Vec::new(),
+            budget(1_000),
+        );
+        let retained = input
+            .items()
+            .iter()
+            .find_map(|item| match item {
+                ThreadItem::Reasoning { state, .. } => Some(state.len()),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(
+            retained,
+            usize::from(origin.as_ref().is_none_or(|model| model == &selected))
+        );
+        // Budget preparation never rewrites the durable audit history.
+        assert!(
+            matches!(&snapshot.items[1], ThreadItem::Reasoning { state, .. } if state.len() == 1)
+        );
+    }
+}
+
+#[test]
 fn same_input_produces_an_equivalent_ordered_plan() {
     let previous_turn = id::<TurnId>("previous");
     let current_turn = id::<TurnId>("current");

@@ -22,7 +22,7 @@ use ash_protocol::TurnId;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-pub(crate) const CONTEXT_ESTIMATOR_REVISION: &str = "deterministic-bytes-v2";
+pub(crate) const CONTEXT_ESTIMATOR_REVISION: &str = "deterministic-bytes-reasoning-v3";
 const TEXT_ITEM_OVERHEAD: u32 = 6;
 const TOOL_ITEM_OVERHEAD: u32 = 12;
 const IMAGE_TOKEN_ESTIMATE: u32 = 1_024;
@@ -1156,7 +1156,19 @@ fn estimate_item(item: &ThreadItem) -> ContextTokenCount {
             || estimate_bytes(text.len(), TOOL_ITEM_OVERHEAD),
             |content| estimate_content(content),
         ),
-        ThreadItem::Reasoning { .. } | ThreadItem::Plan { .. } => ContextTokenCount::ZERO,
+        ThreadItem::Reasoning { state, .. } => {
+            state.iter().fold(ContextTokenCount::ZERO, |total, state| {
+                // Generated reasoning usage is a replay estimate, not a second adjustment to
+                // provider input usage. Legacy/unknown opaque items use the ordinary byte
+                // heuristic; a summary alone is not the replayable reasoning payload.
+                let estimate = state.token_estimate.map_or_else(
+                    || estimate_bytes(state.item.to_string().len(), TEXT_ITEM_OVERHEAD),
+                    |tokens| ContextTokenCount::new(u32::try_from(tokens).unwrap_or(u32::MAX)),
+                );
+                total.saturating_add(estimate)
+            })
+        }
+        ThreadItem::Plan { .. } => ContextTokenCount::ZERO,
     }
 }
 

@@ -38,6 +38,24 @@ pub struct ReasoningState {
     pub scope: String,
     #[ts(type = "unknown")]
     pub item: Value,
+    /// Generation usage attributed to this replay item, not an exact input-token measurement.
+    /// This estimate is used only when counting an assembled request locally; it must never be
+    /// added to provider-reported input usage or a full-request preflight count.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable, type = "number | null")]
+    pub token_estimate: Option<u64>,
+    /// Effective replay mode reported by the producing response. Missing means unknown, including
+    /// older persisted items and compatible endpoints that do not report this contract.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub context: Option<ReasoningReplayContext>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum ReasoningReplayContext {
+    CurrentTurn,
+    AllTurns,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]

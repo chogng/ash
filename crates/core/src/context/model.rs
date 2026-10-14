@@ -205,11 +205,11 @@ impl ContextInput {
         Self {
             policy: snapshot.context_policy(&current_turn_id),
             source_thread_sequence: snapshot.sequence,
-            current_turn_id,
+            current_turn_id: current_turn_id.clone(),
             instructions,
             environment: String::new(),
             evidence: Vec::new(),
-            items: model_items(&snapshot.items),
+            items: model_items(snapshot, &current_turn_id),
             checkpoints: snapshot.context_checkpoints.clone(),
             terminal_turns: snapshot
                 .turns
@@ -365,7 +365,35 @@ impl ContextInput {
 
 // Nested calls are audit facts. Only their owning exec/wait output belongs in model
 // context, including token measurement and compaction input.
-fn model_items(items: &[ThreadItem]) -> Vec<ThreadItem> {
+fn model_items(snapshot: &ThreadSnapshot, current_turn_id: &TurnId) -> Vec<ThreadItem> {
+    let items = &snapshot.items;
+    let model = snapshot
+        .turns
+        .iter()
+        .find(|turn| &turn.turn_id == current_turn_id)
+        .and_then(|turn| turn.model.as_ref());
+    let compatible_turn = |turn_id: &TurnId| {
+        model.is_none_or(|model| {
+            snapshot
+                .turns
+                .iter()
+                .find(|turn| &turn.turn_id == turn_id)
+                .and_then(|turn| turn.model.as_ref())
+                .is_none_or(|origin| origin == model)
+        })
+    };
+    // Read the effective mode from the latest compatible response, not from a model-name
+    // heuristic. A missing mode stays unknown and is conservatively estimated on replay.
+    let replay_context = items
+        .iter()
+        .rev()
+        .find_map(|item| match item {
+            ThreadItem::Reasoning { turn_id, state, .. } if compatible_turn(turn_id) => {
+                state.last().map(|state| state.context)
+            }
+            _ => None,
+        })
+        .flatten();
     let nested = items
         .iter()
         .filter_map(|item| match item {
@@ -391,5 +419,17 @@ fn model_items(items: &[ThreadItem]) -> Vec<ThreadItem> {
             _ => true,
         })
         .cloned()
+        .map(|mut item| {
+            if let ThreadItem::Reasoning { turn_id, state, .. } = &mut item
+                && (!compatible_turn(turn_id)
+                    || (replay_context == Some(ash_protocol::ReasoningReplayContext::CurrentTurn)
+                        && turn_id != current_turn_id))
+            {
+                // Exclude items that do not render into this sample from both assembly and
+                // budgeting. Provider credential scope remains enforced at its boundary.
+                state.clear();
+            }
+            item
+        })
         .collect()
 }

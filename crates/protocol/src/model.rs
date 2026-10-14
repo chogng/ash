@@ -59,6 +59,7 @@ pub use message::InputItem;
 pub use message::Message;
 pub use message::MessagePhase;
 pub use message::MessageRole;
+pub use message::ReasoningReplayContext;
 pub use message::ReasoningState;
 pub use message::ToolCall;
 pub use message::ToolChoice;

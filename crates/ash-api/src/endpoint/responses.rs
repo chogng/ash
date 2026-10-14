@@ -562,6 +562,21 @@ pub(crate) fn parse_response(response: Value) -> Result<ModelResponse, ApiError>
                     output.push(OutputItem::ReasoningState(ash_protocol::ReasoningState {
                         scope: String::new(),
                         item: item.clone(),
+                        token_estimate: None,
+                        context: match response
+                            .pointer("/reasoning/context")
+                            .and_then(Value::as_str)
+                        {
+                            Some("current_turn") => {
+                                Some(ash_protocol::ReasoningReplayContext::CurrentTurn)
+                            }
+                            Some("all_turns") => {
+                                Some(ash_protocol::ReasoningReplayContext::AllTurns)
+                            }
+                            // Compatibility endpoints and older responses do not necessarily expose
+                            // an effective mode. Do not infer it from a model name.
+                            _ => None,
+                        },
                     }));
                 }
                 let text = item
@@ -576,6 +591,29 @@ pub(crate) fn parse_response(response: Value) -> Result<ModelResponse, ApiError>
                 }
             }
             _ => {}
+        }
+    }
+    // Usage covers the response as a whole, not each encrypted item. Partition it once so
+    // multiple reasoning items cannot each acquire the entire generated reasoning count.
+    // Per-item replay sizes remain estimates; their sum preserves the reported total.
+    if let Some(tokens) = response
+        .pointer("/usage/output_tokens_details/reasoning_tokens")
+        .and_then(Value::as_u64)
+    {
+        let count = output
+            .iter()
+            .filter(|item| matches!(item, OutputItem::ReasoningState(_)))
+            .count();
+        if count > 0 {
+            let per_item = tokens / count as u64;
+            let mut remainder = tokens % count as u64;
+            for item in &mut output {
+                if let OutputItem::ReasoningState(state) = item {
+                    let extra = u64::from(remainder > 0);
+                    state.token_estimate = Some(per_item + extra);
+                    remainder = remainder.saturating_sub(extra);
+                }
+            }
         }
     }
     if output.is_empty() {

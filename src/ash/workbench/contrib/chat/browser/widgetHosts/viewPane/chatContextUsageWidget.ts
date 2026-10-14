@@ -9,7 +9,7 @@ import { localize } from '../../../../../../nls.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IContextViewService } from '../../../../../../platform/contextview/browser/contextView.js';
-import type { ChatContextUsage } from '../../../../../services/chat/common/chatService.js';
+import { getContextInputBudget, type ChatContextUsage } from '../../../../../services/chat/common/chatService.js';
 import { ChatContextUsageDetails } from './chatContextUsageDetails.js';
 
 /** Owns the context meter and its anchored details, using the input's current usage snapshot. */
@@ -54,7 +54,7 @@ export class ChatContextUsageWidget extends Disposable {
 					const detailsText = details.innerText;
 					return new AccessibleContentProvider(AccessibleViewProviderId.SessionsChat, { type }, () => type === AccessibleViewType.View
 						? detailsText
-						: localize('chat.input.contextDetailsHelp', 'Context usage details show the estimated token count and a breakdown by category. Percentages use the model context capacity. The unsent draft is excluded. Unknown capacity shows token counts without percentages. Press Escape or activate Close to return to the context ring. Tab leaves the details.'),
+						: localize('chat.input.contextDetailsHelp', 'Context usage details show the estimated token count and a breakdown by category. Percentages use the input budget for automatic compaction; model context capacity is shown separately. The unsent draft is excluded. Unknown capacity shows token counts without percentages. Press Escape or activate Close to return to the context ring. Tab leaves the details.'),
 						() => details.isConnected ? details.focus() : this.button.focus(), AccessibilityVerbositySettingId.Chat);
 				},
 			}));
@@ -65,7 +65,7 @@ export class ChatContextUsageWidget extends Disposable {
 	update(usage: ChatContextUsage | undefined): void {
 		if (this.isDisposed) return;
 		this.usage = usage;
-		const capacity = usage?.contextWindow;
+		const capacity = usage && getContextInputBudget(usage);
 		const percentage = usage && capacity !== undefined && capacity > 0 ? usage.estimatedTokens / capacity * 100 : undefined;
 		const filled = percentage !== undefined ? Math.min(100, Math.max(0, percentage)) : 0;
 		this.value.classList.toggle('empty', filled === 0);
@@ -129,16 +129,18 @@ export class ChatContextUsageWidget extends Disposable {
 	private get label(): string {
 		const usage = this.usage;
 		if (!usage) return localize('chat.input.contextUsage', 'Context usage');
-		return usage.contextWindow && usage.contextWindow > 0
-			? localize('chat.input.contextRingLabel', 'Context usage: {0}%, {1} of {2} tokens', Math.round(usage.estimatedTokens / usage.contextWindow * 100), usage.estimatedTokens.toLocaleString(), usage.contextWindow.toLocaleString())
+		const budget = getContextInputBudget(usage);
+		return budget !== undefined
+			? localize('chat.input.contextRingLabel', 'Context budget: {0}%, estimated input {1} of {2} tokens', Math.round(usage.estimatedTokens / budget * 100), usage.estimatedTokens.toLocaleString(), budget.toLocaleString())
 			: localize('chat.input.contextRingUnknownLabel', 'Context usage: {0} tokens, capacity unavailable', usage.estimatedTokens.toLocaleString());
 	}
 
 	private get tooltip(): string {
 		const usage = this.usage;
 		if (!usage) return this.label;
-		return usage.contextWindow && usage.contextWindow > 0
-			? localize('chat.input.contextRingHover', 'Context usage: {0}%\nEstimated tokens: {1} / {2}', Math.round(usage.estimatedTokens / usage.contextWindow * 100), usage.estimatedTokens.toLocaleString(), usage.contextWindow.toLocaleString())
+		const budget = getContextInputBudget(usage);
+		return budget !== undefined
+			? localize('chat.input.contextRingHover', 'Context budget: {0}%\nEstimated input tokens: {1} / {2}', Math.round(usage.estimatedTokens / budget * 100), usage.estimatedTokens.toLocaleString(), budget.toLocaleString())
 			: localize('chat.input.contextRingUnknownHover', 'Estimated context: {0} tokens\nContext capacity unavailable.', usage.estimatedTokens.toLocaleString());
 	}
 }
