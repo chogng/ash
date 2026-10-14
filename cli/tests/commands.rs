@@ -15,6 +15,9 @@ use std::time::Duration;
 use std::time::Instant;
 use tempfile::TempDir;
 
+#[path = "support/account_server.rs"]
+mod account_server;
+
 struct Harness {
     root: TempDir,
     profile: PathBuf,
@@ -43,13 +46,33 @@ impl Harness {
     }
 
     fn start_server(&mut self) {
+        let mut command = Command::new(&self.backend);
+        command.arg("--managed");
+        self.start_server_command(command);
+    }
+
+    fn start_account_server(&mut self, keyring: account_server::KeyringMode) {
+        // The subprocess uses the production application composition and managed endpoint,
+        // with an explicitly injected fixture keyring instead of the host's credential facility.
+        let mut command = Command::new(std::env::current_exe().unwrap());
+        command
+            .args([
+                "--exact",
+                "account_server_fixture",
+                "--ignored",
+                "--nocapture",
+            ])
+            .env("ASH_CLI_ACCOUNT_FIXTURE_KEYRING", keyring.argument());
+        self.start_server_command(command);
+    }
+
+    fn start_server_command(&mut self, mut command: Command) {
         // The fixture owns the daemon lifetime, including under Cargo's Windows job.
         let log_path = self.root.path().join("server.log");
         let log = std::fs::File::create(&log_path).unwrap();
         let error_log = log.try_clone().unwrap();
         self.server = Some(
-            Command::new(&self.backend)
-                .arg("--managed")
+            command
                 .current_dir(self.root.path())
                 // Account discovery also reads the host home; removing HOME selects the OS
                 // user's real home on Unix rather than isolating it from this fixture.
@@ -116,8 +139,9 @@ impl Harness {
         let output = self.output(arguments);
         assert!(
             output.status.success(),
-            "{arguments:?}: {}",
-            String::from_utf8_lossy(&output.stderr)
+            "{arguments:?}: {}\n{}",
+            String::from_utf8_lossy(&output.stderr),
+            String::from_utf8_lossy(&output.stdout)
         );
         serde_json::from_slice(&output.stdout).unwrap()
     }
@@ -155,7 +179,11 @@ impl Drop for Harness {
             if !output.status.success() {
                 let _ = server.kill();
             }
-            let _ = server.wait();
+            let status = server.wait().unwrap();
+            assert!(
+                status.success() || std::thread::panicking(),
+                "test daemon exited unsuccessfully: {status}"
+            );
             assert!(
                 output.status.success() || std::thread::panicking(),
                 "could not stop test daemon: {}",
@@ -672,7 +700,7 @@ fn plugin_commands_preserve_version_and_permission_boundaries() {
 #[test]
 fn account_status_and_doctor_read_the_shared_server() {
     let mut harness = Harness::new();
-    harness.start_server();
+    harness.start_account_server(account_server::KeyringMode::Available);
     assert_eq!(
         harness.json(&["login", "status"])["accounts"],
         serde_json::json!([])
@@ -700,7 +728,7 @@ fn api_key_input_is_stored_without_appearing_in_command_output() {
     let empty = harness.output(&["login", "api-key", "openai"]);
     assert_eq!(empty.status.code(), Some(2));
     assert!(!harness.profile.exists());
-    harness.start_server();
+    harness.start_account_server(account_server::KeyringMode::Available);
     let mut child = harness
         .command(&["login", "api-key", "openai"])
         .stdin(Stdio::piped())
@@ -720,6 +748,29 @@ fn api_key_input_is_stored_without_appearing_in_command_output() {
     assert!(!String::from_utf8_lossy(&output.stderr).contains(key));
     let result: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(result["apiKeyConfigured"], true);
+    let values = harness.profile.join("secrets/encrypted/values");
+    let encrypted: Vec<_> = std::fs::read_dir(values).unwrap().collect();
+    assert!(!encrypted.is_empty(), "the key must be persisted on disk");
+    for entry in encrypted {
+        let bytes = std::fs::read(entry.unwrap().path()).unwrap();
+        assert!(bytes.starts_with(b"ASHSEC\0\x01"));
+        assert!(
+            !bytes
+                .windows(key.len())
+                .any(|bytes| bytes == key.as_bytes())
+        );
+    }
+    assert_eq!(
+        std::fs::read_dir(harness.profile.join("secrets/values"))
+            .unwrap()
+            .count(),
+        0
+    );
+    assert!(
+        !std::fs::read_to_string(harness.root.path().join("server.log"))
+            .unwrap()
+            .contains(key)
+    );
     let session = harness.session();
     let providers = session.client().list_providers().unwrap();
     assert!(
@@ -754,4 +805,61 @@ fn doctor_reports_missing_backend_and_fails() {
             .iter()
             .any(|check| check["name"] == "app-server executable" && check["status"] == "failed")
     );
+}
+
+#[test]
+fn unavailable_keyring_reports_account_and_api_key_failures_without_plaintext_fallback() {
+    for (keyring, expected_error) in [
+        (
+            account_server::KeyringMode::Unavailable,
+            "SecretStorageUnavailable",
+        ),
+        (
+            account_server::KeyringMode::Failed,
+            "SecretStorageOperationFailed",
+        ),
+    ] {
+        let mut harness = Harness::new();
+        harness.start_account_server(keyring);
+        let status = harness.output(&["login", "status"]);
+        assert_eq!(status.status.code(), Some(1));
+        assert!(String::from_utf8_lossy(&status.stderr).contains("AccountUnavailable"));
+        let key = "unavailable-keyring-not-a-real-key";
+        let mut child = harness
+            .command(&["login", "api-key", "openai"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        writeln!(child.stdin.take().unwrap(), "{key}").unwrap();
+        let output = child.wait_with_output().unwrap();
+        assert_eq!(output.status.code(), Some(1));
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains(expected_error),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(!String::from_utf8_lossy(&output.stdout).contains(key));
+        assert!(!String::from_utf8_lossy(&output.stderr).contains(key));
+        for path in ["secrets/values", "secrets/encrypted/values"] {
+            assert_eq!(
+                std::fs::read_dir(harness.profile.join(path))
+                    .unwrap()
+                    .count(),
+                0
+            );
+        }
+        assert!(
+            !std::fs::read_to_string(harness.root.path().join("server.log"))
+                .unwrap()
+                .contains(key)
+        );
+    }
+}
+
+#[test]
+#[ignore = "subprocess fixture launched by account command tests"]
+fn account_server_fixture() {
+    account_server::run();
 }
