@@ -102,7 +102,7 @@ Workspace App Server 路径为：
   - `src/ash/workbench/contrib/mediaPreview/test/browser/imagePreview.test.ts`
   - `src/ash/workbench/contrib/mediaPreview/test/browser/mediaPreview.test.ts`
 - 只依赖既有契约：`IFileService`、`EditorPane`、Accessible View、`ImageResource`。
-- `src/ash/platform/media/browser/image.ts` 的 `ImageResource/inspectImage` 供 Workbench、Design/Creator、Library 共用。首轮尽量不改；若格式解码契约需要变化，先评估其他消费者和 ownership，另开协作依赖。
+- `src/ash/base/browser/image.ts` 的 `ImageResource/inspectImage` 供 Workbench、Design/Creator、Library 共用。首轮尽量不改；若格式解码契约需要变化，先评估其他消费者和 ownership，另开协作依赖。
 - 不编辑 `AppServerFileSystemProvider` / App Server 协议与后端、Workbench Editor tab 保存 owner，或已在改动中的 Search/Preferences/Trace/SCM/Output/Notifications/AgentHost。若测试只需依赖实际接口，不因此修改这些 owner。
 - 不把 Image Preview 的状态或 DOM 放进 `base`；不要复制 VS Code extension 的 Webview、遥测、外部路径或 status bar 实现。
 

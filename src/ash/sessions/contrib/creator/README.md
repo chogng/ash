@@ -96,7 +96,7 @@ Design 与 Editor 共用 Base、Platform 提供的生命周期、控件、配置
 
 Design 通过 `sessions.common.main.ts` 加载，当前使用方是 Sessions。Design 消费 Workbench 的工作副本与窗口生命周期契约；其基础层和共享服务保持既有依赖方向，不能导入本目录。
 
-普通图片查看的类型识别、显示解码和尺寸读取由 [Platform 图片模块](../../../platform/media/browser/image.ts) 提供；`ImageResource` 创建并释放视图所用的对象 URL。[Workbench 图片预览](../../../workbench/contrib/mediaPreview/browser/imagePreview.ts) 和 Design 共用这套能力。普通文件查看负责适应窗口、原尺寸和缩放。Design 导入通过 [素材服务](../../../platform/assets/common/assetService.ts) 使用 Rust 入库结果，前端不生成正式素材元数据；Design 保留素材版本引用、裁切和文档历史。两种视图分别拥有预览资源，关闭一处不影响另一处；URL 不保存进文件，也不作为素材身份。Library 消费同一模块，预览资源随其页面可见性释放，不需要导入 Design。
+普通图片查看的类型识别、显示解码和尺寸读取由 [Base 浏览器图片工具](../../../base/browser/image.ts) 提供；`ImageResource` 创建并释放视图所用的对象 URL。[Workbench 图片预览](../../../workbench/contrib/mediaPreview/browser/imagePreview.ts) 和 Design 共用这套能力。普通文件查看负责适应窗口、原尺寸和缩放。Design 导入通过 [素材服务](../../../platform/assets/common/assetService.ts) 使用 Rust 入库结果，前端不生成正式素材元数据；Design 保留素材版本引用、裁切和文档历史。两种视图分别拥有预览资源，关闭一处不影响另一处；URL 不保存进文件，也不作为素材身份。Library 消费同一模块，预览资源随其页面可见性释放，不需要导入 Design。
 
 Library 面向整个产品收集、查找和整理素材，Design 文档保存采用的确切素材版本及使用方式。设计模型不属于聊天记录，Library 的素材目录也不属于某个 Design Widget。Library 已提供图片目录、导入、搜索、收藏与集合；[Rust 素材领域](../../../../../crates/assets/src/lib.rs) 已提供原件入库、不可变版本与分块读取，Design 从文件导入时使用该领域，原始字节随设计包保存。Library 的“用于 Design”由窗口装配打开设计页并调用编辑器的素材采用入口；Design 通过共享素材服务读取确切版本，将原件纳入工作副本。同一素材版本可产生多个独立图片对象，文档只保存一份素材版本条目。Design 不持有另一份全局目录，Library 不导入 Design 的编辑模型。规划见 [DESIGN.md](DESIGN.md#library-与编辑器的归属)。
 

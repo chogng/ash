@@ -1,6 +1,6 @@
 import { encodeHex, VSBuffer } from '../../../../base/common/buffer.js';
 import { Disposable, DisposableMap } from '../../../../base/common/lifecycle.js';
-import { ImageResource } from '../../../../platform/media/browser/image.js';
+import { ImageResource } from '../../../../base/browser/image.js';
 import type { DesignAssetVersion, DesignDocument } from '../common/model/document.js';
 import { flattenDesignShapes } from '../common/model/document.js';
 

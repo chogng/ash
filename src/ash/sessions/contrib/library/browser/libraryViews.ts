@@ -10,7 +10,7 @@ import { IAssetService } from '../../../../platform/assets/common/assetService.j
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IHoverService } from '../../../../platform/hover/browser/hoverService.js';
-import { ImageResource } from '../../../../platform/media/browser/image.js';
+import { ImageResource } from '../../../../base/browser/image.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { ViewPane, type IViewPaneOptions } from '../../../../workbench/browser/parts/views/viewPane.js';
 import { ILibraryService, type LibraryState } from './libraryService.js';

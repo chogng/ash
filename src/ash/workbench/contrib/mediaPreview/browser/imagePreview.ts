@@ -14,7 +14,7 @@ import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.j
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
-import { ImageResource, inspectImage, type ImageMetadata } from '../../../../platform/media/browser/image.js';
+import { ImageResource, inspectImage, type ImageMetadata } from '../../../../base/browser/image.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 
 export const IMAGE_PREVIEW_ID = 'ash.imagePreview';

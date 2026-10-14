@@ -13,7 +13,7 @@ import { ContextKeyService, IContextKeyService } from '../../../../../platform/c
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import { IFileService, FileKind, type IFileChangeEvent, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { inspectImage } from '../../../../../platform/media/browser/image.js';
+import { inspectImage } from '../../../../../base/browser/image.js';
 import { getBuiltinEditorPaneFactory } from '../../../../browser/editor.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { IMAGE_PREVIEW_ID, ImagePreview } from '../../browser/imagePreview.js';

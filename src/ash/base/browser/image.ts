@@ -1,5 +1,5 @@
-import { AbstractDisposable } from '../../../base/common/lifecycle.js';
-import { localize } from '../../../nls.js';
+import { AbstractDisposable } from '../common/lifecycle.js';
+import { localize } from '../../nls.js';
 
 export interface ImageMetadata {
 	readonly mediaType: 'image/png' | 'image/jpeg' | 'image/webp';
@@ -7,7 +7,7 @@ export interface ImageMetadata {
 	readonly height: number;
 }
 
-/** Decode bytes at the import boundary; filenames and declared dimensions are not evidence. */
+/** Decode bytes when loading a preview; these dimensions describe browser rendering, not persisted asset metadata. */
 export async function inspectImage(bytes: Uint8Array): Promise<ImageMetadata> {
 	let mediaType: ImageMetadata['mediaType'];
 	if ([137, 80, 78, 71, 13, 10, 26, 10].every((value, index) => bytes[index] === value)) {

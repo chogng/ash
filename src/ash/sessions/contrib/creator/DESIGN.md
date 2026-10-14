@@ -149,7 +149,7 @@ Library 是收集和复用素材的地方，Design 是将素材组织成作品�
 
 VS Code 的图片、音频和视频查看来自内置 `media-preview` 扩展，通过只读自定义编辑器与 Webview 承载。它提供查看与播放行为，不提供 Design 文档、Library 素材目录或视频剪辑模型。Ash 复用已有文件服务、编辑器宿主和生命周期设施，参考上游公开行为独立实现；不为图片查看引入整套扩展编辑器运行机制。
 
-当前 [共享图片模块](../../../platform/media/browser/image.ts) 为普通文件查看识别 PNG、JPEG、WebP，交给浏览器解码并取得显示尺寸；解码结果及时释放。这些结果用于当前视图，正式素材元数据由 Rust 入库产生。`ImageResource` 提供由消费视图持有的预览 URL，关闭或替换时释放，不持有 Library 目录、设计模型或撤销历史。
+当前 [Base 浏览器图片工具](../../../base/browser/image.ts) 为普通文件查看识别 PNG、JPEG、WebP，交给浏览器解码并取得显示尺寸；解码结果及时释放。这些结果用于当前视图，正式素材元数据由 Rust 入库产生。`ImageResource` 提供由消费视图持有的预览 URL，关闭或替换时释放，不持有 Library 目录、设计模型或撤销历史。
 
 [Workbench 图片预览](../../../workbench/contrib/mediaPreview/browser/imagePreview.ts) 负责普通文件打开、适应窗口、原尺寸、缩放、键盘操作和文本元数据视图；它收到文件服务的变化通知后重新加载。Design 的画布资源使用共享 `ImageResource`；导入通过 [素材服务](../../../platform/assets/common/assetService.ts) 上传原件，采用 Rust 返回的确切版本、类型、显示尺寸和内容摘要，保留自身的裁切和编辑规则。每个视图分别拥有短期预览资源，共用原始文件与既有文件访问契约，不建立第二份全局素材库。
 
