@@ -1,3 +1,4 @@
+import { AppServerAgentVoiceService } from '../../browser/appServerAgentService.js';
 import { createAppServerAgentThreadService } from '../../browser/appServerAgentService.js';
 import type { ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope } from '../../common/agentService.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -1241,4 +1242,68 @@ test('Agent Thread domain events cross the real decoder and release listeners ac
 	transport.emitNotification(transcript);
 	assert.equal(updates.length, 2);
 	assert.equal(receiver.transcripts.length, 1);
+});
+
+
+test('Voice adapter binds task requests to the original decoded media source and ignores stale epochs', async () => {
+	const transport = new FakeTransport(value => ({ ...value, capabilities: { ...value.capabilities, contracts: { ...value.capabilities.contracts, voiceConversation: { version: 1 } } } }));
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = new DisposableStore(); cleanup.add(toDisposable(() => client.dispose())); await client.connect();
+	const voice = cleanup.add(new AppServerAgentVoiceService(client));
+	const tasks: string[] = []; cleanup.add(voice.onDidRequestTask(task => tasks.push(task.commandId)));
+	const pending = voice.start({ sessionId: 'source', threadId: 'thread' }, { connectionId: 'openai', modelId: 'speech', voice: 'alloy' });
+	const params = transport.requests.at(-1)!.params as { resourceId: string; operationId: string; };
+	const status = { resourceId: params.resourceId, sessionId: 'source', threadId: 'thread', mediaEpoch: 1, sequence: 2, state: 'connected' as const, usageMilliseconds: 0, error: null };
+	transport.respondAt(-1, status); await pending;
+	const task = { ...status, delegationId: 'proposal', commandId: 'original-command', transcript: 'run tests' };
+	const { sequence: _sequence, state: _state, usageMilliseconds: _usage, error: _error, ...delegation } = task;
+	transport.emitNotification({ method: 'voice/delegation', params: { ...delegation, threadId: 'other' } });
+	transport.emitNotification({ method: 'voice/delegation', params: delegation });
+	assert.deepEqual(tasks, ['original-command']);
+	const interrupt = voice.interrupt();
+	assert.equal(transport.requests.at(-1)?.method, 'voice/interrupt');
+	transport.respondAt(-1, { ...status, mediaEpoch: 2, sequence: 2 }); await interrupt;
+	transport.emitNotification({ method: 'voice/changed', params: { ...status, sequence: 999, state: 'failed' } });
+	transport.emitNotification({ method: 'voice/delegation', params: delegation });
+	assert.equal(voice.state?.mediaEpoch, 2); assert.deepEqual(tasks, ['original-command']);
+	transport.close('closed'); assert.equal(voice.state, undefined); assert.equal(voice.isAvailable, false);
+	await client.connect(); assert.equal(voice.state, undefined);
+	assert.equal(transport.requests.filter(request => request.method === 'voice/start').length, 1);
+});
+
+test('Voice start cancellation retires its original operation and stops an acknowledged late resource', async () => {
+	const transport = new FakeTransport(value => ({ ...value, capabilities: { ...value.capabilities, contracts: { ...value.capabilities.contracts, voiceConversation: { version: 1 } } } }));
+	const client = new AppServerProtocolClient(transport); using cleanup = new DisposableStore(); cleanup.add(toDisposable(() => client.dispose())); await client.connect();
+	const voice = cleanup.add(new AppServerAgentVoiceService(client)); const controller = new AbortController();
+	const pending = voice.start({ sessionId: 'source', threadId: 'thread' }, { connectionId: 'openai' }, controller.signal);
+	const rejected = assert.rejects(pending, isCancellationError);
+	const requestIndex = transport.requests.length - 1;
+	const params = transport.requests.at(-1)!.params as { resourceId: string; operationId: string; };
+	controller.abort(); assert.deepEqual(transport.requests.at(-1)?.params, { operationId: params.operationId }); transport.respondAt(-1, null);
+	transport.respondAt(requestIndex, { resourceId: params.resourceId, sessionId: 'source', threadId: 'thread', mediaEpoch: 3, sequence: 2, state: 'connected', usageMilliseconds: 0, error: null });
+	// The pending start promise has settled before cleanup issues stop.
+	for (let i = 0; i < 8 && transport.requests.at(-1)?.method !== 'voice/stop'; i++) await Promise.resolve();
+	assert.equal(transport.requests.at(-1)?.method, 'voice/stop');
+	transport.respondAt(-1, { resourceId: params.resourceId, sessionId: 'source', threadId: 'thread', mediaEpoch: 3, sequence: 3, state: 'ended', usageMilliseconds: 0, error: null });
+	await rejected; assert.equal(voice.state?.state, 'ended');
+});
+
+test('Voice cancellation preserves cancellation semantics when the original start returns a late failure', async () => {
+	const transport = new FakeTransport(value => ({ ...value, capabilities: { ...value.capabilities, contracts: { ...value.capabilities.contracts, voiceConversation: { version: 1 } } } }));
+	const client = new AppServerProtocolClient(transport); using cleanup = new DisposableStore(); cleanup.add(toDisposable(() => client.dispose())); await client.connect();
+	const voice = cleanup.add(new AppServerAgentVoiceService(client)); const controller = new AbortController();
+	const pending = voice.start({ sessionId: 'source', threadId: 'thread' }, { connectionId: 'openai' }, controller.signal); const rejected = assert.rejects(pending, isCancellationError);
+	const startIndex = transport.requests.length - 1; controller.abort(); transport.respondAt(-1, null);
+	transport.rejectAt(startIndex, { code: -32000, message: 'InternalError', data: { kind: 'InternalError' } });
+	await rejected; assert.equal(voice.state, undefined);
+});
+
+test('Voice start cannot report connected after a newer terminal media notification', async () => {
+	const transport = new FakeTransport(value => ({ ...value, capabilities: { ...value.capabilities, contracts: { ...value.capabilities.contracts, voiceConversation: { version: 1 } } } }));
+	const client = new AppServerProtocolClient(transport); using cleanup = new DisposableStore(); cleanup.add(toDisposable(() => client.dispose())); await client.connect();
+	const voice = cleanup.add(new AppServerAgentVoiceService(client)); const pending = voice.start({ sessionId: 'source', threadId: 'thread' }, { connectionId: 'openai' }); const rejected = assert.rejects(pending, /Could not start/u);
+	const params = transport.requests.at(-1)!.params as { resourceId: string; };
+	const status = { resourceId: params.resourceId, sessionId: 'source', threadId: 'thread', mediaEpoch: 1, sequence: 3, state: 'ended' as const, usageMilliseconds: 500, error: null };
+	transport.emitNotification({ method: 'voice/changed', params: status }); transport.respondAt(-1, { ...status, sequence: 2, state: 'connected' });
+	await rejected; assert.equal(voice.state?.state, 'ended'); assert.equal(voice.state?.usageMilliseconds, 500);
 });

@@ -121,3 +121,12 @@ test('dormant manifests contain declarations without process registrations or au
 		{ activation: { events: [], commands: [...extension.activation.commands, ...extension.activation.commands] } },
 	]) { assert.throws(() => normalize(invalid)); }
 });
+
+test('Speech registration accepts only bounded immutable metadata on the original fleet boundary', () => {
+	const fleet = (registration: unknown) => ({ generation: 1, extensions: [{ id: 'example.speech', version: '1', packageDigest: DIGEST, runtimeApiVersion: 1, activationGeneration: 1, incarnation: 1, lifecycle: 'ready', failure: null, stderr: '', outputEvents: [], registrations: [registration] }] });
+	const registration = { registrationId: 'speech', kind: 'speechProvider', identifier: 'example.recognition' };
+	const normalized = normalizeExtensionHostSnapshot(fleet(registration));
+	assert.deepEqual(normalized.extensions[0]!.registrations, [registration]);
+	assert.equal(Object.isFrozen(normalized.extensions[0]!.registrations[0]), true);
+	for (const value of [{ ...registration, identifier: '' }, { ...registration, identifier: 'space inside' }, { ...registration, identifier: 'x'.repeat(257) }, { ...registration, backendToken: 'private' }]) assert.throws(() => normalizeExtensionHostSnapshot(fleet(value)));
+});

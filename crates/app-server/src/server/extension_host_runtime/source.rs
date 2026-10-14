@@ -163,6 +163,7 @@ pub(in crate::server) enum ActivationEvent {
         debug_type: Option<String>,
     },
     StartupFinished,
+    Speech,
     ResolveAuthority(String),
 }
 
@@ -222,6 +223,10 @@ impl ActivationPlan {
                 event == "onDemand:remoteAuthorityResolver"
                     || event == &format!("onResolveRemoteAuthority:{prefix}")
             }),
+            ActivationEvent::Speech => self
+                .events
+                .iter()
+                .any(|event| event == "onSpeech" || event == "onDemand:speechProvider"),
             ActivationEvent::StartupFinished => {
                 self.events.iter().any(|event| event == "onStartupFinished")
             }
@@ -442,6 +447,7 @@ fn extension_capability(capability: EditorExtensionCapability) -> ExtensionCapab
         }
         EditorExtensionCapability::TestProfileProvider => ExtensionCapability::TestProfileProvider,
         EditorExtensionCapability::DataChannel => ExtensionCapability::DataChannel,
+        EditorExtensionCapability::SpeechProvider => ExtensionCapability::SpeechProvider,
         EditorExtensionCapability::LinkPresentationProvider => {
             ExtensionCapability::LinkPresentationProvider
         }
@@ -461,6 +467,7 @@ fn capability_name(capability: EditorExtensionCapability) -> &'static str {
         EditorExtensionCapability::TerminalProfileProvider => "terminalProfileProvider",
         EditorExtensionCapability::TestProfileProvider => "testProfileProvider",
         EditorExtensionCapability::DataChannel => "dataChannel",
+        EditorExtensionCapability::SpeechProvider => "speechProvider",
         EditorExtensionCapability::LinkPresentationProvider => "linkPresentationProvider",
         EditorExtensionCapability::ExternalUriOpener => "externalUriOpener",
     }

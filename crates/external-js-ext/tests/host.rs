@@ -3574,3 +3574,141 @@ fn vscode_localization_is_available_during_rust_v8_module_evaluation() {
         })
     );
 }
+
+#[test]
+fn vscode_speech_provider_sessions_use_persistent_tokens_and_retire_with_registration() {
+    let running = start_vscode_with_files_and_capabilities(r#"
+        const v = require('vscode');
+        let registration; const sessions = new Map(); let cancelled = 0; let detached = 0;
+        function provide(kind, token, options) {
+            const emitter = new v.EventEmitter();
+            const session = {
+                onDidChange(listener) { const handle = emitter.event(listener); return { dispose() { detached++; handle.dispose(); emitter.dispose(); } }; },
+                async synthesize(text) { emitter.fire({ status: v.TextToSpeechStatus.Started, text }); emitter.fire({ status: v.TextToSpeechStatus.Stopped }); }
+            };
+            token.onCancellationRequested(() => { cancelled++; sessions.delete(kind); });
+            sessions.set(kind, { emitter, token, options });
+            return session;
+        }
+        exports.activate = context => {
+            registration = v.speech.registerSpeechProvider('example.recognition', {
+                provideSpeechToTextSession: (token, options) => provide('stt', token, options),
+                provideTextToSpeechSession: (token, options) => provide('tts', token, options),
+                provideKeywordRecognitionSession: token => provide('keyword', token)
+            });
+            context.subscriptions.push(registration);
+            context.subscriptions.push(v.commands.registerCommand('example.probe', (action, kind) => {
+                if (action === 'emit') sessions.get(kind).emitter.fire({ status: kind === 'stt' ? v.SpeechToTextStatus.Recognized : v.KeywordRecognitionStatus.Recognized, text: '你好' });
+                if (action === 'retire') registration.dispose();
+                return { cancelled, detached, sessions: [...sessions.keys()], language: sessions.get(kind)?.options?.language ?? null };
+            }));
+        };
+    "#, &[], vec![ExtensionCapability::SpeechProvider, ExtensionCapability::Command]).unwrap();
+    let registration = running
+        .supervisor
+        .snapshot()
+        .registrations
+        .into_iter()
+        .find(|value| {
+            matches!(
+                value.kind,
+                external_ext_protocol::RegistrationKind::SpeechProvider { .. }
+            )
+        })
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(&registration).unwrap(),
+        json!({"registrationId":"vscode.speech.1","kind":"speechProvider","identifier":"example.recognition"})
+    );
+    let mut request = invocation("unused", json!([]), Duration::from_secs(5));
+    request.registration_id = registration.registration_id;
+    let ids = [
+        "a1234567-1234-1234-1234-123456789abc",
+        "b1234567-1234-1234-1234-123456789abc",
+        "c1234567-1234-1234-1234-123456789abc",
+    ];
+    for (index, kind) in ["speechToText", "textToSpeech", "keywordRecognition"]
+        .into_iter()
+        .enumerate()
+    {
+        request.operation = "createSpeechSession".into();
+        request.payload = json!({"sessionId":ids[index],"kind":kind,"language":"zh-CN"});
+        running.supervisor.invoke(request.clone()).unwrap();
+    }
+    let probe = running
+        .supervisor
+        .invoke(invocation(
+            "probe",
+            json!(["emit", "stt"]),
+            Duration::from_secs(5),
+        ))
+        .unwrap()
+        .payload;
+    assert_eq!(
+        probe,
+        json!({"cancelled":0,"detached":0,"sessions":["stt","tts","keyword"],"language":"zh-CN"})
+    );
+    request.operation = "readSpeechSession".into();
+    request.payload = json!({"sessionId":ids[0]});
+    assert_eq!(
+        running.supervisor.invoke(request.clone()).unwrap().payload,
+        json!({"events":[{"status":3,"text":"你好"}],"closed":false})
+    );
+    request.operation = "synthesizeSpeech".into();
+    request.payload = json!({"sessionId":ids[1],"text":"Hello"});
+    running.supervisor.invoke(request.clone()).unwrap();
+    request.operation = "readSpeechSession".into();
+    request.payload = json!({"sessionId":ids[1]});
+    assert_eq!(
+        running.supervisor.invoke(request.clone()).unwrap().payload,
+        json!({"events":[{"status":1,"text":"Hello"},{"status":2}],"closed":false})
+    );
+    running
+        .supervisor
+        .invoke(invocation(
+            "probe",
+            json!(["emit", "keyword"]),
+            Duration::from_secs(5),
+        ))
+        .unwrap();
+    request.payload = json!({"sessionId":ids[2]});
+    assert_eq!(
+        running.supervisor.invoke(request.clone()).unwrap().payload,
+        json!({"events":[{"status":1,"text":"你好"}],"closed":false})
+    );
+    request.operation = "closeSpeechSession".into();
+    request.payload = json!({"sessionId":ids[0]});
+    running.supervisor.invoke(request.clone()).unwrap();
+    running.supervisor.invoke(request.clone()).unwrap();
+    let retired = running
+        .supervisor
+        .invoke(invocation(
+            "probe",
+            json!(["retire", "stt"]),
+            Duration::from_secs(5),
+        ))
+        .unwrap()
+        .payload;
+    assert_eq!(
+        retired,
+        json!({"cancelled":3,"detached":3,"sessions":[],"language":null})
+    );
+    request.operation = "readSpeechSession".into();
+    request.payload = json!({"sessionId":ids[1]});
+    assert!(running.supervisor.invoke(request).is_err());
+}
+
+#[test]
+fn vscode_speech_registration_requires_the_admitted_capability() {
+    let source = r#"
+        const v = require('vscode');
+        exports.activate = () => v.speech.registerSpeechProvider('example.recognition', {
+            provideSpeechToTextSession() {}, provideTextToSpeechSession() {}, provideKeywordRecognitionSession() {}
+        });
+    "#;
+    let error =
+        start_vscode_with_files_and_capabilities(source, &[], vec![ExtensionCapability::Command])
+            .err()
+            .unwrap();
+    assert!(error.to_string().contains("speechProvider"));
+}

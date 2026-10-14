@@ -326,3 +326,64 @@ fn standard_manifest_derives_implicit_commands_languages_and_tasks_and_preserves
         assert!(super::activation_plan(&manifest).is_err());
     }
 }
+
+#[test]
+fn standard_speech_proposal_requests_only_its_explicit_host_ceiling() {
+    let root = tempfile::tempdir().unwrap();
+    for (manifest, expected) in [
+        (serde_json::json!({"main":"main.js"}), false),
+        (
+            serde_json::json!({"main":"main.js","enabledApiProposals":["speech"]}),
+            true,
+        ),
+        (
+            serde_json::json!({"main":"main.js","enabledApiProposals":["chatParticipantPrivate"]}),
+            false,
+        ),
+    ] {
+        fs::write(
+            root.path().join("package.json"),
+            serde_json::to_vec(&manifest).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            super::javascript_speech_provider_requested(root.path()).unwrap(),
+            expected
+        );
+    }
+    for proposals in [
+        serde_json::json!(true),
+        serde_json::json!(["speech", "speech"]),
+        serde_json::json!([42]),
+        serde_json::json!(["speech extra"]),
+    ] {
+        fs::write(
+            root.path().join("package.json"),
+            serde_json::to_vec(
+                &serde_json::json!({"main":"main.js","enabledApiProposals":proposals}),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert!(super::javascript_speech_provider_requested(root.path()).is_err());
+    }
+}
+
+#[test]
+fn speech_manifest_declaration_produces_the_standard_activation_event() {
+    let plan = super::activation_plan(&serde_json::json!({"main":"main.js","contributes":{"speechProviders":[{"name":"acme.recognition","description":"Recognition"}]}})).unwrap();
+    assert_eq!(plan.events, ["onSpeech"]);
+    for providers in [
+        serde_json::json!([{"name":""}]),
+        serde_json::json!([{"name":"same"},{"name":"same"}]),
+        serde_json::json!([{"name":"a","endpoint":"untrusted"}]),
+        serde_json::json!([{"name":"a","description":1}]),
+    ] {
+        assert!(
+            super::activation_plan(
+                &serde_json::json!({"main":"main.js","contributes":{"speechProviders":providers}})
+            )
+            .is_err()
+        );
+    }
+}

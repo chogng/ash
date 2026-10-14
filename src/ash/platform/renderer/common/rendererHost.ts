@@ -49,6 +49,7 @@ import type { ITraceSettingsService } from '../../trace/common/traceSettingsServ
 import type { IAccountApi } from "../../accounts/common/accountApi.js";
 import type { ITurnChangesApi } from "../../turnChanges/common/turnChangesApi.js";
 import type { IAutomationService } from '../../automation/common/automationService.js';
+import type { IAgentVoiceService } from '../../agentHost/common/agentService.js';
 import type { ITeamApi } from '../../teams/common/teamApi.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type { URI } from '../../../base/common/uri.js';
@@ -85,6 +86,7 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly testing: ITestExecutionService;
 	readonly calls?: ICallService;
 	readonly dictation?: IDictationService;
+	readonly agentVoice?: IAgentVoiceService;
 	readonly automation?: IAutomationService;
 	readonly messageHistory?: IMessageHistoryService;
 	readonly symphony?: ISymphonyBackend;

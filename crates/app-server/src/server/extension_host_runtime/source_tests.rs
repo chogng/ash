@@ -412,3 +412,23 @@ fn terminal_profile_activation_matches_declared_identity_and_demand_capability()
     assert!(demand.matches(&ActivationEvent::TerminalProfile("acme.shell".into())));
     assert!(!demand.matches(&ActivationEvent::Command("acme.shell".into())));
 }
+
+#[test]
+fn speech_activation_uses_only_its_declared_provider_owner() {
+    use super::ActivationEvent;
+    use super::ActivationPlan;
+    for declaration in ["onSpeech", "onDemand:speechProvider"] {
+        let plan = ActivationPlan {
+            events: vec![declaration.into()],
+            commands: vec![],
+        };
+        assert!(plan.matches(&ActivationEvent::Speech));
+        assert!(!plan.matches(&ActivationEvent::Command("speech".into())));
+        assert!(!plan.matches(&ActivationEvent::TaskType(None)));
+    }
+    let plan = ActivationPlan {
+        events: vec!["onLanguage:typescript".into()],
+        commands: vec![],
+    };
+    assert!(!plan.matches(&ActivationEvent::Speech));
+}

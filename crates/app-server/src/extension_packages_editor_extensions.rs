@@ -133,7 +133,7 @@ pub(crate) fn deployments(
             continue;
         };
         // Invalid declarations belong to this package's failure state, never the whole fleet.
-        let (activation, activation_failure, activation_events) =
+        let (activation, mut activation_failure, activation_events) =
             match javascript_activation_plan(&source.host_path()) {
                 Ok(plan) => {
                     let events = plan.events.clone();
@@ -142,7 +142,7 @@ pub(crate) fn deployments(
                 Err(message) => (None, Some(message), Vec::new()),
             };
         let extension_id = format!("marketplace:{}:vscode", source.package().id);
-        let capabilities = vec![
+        let mut capabilities = vec![
             ExtensionCapability::Command,
             ExtensionCapability::LanguageProvider,
             ExtensionCapability::StatusBar,
@@ -150,6 +150,11 @@ pub(crate) fn deployments(
             ExtensionCapability::TerminalProfileProvider,
             ExtensionCapability::DebugAdapter,
         ];
+        match javascript_speech_provider_requested(&source.host_path()) {
+            Ok(true) => capabilities.push(ExtensionCapability::SpeechProvider),
+            Ok(false) => {}
+            Err(message) => activation_failure = Some(message),
+        }
         let binding = ExtensionsEditorExtensionBinding {
             package: source.package().clone(),
             capability: source.capability().clone(),
@@ -451,6 +456,40 @@ pub(crate) fn javascript_activation_plan(root: &std::path::Path) -> Result<Activ
     activation_plan(&manifest)
 }
 
+/// Standard proposed-API metadata requests a ceiling; the original package policy grants it.
+fn javascript_speech_provider_requested(root: &std::path::Path) -> Result<bool, String> {
+    let path = root.join("package.json");
+    let metadata = std::fs::symlink_metadata(&path).map_err(|_| "missing extension manifest")?;
+    if !metadata.is_file() || metadata.len() > 4 * 1024 * 1024 {
+        return Err("invalid extension manifest".into());
+    }
+    let manifest: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(path).map_err(|_| "missing extension manifest")?)
+            .map_err(|_| "invalid extension manifest")?;
+    let Some(proposals) = manifest.get("enabledApiProposals") else {
+        return Ok(false);
+    };
+    let proposals = proposals
+        .as_array()
+        .filter(|values| values.len() <= 128)
+        .ok_or("invalid proposed API declarations")?;
+    let mut speech = false;
+    let mut unique = BTreeSet::new();
+    for proposal in proposals {
+        let name = proposal
+            .as_str()
+            .filter(|name| {
+                !name.is_empty() && name.len() <= 256 && !name.chars().any(char::is_whitespace)
+            })
+            .ok_or("invalid proposed API declaration")?;
+        if !unique.insert(name) {
+            return Err("duplicate proposed API declaration".into());
+        }
+        speech |= name == "speech";
+    }
+    Ok(speech)
+}
+
 fn activation_plan(manifest: &serde_json::Value) -> Result<ActivationPlan, String> {
     let mut events: BTreeSet<String> = match manifest.get("activationEvents") {
         None => BTreeSet::new(),
@@ -516,6 +555,39 @@ fn activation_plan(manifest: &serde_json::Value) -> Result<ActivationPlan, Strin
                 })
                 .ok_or("invalid task definition type")?;
             events.insert(format!("onTaskType:{task_type}"));
+        }
+    }
+    if let Some(providers) = manifest.pointer("/contributes/speechProviders") {
+        let providers = providers
+            .as_array()
+            .filter(|values| values.len() <= 16)
+            .ok_or("invalid speech providers")?;
+        let mut names = BTreeSet::new();
+        for provider in providers {
+            let name = provider
+                .get("name")
+                .and_then(serde_json::Value::as_str)
+                .filter(|name| {
+                    !name.is_empty() && name.len() <= 256 && !name.chars().any(char::is_whitespace)
+                })
+                .ok_or("invalid speech provider name")?;
+            if !names.insert(name) {
+                return Err("duplicate speech provider name".into());
+            }
+            if provider
+                .get("description")
+                .is_some_and(|value| !value.as_str().is_some_and(|value| value.len() <= 512))
+                || provider.as_object().is_none_or(|value| {
+                    value
+                        .keys()
+                        .any(|key| key != "name" && key != "description")
+                })
+            {
+                return Err("invalid speech provider declaration".into());
+            }
+        }
+        if !providers.is_empty() {
+            events.insert("onSpeech".into());
         }
     }
     if events.len() > MAXIMUM_ACTIVATION_EVENTS
@@ -728,6 +800,7 @@ enum ManifestCapability {
     TerminalProfileProvider,
     TestProfileProvider,
     DataChannel,
+    SpeechProvider,
     LinkPresentationProvider,
     ExternalUriOpener,
 }
@@ -743,6 +816,7 @@ impl ManifestCapability {
             Self::TerminalProfileProvider => ExtensionCapability::TerminalProfileProvider,
             Self::TestProfileProvider => ExtensionCapability::TestProfileProvider,
             Self::DataChannel => ExtensionCapability::DataChannel,
+            Self::SpeechProvider => ExtensionCapability::SpeechProvider,
             Self::LinkPresentationProvider => ExtensionCapability::LinkPresentationProvider,
             Self::ExternalUriOpener => ExtensionCapability::ExternalUriOpener,
         }
@@ -758,6 +832,7 @@ impl ManifestCapability {
             Self::TerminalProfileProvider => "terminalProfileProvider",
             Self::TestProfileProvider => "testProfileProvider",
             Self::DataChannel => "dataChannel",
+            Self::SpeechProvider => "speechProvider",
             Self::LinkPresentationProvider => "linkPresentationProvider",
             Self::ExternalUriOpener => "externalUriOpener",
         }

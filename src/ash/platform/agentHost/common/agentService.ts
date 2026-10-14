@@ -569,6 +569,7 @@ export type ThreadCommittedEvent =
 		| 'goalCreated'
 		| 'goalUpdated'
 		| 'goalCleared'
+		| 'voiceTranscriptRecorded'
 		| 'userGoalChanged'
 		| 'turnExecutionBound'
 		| 'agentContextSeedCommitted'
@@ -848,3 +849,37 @@ export interface IAgentTurnService {
 export const IAgentSessionService = createServiceIdentifier<IAgentSessionService>('agentSessionService');
 export const IAgentThreadService = createServiceIdentifier<IAgentThreadService>('agentThreadService');
 export const IAgentTurnService = createServiceIdentifier<IAgentTurnService>('agentTurnService');
+
+export interface AgentVoiceSource { readonly sessionId: string; readonly threadId: string; }
+export interface AgentVoiceSelection { readonly connectionId: string; readonly modelId?: string; readonly voice?: string; }
+export interface AgentVoiceModelChoice { readonly modelId: string; readonly defaultVoice: string; readonly voices: readonly string[]; }
+export interface AgentVoiceConnectionChoice { readonly connectionId: string; readonly name: string; readonly defaultModel: string; readonly models: readonly AgentVoiceModelChoice[]; }
+export interface AgentVoiceSessionState extends AgentVoiceSource {
+	readonly resourceId: string;
+	readonly mediaEpoch: number;
+	readonly sequence: number;
+	readonly state: 'connecting' | 'connected' | 'stopping' | 'ended' | 'failed';
+	readonly usageMilliseconds: number;
+	readonly error?: string;
+}
+export interface AgentVoiceTaskRequest extends AgentVoiceSource {
+	readonly resourceId: string;
+	readonly mediaEpoch: number;
+	readonly delegationId: string;
+	readonly commandId: string;
+	readonly transcript: string;
+}
+
+/** Optional connection-owned agent media capability. Chat owns its UI; Core owns transcript/task facts. */
+export const IAgentVoiceService = createServiceIdentifier<IAgentVoiceService | undefined>('agentVoiceService');
+export interface IAgentVoiceService {
+	readonly isAvailable: boolean;
+	readonly state: AgentVoiceSessionState | undefined;
+	readonly onDidChange: Event<void>;
+	readonly onDidRequestTask: Event<AgentVoiceTaskRequest>;
+	getOptions(): Promise<readonly AgentVoiceConnectionChoice[]>;
+	start(source: AgentVoiceSource, selection: AgentVoiceSelection, signal?: AbortSignal): Promise<AgentVoiceSessionState>;
+	stop(): Promise<void>;
+	interrupt(): Promise<void>;
+	rejectTask(request: AgentVoiceTaskRequest): Promise<void>;
+}

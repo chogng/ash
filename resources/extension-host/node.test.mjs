@@ -513,7 +513,7 @@ exports.activate = context => {
 	const registration = h.registrations.find(entry => entry.kind === 'terminalEnvironment');
 	const result = await h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, operation: 'getTerminalEnvironment', payload: {}, deadlineUnixMillis: Date.now() + 5000 }).result;
 	assert.equal(result.status, 'success', JSON.stringify(result));
-	assert.deepEqual(result.body.body.payload, { persistent: false, map: [['PATH', { value: ':after', type: 2 }], ['MODE', { value: 'extension', type: 1 }]] });
+	assert.deepEqual(result.body.body.payload, { persistent: false, map: [['PATH', { variable: 'PATH', value: ':after', type: 2, options: { applyAtProcessCreation: true } }], ['MODE', { variable: 'MODE', value: 'extension', type: 1, options: { applyAtProcessCreation: true } }]], descriptionMap: [] });
 });
 
 test('terminal environment collection is independent of registering a profile', async t => {
@@ -525,5 +525,120 @@ test('terminal environment collection is independent of registering a profile', 
 	const registration = h.registrations.find(entry => entry.kind === 'terminalEnvironment');
 	const result = await h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, operation: 'getTerminalEnvironment', payload: {}, deadlineUnixMillis: Date.now() + 5000 }).result;
 	assert.equal(result.status, 'success', JSON.stringify(result));
-	assert.deepEqual(result.body.body.payload, { persistent: true, map: [['MODE', { value: 'extension', type: 1 }], ['PATH', { value: '/extension:', type: 3 }]] });
+	assert.deepEqual(result.body.body.payload, { persistent: true, map: [['MODE', { variable: 'MODE', value: 'extension', type: 1, options: { applyAtProcessCreation: true } }], ['PATH', { variable: 'PATH', value: '/extension:', type: 3, options: { applyAtProcessCreation: true } }]], descriptionMap: [] });
+});
+
+test('terminal environment options are validated and captured with their declared phase', async t => {
+	const h = await host(t, `exports.activate = context => {
+ const options = { applyAtProcessCreation: false, applyAtShellIntegration: true };
+ context.environmentVariableCollection.append('STAGE', ':after', options);
+ options.applyAtProcessCreation = true;
+ if (context.environmentVariableCollection.get('STAGE').options.applyAtProcessCreation) throw new Error('Mutable phase snapshot');
+ let rejected = false;
+ try { context.environmentVariableCollection.replace('BAD', '', { applyAtShellIntegration: 'yes' }); } catch { rejected = true; }
+ if (!rejected) throw new Error('Invalid phase accepted');
+};`, 'extension.cjs', ['terminalProfileProvider']);
+	const registration = h.registrations.find(entry => entry.kind === 'terminalEnvironment');
+	const result = await h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, operation: 'getTerminalEnvironment', payload: {}, deadlineUnixMillis: Date.now() + 5000 }).result;
+	assert.equal(result.status, 'success', JSON.stringify(result));
+	assert.deepEqual(result.body.body.payload.map[0][1].options, { applyAtProcessCreation: false, applyAtShellIntegration: true });
+});
+
+test('terminal environment scoped views retain global entries and serialize folder identity', async t => {
+	const h = await host(t, `const v = require('vscode');
+exports.activate = context => {
+ const root = context.environmentVariableCollection;
+ root.append('PATH', ':global'); root.description = 'global';
+ const scoped = root.getScoped({ workspaceFolder: { uri: v.Uri.file('/workspace/a'), name: 'a', index: 0 } });
+ scoped.append('PATH', ':folder'); scoped.description = 'folder a';
+ if (root.get('PATH').value !== ':global' || [...scoped][0][0] !== 'PATH') throw new Error('Scope view leaked');
+ scoped.clear(); scoped.prepend('PATH', 'folder:');
+};`, 'extension.cjs', ['terminalProfileProvider']);
+	const registration = h.registrations.find(entry => entry.kind === 'terminalEnvironment');
+	const result = await h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, operation: 'getTerminalEnvironment', payload: {}, deadlineUnixMillis: Date.now() + 5000 }).result;
+	assert.equal(result.status, 'success', JSON.stringify(result));
+	const snapshot = result.body.body.payload;
+	assert.deepEqual(snapshot.map[0], ['PATH', { variable: 'PATH', value: ':global', type: 2, options: { applyAtProcessCreation: true } }]);
+	assert.equal(snapshot.map[1][1].value, 'folder:');
+	assert.deepEqual(snapshot.map[1][1].scope.workspaceFolder, { uri: { scheme: 'file', authority: '', path: '/workspace/a', query: '', fragment: '' }, name: 'a', index: 0 });
+	assert.deepEqual(snapshot.descriptionMap.map(entry => entry[1].description), ['global', 'folder a']);
+});
+
+test('standard Speech sessions preserve events, tokens, cancellation and registration disposal in Node', { timeout: 10000 }, async t => {
+ const h = await host(t, `const v = require('vscode');
+let registration; let cancelled = 0; let detached = 0; const sessions = new Map();
+function provide(kind, token, options) {
+ const key = options?.language ?? kind; const emitter = new v.EventEmitter();
+ const session = { onDidChange(listener) { const handle = emitter.event(listener); return { dispose() { detached++; handle.dispose(); emitter.dispose(); } }; },
+ async synthesize(text) { emitter.fire({ status: v.TextToSpeechStatus.Started, text }); emitter.fire({ status: v.TextToSpeechStatus.Stopped }); } };
+ let resume; sessions.set(key, { emitter, token });
+ token.onCancellationRequested(() => { cancelled++; sessions.delete(key); resume?.(session); });
+ return key === 'pending' ? new Promise(resolve => { resume = resolve; }) : session;
+}
+exports.activate = context => {
+ registration = v.speech.registerSpeechProvider('test.recognition', {
+  provideSpeechToTextSession: (token, options) => provide('stt', token, options),
+  provideTextToSpeechSession: (token, options) => provide('tts', token, options),
+  provideKeywordRecognitionSession: token => provide('keyword', token)
+ });
+ context.subscriptions.push(registration, v.commands.registerCommand('test.node', (action, key) => {
+  if (action === 'emit') sessions.get(key).emitter.fire({ status: key === 'keyword' ? v.KeywordRecognitionStatus.Recognized : v.SpeechToTextStatus.Recognized, text: '你好' });
+  if (action === 'overflow') for (let index = 0; index < 129; index++) sessions.get(key)?.emitter.fire({ status: v.SpeechToTextStatus.Recognized, text: 'phrase' });
+  if (action === 'dispose') registration.dispose();
+  return { cancelled, detached, sessions: [...sessions.keys()] };
+ }));
+};`, 'extension.cjs', ['speechProvider', 'command']);
+ const registration = h.registrations.find(value => value.kind === 'speechProvider');
+ assert.deepEqual(registration, { registrationId: 'vscode.speech.1', kind: 'speechProvider', identifier: 'test.recognition' });
+ const invoke = (operation, payload) => h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, operation, payload, deadlineUnixMillis: Date.now() + 30000 });
+ const ids = ['a1234567-1234-1234-1234-123456789abc','b1234567-1234-1234-1234-123456789abc','c1234567-1234-1234-1234-123456789abc'];
+ for (const [index, kind] of ['speechToText','textToSpeech','keywordRecognition'].entries()) assert.equal((await invoke('createSpeechSession', { sessionId: ids[index], kind }).result).status, 'success');
+ assert.deepEqual((await h.invoke('test.node', ['emit','stt']).result).body.body.payload, { cancelled: 0, detached: 0, sessions: ['stt','tts','keyword'] });
+ assert.deepEqual((await invoke('readSpeechSession', { sessionId: ids[0] }).result).body.body.payload, { events: [{ status: 3, text: '你好' }], closed: false });
+ assert.equal((await invoke('synthesizeSpeech', { sessionId: ids[1], text: 'hello' }).result).status, 'success');
+ assert.deepEqual((await invoke('readSpeechSession', { sessionId: ids[1] }).result).body.body.payload, { events: [{ status: 1, text: 'hello' }, { status: 2 }], closed: false });
+ await h.invoke('test.node', ['emit','keyword']).result;
+ assert.deepEqual((await invoke('readSpeechSession', { sessionId: ids[2] }).result).body.body.payload, { events: [{ status: 1, text: '你好' }], closed: false });
+ const pending = invoke('createSpeechSession', { sessionId: 'd1234567-1234-1234-1234-123456789abc', kind: 'speechToText', language: 'pending' });
+ assert.deepEqual((await h.invoke('test.node', []).result).body.body.payload.sessions, ['stt','tts','keyword','pending']);
+ assert.equal((await h.request('cancel', { targetRequestId: pending.requestId, reason: 'caller' }).result).body.result, 'cancelled');
+ assert.equal((await pending.result).status, 'failure');
+ assert.deepEqual((await h.invoke('test.node', ['overflow','stt']).result).body.body.payload, { cancelled: 2, detached: 1, sessions: ['tts','keyword'] });
+ assert.equal((await invoke('readSpeechSession', { sessionId: ids[0] }).result).status, 'failure');
+ assert.deepEqual((await h.invoke('test.node', ['dispose']).result).body.body.payload, { cancelled: 4, detached: 3, sessions: [] });
+ assert.equal((await invoke('readSpeechSession', { sessionId: ids[1] }).result).status, 'failure');
+});
+
+test('completed Speech creation keeps a persistent token until its exact session is closed', { timeout: 10000 }, async t => {
+ const h = await host(t, `const v = require('vscode');
+let cancelled = 0;
+function provide(token) {
+ const events = new v.EventEmitter();
+ token.onCancellationRequested(() => { cancelled++; events.dispose(); });
+ return { onDidChange: events.event, synthesize: async () => {} };
+}
+exports.activate = context => context.subscriptions.push(
+ v.speech.registerSpeechProvider('test.recognition', {
+  provideSpeechToTextSession: provide,
+  provideTextToSpeechSession: provide,
+  provideKeywordRecognitionSession: provide
+ }),
+ v.commands.registerCommand('test.node', () => cancelled)
+);`, 'extension.cjs', ['speechProvider', 'command']);
+ const registrationId = h.registrations.find(value => value.kind === 'speechProvider').registrationId;
+ const invoke = (operation, sessionId) => h.request('invoke', { extensionId: 'test.node', registrationId, operation, payload: { sessionId, ...(operation === 'createSpeechSession' ? { kind: 'speechToText' } : {}) }, deadlineUnixMillis: Date.now() + 30000 });
+ const first = 'a1234567-1234-1234-1234-123456789abc';
+ const second = 'b1234567-1234-1234-1234-123456789abc';
+ const created = invoke('createSpeechSession', first);
+ assert.equal((await created.result).status, 'success');
+ assert.equal((await invoke('createSpeechSession', second).result).status, 'success');
+ await h.request('cancel', { targetRequestId: created.requestId, reason: 'caller' }).result;
+ assert.equal((await h.invoke('test.node', []).result).body.body.payload, 0);
+ assert.equal((await invoke('closeSpeechSession', first).result).status, 'success');
+ assert.equal((await invoke('closeSpeechSession', first).result).status, 'success');
+ assert.equal((await h.invoke('test.node', []).result).body.body.payload, 1);
+ assert.equal((await invoke('readSpeechSession', first).result).status, 'failure');
+ assert.equal((await invoke('readSpeechSession', second).result).status, 'success');
+ assert.equal((await invoke('closeSpeechSession', second).result).status, 'success');
+ assert.equal((await h.invoke('test.node', []).result).body.body.payload, 2);
 });

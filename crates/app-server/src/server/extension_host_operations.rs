@@ -136,7 +136,8 @@ impl AppServer {
             ExtensionHostActivationEventDto::Debug { debug_type, .. } => debug_type
                 .as_ref()
                 .is_none_or(|debug_type| valid_text(debug_type, 128)),
-            ExtensionHostActivationEventDto::StartupFinished {} => true,
+            ExtensionHostActivationEventDto::StartupFinished {}
+            | ExtensionHostActivationEventDto::Speech {} => true,
             ExtensionHostActivationEventDto::ResolveAuthority { authority_prefix } => {
                 valid_text(authority_prefix, 64)
             }
@@ -178,6 +179,7 @@ impl AppServer {
                 }
             }
             ExtensionHostActivationEventDto::StartupFinished {} => ActivationEvent::StartupFinished,
+            ExtensionHostActivationEventDto::Speech {} => ActivationEvent::Speech,
             ExtensionHostActivationEventDto::ResolveAuthority { authority_prefix } => {
                 ActivationEvent::ResolveAuthority(authority_prefix)
             }
@@ -494,6 +496,9 @@ fn registration_dto(
                         .collect(),
                     label,
                 }
+            }
+            RegistrationKind::SpeechProvider { identifier } => {
+                ExtensionHostRegistrationKindDto::SpeechProvider { identifier }
             }
             RegistrationKind::DataChannel { channel_id } => {
                 ExtensionHostRegistrationKindDto::DataChannel { channel_id }

@@ -1,3 +1,8 @@
+import { Disposable } from '../../../base/common/lifecycle.js';
+import { Emitter } from '../../../base/common/event.js';
+import { getNLSLanguage, localize } from '../../../nls.js';
+import type { VoiceStatus } from '../../../../../.build/protocol/typescript/index.js';
+import type { IAgentVoiceService, AgentVoiceSource, AgentVoiceSelection, AgentVoiceSessionState, AgentVoiceTaskRequest, AgentVoiceConnectionChoice } from '../common/agentService.js';
 import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
 import { createUuid } from '../../../base/common/uuid.js';
 import { canceled } from '../../../base/common/errors.js';
@@ -717,4 +722,119 @@ function toAgentExecutionNode(node: AgentNodeDto): AgentExecutionNode {
 function normalizeArtifactJson(json: string): string {
 	JSON.parse(json);
 	return json;
+}
+
+/** Media resources remain attached to their original connection and are never restarted implicitly. */
+export class AppServerAgentVoiceService extends Disposable implements IAgentVoiceService {
+	private readonly changed = this._register(new Emitter<void>());
+	public readonly onDidChange = this.changed.event;
+	private readonly tasks = this._register(new Emitter<AgentVoiceTaskRequest>());
+	public readonly onDidRequestTask = this.tasks.event;
+	private readonly device = createUuid();
+	private resource: string | undefined;
+	private source: AgentVoiceSource | undefined;
+	private current: AgentVoiceSessionState | undefined;
+	private starting: { readonly operationId: string; readonly generation: number; readonly promise: Promise<VoiceStatus>; readonly cancel: () => Promise<void>; } | undefined;
+	public get state(): AgentVoiceSessionState | undefined { return this.current; }
+	public get isAvailable(): boolean { return !this.isDisposed && this.client.state === 'ready' && this.client.capabilities?.contracts.voiceConversation?.version === 1; }
+
+	constructor(private readonly client: AppServerProtocolClient) {
+		super();
+		this._register(client.onNotification(notification => {
+			if (notification.method === 'voice/changed') this.accept(notification.params);
+			else if (notification.method === 'voice/delegation') {
+				const request = notification.params;
+				if (request.resourceId === this.resource && request.sessionId === this.source?.sessionId && request.threadId === this.source.threadId && request.mediaEpoch === this.current?.mediaEpoch && this.current.state === 'connected') this.tasks.fire({ resourceId: request.resourceId, sessionId: request.sessionId, threadId: request.threadId, mediaEpoch: request.mediaEpoch, delegationId: request.delegationId, commandId: request.commandId, transcript: request.transcript });
+			}
+		}));
+		this._register(client.onStateChange(state => {
+			if (state !== 'ready') { this.resource = undefined; this.source = undefined; this.current = undefined; }
+			this.changed.fire();
+		}));
+	}
+
+	public async getOptions(): Promise<readonly AgentVoiceConnectionChoice[]> {
+		this.assertAvailable();
+		const generation = this.client.generation;
+		const result = await this.client.request(APP_SERVER_METHODS['voice/options'], {});
+		if (this.isDisposed || generation !== this.client.generation) throw canceled();
+		return result.connections.map(connection => ({ connectionId: connection.connectionId, name: connection.name, defaultModel: connection.defaultModel, models: connection.models.map(model => ({ modelId: model.modelId, defaultVoice: model.defaultVoice, voices: [...model.voices] })) }));
+	}
+
+	public async start(source: AgentVoiceSource, selection: AgentVoiceSelection, signal?: AbortSignal): Promise<AgentVoiceSessionState> {
+		this.assertAvailable();
+		if (signal?.aborted) throw canceled();
+		if (this.starting || this.current && !['ended', 'failed'].includes(this.current.state)) throw new Error(localize('chat.voice.alreadyActive', 'Stop the current voice conversation first.'));
+		const generation = this.client.generation;
+		const resourceId = createUuid(); const operationId = createUuid();
+		this.resource = resourceId; this.source = { ...source }; this.current = undefined;
+		let cancellation: Promise<void> | undefined;
+		const cancel = (): Promise<void> => {
+			if (this.client.generation !== generation) return Promise.resolve();
+			return cancellation ??= this.client.request(APP_SERVER_METHODS['voice/start/cancel'], { operationId }).then(() => undefined, () => undefined);
+		};
+		const onAbort = () => { void cancel(); };
+		signal?.addEventListener('abort', onAbort, { once: true });
+		const promise = this.client.request(APP_SERVER_METHODS['voice/start'], {
+			resourceId, operationId, deviceId: this.device, sessionId: source.sessionId, threadId: source.threadId, connectionId: selection.connectionId, modelId: selection.modelId ?? null, voice: selection.voice ?? null, locale: getNLSLanguage() || 'en',
+			taskLabels: {
+				queued: localize('chat.voice.task.queued', 'Your voice request is queued in Chat.'),
+				running: localize('chat.voice.task.running', 'I am working on your request in Chat.'),
+				waiting: localize('chat.voice.task.waiting', 'Your request is waiting for your response in Chat.'),
+				completed: localize('chat.voice.task.completed', 'Your request in Chat has completed.'),
+				failed: localize('chat.voice.task.failed', 'Your request in Chat could not complete.'),
+				stopped: localize('chat.voice.task.stopped', 'Your request in Chat has stopped.'),
+				rejected: localize('chat.voice.task.rejected', 'The host could not accept this voice request.'),
+			}
+		});
+		const pending = { operationId, generation, promise, cancel }; this.starting = pending;
+		if (signal?.aborted) cancel();
+		try {
+			const status = await promise;
+			if (this.isDisposed || generation !== this.client.generation || this.resource !== resourceId) throw canceled();
+			this.accept(status);
+			if (signal?.aborted) { await this.stop(); throw canceled(); }
+			const current = this.state;
+			if (current?.state !== 'connected') throw new Error(localize('chat.voice.startFailed', 'Could not start the voice conversation: {0}', current?.error ?? current?.state ?? status.state));
+			return current;
+		} catch (error) {
+			if (signal?.aborted || this.isDisposed || generation !== this.client.generation) throw canceled();
+			throw error;
+		} finally { signal?.removeEventListener('abort', onAbort); if (this.starting === pending) this.starting = undefined; }
+	}
+
+	public async stop(): Promise<void> {
+		const generation = this.client.generation;
+		const starting = this.starting;
+		if (starting && starting.generation === generation) {
+			await starting.cancel();
+			try { this.accept(await starting.promise); } catch { return; }
+		}
+		const current = this.current;
+		if (!current || current.state === 'ended' || current.state === 'failed' || this.client.state !== 'ready') return;
+		const status = await this.client.request(APP_SERVER_METHODS['voice/stop'], { resourceId: current.resourceId, mediaEpoch: current.mediaEpoch, operationId: createUuid() });
+		if (generation === this.client.generation) this.accept(status);
+	}
+
+	public async interrupt(): Promise<void> {
+		const current = this.current;
+		if (!current || current.state !== 'connected') return;
+		const generation = this.client.generation;
+		const status = await this.client.request(APP_SERVER_METHODS['voice/interrupt'], { resourceId: current.resourceId, mediaEpoch: current.mediaEpoch, operationId: createUuid() });
+		if (generation === this.client.generation) this.accept(status);
+	}
+
+	public async rejectTask(request: AgentVoiceTaskRequest): Promise<void> {
+		if (this.current?.resourceId !== request.resourceId || this.current.mediaEpoch !== request.mediaEpoch || this.current.state !== 'connected') return;
+		await this.client.request(APP_SERVER_METHODS['voice/delegation/reject'], { resourceId: request.resourceId, mediaEpoch: request.mediaEpoch, delegationId: request.delegationId });
+	}
+
+	protected override disposeCore(): void { void this.stop().catch(() => undefined); super.disposeCore(); }
+	private assertAvailable(): void { if (!this.isAvailable) throw new Error(localize('chat.voice.unavailable', 'Voice conversation is unavailable in this host.')); }
+	private accept(status: VoiceStatus): void {
+		if (this.isDisposed || status.resourceId !== this.resource || status.sessionId !== this.source?.sessionId || status.threadId !== this.source.threadId) return;
+		if (this.current && (status.mediaEpoch < this.current.mediaEpoch || status.mediaEpoch === this.current.mediaEpoch && status.sequence <= this.current.sequence)) return;
+		this.current = { resourceId: status.resourceId, sessionId: status.sessionId, threadId: status.threadId, mediaEpoch: status.mediaEpoch, sequence: status.sequence, state: status.state, usageMilliseconds: status.usageMilliseconds, ...(status.error ? { error: status.error } : {}) };
+		this.changed.fire();
+	}
 }

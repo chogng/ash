@@ -1,5 +1,5 @@
 import { createSCMApi } from './scm.js';
-import { languages as ashLanguages, workspace as ashWorkspace, window as ashWindow, tasks as ashTasks, terminals as ashTerminals, debug as ashDebug, __runtime as ashRuntime, CancellationTokenSource, ResolvedAuthority, ManagedResolvedAuthority, RemoteAuthorityResolverError } from './host.mjs';
+import { languages as ashLanguages, workspace as ashWorkspace, window as ashWindow, tasks as ashTasks, terminals as ashTerminals, speech as ashSpeech, debug as ashDebug, __runtime as ashRuntime, CancellationTokenSource, ResolvedAuthority, ManagedResolvedAuthority, RemoteAuthorityResolverError } from './host.mjs';
 
 // This is the public editor contract inside the confined process. Editor models and UI
 // remain with the initiating client; this module owns only extension callback lifetimes.
@@ -25,32 +25,73 @@ export function createApi(configuration, initialization) {
 	const pending = new Map();
 	let subscriptions;
 	const environmentMutators = new Map();
+	const environmentDescriptions = new Map();
 	let environmentPersistent = true;
 	let environmentAdmitted = false;
+	let speechAdmitted = false;
 	function requireEnvironmentCapability() {
 		if (!environmentAdmitted) throw new Error('Terminal environment collections require the admitted terminal provider capability');
 	}
-	const environmentVariableCollection = Object.freeze({
+	function environmentCollection(scope) {
+		const scopeId = scope?.workspaceFolder?.uri.toString() ?? '';
+		const entries = () => [...environmentMutators.values()].filter(entry => (entry.scope?.workspaceFolder?.uri.toString() ?? '') === scopeId);
+		const key = variable => JSON.stringify([scopeId, variable]);
+		const view = Object.freeze({
 		get persistent() { return environmentPersistent; },
 		set persistent(value) {
 			requireEnvironmentCapability();
 			if (typeof value !== 'boolean') throw new TypeError('Environment collection persistence must be a boolean');
 			environmentPersistent = value;
 		},
-		replace(variable, value) { setEnvironmentMutator(variable, value, 1); },
-		append(variable, value) { setEnvironmentMutator(variable, value, 2); },
-		prepend(variable, value) { setEnvironmentMutator(variable, value, 3); },
-		get(variable) { return environmentMutators.get(variable); },
-		delete(variable) { requireEnvironmentCapability(); environmentMutators.delete(variable); },
-		clear() { requireEnvironmentCapability(); environmentMutators.clear(); },
-		forEach(callback, thisArg) { environmentMutators.forEach((mutator, variable) => callback.call(thisArg, variable, mutator, environmentVariableCollection)); },
-		[Symbol.iterator]() { return environmentMutators[Symbol.iterator](); },
-	});
-	function setEnvironmentMutator(variable, value, type) {
+		get description() { return environmentDescriptions.get(scopeId)?.description; },
+		set description(value) {
+			requireEnvironmentCapability();
+			if (value !== undefined && (typeof value !== 'string' || value.length > 32768 || value.includes('\0'))) throw new TypeError('Invalid terminal environment description');
+			if (value === undefined) environmentDescriptions.delete(scopeId);
+			else environmentDescriptions.set(scopeId, { description: value, ...(scope ? { scope } : {}) });
+		},
+		replace(variable, value, options) { setEnvironmentMutator(key(variable), variable, value, 1, scope, options); },
+		append(variable, value, options) { setEnvironmentMutator(key(variable), variable, value, 2, scope, options); },
+		prepend(variable, value, options) { setEnvironmentMutator(key(variable), variable, value, 3, scope, options); },
+		get(variable) { return environmentMutators.get(key(variable)); },
+		delete(variable) { requireEnvironmentCapability(); environmentMutators.delete(key(variable)); },
+		clear() { requireEnvironmentCapability(); for (const entry of entries()) environmentMutators.delete(key(entry.variable)); },
+		forEach(callback, thisArg) { for (const entry of entries()) callback.call(thisArg, entry.variable, entry, view); },
+		[Symbol.iterator]() { return entries().map(entry => [entry.variable, entry])[Symbol.iterator](); },
+		getScoped(scope) {
+			requireEnvironmentCapability();
+			if (scope === undefined || scope.workspaceFolder === undefined) return environmentVariableCollection;
+			const folder = scope.workspaceFolder;
+			if (!folder || !(folder.uri instanceof Uri) || typeof folder.name !== 'string' || !folder.name || !Number.isSafeInteger(folder.index) || folder.index < 0) throw new TypeError('Invalid terminal environment scope');
+			return environmentCollection(Object.freeze({ workspaceFolder: Object.freeze({ uri: folder.uri, name: folder.name, index: folder.index }) }));
+		},
+		});
+		return view;
+	}
+	const environmentVariableCollection = environmentCollection();
+	function setEnvironmentMutator(key, variable, value, type, scope, options = { applyAtProcessCreation: true }) {
 		requireEnvironmentCapability();
 		if (typeof variable !== 'string' || !variable || variable.length > 32768 || /[=\0]/.test(variable) || typeof value !== 'string' || value.length > 32768 || value.includes('\0')) throw new TypeError('Invalid terminal environment mutator');
-		if (!environmentMutators.has(variable) && environmentMutators.size >= 1024) throw new RangeError('Terminal environment collection quota exceeded');
-		environmentMutators.set(variable, Object.freeze({ value, type }));
+		if (!environmentMutators.has(key) && environmentMutators.size >= 1024) throw new RangeError('Terminal environment collection quota exceeded');
+		if (!options || typeof options !== 'object' || Array.isArray(options) || Object.keys(options).some(key => !['applyAtProcessCreation', 'applyAtShellIntegration'].includes(key)) || Object.values(options).some(value => value !== undefined && typeof value !== 'boolean')) throw new TypeError('Invalid terminal environment mutator');
+		environmentMutators.set(key, Object.freeze({ variable, value, type, options: Object.freeze({ ...options }), ...(scope ? { scope } : {}) }));
+	}
+	function snapshotEnvironment() {
+		const entries = [...environmentMutators.values()];
+		const used = new Set(entries.filter(entry => !entry.scope).map(entry => entry.variable));
+		return {
+			persistent: environmentPersistent,
+			map: entries.map((entry, index) => {
+				let key = entry.variable;
+				if (entry.scope) {
+					key = `scope:${index}`;
+					while (used.has(key)) key += '#';
+					used.add(key);
+				}
+				return [key, entry];
+			}),
+			descriptionMap: [...environmentDescriptions],
+		};
 	}
 	let providerSequence = 0;
 	let activeEditor;
@@ -1285,6 +1326,15 @@ export function createApi(configuration, initialization) {
 		editors: Object.freeze({ request: payload => request({ operation: 'editorOperation', payload }, 'value').then(result => result.value) }),
 	});
 	const api = contract('vscode', {
+  SpeechToTextStatus: Object.freeze({ Started: 1, Recognizing: 2, Recognized: 3, Stopped: 4, Error: 5 }),
+  TextToSpeechStatus: Object.freeze({ Started: 1, Stopped: 2, Error: 3 }),
+  KeywordRecognitionStatus: Object.freeze({ Recognized: 1, Stopped: 2 }),
+  speech: Object.freeze({ registerSpeechProvider(identifier, provider) {
+   if (!speechAdmitted) throw new Error('Speech providers require the admitted speechProvider capability');
+   const registration = ashSpeech.registerSpeechProvider(`vscode.speech.${++providerSequence}`, identifier, provider);
+   subscriptions.push(registration);
+   return registration;
+  } }),
 		TerminalProfile: class TerminalProfile { constructor(options) { this.options = options; } },
 		ash: ashApi,
 		env: contract('env', { get language() { return windowFacts().language ?? 'en'; } }),
@@ -1659,7 +1709,8 @@ export function createApi(configuration, initialization) {
 		activate(context, callback, receiver, capabilities) {
 			subscriptions = context.subscriptions;
 			environmentAdmitted = capabilities.includes('terminalProfileProvider');
-			if (environmentAdmitted) subscriptions.push(ashTerminals.registerEnvironmentVariableCollection('vscode.terminalEnvironment', () => ({ persistent: environmentPersistent, map: [...environmentMutators] })));
+			speechAdmitted = capabilities.includes('speechProvider');
+			if (environmentAdmitted) subscriptions.push(ashTerminals.registerEnvironmentVariableCollection('vscode.terminalEnvironment', snapshotEnvironment));
 			if (initialization) subscriptions.push(ensureWorkspaceEvents());
 			// The supervisor supplies the admitted ceiling. Optional API observers must
 			// not turn an unrelated command into a rejected registration handshake.
@@ -1668,6 +1719,7 @@ export function createApi(configuration, initialization) {
 			if (capabilities.includes('statusBar')) subscriptions.push(ashWindow.registerStatusBar(statusRegistrationId, statusSnapshot));
 			subscriptions.push(new Disposable(() => {
 				environmentAdmitted = false;
+				speechAdmitted = false;
 				environmentMutators.clear();
 				scmBridge.dispose();
 				statusDisposed = true;

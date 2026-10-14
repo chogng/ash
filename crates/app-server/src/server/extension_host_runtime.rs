@@ -1033,6 +1033,8 @@ fn registration_allows_operation(registration: &RegistrationKind, operation: &st
                 | "closeTaskTerminal"
         ),
         RegistrationKind::TestProfileProvider { .. } => operation == "provideTestProfiles",
+        RegistrationKind::SpeechProvider { .. } => matches!(operation,
+            "createSpeechSession" | "readSpeechSession" | "synthesizeSpeech" | "closeSpeechSession"),
         RegistrationKind::DataChannel { .. } => operation == "receiveData",
         RegistrationKind::LinkPresentationProvider { .. } => operation == "provideLinkPresentation",
     }

@@ -65,6 +65,7 @@ export interface ExtensionManifest {
 	readonly version: string;
 	readonly displayName: string;
 	readonly contributes: {
+		readonly speechProviders: readonly { readonly name: string; readonly description?: string; }[];
 		readonly terminalProfiles: readonly { readonly id: string; readonly title: string; readonly icon?: string; readonly color?: string; }[];
 		readonly localizations: readonly ILocalizationContribution[];
 		readonly configuration: readonly IConfigurationNode[];
@@ -132,6 +133,7 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 		version,
 		displayName,
 		contributes: Object.freeze({
+			speechProviders: parseSpeechProviders(contributes.speechProviders),
 			terminalProfiles: parseTerminalProfiles(contributes.terminalProfiles),
 			localizations: parseLocalizations(contributes.localizations),
 			configuration: parseConfigurations(contributes.configuration, Object.freeze({ id: descriptor.id, displayName })),
@@ -631,8 +633,15 @@ function parseSubmenus(value: unknown, placements: unknown): ExtensionManifest['
 }
 
 function parseTerminalProfiles(value: unknown): ExtensionManifest['contributes']['terminalProfiles'] {
- if (value === undefined) return Object.freeze([]);
- const point = ExtensionsRegistry.getExtensionPoint<ExtensionManifest['contributes']['terminalProfiles']>('terminalProfiles');
- if (!point) throw new TypeError(localize('terminal.profile.invalidDeclaration', 'Invalid terminal profile contribution.'));
- return point.validate(value);
+	if (value === undefined) return Object.freeze([]);
+	const point = ExtensionsRegistry.getExtensionPoint<ExtensionManifest['contributes']['terminalProfiles']>('terminalProfiles');
+	if (!point) throw new TypeError(localize('terminal.profile.invalidDeclaration', 'Invalid terminal profile contribution.'));
+	return point.validate(value);
+}
+
+function parseSpeechProviders(value: unknown): ExtensionManifest['contributes']['speechProviders'] {
+	if (value === undefined) return Object.freeze([]);
+	const point = ExtensionsRegistry.getExtensionPoint<ExtensionManifest['contributes']['speechProviders']>('speechProviders');
+	if (!point) throw new TypeError(localize('speech.providerDeclarationInvalid', 'Invalid speech provider contribution.'));
+	return point.validate(value);
 }

@@ -2084,6 +2084,10 @@ use crate::protocol::terminal::TerminalSendSignalParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalShellIntegration;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::terminal::TerminalShellIntegrationEvent;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::terminal::TerminalShellType;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalSignal;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalWriteBinaryParams;
@@ -2187,6 +2191,28 @@ use crate::protocol::turn_changes::TurnChangesReadParams;
 use crate::protocol::turn_changes::TurnChangesReadResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::turn_changes::TurnChangesUpdateDraftParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::voice::VoiceConnectionChoice;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::voice::VoiceConnectionState;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::voice::VoiceControlParams;
+use crate::protocol::voice::VoiceDelegationRequest;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::voice::VoiceModelChoice;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::voice::VoiceOptions;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::voice::VoiceRejectDelegationParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::voice::VoiceResourceParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::voice::VoiceStartCancelParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::voice::VoiceStartParams;
+use crate::protocol::voice::VoiceStatus;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::voice::VoiceTaskLabels;
 #[cfg(any(test, feature = "export"))]
 use analytics::UsageEvent;
 #[cfg(any(test, feature = "export"))]
@@ -2402,6 +2428,8 @@ use ash_protocol::ModelBillingRecord;
 use ash_protocol::ModelBillingScope;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelCapabilities;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ModelConnectionId;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelContextAllocation;
 #[cfg(any(test, feature = "export"))]
@@ -3335,6 +3363,13 @@ client_methods! {
         response: ConfigCommandResult,
         serialization: GlobalExclusive,
     },
+    VoiceOptions => "voice/options" { params: EmptyParams, response: VoiceOptions, serialization: GlobalSharedRead, },
+    VoiceStart => "voice/start" { params: VoiceStartParams, response: VoiceStatus, serialization: ConnectionExclusive("voice"), cancellation: "operationId" => PreserveOutcome, },
+    VoiceStartCancel => "voice/start/cancel" { params: VoiceStartCancelParams, response: (), serialization: None, },
+    VoiceRead => "voice/read" { params: VoiceResourceParams, response: VoiceStatus, serialization: ConnectionExclusive("voice"), },
+    VoiceStop => "voice/stop" { params: VoiceControlParams, response: VoiceStatus, serialization: None, },
+    VoiceInterrupt => "voice/interrupt" { params: VoiceControlParams, response: VoiceStatus, serialization: None, },
+    VoiceRejectDelegation => "voice/delegation/reject" { params: VoiceRejectDelegationParams, response: (), serialization: None, },
     CallStart => "call/start" {
         params: CallStartParams,
         response: CallStatus,
@@ -5312,6 +5347,8 @@ server_notifications! {
     SessionDeleted => "session/deleted" {
         params: SessionDeleted,
     },
+    VoiceChanged => "voice/changed" { params: VoiceStatus, },
+    VoiceDelegation => "voice/delegation" { params: VoiceDelegationRequest, },
     CallChanged => "call/changed" { params: CallStatus, },
     DictationTranscript => "dictation/transcript" { params: DictationTranscript, },
     DictationEnded => "dictation/ended" { params: DictationEnded, },
@@ -5738,6 +5775,18 @@ typescript_bindings! {
     TextDocumentReleaseParams,
     ServerInfo,
     ServerOperatingSystem,
+    VoiceStartParams,
+    VoiceStartCancelParams,
+    VoiceResourceParams,
+    VoiceControlParams,
+    VoiceRejectDelegationParams,
+    VoiceStatus,
+    VoiceOptions,
+    VoiceConnectionChoice,
+    VoiceModelChoice,
+    VoiceDelegationRequest,
+    VoiceTaskLabels,
+    VoiceConnectionState,
     CallStartParams,
     CallResourceParams,
     CallControlParams,
@@ -6224,6 +6273,7 @@ typescript_bindings! {
     ToolOutputArtifactSource,
     McpAppResourceCsp,
     VoiceTranscript,
+    ModelConnectionId,
     VoiceTranscriptSpeaker,
     ToolOutputStream,
     ProcessExitStatus,
@@ -6827,6 +6877,8 @@ typescript_bindings! {
     TerminalReadResult,
     TerminalCwd,
     TerminalShellIntegration,
+    TerminalShellIntegrationEvent,
+    TerminalShellType,
     TerminalCloseParams,
     TestingDiscoverParams,
     TestingPrepareDebugParams,

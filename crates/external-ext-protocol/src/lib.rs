@@ -280,6 +280,7 @@ pub enum ExtensionCapability {
     TerminalProfileProvider,
     TestProfileProvider,
     DataChannel,
+    SpeechProvider,
     LinkPresentationProvider,
     ExternalUriOpener,
 }
@@ -393,6 +394,9 @@ pub enum RegistrationKind {
     },
     DataChannel {
         channel_id: String,
+    },
+    SpeechProvider {
+        identifier: String,
     },
     LinkPresentationProvider {
         uri_pattern: String,

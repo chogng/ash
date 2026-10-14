@@ -318,6 +318,12 @@ function normalizeRegistration(value: unknown): ExtensionHostRegistration {
 		exactKeys(input, "Extension Host Test Profile provider registration", ["kind", "label", "providerId", "registrationId"]);
 		return Object.freeze({ kind, registrationId, providerId: boundedText(input.providerId, "Extension Host Test Profile provider ID", 256), label: boundedText(input.label, "Extension Host Test Profile provider label", 512) });
 	}
+	if (kind === 'speechProvider') {
+		exactKeys(input, 'Extension Host speech registration', ['kind', 'registrationId', 'identifier']);
+		const identifier = boundedText(input.identifier, 'Speech provider identifier', 256);
+		if (/\s/u.test(identifier)) throw new TypeError('Invalid Speech provider identifier');
+		return Object.freeze({ kind, registrationId, identifier });
+	}
 	if (kind === 'dataChannel') {
 		exactKeys(input, 'Extension Host data channel registration', ['channelId', 'kind', 'registrationId']);
 		return Object.freeze({ kind, registrationId, channelId: outputChannelId(input.channelId) });

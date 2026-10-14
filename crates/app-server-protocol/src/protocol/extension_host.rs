@@ -51,6 +51,7 @@ pub enum ExtensionHostActivationEventDto {
     },
     // A struct variant preserves the closed wire shape; Serde unit variants ignore extra fields.
     StartupFinished {},
+    Speech {},
     ResolveAuthority {
         #[schemars(length(min = 1, max = 64))]
         authority_prefix: String,
@@ -365,6 +366,10 @@ pub enum ExtensionHostRegistrationKindDto {
     DataChannel {
         #[schemars(length(min = 1, max = 256))]
         channel_id: String,
+    },
+    SpeechProvider {
+        #[schemars(length(min = 1, max = 256))]
+        identifier: String,
     },
     LinkPresentationProvider {
         #[schemars(length(min = 1, max = 2048))]

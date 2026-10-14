@@ -8,6 +8,7 @@ import { AppServerSymphonyService } from '../../symphony/browser/appServerSympho
 import { EDIT_USER_HOOKS_CONFIGURATION_CHANNEL } from '../../hooks/common/hooksIpc.js';
 import { AppServerBackupService } from '../../backup/browser/appServerBackupService.js';
 import { AppServerCallService } from '../../call/browser/appServerCallService.js';
+import { AppServerAgentVoiceService } from '../../agentHost/browser/appServerAgentService.js';
 import { AppServerDictationService } from '../../dictation/browser/appServerDictationService.js';
 import { AppServerMemoriesService } from '../../memories/browser/appServerMemoriesService.js';
 import { AppServerMemoryDiagnosticsService } from '../../memory/browser/appServerMemoryDiagnosticsService.js';
@@ -180,6 +181,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			if (client.capabilities?.memories) { backend = { ...backend, memories: resources.add(new AppServerMemoriesService(client)) }; }
 			if (client.capabilities?.contracts.memoryDiagnostics?.version === 1) { backend = { ...backend, memoryDiagnostics: resources.add(new AppServerMemoryDiagnosticsService(client, 'electron', () => invoke<MemoryObservation[]>('ash:memory:collect'))) }; }
 			if (client.capabilities?.contracts.calls?.version === 1) { backend = { ...backend, calls: resources.add(new AppServerCallService(client)) }; }
+			if (remoteConnection.kind === 'local' && client.capabilities?.contracts.voiceConversation?.version === 1) { backend = { ...backend, agentVoice: resources.add(new AppServerAgentVoiceService(client)) }; }
 			if (remoteConnection.kind === 'local') {
 				const services = resources.add(new InstantiationService());
 				if (!backend.localTranscription) { throw new Error('Local transcription service was not contributed by the renderer entry'); }

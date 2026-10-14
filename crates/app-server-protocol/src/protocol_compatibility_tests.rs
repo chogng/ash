@@ -226,3 +226,21 @@ fn explicit_unlock_options_preserve_existing_byte_write_requests() {
         .is_err()
     );
 }
+
+#[test]
+fn terminal_prompt_type_remains_optional_and_round_trips_output_order() {
+    use crate::protocol::terminal::TerminalShellIntegration;
+    let mut value = serde_json::json!({
+        "commandDetection": false, "cwdDetection": false,
+        "hasRichCommandDetection": false, "commandStorageDisabled": false,
+        "commands": [], "afterOutputSequence": 7,
+    });
+    let legacy: TerminalShellIntegration = serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(legacy.prompt_type, None);
+    assert_eq!(serde_json::to_value(legacy).unwrap(), value);
+    value["promptType"] = serde_json::json!("starship");
+    let current: TerminalShellIntegration = serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(current.prompt_type.as_deref(), Some("starship"));
+    assert_eq!(current.after_output_sequence, 7);
+    assert_eq!(serde_json::to_value(current).unwrap(), value);
+}

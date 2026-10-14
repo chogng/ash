@@ -1,3 +1,4 @@
+import { MainThreadSpeech } from './mainThreadSpeech.js';
 import { MainThreadTerminalService, type ExtensionTerminalProfileRegistration, type ExtensionTerminalEnvironmentRegistration } from './mainThreadTerminalService.js';
 import { MainThreadLocalization } from './mainThreadLocalization.js';
 import { MainThreadMessageService } from './mainThreadMessageService.js';
@@ -121,6 +122,7 @@ export class MainThreadExtensionApi extends Disposable {
 	private readonly messages: MainThreadMessageService;
 	private readonly taskApi: MainThreadTask;
 	private readonly terminalApi: MainThreadTerminalService;
+	private readonly speechApi: MainThreadSpeech;
 	private readonly debugApi: MainThreadDebugService;
 	private readonly remoteSources = new Map<string, ExtensionHostRuntime>();
 
@@ -152,6 +154,7 @@ export class MainThreadExtensionApi extends Disposable {
 		this.scmApi = this._register(instantiation.createInstance(MainThreadSCM, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
 		this.backendApi = this._register(instantiation.createInstance(MainThreadExtensionBackend));
 		this.terminalApi = this._register(instantiation.createInstance(MainThreadTerminalService));
+		this.speechApi = this._register(instantiation.createInstance(MainThreadSpeech, this.invocationTimeoutMillis));
 		this.configurationApi = this._register(instantiation.createInstance(MainThreadConfiguration, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
 		this.workspaceApi = this._register(instantiation.createInstance(MainThreadWorkspace, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
 		// Host adapters validate callback messages; editor contracts stay in the Workbench.
@@ -341,6 +344,7 @@ export class MainThreadExtensionApi extends Disposable {
 			if (runtime.lifecycle === 'ready' && runtime.registrations.some(registration => (registration.kind === 'remoteConnectionResolver' || registration.kind === 'remoteAuthorityResolver'))) { this.remoteSources.set(runtime.id, runtime); }
 		}
 		this.projectOutput(snapshot);
+		this.speechApi.update(snapshot);
 		this.customEditors.update(snapshot);
 		this.diagnostics.update(snapshot);
 		this.documents.update(snapshot);
@@ -359,6 +363,7 @@ export class MainThreadExtensionApi extends Disposable {
 		this.activationController = new AbortController();
 		this.revokeContributions();
 		this.contributionIdentity = undefined;
+		this.speechApi.clear();
 		this.customEditors.clear();
 		this.documents.clear();
 		this.configurationApi.clear();
@@ -462,7 +467,7 @@ export class MainThreadExtensionApi extends Disposable {
 			}
 			if (runtime.lifecycle !== "ready" || runtime.incarnation === undefined) continue;
 			for (const registration of runtime.registrations) {
-				if (registration.kind === 'remoteAuthorityResolver' || registration.kind === 'workspaceEvents' || registration.kind === 'statusBar' || registration.kind === 'sourceControl' || registration.kind === 'textDocumentEvents' || registration.kind === 'taskEvents' || registration.kind === 'debugEvents' || registration.kind === 'customTextEditor' || registration.kind === 'dataChannel' || registration.kind === 'linkPresentationProvider' || registration.kind === 'externalUriOpener') {
+				if (registration.kind === 'remoteAuthorityResolver' || registration.kind === 'workspaceEvents' || registration.kind === 'statusBar' || registration.kind === 'sourceControl' || registration.kind === 'textDocumentEvents' || registration.kind === 'taskEvents' || registration.kind === 'debugEvents' || registration.kind === 'customTextEditor' || registration.kind === 'dataChannel' || registration.kind === 'speechProvider' || registration.kind === 'linkPresentationProvider' || registration.kind === 'externalUriOpener') {
 					continue;
 				}
 				const runtimeId = runtime.id;

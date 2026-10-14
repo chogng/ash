@@ -389,6 +389,92 @@ function registerPseudoterminalCallbacks(registration, provider) {
 	return disposable;
 }
 
+/** Provider sessions use the existing bounded invocation protocol, not a product audio transport. */
+export const speech = Object.freeze({
+ registerSpeechProvider(registrationId, identifier, provider) {
+  if (typeof identifier !== 'string' || !identifier || identifier.length > 256 ||
+   ['provideSpeechToTextSession', 'provideTextToSpeechSession', 'provideKeywordRecognitionSession'].some(name => typeof provider?.[name] !== 'function')) {
+   throw new TypeError('Speech registration requires an identifier and all standard session factories');
+  }
+  const sessions = new Map();
+  function release(id) {
+   const state = sessions.get(id);
+   if (!state) return;
+   sessions.delete(id);
+   state.closed = true;
+   try { state.token.cancel(); }
+   finally {
+    try { state.listener?.dispose(); }
+    finally { state.token.dispose(); state.events.length = 0; }
+   }
+  }
+  const registration = {
+   registrationId, kind: 'speechProvider', identifier,
+   operation: ['createSpeechSession', 'readSpeechSession', 'synthesizeSpeech', 'closeSpeechSession'],
+   disposeResources() {
+    let failure;
+    for (const id of [...sessions.keys()]) { try { release(id); } catch (error) { failure ??= error; } }
+    if (failure) throw failure;
+   },
+   async callback(context, payload, operation) {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload) || typeof payload.sessionId !== 'string' || !/^[a-f0-9-]{36}$/.test(payload.sessionId)) throw new TypeError('Invalid speech session identity');
+    const allowed = operation === 'createSpeechSession' ? ['sessionId', 'kind', 'language'] : operation === 'synthesizeSpeech' ? ['sessionId', 'text'] : ['sessionId'];
+    if (Object.keys(payload).some(key => !allowed.includes(key))) throw new TypeError('Unexpected speech session field');
+    const id = payload.sessionId;
+    if (operation === 'closeSpeechSession') { release(id); return {}; }
+    if (operation === 'createSpeechSession') {
+     if (sessions.has(id) || sessions.size >= 32) throw new Error('Speech session admission limit exceeded');
+     const factories = { speechToText: 'provideSpeechToTextSession', textToSpeech: 'provideTextToSpeechSession', keywordRecognition: 'provideKeywordRecognitionSession' };
+     if (!Object.hasOwn(factories, payload.kind) || payload.language !== undefined && (typeof payload.language !== 'string' || !/^[A-Za-z0-9-]{1,35}$/.test(payload.language))) throw new TypeError('Invalid speech session options');
+     const state = { token: new CancellationTokenSource(), events: [], bytes: 0, closed: false, listener: undefined, kind: payload.kind, session: undefined };
+     sessions.set(id, state);
+     const cancellation = context.cancellationToken.onCancellationRequested(() => release(id));
+     try {
+      state.session = await provider[factories[payload.kind]](state.token.token, payload.language === undefined ? undefined : { language: payload.language });
+      if (context.cancellationToken.isCancellationRequested || sessions.get(id) !== state) throw new Error('Speech session creation cancelled');
+      if (typeof state.session?.onDidChange !== 'function' || state.kind === 'textToSpeech' && typeof state.session.synthesize !== 'function') throw new TypeError('Invalid speech provider session');
+      state.listener = state.session.onDidChange(event => {
+       if (state.closed || sessions.get(id) !== state) return;
+       const maximum = state.kind === 'speechToText' ? 5 : state.kind === 'textToSpeech' ? 3 : 2;
+       if (!Number.isInteger(event?.status) || event.status < 1 || event.status > maximum || event.text !== undefined && (typeof event.text !== 'string' || event.text.length > 16384)) {
+        release(id); return;
+       }
+       const value = { status: event.status, ...(event.text === undefined ? {} : { text: event.text }) };
+       const bytes = JSON.stringify(value).length;
+       if (state.events.length >= 128 || state.bytes + bytes > 262144) { release(id); return; }
+       state.events.push(value); state.bytes += bytes;
+       if (state.kind === 'speechToText' && (event.status === 4 || event.status === 5) || state.kind === 'keywordRecognition' && event.status === 2) state.closed = true;
+      });
+      if (typeof state.listener?.dispose !== 'function') throw new TypeError('Speech event subscription must be disposable');
+      if (sessions.get(id) !== state) { state.listener.dispose(); throw new Error('Speech session was released while subscribing'); }
+      return {};
+     } catch (error) { release(id); throw error; }
+     finally { cancellation.dispose(); }
+    }
+    const state = sessions.get(id);
+    if (!state) throw new Error('Speech session is unavailable');
+    if (operation === 'readSpeechSession') {
+     const events = state.events.splice(0); state.bytes = 0;
+     return { events, closed: state.closed };
+    }
+    if (operation === 'synthesizeSpeech') {
+     if (state.kind !== 'textToSpeech' || state.closed || typeof payload.text !== 'string' || !payload.text.trim() || payload.text.length > 16384) throw new TypeError('Invalid speech synthesis request');
+     const cancellation = context.cancellationToken.onCancellationRequested(() => release(id));
+     try {
+      await state.session.synthesize(payload.text);
+      if (context.cancellationToken.isCancellationRequested) release(id);
+      return {};
+     } finally { cancellation.dispose(); }
+    }
+    throw new Error('Unsupported speech operation');
+   },
+  };
+  const handle = register(registration);
+  activation.subscriptions.push(handle);
+  return handle;
+ },
+});
+
 export const terminals = Object.freeze({
 	registerEnvironmentVariableCollection(registrationId, snapshot) {
 		if (typeof snapshot !== 'function') throw new TypeError('Terminal environment collection requires a snapshot callback');

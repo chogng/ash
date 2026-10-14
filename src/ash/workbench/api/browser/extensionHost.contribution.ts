@@ -1,3 +1,4 @@
+import { ISpeechService } from '../../contrib/speech/common/speechService.js';
 // API composition waits for its contribution-owned bridges before starting package activation.
 import { ITerminalService } from '../../services/terminal/browser/terminal.js';
 import { ITerminalProfileService, ITerminalProfileResolverService } from '../../services/terminal/common/terminal.js';
@@ -19,7 +20,7 @@ import { IViewsService } from '../../services/views/common/viewsService.js';
 
 registerWorkbenchServiceContribution({
 	service: IExtensionHostService,
-	dependencies: [ITerminalService, ITerminalProfileService, ITerminalProfileResolverService, IConfigurationService, IWorkspaceContextService, IExtensionService, IExtensionHostApi, ILogService, ILanguageFeaturesService, ITaskService, ITestingService, IOutputService, IQuickInputService, IViewsService],
+	dependencies: [ISpeechService, ITerminalService, ITerminalProfileService, ITerminalProfileResolverService, IConfigurationService, IWorkspaceContextService, IExtensionService, IExtensionHostApi, ILogService, ILanguageFeaturesService, ITaskService, ITestingService, IOutputService, IQuickInputService, IViewsService],
 	install: context => {
 		const service = context.register(context.container.createInstance(AppServerExtensionHostService, CommandsRegistry, 30_000));
 		const ready = service.start();

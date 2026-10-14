@@ -1,3 +1,4 @@
+import '../../../../contrib/speech/browser/speechService.js';
 import { createEmptyTestLanguagePacks } from '../../../localization/test/common/localizationTestUtils.js';
 import { JSDOM } from 'jsdom';
 import { GlobalExtensionEnablementService } from '../../../../../platform/extensionManagement/common/extensionEnablementService.js';
@@ -854,4 +855,13 @@ test('profile disablement retires declarative settings and welcome content witho
 		assert.deepEqual(service.currentCatalog.extensions.map(value => value.id), [entry.id]);
 		assert.ok(registry.getConfiguration('test.enablement.option'));
 	} finally { dom.window.close(); }
+});
+
+test('speech provider declarations remain bounded immutable metadata in the original manifest owner', () => {
+	const manifest = parseExtensionManifest(JSON.stringify({ name: 'demo', publisher: 'ash', version: '1.0.0', contributes: { speechProviders: [{ name: 'acme.speech', description: 'Recognition' }] } }), descriptor);
+	assert.deepEqual(manifest.contributes.speechProviders, [{ name: 'acme.speech', description: 'Recognition' }]);
+	assert.equal(Object.isFrozen(manifest.contributes.speechProviders[0]), true);
+	for (const providers of [[{ name: '' }], [{ name: 'a', model: 'untrusted' }], [{ name: 'same' }, { name: 'same' }], [{ name: 'a', description: 1 }]]) {
+		assert.throws(() => parseExtensionManifest(JSON.stringify({ name: 'demo', publisher: 'ash', version: '1.0.0', contributes: { speechProviders: providers } }), descriptor), /Invalid speech provider contribution/);
+	}
 });

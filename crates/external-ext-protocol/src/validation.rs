@@ -73,6 +73,7 @@ pub(super) fn validate_registrations(
     let mut debugger_types = BTreeSet::new();
     let mut task_types = BTreeSet::new();
     let mut terminal_profiles = BTreeSet::new();
+    let mut speech_providers = BTreeSet::new();
     let mut has_terminal_environment = false;
     let mut test_profile_providers = BTreeSet::new();
     for registration in registrations {
@@ -140,6 +141,15 @@ pub(super) fn validate_registrations(
                 }
                 validate_display_text(label, "external URI opener label")?;
                 ExtensionCapability::ExternalUriOpener
+            }
+            RegistrationKind::SpeechProvider { identifier } => {
+                validate_identifier(identifier)?;
+                require_unique(
+                    &mut speech_providers,
+                    identifier,
+                    "speech provider identifiers",
+                )?;
+                ExtensionCapability::SpeechProvider
             }
             RegistrationKind::DataChannel { channel_id } => {
                 validate_selector(channel_id, "data channel ID")?;
@@ -272,7 +282,9 @@ pub(super) fn validate_registrations(
             }
             RegistrationKind::TerminalEnvironment {} => {
                 if has_terminal_environment {
-                    return Err(protocol_error("terminal environment collection must be unique"));
+                    return Err(protocol_error(
+                        "terminal environment collection must be unique",
+                    ));
                 }
                 has_terminal_environment = true;
                 ExtensionCapability::TerminalProfileProvider

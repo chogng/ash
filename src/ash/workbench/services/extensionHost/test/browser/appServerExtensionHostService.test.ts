@@ -1,3 +1,5 @@
+import { ISpeechService } from '../../../../contrib/speech/common/speechService.js';
+import { SpeechService } from '../../../../contrib/speech/browser/speechService.js';
 import '../../../../contrib/terminal/common/terminalExtensionPoints.contribution.js';
 import { TerminalContributionService } from '../../../../contrib/terminal/common/terminalExtensionPoints.js';
 import { IEnvironmentVariableService } from '../../../../contrib/terminal/common/environmentVariable.js';
@@ -953,6 +955,7 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 
 function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesService, tasks: ProviderSink<TaskProvider>, tests: ProviderSink<TestProfileProvider>, output?: IOutputService, debug = new ProviderSink<IDebugConfigurationProvider>(), remote?: { connections: IRemoteConnectionApi; confirm: IDialogService['confirm']; }, extensionApi?: IExtensionApi): InstantiationService {
 	const services = workbenchInstantiationService(undefined, undefined, { languageFeatures: languages, output });
+	services.registerSingleton(ISpeechService, () => new SpeechService(undefined));
 	services.registerInstance(ILanguagePackService, createEmptyTestLanguagePacks());
 	services.registerInstance(IFileService, services.resources.add(new FileService()));
 	services.registerSingleton(IExtensionService, () => new TestExtensionService(extensionApi));
@@ -1469,4 +1472,22 @@ suite('Extension terminal profile registration lifecycle', () => {
 		await assert.rejects(profiles.getContributedProfileProvider('acme.demo', 'shell')!.createContributedTerminalProfile({}));
 		assert.equal(api.invocations.length, 1);
 	});
+});
+
+test('onSpeech activates the exact dormant provider and commits it through MainThreadSpeech', async () => {
+	for (const event of ['onSpeech', 'onDemand:speechProvider']) {
+		const api = new FakeExtensionHostApi(dormantSnapshot([event]));
+		const ready = snapshot(2, 'acme.lazy', [], '', [], 11);
+		api.activationResult = Promise.resolve({ ...ready, extensions: ready.extensions.map(runtime => ({ ...runtime, registrations: [{ kind: 'speechProvider' as const, registrationId: 'speech', identifier: 'acme.recognition' }] })) });
+		using languages = new LanguageFeaturesService();
+		using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+		using host = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+		await host.start();
+		const speech = services.get(ISpeechService); assert.equal(speech.hasSpeechProvider, false);
+		const extensions = services.get(IExtensionService); await extensions.activateByEvent('onDebug'); assert.equal(api.activations.length, 0);
+		await extensions.activateByEvent('onSpeech');
+		assert.deepEqual(api.activations.map(({ initialization, ...request }) => request), [{ extensionId: 'acme.demo', activationGeneration: 11, event: { type: 'speech' } }]);
+		assert.equal(speech.hasSpeechProvider, true); assert.equal(host.currentSnapshot.extensions[0]!.registrations[0]!.kind, 'speechProvider');
+		await host.stop(); assert.equal(speech.hasSpeechProvider, false);
+	}
 });

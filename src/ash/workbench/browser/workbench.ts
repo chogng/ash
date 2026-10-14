@@ -35,6 +35,7 @@ import { IAppServerApi as AppServerApiId, IServerEventApi as ServerEventApiId } 
 import { ILanguageModelsService, LanguageModelsService } from '../contrib/chat/common/languageModels.js';
 import { ILanguageModelsConfigurationService } from '../contrib/chat/common/languageModelsConfiguration.js';
 import { ChatModelPreferences, LanguageModelsConfigurationService } from '../contrib/chat/browser/languageModelsConfigurationService.js';
+import { IAgentVoiceService } from '../../platform/agentHost/common/agentService.js';
 import { IDictationService } from '../../platform/dictation/common/dictationService.js';
 import { IHooksService } from '../../platform/hooks/common/hooksService.js';
 import { ExtensionColorThemeService } from '../services/extensions/browser/extensionColorThemeService.js';
@@ -74,7 +75,7 @@ import { assertDefined } from "../../base/common/types.js";
 import { URI } from "../../base/common/uri.js";
 import { AccessibilityService } from "../../platform/accessibility/browser/accessibilityService.js";
 import { IAccessibilityService } from "../../platform/accessibility/common/accessibility.js";
-import { ILogService } from "../../platform/log/common/log.js";
+import { ILoggerService, ILogService } from "../../platform/log/common/log.js";
 import type { LogService } from "../../platform/log/common/logServiceImpl.js";
 import { ILifecycleService, LifecyclePhase, type ShutdownReason } from "../services/lifecycle/common/lifecycle.js";
 import { IDebugAdapterProcessService } from "../../platform/debug/common/debugAdapterProcessService.js";
@@ -551,6 +552,7 @@ export class Workbench extends Disposable {
 		this.logService = logService;
 		this.registerErrorHandler(logService);
 		services.registerInstance(ILogService, logService);
+		if (!services.has(ILoggerService)) services.registerInstance(ILoggerService, logService);
 		services.registerInstance(IRendererHostService, api);
 		services.registerInstance(IMessageHistoryService, api.messageHistory);
 		services.registerInstance(IExtensionResourceLoaderService, enabledExtensions.resources);
@@ -561,6 +563,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IWorkspaceContextService, workspaceContext);
 		AppServerAvailableContext.bindTo(contextKeys).set(api.hasAppServer);
 		services.registerInstance(IDictationService, api.dictation);
+		services.registerInstance(IAgentVoiceService, api.agentVoice);
 		services.registerInstance(ILocalTranscriptionService, api.localTranscription ?? this._register(new NullLocalTranscriptionService()));
 		services.registerInstance(IAgentCapabilitiesService, api.agentCapabilities);
 		services.registerInstance(IMcpServerStatusService, api.mcpServerStatus);

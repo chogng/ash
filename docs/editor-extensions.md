@@ -539,7 +539,10 @@ Extensions 的“内置”列表包含所有预装扩展，包括没有脚本入
 | 文档       | `workspace.openTextDocument(Uri)`；打开、修改、关闭事件；UTF-16 `getText(range)`、`offsetAt`、`positionAt`、`lineAt`、单词范围                                                                                      |
 | 诊断       | `languages.createDiagnosticCollection`、Diagnostic 四种严重度；set/delete/clear/dispose；资源版本与运行实例隔离                                                                                                     |
 | 语言       | 语言 ID 的 Hover、Completion、definition、references、rename、symbols、folding、links、code actions、selection ranges、highlights；各 API 保留当前子集限制                                                          |
+| Speech     | `speech.registerSpeechProvider` 与标准 STT/TTS/keyword session、状态事件、语言 options 和持续取消 token；Node 与 Rust/V8 复用同一兼容层，Provider 拥有识别、合成与媒体访问 |
 | 基础类型   | `Uri`、`Position`、`Range`、`Hover`、`MarkdownString`、`Diagnostic`、`CompletionItem`、`CompletionList`、`TextEdit`、`WorkspaceEdit`、`SnippetString`、`Disposable` 的上述用法，不提供完整类型成员                  |
+
+Speech 注册必须在原包的 `speechProvider` capability ceiling 内。标准市场 JS 包仅在 `enabledApiProposals` 明确声明 `speech` 时请求此能力，实际执行仍受原包授权与宿主权限约束；Plugin 使用原 capability 声明。窗口的 SpeechService 消费精确 registration/incarnation 的有界会话事件，注销、撤权或断连取消该来源的 session。原 Dictation 输入在没有扩展注册时保留；多个活动注册明确拒绝未选择的请求。扩展会话不显示原 Dictation backend 的设备选项。兼容层不提供麦克风、播放器、识别服务商或新的 Voice RPC。 声明 `contributes.speechProviders` 的扩展在原 `onSpeech` 事件中激活；声明却未能注册时不会回落到另一麦克风。标准会话语言来自原窗口的 `accessibility.voice.speechLanguage`（`auto` 跟随显示语言），不双写旧 Dictation 配置。Desktop Chat 与 Cowork 可朗读已完成的回复；逐段等待扩展的 `Stopped`，消息隐藏、移除、修正或停止命令取消其原会话。
 
 激活上下文提供同一生命周期的 `subscriptions`、包快照对应的 `extensionUri`/`extensionPath`、
 `asAbsolutePath`、生产运行模式及自身 Extension 元数据。激活完成后，导出对象和激活 Promise
