@@ -17,7 +17,7 @@ import type { IDimension } from '../../../../base/browser/dom.js';
 import type { IContextViewProvider } from '../../../../base/browser/ui/contextview/contextview.js';
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { DisposableMap, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { IDirPermissionsService } from '../../../../platform/dirPermissions/common/dirPermissionsService.js';
+import { IWorkspaceTrustApi } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { IAgentCapabilitiesService } from '../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
@@ -95,7 +95,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		@ILanguagePackService private readonly languagePackService: ILanguagePackService,
 		@IAgentCapabilitiesService private readonly agentCapabilitiesService: IAgentCapabilitiesService,
 		@IAppServerRemoteAgentService private readonly remoteAgentService: IAppServerRemoteAgentService,
-		@IDirPermissionsService private readonly dirPermissionsService: IDirPermissionsService,
+		@IWorkspaceTrustApi private readonly workspaceTrust: IWorkspaceTrustApi,
 		@IPreferencesService private readonly preferencesService: IPreferencesService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IThemeService themeService: IThemeService,
@@ -247,7 +247,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 			updateItem: item => { if (!('domNode' in item.value)) settingsRenderer.update(item.value); },
 			disposeItem: item => { if (!('domNode' in item.value)) settingsRenderer.disposeSetting(item.id); },
 		}));
-		this.agentCapabilitiesSettings = this._register(new AgentCapabilitiesSettings(settingsContent, this.agentCapabilitiesService, this.remoteAgentService, this.dirPermissionsService, this.localizationService));
+		this.agentCapabilitiesSettings = this._register(new AgentCapabilitiesSettings(settingsContent, this.agentCapabilitiesService, this.remoteAgentService, this.workspaceTrust, this.localizationService));
 		this.renderCategory(initialCategory);
 		this._register(configurationRegistry.onDidUpdateConfiguration(({ properties }) => {
 			// Remove changed schemas first so keyed controls release their old value bindings.

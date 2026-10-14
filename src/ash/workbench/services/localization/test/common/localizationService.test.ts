@@ -18,7 +18,7 @@ import { WorkbenchLocalizationService } from "../../browser/workbenchLocalizatio
 import { AppServerProtocolIncompatibleError } from '../../../../../platform/agentHost/common/appServerProtocolCompatibility.js';
 
 import { commandActionLabel } from '../../../../../platform/action/common/action.js';
-import { dirPermissionNames } from '../../../../../platform/dirPermissions/common/dirPermissionsService.js';
+import { workspaceTrustPermissionNames } from '../../../../../platform/workspace/common/workspaceTrust.js';
 import { JSDOM } from 'jsdom';
 import { QuickInputController } from '../../../../../platform/quickinput/browser/quickInputController.js';
 import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '../../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
@@ -37,8 +37,8 @@ suite('Workbench localization', () => {
 	test('shared permission originals remain English while their window renders Chinese', () => {
 		initializeTestLocalization('zh-CN');
 		using localization = new WorkbenchLocalizationService();
-		assert.equal(dirPermissionNames.readFiles, 'Read files');
-		assert.equal(localization.translate('ash.settings', 'capabilities.permission.readFiles', dirPermissionNames.readFiles), '读取文件');
+		assert.equal(workspaceTrustPermissionNames.readFiles, 'Read files');
+		assert.equal(localization.translate('ash.settings', 'capabilities.permission.readFiles', workspaceTrustPermissionNames.readFiles), '读取文件');
 	});
 
 	test('backend protocol mismatch reports the fingerprints in Chinese', () => {

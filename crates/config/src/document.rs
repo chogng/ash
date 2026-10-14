@@ -4,7 +4,7 @@ use crate::ConfigDiagnostic;
 use crate::ConfigError;
 use crate::ConfigProvenance;
 use crate::DirConfigIntent;
-use crate::DirPermissionsConfig;
+use crate::DirectoryGrantsConfig;
 use crate::GitConfig;
 use crate::HooksConfig;
 use crate::LanguageServersConfig;
@@ -312,8 +312,9 @@ pub struct UserConfigDocument {
     pub commit_messages: CommitMessageConfig,
     #[serde(default)]
     pub exec_policy: UserExecPolicyConfig,
-    #[serde(default)]
-    pub dir_permissions: DirPermissionsConfig,
+    // Keep the persisted key stable for existing profiles.
+    #[serde(default, rename = "dirPermissions")]
+    pub directory_grants: DirectoryGrantsConfig,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub gui: BTreeMap<String, serde_json::Value>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -505,7 +506,7 @@ pub struct ResolvedConfig {
     pub codebase: CodebaseConfig,
     pub commit_messages: CommitMessageConfig,
     pub exec_policy: UserExecPolicyConfig,
-    pub dir_permissions: DirPermissionsConfig,
+    pub directory_grants: DirectoryGrantsConfig,
     pub gui: BTreeMap<String, serde_json::Value>,
     pub tui: BTreeMap<String, serde_json::Value>,
     pub desktop: HashMap<String, serde_json::Value>,
@@ -701,7 +702,7 @@ impl From<&UserConfigDocument> for ResolvedConfig {
             codebase: document.codebase.clone(),
             commit_messages: document.commit_messages.clone(),
             exec_policy: document.exec_policy.clone(),
-            dir_permissions: document.dir_permissions.clone(),
+            directory_grants: document.directory_grants.clone(),
             gui: document.gui.clone(),
             tui: document.tui.clone(),
             desktop: document.desktop.clone(),

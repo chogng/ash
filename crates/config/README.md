@@ -4,7 +4,7 @@
 
 1. `ConfigStore` 按 `schemaVersion` 严格读取并原子迁移用户 `config.toml`；根级 `[gui]`、`[tui]` 作为前端自有键值表原样保存，SQLite 保存 revision、generation 和命令回执。内存中的已提交快照与变化通知一起更新，运行时可独立读取该快照；损坏的文件编辑仍使严格读取和命令失败，不替换已提交状态。
 2. `DirConfigStore` 严格读取目录提供的 `.ash/config.toml`；目录文档只能表达待处理的配置意图，不能给自身增加 capability。
-3. `DirPermissionsConfig` 按 `DirId` 保存用户明确授予的 capability 集合；缺失条目表示没有持久授权，不使用 Trusted、Restricted 或目录级 Trust 状态。
+3. `DirectoryGrantsConfig` 按 `DirId` 保存用户明确授予的 capability 集合；缺失条目表示没有持久授权，不使用 Trusted、Restricted 或目录级 Trust 状态。
 
 Plugin 包标识与版本直接复用 `ash-plugin` 的类型和校验，配置层只保存请求及其作用域。
 

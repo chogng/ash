@@ -52,6 +52,7 @@ import type { IChatService } from '../../../../services/chat/common/chatService.
 import type { IAppServerRemoteAgentService } from '../../../../services/remote/common/appServerRemoteAgentService.js';
 import type { RemoteAgentConnection } from '../../../../../platform/remote/common/remoteAgentApi.js';
 import type { RemoteConnectionState } from '../../../../../platform/remote/common/remote.js';
+import type { IWorkspaceTrustApi } from '../../../../../platform/workspace/common/workspaceTrust.js';
 import type { ILanguagePackService } from '../../../../../platform/languagePacks/common/languagePacks.js';
 import type { ILocalTranscriptionModelStatus, ILocalTranscriptionService as LocalTranscriptionService, LocalTranscriptionModelState as ModelState } from '../../../../../platform/localTranscription/common/localTranscription.js';
 
@@ -131,7 +132,7 @@ const { IAgentCapabilitiesService } = await import('../../../../../platform/agen
 const { ITraceSettingsService } = await import('../../../../../platform/trace/common/traceSettingsService.js');
 const { IFileDialogService } = await import('../../../../../platform/dialogs/common/dialogs.js');
 const { IAppServerRemoteAgentService: RemoteAgentServiceId } = await import('../../../../services/remote/common/appServerRemoteAgentService.js');
-const { IDirPermissionsService: DirPermissionsServiceId } = await import('../../../../../platform/dirPermissions/common/dirPermissionsService.js');
+const { IWorkspaceTrustApi: WorkspaceTrustApiId } = await import('../../../../../platform/workspace/common/workspaceTrust.js');
 const configurationRegistry = Registry.as<InstanceType<typeof ConfigurationRegistry>>(ConfigurationExtensions.Configuration);
 configurationRegistry.updateConfigurations({ add: [...parseExtensionManifest(JSON.stringify(manifest).replace(/%([^%]+)%/g, (match, key) => (gitMessages as Record<string, string>)[key] ?? match), { id: 'ash.git', name: 'git', publisher: 'ash', version: '0.1.0' }).contributes.configuration], remove: [] });
 const { EditorPart } = await import('../../../../browser/parts/editor/editorPart.js');
@@ -189,7 +190,7 @@ test('Sandbox diagnostics render Chinese readiness and preserve backend reasons 
 			sandboxDiagnostics: [{ backend: 'mxc', network: 'managed', readiness: { type: 'unsupported', reason: '<script>diagnostic</script>' } }]
 		}),
 	}, { onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService,
-		{ onDidChangePermissions: Event.None } as IDirPermissionsService, {
+		{ onDidChangeTrust: Event.None } as IWorkspaceTrustApi, {
 		whenReady: Promise.resolve(), translate: (bundle, key, fallback) => chinese.bundles[bundle]?.[key] ?? fallback,
 	});
 	panel.setView('sandbox');
@@ -1377,10 +1378,10 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		reconnect: async () => ({ kind: 'alreadyConnected' }),
 		rollbackRuntime: async () => ({ kind: 'cancelled' }),
 	});
-	services.registerInstance(DirPermissionsServiceId, {
-		onDidChangePermissions: Event.None,
-		list: async () => ({ revision: 1, entries: [{ dir: 'dir-1', path: '/workspace', permissions: ['readFiles'] }] }),
-	} as unknown as IDirPermissionsService);
+	services.registerInstance(WorkspaceTrustApiId, {
+		onDidChangeTrust: Event.None,
+		listDirectories: async () => ({ revision: 1, entries: [{ dir: 'dir-1', path: '/workspace', permissions: ['readFiles'] }] }),
+	} as unknown as IWorkspaceTrustApi);
 	let searchSnapshot: import('../../../../../platform/search/common/search.js').ContentSearchConfiguration = { revision: 4, engine: 'tgrep' };
 	let rejectSearchSave = false;
 	let nextSearchRead: Promise<typeof searchSnapshot> | undefined;

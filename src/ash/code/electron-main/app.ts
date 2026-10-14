@@ -19,7 +19,7 @@ import { AppServerBrowserHost } from "../../platform/agentHost/electron-main/app
 import { rendererSystemHostRoutes } from "../../platform/native/electron-main/rendererSystemHostRoutes.js";
 import { nativeImage, nativeTheme, shell } from "electron";
 import { app, BrowserWindow, dialog, globalShortcut, ipcMain, screen, Menu, Tray, type Event as ElectronEvent, type MenuItemConstructorOptions } from "electron/main";
-import type { DirGrant } from "../../platform/dirPermissions/common/dirPermissionsService.js";
+
 import { basename, dirname, isAbsolute, join, parse } from "node:path";
 import { mkdir } from "node:fs/promises";
 import { readFileSync } from "node:fs";
@@ -106,7 +106,7 @@ import { electronRemoteWindowMainHost } from "../../platform/remote/electron-mai
 import { RemoteWindowMainContext } from "../../platform/remote/electron-main/remoteWindowMainContext.js";
 import { WORKSPACE_CONTEXT_CHANGED_CHANNEL } from "../../platform/workspace/common/workspaceIpc.js";
 import { createAppServerWorkspaceTransitionAdapter, reconnectAppServerWorkspace } from "../../platform/workspaces/electron-main/appServerWorkspaceTransition.js";
-import { DEVELOPMENT_DIR_PERMISSIONS, READ_DIR_PERMISSIONS } from '../../platform/workspace/common/workspaceTrust.js';
+import { DEVELOPMENT_DIR_PERMISSIONS, READ_DIR_PERMISSIONS, type WorkspaceTrustGrant } from '../../platform/workspace/common/workspaceTrust.js';
 import { type IWorkspaceTransitionFailure, type WorkspaceTransitionMainServiceOptions, WorkspaceTransitionFailureKind, WorkspaceTransitionMainService, WorkspaceTransitionStatus } from "../../platform/workspaces/electron-main/workspaceTransitionMainService.js";
 import { WorkspacesManagementMainService } from '../../platform/workspaces/electron-main/workspacesManagementMainService.js';
 import { StorageMainService } from '../../platform/storage/electron-main/storageMainService.js';
@@ -1941,7 +1941,7 @@ export class AshApplication extends Disposable {
 		];
 	}
 
-	private async resolveDirGrant(workspaceHost: RendererWorkspaceHost, path: string): Promise<DirGrant | undefined> {
+	private async resolveDirGrant(workspaceHost: RendererWorkspaceHost, path: string): Promise<WorkspaceTrustGrant | undefined> {
 		if (this.appServerStartupMode === "disabled") return { type: "config" };
 		const persisted = await workspaceHost.readPermissions(path);
 		if (persisted !== undefined) return { type: "config" };

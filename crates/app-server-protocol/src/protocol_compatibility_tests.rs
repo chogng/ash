@@ -244,3 +244,46 @@ fn terminal_prompt_type_remains_optional_and_round_trips_output_order() {
     assert_eq!(current.after_output_sequence, 7);
     assert_eq!(serde_json::to_value(current).unwrap(), value);
 }
+
+#[test]
+fn directory_grants_keep_legacy_wire_contracts() {
+    use crate::protocol::config::DirectoryGrantsReadResult;
+    use crate::protocol::config::DirectoryGrantsSetParams;
+    use crate::protocol::registry::ClientMethod;
+    use ts_rs::TS;
+
+    assert_eq!(
+        ClientMethod::DirectoryGrantsRead.as_str(),
+        "config/dirPermissions/read"
+    );
+    assert_eq!(
+        ClientMethod::DirectoryGrantsList.as_str(),
+        "config/dirPermissions/list"
+    );
+    assert_eq!(
+        ClientMethod::DirectoryGrantsSet.as_str(),
+        "config/dirPermissions/set"
+    );
+    assert_eq!(
+        ClientMethod::DirectoryGrantsForget.as_str(),
+        "config/dirPermissions/forget"
+    );
+    assert_eq!(
+        DirectoryGrantsSetParams::name(&ts_rs::Config::default()),
+        "DirPermissionsSetParams"
+    );
+    let request = serde_json::json!({"commandId":"directory-grant", "expectedRevision":7, "path":"/tmp/project", "permissions":["readFiles", "useLanguageServices"]});
+    let decoded: DirectoryGrantsSetParams = serde_json::from_value(request.clone()).unwrap();
+    assert_eq!(serde_json::to_value(decoded).unwrap(), request);
+    let dir = format!("sha256:{}", "ab".repeat(32));
+    for reply in [
+        serde_json::json!({"dir":dir}),
+        serde_json::json!({"dir":dir, "permissions":[]}),
+    ] {
+        let decoded: DirectoryGrantsReadResult = serde_json::from_value(reply.clone()).unwrap();
+        assert_eq!(serde_json::to_value(decoded).unwrap(), reply);
+    }
+    let mut invalid = request;
+    invalid["permissions"] = serde_json::json!(["unknownCapability"]);
+    assert!(serde_json::from_value::<DirectoryGrantsSetParams>(invalid).is_err());
+}

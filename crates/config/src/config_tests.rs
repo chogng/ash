@@ -650,7 +650,7 @@ type = "disabled"
     let restricted_id = restricted.parse::<DirId>().unwrap();
     let permissions = snapshot
         .values
-        .dir_permissions
+        .directory_grants
         .explicit_permissions_for(&trusted_id)
         .unwrap();
 
@@ -664,19 +664,19 @@ type = "disabled"
     assert!(
         snapshot
             .values
-            .dir_permissions
+            .directory_grants
             .explicit_permissions_for(&restricted_id)
             .is_none()
     );
     assert!(
         snapshot
             .values
-            .dir_permissions
+            .directory_grants
             .explicit_permissions_for(&mismatched_id)
             .is_none()
     );
     assert_eq!(
-        snapshot.values.dir_permissions.path_for(&trusted_id),
+        snapshot.values.directory_grants.path_for(&trusted_id),
         Some(trusted_path.as_path())
     );
 
@@ -1369,7 +1369,7 @@ fn dir_permissions_commands_persist_user_owned_decisions() {
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("set-dir-permissions").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
-            command: UserConfigCommand::SetDirPermissions {
+            command: UserConfigCommand::SetDirectoryGrant {
                 dir: dir.clone(),
                 permissions: permissions.clone(),
                 display_path: Some(display_path.clone()),
@@ -1382,7 +1382,7 @@ fn dir_permissions_commands_persist_user_owned_decisions() {
             .read_snapshot()
             .unwrap()
             .values
-            .dir_permissions
+            .directory_grants
             .explicit_permissions_for(&dir),
         Some(&permissions)
     );
@@ -1391,7 +1391,7 @@ fn dir_permissions_commands_persist_user_owned_decisions() {
             .read_snapshot()
             .unwrap()
             .values
-            .dir_permissions
+            .directory_grants
             .path_for(&dir),
         Some(display_path.as_path())
     );
@@ -1401,7 +1401,7 @@ fn dir_permissions_commands_persist_user_owned_decisions() {
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("forget-dir-permissions").unwrap(),
             expected_revision: configured.revision,
-            command: UserConfigCommand::ForgetDirPermissions { dir: dir.clone() },
+            command: UserConfigCommand::ForgetDirectoryGrant { dir: dir.clone() },
         })
         .unwrap();
     assert_eq!(
@@ -1409,7 +1409,7 @@ fn dir_permissions_commands_persist_user_owned_decisions() {
             .read_snapshot()
             .unwrap()
             .values
-            .dir_permissions
+            .directory_grants
             .explicit_permissions_for(&dir),
         None
     );
@@ -1418,7 +1418,7 @@ fn dir_permissions_commands_persist_user_owned_decisions() {
             .read_snapshot()
             .unwrap()
             .values
-            .dir_permissions
+            .directory_grants
             .path_for(&dir),
         None
     );

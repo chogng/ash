@@ -38,7 +38,7 @@ import type { ICodebaseSymbolsApi } from "../../codebaseSymbols/common/codebaseS
 import type { IRemoteAgentApi } from "../../remote/common/remoteAgentApi.js";
 import type { IRemoteConnectionApi } from "../../remote/common/remoteConnectionService.js";
 import type { IExtensionManagementApi } from "../../extensionManagement/common/extensionManagementApi.js";
-import type { IDirPermissionsApi } from "../../dirPermissions/common/dirPermissionsApi.js";
+import type { IWorkspaceTrustApi } from '../../workspace/common/workspaceTrust.js';
 
 import type { IAgentCapabilitiesService } from '../../agentCapabilities/common/agentCapabilitiesService.js';
 import type { IMcpServerStatusService } from '../../mcp/common/mcpServerStatusService.js';
@@ -127,7 +127,7 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly localGit: ILocalGitService;
 	readonly extensionManagement: IExtensionManagementApi;
 	readonly toolSearch: IToolSearchApi;
-	readonly dirPermissions: IDirPermissionsApi;
+	readonly workspaceTrust: IWorkspaceTrustApi;
 	readonly agentCapabilities: IAgentCapabilitiesService;
 	readonly mcpServerStatus: IMcpServerStatusService;
 	readonly traceSettings: ITraceSettingsService;

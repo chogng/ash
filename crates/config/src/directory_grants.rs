@@ -10,7 +10,7 @@ use std::path::PathBuf;
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct DirPermissionsConfig {
+pub struct DirectoryGrantsConfig {
     #[serde(default)]
     pub entries: BTreeMap<DirId, Permissions>,
     /// Canonical paths retained only as display metadata.
@@ -18,7 +18,7 @@ pub struct DirPermissionsConfig {
     pub paths: BTreeMap<DirId, PathBuf>,
 }
 
-impl DirPermissionsConfig {
+impl DirectoryGrantsConfig {
     pub fn explicit_permissions_for(&self, dir: &DirId) -> Option<&Permissions> {
         self.entries.get(dir)
     }
@@ -36,5 +36,5 @@ impl DirPermissionsConfig {
 }
 
 #[cfg(test)]
-#[path = "dir_permissions_tests.rs"]
+#[path = "directory_grants_tests.rs"]
 mod tests;

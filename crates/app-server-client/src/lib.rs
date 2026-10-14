@@ -29,6 +29,8 @@ use ash_app_server_protocol::protocol::attachments::AttachmentUploadStartResult;
 use ash_app_server_protocol::protocol::attachments::AttachmentUploadWriteParams;
 use ash_app_server_protocol::protocol::attachments::AttachmentUploadWriteResult;
 use ash_app_server_protocol::protocol::common::EmptyParams;
+use ash_app_server_protocol::protocol::config::DirectoryGrantsReadParams;
+use ash_app_server_protocol::protocol::config::DirectoryGrantsReadResult;
 use ash_app_server_protocol::protocol::config::{
     ConfigCommandResult, ConfigReadResult, ConfigUpdateParams, HookRemoveParams,
     HookSetEnablementParams, HookUpsertParams, LanguageServerConfigureParams,
@@ -60,10 +62,9 @@ use ash_app_server_protocol::protocol::dictation::DictationStopResult;
 use ash_app_server_protocol::protocol::diff::DiffComputeParams;
 use ash_app_server_protocol::protocol::diff::DiffComputeResult;
 use ash_app_server_protocol::protocol::environment::{
-    DirPermissionsReadParams, DirPermissionsReadResult, EnvDirsSetParams, EnvDirsSetResult,
-    SessionDirAddParams, SessionDirAddResult, SessionDirListParams, SessionDirListResult,
-    SessionDirMoveParams, SessionDirMoveResult, SessionDirMutationResult,
-    SessionDirPermissionsSetParams, SessionDirRemoveParams,
+    EnvDirsSetParams, EnvDirsSetResult, SessionDirAddParams, SessionDirAddResult,
+    SessionDirListParams, SessionDirListResult, SessionDirMoveParams, SessionDirMoveResult,
+    SessionDirMutationResult, SessionDirPermissionsSetParams, SessionDirRemoveParams,
 };
 use ash_app_server_protocol::protocol::error::AppServerErrorData;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
@@ -693,11 +694,11 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         self.call(ClientMethod::ProjectList, ProjectListParams::default())
     }
 
-    pub fn read_dir_permissions(
+    pub fn read_directory_grants(
         &mut self,
-        params: DirPermissionsReadParams,
-    ) -> Result<DirPermissionsReadResult, ClientError> {
-        self.call(ClientMethod::DirPermissionsRead, params)
+        params: DirectoryGrantsReadParams,
+    ) -> Result<DirectoryGrantsReadResult, ClientError> {
+        self.call(ClientMethod::DirectoryGrantsRead, params)
     }
 
     pub fn read_project(

@@ -6,12 +6,12 @@ import { Position } from "../../../../editor/common/core/position.js";
 import { Range } from "../../../../editor/common/core/range.js";
 import { LanguageDiagnosticSeverity, type LanguageDiagnostic, type LanguageDiagnosticsPublisher } from '../../../../editor/common/languages.js';
 import { type TextModel } from "../../../../editor/common/model/textModel.js";
-import { type IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
+import { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
 import { AppServerRemoteError } from "../../../../platform/agentHost/common/appServerError.js";
 import { workspaceResourceFromPath } from "../../../../platform/workspace/common/workspace.js";
 import { type ILanguageApi } from "../../../../platform/language/common/languageApi.js";
-import { workspaceRelativePath, type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
-import { type IDirPermissionsService } from "../../../../platform/dirPermissions/common/dirPermissionsService.js";
+import { workspaceRelativePath, IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
+import { IWorkspaceTrustManagementService } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { type AppServerErrorName, type LanguageCodeActionDiagnosticDto, type LanguageDiagnosticsNotification } from "../../../../../../.build/protocol/typescript/index.js";
 import { type ICodeIntelligenceDocumentService } from "../../codeIntelligence/common/codeIntelligenceDocumentService.js";
 import { AppServerLanguageSupport } from "./appServerLanguageSupport.js";
@@ -60,13 +60,21 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 	private alive = true;
 	readonly onDidChangeDiagnostics = this.changeEmitter.event;
 
-	constructor(private readonly api: ILanguageApi, events: IServerEventApi, private readonly workspace: IWorkspaceContextService, private readonly codeIntelligenceDocuments?: ICodeIntelligenceDocumentService, private readonly dirPermissions?: IDirPermissionsService) {
+	constructor(
+		private readonly api: ILanguageApi,
+		private readonly codeIntelligenceDocuments: ICodeIntelligenceDocumentService | undefined,
+		private readonly checkWorkspaceTrust: boolean,
+		@IServerEventApi events: IServerEventApi,
+		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
+		@IWorkspaceTrustManagementService private readonly workspaceTrust: IWorkspaceTrustManagementService,
+	) {
 		super();
 		const subscription = events.subscribe(event => {
 			if (event.method === "language/diagnostics") this.acceptDiagnostics(event.params);
-			if (event.method === "config/changed" || event.method === "extensions/changed") this.queuePermissionRefresh();
+			if (event.method === "extensions/changed" || (!checkWorkspaceTrust && event.method === "config/changed")) this.queuePermissionRefresh();
 		});
 		this._register(toDisposable(() => subscription.dispose()));
+		if (checkWorkspaceTrust) this._register(workspaceTrust.onDidChangeTrust(() => this.queuePermissionRefresh()));
 		this._register(workspace.onDidChangeWorkspace(() => {
 			this.languageAllowed = false;
 			this.support = new AppServerLanguageSupport();
@@ -292,7 +300,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 	}
 
 	private async refreshDirAccess(generation: number): Promise<void> {
-		const access = await resolveAppServerLanguageDirAccess(this.workspace, this.dirPermissions);
+		const access = await resolveAppServerLanguageDirAccess(this.workspace, this.workspaceTrust, this.checkWorkspaceTrust);
 		if (!this.alive || generation !== this.permissionRefreshGeneration || this.workspace.getWorkspace().id !== access.workspaceId) return;
 		const support = access.allowed ? await AppServerLanguageSupport.read(this.api, this.workspace) : new AppServerLanguageSupport();
 		if (!this.alive || generation !== this.permissionRefreshGeneration || this.workspace.getWorkspace().id !== access.workspaceId) return;

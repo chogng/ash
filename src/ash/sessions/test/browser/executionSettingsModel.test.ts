@@ -1,9 +1,10 @@
+import type { WorkspaceTrustPermission } from '../../../platform/workspace/common/workspaceTrust.js';
 import type { ILocalizationService } from '../../../workbench/services/localization/common/localizationService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { DeferredPromise } from '../../../base/common/async.js';
 import { Emitter, Event } from '../../../base/common/event.js';
-import type { IDirPermissionsService, DirPermission } from '../../../platform/dirPermissions/common/dirPermissionsService.js';
+import type { IWorkspaceTrustApi } from '../../../platform/workspace/common/workspaceTrust.js';
 import type { IAgentExecutionSettingsService, ExecutionSettings } from '../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import type { IAgentCapabilitiesService } from '../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import type { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
@@ -23,15 +24,16 @@ function ready(model: ExecutionSettingsModel): Promise<void> {
 test('execution settings preserve an unsaved default while saving an aliased directory and retain discovery capabilities', async () => {
 	let settings: ExecutionSettings = { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' };
 	const execution: IAgentExecutionSettingsService = { onDidChange: Event.None, read: async () => ({ revision: 1, settings }), configure: async draft => { settings = draft; } };
-	let permissions: readonly DirPermission[] = ['readFiles', 'loadInstructions', 'discoverSkills'];
+	let permissions: readonly WorkspaceTrustPermission[] = ['readFiles', 'loadInstructions', 'discoverSkills'];
 	let forgotten = false;
-	const directories: IDirPermissionsService = {
-		onDidChangePermissions: Event.None,
-		list: async () => ({ revision: 1, entries: forgotten ? [] : [{ dir: 'same-directory', path: '/canonical', permissions }] }),
-		read: async () => permissions,
-		resolve: async () => ({ dir: 'same-directory', permissions }),
-		set: async (_path, granted, revision) => { assert.equal(revision, 1); permissions = granted; return { revision: 2, generation: 2, disposition: 'updated' }; },
-		forget: async dir => { assert.equal(dir, 'same-directory'); forgotten = true; return { revision: 3, generation: 3, disposition: 'updated' }; },
+	const directories: IWorkspaceTrustApi = {
+		onDidChangeTrust: Event.None,
+		createGrant: async () => { throw new Error('Unexpected grant preparation'); },
+		persistGrant: async () => { throw new Error('Unexpected host grant write'); },
+		listDirectories: async () => ({ revision: 1, entries: forgotten ? [] : [{ dir: 'same-directory', path: '/canonical', permissions }] }),
+		readDirectory: async () => ({ dir: 'same-directory', permissions }),
+		setDirectoryPermissions: async (_path, granted, revision) => { assert.equal(revision, 1); permissions = granted; return { revision: 2, generation: 2, disposition: 'updated' }; },
+		forgetDirectory: async dir => { assert.equal(dir, 'same-directory'); forgotten = true; return { revision: 3, generation: 3, disposition: 'updated' }; },
 	};
 	const capabilities: IAgentCapabilitiesService = { isAvailable: true, read: async () => ({ directoryGrantsReadable: true, tools: [], toolSets: [], sandboxBackends: [], sandboxDiagnostics: [], localProcessSandboxConfigured: true }) };
 	const remote = { connectionState: 'connected', onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService;
@@ -53,12 +55,57 @@ test('execution settings preserve an unsaved default while saving an aliased dir
 
 function executionFixture(execution: IAgentExecutionSettingsService) {
 	return new ExecutionSettingsModel(execution,
-		{ onDidChangePermissions: Event.None } as IDirPermissionsService,
+		{ onDidChangeTrust: Event.None } as IWorkspaceTrustApi,
 		{ read: async () => ({ directoryGrantsReadable: false }) } as IAgentCapabilitiesService,
 		{ connectionState: 'connected', onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService,
 		{} as IDialogService, { translate: (_bundle, _key, fallback) => fallback } as ILocalizationService);
 }
 const manualDefaults: ExecutionSettings = { approvalMode: 'manual', commandFileAccess: 'readOnly', commandNetworkAccess: 'denied' };
+
+test('a directory revision conflict preserves the draft and never silently retries its grant', async () => {
+	const precise = Object.freeze(['readFiles', 'discoverSkills', 'useLanguageServices'] as const);
+	const writes: unknown[] = [];
+	const trust: IWorkspaceTrustApi = {
+		onDidChangeTrust: Event.None,
+		readDirectory: async () => ({ dir: 'canonical', permissions: precise }),
+		listDirectories: async () => ({ revision: 7, entries: [{ dir: 'canonical', path: '/canonical', permissions: precise }] }),
+		setDirectoryPermissions: async (path, permissions, revision) => {
+			writes.push({ path, permissions, revision });
+			throw new Error('directory revision conflict');
+		},
+		forgetDirectory: async () => { throw new Error('Unexpected revocation'); },
+		createGrant: async () => { throw new Error('Unexpected host grant'); },
+		persistGrant: async () => { throw new Error('Unexpected host write'); },
+	};
+	using model = new ExecutionSettingsModel(
+		{ onDidChange: Event.None, read: async () => ({ revision: 3, settings: manualDefaults }), configure: async () => { } },
+		trust,
+		{ isAvailable: true, read: async () => ({ directoryGrantsReadable: true, tools: [], toolSets: [], sandboxBackends: [], sandboxDiagnostics: [], localProcessSandboxConfigured: true }) },
+		{ connectionState: 'connected', onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService,
+		{} as IDialogService, { translate: (_bundle, _key, fallback) => fallback } as ILocalizationService,
+	);
+	const initialized = ready(model);
+	model.setVisible(true);
+	await initialized;
+	const path = field(model, 'directory');
+	if (path.kind === 'text') path.setValue('/alias');
+	const access = field(model, 'directory-access');
+	if (access.kind === 'select') access.setValue('commands');
+	const save = field(model, 'save-directory');
+	assert.equal(save.kind, 'action');
+	if (save.kind === 'action') { await save.run(); await save.run(); }
+	assert.deepEqual(writes, [{
+		path: '/alias', revision: 7, permissions: [
+			'readFiles', 'watchFiles', 'browseFiles', 'searchFiles', 'inspectRepository', 'writeFiles', 'mutateRepository', 'executeCommands', 'discoverSkills', 'useLanguageServices',
+		]
+	}]);
+	const retained = field(model, 'directory');
+	assert.ok(retained.kind === 'text' && retained.value === '/alias');
+	const unavailable = field(model, 'save-directory');
+	assert.ok(unavailable.kind === 'action' && !unavailable.enabled);
+	const message = field(model, 'status');
+	assert.ok(message.kind === 'status' && message.text.includes('directory revision conflict'));
+});
 
 test('Execution defaults reject a failed save, retain its draft and require an explicit refresh', async () => {
 	using model = executionFixture({ onDidChange: Event.None, read: async () => ({ revision: 7, settings: manualDefaults }), configure: async () => { throw new Error('revision conflict'); } });

@@ -2,7 +2,7 @@ import './media/agentCapabilitiesSettings.css';
 import { h } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { AgentCapabilitiesSnapshot, AgentToolCapability, IAgentCapabilitiesService } from '../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
-import { dirPermissionNames, type DirPermissionsEntry, type IDirPermissionsService } from '../../../../platform/dirPermissions/common/dirPermissionsService.js';
+import { workspaceTrustPermissionNames, type WorkspaceTrustEntry, type IWorkspaceTrustApi } from '../../../../platform/workspace/common/workspaceTrust.js';
 import type { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import type { IAppServerRemoteAgentService } from '../../../services/remote/common/appServerRemoteAgentService.js';
 
@@ -15,10 +15,10 @@ export class AgentCapabilitiesSettings extends Disposable {
 	private readonly content: HTMLElement;
 	private view: View | undefined;
 	private catalog: AgentCapabilitiesSnapshot | undefined;
-	private directories: readonly DirPermissionsEntry[] = [];
+	private directories: readonly WorkspaceTrustEntry[] = [];
 	private loadVersion = 0;
 
-	constructor(container: HTMLElement, private readonly capabilities: IAgentCapabilitiesService, remoteAgentService: IAppServerRemoteAgentService, private readonly dirPermissions: IDirPermissionsService, private readonly localization: ILocalizationService) {
+	constructor(container: HTMLElement, private readonly capabilities: IAgentCapabilitiesService, remoteAgentService: IAppServerRemoteAgentService, private readonly workspaceTrust: IWorkspaceTrustApi, private readonly localization: ILocalizationService) {
 		super();
 		const document = container.ownerDocument;
 		this.domNode = h(document, 'section');
@@ -31,7 +31,7 @@ export class AgentCapabilitiesSettings extends Disposable {
 		this.content = h(document, 'div');
 		this.domNode.append(this.status, this.content);
 		container.append(this.domNode);
-		this._register(this.dirPermissions.onDidChangePermissions(() => {
+		this._register(this.workspaceTrust.onDidChangeTrust(() => {
 			if (this.view === 'sandbox') void this.refresh();
 		}));
 		this._register(remoteAgentService.onDidChangeConnectionState(state => {
@@ -59,7 +59,7 @@ export class AgentCapabilitiesSettings extends Disposable {
 		this.status.textContent = this.label('capabilities.loading', 'Loading capabilities…');
 		try {
 			const catalog = await this.capabilities.read();
-			const directories = view === 'sandbox' && catalog.directoryGrantsReadable ? await this.dirPermissions.list() : undefined;
+			const directories = view === 'sandbox' && catalog.directoryGrantsReadable ? await this.workspaceTrust.listDirectories() : undefined;
 			if (version !== this.loadVersion || !this.view) return;
 			this.catalog = catalog;
 			if (directories) this.directories = directories.entries;
@@ -148,7 +148,7 @@ export class AgentCapabilitiesSettings extends Disposable {
 			const path = h(this.content.ownerDocument, 'h5');
 			path.textContent = directory.path ?? directory.dir;
 			const permissions = h(this.content.ownerDocument, 'p');
-			permissions.textContent = directory.permissions.map(permission => this.label(`capabilities.permission.${permission}`, dirPermissionNames[permission])).join(', ');
+			permissions.textContent = directory.permissions.map(permission => this.label(`capabilities.permission.${permission}`, workspaceTrustPermissionNames[permission])).join(', ');
 			item.append(path, permissions);
 			list.append(item);
 		}

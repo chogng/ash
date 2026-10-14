@@ -500,6 +500,18 @@ use crate::protocol::config::CustomProviderConfigDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::config::CustomProviderProtocolDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::config::DirectoryGrantsEntryDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::config::DirectoryGrantsForgetParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::config::DirectoryGrantsListResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::config::DirectoryGrantsReadParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::config::DirectoryGrantsReadResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::config::DirectoryGrantsSetParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::config::ExecPolicyActionKindDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::config::ExecPolicyEffectDto;
@@ -750,18 +762,6 @@ use crate::protocol::diff::DiffRowKindDto;
 use crate::protocol::environment::DirContributionsDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::environment::DirGrantDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::environment::DirPermissionsEntryDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::environment::DirPermissionsForgetParams;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::environment::DirPermissionsListResult;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::environment::DirPermissionsReadParams;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::environment::DirPermissionsReadResult;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::environment::DirPermissionsSetParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::environment::EnvDirDto;
 #[cfg(any(test, feature = "export"))]
@@ -3339,23 +3339,23 @@ client_methods! {
         response: SessionDirMutationResult,
         serialization: SessionExclusive,
     },
-    DirPermissionsRead => "config/dirPermissions/read" {
-        params: DirPermissionsReadParams,
-        response: DirPermissionsReadResult,
+    DirectoryGrantsRead => "config/dirPermissions/read" {
+        params: DirectoryGrantsReadParams,
+        response: DirectoryGrantsReadResult,
         serialization: GlobalSharedRead,
     },
-    DirPermissionsList => "config/dirPermissions/list" {
+    DirectoryGrantsList => "config/dirPermissions/list" {
         params: EmptyParams,
-        response: DirPermissionsListResult,
+        response: DirectoryGrantsListResult,
         serialization: GlobalSharedRead,
     },
-    DirPermissionsSet => "config/dirPermissions/set" {
-        params: DirPermissionsSetParams,
+    DirectoryGrantsSet => "config/dirPermissions/set" {
+        params: DirectoryGrantsSetParams,
         response: ConfigCommandResult,
         serialization: GlobalExclusive,
     },
-    DirPermissionsForget => "config/dirPermissions/forget" {
-        params: DirPermissionsForgetParams,
+    DirectoryGrantsForget => "config/dirPermissions/forget" {
+        params: DirectoryGrantsForgetParams,
         response: ConfigCommandResult,
         serialization: GlobalExclusive,
     },
@@ -6070,12 +6070,12 @@ typescript_bindings! {
     SessionDirMutationResult,
     PermissionDto,
     SessionDirPermissionsSetParams,
-    DirPermissionsReadParams,
-    DirPermissionsReadResult,
-    DirPermissionsEntryDto,
-    DirPermissionsListResult,
-    DirPermissionsSetParams,
-    DirPermissionsForgetParams,
+    DirectoryGrantsReadParams,
+    DirectoryGrantsReadResult,
+    DirectoryGrantsEntryDto,
+    DirectoryGrantsListResult,
+    DirectoryGrantsSetParams,
+    DirectoryGrantsForgetParams,
     SessionStatus,
     SessionManagerStatus,
     SessionManagerActivity,

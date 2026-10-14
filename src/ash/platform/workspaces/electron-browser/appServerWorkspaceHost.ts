@@ -1,24 +1,23 @@
 import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
 import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
 import { decodeAppServerRequestParams } from '../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
-import { generateUuid } from '../../../base/common/uuid.js';
 import { isRecord } from '../../../base/common/types.js';
 import { type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { invoke, subscribe } from '../../ipc/electron-browser/rendererIpc.js';
 import { parseWorkspace } from '../../workspace/common/workspace.js';
-import { createWorkspaceContextApi } from '../../workspace/electron-browser/workspaceContextApi.js';
+import type { IWorkspaceContextApi } from '../../workspace/common/workspaceIpc.js';
 import { getRemoteWorkspacePath, isRemoteResource } from '../../remote/common/remote.js';
 import type { EnvDirSetEntry, PermissionDto } from '../../../../../.build/protocol/typescript/index.js';
-import { DEVELOPMENT_DIR_PERMISSIONS, READ_DIR_PERMISSIONS, type IWorkspaceTrustRequestService } from '../../workspace/common/workspaceTrust.js';
+import { DEVELOPMENT_DIR_PERMISSIONS, READ_DIR_PERMISSIONS, type IWorkspaceTrustApi, type IWorkspaceTrustRequestService } from '../../workspace/common/workspaceTrust.js';
 
-export async function initializeWorkspace(client: AppServerProtocolClient, workspaceTrust: IWorkspaceTrustRequestService): Promise<void> {
-	const workspace = parseWorkspace(await createWorkspaceContextApi().getWorkspace());
+export async function initializeWorkspace(client: AppServerProtocolClient, workspaceTrust: IWorkspaceTrustRequestService, trustApi: IWorkspaceTrustApi, workspaceApi: IWorkspaceContextApi): Promise<void> {
+	const workspace = parseWorkspace(await workspaceApi.getWorkspace());
 	const dirs: EnvDirSetEntry[] = [];
 	for (const folder of workspace.folders) {
 		const path = isRemoteResource(folder.uri) ? getRemoteWorkspacePath(folder.uri) : folder.uri.fsPath;
-		const existing = await client.request(APP_SERVER_METHODS['config/dirPermissions/read'], { path });
-		if (existing.permissions !== null && existing.permissions !== undefined) {
+		const existing = await trustApi.readDirectory(path);
+		if (existing.permissions !== undefined) {
 			dirs.push({ id: folder.id, path, grant: { type: 'config' } });
 			continue;
 		}
@@ -26,15 +25,14 @@ export async function initializeWorkspace(client: AppServerProtocolClient, works
 		if (choice === 'cancel') { throw new Error('Directory permission selection cancelled'); }
 		if (choice !== 'development' && choice !== 'readOnly') { throw new TypeError('Invalid directory permission selection'); }
 		const permissions: PermissionDto[] = [...(choice === 'readOnly' ? READ_DIR_PERMISSIONS : DEVELOPMENT_DIR_PERMISSIONS)];
-		const config = await client.request(APP_SERVER_METHODS['config/read'], {});
-		const grant = { type: 'user' as const, commandId: generateUuid(), expectedRevision: config.revision, permissions };
-		await client.request(APP_SERVER_METHODS['env/dirs/set'], { dirs: [...dirs, { id: folder.id, path, grant }] });
+		const grant = await trustApi.createGrant(path, permissions);
+		await client.request(APP_SERVER_METHODS['env/dirs/set'], { dirs: [...dirs, { id: folder.id, path, grant: { ...grant, permissions: [...grant.permissions] } }] });
 		dirs.push({ id: folder.id, path, grant: { type: 'config' } });
 	}
 	if (dirs.length) { await client.request(APP_SERVER_METHODS['env/dirs/set'], { dirs }); }
 }
 
-export function registerAppServerWorkspaceHost(client: AppServerProtocolClient, ready: () => Promise<void>, workspaceTrust: IWorkspaceTrustRequestService): IDisposable {
+export function registerAppServerWorkspaceHost(client: AppServerProtocolClient, ready: () => Promise<void>, workspaceTrust: IWorkspaceTrustRequestService, trustApi: IWorkspaceTrustApi): IDisposable {
 	const subscription = subscribe('ash:workspace:operation', (value: unknown) => {
 		if (!isRecord(value) || typeof value.nonce !== 'string' || !isRecord(value.params)) { return; }
 		const { nonce, operation, params } = value;
@@ -47,12 +45,14 @@ export function registerAppServerWorkspaceHost(client: AppServerProtocolClient, 
 				}
 				case 'readPermissions': {
 					const request = decodeAppServerRequestParams('config/dirPermissions/read', params);
-					return (await client.request(APP_SERVER_METHODS['config/dirPermissions/read'], request)).permissions ?? undefined;
+					return (await trustApi.readDirectory(request.path)).permissions;
 				}
 				case 'createGrant': {
-					const config = await client.request(APP_SERVER_METHODS['config/read'], {});
-					const checked = decodeAppServerRequestParams('config/dirPermissions/set', { commandId: generateUuid(), expectedRevision: config.revision, path: params.path, permissions: params.permissions });
-					return { type: 'user', commandId: checked.commandId, expectedRevision: checked.expectedRevision, permissions: checked.permissions };
+					if (typeof params.path !== 'string' || !Array.isArray(params.permissions)
+						|| !params.permissions.every(value => DEVELOPMENT_DIR_PERMISSIONS.some(permission => permission === value))) {
+						throw new TypeError('Invalid workspace trust grant');
+					}
+					return trustApi.createGrant(params.path, params.permissions);
 				}
 				case 'persistDirectoryGrant': {
 					if (!isRecord(params.grant)) throw new TypeError('Invalid directory grant');
@@ -64,7 +64,7 @@ export function registerAppServerWorkspaceHost(client: AppServerProtocolClient, 
 						path: params.path,
 						permissions: params.grant.permissions,
 					});
-					return client.request(APP_SERVER_METHODS['config/dirPermissions/set'], request);
+					return trustApi.persistGrant(request.path, { type: 'user', commandId: request.commandId, expectedRevision: request.expectedRevision, permissions: request.permissions });
 				}
 				case 'setFolders': return client.request(APP_SERVER_METHODS['env/dirs/set'], decodeAppServerRequestParams('env/dirs/set', { dirs: params.folders }));
 				default: throw new Error('Unknown workspace operation');

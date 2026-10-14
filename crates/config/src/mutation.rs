@@ -166,25 +166,25 @@ pub(crate) fn apply_command(
         UserConfigCommand::RevokeCommitMessageEgress { dir } => {
             document.commit_messages.revoke(dir);
         }
-        UserConfigCommand::SetDirPermissions {
+        UserConfigCommand::SetDirectoryGrant {
             dir,
             permissions,
             display_path,
         } => {
             document
-                .dir_permissions
+                .directory_grants
                 .entries
                 .insert(dir.clone(), permissions.clone());
             if let Some(display_path) = display_path {
                 document
-                    .dir_permissions
+                    .directory_grants
                     .paths
                     .insert(dir.clone(), display_path.clone());
             }
         }
-        UserConfigCommand::ForgetDirPermissions { dir } => {
-            document.dir_permissions.entries.remove(dir);
-            document.dir_permissions.paths.remove(dir);
+        UserConfigCommand::ForgetDirectoryGrant { dir } => {
+            document.directory_grants.entries.remove(dir);
+            document.directory_grants.paths.remove(dir);
         }
         UserConfigCommand::UpsertExecPolicyRule { rule } => {
             document.exec_policy.upsert(rule.clone());

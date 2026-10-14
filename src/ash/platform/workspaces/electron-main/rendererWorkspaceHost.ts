@@ -3,8 +3,8 @@ import { randomUUID } from 'node:crypto';
 import type { WebContents } from 'electron/main';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { isRecord } from '../../../base/common/types.js';
-import type { DirGrant, DirPermission } from '../../dirPermissions/common/dirPermissionsService.js';
-import type { WorkspaceTrustChoice } from '../../workspace/common/workspaceTrust.js';
+
+import type { WorkspaceTrustChoice, WorkspaceTrustGrant, WorkspaceTrustPermission } from '../../workspace/common/workspaceTrust.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
 
 /** Routes window-owned workspace operations to the renderer that owns the backend connection. */
@@ -13,11 +13,11 @@ export class RendererWorkspaceHost extends Disposable {
 
 	constructor(private readonly renderer: WebContents) { super(); }
 
-	public readPermissions(path: string): Promise<readonly DirPermission[] | undefined> { return this.call('readPermissions', { path }) as Promise<readonly DirPermission[] | undefined>; }
+	public readPermissions(path: string): Promise<readonly WorkspaceTrustPermission[] | undefined> { return this.call('readPermissions', { path }) as Promise<readonly WorkspaceTrustPermission[] | undefined>; }
 	public selectPermissions(path: string): Promise<WorkspaceTrustChoice> { return this.call('selectPermissions', { path }) as Promise<WorkspaceTrustChoice>; }
-	public createGrant(path: string, permissions: readonly DirPermission[]): Promise<DirGrant> { return this.call('createGrant', { path, permissions }) as Promise<DirGrant>; }
-	public async persistDirectoryGrant(path: string, grant: DirGrant): Promise<void> { await this.call('persistDirectoryGrant', { path, grant }); }
-	public async setFolders(folders: readonly { id: string; path: string; grant: DirGrant; }[]): Promise<void> { await this.call('setFolders', { folders }); }
+	public createGrant(path: string, permissions: readonly WorkspaceTrustPermission[]): Promise<WorkspaceTrustGrant> { return this.call('createGrant', { path, permissions }) as Promise<WorkspaceTrustGrant>; }
+	public async persistDirectoryGrant(path: string, grant: WorkspaceTrustGrant): Promise<void> { await this.call('persistDirectoryGrant', { path, grant }); }
+	public async setFolders(folders: readonly { id: string; path: string; grant: WorkspaceTrustGrant; }[]): Promise<void> { await this.call('setFolders', { folders }); }
 
 	public routes(): readonly IpcRoute<unknown, unknown>[] {
 		return [{

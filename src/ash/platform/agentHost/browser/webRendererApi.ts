@@ -36,7 +36,7 @@ import { createAppServerLanguageApi } from "../../language/browser/languageApi.j
 import { createAppServerPluginManagementApi } from "../../extensionManagement/browser/pluginManagementApi.js";
 import { createAppServerExtensionHostApi } from './extensionHostApi.js';
 import { createAppServerExtensionManagementApi } from "../../extensionManagement/browser/extensionManagementApi.js";
-import { createAppServerDirPermissionsApi } from "../../dirPermissions/browser/dirPermissionsApi.js";
+import { createAppServerWorkspaceTrustApi } from '../../workspace/browser/workspaceTrustApi.js';
 import { createAppServerAgentCapabilitiesApi } from '../../agentCapabilities/browser/agentCapabilitiesApi.js';
 import { createAppServerMcpServerStatusApi } from '../../mcp/browser/mcpServerStatusApi.js';
 import { createAppServerTraceSettingsApi } from '../../trace/browser/traceSettingsApi.js';
@@ -138,7 +138,7 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 		localGit: new AppServerLocalGitService(connection),
 		extensionManagement: createAppServerExtensionManagementApi(connection),
 		toolSearch: createAppServerToolSearchApi(connection),
-		dirPermissions: createAppServerDirPermissionsApi(connection),
+		workspaceTrust: createAppServerWorkspaceTrustApi(connection),
 		networkDiagnostics: createAppServerNetworkDiagnosticsApi(connection),
 		issueReporter: new AppServerIssueReporterService(connection),
 		github: new AppServerGitHubService(connection),

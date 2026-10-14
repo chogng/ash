@@ -1,7 +1,7 @@
 import { ExecutionSettingsModel } from './executionSettingsModel.js';
 import { AgentCapabilitiesSettings } from '../../../../workbench/contrib/preferences/browser/agentCapabilitiesSettings.js';
 import { IAgentCapabilitiesService } from '../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
-import { IDirPermissionsService } from '../../../../platform/dirPermissions/common/dirPermissionsService.js';
+import { IWorkspaceTrustApi } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { IAppServerRemoteAgentService } from '../../../../workbench/services/remote/common/appServerRemoteAgentService.js';
 import { ILocalizationService } from '../../../../workbench/services/localization/common/localizationService.js';
 import { GitHubSettingsModel } from '../../../../workbench/contrib/github/browser/githubSettingsModel.js';
@@ -100,7 +100,7 @@ export class SessionsPreferences extends Disposable {
 		@IAccessibleViewService private readonly accessibleView: IAccessibleViewService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IAgentCapabilitiesService private readonly capabilities: IAgentCapabilitiesService,
-		@IDirPermissionsService private readonly permissions: IDirPermissionsService,
+		@IWorkspaceTrustApi private readonly workspaceTrust: IWorkspaceTrustApi,
 		@IAppServerRemoteAgentService private readonly remote: IAppServerRemoteAgentService,
 		@ILocalizationService private readonly localization: ILocalizationService,
 	) {
@@ -253,7 +253,7 @@ export class SessionsPreferences extends Disposable {
 				status.hidden = !message;
 			},
 		};
-		const toolCatalog = resources.add(new AgentCapabilitiesSettings(pageContent, this.capabilities, this.remote, this.permissions, this.localization));
+		const toolCatalog = resources.add(new AgentCapabilitiesSettings(pageContent, this.capabilities, this.remote, this.workspaceTrust, this.localization));
 		const renderer = resources.add(contentServices.createInstance(SettingsRenderer, list, settingOptions));
 		const modelContent = resources.add(this.instantiationService.createInstance(ModelSettingsContent, list));
 		const dictationContent = resources.add(this.instantiationService.createInstance(DictationSettingsContent, list));

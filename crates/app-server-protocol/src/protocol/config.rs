@@ -1,5 +1,7 @@
 use crate::JsonSchema;
 use crate::TS;
+use crate::protocol::environment::PermissionDto;
+use ash_file_access::DirId;
 use ash_protocol::CommandId;
 use ash_protocol::Patch;
 use ash_protocol::ReasoningEffort;
@@ -7,6 +9,74 @@ use ash_protocol::ToolMode;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::BTreeMap;
+use std::path::PathBuf;
+
+// Legacy exported names and RPC paths remain stable for existing clients.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename = "DirPermissionsReadParams")]
+#[schemars(rename = "DirPermissionsReadParams")]
+pub struct DirectoryGrantsReadParams {
+    pub path: PathBuf,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename = "DirPermissionsReadResult")]
+#[schemars(rename = "DirPermissionsReadResult")]
+pub struct DirectoryGrantsReadResult {
+    pub dir: DirId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub permissions: Option<Vec<PermissionDto>>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename = "DirPermissionsEntryDto")]
+#[schemars(rename = "DirPermissionsEntryDto")]
+pub struct DirectoryGrantsEntryDto {
+    pub dir: DirId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub path: Option<PathBuf>,
+    pub permissions: Vec<PermissionDto>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename = "DirPermissionsListResult")]
+#[schemars(rename = "DirPermissionsListResult")]
+pub struct DirectoryGrantsListResult {
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub entries: Vec<DirectoryGrantsEntryDto>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename = "DirPermissionsSetParams")]
+#[schemars(rename = "DirPermissionsSetParams")]
+pub struct DirectoryGrantsSetParams {
+    pub command_id: CommandId,
+    #[schemars(range(min = 0))]
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    pub path: PathBuf,
+    pub permissions: Vec<PermissionDto>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename = "DirPermissionsForgetParams")]
+#[schemars(rename = "DirPermissionsForgetParams")]
+pub struct DirectoryGrantsForgetParams {
+    pub command_id: CommandId,
+    #[schemars(range(min = 0))]
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    pub dir: DirId,
+}
 
 /// Profile-owned time information supplied to model requests.
 #[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

@@ -3467,7 +3467,7 @@ fn local_model_resolution_rechecks_directory_config_permissions() {
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("grant-config").unwrap(),
             expected_revision: config.read_snapshot().unwrap().revision,
-            command: UserConfigCommand::SetDirPermissions {
+            command: UserConfigCommand::SetDirectoryGrant {
                 dir: dir_id.clone(),
                 permissions: ash_file_access::Permissions::new([DirPermission::LoadConfig]),
                 display_path: None,
@@ -3481,7 +3481,7 @@ fn local_model_resolution_rechecks_directory_config_permissions() {
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("revoke-config").unwrap(),
             expected_revision: config.read_snapshot().unwrap().revision,
-            command: UserConfigCommand::ForgetDirPermissions { dir: dir_id },
+            command: UserConfigCommand::ForgetDirectoryGrant { dir: dir_id },
         })
         .unwrap();
     // Revocation must not even parse the now-invalid directory file.
@@ -3521,7 +3521,7 @@ fn directory_config_watcher_applies_late_grants_and_revocation() {
             .apply(ConfigCommandRequest {
                 command_id: CommandId::new(id).unwrap(),
                 expected_revision: runtime.config.read_snapshot().unwrap().revision,
-                command: UserConfigCommand::SetDirPermissions {
+                command: UserConfigCommand::SetDirectoryGrant {
                     dir: directory.id(),
                     permissions,
                     display_path: None,

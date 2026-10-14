@@ -243,10 +243,8 @@ import { IChatService } from "../services/chat/common/chatService.js";
 import { ICodebaseService } from "../../platform/codebase/common/codebaseService.js";
 import { AppServerCodebaseService } from "../services/codebase/browser/appServerCodebaseService.js";
 import { IToolSearchService } from "../../platform/toolSearch/common/toolSearchService.js";
-import { IDirPermissionsService } from "../../platform/dirPermissions/common/dirPermissionsService.js";
 import { IKeyboardLayoutService } from "../../platform/keyboardLayout/common/keyboardLayout.js";
-import { AppServerDirPermissionsService } from "../services/dirPermissions/browser/appServerDirPermissionsService.js";
-import { IWorkspaceTrustManagementService } from '../../platform/workspace/common/workspaceTrust.js';
+import { IWorkspaceTrustApi, IWorkspaceTrustManagementService } from '../../platform/workspace/common/workspaceTrust.js';
 import { WorkspaceTrustManagementService } from '../services/workspaces/common/workspaceTrust.js';
 import { IConnectorService } from "../../platform/connectors/common/connectorService.js";
 import { AppServerConnectorService } from "../services/connectors/browser/appServerConnectorService.js";
@@ -643,8 +641,8 @@ export class Workbench extends Disposable {
 		const labelService = this._register(services.createInstance(LabelService));
 		services.registerInstance(ILabelService, labelService);
 		services.registerInstance(IDecorationsService, this._register(services.createInstance(DecorationsService, workbenchRoot.ownerDocument)));
-		const dirPermissionsService = this._register(new AppServerDirPermissionsService(api.dirPermissions, api.events));
-		services.registerInstance(IDirPermissionsService, dirPermissionsService);
+		services.registerInstance(ServerEventApiId, api.events);
+		services.registerInstance(IWorkspaceTrustApi, api.workspaceTrust);
 		const workspaceTrustService = this._register(services.createInstance(WorkspaceTrustManagementService));
 		services.registerInstance(IWorkspaceTrustManagementService, workspaceTrustService);
 		const workspaceFileService = new AppServerFileSystemProvider({
@@ -722,13 +720,13 @@ export class Workbench extends Disposable {
 		this._register(services.createInstance(WorkbenchLanguageFeatures));
 		// Only the desktop host may inspect directory grants. Web language requests
 		// are authorized by the server for the authenticated workspace.
-		const languageDirPermissions = nativeHostApi ? dirPermissionsService : undefined;
-		if (api.hasAppServer) { this._register(new AppServerLanguageProviders(languageFeaturesService, api.language, workspaceContext, { dirPermissions: languageDirPermissions, events: api.events })); }
+		const checkWorkspaceTrust = !!nativeHostApi;
+		if (api.hasAppServer) { this._register(services.createInstance(AppServerLanguageProviders, api.language, { checkWorkspaceTrust })); }
 		const diffService = services.createInstance(DiffService);
 		services.registerInstance(IDiffService, diffService);
 		const codeIntelligenceDocuments = new AppServerCodeIntelligenceDocumentService(api.codebaseSymbols);
 		services.registerInstance(ICodeIntelligenceDocumentService, codeIntelligenceDocuments);
-		const languageDiagnosticsService = this._register(new AppServerLanguageDiagnosticsService(api.language, api.events, workspaceContext, codeIntelligenceDocuments, languageDirPermissions));
+		const languageDiagnosticsService = this._register(services.createInstance(AppServerLanguageDiagnosticsService, api.language, codeIntelligenceDocuments, checkWorkspaceTrust));
 		services.registerInstance(ILanguageDiagnosticsService, languageDiagnosticsService);
 		const markerService = this._register(new MarkerService());
 		services.registerInstance(IMarkerService, markerService);
@@ -826,7 +824,6 @@ export class Workbench extends Disposable {
 		services.registerSingleton(ITraceService, () => services.createInstance(AppServerTraceService));
 		services.registerInstance(IAgentTurnService, api.turn);
 		services.registerInstance(ITurnChangesApi, api.turnChanges);
-		services.registerInstance(ServerEventApiId, api.events);
 		const chatService = this._register(services.createInstance(ChatService));
 		services.registerInstance(IChatService, chatService);
 		services.registerInstance(ILanguageModelsConfigurationService, this._register(services.createInstance(LanguageModelsConfigurationService, ChatModelPreferences)));

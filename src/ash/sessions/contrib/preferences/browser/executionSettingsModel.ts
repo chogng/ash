@@ -1,18 +1,19 @@
+import type { WorkspaceTrustPermission } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { ILocalizationService } from '../../../../workbench/services/localization/common/localizationService.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IAgentCapabilitiesService } from '../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
-import { IDirPermissionsService, dirPermissionNames, type DirPermission, type DirPermissionsSnapshot } from '../../../../platform/dirPermissions/common/dirPermissionsService.js';
+import { IWorkspaceTrustApi, workspaceTrustPermissionNames, type WorkspaceTrustSnapshot } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IAgentExecutionSettingsService, type ExecutionSettings, type ExecutionSettingsSnapshot } from '../../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { approvalModeDefinition, approvalModeDefinitions } from '../../../../platform/agentHost/common/approvalModes.js';
 import { IAppServerRemoteAgentService } from '../../../../workbench/services/remote/common/appServerRemoteAgentService.js';
 import type { SettingsSectionField, SettingsSectionModel } from '../../../../workbench/contrib/preferences/browser/settingsTreeModels.js';
 
-const readPermissions: readonly DirPermission[] = ['readFiles', 'watchFiles', 'browseFiles', 'searchFiles', 'inspectRepository'];
-const writePermissions: readonly DirPermission[] = [...readPermissions, 'writeFiles', 'mutateRepository'];
-const commandPermissions: readonly DirPermission[] = [...writePermissions, 'executeCommands'];
+const readPermissions: readonly WorkspaceTrustPermission[] = ['readFiles', 'watchFiles', 'browseFiles', 'searchFiles', 'inspectRepository'];
+const writePermissions: readonly WorkspaceTrustPermission[] = [...readPermissions, 'writeFiles', 'mutateRepository'];
+const commandPermissions: readonly WorkspaceTrustPermission[] = [...writePermissions, 'executeCommands'];
 
 /** Only UI drafts live here. Defaults and directory grants retain their existing backend owners and revisions. */
 export class ExecutionSettingsModel extends Disposable implements SettingsSectionModel {
@@ -23,7 +24,7 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 	private readonly changed = this._register(new Emitter<void>());
 	readonly onDidChange = this.changed.event;
 	private snapshot: ExecutionSettingsSnapshot | undefined;
-	private directories: DirPermissionsSnapshot | undefined;
+	private directories: WorkspaceTrustSnapshot | undefined;
 	private draft: ExecutionSettings = { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' };
 	private path = '';
 	private access = 'read';
@@ -39,7 +40,7 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 
 	constructor(
 		@IAgentExecutionSettingsService private readonly execution: IAgentExecutionSettingsService,
-		@IDirPermissionsService private readonly permissions: IDirPermissionsService,
+		@IWorkspaceTrustApi private readonly workspaceTrust: IWorkspaceTrustApi,
 		@IAgentCapabilitiesService private readonly capabilities: IAgentCapabilitiesService,
 		@IAppServerRemoteAgentService private readonly remote: IAppServerRemoteAgentService,
 		@IDialogService private readonly dialogs: IDialogService,
@@ -56,7 +57,7 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 			} else { void this.refresh(); }
 		};
 		this._register(execution.onDidChange(changed));
-		this._register(permissions.onDidChangePermissions(changed));
+		this._register(workspaceTrust.onDidChangeTrust(changed));
 		const connectionChanged = (): void => {
 			this.generation++; this.snapshot = undefined; this.directories = undefined; this.dirty = false; this.directoryDirty = false; this.stale = false; this.busy = false; this.refreshRequested = false; this.message = ''; this.savedText = ''; this.path = '';
 			if (this.visible) void this.refresh();
@@ -110,7 +111,7 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 	private directoryText(): string {
 		if (!this.directories) return localize({ bundle: 'ash.settings', key: 'execution.directoryUnavailable' }, 'Directory grants require a connected trusted desktop host.');
 		const entry = this.directories.entries.find(entry => entry.path === this.path);
-		return entry ? localize({ bundle: 'ash.settings', key: 'execution.directoryCurrent' }, 'Saved capabilities: {0}', entry.permissions.map(permission => this.localization.translate('ash.settings', `capabilities.permission.${permission}`, dirPermissionNames[permission])).join(', ')) : localize({ bundle: 'ash.settings', key: 'execution.directoryNew' }, 'No saved grant selected. Enter a directory to grant file and command access.');
+		return entry ? localize({ bundle: 'ash.settings', key: 'execution.directoryCurrent' }, 'Saved capabilities: {0}', entry.permissions.map(permission => this.localization.translate('ash.settings', `capabilities.permission.${permission}`, workspaceTrustPermissionNames[permission])).join(', ')) : localize({ bundle: 'ash.settings', key: 'execution.directoryNew' }, 'No saved grant selected. Enter a directory to grant file and command access.');
 	}
 	private async refresh(preserveDrafts = false): Promise<void> {
 		if (!this.visible || this.remote.connectionState !== 'connected') { this.changed.fire(); return; }
@@ -121,7 +122,7 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 			while (this.current(generation)) {
 				this.refreshRequested = false;
 				const [snapshot, catalog] = await Promise.all([this.execution.read(), this.capabilities.read()]);
-				const directories = catalog.directoryGrantsReadable ? await this.permissions.list() : undefined;
+				const directories = catalog.directoryGrantsReadable ? await this.workspaceTrust.listDirectories() : undefined;
 				if (!this.current(generation)) return;
 				if (this.refreshRequested) continue;
 				const draft = this.draft; const dirty = this.dirty; const directoryDirty = this.directoryDirty;
@@ -160,14 +161,14 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 		const directories = this.directories; const path = this.path.trim();
 		this.busy = true; this.changed.fire();
 		try {
-			const resolved = await this.permissions.resolve(path);
+			const resolved = await this.workspaceTrust.readDirectory(path);
 			if (!this.current(generation)) return;
 			const entry = directories.entries.find(entry => entry.dir === resolved.dir);
-			if (revoke) { if (entry) await this.permissions.forget(entry.dir, directories.revision); }
+			if (revoke) { if (entry) await this.workspaceTrust.forgetDirectory(entry.dir, directories.revision); }
 			else {
 				const preset = this.access === 'commands' ? commandPermissions : this.access === 'write' ? writePermissions : readPermissions;
 				const retained = entry?.permissions.filter(permission => !commandPermissions.includes(permission)) ?? [];
-				await this.permissions.set(path, [...preset, ...retained], directories.revision);
+				await this.workspaceTrust.setDirectoryPermissions(path, [...preset, ...retained], directories.revision);
 			}
 			if (this.current(generation)) {
 				this.directoryDirty = false;

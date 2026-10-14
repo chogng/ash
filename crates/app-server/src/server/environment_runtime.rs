@@ -563,7 +563,7 @@ impl EnvRuntimeControl {
         }
 
         let permissions = config
-            .dir_permissions
+            .directory_grants
             .explicit_permissions_for(&authorization.dir().id())
             .cloned()
             .unwrap_or_else(inspection_permissions);
@@ -758,7 +758,7 @@ impl DirGrantPolicy {
                     .map_err(|error| EnvRuntimeError::Failed(error.0))?;
                 match snapshot
                     .values
-                    .dir_permissions
+                    .directory_grants
                     .explicit_permissions_for(&dir.id())
                 {
                     Some(permissions) => (GrantSource::ExplicitUser, permissions.clone()),

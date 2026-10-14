@@ -1,7 +1,12 @@
 use super::AppServer;
+use super::ConnectionState;
 use super::RpcError;
 use super::core_error;
 use super::decode;
+use super::environment_operations::permission_dtos;
+use super::environment_operations::permissions;
+use super::environment_operations::require_dir_permissions_host;
+use super::environment_operations::validate_path;
 use super::extension_config_operations::hook_config_dto;
 use super::extension_config_operations::plugin_request_dto;
 use super::result;
@@ -16,6 +21,12 @@ use ash_app_server_protocol::protocol::config::ConfigCommandDispositionDto;
 use ash_app_server_protocol::protocol::config::ConfigCommandResult;
 use ash_app_server_protocol::protocol::config::ConfigReadResult;
 use ash_app_server_protocol::protocol::config::ConfigUpdateParams;
+use ash_app_server_protocol::protocol::config::DirectoryGrantsEntryDto;
+use ash_app_server_protocol::protocol::config::DirectoryGrantsForgetParams;
+use ash_app_server_protocol::protocol::config::DirectoryGrantsListResult;
+use ash_app_server_protocol::protocol::config::DirectoryGrantsReadParams;
+use ash_app_server_protocol::protocol::config::DirectoryGrantsReadResult;
+use ash_app_server_protocol::protocol::config::DirectoryGrantsSetParams;
 use ash_app_server_protocol::protocol::config::FrontendConfigDto;
 use ash_app_server_protocol::protocol::config::GitAutoFetchModeDto;
 use ash_app_server_protocol::protocol::config::GitConfigDto;
@@ -77,6 +88,7 @@ use ash_config::SkillSourceId;
 use ash_config::ToolSearchConfig;
 use ash_config::ToolSearchModeConfig;
 use ash_config::UserConfigCommand;
+use ash_file_access::Dir;
 use ash_model_provider::ModelId;
 use ash_model_provider::ModelRef;
 use ash_model_provider::ProviderId;
@@ -111,6 +123,117 @@ use ash_execpolicy::HostMatcher;
 use ash_execpolicy::ScopeMatcher;
 
 impl AppServer {
+    pub(super) fn directory_grants_store(&self) -> Result<&ash_config::ConfigStore, RpcError> {
+        self.config
+            .as_deref()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))
+    }
+
+    pub(super) fn directory_grants_snapshot(
+        &self,
+    ) -> Result<ash_config::ResolvedConfigSnapshot, RpcError> {
+        self.directory_grants_store()?
+            .read_snapshot()
+            .map_err(|_| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))
+    }
+
+    pub(super) fn directory_grants_read(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        require_dir_permissions_host(connection)?;
+        let params: DirectoryGrantsReadParams = decode(params)?;
+        validate_path(&params.path, true)?;
+        let dir = Dir::open_local(params.path)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        let snapshot = self.directory_grants_snapshot()?;
+        let configured = snapshot
+            .values
+            .directory_grants
+            .explicit_permissions_for(&dir.id())
+            .map(permission_dtos);
+        result(&DirectoryGrantsReadResult {
+            dir: dir.id(),
+            permissions: configured,
+        })
+    }
+
+    pub(super) fn directory_grants_list(
+        &self,
+        connection: &ConnectionState,
+    ) -> Result<Value, RpcError> {
+        require_dir_permissions_host(connection)?;
+        let snapshot = self.directory_grants_snapshot()?;
+        let entries = snapshot
+            .values
+            .directory_grants
+            .entries
+            .iter()
+            .map(|(dir, permissions)| DirectoryGrantsEntryDto {
+                dir: dir.clone(),
+                path: snapshot
+                    .values
+                    .directory_grants
+                    .path_for(dir)
+                    .map(std::path::Path::to_path_buf),
+                permissions: permission_dtos(permissions),
+            })
+            .collect();
+        result(&DirectoryGrantsListResult {
+            revision: snapshot.revision.get(),
+            entries,
+        })
+    }
+
+    pub(super) fn directory_grants_set(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        require_dir_permissions_host(connection)?;
+        let params: DirectoryGrantsSetParams = decode(params)?;
+        validate_path(&params.path, true)?;
+        let dir = Dir::open_local(params.path)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        let command = UserConfigCommand::SetDirectoryGrant {
+            dir: dir.id(),
+            permissions: permissions(params.permissions)?,
+            display_path: Some(dir.canonical_path().to_path_buf()),
+        };
+        let outcome = self
+            .directory_grants_store()?
+            .apply(ConfigCommandRequest {
+                command_id: params.command_id,
+                expected_revision: ConfigRevision::new(params.expected_revision),
+                command,
+            })
+            .map_err(config_operation_error)?;
+        let command_result = config_command_result(outcome);
+        self.reconcile_active_dir_permissions()?;
+        result(&command_result)
+    }
+
+    pub(super) fn directory_grants_forget(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        require_dir_permissions_host(connection)?;
+        let params: DirectoryGrantsForgetParams = decode(params)?;
+        let outcome = self
+            .directory_grants_store()?
+            .apply(ConfigCommandRequest {
+                command_id: params.command_id,
+                expected_revision: ConfigRevision::new(params.expected_revision),
+                command: UserConfigCommand::ForgetDirectoryGrant { dir: params.dir },
+            })
+            .map_err(config_operation_error)?;
+        let command_result = config_command_result(outcome);
+        self.reconcile_active_dir_permissions()?;
+        result(&command_result)
+    }
+
     pub(super) fn issue_configure(&self, value: &Value) -> Result<Value, RpcError> {
         let params: ash_app_server_protocol::protocol::issues::IssueConfigureParams =
             decode(value)?;

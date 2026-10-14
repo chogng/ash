@@ -5,14 +5,14 @@ import { URI } from "../../../../base/common/uri.js";
 import { Position } from "../../../../editor/common/core/position.js";
 import { Range, type IRange } from "../../../../editor/common/core/range.js";
 import { type ITextModel } from "../../../../editor/common/model.js";
-import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
+import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import * as languages from '../../../../editor/common/languages.js';
 import { type LanguageCompletionItemKindDto, type LanguageHierarchyItemDto, type LanguageCodeActionDto, type LanguageCodeLensDto, type LanguageDirectoryEditDto, type LanguageDocumentLinkDto, type LanguageDocumentSymbolDto } from '../../../../../../.build/protocol/typescript/index.js';
 import { type ILanguageApi } from "../../../../platform/language/common/languageApi.js";
 import { workspaceResourceFromPath } from "../../../../platform/workspace/common/workspace.js";
-import { workspaceRelativePath, type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
-import { type IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
-import { type IDirPermissionsService } from "../../../../platform/dirPermissions/common/dirPermissionsService.js";
+import { workspaceRelativePath, IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
+import { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
+import { IWorkspaceTrustManagementService } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { AppServerLanguageSupport } from "./appServerLanguageSupport.js";
 import { resolveAppServerLanguageDirAccess } from "./appServerLanguageWorkspace.js";
 
@@ -33,15 +33,20 @@ export class AppServerLanguageProviders extends Disposable {
 	private refreshQueue = Promise.resolve();
 	private alive = true;
 
-	constructor(private readonly languageFeatures: ILanguageFeaturesService, private readonly api: ILanguageApi, private readonly workspace: IWorkspaceContextService, private readonly options: AppServerLanguageProvidersOptions = {}) {
+	constructor(
+		private readonly api: ILanguageApi,
+		private readonly options: AppServerLanguageProvidersOptions,
+		@ILanguageFeaturesService private readonly languageFeatures: ILanguageFeaturesService,
+		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
+		@IWorkspaceTrustManagementService private readonly workspaceTrust: IWorkspaceTrustManagementService,
+		@IServerEventApi events: IServerEventApi,
+	) {
 		super();
-		if (options.dirPermissions && !options.events) throw new Error("Permission-aware App Server language providers require the App Server event stream");
-		if (options.events) {
-			const subscription = options.events.subscribe(event => {
-				if (event.method === "config/changed" || event.method === "extensions/changed") this.queueRefresh();
-			});
-			this._register(toDisposable(() => subscription.dispose()));
-		}
+		const subscription = events.subscribe(event => {
+			if (event.method === "extensions/changed" || (!options.checkWorkspaceTrust && event.method === "config/changed")) this.queueRefresh();
+		});
+		this._register(toDisposable(() => subscription.dispose()));
+		if (options.checkWorkspaceTrust) this._register(workspaceTrust.onDidChangeTrust(() => this.queueRefresh()));
 		this._register(workspace.onDidChangeWorkspace(() => this.queueRefresh()));
 		this._register(toDisposable(() => { this.alive = false; }));
 		this.queueRefresh();
@@ -95,7 +100,7 @@ export class AppServerLanguageProviders extends Disposable {
 	}
 
 	private async refresh(generation: number): Promise<void> {
-		const access = await resolveAppServerLanguageDirAccess(this.workspace, this.options.dirPermissions);
+		const access = await resolveAppServerLanguageDirAccess(this.workspace, this.workspaceTrust, this.options.checkWorkspaceTrust);
 		if (!this.alive || generation !== this.refreshGeneration || this.workspace.getWorkspace().id !== access.workspaceId) return;
 		if (access.allowed) {
 			const support = await AppServerLanguageSupport.read(this.api, this.workspace);
@@ -109,8 +114,8 @@ export class AppServerLanguageProviders extends Disposable {
 }
 
 export interface AppServerLanguageProvidersOptions {
-	readonly dirPermissions?: IDirPermissionsService;
-	readonly events?: IServerEventApi;
+	/** Desktop inspects exact grants; Web retains backend authorization for its authenticated workspace. */
+	readonly checkWorkspaceTrust: boolean;
 }
 
 class AppServerLanguageProvider implements languages.LanguageCompletionProvider, languages.LanguageHoverProvider, languages.LanguageDeclarationProvider, languages.LanguageDefinitionProvider, languages.LanguageImplementationProvider, languages.LanguageTypeDefinitionProvider, languages.LanguageReferenceProvider, languages.LanguageCallHierarchyProvider, languages.LanguageTypeHierarchyProvider, languages.LanguageRenameProvider, languages.LanguageCodeActionProvider, languages.DocumentFormattingEditProvider, languages.DocumentRangeFormattingEditProvider, languages.LanguageParameterHintsProvider, languages.LanguageInlayHintsProvider, languages.LinkedEditingRangeProvider, languages.LanguageSemanticTokensProvider, languages.LanguageDocumentSymbolProvider, languages.CodeLensProvider, languages.LanguageLinkProvider, languages.LanguageColorProvider, languages.LanguageFoldingRangeProvider {

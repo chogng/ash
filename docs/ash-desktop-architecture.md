@@ -492,6 +492,25 @@ Workspace 各目录的实际权限提供界面状态和变化通知；它每次�
 允许部分开发操作的目录显示“受限工作区”。文件读写和命令执行仍由 App Server 按具体权限检查，
 编辑器自身的只读状态只针对有文件工作副本的编辑器。
 
+目录信任的前端 owner 对应 VS Code 的
+`platform/workspace/common/workspaceTrust.ts` 与
+`workbench/services/workspaces/common/workspaceTrust.ts`。
+`IWorkspaceTrustManagementService.getUriTrustInfo` 返回 URI 的信任状态与精确权限集合，
+Workspace 状态从各目录结果派生；部分授权、空授权集合与未授权保持区别。
+Ash 的异步权限读取和只读状态是该契约的扩展，不能以信任布尔值替代 Rust 的逐项授权。
+
+`platform/workspace/browser/workspaceTrustApi.ts` 负责 Rust 授权的读取、列表、创建、保存与撤销适配。
+Renderer 的 `workspaceTrust` API 在 Workbench 和 Sessions 的服务容器中注册；打开目录时
+也使用同一 API。`config/dirPermissions/list|read|set|forget` 暂时保留为后端协议名称，
+授权通过修订号和 command ID 提交，启动时仍由 `env/dirs/set` 原子应用所选授权。
+设置中的目录授权列表、精确权限编辑和撤销使用 `IWorkspaceTrustApi`，设置模型只持有草稿、
+可见页快照和修订冲突状态，不保存另一份授权配置。目录别名以 Rust 返回的目录身份匹配，
+修改文件和命令能力时保留未编辑的发现与配置能力。
+语言提供者和诊断服务注入 `IWorkspaceTrustManagementService`，通过 `getUriTrustInfo`
+检查每个目录同时具备 `useLanguageServices` 和 `executeCommands`；部分授权无需满足完整开发信任。
+桌面权限变化由信任服务通知，撤销后移除提供者并停止后续同步；Web 仍由后端检查已认证工作区，
+不新增目录授权宿主能力。旧 `dirPermissions` 服务标识、Renderer 属性和注册已退出生产调用链。
+
 编辑器窗口的 Workspace 不归 Session catalog 所有。前端 `ISession.workspace` 只描述该 Session
 使用的 Environment、`cwd` 和目录；它可以帮助界面显示位置或请求切换运行环境，但不能改变窗口
 Workspace，也不能授予目录权限。选择另一个 Environment 中的 Session 时，由宿主建立对应

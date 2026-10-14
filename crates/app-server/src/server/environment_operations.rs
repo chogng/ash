@@ -1,19 +1,12 @@
 use super::AppServer;
 use super::ConnectionState;
 use super::RpcError;
-use super::config_operations::config_command_result;
 use super::config_operations::config_operation_error;
 use super::decode;
 use super::environment_runtime::EnvRuntimeError;
 use super::result;
 use ash_app_server_protocol::protocol::environment::DirContributionsDto;
 use ash_app_server_protocol::protocol::environment::DirGrantDto;
-use ash_app_server_protocol::protocol::environment::DirPermissionsEntryDto;
-use ash_app_server_protocol::protocol::environment::DirPermissionsForgetParams;
-use ash_app_server_protocol::protocol::environment::DirPermissionsListResult;
-use ash_app_server_protocol::protocol::environment::DirPermissionsReadParams;
-use ash_app_server_protocol::protocol::environment::DirPermissionsReadResult;
-use ash_app_server_protocol::protocol::environment::DirPermissionsSetParams;
 use ash_app_server_protocol::protocol::environment::EnvDirDto;
 use ash_app_server_protocol::protocol::environment::EnvDirsSetParams;
 use ash_app_server_protocol::protocol::environment::EnvDirsSetResult;
@@ -138,103 +131,6 @@ impl AppServer {
         })
     }
 
-    pub(super) fn dir_permissions_read(
-        &self,
-        connection: &ConnectionState,
-        params: &Value,
-    ) -> Result<Value, RpcError> {
-        require_dir_permissions_host(connection)?;
-        let params: DirPermissionsReadParams = decode(params)?;
-        validate_path(&params.path, true)?;
-        let dir = Dir::open_local(params.path)
-            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
-        let snapshot = self.dir_config_snapshot()?;
-        let configured = snapshot
-            .values
-            .dir_permissions
-            .explicit_permissions_for(&dir.id())
-            .map(permission_dtos);
-        result(&DirPermissionsReadResult {
-            dir: dir.id(),
-            permissions: configured,
-        })
-    }
-
-    pub(super) fn dir_permissions_list(
-        &self,
-        connection: &ConnectionState,
-    ) -> Result<Value, RpcError> {
-        require_dir_permissions_host(connection)?;
-        let snapshot = self.dir_config_snapshot()?;
-        let entries = snapshot
-            .values
-            .dir_permissions
-            .entries
-            .iter()
-            .map(|(dir, permissions)| DirPermissionsEntryDto {
-                dir: dir.clone(),
-                path: snapshot
-                    .values
-                    .dir_permissions
-                    .path_for(dir)
-                    .map(std::path::Path::to_path_buf),
-                permissions: permission_dtos(permissions),
-            })
-            .collect();
-        result(&DirPermissionsListResult {
-            revision: snapshot.revision.get(),
-            entries,
-        })
-    }
-
-    pub(super) fn dir_permissions_set(
-        &self,
-        connection: &ConnectionState,
-        params: &Value,
-    ) -> Result<Value, RpcError> {
-        require_dir_permissions_host(connection)?;
-        let params: DirPermissionsSetParams = decode(params)?;
-        validate_path(&params.path, true)?;
-        let dir = Dir::open_local(params.path)
-            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
-        let command = UserConfigCommand::SetDirPermissions {
-            dir: dir.id(),
-            permissions: permissions(params.permissions)?,
-            display_path: Some(dir.canonical_path().to_path_buf()),
-        };
-        let outcome = self
-            .dir_config_store()?
-            .apply(ConfigCommandRequest {
-                command_id: params.command_id,
-                expected_revision: ConfigRevision::new(params.expected_revision),
-                command,
-            })
-            .map_err(config_operation_error)?;
-        let command_result = config_command_result(outcome);
-        self.reconcile_active_dir_permissions()?;
-        result(&command_result)
-    }
-
-    pub(super) fn dir_permissions_forget(
-        &self,
-        connection: &ConnectionState,
-        params: &Value,
-    ) -> Result<Value, RpcError> {
-        require_dir_permissions_host(connection)?;
-        let params: DirPermissionsForgetParams = decode(params)?;
-        let outcome = self
-            .dir_config_store()?
-            .apply(ConfigCommandRequest {
-                command_id: params.command_id,
-                expected_revision: ConfigRevision::new(params.expected_revision),
-                command: UserConfigCommand::ForgetDirPermissions { dir: params.dir },
-            })
-            .map_err(config_operation_error)?;
-        let command_result = config_command_result(outcome);
-        self.reconcile_active_dir_permissions()?;
-        result(&command_result)
-    }
-
     pub(super) fn env_dirs_set(
         &self,
         connection: &ConnectionState,
@@ -293,11 +189,11 @@ impl AppServer {
                 let dir = Dir::open_local(path)
                     .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
                 let permissions = permissions(values)?;
-                self.dir_config_store()?
+                self.directory_grants_store()?
                     .apply(ConfigCommandRequest {
                         command_id,
                         expected_revision: ConfigRevision::new(expected_revision),
-                        command: UserConfigCommand::SetDirPermissions {
+                        command: UserConfigCommand::SetDirectoryGrant {
                             dir: dir.id(),
                             permissions: permissions.clone(),
                             display_path: Some(dir.canonical_path().to_path_buf()),
@@ -307,18 +203,6 @@ impl AppServer {
                 Some((GrantSource::ExplicitUser, permissions))
             }
         })
-    }
-
-    fn dir_config_store(&self) -> Result<&ash_config::ConfigStore, RpcError> {
-        self.config
-            .as_deref()
-            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))
-    }
-
-    fn dir_config_snapshot(&self) -> Result<ash_config::ResolvedConfigSnapshot, RpcError> {
-        self.dir_config_store()?
-            .read_snapshot()
-            .map_err(|_| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))
     }
 
     pub(crate) fn reconcile_active_dir_permissions(&self) -> Result<(), RpcError> {
@@ -334,10 +218,10 @@ impl AppServer {
         let Some(active) = active else {
             return Ok(());
         };
-        let snapshot = self.dir_config_snapshot()?;
+        let snapshot = self.directory_grants_snapshot()?;
         let configured = snapshot
             .values
-            .dir_permissions
+            .directory_grants
             .explicit_permissions_for(&active.dir().id())
             .cloned();
         if configured.as_ref() == Some(active.permissions()) {
@@ -365,7 +249,10 @@ impl AppServer {
     }
 }
 
-fn validate_path(path: &std::path::Path, require_absolute: bool) -> Result<(), RpcError> {
+pub(super) fn validate_path(
+    path: &std::path::Path,
+    require_absolute: bool,
+) -> Result<(), RpcError> {
     if path.as_os_str().is_empty() || (require_absolute && !path.is_absolute()) {
         return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
     }
@@ -456,7 +343,7 @@ fn session_dir_mutation(mutation: Mutation) -> SessionDirMutationDto {
     }
 }
 
-fn permissions(values: Vec<PermissionDto>) -> Result<Permissions, RpcError> {
+pub(super) fn permissions(values: Vec<PermissionDto>) -> Result<Permissions, RpcError> {
     let permissions = values.into_iter().map(permission).collect::<Vec<_>>();
     let unique = permissions
         .iter()
@@ -488,7 +375,7 @@ fn permission(value: PermissionDto) -> Permission {
     }
 }
 
-fn permission_dtos(value: &Permissions) -> Vec<PermissionDto> {
+pub(super) fn permission_dtos(value: &Permissions) -> Vec<PermissionDto> {
     value.entries().map(permission_dto).collect()
 }
 
@@ -512,7 +399,7 @@ fn permission_dto(value: Permission) -> PermissionDto {
     }
 }
 
-fn require_dir_permissions_host(connection: &ConnectionState) -> Result<(), RpcError> {
+pub(super) fn require_dir_permissions_host(connection: &ConnectionState) -> Result<(), RpcError> {
     if connection.supports_dir_permissions_host() {
         Ok(())
     } else {

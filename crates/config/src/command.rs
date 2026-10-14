@@ -144,14 +144,17 @@ pub enum UserConfigCommand {
     RevokeCommitMessageEgress {
         dir: DirId,
     },
-    SetDirPermissions {
+    // Command receipts fingerprint this serialized name; preserve replay across upgrades.
+    #[serde(rename = "setDirPermissions")]
+    SetDirectoryGrant {
         dir: DirId,
         permissions: Permissions,
         /// Optional canonical path retained as non-authoritative display metadata.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         display_path: Option<PathBuf>,
     },
-    ForgetDirPermissions {
+    #[serde(rename = "forgetDirPermissions")]
+    ForgetDirectoryGrant {
         dir: DirId,
     },
     UpsertExecPolicyRule {

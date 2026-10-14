@@ -402,7 +402,7 @@
       ],
       "type": "string"
     },
-    "DirPermissionsConfig": {
+    "DirectoryGrantsConfig": {
       "additionalProperties": false,
       "description": "Durable user-owned permissions for explicitly selected directories.",
       "properties": {
@@ -1715,7 +1715,7 @@
       "type": "object"
     },
     "dirPermissions": {
-      "$ref": "#/$defs/DirPermissionsConfig",
+      "$ref": "#/$defs/DirectoryGrantsConfig",
       "default": {
         "entries": {},
         "paths": {}

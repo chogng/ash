@@ -11,7 +11,7 @@ pub use message_board::MessageBoardConfig;
 mod command;
 mod commit_messages;
 mod dir_config;
-mod dir_permissions;
+mod directory_grants;
 mod document;
 mod document_migration;
 mod exec_policy;
@@ -41,7 +41,7 @@ pub use dir_config::{
     DirAgentConfig, DirConfigDocument, DirConfigIntent, DirConfigRevision, DirConfigScope,
     DirConfigStore, DirMcpConfig, DirMcpServerConfig, DirSkillsConfig,
 };
-pub use dir_permissions::DirPermissionsConfig;
+pub use directory_grants::DirectoryGrantsConfig;
 pub use document::CommandFileAccess;
 pub use document::CommandNetworkAccess;
 pub use document::ExecutionConfig;

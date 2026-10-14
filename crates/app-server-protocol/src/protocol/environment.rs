@@ -1,6 +1,5 @@
 use crate::JsonSchema;
 use crate::TS;
-use ash_file_access::DirId;
 use ash_protocol::CommandId;
 use ash_protocol::SessionId;
 use serde::Deserialize;
@@ -56,60 +55,6 @@ pub enum DirGrantDto {
 pub struct SessionDirSelector {
     pub session_id: SessionId,
     pub path: PathBuf,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct DirPermissionsReadParams {
-    pub path: PathBuf,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct DirPermissionsReadResult {
-    pub dir: DirId,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
-    pub permissions: Option<Vec<PermissionDto>>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct DirPermissionsEntryDto {
-    pub dir: DirId,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
-    pub path: Option<PathBuf>,
-    pub permissions: Vec<PermissionDto>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct DirPermissionsListResult {
-    #[ts(type = "number")]
-    pub revision: u64,
-    pub entries: Vec<DirPermissionsEntryDto>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct DirPermissionsSetParams {
-    pub command_id: CommandId,
-    #[schemars(range(min = 0))]
-    #[ts(type = "number")]
-    pub expected_revision: u64,
-    pub path: PathBuf,
-    pub permissions: Vec<PermissionDto>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct DirPermissionsForgetParams {
-    pub command_id: CommandId,
-    #[schemars(range(min = 0))]
-    #[ts(type = "number")]
-    pub expected_revision: u64,
-    pub dir: DirId,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

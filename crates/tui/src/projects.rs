@@ -9,7 +9,7 @@ use crate::widgets::list_selection::ListSelectionSpec;
 use crate::widgets::search_box::SearchBoxModel;
 use ash_app_server_client::AppServerClient;
 use ash_app_server_client::JsonRpcTransport;
-use ash_app_server_protocol::protocol::environment::DirPermissionsReadParams;
+use ash_app_server_protocol::protocol::config::DirectoryGrantsReadParams;
 use ash_app_server_protocol::protocol::environment::SessionDirAddParams;
 use ash_app_server_protocol::protocol::environment::SessionDirListParams;
 use ash_app_server_protocol::protocol::environment::SessionDirListResult;
@@ -281,7 +281,7 @@ where
     T: JsonRpcTransport,
 {
     client
-        .read_dir_permissions(DirPermissionsReadParams {
+        .read_directory_grants(DirectoryGrantsReadParams {
             path: path.to_path_buf(),
         })
         .map(|result| result.dir)

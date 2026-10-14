@@ -1,4 +1,5 @@
-import type { DirGrant } from "../../dirPermissions/common/dirPermissionsService.js";
+import type { WorkspaceTrustGrant } from '../../workspace/common/workspaceTrust.js';
+
 import type { IDisposable } from "../../../base/common/lifecycle.js";
 import type { AppServerConnectionState } from "../../agentHost/common/appServerApi.js";
 import { AppServerRemoteError } from "../../agentHost/common/appServerError.js";
@@ -113,7 +114,7 @@ export async function reconnectAppServerWorkspace(
 	supervisor: AppServerConnectionRelay,
 	workspaceHost: RendererWorkspaceHost,
 	root: string | undefined,
-	grant: DirGrant,
+	grant: WorkspaceTrustGrant,
 	workspaceId: string,
 	previousWorkspaceId: string,
 ): Promise<void> {

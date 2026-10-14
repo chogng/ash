@@ -1,3 +1,4 @@
+import type { WorkspaceTrustGrant } from '../../../workspace/common/workspaceTrust.js';
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
 import { setup, teardown, test } from "mocha";
@@ -5,7 +6,7 @@ import { InstantiationService } from "../../../instantiation/common/instantiatio
 import { IAuxiliaryWindowsMainService } from "../../../auxiliaryWindow/electron-main/auxiliaryWindows.js";
 import { AuxiliaryWindowsMainService } from "../../../auxiliaryWindow/electron-main/auxiliaryWindowsMainService.js";
 import { IWindowsMainService } from "../../../windows/electron-main/windows.js";
-import type { DirGrant } from "../../../dirPermissions/common/dirPermissionsService.js";
+
 import { URI } from "../../../../base/common/uri.js";
 import { toDisposable } from "../../../../base/common/lifecycle.js";
 import {
@@ -329,7 +330,7 @@ test("workspace transition commits only after the runtime accepts the folder", a
 		UNKNOWN_EMPTY_WINDOW_WORKSPACE,
 	);
 	const runtimeSwitches: string[] = [];
-	const grants: DirGrant[] = [];
+	const grants: WorkspaceTrustGrant[] = [];
 	const transitions = new WorkspaceTransitionMainService({
 		workspaces,
 		context,
@@ -345,7 +346,7 @@ test("workspace transition commits only after the runtime accepts the folder", a
 		classifyRuntimeError: () => WorkspaceTransitionFailureKind.RuntimeRejected,
 	});
 	const acceptedPath = resolve("project");
-	const acceptedGrant: DirGrant = { type: "host", permissions: ["readFiles"] };
+	const acceptedGrant: WorkspaceTrustGrant = { type: "host", permissions: ["readFiles"] };
 	const accepted = await transitions.transitionToFolder(acceptedPath, acceptedGrant);
 
 	assert.equal(accepted.status, WorkspaceTransitionStatus.Applied);

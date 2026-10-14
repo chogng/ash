@@ -2374,15 +2374,15 @@ impl AppServer {
             Some(ClientMethod::SessionDirPermissionsSet) => {
                 self.session_dir_permissions_set(connection, &request.params)
             }
-            Some(ClientMethod::DirPermissionsRead) => {
-                self.dir_permissions_read(connection, &request.params)
+            Some(ClientMethod::DirectoryGrantsRead) => {
+                self.directory_grants_read(connection, &request.params)
             }
-            Some(ClientMethod::DirPermissionsList) => self.dir_permissions_list(connection),
-            Some(ClientMethod::DirPermissionsSet) => {
-                self.dir_permissions_set(connection, &request.params)
+            Some(ClientMethod::DirectoryGrantsList) => self.directory_grants_list(connection),
+            Some(ClientMethod::DirectoryGrantsSet) => {
+                self.directory_grants_set(connection, &request.params)
             }
-            Some(ClientMethod::DirPermissionsForget) => {
-                self.dir_permissions_forget(connection, &request.params)
+            Some(ClientMethod::DirectoryGrantsForget) => {
+                self.directory_grants_forget(connection, &request.params)
             }
             Some(
                 method @ (ClientMethod::CallStart

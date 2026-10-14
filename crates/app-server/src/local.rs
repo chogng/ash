@@ -3022,7 +3022,7 @@ impl DirConfigTracker {
         if self.access == InitialDirPermissions::UserConfig
             && !user
                 .values
-                .dir_permissions
+                .directory_grants
                 .permissions_for(&self.scope().dir_id)
                 .allows(DirPermission::LoadConfig)
         {

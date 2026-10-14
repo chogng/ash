@@ -1,7 +1,8 @@
+import type { WorkspaceTrustGrant } from '../../workspace/common/workspaceTrust.js';
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable } from "../../../base/common/lifecycle.js";
 import type { IAnyWorkspaceIdentifier, ISingleFolderWorkspaceIdentifier } from "../../workspace/common/workspace.js";
-import type { DirGrant } from "../../dirPermissions/common/dirPermissionsService.js";
+
 import type { WorkspaceContextMainService } from '../../window/electron-main/window.js';
 import type { WorkspacesManagementMainService } from './workspacesManagementMainService.js';
 
@@ -45,7 +46,7 @@ export interface IWorkspaceTransitionContext {
 	readonly previous: IAnyWorkspaceIdentifier;
 	readonly workspace: ISingleFolderWorkspaceIdentifier;
 	readonly root: string;
-	readonly grant: DirGrant;
+	readonly grant: WorkspaceTrustGrant;
 }
 
 export interface IResolvedWorkspaceTransitionTarget {
@@ -140,20 +141,20 @@ export class WorkspaceTransitionMainService extends Disposable {
 		return this._state;
 	}
 
-	transitionToFolder(path: string, grant: DirGrant = { type: "config" }): Promise<IWorkspaceTransitionResult> {
+	transitionToFolder(path: string, grant: WorkspaceTrustGrant = { type: "config" }): Promise<IWorkspaceTransitionResult> {
 		const transition = this.transitionQueue.then(() => this.doTransitionToFolder(path, grant));
 		this.transitionQueue = transition.then(() => undefined, () => undefined);
 		return transition;
 	}
 
 	/** Transitions to an already validated local or Remote single-folder Workspace identity. */
-	transitionToWorkspace(target: IResolvedWorkspaceTransitionTarget, grant: DirGrant = { type: "config" }): Promise<IWorkspaceTransitionResult> {
+	transitionToWorkspace(target: IResolvedWorkspaceTransitionTarget, grant: WorkspaceTrustGrant = { type: "config" }): Promise<IWorkspaceTransitionResult> {
 		const transition = this.transitionQueue.then(() => this.doTransitionToWorkspace(target.root, target.workspace, grant));
 		this.transitionQueue = transition.then(() => undefined, () => undefined);
 		return transition;
 	}
 
-	private async doTransitionToFolder(requestedPath: string, grant: DirGrant): Promise<IWorkspaceTransitionResult> {
+	private async doTransitionToFolder(requestedPath: string, grant: WorkspaceTrustGrant): Promise<IWorkspaceTransitionResult> {
 		const transitionId = this.nextTransitionId++;
 		const previous = this.context.getWorkspace();
 		this.setState({ phase: WorkspaceTransitionPhase.Resolving, transitionId, requestedPath, previous });
@@ -177,7 +178,7 @@ export class WorkspaceTransitionMainService extends Disposable {
 	private async doTransitionToWorkspace(
 		requestedPath: string,
 		workspace: ISingleFolderWorkspaceIdentifier,
-		grant: DirGrant,
+		grant: WorkspaceTrustGrant,
 		transitionId = this.nextTransitionId++,
 		previous = this.context.getWorkspace(),
 	): Promise<IWorkspaceTransitionResult> {

@@ -13,7 +13,7 @@ import { IQuickInputService } from '../../../platform/quickinput/common/quickInp
 import { IGlobalExtensionEnablementService } from '../../../platform/extensionManagement/common/extensionManagement.js';
 import { IPluginManagementService } from '../../../platform/extensionManagement/common/pluginManagementService.js';
 import { IAgentCapabilitiesService } from '../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
-import { IDirPermissionsService } from '../../../platform/dirPermissions/common/dirPermissionsService.js';
+import { IWorkspaceTrustApi } from '../../../platform/workspace/common/workspaceTrust.js';
 import { IOpenerService } from '../../../platform/opener/common/opener.js';
 import { ITraceSettingsService } from '../../../platform/trace/common/traceSettingsService.js';
 import { IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
@@ -239,7 +239,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	services.registerInstance(IGitHubReviewModel, githubReview);
 	services.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
 	services.registerInstance(IAgentCapabilitiesService, { isAvailable: true, read: async () => ({ toolSets: [], tools: [{ name: 'read_file', description: 'Read authorized files', source: 'local', sourceDetails: ['Ash'], exposure: 'direct', authority: 'directoryRead' }], localProcessSandboxConfigured: false, sandboxBackends: [], directoryGrantsReadable: false, sandboxDiagnostics: [] }) });
-	services.registerInstance(IDirPermissionsService, { onDidChangePermissions: Event.None } as import('../../../platform/dirPermissions/common/dirPermissionsService.js').IDirPermissionsService);
+	services.registerInstance(IWorkspaceTrustApi, { onDidChangeTrust: Event.None } as import('../../../platform/workspace/common/workspaceTrust.js').IWorkspaceTrustApi);
 	let editorReveals = 0;
 	using preferences = services.createInstance(SessionsPreferences, window.document.body, () => { editorReveals++; });
 	await configuration.updateValue('sessions.activityBar.compact', true);

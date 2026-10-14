@@ -1187,7 +1187,7 @@ fn user_config_permissions_are_resolved_for_each_client_requested_dir() {
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("set-dir-permissions").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
-            command: UserConfigCommand::SetDirPermissions {
+            command: UserConfigCommand::SetDirectoryGrant {
                 dir: root.id(),
                 permissions: host_dir_permissions(),
                 display_path: None,
@@ -1221,7 +1221,7 @@ fn user_config_permissions_reactivate_an_active_restricted_dir() {
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("promote-config-dir").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
-            command: UserConfigCommand::SetDirPermissions {
+            command: UserConfigCommand::SetDirectoryGrant {
                 dir: root.id(),
                 permissions: host_dir_permissions(),
                 display_path: None,
@@ -1244,7 +1244,7 @@ fn user_config_revocation_removes_executable_services_but_keeps_file_access() {
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("grant-revoked-dir").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
-            command: UserConfigCommand::SetDirPermissions {
+            command: UserConfigCommand::SetDirectoryGrant {
                 dir: root.id(),
                 permissions: host_dir_permissions(),
                 display_path: None,
@@ -1304,7 +1304,7 @@ fn user_config_revocation_removes_executable_services_but_keeps_file_access() {
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("restrict-revoked-dir").unwrap(),
             expected_revision: trusted.revision,
-            command: UserConfigCommand::SetDirPermissions {
+            command: UserConfigCommand::SetDirectoryGrant {
                 dir: root.id(),
                 permissions: inspection_permissions(),
                 display_path: None,
@@ -1369,7 +1369,7 @@ fn user_config_revocation_removes_local_semantic_model_access() {
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("grant-semantic-dir").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
-            command: UserConfigCommand::SetDirPermissions {
+            command: UserConfigCommand::SetDirectoryGrant {
                 dir: root.id(),
                 permissions: host_dir_permissions(),
                 display_path: None,
@@ -1391,7 +1391,7 @@ fn user_config_revocation_removes_local_semantic_model_access() {
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("restrict-semantic-dir").unwrap(),
             expected_revision: trusted.revision,
-            command: UserConfigCommand::SetDirPermissions {
+            command: UserConfigCommand::SetDirectoryGrant {
                 dir: root.id(),
                 permissions: inspection_permissions(),
                 display_path: None,
@@ -1417,7 +1417,7 @@ fn user_config_revocation_deletes_cloud_grant_and_removes_cloud_runtime() {
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("grant-cloud-dir").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
-            command: UserConfigCommand::SetDirPermissions {
+            command: UserConfigCommand::SetDirectoryGrant {
                 dir: root.id(),
                 permissions: host_dir_permissions(),
                 display_path: None,
@@ -1461,7 +1461,7 @@ fn user_config_revocation_deletes_cloud_grant_and_removes_cloud_runtime() {
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("restrict-cloud-dir").unwrap(),
             expected_revision: trusted.revision,
-            command: UserConfigCommand::SetDirPermissions {
+            command: UserConfigCommand::SetDirectoryGrant {
                 dir: root.id(),
                 permissions: inspection_permissions(),
                 display_path: None,

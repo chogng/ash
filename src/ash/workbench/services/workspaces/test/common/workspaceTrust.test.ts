@@ -3,9 +3,8 @@ import { test } from 'mocha';
 import { Emitter } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { IDirPermissionsService, type DirPermission } from '../../../../../platform/dirPermissions/common/dirPermissionsService.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
-import { DEVELOPMENT_DIR_PERMISSIONS, READ_DIR_PERMISSIONS } from '../../../../../platform/workspace/common/workspaceTrust.js';
+import { DEVELOPMENT_DIR_PERMISSIONS, IWorkspaceTrustApi, READ_DIR_PERMISSIONS, type WorkspaceTrustPermission } from '../../../../../platform/workspace/common/workspaceTrust.js';
 import { WorkspaceContextService } from '../../browser/workspaceContextService.js';
 import { WorkspaceTrustManagementService } from '../../common/workspaceTrust.js';
 import { IRemoteAuthorityResolverService } from '../../../../../platform/remote/common/remoteAuthorityResolver.js';
@@ -19,19 +18,20 @@ import { NativeExtensionService } from '../../../extensions/electron-browser/nat
 test('Workspace Trust reads current Rust permissions for each workspace folder', async () => {
 	using changes = new Emitter<void>();
 	using workspace = new WorkspaceContextService({ id: 'empty' });
-	const allowed = new Map<string, readonly DirPermission[]>();
+	const allowed = new Map<string, readonly WorkspaceTrustPermission[]>();
 	const reads: string[] = [];
-	const permissions: IDirPermissionsService = {
-		onDidChangePermissions: changes.event,
-		list: async () => ({ revision: 0, entries: [] }),
-		read: async path => { reads.push(path); return allowed.get(path); },
-		set: async () => { throw new Error('Unexpected permission write'); },
-		resolve: async () => { throw new Error('Unexpected permission identity resolution'); },
-		forget: async () => { throw new Error('Unexpected permission deletion'); },
+	const permissions: IWorkspaceTrustApi = {
+		onDidChangeTrust: changes.event,
+		listDirectories: async () => { throw new Error('Unexpected directory management'); },
+		setDirectoryPermissions: async () => { throw new Error('Unexpected directory management'); },
+		forgetDirectory: async () => { throw new Error('Unexpected directory management'); },
+		readDirectory: async path => { reads.push(path); return { dir: path, permissions: allowed.get(path) }; },
+		createGrant: async () => { throw new Error('Unexpected grant creation'); },
+		persistGrant: async () => { throw new Error('Unexpected grant persistence'); },
 	};
 	using services = new InstantiationService();
 	services.registerInstance(IWorkspaceContextService, workspace);
-	services.registerInstance(IDirPermissionsService, permissions);
+	services.registerInstance(IWorkspaceTrustApi, permissions);
 	using resolver = services.createInstance(RemoteAuthorityResolverService);
 	services.registerInstance(IRemoteAuthorityResolverService, resolver);
 	using trust = services.createInstance(WorkspaceTrustManagementService);
@@ -45,10 +45,16 @@ test('Workspace Trust reads current Rust permissions for each workspace folder',
 	allowed.set(first.fsPath, READ_DIR_PERMISSIONS);
 	assert.deepEqual(await trust.getWorkspaceTrustInfo(), { isTrusted: false, isReadOnly: true });
 	assert.deepEqual(reads, [first.fsPath, first.fsPath]);
+	allowed.set(first.fsPath, []);
+	assert.deepEqual(await trust.getUriTrustInfo(first), { uri: first, trusted: false, permissions: [] });
+	assert.deepEqual(await trust.getWorkspaceTrustInfo(), { isTrusted: false, isReadOnly: false });
 
 	allowed.set(first.fsPath, [...READ_DIR_PERMISSIONS, 'executeCommands']);
 	changes.fire();
 	assert.deepEqual(await trust.getWorkspaceTrustInfo(), { isTrusted: false, isReadOnly: false });
+	assert.deepEqual(await trust.getUriTrustInfo(first), {
+		uri: first, trusted: false, permissions: [...READ_DIR_PERMISSIONS, 'executeCommands'],
+	});
 	allowed.set(first.fsPath, [...READ_DIR_PERMISSIONS, 'writeFiles']);
 	changes.fire();
 	assert.deepEqual(await trust.getWorkspaceTrustInfo(), { isTrusted: false, isReadOnly: false });
@@ -68,6 +74,13 @@ test('Workspace Trust reads current Rust permissions for each workspace folder',
 	assert.deepEqual(await trust.getWorkspaceTrustInfo(), { isTrusted: false, isReadOnly: false });
 	assert.equal(notifications, 5);
 	assert.deepEqual(reads.slice(-2), [first.fsPath, second.fsPath]);
+	const beforeUnsupported = reads.length;
+	const unsupported = URI.parse('https://example.test/folder');
+	assert.deepEqual(await trust.getUriTrustInfo(unsupported), { uri: unsupported, trusted: false, permissions: undefined });
+	assert.equal(reads.length, beforeUnsupported);
+	trust.dispose();
+	changes.fire();
+	assert.equal(notifications, 5);
 });
 
 for (const prefix of ['ssh', 'team']) {
@@ -82,14 +95,16 @@ for (const prefix of ['ssh', 'team']) {
 		services.registerSingleton(IRemoteSocketFactoryService, () => services.createInstance(RemoteSocketFactoryService));
 		let trustHint = true;
 		let canonical = URI.parse(`ash-remote://${prefix}+build/canonical`);
-		let allowed: readonly DirPermission[] = READ_DIR_PERMISSIONS;
+		let allowed: readonly WorkspaceTrustPermission[] = READ_DIR_PERMISSIONS;
 		const reads: string[] = [];
-		services.registerInstance(IDirPermissionsService, {
-			onDidChangePermissions: changes.event, list: async () => ({ revision: 0, entries: [] }),
-			read: async path => { reads.push(path); return allowed; },
-			set: async () => { throw new Error('Resolver must not grant permissions'); },
-			resolve: async () => { throw new Error('Resolver must not replace Rust identity ownership'); },
-			forget: async () => { throw new Error('Unexpected permission deletion'); },
+		services.registerInstance(IWorkspaceTrustApi, {
+			onDidChangeTrust: changes.event,
+			listDirectories: async () => { throw new Error('Unexpected directory management'); },
+			setDirectoryPermissions: async () => { throw new Error('Unexpected directory management'); },
+			forgetDirectory: async () => { throw new Error('Unexpected directory management'); },
+			readDirectory: async path => { reads.push(path); return { dir: path, permissions: allowed }; },
+			createGrant: async () => { throw new Error('Resolver must not grant permissions'); },
+			persistGrant: async () => { throw new Error('Resolver must not persist permissions'); },
 		});
 		const fleet: ExtensionHostFleetSnapshot = { generation: 1, extensions: [{ id: 'local.resolver', version: '1.0.0', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1, lifecycle: 'ready', incarnation: 1, activationGeneration: 1, failure: undefined, stderr: '', outputEvents: [], registrations: [{ kind: 'remoteAuthorityResolver', registrationId: 'resolve', authorityPrefix: prefix }] }] };
 		services.registerInstance(IExtensionHostApi, {

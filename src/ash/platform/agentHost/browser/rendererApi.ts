@@ -26,7 +26,7 @@ import { createDisconnectedLanguageApi } from "../../language/browser/languageAp
 import { createDisconnectedPluginManagementApi } from "../../extensionManagement/browser/pluginManagementApi.js";
 import { createDisconnectedExtensionHostApi } from './extensionHostApi.js';
 import { createDisconnectedExtensionsApi } from "../../extensionManagement/browser/extensionManagementApi.js";
-import { createDisconnectedDirPermissionsApi } from "../../dirPermissions/browser/dirPermissionsApi.js";
+import { createDisconnectedWorkspaceTrustApi } from '../../workspace/browser/workspaceTrustApi.js';
 import { createDisconnectedAgentCapabilitiesApi } from '../../agentCapabilities/browser/agentCapabilitiesApi.js';
 import { createDisconnectedMcpServerStatusApi } from '../../mcp/browser/mcpServerStatusApi.js';
 import { createDisconnectedTraceSettingsApi } from '../../trace/browser/traceSettingsApi.js';
@@ -82,7 +82,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
 		localGit: createDisconnectedLocalGitService(unavailableOperation),
 		extensionManagement: createDisconnectedExtensionsApi(unavailableOperation),
 		toolSearch: createDisconnectedToolSearchApi(unavailableOperation),
-		dirPermissions: createDisconnectedDirPermissionsApi(unavailableOperation),
+		workspaceTrust: createDisconnectedWorkspaceTrustApi(unavailableOperation),
 		networkDiagnostics: createDisconnectedNetworkDiagnosticsApi(unavailableOperation),
 		issueReporter: createDisconnectedIssueReporterService(unavailableOperation),
 		github: createDisconnectedGitHubService(),

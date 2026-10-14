@@ -2,7 +2,7 @@ use crate::CodebaseAutomaticContext;
 use crate::CodebaseConfig;
 use crate::CodebaseModelSelection;
 use crate::ConfigError;
-use crate::DirPermissionsConfig;
+use crate::DirectoryGrantsConfig;
 use crate::UserConfigDocument;
 use ash_file_access::Dir;
 use ash_file_access::DirId;
@@ -536,7 +536,7 @@ fn migrate_workspace_trust(
     let legacy = value
         .try_into::<LegacyWorkspaceTrustConfig>()
         .map_err(|error| ConfigError(format!("invalid workspaceTrust: {error}")))?;
-    let mut config = DirPermissionsConfig::default();
+    let mut config = DirectoryGrantsConfig::default();
     for (legacy_id, setting) in legacy.roots {
         if setting != LegacyWorkspaceTrustSetting::Trusted {
             continue;

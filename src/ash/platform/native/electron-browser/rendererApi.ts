@@ -57,6 +57,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 	if (hostCapabilities.browser && !playwrightService) { throw new Error('Browser host requires the Workbench Playwright service'); }
 	performance.mark('ash.rendererApi.start');
 	const resources = new DisposableStore();
+	const workspaceApi = createWorkspaceContextApi();
 	const remoteConnection = await createRemoteAgentApi().getConnection();
 	let connecting: Promise<void> = Promise.resolve();
 	const carrier = resources.add(new AppServerMessagePortTransport(() => {
@@ -167,7 +168,6 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			}
 			resources.add(client.onStateChange(state => { if (state === 'crashed') { scheduleRecovery(); } }));
 			if (hostCapabilities.browser) { resources.add(registerAppServerBrowserHost(client, playwrightService!, mainProcessService)); }
-			resources.add(registerAppServerWorkspaceHost(client, () => connecting, workspaceTrust));
 			backend = createRendererHost(client, {
 				externalOpener: { openExternal: target => invoke<boolean>('ash:host:openExternal', target) },
 				callbackHost: {
@@ -177,6 +177,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 				},
 				clipboardService: new ElectronRendererClipboardService(),
 			}, contributions);
+			resources.add(registerAppServerWorkspaceHost(client, () => connecting, workspaceTrust, backend.workspaceTrust));
 			backend = { ...backend, backup: new AppServerBackupService(localExtensions ? localClient : client, 'ash-editor'), ...(windowExtensions ? { extensionHost: windowExtensions } : {}) };
 			if (client.capabilities?.memories) { backend = { ...backend, memories: resources.add(new AppServerMemoriesService(client)) }; }
 			if (client.capabilities?.contracts.memoryDiagnostics?.version === 1) { backend = { ...backend, memoryDiagnostics: resources.add(new AppServerMemoryDiagnosticsService(client, 'electron', () => invoke<MemoryObservation[]>('ash:memory:collect'))) }; }
@@ -198,7 +199,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 				const replacement = subscribe('ash:terminal:prepareReplacement', () => terminals.prepareForServerReplacement());
 				resources.add(toDisposable(() => replacement.dispose()));
 			}
-			await initializeWorkspace(client, workspaceTrust);
+			await initializeWorkspace(client, workspaceTrust, backend.workspaceTrust, workspaceApi);
 			performance.mark('ash.rendererApi.workspace-initialized');
 			started = true;
 		} else {
@@ -229,7 +230,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			localFiles: resources.add(new DiskFileSystemProviderClient(mainProcessService.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME))),
 			userDataHome: URI.parse(await mainProcessService.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME).call<string>('userDataHome')),
 			localUserHome: URI.parse(await mainProcessService.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME).call<string>('userHome')),
-			workspace: createWorkspaceContextApi(),
+			workspace: workspaceApi,
 		};
 	} catch (error) { resources.dispose(); throw error; }
 }

@@ -1,27 +1,42 @@
 import assert from "node:assert/strict";
 import { suite, test } from "mocha";
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { Event } from "../../../../../base/common/event.js";
+import { Emitter, Event } from "../../../../../base/common/event.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../editor/common/core/range.js";
 import { LanguageDiagnosticSeverity } from '../../../../../editor/common/languages.js';
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
-import { type IServerEventApi } from "../../../../../platform/agentHost/common/appServerApi.js";
+import { IServerEventApi } from "../../../../../platform/agentHost/common/appServerApi.js";
 import { AppServerRemoteError } from "../../../../../platform/agentHost/common/appServerError.js";
 import { type ILanguageApi } from "../../../../../platform/language/common/languageApi.js";
-import { type IDirPermissionsService } from "../../../../../platform/dirPermissions/common/dirPermissionsService.js";
-import { type PermissionDto, type ServerNotification } from '../../../../../../../.build/protocol/typescript/index.js';
+import { IWorkspaceTrustManagementService, type WorkspaceTrustPermission } from '../../../../../platform/workspace/common/workspaceTrust.js';
+import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { Disposable } from '../../../../../base/common/lifecycle.js';
+import { type ServerNotification } from '../../../../../../../.build/protocol/typescript/index.js';
 import { WorkspaceContextService } from "../../../workspaces/browser/workspaceContextService.js";
 import { type CodeIntelligenceDocumentSnapshot, type ICodeIntelligenceDocumentService } from "../../../codeIntelligence/common/codeIntelligenceDocumentService.js";
 import { AppServerLanguageDiagnosticsService } from "../../browser/appServerLanguageDiagnosticsService.js";
+
+function createDiagnosticsService(api: ILanguageApi, events: IServerEventApi, workspace: WorkspaceContextService, documents?: ICodeIntelligenceDocumentService, trust?: IWorkspaceTrustManagementService): AppServerLanguageDiagnosticsService {
+	using services = new InstantiationService();
+	services.registerInstance(IServerEventApi, events);
+	services.registerInstance(IWorkspaceContextService, workspace);
+	services.registerInstance(IWorkspaceTrustManagementService, trust ?? {
+		onDidChangeTrust: Event.None,
+		getUriTrustInfo: async () => { throw new Error('Backend-authorized diagnostics must not inspect host grants'); },
+		getWorkspaceTrustInfo: async () => undefined,
+	});
+	return services.createInstance(AppServerLanguageDiagnosticsService, api, documents, !!trust);
+}
 
 test("App Server diagnostics service synchronizes, filters revisions, and closes once", async () => {
 	const events = new FakeServerEvents();
 	const api = new FakeLanguageApi();
 	const documents = new FakeCodeIntelligenceDocuments();
 	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:/project") });
-	using service = new AppServerLanguageDiagnosticsService(api, events, workspace, documents);
+	using service = createDiagnosticsService(api, events, workspace, documents);
 	using model = new TextModel("fn main() {}\n");
 	const resource = URI.file("C:/project/main.rs");
 	using first = service.acquire(resource, "rust", model);
@@ -71,7 +86,7 @@ suite('App Server diagnostics shutdown', () => {
 				return new Promise((_, reject) => { rejectSynchronization = reject; });
 			};
 			using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/project') });
-			using service = new AppServerLanguageDiagnosticsService(api, new FakeServerEvents(), workspace);
+			using service = createDiagnosticsService(api, new FakeServerEvents(), workspace);
 			using model = new TextModel('fn main() {}\n');
 			using acquisition = service.acquire(URI.file('/project/main.rs'), 'rust', model);
 			await tick();
@@ -100,7 +115,7 @@ suite('App Server diagnostics shutdown', () => {
 				return new Promise((_, reject) => { rejectReport = reject; });
 			};
 			using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/project') });
-			using service = new AppServerLanguageDiagnosticsService(api, new FakeServerEvents(), workspace);
+			using service = createDiagnosticsService(api, new FakeServerEvents(), workspace);
 			await tick();
 			assert.ok(rejectReport);
 			const error = new Error('test workspace transport stopped');
@@ -120,7 +135,7 @@ suite('App Server diagnostics shutdown', () => {
 		const api = new FakeLanguageApi();
 		const documents = new FakeCodeIntelligenceDocuments();
 		using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/project') });
-		using service = new AppServerLanguageDiagnosticsService(api, new FakeServerEvents(), workspace, documents);
+		using service = createDiagnosticsService(api, new FakeServerEvents(), workspace, documents);
 		using model = new TextModel('fn main() {}\n');
 		using acquisition = service.acquire(URI.file('/project/main.rs'), 'rust', model);
 		await tick();
@@ -137,7 +152,7 @@ test("App Server diagnostics retain pushes received before the editor acquires i
 	const events = new FakeServerEvents();
 	const api = new FakeLanguageApi();
 	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("/project") });
-	using service = new AppServerLanguageDiagnosticsService(api, events, workspace);
+	using service = createDiagnosticsService(api, events, workspace);
 	await tick();
 	const resource = URI.file("/project/main.rs");
 	const diagnostic = { range: { start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } }, severity: "error" as const, message: "server diagnostic", code: null, source: "fixture" };
@@ -155,7 +170,7 @@ test("App Server diagnostics discard a push from a different revision when acqui
 	const events = new FakeServerEvents();
 	const api = new FakeLanguageApi();
 	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("/project") });
-	using service = new AppServerLanguageDiagnosticsService(api, events, workspace);
+	using service = createDiagnosticsService(api, events, workspace);
 	await tick();
 	const resource = URI.file("/project/main.rs");
 	events.fire({ method: "language/diagnostics", params: { path: "main.rs", revision: 2, diagnostics: [{ range: { start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } }, severity: "error", message: "different revision", code: null, source: "fixture" }] } });
@@ -176,7 +191,7 @@ test("App Server diagnostics keep equal relative paths isolated by Workspace fol
 		],
 		configuration: URI.file("C:/project.code-workspace"),
 	});
-	using service = new AppServerLanguageDiagnosticsService(api, events, workspace);
+	using service = createDiagnosticsService(api, events, workspace);
 	using model = new TextModel("fn second() {}\n");
 	const resource = URI.file("C:/two/main.rs");
 	using acquisition = service.acquire(resource, "rust", model);
@@ -190,7 +205,7 @@ test("App Server diagnostics keep equal relative paths isolated by Workspace fol
 test('App Server diagnostics synchronize Shell documents using the grammar language identity', async () => {
 	const api = new FakeLanguageApi();
 	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/project') });
-	using service = new AppServerLanguageDiagnosticsService(api, new FakeServerEvents(), workspace);
+	using service = createDiagnosticsService(api, new FakeServerEvents(), workspace);
 	using model = new TextModel('echo hello', { languageId: 'shellscript' });
 	using acquisition = service.acquire(URI.file('/project/main.sh'), 'shellscript', model);
 	await tick();
@@ -266,7 +281,7 @@ test("App Server diagnostics service includes unopened workspace reports", async
 	const api = new FakeLanguageApi();
 	api.workspaceReport = { supported: true, snapshots: [{ path: "src/unopened.rs", diagnostics: [{ range: { start: { lineIndex: 2, columnIndex: 1 }, end: { lineIndex: 2, columnIndex: 4 } }, severity: "warning", message: "workspace warning", code: null, source: "fixture" }] }] };
 	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:/project") });
-	using service = new AppServerLanguageDiagnosticsService(api, events, workspace);
+	using service = createDiagnosticsService(api, events, workspace);
 	await tick();
 	await tick();
 	const resource = URI.file("C:/project/src/unopened.rs");
@@ -290,7 +305,7 @@ test("App Server diagnostics service treats typed unavailable pulls as unsupport
 	console.error = (...arguments_: unknown[]) => reported.push(arguments_);
 	try {
 		using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:/project") });
-		using service = new AppServerLanguageDiagnosticsService(api, events, workspace);
+		using service = createDiagnosticsService(api, events, workspace);
 		using model = new TextModel("fn main() {}\n");
 		using acquisition = service.acquire(URI.file("C:/project/main.rs"), "rust", model);
 		await tick();
@@ -308,7 +323,7 @@ test("App Server diagnostics service waits for a workspace folder before pulling
 	const events = new FakeServerEvents();
 	const api = new FakeLanguageApi();
 	using workspace = new WorkspaceContextService({ id: "empty-window" });
-	using service = new AppServerLanguageDiagnosticsService(api, events, workspace);
+	using service = createDiagnosticsService(api, events, workspace);
 
 	await tick();
 	assert.equal(api.workspaceDiagnosticPulls, 0);
@@ -322,9 +337,9 @@ test("App Server diagnostics service waits for a workspace folder before pulling
 test("App Server diagnostics service gates Editor synchronization on directory permissions and replays open models after access is allowed", async () => {
 	const events = new FakeServerEvents();
 	const api = new FakeLanguageApi();
-	const permissions = new FakeDirPermissionsService("workspace", []);
+	using permissions = new FakeWorkspaceTrustService([]);
 	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:/project") });
-	using service = new AppServerLanguageDiagnosticsService(api, events, workspace, undefined, permissions);
+	using service = createDiagnosticsService(api, events, workspace, undefined, permissions);
 	using model = new TextModel("fn main() {}\n");
 	using acquisition = service.acquire(URI.file("C:/project/main.rs"), "rust", model);
 
@@ -334,7 +349,7 @@ test("App Server diagnostics service gates Editor synchronization on directory p
 	assert.equal(api.workspaceDiagnosticPulls, 0);
 
 	permissions.value = ["executeCommands", "useLanguageServices"];
-	events.fire({ method: "config/changed", params: { revision: 2, generation: 2 } });
+	permissions.notify();
 	await tick();
 	await tick();
 	assert.equal(api.synchronized.length, 1);
@@ -342,7 +357,7 @@ test("App Server diagnostics service gates Editor synchronization on directory p
 	assert.ok(api.workspaceDiagnosticPulls > 0);
 
 	permissions.value = [];
-	events.fire({ method: "config/changed", params: { revision: 3, generation: 3 } });
+	permissions.notify();
 	await tick();
 	await tick();
 	const synchronizedBeforeEdit = api.synchronized.length;
@@ -351,14 +366,13 @@ test("App Server diagnostics service gates Editor synchronization on directory p
 	assert.equal(api.synchronized.length, synchronizedBeforeEdit);
 });
 
-class FakeDirPermissionsService implements IDirPermissionsService {
-	readonly onDidChangePermissions = Event.None;
-	constructor(private readonly dir: string, public value: readonly PermissionDto[]) { }
-	async list() { return { revision: 1, entries: [{ dir: this.dir, path: "C:\\project", permissions: this.value }] }; }
-	async resolve(): ReturnType<IDirPermissionsService["resolve"]> { return { dir: this.dir, permissions: this.value }; }
-	async read(): ReturnType<IDirPermissionsService["read"]> { return this.value; }
-	async set(): ReturnType<IDirPermissionsService["set"]> { throw new Error("unused"); }
-	async forget(): ReturnType<IDirPermissionsService["forget"]> { throw new Error("unused"); }
+class FakeWorkspaceTrustService extends Disposable implements IWorkspaceTrustManagementService {
+	private readonly change = this._register(new Emitter<void>());
+	readonly onDidChangeTrust = this.change.event;
+	constructor(public value: readonly WorkspaceTrustPermission[]) { super(); }
+	async getUriTrustInfo(uri: URI) { return { uri, trusted: false, permissions: this.value }; }
+	async getWorkspaceTrustInfo() { return undefined; }
+	notify() { this.change.fire(); }
 }
 
 test("installing a language server synchronizes an already open document and uninstall stops it", async () => {
@@ -366,7 +380,7 @@ test("installing a language server synchronizes an already open document and uni
 	api.availableServers = [];
 	const events = new FakeServerEvents();
 	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("/project") });
-	using service = new AppServerLanguageDiagnosticsService(api, events, workspace);
+	using service = createDiagnosticsService(api, events, workspace);
 	using model = new TextModel("value = 1", { languageId: "python" });
 	using acquisition = service.acquire(URI.file("/project/main.py"), "python", model);
 	await tick();
@@ -392,7 +406,7 @@ test("uninstall discards pending workspace diagnostic reports and late server no
 	api.directoryDiagnostics = () => new Promise(resolve => { complete = resolve; });
 	const events = new FakeServerEvents();
 	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("/project") });
-	using service = new AppServerLanguageDiagnosticsService(api, events, workspace);
+	using service = createDiagnosticsService(api, events, workspace);
 	await tick();
 	api.availableServers = [];
 	events.fire({ method: "extensions/changed", params: { instanceId: "test", generation: 2 } });
