@@ -74,6 +74,41 @@ fn frame(participant: &str, track: &str, value: i16) -> AudioFrame {
 }
 
 #[test]
+fn muting_drops_queued_and_late_audio_without_interrupting_playback() {
+    let mut bridge = AudioBridge::new(BTreeMap::from([("alice".into(), "member".into())])).unwrap();
+    let late = frame("alice", "mic", 5000);
+    bridge.push_input(frame("alice", "mic", 5000)).unwrap();
+    bridge.set_input(false);
+    bridge.push_input(frame("alice", "mic", 5000)).unwrap();
+    assert!(
+        bridge
+            .input(Instant::now())
+            .unwrap()
+            .iter()
+            .all(|byte| *byte == 0)
+    );
+    bridge.push_output(&vec![1; 960]).unwrap();
+    assert!(bridge.output().unwrap().is_some());
+    bridge.set_input(true);
+    bridge.push_input(late).unwrap();
+    assert!(
+        bridge
+            .input(Instant::now())
+            .unwrap()
+            .iter()
+            .all(|byte| *byte == 0)
+    );
+    bridge.push_input(frame("alice", "mic", 5000)).unwrap();
+    assert!(
+        bridge
+            .input(Instant::now())
+            .unwrap()
+            .iter()
+            .any(|byte| *byte != 0)
+    );
+}
+
+#[test]
 fn simultaneous_tracks_mix_instead_of_concatenating_and_expire_by_time() {
     let mut bridge = AudioBridge::new(BTreeMap::from([("alice".into(), "member".into())])).unwrap();
     bridge.push_input(frame("alice", "first", 4000)).unwrap();

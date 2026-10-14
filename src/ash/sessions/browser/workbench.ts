@@ -1,4 +1,5 @@
 import { IAgentVoiceService } from '../../platform/agentHost/common/agentService.js';
+import { BrowserAuxiliaryWindowService, IAuxiliaryWindowService } from '../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../editor/common/services/languageFeatureDebounce.js';
 import { IInlineCompletionsService, InlineCompletionsService } from '../../editor/browser/services/inlineCompletionsService.js';
 import { IMarkerDecorationsService } from '../../editor/common/services/markerDecorations.js';
@@ -387,6 +388,7 @@ export abstract class Workbench extends Disposable {
 		const themeService = this.themeService = this._register(services.createInstance(WorkbenchThemeService, options.container));
 		services.registerInstance(IThemeService, themeService);
 		themeService.initialize();
+		services.registerInstance(IAuxiliaryWindowService, this._register(services.createInstance(BrowserAuxiliaryWindowService, ownerWindow, options.container)));
 		const workbenchWindow = this._register(new WorkbenchWindow({
 			root: options.container,
 			workbenchState: WorkbenchState.EMPTY,
@@ -709,6 +711,7 @@ export abstract class Workbench extends Disposable {
 			},
 			captureActiveDraft: () => sessionsPart!.captureActiveDraft(),
 			openConversation: async (sessionId, threadId) => { await this.showChat(); await view.openThread(sessionId, threadId); },
+			startVoiceConversation: () => sessionsPart!.startVoiceConversation(),
 		});
 
 		const diffService = services.createInstance(DiffService);

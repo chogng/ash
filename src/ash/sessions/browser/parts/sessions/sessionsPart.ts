@@ -100,6 +100,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 	addContext(attachment: ChatContextAttachment): void { this.view.addContext(attachment); }
 
 	appendToDraft(text: string): void { this.view.appendToDraft(text); }
+	startVoiceConversation(): Promise<void> { return this.view.startVoiceConversation(); }
 
 	captureActiveDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined> { return this.view.captureActiveDraft(); }
 

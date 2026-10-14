@@ -61,6 +61,13 @@ export class VoiceSessionController extends Disposable implements IVoiceSessionC
 	public get isAvailable(): boolean { return !this.isDisposed && !this.stopping && (!!this.target || !!this.prepare) && this.voice?.isAvailable === true && (!this.voice.state || ['ended', 'failed'].includes(this.voice.state.state) || this.voice.state.resourceId === this.resource); }
 	public get isActive(): boolean { return !!this.controller && (!this.resource || !!this.stopping || this.voice?.state?.resourceId === this.resource && !['ended', 'failed'].includes(this.voice.state.state)); }
 	public get isConnected(): boolean { return this.isActive && this.voice?.state?.state === 'connected' && this.voice.state.resourceId === this.resource && sameSource(this.voice.state, this.active); }
+	public get isMuted(): boolean { return this.voice?.state?.muted ?? false; }
+	public get inputMode(): AgentVoiceSessionState['inputMode'] { return this.voice?.state?.inputMode ?? 'openMic'; }
+	public get isListening(): boolean { return this.isConnected && this.voice?.state?.listening === true; }
+	public async setMuted(muted: boolean): Promise<void> { if (this.isConnected) await this.voice?.setMuted(muted); }
+	public async setInputMode(mode: AgentVoiceSessionState['inputMode']): Promise<void> { if (this.isConnected) await this.voice?.setInputMode(mode); }
+	public async pttDown(id: string): Promise<void> { if (this.isConnected) await this.voice?.pttDown(id); }
+	public async pttUp(id: string): Promise<void> { if (this.isConnected) await this.voice?.pttUp(id); }
 
 	public setSource(source: AgentVoiceSource | undefined, draftIdentity?: string): void {
 		const identity = source ? `${source.sessionId}/${source.threadId}` : draftIdentity;

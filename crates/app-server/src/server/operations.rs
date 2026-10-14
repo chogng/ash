@@ -449,7 +449,7 @@ impl AppServer {
         {
             capabilities.contracts.insert(
                 "voiceConversation".into(),
-                ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },
+                ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 2 },
             );
         }
         if self.home.is_some() {

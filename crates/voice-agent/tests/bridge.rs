@@ -171,6 +171,7 @@ async fn bridge(ending: Ending) {
             .await
             .unwrap();
         let mut heard = false;
+        let mut muted = true;
         let mut commentary = false;
         while let Some(message) = socket.next().await {
             let message = message.unwrap();
@@ -179,7 +180,10 @@ async fn bridge(ending: Ending) {
             }
             let event: Value = serde_json::from_str(message.to_text().unwrap()).unwrap();
             match event["type"].as_str().unwrap() {
+                "session.input_audio.mute" => muted = true,
+                "session.input_audio.unmute" => muted = false,
                 "session.input_audio.append" => {
+                    assert!(!muted, "the model must never receive audio while muted");
                     let bytes = STANDARD.decode(event["audio"].as_str().unwrap()).unwrap();
                     assert_eq!(bytes.len(), 480);
                     if !heard
@@ -292,6 +296,16 @@ async fn bridge(ending: Ending) {
     let (output, mut events) = mpsc::channel(32);
     let token = cancellation.token();
     let worker = tokio::spawn(async move { agent.run(input, output, &token).await });
+    let (reply, ready) = tokio::sync::oneshot::channel();
+    commands
+        .send(AgentCommand::Input {
+            enabled: true,
+            lease: None,
+            reply,
+        })
+        .await
+        .unwrap();
+    ready.await.unwrap().unwrap();
     let mut heard = 0;
     let mut delegated = false;
     let mut clock = tokio::time::interval(Duration::from_millis(10));

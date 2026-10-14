@@ -12,8 +12,15 @@ use std::collections::BTreeSet;
 use std::time::Duration;
 use std::time::Instant;
 use tokio::sync::mpsc;
+use tokio::sync::oneshot;
 
 pub enum AgentCommand {
+    /// The host completes input control only after buffered audio is fenced and the model is updated.
+    Input {
+        enabled: bool,
+        lease: Option<(String, Instant)>,
+        reply: oneshot::Sender<Result<(), String>>,
+    },
     /// App Server supplies only authorized task status, capped before entering model context.
     Commentary {
         delegation_id: String,
@@ -27,6 +34,9 @@ pub enum AgentCommand {
 
 #[derive(Debug)]
 pub enum AgentEvent {
+    InputExpired {
+        id: String,
+    },
     InputTranscript {
         text: String,
         start_ms: u64,
@@ -66,11 +76,9 @@ impl VoiceAgent {
         model: VoiceModelSession,
         human_participants: BTreeMap<String, String>,
     ) -> Result<Self, AgentError> {
-        Ok(Self {
-            room,
-            model,
-            audio: AudioBridge::new(human_participants)?,
-        })
+        let mut audio = AudioBridge::new(human_participants)?;
+        audio.set_input(false);
+        Ok(Self { room, model, audio })
     }
 
     pub async fn run(
@@ -79,7 +87,13 @@ impl VoiceAgent {
         events: mpsc::Sender<AgentEvent>,
         cancellation: &CancellationToken,
     ) -> Result<(), AgentError> {
-        let result = self.pump(&mut commands, &events, cancellation).await;
+        let result = async {
+            self.model
+                .send(VoiceCommand::MuteInput, cancellation)
+                .await?;
+            self.pump(&mut commands, &events, cancellation).await
+        }
+        .await;
         // Leave media before waiting for model billing, including failed or revoked sessions.
         let media = self.room.close().await.map_err(AgentError::from);
         // Cancellation stops the bridge, but final billing requires a fresh bounded close attempt.
@@ -115,11 +129,21 @@ impl VoiceAgent {
         let mut transcript = String::new();
         let mut delegations = BTreeSet::new();
         let mut humans = BTreeSet::new();
+        let mut input_lease: Option<(String, Instant)> = None;
         loop {
             tokio::select! {
                 _ = cancellation.cancelled() => return Ok(()),
                 _ = events.closed() => return Err(AgentError::Consumer),
                 command = commands.recv() => match command {
+                    Some(AgentCommand::Input { enabled, lease, reply }) => {
+                        input_lease = lease;
+                        let result = if self.audio.input_enabled() == enabled { Ok(()) } else {
+                            self.audio.set_input(enabled);
+                            self.model.send(if enabled { VoiceCommand::UnmuteInput } else { VoiceCommand::MuteInput }, cancellation).await
+                        };
+                        let _ = reply.send(result.as_ref().map(|_| ()).map_err(ToString::to_string));
+                        result?;
+                    }
                     Some(AgentCommand::Stop) | None => return Ok(()),
                     Some(AgentCommand::StopPlayback) => { self.audio.stop_playback(); self.room.mute()?; }
                     Some(AgentCommand::Commentary { delegation_id, text }) => {
@@ -168,7 +192,15 @@ impl VoiceAgent {
                     VoiceEvent::Other { .. } => {}
                 },
                 _ = clock.tick() => {
-                    self.model.send(VoiceCommand::AppendAudio { pcm16: self.audio.input(Instant::now())? }, cancellation).await?;
+                    if input_lease.as_ref().is_some_and(|(_, deadline)| Instant::now() >= *deadline) {
+                        let (id, _) = input_lease.take().expect("expired input lease");
+                        self.audio.set_input(false);
+                        self.model.send(VoiceCommand::MuteInput, cancellation).await?;
+                        emit(events, AgentEvent::InputExpired { id })?;
+                    }
+                    if self.audio.input_enabled() {
+                        self.model.send(VoiceCommand::AppendAudio { pcm16: self.audio.input(Instant::now())? }, cancellation).await?;
+                    }
                     if let Some(samples) = self.audio.output()? { self.room.send_audio(&samples).await?; }
                 }
             }

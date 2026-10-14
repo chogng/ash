@@ -1,3 +1,5 @@
+import { AgentsVoiceWidget } from '../../../../../workbench/contrib/agentsVoice/browser/agentsVoiceWidget.js';
+import { generateUuid } from '../../../../../base/common/uuid.js';
 import { VoiceSessionController, pickVoiceConversation } from '../../../../../workbench/contrib/chat/browser/voiceClient/voiceSessionController.js';
 import type { AgentVoiceTaskRequest } from '../../../../../platform/agentHost/common/agentService.js';
 import { canceled, isCancellationError } from '../../../../../base/common/errors.js';
@@ -22,7 +24,7 @@ import type { ChatInputState } from "../../../../../workbench/contrib/chat/brows
 import type { ModelReasoningEffort } from "../../../../../workbench/services/chat/common/modelCatalog.js";
 import type { IChatListItem } from "../../../../../workbench/contrib/chat/browser/widget/chatListItems.js";
 import type { ResolvedChatContext } from "../../../../../workbench/services/chat/common/chatContextService.js";
-import { h } from "../../../../../base/browser/dom.js";
+import { getActiveWindow, h } from "../../../../../base/browser/dom.js";
 import type { ChatContextAttachment } from "../../../../../workbench/services/chat/common/chatContextService.js";
 import type { IOpenerService } from "../../../../../platform/opener/common/opener.js";
 import type { IEditorService } from "../../../../../workbench/services/editor/common/editorService.js";
@@ -70,6 +72,7 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 	private submittedMessage = false;
 	private displayedThreadId: ThreadId | undefined;
 	private readonly voiceSessionController: VoiceSessionController;
+	private readonly voiceWidget: AgentsVoiceWidget;
 
 	constructor(
 		container: HTMLElement,
@@ -161,7 +164,20 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 			resolveInteraction: (response) => this.model.resolveInteraction(response),
 		};
 		this.inputPart = this._register(createInputPart(this.element, inputDelegate));
-		this.element.append(this.goalElement, this.listWidget.element, this.inputPart.element);
+		const voiceContainer = h(ownerDocument, 'div');
+		let hold: string | undefined;
+		this.voiceWidget = this._register(instantiationService.createInstance(AgentsVoiceWidget, voiceContainer, {
+			openSession: () => this.inputPart.focus(),
+			toggleMute: () => { void this.runVoice(() => voice.setMuted(!voice.isMuted)); },
+			toggleInputMode: () => { void this.runVoice(() => voice.setInputMode(voice.inputMode === 'pushToTalk' ? 'openMic' : 'pushToTalk')); },
+			pttDown: () => { hold = generateUuid(); const id = hold; void this.runVoice(() => voice.pttDown(id)); },
+			pttUp: () => { const id = hold; hold = undefined; if (id) void this.runVoice(() => voice.pttUp(id)); },
+			disconnect: () => { void this.runVoice(() => voice.disconnect()); },
+			stopPlayback: () => { void this.runVoice(() => voice.stopSpeaking()); },
+			closeWindow: () => this.inputPart.focus(),
+			showSessionsPicker: () => this.inputPart.focus(),
+		}, { showClose: false, showOnboarding: false, inputBoxLayout: true }));
+		this.element.append(this.goalElement, this.listWidget.element, voiceContainer, this.inputPart.element);
 		this._register(listWidgets.onDidChange(widget => {
 			const previous = this.listWidget;
 			const state = previous.getViewState();
@@ -229,6 +245,8 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 		return this.inputPart.acceptInput(value);
 	}
 
+	startVoiceConversation(): Promise<void> { return this.voiceSessionController.connect(getActiveWindow(), (connections, signal) => pickVoiceConversation(this.quickInput, connections, signal)); }
+
 	private reportVoiceError(error: unknown): void { if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(localize('chat.voice.requestFailed', 'The voice request failed: {0}', String(error))); }
 	private async runVoice(operation: () => Promise<void>): Promise<void> { try { await operation(); } catch (error) { this.reportVoiceError(error); } }
 
@@ -280,6 +298,20 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 		}
 		this.syncIdentity();
 		this.voiceSessionController.setSource(this.model.sessionId && this.model.threadId ? { sessionId: this.model.sessionId, threadId: this.model.threadId } : undefined, this.model.untitledSessionId);
+		const voice = this.voiceSessionController;
+		const focused = this.element.ownerDocument.activeElement;
+		if (!voice.isActive && this.voiceWidget.element.contains(focused)) this.inputPart.focus();
+		this.voiceWidget.element.hidden = !voice.isActive;
+		this.voiceWidget.setConnected(voice.isConnected);
+		this.voiceWidget.setConnecting(voice.isActive && !voice.isConnected);
+		this.voiceWidget.setMuted(voice.isMuted);
+		this.voiceWidget.setInputMode(voice.inputMode);
+		this.voiceWidget.setVoiceState(voice.isListening ? 'listening' : 'idle');
+		this.voiceWidget.setStatusText(voice.isConnected
+			? voice.isMuted ? localize('agentsVoice.mutedStatus', 'Microphone muted') : voice.inputMode === 'pushToTalk'
+				? voice.isListening ? localize('agentsVoice.listening', 'Listening…') : localize('agentsVoice.readyPtt', 'Press and hold to speak')
+				: localize('agentsVoice.listening', 'Listening…')
+			: localize('agentsVoice.connecting', 'Connecting…'));
 		this.renderGoal();
 		const items = this.model.items;
 		this.updateConversationState(items.length > 0);

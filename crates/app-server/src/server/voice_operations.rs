@@ -11,6 +11,9 @@ use ash_app_server_protocol::protocol::voice::VoiceConnectionChoice;
 use ash_app_server_protocol::protocol::voice::VoiceConnectionState;
 use ash_app_server_protocol::protocol::voice::VoiceControlParams;
 use ash_app_server_protocol::protocol::voice::VoiceDelegationRequest;
+use ash_app_server_protocol::protocol::voice::VoiceInputControl;
+use ash_app_server_protocol::protocol::voice::VoiceInputMode;
+use ash_app_server_protocol::protocol::voice::VoiceInputParams;
 use ash_app_server_protocol::protocol::voice::VoiceModelChoice;
 use ash_app_server_protocol::protocol::voice::VoiceOptions;
 use ash_app_server_protocol::protocol::voice::VoiceRejectDelegationParams;
@@ -75,11 +78,20 @@ struct Session {
     commands: Mutex<Option<mpsc::Sender<AgentCommand>>>,
     rejected: Mutex<Vec<String>>,
     control: Mutex<()>,
+    input: Mutex<InputPolicy>,
     closing: Mutex<()>,
     worker: Mutex<Option<tokio::task::JoinHandle<()>>>,
     startup_finished: AtomicBool,
     notifications: super::notification_queue::NotificationQueue,
 }
+
+#[derive(Clone, Default)]
+struct InputPolicy {
+    hold: Option<(String, Instant)>,
+    last_control: Option<VoiceInputControl>,
+}
+
+const INPUT_LEASE: Duration = Duration::from_secs(3);
 
 impl Session {
     fn status(&self) -> VoiceStatus {
@@ -104,6 +116,14 @@ impl Session {
             return current.clone();
         }
         current.state = state;
+        if matches!(
+            state,
+            VoiceConnectionState::Stopping
+                | VoiceConnectionState::Ended
+                | VoiceConnectionState::Failed
+        ) {
+            current.listening = false;
+        }
         current.error = error;
         current.sequence += 1;
         let status = current.clone();
@@ -224,6 +244,10 @@ impl Voices {
                 media_epoch,
                 sequence: 1,
                 state: VoiceConnectionState::Connecting,
+                input_mode: spec.input_mode,
+                muted: spec.muted,
+                listening: false,
+                input_sequence: 0,
                 usage_milliseconds: usage_base,
                 error: None,
             }),
@@ -234,6 +258,7 @@ impl Voices {
             commands: Mutex::new(None),
             rejected: Mutex::new(Vec::new()),
             control: Mutex::new(()),
+            input: Mutex::new(InputPolicy::default()),
             closing: Mutex::new(()),
             worker: Mutex::new(None),
             startup_finished: AtomicBool::new(false),
@@ -386,7 +411,7 @@ impl AppServer {
                     home.root(),
                     connection.outbound_notifications.clone(),
                 )
-                .map_err(failed)?;
+                .map_err(|error| failed(format!("Starting the voice Call failed: {error}")))?;
             if session.cancellation.token().is_cancelled() {
                 return Err(cancelled());
             }
@@ -401,9 +426,11 @@ impl AppServer {
                     .ok_or_else(|| failed("Voice room is unavailable"))?;
                 (call.client.clone(), call.url.clone())
             };
-            let human = client
-                .join(&session.spec.device_id)
-                .map_err(|error| failed(error.to_string()))?;
+            let human = client.join(&session.spec.device_id).map_err(|error| {
+                failed(format!(
+                    "Joining the human to the voice Call failed: {error}"
+                ))
+            })?;
             if !human.microphone
                 || human.member.role != call::CallRole::Owner
                 || human.call.members.len() != 1
@@ -418,7 +445,7 @@ impl AppServer {
                     &credential,
                     call::CallRole::Agent,
                 )
-                .map_err(|error| failed(error.to_string()))?;
+                .map_err(|error| failed(format!("Inviting the voice agent failed: {error}")))?;
             let local_network = OutboundNetworkSnapshot::with_policy(
                 HttpClientConfig::default().with_proxy_policy(ProxyPolicy::Direct),
                 self.calls.network_policy(),
@@ -435,7 +462,7 @@ impl AppServer {
             .map_err(|error| failed(error.to_string()))?;
             let joined = agent_client
                 .join(&format!("agent-{}", session.spec.device_id))
-                .map_err(|error| failed(error.to_string()))?;
+                .map_err(|error| failed(format!("Joining the voice agent failed: {error}")))?;
             if joined.member.role != call::CallRole::Agent
                 || !joined.microphone
                 || joined.call.id != human.call.id
@@ -519,21 +546,10 @@ impl AppServer {
                 .map_err(failed)?
                 .spawn(host.run(agent, receiver));
             *session.worker.lock().unwrap() = Some(worker);
-            let capture = self
-                .calls
-                .control(session.owner, &call_id, Some(call::CallControl::Unmute))
-                .map_err(failed)?;
-            if !capture.microphone_allowed
-                || capture.muted
-                || matches!(
-                    capture.connection,
-                    call::CallConnection::Ended | call::CallConnection::Failed
-                )
-            {
-                return Err(failed(
-                    "The microphone could not start in the authorized voice room",
-                ));
-            }
+            let listening =
+                !session.spec.muted && session.spec.input_mode == VoiceInputMode::OpenMic;
+            set_input(&self.calls, &session, listening, None).map_err(failed)?;
+            session.state.lock().unwrap().listening = listening;
             if token.is_cancelled() {
                 return Err(cancelled());
             }
@@ -637,6 +653,103 @@ impl AppServer {
                         .status(),
                 )
             }
+            ClientMethod::VoiceInput => {
+                let params: VoiceInputParams = decode(params)?;
+                valid_id(&params.resource_id)?;
+                if params.input_sequence == 0 || params.input_sequence > 9_007_199_254_740_991 {
+                    return Err(invalid());
+                }
+                match &params.control {
+                    VoiceInputControl::Hold { id }
+                    | VoiceInputControl::Release { id }
+                    | VoiceInputControl::Renew { id } => valid_id(id)?,
+                    VoiceInputControl::Mute { .. } | VoiceInputControl::Mode { .. } => {}
+                }
+                let session = self
+                    .voices
+                    .get(connection.connection_id, &params.resource_id)?;
+                let _control = session
+                    .control
+                    .lock()
+                    .map_err(|_| failed("Voice control unavailable"))?;
+                let status = session.status();
+                if status.media_epoch != params.media_epoch
+                    || status.state != VoiceConnectionState::Connected
+                {
+                    return Err(invalid());
+                }
+                if params.input_sequence < status.input_sequence {
+                    return result(&status);
+                }
+                let mut policy = session.input.lock().unwrap().clone();
+                if params.input_sequence == status.input_sequence {
+                    if policy.last_control.as_ref() != Some(&params.control) {
+                        return Err(invalid());
+                    }
+                    return result(&status);
+                }
+                let mut mode = status.input_mode;
+                let mut muted = status.muted;
+                let now = Instant::now();
+                if policy
+                    .hold
+                    .as_ref()
+                    .is_some_and(|(_, deadline)| now >= *deadline)
+                {
+                    policy.hold = None;
+                }
+                match &params.control {
+                    VoiceInputControl::Mute { muted: value } => {
+                        muted = *value;
+                        if muted {
+                            policy.hold = None;
+                        }
+                    }
+                    VoiceInputControl::Mode { mode: value } => {
+                        mode = *value;
+                        policy.hold = None;
+                    }
+                    VoiceInputControl::Hold { id } => {
+                        if mode != VoiceInputMode::PushToTalk || muted {
+                            return Err(invalid());
+                        }
+                        policy.hold = Some((id.clone(), now + INPUT_LEASE));
+                    }
+                    VoiceInputControl::Release { id } => {
+                        if policy.hold.as_ref().is_some_and(|(held, _)| held == id) {
+                            policy.hold = None;
+                        }
+                    }
+                    VoiceInputControl::Renew { id } => {
+                        if let Some((held, deadline)) = &mut policy.hold {
+                            if held == id {
+                                *deadline = now + INPUT_LEASE;
+                            }
+                        }
+                    }
+                }
+                let listening =
+                    !muted && (mode == VoiceInputMode::OpenMic || policy.hold.is_some());
+                if let Err(error) = set_input(&self.calls, &session, listening, policy.hold.clone())
+                {
+                    session.cancel();
+                    session.publish(VoiceConnectionState::Failed, Some(error.clone()));
+                    return Err(failed(error));
+                }
+                policy.last_control = Some(params.control);
+                *session.input.lock().unwrap() = policy;
+                {
+                    let mut current = session.state.lock().unwrap();
+                    if current.state != VoiceConnectionState::Connected {
+                        return Err(invalid());
+                    }
+                    current.input_mode = mode;
+                    current.muted = muted;
+                    current.listening = listening;
+                    current.input_sequence = params.input_sequence;
+                }
+                result(&session.publish(VoiceConnectionState::Connected, None))
+            }
             ClientMethod::VoiceStop | ClientMethod::VoiceInterrupt => {
                 let params: VoiceControlParams = decode(params)?;
                 valid_id(&params.operation_id)?;
@@ -679,6 +792,8 @@ impl AppServer {
                 session.publish(VoiceConnectionState::Ended, None);
                 if method == ClientMethod::VoiceInterrupt {
                     let mut next = session.spec.clone();
+                    next.input_mode = session.status().input_mode;
+                    next.muted = session.status().muted;
                     next.operation_id = params.operation_id;
                     self.voice_start(
                         connection,
@@ -767,15 +882,38 @@ impl VoiceHost {
             tokio::spawn(async move { agent.run(receiver, events, &running_token).await });
         let mut clock = tokio::time::interval(Duration::from_secs(1));
         let mut proposals: BTreeMap<String, Proposal> = BTreeMap::new();
+        let mut final_usage_error = None;
         let outcome: Result<(), String> = 'conversation: loop {
             tokio::select! {
                 _ = token.cancelled() => break Ok(()),
                 finished = &mut running => break finished.map_err(|error| error.to_string()).and_then(|result| result.map_err(|error| error.to_string())),
                 event = incoming.recv() => {
                     let Some(event) = event else { break Ok(()) };
-                    if token.is_cancelled() { break Ok(()) }
+                    if token.is_cancelled() {
+                        // recv has already consumed this event. Preserve billing even if
+                        // cancellation wins before its handling; retired speech stays ignored.
+                        if let AgentEvent::Usage { seconds } | AgentEvent::Closed { seconds, .. } = event {
+                            if let Err(error) = self.session.usage(seconds) { final_usage_error = Some(error); }
+                        }
+                        break Ok(());
+                    }
                     let speaker = match &event { AgentEvent::InputTranscript { .. } => Some(VoiceTranscriptSpeaker::User), AgentEvent::OutputTranscript { .. } => Some(VoiceTranscriptSpeaker::Assistant), _ => None };
                     match event {
+                        AgentEvent::InputExpired { id } => {
+                            let session = self.session.clone(); let calls = self.calls.clone();
+                            let ended = tokio::task::spawn_blocking(move || {
+                                let _control = session.control.lock().map_err(|_| "Voice control unavailable".to_owned())?;
+                                let expired = session.input.lock().unwrap().hold.as_ref().is_some_and(|(held, deadline)| *held == id && Instant::now() >= *deadline);
+                                if expired && session.status().state == VoiceConnectionState::Connected {
+                                    set_input(&calls, &session, false, None)?;
+                                    session.input.lock().unwrap().hold = None;
+                                    session.state.lock().unwrap().listening = false;
+                                    session.publish(VoiceConnectionState::Connected, None);
+                                }
+                                Ok::<_, String>(())
+                            }).await;
+                            if let Err(error) = ended.map_err(|error| error.to_string()).and_then(|result| result) { break Err(error); }
+                        }
                         AgentEvent::InputTranscript { text, start_ms, end_ms } | AgentEvent::OutputTranscript { text, start_ms, end_ms } => {
                             // Speaker is taken from the original event, never inferred from mixed audio text.
                             let speaker = speaker.expect("transcript event has an explicit speaker");
@@ -841,7 +979,6 @@ impl VoiceHost {
             running.abort();
             let _ = running.await;
         }
-        let mut final_usage_error = None;
         // Finalization emits billing after cancellation. Drain only usage; retired speech/tasks
         // must never reach Core or the next media epoch during teardown.
         while let Ok(event) = incoming.try_recv() {
@@ -888,10 +1025,80 @@ fn close_room(calls: &super::call_runtime::Calls, session: &Session) -> Result<(
                 snapshot.revision,
             );
         }
-        calls.control(session.owner, &call_id, None)?;
+        calls.stop_and_wait(session.owner, &call_id)?;
     }
     Ok(())
 }
+fn set_input(
+    calls: &super::call_runtime::Calls,
+    session: &Session,
+    enabled: bool,
+    lease: Option<(String, Instant)>,
+) -> Result<(), String> {
+    if enabled && session.cancellation.token().is_cancelled() {
+        return Err("Voice input has retired".into());
+    }
+    // Stop the physical source before acknowledging mute. On enable, update the model
+    // gate before opening capture, so no recording can race ahead of its input policy.
+    if !enabled {
+        calls.control(
+            session.owner,
+            &session.call_id(),
+            Some(call::CallControl::Mute),
+        )?;
+    }
+    let commands = session
+        .commands
+        .lock()
+        .unwrap()
+        .clone()
+        .ok_or("Voice input unavailable")?;
+    let deadline = lease.as_ref().map(|(_, deadline)| *deadline);
+    calls.executor()?.block_on(async {
+        let (reply, completed) = tokio::sync::oneshot::channel();
+        tokio::time::timeout(Duration::from_secs(5), async {
+            commands
+                .send(AgentCommand::Input {
+                    enabled,
+                    lease,
+                    reply,
+                })
+                .await
+                .map_err(|_| "Voice input worker ended".to_owned())?;
+            completed
+                .await
+                .map_err(|_| "Voice input worker ended".to_owned())?
+        })
+        .await
+        .map_err(|_| "Voice input control timed out".to_owned())?
+    })?;
+    if enabled
+        && (session.cancellation.token().is_cancelled()
+            || deadline.is_some_and(|deadline| Instant::now() >= deadline))
+    {
+        calls.control(
+            session.owner,
+            &session.call_id(),
+            Some(call::CallControl::Mute),
+        )?;
+        return Err("Voice input authorization expired before capture could start".into());
+    }
+    if enabled && !session.status().listening {
+        let capture = calls.control(
+            session.owner,
+            &session.call_id(),
+            Some(call::CallControl::Unmute),
+        )?;
+        if !capture.microphone_allowed
+            || capture.muted
+            || capture.connection != call::CallConnection::Connected
+        {
+            return Err("The microphone could not start in the authorized voice room".into());
+        }
+    }
+    Ok(())
+}
+
 fn valid_id(id: &str) -> Result<(), RpcError> {
     if id.is_empty()
         || id.len() > 96

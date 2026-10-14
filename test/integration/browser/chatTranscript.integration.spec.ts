@@ -1,5 +1,22 @@
 import { expect, test } from '@playwright/test';
 
+for (const locale of ['en', 'zh-CN']) for (const cowork of [false, true]) {
+	test(`${cowork ? 'Cowork' : 'Chat'} Voice mute and push to talk preserve the composer in ${locale}`, async ({ page }) => {
+		await page.goto(`/chatTranscript.html?locale=${locale}`); await page.evaluate(cowork => window.ashChatTranscriptIntegration.showChatApp(true, cowork), cowork);
+		const chat = page.locator('#app-chat'); await chat.getByRole('button', { name: locale === 'en' ? 'Voice conversation' : '语音对话', exact: true }).click();
+		const choices = page.getByRole('combobox', { name: locale === 'en' ? 'Voice conversation options' : '语音对话选项' }); await choices.fill('marin'); await choices.press('Enter');
+		const draft = chat.locator(cowork ? '.stanza-editor-input' : '.ash-chat-input-part textarea'); if (cowork) { await draft.focus(); await page.keyboard.insertText('Private draft'); } else await draft.fill('Private draft');
+		const controls = chat.locator('.ash-agents-voice'); await controls.getByRole('button', { name: locale === 'en' ? 'Mute microphone' : '静音麦克风', exact: true }).click();
+		await controls.getByRole('button', { name: locale === 'en' ? 'Use push to talk' : '使用按住说话', exact: true }).click();
+		const held = controls.getByRole('button', { name: locale === 'en' ? 'Hold to speak' : '按住说话', exact: true }); await expect(held).toBeDisabled();
+		await controls.getByRole('button', { name: locale === 'en' ? 'Unmute microphone' : '取消麦克风静音', exact: true }).click();
+		await held.focus(); await page.keyboard.down('Space'); await expect(held).toHaveAttribute('aria-pressed', 'true'); await page.keyboard.up('Space'); await expect(held).toHaveAttribute('aria-pressed', 'false');
+		await held.focus(); await page.keyboard.down('Enter'); await expect(held).toHaveAttribute('aria-pressed', 'true'); await draft.focus(); await expect(held).toHaveAttribute('aria-pressed', 'false'); await page.keyboard.up('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.voiceState())).toEqual(['start', 'mute:true', 'mode:pushToTalk', 'mute:false', 'hold', 'release', 'hold', 'release']);
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft())).toBe('Private draft'); expect(await page.evaluate(() => window.ashChatTranscriptIntegration.chatMessages())).toEqual([]);
+	});
+}
+
 for (const locale of ['en', 'zh-CN']) {
 	test(`Skill file editing completes header keys and shows their description in ${locale}`, async ({ page }) => {
 		await page.goto(`/chatTranscript.html?prompt=1&locale=${locale}`);
@@ -773,14 +790,14 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatMessages())).toEqual([{
 				text: locale === 'en' ? 'Handle the request I just spoke.' : '处理我刚才说出的请求。', mode: 'plan', contexts: [{ name: locale === 'en' ? 'Voice request' : '语音请求', content: 'run tests <script>unsafe()</script>' }], commandId: 'voice-command', source: { sessionId: 'app-session', threadId: 'app-thread' },
 			}]);
-			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft())).toBe('Unsent user draft'); await expect(chat.getByText('private.txt', { exact: true })).toBeVisible();
+			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft())).toBe('Unsent user draft private.txt '); await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatDraftContexts())).toEqual([expect.objectContaining({ name: 'private.txt', content: 'private file body' })]);
 			await expect(chat.getByText('run tests <script>unsafe()</script>', { exact: true })).toBeVisible();
 			await expect(chat.locator('script')).toHaveCount(0);
 			await chat.getByRole('button', { name: locale === 'en' ? 'Interrupt voice reply' : '打断语音回复', exact: true }).click();
 			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.voiceState())).toEqual(['start', 'interrupt']);
 			await page.evaluate(() => window.ashChatTranscriptIntegration.retireChat());
 			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.voiceState())).toEqual(['start', 'interrupt', 'stop']);
-			if (cowork) await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft())).toBeUndefined(); else await expect(draft).toHaveValue('Unsent user draft'); expect(errors).toEqual([]);
+			if (cowork) await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft())).toBeUndefined(); else await expect(draft).toHaveValue('Unsent user draft private.txt '); expect(errors).toEqual([]);
 		});
 	}
 
@@ -1050,6 +1067,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await chat.locator('.ash-chat-tool-invocation > summary').click();
 			const audio = chat.locator('.ash-chat-media').filter({ has: page.locator('audio') }).first();
 			await audio.getByRole('button', { name: locale === 'en' ? 'Load audio' : '加载音频', exact: true }).click();
+			await expect.poll(() => audio.locator(':scope > audio').evaluate(element => (element as HTMLAudioElement).readyState)).toBeGreaterThanOrEqual(2);
 			await audio.locator(':scope > audio').evaluate(element => (element as HTMLAudioElement).play());
 			await expect.poll(() => audio.locator(':scope > audio').evaluate(element => (element as HTMLAudioElement).paused)).toBe(false);
 			const original = await audio.locator(':scope > audio').getAttribute('src');
@@ -1057,8 +1075,8 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.voiceState())).toEqual(['start', 'stop']);
 			await expect.poll(() => audio.locator(':scope > audio').evaluate(element => (element as HTMLAudioElement).paused)).toBe(true);
 			await page.evaluate(() => window.ashChatTranscriptIntegration.setChatVisible(true));
-			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft())).toBe('Retained draft');
-			await expect(chat.getByRole('button', { name: locale === 'en' ? 'Remove private.txt' : '移除 private.txt', exact: true })).toBeVisible();
+			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft())).toBe('Retained draft private.txt ');
+			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatDraftContexts())).toEqual([expect.objectContaining({ name: 'private.txt', content: 'private file body' })]);
 			await expect(audio.locator(':scope > audio')).toHaveAttribute('src', original!);
 			await expect.poll(() => audio.locator(':scope > audio').evaluate(element => (element as HTMLAudioElement).paused)).toBe(true);
 			expect(await page.evaluate(() => window.ashChatTranscriptIntegration.chatMessages())).toEqual([]);

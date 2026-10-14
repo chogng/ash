@@ -1,3 +1,4 @@
+import { localize } from '../../nls.js';
 import { Lxicon } from '../../base/common/lxicons.js';
 import { InstantiationType, registerSingleton } from '../../platform/instantiation/common/extensions.js';
 import { SyncDescriptor } from '../../platform/instantiation/common/descriptors.js';
@@ -48,6 +49,11 @@ class ChatSessionNavigationService implements IChatSessionNavigationServiceContr
 
 	openConversation(sessionId: string, threadId: string): Promise<void> {
 		return this.sessions.openThread(sessionId, threadId);
+	}
+	async startVoiceConversation(): Promise<void> {
+		const view = await this.views.openView(CHAT_VIEW_ID);
+		if (!(view instanceof ChatViewPane)) throw new Error(localize('agentsVoice.viewUnavailable', 'Chat view is unavailable for voice'));
+		await view.startVoiceConversation();
 	}
 }
 

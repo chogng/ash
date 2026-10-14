@@ -115,7 +115,7 @@ const opened: string[] = [];
 const restoring = (parameters.has('restoreSlow') || parameters.has('historySlow')) ? new DeferredPromise<void>() : undefined;
 services.registerInstance(IChatSessionNavigationService, {
 	getActiveConversation: () => activeChat,
-	getConversations: () => [], appendToActiveDraft() { }, captureActiveDraft: async () => undefined,
+	getConversations: () => [], startVoiceConversation: async () => { throw new Error("Unexpected voice start"); }, appendToActiveDraft() { }, captureActiveDraft: async () => undefined,
 	openConversation: async (sessionId, threadId) => { activeChat = { sessionId, threadId }; opened.push(threadId); },
 });
 // Durable message history is the external boundary of this UI fixture.

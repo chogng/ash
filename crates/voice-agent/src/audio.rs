@@ -19,6 +19,8 @@ pub(super) struct AudioBridge {
     downsample: AudioResampler,
     upsample: AudioResampler,
     playback: bool,
+    input_enabled: bool,
+    input_since: Instant,
 }
 
 impl AudioBridge {
@@ -41,11 +43,16 @@ impl AudioBridge {
             downsample: AudioResampler::new(AudioRate::Room, AudioRate::Voice),
             upsample: AudioResampler::new(AudioRate::Voice, AudioRate::Room),
             playback: true,
+            input_enabled: true,
+            input_since: Instant::now(),
         })
     }
 
     pub(super) fn push_input(&mut self, frame: AudioFrame) -> Result<(), AgentError> {
-        if self.is_human(&frame.participant_id) {
+        if self.input_enabled
+            && frame.received_at >= self.input_since
+            && self.is_human(&frame.participant_id)
+        {
             self.input.push(frame)?;
         }
         Ok(())
@@ -73,6 +80,17 @@ impl AudioBridge {
             .into_iter()
             .flat_map(i16::to_le_bytes)
             .collect())
+    }
+
+    pub(super) fn input_enabled(&self) -> bool {
+        self.input_enabled
+    }
+
+    pub(super) fn set_input(&mut self, enabled: bool) {
+        self.input_enabled = enabled;
+        self.input_since = Instant::now();
+        self.input = AudioMixer::default();
+        self.downsample = AudioResampler::new(AudioRate::Room, AudioRate::Voice);
     }
 
     pub(super) fn push_output(&mut self, pcm16: &[u8]) -> Result<(), AgentError> {

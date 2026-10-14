@@ -736,7 +736,10 @@ export class AppServerAgentVoiceService extends Disposable implements IAgentVoic
 	private current: AgentVoiceSessionState | undefined;
 	private starting: { readonly operationId: string; readonly generation: number; readonly promise: Promise<VoiceStatus>; readonly cancel: () => Promise<void>; } | undefined;
 	public get state(): AgentVoiceSessionState | undefined { return this.current; }
-	public get isAvailable(): boolean { return !this.isDisposed && this.client.state === 'ready' && this.client.capabilities?.contracts.voiceConversation?.version === 1; }
+	private inputQueue: Promise<void> = Promise.resolve();
+	private inputCounter = 0;
+	private hold: { readonly id: string; readonly resourceId: string; readonly epoch: number; renew?: ReturnType<typeof setInterval>; } | undefined;
+	public get isAvailable(): boolean { return !this.isDisposed && this.client.state === 'ready' && this.client.capabilities?.contracts.voiceConversation?.version === 2; }
 
 	constructor(private readonly client: AppServerProtocolClient) {
 		super();
@@ -748,7 +751,7 @@ export class AppServerAgentVoiceService extends Disposable implements IAgentVoic
 			}
 		}));
 		this._register(client.onStateChange(state => {
-			if (state !== 'ready') { this.resource = undefined; this.source = undefined; this.current = undefined; }
+			if (state !== 'ready') { this.clearHold(); this.resource = undefined; this.source = undefined; this.current = undefined; }
 			this.changed.fire();
 		}));
 	}
@@ -776,7 +779,7 @@ export class AppServerAgentVoiceService extends Disposable implements IAgentVoic
 		const onAbort = () => { void cancel(); };
 		signal?.addEventListener('abort', onAbort, { once: true });
 		const promise = this.client.request(APP_SERVER_METHODS['voice/start'], {
-			resourceId, operationId, deviceId: this.device, sessionId: source.sessionId, threadId: source.threadId, connectionId: selection.connectionId, modelId: selection.modelId ?? null, voice: selection.voice ?? null, locale: getNLSLanguage() || 'en',
+			resourceId, operationId, deviceId: this.device, sessionId: source.sessionId, threadId: source.threadId, connectionId: selection.connectionId, modelId: selection.modelId ?? null, voice: selection.voice ?? null, locale: getNLSLanguage() || 'en', inputMode: 'openMic', muted: false,
 			taskLabels: {
 				queued: localize('chat.voice.task.queued', 'Your voice request is queued in Chat.'),
 				running: localize('chat.voice.task.running', 'I am working on your request in Chat.'),
@@ -804,6 +807,7 @@ export class AppServerAgentVoiceService extends Disposable implements IAgentVoic
 	}
 
 	public async stop(): Promise<void> {
+		this.clearHold();
 		const generation = this.client.generation;
 		const starting = this.starting;
 		if (starting && starting.generation === generation) {
@@ -817,6 +821,7 @@ export class AppServerAgentVoiceService extends Disposable implements IAgentVoic
 	}
 
 	public async interrupt(): Promise<void> {
+		this.clearHold();
 		const current = this.current;
 		if (!current || current.state !== 'connected') return;
 		const generation = this.client.generation;
@@ -829,12 +834,55 @@ export class AppServerAgentVoiceService extends Disposable implements IAgentVoic
 		await this.client.request(APP_SERVER_METHODS['voice/delegation/reject'], { resourceId: request.resourceId, mediaEpoch: request.mediaEpoch, delegationId: request.delegationId });
 	}
 
+	public setMuted(muted: boolean): Promise<void> { this.clearHold(); return this.input({ type: 'mute', muted }); }
+	public setInputMode(mode: AgentVoiceSessionState['inputMode']): Promise<void> { this.clearHold(); return this.input({ type: 'mode', mode }); }
+	public async pttDown(id: string): Promise<void> {
+		const state = this.current;
+		if (!state || state.state !== 'connected' || state.muted || state.inputMode !== 'pushToTalk') return;
+		if (this.hold?.id === id) return;
+		this.clearHold();
+		const hold = { id, resourceId: state.resourceId, epoch: state.mediaEpoch, renew: undefined as ReturnType<typeof setInterval> | undefined };
+		this.hold = hold;
+		try {
+			await this.input({ type: 'hold', id });
+			if (this.hold !== hold) return;
+			let renewing = false;
+			hold.renew = setInterval(() => {
+				if (this.hold !== hold || renewing) return;
+				renewing = true;
+				void this.input({ type: 'renew', id }).then(() => {
+					if (this.hold === hold && !this.current?.listening) this.clearHold();
+				}, () => { if (this.hold === hold) { this.clearHold(); void this.input({ type: 'release', id }).catch(() => undefined); } }).finally(() => { renewing = false; });
+			}, 500);
+		} catch (error) { if (this.hold === hold) this.clearHold(); throw error; }
+	}
+	public pttUp(id: string): Promise<void> {
+		if (this.hold?.id === id) this.clearHold();
+		return this.input({ type: 'release', id });
+	}
+	private clearHold(): void { if (this.hold?.renew !== undefined) clearInterval(this.hold.renew); this.hold = undefined; }
+	private input(control: { readonly type: 'mute'; readonly muted: boolean; } | { readonly type: 'mode'; readonly mode: AgentVoiceSessionState['inputMode']; } | { readonly type: 'hold' | 'release' | 'renew'; readonly id: string; }): Promise<void> {
+		const source = this.current;
+		const generation = this.client.generation;
+		if (!source || source.state !== 'connected') return Promise.resolve();
+		const operation = this.inputQueue.catch(() => undefined).then(async () => {
+			const current = this.current;
+			if (this.isDisposed || this.client.generation !== generation || current?.resourceId !== source.resourceId || current.mediaEpoch !== source.mediaEpoch || current.state !== 'connected') throw canceled();
+			const inputSequence = this.inputCounter = Math.max(this.inputCounter, current.inputSequence) + 1;
+			const status = await this.client.request(APP_SERVER_METHODS['voice/input'], { resourceId: source.resourceId, mediaEpoch: source.mediaEpoch, inputSequence, control });
+			if (generation === this.client.generation) this.accept(status);
+		});
+		this.inputQueue = operation;
+		return operation;
+	}
+
 	protected override disposeCore(): void { void this.stop().catch(() => undefined); super.disposeCore(); }
 	private assertAvailable(): void { if (!this.isAvailable) throw new Error(localize('chat.voice.unavailable', 'Voice conversation is unavailable in this host.')); }
 	private accept(status: VoiceStatus): void {
 		if (this.isDisposed || status.resourceId !== this.resource || status.sessionId !== this.source?.sessionId || status.threadId !== this.source.threadId) return;
 		if (this.current && (status.mediaEpoch < this.current.mediaEpoch || status.mediaEpoch === this.current.mediaEpoch && status.sequence <= this.current.sequence)) return;
-		this.current = { resourceId: status.resourceId, sessionId: status.sessionId, threadId: status.threadId, mediaEpoch: status.mediaEpoch, sequence: status.sequence, state: status.state, usageMilliseconds: status.usageMilliseconds, ...(status.error ? { error: status.error } : {}) };
+		if (this.hold && (status.mediaEpoch !== this.hold.epoch || status.state !== 'connected' || status.muted || status.inputMode !== 'pushToTalk')) this.clearHold();
+		this.current = { resourceId: status.resourceId, sessionId: status.sessionId, threadId: status.threadId, mediaEpoch: status.mediaEpoch, sequence: status.sequence, state: status.state, inputMode: status.inputMode, muted: status.muted, listening: status.listening, inputSequence: status.inputSequence, usageMilliseconds: status.usageMilliseconds, ...(status.error ? { error: status.error } : {}) };
 		this.changed.fire();
 	}
 }

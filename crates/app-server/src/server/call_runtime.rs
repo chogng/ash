@@ -372,6 +372,28 @@ impl Calls {
         })
     }
 
+    /// A control receipt precedes device/room disposal. Voice replacement must wait
+    /// for this specific Call worker before acquiring the microphone for its next epoch.
+    pub(super) fn stop_and_wait(&self, owner: u64, resource: &str) -> Result<(), Failure> {
+        self.control(owner, resource, None)?;
+        let deadline = std::time::Instant::now() + Duration::from_secs(30);
+        loop {
+            let finished = self
+                .sessions
+                .lock()
+                .map_err(|_| "Call state unavailable")?
+                .get(&(owner, resource.into()))
+                .is_none_or(|session| session.worker.is_finished());
+            if finished {
+                return Ok(());
+            }
+            if std::time::Instant::now() >= deadline {
+                return Err("Call device cleanup is still pending".into());
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
     pub fn close(&self, owner: u64) {
         if let Ok(mut sessions) = self.sessions.lock() {
             let keys: Vec<_> = sessions
@@ -392,7 +414,13 @@ impl Drop for Calls {
             sessions.clear();
         }
         if let Some(runtime) = self.executor.take() {
-            runtime.shutdown_timeout(Duration::from_secs(15));
+            // The final VoiceHost reference can be released by a worker of this
+            // runtime. Tokio must not block that worker while dropping its executor.
+            if tokio::runtime::Handle::try_current().is_ok() {
+                runtime.shutdown_background();
+            } else {
+                runtime.shutdown_timeout(Duration::from_secs(15));
+            }
         }
     }
 }

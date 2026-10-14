@@ -26,6 +26,7 @@ export interface ISessionsConversationPane extends IDisposable {
 		selectUntitledSession(session: IUntitledChatSession): void;
 	};
 	focus(): void;
+	startVoiceConversation(): Promise<void>;
 	addContext(attachment: ChatContextAttachment): void;
 	appendToDraft(text: string): void;
 	captureDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined>;
@@ -92,6 +93,10 @@ export class SessionsChatView extends Disposable {
 	async captureActiveDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined> {
 		await this.grid.whenReady();
 		return this.activePane?.captureDraft();
+	}
+	startVoiceConversation(): Promise<void> {
+		if (!this.activePane) return Promise.reject(new Error(localize('agentsVoice.noChat', 'Open a Chat before starting voice.')));
+		return this.activePane.startVoiceConversation();
 	}
 
 	setVisible(visible: boolean): void {

@@ -13,14 +13,30 @@ class Voice extends Disposable implements IAgentVoiceService {
 	isAvailable = true; state: AgentVoiceSessionState | undefined; stops = 0; starts = 0; rejected = 0;
 	options: Promise<readonly { connectionId: string; name: string; defaultModel: string; models: readonly []; }[]> = Promise.resolve([{ connectionId: 'voice', name: 'Voice', defaultModel: 'speech', models: [] }]);
 	getOptions() { return this.options; }
-	async start(source: AgentVoiceSource): Promise<AgentVoiceSessionState> { this.starts++; this.state = { ...source, resourceId: 'media', mediaEpoch: this.starts, sequence: 1, state: 'connected', usageMilliseconds: 0 }; this.changes.fire(); return this.state; }
+	async start(source: AgentVoiceSource): Promise<AgentVoiceSessionState> { this.starts++; this.state = { ...source, resourceId: 'media', mediaEpoch: this.starts, sequence: 1, state: 'connected', inputMode: 'openMic' as const, muted: false, listening: true, inputSequence: 0, usageMilliseconds: 0 }; this.changes.fire(); return this.state; }
 	async stop(): Promise<void> { this.stops++; if (this.state) this.state = { ...this.state, state: 'ended' }; this.changes.fire(); }
 	async interrupt(): Promise<void> { if (this.state) this.state = { ...this.state, mediaEpoch: this.state.mediaEpoch + 1 }; this.changes.fire(); }
+	private hold: string | undefined;
+	async setMuted(muted: boolean): Promise<void> { this.hold = undefined; if (this.state) this.state = { ...this.state, muted, listening: !muted && this.state.inputMode === 'openMic' }; this.changes.fire(); }
+	async setInputMode(inputMode: AgentVoiceSessionState['inputMode']): Promise<void> { this.hold = undefined; if (this.state) this.state = { ...this.state, inputMode, listening: !this.state.muted && inputMode === 'openMic' }; this.changes.fire(); }
+	async pttDown(id: string): Promise<void> { if (this.state?.inputMode === 'pushToTalk' && !this.state.muted) { this.hold = id; this.state = { ...this.state, listening: true }; this.changes.fire(); } }
+	async pttUp(id: string): Promise<void> { if (this.state && this.hold === id) { this.hold = undefined; this.state = { ...this.state, listening: false }; this.changes.fire(); } }
 	async rejectTask(): Promise<void> { this.rejected++; }
 }
 const source = { sessionId: 'session', threadId: 'thread' };
 const gesture = { navigator: { userActivation: { isActive: true } } } as Window & typeof globalThis;
 function request(epoch = 1): AgentVoiceTaskRequest { return { ...source, resourceId: 'media', mediaEpoch: epoch, delegationId: 'proposal', commandId: 'command', transcript: 'run tests' }; }
+
+test('Voice controls affect only their original Chat owner and an old release cannot end a newer hold', async () => {
+	using voice = new Voice(); using owner = new VoiceSessionController(async () => { }, error => { throw error; }, undefined, voice); owner.setSource(source); await owner.connect(gesture);
+	using other = new VoiceSessionController(async () => { }, error => { throw error; }, undefined, voice); other.setSource({ ...source, threadId: 'other' });
+	await owner.setInputMode('pushToTalk'); assert.equal(owner.isListening, false);
+	await owner.pttDown('first'); await owner.pttDown('second'); await owner.pttUp('first'); assert.equal(owner.isListening, true);
+	await other.setMuted(true); assert.equal(owner.isMuted, false);
+	await owner.pttUp('second'); assert.equal(owner.isListening, false);
+	await owner.setMuted(true); await owner.pttDown('muted'); assert.equal(owner.isListening, false);
+	await owner.setMuted(false); assert.equal(owner.isListening, false);
+});
 
 test('Voice client requires a user action and never starts a media session from script alone', async () => {
 	using voice = new Voice(); using client = new VoiceSessionController(async () => { }, error => { throw error; }, undefined, voice); client.setSource(source);

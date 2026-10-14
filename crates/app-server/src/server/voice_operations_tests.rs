@@ -19,6 +19,8 @@ fn spec() -> VoiceStartParams {
         model_id: None,
         voice: None,
         locale: "zh-CN".into(),
+        input_mode: Default::default(),
+        muted: false,
         task_labels: VoiceTaskLabels {
             queued: "queued".into(),
             running: "running".into(),
@@ -29,6 +31,33 @@ fn spec() -> VoiceStartParams {
             rejected: "rejected".into(),
         },
     }
+}
+
+#[test]
+fn voice_input_rejects_malformed_wire_controls_before_touching_media() {
+    let server = crate::tests::server();
+    let mut host = server.product_host_connection();
+    crate::tests::initialize(&server, &mut host);
+    for (sequence, control) in [
+        (0_u64, json!({"type":"mute","muted":true})),
+        (9_007_199_254_740_992, json!({"type":"mute","muted":true})),
+        (1, json!({"type":"hold","id":"invalid\n"})),
+        (1, json!({"type":"mode","mode":"unknown"})),
+        (1, json!({"type":"mute","muted":"true"})),
+        (1, json!({"type":"release","id":"hold","extra":true})),
+    ] {
+        assert_eq!(server.voice_operation(&host, ClientMethod::VoiceInput, &json!({"resourceId":"media","mediaEpoch":1,"inputSequence":sequence,"control":control})).unwrap_err().code, -32602);
+    }
+    assert!(!server.calls.has_active_audio());
+    let mut legacy = serde_json::to_value(spec()).unwrap();
+    legacy.as_object_mut().unwrap().remove("inputMode");
+    legacy.as_object_mut().unwrap().remove("muted");
+    let decoded: VoiceStartParams = serde_json::from_value(legacy).unwrap();
+    assert_eq!(
+        decoded.input_mode,
+        ash_app_server_protocol::protocol::voice::VoiceInputMode::OpenMic
+    );
+    assert!(!decoded.muted);
 }
 
 #[test]
@@ -131,6 +160,7 @@ enum VoiceCorePlacement {
 
 fn exercise_voice_core(placement: VoiceCorePlacement) {
     use ash_secrets::SecretStore;
+    use base64::Engine;
     use futures::SinkExt;
     use futures::StreamExt;
     use std::sync::Arc;
@@ -149,6 +179,8 @@ fn exercise_voice_core(placement: VoiceCorePlacement) {
         .block_on(tokio::net::TcpListener::bind("127.0.0.1:0"))
         .unwrap();
     let base_url = format!("http://{}/v1", listener.local_addr().unwrap());
+    let audio_count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let model_audio_count = audio_count.clone();
     let (commentary, received_commentary) = std::sync::mpsc::channel();
     let model = model_runtime.spawn(async move {
         for epoch in 1..=3 {
@@ -163,11 +195,15 @@ fn exercise_voice_core(placement: VoiceCorePlacement) {
             let model = started["session"]["model"].clone();
             socket.send(Message::Text(json!({"type":"session.started", "session":{"id":format!("live-{epoch}"), "model":model}}).to_string().into())).await.unwrap();
             let mut heard = false;
+            let mut muted = true;
             while let Some(message) = socket.next().await {
                 let Ok(message) = message else { break }; if message.is_close() { break; }
                 let value: serde_json::Value = serde_json::from_str(message.to_text().unwrap()).unwrap();
+                if value["type"] == "session.input_audio.append" { assert!(!muted, "audio sent while model input is muted"); model_audio_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst); }
                 match value["type"].as_str().unwrap() {
-                    "session.input_audio.append" if !heard => {
+                    "session.input_audio.mute" => muted = true,
+                    "session.input_audio.unmute" => muted = false,
+                    "session.input_audio.append" if !heard && base64::engine::general_purpose::STANDARD.decode(value["audio"].as_str().unwrap()).unwrap().iter().any(|sample| *sample != 0) => {
                         heard = true;
                         for event in [json!({"type":"session.input_transcript.delta","delta":"run tests","start_ms":0,"end_ms":100}), json!({"type":"session.output_transcript.delta","delta":"I will check.","start_ms":100,"end_ms":200}), json!({"type":"session.delegation.created","delegation":{"id":"task","target":"client"},"offset_ms":100})] {
                             socket.send(Message::Text(event.to_string().into())).await.unwrap();
@@ -252,6 +288,7 @@ fn exercise_voice_core(placement: VoiceCorePlacement) {
             .unwrap(),
     )
     .unwrap();
+    params.input_mode = ash_app_server_protocol::protocol::voice::VoiceInputMode::PushToTalk;
     let initial = core.threads.read_thread(&params.thread_id).unwrap();
     if source.is_some() {
         assert!(server.threads.read_thread(&params.thread_id).is_err());
@@ -264,6 +301,34 @@ fn exercise_voice_core(placement: VoiceCorePlacement) {
         )
         .unwrap();
     assert_eq!(started["state"], "connected");
+    assert_eq!(started["listening"], false);
+    std::thread::sleep(Duration::from_millis(150));
+    assert_eq!(audio_count.load(std::sync::atomic::Ordering::SeqCst), 0);
+    let input = |sequence, control| {
+        server.voice_operation(&owner, ClientMethod::VoiceInput, &json!({"resourceId":params.resource_id,"mediaEpoch":started["mediaEpoch"],"inputSequence":sequence,"control":control}))
+    };
+    assert_eq!(
+        input(1, json!({"type":"hold","id":"first"})).unwrap()["listening"],
+        true
+    );
+    assert_eq!(
+        input(2, json!({"type":"hold","id":"second"})).unwrap()["listening"],
+        true
+    );
+    assert_eq!(
+        input(3, json!({"type":"release","id":"first"})).unwrap()["listening"],
+        true
+    );
+    assert_eq!(
+        input(2, json!({"type":"mute","muted":true})).unwrap()["listening"],
+        true
+    );
+    assert_eq!(
+        input(3, json!({"type":"mute","muted":true}))
+            .unwrap_err()
+            .code,
+        -32602
+    );
     let deadline = Instant::now() + Duration::from_secs(15);
     let proposal = loop {
         let notifications = owner.outbound_notifications.drain();
@@ -276,6 +341,56 @@ fn exercise_voice_core(placement: VoiceCorePlacement) {
         assert!(Instant::now() < deadline, "voice delegation did not arrive");
         std::thread::sleep(Duration::from_millis(20));
     };
+    assert_eq!(
+        input(4, json!({"type":"mute","muted":true})).unwrap()["listening"],
+        false
+    );
+    std::thread::sleep(Duration::from_millis(150));
+    let quiet = audio_count.load(std::sync::atomic::Ordering::SeqCst);
+    std::thread::sleep(Duration::from_millis(150));
+    assert_eq!(audio_count.load(std::sync::atomic::Ordering::SeqCst), quiet);
+    let capture = || {
+        server.call_operation(&owner, ClientMethod::CallRead, &json!({"resourceId":format!("voice-{}-{}", params.resource_id, started["mediaEpoch"].as_u64().unwrap())})).unwrap()
+    };
+    assert_eq!(capture()["muted"], true);
+    assert_eq!(
+        input(5, json!({"type":"hold","id":"muted"}))
+            .unwrap_err()
+            .code,
+        -32602
+    );
+    assert_eq!(
+        input(5, json!({"type":"mute","muted":false})).unwrap()["listening"],
+        false
+    );
+    assert_eq!(
+        input(6, json!({"type":"hold","id":"expires"})).unwrap()["listening"],
+        true
+    );
+    let expires = Instant::now() + Duration::from_secs(6);
+    loop {
+        let status = server
+            .voice_operation(
+                &owner,
+                ClientMethod::VoiceRead,
+                &json!({"resourceId":params.resource_id}),
+            )
+            .unwrap();
+        assert_eq!(
+            status["state"], "connected",
+            "voice failed while awaiting hold expiry: {status}"
+        );
+        if status["listening"] == false {
+            break;
+        }
+        assert!(Instant::now() < expires, "hold did not expire");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert_eq!(capture()["muted"], true);
+    assert_eq!(
+        input(7, json!({"type":"renew","id":"expires"})).unwrap()["listening"],
+        false
+    );
     let snapshot = core.threads.read_thread(&params.thread_id).unwrap();
     assert_eq!(snapshot.turns, initial.turns);
     assert_eq!(snapshot.items, initial.items);
@@ -326,6 +441,14 @@ fn exercise_voice_core(placement: VoiceCorePlacement) {
         .voice_operation(&owner, ClientMethod::VoiceInterrupt, &control)
         .unwrap();
     assert_eq!(next["state"], "connected");
+    assert_eq!(next["inputMode"], "pushToTalk");
+    assert_eq!(next["listening"], false);
+    assert_eq!(
+        input(8, json!({"type":"hold","id":"retired"}))
+            .unwrap_err()
+            .code,
+        -32602
+    );
     assert!(next["mediaEpoch"].as_u64().unwrap() > started["mediaEpoch"].as_u64().unwrap());
     assert_eq!(
         server

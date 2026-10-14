@@ -220,6 +220,7 @@ services.registerInstance(IInstructionService, {
 services.registerInstance(IChatSessionNavigationService, {
 	getActiveConversation: () => ({ sessionId: 'active-session', threadId: 'active-thread' }),
 	getConversations: () => [{ sessionId: 'active-session', threadId: 'active-thread', title: 'Current session' }, { sessionId: 'previous-session', threadId: 'previous-thread', title: 'Earlier design' }],
+	startVoiceConversation: async () => { throw new Error("Unexpected voice start"); },
 	appendToActiveDraft: () => { }, captureActiveDraft: async () => undefined, openConversation: async (sessionId, threadId) => { recordDestination({ sessionId, threadId }); },
 });
 services.registerInstance(IChatService, {

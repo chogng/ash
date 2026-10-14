@@ -9,6 +9,8 @@ export interface IChatSessionNavigationService {
 	getActiveConversation(): { readonly sessionId: string; readonly threadId: string; } | undefined;
 	captureActiveDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined>;
 	openConversation(sessionId: string, threadId: string): Promise<void>;
+	/** Starts voice through the visible Chat's controller, preserving its composer and submission policy. */
+	startVoiceConversation(): Promise<void>;
 }
 
 export const IChatSessionNavigationService = createServiceIdentifier<IChatSessionNavigationService>('chatSessionNavigationService');

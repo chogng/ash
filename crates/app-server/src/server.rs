@@ -2929,6 +2929,7 @@ impl AppServer {
             Some(
                 ClientMethod::VoiceStartCancel
                 | ClientMethod::VoiceRead
+                | ClientMethod::VoiceInput
                 | ClientMethod::VoiceStop
                 | ClientMethod::VoiceInterrupt
                 | ClientMethod::VoiceRejectDelegation

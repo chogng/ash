@@ -2189,6 +2189,12 @@ use crate::protocol::voice::VoiceConnectionState;
 use crate::protocol::voice::VoiceControlParams;
 use crate::protocol::voice::VoiceDelegationRequest;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::voice::VoiceInputControl;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::voice::VoiceInputMode;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::voice::VoiceInputParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::voice::VoiceModelChoice;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::voice::VoiceOptions;
@@ -3357,6 +3363,7 @@ client_methods! {
     VoiceStart => "voice/start" { params: VoiceStartParams, response: VoiceStatus, serialization: ConnectionExclusive("voice"), cancellation: "operationId" => PreserveOutcome, },
     VoiceStartCancel => "voice/start/cancel" { params: VoiceStartCancelParams, response: (), serialization: None, },
     VoiceRead => "voice/read" { params: VoiceResourceParams, response: VoiceStatus, serialization: ConnectionExclusive("voice"), },
+    VoiceInput => "voice/input" { params: VoiceInputParams, response: VoiceStatus, serialization: None, },
     VoiceStop => "voice/stop" { params: VoiceControlParams, response: VoiceStatus, serialization: None, },
     VoiceInterrupt => "voice/interrupt" { params: VoiceControlParams, response: VoiceStatus, serialization: None, },
     VoiceRejectDelegation => "voice/delegation/reject" { params: VoiceRejectDelegationParams, response: (), serialization: None, },
@@ -5761,6 +5768,9 @@ typescript_bindings! {
     ServerInfo,
     ServerOperatingSystem,
     VoiceStartParams,
+    VoiceInputControl,
+    VoiceInputMode,
+    VoiceInputParams,
     VoiceStartCancelParams,
     VoiceResourceParams,
     VoiceControlParams,

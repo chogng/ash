@@ -1406,6 +1406,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(IChatSessionNavigationService, {
 		getActiveConversation: () => ({ sessionId: 'session-hooks', threadId: 'thread-hooks' }),
 		getConversations: () => [], captureActiveDraft: async () => undefined, openConversation: async () => { },
+		startVoiceConversation: async () => { throw new Error("Unexpected voice start"); },
 		appendToActiveDraft: text => { prompts.push(text); },
 	});
 	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });

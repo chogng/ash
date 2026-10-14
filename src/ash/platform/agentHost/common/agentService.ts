@@ -852,6 +852,7 @@ export const IAgentTurnService = createServiceIdentifier<IAgentTurnService>('age
 
 export interface AgentVoiceSource { readonly sessionId: string; readonly threadId: string; }
 export interface AgentVoiceSelection { readonly connectionId: string; readonly modelId?: string; readonly voice?: string; }
+export type AgentVoiceInputMode = 'openMic' | 'pushToTalk';
 export interface AgentVoiceModelChoice { readonly modelId: string; readonly defaultVoice: string; readonly voices: readonly string[]; }
 export interface AgentVoiceConnectionChoice { readonly connectionId: string; readonly name: string; readonly defaultModel: string; readonly models: readonly AgentVoiceModelChoice[]; }
 export interface AgentVoiceSessionState extends AgentVoiceSource {
@@ -859,6 +860,11 @@ export interface AgentVoiceSessionState extends AgentVoiceSource {
 	readonly mediaEpoch: number;
 	readonly sequence: number;
 	readonly state: 'connecting' | 'connected' | 'stopping' | 'ended' | 'failed';
+	readonly inputMode: AgentVoiceInputMode;
+	readonly muted: boolean;
+	/** True only after the capture source and model input have acknowledged the policy. */
+	readonly listening: boolean;
+	readonly inputSequence: number;
 	readonly usageMilliseconds: number;
 	readonly error?: string;
 }
@@ -881,5 +887,12 @@ export interface IAgentVoiceService {
 	start(source: AgentVoiceSource, selection: AgentVoiceSelection, signal?: AbortSignal): Promise<AgentVoiceSessionState>;
 	stop(): Promise<void>;
 	interrupt(): Promise<void>;
+	/** Closes microphone capture and model input while retaining playback and the conversation. */
+	setMuted(muted: boolean): Promise<void>;
+	setInputMode(mode: AgentVoiceInputMode): Promise<void>;
+	/** Each gesture has a unique ID. The transport renews its lease until the matching release. */
+	pttDown(id: string): Promise<void>;
+	/** A delayed release for an older gesture cannot end the current hold. */
+	pttUp(id: string): Promise<void>;
 	rejectTask(request: AgentVoiceTaskRequest): Promise<void>;
 }

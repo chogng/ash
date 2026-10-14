@@ -123,8 +123,8 @@ services.registerInstance(IDictationService, undefined);
 registerTestDictationOnboarding(services);
 services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 services.registerSingleton(ITerminalLogService, () => services.createInstance(TerminalLogService));
-registerCodeEditorServices(services);
 services.registerInstance(IAgentCapabilitiesService, { isAvailable: true, read: async () => ({ tools: [{ name: 'read_file', description: 'Read authorized files', source: 'local', sourceDetails: ['Ash'], exposure: 'direct', authority: 'directoryRead' }, { name: 'internal_tool', description: 'Internal', source: 'local', sourceDetails: [], exposure: 'hidden', authority: 'providerDefined' }], toolSets: [], localProcessSandboxConfigured: false, directoryGrantsReadable: true, sandboxBackends: [], sandboxDiagnostics: [] }) });
+registerCodeEditorServices(services);
 const skillResourceRequests: unknown[] = [];
 const prompts = resources.add(new PromptsService({
 	onDidChangeSkills: Event.None,
@@ -319,8 +319,12 @@ const voiceControls: string[] = [];
 const voiceFixture: IAgentVoiceService = {
 	isAvailable: true, get state() { return voiceSession; }, onDidChange: voiceChanges.event, onDidRequestTask: voiceTasks.event,
 	getOptions: async () => [{ connectionId: 'fixture', name: 'Voice fixture', defaultModel: 'speech', models: [{ modelId: 'speech', defaultVoice: 'cedar', voices: ['cedar', 'marin'] }] }],
-	start: async (source, selection) => { chosenVoice = { ...selection }; voiceControls.push('start'); voiceSession = { ...source, resourceId: 'voice-media', mediaEpoch: (voiceSession?.mediaEpoch ?? 0) + 1, sequence: 1, state: 'connected', usageMilliseconds: 0 }; voiceChanges.fire(); return voiceSession; },
+	start: async (source, selection) => { chosenVoice = { ...selection }; voiceControls.push('start'); voiceSession = { ...source, resourceId: 'voice-media', mediaEpoch: (voiceSession?.mediaEpoch ?? 0) + 1, sequence: 1, state: 'connected', inputMode: 'openMic' as const, muted: false, listening: true, inputSequence: 0, usageMilliseconds: 0 }; voiceChanges.fire(); return voiceSession; },
 	stop: async () => { voiceControls.push('stop'); if (voiceSession) voiceSession = { ...voiceSession, state: 'ended' }; voiceChanges.fire(); },
+	setMuted: async muted => { voiceControls.push('mute:' + muted); if (voiceSession) voiceSession = { ...voiceSession, muted, listening: !muted && voiceSession.inputMode === 'openMic' }; voiceChanges.fire(); },
+	setInputMode: async inputMode => { voiceControls.push('mode:' + inputMode); if (voiceSession) voiceSession = { ...voiceSession, inputMode, listening: !voiceSession.muted && inputMode === 'openMic' }; voiceChanges.fire(); },
+	pttDown: async () => { voiceControls.push('hold'); if (voiceSession) voiceSession = { ...voiceSession, listening: true }; voiceChanges.fire(); },
+	pttUp: async () => { voiceControls.push('release'); if (voiceSession) voiceSession = { ...voiceSession, listening: false }; voiceChanges.fire(); },
 	interrupt: async () => { voiceControls.push('interrupt'); if (voiceSession) voiceSession = { ...voiceSession, mediaEpoch: voiceSession.mediaEpoch + 1 }; voiceChanges.fire(); },
 	rejectTask: async () => { voiceControls.push('reject'); },
 };
@@ -459,6 +463,7 @@ declare global {
 			retireChat(): void;
 			setChatVisible(visible: boolean): void;
 			chatDraft(): Promise<string | undefined>;
+			chatDraftContexts(): Promise<readonly { name: string; content: string; }[] | undefined>;
 			persistedChatDraft(): unknown;
 			appImagePending(): boolean;
 			delayAppImages(): void;
@@ -667,6 +672,7 @@ window.ashChatTranscriptIntegration = {
 	finishAppImages: () => { completeImageDecode?.(); completeImageDecode = undefined; },
 	persistedChatDraft: () => readNewChatDraftState(services.get(IStorageService), appChatThread),
 	chatDraft: async () => (await appChat?.captureDraft())?.draft.text,
+	chatDraftContexts: async () => (await appChat?.captureDraft())?.draft.contexts,
 	setChatVisible: visible => appChat?.setVisible(visible),
 	retireChat: () => { appChatGeneration++; composerChanges.fire(); appChatThread = 'replacement-thread'; chatChanges.fire(); },
 	voiceState: () => voiceControls,

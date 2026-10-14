@@ -50,6 +50,7 @@ export default defineConfig({
 				agentTrace: resolve(import.meta.dirname, 'agentTrace.html'),
 				chatInput: resolve(import.meta.dirname, "chatInput.html"),
 				chatTranscript: resolve(import.meta.dirname, 'chatTranscript.html'),
+				agentsVoice: resolve(import.meta.dirname, 'agentsVoice.html'),
 				aiCustomization: resolve(import.meta.dirname, 'aiCustomization.html'),
 				dataChannel: resolve(import.meta.dirname, 'dataChannel.html'),
 				extensionHost: resolve(import.meta.dirname, 'extensionHost.html'),

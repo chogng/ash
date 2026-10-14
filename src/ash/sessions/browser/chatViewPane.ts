@@ -237,6 +237,10 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 	captureActiveDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined> {
 		return this.activePane?.captureDraft() ?? Promise.resolve(undefined);
 	}
+	startVoiceConversation(): Promise<void> {
+		if (!this.activePane) return Promise.reject(new Error(localize('agentsVoice.noChat', 'Open a Chat before starting voice.')));
+		return this.activePane.startVoiceConversation();
+	}
 
 	appendToDraft(text: string): void {
 		this.ensureConversationForVisibleChat();

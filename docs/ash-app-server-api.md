@@ -1537,3 +1537,11 @@ factsAvailable/factsIncluded；客户端须显示覆盖量，读取量与事实�
 三个扩展来源默认关闭，Sessions 的整理选项默认开启。历史观察不能确认
 目标归属；`target` 是用户确认的精确归属说明，仍不授予操作权限。条目含来源种类、版本、接受状态
 和当前状态；详细范围与信任规则见 [准备项目审核环境](guardian.md#准备项目审核环境)。
+
+## 语音对话输入控制
+
+- `voiceConversation` 能力版本 2 增加 `voice/input`。产品通过 `IAgentVoiceService` 使用静音、输入模式和按住说话控制；Core 继续持有原聊天的转写与任务事实。
+- `voice/start` 的 `inputMode`、`muted` 省略时分别为 `openMic`、`false`。`VoiceStatus` 返回 `inputMode`、`muted`、实际确认的 `listening` 和 `inputSequence`。
+- `voice/input` 绑定连接所属 `resourceId` 与 `mediaEpoch`，携带该 epoch 内递增的 `inputSequence`；控制为 `mute`、`mode`、`hold`、`release` 或 `renew`。同序号同控制可重试，旧序号不改变当前策略，旧 epoch 被拒绝。
+- 静音先关闭 Call 的物理采集，再关闭模型输入；回复播放继续。按住手势使用唯一 ID 和三秒租期，由前端续期；旧手势松开不能结束新手势，到期续期不能重新开启采集。松键、指针取消、失焦及控件销毁均释放手势。
+- 打断回复等待旧 Call 的设备清理后开启下一 epoch，保留静音和模式并清除按住状态。关闭浮窗只释放该窗口的录音手势及转写订阅，断开连接才结束语音会话。
