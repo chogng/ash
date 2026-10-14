@@ -21,8 +21,10 @@
 	border-bottom-left-radius: var(--ash-cornerRadius-xLarge);
 }
 
-.ash-sessions-window.modern-ui .ash-workbench-editor {
-	border-left: var(--ash-strokeThickness) solid var(--ash-border);
+.ash-sessions-window.modern-ui
+	.ash-workbench-sessions:not(.ash-sessions-frame-end) {
+	/* Each leading pane owns its trailing separator; the sidebar already paints its own. */
+	border-right: var(--ash-strokeThickness) solid var(--ash-border);
 }
 
 .ash-sessions-window.modern-ui .ash-sessions-frame-end {
