@@ -8,6 +8,33 @@ export interface Event<T> {
 export namespace Event {
 	export const None: Event<any> = () => noneDisposable;
 
+	/** Releases the source before delivering, including synchronous registration and reentry. */
+	export function once<T>(event: Event<T>): Event<T> {
+		return (listener, thisArgs, disposables) => {
+			let delivered = false;
+			let source: IDisposable | undefined;
+			const subscription = toDisposable(() => {
+				delivered = true;
+				source?.dispose();
+			});
+			try {
+				source = event(value => {
+					if (delivered) return;
+					subscription.dispose();
+					listener.call(thisArgs, value);
+				});
+				if (delivered) {
+					source.dispose();
+					return addDisposable(noneDisposable, disposables);
+				}
+				return addDisposable(subscription, disposables);
+			} catch (error) {
+				subscription.dispose();
+				throw error;
+			}
+		};
+	}
+
 	export function map<T, R>(event: Event<T>, transform: (value: T) => R): Event<R> {
 		return (listener, thisArgs, disposables) => event(value => listener.call(thisArgs, transform(value)), undefined, disposables);
 	}

@@ -1,7 +1,45 @@
 import { strict as assert } from "node:assert";
-import { test } from "mocha";
+import { suite, test } from "mocha";
 import { createEventDeliveryQueue, Emitter, Event, PauseableEmitter, runWithBufferedEvents, ValueWithChangeEvent } from "../../common/event.js";
-import { DisposableStore, type IDisposable, noneDisposable } from "../../common/lifecycle.js";
+import { DisposableStore, toDisposable, type IDisposable, noneDisposable } from "../../common/lifecycle.js";
+import { ensureNoDisposablesAreLeakedInTestSuite } from './utils.js';
+
+suite('Event.once lifetime', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('removes the subscription before reentry and preserves consumer context', () => {
+		using emitter = new Emitter<number>();
+		using owner = new DisposableStore();
+		const context = { values: [] as number[] };
+		Event.once(emitter.event)(function (this: typeof context, value) {
+			assert.equal(emitter.hasListeners(), false);
+			this.values.push(value);
+			emitter.fire(2);
+		}, context, owner);
+		emitter.fire(1);
+		assert.deepEqual(context.values, [1]);
+	});
+
+	test('cleans synchronous registration and cancellation without delivering twice', () => {
+		using owner = new DisposableStore();
+		let released = 0;
+		const values: number[] = [];
+		const source: Event<number> = listener => {
+			listener(1);
+			listener(2);
+			return toDisposable(() => { released++; });
+		};
+		Event.once(source)(value => values.push(value), undefined, owner);
+		assert.deepEqual(values, [1]);
+		assert.equal(released, 1);
+		using emitter = new Emitter<number>();
+		Event.once(emitter.event)(value => values.push(value), undefined, owner);
+		owner.clear();
+		emitter.fire(3);
+		assert.equal(emitter.hasListeners(), false);
+		assert.deepEqual(values, [1]);
+	});
+});
 
 test("Event.None returns the reusable empty disposable", () => {
 	assert.equal(Event.None(() => undefined), noneDisposable);

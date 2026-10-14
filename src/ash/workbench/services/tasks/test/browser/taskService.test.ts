@@ -1,3 +1,5 @@
+import { formatMessageForTerminal } from '../../../../../platform/terminal/common/terminalStrings.js';
+import { MergedEnvironmentVariableCollection } from '../../../../../platform/terminal/common/environmentVariableCollection.js';
 import { IEnvironmentVariableService } from '../../../../contrib/terminal/common/environmentVariable.js';
 import type { IQuickPick, IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
@@ -381,8 +383,13 @@ class FakeTerminalInstance extends Disposable implements ITerminalInstance {
 	async close(): Promise<void> { this.state = "exited"; }
 	command(event: ITerminalCommandStatusEvent): void { this.commandEmitter.fire(event); }
 	output(value: string): void { this.outputBytes(new TextEncoder().encode(value)); }
-	outputBytes(data: Uint8Array): void { this.dataEmitter.fire({ data, trackCommit: false }); }
-	exit(code: number | undefined): void { this.exitCode = code; this.state = 'exited'; this.exitEmitter.fire(code); }
+	private readonly outputDecoder = new TextDecoder();
+	outputBytes(data: Uint8Array): void { this.dataEmitter.fire({ data: this.outputDecoder.decode(data, { stream: true }), trackCommit: false }); }
+	exit(code: number | undefined): void {
+		const tail = this.outputDecoder.decode();
+		if (tail) this.dataEmitter.fire({ data: tail, trackCommit: false });
+		this.exitCode = code; this.state = 'exited'; this.exitEmitter.fire(code);
+	}
 }
 
 
@@ -395,7 +402,7 @@ function testPathService(workspace: IWorkspaceContextService, os = OperatingSyst
 function registerTaskProfiles(services: InstantiationService): void {
 	services.registerInstance(ITerminalContributionService, { terminalProfiles: [], onDidChangeTerminalProfiles: Event.None, ...Disposable.None });
 	services.registerSingleton(ITerminalProfileService, () => services.createInstance(TerminalProfileService));
-	services.registerInstance(IEnvironmentVariableService, { collections: new Map(), mergedCollection: { applyToProcessEnvironment: async () => { } }, onDidChangeCollections: Event.None, refreshCollections: async () => { }, set: () => { }, delete: () => { }, registerCollectionProvider: () => Disposable.None });
+	services.registerInstance(IEnvironmentVariableService, { collections: new Map(), mergedCollection: new MergedEnvironmentVariableCollection(new Map()), onDidChangeCollections: Event.None, refreshCollections: async () => { }, set: () => { }, delete: () => { }, registerCollectionProvider: () => Disposable.None });
 	services.registerSingleton(ITerminalProfileResolverService, () => services.createInstance(BrowserTerminalProfileResolverService));
 }
 
@@ -416,6 +423,7 @@ function taskServices(owner: DisposableStore, files: IFileSystemProvider, worksp
 		[IPathService, testPathService(workspace, os)], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
 		[ITerminalProcessService, {
 			operatingSystem: os, onConnectionState: Event.None,
+			getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
 			getEnvironment: async () => ({ HOME: '/execution/home' }),
 			listProfiles: () => terminals.getProfiles(), resolveProfile: resolveTaskProfile,
 		}],
@@ -448,6 +456,7 @@ suite('Task shell profiles through execution owners', () => {
 		const closes: string[] = [];
 		const processes: ITerminalProcessService = {
 			operatingSystem: os, onConnectionState: Event.None, getConnectionState: async () => 'ready',
+			getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
 			getEnvironment: async () => ({ HOME: '/execution/home' }),
 			listProfiles: async () => [{ profileId: 'bash', title: 'Bash', isDefault: true }],
 			resolveProfile: resolveTaskProfile,
@@ -943,7 +952,7 @@ test('TaskService selects the execution host platform before resolving command, 
 	const task = (await service.refresh())[0];
 	assert.equal(terminals.instances.length, 0);
 	const run = await service.run(task);
-	assert.deepEqual(creates, [{ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' }, title: 'Task: Platform', dirId: 'workspace', env: { INHERITED: 'base', REMOVED: null, PLATFORM: '/execution/home' }, cwd: '/workspace/linux', execution: { type: 'process', program: '/workspace/linux-adapter', args: ['', '/execution/home', '$HOME'] }, initialText: 'Executing task: "/workspace/linux-adapter" "" "/execution/home" "$HOME"', waitOnExit: 'Terminal will be reused by tasks, press any key to close it.', deferStart: true }]);
+	assert.deepEqual(creates, [{ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' }, title: 'Task: Platform', dirId: 'workspace', env: { INHERITED: 'base', REMOVED: null, PLATFORM: '/execution/home' }, cwd: '/workspace/linux', execution: { type: 'process', program: '/workspace/linux-adapter', args: ['', '/execution/home', '$HOME'] }, initialText: { text: formatMessageForTerminal('Executing task: "/workspace/linux-adapter" "" "/execution/home" "$HOME"'), trailingNewLine: false }, waitOnExit: 'Terminal will be reused by tasks, press any key to close it.', deferStart: true }]);
 	assert.deepEqual(terminals.instances[0].writes, []);
 	await service.terminate(run);
 });
@@ -983,6 +992,7 @@ suite('TaskService terminal availability', () => {
 				operatingSystem: OperatingSystem.Linux,
 				resolveProfile: resolveTaskProfile,
 				getConnectionState: async () => 'ready', onConnectionState: Event.None,
+				getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
 				getEnvironment: async () => ({}), listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
 				create: async options => {
 					assert.deepEqual(options.execution, { type: 'shell', commandLine: 'check' });
@@ -1046,6 +1056,7 @@ suite('TaskService terminal availability', () => {
 				resolveProfile: resolveTaskProfile,
 				getConnectionState: async () => 'crashed',
 				onConnectionState: () => Disposable.None,
+				getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
 				getEnvironment: async () => ({}), listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
 				create: async () => ({ ready: { pid: 1234, cwd: '/backend/workspace' }, terminalId: 'task-process', profile: { profileId: 'shell', title: 'Shell', isDefault: true }, connectionPersistence: persistence }),
 				read: async () => { throw new Error('Disconnected terminal must not poll'); },
@@ -1115,6 +1126,7 @@ suite('Task terminal reuse policies', () => {
 			operatingSystem: OperatingSystem.Linux,
 			resolveProfile: resolveTaskProfile,
 			getConnectionState: async () => 'ready', onConnectionState: Event.None,
+			getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
 			getEnvironment: async () => ({}), listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
 			create: async options => {
 				created.push(options.execution);
@@ -1603,7 +1615,7 @@ test('shell task arguments are quoted after variable resolution and explicit she
 	using service = taskServices(resources, new FakeFileService(URI.file('/workspace'), contents), workspace, terminals).createInstance(TaskService);
 	const run = await service.run((await service.refresh())[0]);
 	assert.deepEqual({ execution: creations[0].execution, cwd: creations[0].cwd, env: creations[0].env, writes: terminals.instances[0].writes, calls }, {
-		execution: { type: 'process', program: '/bin/sh', args: ['-c', "'/workspace/tool with spaces' '' 'literal $(touch injected)' '$HOME' \"$HOME\" two\\ words 'one'\\''two'"] },
+		execution: { type: 'process', program: '/bin/sh', args: ['-c', "'/workspace/tool with spaces' '' 'literal $(touch injected)' '$HOME' \"$HOME\" two\\ words 'one'\"'\"'two'"] },
 		cwd: '/workspace/child', env: { MODE: '/execution/home' }, writes: [], calls: 1,
 	});
 	await service.terminate(run);
@@ -1767,6 +1779,7 @@ test('CustomExecution opens after task listeners, receives input and resize, and
 		operatingSystem: OperatingSystem.Linux,
 		resolveProfile: async () => { throw new Error('CustomExecution must not resolve a shell'); },
 		getConnectionState: async () => 'ready', onConnectionState: () => Disposable.None,
+		getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
 		getEnvironment: async () => ({}), listProfiles: async () => [],
 		create: async () => { throw new Error('CustomExecution must not spawn a backend shell'); },
 		read: async () => { throw new Error('CustomExecution must not poll a backend shell'); },
@@ -1800,7 +1813,7 @@ test('CustomExecution opens after task listeners, receives input and resize, and
 	});
 	const output: string[] = [];
 	using start = service.onDidStartTask(run => {
-		resources.add(terminals.instances.find(instance => instance.id === run.terminalId)!.onDidWriteData(event => output.push(new TextDecoder().decode(event.data))));
+		resources.add(terminals.instances.find(instance => instance.id === run.terminalId)!.onDidWriteData(event => output.push(event.data)));
 	});
 	const run = await service.run((await service.refresh())[0]!);
 	const instance = terminals.instances[0];
@@ -1820,6 +1833,7 @@ test('Extension Host CustomExecution streams ordered events without a shell and 
 		operatingSystem: OperatingSystem.Linux,
 		resolveProfile: async () => { throw new Error('CustomExecution must not resolve a shell'); },
 		getConnectionState: async () => 'ready', onConnectionState: () => Disposable.None,
+		getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
 		getEnvironment: async () => ({}), listProfiles: async () => [],
 		create: async () => { throw new Error('CustomExecution must not spawn a backend shell'); },
 		read: async () => { throw new Error('CustomExecution must not poll a backend shell'); },
@@ -1846,7 +1860,7 @@ test('Extension Host CustomExecution streams ordered events without a shell and 
 		return { events: [] };
 	}, workspace, 'builder'));
 	const output: string[] = [];
-	using start = service.onDidStartTask(run => resources.add(terminals.instances.find(instance => instance.id === run.terminalId)!.onDidWriteData(event => output.push(new TextDecoder().decode(event.data)))));
+	using start = service.onDidStartTask(run => resources.add(terminals.instances.find(instance => instance.id === run.terminalId)!.onDidWriteData(event => output.push(event.data))));
 	const run = await service.run((await service.refresh())[0]!);
 	await opened.p;
 	await terminals.instances[0].sendText('hello', true);
@@ -1966,6 +1980,7 @@ for (const placement of ['task', 'taskPlain', 'defaults', 'taskPlatform', 'defau
 			operatingSystem: OperatingSystem.Linux,
 			resolveProfile: resolveTaskProfile,
 			getConnectionState: async () => 'ready', onConnectionState: Event.None,
+			getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
 			getEnvironment: async () => ({}), listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
 			create: async options => {
 				created.push(options);
@@ -2021,6 +2036,7 @@ suite('Extension task execution lifecycle', () => {
 					operatingSystem: OperatingSystem.Linux,
 					resolveProfile: resolveTaskProfile,
 					getConnectionState: async () => 'ready', onConnectionState: Event.None,
+					getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
 					getEnvironment: async () => ({}),
 					listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
 					create: async options => {
@@ -2201,6 +2217,7 @@ suite('Task rerun variable policy through the execution owners', () => {
 					operatingSystem: OperatingSystem.Linux,
 					resolveProfile: resolveTaskProfile,
 					getConnectionState: async () => 'ready', onConnectionState: Event.None,
+					getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
 					getEnvironment: async () => ({ MODE: `mode-${++environmentReads}`, EXTRA: 'new-variable' }),
 					listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
 					create: async options => {
@@ -2310,6 +2327,7 @@ suite('Task instance limits through the execution owners', () => {
 					operatingSystem: OperatingSystem.Linux,
 					resolveProfile: resolveTaskProfile,
 					getConnectionState: async () => 'ready', onConnectionState: Event.None,
+					getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
 					getEnvironment: async () => ({}), listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
 					create: async () => ({ ready: { pid: 1234, cwd: '/instances' }, terminalId: `process-${await prepare()}`, profile: { profileId: 'shell', title: 'Shell', isDefault: true }, connectionPersistence: 'connectionOwned' }),
 					read: async options => ({ terminalId: options.terminalId, commandEventGap: false, chunks: [], nextSequence: 0, commandEvents: [], nextCommandSequence: 0, exited: false, exitCode: undefined, outputGap: false }),
@@ -2440,6 +2458,7 @@ suite('Task instance policies through the execution owners', () => {
 			operatingSystem: OperatingSystem.Linux,
 			resolveProfile: resolveTaskProfile,
 			getConnectionState: async () => 'ready', onConnectionState: Event.None,
+			getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
 			getEnvironment: async () => ({}), listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
 			create: async () => ({ ready: { pid: ++peer.creations, cwd: '/policy' }, terminalId: `policy-${peer.creations}`, profile: { profileId: 'shell', title: 'Shell', isDefault: true }, connectionPersistence: 'connectionOwned' }),
 			read: async options => ({ terminalId: options.terminalId, commandEventGap: false, chunks: [], nextSequence: 0, commandEvents: [], nextCommandSequence: 0, exited: false, exitCode: undefined, outputGap: false }),

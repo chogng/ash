@@ -17,6 +17,11 @@ export enum OperatingSystem {
 	Linux = "linux",
 }
 
+/** Process launch environments use undefined to remove an inherited variable. */
+export interface IProcessEnvironment {
+	[key: string]: string | undefined;
+}
+
 interface INodeProcess {
 	readonly platform: string;
 	readonly arch: string;
