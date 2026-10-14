@@ -59,6 +59,25 @@ pub(super) enum Completion {
 }
 
 impl Completion {
+    /// Only an acknowledged handoff of the still-selected conversation can close this TUI.
+    pub(super) fn desktop_handoff_ready(&self, active: Option<&Conversation>) -> bool {
+        match self {
+            Self::ProductCommand {
+                result: Ok(completion),
+                ..
+            } if completion.output.desktop_handoff => completion
+                .output
+                .conversation
+                .as_ref()
+                .zip(active)
+                .is_some_and(|(opened, current)| {
+                    opened.session_id() == current.conversation.session_id()
+                        && opened.thread_id() == current.conversation.thread_id()
+                }),
+            _ => false,
+        }
+    }
+
     fn thread_scope(&self) -> Option<&ThreadRequestScope> {
         match self {
             Self::Thread(completion) => Some(completion.scope()),

@@ -17,6 +17,8 @@ import { IndexedDbWorkingCopyBackupService } from '../services/workingCopy/brows
 import { AppServerProtocolClient } from '../../platform/agentHost/browser/appServerProtocolClient.js';
 import { AppServerTextDocumentHost } from '../services/textfile/browser/appServerTextDocumentHost.js';
 import { AppServerIdeHost } from '../services/editor/browser/appServerIdeHost.js';
+import { EnvironmentVariableMutatorType } from '../../platform/terminal/common/environmentVariable.js';
+import { IEnvironmentVariableService } from '../contrib/terminal/common/environmentVariable.js';
 import { IChatEditingService } from '../contrib/chat/common/editing/chatEditingService.js';
 import { addDisposableListener } from '../../base/browser/dom.js';
 import { installBaseUiStyles } from '../../base/browser/ui/styles.js';
@@ -135,7 +137,14 @@ export class DesktopMain extends Disposable {
 					const editing = services.get(IChatEditingService);
 					const hosts = new DisposableStore();
 					hosts.add(services.createInstance(AppServerTextDocumentHost, documentClient!, { applyEdits: editing.applyEdits.bind(editing), finishTurn: editing.finishTurn.bind(editing) }));
-					hosts.add(services.createInstance(AppServerIdeHost, documentClient!));
+					const ide = hosts.add(services.createInstance(AppServerIdeHost, documentClient!));
+					hosts.add(services.get(IEnvironmentVariableService).registerCollectionProvider('ash.ide', async () => {
+						const key = await ide.readTerminalWindowKey();
+						return {
+							persistent: false,
+							map: key ? new Map([['ASH_IDE_WINDOW', { variable: 'ASH_IDE_WINDOW', type: EnvironmentVariableMutatorType.Replace, value: key }]]) : new Map(),
+						};
+					}));
 					return hosts;
 				} : undefined,
 				createLogService: () => logger.createLogger('workbench'),

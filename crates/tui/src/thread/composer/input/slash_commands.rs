@@ -31,6 +31,7 @@ pub(crate) enum TuiSlashCommandAction {
     Archive,
     Connectors,
     Ide,
+    Desktop,
     Rewind,
     Config,
     Home,
@@ -107,7 +108,8 @@ impl TuiSlashCommandAction {
             Self::Mcp => "list configured MCP tools",
             Self::Hooks => "browse and manage Hooks",
             Self::Connectors => "show external service connections",
-            Self::Ide => "connect to Ash IDE for editor context and result displays",
+            Self::Ide => "turn Ash IDE context on or off",
+            Self::Desktop => "continue this conversation in Ash desktop",
             Self::Resume => "list or resume a saved session",
             Self::Archive => "archive the current session and start a new chat",
             Self::Rewind => "return to an earlier message checkpoint",
@@ -143,8 +145,7 @@ impl TuiSlashCommandAction {
 
     fn argument_mode(self) -> SlashCommandArgumentMode {
         match self {
-            Self::Ide
-            | Self::Resume
+            Self::Resume
             | Self::Memories
             | Self::Rewind
             | Self::AddDir
@@ -172,7 +173,6 @@ impl TuiSlashCommandAction {
             Self::Permission => Some("<manual|auto|bypassPermissions>"),
             Self::Guardian => Some("[setup]"),
             Self::Theme => Some("<theme>"),
-            Self::Ide => Some("[status|disconnect]"),
             Self::Resume => Some("<session-id>"),
             Self::Rewind => Some("<checkpoint>"),
             Self::Branch => Some("<name>"),

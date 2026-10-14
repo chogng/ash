@@ -152,16 +152,17 @@ where
     if text.is_none() && submission.display_text.trim().starts_with("/advisor ") {
         return Err(ClientError::Protocol("Advisor questions must be text; send attachments to the conversation before consulting.".into()));
     }
-    let ide = if command.is_none() {
+    let (ide_window_id, ide) = if command.is_none() {
         match client.request_ide(
             ash_app_server_protocol::protocol::ide::IdeRequest::Context {
                 session_id: scope.session_id.clone(),
                 thread_id: scope.thread_id.clone(),
             },
         )? {
-            ash_app_server_protocol::protocol::ide::IdeResult::Context { window, context } => {
-                window.zip(context)
-            }
+            ash_app_server_protocol::protocol::ide::IdeResult::Context { window, context } => (
+                window.as_ref().map(|window| window.id.clone()),
+                window.zip(context),
+            ),
             _ => {
                 return Err(ClientError::Protocol(
                     "Unexpected IDE context response".into(),
@@ -169,7 +170,7 @@ where
             }
         }
     } else {
-        None
+        (None, None)
     };
     let request = match command {
         Some(("/compact", arguments)) => SessionRequest::CompactContext {
@@ -183,7 +184,7 @@ where
             question: question.to_owned(),
         },
         _ => SessionRequest::StartTurn {
-            ide_window_id: ide.as_ref().map(|(window, _)| window.id.clone()),
+            ide_window_id,
             thread_id: scope.thread_id,
             expected_sequence: scope.expected_sequence,
             mode: submission.mode,

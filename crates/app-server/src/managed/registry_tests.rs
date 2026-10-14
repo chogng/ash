@@ -622,7 +622,7 @@ fn ide_windows_are_discovered_across_real_profile_directory_runtimes() {
     let registered = crate::tests::call(
         &editor_server,
         &mut editor,
-        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"ide/request","params":{"type":"register","title":"First project","roots":[first.path()]}}),
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"ide/request","params":{"type":"register","title":"First project","roots":[first.path()],"windowKey":"01234567890123456789012345678901"}}),
     );
     assert!(registered.get("error").is_none(), "{registered}");
     let listed = crate::tests::call(
@@ -635,10 +635,23 @@ fn ide_windows_are_discovered_across_real_profile_directory_runtimes() {
         registered["result"]["window"]["id"]
     );
 
+    let mut another_editor = editor_server.product_host_connection();
+    let response = crate::tests::call(
+        &editor_server,
+        &mut another_editor,
+        serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"other-ide","version":"1"}}}),
+    );
+    assert!(response.get("error").is_none(), "{response}");
+    let another = crate::tests::call(
+        &editor_server,
+        &mut another_editor,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"ide/request","params":{"type":"register","title":"Another window in the same project","roots":[first.path()],"windowKey":"01234567890123456789012345678902"}}),
+    );
+    assert!(another.get("error").is_none(), "{another}");
     let connected = crate::tests::call(
         &tui_server,
         &mut tui,
-        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"ide/request","params":{"type":"connect","windowId":registered["result"]["window"]["id"]}}),
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"ide/request","params":{"type":"attach","windowKey":"01234567890123456789012345678901"}}),
     );
     assert!(connected.get("error").is_none(), "{connected}");
     let session = crate::tests::call(
@@ -703,6 +716,27 @@ fn ide_windows_are_discovered_across_real_profile_directory_runtimes() {
         serde_json::json!({"jsonrpc":"2.0","id":6,"method":"ide/request","params":{"type":"list"}}),
     );
     assert!(listed.get("error").is_none(), "{listed}");
+    assert_eq!(listed["result"]["preferred"]["type"], "unavailable");
+    assert_eq!(
+        listed["result"]["selected"]["id"], registered["result"]["window"]["id"],
+        "an unavailable attachment remains switchable"
+    );
+    let disconnected = crate::tests::call(
+        &tui_server,
+        &mut tui,
+        serde_json::json!({"jsonrpc":"2.0","id":7,"method":"ide/request","params":{"type":"disconnect"}}),
+    );
+    assert_eq!(disconnected["result"]["window"], serde_json::Value::Null);
+    assert_eq!(
+        listed["result"]["windows"][0]["id"],
+        another["result"]["window"]["id"]
+    );
+    editor_server.close_connection(another_editor);
+    let listed = crate::tests::call(
+        &tui_server,
+        &mut tui,
+        serde_json::json!({"jsonrpc":"2.0","id":8,"method":"ide/request","params":{"type":"list"}}),
+    );
     assert_eq!(listed["result"]["windows"], serde_json::json!([]));
     tui_server.close_connection(tui);
 }

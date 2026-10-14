@@ -559,3 +559,22 @@ fn status_line_truncation_preserves_combined_emoji_and_accents() {
         }
     }
 }
+
+#[test]
+fn ide_statusline_is_localized_compact_and_independent_of_configured_accounting() {
+    let mut model = StatusLineModel::new();
+    let mut settings = StatusLineSettings::default();
+    for item in StatusLineItem::ALL {
+        settings.set(item, false);
+    }
+    model.apply_settings(settings);
+    model.set_ide_context(true);
+    let runtime = StatusLineRuntime {
+        language: crate::nls::Language::Chinese,
+        ..Default::default()
+    };
+    assert_eq!(model.top_text_for_width(80, runtime), "IDE 上下文");
+    assert_eq!(model.top_text_for_width(3, runtime), "IDE");
+    model.set_ide_context(false);
+    assert_eq!(model.top_text_for_width(80, runtime), "");
+}

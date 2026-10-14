@@ -4,10 +4,13 @@ import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { basename, extUri } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
 import { TaskQueue } from '../../../../base/common/async.js';
+import { generateUuid } from '../../../../base/common/uuid.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
 import { AppServerProtocolClient } from '../../../../platform/agentHost/browser/appServerProtocolClient.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { INativeHostService } from '../../../common/services.js';
+import type { INativeHostApi } from '../../../../platform/native/common/nativeHost.js';
 import { createDiffEditorInput } from '../../../common/editor/diffEditorInput.js';
 import { IWorkingCopyService } from '../../workingCopy/common/workingCopyService.js';
 import { IEditorGroupsService } from '../common/editorGroupsService.js';
@@ -18,6 +21,9 @@ import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS, type IdeContext } from 
 export class AppServerIdeHost extends Disposable {
 	private readonly lifetime = new AbortController();
 	private readonly registration = new TaskQueue();
+	// Separate the window lifetime from backend registration generations and frozen Turn targets.
+	private readonly windowKey = generateUuid().replaceAll('-', '');
+	private registered = false;
 
 	constructor(
 		private readonly client: AppServerProtocolClient,
@@ -26,6 +32,7 @@ export class AppServerIdeHost extends Disposable {
 		@IEditorService private readonly editors: IEditorService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IWorkingCopyService private readonly workingCopies: IWorkingCopyService,
+		@INativeHostService private readonly windowHost: INativeHostApi,
 	) {
 		super();
 		this._register(toDisposable(() => {
@@ -39,6 +46,11 @@ export class AppServerIdeHost extends Disposable {
 			const signal = AbortSignal.any([context.signal, this.lifetime.signal]);
 			throwIfCancelled(signal);
 			switch (params.type) {
+				case 'openConversation':
+					// The window service waits for Sessions to load the exact durable identity.
+					// It carries no prompt, draft or permission changes into the receiving window.
+					await this.windowHost.openAgentsWindow({ conversation: { sessionId: params.sessionId, threadId: params.threadId } });
+					break;
 				case 'context': return { type: 'context', context: this.capture(params.roots) };
 				case 'openFile': {
 					const resource = this.displayResource(params.path);
@@ -55,27 +67,36 @@ export class AppServerIdeHost extends Disposable {
 			throwIfCancelled(signal);
 			return { type: 'opened' };
 		}));
-		this._register(client.onStateChange(state => { if (state === 'ready') this.publish(); }));
+		this._register(client.onStateChange(state => { this.registered = false; if (state === 'ready') this.publish(); }));
 		this._register(workspace.onDidChangeWorkspace(() => this.publish()));
 		this._register(editors.onDidActiveEditorChange(() => this.publish()));
 		if (client.state === 'ready') this.publish();
+	}
+
+	/** Terminal launch waits for this window's registration; the desktop owns environment setup. */
+	async readTerminalWindowKey(): Promise<string | undefined> {
+		await this.registration.schedule(async () => { });
+		return this.registered && !this.lifetime.signal.aborted ? this.windowKey : undefined;
 	}
 
 	private publish(): void {
 		const generation = this.client.generation;
 		void this.registration.schedule(async () => {
 			if (this.lifetime.signal.aborted || this.client.state !== 'ready' || this.client.generation !== generation) return;
+			this.registered = false;
 			const workspace = this.workspace.getWorkspace();
 			const roots = workspace.folders.filter(folder => folder.uri.scheme === 'file').map(folder => folder.uri.fsPath);
 			// Remote windows require an execution-environment contract before they can attach.
 			if (workspace.remoteAuthority || roots.length === 0) {
+				this.registered = false;
 				await this.client.request(APP_SERVER_METHODS['ide/request'], { type: 'unregister' });
 			} else {
 				const project = workspace.name ?? workspace.folders.map(folder => folder.name).join(', ');
 				const active = this.editors.activeEditor;
 				const label = active?.resource.scheme === 'file' ? basename(active.resource) : active?.label;
 				const title = (label ? `${project} · ${label}` : project).replace(/\p{Cc}/gu, ' ').slice(0, 256);
-				await this.client.request(APP_SERVER_METHODS['ide/request'], { type: 'register', title, roots });
+				await this.client.request(APP_SERVER_METHODS['ide/request'], { type: 'register', title, roots, windowKey: this.windowKey });
+				this.registered = true;
 			}
 		}).catch(error => { if (!this.lifetime.signal.aborted && this.client.state === 'ready') onUnexpectedError(error); });
 	}

@@ -281,12 +281,25 @@ impl AppDriver {
                             self.model_picker.update_catalog(catalog.clone());
                         }
                     }
+                    let desktop_handoff =
+                        completion.desktop_handoff_ready(self.conversation.as_ref());
                     apply_request_completion(
                         completion,
                         origin,
                         &mut self.conversation,
                         &mut self.app,
                     );
+                    if desktop_handoff
+                        && self.app.input_state().is_empty()
+                        && self.app.input().is_empty()
+                        && self.queued_commands.is_empty()
+                        && self.app.sessions.pending_submission.is_none()
+                    {
+                        self.queued_commands
+                            .push_front(ScheduledCommand::new(AppCommand::Quit, &self.app));
+                    } else if desktop_handoff {
+                        self.app.update(crate::ide::Event::Notice("Conversation opened in Ash desktop. The terminal remains open to preserve your new input.".into()));
+                    }
                 }
                 Err(error) => self
                     .app

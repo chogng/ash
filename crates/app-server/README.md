@@ -159,3 +159,14 @@ App Server 按 profile 的 `messageBoard` 配置选择本地存储或外部消�
 快照和验收要求交给目标机器。接收端提供 version 1 `taskDelivery` contract，以现有 Core、Queue
 和隔离工作目录创建独立 Session；状态和报告通过同一 SSH route 查询。包和回执归
 [`task-delivery`](../task-delivery/README.md)，App Server 只组合领域流程、目录权限、协议和传输。
+
+
+## Ash IDE 通道与会话接续
+
+Ash 编辑器窗口通过 `ide/request` 注册窗口标题、工作区根目录和窗口生命周期内稳定的 `windowKey`。桌面装配层通过现有终端环境集合注册非持久的窗口键；编辑器 adapter 只提供已注册窗口的键和生命周期状态。窗口的集成终端继承 `ASH_IDE_WINDOW`，`ash code` 在初始化后按此键自动关联确切窗口。`/ide` 切换上下文共享；关闭共享仍保留发起窗口身份。profile 级注册表拥有窗口发现和失效租约；同一物理产品连接经过网关进入多个本机目录运行时，所有 peer 共享一个连接级 IDE 关联，其他产品连接保持独立。
+
+每个新 Turn 请求一次有界、带版本的当前文件与选区快照，附带打开和未保存文件路径。后端按会话的目录和路径权限过滤，Turn 固定提交时的窗口租约。`ide/hostRequest` 把读取上下文、打开文件和展示 diff 路由回窗口；编辑器 model、working copy、undo 和 dirty 冲突继续由现有前端服务拥有。Main 只转发连接 frame，桌面不加载 CLI 或 TUI。
+
+`ide/request` 的 `openConversation` 验证 Session／Thread 关系、未归档状态、本机执行目标及未完成的 Turn 和队列消息。同一终端连接的目录 peer 以弱引用记录彼此身份，交接直接检查各 peer 拥有的 Turn 绑定；另一个 Session 或目录中的后台任务也会阻止关闭该连接。这份 peer 索引不复制 Core 执行状态或审批状态。已有终端发起窗口优先于上下文选择；该窗口不可用时不替换成其他窗口。通过反向 `ide/hostRequest.openConversation` 携带同一持久身份，编辑器 adapter 调用既有 `openAgentsWindow({ conversation })`。现有窗口服务等待 Agents renderer 加载并确认后才返回 `opened`；导航失败、来源断线或取消不能产生成功交接回执。普通 IDE 请求上限为 5 秒，窗口加载交接为 30 秒。
+
+TUI 的 `/desktop` 只在收到成功回执且仍选择原会话、没有新增输入或待执行操作时退出；否则保留终端。此操作不发送 Turn、不复制历史、不移动草稿、不变更权限，也不重绑运行中的工具与审批。新一轮执行仍由提交它的产品连接拥有。共享 Session、Thread、Turn 和记录以 Rust/Core 为唯一 owner，Agents 的现有 Sessions provider 读取同一身份，Project、Workspace 和执行 Environment 保持各自边界。

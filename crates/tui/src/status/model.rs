@@ -160,6 +160,7 @@ struct GitStatusCursor {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(crate) struct StatusLineModel {
     settings: StatusLineSettings,
+    ide_context: bool,
     glyph_set: crate::config::GlyphSet,
     context_model: Option<ModelRefDto>,
     context_capacity: Option<u64>,
@@ -175,6 +176,10 @@ pub(crate) struct StatusLineModel {
 }
 
 impl StatusLineModel {
+    pub(crate) fn set_ide_context(&mut self, enabled: bool) {
+        self.ide_context = enabled;
+    }
+
     pub(crate) fn model_label(&self) -> &str {
         match &self.model {
             Some(value) => &value.full[0].text,
@@ -386,6 +391,12 @@ impl StatusLineModel {
     ) -> StatusLineLayout {
         let mut values = Vec::new();
         if !matches!(location, StatusLineLocation::Header) {
+            if self.ide_context {
+                values.push(DisplayValue::plain(
+                    crate::nls::localize(runtime.language, "IDE context"),
+                    "IDE",
+                ));
+            }
             if self.settings.style() == StatusLineStyle::Rich {
                 if let Some((completed, total)) = runtime.plan {
                     values.push(progress_value(

@@ -3552,18 +3552,74 @@ fn dictation_model_preparation_shows_real_download_bytes_in_chinese() {
 }
 
 #[test]
-fn ide_picker_shows_window_roots_connection_status_and_disconnect_action() {
+fn ide_picker_only_appears_for_multiple_matching_windows() {
     struct IdeTransport;
     impl ash_app_server_client::JsonRpcTransport for IdeTransport {
         fn round_trip(&mut self, raw: &str) -> Result<String, ash_app_server_client::ClientError> {
             let request: serde_json::Value = serde_json::from_str(raw).unwrap();
             let window = serde_json::json!({"id":"01234567890123456789012345678901","title":"Ash workspace","roots":["/workspace/ash"]});
-            Ok(serde_json::json!({"jsonrpc":"2.0","id":request["id"],"result":{"type":"windows","windows":[window.clone()],"selected":window}}).to_string())
+            Ok(serde_json::json!({"jsonrpc":"2.0","id":request["id"],"result":{"type":"windows","windows":[window.clone(),{"id":"01234567890123456789012345678902","title":"Second Ash window","roots":["/workspace/ash"]}],"selected":null}}).to_string())
         }
     }
     let mut client = ash_app_server_client::AppServerClient::new(IdeTransport);
     let mut app = App::new();
-    app.update(crate::ide::open(&mut client, "").unwrap());
+    app.update(
+        crate::ide::toggle(&mut client, std::path::Path::new("/workspace/ash"), "").unwrap(),
+    );
     assert_eq!(app.list_selection().unwrap().title(), "Ash IDE");
-    crate::tui_assert_snapshot!(app = &app; "ide_connected_window_picker", render(&app, 90, 20));
+    crate::tui_assert_snapshot!(app = &app; "ide_matching_windows_picker", render(&app, 90, 20));
+}
+
+#[test]
+fn ide_context_statusline_follows_connection_in_both_screen_modes() {
+    for screen in [
+        crate::terminal::ScreenMode::Fullscreen,
+        crate::terminal::ScreenMode::Inline,
+    ] {
+        let mut app = App::new();
+        let mut settings = crate::config::TerminalSettings::default();
+        settings.set_screen_mode(screen);
+        app.update(crate::config::Event::SettingsReceived(settings));
+        let window = ash_app_server_protocol::protocol::ide::IdeWindow {
+            id: "01234567890123456789012345678901".into(),
+            title: "Project".into(),
+            roots: vec!["/project".into()],
+        };
+        app.update(crate::ide::Event::ConnectionChanged {
+            window: Some(window),
+            notice: "".into(),
+        });
+        let connected = render(&app, 80, 20);
+        assert!(connected.contains("IDE context"));
+        app.update(crate::ide::Event::ConnectionChanged {
+            window: None,
+            notice: "".into(),
+        });
+        let disconnected = render(&app, 80, 20);
+        assert!(!disconnected.contains("IDE context"));
+        crate::tui_assert_snapshot!(app = &app; "ide_context_statusline_toggle", format!("Connected\n{connected}\n\nDisconnected\n{disconnected}"));
+    }
+}
+
+#[test]
+fn ide_desktop_handoff_notice_keeps_the_terminal_composer_and_localizes_guidance() {
+    for screen in [
+        crate::terminal::ScreenMode::Fullscreen,
+        crate::terminal::ScreenMode::Inline,
+    ] {
+        let mut app = App::new();
+        let mut settings = crate::config::TerminalSettings::default();
+        settings.set_screen_mode(screen);
+        settings.set_language(crate::nls::Language::Chinese);
+        app.update(crate::config::Event::SettingsReceived(settings));
+        app.handle_paste("保留下一条消息".into());
+        app.update(crate::ide::Event::Notice(
+            "Finish or stop the current task and clear queued messages, then run /desktop.".into(),
+        ));
+        assert_eq!(app.input(), "保留下一条消息");
+        let frame = render_visible_text(&app, 80, 20);
+        assert!(frame.contains("/desktop"));
+        assert!(frame.contains("排队消息"));
+        crate::tui_assert_snapshot!(app = &app; "ide_desktop_handoff_notice", frame);
+    }
 }

@@ -53,6 +53,7 @@ pub(super) fn start(
         drafts,
         notices,
         announcement,
+        ide_window_key,
         ..
     } = options;
     let profile_root = match profile_root {
@@ -137,6 +138,11 @@ pub(super) fn start(
         input_catalog,
         startup_context,
     );
+    if let Some(key) = ide_window_key {
+        if let Ok(event) = crate::ide::attach(&mut client, key) {
+            app.update(event);
+        }
+    }
     app.set_dictation_shortcut_settings(dictation_preference);
     let history = (|| {
         let runtime =

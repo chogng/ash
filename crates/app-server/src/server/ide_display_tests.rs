@@ -33,6 +33,7 @@ fn ide_display_routes_to_the_frozen_window_while_other_app_actions_keep_the_init
             1,
             "First".into(),
             vec![root.to_string_lossy().into_owned()],
+            None,
         )
         .unwrap();
     let second = server
@@ -42,6 +43,7 @@ fn ide_display_routes_to_the_frozen_window_while_other_app_actions_keep_the_init
             2,
             "Second".into(),
             vec![root.to_string_lossy().into_owned()],
+            None,
         )
         .unwrap();
     server

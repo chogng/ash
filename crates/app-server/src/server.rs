@@ -367,6 +367,7 @@ impl EnvStateMode {
 pub struct ConnectionState {
     pub(super) connection_id: u64,
     authority: ConnectionAuthority,
+    pub(crate) ide_attachment: Arc<crate::client_host::IdeAttachment>,
     state: Arc<Mutex<ConnectionMutableState>>,
     outbound_notifications: NotificationQueue,
 }

@@ -24,6 +24,7 @@ use std::path::PathBuf;
 pub(crate) struct ProductCommandOutput {
     pub(crate) conversation: Option<ActiveConversation>,
     pub(crate) command: String,
+    pub(crate) desktop_handoff: bool,
     pub(crate) events: Vec<AppEvent>,
     pub(crate) conversation_change: Option<ConversationChange>,
 }
@@ -44,6 +45,7 @@ where
             command,
             events: output.events,
             conversation_change: output.conversation_change,
+            desktop_handoff: output.desktop_handoff,
         })
         .map_err(|error| error.to_string())
 }
@@ -208,7 +210,31 @@ where
         TuiSlashCommandAction::Ide => {
             output
                 .events
-                .push(crate::ide::open(client, &arguments)?.into());
+                .push(crate::ide::toggle(client, workspace, &arguments)?.into());
+        }
+        TuiSlashCommandAction::Desktop => {
+            if !arguments.is_empty() {
+                return Err(CommandExecutionError("Usage: /desktop".into()));
+            }
+            let Some(conversation) = conversation.as_ref() else {
+                output.events.push(
+                    crate::ide::Event::Notice(
+                        "Start or resume a conversation before running /desktop.".into(),
+                    )
+                    .into(),
+                );
+                return Ok(output);
+            };
+            match crate::ide::open_conversation(
+                client,
+                conversation.session_id().clone(),
+                conversation.thread_id().clone(),
+            )? {
+                crate::ide::DesktopHandoff::Opened => output.desktop_handoff = true,
+                crate::ide::DesktopHandoff::Stay(notice) => {
+                    output.events.push(crate::ide::Event::Notice(notice).into())
+                }
+            }
         }
         TuiSlashCommandAction::Connectors => {
             output.events.push(
@@ -406,6 +432,7 @@ where
 #[derive(Default)]
 struct CommandOutput {
     events: Vec<AppEvent>,
+    desktop_handoff: bool,
     conversation_change: Option<ConversationChange>,
 }
 

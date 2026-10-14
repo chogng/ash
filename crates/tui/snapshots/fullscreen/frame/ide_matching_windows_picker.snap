@@ -8,9 +8,9 @@ expression: "render(&app, 90, 20)"
            │                                                                 │            
            │   IDE windows                                                   │            
            │                                                                 │            
-           │  Disconnect IDE                                                 │            
+           │> Ash workspace  ·  /workspace/ash                               │            
+           │  Second Ash window  ·  /workspace/ash                           │            
            │                                                                 │            
-           │> Ash workspace  ·  Connected · /workspace/ash                   │            
            │                                                                 │            
            │                                                                 │            
            │                                                                 │            

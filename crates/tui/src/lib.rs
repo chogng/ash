@@ -176,6 +176,7 @@ pub struct TuiOptions {
     drafts: Option<TuiRecoveryDrafts>,
     notices: Option<TuiNotices>,
     announcement: Option<TuiAnnouncement>,
+    ide_window_key: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -228,7 +229,14 @@ impl TuiOptions {
             drafts: None,
             notices: None,
             announcement: None,
+            ide_window_key: None,
         }
+    }
+
+    /// Associates this local TUI with the Ash window that launched its terminal.
+    pub fn with_ide_window_key(mut self, key: String) -> Self {
+        self.ide_window_key = Some(key);
+        self
     }
 
     pub fn with_announcement(mut self, announcement: TuiAnnouncement) -> Self {

@@ -5830,6 +5830,7 @@ typescript_bindings! {
     ClientCapabilities,
     crate::protocol::common::HostRequestCancelParams,
     crate::protocol::ide::IdeWindow,
+    crate::protocol::ide::IdeOrigin,
     crate::protocol::ide::IdeRequest,
     crate::protocol::ide::IdeResult,
     crate::protocol::ide::IdeContext,

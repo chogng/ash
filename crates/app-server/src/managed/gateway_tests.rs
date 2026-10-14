@@ -1486,3 +1486,154 @@ fn voice_gateway_real_room_records_directory_speech_and_stops_profile_media() {
     drop(client);
     served.join().unwrap();
 }
+
+#[cfg(unix)]
+#[test]
+fn ide_attachment_follows_one_gateway_connection_across_directory_routes() {
+    use std::io::Write;
+    let profile = tempfile::tempdir().unwrap();
+    let workspace = tempfile::tempdir().unwrap();
+    let first = tempfile::tempdir_in(workspace.path()).unwrap();
+    let second = tempfile::tempdir_in(workspace.path()).unwrap();
+    let options = ash_app_server_daemon::ConnectionOptions::new(
+        profile.path(),
+        None,
+        ash_app_server_daemon::GrantSource::HostConfiguration,
+        None,
+    );
+    let registry = Arc::new(ProfileAppServerRegistry::open(options.clone()).unwrap());
+    let server = registry.server_for(options).unwrap();
+    let (mut client, stream) = crate::server::request_dispatch::tests::Client::pair();
+    let served = thread::spawn(move || {
+        let (reader, writer) = ash_app_server_transport::LocalStream::pair(stream).unwrap();
+        let result = serve(
+            registry,
+            server,
+            BufReader::new(reader),
+            writer,
+            RemoteLaunch::from_environment(),
+        );
+        assert!(
+            result.is_ok()
+                || result
+                    .as_ref()
+                    .is_err_and(crate::managed::is_peer_disconnect)
+        );
+    });
+    client.initialize();
+    let mut context_calls = 0;
+    let mut handoffs = Vec::new();
+    let mut call = |id, method, params| {
+        client.send(id, method, params);
+        loop {
+            let message = client.read();
+            if message["method"] == "ide/hostRequest" {
+                let result = match message["params"]["type"].as_str().unwrap() {
+                    "context" => {
+                        context_calls += 1;
+                        serde_json::json!({"type":"context", "context":{"activeFile":null,"openTabs":[],"dirtyFiles":[]}})
+                    }
+                    "openConversation" => {
+                        handoffs.push(message["params"].clone());
+                        serde_json::json!({"type":"opened"})
+                    }
+                    other => panic!("unexpected IDE host request: {other}"),
+                };
+                writeln!(
+                    client.writer,
+                    "{}",
+                    serde_json::json!({"jsonrpc":"2.0", "id":message["id"], "result":result})
+                )
+                .unwrap();
+            } else if message["id"] == id {
+                assert!(message.get("error").is_none(), "{message}");
+                break message;
+            }
+        }
+    };
+    let key = "01234567890123456789012345678901";
+    let registered = call(
+        2,
+        "ide/request",
+        serde_json::json!({
+            "type":"register", "title":"Origin window", "roots":[workspace.path()], "windowKey":key
+        }),
+    );
+    let window_id = registered["result"]["window"]["id"].clone();
+    call(
+        3,
+        "ide/request",
+        serde_json::json!({"type":"attach","windowKey":key}),
+    );
+    let mut sessions = Vec::new();
+    for (id, root) in [(4, first.path()), (5, second.path())] {
+        let created = call(
+            id,
+            "session/create",
+            serde_json::json!({
+                "commandId":format!("gateway-ide-{id}"), "title":"Directory session",
+                "executionTarget":{"type":"local","root":root}
+            }),
+        );
+        sessions.push((
+            created["result"]["session"]["sessionId"].clone(),
+            created["result"]["session"]["threads"][0]["threadId"].clone(),
+        ));
+    }
+    for (index, (session, thread)) in sessions.iter().enumerate() {
+        let result = call(
+            6 + index as u64,
+            "ide/request",
+            serde_json::json!({
+                "type":"context", "sessionId":session, "threadId":thread
+            }),
+        );
+        assert_eq!(result["result"]["window"]["id"], window_id);
+        assert!(result["result"]["context"].is_object());
+    }
+    call(8, "ide/request", serde_json::json!({"type":"disconnect"}));
+    for (index, (session, thread)) in sessions.iter().enumerate() {
+        let result = call(
+            9 + index as u64,
+            "ide/request",
+            serde_json::json!({
+                "type":"context", "sessionId":session, "threadId":thread
+            }),
+        );
+        assert!(result["result"]["window"].is_null());
+        assert!(result["result"]["context"].is_null());
+    }
+    let (session, thread) = &sessions[0];
+    let opened = call(
+        13,
+        "ide/request",
+        serde_json::json!({
+            "type":"openConversation", "sessionId":session, "threadId":thread
+        }),
+    );
+    assert_eq!(opened["result"]["type"], "conversationOpened");
+    // Reattachment updates both peers that were already initialized, without replaying selection.
+    call(
+        11,
+        "ide/request",
+        serde_json::json!({"type":"attach","windowKey":key}),
+    );
+    let (session, thread) = &sessions[0];
+    let result = call(
+        12,
+        "ide/request",
+        serde_json::json!({
+            "type":"context", "sessionId":session, "threadId":thread
+        }),
+    );
+    assert_eq!(result["result"]["window"]["id"], window_id);
+    assert_eq!(context_calls, 3);
+    assert_eq!(
+        handoffs,
+        vec![serde_json::json!({
+            "type":"openConversation", "sessionId":sessions[0].0, "threadId":sessions[0].1
+        })]
+    );
+    client.close();
+    served.join().unwrap();
+}

@@ -2717,6 +2717,14 @@ impl App {
             }
             AppEvent::Ide(event) => match event {
                 crate::ide::Event::Opened(view) => self.open_command_panel(CommandPanel::ide(view)),
+                crate::ide::Event::ConnectionChanged { window, notice } => {
+                    self.chat_panel
+                        .status_line_mut()
+                        .set_ide_context(window.is_some());
+                    if !notice.to_string().is_empty() {
+                        self.update(AppEvent::Ide(crate::ide::Event::Notice(notice)));
+                    }
+                }
                 crate::ide::Event::Notice(mut text) => {
                     text.localize(self.language());
                     self.chat_panel

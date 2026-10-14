@@ -29,12 +29,22 @@ impl AppServer {
         let request: IdeRequest = decode(params)?;
         let owner = connection.connection_id;
         let response = match request {
-            IdeRequest::Register { title, roots } => {
+            IdeRequest::Register {
+                title,
+                roots,
+                window_key,
+            } => {
                 if !connection.allows_product_host_capabilities() {
                     return Err(RpcError::new(
                         -32073,
                         AppServerErrorName::PermissionRequired,
                     ));
+                }
+                if window_key
+                    .as_ref()
+                    .is_some_and(|key| !valid_window_key(key))
+                {
+                    return Err(invalid());
                 }
                 if title.trim().is_empty()
                     || title.len() > 1024
@@ -58,9 +68,23 @@ impl AppServer {
                     .collect::<Result<Vec<_>, _>>()?;
                 let window = self
                     .ide_registry
-                    .register(&self.client_host, owner, title, roots)
+                    .register(&self.client_host, owner, title, roots, window_key)
                     .map_err(ide_error)?;
                 IdeResult::Registered { window }
+            }
+            IdeRequest::Attach { window_key } => {
+                if !valid_window_key(&window_key) {
+                    return Err(invalid());
+                }
+                self.client_host
+                    .set_ide_window_key(owner, window_key.clone())
+                    .map_err(ide_error)?;
+                let target = self.ide_registry.find_window_key(&window_key);
+                let window = target.as_ref().map(|target| target.window.clone());
+                self.client_host
+                    .select_ide(owner, target)
+                    .map_err(ide_error)?;
+                IdeResult::Connected { window }
             }
             IdeRequest::Unregister {} => {
                 self.ide_registry.unregister(&self.client_host, owner);
@@ -68,12 +92,30 @@ impl AppServer {
             }
             IdeRequest::List {} => IdeResult::Windows {
                 windows: self.ide_registry.list(),
+                preferred: self
+                    .client_host
+                    .ide_window_key(owner)
+                    .map_err(ide_error)?
+                    .map(|key| match self.ide_registry.find_window_key(&key) {
+                        Some(target) => {
+                            ash_app_server_protocol::protocol::ide::IdeOrigin::Available {
+                                window: target.window,
+                            }
+                        }
+                        None => ash_app_server_protocol::protocol::ide::IdeOrigin::Unavailable {},
+                    }),
                 selected: self
                     .client_host
                     .selected_ide(owner)
                     .map_err(ide_error)?
-                    .and_then(|target| self.ide_registry.get(&target.window.id).ok())
-                    .map(|target| target.window),
+                    .map(|target| {
+                        // A lost window does not switch context sharing off. Retain the selection
+                        // so `/ide` can still disable it, while refreshing live window labels.
+                        self.ide_registry
+                            .get(&target.window.id)
+                            .map(|live| live.window)
+                            .unwrap_or(target.window)
+                    }),
             },
             IdeRequest::Connect { window_id } => {
                 if window_id.len() != 32 {
@@ -93,6 +135,100 @@ impl AppServer {
                     .select_ide(owner, None)
                     .map_err(ide_error)?;
                 IdeResult::Connected { window: None }
+            }
+            IdeRequest::OpenConversation {
+                session_id,
+                thread_id,
+            } => {
+                let snapshot = self.read_session_thread_snapshot(&session_id, &thread_id)?;
+                let session = self.session_view(&session_id)?;
+                if snapshot.status != ash_protocol::ThreadStatus::Active
+                    || session.status != ash_protocol::SessionStatus::Active
+                    || !matches!(
+                        session.execution_target,
+                        Some(ash_protocol::SessionExecutionTarget::Local { .. })
+                    )
+                {
+                    return result(&IdeResult::ConversationUnavailable {});
+                }
+                // The initiating client still owns outstanding tools and approvals. Opening the
+                // desktop must never dispose that connection while it has accepted work.
+                let active = matches!(
+                    session.manager.status,
+                    ash_protocol::SessionManagerStatus::Working
+                        | ash_protocol::SessionManagerStatus::NeedsInput
+                );
+                // Core owns the Session's activity classification, including background branches.
+                // Queue delivery is independent, so inspect the pending work of each branch too.
+                let queued = if let Some(queue) = &self.queue {
+                    session
+                        .threads
+                        .iter()
+                        .try_fold(false, |pending, thread| {
+                            queue.list(&session_id, &thread.thread_id).map(|messages| {
+                                pending
+                                    || messages.iter().any(|message| match message.status {
+                                        queue::QueueStatus::Pending
+                                        | queue::QueueStatus::Paused
+                                        | queue::QueueStatus::Delivering => true,
+                                        queue::QueueStatus::Started
+                                        | queue::QueueStatus::Rejected
+                                        | queue::QueueStatus::Cancelled => false,
+                                    })
+                            })
+                        })
+                        .map_err(|error| core_error(CoreError::Execution(error.to_string())))?
+                } else {
+                    false
+                };
+                if active
+                    || queued
+                    || self
+                        .client_host
+                        .has_pending_turns(owner)
+                        .map_err(ide_error)?
+                {
+                    IdeResult::ConversationBusy {}
+                } else {
+                    // Provenance remains available when /ide has disabled context sharing.
+                    // Never silently choose another window when the original has disappeared.
+                    let key = self.client_host.ide_window_key(owner).map_err(ide_error)?;
+                    let target = if let Some(key) = key {
+                        self.ide_registry.find_window_key(&key)
+                    } else {
+                        self.client_host
+                            .selected_ide(owner)
+                            .map_err(ide_error)?
+                            .and_then(|target| self.ide_registry.get(&target.window.id).ok())
+                    };
+                    if let Some(target) = target {
+                        match target
+                            .request(
+                                &IdeHostRequest::OpenConversation {
+                                    session_id,
+                                    thread_id,
+                                },
+                                cancellation,
+                            )
+                            .map_err(ide_error)?
+                        {
+                            // Loading the desktop can take time. Accepted work may appear on
+                            // another peer while we await its acknowledgement.
+                            IdeHostResult::Opened {}
+                                if self
+                                    .client_host
+                                    .has_pending_turns(owner)
+                                    .map_err(ide_error)? =>
+                            {
+                                IdeResult::ConversationBusy {}
+                            }
+                            IdeHostResult::Opened {} => IdeResult::ConversationOpened {},
+                            IdeHostResult::Context { .. } => return Err(invalid()),
+                        }
+                    } else {
+                        IdeResult::ConversationUnavailable {}
+                    }
+                }
             }
             IdeRequest::Context {
                 session_id,
@@ -142,11 +278,14 @@ impl AppServer {
                         allowed.sort();
                         allowed.dedup();
                         if allowed.is_empty() {
-                            return Err(core_error(CoreError::Policy(
-                                "selected IDE does not share a granted session directory".into(),
-                            )));
+                            // An integrated terminal can cd outside its editor workspace. Keep the
+                            // attachment, but share no content beyond the current directory grants.
+                            return result(&IdeResult::Context {
+                                window: Some(target.window),
+                                context: None,
+                            });
                         }
-                        let IdeHostResult::Context { context } = target
+                        let IdeHostResult::Context { mut context } = target
                             .request(
                                 &IdeHostRequest::Context {
                                     roots: allowed.clone(),
@@ -179,20 +318,16 @@ impl AppServer {
                                 })
                             })
                         };
+                        // An IDE may have a denied file open (for example a secret). Omit it
+                        // without preventing an otherwise valid terminal message from being sent.
+                        context.open_tabs.retain(readable);
+                        context.dirty_files.retain(readable);
                         if context
-                            .open_tabs
-                            .iter()
-                            .chain(&context.dirty_files)
-                            .any(|path| !readable(path))
-                            || context
-                                .active_file
-                                .as_ref()
-                                .is_some_and(|file| !readable(&file.path))
+                            .active_file
+                            .as_ref()
+                            .is_some_and(|file| !readable(&file.path))
                         {
-                            return Err(core_error(CoreError::Policy(
-                                "IDE context contains a file excluded by directory permissions"
-                                    .into(),
-                            )));
+                            context.active_file = None;
                         }
                         IdeResult::Context {
                             window: Some(target.window),
@@ -206,6 +341,10 @@ impl AppServer {
     }
 }
 
+fn valid_window_key(key: &str) -> bool {
+    key.len() == 32 && key.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
 fn invalid() -> RpcError {
     RpcError::new(-32602, AppServerErrorName::InvalidParams)
 }
@@ -213,7 +352,7 @@ fn ide_error(error: crate::client_host::ClientHostError) -> RpcError {
     let error = match error {
         crate::client_host::ClientHostError::Cancelled(reason) => CoreError::Cancelled(reason),
         crate::client_host::ClientHostError::CapabilityUnavailable => CoreError::Execution(
-            "IDE disconnected; use /ide to reconnect or /ide disconnect to continue".into(),
+            "IDE disconnected; run /ide to disable editor context and continue".into(),
         ),
         crate::client_host::ClientHostError::TimedOut => {
             CoreError::Execution("IDE context request timed out".into())

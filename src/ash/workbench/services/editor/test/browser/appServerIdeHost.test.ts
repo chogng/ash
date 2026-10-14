@@ -21,6 +21,8 @@ import { IEditorGroupsService } from '../../common/editorGroupsService.js';
 import { IEditorService, type EditorOpenOptions } from '../../common/editorService.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import { isDiffEditorInput } from '../../../../common/editor/diffEditorInput.js';
+import { INativeHostService } from '../../../../common/services.js';
+import type { INativeHostApi, IOpenAgentsWindowOptions } from '../../../../../platform/native/common/nativeHost.js';
 import { AppServerIdeHost } from '../../browser/appServerIdeHost.js';
 import type { IdeHostRequest } from '../../../../../../../.build/protocol/typescript/index.js';
 
@@ -75,20 +77,28 @@ async function fixture() {
 		const opened: Array<{ input: IResourceEditorInput; options?: EditorOpenOptions; }> = [];
 		let open: () => Promise<void> = async () => { };
 		services.registerInstance(IEditorService, { onDidActiveEditorChange: Event.None, openEditor: async (input, options) => { opened.push({ input, options }); await open(); } } as IEditorService);
+		const conversations: IOpenAgentsWindowOptions[] = [];
+		let openConversation: () => Promise<void> = async () => { };
+		services.registerInstance(INativeHostService, { openAgentsWindow: async options => {
+			conversations.push(options!); await openConversation();
+		} } as INativeHostApi);
 		const transport = new IdeTransport();
 		const client = new AppServerProtocolClient(transport);
 		lifetime.add(toDisposable(() => client.dispose()));
 		await client.connect();
 		const host = lifetime.add(services.createInstance(AppServerIdeHost, client));
 		await transport.registered.p;
-		return { lifetime, transport, host, workspace, model, opened, setSelection: (next: Selection) => { selection = next; }, setOpen: (next: () => Promise<void>) => { open = next; } };
+		return { lifetime, transport, host, workspace, model, opened, conversations, setOpenConversation: (next: () => Promise<void>) => { openConversation = next; }, setSelection: (next: Selection) => { selection = next; }, setOpen: (next: () => Promise<void>) => { open = next; } };
 	} catch (error) { lifetime.dispose(); throw error; }
 }
 
 test('IDE registration and context use the live editor model and filter unrelated files', async () => {
 	const f = await fixture();
 	using cleanup = f.lifetime;
-	assert.deepEqual(f.transport.requests[0]!.params, { type: 'register', title: 'Project', roots: ['/project'] });
+	const registration = f.transport.requests[0]!.params as { windowKey: string; };
+	assert.match(registration.windowKey, /^[0-9a-f]{32}$/i);
+	assert.deepEqual(f.transport.requests[0]!.params, { type: 'register', title: 'Project', roots: ['/project'], windowKey: registration.windowKey });
+	assert.equal(await f.host.readTerminalWindowKey(), registration.windowKey);
 	const first = await f.transport.call({ type: 'context', roots: ['/project'] });
 	assert.deepEqual(first.result, { type: 'context', context: { activeFile: { path: '/project/lib.rs', version: 1, selections: [{ startLine: 1, startColumn: 1, endLine: 1, endColumn: 8, text: 'unsaved', truncated: false }] }, openTabs: ['/project/lib.rs'], dirtyFiles: ['/project/lib.rs'] } });
 	f.model.setValue('changed selection');
@@ -124,6 +134,7 @@ test('disposing the IDE host withdraws discovery and cancels a late display resu
 	void finish.complete();
 	assert.ok((await pending).error);
 	assert.equal((f.transport.requests.at(-1)!.params as { type: string; }).type, 'unregister');
+	assert.equal(await f.host.readTerminalWindowKey(), undefined);
 });
 
 
@@ -136,4 +147,37 @@ test('IDE selection context marks truncation and preserves complete Unicode char
 	const result = response.result as { context: { activeFile: { selections: Array<{ text: string; truncated: boolean; }>; }; }; };
 	assert.equal(result.context.activeFile.selections[0]!.text, '🙂'.repeat(40_000));
 	assert.equal(result.context.activeFile.selections[0]!.truncated, true);
+});
+
+
+test('desktop handoff waits for the existing window service to acknowledge the exact conversation', async () => {
+	const f = await fixture();
+	using cleanup = f.lifetime;
+	const entered = new DeferredPromise<void>();
+	const finish = new DeferredPromise<void>();
+	f.setOpenConversation(async () => { void entered.complete(); await finish.p; });
+	let acknowledged = false;
+	const pending = f.transport.call({ type: 'openConversation', sessionId: 'session', threadId: 'thread' });
+	void pending.then(() => { acknowledged = true; });
+	await entered.p;
+	assert.equal(acknowledged, false);
+	assert.deepEqual(f.conversations, [{ conversation: { sessionId: 'session', threadId: 'thread' } }]);
+	assert.equal(f.opened.length, 0);
+	void finish.complete();
+	assert.deepEqual((await pending).result, { type: 'opened' });
+});
+
+test('desktop handoff does not acknowledge failed navigation or a disposed source window', async () => {
+	const f = await fixture();
+	using cleanup = f.lifetime;
+	f.setOpenConversation(async () => { throw new Error('Session unavailable'); });
+	assert.ok((await f.transport.call({ type: 'openConversation', sessionId: 'session', threadId: 'thread' })).error);
+	const entered = new DeferredPromise<void>();
+	const finish = new DeferredPromise<void>();
+	f.setOpenConversation(async () => { void entered.complete(); await finish.p; });
+	const pending = f.transport.call({ type: 'openConversation', sessionId: 'session', threadId: 'thread' });
+	await entered.p;
+	f.host.dispose();
+	void finish.complete();
+	assert.ok((await pending).error);
 });

@@ -771,3 +771,144 @@ fn english_punctuation_driver_uses_local_profile_and_applies_external_changes() 
     assert!(!restarted.app().punctuation_settings.enabled);
     assert_eq!(restarted.app().input(), "草稿，");
 }
+
+#[test]
+#[cfg(feature = "in-process-tests")]
+fn ide_desktop_handoff_exits_only_after_acknowledgement_and_preserves_new_terminal_work() {
+    let _guard = crate::test_support::in_process_test_guard();
+    let root = tempfile::tempdir().unwrap();
+    let session = AppServerSession::start_embedded(InProcessClientOptions::new(
+        root.path(),
+        ClientInfo {
+            name: "ash-desktop-handoff-test".into(),
+            version: "1".into(),
+        },
+    ))
+    .unwrap();
+    let mut client = session.client();
+    let active = crate::sessions::ActiveConversation::start(&mut client, "Handoff".into()).unwrap();
+    let other =
+        crate::sessions::ActiveConversation::start(&mut client, "Other conversation".into())
+            .unwrap();
+    let (subscription, _, _) = crate::thread::ThreadSubscription::start(
+        &mut client,
+        active.session_id(),
+        active.thread_id(),
+    )
+    .unwrap();
+    let model_picker = crate::models::ModelPickerData::new(
+        client.list_models().unwrap(),
+        client.read_config().unwrap(),
+    );
+    let runtime = state::StateRuntime::open(root.path()).unwrap();
+    let local_settings = Arc::new(
+        crate::config::LocalTuiSettings::open(root.path(), runtime.database_path()).unwrap(),
+    );
+    let mut driver = AppDriver::new(
+        App::new(),
+        client.clone(),
+        Some(crate::sessions::Conversation {
+            conversation: active.clone(),
+            subscription,
+        }),
+        AppDriverResources {
+            file_search: None,
+            host_dir_root: root.path().to_path_buf(),
+            theme_resource: crate::theme::ThemeResource::in_product_root(
+                root.path().to_path_buf(),
+                None,
+            ),
+            server_slash_commands: vec![],
+            plugins_enabled: false,
+            local_settings,
+            model_picker,
+        },
+    )
+    .unwrap();
+    driver.queued_commands.clear();
+    // The external navigation reply enters the same completion pipeline as /desktop.
+    // Keep it gated so no wall-clock guess can masquerade as an acknowledgement.
+    for (acknowledged, draft, has_queued_command, still_selected) in [
+        (false, "", false, true),
+        (true, "new terminal draft", false, true),
+        (true, "   ", false, true),
+        (true, "", true, true),
+        (true, "", false, false),
+        (true, "", false, true),
+    ] {
+        driver
+            .app_mut()
+            .input_state_mut()
+            .restore_recovery_draft(crate::thread::composer::ChatInput::new().recovery_draft());
+        driver.queued_commands.clear();
+        if !draft.is_empty() {
+            driver.app_mut().handle_paste(draft.into());
+        }
+        if has_queued_command {
+            driver
+                .queued_commands
+                .push_back(scheduled(AppCommand::Suspend));
+        }
+        let output = super::super::dispatch::ProductCommandOutput {
+            conversation: Some(if still_selected {
+                active.clone()
+            } else {
+                other.clone()
+            }),
+            command: "/desktop".into(),
+            events: vec![],
+            conversation_change: None,
+            desktop_handoff: acknowledged,
+        };
+        let result =
+            super::super::completion::finish_product_command_request(&mut client, None, output)
+                .unwrap();
+        let (send, receive) = std::sync::mpsc::sync_channel(0);
+        driver.requests.spawn(
+            Some(RequestKey::Thread),
+            "ash-desktop-handoff-ack",
+            move || {
+                receive.recv().unwrap();
+                Completion::ProductCommand {
+                    command: "/desktop".into(),
+                    result: Ok(result),
+                }
+            },
+            &mut driver.app,
+            origin(),
+        );
+        driver.poll_request_completions();
+        assert!(
+            !driver
+                .queued_commands
+                .iter()
+                .any(|command| matches!(command.command, AppCommand::Quit))
+        );
+        send.send(()).unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while !driver.requests.is_idle(Some(RequestKey::Thread)) {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "handoff completion did not arrive"
+            );
+            driver.poll_request_completions();
+            std::thread::yield_now();
+        }
+        assert_eq!(
+            driver
+                .queued_commands
+                .iter()
+                .any(|command| matches!(command.command, AppCommand::Quit)),
+            acknowledged && draft.is_empty() && !has_queued_command && still_selected
+        );
+        if !draft.is_empty() {
+            assert_eq!(driver.app().input(), draft);
+        }
+        if has_queued_command {
+            assert!(matches!(
+                driver.queued_commands.front().unwrap().command,
+                AppCommand::Suspend
+            ));
+        }
+    }
+}

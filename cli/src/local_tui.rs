@@ -52,6 +52,12 @@ fn run_entry(mut dir_root: PathBuf, profile_root: PathBuf, entry: Entry) -> Resu
             .with_announcement(announcement.clone())
             .with_dir_root(&dir_root)
             .with_profile_root(&profile_root);
+        if let Some(key) = env::var("ASH_IDE_WINDOW")
+            .ok()
+            .filter(|key| key.len() == 32 && key.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        {
+            options = options.with_ide_window_key(key);
+        }
         if let Some(process_id) = session.process_id() {
             options = options.with_app_server_process_id(process_id);
         }

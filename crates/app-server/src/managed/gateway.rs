@@ -318,6 +318,7 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
         });
 
         let profile_connection = profile_server.product_host_connection();
+        let ide_attachment = Arc::clone(&profile_connection.ide_attachment);
         let profile_notifications = profile_server.connection_notifications(&profile_connection);
         let profile_outbound = outbound.clone();
         scope.spawn(move || {
@@ -648,6 +649,7 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
                                 Arc::clone(&registry),
                                 root.clone(),
                                 initialize.clone(),
+                                Arc::clone(&ide_attachment),
                                 next_route_id,
                                 requests.handle(),
                                 outbound.clone(),

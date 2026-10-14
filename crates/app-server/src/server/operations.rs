@@ -375,6 +375,10 @@ impl AppServer {
             params.capabilities.text_documents.is_some(),
             connection.outbound_notifications.clone(),
         );
+        self.client_host.install_ide_attachment(
+            connection.connection_id,
+            std::sync::Arc::clone(&connection.ide_attachment),
+        );
         self.client_host.register_app_tools(
             connection.connection_id,
             params.capabilities.app_tools.clone(),

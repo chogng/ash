@@ -9,7 +9,7 @@ expression: rendered
                                                                                 
                                                                                 
                                                                                 
-  ───────────────────────────────────────────────────────────────────── 39/39   
+  ───────────────────────────────────────────────────────────────────── 40/40   
   /pr                        ask the Agent to create or inspect a pull request │
   /extensions                find and install Extensions packages              │
   /plugins                   manage installed packages and exact versions      │

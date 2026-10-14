@@ -16,7 +16,9 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::collections::VecDeque;
+use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::Weak;
 use std::sync::mpsc;
 use std::time::Duration;
 use std::time::Instant;
@@ -59,7 +61,30 @@ struct ClientHostOwner {
     app_tools: Option<ash_app_server_protocol::protocol::app_tools::AppToolsCapability>,
     outbound: NotificationQueue,
     text_documents: bool,
-    ide: Option<crate::ide_registry::IdeTarget>,
+    ide_attachment: Arc<IdeAttachment>,
+}
+
+/// One logical product connection can have peers in several directory runtimes. They share
+/// selection here; admitted Turns retain their own immutable target and approval owner.
+#[derive(Default)]
+pub(crate) struct IdeAttachment {
+    state: Mutex<IdeAttachmentState>,
+    // Peer identities borrow the authoritative Turn bindings; they never copy execution state.
+    peers: Mutex<Vec<(Weak<ClientHost>, u64)>>,
+}
+
+#[derive(Default)]
+struct IdeAttachmentState {
+    selected: Option<crate::ide_registry::IdeTarget>,
+    window_key: Option<String>,
+}
+
+impl std::fmt::Debug for IdeAttachment {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("IdeAttachment")
+            .finish_non_exhaustive()
+    }
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -124,7 +149,7 @@ impl ClientHost {
                     app_tools: None,
                     outbound,
                     text_documents,
-                    ide: None,
+                    ide_attachment: Arc::default(),
                 },
             );
     }
@@ -157,20 +182,120 @@ impl ClientHost {
             .and_then(|owner| owner.app_tools.clone())
     }
 
+    pub(crate) fn install_ide_attachment(
+        self: &Arc<Self>,
+        connection_id: u64,
+        attachment: Arc<IdeAttachment>,
+    ) {
+        let installed = {
+            let mut state = self
+                .state
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if let Some(owner) = state.owners.get_mut(&connection_id) {
+                owner.ide_attachment = Arc::clone(&attachment);
+                true
+            } else {
+                false
+            }
+        };
+        if installed {
+            let host = Arc::downgrade(self);
+            let mut peers = attachment
+                .peers
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            peers.retain(|(peer, _)| peer.strong_count() > 0);
+            if !peers
+                .iter()
+                .any(|(peer, id)| *id == connection_id && peer.ptr_eq(&host))
+            {
+                peers.push((host, connection_id));
+            }
+        }
+    }
+
+    /// A handoff cannot close the product connection while any directory peer still owns a Turn.
+    pub(crate) fn has_pending_turns(&self, connection_id: u64) -> Result<bool, ClientHostError> {
+        let attachment = self.ide_attachment(connection_id)?;
+        if self.has_turn_binding(connection_id)? {
+            return Ok(true);
+        }
+        let peers = attachment
+            .peers
+            .lock()
+            .map_err(|_| ClientHostError::Failed("IDE peer registry lock poisoned".into()))?
+            .clone();
+        for (peer, id) in peers {
+            if let Some(host) = peer.upgrade()
+                && host
+                    .ide_attachment(id)
+                    .is_ok_and(|current| Arc::ptr_eq(&current, &attachment))
+                && host.has_turn_binding(id)?
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    fn has_turn_binding(&self, connection_id: u64) -> Result<bool, ClientHostError> {
+        Ok(self
+            .turns
+            .lock()
+            .map_err(|_| ClientHostError::Failed("client Turn binding lock poisoned".into()))?
+            .values()
+            .flatten()
+            .any(|binding| binding.connection_id == connection_id))
+    }
+
+    fn ide_attachment(&self, connection_id: u64) -> Result<Arc<IdeAttachment>, ClientHostError> {
+        self.state
+            .lock()
+            .map_err(|_| ClientHostError::Failed("client host state lock poisoned".into()))?
+            .owners
+            .get(&connection_id)
+            .map(|owner| Arc::clone(&owner.ide_attachment))
+            .ok_or(ClientHostError::CapabilityUnavailable)
+    }
+
+    /// Terminal provenance survives disabling context sharing, without retaining editor objects.
+    pub(crate) fn set_ide_window_key(
+        &self,
+        connection_id: u64,
+        key: String,
+    ) -> Result<(), ClientHostError> {
+        self.ide_attachment(connection_id)?
+            .state
+            .lock()
+            .map_err(|_| ClientHostError::Failed("IDE attachment lock poisoned".into()))?
+            .window_key = Some(key);
+        Ok(())
+    }
+
+    pub(crate) fn ide_window_key(
+        &self,
+        connection_id: u64,
+    ) -> Result<Option<String>, ClientHostError> {
+        Ok(self
+            .ide_attachment(connection_id)?
+            .state
+            .lock()
+            .map_err(|_| ClientHostError::Failed("IDE attachment lock poisoned".into()))?
+            .window_key
+            .clone())
+    }
+
     pub(crate) fn select_ide(
         &self,
         connection_id: u64,
         target: Option<crate::ide_registry::IdeTarget>,
     ) -> Result<(), ClientHostError> {
-        let mut state = self
+        self.ide_attachment(connection_id)?
             .state
             .lock()
-            .map_err(|_| ClientHostError::Failed("client host state lock poisoned".into()))?;
-        let owner = state
-            .owners
-            .get_mut(&connection_id)
-            .ok_or(ClientHostError::CapabilityUnavailable)?;
-        owner.ide = target;
+            .map_err(|_| ClientHostError::Failed("IDE attachment lock poisoned".into()))?
+            .selected = target;
         Ok(())
     }
 
@@ -179,13 +304,11 @@ impl ClientHost {
         connection_id: u64,
     ) -> Result<Option<crate::ide_registry::IdeTarget>, ClientHostError> {
         Ok(self
+            .ide_attachment(connection_id)?
             .state
             .lock()
-            .map_err(|_| ClientHostError::Failed("client host state lock poisoned".into()))?
-            .owners
-            .get(&connection_id)
-            .ok_or(ClientHostError::CapabilityUnavailable)?
-            .ide
+            .map_err(|_| ClientHostError::Failed("IDE attachment lock poisoned".into()))?
+            .selected
             .clone())
     }
 
@@ -244,15 +367,21 @@ impl ClientHost {
             .map_err(|_| CoreError::Execution("client Turn binding lock poisoned".into()))?;
         let binding = connection
             .map(|connection_id| -> Result<TurnHostBinding, CoreError> {
-                let (ide, text_documents) = {
+                let (attachment, text_documents) = {
                     let state = self.state.lock().map_err(|_| {
                         CoreError::Execution("client host state lock poisoned".into())
                     })?;
                     let owner = state.owners.get(&connection_id).ok_or_else(|| {
                         CoreError::Execution("initiating client is unavailable".into())
                     })?;
-                    (owner.ide.clone(), owner.text_documents)
+                    (Arc::clone(&owner.ide_attachment), owner.text_documents)
                 };
+                let ide = attachment
+                    .state
+                    .lock()
+                    .map_err(|_| CoreError::Execution("IDE attachment lock poisoned".into()))?
+                    .selected
+                    .clone();
                 // The selected window may share this ClientHost. Check it after releasing state
                 // to avoid taking the same mutex recursively across two connections.
                 if let Some(expected) = expected_ide {

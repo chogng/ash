@@ -250,7 +250,11 @@ fn ide_context_is_fresh_per_submission_and_pins_the_window_without_changing_user
             self.requests.lock().unwrap().push(request.clone());
             let value = match request["method"].as_str().unwrap() {
                 "ide/request" => {
-                    serde_json::json!({"type":"context", "window":{"id":"01234567890123456789012345678901", "title":"Project", "roots":["/project"]}, "context":{"activeFile":{"path":"/project/lib.rs", "version":2, "selections":[{"startLine":2,"startColumn":1,"endLine":2,"endColumn":4,"text":"new"}]},"openTabs":["/project/lib.rs"],"dirtyFiles":["/project/lib.rs"]}})
+                    let mut response = serde_json::json!({"type":"context", "window":{"id":"01234567890123456789012345678901", "title":"Project", "roots":["/project"]}, "context":{"activeFile":{"path":"/project/lib.rs", "version":2, "selections":[{"startLine":2,"startColumn":1,"endLine":2,"endColumn":4,"text":"new"}]},"openTabs":["/project/lib.rs"],"dirtyFiles":["/project/lib.rs"]}});
+                    if self.requests.lock().unwrap().len() > 2 {
+                        response["context"] = serde_json::Value::Null;
+                    }
+                    response
                 }
                 "session/request" => {
                     serde_json::json!({"type":"turn", "value":{"turnId":"turn", "sequence":8}})
@@ -287,7 +291,7 @@ fn ide_context_is_fresh_per_submission_and_pins_the_window_without_changing_user
     }
     let requests = requests.lock().unwrap();
     assert_eq!(requests.len(), 4);
-    for pair in requests.chunks(2) {
+    for (index, pair) in requests.chunks(2).enumerate() {
         assert_eq!(pair[0]["params"]["sessionId"], "session");
         let turn = &pair[1]["params"]["request"];
         assert_eq!(turn["ideWindowId"], "01234567890123456789012345678901");
@@ -295,6 +299,14 @@ fn ide_context_is_fresh_per_submission_and_pins_the_window_without_changing_user
             turn["input"][0],
             serde_json::json!({"type":"text","text":"explain this"})
         );
+        if index == 1 {
+            assert_eq!(
+                turn["input"].as_array().unwrap().len(),
+                1,
+                "missing context must not replay a stale snapshot"
+            );
+            continue;
+        }
         let context: serde_json::Value =
             serde_json::from_str(turn["input"][1]["content"].as_str().unwrap()).unwrap();
         assert_eq!(

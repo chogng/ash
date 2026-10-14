@@ -22,6 +22,7 @@ pub(crate) struct IdeTarget {
     pub(crate) window: IdeWindow,
     host: Weak<ClientHost>,
     connection_id: u64,
+    window_key: Option<String>,
     active: Arc<AtomicBool>,
 }
 
@@ -51,7 +52,10 @@ impl IdeTarget {
             HostMethod::IdeHostRequest,
             params,
             cancellation,
-            Duration::from_secs(5),
+            match params {
+                IdeHostRequest::OpenConversation { .. } => Duration::from_secs(30),
+                _ => Duration::from_secs(5),
+            },
         )
     }
 }
@@ -68,16 +72,29 @@ impl IdeRegistry {
         connection_id: u64,
         title: String,
         roots: Vec<String>,
+        window_key: Option<String>,
     ) -> Result<IdeWindow, ClientHostError> {
         let mut windows = self
             .windows
             .lock()
             .map_err(|_| ClientHostError::Failed("IDE registry lock poisoned".into()))?;
+        if let Some(key) = &window_key {
+            if windows.values().any(|target| {
+                target.window_key.as_ref() == Some(key)
+                    && target.is_connected()
+                    && (target.connection_id != connection_id
+                        || !target.host.ptr_eq(&Arc::downgrade(host)))
+            }) {
+                return Err(ClientHostError::Failed(
+                    "IDE window key is already registered".into(),
+                ));
+            }
+        }
         let existing = windows.values().find(|target| {
             target.connection_id == connection_id && target.host.ptr_eq(&Arc::downgrade(host))
         });
         if let Some(target) = existing {
-            if target.window.roots == roots {
+            if target.window.roots == roots && target.window_key == window_key {
                 let id = target.window.id.clone();
                 let target = windows
                     .get_mut(&id)
@@ -111,6 +128,7 @@ impl IdeRegistry {
                 window: window.clone(),
                 host: Arc::downgrade(host),
                 connection_id,
+                window_key,
                 active: Arc::new(AtomicBool::new(true)),
             },
         );
@@ -135,6 +153,15 @@ impl IdeRegistry {
             .filter(|target| target.is_connected())
             .cloned()
             .ok_or(ClientHostError::CapabilityUnavailable)
+    }
+
+    pub(crate) fn find_window_key(&self, key: &str) -> Option<IdeTarget> {
+        self.windows
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .values()
+            .find(|target| target.window_key.as_deref() == Some(key) && target.is_connected())
+            .cloned()
     }
 
     pub(crate) fn unregister(&self, host: &Arc<ClientHost>, connection_id: u64) {

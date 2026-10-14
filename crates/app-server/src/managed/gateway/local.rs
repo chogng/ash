@@ -62,6 +62,7 @@ impl<'scope> LocalTarget<'scope> {
         registry: Arc<ProfileAppServerRegistry>,
         root: PathBuf,
         initialize: IncomingRequest,
+        ide_attachment: Arc<crate::client_host::IdeAttachment>,
         route_id: usize,
         requests: RequestDispatchHandle<'env>,
         outbound: OutboundSender,
@@ -82,6 +83,7 @@ impl<'scope> LocalTarget<'scope> {
                     .block_on(registry.open_local_session(&root, &opening_cancellation))
                     .map_err(io::Error::other)?;
                 let mut connection = server.product_host_connection();
+                connection.ide_attachment = ide_attachment;
                 let response = server.handle_json(&mut connection, &initialize);
                 if !serde_json::from_str::<Value>(&response)
                     .is_ok_and(|response| response.get("result").is_some())

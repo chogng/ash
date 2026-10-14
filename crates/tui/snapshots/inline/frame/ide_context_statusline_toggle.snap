@@ -1,0 +1,47 @@
+---
+source: crates/tui/src/app/fullscreen/frame_tests.rs
+expression: "format!(\"Connected\\n{connected}\\n\\nDisconnected\\n{disconnected}\")"
+---
+Connected
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+────────────────────────────────────────────────────────────────────────────────
+>                                                                               
+────────────────────────────────────────────────────────────────────────────────
+  IDE context                                                                   
+  ⏸ Manual · ← Dashboard · ? for shortcuts                                      
+
+Disconnected
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+────────────────────────────────────────────────────────────────────────────────
+>                                                                               
+────────────────────────────────────────────────────────────────────────────────
+                                                                                
+  ⏸ Manual · ← Dashboard · ? for shortcuts
