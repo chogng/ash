@@ -1,6 +1,7 @@
 import { packager } from '@electron/packager';
 import { writeApplicationChecksums } from './host.ts';
 import { ignoreApplicationFile, productionDependencyDeployOptions } from './packageApplication.ts';
+import { pruneElectronLocales } from './packageLocales.ts';
 import { rebuild } from '@electron/rebuild';
 import { spawn } from 'node:child_process';
 import { cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
@@ -101,6 +102,7 @@ async function assembleBundle(stage: string, bundlePath: string, options: Map<st
 		prune: false,
 		derefSymlinks: true,
 		ignore: ignoreApplicationFile,
+		afterExtract: [pruneElectronLocales],
 	});
 	if (packagePaths.length !== 1 || resolve(packagePaths[0]) !== bundlePath) throw new Error('Electron packager returned an unexpected bundle path');
 

@@ -220,8 +220,8 @@ get/install/update 只访问 ID 指定的来源，并核对返回的名称和精
   "schemaVersion": 3,
   "extensionSources": [{
     "name": "ash",
-    "metadataBaseUrl": "https://chogng.github.io/ash-marketplace/metadata/",
-    "targetsBaseUrl": "https://chogng.github.io/ash-marketplace/targets/",
+    "metadataBaseUrl": "https://chogng.github.io/extensions/metadata/",
+    "targetsBaseUrl": "https://chogng.github.io/extensions/targets/",
     "trustedRoot": "extensions-root.json",
     "catalogRefreshIntervalSeconds": 300
   }],

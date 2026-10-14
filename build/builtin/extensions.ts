@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { build } from 'vite';
 import { gzipSync } from 'node:zlib';
 import { fingerprintPaths, PreparedInputs, readJsonCache, writeJsonCache } from '../lib/preparedInputs.ts';
+import { readPreinstalledLanguagePackIds } from '../resources/languagePacks.ts';
 
 const root = resolve(import.meta.dirname, '../..');
 export const browserExtensionRoots = [resolve(root, 'extensions'), ...String(process.env.ASH_WEB_EXTENSION_PATHS ?? '').split(delimiter).filter(Boolean).map(path => resolve(path))];
@@ -15,6 +16,7 @@ const prepared = new PreparedInputs(resolve(root, '.build/browser-extension-inpu
 const buildEnvironment = process.env.NODE_ENV ?? 'production';
 const toolchainFiles = [
 	'build/builtin/extensions.ts', 'build/lib/preparedInputs.ts', 'pnpm-lock.yaml', 'package.json', 'build/package.json',
+	'build/resources/languagePacks.ts', 'localization/preinstalled.json',
 	'tsconfig.json', 'tsconfig.base.json', 'extensions/tsconfig.json', 'extensions/tsconfig.base.json',
 	'.env', '.env.local', '.env.production', '.env.production.local',
 ].map(path => resolve(root, path));
@@ -62,6 +64,7 @@ export function prepareBuiltinExtensions(): Promise<boolean> {
 }
 
 async function preparePackages(): Promise<boolean> {
+	const preinstalledLanguagePacks = await readPreinstalledLanguagePackIds();
 	const toolchain = await fingerprintPaths(toolchainFiles);
 	const packages: string[] = [];
 	for (const entry of (await readdir(browserExtensionRoots[0], { withFileTypes: true })).filter(entry => entry.isDirectory()).sort((a, b) => a.name.localeCompare(b.name))) {
@@ -83,6 +86,8 @@ async function preparePackages(): Promise<boolean> {
 		const manifestJson = await readFile(resolve(packageRoot, 'package.json'), 'utf8');
 		const manifest = JSON.parse(manifestJson);
 		const id = `${manifest.publisher}.${manifest.name}`;
+		if (index < builtInCount && manifest.engines?.ash && manifest.contributes?.localizations
+			&& !preinstalledLanguagePacks.has(`${manifest.publisher}/${manifest.name}`)) { continue; }
 		packageNames[id] = basename(packageRoot);
 		if (Object.hasOwn(bundledResources, id)) { throw new Error(`Duplicate browser extension: ${id}`); }
 		const packageResources: Record<string, string> = Object.create(null);

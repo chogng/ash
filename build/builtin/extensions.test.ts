@@ -10,6 +10,10 @@ test('browser packaging excludes Rust-only extensions and rejects missing JS man
 	try {
 		await mkdir(join(directory, 'build/builtin'), { recursive: true });
 		await copyFile(resolve(import.meta.dirname, 'extensions.ts'), join(directory, 'build/builtin/extensions.ts'));
+		await mkdir(join(directory, 'build/resources'), { recursive: true });
+		await copyFile(resolve(import.meta.dirname, '../resources/languagePacks.ts'), join(directory, 'build/resources/languagePacks.ts'));
+		await mkdir(join(directory, 'localization'), { recursive: true });
+		await writeFile(join(directory, 'localization/preinstalled.json'), JSON.stringify(['test/language-pack']));
 		await mkdir(join(directory, 'build/lib'), { recursive: true });
 		await copyFile(resolve(import.meta.dirname, '../lib/preparedInputs.ts'), join(directory, 'build/lib/preparedInputs.ts'));
 		await symlink(resolve(import.meta.dirname, '../../node_modules'), join(directory, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
@@ -27,6 +31,9 @@ test('browser packaging excludes Rust-only extensions and rejects missing JS man
 		await writeFile(join(directory, 'extensions/language-pack/package.json'), JSON.stringify({ publisher: 'test', name: 'language-pack', version: '1.0.0', engines: { ash: '*' }, contributes: { localizations: [{ languageId: 'zh-CN', translations: [{ id: 'ash', path: 'localization/package.json' }] }] } }));
 		await mkdir(join(directory, '.build/desktop/localization/extensions/test.language-pack/localization'), { recursive: true });
 		await writeFile(join(directory, '.build/desktop/localization/extensions/test.language-pack/localization/package.json'), JSON.stringify(catalog));
+		await mkdir(join(directory, 'extensions/optional-language'), { recursive: true });
+		await writeFile(join(directory, 'extensions/optional-language/package.json'), JSON.stringify({ publisher: 'test', name: 'optional-language', engines: { ash: '*' }, contributes: { localizations: [{ languageId: 'fr' }] } }));
+		await writeFile(join(directory, 'extensions/optional-language/optional.json'), 'French must be downloaded');
 		const run = () => spawnSync(process.execPath, ['build/builtin/extensions.ts'], {
 			cwd: directory, encoding: 'utf8', timeout: 15_000,
 			// This fixture owns its catalog, including any externally configured roots.
@@ -56,6 +63,10 @@ test('browser Git packages publish their bundled frontend without a Rust runtime
 	try {
 		await mkdir(join(directory, 'build/builtin'), { recursive: true });
 		await copyFile(resolve(import.meta.dirname, 'extensions.ts'), join(directory, 'build/builtin/extensions.ts'));
+		await mkdir(join(directory, 'build/resources'), { recursive: true });
+		await copyFile(resolve(import.meta.dirname, '../resources/languagePacks.ts'), join(directory, 'build/resources/languagePacks.ts'));
+		await mkdir(join(directory, 'localization'), { recursive: true });
+		await writeFile(join(directory, 'localization/preinstalled.json'), JSON.stringify(['test/language-pack']));
 		await mkdir(join(directory, 'build/lib'), { recursive: true });
 		await copyFile(resolve(import.meta.dirname, '../lib/preparedInputs.ts'), join(directory, 'build/lib/preparedInputs.ts'));
 		await symlink(resolve(import.meta.dirname, '../node_modules'), join(directory, 'build/node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
@@ -148,6 +159,10 @@ for (const resource of ['manifest', 'file'] as const) {
 			// language packs or other resources in the developer's checkout.
 			await mkdir(join(directory, 'build/builtin'), { recursive: true });
 			await copyFile(resolve(import.meta.dirname, 'extensions.ts'), join(directory, 'build/builtin/extensions.ts'));
+		await mkdir(join(directory, 'build/resources'), { recursive: true });
+		await copyFile(resolve(import.meta.dirname, '../resources/languagePacks.ts'), join(directory, 'build/resources/languagePacks.ts'));
+		await mkdir(join(directory, 'localization'), { recursive: true });
+		await writeFile(join(directory, 'localization/preinstalled.json'), JSON.stringify(['test/language-pack']));
 			await mkdir(join(directory, 'build/lib'), { recursive: true });
 			await copyFile(resolve(import.meta.dirname, '../lib/preparedInputs.ts'), join(directory, 'build/lib/preparedInputs.ts'));
 			await symlink(resolve(import.meta.dirname, '../../node_modules'), join(directory, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');

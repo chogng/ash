@@ -1,6 +1,7 @@
 import { packager } from '@electron/packager';
 import { writeApplicationChecksums } from './host.ts';
 import { ignoreApplicationFile, productionDependencyDeployOptions } from './packageApplication.ts';
+import { pruneElectronLocales } from './packageLocales.ts';
 import { rebuild } from '@electron/rebuild';
 import { spawn } from 'node:child_process';
 import { cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
@@ -94,6 +95,7 @@ try {
 		extraResource: resources,
 		...(options.unsigned ? {} : { osxSign: { identity: signingIdentity! } }),
 		ignore: ignoreApplicationFile,
+		afterExtract: [pruneElectronLocales],
 	});
 	if (packages.length !== 1 || resolve(packages[0]) !== dirname(bundlePath)) throw new Error('Electron packager returned an unexpected bundle path');
 	for (const file of [

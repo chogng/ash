@@ -37,6 +37,10 @@ use cache::stage_datastore;
 
 const MAX_TRUSTED_ROOT_BYTES: usize = 1024 * 1024;
 const MAX_REVOCATIONS_BYTES: usize = 4 * 1024 * 1024;
+// Repository branding can change without changing the signed distribution wire format.
+const PACKAGE_METADATA_KEY: &str = "marketplacePackage";
+const CATALOG_METADATA_KEY: &str = "marketplaceCatalog";
+const REVOCATIONS_TARGET: &str = "marketplace/revocations.json";
 const DEFAULT_CATALOG_REFRESH_INTERVAL: Duration = Duration::from_secs(300);
 const MIN_CATALOG_REFRESH_INTERVAL: Duration = Duration::from_secs(60);
 const MAX_CATALOG_REFRESH_INTERVAL: Duration = Duration::from_secs(86_400);
@@ -392,13 +396,12 @@ fn collect_delegated_targets(
             continue;
         };
         for (name, target) in &signed.signed.targets {
-            let Some(package_value) = target.custom.get("extension_packagesPackage").cloned()
-            else {
+            let Some(package_value) = target.custom.get(PACKAGE_METADATA_KEY).cloned() else {
                 continue;
             };
             let catalog_value = target
                 .custom
-                .get("extension_packagesCatalog")
+                .get(CATALOG_METADATA_KEY)
                 .cloned()
                 .ok_or_else(ExtensionsClientError::package_untrusted)?;
             let package: PackageTargetMetadata = serde_json::from_value(package_value)
@@ -462,7 +465,7 @@ fn collect_delegated_targets(
 async fn read_revocations(
     repository: &Repository,
 ) -> Result<BTreeSet<(String, Version, String)>, ExtensionsClientError> {
-    let name = TargetName::new("extensions/revocations.json")
+    let name = TargetName::new(REVOCATIONS_TARGET)
         .map_err(|_| ExtensionsClientError::package_untrusted())?;
     let target = repository
         .targets()

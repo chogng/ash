@@ -177,6 +177,7 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 		'.build/protocol/typescript/ProductSlashCommands.ts': `export const PRODUCT_SLASH_COMMANDS = { permission: { description: 'Choose permissions' }, guardian: { description: 'Prepare project background' } };`,
 		'localization/languages.json': JSON.stringify(['en'].map(locale => ({ locale, languageName: locale, localizedLanguageName: locale }))),
 		'localization/en/messages.json': '{}',
+		'localization/preinstalled.json': JSON.stringify(['ash/language-pack-zh-cn']),
 		'extensions/language-pack-zh-cn/package.json': JSON.stringify({ name: 'language-pack-zh-cn', publisher: 'ash', version: '1.0.0', displayName: '简体中文', description: 'Chinese', license: 'MIT', engines: { ash: '*' }, contributes: { localizations: [{ languageId: 'zh-CN', languageName: 'Chinese', localizedLanguageName: '简体中文', translations: [{ id: 'ash', path: 'localization/package.json' }] }] } }),
 		'extensions/language-pack-zh-cn/translations/messages.json': JSON.stringify({ ash: { hello: '你好' } }),
 	};
@@ -184,7 +185,7 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 		await mkdir(dirname(join(root, name)), { recursive: true });
 		await writeFile(join(root, name), text);
 	}
-	for (const file of ['build/resources/localization.ts', 'build/lib/watchRebuild.ts', 'build/lib/preparedInputs.ts', entry]) {
+	for (const file of ['build/resources/localization.ts', 'build/resources/languagePacks.ts', 'build/lib/watchRebuild.ts', 'build/lib/preparedInputs.ts', entry]) {
 		await mkdir(dirname(join(root, file)), { recursive: true });
 		await copyFile(join(repository, file), join(root, file));
 	}
@@ -195,6 +196,14 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 		assert.equal(result.status, 0, result.stdout + result.stderr);
 		return result.stdout;
 	}
+	// A new language source remains a distributable package without joining host imports.
+	const frenchRoot = join(root, 'extensions/language-pack-fr');
+	await mkdir(join(frenchRoot, 'translations'), { recursive: true });
+	const frenchManifest = JSON.parse(files['extensions/language-pack-zh-cn/package.json']);
+	frenchManifest.name = 'language-pack-fr';
+	frenchManifest.contributes.localizations[0] = { languageId: 'fr', languageName: 'French', localizedLanguageName: 'Français', translations: [{ id: 'ash', path: 'localization/package.json' }] };
+	await writeFile(join(frenchRoot, 'package.json'), JSON.stringify(frenchManifest));
+	await writeFile(join(frenchRoot, 'translations/messages.json'), JSON.stringify({ ash: { hello: 'Bonjour' } }));
 	run(['build/resources/localization.ts', '--check']);
 	await assert.rejects(stat(join(root, '.build/desktop/localization')), { code: 'ENOENT' });
 	run(['build/resources/localization.ts']);
@@ -205,6 +214,13 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 	const packedCatalog = JSON.parse(await readFile(join(extensionRoot, 'localization/package.json'), 'utf8'));
 	assert.equal(packedCatalog.locale, 'zh-CN');
 	assert.equal(packedCatalog.bundles.ash.hello, '你好');
+	const frenchCatalog = JSON.parse(await readFile(join(generated, 'extensions/ash.language-pack-fr/localization/package.json'), 'utf8'));
+	assert.equal(frenchCatalog.bundles.ash.hello, 'Bonjour');
+	assert.doesNotMatch(await readFile(join(generated, 'localizationCatalogs.ts'), 'utf8'), /Bonjour|language-pack-fr|localizationCatalog.fr/);
+	// Remove obsolete compiled catalogs left by the former automatic-preinstall behavior.
+	await writeFile(join(generated, 'localizationCatalog.fr.ts'), 'export const obsolete = true;');
+	run(['build/resources/localization.ts']);
+	await assert.rejects(stat(join(generated, 'localizationCatalog.fr.ts')), { code: 'ENOENT' });
 	assert.match(await readFile(join(generated, 'localizationCatalog.en.ts'), 'utf8'), /"slash.permission.description": "Choose permissions"/u);
 	await writeFile(join(root, '.build/protocol/typescript/ProductSlashCommands.ts'), `export const PRODUCT_SLASH_COMMANDS = { permission: { description: 'Choose next-turn permissions' }, guardian: { description: 'Prepare project background' } };`);
 	run(['build/resources/localization.ts', '--check']);

@@ -4,6 +4,10 @@ Ash treats UI localization as a data catalog capability, separate from programmi
 packages. The product owns the catalog contract it consumes; the remote Extensions only validates,
 signs, and distributes product-independent static locale payloads.
 
+The explicit product selection in `localization/preinstalled.json` currently keeps Simplified Chinese offline.
+All other language packs are installed on demand through the Rust Extensions Manager. Adding a
+translation source under `extensions/` does not add it to host imports or browser package snapshots.
+
 English and preinstalled extension catalogs are generated into `.build/desktop/localization/` and are not tracked by Git.
 The source `localizationCatalogs.ts` is a stable loading entrypoint. Build and test preparation
 generate the data before compilation; Vite emits one shared chunk per language, and TypeScript
@@ -57,6 +61,8 @@ no longer supply catalog entries; nonempty declarations in `localization/en` fai
 `pnpm localization:generate` validates the manifest and translations and produces the standalone
 package under `.build/desktop/localization/extensions/ash.language-pack-zh-cn/`. It contains
 `package.json`, the generated catalog, and the generic Extensions distribution `manifest.json`.
+Optional packs generate the same standalone directory, but no TypeScript catalog module; publish
+those directories through the [Extensions repository](https://github.com/chogng/extensions).
 Normal extension preparation also includes that catalog in the application's bundled extension
 resources. Main and browser startup consume a generated snapshot of the same extension catalog;
 loading the preinstalled pack does not require an Extension Host or an App Server connection.
@@ -177,3 +183,25 @@ per-window initialization snapshot; no global App Server language is set. The PO
 App Server terminal boundary is process environment inheritance, not the UI `workbench.locale`
 selection. See [VS Code Display Language](https://code.visualstudio.com/docs/configure/locales) for
 the reference user experience.
+
+## Chromium display-language resources
+
+Desktop packaging retains English and the locales selected by `localization/preinstalled.json`.
+The filter runs on the extracted official Electron distribution before code signing. ICU data
+remains available for international text and formatting. Other Ash display-language packs are
+static product catalogs installed by Rust; they do not modify Chromium resources inside the
+signed application. Chromium UI uses its available fallback language when the system locale is
+not shipped.
+
+A signed registry can be checked through the production Rust manager without launching an
+extension process. Use an empty temporary state directory; the check installs the partial French
+package, reads its catalog through a lease, then releases the lease and uninstalls the package:
+
+```bash
+./scripts/.venv/bin/python -B scripts/cargo.py run -p ash-core-plugins \
+  --example localization_distribution_smoke -- \
+  https://chogng.github.io/extensions/ \
+  resources/product-services/extensions-root.json /absolute/path/to/empty-test-state
+```
+
+The first argument also accepts a locally signed distribution directory for release rehearsals.

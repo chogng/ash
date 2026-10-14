@@ -13,8 +13,8 @@
   "extensionSources": [
     {
       "name": "ash",
-      "metadataBaseUrl": "https://chogng.github.io/ash-marketplace/metadata/",
-      "targetsBaseUrl": "https://chogng.github.io/ash-marketplace/targets/",
+      "metadataBaseUrl": "https://chogng.github.io/extensions/metadata/",
+      "targetsBaseUrl": "https://chogng.github.io/extensions/targets/",
       "trustedRoot": "extensions-root.json",
       "catalogRefreshIntervalSeconds": 300
     }

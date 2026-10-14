@@ -101,11 +101,11 @@ fn production_product_services_delegates_to_the_plugins_manager() {
     let registry = config.extension_sources().values().next().unwrap();
     assert_eq!(
         registry.metadata_base_url().as_str(),
-        "https://chogng.github.io/ash-marketplace/metadata/"
+        "https://chogng.github.io/extensions/metadata/"
     );
     assert_eq!(
         registry.targets_base_url().as_str(),
-        "https://chogng.github.io/ash-marketplace/targets/"
+        "https://chogng.github.io/extensions/targets/"
     );
     assert_eq!(
         registry.catalog_refresh_interval(),

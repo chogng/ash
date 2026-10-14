@@ -25,7 +25,7 @@ and refresh tokens in the profile secret store and exposes only the account name
 to the editor. This account connection is separate from Plugin connector OAuth settings.
 
 The independent Extensions source, public root owner, publishing pipeline, and key rotation
-procedure live in the private [`extensions`](https://github.com/chogng/marketplace) repository.
+procedure live in the private [`extensions`](https://github.com/chogng/extensions) repository.
 Ash is one optional consumer: this product bundle chooses to pin that root, while Extensions
 validation and publication do not depend on Ash. A root rotation must be valid in the Extensions;
 Ash then updates its pinned copy before requiring metadata signed only by the rotated root.

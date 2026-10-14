@@ -9,6 +9,7 @@ use tough::Repository;
 use tough::RepositoryLoader;
 use tough::TargetName;
 
+use super::REVOCATIONS_TARGET;
 use super::RemoteExtensionsConfig;
 use super::directory_url;
 use crate::ExtensionsClientError;
@@ -25,7 +26,7 @@ pub(super) async fn cache_repository(
         .map_err(|_| ExtensionsClientError::storage())?;
     let metadata = staging.path().join("metadata");
     let targets = staging.path().join("targets");
-    let mut target_names = vec!["extensions/revocations.json".to_owned()];
+    let mut target_names = vec![REVOCATIONS_TARGET.to_owned()];
     target_names.extend(package_targets.iter().map(|name| name.raw().to_owned()));
     repository
         .cache(&metadata, &targets, Some(&target_names), true)
