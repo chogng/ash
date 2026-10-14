@@ -106,6 +106,8 @@ import { ChangesViewService } from '../../../src/ash/sessions/contrib/changes/br
 import { emptyEditorServiceState } from '../../../src/ash/workbench/test/common/testEditorService.js';
 import { IResourceLabelService } from '../../../src/ash/workbench/browser/labels.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
+import { QuickInputService } from '../../../src/ash/platform/quickinput/browser/quickInputService.js';
+import { BrowserLayoutService, ILayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
 import { IEditorGroupsService } from '../../../src/ash/workbench/services/editor/common/editorGroupsService.js';
 import { IRendererHostService } from '../../../src/ash/platform/renderer/common/rendererHost.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
@@ -389,6 +391,10 @@ const harness = {
 			openEditor: (input, options, target) => titleEditor!.openEditor(input, options, target),
 		} as IEditorPartsService);
 		services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService));
+		services.registerInstance(ILayoutService, resources.add(new BrowserLayoutService({ root: document.body })));
+		// Quick Access providers must capture this fixture's focused diff side,
+		// rather than the editors in the inherited standalone service scope.
+		services.registerSingleton(IQuickInputService, () => resources.add(services.createInstance(QuickInputService)));
 		resources.add(registerAction2(MultiDiffGoToFileAction));
 		resources.add(registerAction2(MultiDiffCollapseAllAction));
 		resources.add(registerAction2(MultiDiffExpandAllAction));

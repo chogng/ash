@@ -1327,11 +1327,13 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		}]
 	}];
 	const hooksChanged = disposables.add(new Emitter<void>());
+	const firstHookRead = new DeferredPromise<void>();
 	let nextHooksRead: Promise<readonly HookSource[]> | undefined;
 	const hooksBackend: IAppServerHookApi = {
 		onDidChangeHooks: hooksChanged.event,
 		list: async sessionId => {
 			hookReads++;
+			void firstHookRead.complete();
 			assert.equal(sessionId, 'session-hooks');
 			if (hooksFailure) throw new Error('Invalid TOML');
 			const pending = nextHooksRead;
@@ -1750,6 +1752,8 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.ok(manageHooks, [...root.querySelectorAll<HTMLButtonElement>('.ash-settings-section button')].map(button => button.textContent).join(', '));
 	manageHooks.click();
 	await managementOpened.p;
+	await firstHookRead.p;
+	await nextTurn();
 	const managementPane = editor.activePane!;
 	const hooksRoot = root.querySelector<HTMLElement>('.ash-ai-customization-management');
 	assert.ok(hooksRoot && !hooksRoot.hidden);

@@ -160,14 +160,14 @@ test('server folder selection navigates directories before returning the chosen 
 	let pickerCount = 0;
 	const quickInput = {
 		createQuickPick() {
-			const accepted = new Emitter<IQuickPickItem>();
+			const accepted = new Emitter<{ inBackground: boolean; }>();
 			const hidden = new Emitter<void>();
 			const index = pickerCount++;
 			return {
-				items: [] as IQuickPickItem[],
+				items: [] as IQuickPickItem[], selectedItems: [] as IQuickPickItem[],
 				onDidAccept: accepted.event,
 				onDidHide: hidden.event,
-				show() { accepted.fire(this.items[index === 0 ? 1 : 0]!); },
+				show() { this.selectedItems = [this.items[index === 0 ? 1 : 0]!]; accepted.fire({ inBackground: false }); },
 				dispose() { accepted.dispose(); hidden.dispose(); },
 				[Symbol.dispose]() { accepted.dispose(); hidden.dispose(); },
 			};
@@ -197,15 +197,15 @@ test('browser Open File browses the current workspace and returns the chosen fil
 	} as unknown as IFileService;
 	const quickInput = {
 		createQuickPick() {
-			const accepted = new Emitter<IQuickPickItem>();
+			const accepted = new Emitter<{ inBackground: boolean; }>();
 			const hidden = new Emitter<void>();
 			const triggered = new Emitter<{ item: IQuickPickItem; button: { id: string; label: string; }; }>();
 			return {
-				items: [] as IQuickPickItem[],
+				items: [] as IQuickPickItem[], selectedItems: [] as IQuickPickItem[],
 				onDidAccept: accepted.event,
 				onDidHide: hidden.event,
 				onDidTriggerItemButton: triggered.event,
-				show() { accepted.fire(this.items.find(item => item.label !== '..')!); },
+				show() { this.selectedItems = [this.items.find(item => item.label !== '..')!]; accepted.fire({ inBackground: false }); },
 				dispose() { accepted.dispose(); hidden.dispose(); triggered.dispose(); },
 				[Symbol.dispose]() { accepted.dispose(); hidden.dispose(); triggered.dispose(); },
 			};
@@ -232,17 +232,17 @@ test('browser file dialog filters files and returns every selected file from the
 	let step = 0;
 	const quickInput = {
 		createQuickPick() {
-			const accepted = new Emitter<IQuickPickItem>();
+			const accepted = new Emitter<{ inBackground: boolean; }>();
 			const hidden = new Emitter<void>();
 			const triggered = new Emitter<{ item: IQuickPickItem; button: { id: string; label: string; }; }>();
 			return {
-				items: [] as IQuickPickItem[],
+				items: [] as IQuickPickItem[], selectedItems: [] as IQuickPickItem[],
 				onDidAccept: accepted.event,
 				onDidHide: hidden.event,
 				onDidTriggerItemButton: triggered.event,
 				show() {
 					shown.push(this.items.map(item => item.label));
-					accepted.fire(this.items[[0, 1, 3, 0][step++]!]!);
+					this.selectedItems = [this.items[[0, 1, 3, 0][step++]!]!]; accepted.fire({ inBackground: false });
 				},
 				dispose() { accepted.dispose(); hidden.dispose(); triggered.dispose(); },
 				[Symbol.dispose]() { accepted.dispose(); hidden.dispose(); triggered.dispose(); },
@@ -274,15 +274,15 @@ test('server folder dialog selects folders across directory navigation', async (
 	let step = 0;
 	const quickInput = {
 		createQuickPick() {
-			const accepted = new Emitter<IQuickPickItem>();
+			const accepted = new Emitter<{ inBackground: boolean; }>();
 			const hidden = new Emitter<void>();
 			const triggered = new Emitter<{ item: IQuickPickItem; button: { id: string; label: string; }; }>();
 			return {
-				items: [] as IQuickPickItem[], onDidAccept: accepted.event, onDidHide: hidden.event, onDidTriggerItemButton: triggered.event,
+				items: [] as IQuickPickItem[], selectedItems: [] as IQuickPickItem[], onDidAccept: accepted.event, onDidHide: hidden.event, onDidTriggerItemButton: triggered.event,
 				show() {
 					shown.push(this.items.map(item => item.label));
 					const label = ['Select /work', 'other', 'Select /work/other', 'Done (2)'][step++];
-					accepted.fire(this.items.find(item => item.label === label)!);
+					this.selectedItems = [this.items.find(item => item.label === label)!]; accepted.fire({ inBackground: false });
 				},
 				dispose() { accepted.dispose(); hidden.dispose(); triggered.dispose(); },
 				[Symbol.dispose]() { accepted.dispose(); hidden.dispose(); triggered.dispose(); },
@@ -336,12 +336,12 @@ test('browser document open chooses an authorized folder without replacing the w
 	} as unknown as IFileService;
 	const quickInput = {
 		createQuickPick() {
-			const accepted = new Emitter<IQuickPickItem>();
+			const accepted = new Emitter<{ inBackground: boolean; }>();
 			const hidden = new Emitter<void>();
 			const triggered = new Emitter<{ item: IQuickPickItem; button: { id: string; label: string; }; }>();
 			return {
-				items: [] as IQuickPickItem[], onDidAccept: accepted.event, onDidHide: hidden.event, onDidTriggerItemButton: triggered.event,
-				show() { accepted.fire(this.items[0]); },
+				items: [] as IQuickPickItem[], selectedItems: [] as IQuickPickItem[], onDidAccept: accepted.event, onDidHide: hidden.event, onDidTriggerItemButton: triggered.event,
+				show() { this.selectedItems = [this.items[0]]; accepted.fire({ inBackground: false }); },
 				dispose() { accepted.dispose(); hidden.dispose(); triggered.dispose(); },
 				[Symbol.dispose]() { accepted.dispose(); hidden.dispose(); triggered.dispose(); },
 			};
@@ -399,11 +399,11 @@ for (const { label, os, resource, path } of [
 		let activated = false;
 		const quickInput = {
 			createQuickPick() {
-				const accepted = new Emitter<IQuickPickItem>();
+				const accepted = new Emitter<{ inBackground: boolean; }>();
 				const hidden = new Emitter<void>();
 				return {
-					items: [] as IQuickPickItem[], onDidAccept: accepted.event, onDidHide: hidden.event,
-					show() { accepted.fire(this.items[0]!); },
+					items: [] as IQuickPickItem[], selectedItems: [] as IQuickPickItem[], onDidAccept: accepted.event, onDidHide: hidden.event,
+					show() { this.selectedItems = [this.items[0]!]; accepted.fire({ inBackground: false }); },
 					dispose() { accepted.dispose(); hidden.dispose(); },
 					[Symbol.dispose]() { this.dispose(); },
 				};

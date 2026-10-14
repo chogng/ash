@@ -13,6 +13,7 @@ import { IElevatedFileService } from './services/files/common/elevatedFileServic
  */
 import "../platform/update/common/update.config.contribution.js";
 import "./workbench.common.main.js";
+import './contrib/terminal/electron-browser/terminal.contribution.js';
 import './services/tunnel/electron-browser/tunnelService.js';
 import './services/clipboard/electron-browser/clipboardService.js';
 import './services/process/electron-browser/processService.js';

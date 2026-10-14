@@ -80,9 +80,9 @@ suite('Workbench localization', () => {
 	});
 
 
-	test('document editor name uses the selected Chinese catalog', () => {
+	test('dictation startup status uses the selected Chinese catalog', () => {
 		initializeTestLocalization('zh-CN');
-		assert.equal(localize('editor.document.name', 'Stanza Document'), 'Stanza 文档');
+		assert.equal(localize('chat.input.dictationStarting', 'Starting dictation…'), '正在启动听写…');
 	});
 
 	test('Tree settings use Chinese titles and guide options', () => {

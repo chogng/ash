@@ -1,4 +1,5 @@
 import { IChangesViewService } from '../../contrib/changes/common/changesViewService.js';
+import { IAgentExecutionSettingsService } from '../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { ChangesViewService } from '../../contrib/changes/browser/changesViewService.js';
 import { ISessionChangesService } from '../../contrib/changes/common/sessionChangesService.js';
 import { SessionChangesService } from '../../contrib/changes/browser/sessionChangesService.js';
@@ -86,6 +87,7 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		let pendingRefresh: DeferredPromise<{ changeSets: TurnChangesReadResult['summary'][]; }> | undefined;
 		let pendingRead: DeferredPromise<{ path: string; binary: boolean; truncated: boolean; before: string; after: string; }> | undefined;
 		services.registerInstance(IAgentModelsService, host.model);
+		services.registerInstance(IAgentExecutionSettingsService, host.executionSettings);
 		services.registerInstance(IAgentThreadService, host.thread);
 		services.registerInstance(IAgentTurnService, host.turn);
 		services.registerInstance(IAppServerSkillApi, host.skills);

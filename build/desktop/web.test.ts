@@ -7,10 +7,10 @@ import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import { startWeb } from './web.ts';
 
-for (const succeeds of [true, false]) {
-	test(`Web launch ${succeeds ? 'selects the newly prepared package before spawning the backend' : 'stops on preparation failure before reading or launching an old package'}`, async t => {
+for (const [succeeds, reuse] of [[true, false], [false, false], [true, true]]) {
+	test(`Web launch ${reuse ? 'reuses explicitly prepared inputs without compiling in the fixture' : succeeds ? 'selects the newly prepared package before spawning the backend' : 'stops on preparation failure before reading or launching an old package'}`, async t => {
 		const events: string[] = [];
-		let prepared = false;
+		let prepared = reuse;
 		let packageRoot = '';
 		t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
 		t.mock.method(fs, 'readdirSync', (path: string) => {
@@ -38,12 +38,12 @@ for (const succeeds of [true, false]) {
 		});
 		syncBuiltinESMExports();
 		if (succeeds) {
-			const launch = await startWeb({ port: 0, environment: {} });
+			const launch = await startWeb({ port: 0, environment: {}, preparedBackend: reuse });
 			await launch.close();
 		} else {
 			await assert.rejects(startWeb({ port: 0, environment: {} }), /backend preparation exited with status 1/);
 		}
-		assert.deepEqual(events, succeeds ? ['prepare', 'select', 'launch'] : ['prepare']);
+		assert.deepEqual(events, reuse ? ['select', 'launch'] : succeeds ? ['prepare', 'select', 'launch'] : ['prepare']);
 	});
 }
 

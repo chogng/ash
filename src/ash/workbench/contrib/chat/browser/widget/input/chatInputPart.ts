@@ -286,6 +286,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 		this.dictationSession = this._register(instantiationService.createInstance(DictationSession, this.input, this.dictationPreview, () => this.visible, () => this.delegate.openModelSettings('dictation')));
 		this._register(this.speechToText.onDidChangeState(() => { this.renderStatus(); this.renderToolbarActions(); }));
+		this._register(this.speechToText.onDidChangeHasSpeechProvider(() => this.renderToolbarActions()));
 		this._register(this.dictationSession.onDidEnd(error => {
 			// The speech service can become idle before the input session releases its active state.
 			this.renderStatus();
@@ -1195,6 +1196,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		if (state.aiDisabled) return localize('chat.ai.disabled.message', 'AI features are disabled. Turn off Disable AI features in Settings to send messages.');
 		if (state.inputBlocked && state.phase !== 'loading') return '';
 		if (state.error) return state.error;
+		if (this.dictationSession.isActive && this.speechToText.isStarting) return localize('chat.input.dictationStarting', 'Starting dictation…');
 		if (this.dictationSession.isActive && this.speechToText.state === SpeechToTextState.Transcribing) return localize('chat.input.dictationTranscribing', 'Transcribing…');
 		if (this.dictationSession.isActive) return localize('chat.input.dictationListening', 'Listening…');
 		switch (state.phase) {

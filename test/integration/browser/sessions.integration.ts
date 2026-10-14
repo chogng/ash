@@ -3,8 +3,12 @@ import '../../../src/ash/sessions/sessions.web.main.js';
 import type { } from '../../../src/ash/workbench/browser/web.api.js';
 import { codeSessionsProfile } from '../../../src/ash/code/common/codeSessionsProfile.js';
 import { SessionsBrowserMain } from '../../../src/ash/sessions/browser/web.main.js';
+import { WorkbenchThemesRegistry } from '../../../src/ash/workbench/common/theme.js';
+import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 
 // Mount the renderer's real Parts, settings and canvas without a product process or backend.
+const themes = WorkbenchThemesRegistry.registerColorThemes([darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme]);
+window.addEventListener('pagehide', () => themes.dispose(), { once: true });
 const initialErrorHandler = errorHandler.getUnexpectedErrorHandler();
 let main = new SessionsBrowserMain(document.querySelector<HTMLElement>('#app')!, codeSessionsProfile);
 window.addEventListener('pagehide', () => main.dispose(), { once: true });

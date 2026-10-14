@@ -11,6 +11,7 @@ import { IElevatedFileService } from './services/files/common/elevatedFileServic
  * Electron belong in `workbench.common.main.ts`.
  */
 import "./workbench.common.main.js";
+import './contrib/terminal/browser/terminal.web.contribution.js';
 import './services/tunnel/browser/tunnelService.js';
 import './services/workspaces/browser/workspacesService.js';
 import { BrowserHostService } from './services/host/browser/browserHostService.js';

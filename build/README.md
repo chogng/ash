@@ -21,12 +21,21 @@ the shared development package; `desktop/` owns incremental Desktop selection.
 Task entrypoints use the existing pnpm and Just commands, with Vite
 and Cargo retaining compilation. Gulp is not required for these tasks.
 
-Frontend CI checks Renderer sources and smoke automation types once before
-running the two Web modes. `pnpm bundle:web` and `pnpm bundle:web:full` only run
+Frontend CI checks Renderer sources and smoke automation types once per platform
+before building Desktop and both Web modes on Linux, Windows and macOS.
+`pnpm build:prepared` requires current generated inputs and successful common,
+Renderer and automation checks; it retains TS7 Host compilation and preload
+validation. `pnpm test:unit:prepared`, `pnpm build:stanza:prepared` and
+`pnpm test:browser:integration:prepared` also require current generated inputs and
+the common check from `pnpm prepare:generated`. CI uses these entries after
+explicit preparation to avoid repeated lifecycle checks; standalone build and
+test commands retain their complete preparation. `pnpm bundle:web` and `pnpm bundle:web:full` only run
 Vite against those prepared, checked sources; use `pnpm build:web` or
 `pnpm build:web:full` for a standalone build. The two bundles have different
 App Server compile-time flags and share an output directory, so CI runs each
-mode's tests before replacing its bundle. Electron smoke preparation publishes
+mode's tests before replacing its bundle. Connected Web smoke fixtures reuse the
+explicitly prepared backend, rather than compiling it again for every profile;
+`test:smoke:browser:full:no-compile` requires that preparation. Electron smoke preparation publishes
 the runtime required by startup's Tunnel services and builds Desktop once;
 UI and connected tests reuse those artifacts with separate test profiles.
 

@@ -54,7 +54,8 @@ test('Sessions common entry registers the shared speech service for unavailable 
 	const { ISpeechService, SpeechToTextState } = await import('../../../workbench/contrib/speech/common/speechService.js');
 	const registrations = getSingletonServiceDescriptors().filter(([id]) => id === ISpeechService);
 	assert.equal(registrations.length, 1);
-	using services = new InstantiationService(new ServiceCollection(...registrations));
+	const { IExtensionService } = await import('../../../workbench/services/extensions/common/extensionService.js');
+	using services = new InstantiationService(new ServiceCollection(...registrations, [IExtensionService, undefined], [IConfigurationService, undefined], [IContextKeyService, undefined]));
 	services.registerInstance(IDictationService, undefined);
 	const speech = services.get(ISpeechService);
 	assert.equal(speech.hasSpeechProvider, false);

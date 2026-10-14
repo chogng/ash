@@ -10,18 +10,21 @@ const checker = resolve(sourceRoot, 'node_modules/bun/bin/bun.exe');
 const bundler = resolve(repositoryRoot, 'build/node_modules/vite/bin/vite.js');
 const config = resolve(import.meta.dirname, 'vite/vite.config.ts');
 const [command = 'all', ...extra] = process.argv.slice(2);
+const prepared = extra.length === 1 && extra[0] === '--prepared';
 
-if (extra.length || !['all', 'host', 'renderer', 'web', 'prepare'].includes(command)) {
-	throw new Error('Usage: build.ts [all|host|renderer|web|prepare]');
+if ((extra.length && !prepared) || !['all', 'host', 'renderer', 'web', 'prepare'].includes(command) || (command === 'prepare' && prepared)) {
+	throw new Error('Usage: build.ts [all|host|renderer|web|prepare] [--prepared]');
 }
 
 if (command === 'prepare') {
 	await prepareHostOutput();
 } else {
-	await prepareGenerated();
+	// CI owns preparation and no-emit checks before reusing these inputs.
+	// Direct builds keep the complete preparation and validation path.
+	if (!prepared) await prepareGenerated();
 	if (command === 'all' || command === 'host') await buildHost();
 	if (command === 'all' || command === 'renderer' || command === 'web') {
-		await run(checker, ['check', '-p', 'tsconfig.renderer.json', '--all']);
+		if (!prepared) await run(checker, ['check', '-p', 'tsconfig.renderer.json', '--all']);
 		await run(process.execPath, [bundler, 'build', '--config', config, ...(command === 'web' ? ['--mode', 'web'] : [])]);
 	}
 }

@@ -16,9 +16,11 @@ interface WebLaunch {
 	reloadBackend(): Promise<void>;
 }
 
-export async function startWeb(options: { port: number; assets?: string; origin?: string; environment: Readonly<NodeJS.ProcessEnv>; }): Promise<WebLaunch> {
+export async function startWeb(options: { port: number; assets?: string; origin?: string; environment: Readonly<NodeJS.ProcessEnv>; preparedBackend?: boolean; }): Promise<WebLaunch> {
 	const root = resolve(import.meta.dirname, '../..');
-	await prepareAppServer('packaged-node');
+	// Smoke orchestration prepares once before launching isolated test profiles.
+	// Direct callers retain preparation before selecting their runtime.
+	if (!options.preparedBackend) await prepareAppServer('packaged-node');
 	const packageRoot = developmentAshPackagePath(root, 'packaged-node');
 	const suffix = process.platform === 'win32' ? '.exe' : '';
 	const source = options.environment;

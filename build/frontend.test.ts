@@ -29,9 +29,9 @@ test('Frontend acceptance waits for shared contracts and unit tests', () => {
 		assert.match(definition, /^    needs: contracts$/m);
 	}
 	const contracts = workflow.split('\n  contracts:\n')[1].split(/\n  [a-z-]+:\n/u)[0];
-	assert.match(contracts, /pnpm typecheck:renderer/u);
+	assert.match(contracts, /pnpm exec bun check -p tsconfig.renderer.json --all/u);
 	assert.match(contracts, /pnpm test:build/u);
-	assert.match(contracts, /pnpm test:unit/u);
+	assert.match(contracts, /pnpm run test:unit:prepared/u);
 });
 
 test('Frontend CI smoke commands collect applicable tests from configured Playwright projects', { timeout: 30_000 }, async () => {
@@ -48,7 +48,7 @@ test('Frontend CI retains Academic coverage in the unified Workbench projects', 
 	assert.deepEqual(playwrightTargetForProject('electron-ui'), { kind: 'electron', appServerMode: 'disabled' });
 	assert.ok(projects.includes('electron-app-server'));
 	assert.deepEqual(playwrightTargetForProject('electron-app-server'), { kind: 'electron', appServerMode: 'required' });
-	for (const [project, file] of [['electron-ui', 'academic/academic-workbench.spec.ts'], ['electron-app-server', 'editor/academic-open.spec.ts']]) {
+	for (const [project, file] of [['electron-ui', 'academic/academic-workbench.spec.ts'], ['electron-app-server', 'editor/academic-open.spec.ts'], ['browser-app-server', 'editor/academic-open.spec.ts']]) {
 		const { stdout } = await execute(process.execPath, ['test/smoke/run.ts', project, `test/smoke/areas/${file}`, '--list'], { cwd: repositoryRoot, timeout: 10_000 });
 		assert.match(stdout, /Total: [1-9]\d* tests? in 1 file/);
 	}

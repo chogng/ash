@@ -40,7 +40,6 @@ import type { IRemoteAgentApi } from "../../remote/common/remoteAgentApi.js";
 import type { IRemoteConnectionApi } from "../../remote/common/remoteConnectionService.js";
 import type { IExtensionManagementApi } from "../../extensionManagement/common/extensionManagementApi.js";
 import type { IWorkspaceTrustApi } from '../../workspace/common/workspaceTrust.js';
-
 import type { IAgentCapabilitiesService } from '../../agentCapabilities/common/agentCapabilitiesService.js';
 import type { IAgentToolsApi } from '../../agentHost/common/agentToolsApi.js';
 import type { IMcpServerStatusService } from '../../mcp/common/mcpServerStatusService.js';

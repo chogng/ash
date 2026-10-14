@@ -43,17 +43,20 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Check localization, styles and generated contracts
         run: |
-          pnpm localization:check
+          pnpm run prepare:generated
+          pnpm exec bun build/resources/localization.ts --check
           pnpm stylelint
-          pnpm typecheck:protocol
-          pnpm typecheck:renderer
+          pnpm exec bun check -p tsconfig.protocol.json --all
+          pnpm exec bun check -p tsconfig.renderer.json --all
       - name: Check and test build tools
         run: |
           pnpm typecheck:build
           pnpm test:build
-          pnpm build:stanza
+          pnpm run build:stanza:prepared
       - name: Test frontend units
-        run: pnpm test:unit
+        run: |
+          pnpm run prepare:output
+          pnpm run test:unit:prepared
 
   desktop-runtime:
     needs: contracts
@@ -121,16 +124,18 @@ jobs:
       - name: Install Chromium
         if: matrix.surface == 'browser'
         run: pnpm exec playwright install --with-deps chromium
-      - name: Test browser integration
-        if: matrix.surface == 'browser'
-        run: pnpm run test:browser:integration --project=chromium
-      - name: Prepare production browser UI smoke tests
-        if: matrix.surface == 'browser'
-        # Both Web modes share the checked sources and automation typecheck.
+      - name: Check sources and build Desktop and Web on every platform
+        # Each runner checks its own platform declarations once. The Desktop
+        # and both Web bundles reuse these inputs without lifecycle rechecks.
         run: |
           pnpm run typecheck:renderer
           pnpm exec bun check -p test/automation/tsconfig.json --all
+          pnpm run rebuild:native
+          pnpm run build:prepared
           pnpm run bundle:web
+      - name: Test browser integration
+        if: matrix.surface == 'browser'
+        run: pnpm run test:browser:integration:prepared --project=chromium
       - name: Test production browser UI
         if: matrix.surface == 'browser'
         run: pnpm run test:smoke:browser:no-compile
@@ -138,7 +143,7 @@ jobs:
         if: matrix.surface == 'electron'
         # Startup reads runtime metadata for Tunnel services even in UI-only mode.
         # Connected smoke tests reuse this runtime and the same Desktop build.
-        run: pnpm run pretest:smoke:ui
+        run: pnpm run prepare:backend
       - name: Test Electron UI
         if: matrix.surface == 'electron'
         run: pnpm run test:smoke:ui:no-compile
@@ -150,6 +155,9 @@ jobs:
       - name: Test connected Web
         if: matrix.surface == 'browser'
         run: pnpm run test:smoke:browser:full:no-compile
+      - name: Build connected Web on Desktop runners
+        if: matrix.surface == 'electron'
+        run: pnpm run bundle:web:full
       - name: Test connected Electron
         if: matrix.surface == 'electron'
         run: pnpm run test:smoke:desktop:no-compile --grep-invert "Mock Agent Task loop"

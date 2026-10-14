@@ -1654,6 +1654,7 @@
     "themeEditor.interactivePreview": "交互式主题预览",
     "themeEditor.previewTerminalIntro": "预览终端。可以尝试 help、clear 或 echo。命令仅在此预览中运行。",
     "themeEditor.previewCommand": "此预览支持 help、clear 和 echo。",
+    "themeEditor.previewChatUnavailable": "此预览中聊天不可用。",
     "quickInput.searchModes": "搜索分类",
     "quickAccess.filesTab": "文件",
     "themeEditor.previewOnly": "仅供预览",

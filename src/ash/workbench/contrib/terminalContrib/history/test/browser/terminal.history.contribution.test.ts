@@ -78,20 +78,20 @@ test('Run Recent Command executes only an accepted item in the still-active term
 			instances: [instance],
 		} as unknown as ITerminalService);
 
-		const pickers: Array<{ readonly items: readonly (IQuickPickItem | IQuickPickSeparator)[]; readonly accepted: Emitter<IQuickPickItem>; readonly hidden: Emitter<void>; readonly shown: Promise<void>; }> = [];
+		const pickers: Array<{ readonly items: readonly (IQuickPickItem | IQuickPickSeparator)[]; readonly accept: (item: IQuickPickItem) => void; readonly hidden: Emitter<void>; readonly shown: Promise<void>; }> = [];
 		services.registerInstance(IQuickInputService, {
 			createQuickPick: () => {
-				const accepted = resources.add(new Emitter<IQuickPickItem>());
+				const accepted = resources.add(new Emitter<{ inBackground: boolean; }>());
 				const hidden = resources.add(new Emitter<void>());
 				let show!: () => void;
 				const shown = new Promise<void>(resolve => show = resolve);
 				const picker = {
-					items: [] as readonly (IQuickPickItem | IQuickPickSeparator)[], ariaLabel: '', placeholder: '',
+					items: [] as readonly (IQuickPickItem | IQuickPickSeparator)[], selectedItems: [] as IQuickPickItem[], ariaLabel: '', placeholder: '',
 					onDidAccept: accepted.event, onDidHide: hidden.event,
 					show: () => show(), hide: () => hidden.fire(),
 					dispose() { }, [Symbol.dispose]() { },
 				} as unknown as IQuickPick<IQuickPickItem>;
-				pickers.push({ get items() { return picker.items; }, accepted, hidden, shown });
+				pickers.push({ get items() { return picker.items; }, accept: item => { picker.selectedItems = [item]; accepted.fire({ inBackground: false }); }, hidden, shown });
 				return picker;
 			},
 			input: async () => undefined,
@@ -107,7 +107,7 @@ test('Run Recent Command executes only an accepted item in the still-active term
 		const stale = services.invokeFunction(runRecent);
 		await pickers[1]!.shown;
 		activeInstance = undefined;
-		pickers[1]!.accepted.fire(pickers[1]!.items[0]! as IQuickPickItem);
+		pickers[1]!.accept(pickers[1]!.items[0]! as IQuickPickItem);
 		await stale;
 		assert.deepEqual(sent, []);
 
@@ -115,7 +115,7 @@ test('Run Recent Command executes only an accepted item in the still-active term
 		const accepted = services.invokeFunction(runRecent);
 		await pickers[2]!.shown;
 		assert.deepEqual(sent, []);
-		pickers[2]!.accepted.fire(pickers[2]!.items[0]! as IQuickPickItem);
+		pickers[2]!.accept(pickers[2]!.items[0]! as IQuickPickItem);
 		await accepted;
 		assert.deepEqual(sent, [{ text: 'echo explicitly accepted', shouldExecute: true }]);
 	} finally {

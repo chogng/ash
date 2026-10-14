@@ -259,7 +259,7 @@ test('document highlights translate protocol kinds into editor kinds', async () 
 	using registration = languages.registerProviderBatch(createExtensionHostLanguageProviderBatch({
 		kind: 'languageProvider', registrationId: 'highlights', languageIds: ['markdown'], operations: ['documentHighlights'],
 	}, 'markdown', 'highlights', async () => [1, 2, 3].map(kind => ({
-		kind, startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 8,
+		kind, range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 7 } },
 	}))));
 	const result = await languages.documentHighlightProvider.ordered(model)[0]!.provideDocumentHighlights(model, new Position(1, 3), source.token);
 	assert.deepEqual(result?.map(highlight => highlight.kind), [0, 1, 2]);

@@ -52,9 +52,11 @@ registerAction2(class ToggleVoiceMute extends Action2 {
 
 registerAction2(class PushToTalk extends Action2 {
 	constructor() {
-		super({ id: 'agentsVoice.pushToTalk', title: localize2('agentsVoice.command.ptt', 'Voice: Push to Talk'),
+		super({
+			id: 'agentsVoice.pushToTalk', title: localize2('agentsVoice.command.ptt', 'Voice: Push to Talk'),
 			precondition: ContextKeyExpr.and(AGENTS_VOICE_CONNECTED.isEqualTo(true), AGENTS_VOICE_PUSH_TO_TALK.isEqualTo(true)),
-			keybinding: { primary: Keybinding.single(logicalKey(' ', { primaryKey: true, shiftKey: true })) } });
+			keybinding: { primary: Keybinding.single(logicalKey(' ', { primaryKey: true, shiftKey: true })) }
+		});
 	}
 	async run(accessor: ServicesAccessor): Promise<void> {
 		const release = accessor.get(IKeybindingService).enableKeybindingHoldMode(this.desc.id);

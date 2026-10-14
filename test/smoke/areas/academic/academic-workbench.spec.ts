@@ -5,7 +5,7 @@ test('Academic is a document contribution in the Code Workbench', async ({ workb
 	await expect(workbench.page.locator("[data-action-id='ash.academic.open-sessions']")).toHaveCount(0);
 });
 
-test('browser opens and saves Academic beside code without changing Workbench', { tag: ['@browser-ui'] }, async ({ target, testWorkspace, workbench }) => {
+test('disconnected browser preserves and saves Academic source beside code', { tag: ['@browser-ui'] }, async ({ testWorkspace, workbench }) => {
 	const paper = await readFile(testWorkspace.academicFile, 'utf8');
 	const page = workbench.page;
 	await page.evaluate(async ({ paper }) => {
@@ -23,18 +23,23 @@ test('browser opens and saves Academic beside code without changing Workbench', 
 	const explorer = page.locator('.ash-explorer');
 	await explorer.getByRole('treeitem', { name: 'paper.ash-academic', exact: true }).dblclick();
 	const group = workbench.editors.groupAt(0);
-	const input = group.content.locator('textarea.stanza-document-text-input').first();
-	await input.fill('Browser paper');
+	// The disconnected catalog deliberately contributes no custom editors.
+	// Keep the source editable; connected smoke coverage exercises Academic's engine.
+	await expect(group.content.locator('.stanza-structured-editor-pane')).toHaveCount(0);
+	const input = group.editor.input;
+	await group.editor.waitForEditorFocus();
+	await input.press('ControlOrMeta+End');
+	await input.press('Enter');
 	await input.press('ControlOrMeta+S');
 	await expect.poll(() => page.evaluate(async () => {
 		const picker = window as Window & { showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle>; };
 		const folder = await picker.showDirectoryPicker!();
 		return (await (await folder.getFileHandle('paper.ash-academic')).getFile()).text();
-	})).toContain('Browser paper');
+	})).toBe(paper + '\n');
 	await explorer.getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
 	await expect(group.content.locator('.stanza-editor')).toBeVisible();
 	await group.tabs.filter({ hasText: 'paper.ash-academic' }).click();
-	await expect(group.content.locator('textarea.stanza-document-text-input').first()).toHaveValue('Browser paper');
+	await group.editor.waitForEditorContents(contents => contents.startsWith(paper));
 });
 
 for (const retiredMode of ['academic', 'unregistered']) {

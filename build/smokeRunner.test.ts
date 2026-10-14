@@ -259,7 +259,13 @@ function completion(child: ChildProcess): Promise<{ code: number | null; output:
 async function waitForFile(path: string): Promise<string> {
 	const deadline = Date.now() + 20_000;
 	while (true) {
-		try { return await readFile(path, 'utf8'); }
+		try {
+			// writeFile creates the marker before writing its contents. Under load
+			// the reader can observe that intermediate empty file.
+			const value = await readFile(path, 'utf8');
+			if (value) return value;
+			if (Date.now() >= deadline) throw new Error(`Marker remained empty: ${path}`);
+		}
 		catch (error) { if (error.code !== 'ENOENT' || Date.now() >= deadline) throw error; }
 		await new Promise<void>(resolveDelay => setTimeout(resolveDelay, 50));
 	}

@@ -21,7 +21,7 @@ export interface GitHubBrowserTestConfiguration {
 }
 
 /** Owns the authenticated Web backend and profile for one smoke scenario. */
-export async function launchWeb(workspaceDirectory: string, options: { readonly reportIssueUrl?: string; readonly backendConfiguration?: string; readonly githubAccount?: GitHubBrowserTestConfiguration; } = {}): Promise<WebLaunchResult> {
+export async function launchWeb(workspaceDirectory: string, options: { readonly reportIssueUrl?: string; readonly backendConfiguration?: string; readonly githubAccount?: GitHubBrowserTestConfiguration; readonly preparedBackend?: boolean; } = {}): Promise<WebLaunchResult> {
 	const root = resolve(import.meta.dirname, '../..');
 	const profileDirectory = await mkdtemp(join(tmpdir(), 'ash-w-'));
 	const productServicesPath = join(profileDirectory, 'product-services.json');
@@ -57,7 +57,7 @@ export async function launchWeb(workspaceDirectory: string, options: { readonly 
 		if (languageServer) {
 			await writeFile(join(profileDirectory, 'config.toml'), `${options.backendConfiguration ?? ''}\n[languageServers.servers.rust-analyzer]\nmode = "enabled"\nexecutable = ${JSON.stringify(languageServer)}\n`);
 		}
-		launch = await startWeb({ port: 0, assets: join(root, '.build/desktop/web/ash'), environment });
+		launch = await startWeb({ port: 0, assets: join(root, '.build/desktop/web/ash'), environment, preparedBackend: options.preparedBackend });
 		const { endpoint, ticket } = launch.info;
 		const response = await fetch(new URL('/ash/session', endpoint), { method: 'POST', headers: { Origin: new URL(endpoint).origin }, body: ticket, signal: AbortSignal.timeout(10_000) });
 		if (!response.ok) { throw new Error(`Web test authentication failed: ${response.status}`); }

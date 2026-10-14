@@ -14,9 +14,11 @@ test("aggregate, test and typecheck commands prepare inputs once and stop on pre
 		"stylelint": "styles",
 		"test:build-tools": "tools",
 		"test:unit": "unit",
+		"test:unit:prepared": "unit",
 		"test:editor:unit": "editor",
 		"test:extensions": "extension-tests",
 		"test:browser:integration": "browser",
+		"test:browser:integration:prepared": "browser",
 		"test:editor:browser": "editor-browser",
 		"test:editor:browser:build": "browser-build",
 		"prepare:output": "output",
@@ -29,6 +31,7 @@ test("aggregate, test and typecheck commands prepare inputs once and stop on pre
 		"icons:check": "icons",
 		"typecheck:renderer": "renderer",
 		"build": "desktop-build",
+		"build:prepared": "desktop-build",
 		"rebuild:native": "electron-dependencies",
 		"prepare:backend": "backend",
 		"prepare:backend:web": "backend-web",
@@ -71,6 +74,8 @@ test("aggregate, test and typecheck commands prepare inputs once and stop on pre
 		["test:main", ["styles"], "styles"],
 		["test:browser:integration", ["protocol"], "protocol"],
 		["test:unit", ["output", "protocol", "localization", "common", "extensions", "icons", "unit"], ""],
+		["test:unit:prepared", ["unit"], ""],
+		["build:prepared", ["desktop-build"], ""],
 		["test:editor:unit", ["output", "protocol", "localization", "common", "extensions", "icons", "editor"], ""],
 		["test:extensions", ["output", "protocol", "localization", "common", "extensions", "icons", "extension-tests"], ""],
 		["test:browser:integration", ["protocol", "localization", "common", "extensions", "icons", "browser"], ""],
@@ -100,17 +105,18 @@ test("aggregate, test and typecheck commands prepare inputs once and stop on pre
 	}
 
 	const workflow = await readFile(resolve(import.meta.dirname, '../../.github/workflows/frontend.yml'), 'utf8');
-	const smokeSteps = workflow.slice(workflow.indexOf('      - name: Prepare production browser UI smoke tests')).split('      - name: ');
+	const smokeSteps = workflow.slice(workflow.indexOf('      - name: Check sources and build Desktop and Web on every platform')).split('      - name: ');
+	const checkedBuild = ['protocol', 'localization', 'common', 'extensions', 'icons', 'renderer', 'automation', 'electron-dependencies', 'desktop-build', 'bundle-web'];
 	for (const [surface, failure, expected] of [
-		['browser', '', ['protocol', 'localization', 'common', 'extensions', 'icons', 'renderer', 'automation', 'bundle-web', 'browser-ui-tests', 'bundle-web-full', 'backend-web', 'browser-connected-tests']],
+		['browser', '', [...checkedBuild, 'browser', 'browser-ui-tests', 'bundle-web-full', 'backend-web', 'browser-connected-tests']],
 		// CI invokes connected Electron smoke tests separately for the general suite and mock Agent Task coverage.
-		['electron', '', ['backend', 'electron-dependencies', 'protocol', 'localization', 'common', 'extensions', 'icons', 'desktop-build', 'automation', 'electron-ui-tests', 'electron-connected-tests', 'electron-connected-tests']],
+		['electron', '', [...checkedBuild, 'backend', 'electron-ui-tests', 'bundle-web-full', 'electron-connected-tests', 'electron-connected-tests']],
 		['browser', 'renderer', ['protocol', 'localization', 'common', 'extensions', 'icons', 'renderer']],
-		['electron', 'backend', ['backend']],
-		['electron', 'electron-connected-tests', ['backend', 'electron-dependencies', 'protocol', 'localization', 'common', 'extensions', 'icons', 'desktop-build', 'automation', 'electron-ui-tests', 'electron-connected-tests']],
+		['electron', 'backend', [...checkedBuild, 'backend']],
+		['electron', 'electron-connected-tests', [...checkedBuild, 'backend', 'electron-ui-tests', 'bundle-web-full', 'electron-connected-tests']],
 	] as const) {
 		await writeFile(join(directory, 'operations.jsonl'), '');
-		const commands = smokeSteps.filter(step => step.includes(`if: matrix.surface == '${surface}'`)).flatMap(step => {
+		const commands = smokeSteps.filter(step => step.startsWith('Check sources and build Desktop and Web on every platform') || step.includes(`if: matrix.surface == '${surface}'`)).flatMap(step => {
 			const run = step.match(/^        run: (.+)$/m)?.[1];
 			assert.ok(run, step);
 			return run === '|' ? [...step.matchAll(/^          (pnpm .+)$/gm)].map(match => match[1]) : [run];

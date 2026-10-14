@@ -38,7 +38,6 @@ import { ILanguageModelsConfigurationService } from '../contrib/chat/common/lang
 import { ChatModelPreferences, LanguageModelsConfigurationService } from '../contrib/chat/browser/languageModelsConfigurationService.js';
 import { IAgentVoiceService } from '../../platform/agentHost/common/agentService.js';
 import { IDictationService } from '../../platform/dictation/common/dictationService.js';
-
 import { ExtensionColorThemeService } from '../services/extensions/browser/extensionColorThemeService.js';
 import { IWorkbenchThemeService } from '../services/themes/common/workbenchThemeService.js';
 import { IHostColorSchemeService, type IHostColorSchemeService as HostColorSchemeService } from '../services/themes/common/hostColorSchemeService.js';
@@ -698,7 +697,9 @@ export class Workbench extends Disposable {
 		services.registerSingleton(IModelService, () => new ModelService(configuration, services.get(ITextResourcePropertiesService), languageService, languageFeaturesService, languageConfigurationService));
 		this._register(new DefaultPasteProvidersFeature(languageFeaturesService, workspaceContext));
 		this._register(new DefaultDropProvidersFeature(languageFeaturesService, workspaceContext));
-		services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService));
+		// Markdown and opener services receive this before EditorParts exists;
+		// defer construction until an editor operation needs the completed Parts.
+		services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService), { instantiation: InstantiationType.Delayed });
 		services.registerSingleton(IInlineCompletionsService, () => services.createInstance(InlineCompletionsService));
 		services.registerSingleton(ILanguageFeatureDebounceService, () => services.createInstance(LanguageFeatureDebounceService));
 		const textMateService = this._register(new BrowserTextMateService());

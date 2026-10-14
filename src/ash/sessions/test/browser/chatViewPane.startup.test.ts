@@ -1,4 +1,8 @@
 import { IAgentExecutionSettingsService } from '../../../platform/agentHost/common/agentExecutionSettingsService.js';
+import { IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
+import { ICommandService } from '../../../platform/commands/common/commands.js';
+import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
+import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
@@ -23,7 +27,6 @@ import { INotificationService } from '../../../platform/notification/common/noti
 import { Emitter, Event } from "../../../base/common/event.js";
 import { toDisposable } from "../../../base/common/lifecycle.js";
 import { type IMenu, IMenuService } from "../../../platform/actions/common/actions.js";
-import type { ICommandService } from "../../../platform/commands/common/commands.js";
 import { IContextViewService, IContextMenuService } from "../../../platform/contextview/browser/contextView.js";
 import type { IChatService, ModelCatalogEntry, SlashCommandDefinition, ThreadRead, ThreadSubscription, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope } from "../../../workbench/services/chat/common/chatService.js";
 import type { IWorkbenchLayoutService, WorkbenchPartId, WorkbenchPartVisibilityChangeEvent } from "../../../workbench/services/layout/browser/layoutService.js";
@@ -64,6 +67,7 @@ test("opens a local Chat conversation before the backend session request settles
 	using layoutService = new VisibleAuxiliarybarLayoutService({ root: document.body });
 	using contextViewService = new BrowserContextViewService(document.body);
 	using services = createTestEditorServices();
+	services.registerSingleton(ICommandService, () => services.createInstance(CommandService));
 	using notifications = new NotificationService();
 	services.registerInstance(INotificationService, notifications);
 	services.registerInstance(IEditorService, { ...emptyEditorServiceState, focusActiveEditor() { }, openEditor: async () => { } });
@@ -71,10 +75,17 @@ test("opens a local Chat conversation before the backend session request settles
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	services.registerSingleton(IActionWidgetService, () => services.createInstance(ActionWidgetService));
 	services.registerInstance(IDictationService, undefined);
+	services.registerInstance(IAgentVoiceService, undefined);
 	services.registerInstance(IDialogService, { confirm: async () => ({ confirmed: false }) } as unknown as IDialogService);
 	services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 	registerTestDictationOnboarding(services);
 	const chat = unavailableChatService();
+	services.registerInstance(IChatSessionNavigationService, {
+		getConversations: () => [], getActiveConversation: () => undefined,
+		captureActiveDraft: async () => undefined, appendToActiveDraft: () => { },
+		startVoiceConversation: async () => { throw new Error('Voice is outside this startup fixture'); },
+		openConversation: async () => { throw new Error('Navigation is outside this startup fixture'); },
+	});
 	services.registerInstance(ILanguageModelsService, chat);
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IAppServerSkillApi, { onDidChangeSkills: Event.None, readTextResource: async () => { throw new Error("No Skill body in this test fixture"); }, list: () => new Promise(() => { }), read: () => new Promise(() => { }), setEnabled: () => new Promise(() => { }) });

@@ -661,9 +661,9 @@ test("Code Workbench composes code and Academic document contributions", () => {
 	assert.match(workbenchContributions, /contrib\/testing\/browser\/testing\.contribution/u);
 	assert.match(workbenchContributions, /contrib\/debug\/browser\/debug\.contribution/u);
 	assert.doesNotMatch(workbenchContributions, /editor\/editor\.academic\.all/u);
-	assert.match(academicContribution, /registerEditorProfile/u);
+	assert.match(academicContribution, /registerBuiltinEditorPane\('ash\.academic'/u);
 	assert.match(workbenchContributions, /contrib\/academic\/browser\/academicEditor\.contribution/u);
-	assert.match(workbenchContributions, /contrib\/documentEditor\/browser\/documentEditor\.contribution/u);
+	assert.doesNotMatch(workbenchContributions, /contrib\/documentEditor\/browser\/documentEditor\.contribution/u);
 	assert.doesNotMatch(academicContribution, /workbench\/contrib\/(?:tasks|testing|debug)/u);
 	assert.doesNotMatch(academicContribution, /workbench\/contrib\/extensionHost/u);
 	assert.doesNotMatch(academicContribution, /editor\/editor\.code\.all/u);
@@ -693,7 +693,7 @@ test("Workbench entries select runtime services and load feature services throug
 	assert.match(workbenchContributions, /api\/browser\/extensionHost\.contribution/u);
 	assert.doesNotMatch(workbenchContributions, /extensionHostServiceRegistration/u);
 	const extensionHostComposition = readFileSync(join(workbenchRoot, 'api/browser/extensionHost.contribution.ts'), 'utf8');
-	assert.match(extensionHostComposition, /dependencies: \[ITerminalService, ITerminalProfileService, ITerminalProfileResolverService/u);
+	assert.match(extensionHostComposition, /dependencies: \[ISpeechService, ITerminalService, ITerminalProfileService, ITerminalProfileResolverService/u);
 	assert.match(workbenchContributions, /codebaseSymbolsServiceRegistration/u);
 	assert.match(debugContribution, /import ["']\.\/debugService\.js["']/u);
 	assert.match(testingContribution, /services\/testing\/browser\/testingServiceRegistration/u);

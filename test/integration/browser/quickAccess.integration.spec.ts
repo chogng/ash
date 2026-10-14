@@ -189,7 +189,7 @@ for (const variant of [{ locale: 'en', theme: 'light' }, { locale: 'zh-CN', them
 		await expect(page.getByRole('separator', { name: recent })).toHaveCount(1);
 		await expect(page.getByRole('separator', { name: other })).toHaveCount(1);
 		await input.fill('>for');
-		await expect(labels).toHaveText(['Zulu Format', 'Alpha Format', 'Format']);
+		await expect(labels).toHaveText(variant.locale === 'en' ? ['Zulu Format', 'Alpha Format', 'Format', 'Go to File'] : ['Zulu Format', 'Alpha Format', 'Format']);
 		await expect(input).toBeFocused();
 		await input.fill('>Format');
 		await expect(labels.nth(0)).toHaveText('Format');
@@ -213,10 +213,10 @@ for (const variant of [{ locale: 'en', theme: 'light' }, { locale: 'zh-CN', them
 		await open.click();
 		await expect(labels.nth(0)).toHaveText('Alpha Format');
 		await input.fill('>for');
-		await expect(labels).toHaveText(['Alpha Format', 'Format', 'Zulu Format']);
+		await expect(labels).toHaveText(variant.locale === 'en' ? ['Alpha Format', 'Format', 'Go to File', 'Zulu Format'] : ['Alpha Format', 'Format', 'Zulu Format']);
 		await page.evaluate(() => window.ashQuickAccessIntegration.setHistoryLength(0));
 		await expect(page.getByRole('separator', { name: recent })).toHaveCount(0);
-		await expect(labels).toHaveText(['Alpha Format', 'Format', 'Zulu Format']);
+		await expect(labels).toHaveText(variant.locale === 'en' ? ['Alpha Format', 'Format', 'Go to File', 'Zulu Format'] : ['Alpha Format', 'Format', 'Zulu Format']);
 		await input.fill('>Zulu');
 		await page.keyboard.press('Enter');
 		await page.evaluate(() => window.ashQuickAccessIntegration.setHistoryLength(50));
@@ -237,9 +237,9 @@ test('switching providers cancels late GitHub results and scoped pickers omit na
 	await page.getByRole('tab', { name: 'Commands', exact: true }).click();
 	await expect(input).toHaveValue('>');
 	await input.fill('>for');
-	await expect(page.locator('.ash-quick-pick-row-label')).toHaveText(['Alpha Format', 'Format', 'Zulu Format']);
+	await expect(page.locator('.ash-quick-pick-row-label')).toHaveText(['Alpha Format', 'Format', 'Go to File', 'Zulu Format']);
 	await page.evaluate(() => window.ashQuickAccessIntegration.releaseRequest());
-	await expect(page.locator('.ash-quick-pick-row-label')).toHaveText(['Alpha Format', 'Format', 'Zulu Format']);
+	await expect(page.locator('.ash-quick-pick-row-label')).toHaveText(['Alpha Format', 'Format', 'Go to File', 'Zulu Format']);
 	await page.keyboard.press('Escape');
 	await page.evaluate(() => window.ashQuickAccessIntegration.show('>', true));
 	await expect(page.getByRole('tab')).toHaveCount(0);

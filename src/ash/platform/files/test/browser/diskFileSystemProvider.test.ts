@@ -103,6 +103,8 @@ suite('Disk provider byte publication and watch disposal', () => {
 			using watcher = files.watch(root, { recursive: true, excludes: [] });
 			const observe = (resource: URI, action: () => Promise<unknown>, retry = false): Promise<void> => new Promise((resolve, reject) => {
 				let finished = false;
+				let observed = false;
+				let pendingActions = 0;
 				const finish = (error?: unknown): void => {
 					if (finished) return;
 					finished = true;
@@ -112,10 +114,22 @@ suite('Disk provider byte publication and watch disposal', () => {
 					if (error) reject(error); else resolve();
 				};
 				const change = files.onDidChangeFiles(event => {
-					if (event.resources?.some(item => extUriBiasedIgnorePathCase.isEqual(item, resource))) finish();
+					if (event.resources?.some(item => extUriBiasedIgnorePathCase.isEqual(item, resource))) {
+						observed = true;
+						clearInterval(probe);
+						if (pendingActions === 0) finish();
+					}
 				});
 				const timeout = setTimeout(() => finish(new Error(`No filesystem change for ${resource.toString()}: ${JSON.stringify({ errors, recent: changes.slice(-5).map(resources => resources.map(item => item.toString())) })}`)), 10_000);
-				const run = (): void => { void action().catch(finish); };
+				// Deletion can notify watchers before recursive rm finishes. Wait for
+				// the action too, so recreation cannot race the old directory.
+				const run = (): void => {
+					pendingActions++;
+					void action().then(() => {
+						pendingActions--;
+						if (observed && pendingActions === 0) finish();
+					}, finish);
+				};
 				const probe = retry ? setInterval(run, 20) : undefined;
 				run();
 			});

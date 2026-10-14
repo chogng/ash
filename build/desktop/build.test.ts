@@ -73,4 +73,26 @@ test('Desktop build stops at the failed host or renderer step before bundling', 
 		assert.equal(result.status, 0, result.stdout + result.stderr);
 		assert.deepEqual((await readFile(join(root, 'operations.log'), 'utf8')).trim().split('\n').filter(Boolean), expected);
 	}
+	// A prepared build retains host compilation and preload validation while
+	// reusing the generation and no-emit checks owned by its caller.
+	for (const [failure, expected] of [
+		['', ['tsconfig.main.json', 'tsconfig.preload.json', 'bundle']],
+		['tsconfig.main.json', ['tsconfig.main.json']],
+		['preload-import', ['tsconfig.main.json', 'tsconfig.preload.json']],
+	] as const) {
+		await writeFile(join(root, 'operations.log'), '');
+		const result = spawnSync(process.execPath, [join(root, 'build/desktop/build.ts'), 'all', '--prepared'], {
+			cwd: tmpdir(), env: { ...process.env, FAILURE: failure }, encoding: 'utf8', windowsHide: true, timeout: 10_000,
+		});
+		assert.equal(result.status, failure ? 1 : 0, result.stdout + result.stderr);
+		assert.doesNotMatch(result.stdout + result.stderr, /No type errors in/);
+		assert.deepEqual((await readFile(join(root, 'operations.log'), 'utf8')).trim().split('\n'), expected);
+	}
+	for (const args of [['all', '--unknown'], ['all', '--prepared', '--prepared'], ['prepare', '--prepared']]) {
+		await writeFile(join(root, 'operations.log'), '');
+		const result = spawnSync(process.execPath, [join(root, 'build/desktop/build.ts'), ...args], { encoding: 'utf8', timeout: 10_000 });
+		assert.equal(result.status, 1);
+		assert.match(result.stderr, /Usage: build.ts/);
+		assert.equal(await readFile(join(root, 'operations.log'), 'utf8'), '');
+	}
 });

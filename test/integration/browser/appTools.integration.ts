@@ -23,6 +23,7 @@ import { ISessionGroupsService, SessionGroupsService } from '../../../src/ash/se
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { SessionsList } from '../../../src/ash/sessions/browser/parts/sidebar/sessionsList.js';
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
+import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
@@ -121,6 +122,7 @@ const container = document.createElement('main');
 document.body.append(container);
 resources.add(new SessionsList(container, management, view, 'Tasks', 'New task', { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { } }, groups));
 const services = resources.add(new InstantiationService());
+services.registerInstance(IStorageService, storage);
 const platform = new URL(location.href).searchParams.get('os') ?? 'linux';
 const workspace = resources.add(new WorkspaceContextService({ id: 'app-tools', uri: platform === 'windows' ? URI.from({ scheme: 'file', path: '/c:/workspace' }) : URI.file('/workspace') }));
 const configuration = resources.add(new WorkbenchConfigurationService());

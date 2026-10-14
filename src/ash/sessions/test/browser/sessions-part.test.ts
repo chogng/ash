@@ -1,4 +1,5 @@
 import { createDisconnectedRendererApi } from '../../../platform/agentHost/browser/rendererApi.js';
+import { IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
 import { IRendererHostService } from '../../../platform/renderer/common/rendererHost.js';
 import { IPathService } from '../../../platform/path/common/pathService.js';
 import { BrowserPathService } from '../../../workbench/services/path/browser/pathService.js';
@@ -234,6 +235,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	using resources = new DisposableStore();
 	const services = resources.add(createCodeEditorServices(resources).createChild());
 	services.registerInstance(IRendererHostService, createDisconnectedRendererApi());
+	services.registerInstance(IAgentVoiceService, createDisconnectedRendererApi().agentVoice);
 	services.registerSingleton(IPathService, () => services.createInstance(BrowserPathService));
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });

@@ -68,7 +68,6 @@ import { WorkbenchLocaleService } from '../../workbench/services/localization/br
 import { ILocalizationService } from '../../workbench/services/localization/common/localizationService.js';
 import { WorkbenchLocalizationService } from '../../workbench/services/localization/browser/workbenchLocalizationService.js';
 import { builtinLanguagePackCatalogs, preinstalledLanguagePacks } from '../../workbench/services/localization/common/localizationCatalogs.js';
-
 import { IAppServerHookApi, IAppServerSkillApi } from '../../platform/agentHost/common/appServerApi.js';
 import { IExtensionManagementService, OPEN_EXTENSIONS_COMMAND_ID, OPEN_INSTALLED_EXTENSIONS_COMMAND_ID, type ExtensionsOpenOptions } from '../../platform/extensionManagement/common/extensionManagementService.js';
 import { registerExtensionManagementActions } from '../../workbench/contrib/extensions/browser/extensionsActions.js';

@@ -85,12 +85,10 @@ const test = base.extend<{ taskScenario: TaskScenario; taskKind: 'process' | 'sh
 				}
 			});
 			await client.request(APP_SERVER_METHODS['provider/apiKey/set'], { connection: taskModel.provider, apiKey: 'synthetic-fixture-key' });
+			const catalog = await client.request(APP_SERVER_METHODS['model/list'], {});
+			expect(catalog.models.some(entry => entry.model.provider === taskModel.provider && entry.model.model === taskModel.model), 'The seeded Task model must be in the backend catalog').toBe(true);
 			const config = await client.request(APP_SERVER_METHODS['config/read'], {});
 			await client.request(APP_SERVER_METHODS['config/update'], { commandId: 'task-fixture-model', expectedRevision: config.revision, model: taskModel, execution: { ...config.execution, approvalMode: 'manual' } });
-			// The fixture seeds the profile through a second connection after startup.
-			// Start the composer with the completed credential and model catalog.
-			await workbench.page.reload();
-			await expect(workbench.page.locator('.ash-sessions-window')).toBeVisible();
 			const permissions = ['readFiles', 'browseFiles', 'watchFiles', 'executeCommands'] as const;
 			const created = await client.request(APP_SERVER_METHODS['session/create'], { commandId: 'task-fixture-session', title: 'Mock Agent Task Regression', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 			const sessionId = created.session.sessionId;
@@ -108,6 +106,14 @@ const test = base.extend<{ taskScenario: TaskScenario; taskKind: 'process' | 'sh
 			const active = page.locator('.ash-sessions-chat-slot.active:visible :is(.ash-chat,.ash-cowork)');
 			await active.locator('.ash-chat-input-model-action').press('ArrowDown');
 			const picker = page.getByRole('dialog', { name: 'Choose a chat model', exact: true });
+			// Enable the fixture model through the window that owns picker preferences.
+			await picker.getByRole('button', { name: 'Open Settings', exact: true }).click();
+			const provider = page.locator(`[data-provider-id="${taskModel.provider}"]`);
+			const enabled = provider.getByRole('switch', { name: `Enable ${taskModel.model}`, exact: true });
+			if (!await enabled.isChecked()) { await enabled.focus(); await enabled.press('Space'); }
+			await expect(enabled).toBeChecked();
+			await page.keyboard.press('Escape');
+			await active.locator('.ash-chat-input-model-action').press('ArrowDown');
 			const auto = picker.getByRole('switch', { name: 'Auto', exact: true });
 			if (await auto.isChecked()) await auto.press('Space');
 			await picker.getByRole('combobox').fill(taskModel.model);
@@ -127,7 +133,6 @@ const test = base.extend<{ taskScenario: TaskScenario; taskKind: 'process' | 'sh
 // The Task tools and their approval UI must belong to the same Agents window.
 test.use({
 	electronArgs: ['--agents-window'],
-	electronUserSettings: { 'models.hidden': [{ ...taskModel, visible: true }] },
 });
 test.describe.configure({ timeout: 180_000 });
 

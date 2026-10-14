@@ -172,7 +172,12 @@
     "prestart:web": "pnpm run protocol:generate",
     "pretypecheck:web:watch": "pnpm run protocol:generate",
     "pretypecheck:memories": "pnpm run protocol:generate",
-    "pretypecheck:test-unit": "pnpm run protocol:generate"
+    "pretypecheck:test-unit": "pnpm run protocol:generate",
+    "build:prepared": "node build/desktop/build.ts all --prepared",
+    "test:unit:prepared": "node test/unit/prepare.ts tsconfig.test.json && tsc -p tsconfig.test.json && node --test test/unit/mocha.test.ts && node test/unit/run.ts",
+    "typecheck:stanza:prepared": "bun check -p build/desktop/vite/stanza/tsconfig.json --all",
+    "build:stanza:prepared": "pnpm run typecheck:stanza:prepared && vite build --config build/desktop/vite/editor.vite.config.ts",
+    "test:browser:integration:prepared": "bun check -p test/integration/browser/tsconfig.json --all && node test/integration/browser/run.ts"
   },
   "devDependencies": {
     "@ash/typescript-compiler": "npm:typescript@7.0.2",

@@ -20,9 +20,20 @@ import { BrowserURLService } from '../../../services/url/browser/urlService.js';
 import { ITerminalService, ITerminalGroupService } from '../../../services/terminal/browser/terminal.js';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { createThemePreviewHost, connectThemePreview } from './themePreviewHost.js';
+import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
 
 const host = await createThemePreviewHost();
 const { resources, root, workspaceFiles, workspaceRoot, samples, storage, api, clipboard, serviceCollection } = host;
+// Code preview owns no conversations or media. Shared Chat contributions can
+// observe that empty scope without borrowing the enclosing product's history.
+const chatUnavailable = () => new Error(localize('themeEditor.previewChatUnavailable', 'Chat is unavailable in this preview.'));
+serviceCollection.set(IChatSessionNavigationService, {
+	getConversations: () => [], getActiveConversation: () => undefined,
+	captureActiveDraft: async () => undefined,
+	appendToActiveDraft: () => { throw chatUnavailable(); },
+	openConversation: async () => { throw chatUnavailable(); },
+	startVoiceConversation: async () => { throw chatUnavailable(); },
+});
 await import('../../../workbench.web.main.js');
 let services!: IInstantiationService;
 serviceCollection.set(IFileDialogService, host.fileDialogDescriptor(() => services));

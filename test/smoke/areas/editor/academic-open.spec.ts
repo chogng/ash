@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { expect, test } from "../../../automation/test.js";
 
-test("Code opens Academic through the document contribution and saves its structured document through the Workbench", { tag: ['@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
+test("Code opens Academic through the document contribution and saves its structured document through the Workbench", { tag: ['@electron-app-server', '@browser-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 
 	const page = workbench.page;
 	const explorer = page.locator(".ash-explorer");

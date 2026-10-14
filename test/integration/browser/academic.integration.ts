@@ -17,6 +17,7 @@ import { createDefaultDocumentSchema } from "../../../src/ash/editor/editor.api.
 import { createTextNode } from "../../../src/ash/editor/editor.api.js";
 import { TextModel } from "../../../src/ash/editor/editor.api.js";
 import "../../../src/ash/editor/contrib/documentEditor.contribution.js";
+import '../../../src/ash/workbench/contrib/academic/browser/academicEditor.contribution.js';
 import { DocumentEditorPane } from "../../../src/ash/workbench/contrib/documentEditor/browser/documentEditorPane.js";
 import type { DocumentNode } from "../../../src/ash/editor/common/model/document.js";
 import { documentFromPlainText, serializeDocument } from "../../../src/ash/editor/common/model/documentSerialization.js";

@@ -368,6 +368,7 @@
     "chat.input.dictationUnavailable": "语音输入暂不可用",
     "chat.input.dictationStop": "停止语音输入",
     "chat.input.dictationListening": "正在聆听…",
+    "chat.input.dictationStarting": "正在启动听写…",
     "chat.input.dictationFailed": "语音输入失败：{0}",
     "chat.input.dictationInserted": "听写内容已加入消息",
     "chat.draftChangedDuringHandoff": "打开 Agents 窗口时草稿发生了变化，请重试。",

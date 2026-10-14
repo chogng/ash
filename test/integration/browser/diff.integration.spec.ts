@@ -3161,6 +3161,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await page.keyboard.press('Enter');
 		await expect(gotoInput).toBeFocused();
 		await gotoInput.fill(':2:2');
+		await expect(page.locator('.ash-quick-pick-row-label')).toHaveText(localized(locale, 'Press Enter to go to line 2, column 2.', '按 Enter 转到第 2 行，第 2 列。'));
 		await page.keyboard.press('Enter');
 		await expect(cursor).toHaveText(localized(locale, 'Ln 2, Col 2', '行 2，列 2'));
 		await expect(editorInputs.first()).toBeFocused();

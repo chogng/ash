@@ -453,6 +453,11 @@ export const SettingsNavigation = [
 					label: localize('settings.chatEditing.label', 'Editing'),
 					description: localize('settings.chatEditing.description', 'Choose how Agent edits are reviewed.'),
 					settings: ['chat.editing.autoAcceptDelay'],
+				}, {
+					id: 'customization-discovery',
+					label: localize({ bundle: 'ash.extensions', key: 'marketplaceEnabledTitle' }, 'Discover skills and MCP servers'),
+					description: localize({ bundle: 'ash.extensions', key: 'marketplaceEnabledDescription' }, 'Show catalog results in Skills and MCP Servers. Installed resources remain available.'),
+					settings: ['chat.customizations.marketplace.enabled'],
 				}],
 			},
 			{

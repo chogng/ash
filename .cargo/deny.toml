@@ -6,7 +6,7 @@ all-features = true
 yanked = "deny"
 unmaintained = "all"
 unused-ignored-advisory = "deny"
-# Reviewed 2026-10-11: these IDs report maintenance status, not a known
+# Reviewed 2026-10-14: these IDs report maintenance status, not a known
 # vulnerability. Keep the published consumer APIs instead of vendoring their
 # source trees solely to replace transitive dependencies. New advisories remain
 # checked; remove each exception when a compatible upstream release drops it.
