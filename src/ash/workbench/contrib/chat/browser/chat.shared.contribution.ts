@@ -2,6 +2,11 @@ import { ChatInputConfiguration, ChatEditorConfiguration, autoAcceptDelaySetting
 import { localize } from '../../../../nls.js';
 import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
+import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
+import { ILanguageModelToolsService } from '../common/tools/languageModelToolsService.js';
+import { LanguageModelToolsService } from './tools/languageModelToolsService.js';
+
+registerSingleton(ILanguageModelToolsService, LanguageModelToolsService, InstantiationType.Delayed);
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(Extensions.Configuration);
 

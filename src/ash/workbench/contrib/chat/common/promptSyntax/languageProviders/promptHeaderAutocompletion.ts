@@ -1,4 +1,4 @@
-import { IAgentCapabilitiesService } from '../../../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
+import { ILanguageModelToolsService, isToolSet } from '../../tools/languageModelToolsService.js';
 import { Range } from '../../../../../../editor/common/core/range.js';
 import {
 	LanguageCompletionItemKind,
@@ -16,7 +16,7 @@ export class PromptHeaderAutocompletion implements LanguageCompletionProvider {
 	public readonly languageIds = ['markdown'];
 	private readonly parser = new PromptFileParser();
 
-	constructor(@IAgentCapabilitiesService private readonly capabilities: IAgentCapabilitiesService) { }
+	constructor(@ILanguageModelToolsService private readonly toolsService: ILanguageModelToolsService) { }
 
 	public async provideCompletions(request: LanguageCompletionProviderRequest, signal: AbortSignal): Promise<LanguageCompletionProviderResult | undefined> {
 		if (signal.aborted || !request.resource?.path.endsWith('/SKILL.md')) return undefined;
@@ -27,15 +27,26 @@ export class PromptHeaderAutocompletion implements LanguageCompletionProvider {
 		const line = lines[request.position.lineNumber - 1]!;
 		const prefix = line.slice(0, request.position.column - 1);
 		const tools = parsed.header.getAttribute('allowed-tools');
-		if (tools?.range.startLineNumber === request.position.lineNumber && tools.value.type === 'scalar' && tools.value.format === 'none' && /^allowed-tools:\s/u.test(prefix) && this.capabilities.isAvailable) {
+		if (tools?.range.startLineNumber === request.position.lineNumber && tools.value.type === 'scalar' && tools.value.format === 'none' && /^allowed-tools:\s/u.test(prefix) && this.toolsService.isAvailable) {
 			const token = prefix.slice(prefix.indexOf(':') + 1).match(/\S*$/u)![0];
 			const suffix = line.slice(request.position.column - 1).match(/^\S*/u)![0];
 			const current = token + suffix;
 			const existing = new Set(tools.value.value.split(/\s+/u).filter(name => name !== current));
-			const catalog = await this.capabilities.read();
+			await this.toolsService.refresh();
 			if (signal.aborted) return undefined;
 			const range = new Range(request.position.lineNumber, request.position.column - token.length, request.position.lineNumber, request.position.column + suffix.length);
-			return { items: catalog.tools.filter(tool => (tool.exposure === 'direct' || tool.exposure === 'deferred') && tool.name.startsWith(token) && !existing.has(tool.name)).map(tool => ({ id: tool.name, label: tool.name, insertText: tool.name, range, kind: LanguageCompletionItemKind.Function, documentation: tool.description })), isIncomplete: true };
+			const existingTools = new Set([...existing].map(name => this.toolsService.getToolByFullReferenceName(name)).filter(tool => tool !== undefined));
+			const items = [...this.toolsService.getFullReferenceNames()]
+				.filter(name => name.startsWith(token) && !existing.has(name) && !existingTools.has(this.toolsService.getToolByFullReferenceName(name)!))
+				.map(name => {
+					const tool = this.toolsService.getToolByFullReferenceName(name)!;
+					return {
+						id: name, label: name, insertText: name, range,
+						kind: LanguageCompletionItemKind.Function,
+						documentation: isToolSet(tool) ? [...tool.getTools()].filter(member => member.canBeReferencedInPrompt).map(member => member.displayName).join(', ') : tool.modelDescription,
+					};
+				});
+			return { items, isIncomplete: true };
 		}
 		const name = parsed.header.getAttribute('name');
 		if (name?.range.startLineNumber === request.position.lineNumber && /^name:\s*[a-z0-9-]*$/u.test(line) && prefix.includes(':')) {

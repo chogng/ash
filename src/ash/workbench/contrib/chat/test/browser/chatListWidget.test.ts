@@ -1,3 +1,4 @@
+import { createTestLanguageModelToolsService } from '../common/tools/testLanguageModelToolsService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { BrowserClipboardService } from '../../../../../platform/clipboard/browser/clipboardService.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
@@ -15,7 +16,7 @@ import { IChatTipService } from '../../browser/chatTipService.js';
 import { ChatInputTipPresenter } from '../../browser/widget/input/chatInputTipPresenter.js';
 import { IChatTipService as ICoworkTipService } from '../../../../../sessions/contrib/cowork/browser/chatTipService.js';
 import { ChatInputTipPresenter as CoworkTipPresenter } from '../../../../../sessions/contrib/cowork/browser/widget/input/chatInputTipPresenter.js';
-import { IAgentCapabilitiesService } from '../../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
+import { ILanguageModelToolsService } from '../../common/tools/languageModelToolsService.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { AccessibleViewType } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { PromptLanguageFeaturesProvider } from '../../browser/promptSyntax/promptFileContributions.js';
@@ -278,7 +279,7 @@ test('Skill diagnostic contribution handles open, edits, language changes and di
 	const uri = URI.file('/skills/review/SKILL.md');
 	const model = resources.add(models.createModel('---\nname: review\n---', languages.createById('markdown'), uri));
 	markers.changeOne('other', uri, [{ startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 2, severity: MarkerSeverity.Warning, message: 'existing' }]);
-	services.registerInstance(IAgentCapabilitiesService, { isAvailable: true, read: async () => ({ tools: [{ name: 'read_file', description: 'Read authorized files', source: 'local', sourceDetails: ['Ash'], exposure: 'direct', authority: 'directoryRead' }, { name: 'internal_tool', description: 'Internal', source: 'local', sourceDetails: [], exposure: 'hidden', authority: 'providerDefined' }], toolSets: [], localProcessSandboxConfigured: false, directoryGrantsReadable: true, sandboxBackends: [], sandboxDiagnostics: [] }) });
+	services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService({ isAvailable: true, read: async () => ({ tools: [{ name: 'read_file', description: 'Read authorized files', source: 'local', sourceDetails: ['Ash'], exposure: 'direct', authority: 'directoryRead' }, { name: 'internal_tool', description: 'Internal', source: 'local', sourceDetails: [], exposure: 'hidden', authority: 'providerDefined' }], toolSets: [] }) }));
 	services.registerInstance(IPromptsService, resources.add(new PromptsService({ onDidChangeSkills: Event.None, list: async () => ({ generation: 1, skills: [] }), read: async () => ({ revision: 0, catalog: { generation: 1, skills: [] }, diagnostics: [] }), setEnabled: async () => { }, readTextResource: async () => { throw new Error('No discovered Skill'); } }, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } })));
 	using contribution = services.createInstance(PromptLanguageFeaturesProvider);
 	assert.deepEqual(markers.read({ resource: uri, owner: PromptLanguageFeaturesProvider.ID }).map(marker => marker.code), ['requiredField']);
@@ -324,9 +325,9 @@ test('streamed memory references retain their buttons, code editor and focus as 
 test('Skill resource content provider shares readonly models and cancels a late resource on removal', async () => {
 	using resources = new DisposableStore();
 	const services = resources.add(createTestEditorServices());
+	services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService({ isAvailable: false, read: async () => { throw new Error('Unexpected capabilities read'); } }));
 	registerCodeEditorServices(services);
 	resources.add(services.get(ILanguageService).registerLanguage({ id: 'markdown', extensions: ['.md'] }));
-	services.registerInstance(IAgentCapabilitiesService, { isAvailable: false, read: async () => { throw new Error('Unexpected capabilities read'); } });
 	const pending = new DeferredPromise<string>();
 	let delayed: AbortSignal | undefined;
 	const calls: unknown[] = [];

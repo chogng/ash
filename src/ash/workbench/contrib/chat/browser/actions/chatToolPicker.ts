@@ -2,17 +2,18 @@ import { addDisposableListener } from '../../../../../base/browser/dom.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../nls.js';
-import type { AgentCapabilitiesSnapshot, AgentToolSetCapability, ToolSource } from '../../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
+import type { ILanguageModelToolsService, IToolSet, ToolSource } from '../../common/tools/languageModelToolsService.js';
 import { filterQuickPickItems } from '../../../../../platform/quickinput/browser/quickInputList.js';
 import type { IQuickInputService, IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
 import { browserChatToolReferenceNames } from '../../../../../platform/browserView/common/browserChatToolReferenceNames.js';
 
 interface ToolPick extends IQuickPickItem {
+	readonly key: string;
 	readonly names?: readonly string[];
 }
 
-export function toolSetLabel(set: AgentToolSetCapability): string {
+export function toolSetLabel(set: IToolSet): string {
 	const labels: Record<ToolSource, string> = {
 		environment: localize('chat.tools.environment', 'Environment tools'),
 		dynamic: localize('chat.tools.dynamic', 'Client tools'),
@@ -34,7 +35,7 @@ export function createToolSelectionAttachment(disabled: readonly string[]): Chat
 }
 
 /** Edits an unsent selection. Escape discards it; Apply commits it to the originating composer. */
-export function showToolsPicker(quickInput: IQuickInputService, catalog: AgentCapabilitiesSnapshot, currentDisabled: readonly string[], signal: AbortSignal): Promise<readonly string[] | undefined> {
+export function showToolsPicker(quickInput: IQuickInputService, toolsService: ILanguageModelToolsService, currentDisabled: readonly string[], signal: AbortSignal): Promise<readonly string[] | undefined> {
 	const resources = new DisposableStore();
 	const picker = resources.add(quickInput.createQuickPick<ToolPick>());
 	resources.add(toDisposable(() => picker.hide()));
@@ -49,25 +50,33 @@ export function showToolsPicker(quickInput: IQuickInputService, catalog: AgentCa
 			resolve(result);
 			resources.dispose();
 		};
-		const render = (): void => {
+		const render = (retainActive = true): void => {
+			const tools = [...toolsService.getAllToolsIncludingDisabled()];
+			const toolSets = [...toolsService.toolSets.get()];
+			const active = retainActive ? picker.activeItems[0] : undefined;
 			const state = (names: readonly string[]): string => {
 				const count = names.filter(name => !disabled.has(name)).length;
 				return count === names.length ? localize('chat.tools.enabled', 'Enabled') : count === 0 ? localize('chat.tools.disabled', 'Disabled') : localize('chat.tools.mixed', 'Partly enabled');
 			};
 			const items: ToolPick[] = [];
-			const browserTools = catalog.tools.filter(tool => tool.source === 'local' && tool.exposure !== 'hidden' && browserChatToolReferenceNames.includes(tool.name)).map(tool => tool.name);
+			const browserTools = tools.filter(tool => tool.source === 'local' && tool.exposure !== 'hidden' && browserChatToolReferenceNames.includes(tool.id)).map(tool => tool.id);
 			if (browserTools.length) {
-				items.push({ label: localize('chat.tools.browser', 'Browser tools'), description: state(browserTools), picked: browserTools.every(name => !disabled.has(name)), names: browserTools });
+				items.push({ key: 'browser', label: localize('chat.tools.browser', 'Browser tools'), description: state(browserTools), picked: browserTools.every(name => !disabled.has(name)), names: browserTools });
 			}
-			for (const set of catalog.toolSets) {
-				items.push({ label: toolSetLabel(set), description: state(set.tools), picked: set.tools.every(name => !disabled.has(name)), detail: localize('chat.tools.setMembers', 'Tool set: {0}', set.tools.join(', ')), names: set.tools });
+			for (const set of toolSets) {
+				const names = [...set.getTools()].map(tool => tool.id);
+				items.push({ key: `set:${set.id}`, label: toolSetLabel(set), description: state(names), picked: names.every(name => !disabled.has(name)), detail: localize('chat.tools.setMembers', 'Tool set: {0}', names.join(', ')), names });
 			}
-			for (const tool of catalog.tools.filter(tool => tool.exposure !== 'hidden')) {
-				items.push({ label: tool.name, description: state([tool.name]), picked: !disabled.has(tool.name), detail: tool.description, names: [tool.name] });
+			for (const tool of tools.filter(tool => tool.exposure !== 'hidden')) {
+				items.push({ key: `tool:${tool.id}`, label: tool.displayName, description: state([tool.id]), picked: !disabled.has(tool.id), detail: tool.modelDescription, names: [tool.id] });
 			}
-			picker.items = [...filterQuickPickItems(items, picker.value), { label: localize('chat.tools.apply', 'Apply tool selection'), alwaysShow: true }];
+			const visible: ToolPick[] = [...filterQuickPickItems(items, picker.value), { key: 'apply', label: localize('chat.tools.apply', 'Apply tool selection'), alwaysShow: true }];
+			picker.items = visible;
+			const retained = active && visible.find(item => item.key === active.key);
+			if (retained) picker.activeItems = [retained];
 		};
-		resources.add(picker.onDidChangeValue(render));
+		resources.add(toolsService.onDidChangeTools(() => render()));
+		resources.add(picker.onDidChangeValue(() => render(false)));
 		resources.add(picker.onDidAccept(() => {
 			const item = picker.selectedItems[0];
 			if (!item) return;

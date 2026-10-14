@@ -8,6 +8,15 @@ use crate::protocol::session::SessionDeleted;
 use serde_json::json;
 
 #[test]
+fn registry_decodes_tool_catalog_invalidation_without_a_version() {
+    let notification = decode_server_notification("agent/tools/changed".into(), json!({})).unwrap();
+    assert_eq!(
+        notification,
+        ServerNotification::AgentToolsChanged(crate::protocol::common::EmptyParams {})
+    );
+}
+
+#[test]
 fn registry_decodes_known_notification_payloads() {
     let notification = decode_server_notification(
         "connector/changed".into(),

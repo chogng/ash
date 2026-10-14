@@ -1234,6 +1234,24 @@ impl UpdateBroker {
         });
     }
 
+    pub(super) fn publish_agent_tools_changed(&self) {
+        let Ok(mut state) = self.state.lock() else {
+            return;
+        };
+        state.subscribers.retain(|_, subscriber| {
+            let Some(queue) = subscriber.queue.upgrade() else {
+                return false;
+            };
+            if subscriber.scope_id == self.scope_id {
+                queue.push(notification(
+                    ServerNotificationMethod::AgentToolsChanged,
+                    &EmptyParams {},
+                ));
+            }
+            true
+        });
+    }
+
     pub(super) fn publish_git_repositories_changed(&self) {
         let Ok(mut state) = self.state.lock() else {
             return;

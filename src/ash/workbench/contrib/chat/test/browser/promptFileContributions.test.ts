@@ -1,3 +1,4 @@
+import { createTestLanguageModelToolsService } from '../common/tools/testLanguageModelToolsService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
@@ -11,14 +12,14 @@ import type { IModelService } from '../../../../../editor/common/services/model.
 import type { ITextModelService, ITextModelContentProvider } from '../../../../../editor/common/services/resolverService.js';
 import type { IMarkerService } from '../../../../../platform/markers/common/markers.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { IAgentCapabilitiesService } from '../../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
+import { ILanguageModelToolsService } from '../../common/tools/languageModelToolsService.js';
 import { PromptsService } from '../../common/promptSyntax/service/promptsServiceImpl.js';
 import { PromptLanguageFeaturesProvider } from '../../browser/promptSyntax/promptFileContributions.js';
 
 for (const end of ['disposed', 'created'] as const) test(`Skill text content provider releases a read when the contribution is ${end}`, async () => {
 	using resources = new DisposableStore();
 	const services = resources.add(new InstantiationService());
-	services.registerInstance(IAgentCapabilitiesService, { isAvailable: false, read: async () => { throw new Error('No capability read expected'); } });
+	services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService({ isAvailable: false, read: async () => { throw new Error('No capability read expected'); } }));
 	const features = resources.add(new LanguageFeaturesService());
 	const languages = resources.add(new LanguageService());
 	resources.add(languages.registerLanguage({ id: 'markdown' }));

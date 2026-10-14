@@ -1,4 +1,5 @@
 import '../platform/uriIdentity/common/uriIdentityService.js';
+import './contrib/chat/browser/chat.shared.contribution.js';
 import './contrib/terminal/common/environmentVariable.contribution.js';
 import './contrib/terminal/common/terminalExtensionPoints.contribution.js';
 import './contrib/memories/browser/memories.contribution.js';

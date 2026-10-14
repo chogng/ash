@@ -39,6 +39,7 @@ import { createAppServerExtensionHostApi } from './extensionHostApi.js';
 import { createAppServerExtensionManagementApi } from "../../extensionManagement/browser/extensionManagementApi.js";
 import { createAppServerWorkspaceTrustApi } from '../../workspace/browser/workspaceTrustApi.js';
 import { createAppServerAgentCapabilitiesApi } from '../../agentCapabilities/browser/agentCapabilitiesApi.js';
+import { createAppServerAgentToolsApi } from './agentToolsApi.js';
 import { createAppServerMcpServerStatusApi } from '../../mcp/browser/mcpServerStatusApi.js';
 import { AppServerMcpServerManagementService } from '../../mcp/browser/appServerMcpServerManagementService.js';
 import { createAppServerTraceSettingsApi } from '../../trace/browser/traceSettingsApi.js';
@@ -147,6 +148,7 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 		issueReporter: new AppServerIssueReporterService(connection),
 		github: new AppServerGitHubService(connection),
 		agentCapabilities: createAppServerAgentCapabilitiesApi(connection),
+		agentTools: createAppServerAgentToolsApi(connection),
 		mcpServerStatus: createAppServerMcpServerStatusApi(connection),
 		mcpServerManagement: new AppServerMcpServerManagementService(connection),
 		traceSettings: createAppServerTraceSettingsApi(connection),

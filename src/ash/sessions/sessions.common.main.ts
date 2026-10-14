@@ -8,6 +8,7 @@ import '../workbench/contrib/commands/common/commands.contribution.js';
 import '../workbench/contrib/extensions/browser/extensionRecommendations.contribution.js';
 import '../workbench/contrib/chat/browser/aiCustomization/customizationMarketplace.contribution.js';
 import '../workbench/contrib/preferences/browser/preferences.contribution.js';
+import '../workbench/contrib/chat/browser/chat.shared.contribution.js';
 import '../workbench/contrib/chat/browser/chat.contribution.js';
 import '../workbench/contrib/agentsVoice/browser/agentsVoice.contribution.js';
 import '../workbench/contrib/speech/browser/speech.contribution.js';

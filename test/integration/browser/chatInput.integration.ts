@@ -1,3 +1,4 @@
+import { createTestLanguageModelToolsService } from '../../../src/ash/workbench/contrib/chat/test/common/tools/testLanguageModelToolsService.js';
 import { createDiffEditorInput } from '../../../src/ash/workbench/common/editor/diffEditorInput.js';
 import { IPathService } from '../../../src/ash/platform/path/common/pathService.js';
 import { BrowserPathService } from '../../../src/ash/workbench/services/path/browser/pathService.js';
@@ -22,7 +23,7 @@ import { extensionMenuId } from '../../../src/ash/workbench/services/extensions/
 import { Lxicon } from '../../../src/ash/base/common/lxicons.js';
 import { IMessageHistoryService, type MessageHistoryEntry, type MessageHistoryQuery } from '../../../src/ash/platform/messageHistory/common/messageHistory.js';
 import '../../../src/ash/workbench/contrib/chat/browser/chat.shared.contribution.js';
-import { IAgentCapabilitiesService } from '../../../src/ash/platform/agentCapabilities/common/agentCapabilitiesService.js';
+import { ILanguageModelToolsService } from '../../../src/ash/workbench/contrib/chat/common/tools/languageModelToolsService.js';
 import { IInstructionService } from '../../../src/ash/platform/instructions/common/instructionService.js';
 import { IAppServerRemoteAgentService } from '../../../src/ash/workbench/services/remote/common/appServerRemoteAgentService.js';
 import { ILanguageFeaturesService } from '../../../src/ash/editor/common/services/languageFeatures.js';
@@ -102,7 +103,7 @@ import { HoverService, IHoverService } from '../../../src/ash/platform/hover/bro
 import { setHoverDelegate } from '../../../src/ash/base/browser/ui/hover/hoverDelegate.js';
 
 declare global {
-	interface Window { ashChatInputIntegration: { setActiveFile(path?: string): void; setActiveDiff(original: string, modified: string, text?: string): void; setChanges(changes: ChatInputState['changes']): void; setVisible(visible: boolean): void; inputAccessibility(): string | undefined; contextAccessibility(): { help: string | undefined; content: string | undefined; }; setFooterPhase(phase: ChatInputState['phase'], error?: string): void; setContextUsage(available: boolean, capacity?: number, estimatedTokens?: number): void; setFooterStatus(visible: boolean): void; removeFooterStatus(): void; historyState(): unknown; holdNextHistoryRead(): void; releaseHistorySearch(query: string): void; addHistoryContext(): void; setHistorySkill(digest: string): void; refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; restoreCapturedDraft(): Promise<string | undefined>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; disposeContextTerminal(): void; }; }
+	interface Window { ashChatInputIntegration: { changeTools(): void; setActiveFile(path?: string): void; setActiveDiff(original: string, modified: string, text?: string): void; setChanges(changes: ChatInputState['changes']): void; setVisible(visible: boolean): void; inputAccessibility(): string | undefined; contextAccessibility(): { help: string | undefined; content: string | undefined; }; setFooterPhase(phase: ChatInputState['phase'], error?: string): void; setContextUsage(available: boolean, capacity?: number, estimatedTokens?: number): void; setFooterStatus(visible: boolean): void; removeFooterStatus(): void; historyState(): unknown; holdNextHistoryRead(): void; releaseHistorySearch(query: string): void; addHistoryContext(): void; setHistorySkill(digest: string): void; refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; restoreCapturedDraft(): Promise<string | undefined>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; disposeContextTerminal(): void; }; }
 }
 
 const locale = new URLSearchParams(location.search).get('locale');
@@ -188,22 +189,24 @@ services.registerInstance(IClipboardService, {
 	readText: async () => '', writeText: async () => { }, readResources: async () => ({ resources: [], operation: 'copy' }), writeResources: async () => { }, hasResources: async () => false,
 });
 services.registerInstance(IHostService, { hasFocus: true, onDidChangeFocus: Event.None, restart: async () => { }, openWindow: async () => { }, getScreenshot: async () => new URLSearchParams(location.search).has('cancelScreenshot') ? undefined : Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNg+M/QAAADggGA8sg/+gAAAABJRU5ErkJggg=='), character => character.charCodeAt(0)) });
-services.registerInstance(IAgentCapabilitiesService, {
+let toolsChanged = false;
+const toolCatalogChanges = resources.add(new Emitter<void>());
+services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService({
 	isAvailable: !new URLSearchParams(location.search).has('noTools'),
+	onDidChangeTools: toolCatalogChanges.event,
 	read: async () => {
 		if (new URLSearchParams(location.search).has('toolFailure')) { throw new Error('Tool catalog failed'); }
 		return {
-			toolSets: [{ id: 'local', source: 'local', sourceId: 'directory', tools: ['read_file', 'write_file'] }, { id: 'mcp:docs', source: 'mcp', sourceId: 'docs-server', tools: ['connector_search'] }],
+			toolSets: [{ id: 'local', source: 'local', sourceId: 'directory', tools: ['read_file', toolsChanged ? 'added_tool' : 'write_file'] }, { id: 'mcp:docs', source: 'mcp', sourceId: 'docs-server', tools: ['connector_search'] }],
 			tools: [
 				{ name: 'read_file', description: 'Read a source document', source: 'local', sourceDetails: ['directory'], exposure: 'direct', authority: 'directoryRead' },
-				{ name: 'write_file', description: 'Write a source document', source: 'local', sourceDetails: ['directory'], exposure: 'direct', authority: 'directoryWrite' },
+				{ name: toolsChanged ? 'added_tool' : 'write_file', description: toolsChanged ? 'Added source document' : 'Write a source document', source: 'local', sourceDetails: ['directory'], exposure: 'direct', authority: 'directoryWrite' },
 				{ name: 'connector_search', description: 'Search external references', source: 'mcp', sourceDetails: ['docs-server'], exposure: 'deferred', authority: 'providerDefined' },
 				{ name: 'internal_broker', description: 'Hidden broker', source: 'host', sourceDetails: [], exposure: 'hidden', authority: 'productService' },
 			],
-			localProcessSandboxConfigured: false, sandboxBackends: [], sandboxDiagnostics: [], directoryGrantsReadable: false,
 		};
 	},
-});
+}));
 const instructionWaiters: (() => void)[] = [];
 services.registerInstance(IInstructionService, {
 	isAvailable: !new URLSearchParams(location.search).has('noInstructions'),
@@ -602,6 +605,7 @@ function renderModels(): void {
 }
 part.render(state);
 window.ashChatInputIntegration = {
+	changeTools: () => { toolsChanged = true; toolCatalogChanges.fire(); },
 	setActiveDiff: (original, modified, text) => {
 		activeEditor = createDiffEditorInput({ resource: URI.parse(original), initialText: 'Original contents', readOnly: true }, { resource: URI.parse(modified), ...(text === undefined ? {} : { initialText: text, readOnly: true }) });
 		activeEditorChanged.fire();

@@ -96,6 +96,31 @@ fn delivered_request_and_assistant_text_emit_ui_hook_events() {
 }
 
 #[test]
+fn tool_catalog_invalidation_fans_out_only_to_its_environment_connections() {
+    let broker = UpdateBroker::default();
+    let foreign = broker.fork_scope();
+    let first = NotificationQueue::default();
+    let second = NotificationQueue::default();
+    let unrelated = NotificationQueue::default();
+    broker.register(1, false, &first);
+    broker.register(2, true, &second);
+    foreign.register(3, true, &unrelated);
+
+    broker.publish_agent_tools_changed();
+    for queue in [&first, &second] {
+        let notifications = queue.drain();
+        assert_eq!(notifications.len(), 1);
+        assert_eq!(notifications[0]["method"], "agent/tools/changed");
+        assert_eq!(notifications[0]["params"], serde_json::json!({}));
+    }
+    assert!(unrelated.drain().is_empty());
+    broker.unregister(2);
+    broker.publish_agent_tools_changed();
+    assert_eq!(first.drain().len(), 1);
+    assert!(second.drain().is_empty());
+}
+
+#[test]
 fn broker_fans_out_filesystem_invalidation_without_a_subscription() {
     let broker = UpdateBroker::default();
     let queue = NotificationQueue::default();

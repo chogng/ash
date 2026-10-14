@@ -218,6 +218,7 @@ impl EmbeddingInvoker for PermissionBoundSemanticEmbedding {
 #[test]
 fn unavailable_hybrid_tool_search_remains_gated_and_reports_status() {
     let tools = EnvToolPorts::new(
+        Arc::new(UpdateBroker::default()),
         ToolPort::host(Arc::new(NoTools), Arc::new(RejectPolicy)),
         ToolPort::application(Arc::new(NoTools), Arc::new(RejectPolicy)),
         None,
@@ -250,6 +251,70 @@ fn unavailable_hybrid_tool_search_remains_gated_and_reports_status() {
             model: Some(model),
             reason: "this App Server host does not provide semantic model invocation".into(),
         }
+    );
+}
+
+#[test]
+fn tool_catalog_notifications_follow_successful_installation_only() {
+    let directory = TestDir::new("catalog-change", "file.txt");
+    let server = server().with_local_env_host(None, host_policy()).unwrap();
+    let host = server.local_env_host.as_ref().unwrap();
+    let queue = crate::server::notification_queue::NotificationQueue::default();
+    server.updates.register(1, false, &queue);
+
+    server
+        .commit_full_env_runtime(
+            directory.authorization(),
+            test_local_tools(),
+            test_grep(),
+            host,
+        )
+        .unwrap();
+    queue.drain();
+    host.tools.replace_host_available(true).unwrap();
+    let events = queue.drain();
+    assert!(
+        events
+            .iter()
+            .any(|event| event["method"] == "agent/tools/changed")
+    );
+    assert!(
+        host.tools
+            .capabilities_snapshot()
+            .0
+            .iter()
+            .any(|tool| tool.name == "browser_open")
+    );
+
+    host.tools.replace_host_available(true).unwrap();
+    assert!(
+        queue.drain().is_empty(),
+        "unchanged catalogs must not emit invalidations"
+    );
+    assert!(
+        host.tools
+            .replace(|_| Err(EnvRuntimeError::Unavailable))
+            .is_err()
+    );
+    assert!(
+        queue.drain().is_empty(),
+        "rejected replacements must not invalidate the catalog"
+    );
+
+    host.tools.replace_host_available(false).unwrap();
+    assert!(
+        queue
+            .drain()
+            .iter()
+            .any(|event| event["method"] == "agent/tools/changed")
+    );
+    assert!(
+        !host
+            .tools
+            .capabilities_snapshot()
+            .0
+            .iter()
+            .any(|tool| tool.name == "browser_open")
     );
 }
 

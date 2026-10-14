@@ -97,6 +97,35 @@ test('Secret storage reads stay with their window connection and disposal reject
 	assert.equal(secondTransport.requests.filter(request => request.method === 'secrets/status').length, 2);
 });
 
+test('Renderer host separates the tool transport from sandbox and connection diagnostics', async () => {
+	const transport = new FakeTransport();
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	using cleanup = toDisposable(() => connected.dispose());
+	let changes = 0;
+	using subscriptions = new DisposableStore();
+	connected.api.agentTools.onDidChangeTools(() => changes++, undefined, subscriptions);
+	transport.emitNotification({ method: 'config/changed', params: { revision: 2, generation: 2 } });
+	assert.equal(changes, 0, 'Configuration events precede catalog reconciliation');
+	transport.emitNotification({ method: 'agent/tools/changed', params: {} });
+	assert.equal(changes, 1);
+	subscriptions.dispose();
+	transport.emitNotification({ method: 'agent/tools/changed', params: {} });
+	assert.equal(changes, 1);
+	const tools = [{ name: 'read_file', description: 'Read a file', source: 'local', sourceChain: [{ type: 'product', component: 'directory' }], exposure: 'direct', authority: 'directoryRead' }];
+	const toolSets = [{ id: 'directory', source: 'local', sourceId: 'directory', tools: ['read_file'] }];
+	const environment = {
+		localProcessSandboxConfigured: true, sandboxBackends: ['mxc'], directoryGrantsReadable: false,
+		sandboxDiagnostics: [{ backend: 'mxc', network: 'managed', readiness: { type: 'unsupported', reason: 'Network policy unsupported' } }],
+	};
+	const toolRead = connected.api.agentTools.read();
+	assert.deepEqual({ method: transport.requests.at(-1)?.method, params: transport.requests.at(-1)?.params }, { method: 'agent/capabilities/read', params: {} });
+	transport.respondAt(-1, { tools, toolSets, ...environment });
+	assert.deepEqual(await toolRead, { tools, toolSets });
+	const environmentRead = connected.api.agentCapabilities.read();
+	transport.respondAt(-1, { tools, toolSets, ...environment });
+	assert.deepEqual(await environmentRead, environment);
+});
+
 test('Skill body reading opens exact authorized bytes lazily and releases the connection handle', async () => {
 	const transport = new SkillResourceTransport(Buffer.from('# Review\n审阅 changes\n'));
 	const client = new AppServerProtocolClient(transport);

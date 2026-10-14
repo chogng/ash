@@ -26,7 +26,7 @@ import { URI } from '../../../../base/common/uri.js';
 import { changeExtensionEnablement, configureMcpServer, describeMcpServerState, describePluginPermission, extensionEnablementLabel, reviewExtensionExecution, reviewLocalExtensionPermissions } from './extensionsActions.js';
 import type { ParsedPromptFile } from '../../chat/common/promptSyntax/promptFileParser.js';
 import { IPromptsService } from '../../chat/common/promptSyntax/service/promptsService.js';
-import { IAgentCapabilitiesService } from '../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
+import { ILanguageModelToolsService } from '../../chat/common/tools/languageModelToolsService.js';
 import { IMcpServerStatusService } from '../../../../platform/mcp/common/mcpServerStatusService.js';
 import { IMcpServerManagementService } from '../../../../platform/mcp/common/mcpServerManagementService.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
@@ -119,7 +119,7 @@ export class ExtensionsEditor extends EditorPane {
 		@IGlobalExtensionEnablementService private readonly enablement: IGlobalExtensionEnablementService,
 		@IPluginManagementService private readonly plugins: IPluginManagementService,
 		@IPromptsService private readonly prompts: IPromptsService,
-		@IAgentCapabilitiesService private readonly agentCapabilities: IAgentCapabilitiesService,
+		@ILanguageModelToolsService private readonly languageModelTools: ILanguageModelToolsService,
 		@IMcpServerStatusService private readonly mcpStatus: IMcpServerStatusService,
 		@IMcpServerManagementService private readonly mcpManagement: IMcpServerManagementService,
 		@IEditorService private readonly editors: IEditorService,
@@ -291,7 +291,7 @@ export class ExtensionsEditor extends EditorPane {
 			const [installedResult, statusResult, catalogResult, configurationResult] = await Promise.allSettled([
 				this.extensions.listInstalled(),
 				this.mcpStatus.isAvailable ? this.mcpStatus.read() : Promise.resolve(undefined),
-				this.agentCapabilities.isAvailable ? this.agentCapabilities.read() : Promise.resolve(undefined),
+				this.languageModelTools.isAvailable ? this.languageModelTools.refresh().then(() => [...this.languageModelTools.getAllToolsIncludingDisabled()]) : Promise.resolve(undefined),
 				this.mcpManagement.isAvailable ? this.mcpManagement.readConfiguration() : Promise.resolve(undefined),
 			]);
 			if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
@@ -309,7 +309,7 @@ export class ExtensionsEditor extends EditorPane {
 				? localize({ bundle: 'ash.extensions', key: 'mcpStatusReadFailed' }, 'Could not load MCP server status: {0}', String(statusResult.reason))
 				: server?.state.status === 'unavailable' ? server.state.reason : '';
 			const catalog = catalogResult.status === 'fulfilled' ? catalogResult.value : undefined;
-			const tools = catalog?.tools.filter(tool => tool.source === 'mcp' && tool.sourceDetails.includes(target.serverId)) ?? [];
+			const tools = catalog?.filter(tool => tool.source === 'mcp' && tool.sourceDetails.includes(target.serverId)) ?? [];
 			this.title.textContent = configuredServer?.displayName || server?.displayName || capability?.id || target.serverId;
 			this.metadata.textContent = installation ? `${installation.package.id} · ${installation.package.version}` : target.serverId;
 			this.description.textContent = localize({ bundle: 'ash.extensions', key: 'detailMcpDescription' }, 'Tools provided by {0}.', this.title.textContent);
@@ -340,7 +340,7 @@ export class ExtensionsEditor extends EditorPane {
 				...(capability ? [localize({ bundle: 'ash.extensions', key: 'mcpContract' }, 'Contract version: {0}', capability.contractVersion), localize({ bundle: 'ash.extensions', key: 'localExtensionPermissions' }, 'Requested permissions: {0}', capability.permissions.join(', '))] : []),
 				catalogResult.status === 'rejected' ? localize({ bundle: 'ash.extensions', key: 'mcpToolsReadFailed' }, 'Could not load tool descriptions: {0}', String(catalogResult.reason)) : '',
 				server?.toolCount === 0 ? localize({ bundle: 'ash.extensions', key: 'mcpNoTools' }, 'No tools are currently registered for this server.') : '',
-				...tools.map(tool => `${tool.name}\n${tool.description}`),
+				...tools.map(tool => `${tool.displayName}\n${tool.modelDescription}`),
 			].filter(Boolean).join('\n\n');
 			if (configuredServer && configuration) {
 				const operationLifetime = new AbortController();

@@ -14,6 +14,7 @@ use super::semantic_index_job::AppServerSemanticIndexMetrics;
 use super::semantic_index_job::SemanticIndexJobController;
 use super::switch_mode_tool::SwitchModeToolService;
 use super::symbol_index_runtime::SymbolIndexRuntime;
+use super::update_broker::UpdateBroker;
 use super::update_plan_tool::UpdatePlanToolService;
 use crate::codebase_retrieval_context::CodebaseRetrievalContextSource;
 use crate::codebase_retrieval_tool::CodebaseRetrievalTool;
@@ -817,6 +818,7 @@ struct EnvToolPortState {
 pub(crate) struct EnvToolPorts {
     state: Mutex<EnvToolPortState>,
     reloadable: Arc<ReloadableToolPorts>,
+    updates: Arc<UpdateBroker>,
     host: ToolPort,
     application: ToolPort,
     semantic_model_provider: Option<Arc<dyn SemanticModelProvider>>,
@@ -843,6 +845,7 @@ impl EnvToolPorts {
     }
 
     fn new(
+        updates: Arc<UpdateBroker>,
         host: ToolPort,
         application: ToolPort,
         environment: Option<ToolPort>,
@@ -884,6 +887,7 @@ impl EnvToolPorts {
                 registry_generation,
             }),
             reloadable: ReloadableToolPorts::new(combined),
+            updates,
             host,
             application,
             semantic_model_provider,
@@ -1003,8 +1007,16 @@ impl EnvToolPorts {
             next.search.clone(),
         )
         .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
+        let previous_catalog = self.reloadable.catalog();
         *state = next;
         self.reloadable.replace(combined);
+        let catalog_changed = previous_catalog != self.reloadable.catalog();
+        drop(state);
+        // Notify only after installation. Configuration and provider events can precede
+        // reconciliation, so they cannot serve as tool-catalog invalidations.
+        if catalog_changed {
+            self.updates.publish_agent_tools_changed();
+        }
         Ok(())
     }
 
@@ -1223,6 +1235,7 @@ impl AppServer {
             ),
         };
         let tools = EnvToolPorts::new(
+            Arc::clone(&self.updates),
             self.browser_tool_port.clone(),
             self.app_tool_port.clone(),
             self.execution_tool_port.clone(),

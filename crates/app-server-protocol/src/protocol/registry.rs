@@ -5419,6 +5419,9 @@ server_notifications! {
     MemoryChanged => "memory/changed" {
         params: MemoryChanged,
     },
+    // Invalidation after the connection's environment tool catalog has been replaced.
+    // Clients reread agent/capabilities/read; this carries no catalog version or tool state.
+    AgentToolsChanged => "agent/tools/changed" { params: EmptyParams, },
     QueueChanged => "queue/changed" { params: EmptyParams, },
     SymphonyChanged => "symphony/changed" { params: EmptyParams, },
     AutomationChanged => "automation/changed" {

@@ -30,6 +30,7 @@ import { IPromptsService } from '../../workbench/contrib/chat/common/promptSynta
 import { PromptsService } from '../../workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
 import { IWorkspaceTrustApi } from '../../platform/workspace/common/workspaceTrust.js';
 import { IAgentCapabilitiesService } from '../../platform/agentCapabilities/common/agentCapabilitiesService.js';
+import { IAgentToolsApi } from '../../platform/agentHost/common/agentToolsApi.js';
 import { IMcpServerStatusService } from '../../platform/mcp/common/mcpServerStatusService.js';
 import { IMcpServerManagementService } from '../../platform/mcp/common/mcpServerManagementService.js';
 import { IInstructionService } from '../../platform/instructions/common/instructionService.js';
@@ -474,6 +475,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(ILanguageModelsService, this._register(services.createInstance(LanguageModelsService)));
 		services.registerInstance(IInstructionService, options.api.instructions);
 		services.registerInstance(IAgentCapabilitiesService, options.api.agentCapabilities);
+		services.registerInstance(IAgentToolsApi, options.api.agentTools);
 		services.registerInstance(IMcpServerStatusService, options.api.mcpServerStatus);
 		services.registerInstance(IMcpServerManagementService, options.api.mcpServerManagement);
 		services.registerInstance(IWorkspaceTrustApi, options.api.workspaceTrust);

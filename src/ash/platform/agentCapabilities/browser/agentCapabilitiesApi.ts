@@ -1,6 +1,5 @@
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { appServerRequest } from '../../agentHost/browser/appServerRequest.js';
-import type { ToolSourceProvenance } from '../../../../../.build/protocol/typescript/index.js';
 import type { UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
 import type { AgentCapabilitiesSnapshot, IAgentCapabilitiesService } from '../common/agentCapabilitiesService.js';
 
@@ -10,15 +9,6 @@ export function createAppServerAgentCapabilitiesApi(connection: AppServerProtoco
 		read: async (): Promise<AgentCapabilitiesSnapshot> => {
 			const result = await appServerRequest(connection, 'agent/capabilities/read', {});
 			return {
-				toolSets: result.toolSets.map(set => ({ ...set, tools: [...set.tools] })),
-				tools: result.tools.map(tool => ({
-					name: tool.name,
-					description: tool.description,
-					source: tool.source,
-					sourceDetails: tool.sourceChain.map(sourceDetail),
-					exposure: tool.exposure,
-					authority: tool.authority,
-				})),
 				localProcessSandboxConfigured: result.localProcessSandboxConfigured,
 				sandboxBackends: result.sandboxBackends,
 				sandboxDiagnostics: result.sandboxDiagnostics.map(diagnostic => ({
@@ -34,15 +24,4 @@ export function createAppServerAgentCapabilitiesApi(connection: AppServerProtoco
 
 export function createDisconnectedAgentCapabilitiesApi(unavailable: UnavailableOperation): IAgentCapabilitiesService {
 	return { isAvailable: false, read: () => unavailable('agentCapabilities.read') };
-}
-
-function sourceDetail(source: ToolSourceProvenance): string {
-	switch (source.type) {
-		case 'product': return source.component;
-		case 'plugin': return `${source.pluginId}@${source.version}`;
-		case 'mcp': return source.serverId;
-		case 'dynamic': return source.name;
-		case 'extension': return source.id;
-		case 'system': return source.id;
-	}
 }

@@ -852,6 +852,8 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(picker.getByRole('option', { name: /internal_broker/ })).toHaveCount(0);
 		await picker.getByRole('combobox').fill('docs-server');
 		await expect(picker.getByRole('option', { name: /^connector_search(?:\s|$)/ })).toHaveCount(1);
+		await picker.getByRole('combobox').fill('mcp/docs-server/connector_search');
+		await expect(picker.getByRole('option', { name: /^connector_search(?:\s|$)/ })).toHaveCount(1);
 		await picker.getByRole('combobox').fill('connector_search');
 		await expect(picker.getByRole('option', { name: /^connector_search(?:\s|$)/ })).toBeVisible();
 		await page.keyboard.press('ArrowDown');
@@ -892,6 +894,85 @@ test('unavailable tools stay hidden and catalog failure returns focus without at
 });
 
 for (const locale of ['en', 'zh-CN']) {
+	test(`tool set references resolve to backend members when attached and sent in ${locale}`, async ({ page }) => {
+		await page.goto(`/chatInput.html?inlineCode=1&locale=${locale}`);
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const chinese = locale === 'zh-CN';
+		await page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true }).press('Enter');
+		const picker = page.getByRole('dialog');
+		await picker.getByRole('option', { name: chinese ? '工具…' : 'Tools…', exact: true }).click();
+		await picker.getByRole('combobox').fill('local/directory');
+		const set = picker.getByRole('option').filter({ hasText: 'local/directory' });
+		await expect(set).toHaveCount(1);
+		await set.click();
+		await page.locator('[data-action-id="ash.chat.input.send"] button').press('Enter');
+		const contexts = JSON.parse((await page.getByLabel('Submission').textContent())!) as { content: string; }[];
+		expect(contexts.map(context => JSON.parse(context.content))).toEqual([
+			{ id: 'local', source: 'local', sourceId: 'directory', tools: ['read_file', 'write_file'] },
+		]);
+	});
+}
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`open tool references follow catalog changes while preserving search and keyboard focus in ${locale}`, async ({ page }) => {
+		await page.goto(`/chatInput.html?inlineCode=1&locale=${locale}`);
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const chinese = locale === 'zh-CN';
+		await page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true }).press('Enter');
+		const picker = page.getByRole('dialog');
+		await picker.getByRole('option', { name: chinese ? '工具…' : 'Tools…', exact: true }).click();
+		const search = picker.getByRole('combobox');
+		await search.fill('source document');
+		const read = picker.getByRole('option', { name: /^read_file(?:\s|$)/ });
+		await expect(read).toBeVisible();
+		await expect(picker.getByRole('option', { name: /^write_file(?:\s|$)/ })).toBeVisible();
+		await page.keyboard.press('ArrowDown');
+		await expect(search).toHaveAttribute('aria-activedescendant', (await read.getAttribute('id'))!);
+		await page.evaluate(() => window.ashChatInputIntegration.changeTools());
+		await expect(picker.getByRole('option', { name: /^added_tool(?:\s|$)/ })).toBeVisible();
+		await expect(picker.getByRole('option', { name: /^write_file(?:\s|$)/ })).toHaveCount(0);
+		await expect(search).toHaveValue('source document');
+		await expect(search).toBeFocused();
+		await expect(search).toHaveAttribute('aria-activedescendant', (await read.getAttribute('id'))!);
+		await page.keyboard.press('Enter');
+		await expect(picker).toHaveCount(0);
+		await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
+		await page.locator('[data-action-id="ash.chat.input.send"] button').press('Enter');
+		await expect(page.getByLabel('Submission')).toContainText('read_file');
+	});
+
+	test(`open tool configuration follows catalog changes without losing pending selection in ${locale}`, async ({ page }) => {
+		await page.goto(`/chatInput.html?inlineCode=1&locale=${locale}`);
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const chinese = locale === 'zh-CN';
+		await page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true }).press('Enter');
+		const picker = page.getByRole('dialog');
+		await picker.getByRole('option', { name: chinese ? '工具…' : 'Tools…', exact: true }).click();
+		await picker.getByRole('option', { name: chinese ? '配置工具…' : 'Configure tools…', exact: true }).click();
+		const search = picker.getByRole('combobox');
+		await search.fill('read_file');
+		const read = picker.getByRole('option', { name: /^read_file(?:\s|$)/ });
+		await expect(read).toBeVisible();
+		await read.click();
+		await search.focus();
+		await expect(search).toHaveAttribute('aria-activedescendant', (await read.getAttribute('id'))!);
+		await expect(read).toContainText(chinese ? '已禁用' : 'Disabled');
+		await page.evaluate(() => window.ashChatInputIntegration.changeTools());
+		await expect(search).toHaveValue('read_file');
+		await expect(search).toBeFocused();
+		await expect(read).toContainText(chinese ? '已禁用' : 'Disabled');
+		await search.fill('');
+		await expect(picker.getByRole('option', { name: /^added_tool(?:\s|$)/ })).toBeVisible();
+		await expect(picker.getByRole('option', { name: /^write_file(?:\s|$)/ })).toHaveCount(0);
+		await picker.getByRole('option', { name: chinese ? '应用工具选择' : 'Apply tool selection', exact: true }).click();
+		const message = page.getByRole('textbox', { name: 'Chat message', exact: true });
+		await message.press('End');
+		await message.pressSequentially('Use enabled tools');
+		await page.locator('[data-action-id="ash.chat.input.send"] button').press('Enter');
+		const submitted = JSON.parse((await page.getByLabel('Submission').textContent())!);
+		expect(JSON.parse(submitted[0].content)).toEqual(['read_file']);
+	});
+
 	test(`tool selection toggles sets and members, discards cancellation and survives send in ${locale}`, async ({ page }) => {
 		await page.goto(`/chatInput.html?inlineCode=1&locale=${locale}`);
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());

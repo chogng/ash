@@ -1,4 +1,5 @@
 import { ISecretStorageStatusService } from '../../../../../platform/secrets/common/secrets.js';
+import { createTestLanguageModelToolsService } from '../../../chat/test/common/tools/testLanguageModelToolsService.js';
 import type { IQuickPick, IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import gitMessages from '../../../../../../../extensions/git/package.nls.json' with { type: 'json' };
@@ -130,6 +131,7 @@ await import('../../../../services/chat/common/modelCatalog.js');
 const { IContentSearchConfigurationService } = await import('../../../../../platform/search/common/search.js');
 const { INetworkDiagnosticsService } = await import('../../../../../platform/networkDiagnostics/common/networkDiagnosticsService.js');
 const { IAgentCapabilitiesService } = await import('../../../../../platform/agentCapabilities/common/agentCapabilitiesService.js');
+const { ILanguageModelToolsService } = await import('../../../chat/common/tools/languageModelToolsService.js');
 const { ITraceSettingsService } = await import('../../../../../platform/trace/common/traceSettingsService.js');
 const { IFileDialogService } = await import('../../../../../platform/dialogs/common/dialogs.js');
 const { IAppServerRemoteAgentService: RemoteAgentServiceId } = await import('../../../../services/remote/common/appServerRemoteAgentService.js');
@@ -182,15 +184,16 @@ const localizationService: ILocalizationService = {
 
 test('Sandbox diagnostics render Chinese readiness and preserve backend reasons as text', async () => {
 	const { AgentCapabilitiesSettings } = await import('../../browser/agentCapabilitiesSettings.js');
+	using tools = createTestLanguageModelToolsService({ isAvailable: true, read: async () => { throw new Error('Sandbox settings must not read tools'); } });
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	const root = h(browserEnvironment.window.document, 'div');
 	using panel = new AgentCapabilitiesSettings(root, {
 		isAvailable: true,
 		read: async () => ({
-			toolSets: [], tools: [], localProcessSandboxConfigured: true, sandboxBackends: ['mxc'], directoryGrantsReadable: false,
+			localProcessSandboxConfigured: true, sandboxBackends: ['mxc'], directoryGrantsReadable: false,
 			sandboxDiagnostics: [{ backend: 'mxc', network: 'managed', readiness: { type: 'unsupported', reason: '<script>diagnostic</script>' } }]
 		}),
-	}, { onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService,
+	}, tools, { onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService,
 		{ onDidChangeTrust: Event.None } as IWorkspaceTrustApi, {
 		whenReady: Promise.resolve(), translate: (bundle, key, fallback) => chinese.bundles[bundle]?.[key] ?? fallback,
 	});
@@ -199,6 +202,28 @@ test('Sandbox diagnostics render Chinese readiness and preserve backend reasons 
 	assert.match(root.textContent ?? '', /mxc · 受管网络 · 不支持此策略: <script>diagnostic<\/script>/);
 	assert.match(root.textContent ?? '', /只读进程准备检查/);
 	assert.equal(root.querySelector('script'), null);
+});
+
+test('Tools settings read only the tool service and discard late replies after disposal', async () => {
+	const { AgentCapabilitiesSettings } = await import('../../browser/agentCapabilitiesSettings.js');
+	const root = h(browserEnvironment.window.document, 'div');
+	let environmentReads = 0;
+	let toolReads = 0;
+	const pending = new DeferredPromise<import('../../../chat/test/common/tools/testLanguageModelToolsService.js').ToolCatalogFixture>();
+	using tools = createTestLanguageModelToolsService({ isAvailable: true, read: () => { toolReads++; return pending.p; } });
+	using panel = new AgentCapabilitiesSettings(root, {
+		isAvailable: true,
+		read: async () => { environmentReads++; throw new Error('Tools settings must not read environment diagnostics'); },
+	}, tools,
+		{ onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService,
+		{ onDidChangeTrust: Event.None } as IWorkspaceTrustApi, localizationService);
+	panel.setView('tools');
+	assert.equal(toolReads, 1);
+	assert.equal(environmentReads, 0);
+	panel.dispose();
+	await pending.complete({ toolSets: [], tools: [{ name: 'late_tool', description: 'Late reply', source: 'local', sourceDetails: [], exposure: 'direct', authority: 'directoryRead' }] });
+	await nextTurn();
+	assert.equal(root.textContent?.includes('late_tool'), false);
 });
 
 test('Chinese indexed search settings explain engine scope in the control and accessibility help', async () => {
@@ -1366,7 +1391,6 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		read: async () => {
 			capabilityReads++;
 			return {
-				toolSets: [], tools: [{ name: 'read_file', description: 'Read a file.', source: 'local', sourceDetails: ['ash-app-server'], exposure: 'direct', authority: 'directoryRead' }],
 				localProcessSandboxConfigured: true,
 				sandboxBackends: ['mxc'],
 				sandboxDiagnostics: [{ backend: 'mxc', network: 'managed', readiness: { type: 'unsupported', reason: '<script>diagnostic</script>' } }],
@@ -1374,6 +1398,14 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 			};
 		},
 	});
+	assert.throws(() => descriptor.create({ instantiationService: services }), /Unknown service: ILanguageModelToolsService/);
+	services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService({
+		isAvailable: true,
+		read: async () => {
+			capabilityReads++;
+			return { toolSets: [], tools: [{ name: 'read_file', description: 'Read a file.', source: 'local', sourceDetails: ['ash-app-server'], exposure: 'direct', authority: 'directoryRead' }] };
+		},
+	}));
 	assert.throws(() => descriptor.create({ instantiationService: services }), /Unknown service: appServerRemoteAgentService/);
 	const connectionChanged = disposables.add(new Emitter<RemoteConnectionState>());
 	const connectionIdentityChanged = disposables.add(new Emitter<RemoteAgentConnection>());

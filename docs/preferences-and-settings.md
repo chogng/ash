@@ -15,6 +15,14 @@
 
 功能模块注册配置项，分类布局引用 setting ID，由 Preferences 统一建模和渲染。账号状态与管理操作通过数据契约接入。功能模块不得提供设置页 DOM、widget 或渲染回调；完整职责约束和旧接口迁移边界见 [Settings 接入与渲染边界](../src/ash/workbench/contrib/preferences/README.md)。
 
+工具目录和工具集由 [`ILanguageModelToolsService`](../src/ash/workbench/contrib/chat/common/tools/languageModelToolsService.ts) 提供，在 `chat.shared.contribution.ts` 注册，并由 Workbench 与 Sessions 的共享入口加载。对应的 `browser/tools/languageModelToolsService.ts` 将 App Server DTO 转换为可整体替换的只读快照；消费者先 `refresh()`，再使用 `getAllToolsIncludingDisabled()`、可观察 `toolSets` 和引用查询。并发刷新共享一次读取；断线、连接代次变化和释放会阻止旧结果进入快照。该服务不提供工具注册、启用或执行入口。
+
+Skill 补全和聊天引用使用 `getFullReferenceNames()`、`getFullReferenceName()` 与 `getToolByFullReferenceName()`，工具集通过 `IToolSet.getTools()` 返回同一快照中的工具对象。来源组的引用名由来源类别与编码后的来源 ID 组成，空来源 ID 使用保留段 `@`，避免和后端工具名冲突；MCP 工具集使用 `/*`，外部工具引用带来源组前缀。后端工具 ID 保留为解析别名，工具选择和执行仍传后端 ID。Skill 的 `allowed-tools` 保持目录提示语义，不由前端授予权限。来源、权限和暴露方式是 Ash 元数据，尚未伪装为 VS Code 的完整 `ToolDataSource`。当前 `agent/capabilities/read` 没有模型参数或目录版本，未添加模型筛选。
+
+后端在 `EnvToolPorts.replace` 成功安装且目录内容变化后，通过已有 `UpdateBroker` 和连接通知队列发送 `agent/tools/changed`。事件只到达同一 Environment 的连接，参数为空，不携带工具状态或版本。MCP 的工具列表变化、配置与插件重建、动态或扩展工具变化均复用这个安装入口；前端不依赖可能早于重建完成的配置通知。`LanguageModelToolsService` 收到通知后重新读取已使用的目录，在替换快照后触发 `onDidChangeTools`；读取期间收到多次通知，会合并为后续读取，旧结果不进入快照。已打开的工具引用与配置选择器订阅该事件，保留搜索、当前仍存在的选项和未提交的禁用选择；关闭释放订阅，连接失效清空列表，恢复连接后重读。
+
+设置和 MCP 详情消费同一工具领域契约。Ash 专属的沙箱准备诊断和目录授权可读性保留在 [`IAgentCapabilitiesService`](../src/ash/platform/agentCapabilities/common/agentCapabilitiesService.ts)，目录授权数据仍归 `IWorkspaceTrustApi`。Preferences 的工具页与沙箱页分别读取所属服务，页面继续由 Preferences 呈现。
+
 GitHub 设置页显示复用 Codex 登录和 Ash 的 GitHub 账号，检查指定仓库的访问权限，并链接官方 Connector 与自动审查管理页。Ash 的仓库访问成功不代表官方 Connector 已获授权。PR 页面使用 GitHub 账号发布 `@codex review` 请求，刷新及分页读取 PR 评论和审查讨论；发送结果不确定时，确认 GitHub 上的结果前不能再次提交。
 
 ## 打开路径

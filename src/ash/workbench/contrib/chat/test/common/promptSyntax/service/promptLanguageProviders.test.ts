@@ -1,5 +1,5 @@
 import { DeferredPromise } from '../../../../../../../base/common/async.js';
-import type { AgentCapabilitiesSnapshot } from '../../../../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
+import { createTestLanguageModelToolsService, type ToolCatalogFixture } from '../../tools/testLanguageModelToolsService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { URI } from '../../../../../../../base/common/uri.js';
@@ -17,7 +17,8 @@ async function complete(source: string, position: Position, name = 'SKILL.md', a
 	using model = new TextModel(source, { resource: URI.file(`/skills/review/${name}`), languageId: 'markdown' });
 	const controller = new AbortController();
 	if (aborted) controller.abort();
-	return new PromptHeaderAutocompletion({ isAvailable: false, read: async () => { throw new Error('Unexpected catalog read'); } }).provideCompletions({
+	using service = createTestLanguageModelToolsService({ isAvailable: false, read: async () => { throw new Error('Unexpected catalog read'); } });
+	return await new PromptHeaderAutocompletion(service).provideCompletions({
 		requestId: 1, resource: model.uri, languageId: 'markdown', position,
 		context: { kind: LanguageCompletionTriggerKind.Invoke }, snapshot: model.createVersionedSnapshot(),
 	}, controller.signal);
@@ -83,19 +84,21 @@ test('Skill draft diagnostics explain syntax and schema without accepting or exe
 
 test('allowed-tools suggestions read the real capability catalog, omit hidden and existing tools and reject a cancelled reply', async () => {
 	using model = new TextModel('---\nname: review\nallowed-tools: existing re_file\n---', { resource: URI.file('/skills/review/SKILL.md'), languageId: 'markdown' });
-	const pending = new DeferredPromise<AgentCapabilitiesSnapshot>();
+	const pending = new DeferredPromise<ToolCatalogFixture>();
 	let reads = 0;
-	const provider = new PromptHeaderAutocompletion({ isAvailable: true, read: () => { reads++; return pending.p; } });
+	using service = createTestLanguageModelToolsService({ isAvailable: true, read: () => { reads++; return pending.p; } });
+	const provider = new PromptHeaderAutocompletion(service);
 	const controller = new AbortController();
 	const request = { requestId: 1, resource: model.uri, languageId: 'markdown', position: new Position(3, 26), context: { kind: LanguageCompletionTriggerKind.Invoke as const }, snapshot: model.createVersionedSnapshot() };
 	const first = provider.provideCompletions(request, controller.signal);
 	assert.equal(reads, 1);
-	const tools: AgentCapabilitiesSnapshot = { tools: ['existing', 'read_file', 'restricted'].map((name, index) => ({ name, description: name + ' description', source: 'local', sourceDetails: [], exposure: index === 2 ? 'hidden' : 'direct', authority: 'directoryRead' })), toolSets: [], localProcessSandboxConfigured: false, sandboxBackends: [], directoryGrantsReadable: true, sandboxDiagnostics: [] };
+	const tools: ToolCatalogFixture = { tools: ['existing', 'read_file', 'restricted'].map((name, index) => ({ name, description: name + ' description', source: 'local', sourceDetails: [], exposure: index === 2 ? 'hidden' : 'direct', authority: 'directoryRead' })), toolSets: [] };
 	await pending.complete(tools);
 	const result = await first;
 	assert.deepEqual(result?.items.map(item => ({ label: item.label, range: item.range })), [{ label: 'read_file', range: new Range(3, 25, 3, 32) }]);
-	const delayed = new DeferredPromise<AgentCapabilitiesSnapshot>();
-	const cancelled = new PromptHeaderAutocompletion({ isAvailable: true, read: () => delayed.p }).provideCompletions(request, controller.signal);
+	const delayed = new DeferredPromise<ToolCatalogFixture>();
+	using delayedService = createTestLanguageModelToolsService({ isAvailable: true, read: () => delayed.p });
+	const cancelled = new PromptHeaderAutocompletion(delayedService).provideCompletions(request, controller.signal);
 	controller.abort();
 	await delayed.complete(tools);
 	assert.equal(await cancelled, undefined);
@@ -111,6 +114,30 @@ test('Prompt links use the original Skill URI and reject code, remote web links 
 	assert.deepEqual(provider.provideLinks(request, controller.signal).map(link => ({ range: link.range, target: link.target })), [{ range: new Range(4, 9, 4, 28), target: uri.with({ path: '/review/references/guide.md' }).toString() }]);
 	controller.abort();
 	assert.deepEqual(provider.provideLinks(request, controller.signal), []);
+});
+
+test('Skill tool completion uses qualified references and tool set membership, including aliases already present in the header', async () => {
+	using service = createTestLanguageModelToolsService({
+		isAvailable: true, read: async () => ({
+			tools: [{ name: 'search_docs', description: 'Search documents', source: 'mcp', sourceDetails: ['docs-server'], exposure: 'deferred', authority: 'providerDefined' }],
+			toolSets: [{ id: 'docs-set', source: 'mcp', sourceId: 'docs-server', tools: ['search_docs'] }],
+		})
+	});
+	const provider = new PromptHeaderAutocompletion(service);
+	for (const existing of ['', 'search_docs ']) {
+		const line = `allowed-tools: ${existing}mcp/`;
+		using model = new TextModel(`---\nname: review\n${line}\n---`, { resource: URI.file('/skills/review/SKILL.md'), languageId: 'markdown' });
+		const result = await provider.provideCompletions({
+			requestId: 1, resource: model.uri, languageId: 'markdown', position: new Position(3, line.length + 1),
+			context: { kind: LanguageCompletionTriggerKind.Invoke }, snapshot: model.createVersionedSnapshot(),
+		}, new AbortController().signal);
+		assert.deepEqual(result?.items.map(item => ({ label: item.label, documentation: item.documentation })), existing ? [
+			{ label: 'mcp/docs-server/*', documentation: 'search_docs' },
+		] : [
+			{ label: 'mcp/docs-server/search_docs', documentation: 'Search documents' },
+			{ label: 'mcp/docs-server/*', documentation: 'search_docs' },
+		]);
+	}
 });
 
 

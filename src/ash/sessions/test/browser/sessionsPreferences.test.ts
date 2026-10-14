@@ -1,4 +1,5 @@
 import { ISecretStorageStatusService } from '../../../platform/secrets/common/secrets.js';
+import { createTestLanguageModelToolsService } from '../../../workbench/contrib/chat/test/common/tools/testLanguageModelToolsService.js';
 import { quickInputServiceTestControls } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { IExtensionService } from '../../../workbench/services/extensions/common/extensionService.js';
 import { TestExtensionService } from '../../../workbench/test/common/testExtensionServices.js';
@@ -15,6 +16,7 @@ import { IGlobalExtensionEnablementService } from '../../../platform/extensionMa
 import { IPluginManagementService } from '../../../platform/extensionManagement/common/pluginManagementService.js';
 import { IAgentCapabilitiesService } from '../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { IWorkspaceTrustApi } from '../../../platform/workspace/common/workspaceTrust.js';
+import { ILanguageModelToolsService } from '../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
 import { IOpenerService } from '../../../platform/opener/common/opener.js';
 import { ITraceSettingsService } from '../../../platform/trace/common/traceSettingsService.js';
 import { IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
@@ -240,7 +242,8 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	using githubReview = services.createInstance(GitHubReviewModel);
 	services.registerInstance(IGitHubReviewModel, githubReview);
 	services.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
-	services.registerInstance(IAgentCapabilitiesService, { isAvailable: true, read: async () => ({ toolSets: [], tools: [{ name: 'read_file', description: 'Read authorized files', source: 'local', sourceDetails: ['Ash'], exposure: 'direct', authority: 'directoryRead' }], localProcessSandboxConfigured: false, sandboxBackends: [], directoryGrantsReadable: false, sandboxDiagnostics: [] }) });
+	services.registerInstance(IAgentCapabilitiesService, { isAvailable: true, read: async () => ({ localProcessSandboxConfigured: false, sandboxBackends: [], directoryGrantsReadable: false, sandboxDiagnostics: [] }) });
+	services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService({ isAvailable: true, read: async () => ({ toolSets: [], tools: [{ name: 'read_file', description: 'Read authorized files', source: 'local', sourceDetails: ['Ash'], exposure: 'direct', authority: 'directoryRead' }] }) }));
 	services.registerInstance(IWorkspaceTrustApi, { onDidChangeTrust: Event.None } as import('../../../platform/workspace/common/workspaceTrust.js').IWorkspaceTrustApi);
 	let editorReveals = 0;
 	using preferences = services.createInstance(SessionsPreferences, window.document.body, () => { editorReveals++; });

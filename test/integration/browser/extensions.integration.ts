@@ -1,3 +1,4 @@
+import { createTestLanguageModelToolsService } from '../../../src/ash/workbench/contrib/chat/test/common/tools/testLanguageModelToolsService.js';
 import { BrowserClipboardService } from '../../../src/ash/platform/clipboard/browser/clipboardService.js';
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
 import { IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
@@ -92,7 +93,7 @@ import { UriIdentityService } from '../../../src/ash/platform/uriIdentity/common
 import { IWorkspaceExtensionsConfigService, WorkspaceExtensionsConfigService } from '../../../src/ash/workbench/services/extensionRecommendations/common/workspaceExtensionsConfig.js';
 import { IExtensionRecommendationsService } from '../../../src/ash/workbench/services/extensionRecommendations/common/extensionRecommendations.js';
 import { ExtensionRecommendationsService } from '../../../src/ash/workbench/contrib/extensions/browser/extensionRecommendationsService.js';
-import { IAgentCapabilitiesService } from '../../../src/ash/platform/agentCapabilities/common/agentCapabilitiesService.js';
+import { ILanguageModelToolsService } from '../../../src/ash/workbench/contrib/chat/common/tools/languageModelToolsService.js';
 import { IMcpServerStatusService, type McpServerStatus } from '../../../src/ash/platform/mcp/common/mcpServerStatusService.js';
 import { createAppServerMcpServerStatusApi } from '../../../src/ash/platform/mcp/browser/mcpServerStatusApi.js';
 import { AppServerMcpServerManagementService } from '../../../src/ash/platform/mcp/browser/appServerMcpServerManagementService.js';
@@ -455,13 +456,13 @@ const mcpConnection = {
 } as unknown as AppServerProtocolClient;
 services.registerInstance(IMcpServerStatusService, createAppServerMcpServerStatusApi(mcpConnection));
 services.registerInstance(IMcpServerManagementService, disposables.add(new AppServerMcpServerManagementService(mcpConnection)));
-services.registerInstance(IAgentCapabilitiesService, {
+services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService({
 	isAvailable: true,
 	read: async () => {
 		if (mcpToolsFailure) { throw new Error('Tool catalog unavailable'); }
-		return { tools: [{ name: 'fixture_search', description: 'Search fixture records', source: 'mcp' as const, sourceDetails: ['marketplace:example/web:mcp:fixture-server'], exposure: 'direct' as const, authority: 'providerDefined' as const }], toolSets: [{ id: 'fixture-set', source: 'mcp' as const, sourceId: 'marketplace:example/web:mcp:fixture-server', tools: ['fixture_search'] }], localProcessSandboxConfigured: false, sandboxBackends: [], sandboxDiagnostics: [], directoryGrantsReadable: false };
+		return { tools: [{ name: 'fixture_search', description: 'Search fixture records', source: 'mcp' as const, sourceDetails: ['marketplace:example/web:mcp:fixture-server'], exposure: 'direct' as const, authority: 'providerDefined' as const }], toolSets: [{ id: 'fixture-set', source: 'mcp' as const, sourceId: 'marketplace:example/web:mcp:fixture-server', tools: ['fixture_search'] }] };
 	},
-});
+}));
 const host = document.getElementById('extensions')!;
 const paneLayout = new URLSearchParams(location.search).has('paneLayout');
 const previewHeight = new URLSearchParams(location.search).has('preview') ? 780 : 650;

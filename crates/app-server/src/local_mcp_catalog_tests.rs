@@ -347,6 +347,7 @@ fn mcp_notifications_refresh_code_mode_catalog_without_changing_model_tools() {
     let mut request_id = 1;
     for stage in 0..3 {
         if stage != 0 {
+            server.drain_notifications(&mut connection);
             fixture.change_catalog(stage);
         }
         let deadline = Instant::now() + WAIT;
@@ -368,6 +369,36 @@ fn mcp_notifications_refresh_code_mode_catalog_without_changing_model_tools() {
             thread::sleep(Duration::from_millis(10));
         }
         fixture.wait_for_stream();
+        if stage != 0 {
+            let notifications = server.drain_notifications(&mut connection);
+            assert!(
+                notifications.iter().any(|raw| {
+                    let event: serde_json::Value = serde_json::from_str(raw).unwrap();
+                    event["method"] == "agent/tools/changed" && event["params"] == json!({})
+                }),
+                "reconciled MCP catalog must invalidate connected tool consumers"
+            );
+            request_id += 1;
+            let capabilities = local_call(
+                &server,
+                &mut connection,
+                json!({"jsonrpc":"2.0", "id":request_id, "method":"agent/capabilities/read", "params":{}}),
+            );
+            let current_names = capabilities["result"]["tools"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|tool| tool["source"] == "mcp")
+                .flat_map(|tool| tool["sourceChain"].as_array().unwrap())
+                .filter(|source| source["type"] == "mcp")
+                .map(|source| source["remoteName"].as_str().unwrap())
+                .collect::<std::collections::BTreeSet<_>>();
+            let expected_names = catalog(stage).iter().map(|(name, _)| *name).collect();
+            assert_eq!(
+                current_names, expected_names,
+                "invalidated reads must see the installed catalog"
+            );
+        }
         // A notification must cause a new runtime catalog without any config mutation.
         assert_eq!(config.read_snapshot().unwrap().revision, snapshot.revision);
         let turn = threads

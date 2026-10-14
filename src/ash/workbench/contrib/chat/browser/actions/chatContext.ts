@@ -1,10 +1,11 @@
 import { captureTerminalAttachment } from '../../../terminal/browser/chatTerminalCommandMirror.js';
-import { IAgentCapabilitiesService } from '../../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
+import { ILanguageModelToolsService, isToolSet } from '../../common/tools/languageModelToolsService.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { ITerminalService, type ITerminalView } from '../../../../services/terminal/browser/terminal.js';
 import { TERMINAL_VIEW_ID } from '../../../terminal/common/terminal.js';
 import { addDisposableListener } from '../../../../../base/browser/dom.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../../base/common/cancellation.js';
+import { Event } from '../../../../../base/common/event.js';
 import { DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { Schemas } from '../../../../../base/common/network.js';
@@ -18,7 +19,6 @@ import { IClipboardService } from '../../../../../platform/clipboard/common/clip
 import { GitHubIssueState, IGitHubService, type GitHubRepository } from '../../../../../platform/github/common/githubService.js';
 import { filterQuickPickItems } from '../../../../../platform/quickinput/browser/quickInputList.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
-import type { AgentToolCapability, AgentToolSetCapability } from '../../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { createToolSelectionAttachment, showToolsPicker, toolSetLabel } from './chatToolPicker.js';
 import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
 import { IChatService } from '../../../../services/chat/common/chatService.js';
@@ -41,8 +41,7 @@ export interface ChatContextSource {
 
 interface ToolReferencePick extends IQuickPickItem {
 	readonly configure?: true;
-	readonly tool?: AgentToolCapability;
-	readonly set?: AgentToolSetCapability;
+	readonly reference?: string;
 }
 
 export class ToolsContextPickerPick implements ChatContextSource {
@@ -51,40 +50,55 @@ export class ToolsContextPickerPick implements ChatContextSource {
 
 	constructor(
 		private readonly disabled: readonly string[] = [],
-		@IAgentCapabilitiesService private readonly capabilities: IAgentCapabilitiesService,
+		@ILanguageModelToolsService private readonly toolsService: ILanguageModelToolsService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 	) { }
 
-	public isEnabled(): boolean { return this.capabilities.isAvailable; }
+	public isEnabled(): boolean { return this.toolsService.isAvailable; }
 
 	public async asAttachment(signal: AbortSignal): Promise<ChatContextSelection | undefined> {
 		if (!this.isEnabled() || signal.aborted) { return undefined; }
-		const catalog = await this.capabilities.read();
+		await this.toolsService.refresh();
 		if (signal.aborted) { return undefined; }
 		const selected = await pickChatContextItem<ToolReferencePick>(this.quickInput, localize('chat.context.selectTool', 'Search available tools by name, description or source'), async query => {
-			const tools = catalog.tools.filter(tool => tool.exposure !== 'hidden' && !this.disabled.includes(tool.name));
-			const sets = catalog.toolSets.filter(set => set.tools.some(name => !this.disabled.includes(name)));
+			const tools = [...this.toolsService.getAllToolsIncludingDisabled()].filter(tool => tool.canBeReferencedInPrompt && !this.disabled.includes(tool.id));
+			const sets = [...this.toolsService.toolSets.get()].filter(set => [...set.getTools()].some(tool => tool.canBeReferencedInPrompt && !this.disabled.includes(tool.id)));
 			const references: ToolReferencePick[] = [
-				...tools.map(tool => ({ label: tool.name, description: tool.sourceDetails.join(' › '), detail: tool.description, tool })),
-				...sets.map(set => ({ label: toolSetLabel(set), description: localize('chat.tools.set', 'Tool set'), detail: set.tools.filter(name => !this.disabled.includes(name)).join(', '), set })),
+				...tools.map(tool => {
+					const reference = this.toolsService.getFullReferenceName(tool);
+					return { label: tool.displayName, description: tool.sourceDetails.join(' › '), detail: `${tool.modelDescription}\n${reference}`, reference };
+				}),
+				...sets.map(set => {
+					const reference = this.toolsService.getFullReferenceName(set);
+					const members = [...set.getTools()].filter(tool => tool.canBeReferencedInPrompt && !this.disabled.includes(tool.id)).map(tool => tool.id);
+					return { label: toolSetLabel(set), description: localize('chat.tools.set', 'Tool set'), detail: `${members.join(', ')}\n${reference}`, reference };
+				}),
 			];
 			return [...filterQuickPickItems(references, query), { label: localize('chat.tools.configure', 'Configure tools…'), configure: true, alwaysShow: true }];
-		}, signal);
+		}, signal, undefined, this.toolsService.onDidChangeTools);
 		if (signal.aborted || !selected || selected.kind === 'back') { return undefined; }
 		if (selected.item.configure) {
-			const disabled = await showToolsPicker(this.quickInput, catalog, this.disabled, signal);
+			const disabled = await showToolsPicker(this.quickInput, this.toolsService, this.disabled, signal);
 			return disabled && !signal.aborted ? { attachment: createToolSelectionAttachment(disabled), acceptInBackground: false } : undefined;
 		}
-		const { tool, set } = selected.item;
+		const reference = selected.item.reference ? this.toolsService.getToolByFullReferenceName(selected.item.reference) : undefined;
+		const set = isToolSet(reference) ? reference : undefined;
+		const tool = reference && !isToolSet(reference) ? reference : undefined;
 		if (!tool && !set) { return undefined; }
-		const name = tool ? localize('chat.context.toolName', 'Tool: {0}', tool.name) : localize('chat.tools.setName', 'Tool set: {0}', toolSetLabel(set!));
+		const name = tool ? localize('chat.context.toolName', 'Tool: {0}', tool.displayName) : localize('chat.tools.setName', 'Tool set: {0}', toolSetLabel(set!));
 		// References describe enabled tools; only the separate typed selection narrows execution.
-		const content = JSON.stringify(tool ?? { ...set, tools: set!.tools.filter(name => !this.disabled.includes(name)) }, null, 2);
+		const content = JSON.stringify(tool ? {
+			name: tool.id, description: tool.modelDescription, source: tool.source,
+			sourceDetails: tool.sourceDetails, exposure: tool.exposure, authority: tool.authority,
+		} : {
+			id: set!.id, source: set!.source, sourceId: set!.sourceId,
+			tools: [...set!.getTools()].filter(tool => tool.canBeReferencedInPrompt && !this.disabled.includes(tool.id)).map(tool => tool.id),
+		}, null, 2);
 		return {
 			acceptInBackground: selected.background,
 			attachment: {
-				id: tool ? `tool:${tool.name}` : `tool-set:${set!.id}`, kind: tool ? 'tool' : 'toolSet', name,
-				resource: URI.from({ scheme: Schemas.internal, authority: 'agent-tools', query: new URLSearchParams({ name: tool?.name ?? set!.id }).toString() }),
+				id: tool ? `tool:${tool.id}` : `tool-set:${set!.id}`, kind: tool ? 'tool' : 'toolSet', name,
+				resource: URI.from({ scheme: Schemas.internal, authority: 'agent-tools', query: new URLSearchParams({ name: tool?.id ?? set!.id }).toString() }),
 				resolve: async () => ({ name, content }),
 			},
 		};
@@ -308,7 +322,7 @@ export class GitHubContextValuePick implements ChatContextSource {
 type ContextPickSelection<T> = { readonly kind: 'item'; readonly item: T; readonly background: boolean; } | { readonly kind: 'back'; };
 interface BackPick extends IQuickPickItem { readonly back: true; }
 
-export function pickChatContextItem<T extends IQuickPickItem>(quickInput: IQuickInputService, placeholder: string, provide: (query: string, token: CancellationToken) => Promise<readonly T[]>, signal: AbortSignal, accept: (item: T) => boolean = () => true): Promise<ContextPickSelection<T> | undefined> {
+export function pickChatContextItem<T extends IQuickPickItem>(quickInput: IQuickInputService, placeholder: string, provide: (query: string, token: CancellationToken) => Promise<readonly T[]>, signal: AbortSignal, accept: (item: T) => boolean = () => true, onDidChangeItems: Event<void> = Event.None): Promise<ContextPickSelection<T> | undefined> {
 	const resources = new DisposableStore();
 	const picker = resources.add(quickInput.createQuickPick<T | BackPick>());
 	const request = resources.add(new MutableDisposable());
@@ -325,18 +339,23 @@ export function pickChatContextItem<T extends IQuickPickItem>(quickInput: IQuick
 			if (error) reject(error); else resolve(item);
 			resources.dispose();
 		};
-		const load = async (query: string): Promise<void> => {
+		const load = async (query: string, retainActive = false): Promise<void> => {
 			if (settled) return;
 			const cancellation = new CancellationTokenSource();
 			request.value = toDisposable(() => cancellation.dispose(true));
 			const token = cancellation.token;
 			// Quick Input preserves the active item by identity when results change.
 			// Start empty so the completed catalog selects its first actual source.
-			picker.items = [];
+			const active = retainActive ? picker.activeItems[0] : undefined;
+			if (!retainActive) picker.items = [];
 			picker.busy = true;
 			try {
 				const items = await provide(query, token);
-				if (!settled && !token.isCancellationRequested) picker.items = [...items, back];
+				if (!settled && !token.isCancellationRequested) {
+					picker.items = [...items, back];
+					const retained = active && (active === back ? back : items.find(item => item.label === active.label && item.description === active.description));
+					if (retained) picker.activeItems = [retained];
+				}
 			} catch (error) {
 				if (!settled && !token.isCancellationRequested) finish(undefined, error);
 			} finally {
@@ -344,6 +363,7 @@ export function pickChatContextItem<T extends IQuickPickItem>(quickInput: IQuick
 			}
 		};
 		resources.add(picker.onDidChangeValue(query => { void load(query); }));
+		resources.add(onDidChangeItems(() => { void load(picker.value, true); }));
 		resources.add(picker.onDidAccept(() => {
 			const item = picker.selectedItems[0];
 			if (!item) return;
