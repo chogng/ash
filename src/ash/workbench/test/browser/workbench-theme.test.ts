@@ -12,7 +12,7 @@ import { createColorTheme, highContrastDarkColorTheme } from '../../../platform/
 import { ColorScheme } from '../../../platform/theme/common/theme.js';
 import { WorkbenchConfiguration } from '../../common/configuration.js';
 import { WorkbenchThemesRegistry } from '../../common/theme.js';
-import { WorkbenchConfigurationService } from '../../services/configuration/browser/configurationService.js';
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../services/configuration/test/common/testServices.js';
 import { WorkbenchThemeService } from '../../services/themes/browser/workbenchThemeService.js';
 
 class ThemeWindow extends Disposable {

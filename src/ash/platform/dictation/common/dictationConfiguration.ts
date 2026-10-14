@@ -1,5 +1,5 @@
 import { localize } from '../../../nls.js';
-import { configurationValues, type IConfigurationDocument } from '../../configuration/common/configurationIpc.js';
+import type { IConfigurationService } from '../../configuration/common/configuration.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../configuration/common/configurationRegistry.js';
 import { Registry } from '../../registry/common/platform.js';
 
@@ -22,13 +22,12 @@ function parseCloudProvider(value: unknown): 'openAi' | 'xai' {
 	throw new TypeError('dictation.cloudProvider must be openAi or xai');
 }
 
-export function dictationBackend(document: IConfigurationDocument): { readonly type: 'local'; readonly modelId: string; } | { readonly type: 'cloud'; readonly provider: 'openAi' | 'xai'; readonly modelId: string; } {
-	const values = configurationValues(document);
-	const type = parseBackend(values[DictationConfiguration.backend] ?? 'local');
+export function dictationBackend(configuration: Pick<IConfigurationService, 'getValue'>): { readonly type: 'local'; readonly modelId: string; } | { readonly type: 'cloud'; readonly provider: 'openAi' | 'xai'; readonly modelId: string; } {
+	const type = parseBackend(configuration.getValue(DictationConfiguration.backend) ?? 'local');
 	if (type === 'local') {
-		return { type, modelId: parseLocalModel(values[DictationConfiguration.localModel] ?? DEFAULT_LOCAL_DICTATION_MODEL) };
+		return { type, modelId: parseLocalModel(configuration.getValue(DictationConfiguration.localModel) ?? DEFAULT_LOCAL_DICTATION_MODEL) };
 	}
-	const provider = parseCloudProvider(values[DictationConfiguration.cloudProvider] ?? 'openAi');
+	const provider = parseCloudProvider(configuration.getValue(DictationConfiguration.cloudProvider) ?? 'openAi');
 	return { type, provider, modelId: provider === 'xai' ? XAI_DICTATION_MODEL : CLOUD_DICTATION_MODEL };
 }
 
@@ -44,10 +43,9 @@ function parseLanguage(value: unknown): string {
 	throw new TypeError('dictation.language must be auto or a language code');
 }
 
-export function dictationInputOptions(document: IConfigurationDocument, backend: 'local' | 'cloud'): { inputDevice: string | null; language: string | null; } {
-	const values = configurationValues(document);
-	const inputDevice = parseInputDevice(values['dictation.inputDevice'] ?? '');
-	const language = parseLanguage(values['dictation.language'] ?? 'auto');
+export function dictationInputOptions(configuration: Pick<IConfigurationService, 'getValue'>, backend: 'local' | 'cloud'): { inputDevice: string | null; language: string | null; } {
+	const inputDevice = parseInputDevice(configuration.getValue('dictation.inputDevice') ?? '');
+	const language = parseLanguage(configuration.getValue('dictation.language') ?? 'auto');
 	return { inputDevice: inputDevice || null, language: backend === 'local' || language === 'auto' ? null : language };
 }
 

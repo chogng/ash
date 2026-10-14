@@ -7,7 +7,7 @@ import { ConfigurationResolverExpression } from '../../common/configurationResol
 import { SyncDescriptor } from '../../../../../platform/instantiation/common/descriptors.js';
 import { OperatingSystem } from '../../../../../base/common/platform.js';
 import { ConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
-import { WorkbenchConfigurationService } from '../../../configuration/browser/configurationService.js';
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../../configuration/test/common/testServices.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IRendererHostService, type IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
 import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.js';

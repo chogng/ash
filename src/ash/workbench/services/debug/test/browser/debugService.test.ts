@@ -29,7 +29,7 @@ import { normalizeExtensionCatalog } from '../../../../../platform/extensions/co
 import { ExtensionResourceLoaderService } from '../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { createHash } from 'node:crypto';
 import { registerTestExtensionService, TestExtensionService } from '../../../../test/common/testExtensionServices.js';
-import { WorkbenchConfigurationService } from '../../../configuration/browser/configurationService.js';
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../../configuration/test/common/testServices.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IRendererHostService } from '../../../../../platform/renderer/common/rendererHost.js';
 import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.js';

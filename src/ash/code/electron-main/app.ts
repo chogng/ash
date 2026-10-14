@@ -1,4 +1,8 @@
 import { AshWorkbenchName } from '../common/application.js';
+import '../../platform/update/common/update.config.contribution.js';
+import { SystemPolicyService } from '../../platform/policy/node/systemPolicyService.js';
+import { FilePolicyService } from '../../platform/policy/common/filePolicyService.js';
+import { PolicyChannel } from '../../platform/policy/common/policyIpc.js';
 import { randomUUID } from 'node:crypto';
 import { WebviewProtocolProvider } from '../../platform/webview/electron-main/webviewProtocolProvider.js';
 import { isAdmin, performShellCommand } from '../../platform/native/electron-main/nativeHostMainService.js';
@@ -44,10 +48,12 @@ import { UtilityProcess } from '../../platform/utilityProcess/electron-main/util
 import { BrowserViewGroupMainService } from '../../platform/browserView/electron-main/browserViewGroupMainService.js';
 import { IPlaywrightService } from '../../platform/browserView/common/playwrightService.js';
 import { WebContentsView, session as electronSession } from 'electron/main';
-import { configurationValues } from '../../platform/configuration/common/configurationIpc.js';
 import { formatNlsMessage, localize2 } from '../../nls.js';
-import { ConfigurationMainService, configurationChannel } from "../../platform/configuration/electron-main/configurationMainService.js";
-import { IConfigurationResourceService } from '../../platform/configuration/common/configurationResourceService.js';
+import { ConfigurationService } from '../../platform/configuration/common/configurationService.js';
+import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
+import { IPolicyService } from '../../platform/policy/common/policy.js';
+import { FileService } from '../../platform/files/common/fileService.js';
+import { IFileService } from '../../platform/files/common/files.js';
 import { IMeteredConnectionService } from '../../platform/meteredConnection/common/meteredConnection.js';
 import { METERED_CONNECTION_CHANNEL } from '../../platform/meteredConnection/common/meteredConnectionIpc.js';
 import { MeteredConnectionMainService } from '../../platform/meteredConnection/electron-main/meteredConnectionMainService.js';
@@ -146,7 +152,7 @@ export interface AshApplicationOptions {
 
 interface PersistentServices {
 	readonly state: StateService;
-	readonly configuration: ConfigurationMainService;
+	readonly configuration: ConfigurationService;
 	readonly userKeyboardLayout: UserKeyboardLayoutMainService;
 }
 
@@ -212,6 +218,7 @@ export class AshApplication extends Disposable {
 	private readonly globalKeybindings: GlobalKeybindingsMainService;
 	private readonly nativeMenubar: NativeMenubarMainService | undefined;
 	private readonly profileRoot: string;
+	private profileFileSystem!: DiskFileSystemProvider;
 	private readonly localizationChanged = this._register(new Emitter<void>());
 	private activeLanguagePack: LanguagePackCatalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'en')!;
 	private restartRequested = false;
@@ -435,19 +442,7 @@ export class AshApplication extends Disposable {
 		this.logService.info('lifecycle', 'Desktop startup', { appServer: this.appServerStartupMode });
 		await this.createPersistentServices(token);
 		throwIfCancelled(token);
-		this.mainProcessIpcServer.registerChannel('configuration', configurationChannel(this.services.configuration));
-		const configuration = this.services.configuration;
-		this.windowServices.registerInstance(IConfigurationResourceService, {
-			onDidChangeResource: Event.map(configuration.onDidChange, snapshot => ({ revision: snapshot.revision, source: snapshot.document.source })),
-			async read() {
-				const snapshot = configuration.read();
-				return { revision: snapshot.revision, source: snapshot.document.source };
-			},
-			async write(source, expectedRevision) {
-				const snapshot = await configuration.update({ expectedRevision, document: { version: 1, source } });
-				return { revision: snapshot.revision, source: snapshot.document.source };
-			},
-		});
+		this.windowServices.registerInstance(IConfigurationService, this.services.configuration);
 		const meteredConnection = this._register(this.windowServices.createInstance(MeteredConnectionMainService));
 		this.windowServices.registerInstance(IMeteredConnectionService, meteredConnection);
 		this.mainProcessIpcServer.registerChannel(METERED_CONNECTION_CHANNEL, new MeteredConnectionChannel(meteredConnection));
@@ -481,7 +476,7 @@ export class AshApplication extends Disposable {
 		}));
 		await mkdir(join(this.profileRoot, 'themes'), { recursive: true });
 		throwIfCancelled(token);
-		const profileFiles = this._register(new DiskFileSystemProvider([URI.file(this.profileRoot)]));
+		const profileFiles = this.profileFileSystem;
 		this._register(profileFiles.onDidWatchError(error => this.logService.error('files', 'Failed to watch user profile files', error)));
 		this._register(profileFiles.watch(URI.file(this.profileRoot), { recursive: true, excludes: ['**/*.tmp'] }));
 		this.mainProcessIpcServer.registerChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME, this._register(new DiskFileSystemProviderChannel(profileFiles, URI.file(this.profileRoot), URI.file(app.getPath('home')))));
@@ -489,7 +484,7 @@ export class AshApplication extends Disposable {
 		this.mainProcessIpcServer.registerChannel('userKeyboardLayout', userKeyboardLayoutChannel(this.services.userKeyboardLayout));
 		this.mainProcessIpcServer.registerChannel('update', new UpdateChannel(this.updateMainService));
 		this.mainProcessIpcServer.registerChannel('process', ProxyChannel.fromService(this.windowServices.createInstance(ProcessMainService), this._store));
-		const localeValue = configurationValues(this.services.configuration.read().document)[LocalizationConfiguration.locale];
+		const localeValue = this.services.configuration.getValue(LocalizationConfiguration.locale);
 		const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === localeValue) ?? productLanguagePackCatalogs.find(catalog => catalog.locale === 'en')!;
 		throwIfCancelled(token);
 		this.activeLanguagePack = catalog;
@@ -585,7 +580,7 @@ export class AshApplication extends Disposable {
 				this.jumpListUpdates = this.jumpListUpdates.then(() => this.updateWindowsJumpList()).catch(error => console.error('Failed to update Windows Jump List', error));
 			};
 			this._register(this.workspacesHistory.onDidChangeRecentlyOpened(update));
-			this._register(this.services.configuration.onDidChange(update));
+			this._register(this.services.configuration.onDidChangeConfiguration(update));
 			update();
 		}
 	}
@@ -633,7 +628,7 @@ export class AshApplication extends Disposable {
 
 	private async restoreWindowSession(workspaces: WorkspacesManagementMainService, hasExplicitTarget: boolean, wasUpdated: boolean): Promise<void> {
 		const session = this.windowSessionStateHandler.readSession();
-		const configuredSetting = configurationValues(this.services.configuration.read().document)[RESTORE_WINDOWS_SETTING];
+		const configuredSetting = this.services.configuration.getValue(RESTORE_WINDOWS_SETTING);
 		const selection = this.windowsMainService.selectWindowsToRestore(session, configuredSetting, hasExplicitTarget, wasUpdated);
 		for (const entry of selection.windows) {
 			try {
@@ -717,7 +712,7 @@ export class AshApplication extends Disposable {
 			}).catch(error => console.error('Failed to update tray menu', error));
 		};
 		this._register(this.workspacesHistory.onDidChangeRecentlyOpened(updateMenu));
-		this._register(this.services.configuration.onDidChange(updateMenu));
+		this._register(this.services.configuration.onDidChangeConfiguration(updateMenu));
 		this._register(this.localizationChanged.event(updateMenu));
 		updateMenu();
 		if (whiteIcon) {
@@ -937,15 +932,26 @@ export class AshApplication extends Disposable {
 	}
 
 	private async createPersistentServices(token: CancellationToken): Promise<void> {
-		let configuration: ConfigurationMainService | undefined;
+		let configuration: ConfigurationService | undefined;
 		let userKeyboardLayout: UserKeyboardLayoutMainService | undefined;
 		try {
-			configuration = await ConfigurationMainService.create({
-				filePath: join(this.profileRoot, "settings.json"),
-				onError: (error) => {
-					console.error("Failed to process configuration", error);
-				},
-			});
+			this.profileFileSystem = this._register(new DiskFileSystemProvider([URI.file(this.profileRoot)]));
+			const files = this._register(new FileService());
+			this._register(files.registerProvider(Schemas.file, this.profileFileSystem));
+			let policies: IPolicyService;
+			if (process.platform === 'linux') {
+				const systemFiles = this._register(new FileService());
+				const systemProvider = this._register(new DiskFileSystemProvider([URI.file('/etc')]));
+				this._register(systemFiles.registerProvider(Schemas.file, systemProvider));
+				policies = this._register(new FilePolicyService(URI.file('/etc/ash/policies.json'), systemFiles, this.logService));
+			} else {
+				policies = this._register(new SystemPolicyService(this.logService));
+			}
+			this.mainProcessIpcServer.registerChannel('policy', this._register(new PolicyChannel(policies)));
+			this.windowServices.registerInstance(IPolicyService, policies);
+			const scope = this._register(this.windowServices.createChild(new ServiceCollection([IFileService, files], [IPolicyService, policies], [ILogService, this.logService])));
+			configuration = scope.createInstance(ConfigurationService, URI.file(join(this.profileRoot, 'settings.json')));
+			await configuration.initialize();
 			throwIfCancelled(token);
 			userKeyboardLayout = await UserKeyboardLayoutMainService.create({
 				filePath: join(this.profileRoot, "keyboard-layout.json"),
@@ -958,11 +964,16 @@ export class AshApplication extends Disposable {
 			this.persistentServices = { state: this.stateService, configuration, userKeyboardLayout };
 		} catch (error) {
 			await Promise.all([
-				configuration?.close(),
+				configuration?.dispose(),
 				userKeyboardLayout?.close(),
 			]);
 			throw error;
 		}
+	}
+
+	private windowConfigurationValues(): Readonly<Record<string, unknown>> {
+		const configuration = this.services.configuration;
+		return Object.fromEntries(configuration.keys().user.map(key => [key, configuration.getValue(key)]));
 	}
 
 	private async resolveWorkspace(): Promise<{ readonly workspace: IAnyWorkspaceIdentifier; readonly explicit: boolean; }> {
@@ -1050,7 +1061,7 @@ export class AshApplication extends Disposable {
 			{
 				channel: NLS_CONFIGURATION_CHANNEL,
 				validate: value => { if (value !== undefined) { throw new TypeError('Startup language takes no arguments'); } return undefined; },
-				invoke: () => configurationValues(this.services.configuration.read().document)[LocalizationConfiguration.locale] ?? 'en',
+				invoke: () => this.services.configuration.getValue(LocalizationConfiguration.locale) ?? 'en',
 			},
 			{
 				channel: NLS_ACTIVATE_CHANNEL,
@@ -1212,7 +1223,7 @@ export class AshApplication extends Disposable {
 		resources: DisposableStore,
 	): Promise<WorkbenchWindowRecord> {
 		const windowsStateHandler = this.createWindowsStateHandler(workspaceContext.getWorkspace());
-		const windowState = this.windowsMainService.getNewWindowState(windowsStateHandler, configurationValues(this.services.configuration.read().document), this.lifecycleMainService.wasRestarted);
+		const windowState = this.windowsMainService.getNewWindowState(windowsStateHandler, this.windowConfigurationValues(), this.lifecycleMainService.wasRestarted);
 		const titleBarStyle = this.titleBarStyle;
 		const windowHost = this.windowsMainService.createWindow(options => new BrowserWindow(options), {
 			workspace: workspaceContext.getWorkspace(),
@@ -1623,7 +1634,7 @@ export class AshApplication extends Disposable {
 				titleBarStyle,
 				backgroundColor: this.themeMainService.getBackgroundColor(`sessions:${session.workspaceContext.getWorkspace().id}`),
 				icon: this.windowIconPath,
-				state: this.windowsMainService.getNewWindowState(sessionsWindowState, configurationValues(this.services.configuration.read().document), this.lifecycleMainService.wasRestarted),
+				state: this.windowsMainService.getNewWindowState(sessionsWindowState, this.windowConfigurationValues(), this.lifecycleMainService.wasRestarted),
 				webPreferences: this.createSandboxWebPreferences(),
 				initialize: async (window, windowDisposables) => {
 					this.configureWindowNavigation(window, windowDisposables);
@@ -1982,7 +1993,7 @@ export class AshApplication extends Disposable {
 			this.invitationPersistence.catch(() => { }).then(() => this.storageMainService?.close()),
 			this.stateService.close(),
 			...(services ? [
-				services.configuration.close(),
+				services.configuration.dispose(),
 				services.userKeyboardLayout.close(),
 			] : []),
 		]).catch(error => {
@@ -2086,7 +2097,7 @@ export class AshApplication extends Disposable {
 	}
 
 	private get titleBarStyle(): TitleBarStyleConfiguration {
-		const value = configurationValues(this.services.configuration.read().document)[TitleBarSetting.TitleBarStyle];
+		const value = this.services.configuration.getValue(TitleBarSetting.TitleBarStyle);
 		return parseTitleBarStyle(value ?? 'custom');
 	}
 

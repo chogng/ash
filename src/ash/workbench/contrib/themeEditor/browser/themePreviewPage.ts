@@ -43,7 +43,7 @@ const workbench = resources.add(await startWorkbench({
 	workspace: { id: 'theme-preview', folders: [{ id: 'theme-preview', name: 'theme-preview', uri: workspaceRoot, index: 0 }] },
 	workspaceFileSystemProvider: workspaceFiles,
 	defaultLayout: { parts: { sidebar: true, panel: false, auxiliarybar: false, agentSidebar: false } },
-	initialConfigurationSnapshot: { revision: 1, document: { version: 1, source: '{"workbench.startupEditor":"none"}' } },
+	initialConfiguration: { "contents": { "workbench": { "startupEditor": "none" } }, "keys": ["workbench.startupEditor"], "overrides": [] },
 	// Webviews are not part of the sample. The disconnected host supplies no remote resources.
 	environmentService: { webviewExternalEndpoint: 'https://{{uuid}}.invalid' },
 	clipboardService: clipboard,

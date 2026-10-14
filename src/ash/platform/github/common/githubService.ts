@@ -1,4 +1,5 @@
 import type { AccountStatus } from '../../accounts/common/accountService.js';
+import type { JsonValue } from '../../../base/common/jsonValue.js';
 import type { CancellationToken } from '../../../base/common/cancellation.js';
 import type { Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
@@ -150,6 +151,7 @@ export interface IGitHubService {
 	detachSessionIssue(sessionId: string, reference: GitHubIssueReference): Promise<void>;
 	/** Primary grant first; explicit selection does not change other consumers' primary grant. */
 	listAccounts(token?: CancellationToken): Promise<readonly GitHubAccount[]>;
+	readManagedSettings(accountId: string, token?: CancellationToken): Promise<Readonly<Record<string, JsonValue>> | null>;
 	connectToken(host: string, accessToken: string, token?: CancellationToken): Promise<GitHubAccount>;
 	listNotifications(accountId: string, filter: GitHubNotificationFilter, page: number, token?: CancellationToken): Promise<GitHubPage<GitHubNotification>>;
 	markNotificationRead(accountId: string, threadId: string, token?: CancellationToken): Promise<void>;

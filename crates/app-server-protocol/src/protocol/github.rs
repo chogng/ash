@@ -7,6 +7,21 @@ use crate::protocol::issues::IssueSummary;
 use serde::Deserialize;
 use serde::Serialize;
 
+/// Reads settings for one exact account without changing the profile's primary grant.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubManagedSettingsParams {
+    pub operation_id: String,
+    pub account_id: String,
+}
+
+/// Provider data only; UI setting meanings and policy mappings belong to the client registry.
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubManagedSettingsResult {
+    pub settings: Option<serde_json::Value>,
+}
+
 /// A durable PR identity; live state and account credentials are resolved separately.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

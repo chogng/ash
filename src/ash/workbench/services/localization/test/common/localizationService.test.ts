@@ -7,7 +7,7 @@ import { resolve } from 'node:path';
 import { setup, suite, teardown, test } from "mocha";
 import { Event } from "../../../../../base/common/event.js";
 import { DeferredPromise } from '../../../../../base/common/async.js';
-import type { IConfigurationApi } from '../../../../../platform/configuration/common/configurationIpc.js';
+import type { IFileService } from '../../../../../platform/files/common/files.js';
 import { initializeBrowserLocalization } from '../../browser/localizationBootstrap.js';
 import { InMemoryConfigurationService } from "../../../../../platform/configuration/common/inMemoryConfigurationService.js";
 import type { IExtensionManagementService } from "../../../../../platform/extensionManagement/common/extensionManagementService.js";
@@ -616,11 +616,7 @@ suite('Workbench localization', () => {
 		});
 	}
 
-	function startupConfiguration(locale?: string): IConfigurationApi {
-		return {
-			read: async () => ({ revision: 1, document: { version: 1, source: JSON.stringify(locale === undefined ? {} : { 'workbench.locale': locale }) } }),
-			update: async () => { assert.fail('Bootstrap must not change settings'); },
-			onDidChange: () => { assert.fail('Bootstrap must not subscribe to live language changes'); },
-		};
+	function startupConfiguration(locale?: string): Pick<IFileService, 'readFile'> {
+		return { readFile: async resource => ({ resource, content: JSON.stringify(locale === undefined ? {} : { 'workbench.locale': locale }), revision: 'startup' }) };
 	}
 });

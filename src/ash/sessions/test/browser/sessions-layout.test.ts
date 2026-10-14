@@ -31,7 +31,7 @@ const { DesktopWorkbenchLayout } = await import("../../../sessions/browser/deskt
 const { SessionsModernUIContribution } = await import('../../../sessions/contrib/modernUI/browser/modernUI.contribution.js');
 const { SessionsConfiguration } = await import('../../../sessions/common/configuration.js');
 const { ActivityBarPosition, WorkbenchConfiguration } = await import('../../../workbench/common/configuration.js');
-const { WorkbenchConfigurationService } = await import('../../../workbench/services/configuration/browser/configurationService.js');
+const { TestConfigurationService: WorkbenchConfigurationService } = await import("../../../workbench/services/configuration/test/common/testServices.js");
 
 type SessionsPartId = import("../../common/layoutConstants.js").SessionsPartId;
 type WorkbenchPartInstance = import("../../../workbench/browser/part.js").Part;

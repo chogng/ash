@@ -88,7 +88,7 @@ import { IChatService, type AdvisorConfig, type ModelProviderCredentialStatus, t
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
 import { ModelCatalogConfiguration } from "../../../workbench/contrib/chat/common/languageModelsConfiguration.js";
-import { WorkbenchConfigurationService } from "../../../workbench/services/configuration/browser/configurationService.js";
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../../workbench/services/configuration/test/common/testServices.js';
 import { SessionsManagementService as BaseSessionsManagementService } from "../../services/sessions/browser/sessionsManagementService.js";
 import { AppServerSessionsProvider } from "../../contrib/providers/agentHost/browser/appServerSessionsProvider.js";
 import type { ISession } from "../../services/sessions/common/session.js";
@@ -107,7 +107,9 @@ import { IChatSessionNavigationService } from '../../../workbench/services/chat/
 import type { IOpenerService, OpenOptions } from "../../../platform/opener/common/opener.js";
 import { IEditorService } from "../../../workbench/services/editor/common/editorService.js";
 import { IStorageService } from '../../../platform/storage/common/storage.js';
-import { ConfigurationResourceRevisionConflictError, type IConfigurationResourceService } from '../../../platform/configuration/common/configurationResourceService.js';
+import { UserDataProfileService } from '../../../workbench/services/userDataProfile/browser/userDataProfileService.js';
+import { FileNotFoundError, FileRevisionConflictError } from '../../../platform/files/common/files.js';
+import { TestConfigurationFiles } from '../../../workbench/services/configuration/test/common/testServices.js';
 import { parseJsonDocument } from '../../../base/common/json.js';
 import { productLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
 import { ChatTipService, IChatTipService } from '../../../workbench/contrib/chat/browser/chatTipService.js';
@@ -115,11 +117,7 @@ import { BrowserLifecycleService } from '../../../workbench/services/lifecycle/b
 import { ILifecycleService } from '../../../workbench/services/lifecycle/common/lifecycle.js';
 
 const inputResources = new DisposableStore();
-const emptyConfigurationResource = {
-	onDidChangeResource: Event.None,
-	read: async () => ({ source: '{}', revision: 0 }),
-	write: async () => { throw new Error('This fixture has no legacy configuration to migrate'); },
-};
+const userDataProfile = new UserDataProfileService();
 suiteTeardown(() => inputResources.dispose());
 function createInputServices(contextView: IContextViewService, chat: IChatService, menus?: IMenuService, contextMenus?: IContextMenuService): InstantiationService {
 	const services = inputResources.add(createTestEditorServices(configurationServices.get(chat), createCodeEditorServices(inputResources)));
@@ -153,6 +151,7 @@ function createChatListWidget(container: HTMLElement, options: ConstructorParame
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 setARIAContainer(browserEnvironment.window.document.body);
 const unavailableFileService = {
+	readFile: async (resource: URI) => { throw new FileNotFoundError(resource); },
 	readFileBytes: async () => { throw new Error('File read is unavailable in this test'); },
 } as unknown as IFileService;
 const unavailableAccessibleViewService = { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService;
@@ -268,6 +267,7 @@ test('Chat loads an Ash remote workspace image through the file service', async 
 	const fake = fakeApi({ sessions: [session('session-1', 'thread-1')], thread: () => thread(`![pixel](${resource})`) });
 	const requests: URI[] = [];
 	const fileService = {
+		readFile: async (resource: URI) => { throw new FileNotFoundError(resource); },
 		readFileBytes: async (requested: URI) => {
 			requests.push(requested);
 			return { resource: requested, bytes: new Uint8Array([137, 80, 78, 71]), revision: '1' };
@@ -300,7 +300,7 @@ test('Chat loads an Ash remote workspace image through the file service', async 
 			fileService,
 			unavailableAccessibleViewService,
 			notifications,
-			createInputServices(contextViewService, paneChat, menuService, contextMenuService), inputResources.add(new WorkbenchConfigurationService()), inputResources.add(createTestStorage()), emptyConfigurationResource, contextKeys,
+			createInputServices(contextViewService, paneChat, menuService, contextMenuService), inputResources.add(new WorkbenchConfigurationService()), inputResources.add(createTestStorage()), userDataProfile, contextKeys,
 		);
 		dom.window.document.body.append(pane.element);
 		await sessions.initialize();
@@ -418,7 +418,7 @@ test("Chat title and history switching retain conversations and drafts", async (
 		unavailableFileService,
 		unavailableAccessibleViewService,
 		notifications,
-		createInputServices(contextViewService, chat, menuService, contextMenuService), configuration, inputResources.add(createTestStorage()), emptyConfigurationResource, contextKeys,
+		createInputServices(contextViewService, chat, menuService, contextMenuService), configuration, inputResources.add(createTestStorage()), userDataProfile, contextKeys,
 	);
 	chatView = pane;
 	const title = h(dom.window.document, "div");
@@ -1189,7 +1189,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
 		createInputServices(contextViewService, paneChat, menuService, contextMenuService),
 		inputResources.add(new WorkbenchConfigurationService()),
 		inputResources.add(createTestStorage()),
-		emptyConfigurationResource,
+		userDataProfile,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -1317,7 +1317,7 @@ test("the New Chat slash command opens an untitled session", async () => {
 		createInputServices(contextViewService, paneChat, menuService, contextMenuService),
 		inputResources.add(new WorkbenchConfigurationService()),
 		inputResources.add(createTestStorage()),
-		emptyConfigurationResource,
+		userDataProfile,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -1391,7 +1391,7 @@ test("failed first send keeps the untitled session and its input draft", async (
 		createInputServices(contextViewService, paneChat, menuService, contextMenuService),
 		inputResources.add(new WorkbenchConfigurationService()),
 		inputResources.add(createTestStorage()),
-		emptyConfigurationResource,
+		userDataProfile,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -1477,7 +1477,7 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
 		createInputServices(contextViewService, paneChat, menuService, contextMenuService),
 		inputResources.add(new WorkbenchConfigurationService()),
 		inputResources.add(createTestStorage()),
-		emptyConfigurationResource,
+		userDataProfile,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -4215,7 +4215,7 @@ function navigationThreadSnapshot(threadId: string): import('../../../platform/a
 }
 
 
-async function createNavigationInputPane(configurationSource = '{}', configurationResource?: IConfigurationResourceService, threadApi: Partial<IAgentThreadService> = {}) {
+async function createNavigationInputPane(configurationSource = '{}', configurationFiles?: IFileService, threadApi: Partial<IAgentThreadService> = {}) {
 	const resources = new DisposableStore();
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const contextView = resources.add(new BrowserContextViewService(dom.window.document.body));
@@ -4240,7 +4240,7 @@ async function createNavigationInputPane(configurationSource = '{}', configurati
 	const contextKeys = resources.add(new ContextKeyService());
 	resources.add(new ViewDescriptorService({ registry: new WorkbenchViewRegistry() }, contextKeys));
 	const commandServices = resources.add(new InstantiationService());
-	const configuration = resources.add(new WorkbenchConfigurationService({ initialSnapshot: { revision: 1, document: { version: 1, source: configurationSource } } }));
+	const configuration = resources.add(new WorkbenchConfigurationService({ source: configurationSource }));
 	commandServices.registerInstance(IConfigurationService, configuration);
 	const commands = resources.add(new CommandService(commandServices));
 	const menu = new MenuService(commands, contextKeys);
@@ -4248,8 +4248,8 @@ async function createNavigationInputPane(configurationSource = '{}', configurati
 	const chat = resources.add(createChatService(api, configuration));
 	const inputServices = createInputServices(contextView, chat, menu, contextMenus);
 	const pane = resources.add(new ChatViewPane(dom.window.document.body, { id: CHAT_VIEW_ID, title: 'Chat' }, chat, sessions,
-		menu, contextMenus, contextView, commands, testLayoutService(), unavailableFileService, unavailableAccessibleViewService, notifications,
-		inputServices, configuration, inputResources.add(createTestStorage()), configurationResource ?? configuration));
+		menu, contextMenus, contextView, commands, testLayoutService(), configurationFiles ?? configuration.fileService, unavailableAccessibleViewService, notifications,
+		inputServices, configuration, inputResources.add(createTestStorage()), userDataProfile));
 	dom.window.document.body.append(pane.element);
 	await sessions.initialize();
 	await nextTask();
@@ -4405,16 +4405,18 @@ test('Sessions migrates legacy automatic layout once while preserving profile co
 	resources.dispose();
 	const reopened = await createNavigationInputPane(snapshot.source);
 	using reopenedResources = reopened.resources;
-	assert.equal((await reopened.configuration.read()).revision, 1);
+	assert.equal((await reopened.configuration.read()).source, snapshot.source);
 });
 
 test('Sessions migration yields to a newer explicit preference', async () => {
 	let writes = 0;
-	const fixture = await createNavigationInputPane(`{"${AGENT_SESSIONS_ORIENTATION_SETTING}":"stacked"}`, {
-		onDidChangeResource: Event.None,
-		read: async () => ({ revision: 0, source: `{"${AGENT_SESSIONS_ORIENTATION_SETTING}":"auto"}` }),
-		write: async () => { writes++; throw new ConfigurationResourceRevisionConflictError(0, 1); },
-	});
+	using files = new class extends TestConfigurationFiles {
+		override async writeFile(...args: Parameters<TestConfigurationFiles['writeFile']>): Promise<never> {
+			writes++;
+			throw new FileRevisionConflictError(args[0].resource);
+		}
+	}(`{"${AGENT_SESSIONS_ORIENTATION_SETTING}":"auto"}`);
+	const fixture = await createNavigationInputPane(`{"${AGENT_SESSIONS_ORIENTATION_SETTING}":"stacked"}`, files);
 	using resources = fixture.resources;
 	assert.equal(writes, 1);
 	assert.equal(fixture.configuration.getValue(AGENT_SESSIONS_ORIENTATION_SETTING), AgentSessionsOrientation.Stacked);
@@ -4654,7 +4656,7 @@ for (const navigate of [false, true]) {
 		const chat = resources.add(createChatService(fake.api));
 		const pane = resources.add(new ChatViewPane(dom.window.document.body, { id: CHAT_VIEW_ID, title: 'Chat' }, chat, sessions,
 			menu, contextMenus, contextView, commands, testLayoutService(), unavailableFileService, unavailableAccessibleViewService, notifications,
-			createInputServices(contextView, chat, menu, contextMenus), inputResources.add(new WorkbenchConfigurationService()), inputResources.add(createTestStorage()), emptyConfigurationResource));
+			createInputServices(contextView, chat, menu, contextMenus), inputResources.add(new WorkbenchConfigurationService()), inputResources.add(createTestStorage()), userDataProfile));
 		dom.window.document.body.append(pane.element);
 		await nextTask();
 		const original = pane.element.querySelector<HTMLElement>('.ash-chat-pane-host > .ash-chat')!;
@@ -4807,7 +4809,7 @@ test('AI preference blocks direct dispatch, including a pending permission read,
 
 test('AI preference prevents an Untitled Chat from materializing and follows JSONC reload without changing execution defaults', async () => {
 	const fake = fakeApi({ createSession: session('created', 'created-thread'), thread: () => ({ ...thread(), threadId: 'created-thread' }) });
-	using configuration = new WorkbenchConfigurationService({ initialSnapshot: { revision: 1, document: { version: 1, source: '{\n // Keep this comment\n "chat.disableAIFeatures": true,\n "chat.input.fontSize": 17,\n}' } } });
+	using configuration = new WorkbenchConfigurationService({ source: '{\n // Keep this comment\n "chat.disableAIFeatures": true,\n "chat.input.fontSize": 17,\n}' });
 	using chat = createChatService(fake.api, configuration);
 	using sessions = new SessionsManagementService(fake.api);
 	using model = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);

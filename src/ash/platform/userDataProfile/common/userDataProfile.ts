@@ -6,5 +6,6 @@ export interface IUserDataProfile {
 	readonly isDefault: boolean;
 	readonly name: string;
 	readonly location: URI;
+	readonly settingsResource: URI;
 	readonly keybindingsResource: URI;
 }

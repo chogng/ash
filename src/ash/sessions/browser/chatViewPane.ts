@@ -31,7 +31,8 @@ import { INotificationService } from '../../platform/notification/common/notific
 import type { IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
 import { Sash, SashState } from '../../base/browser/ui/sash/sash.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
-import { ConfigurationResourceRevisionConflictError, IConfigurationResourceService } from '../../platform/configuration/common/configurationResourceService.js';
+import { FileRevisionConflictError, FileSystemProviderErrorCode, toFileSystemProviderErrorCode } from '../../platform/files/common/files.js';
+import { IUserDataProfileService } from '../../workbench/services/userDataProfile/common/userDataProfile.js';
 import { editJsonObjectProperty, parseJsonDocument } from '../../base/common/json.js';
 
 let chatViewInstanceId = 0;
@@ -93,7 +94,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IStorageService private readonly storage: IStorageService,
-		@IConfigurationResourceService private readonly configurationResource: IConfigurationResourceService,
+		@IUserDataProfileService private readonly userProfile: IUserDataProfileService,
 		@IContextKeyService contextKeyService?: IContextKeyService,
 		@IOpenerService private readonly openerService?: IOpenerService,
 		@IEditorService private readonly editorService?: IEditorService,
@@ -472,14 +473,15 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 
 	private async migrateSessionsOrientation(): Promise<void> {
 		try {
-			const snapshot = await this.configurationResource.read();
+			const resource = this.userProfile.currentProfile.settingsResource;
+			const snapshot = await this.fileService.readFile(resource);
 			if (this.viewDisposed) return;
-			const value = parseJsonDocument(snapshot.source, { allowComments: true, allowTrailingComma: true }).value;
+			const value = parseJsonDocument(snapshot.content, { allowComments: true, allowTrailingComma: true }).value;
 			if (!value || typeof value !== 'object' || !(AGENT_SESSIONS_ORIENTATION_SETTING in value) || value[AGENT_SESSIONS_ORIENTATION_SETTING] !== 'auto') return;
 			// The revision check preserves a layout the user chose while the old profile was loading.
-			await this.configurationResource.write(editJsonObjectProperty(snapshot.source, AGENT_SESSIONS_ORIENTATION_SETTING, AgentSessionsOrientation.SideBySide), snapshot.revision);
+			await this.fileService.writeFile({ resource, content: editJsonObjectProperty(snapshot.content, AGENT_SESSIONS_ORIENTATION_SETTING, AgentSessionsOrientation.SideBySide), expectedRevision: snapshot.revision });
 		} catch (error) {
-			if (this.viewDisposed || error instanceof ConfigurationResourceRevisionConflictError) return;
+			if (this.viewDisposed || error instanceof FileRevisionConflictError || toFileSystemProviderErrorCode(error as Error) === FileSystemProviderErrorCode.FileNotFound) return;
 			this.notifications.error(localize('chat.sessions.layout.migrationFailed', 'Could not save the Sessions layout preference: {0}', String(error)));
 		}
 	}

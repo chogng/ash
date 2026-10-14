@@ -1,3 +1,4 @@
+import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
 import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
@@ -128,12 +129,12 @@ test('Seti extension fonts render in Explorer and editor tabs and can be switche
 		await expect(tab).toBeFocused();
 	}
 	for (const id of [null, 'vs-seti']) {
-		await workbench.page.evaluate(async id => {
-			const snapshot = await globalThis.ashTestMainProcess.call('configuration', 'read') as { revision: number; document: { source: string; }; };
-			const values = JSON.parse(snapshot.document.source);
+		await (async id => {
+			const snapshot = await readUserSettings(workbench.page);
+			const values = JSON.parse(snapshot.content);
 			values['workbench.iconTheme'] = id;
-			await globalThis.ashTestMainProcess.call('configuration', 'update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(values) } });
-		}, id);
+			await writeUserSettings(workbench.page, JSON.stringify(values), snapshot.revision);
+		})(id);
 		await expect(icon).toHaveCount(id === null ? 0 : 1);
 		if (id === null) {
 			await expect(tabIcon).toBeEmpty();
@@ -315,12 +316,12 @@ test('Desktop migrates a user theme through the file provider and applies its co
 	const source = JSON.parse(await readFile(join(home, 'themes', 'test-migration.json'), 'utf8'));
 	expect(source.name).toBe('Test Migration');
 	expect(source.version).toBeUndefined();
-	await workbench.page.evaluate(async () => {
-		const snapshot = await globalThis.ashTestMainProcess.call('configuration', 'read') as { revision: number; document: { source: string; }; };
-		const values = JSON.parse(snapshot.document.source);
+	await (async () => {
+		const snapshot = await readUserSettings(workbench.page);
+		const values = JSON.parse(snapshot.content);
 		values['workbench.colorTheme'] = 'test-migration';
-		await globalThis.ashTestMainProcess.call('configuration', 'update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(values) } });
-	});
+		await writeUserSettings(workbench.page, JSON.stringify(values), snapshot.revision);
+	})();
 	await expect.poll(() => workbench.element.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background').trim())).toBe('#123456');
 	await writeFile(join(home, 'themes', 'test-migration.json'), JSON.stringify({
 		name: 'Test Migration', type: 'dark',

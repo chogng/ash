@@ -2,9 +2,6 @@ import type {
 	IRuntimeEnvironment,
 } from "../../../base/common/environment.js";
 import type { IRendererHost } from "../../renderer/common/rendererHost.js";
-import type {
-	IConfigurationApi,
-} from "../../configuration/common/configurationIpc.js";
 import type { INativeKeyboardLayoutApi } from "../../keyboardLayout/common/nativeKeyboardLayout.js";
 import type { IUserKeyboardLayoutApi } from "../../keyboardLayout/common/userKeyboardLayout.js";
 import type {
@@ -25,7 +22,6 @@ import type {
 /** Capabilities exposed only by the Electron preload bridge. */
 export interface AshElectronRendererApi extends IRendererHost {
 	readonly environment: IRuntimeEnvironment;
-	readonly configuration: IConfigurationApi;
 	readonly keyboardLayout: INativeKeyboardLayoutApi;
 	readonly userKeyboardLayout: IUserKeyboardLayoutApi;
 	readonly nativeContextMenu: INativeContextMenuApi;

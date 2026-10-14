@@ -2,7 +2,7 @@ import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { resetNlsResolver } from '../../../../../nls.js';
 import { initializeTestLocalization } from '../../../localization/test/common/localizationTestUtils.js';
 import { SyncDescriptor } from '../../../../../platform/instantiation/common/descriptors.js';
-import { WorkbenchConfigurationService } from '../../../configuration/browser/configurationService.js';
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../../configuration/test/common/testServices.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IRendererHostService } from '../../../../../platform/renderer/common/rendererHost.js';
 import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.js';

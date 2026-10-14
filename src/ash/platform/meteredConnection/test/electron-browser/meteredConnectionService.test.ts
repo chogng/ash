@@ -4,7 +4,7 @@ import { suite, test } from 'mocha';
 import { DeferredPromise } from '../../../../base/common/async.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-import { IConfigurationResourceService, type IConfigurationResourceSnapshot } from '../../../configuration/common/configurationResourceService.js';
+import { ConfigurationRegistry } from '../../../configuration/common/configurationRegistry.js';
 import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
 import { IMainProcessService } from '../../../ipc/common/mainProcessService.js';
 import { IMeteredConnectionService } from '../../common/meteredConnection.js';
@@ -33,13 +33,11 @@ suite('Desktop metered connection renderer', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
 	test('reports explicit browser signals, shares overrides across windows, and removes listeners on disposal', async () => {
-		using configurationChanges = new Emitter<IConfigurationResourceSnapshot>();
+		const registry = new ConfigurationRegistry();
+		registry.registerConfiguration({ key: 'network.meteredConnection', defaultValue: 'auto', parse: value => value as string });
+		using configuration = new InMemoryConfigurationService(registry);
 		using mainServices = new InstantiationService();
-		mainServices.registerInstance(IConfigurationResourceService, {
-			onDidChangeResource: configurationChanges.event,
-			read: async () => ({ source: '{}', revision: 0 }),
-			write: async () => { throw new Error('Unexpected write'); },
-		});
+		mainServices.registerInstance(IConfigurationService, configuration);
 		using main = mainServices.createInstance(MeteredConnectionMainService);
 		const channel = new MeteredConnectionChannel(main);
 		using rendererServices = new InstantiationService();
@@ -68,7 +66,7 @@ suite('Desktop metered connection renderer', () => {
 		connection.saveData = true;
 		connection.dispatchEvent(new Event('change'));
 		assert.equal(await changed.p, true);
-		configurationChanges.fire({ revision: 1, source: '{"network.meteredConnection":"off"}' });
+		await configuration.updateValue('network.meteredConnection', 'off');
 		assert.deepEqual([first.isConnectionMetered, second.isConnectionMetered], [false, false]);
 		first.dispose();
 		second.dispose();

@@ -26,7 +26,7 @@ import { IConfigurationService } from '../../../../../platform/configuration/com
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { WorkbenchConfiguration } from '../../../../common/configuration.js';
 import { WorkbenchFileIconThemesRegistry } from '../../../themes/common/themeExtensionPoints.js';
-import { WorkbenchConfigurationService } from '../../../configuration/browser/configurationService.js';
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../../configuration/test/common/testServices.js';
 import { FileIconThemeData } from '../../browser/fileIconThemeData.js';
 import { WorkbenchThemeService } from '../../browser/workbenchThemeService.js';
 

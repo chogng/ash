@@ -28,6 +28,16 @@ export interface ModelVisibilityPreference extends ModelRef {
 export const ModelCatalogConfiguration = Object.freeze({
 	defaultModel: configurationRegistry.registerConfiguration<string>({
 		key: 'chat.defaultModel',
+		policy: {
+			name: 'ChatDefaultModel',
+			managedSettings: { model: { type: 'string' }, 'permissions.model': { type: 'string' } },
+			// Copilot's top-level model supersedes its legacy nested field; blank values withdraw the default.
+			value: data => {
+				const model = data.managedSettings?.model;
+				const legacy = data.managedSettings?.['permissions.model'];
+				return (typeof model === 'string' ? model.trim() : '') || (typeof legacy === 'string' ? legacy.trim() : '') || undefined;
+			},
+		},
 		defaultValue: '',
 		parse(value: unknown): string {
 			if (typeof value !== 'string') throw new TypeError('Default chat model must be a string');

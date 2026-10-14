@@ -13,7 +13,7 @@ import { Event, Emitter } from '../../../src/ash/base/common/event.js';
 import { DisposableStore, MutableDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
-import { WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/browser/configurationService.js';
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { ContextKeyService, IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { IChatService, type TurnChangeDetails } from '../../../src/ash/workbench/services/chat/common/chatService.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';

@@ -5,7 +5,7 @@ import { AppServerSocketTransport } from '../../platform/agentHost/browser/appSe
 import { IRemoteSocketFactoryService, RemoteSocketFactoryService } from '../../platform/remote/common/remoteSocketFactoryService.js';
 import { ManagedRemoteConnection, RemoteConnectionType } from '../../platform/remote/common/remoteAuthorityResolver.js';
 import { AppServerSymphonyService } from '../../platform/symphony/browser/appServerSymphonyService.js';
-import { EDIT_USER_CONFIGURATION_CHANNEL } from '../../platform/configuration/common/configurationIpc.js';
+import { EDIT_USER_CONFIGURATION_CHANNEL } from '../../platform/native/common/nativeHost.js';
 import { AppServerBackupService } from '../../platform/backup/browser/appServerBackupService.js';
 import { AppServerCallService } from '../../platform/call/browser/appServerCallService.js';
 import { AppServerAgentVoiceService } from '../../platform/agentHost/browser/appServerAgentService.js';
@@ -29,7 +29,15 @@ import { subscribe } from '../../platform/ipc/electron-browser/rendererIpc.js';
 import { ReconnectableTerminalProcessService } from '../../platform/terminal/browser/reconnectableTerminalProcessService.js';
 import { operatingSystemFromNodePlatform } from "../../base/common/environment.js";
 import { sandboxProcess } from "../../base/parts/sandbox/electron-browser/globals.js";
-import { createConfigurationApi } from "../../platform/configuration/electron-browser/configurationApi.js";
+import { ConfigurationService } from '../../platform/configuration/common/configurationService.js';
+import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
+import { IPolicyService } from '../../platform/policy/common/policy.js';
+import { PolicyChannelClient } from '../../platform/policy/common/policyIpc.js';
+import { FileService } from '../../platform/files/common/fileService.js';
+import { IFileService } from '../../platform/files/common/files.js';
+import { FileUserDataProvider } from '../../platform/userData/common/fileUserDataProvider.js';
+import { ILogService, NullLoggerService } from '../../platform/log/common/log.js';
+import { Schemas } from '../../base/common/network.js';
 import { popup as popupContextMenu, close as closeContextMenu } from '../../base/parts/contextmenu/electron-browser/contextmenu.js';
 import { createNativeKeyboardLayoutApi } from "../../platform/keyboardLayout/electron-browser/nativeKeyboardLayoutApi.js";
 import { createUserKeyboardLayoutApi } from "../../platform/keyboardLayout/electron-browser/userKeyboardLayoutApi.js";
@@ -144,6 +152,17 @@ export async function createElectronRendererApi(contributions: readonly Electron
 	};
 
 	try {
+		const localFiles = resources.add(new DiskFileSystemProviderClient(mainProcessService.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME)));
+		const userDataHome = URI.parse(await mainProcessService.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME).call<string>('userDataHome'));
+		const profileFiles = resources.add(new FileService());
+		const profileProvider = resources.add(new FileUserDataProvider(localFiles, userDataHome));
+		resources.add(profileFiles.registerProvider(Schemas.vscodeUserData, profileProvider));
+		const configurationServices = resources.add(new InstantiationService());
+		configurationServices.registerInstance(IFileService, profileFiles);
+		configurationServices.registerInstance(ILogService, new NullLoggerService());
+		configurationServices.registerInstance(IPolicyService, resources.add(new PolicyChannelClient(mainProcessService.getChannel('policy'))));
+		const configuration = resources.add(configurationServices.createInstance(ConfigurationService, URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' })));
+		await configuration.initialize();
 		performance.mark('ash.rendererApi.acquire-start');
 		const enabled = await acquire();
 		performance.mark('ash.rendererApi.acquired');
@@ -187,7 +206,8 @@ export async function createElectronRendererApi(contributions: readonly Electron
 				const services = resources.add(new InstantiationService());
 				if (!backend.localTranscription) { throw new Error('Local transcription service was not contributed by the renderer entry'); }
 				services.registerInstance(ILocalTranscriptionService, backend.localTranscription);
-				backend = { ...backend, dictation: resources.add(services.createInstance(AppServerDictationService, client, createConfigurationApi(mainProcessService))) };
+				services.registerInstance(IConfigurationService, configuration);
+				backend = { ...backend, dictation: resources.add(services.createInstance(AppServerDictationService, client)) };
 			} else {
 				backend = { ...backend, localTranscription: undefined };
 			}
@@ -219,15 +239,14 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			},
 			remote: createRemoteAgentApi(),
 			remoteConnections: createRemoteConnectionApi(),
-			configuration: createConfigurationApi(mainProcessService),
 			keyboardLayout: createNativeKeyboardLayoutApi(mainProcessService),
 			userKeyboardLayout: createUserKeyboardLayoutApi(mainProcessService),
 			nativeContextMenu: { popup: popupContextMenu, close: closeContextMenu },
 			nativeHost: createNativeHostApi(mainProcessService),
 			nativeMenubar: createNativeMenubarApi(),
 			editUserConfiguration: () => invoke<void>(EDIT_USER_CONFIGURATION_CHANNEL),
-			localFiles: resources.add(new DiskFileSystemProviderClient(mainProcessService.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME))),
-			userDataHome: URI.parse(await mainProcessService.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME).call<string>('userDataHome')),
+			localFiles,
+			userDataHome,
 			localUserHome: URI.parse(await mainProcessService.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME).call<string>('userHome')),
 			workspace: workspaceApi,
 		};

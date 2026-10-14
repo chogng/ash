@@ -1,3 +1,4 @@
+import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Locator, Page } from '@playwright/test';
@@ -87,20 +88,7 @@ for (const locale of ['en', 'zh-CN']) {
 				const profile = await application.evaluate(() => process.env.ASH_HOME!);
 				return JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8'))['editor.fontSize'];
 			}
-			return workbench.page.evaluate(async () => {
-				const database = await new Promise<IDBDatabase>((resolve, reject) => {
-					const request = indexedDB.open('ash-configuration');
-					request.onsuccess = () => resolve(request.result);
-					request.onerror = () => reject(request.error);
-				});
-				try {
-					return await new Promise<unknown>((resolve, reject) => {
-						const request = database.transaction('resources', 'readonly').objectStore('resources').get('settings.json');
-						request.onsuccess = () => resolve(JSON.parse(request.result.document.source)['editor.fontSize']);
-						request.onerror = () => reject(request.error);
-					});
-				} finally { database.close(); }
-			});
+			return (async () => { const snapshot = await readUserSettings(workbench.page); return JSON.parse(snapshot.content)['editor.fontSize']; })();
 		};
 		await expect.poll(readSaved).toBe(26);
 		await settings.getByRole('searchbox').press('Control+Alt+I');
@@ -155,20 +143,7 @@ for (const locale of ['en', 'zh-CN']) {
 				const profile = await application.evaluate(() => process.env.ASH_HOME!);
 				return JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8'));
 			}
-			return workbench.page.evaluate(async () => {
-				const database = await new Promise<IDBDatabase>((resolve, reject) => {
-					const request = indexedDB.open('ash-configuration');
-					request.onsuccess = () => resolve(request.result);
-					request.onerror = () => reject(request.error);
-				});
-				try {
-					return await new Promise<unknown>((resolve, reject) => {
-						const request = database.transaction('resources', 'readonly').objectStore('resources').get('settings.json');
-						request.onsuccess = () => resolve(JSON.parse(request.result.document.source));
-						request.onerror = () => reject(request.error);
-					});
-				} finally { database.close(); }
-			});
+			return (async () => { const snapshot = await readUserSettings(workbench.page); return JSON.parse(snapshot.content); })();
 		};
 		await expect.poll(readSaved).toEqual(saved);
 		const assertModified = async (): Promise<void> => {
@@ -278,20 +253,7 @@ for (const locale of ['en', 'zh-CN']) {
 				'window.menuStyle': 'custom', 'window.title': title, 'editor.tokenColorCustomizations': tokenColors, ...(chinese ? { 'workbench.locale': 'zh-CN' } : {}),
 			});
 		} else {
-			await expect.poll(() => page.evaluate(async () => {
-				const database = await new Promise<IDBDatabase>((resolve, reject) => {
-					const request = indexedDB.open('ash-configuration');
-					request.onsuccess = () => resolve(request.result);
-					request.onerror = () => reject(request.error);
-				});
-				try {
-					return await new Promise<string>((resolve, reject) => {
-						const request = database.transaction('resources').objectStore('resources').get('settings.json');
-						request.onsuccess = () => resolve(request.result.document.source);
-						request.onerror = () => reject(request.error);
-					});
-				} finally { database.close(); }
-			}).then(source => JSON.parse(source))).toEqual({
+			await expect.poll(() => (async () => { const snapshot = await readUserSettings(page); return snapshot.content; })().then(source => JSON.parse(source))).toEqual({
 				'window.menuStyle': 'custom', 'window.title': title, 'editor.tokenColorCustomizations': tokenColors, ...(chinese ? { 'workbench.locale': 'zh-CN' } : {}),
 			});
 		}
@@ -548,10 +510,10 @@ test('Configured markers and modified filtering update after external persisted 
 	let writer: Workbench | undefined;
 	const saveExternal = async (source: string): Promise<void> => {
 		if ('windows' in application) {
-			await page.evaluate(async source => {
-				const current = await globalThis.ashTestMainProcess.call<{ revision: number; }>('configuration', 'read');
-				await globalThis.ashTestMainProcess.call('configuration', 'update', { expectedRevision: current.revision, document: { version: 1, source } });
-			}, source);
+			await (async source => {
+				const current = await readUserSettings(page);
+				await writeUserSettings(page, source, current.revision);
+			})(source);
 		} else {
 			if (!writer) {
 				const writerPage = await page.context().newPage();
@@ -683,11 +645,11 @@ test('Settings JSON rejects invalid values and preserves dirty edits during a co
 	await expect(font).toHaveValue(process.platform === 'darwin' ? '12' : '14');
 	await font.fill('20');
 	await font.press('Tab');
-	await expect(settings.locator('[data-settings-item-id="editor.fontSize"] .ash-settings-indicators')).toBeHidden();
-	await expect(settings.locator('[data-settings-item-id="editor.fontSize"] .ash-settings-configured-marker')).toBeVisible();
-	await settings.getByRole('searchbox').fill('@modified @id:editor.fontSize');
-	await expect(settings.locator('[data-settings-item-id="editor.fontSize"]')).toHaveCount(1);
+	await expect(settings).toContainText('Save or revert unsaved changes');
+	await expect(font).toHaveValue(process.platform === 'darwin' ? '12' : '14');
 	await settings.locator('.ash-modal-editor-close').click();
+	const persisted = await readUserSettings(page);
+	await writeUserSettings(page, '{ "editor.fontSize": 20 }', persisted.revision);
 	await group.editor.waitForEditorFocus();
 	const conflict = await workbench.dialogs.expectMessage(application, 'File changed on disk', () => group.editor.input.press('ControlOrMeta+S'));
 	expect(`${conflict.message} ${conflict.detail}`).toContain('Your unsaved changes are still open');

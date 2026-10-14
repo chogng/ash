@@ -1,4 +1,6 @@
 import '../../workbench/contrib/url/browser/url.contribution.js';
+import { IPolicyService } from '../../platform/policy/common/policy.js';
+import { PolicyChannelClient } from '../../platform/policy/common/policyIpc.js';
 import { AppToolsHost } from '../contrib/appTools/browser/appToolsHost.js';
 import { AppServerAppToolsHost } from '../services/appTools/browser/appServerAppToolsHost.js';
 import { ElectronUpdateService } from '../../platform/update/electron-browser/updateService.js';
@@ -12,7 +14,6 @@ import { installBaseUiStyles } from "../../base/browser/ui/styles.js";
 import { URI } from "../../base/common/uri.js";
 import { IFileService } from "../../platform/files/common/files.js";
 import { FileService } from '../../platform/files/common/fileService.js';
-import { validateConfigurationSnapshot } from '../../platform/configuration/common/configurationIpc.js';
 import { InstantiationService } from "../../platform/instantiation/common/instantiationService.js";
 import { addDisposableListener } from "../../base/browser/dom.js";
 import { DisposableStore, toDisposable, type IDisposable } from "../../base/common/lifecycle.js";
@@ -104,6 +105,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		const mainProcessService = profileServices.get(IMainProcessService);
 		const playwrightService = profileServices.get(IPlaywrightService);
 		serviceCollection.set(IMainProcessService, mainProcessService);
+		serviceCollection.set(IPolicyService, sessions.add(new PolicyChannelClient(mainProcessService.getChannel('policy'))));
 		serviceCollection.set(IPlaywrightService, playwrightService);
 		serviceCollection.set(IBrowserViewService, ProxyChannel.toService<IBrowserViewService>(mainProcessService.getChannel(ipcBrowserViewChannelName)));
 		logger = profileServices.createInstance(LoggerChannelClient);
@@ -131,7 +133,6 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		const zoomSubscription = subscribe<number>(WINDOW_ZOOM_CHANGED_CHANNEL, () => { void updateZoomFactor().catch(onUnexpectedError); });
 		sessions.add(toDisposable(() => zoomSubscription.dispose()));
 		let lifecycleService!: ElectronLifecycleService;
-		const initialConfigurationSnapshot = validateConfigurationSnapshot(await api.configuration.read());
 		const workspaceContext = createWorkspaceContextApi();
 		let workspace = parseWorkspace(await workspaceContext.getWorkspace());
 		let workspaceSelection = selectionFromWorkspace(workspace);
@@ -196,8 +197,6 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 			keyboardLayoutProvider: api.keyboardLayout,
 			userKeyboardLayoutApi: api.userKeyboardLayout,
 			returnToWorkbench: () => { void invoke<void>(RETURN_TO_WORKBENCH_CHANNEL).catch(onUnexpectedError); },
-			configurationApi: api.configuration,
-			initialConfigurationSnapshot,
 			createUserDataFileSystemProvider: async () => new FileUserDataProvider(api.localFiles, api.userDataHome),
 			createContextMenuService: services => services.createInstance(ElectronContextMenuService, api.nativeContextMenu),
 			createHostColorSchemeService: services => {

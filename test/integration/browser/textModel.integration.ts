@@ -50,7 +50,7 @@ import { Selection } from "../../../src/ash/editor/common/core/selection.js";
 import { GlyphMarginLane } from "../../../src/ash/editor/common/model.js";
 import { ContentWidgetPositionPreference, type IContentWidget, type IGlyphMarginWidget } from "../../../src/ash/editor/browser/editorBrowser.js";
 import { type IEditorDecorationsCollection } from "../../../src/ash/editor/common/editorCommon.js";
-import { WorkbenchConfigurationService } from "../../../src/ash/workbench/services/configuration/browser/configurationService.js";
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { BrowserTextResourceStore } from "../../../src/ash/workbench/contrib/codeEditor/browser/browserTextResourceStore.js";
 import { AppServerSyntaxProviders } from "../../../src/ash/workbench/services/language/browser/appServerSyntaxProviders.js";
 import { WorkbenchLanguageFeatures } from "../../../src/ash/workbench/services/language/browser/workbenchLanguageFeatures.js";

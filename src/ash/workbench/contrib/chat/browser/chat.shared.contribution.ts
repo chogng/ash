@@ -33,6 +33,7 @@ const configurationRegistry = Registry.as<IConfigurationRegistry>(Extensions.Con
 
 configurationRegistry.registerConfiguration<boolean>({
 	key: ChatAIDisabledSettingId,
+	policy: { name: 'ChatAIDisabled' },
 	defaultValue: false,
 	scope: ConfigurationScope.WINDOW,
 	schema: { type: 'boolean' },

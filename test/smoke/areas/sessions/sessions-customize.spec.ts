@@ -1,3 +1,4 @@
+import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
 import { expect, test } from '../../../automation/test.js';
 import type { Locator, Page } from '@playwright/test';
 import { Editor } from '../../../automation/editor.js';
@@ -5,12 +6,12 @@ import { EditorGroup } from '../../../automation/editors.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 
 async function useCustomMenus(page: Page): Promise<void> {
-	await page.evaluate(async () => {
-		const snapshot = await globalThis.ashTestMainProcess.call('configuration', 'read') as { revision: number; document: { version: 1; source: string; }; };
-		const settings = JSON.parse(snapshot.document.source) as Record<string, unknown>;
+	await (async () => {
+		const snapshot = await readUserSettings(page);
+		const settings = JSON.parse(snapshot.content) as Record<string, unknown>;
 		settings['window.menuStyle'] = 'custom';
-		await globalThis.ashTestMainProcess.call('configuration', 'update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(settings) } });
-	});
+		await writeUserSettings(page, JSON.stringify(settings), snapshot.revision);
+	})();
 }
 
 async function openSettings(page: Page, label = 'Settings'): Promise<Locator> {

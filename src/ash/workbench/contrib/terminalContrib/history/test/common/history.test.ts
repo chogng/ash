@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { StorageScope, StorageTarget } from '../../../../../../platform/storage/common/storage.js';
-import { WorkbenchConfigurationService } from '../../../../../../workbench/services/configuration/browser/configurationService.js';
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../../services/configuration/test/common/testServices.js';
 import { BrowserStorageService } from '../../../../../../workbench/services/storage/browser/storageService.js';
 import '../../../../terminal/common/terminalConfiguration.js';
 import { TerminalCommandHistory } from '../../common/history.js';

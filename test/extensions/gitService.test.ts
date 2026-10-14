@@ -10,7 +10,7 @@ import type { IAppServerApi, IServerEventApi } from "../../src/ash/platform/agen
 import type { GitRepositoriesResult, GitStatusResult, GitHistoryRefsResult, ServerNotification } from '../../.build/protocol/typescript/index.js';
 import { NullLoggerService } from '../../src/ash/platform/log/common/log.js';
 import type { IGitApi } from "../../extensions/git/browser/backend.js";
-import { WorkbenchConfigurationService } from '../../src/ash/workbench/services/configuration/browser/configurationService.js';
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { WorkspaceContextService } from "../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js";
 import { GitService } from "../../extensions/git/browser/gitService.js";
 import { GitHistoryProvider } from '../../extensions/git/browser/gitHistoryProvider.js';

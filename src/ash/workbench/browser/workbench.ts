@@ -1,4 +1,11 @@
+import { UserSettings } from '../../platform/configuration/common/configurationModels.js';
+import { extUriBiasedIgnorePathCase } from '../../base/common/resources.js';
+import { NullLoggerService } from '../../platform/log/common/log.js';
+import type { IConfigurationModel } from '../../platform/configuration/common/configuration.js';
 import { ISecretStorageStatusService } from '../../platform/secrets/common/secrets.js';
+import { IPolicyService, NullPolicyService } from '../../platform/policy/common/policy.js';
+import { MultiplexPolicyService } from '../../platform/policy/common/multiplexPolicyService.js';
+import { AccountPolicyService } from '../services/policies/common/accountPolicyService.js';
 import { IMessageHistoryService } from '../../platform/messageHistory/common/messageHistory.js';
 import { GlobalExtensionEnablementService } from '../../platform/extensionManagement/common/extensionEnablementService.js';
 import { IGlobalExtensionEnablementService } from '../../platform/extensionManagement/common/extensionManagement.js';
@@ -100,8 +107,6 @@ import type {
 	INativeHostApi,
 } from "../../platform/native/common/nativeHost.js";
 import { MenuId } from "../../platform/actions/common/actions.js";
-import type { IConfigurationApi, IConfigurationSnapshot } from "../../platform/configuration/common/configurationIpc.js";
-import { IConfigurationResourceService } from "../../platform/configuration/common/configurationResourceService.js";
 import { IConfigurationService } from "../../platform/configuration/common/configuration.js";
 import { IStorageService, StorageScope, StorageTarget, WillSaveStateReason } from "../../platform/storage/common/storage.js";
 import "../../platform/layout/browser/zIndexRegistry.js";
@@ -355,8 +360,7 @@ export interface IStartWorkbenchOptions {
 	readonly createStorageService: (options: BrowserStorageServiceOptions) => Promise<IStorageService & IDisposable & { switchWorkspace(workspaceId: string): void | Promise<void>; }>;
 	readonly createWorkingCopyBackupService: (services: IInstantiationService, workspaceId: string) => IWorkingCopyBackupService;
 	readonly createLogService: () => LogService;
-	readonly configurationApi?: IConfigurationApi;
-	readonly initialConfigurationSnapshot?: IConfigurationSnapshot;
+	readonly initialConfiguration?: IConfigurationModel;
 	readonly createUserDataFileSystemProvider: () => Promise<IFileSystemProvider & IDisposable>;
 	readonly keyboardLayoutProvider?: IKeyboardLayoutProvider;
 	readonly userKeyboardLayoutApi?: IUserKeyboardLayoutApi;
@@ -389,8 +393,7 @@ export async function startWorkbench({
 	createStorageService,
 	createWorkingCopyBackupService,
 	createLogService,
-	configurationApi,
-	initialConfigurationSnapshot,
+	initialConfiguration,
 	createUserDataFileSystemProvider,
 	keyboardLayoutProvider,
 	userKeyboardLayoutApi,
@@ -412,6 +415,12 @@ export async function startWorkbench({
 		if (!ownerWindow) { throw new Error('Workbench requires an owner window'); }
 		storage = await createStorageService({ ownerWindow, workspaceId: workspace.id });
 		userDataFiles = await createUserDataFileSystemProvider();
+		if (!initialConfiguration) {
+			using profileFiles = new FileService();
+			using registration = profileFiles.registerProvider(Schemas.vscodeUserData, userDataFiles);
+			using settings = new UserSettings(URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' }), {}, extUriBiasedIgnorePathCase, profileFiles, new NullLoggerService());
+			initialConfiguration = (await settings.loadConfiguration()).toJSON();
+		}
 		return new Workbench(
 			productName,
 			defaultLayout,
@@ -420,8 +429,7 @@ export async function startWorkbench({
 			container,
 			workspace,
 			createLifecycleService,
-			configurationApi,
-			initialConfigurationSnapshot,
+			initialConfiguration,
 			userDataFiles,
 			keyboardLayoutProvider,
 			userKeyboardLayoutApi,
@@ -488,8 +496,7 @@ export class Workbench extends Disposable {
 		workbenchRoot: HTMLElement,
 		workspace: IWorkspace,
 		createLifecycleService: (services: IInstantiationService) => ILifecycleService & IDisposable,
-		configurationApi: IConfigurationApi | undefined,
-		initialConfigurationSnapshot: IConfigurationSnapshot | undefined,
+		initialConfiguration: IConfigurationModel | undefined,
 		userDataFileSystemProvider: IFileSystemProvider & IDisposable,
 		keyboardLayoutProvider: IKeyboardLayoutProvider | undefined,
 		userKeyboardLayoutApi: IUserKeyboardLayoutApi | undefined,
@@ -523,7 +530,10 @@ export class Workbench extends Disposable {
 		for (const [id, descriptor] of getSingletonServiceDescriptors()) {
 			if (!serviceCollection.has(id)) { serviceCollection.set(id, descriptor); }
 		}
-		const services = this._register(new InstantiationService(serviceCollection));
+		const hostPolicies = new ServiceCollection(...[...serviceCollection.entries()].filter(([id]) => id === IPolicyService));
+		const windowServices = new ServiceCollection(...[...serviceCollection.entries()].filter(([id]) => id !== IPolicyService));
+		const hostServices = this._register(new InstantiationService(hostPolicies));
+		const services = this._register(hostServices.createChild(windowServices));
 		services.registerInstance(IStorageService, storageService);
 		const extensionManagementService = this._register(new AppServerExtensionManagementService(api.extensionManagement, api.events));
 		services.registerInstance(IExtensionManagementService, extensionManagementService);
@@ -664,13 +674,11 @@ export class Workbench extends Disposable {
 		this._register(fileService.registerProvider(Schemas.ashRemote, workspaceFileService));
 		services.registerInstance(IFileService, fileService);
 		services.registerInstance(ISystemFileTransferService, workspaceFileService);
-		const configuration = this._register(new WorkbenchConfigurationService({
-			api: configurationApi,
-			initialSnapshot: initialConfigurationSnapshot,
+		const configuration = this._register(services.createInstance(WorkbenchConfigurationService, {
+			initialConfiguration,
 		}));
 		this.configurationService = configuration;
 		services.registerInstance(IConfigurationService, configuration);
-		services.registerInstance(IConfigurationResourceService, configuration);
 		const languagePackService = this._register(services.createInstance(WebLanguagePacksService, builtinLanguagePackCatalogs, preinstalledLanguagePacks));
 		services.registerInstance(ILanguagePackService, languagePackService);
 		const textFileService = this._register(services.createInstance(TextFileService));
@@ -939,7 +947,11 @@ export class Workbench extends Disposable {
 		const hoverService = this._register(new HoverService(configuration, contextViews, contextMenus));
 		services.registerInstance(IHoverService, hoverService);
 		this._register(setHoverDelegate(hoverService));
-		void configuration.reloadConfiguration().catch((error: unknown) => console.error("Failed to initialize configuration", error));
+		const systemPolicies = hostServices.has(IPolicyService) ? hostServices.get(IPolicyService) : new NullPolicyService();
+		const accountPolicies = this._register(new AccountPolicyService(services.get(IAccountService), api.github, logService));
+		const policies = this._register(new MultiplexPolicyService([systemPolicies, accountPolicies]));
+		services.registerInstance(IPolicyService, policies);
+		serviceContributionReady.push(configuration.initialize(workspaceContext, fileService, policies, workingCopyService));
 		const accessibilityService = this._register(nativeHostApi
 			? services.createInstance(NativeAccessibilityService, workbenchRoot)
 			: new AccessibilityService({

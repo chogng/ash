@@ -8,6 +8,8 @@ use ash_app_server_protocol::protocol::github::GitHubFileReadParams;
 use ash_app_server_protocol::protocol::github::GitHubForkBranches;
 use ash_app_server_protocol::protocol::github::GitHubForkCreateParams;
 use ash_app_server_protocol::protocol::github::GitHubForkResult;
+use ash_app_server_protocol::protocol::github::GitHubManagedSettingsParams;
+use ash_app_server_protocol::protocol::github::GitHubManagedSettingsResult;
 use ash_app_server_protocol::protocol::github::GitHubNotification;
 use ash_app_server_protocol::protocol::github::GitHubNotificationFilter;
 use ash_app_server_protocol::protocol::github::GitHubNotificationReadParams;
@@ -264,6 +266,7 @@ impl GitHubRequestProcessor {
         matches!(
             method,
             ClientMethod::GitHubNotificationsList
+                | ClientMethod::GitHubManagedSettings
                 | ClientMethod::GitHubNotificationRead
                 | ClientMethod::GitHubNotificationsRead
                 | ClientMethod::GitHubForkCreate
@@ -342,6 +345,12 @@ impl GitHubRequestProcessor {
             }};
         }
         match method {
+            ClientMethod::GitHubManagedSettings => {
+                let _: GitHubManagedSettingsParams = decode(params)?;
+                result(&GitHubManagedSettingsResult {
+                    settings: client.managed_settings().await.map_err(github_error)?,
+                })
+            }
             ClientMethod::GitHubNotificationsList => {
                 let p: GitHubNotificationsParams = decode(params)?;
                 let filter = match p.filter {

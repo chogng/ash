@@ -1,3 +1,4 @@
+import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
 import { expect, test } from '../../../automation/test.js';
 import { dirname, join } from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -958,11 +959,11 @@ test('Search Copy menus release old row callbacks and follow focus contracts in 
 	const page = workbench.page;
 	await writeFile(join(testWorkspace.directory, 'main.ts'), 'ash_copy_focus_token original\n');
 	await writeFile(join(testWorkspace.directory, 'other.ts'), 'ash_copy_focus_token other\n');
-	await page.evaluate(async () => {
-		const snapshot = await globalThis.ashTestMainProcess.call('configuration', 'read') as { revision: number; document: { version: 1; source: string; }; };
-		const source = JSON.stringify({ ...JSON.parse(snapshot.document.source), 'window.menuStyle': 'custom' });
-		await globalThis.ashTestMainProcess.call('configuration', 'update', { expectedRevision: snapshot.revision, document: { version: 1, source } });
-	});
+	await (async () => {
+		const snapshot = await readUserSettings(page);
+		const source = JSON.stringify({ ...JSON.parse(snapshot.content), 'window.menuStyle': 'custom' });
+		await writeUserSettings(page, source, snapshot.revision);
+	})();
 	await expect.poll(() => workbench.menus.isSystemMenu(application)).toBe(false);
 	await (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.writeText('ash-copy-focus-fixture'));
 	const readCopied = () => (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.readText());

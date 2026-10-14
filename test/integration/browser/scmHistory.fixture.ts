@@ -23,7 +23,7 @@ import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContra
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { createTestEditorServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
-import { WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/browser/configurationService.js';
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { SCMHistoryViewPane } from '../../../src/ash/workbench/contrib/scm/browser/scmHistoryViewPane.js';
 import { SCMViewService } from '../../../src/ash/workbench/contrib/scm/browser/scmViewService.js';

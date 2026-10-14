@@ -1,3 +1,4 @@
+import { TestConfigurationFiles } from '../../../../services/configuration/test/common/testServices.js';
 import { ISecretStorageStatusService } from '../../../../../platform/secrets/common/secrets.js';
 import { createTestLanguageModelToolsService } from '../../../chat/test/common/tools/testLanguageModelToolsService.js';
 import type { IQuickPick, IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
@@ -165,7 +166,7 @@ const { BrowserEditorService } = await import('../../../../services/editor/brows
 const { ILocalizationService: LocalizationServiceId } = await import('../../../../services/localization/common/localizationService.js');
 const { createSettingWidget: instantiateSettingWidget } = await import('../../browser/settingsWidgets.js');
 const { DefaultSettings, SettingsEditorModel } = await import('../../../../services/preferences/common/settingsModels.js');
-const { WorkbenchConfigurationService } = await import('../../../../services/configuration/browser/configurationService.js');
+const { TestConfigurationService: WorkbenchConfigurationService } = await import("../../../../services/configuration/test/common/testServices.js");
 const { productLanguagePackCatalogs } = await import('../../../../services/localization/common/localizationCatalogs.js');
 const { ILanguagePackService: LanguagePackServiceId } = await import('../../../../../platform/languagePacks/common/languagePacks.js');
 const { ILocaleService, LocalizationConfiguration } = await import('../../../../services/localization/common/locale.js');
@@ -421,10 +422,10 @@ test('Configured markers follow explicit local user overrides and expose one acc
 		}
 	};
 	assertStatus(false);
-	await configuration.write('{ "status.flag": true, "status.object": {} }', 0);
+	await configuration.write('{ "status.flag": true, "status.object": {} }');
 	assertStatus(true);
 	assert.notEqual(widgets[0]!.domNode.getAttribute('aria-describedby'), widgets[1]!.domNode.getAttribute('aria-describedby'));
-	await configuration.write('{ "[typescript]": { "status.flag": false } }', 1);
+	await configuration.write('{ "[typescript]": { "status.flag": false } }');
 	assertStatus(false);
 });
 
@@ -479,7 +480,7 @@ test('Copy Setting as JSON reads the latest local user values and preserves fals
 	};
 	await copy('copy.boolean');
 	// A menu can stay open while another window saves a new value.
-	await configuration.write('{ "copy.boolean": false, "copy.number": 0, "copy.text": "", "[typescript]": { "copy.boolean": true } }', 0);
+	await configuration.write('{ "copy.boolean": false, "copy.number": 0, "copy.text": "", "[typescript]": { "copy.boolean": true } }');
 	await actions.find(action => action.id === 'settings.copySettingAsJSON')!.run();
 	await copy('copy.number');
 	await copy('copy.text');
@@ -499,7 +500,9 @@ test('Copy Setting as JSON reads the latest local user values and preserves fals
 
 test('Copy Setting as JSON uses the current window default and reports clipboard failures in Chinese', async () => {
 	using resources = new DisposableStore();
-	const { ConfigurationService } = await import('../../../../../sessions/services/configuration/browser/configurationService.js');
+	const { testConfigurationService } = await import("../../../../services/configuration/test/common/testServices.js");
+	const { ConfigurationService: SessionsConfigurationService } = await import('../../../../../sessions/services/configuration/browser/configurationService.js');
+	const ConfigurationService = testConfigurationService(SessionsConfigurationService);
 	const registry = new ConfigurationRegistry();
 	registry.registerConfiguration({
 		key: 'copy.window', defaultValue: true, parse: value => value as boolean, agentsWindow: { default: false },
@@ -971,27 +974,22 @@ test('Modified Settings derives membership from accepted local overrides through
 	for (const [key, defaultValue] of [['modified.boolean', true], ['modified.number', 1], ['modified.text', 'Default'], ['modified.default', true], ['modified.language', true]] as const) {
 		registry.registerConfiguration({ key, defaultValue, parse: value => value, scope: ConfigurationScope.LANGUAGE_OVERRIDABLE });
 	}
-	let snapshot = { revision: 0, document: { version: 1 as const, source: '{}\n' } };
 	const pending = new DeferredPromise<void>();
 	let blockWrites = false;
-	const api: import('../../../../../platform/configuration/common/configurationIpc.js').IConfigurationApi = {
-		read: async () => snapshot,
-		onDidChange: () => ({ dispose() { } }),
-		update: async request => {
+	using api = new class extends TestConfigurationFiles {
+		override async writeFile(...args: Parameters<TestConfigurationFiles['writeFile']>): ReturnType<TestConfigurationFiles['writeFile']> {
 			if (blockWrites) await pending.p;
-			assert.equal(request.expectedRevision, snapshot.revision);
-			snapshot = { revision: snapshot.revision + 1, document: request.document };
-			return snapshot;
-		},
-	};
-	const configuration = resources.add(new WorkbenchConfigurationService({ registry, api, initialSnapshot: snapshot }));
+			return super.writeFile(...args);
+		}
+	}();
+	const configuration = resources.add(new WorkbenchConfigurationService({ registry, files: api }));
 	const tree = resources.add(new SettingsTreeModel<string>(id => registry.getConfiguration(id) !== undefined && configuration.inspect(id).userLocalValue !== undefined));
 	tree.setChildren([...registry.getConfigurations(), 'service.status'].map(id => ({ element: { kind: 'item', id, title: 'Preference', description: '', value: id } })));
 	tree.setQuery('@modified');
 	resources.add(configuration.onDidChangeConfiguration(() => tree.refilter()));
 	const visible = () => tree.visibleItems.map(item => item.id);
 	assert.deepEqual(visible(), []);
-	await configuration.write('{ "modified.boolean": false, "modified.number": 0, "modified.text": "", "modified.default": true, "[typescript]": { "modified.language": false } }', 0);
+	await configuration.write('{ "modified.boolean": false, "modified.number": 0, "modified.text": "", "modified.default": true, "[typescript]": { "modified.language": false } }');
 	const configured = ['modified.boolean', 'modified.number', 'modified.text', 'modified.default'];
 	assert.deepEqual(visible(), configured, 'presence includes explicit defaults and falsy values, without language-only or service state');
 	tree.setQuery('preference @modified @id:modified.text');
@@ -1008,7 +1006,7 @@ test('Modified Settings derives membership from accepted local overrides through
 	blockWrites = false;
 	await configuration.updateValue('modified.default', undefined);
 	assert.deepEqual(visible(), configured.slice(0, -1));
-	using restored = new WorkbenchConfigurationService({ registry, api });
+	using restored = new WorkbenchConfigurationService({ registry, files: api });
 	await restored.reloadConfiguration();
 	assert.deepEqual([...registry.getConfigurations()].filter(id => restored.inspect(id).userLocalValue !== undefined), configured.slice(0, -1));
 });
@@ -1024,7 +1022,7 @@ test('Settings table of contents follows modified result counts through reset', 
 	assert.deepEqual(categories(), []);
 	assert.equal(tree.countVisibleItems(), 0);
 	const fontDefault = configuration.inspect(CodeEditorConfiguration.fontSize).defaultValue;
-	await configuration.write(JSON.stringify({ [CodeEditorConfiguration.fontSize]: fontDefault }), 0);
+	await configuration.write(JSON.stringify({ [CodeEditorConfiguration.fontSize]: fontDefault }));
 	assert.deepEqual(categories(), ['editor-fonts']);
 	assert.equal(tree.countVisibleItems(), 1);
 	tree.setQuery('@modified font');
@@ -1574,7 +1572,13 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(languageControl.textContent, '简体中文');
 	assert.equal(languageControl.getAttribute('aria-label'), 'Interface language');
 	root.querySelector<HTMLButtonElement>('[data-settings-item-id="workbench.locale"] .ash-setting-item-actions-trigger')!.click();
+	let resolveSaved!: () => void;
+	const resetSaved = new Promise<void>(resolve => { resolveSaved = resolve; });
+	using savedListener = configuration.onDidChangeConfiguration(event => {
+		if (event.affectsConfiguration(LocalizationConfiguration.locale)) resolveSaved();
+	});
 	await menuActions.find(action => action.id === 'settings.resetSetting')!.run();
+	await resetSaved;
 	hideMenu?.(false);
 	assert.equal(languageControl.textContent, 'English');
 	assert.equal(configuration.inspect(LocalizationConfiguration.locale).userValue, undefined);
@@ -1656,6 +1660,8 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	hoverDelay.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
 	await nextTurn();
 	assert.equal(configuration.getValue(HoverConfiguration.delay), 750);
+	for (let attempt = 0; hoverDelay.disabled && attempt < 100; attempt++) await nextTurn();
+	assert.equal(hoverDelay.disabled, false);
 
 	root.querySelector<HTMLButtonElement>(`[data-settings-item-id="${HoverConfiguration.delay}"] .ash-setting-item-actions-trigger`)?.click();
 	const copyAction = menuActions.find(action => action.id === 'settings.copySettingId');
@@ -1664,7 +1670,13 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.ok(resetAction);
 	await copyAction.run();
 	assert.deepEqual(copied, [HoverConfiguration.delay]);
+	let resolveHoverReset!: () => void;
+	const hoverReset = new Promise<void>(resolve => { resolveHoverReset = resolve; });
+	using hoverResetListener = configuration.onDidChangeConfiguration(event => {
+		if (event.affectsConfiguration(HoverConfiguration.delay)) resolveHoverReset();
+	});
 	await resetAction.run();
+	await hoverReset;
 	assert.equal(configuration.getValue(HoverConfiguration.delay), configurationRegistry.getConfiguration(HoverConfiguration.delay)?.defaultValue);
 
 	root.querySelector<HTMLElement>('[data-settings-group-id="agents"]')?.closest<HTMLElement>('.ash-tree-row')?.click();

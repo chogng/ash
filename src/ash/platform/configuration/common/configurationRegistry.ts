@@ -5,6 +5,9 @@ import { Emitter, type Event } from '../../../base/common/event.js';
 import { localize } from '../../../nls.js';
 import type { JsonValue } from '../../../base/common/jsonValue.js';
 import { Registry } from '../../registry/common/platform.js';
+import type { PolicyDefinition } from '../../policy/common/policy.js';
+
+type ConfigurationPolicy = Omit<PolicyDefinition, 'type'> & { readonly name: string; readonly minimumVersion?: string; };
 
 export const Extensions = {
 	Configuration: 'base.contributions.configuration',
@@ -15,6 +18,7 @@ export enum ConfigurationScope {
 }
 
 export interface IConfigurationPropertySchema extends JsonSchema {
+	readonly policy?: ConfigurationPolicy;
 	readonly scope?: ConfigurationScope;
 	readonly included?: boolean;
 	readonly ashBinding?: { readonly readCommand: string; readonly writeCommand: string; readonly property: string; };
@@ -75,6 +79,7 @@ export interface IExtensionInfo {
 }
 
 export interface IRegisteredConfiguration<T = unknown> {
+	readonly policy?: ConfigurationPolicy;
 	readonly key: string;
 	/** Catalog identity supplied by the extension owner, never inferred from a setting key. */
 	readonly source?: IExtensionInfo;
@@ -89,6 +94,7 @@ export interface IRegisteredConfiguration<T = unknown> {
 }
 
 export interface IConfigurationKeyDefinition<T> {
+	readonly policy?: ConfigurationPolicy;
 	readonly key: string;
 	readonly defaultValue: T;
 	readonly parse: (value: unknown) => T;
@@ -159,7 +165,13 @@ export class ConfigurationRegistry implements IConfigurationRegistry {
 					};
 					const type = Array.isArray(schema.type) ? schema.type[0] : schema.type;
 					const defaultValue = schema.default === undefined ? (type === 'string' ? '' : type === 'boolean' ? false : type === 'number' || type === 'integer' ? 0 : type === 'array' ? [] : type === 'object' ? {} : null) : schema.default;
-					next.set(key, Object.freeze({ key, source, defaultValue: parse(defaultValue), parse, serialize: parse, schema, setting: schema.ashSetting, extensionBinding: schema.ashBinding, scope: schema.scope ?? node.scope ?? inheritedScope ?? ConfigurationScope.WINDOW }));
+					next.set(key, Object.freeze({
+						key, source, defaultValue: parse(defaultValue), parse, serialize: parse, schema,
+						policy: registeredPolicy(schema.policy, defaultValue, next.values()),
+						setting: schema.ashSetting, extensionBinding: schema.ashBinding,
+						scope: schema.scope ?? node.scope ?? inheritedScope ?? ConfigurationScope.WINDOW,
+						agentsWindow: schema.agentsWindow ? Object.freeze({ ...schema.agentsWindow, default: parse(schema.agentsWindow.default) }) : undefined,
+					}));
 					keys.push(key); properties.add(key);
 				}
 				for (const child of node.allOf ?? []) visit(child, node.scope ?? inheritedScope, source);
@@ -187,6 +199,7 @@ export class ConfigurationRegistry implements IConfigurationRegistry {
 			);
 		}
 		const configuration: IRegisteredConfiguration<T> = Object.freeze({
+			policy: registeredPolicy(definition.policy, definition.defaultValue, this.configurations.values()),
 			key: definition.key,
 			scope: definition.scope,
 			schema: definition.schema,
@@ -222,4 +235,48 @@ Registry.add(Extensions.Configuration, new ConfigurationRegistry());
 
 function isConfigurationKey(value: string): boolean {
 	return /^[A-Za-z][A-Za-z0-9.-]{0,127}$/.test(value);
+}
+
+function registeredPolicy(value: unknown, defaultValue: unknown, existing: Iterable<IRegisteredConfiguration>): IRegisteredConfiguration['policy'] {
+	if (value === undefined) return undefined;
+	const policy = value as Partial<NonNullable<IRegisteredConfiguration['policy']>> | null;
+	if (!policy || typeof policy.name !== 'string' || !/^[A-Za-z][A-Za-z0-9._-]{0,127}$/.test(policy.name)
+		|| policy.minimumVersion !== undefined && typeof policy.minimumVersion !== 'string'
+		|| !['string', 'boolean', 'number'].includes(typeof defaultValue)
+		|| [...existing].some(setting => setting.policy?.name === policy.name)) {
+		throw new TypeError(localize('configuration.contributedValue', "Setting '{0}' does not match its declared schema.", 'policy'));
+	}
+	if (policy.value !== undefined && typeof policy.value !== 'function') throw new TypeError('Invalid account policy mapping');
+	const managedSettings: Record<string, { type: 'string' | 'number' | 'boolean'; }> = {};
+	if (policy.managedSettings !== undefined) {
+		if (!policy.managedSettings || typeof policy.managedSettings !== 'object' || Array.isArray(policy.managedSettings) || Object.keys(policy.managedSettings).length > 128) throw new TypeError('Invalid managed setting definitions');
+		for (const [path, definition] of Object.entries(policy.managedSettings)) {
+			if (!/^[A-Za-z][A-Za-z0-9._-]{0,255}$/.test(path) || !definition || !['string', 'number', 'boolean'].includes(definition.type)) throw new TypeError('Invalid managed setting definition');
+			Object.defineProperty(managedSettings, path, { value: Object.freeze({ type: definition.type }), enumerable: true });
+		}
+	}
+	return Object.freeze({
+		name: policy.name,
+		...(policy.minimumVersion === undefined ? {} : { minimumVersion: policy.minimumVersion }),
+		...(policy.value === undefined ? {} : { value: policy.value }),
+		...(policy.managedSettings === undefined ? {} : { managedSettings: Object.freeze(managedSettings) }),
+	});
+}
+
+/** Identifiers are normalized at the settings-input boundary, before building a model. */
+export function overrideIdentifiersFromKey(key: string): string[] {
+	if (!key.startsWith('[')) return [];
+	const parts = [...key.matchAll(/\[([A-Za-z0-9][A-Za-z0-9+_.-]{0,127})\]/gu)];
+	if (parts.length === 0 || parts.map(part => part[0]).join('') !== key) {
+		throw new TypeError(`invalid configuration override key: ${key}`);
+	}
+	return [...new Set(parts.map(part => part[1]!))];
+}
+
+export function keyFromOverrideIdentifiers(identifiers: string[]): string {
+	const key = identifiers.map(identifier => `[${identifier}]`).join('');
+	if (identifiers.length === 0 || overrideIdentifiersFromKey(key).length !== identifiers.length) {
+		throw new TypeError('Configuration override identifiers must be non-empty and unique');
+	}
+	return key;
 }

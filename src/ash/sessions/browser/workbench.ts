@@ -1,3 +1,4 @@
+import type { IConfigurationModel } from '../../platform/configuration/common/configuration.js';
 import { ISecretStorageStatusService } from '../../platform/secrets/common/secrets.js';
 import { IAgentVoiceService } from '../../platform/agentHost/common/agentService.js';
 import { BrowserAuxiliaryWindowService, IAuxiliaryWindowService } from '../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
@@ -7,7 +8,6 @@ import { IMarkerDecorationsService } from '../../editor/common/services/markerDe
 import { MarkerDecorationsService } from '../../editor/common/services/markerDecorationsService.js';
 import { ILanguageServerService } from '../../platform/language/common/languageServerService.js';
 import { INetworkDiagnosticsService } from '../../platform/networkDiagnostics/common/networkDiagnosticsService.js';
-import { IConfigurationResourceService } from '../../platform/configuration/common/configurationResourceService.js';
 import { ISnippetsService } from '../../workbench/contrib/snippets/browser/snippets.js';
 import { IMessageHistoryService } from '../../platform/messageHistory/common/messageHistory.js';
 import { GlobalExtensionEnablementService } from '../../platform/extensionManagement/common/extensionEnablementService.js';
@@ -110,7 +110,6 @@ import { LanguageService } from "../../editor/common/services/languageService.js
 import { localize } from '../../nls.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../platform/accessibility/browser/accessibleViewRegistry.js';
-import type { IConfigurationApi, IConfigurationSnapshot } from "../../platform/configuration/common/configurationIpc.js";
 import { IConfigurationService } from "../../platform/configuration/common/configuration.js";
 import { ContextKeyExpr } from '../../platform/contextkey/common/contextkey.js';
 import { refineServiceDecorator, type IInstantiationService } from "../../platform/instantiation/common/instantiation.js";
@@ -244,6 +243,9 @@ import { ChatService } from "../../workbench/services/chat/browser/chatService.j
 import { AppServerAccountService } from '../../workbench/services/accounts/browser/appServerAccountService.js';
 import { IChatService } from "../../workbench/services/chat/common/chatService.js";
 import { ConfigurationService } from '../services/configuration/browser/configurationService.js';
+import { IPolicyService, NullPolicyService } from '../../platform/policy/common/policy.js';
+import { MultiplexPolicyService } from '../../platform/policy/common/multiplexPolicyService.js';
+import { AccountPolicyService } from '../../workbench/services/policies/common/accountPolicyService.js';
 import type { ExtensionColorThemeService } from "../../workbench/services/extensions/browser/extensionColorThemeService.js";
 import type { BrowserStorageServiceOptions } from "../../workbench/services/storage/browser/storageService.js";
 import { IWorkbenchHostService } from "../../workbench/services/host/common/workbenchHostService.js";
@@ -299,8 +301,7 @@ export interface IWorkbenchOptions {
 	readonly keyboardLayoutProvider?: IKeyboardLayoutProvider;
 	readonly userKeyboardLayoutApi?: IUserKeyboardLayoutApi;
 	readonly returnToWorkbench: () => void;
-	readonly configurationApi?: IConfigurationApi;
-	readonly initialConfigurationSnapshot?: IConfigurationSnapshot;
+	readonly initialConfiguration?: IConfigurationModel;
 	readonly createUserDataFileSystemProvider: () => Promise<IFileSystemProvider & IDisposable>;
 	readonly createContextMenuService: (services: IInstantiationService) => IContextMenuService & IDisposable;
 	readonly createHostColorSchemeService: (services: IInstantiationService) => IHostColorSchemeService & IDisposable;
@@ -331,13 +332,24 @@ export abstract class Workbench extends Disposable {
 		const ownerWindow = ownerDocument.defaultView;
 		if (!ownerWindow) throw new Error("Sessions renderer requires an owner window");
 
-		const configurationService = this.configurationService = this._register(new ConfigurationService({ api: options.configurationApi, initialSnapshot: options.initialConfigurationSnapshot }));
 		const serviceCollection = options.serviceCollection ?? new ServiceCollection();
 		// Load service descriptions before consumers so shared dependencies resolve in this window's scope.
 		for (const [id, descriptor] of getSingletonServiceDescriptors()) {
 			if (!serviceCollection.has(id)) { serviceCollection.set(id, descriptor); }
 		}
-		const services = this._register(new InstantiationService(serviceCollection));
+		const hostPolicies = new ServiceCollection(...[...serviceCollection.entries()].filter(([id]) => id === IPolicyService));
+		const windowServices = new ServiceCollection(...[...serviceCollection.entries()].filter(([id]) => id !== IPolicyService));
+		const hostServices = this._register(new InstantiationService(hostPolicies));
+		const services = this._register(hostServices.createChild(windowServices));
+		this.logService = this._register(logger);
+		services.registerInstance(ILogService, this.logService);
+		if (!services.has(ILoggerService)) services.registerInstance(ILoggerService, logger);
+		const fileService = this._register(services.createInstance(FileService));
+		this._register(userDataFileSystemProvider);
+		this._register(fileService.registerProvider(Schemas.vscodeUserData, userDataFileSystemProvider));
+		services.registerInstance(IUserDataProfileService, new UserDataProfileService());
+		services.registerInstance(IFileService, fileService);
+		const configurationService = this.configurationService = this._register(services.createInstance(ConfigurationService, { initialConfiguration: options.initialConfiguration }));
 		services.registerInstance(IStorageService, storageService);
 		const extensionManagementService = this._register(new AppServerExtensionManagementService(options.api.extensionManagement, options.api.events));
 		services.registerInstance(IExtensionManagementService, extensionManagementService);
@@ -359,7 +371,6 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IAgentVoiceService, options.api.agentVoice);
 		services.registerInstance(ILocalTranscriptionService, options.api.localTranscription ?? this._register(new NullLocalTranscriptionService()));
 		services.registerInstance(IConfigurationService, configurationService);
-		services.registerInstance(IConfigurationResourceService, configurationService);
 		const languagePacks = this._register(services.createInstance(WebLanguagePacksService, builtinLanguagePackCatalogs, preinstalledLanguagePacks));
 		services.registerInstance(ILanguagePackService, languagePacks);
 		if (options.nativeHostApi) services.registerInstance(INativeHostService, options.nativeHostApi);
@@ -373,9 +384,6 @@ export abstract class Workbench extends Disposable {
 		services.registerSingleton(IInlineCompletionsService, () => services.createInstance(InlineCompletionsService));
 		services.registerSingleton(ILanguageFeatureDebounceService, () => services.createInstance(LanguageFeatureDebounceService));
 		services.registerSingleton(IMarkerDecorationsService, () => services.createInstance(MarkerDecorationsService));
-		this.logService = this._register(logger);
-		services.registerInstance(ILogService, this.logService);
-		if (!services.has(ILoggerService)) services.registerInstance(ILoggerService, logger);
 		// Window errors must terminate at the host logger. The default handler rethrows,
 		// which sends the growing error message back through WorkbenchWindow indefinitely.
 		const previousErrorHandler = errorHandler.getUnexpectedErrorHandler();
@@ -443,13 +451,9 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IWorkspaceContextService, workspace);
 		services.registerInstance(IMarkerService, this._register(new MarkerService()));
 		const files = this._register(services.createInstance(SessionFileService, options.api));
-		const fileService = this._register(services.createInstance(FileService));
-		this._register(userDataFileSystemProvider);
-		this._register(fileService.registerProvider(Schemas.vscodeUserData, userDataFileSystemProvider));
-		services.registerInstance(IUserDataProfileService, new UserDataProfileService());
 		this._register(fileService.registerProvider(Schemas.file, options.browserFileSystemProvider ?? files));
 		this._register(fileService.registerProvider(Schemas.ashRemote, files));
-		services.registerInstance(IFileService, fileService);
+		const systemPolicies = hostServices.has(IPolicyService) ? hostServices.get(IPolicyService) : new NullPolicyService();
 		services.registerInstance(IPluginManagementService, this._register(services.createInstance(AppServerPluginManagementService, options.api.plugins, options.api.events)));
 		services.registerInstance(IFileSearchService, options.api.hasAppServer ? files : services.createInstance(BrowserFileSearchService));
 		services.registerInstance(ISystemFileTransferService, files);
@@ -501,6 +505,10 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(ILocalizationService, localization);
 		services.registerInstance(IAppServerRemoteAgentService, this._register(services.createInstance(AppServerRemoteAgentService, { remoteApi: options.api.remote })));
 		services.registerInstance(IGitHubService, options.api.github);
+		const accountPolicies = this._register(new AccountPolicyService(accountService, options.api.github, this.logService));
+		const policies = this._register(new MultiplexPolicyService([systemPolicies, accountPolicies]));
+		services.registerInstance(IPolicyService, policies);
+		serviceContributionReady.push(configurationService.initialize(workspace, fileService, policies, workingCopies));
 		const sessionGitHub = this._register(services.createInstance(SessionsGitHubService));
 		services.registerInstance(ISessionsGitHubService, sessionGitHub);
 		sessionGitHub.initialize();

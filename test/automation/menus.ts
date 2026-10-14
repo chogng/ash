@@ -1,3 +1,4 @@
+import { readUserSettings } from './settings.js';
 import { expect, type Page, type ElectronApplication } from '@playwright/test';
 import { DEFAULT_MENU_STYLE, DEFAULT_TITLE_BAR_STYLE, parseMenuStyle, parseTitleBarStyle, resolveContextMenuStyle } from '../../src/ash/platform/window/common/window.js';
 import type { PlaywrightApplication } from './playwrightDriver.js';
@@ -55,10 +56,10 @@ export class Menus {
 
 	async isSystemMenu(application: PlaywrightApplication): Promise<boolean> {
 		if (!('windows' in application)) { return false; }
-		const settings = await this.page.evaluate(async () => {
-			const snapshot = await globalThis.ashTestMainProcess.call('configuration', 'read') as { document: { source: string; }; };
-			return JSON.parse(snapshot.document.source) as Record<string, unknown>;
-		});
+		const settings = await (async () => {
+			const snapshot = await readUserSettings(this.page);
+			return JSON.parse(snapshot.content) as Record<string, unknown>;
+		})();
 		// Stored settings omit default values; the product registry owns them.
 		return resolveContextMenuStyle(
 			parseMenuStyle(settings['window.menuStyle'] ?? DEFAULT_MENU_STYLE),

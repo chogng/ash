@@ -1,3 +1,5 @@
+import { migrateLegacyBrowserSettings } from '../../workbench/services/userData/browser/userDataInit.js';
+import { URI as SettingsURI } from '../../base/common/uri.js';
 import '../../workbench/contrib/url/browser/url.contribution.js';
 import '../../platform/meteredConnection/browser/meteredConnectionService.js';
 import { AppToolsHost } from '../contrib/appTools/browser/appToolsHost.js';
@@ -17,7 +19,6 @@ import { installBaseUiStyles } from "../../base/browser/ui/styles.js";
 import { onUnexpectedError } from "../../base/common/errors.js";
 import { Disposable } from "../../base/common/lifecycle.js";
 import { createDisconnectedRendererApi } from "../../workbench/browser/rendererApi.js";
-import { IndexedDbConfigurationApi } from '../../platform/configuration/browser/indexedDbConfigurationApi.js';
 import { BrowserLifecycleService } from '../../workbench/services/lifecycle/browser/lifecycleService.js';
 import { BrowserHostColorSchemeService } from '../../workbench/services/themes/browser/browserHostColorSchemeService.js';
 import { BrowserContextMenuService } from "../../platform/contextview/browser/contextMenuService.js";
@@ -55,8 +56,6 @@ export class SessionsBrowserMain extends Disposable {
 			if (this.isDisposed) { connectedHost?.dispose(); this.assertNotDisposed(); }
 			if (connectedHost) { this._register(connectedHost); }
 			installBaseUiStyles();
-			const configurationApi = this._register(new IndexedDbConfigurationApi());
-			const initialConfigurationSnapshot = await configurationApi.read();
 			this.assertNotDisposed();
 			const host = globalThis.ashWebWorkbenchHost;
 			const ownerWindow = container.ownerDocument.defaultView;
@@ -92,9 +91,12 @@ export class SessionsBrowserMain extends Disposable {
 				api: host?.api ?? createDisconnectedRendererApi(),
 				workspaceSelection: () => host?.workspace ? selectionFromWorkspace(workspaceFromIdentifier(host.workspace)) : { type: 'current' },
 				workspace: () => host?.workspace ? workspaceFromIdentifier(host.workspace) : { id: 'sessions', folders: [] },
-				createUserDataFileSystemProvider: () => IndexedDBFileSystemProvider.create(ownerWindow.indexedDB, Schemas.vscodeUserData),
-				configurationApi,
-				initialConfigurationSnapshot,
+				createUserDataFileSystemProvider: () => IndexedDBFileSystemProvider.create(ownerWindow.indexedDB, Schemas.vscodeUserData).then(async provider => {
+					try {
+						await migrateLegacyBrowserSettings(ownerWindow.indexedDB, provider, SettingsURI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' }));
+						return provider;
+					} catch (error) { provider.dispose(); throw error; }
+				}),
 				browserFileSystemProvider: browserFiles,
 				createFileDialogService: services => {
 					const common = {

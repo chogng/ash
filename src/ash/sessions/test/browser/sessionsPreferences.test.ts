@@ -48,12 +48,14 @@ import type { IAccessibleViewService } from '../../../platform/accessibility/bro
 import type { IChatService } from '../../../workbench/services/chat/common/chatService.js';
 
 test('Sessions modified filtering excludes window defaults, fixed values and language-only overrides', async () => {
-	const [{ ConfigurationService }, { ConfigurationRegistry, ConfigurationScope }, { SettingsTreeModel }] = await Promise.all([
-		import('../../services/configuration/browser/configurationService.js'),
+	const [{ testConfigurationService }, { ConfigurationRegistry, ConfigurationScope }, { SettingsTreeModel }] = await Promise.all([
+		import('../../../workbench/services/configuration/test/common/testServices.js'),
 		import('../../../platform/configuration/common/configurationRegistry.js'),
 		import('../../../workbench/contrib/preferences/browser/settingsTreeModels.js'),
 	]);
-	const registry = new ConfigurationRegistry();
+
+	const { ConfigurationService: SessionsConfigurationService } = await import('../../services/configuration/browser/configurationService.js');
+	const ConfigurationService = testConfigurationService(SessionsConfigurationService); const registry = new ConfigurationRegistry();
 	for (const [key, readOnly] of [['sessions.editable', false], ['sessions.fixed', true], ['sessions.language', false]] as const) {
 		registry.registerConfiguration({ key, defaultValue: true, agentsWindow: { default: false, readOnly }, scope: ConfigurationScope.LANGUAGE_OVERRIDABLE, parse: value => value as boolean });
 	}
@@ -63,7 +65,7 @@ test('Sessions modified filtering excludes window defaults, fixed values and lan
 	tree.setQuery('@modified');
 	using listener = configuration.onDidChangeConfiguration(() => tree.refilter());
 	assert.deepEqual(tree.visibleItems.map(item => item.id), []);
-	await configuration.write('{ "sessions.editable": false, "sessions.fixed": true, "[typescript]": { "sessions.language": true } }', 0);
+	await configuration.write('{ "sessions.editable": false, "sessions.fixed": true, "[typescript]": { "sessions.language": true } }');
 	assert.deepEqual(tree.visibleItems.map(item => item.id), ['sessions.editable'], 'an explicit Sessions default counts, while fixed Workbench and language values do not');
 	await configuration.updateValue('sessions.editable', undefined);
 	assert.deepEqual(tree.visibleItems.map(item => item.id), []);
@@ -91,12 +93,14 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	};
 	await import('../../browser/activityBarAccessibility.js');
 	await import('../../contrib/creator/browser/creatorEditor.contribution.js');
-	const [{ SessionsPreferences }, { ConfigurationService }, { ContextKeyService }] = await Promise.all([
+	const [{ SessionsPreferences }, { testConfigurationService }, { ContextKeyService }] = await Promise.all([
 		import('../../contrib/preferences/browser/sessionsPreferences.js'),
-		import('../../services/configuration/browser/configurationService.js'),
+		import('../../../workbench/services/configuration/test/common/testServices.js'),
 		import('../../../platform/contextkey/browser/contextKeyService.js'),
 	]);
-	const model = { provider: 'openai', model: 'gpt-test' };
+
+	const { ConfigurationService: SessionsConfigurationService } = await import('../../services/configuration/browser/configurationService.js');
+	const ConfigurationService = testConfigurationService(SessionsConfigurationService); const model = { provider: 'openai', model: 'gpt-test' };
 	const otherModel = { provider: 'anthropic', model: 'claude-test' };
 	const changed = new Emitter<void>();
 	let visible = true;
@@ -335,9 +339,14 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	assert.ok(pointerSwitch);
 	assert.equal(pointerSwitch.getAttribute('aria-label'), 'Use pointer cursor on the canvas');
 	assert.equal(pointerSwitch.checked, true);
+	let resolveSaved!: () => void;
+	const pointerSaved = new Promise<void>(resolve => { resolveSaved = resolve; });
+	using savedListener = configuration.onDidChangeConfiguration(event => {
+		if (event.affectsConfiguration('sessions.design.usePointerCursor')) resolveSaved();
+	});
 	pointerSwitch.checked = false;
 	pointerSwitch.dispatchEvent(new window.Event('change', { bubbles: true }));
-	await Promise.resolve();
+	await pointerSaved;
 	assert.equal(configuration.getValue('sessions.design.usePointerCursor'), false);
 	assert.ok(window.document.querySelector('[data-configuration-key="accessibility.verbosity.designCanvas"]'));
 	const modelsButton = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent?.includes('Models'));

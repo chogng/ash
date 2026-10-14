@@ -9,7 +9,7 @@ import { resolveElectronConfiguration } from '../../../automation/electron.js';
 import { Workbench } from '../../../automation/workbench.js';
 import { readStorageEntries, seedStorageOnNextLoad } from '../../../automation/storage.js';
 import { StorageScope, StorageTarget } from '../../../../src/ash/platform/storage/common/storage.js';
-import type { IConfigurationSnapshot } from '../../../../src/ash/platform/configuration/common/configurationIpc.js';
+import { editJsonObjectProperty } from '../../../../src/ash/base/common/json.js';
 import { URI } from '../../../../src/ash/base/common/uri.js';
 
 interface RecentProjectsProbe {
@@ -52,14 +52,22 @@ test('taskbar shortcuts use Ash identity, follow display language after restart 
 		BrowserWindow.prototype.setAppDetails = function (details) { probe.details.push(details); originalDetails.call(this, details); };
 	});
 	const readTasks = (): Promise<Task[]> => electron.evaluate(() => (globalThis as typeof globalThis & { ashTaskbarProbe: TaskbarProbe; }).ashTaskbarProbe.tasks);
+	let refreshSequence = 0;
 	const refreshTasks = async (): Promise<void> => {
-		await workbench.page.evaluate(async () => {
-			const snapshot = await globalThis.ashTestMainProcess.call('configuration', 'read') as IConfigurationSnapshot;
-			await globalThis.ashTestMainProcess.call('configuration', 'update', {
-				expectedRevision: snapshot.revision,
-				document: { ...snapshot.document, source: `${snapshot.document.source}\n` },
-			});
+		const snapshot = await workbench.page.evaluate(async () => {
+			const home = await globalThis.ashTestMainProcess.call('localFilesystem', 'userDataHome') as string;
+			const resource = home.replace(/\/$/u, '') + '/settings.json';
+			const file = await globalThis.ashTestMainProcess.call('localFilesystem', 'readFile', { resource }) as { bytes: string; revision: string; };
+			return { ...file, resource };
 		});
+		const source = Buffer.from(snapshot.bytes, 'base64').toString('utf8');
+		const bytes = Buffer.from(editJsonObjectProperty(source, 'test.taskbarRefresh', ++refreshSequence)).toString('base64');
+		await workbench.page.evaluate(async ({ snapshot, bytes }) => {
+			await globalThis.ashTestMainProcess.call('localFilesystem', 'writeFile', {
+				resource: snapshot.resource, bytes,
+				options: { create: false, overwrite: true, expectedRevision: snapshot.revision },
+			});
+		}, { snapshot, bytes });
 	};
 	const selectLanguage = async (name: string): Promise<void> => {
 		await workbench.quickaccess.runCommand('workbench.action.configureLocale');

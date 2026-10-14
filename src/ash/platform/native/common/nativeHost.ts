@@ -11,6 +11,8 @@ import { buildOpenSessionLinkUri, parseOpenSessionLinkUri } from '../../agentHos
 import { isRecord } from '../../../base/common/types.js';
 
 export const AGENT_HOST_EDITOR_STATE_CHANNEL = 'ash:native-host:editor-state';
+/** Main selects the backend profile's TOML resource; this is not the UI settings transport. */
+export const EDIT_USER_CONFIGURATION_CHANNEL = 'ash:configuration:edit-user';
 export const AGENT_HOST_EDITOR_STATE_CHANGED_CHANNEL = 'ash:native-host:editor-state-changed';
 export const AGENT_HOST_EDITOR_UPDATE_CHANNEL = 'ash:native-host:editor-update';
 export const AGENTS_WINDOW_INVITATION_CLAIM_CHANNEL = 'ash:native-host:invitation-claim';

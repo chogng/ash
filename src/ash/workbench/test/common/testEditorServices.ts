@@ -3,7 +3,7 @@ import { IMessageHistoryService } from '../../../platform/messageHistory/common/
 import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
 import '../../contrib/chat/browser/chat.shared.contribution.js';
-import { WorkbenchConfigurationService } from '../../services/configuration/browser/configurationService.js';
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../services/configuration/test/common/testServices.js';
 import type { ITextResourceStore } from '../../services/textmodelResolver/common/textResourceStore.js';
 import { BrowserPathService } from '../../services/path/browser/pathService.js';
 import { IPathService } from '../../../platform/path/common/pathService.js';
@@ -55,7 +55,7 @@ import { IUriIdentityService } from '../../../platform/uriIdentity/common/uriIde
 import { UriIdentityService } from '../../../platform/uriIdentity/common/uriIdentityService.js';
 
 /** Assembles the same scheme router as the product around test-owned storage. */
-export function createTestFileService(provider: IFileSystemProvider, schemes: readonly string[] = [Schemas.file, Schemas.ashRemote, Schemas.vscodeUserData, 'ash-settings']): FileService {
+export function createTestFileService(provider: IFileSystemProvider, schemes: readonly string[] = [Schemas.file, Schemas.ashRemote, Schemas.vscodeUserData]): FileService {
 	return new TestFileService(provider, schemes);
 }
 

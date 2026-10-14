@@ -1,3 +1,5 @@
+import { UserDataProfileService } from '../../../workbench/services/userDataProfile/browser/userDataProfileService.js';
+import { TestConfigurationFiles } from '../../../workbench/services/configuration/test/common/testServices.js';
 import { IAgentExecutionSettingsService } from '../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
@@ -20,7 +22,6 @@ import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 
 import { JSDOM } from "jsdom";
-import type { IFileService } from '../../../platform/files/common/files.js';
 import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
 import { NotificationService } from '../../../workbench/services/notification/common/notificationService.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
@@ -93,6 +94,7 @@ test("opens a local Chat conversation before the backend session request settles
 	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 	services.registerInstance(IMenuService, emptyMenuService());
 	services.registerInstance(IContextMenuService, {} as IContextMenuService);
+	using files = new TestConfigurationFiles();
 	using view = new ChatViewPane(
 		document.body,
 		{ id: "workbench.chat", title: "Chat" },
@@ -103,13 +105,13 @@ test("opens a local Chat conversation before the backend session request settles
 		contextViewService,
 		{} as ICommandService,
 		layoutService,
-		{} as IFileService,
+		files,
 		{ getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService,
 		notifications,
 		services,
 		services.get(IConfigurationService),
 		services.get(IStorageService),
-		{ onDidChangeResource: Event.None, read: async () => ({ source: '{}', revision: 0 }), write: async () => { throw new Error('No legacy settings'); } },
+		new UserDataProfileService(),
 	);
 
 	assert.deepEqual(escaped, []);

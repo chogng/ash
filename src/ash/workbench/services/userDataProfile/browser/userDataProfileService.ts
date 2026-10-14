@@ -9,6 +9,7 @@ export class UserDataProfileService implements IUserDataProfileService {
 		isDefault: true,
 		name: 'Default',
 		location: URI.from({ scheme: Schemas.vscodeUserData, path: '/user' }),
+		settingsResource: URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' }),
 		keybindingsResource: URI.from({ scheme: Schemas.vscodeUserData, path: '/user/keybindings.json' }),
 	});
 }

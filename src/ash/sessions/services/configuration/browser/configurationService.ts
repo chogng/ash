@@ -1,18 +1,26 @@
-import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
-import { Registry } from '../../../../platform/registry/common/platform.js';
+import type { IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { WorkbenchConfigurationService, type WorkbenchConfigurationServiceOptions } from '../../../../workbench/services/configuration/browser/configurationService.js';
+import { IFileService } from '../../../../platform/files/common/files.js';
+import { ILogService } from '../../../../platform/log/common/log.js';
+import { IUserDataProfileService } from '../../../../workbench/services/userDataProfile/common/userDataProfile.js';
 
 /** Resolves Agents Window defaults without changing the shared settings resource. */
 export class ConfigurationService extends WorkbenchConfigurationService {
-	constructor(options: Omit<WorkbenchConfigurationServiceOptions, 'defaults' | 'readOnlyKeys'> = {}) {
-		const registry = options.registry ?? Registry.as<IConfigurationRegistry>(Extensions.Configuration);
-		const defaults = new Map<string, unknown>();
-		const readOnlyKeys = new Set<string>();
-		for (const configuration of registry.getRegisteredConfigurations()) {
-			if (!configuration.agentsWindow) continue;
-			defaults.set(configuration.key, configuration.agentsWindow.default);
-			if (configuration.agentsWindow.readOnly) readOnlyKeys.add(configuration.key);
-		}
-		super({ ...options, registry, defaults, readOnlyKeys });
+	constructor(
+		options: Omit<WorkbenchConfigurationServiceOptions, 'defaults' | 'readOnlyKeys'> = {},
+		@IFileService files: IFileService,
+		@ILogService log: ILogService,
+		@IUserDataProfileService profile: IUserDataProfileService,
+	) {
+		super(options, files, log, profile);
+	}
+
+	protected override defaultValue(configuration: IRegisteredConfiguration): unknown {
+		return configuration.agentsWindow ? configuration.agentsWindow.default : super.defaultValue(configuration);
+	}
+
+	protected override isReadOnly(key: string): boolean {
+		// Resolve current registrations so extension reloads cannot leave stale window rules.
+		return this.registry.getConfiguration(key)?.agentsWindow?.readOnly === true;
 	}
 }

@@ -14,7 +14,7 @@ import { ILanguageFeaturesService } from '../../../editor/common/services/langua
 import { LanguageFeaturesService } from '../../../editor/common/services/languageFeaturesService.js';
 import { createTestLanguageConfigurationService } from '../../../editor/test/common/modes/testLanguageConfigurationService.js';
 import { ITextModelService } from '../../../editor/common/services/resolverService.js';
-import { WorkbenchConfigurationService } from '../../services/configuration/browser/configurationService.js';
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../services/configuration/test/common/testServices.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';

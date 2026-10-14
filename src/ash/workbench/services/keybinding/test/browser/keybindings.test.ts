@@ -74,7 +74,7 @@ import {
 	StatusbarAlignment,
 	StatusbarService,
 } from "../../../../../workbench/services/statusbar/browser/statusbar.js";
-import { WorkbenchConfigurationService } from "../../../../../workbench/services/configuration/browser/configurationService.js";
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../../configuration/test/common/testServices.js';
 
 const jsonRegistry = Registry.as<IJSONContributionRegistry>(JSONExtensions.JSONContribution);
 

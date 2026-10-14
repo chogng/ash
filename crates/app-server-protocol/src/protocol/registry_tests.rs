@@ -4,6 +4,33 @@ use super::SerializationAccess;
 use schemars::JsonSchema;
 
 #[test]
+fn github_managed_settings_is_account_bound_read_only_and_cancellable() {
+    use crate::protocol::github::GitHubManagedSettingsParams;
+    let definition = super::client_method_definition("github/account/managedSettings").unwrap();
+    let params = serde_json::json!({"operationId":"read-policy", "accountId":"primary"});
+    let request: GitHubManagedSettingsParams = serde_json::from_value(params.clone()).unwrap();
+    assert_eq!(serde_json::to_value(request).unwrap(), params);
+    assert_eq!(
+        definition.cancellation_operation_id(&params).unwrap(),
+        Some("read-policy".into())
+    );
+    assert_eq!(
+        definition.serialization_scope(&params).unwrap(),
+        Some(ClientRequestSerializationScope::HostedAccount {
+            account_id: "primary".into(),
+            access: SerializationAccess::SharedRead,
+        })
+    );
+    assert!(
+        serde_json::from_value::<GitHubManagedSettingsParams>(
+            serde_json::json!({"operationId":"read-policy"})
+        )
+        .is_err()
+    );
+    assert!(serde_json::from_value::<GitHubManagedSettingsParams>(serde_json::json!({"operationId":"read-policy", "accountId":"primary", "token":"forbidden"})).is_err());
+}
+
+#[test]
 fn built_in_provider_enablement_roundtrips_and_uses_global_serialization() {
     use crate::protocol::extension_packages::ExtensionsBuiltInProviderEnablementParams;
     let read = super::client_method_definition("extensions/builtInProviders").unwrap();

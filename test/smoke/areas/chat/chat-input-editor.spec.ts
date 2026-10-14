@@ -1,3 +1,4 @@
+import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
 import { expect, test } from '../../../automation/test.js';
 
 test('Empty chat anchors its input to the bottom pane edge', async ({ workbench }) => {
@@ -338,16 +339,16 @@ test('Chat input places the microphone beside voice or send at the right edge', 
 
 test('Desktop Chat guides a missing local model to Dictation settings without opening the microphone', { tag: ['@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
-	const original = await page.evaluate(async () => {
-		return (await globalThis.ashTestMainProcess.call('configuration', 'read') as { document: { source: string; }; }).document.source;
-	});
-	await page.evaluate(async () => {
-		const snapshot = await globalThis.ashTestMainProcess.call('configuration', 'read') as { revision: number; document: { source: string; }; };
-		const settings = JSON.parse(snapshot.document.source) as Record<string, unknown>;
+	const original = await (async () => {
+		return (await readUserSettings(page)).content;
+	})();
+	await (async () => {
+		const snapshot = await readUserSettings(page);
+		const settings = JSON.parse(snapshot.content) as Record<string, unknown>;
 		settings['dictation.backend'] = 'local';
 		settings['dictation.localModel'] = 'ash-playwright-missing-model';
-		await globalThis.ashTestMainProcess.call('configuration', 'update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(settings) } });
-	});
+		await writeUserSettings(page, JSON.stringify(settings), snapshot.revision);
+	})();
 	try {
 		if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 			await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -397,10 +398,10 @@ test('Desktop Chat guides a missing local model to Dictation settings without op
 		await page.keyboard.press('Escape');
 		await expect(introduction).toHaveCount(0);
 	} finally {
-		await page.evaluate(async source => {
-			const snapshot = await globalThis.ashTestMainProcess.call('configuration', 'read') as { revision: number; };
-			await globalThis.ashTestMainProcess.call('configuration', 'update', { expectedRevision: snapshot.revision, document: { version: 1, source } });
-		}, original);
+		await (async source => {
+			const snapshot = await readUserSettings(page);
+			await writeUserSettings(page, source, snapshot.revision);
+		})(original);
 	}
 });
 

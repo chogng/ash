@@ -1,4 +1,6 @@
 import { NativeExtensionService } from '../services/extensions/electron-browser/nativeExtensionService.js';
+import { IPolicyService } from '../../platform/policy/common/policy.js';
+import { PolicyChannelClient } from '../../platform/policy/common/policyIpc.js';
 import { IRemoteAuthorityResolverService } from '../../platform/remote/common/remoteAuthorityResolver.js';
 import { RemoteAuthorityResolverService } from '../../platform/remote/electron-browser/remoteAuthorityResolverService.js';
 import { IRemoteSocketFactoryService } from '../../platform/remote/common/remoteSocketFactoryService.js';
@@ -25,7 +27,6 @@ import { Schemas } from '../../base/common/network.js';
 import { IFileService } from '../../platform/files/common/files.js';
 import { FileService } from '../../platform/files/common/fileService.js';
 import { ElectronRendererClipboardService } from '../../platform/clipboard/electron-browser/electronRendererClipboardService.js';
-import { validateConfigurationSnapshot } from '../../platform/configuration/common/configurationIpc.js';
 import { invoke, subscribe } from '../../platform/ipc/electron-browser/rendererIpc.js';
 import { InstantiationService } from '../../platform/instantiation/common/instantiationService.js';
 import { IMainProcessService } from '../../platform/ipc/common/mainProcessService.js';
@@ -112,7 +113,6 @@ export class DesktopMain extends Disposable {
 			performance.mark('ash.desktop.themes-ready');
 			const workspace = parseWorkspace(await api.workspace.getWorkspace());
 			performance.mark('ash.desktop.workspace-ready');
-			const initialConfigurationSnapshot = validateConfigurationSnapshot(await api.configuration.read());
 			performance.mark('ash.desktop.configuration-ready');
 			let lifecycleService!: ElectronLifecycleService;
 			let desktopWindow!: ElectronWindow;
@@ -121,6 +121,7 @@ export class DesktopMain extends Disposable {
 			const workbench = this._register(await startWorkbench({
 				...this.options,
 				serviceCollection: new ServiceCollection(
+					[IPolicyService, this._register(new PolicyChannelClient(mainProcessService.getChannel('policy')))],
 					[IBrowserViewService, ProxyChannel.toService<IBrowserViewService>(mainProcessService.getChannel(ipcBrowserViewChannelName))],
 					[IMainProcessService, mainProcessService],
 					[IRemoteAuthorityResolverService, resolver],
@@ -156,8 +157,6 @@ export class DesktopMain extends Disposable {
 					return lifecycleService;
 				},
 				createWindow: services => desktopWindow = services.createInstance(ElectronWindow, { invoke, subscribe }),
-				configurationApi: api.configuration,
-				initialConfigurationSnapshot,
 				createUserDataFileSystemProvider: async () => new FileUserDataProvider(api.localFiles, api.userDataHome),
 				keyboardLayoutProvider: api.keyboardLayout,
 				userKeyboardLayoutApi: api.userKeyboardLayout,

@@ -1,3 +1,4 @@
+import { migrateLegacyBrowserSettings } from '../services/userData/browser/userDataInit.js';
 import { IndexedDBFileSystemProvider } from '../../platform/files/browser/indexedDBFileSystemProvider.js';
 import { Schemas } from '../../base/common/network.js';
 import { BrowserURLService } from '../services/url/browser/urlService.js';
@@ -38,7 +39,6 @@ import { onUnexpectedError } from '../../base/common/errors.js';
 import { EMPTY_WORKSPACE_ID_KEY } from '../services/host/browser/browserHostService.js';
 import { URI } from '../../base/common/uri.js';
 import { IWorkspaceContextService, type IAnyWorkspaceIdentifier } from '../../platform/workspace/common/workspace.js';
-import { IndexedDbConfigurationApi } from '../../platform/configuration/browser/indexedDbConfigurationApi.js';
 import { BrowserWorkbenchEnvironmentService } from '../services/environment/browser/environmentService.js';
 
 /** Creates a browser-hosted Workbench with the shared Web adapters. */
@@ -57,9 +57,12 @@ export async function createWebWorkbench(
 		createStorageService: async storageOptions => new BrowserStorageService(storageOptions),
 		createWorkingCopyBackupService: (_services, workspaceId) => new IndexedDbWorkingCopyBackupService(workspaceId),
 		createLogService: () => new LogService({ sinks: [new ConsoleLogSink()] }),
-		createUserDataFileSystemProvider: () => IndexedDBFileSystemProvider.create(ownerWindow.indexedDB, Schemas.vscodeUserData),
-		configurationApi: options.configurationApi,
-		initialConfigurationSnapshot: options.initialConfigurationSnapshot,
+		createUserDataFileSystemProvider: () => IndexedDBFileSystemProvider.create(ownerWindow.indexedDB, Schemas.vscodeUserData).then(async provider => {
+			try {
+				await migrateLegacyBrowserSettings(ownerWindow.indexedDB, provider, URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' }));
+				return provider;
+			} catch (error) { provider.dispose(); throw error; }
+		}),
 		defaultLayout: options.defaultLayout,
 		api: options.api,
 		webWorkspaceClient: options.webWorkspaceClient,
@@ -114,8 +117,6 @@ export async function startWebWorkbench(
 	const workbench = new DisposableStore();
 	workbench.add(hostLifetime);
 	try {
-		const configurationApi = workbench.add(new IndexedDbConfigurationApi());
-		const initialConfigurationSnapshot = await configurationApi.read();
 		const api = host?.api ?? createDisconnectedRendererApi();
 		const browserFileSystemProvider = !host && WebFileSystemAccess.supported(window) && globalThis.indexedDB
 			? new HTMLFileSystemProvider(globalThis.indexedDB, window)
@@ -126,8 +127,6 @@ export async function startWebWorkbench(
 			urlCallbackProvider: host?.urlCallbackProvider,
 			api,
 			createTextDocumentHost,
-			configurationApi,
-			initialConfigurationSnapshot,
 			webWorkspaceClient: host?.webWorkspaceClient,
 			browserFileSystemProvider,
 			defaultLayout: host?.defaultLayout,

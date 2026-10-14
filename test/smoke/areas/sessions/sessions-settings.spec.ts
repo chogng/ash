@@ -1,3 +1,4 @@
+import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
 import { expect, test } from '../../../automation/test.js';
 import { captureElectronMenu } from '../../../automation/menus.js';
 import { readFile } from 'node:fs/promises';
@@ -49,20 +50,7 @@ test('Sessions Settings command queries reuse search and restore saved values af
 			const profile = await application.evaluate(() => process.env.ASH_HOME!);
 			return JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8'))['sessions.activityBar.compact'];
 		}
-		return sessionsPage.evaluate(async () => {
-			const database = await new Promise<IDBDatabase>((resolve, reject) => {
-				const request = indexedDB.open('ash-configuration');
-				request.onsuccess = () => resolve(request.result);
-				request.onerror = () => reject(request.error);
-			});
-			try {
-				return await new Promise<unknown>((resolve, reject) => {
-					const request = database.transaction('resources', 'readonly').objectStore('resources').get('settings.json');
-					request.onsuccess = () => resolve(JSON.parse(request.result.document.source)['sessions.activityBar.compact']);
-					request.onerror = () => reject(request.error);
-				});
-			} finally { database.close(); }
-		});
+		return (async () => { const snapshot = await readUserSettings(sessionsPage); return JSON.parse(snapshot.content)['sessions.activityBar.compact']; })();
 	};
 	await expect.poll(readSaved).toBe(true);
 	await settings.getByRole('searchbox').press('Control+Alt+I');
@@ -123,10 +111,10 @@ test('Sessions Modified Settings refreshes after external writes, reset and wind
 	const saveExternal = async (compact: boolean | undefined): Promise<void> => {
 		const source = JSON.stringify({ 'window.menuStyle': 'custom', 'workbench.activityBar.compact': true, ...(compact === undefined ? {} : { 'sessions.activityBar.compact': compact }) });
 		if ('windows' in application) {
-			await sessionsPage.evaluate(async source => {
-				const current = await globalThis.ashTestMainProcess.call<{ revision: number; }>('configuration', 'read');
-				await globalThis.ashTestMainProcess.call('configuration', 'update', { expectedRevision: current.revision, document: { version: 1, source } });
-			}, source);
+			await (async source => {
+				const current = await readUserSettings(sessionsPage);
+				await writeUserSettings(sessionsPage, source, current.revision);
+			})(source);
 		} else {
 			if (!writer) {
 				const writerPage = await sessionsPage.context().newPage();
@@ -171,20 +159,7 @@ test('Sessions Modified Settings refreshes after external writes, reset and wind
 		const profile = await application.evaluate(() => process.env.ASH_HOME!);
 		await expect.poll(async () => JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8'))).toEqual(remaining);
 	} else {
-		await expect.poll(() => sessionsPage.evaluate(async () => {
-			const database = await new Promise<IDBDatabase>((resolve, reject) => {
-				const request = indexedDB.open('ash-configuration');
-				request.onsuccess = () => resolve(request.result);
-				request.onerror = () => reject(request.error);
-			});
-			try {
-				return await new Promise<unknown>((resolve, reject) => {
-					const request = database.transaction('resources', 'readonly').objectStore('resources').get('settings.json');
-					request.onsuccess = () => resolve(JSON.parse(request.result.document.source));
-					request.onerror = () => reject(request.error);
-				});
-			} finally { database.close(); }
-		})).toEqual(remaining);
+		await expect.poll(() => (async () => { const snapshot = await readUserSettings(sessionsPage); return JSON.parse(snapshot.content); })()).toEqual(remaining);
 	}
 	sessionsPage = await workbench.reopenAgentsWindow(application, sessionsPage);
 	await openSettings();

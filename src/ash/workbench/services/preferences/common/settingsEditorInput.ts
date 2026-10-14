@@ -1,3 +1,4 @@
+import { Schemas } from '../../../../base/common/network.js';
 import { AbstractDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import type { IOpenSettingsOptions } from './preferences.js';
 import type { IResourceEditorInput } from '../../../common/editor.js';
@@ -9,7 +10,7 @@ import { EditorInputSerializers } from '../../editor/common/editorInputSerialize
 export const SettingsEditorContentType = 'application/vnd.ash.settings-editor';
 export const SettingsEditorResource = URI.parse('ash-settings-editor:/settings');
 export const SettingsFileSystemScheme = 'ash-settings';
-export const UserSettingsResource = URI.parse(`${SettingsFileSystemScheme}:/user/settings.json`);
+export const UserSettingsResource = URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' });
 
 /** Preferences owns the fixed resource; the active pane owns its opening delegate. */
 export class SettingsEditorInput extends AbstractDisposable implements IResourceEditorInput {
@@ -56,7 +57,7 @@ export function isSettingsEditorInput(input: IResourceEditorInput): boolean {
 	return input.contentType === SettingsEditorContentType || input.resource.toString() === SettingsEditorResource.toString();
 }
 
-/** Creates the editable JSONC projection of the current profile's user settings. */
+/** Opens the current profile settings file as an editable JSONC resource. */
 export function createUserSettingsEditorInput(): IResourceEditorInput {
 	return Object.freeze({
 		resource: UserSettingsResource,
@@ -71,7 +72,7 @@ EditorInputSerializers.registerStatic({
 	canSerialize: input => input.resource.toString() === UserSettingsResource.toString(),
 	serialize: () => UserSettingsResource.toString(),
 	deserialize: value => {
-		if (value !== UserSettingsResource.toString()) throw new TypeError('Invalid user settings editor resource');
+		if (value !== UserSettingsResource.toString() && value !== 'ash-settings:/user/settings.json') throw new TypeError('Invalid user settings editor resource');
 		return createUserSettingsEditorInput();
 	},
 });

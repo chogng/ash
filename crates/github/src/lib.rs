@@ -8,6 +8,7 @@ mod credentials;
 mod error;
 mod forks;
 mod issues;
+mod managed_settings;
 mod notifications;
 mod pull_requests;
 mod reporter;
@@ -559,6 +560,9 @@ impl GitHub {
 #[cfg(test)]
 #[path = "github_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod managed_settings_tests;
 
 pub use credentials::GitHubAuthenticationRequest;
 pub use credentials::GitHubAuthenticationResponse;

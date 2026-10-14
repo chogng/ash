@@ -1,3 +1,4 @@
+import { migrateLegacyBrowserSettings } from '../../../src/ash/workbench/services/userData/browser/userDataInit.js';
 import { AsyncDataTree } from '../../../src/ash/base/browser/ui/tree/asyncDataTree.js';
 import { ExtensionResourceLoaderService } from '../../../src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { addDisposableListener } from '../../../src/ash/base/browser/dom.js';
@@ -115,6 +116,67 @@ function trackForegroundListeners(target: EventTarget, eventType: string): void 
 
 const textInput = { resource: URI.parse('review:/content.txt'), label: 'Provider text', languageId: 'plaintext' };
 const integration = {
+	async migrateSettings(scenario: 'absent' | 'legacy' | 'equal' | 'conflict' | 'invalid' | 'interrupted') {
+		const settings = URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' });
+		const source = '// retain this comment\n{ "editor.fontSize": 19, }\n';
+		const legacy = { key: 'settings.json', revision: 7, document: { version: 1, source: scenario === 'invalid' ? '{ broken' : source } };
+		const open = (): Promise<IDBDatabase> => new Promise((resolve, reject) => {
+			const request = indexedDB.open('ash-configuration', 1);
+			request.onupgradeneeded = () => request.result.createObjectStore('resources', { keyPath: 'key' });
+			request.onsuccess = () => resolve(request.result);
+			request.onerror = () => reject(request.error);
+		});
+		const readLegacy = async (): Promise<unknown[]> => {
+			const database = await open();
+			try {
+				return await new Promise((resolve, reject) => {
+					const transaction = database.transaction('resources', 'readonly');
+					const request = transaction.objectStore('resources').getAll();
+					request.onsuccess = () => resolve(request.result);
+					request.onerror = () => reject(request.error);
+				});
+			} finally { database.close(); }
+		};
+		if (scenario !== 'absent') {
+			const database = await open();
+			try {
+				await new Promise<void>((resolve, reject) => {
+					const transaction = database.transaction('resources', 'readwrite');
+					transaction.objectStore('resources').put(legacy);
+					transaction.objectStore('resources').put({ key: 'unrelated', value: 'keep' });
+					transaction.oncomplete = () => resolve();
+					transaction.onerror = () => reject(transaction.error);
+				});
+			} finally { database.close(); }
+		}
+		if (['absent', 'equal', 'conflict'].includes(scenario)) {
+			await files.createDirectory(URI.joinPath(settings, '..'));
+			await files.writeFile({ resource: settings, content: scenario === 'equal' ? '{ "editor.fontSize": 19 }' : '{ "editor.fontSize": 23 }' });
+		}
+		let reads = 0;
+		const controlledProvider = new Proxy(provider, {
+			get(target, key) {
+				if (key === 'readFile') return async (resource: URI) => {
+					if (scenario === 'interrupted' && ++reads === 2) throw new Error('interrupted after durable target');
+					return target.readFile(resource);
+				};
+				const value = Reflect.get(target, key);
+				return typeof value === 'function' ? value.bind(target) : value;
+			},
+		});
+		let error: string | undefined;
+		try { await migrateLegacyBrowserSettings(indexedDB, controlledProvider, settings); }
+		catch (failure) { error = String(failure); }
+		const retainedOnFailure = scenario === 'interrupted' ? (await readLegacy()).some(record => (record as { key: string; }).key === 'settings.json') : undefined;
+		if (scenario === 'interrupted') await migrateLegacyBrowserSettings(indexedDB, provider, settings);
+		if (['legacy', 'equal', 'interrupted'].includes(scenario)) await migrateLegacyBrowserSettings(indexedDB, provider, settings);
+		let target: string | undefined;
+		try { target = (await files.readFile(settings)).content; } catch { /* Invalid legacy data never creates a target. */ }
+		const records = scenario === 'absent' ? undefined : await readLegacy();
+		const absentDatabase = scenario === 'absent' ? !(await indexedDB.databases()).some(database => database.name === 'ash-configuration') : undefined;
+		return { target, records, error, retainedOnFailure, absentDatabase };
+	},
+
 	async treeFocusAndRestore() {
 		const host = document.createElement('div');
 		host.style.cssText = 'height: 66px; width: 240px;';

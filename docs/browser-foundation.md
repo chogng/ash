@@ -297,21 +297,18 @@ The current TypeScript settings path is:
 - `platform/configuration/common/configurationRegistry.ts` owns registered keys,
   defaults, parsers, serializers, schemas, and declared scopes.
 - `workbench/services/configuration/browser/configurationService.ts` resolves
-  registered values and supported language overrides, validates editor writes,
-  and publishes configuration and resource changes. Persisted writes currently
-  support only `USER` and `USER_LOCAL`; the other configuration layers are not
-  implemented merely because they appear in the shared contract.
-- Electron Main owns `<profile>/settings.json`, writes the JSONC source
-  atomically, watches external edits, and enforces compare-and-swap revisions.
-  Renderer access uses the typed read/update/change preload capability.
-- Browser product entries supply `IndexedDbConfigurationApi`. It stores the
-  settings source and revision in the `ash-configuration` database and uses
-  `BroadcastChannel` to reload changes in Workbench and Sessions pages on the
-  same origin. The service's optional in-memory mode is not the product's
-  persistence path.
-- The editable `ash-settings:/user/settings.json` resource is a view of that
-  same source. `SettingsFileSystemProvider` connects the ordinary text-file save
-  path to `IConfigurationResourceService`; it does not own a second document.
+  defaults, user, workspace, folder and language layers, with policy taking
+  precedence. It validates settings writes and publishes configuration changes.
+- `IUserDataProfileService.currentProfile.settingsResource` is the actual JSONC
+  file opened by Preferences and the text editor. Both use the existing
+  `IFileService`, including opaque revision checks and dirty working copies.
+- Electron stores `<profile>/settings.json` through the generic disk provider
+  and its existing file IPC. Main's single-resource configuration service and
+  renderer `UserSettings` interpret file contents and watch invalidations.
+- Browser windows share the generic `ash-user-data-files` IndexedDB provider.
+  Startup migrates the former `ash-configuration` settings record once, removes
+  it only after the target is durable or semantically equal, and preserves both
+  sources on conflict. Active reads and writes use only the profile file.
 - `keybindings.json` is a separate ordered resource supplied by
   `IUserDataProfileService`, validated by the keybinding owner, and edited
   through the shared file model. It is not a settings property.
@@ -329,11 +326,8 @@ The current Electron settings file is a plain JSONC object, for example:
 }
 ```
 
-The configuration API carries a versioned `{ version: 1, source }` document
-inside a revisioned snapshot. That transport shape is not the file format.
-The older `configuration.json` / `{ version, values }` description does not
-represent the current product path. Legacy migration must be verified
-separately; changing this description does not migrate existing profiles.
+There is no settings-specific IPC snapshot or virtual settings filesystem.
+The former versioned envelope is accepted only by the explicit legacy migration.
 
 Consumers use registered string keys through `IConfigurationService`. The
 current registry is named `ConfigurationRegistry`; it does not provide the

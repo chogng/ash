@@ -259,7 +259,7 @@ test("text-file decoding retains a leading content character after the UTF-8 BOM
 });
 
 test('TextFileService forwards configured detection and language overrides, with explicit reopen precedence', async () => {
-	const { WorkbenchConfigurationService } = await import('../../../configuration/browser/configurationService.js');
+	const { TestConfigurationService: WorkbenchConfigurationService } = await import("../../../configuration/test/common/testServices.js");
 	await import('../../../../contrib/files/browser/files.contribution.js');
 	using configuration = new WorkbenchConfigurationService();
 	await configuration.updateValue('files.encoding', 'windows1252');

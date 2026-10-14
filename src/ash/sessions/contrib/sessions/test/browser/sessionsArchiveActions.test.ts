@@ -14,7 +14,7 @@ import { TestQuickInputService } from '../../../../../platform/quickinput/test/b
 import type { ChatAgent } from '../../../../../workbench/services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { CommandService } from '../../../../../workbench/services/commands/common/commandService.js';
-import { WorkbenchConfigurationService } from '../../../../../workbench/services/configuration/browser/configurationService.js';
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../../workbench/services/configuration/test/common/testServices.js';
 import { initializeTestLocalization } from '../../../../../workbench/services/localization/test/common/localizationTestUtils.js';
 import '../../../../../workbench/contrib/chat/browser/chat.shared.contribution.js';
 import '../../browser/views/sessionsViewActions.js';
@@ -66,7 +66,7 @@ async function fixture(wording: 'archive' | 'done', archived = false) {
 	if (archived) provider.items[0] = { ...provider.items[0]!, status: 'archived', chats: provider.items[0]!.chats.map(chat => ({ ...chat, status: 'archived' })) };
 	const sessions = resources.add(new SessionsManagementService(provider));
 	await sessions.initialize();
-	const configuration = resources.add(new WorkbenchConfigurationService({ initialSnapshot: { revision: 1, document: { version: 1, source: JSON.stringify({ [ChatSessionArchiveActionWordingSettingId]: wording }) } } }));
+	const configuration = resources.add(new WorkbenchConfigurationService({ source: JSON.stringify({ [ChatSessionArchiveActionWordingSettingId]: wording }) }));
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(ISessionsManagementService, sessions);
 	const opened: string[] = [];

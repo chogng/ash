@@ -1,4 +1,5 @@
-import { IFileService } from '../../../../platform/files/common/files.js';
+import { IFileService, FileSystemProviderErrorCode, toFileSystemProviderErrorCode } from '../../../../platform/files/common/files.js';
+import { dirname } from '../../../../base/common/resources.js';
 import { IUserDataProfileService } from '../../userDataProfile/common/userDataProfile.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { editJsonObjectProperty, parseJsonDocument } from '../../../../base/common/json.js';
@@ -42,6 +43,20 @@ export class PreferencesService extends Disposable implements IPreferencesServic
 			throw new Error(localize({ bundle: 'ash.settings', key: 'json.unsupportedTarget' }, 'This configuration target does not support editing a settings file.'));
 		}
 		const input = createUserSettingsEditorInput();
+		if (!this.models.getModel(input.resource)) {
+			try {
+				await this.files.stat(input.resource);
+			} catch (error) {
+				if (toFileSystemProviderErrorCode(error as Error) !== FileSystemProviderErrorCode.FileNotFound) throw error;
+				await this.files.createDirectory(dirname(input.resource));
+				try {
+					await this.files.writeFile({ resource: input.resource, content: '{}\n' }, { create: true, overwrite: false });
+				} catch (error) {
+					// Another window may create the profile file while this editor is opening.
+					if (toFileSystemProviderErrorCode(error as Error) !== FileSystemProviderErrorCode.FileExists) throw error;
+				}
+			}
+		}
 		if (!options.revealSetting) {
 			await this.editorService.openEditor(input, { pinned: true });
 			return;

@@ -56,6 +56,12 @@ export class AppServerGitHubService implements IGitHubService {
 	public async listAccounts(token?: CancellationToken): Promise<readonly GitHubAccount[]> {
 		return (await this.request('github/account/list', {}, RequestKind.Read, token)).accounts.map(account => ({ ...account, credentialRevision: BigInt(account.credentialRevision) }));
 	}
+	public async readManagedSettings(accountId: string, token?: CancellationToken) {
+		const settings = (await this.request('github/account/managedSettings', { accountId }, RequestKind.Read, token)).settings;
+		if (settings === null) return null;
+		if (typeof settings !== 'object' || Array.isArray(settings)) throw new GitHubError(GitHubErrorCode.Unavailable);
+		return settings;
+	}
 	public async connectToken(host: string, accessToken: string, token?: CancellationToken): Promise<GitHubAccount> {
 		const account = await this.request('github/account/connect', { host, token: accessToken }, RequestKind.Write, token);
 		return { ...account, credentialRevision: BigInt(account.credentialRevision) };
@@ -221,7 +227,7 @@ export function createDisconnectedGitHubService(): IGitHubService {
 		onDidChangeSessionIssues: Event.None, listSessionIssues: unavailable, attachSessionIssue: unavailable, detachSessionIssue: unavailable,
 		onDidChangeSessionPullRequests: Event.None, listSessionPullRequests: unavailable, attachSessionPullRequest: unavailable, detachSessionPullRequest: unavailable,
 		listAccounts: unavailable, listNotifications: unavailable, markNotificationRead: unavailable, markNotificationsRead: unavailable, createFork: unavailable, connectToken: unavailable, requestedReviewers: unavailable, changeReviewers: unavailable, updateReviewComment: unavailable, deleteReviewComment: unavailable,
-		readCommit: unavailable,
+		readManagedSettings: unavailable, readCommit: unavailable,
 		readRepository: unavailable, listIssues: unavailable, readIssue: unavailable, createIssue: unavailable, updateIssue: unavailable,
 		listComments: unavailable, createComment: unavailable, updateComment: unavailable, deleteComment: unavailable,
 		listPullRequests: unavailable, readPullRequest: unavailable, createPullRequest: unavailable, updatePullRequest: unavailable,

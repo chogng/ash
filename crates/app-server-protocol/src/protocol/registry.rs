@@ -1232,6 +1232,10 @@ use crate::protocol::github::GitHubIssueListResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubIssueUpdateParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubManagedSettingsParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubManagedSettingsResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubNotificationReadParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubNotificationsParams;
@@ -4747,6 +4751,7 @@ client_methods! {
     GitHubNotificationsRead => "github/notifications/readAll" { params: GitHubNotificationsReadParams, response: (), serialization: HostedAccountExclusive, cancellation: "operationId" => PreserveOutcome, },
     GitHubForkCreate => "github/repository/fork" { params: GitHubForkCreateParams, response: GitHubForkResult, serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
     GitHubAccountList => "github/account/list" { params: GitHubAccountListParams, response: GitHubAccountsResult, serialization: None, cancellation: "operationId", },
+    GitHubManagedSettings => "github/account/managedSettings" { params: GitHubManagedSettingsParams, response: GitHubManagedSettingsResult, serialization: HostedAccountSharedRead, cancellation: "operationId", },
     GitHubSessionPullRequests => "github/session/pullRequests" { params: GitHubSessionPullRequestsParams, response: GitHubSessionPullRequestsResult, serialization: SessionExclusive, },
     GitHubSessionPullRequestAttach => "github/session/pullRequest/attach" { params: GitHubSessionPullRequestParams, response: (), serialization: SessionExclusive, },
     GitHubSessionPullRequestDetach => "github/session/pullRequest/detach" { params: GitHubSessionPullRequestParams, response: (), serialization: SessionExclusive, },
@@ -5567,6 +5572,8 @@ typescript_bindings! {
     crate::protocol::github::GitHubAccountsResult,
     crate::protocol::github::GitHubAccountConnectParams,
     crate::protocol::github::GitHubAccountListParams,
+    crate::protocol::github::GitHubManagedSettingsParams,
+    crate::protocol::github::GitHubManagedSettingsResult,
     crate::protocol::github::GitHubPullRequestReference,
     crate::protocol::github::GitHubSessionPullRequestsParams,
     crate::protocol::github::GitHubIssueReference,

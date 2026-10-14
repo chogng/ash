@@ -17,7 +17,7 @@ const { InstantiationService } = await import('../../../../../platform/instantia
 const { WorkbenchConfiguration } = await import('../../../../common/configuration.js');
 const { WorkbenchContributionsRegistry, WorkbenchPhase } = await import('../../../../common/contributions.js');
 const { IAuxiliaryWindowService } = await import('../../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js');
-const { WorkbenchConfigurationService } = await import('../../../../services/configuration/browser/configurationService.js');
+const { TestConfigurationService: WorkbenchConfigurationService } = await import("../../../../services/configuration/test/common/testServices.js");
 const { IWorkbenchLayoutService } = await import('../../../../services/layout/browser/layoutService.js');
 const { BrowserLayoutService } = await import('../../../../../platform/layout/browser/layoutService.js');
 await import('../../browser/modernUI.contribution.js');

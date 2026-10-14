@@ -10,7 +10,7 @@ import { IQuickInputService, type IQuickPick, type IQuickPickItem, type IQuickPi
 import { IStorageService, StorageScope } from '../../../../../../platform/storage/common/storage.js';
 import { ITerminalService, type ITerminalCommandStatusEvent, type ITerminalInstance } from '../../../../../services/terminal/browser/terminal.js';
 import { TerminalExtensionsRegistry } from '../../../../terminal/browser/terminalExtensions.js';
-import { WorkbenchConfigurationService } from '../../../../../../workbench/services/configuration/browser/configurationService.js';
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../../services/configuration/test/common/testServices.js';
 import { BrowserStorageService } from '../../../../../../workbench/services/storage/browser/storageService.js';
 import { TerminalCommandHistory } from '../../common/history.js';
 import { TerminalHistoryCommandId } from '../../common/terminal.history.js';

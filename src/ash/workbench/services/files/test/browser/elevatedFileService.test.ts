@@ -14,7 +14,7 @@ import { AppServerRemoteError } from '../../../../../platform/agentHost/common/a
 import type { FsWriteFileParams, FsWriteFileElevatedParams, FsWriteFileResult } from '../../../../../../../.build/protocol/typescript/index.js';
 import { WorkspaceContextService } from '../../../workspaces/browser/workspaceContextService.js';
 import { FilesConfigurationService, IFilesConfigurationService } from '../../../filesConfiguration/common/filesConfigurationService.js';
-import { WorkbenchConfigurationService } from '../../../configuration/browser/configurationService.js';
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../../configuration/test/common/testServices.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IElevatedFileService } from '../../common/elevatedFileService.js';
 import { ElectronElevatedFileService } from '../../electron-browser/elevatedFileService.js';

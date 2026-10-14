@@ -12,7 +12,7 @@ import { JSDOM } from "jsdom";
 import { BrowserContentSearchService } from "../../../../../platform/search/browser/searchService.js";
 import type { IContentSearchQuery, ContentSearchMatch } from "../../../../../platform/search/common/search.js";
 import type { IContentSearchApi } from "../../../../../platform/search/common/searchApi.js";
-import { WorkbenchConfigurationService } from "../../../../../workbench/services/configuration/browser/configurationService.js";
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
 import { ContentSearchConfiguration } from "../../common/searchConfiguration.js";
 import { DisposableStore } from "../../../../../base/common/lifecycle.js";
 import { Event } from "../../../../../base/common/event.js";

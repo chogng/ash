@@ -6,7 +6,7 @@ import { isCancellationError } from '../../../../../base/common/errors.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
-import { WorkbenchConfigurationService } from '../../../../services/configuration/browser/configurationService.js';
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { IBulkEditService } from '../../../../../editor/browser/services/bulkEditService.js';
@@ -392,8 +392,8 @@ for (const reason of [SaveReason.EXPLICIT, SaveReason.AUTO, SaveReason.FOCUS_CHA
 			}
 		});
 		await reference.save(signal(), { reason });
-		assert.deepEqual(kinds, reason === SaveReason.AUTO ? [] : reason === SaveReason.EXPLICIT ? ['source.fixAll', 'source.organizeImports'] : ['source.organizeImports']);
-		assert.equal(fixture.bulk.store.text(resource), reason === SaveReason.AUTO ? 'edited' : reason === SaveReason.EXPLICIT ? 'edited-action-action' : 'edited-action');
+		assert.deepEqual(kinds, reason === SaveReason.AUTO ? [] : reason === SaveReason.EXPLICIT ? ['source.fixAll', 'source.global', 'source.organizeImports'] : ['source.global', 'source.organizeImports']);
+		assert.equal(fixture.bulk.store.text(resource), reason === SaveReason.AUTO ? 'edited' : reason === SaveReason.EXPLICIT ? 'edited-action-action-action' : 'edited-action-action');
 	});
 }
 

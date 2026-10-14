@@ -1,3 +1,4 @@
+import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
 import { expect, test } from '../../../automation/test.js';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -139,35 +140,9 @@ test('display language startup recovers from missing and damaged Ash packs and r
 		await picker.getByRole('combobox').fill('简体中文');
 		await picker.getByRole('combobox').press('Enter');
 		await expect.poll(restartMessage).toBe('Restart Ash to use 简体中文?');
-		if (target.kind === 'electron' && 'windows' in application) {
-			await workbench.page.evaluate(async () => {
-				const snapshot = await globalThis.ashTestMainProcess.call('configuration', 'read') as { revision: number; document: { version: 1; source: string; }; };
-				const settings = { ...JSON.parse(snapshot.document.source), 'workbench.locale': 'fr-CA' };
-				await globalThis.ashTestMainProcess.call('configuration', 'update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(settings) } });
-			});
-		} else {
-			await workbench.page.evaluate(async () => {
-				const configuration = await new Promise<IDBDatabase>((resolve, reject) => {
-					const request = indexedDB.open('ash-configuration');
-					request.onsuccess = () => resolve(request.result);
-					request.onerror = () => reject(request.error);
-				});
-				try {
-					await new Promise<void>((resolve, reject) => {
-						const transaction = configuration.transaction('resources', 'readwrite');
-						const store = transaction.objectStore('resources');
-						const request = store.get('settings.json');
-						request.onsuccess = () => {
-							const current = request.result;
-							const settings = { ...JSON.parse(current.document.source), 'workbench.locale': 'fr-CA' };
-							store.put({ ...current, revision: current.revision + 1, document: { version: 1, source: JSON.stringify(settings) } });
-						};
-						transaction.oncomplete = () => resolve();
-						transaction.onerror = () => reject(transaction.error);
-					});
-				} finally { configuration.close(); }
-			});
-		}
+		const currentSettings = await readUserSettings(workbench.page);
+		const unsupportedLocaleSettings = { ...JSON.parse(currentSettings.content), 'workbench.locale': 'fr-CA' };
+		await writeUserSettings(workbench.page, JSON.stringify(unsupportedLocaleSettings), currentSettings.revision);
 		await workbench.page.evaluate(async ({ catalog, state }) => {
 			const resources = await new Promise<IDBDatabase>((resolve, reject) => {
 				const request = indexedDB.open('ash-language-packs', 1);

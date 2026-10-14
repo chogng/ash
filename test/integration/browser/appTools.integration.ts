@@ -41,7 +41,7 @@ import { URI } from '../../../src/ash/base/common/uri.js';
 import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
 import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
-import { WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/browser/configurationService.js';
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { IConfigurationResolverService } from '../../../src/ash/workbench/services/configurationResolver/common/configurationResolver.js';
 import { ConfigurationResolverService } from '../../../src/ash/workbench/services/configurationResolver/browser/configurationResolverService.js';
 import { IPathService } from '../../../src/ash/platform/path/common/pathService.js';

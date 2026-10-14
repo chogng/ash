@@ -28,7 +28,7 @@ const { Registry } = await import("../../../../../platform/registry/common/platf
 const { WorkbenchContributionsRegistry, WorkbenchPhase } = await import("../../../../../workbench/common/contributions.js");
 const { SashConfiguration } = await import("../../../../../workbench/contrib/sash/common/sash.js");
 const { SashSettingsController } = await import("../../../../../workbench/contrib/sash/browser/sash.js");
-const { WorkbenchConfigurationService } = await import("../../../../../workbench/services/configuration/browser/configurationService.js");
+const { TestConfigurationService: WorkbenchConfigurationService } = await import("../../../../services/configuration/test/common/testServices.js");
 const configurationRegistry = Registry.as<InstanceType<typeof ConfigurationRegistry>>(ConfigurationExtensions.Configuration);
 await import("../../../../../workbench/contrib/sash/browser/sash.contribution.js");
 

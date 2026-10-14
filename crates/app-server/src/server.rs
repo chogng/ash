@@ -2482,6 +2482,7 @@ impl AppServer {
             }
             Some(
                 method @ (ClientMethod::GitHubNotificationsList
+                | ClientMethod::GitHubManagedSettings
                 | ClientMethod::GitHubNotificationRead
                 | ClientMethod::GitHubNotificationsRead
                 | ClientMethod::GitHubForkCreate

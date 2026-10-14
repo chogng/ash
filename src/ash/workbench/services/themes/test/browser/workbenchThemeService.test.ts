@@ -12,7 +12,7 @@ import { ILanguageService } from '../../../../../editor/common/languages/languag
 import { LanguageService } from '../../../../../editor/common/services/languageService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { WorkbenchConfiguration } from '../../../../common/configuration.js';
-import { WorkbenchConfigurationService } from '../../../configuration/browser/configurationService.js';
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../../configuration/test/common/testServices.js';
 import { resolveSemanticTokenPresentation } from '../../../../../editor/common/services/semanticTokensStyling.js';
 import { lightColorTheme } from '../../../../../platform/theme/common/colorTheme.js';
 import { registerColor } from '../../../../../platform/theme/common/colorUtils.js';
@@ -151,10 +151,7 @@ test('persisted color customizations override themes, update live, and restore t
 		const theme = parseUserColorTheme(JSON.stringify({ ...document, colors: { 'editor.selectionBackground': '#123456', 'editor.selectionForeground': '#abcdef' } }), 'selection-colors');
 		using registration = WorkbenchThemesRegistry.registerColorThemes([theme]);
 		using configuration = new WorkbenchConfigurationService({
-			initialSnapshot: {
-				revision: 1,
-				document: { version: 1, source: `// user colors\n${JSON.stringify({ 'workbench.colorTheme': theme.id, 'workbench.colorCustomizations': { 'editor.selectionBackground': '#456789', 'editor.selectionForeground': '#112233' } })}` },
-			}
+			source: `// user colors\n${JSON.stringify({ 'workbench.colorTheme': theme.id, 'workbench.colorCustomizations': { 'editor.selectionBackground': '#456789', 'editor.selectionForeground': '#112233' } })}`
 		});
 		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);

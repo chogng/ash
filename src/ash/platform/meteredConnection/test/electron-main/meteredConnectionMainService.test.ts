@@ -3,7 +3,8 @@ import { suite, test } from 'mocha';
 import { DeferredPromise } from '../../../../base/common/async.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-import { IConfigurationResourceService, type IConfigurationResourceSnapshot } from '../../../configuration/common/configurationResourceService.js';
+import { IConfigurationService } from '../../../configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../configuration/common/inMemoryConfigurationService.js';
 import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
 import { IMeteredConnectionService } from '../../common/meteredConnection.js';
 import { MeteredConnectionCommand } from '../../common/meteredConnectionIpc.js';
@@ -11,23 +12,25 @@ import { MeteredConnectionChannel } from '../../electron-main/meteredConnectionC
 import { MeteredConnectionMainService } from '../../electron-main/meteredConnectionMainService.js';
 import { UpdateMainService } from '../../../update/electron-main/updateMainService.js';
 import { Registry } from '../../../registry/common/platform.js';
-import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../configuration/common/configurationRegistry.js';
+import { ConfigurationRegistry, ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../configuration/common/configurationRegistry.js';
 import { setNlsMessages, resetNlsResolver } from '../../../../nls.js';
 import chineseMessages from '../../../../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 import { DefaultSettings } from '../../../../workbench/services/preferences/common/settingsModels.js';
 import { createSettingsLayout } from '../../../../workbench/contrib/preferences/browser/settingsLayout.js';
 
+function createConfiguration() {
+	const registry = new ConfigurationRegistry();
+	registry.registerConfiguration({ key: 'network.meteredConnection', defaultValue: 'auto', parse: value => value as string });
+	return new InMemoryConfigurationService(registry);
+}
+
 suite('Desktop metered connection policy', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
 	test('waits for browser state, broadcasts overrides, and rejects invalid IPC input', async () => {
-		using changes = new Emitter<IConfigurationResourceSnapshot>();
+		using configuration = createConfiguration();
 		using services = new InstantiationService();
-		services.registerInstance(IConfigurationResourceService, {
-			onDidChangeResource: changes.event,
-			read: async () => ({ source: '{}', revision: 0 }),
-			write: async () => { throw new Error('Unexpected configuration write'); },
-		});
+		services.registerInstance(IConfigurationService, configuration);
 		using main = services.createInstance(MeteredConnectionMainService);
 		const channel = new MeteredConnectionChannel(main);
 		const observed: boolean[] = [];
@@ -41,40 +44,31 @@ suite('Desktop metered connection policy', () => {
 		assert.throws(() => channel.listen('window:1', MeteredConnectionCommand.OnDidChangeIsConnectionMetered, {}), /no arguments/);
 		await channel.call('window:1', MeteredConnectionCommand.SetIsBrowserConnectionMetered, true);
 		assert.equal(await initialState, true);
-		changes.fire({ revision: 1, source: '{"network.meteredConnection":"off"}' });
+		await configuration.updateValue('network.meteredConnection', 'off');
 		assert.equal(main.isConnectionMetered, false);
-		changes.fire({ revision: 2, source: '{"network.meteredConnection":"on"}' });
+		await configuration.updateValue('network.meteredConnection', 'on');
 		await channel.call('window:1', MeteredConnectionCommand.SetIsBrowserConnectionMetered, false);
 		assert.equal(main.isConnectionMetered, true);
-		changes.fire({ revision: 3, source: '{}' });
+		await configuration.updateValue('network.meteredConnection', undefined);
 		assert.deepEqual({ state: main.isConnectionMetered, observed }, { state: false, observed: [true, false, true, false] });
 	});
 
-	test('a delayed configuration read cannot overwrite a newer setting', async () => {
-		using changes = new Emitter<IConfigurationResourceSnapshot>();
-		const initial = new DeferredPromise<IConfigurationResourceSnapshot>();
+	test('uses initialized configuration and responds to subsequent changes', async () => {
+		using configuration = createConfiguration();
+		await configuration.updateValue('network.meteredConnection', 'off');
 		using services = new InstantiationService();
-		services.registerInstance(IConfigurationResourceService, {
-			onDidChangeResource: changes.event,
-			read: () => initial.p,
-			write: async () => { throw new Error('Unexpected configuration write'); },
-		});
+		services.registerInstance(IConfigurationService, configuration);
 		using main = services.createInstance(MeteredConnectionMainService);
 		main.setIsBrowserConnectionMetered(false);
-		changes.fire({ revision: 2, source: '{"network.meteredConnection":"on"}' });
-		await initial.complete({ revision: 1, source: '{}' });
+		await configuration.updateValue('network.meteredConnection', 'on');
 		await main.whenConnectionStateInitialized;
 		assert.equal(main.isConnectionMetered, true);
 	});
 
 	test('automatic checks wait, skip metered networks without consuming cooldown, and share cooldown across windows', async () => {
-		using changes = new Emitter<IConfigurationResourceSnapshot>();
+		using configuration = createConfiguration();
 		using services = new InstantiationService();
-		services.registerInstance(IConfigurationResourceService, {
-			onDidChangeResource: changes.event,
-			read: async () => ({ source: '{}', revision: 0 }),
-			write: async () => { throw new Error('Unexpected configuration write'); },
-		});
+		services.registerInstance(IConfigurationService, configuration);
 		using main = services.createInstance(MeteredConnectionMainService);
 		services.registerInstance(IMeteredConnectionService, main);
 		const calls: string[] = [];
@@ -103,13 +97,13 @@ suite('Desktop metered connection policy', () => {
 			{ status: 'current', version: '1' }, undefined,
 		]);
 		assert.deepEqual(calls, ['stable', 'latest']);
-		changes.fire({ revision: 1, source: '{"network.meteredConnection":"on"}' });
+		await configuration.updateValue('network.meteredConnection', 'on');
 		assert.deepEqual(await update.checkForUpdates('stable'), { status: 'current', version: '1' });
 	});
 
 	test('required configuration and network dependencies fail during service creation', () => {
 		using services = new InstantiationService();
-		assert.throws(() => services.createInstance(MeteredConnectionMainService), /configurationResourceService/);
+		assert.throws(() => services.createInstance(MeteredConnectionMainService), /configurationService/);
 		assert.throws(() => services.createInstance(UpdateMainService, async () => { }, { isPackaged: false }), /meteredConnectionService/);
 	});
 

@@ -5,6 +5,7 @@ import { DESKTOP_UPDATE_POLICY_SETTING, type DesktopUpdatePolicy } from './updat
 
 Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration<DesktopUpdatePolicy>({
 	key: DESKTOP_UPDATE_POLICY_SETTING,
+	policy: { name: 'DesktopUpdateChannel' },
 	defaultValue: 'latest',
 	parse: value => {
 		if (value === 'latest' || value === 'stable' || value === 'never') return value;

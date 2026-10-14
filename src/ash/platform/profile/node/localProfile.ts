@@ -3,7 +3,8 @@ import { access, copyFile, cp, link, mkdir, readFile, unlink, writeFile } from "
 import { join } from "node:path";
 import { parseJsonc } from "../../../base/common/jsonc.js";
 import { equals } from "../../../base/common/objects.js";
-import { validateConfigurationDocument } from "../../configuration/common/configurationIpc.js";
+import { ConfigurationModelParser } from '../../configuration/common/configurationModels.js';
+import { NullLoggerService } from '../../log/common/log.js';
 
 export interface LegacyLocalProfileMigrationOptions {
 	readonly legacyUserDataRoot: string;
@@ -36,8 +37,11 @@ export async function migrateLegacyConfiguration(profileRoot: string): Promise<L
 	const targetPath = join(profileRoot, "settings.json");
 	let legacySource: string;
 	try {
-		const legacy = JSON.parse(await readFile(legacyPath, "utf8")) as unknown;
-		legacySource = validateConfigurationDocument(legacy).source;
+		const legacy = JSON.parse(await readFile(legacyPath, "utf8")) as Record<string, unknown>;
+		if (!legacy || typeof legacy !== 'object' || Array.isArray(legacy) || Object.keys(legacy).sort().join(',') !== 'source,version' || legacy.version !== 1 || typeof legacy.source !== 'string') {
+			throw new TypeError('Invalid legacy configuration document');
+		}
+		legacySource = validateSettingsSource(legacy.source);
 	} catch (error) {
 		if (isNodeError(error) && error.code === "ENOENT") return undefined;
 		throw error;
@@ -61,12 +65,19 @@ export async function migrateLegacyConfiguration(profileRoot: string): Promise<L
 		}
 		targetSource = await readFile(targetPath, "utf8");
 	}
-	const target = validateConfigurationDocument({ version: 1, source: targetSource });
-	if (!equals(parseJsonc(legacySource, "legacy configuration"), parseJsonc(target.source, "settings"))) {
+	const target = validateSettingsSource(targetSource);
+	if (!equals(parseJsonc(legacySource, "legacy configuration"), parseJsonc(target, "settings"))) {
 		return { legacyPath, settingsPath: targetPath };
 	}
 	await unlink(legacyPath);
 	return undefined;
+}
+
+function validateSettingsSource(source: string): string {
+	const parser = new ConfigurationModelParser('settings migration', new NullLoggerService());
+	parser.parse(source);
+	if (parser.errors.length) throw new TypeError(`Settings JSONC is invalid: ${parser.errors[0]!.message}`);
+	return source;
 }
 
 async function copyFileIfMissing(source: string, destination: string): Promise<void> {

@@ -3,7 +3,7 @@ import { Emitter } from '../../../base/common/event.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
-import { validateConfigurationSnapshot, type IConfigurationApi } from '../../configuration/common/configurationIpc.js';
+import { IConfigurationService } from '../../configuration/common/configuration.js';
 import { dictationBackend, dictationInputOptions } from '../common/dictationConfiguration.js';
 import type { IDictationService, IDictationSession, IDictationOptions } from '../common/dictationService.js';
 import { ILocalTranscriptionService } from '../../localTranscription/common/localTranscription.js';
@@ -27,9 +27,9 @@ export class AppServerDictationService extends Disposable implements IDictationS
 	private active: ActiveDictation | undefined;
 	private starting = false;
 
-	constructor(private readonly client: AppServerProtocolClient, private readonly configuration: IConfigurationApi, @ILocalTranscriptionService private readonly localTranscription: ILocalTranscriptionService) {
+	constructor(private readonly client: AppServerProtocolClient, @IConfigurationService private readonly configuration: IConfigurationService, @ILocalTranscriptionService private readonly localTranscription: ILocalTranscriptionService) {
 		super();
-		const configurationSubscription = configuration.onDidChange(() => this.preparationChanged.fire());
+		const configurationSubscription = configuration.onDidChangeConfiguration(() => this.preparationChanged.fire());
 		this._register(toDisposable(() => configurationSubscription.dispose()));
 		this._register(localTranscription.onDidChangeModels(() => this.preparationChanged.fire()));
 		this._register(client.onStateChange(() => this.preparationChanged.fire()));
@@ -73,20 +73,20 @@ export class AppServerDictationService extends Disposable implements IDictationS
 	}
 
 	public async getPreparation() {
-		const backend = dictationBackend(validateConfigurationSnapshot(await this.configuration.read()).document);
+		const backend = dictationBackend(this.configuration);
 		return backend.type === 'local' ? this.localTranscription.getModelStatus(backend.modelId) : undefined;
 	}
 	public async prepareModel(): Promise<void> {
-		const backend = dictationBackend(validateConfigurationSnapshot(await this.configuration.read()).document);
+		const backend = dictationBackend(this.configuration);
 		if (backend.type === 'local') { await this.localTranscription.prepareModel(backend.modelId, () => { }).completed; }
 	}
 	public async cancelPreparation(): Promise<void> {
-		const backend = dictationBackend(validateConfigurationSnapshot(await this.configuration.read()).document);
+		const backend = dictationBackend(this.configuration);
 		if (backend.type === 'local') { await this.localTranscription.cancelModel(backend.modelId); }
 	}
 
 	public async getOptions(): Promise<IDictationOptions> {
-		const backend = dictationBackend(validateConfigurationSnapshot(await this.configuration.read()).document);
+		const backend = dictationBackend(this.configuration);
 		return this.client.request(APP_SERVER_METHODS['dictation/options'], { backend });
 	}
 
@@ -96,7 +96,7 @@ export class AppServerDictationService extends Disposable implements IDictationS
 		if (this.active || this.starting) { throw new Error(localize('dictation.alreadyActive', 'Dictation is already active')); }
 		this.starting = true;
 		try {
-			const document = validateConfigurationSnapshot(await this.configuration.read()).document;
+			const document = this.configuration;
 			const backend = dictationBackend(document);
 			const options = dictationInputOptions(document, backend.type);
 			this.assertNotDisposed();

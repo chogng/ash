@@ -18,7 +18,7 @@ import { Registry } from '../../../../../platform/registry/common/platform.js';
 import { createConfigurationSchema } from '../../../../../platform/configuration/common/configurationSchema.js';
 import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '../../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../common/contributions.js';
-import { WorkbenchConfigurationService } from '../../../../services/configuration/browser/configurationService.js';
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
 import { IExtensionService, type ExtensionCatalog } from '../../../../services/extensions/common/extensionService.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { createJsonCompletionProvider } from '../../../../services/language/common/jsonLanguageFeatures.js';
@@ -70,7 +70,7 @@ test('folding contribution applies persisted language overrides through the prod
 	resources.add(features.foldingRangeProvider.register('*', { id: 'test.second', provideFoldingRanges: () => [] }));
 	resources.add(features.foldingRangeProvider.register('*', { provideFoldingRanges: () => [] }));
 	using model = new TextModel('one\ntwo', { languageId: 'plaintext' });
-	await configuration.write('{\n// Keep this comment\n"editor.defaultFoldingRangeProvider": "test.first",\n"[plaintext]": { "editor.defaultFoldingRangeProvider": "test.second" }\n}', 0);
+	await configuration.write('{\n// Keep this comment\n"editor.defaultFoldingRangeProvider": "test.first",\n"[plaintext]": { "editor.defaultFoldingRangeProvider": "test.second" }\n}');
 	const errors: unknown[] = [];
 	const host = resources.add(WorkbenchContributionsRegistry.createHost(services, error => errors.push(error), ['workbench.contrib.folding']));
 	host.advance(WorkbenchPhase.AfterRestored);

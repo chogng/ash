@@ -3,7 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
-import { EDIT_USER_CONFIGURATION_CHANNEL } from '../common/configurationIpc.js';
+import { EDIT_USER_CONFIGURATION_CHANNEL } from '../../native/common/nativeHost.js';
 
 /** The host chooses the profile path; Renderer cannot request an arbitrary file or a remote path. */
 export function userConfigurationIpcRoute(profileRoot: string, isLocalConnection: () => boolean, openTextFile: (path: string) => Promise<void>): IpcRoute<unknown, void> {

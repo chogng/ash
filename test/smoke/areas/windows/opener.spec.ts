@@ -1,3 +1,4 @@
+import { readUserSettings } from '../../../automation/settings.js';
 import type { ElectronApplication } from '@playwright/test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -269,7 +270,7 @@ test('desktop blocked navigation retains the current document IPC', { tag: ['@el
 	const electron = application as ElectronApplication;
 	const page = workbench.page;
 	await installMainChannelTestClient(page);
-	const configuration = await page.evaluate(() => globalThis.ashTestMainProcess.call('configuration', 'read'));
+	const configuration = await (() => readUserSettings(page))();
 	const originalUrl = page.url();
 	const navigation = await electron.evaluateHandle(({ BrowserWindow }, originalUrl) => {
 		const result = { navigation: undefined as { url: string; prevented: boolean; } | undefined };
@@ -282,7 +283,7 @@ test('desktop blocked navigation retains the current document IPC', { tag: ['@el
 		await page.evaluate(href => { location.href = href; }, href);
 		await expect.poll(() => navigation.evaluate(result => result.navigation)).toEqual({ url: href, prevented: true });
 		expect(page.url()).toBe(originalUrl);
-		expect(await page.evaluate(() => globalThis.ashTestMainProcess.call('configuration', 'read'))).toEqual(configuration);
+		expect(await (() => readUserSettings(page))()).toEqual(configuration);
 	} finally {
 		await navigation.dispose();
 	}

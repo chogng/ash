@@ -29,7 +29,7 @@ import { BrowserHostColorSchemeService } from '../../../src/ash/workbench/servic
 import { WorkbenchThemeService, loadUserThemes } from '../../../src/ash/workbench/services/themes/browser/workbenchThemeService.js';
 import { IUserThemeService } from '../../../src/ash/workbench/common/userThemes.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
-import { WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/browser/configurationService.js';
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { ITextFileService } from '../../../src/ash/workbench/services/textfile/common/textfiles.js';
 import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
 import { IAccessibilityService } from '../../../src/ash/platform/accessibility/common/accessibility.js';

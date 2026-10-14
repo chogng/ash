@@ -29,7 +29,7 @@ const workbench = resources.add(await createSessionsWorkbench({
 	workspace: () => ({ id: 'theme-preview', folders: [{ id: 'theme-preview', name: 'theme-preview', uri: workspaceRoot, index: 0 }] }),
 	workspaceSelection: () => ({ type: 'current' }),
 	browserFileSystemProvider: workspaceFiles,
-	initialConfigurationSnapshot: { revision: 1, document: { version: 1, source: '{}' } },
+	initialConfiguration: { "contents": {}, "keys": [], "overrides": [] },
 	createStorageService: async () => storage,
 	createUserDataFileSystemProvider: async () => new InMemoryFileSystemProvider(),
 	createLogService: () => new LogService({ sinks: [new ConsoleLogSink()] }),

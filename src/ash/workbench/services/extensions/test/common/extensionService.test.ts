@@ -8,7 +8,7 @@ import { ViewsRegistry } from '../../../../common/views.js';
 import { normalizeExtensionCatalog } from '../../../../../platform/extensions/common/extensionApi.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
-import { WorkbenchConfigurationService } from '../../../configuration/browser/configurationService.js';
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../../configuration/test/common/testServices.js';
 import { resetNlsResolver } from '../../../../../nls.js';
 import { initializeTestLocalization } from '../../../localization/test/common/localizationTestUtils.js';
 import { ExtensionResourceLoaderService } from '../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
@@ -703,7 +703,7 @@ test('extension configuration activates in the canonical owner and rolls back ot
 	});
 	const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 	const source = '{"extensionConfiguration.value":"user value"}';
-	using configuration = new WorkbenchConfigurationService({ initialSnapshot: { revision: 1, document: { version: 1, source } } });
+	using configuration = new WorkbenchConfigurationService({ source: source });
 	using service = new AppServerExtensionService({ api: { list: async () => ({ generation, extensions: present ? [manifest()] : [], diagnostics: [] }), resources: new ExtensionResourceLoaderService(async () => { throw new Error('No contribution resources'); }) }, textMateService: emptyTextMateService() }, createEmptyTestLanguagePacks());
 	await service.start();
 	assert.deepEqual({ value: configuration.getValue('extensionConfiguration.value'), count: configuration.getValue('extensionConfiguration.count') }, { value: 'user value', count: 1 });

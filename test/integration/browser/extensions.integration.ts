@@ -2,7 +2,7 @@ import { createTestLanguageModelToolsService } from '../../../src/ash/workbench/
 import { BrowserClipboardService } from '../../../src/ash/platform/clipboard/browser/clipboardService.js';
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
 import { IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
-import { WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/browser/configurationService.js';
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { ConfigurationRegistry } from '../../../src/ash/platform/configuration/common/configurationRegistry.js';
 import { parseExtensionManifest } from '../../../src/ash/workbench/services/extensions/common/extensionManifest.js';
 import { DefaultSettings } from '../../../src/ash/workbench/services/preferences/common/settingsModels.js';

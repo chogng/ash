@@ -6,7 +6,7 @@ import { ILogService, NullLoggerService } from '../../../../../platform/log/comm
 import { IModelService } from '../../../../../editor/common/services/model.js';
 import { ILanguageService } from '../../../../../editor/common/languages/language.js';
 import { ITextModelService } from '../../../../../editor/common/services/resolverService.js';
-import { WorkbenchConfigurationService } from '../../../../services/configuration/browser/configurationService.js';
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
 import { ModelService } from '../../../../../editor/common/services/modelService.js';
 import { LanguageService } from '../../../../../editor/common/services/languageService.js';
 import { BrowserTextModelService } from '../../../../services/textmodelResolver/browser/browserTextModelService.js';

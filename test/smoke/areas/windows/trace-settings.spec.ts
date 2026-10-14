@@ -1,3 +1,4 @@
+import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
 import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 
@@ -41,11 +42,11 @@ test('Execution trace Settings persists backend intent and shares it with Agents
 	let page = workbench.page;
 	// Use the same account menu in Electron and Web, including macOS.
 	if (target.kind === 'electron') {
-		await page.evaluate(async () => {
-			const snapshot = await globalThis.ashTestMainProcess.call('configuration', 'read') as { revision: number; document: { version: 1; source: string; }; };
-			const source = JSON.stringify({ ...JSON.parse(snapshot.document.source), 'window.menuStyle': 'custom' });
-			await globalThis.ashTestMainProcess.call('configuration', 'update', { expectedRevision: snapshot.revision, document: { version: 1, source } });
-		});
+		await (async () => {
+			const snapshot = await readUserSettings(page);
+			const source = JSON.stringify({ ...JSON.parse(snapshot.content), 'window.menuStyle': 'custom' });
+			await writeUserSettings(page, source, snapshot.revision);
+		})();
 	}
 	await workbench.settingsEditor.openUserSettingsUI();
 	await workbench.settingsEditor.selectGroup('agents');

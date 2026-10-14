@@ -15,7 +15,7 @@ import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } fr
 import { registerTestExtensionService } from '../../../../test/common/testExtensionServices.js';
 import { ExtensionResourceLoaderService } from '../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import { WorkbenchConfigurationService } from '../../../configuration/browser/configurationService.js';
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../../configuration/test/common/testServices.js';
 import { createHash } from 'node:crypto';
 import { IExtensionService } from '../../../extensions/common/extensionService.js';
 import type { IExtensionApi } from '../../../../../platform/extensions/common/extensionApi.js';

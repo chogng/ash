@@ -1,3 +1,4 @@
+import type { IConfigurationModel } from '../../platform/configuration/common/configuration.js';
 import type { IURLCallbackProvider } from '../services/url/browser/urlService.js';
 import type { IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
 import type { IDisposable } from "../../base/common/lifecycle.js";
@@ -9,7 +10,6 @@ import type {
 import type { WorkbenchDefaultLayout } from "./layout.js";
 import type { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
 import type { IWebWorkspaceClient } from '../services/workspaces/browser/workspaceOpenService.js';
-import type { IConfigurationApi, IConfigurationSnapshot } from '../../platform/configuration/common/configurationIpc.js';
 import type { IEmbedderTerminalOptions } from '../services/terminal/common/embedderTerminalService.js';
 
 /**
@@ -36,8 +36,7 @@ export interface IWebWorkbenchConstructionOptions {
 	readonly createTextDocumentHost?: (services: IInstantiationService) => IDisposable;
 	readonly api: IRendererHost;
 	readonly urlCallbackProvider?: IURLCallbackProvider;
-	readonly configurationApi: IConfigurationApi;
-	readonly initialConfigurationSnapshot: IConfigurationSnapshot;
+	readonly initialConfiguration?: IConfigurationModel;
 	readonly webWorkspaceClient?: IWebWorkspaceClient;
 	readonly browserFileSystemProvider?: HTMLFileSystemProvider;
 	readonly workspace?: IAnyWorkspaceIdentifier;

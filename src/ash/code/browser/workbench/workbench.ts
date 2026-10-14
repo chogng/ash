@@ -1,7 +1,11 @@
 import { readBrowserPartsSplash, showPartsSplash } from '../../../workbench/contrib/splash/browser/splash.js';
 import { AshWorkbenchName } from '../../common/application.js';
 import { showStartupError } from '../../../workbench/browser/startupError.js';
-import { IndexedDbConfigurationApi } from '../../../platform/configuration/browser/indexedDbConfigurationApi.js';
+import { IndexedDBFileSystemProvider } from '../../../platform/files/browser/indexedDBFileSystemProvider.js';
+import { FileService } from '../../../platform/files/common/fileService.js';
+import { URI } from '../../../base/common/uri.js';
+import { Schemas } from '../../../base/common/network.js';
+import { migrateLegacyBrowserSettings } from '../../../workbench/services/userData/browser/userDataInit.js';
 import { BrowserLanguagePackStore } from '../../../platform/languagePacks/browser/languagePackStore.js';
 import { initializeBrowserLocalization } from '../../../workbench/services/localization/browser/localizationBootstrap.js';
 import { localize2 } from '../../../nls.js';
@@ -15,8 +19,11 @@ import { createAppServerDebugAdapterCapability } from '../../../platform/debug/b
 try {
 	showPartsSplash(document, readBrowserPartsSplash(window));
 	{
-		using configuration = new IndexedDbConfigurationApi();
-		await initializeBrowserLocalization(configuration, new BrowserLanguagePackStore());
+		using provider = await IndexedDBFileSystemProvider.create(window.indexedDB, Schemas.vscodeUserData);
+		await migrateLegacyBrowserSettings(window.indexedDB, provider, URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' }));
+		using files = new FileService();
+		using registration = files.registerProvider(Schemas.vscodeUserData, provider);
+		await initializeBrowserLocalization(files, new BrowserLanguagePackStore());
 	}
 	await import('../../../workbench/workbench.web.main.js');
 	await import('../../../sessions/common/configuration.js');

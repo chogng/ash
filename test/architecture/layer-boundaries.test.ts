@@ -150,10 +150,12 @@ test("Frontend common service contracts own their domain types", () => {
 test("Configuration service and host transport contracts remain separate", () => {
 	const commonRoot = join(sourceRoot, "platform/configuration/common");
 	const service = readFileSync(join(commonRoot, "configuration.ts"), "utf8");
-	const transport = readFileSync(join(commonRoot, "configurationIpc.ts"), "utf8");
-	assert.equal(existsSync(join(commonRoot, "configurationService.ts")), false);
+	const implementation = readFileSync(join(commonRoot, "configurationService.ts"), "utf8");
+	const models = readFileSync(join(commonRoot, "configurationModels.ts"), "utf8");
 	assert.doesNotMatch(service, /JsonValue|CHANNEL|IConfigurationApi|IConfigurationDocument/u);
-	assert.doesNotMatch(transport, /createServiceIdentifier|IConfigurationService|IConfigurationKey/u);
+	assert.match(implementation, /@IFileService/u);
+	assert.match(implementation, /new UserSettings/u);
+	assert.doesNotMatch(implementation + models, /configurationIpc|configurationResourceService|IConfigurationApi/u);
 });
 
 function productionTypeScriptFiles(directory: string): string[] {

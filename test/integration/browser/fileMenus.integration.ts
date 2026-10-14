@@ -28,7 +28,7 @@ import { IHoverService, HoverService } from '../../../src/ash/platform/hover/bro
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
-import { WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/browser/configurationService.js';
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { ExplorerView } from '../../../src/ash/workbench/contrib/files/browser/views/explorerView.js';

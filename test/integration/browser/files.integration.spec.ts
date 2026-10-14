@@ -1,5 +1,30 @@
 import { chromium, expect, test } from '@playwright/test';
 
+for (const scenario of ['absent', 'legacy', 'equal', 'conflict', 'invalid', 'interrupted'] as const) {
+	test(`browser settings migration preserves data for ${scenario} sources`, async ({ page }) => {
+		await page.goto('/files.html');
+		await expect.poll(() => page.evaluate(() => Boolean(window.ashFilesIntegration))).toBe(true);
+		const result = await page.evaluate(scenario => window.ashFilesIntegration.migrateSettings(scenario), scenario);
+		if (scenario === 'absent') {
+			expect(result.absentDatabase).toBe(true);
+			expect(result.target).toBe('{ "editor.fontSize": 23 }');
+			return;
+		}
+		expect(result.records).toContainEqual({ key: 'unrelated', value: 'keep' });
+		const retained = result.records!.some(record => (record as { key: string; }).key === 'settings.json');
+		if (scenario === 'conflict' || scenario === 'invalid') {
+			expect(retained).toBe(true);
+			expect(result.error).toMatch(scenario === 'conflict' ? /conflict/ : /JSON|property|parse|Invalid/i);
+			expect(result.target).toBe(scenario === 'conflict' ? '{ "editor.fontSize": 23 }' : undefined);
+		} else {
+			expect(retained).toBe(false);
+			expect(result.target).toBe(scenario === 'equal' ? '{ "editor.fontSize": 19 }' : '// retain this comment\n{ "editor.fontSize": 19, }\n');
+			if (scenario === 'interrupted') expect(result.retainedOnFailure).toBe(true);
+			else expect(result.error).toBeUndefined();
+		}
+	});
+}
+
 test('cancelled replacement settles its browser disk write before rollback restores the file', async ({ page }) => {
 	await page.goto('/files.html');
 	await expect.poll(() => page.evaluate(() => Boolean(window.ashFilesIntegration))).toBe(true);

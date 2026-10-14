@@ -1,3 +1,7 @@
+import { ConfigurationModelParser } from '../../common/configurationModels.js';
+import { NullLoggerService } from '../../../log/common/log.js';
+import { FileRevisionConflictError } from '../../../files/common/files.js';
+import { TestConfigurationFiles } from '../../../../workbench/services/configuration/test/common/testServices.js';
 import assert from "node:assert/strict";
 import {
 	mkdtemp,
@@ -15,30 +19,16 @@ import {
 } from "../../../../platform/configuration/common/configurationRegistry.js";
 import { InMemoryConfigurationService } from "../../../../platform/configuration/common/inMemoryConfigurationService.js";
 import { Registry } from "../../../../platform/registry/common/platform.js";
-import {
-	type IConfigurationApi,
-	type IConfigurationSnapshot,
-	type IConfigurationUpdateRequest,
-	configurationValues,
-	validateConfigurationDocument,
-	validateConfigurationSnapshot,
-	validateConfigurationUpdateRequest,
-} from "../../../../platform/configuration/common/configurationIpc.js";
-import {
-	ConfigurationMainService,
-} from "../../../../platform/configuration/electron-main/configurationMainService.js";
-import {
-	WorkbenchConfigurationService,
-} from "../../../../workbench/services/configuration/browser/configurationService.js";
-import {
-	ConfigurationResourceRevisionConflictError,
-} from "../../../../platform/configuration/common/configurationResourceService.js";
+
+
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../workbench/services/configuration/test/common/testServices.js';
+
 import { ConfigurationTarget, addToValueTree, getConfigValueInTarget, getConfigurationValue, getLanguageTagSettingPlainKey, isConfigurationOverrides, isConfigurationUpdateOverrides, isConfigured, merge, removeFromValueTree, toValuesTree } from "../../../../platform/configuration/common/configuration.js";
 
 test('contributed configuration replacement updates live values atomically and preserves stored user settings', async () => {
 	const registry = new ConfigurationRegistry();
 	const source = '// preserved user settings\n{"contributed.value":"saved","[typescript]":{"contributed.value":"typed"}}\n';
-	using service = new WorkbenchConfigurationService({ registry, initialSnapshot: { revision: 1, document: { version: 1, source } } });
+	using service = new WorkbenchConfigurationService({ registry, source: source });
 	const changes: { keys: string[]; source: ConfigurationTarget; valueAffected: boolean; sectionAffected: boolean; }[] = [];
 	using listener = service.onDidChangeConfiguration(event => {
 		changes.push({ keys: [...event.affectedKeys].sort(), source: event.source, valueAffected: event.affectsConfiguration('contributed.value', { resource: URI.file('/project/main.ts') }), sectionAffected: event.affectsConfiguration('contributed', { overrideIdentifier: 'typescript' }) });
@@ -114,41 +104,17 @@ test("configuration value-tree helpers preserve canonical section semantics", ()
 	assert.equal(getLanguageTagSettingPlainKey("[javascript][typescript]"), "javascript, typescript");
 });
 
-test("configuration validators bound the complete wire document", () => {
-	assert.deepEqual(
-		validateConfigurationSnapshot({
-			revision: 2,
-			document: {
-				version: 1,
-				source: '{ "editor.fontSize": 14 }\n',
-			},
-		}),
-		{
-			revision: 2,
-			document: {
-				version: 1,
-				source: '{ "editor.fontSize": 14 }\n',
-			},
-		},
-	);
-	assert.throws(
-		() => validateConfigurationDocument({
-			version: 1,
-			source: '{ "__proto__.unsafe": true }',
-		}),
-		/invalid configuration key/,
-	);
-	assert.throws(
-		() => validateConfigurationDocument({ version: 1, values: { 'editor.fontSize': 14 } }),
-		/configuration object must contain exactly: source, version/,
-	);
-	assert.throws(
-		() => validateConfigurationUpdateRequest({
-			expectedRevision: -1,
-			document: { version: 1, source: '{}' },
-		}),
-		/non-negative safe integer/,
-	);
+test('configuration parser validates persisted JSONC independently of transport', () => {
+	const parser = new ConfigurationModelParser('settings', new NullLoggerService());
+	parser.parse('// keep comments\n{ "editor.fontSize": 14, "[typescript]": { "editor.fontSize": 16 }, }');
+	assert.deepEqual(parser.errors, []);
+	assert.equal(parser.configurationModel.getValue('editor.fontSize'), 14);
+	assert.equal(parser.configurationModel.override('typescript').getValue('editor.fontSize'), 16);
+	assert.throws(() => parser.parse('{ "__proto__.unsafe": true }'), /invalid configuration key/);
+	assert.throws(() => parser.parse('[]'), /must be an object/);
+	assert.throws(() => parser.parse('{"[typescript]": 2}'), /must be an object/);
+	parser.parse('{');
+	assert.ok(parser.errors.length > 0);
 });
 
 test("workbench configuration resolves typed defaults and live snapshots", async () => {
@@ -163,15 +129,9 @@ test("workbench configuration resolves typed defaults and live snapshots", async
 			return value as number;
 		},
 	});
-	const api = new TestConfigurationApi({
-		revision: 0,
-		document: {
-			version: 1,
-			source: '{ "editor.fontSize": 16 }\n',
-		},
-	});
+	using api = new TestConfigurationFiles('{ "editor.fontSize": 16 }\n');
 	using service = new WorkbenchConfigurationService({
-		api,
+		files: api,
 		registry,
 	});
 	let changes = 0;
@@ -186,13 +146,8 @@ test("workbench configuration resolves typed defaults and live snapshots", async
 	await service.updateValue(fontSize, 18);
 	assert.equal(service.getValue<number>(fontSize), 18);
 
-	api.emit({
-		revision: 2,
-		document: {
-			version: 1,
-			source: '{ "editor.fontSize": 20 }\n',
-		},
-	});
+	await api.emit('{ "editor.fontSize": 20 }\n');
+	await service.reloadConfiguration();
 	assert.equal(service.getValue<number>(fontSize), 20);
 	await service.updateValue(fontSize, undefined);
 	assert.equal(service.getValue<number>(fontSize), 12);
@@ -203,38 +158,27 @@ test("workbench configuration resolves typed defaults and live snapshots", async
 	);
 });
 
-test("workbench configuration preserves editable JSONC source", async () => {
+test('workbench configuration preserves editable JSONC source through file-service writes', async () => {
 	const registry = new ConfigurationRegistry();
 	const fontSize = registry.registerConfiguration({
-		key: "editor.fontSize",
-		defaultValue: 12,
-		parse(value): number {
-			if (!Number.isInteger(value) || (value as number) < 8) throw new TypeError("font size must be at least 8");
+		key: 'editor.fontSize', defaultValue: 12, parse(value): number {
+			if (!Number.isInteger(value) || (value as number) < 8) throw new TypeError('font size must be at least 8');
 			return value as number;
-		},
+		}
 	});
 	using service = new WorkbenchConfigurationService({ registry });
-	const observed: string[] = [];
-	using listener = service.onDidChangeResource(snapshot => observed.push(snapshot.source));
-
-	assert.deepEqual(await service.read(), { source: "{}\n", revision: 0 });
-	const source = `{
-		// Keep this user explanation.
-		"editor.fontSize": 16,
-		"extension.unregistered": true,
-	}\n`;
-	assert.deepEqual(await service.write(source, 0), {
-		source,
-		revision: 1,
-	});
-	assert.equal(service.getValue<number>(fontSize), 16);
-	assert.deepEqual(observed, [source]);
+	const initial = await service.read();
+	const source = '{\n\t// Keep this user explanation.\n\t"editor.fontSize": 16,\n\t"extension.unregistered": true,\n}\n';
+	const saved = await service.write(source);
+	assert.equal(saved.source, source);
+	assert.notEqual(saved.revision, initial.revision);
+	assert.equal(service.getValue(fontSize), 16);
 	await service.updateValue(fontSize, 18);
 	assert.match((await service.read()).source, /Keep this user explanation/u);
 	assert.match((await service.read()).source, /"editor\.fontSize": 18/u);
-	await assert.rejects(() => service.write('{ "editor.fontSize": 4 }', 2), /font size/);
-	await assert.rejects(() => service.write('{}', 0), ConfigurationResourceRevisionConflictError);
-	await assert.rejects(() => service.write('[]', 2), /must be an object/);
+	await assert.rejects(service.write('{}', initial.revision), FileRevisionConflictError);
+	await assert.rejects(service.write('[]'), /must be an object/);
+	assert.equal(service.getValue(fontSize), 18);
 });
 
 test("workbench configuration applies and reports language overrides", async () => {
@@ -247,14 +191,8 @@ test("workbench configuration applies and reports language overrides", async () 
 			return value as number;
 		},
 	});
-	const api = new TestConfigurationApi({
-		revision: 0,
-		document: {
-			version: 1,
-			source: '{ "editor.tabSize": 2, "[typescript]": { "editor.tabSize": 8 } }\n',
-		},
-	});
-	using service = new WorkbenchConfigurationService({ api, registry });
+	using api = new TestConfigurationFiles('{ "editor.tabSize": 2, "[typescript]": { "editor.tabSize": 8 } }\n');
+	using service = new WorkbenchConfigurationService({ files: api, registry });
 	const changes: Array<{ readonly keys: string[]; readonly overrides: [string, string[]][]; readonly typescript: boolean; readonly javascript: boolean; }> = [];
 	using listener = service.onDidChangeConfiguration(event => changes.push({
 		keys: event.change.keys,
@@ -268,13 +206,8 @@ test("workbench configuration applies and reports language overrides", async () 
 	assert.equal(service.getValue<number>(tabSize, { overrideIdentifier: "typescript" }), 8);
 	assert.equal(service.getValue<number>(tabSize, { overrideIdentifier: "javascript" }), 2);
 
-	api.emit({
-		revision: 1,
-		document: {
-			version: 1,
-			source: '{ "editor.tabSize": 2, "[typescript]": { "editor.tabSize": 6 } }\n',
-		},
-	});
+	await api.emit('{ "editor.tabSize": 2, "[typescript]": { "editor.tabSize": 6 } }\n');
+	await service.reloadConfiguration();
 	assert.deepEqual(changes.at(-1), {
 		keys: [],
 		overrides: [["typescript", [tabSize]]],
@@ -296,14 +229,8 @@ test("workbench configuration preserves combined override blocks in data and ins
 			return value as number;
 		},
 	});
-	const api = new TestConfigurationApi({
-		revision: 0,
-		document: {
-			version: 1,
-			source: '{ "editor.tabSize": 2, "[typescript][javascript]": { "editor.tabSize": 8 } }\n',
-		},
-	});
-	using service = new WorkbenchConfigurationService({ api, registry });
+	using api = new TestConfigurationFiles('{ "editor.tabSize": 2, "[typescript][javascript]": { "editor.tabSize": 8 } }\n');
+	using service = new WorkbenchConfigurationService({ files: api, registry });
 	await service.reloadConfiguration();
 
 	assert.deepEqual(service.getConfigurationData().userLocal, {
@@ -341,6 +268,59 @@ test("workbench configuration preserves combined override blocks in data and ins
 	assert.doesNotMatch((await service.read()).source, /"\[typescript\]"\s*:/u);
 });
 
+test('workbench saved settings use the same language precedence for reads, inspection and change events', async () => {
+	const registry = new ConfigurationRegistry();
+	registry.registerConfiguration({ key: 'editor.tabSize', defaultValue: 4, parse: value => Number(value) });
+	using service = new WorkbenchConfigurationService({ registry });
+	await service.write('{ "editor.tabSize": 8, "[typescript]": { "editor.tabSize": 2 }, "[typescript][javascript]": { "editor.tabSize": 6 } }');
+	assert.deepEqual([
+		service.getValue('editor.tabSize'), service.getValue('editor.tabSize', { overrideIdentifier: 'typescript' }),
+		service.getValue('editor.tabSize', { overrideIdentifier: 'javascript' }),
+		service.inspect('editor.tabSize', { overrideIdentifier: 'typescript' }).userLocalValue,
+	], [8, 2, 6, 2]);
+	const events: { typescript: boolean; javascript: boolean; }[] = [];
+	using listener = service.onDidChangeConfiguration(event => events.push({
+		typescript: event.affectsConfiguration('editor.tabSize', { overrideIdentifier: 'typescript' }),
+		javascript: event.affectsConfiguration('editor.tabSize', { overrideIdentifier: 'javascript' }),
+	}));
+	await service.updateValue('editor.tabSize', 3, { overrideIdentifier: 'typescript' });
+	assert.deepEqual(events, [{ typescript: true, javascript: false }]);
+	assert.equal(service.getValue('editor.tabSize', { overrideIdentifier: 'typescript' }), 3);
+	assert.equal(service.getValue('editor.tabSize', { overrideIdentifier: 'javascript' }), 6);
+
+	await service.updateValue('editor.tabSize', 10, { overrideIdentifiers: ['typescript', 'javascript'] });
+	assert.deepEqual(events.at(-1), { typescript: false, javascript: true });
+	assert.equal(service.getValue('editor.tabSize', { overrideIdentifier: 'typescript' }), 3);
+	assert.equal(service.inspect('editor.tabSize', { overrideIdentifier: 'javascript' }).userLocalValue, 10);
+});
+
+test('workbench structured settings merge defaults, saved values and language values without changing prior events', async () => {
+	const registry = new ConfigurationRegistry();
+	registry.registerConfiguration({
+		key: 'editor.options', defaultValue: { colors: { foreground: 'gray', background: 'black' }, rulers: [80] },
+		parse: value => value as { colors?: { foreground?: string; background?: string; }; rulers?: number[]; },
+	});
+	using service = new WorkbenchConfigurationService({ registry });
+	await service.write('{ "editor.options": { "colors": { "foreground": "white" } }, "[typescript]": { "editor.options": { "rulers": [100] } } }');
+	assert.deepEqual(service.getValue('editor.options', { overrideIdentifier: 'typescript' }), {
+		colors: { foreground: 'white', background: 'black' }, rulers: [100],
+	});
+	assert.deepEqual(service.inspect('editor.options', { overrideIdentifier: 'typescript' }).userLocalValue, {
+		colors: { foreground: 'white' }, rulers: [100],
+	});
+	const before = service.getConfigurationData();
+	const events: import('../../common/configuration.js').IConfigurationChangeEvent[] = [];
+	using listener = service.onDidChangeConfiguration(event => events.push(event));
+	await service.updateValue('editor.options', { colors: { foreground: 'green' } });
+	assert.equal(events[0]!.affectsConfiguration('editor.options.colors.foreground', { overrideIdentifier: 'typescript' }), true);
+	assert.equal(events[0]!.affectsConfiguration('editor.options.rulers', { overrideIdentifier: 'typescript' }), false);
+	await service.updateValue('editor.options', { colors: { foreground: 'green' }, rulers: [120] });
+	assert.equal(events[0]!.affectsConfiguration('editor.options.colors.foreground', { overrideIdentifier: 'typescript' }), true);
+	assert.deepEqual(before.userLocal.contents, {
+		editor: { options: { colors: { foreground: 'white' } } }, '[typescript]': { 'editor.options': { rulers: [100] } },
+	});
+});
+
 test("workbench configuration accepts resource reads and rejects unsupported write owners", async () => {
 	const registry = new ConfigurationRegistry();
 	const tabSize = registry.registerConfiguration({
@@ -376,14 +356,8 @@ test("workbench configuration change compares values after language overrides", 
 			return value as number;
 		},
 	});
-	const api = new TestConfigurationApi({
-		revision: 0,
-		document: {
-			version: 1,
-			source: '{ "editor.tabSize": 2, "[typescript]": { "editor.tabSize": 8 } }\n',
-		},
-	});
-	using service = new WorkbenchConfigurationService({ api, registry });
+	using api = new TestConfigurationFiles('{ "editor.tabSize": 2, "[typescript]": { "editor.tabSize": 8 } }\n');
+	using service = new WorkbenchConfigurationService({ files: api, registry });
 	await service.reloadConfiguration();
 	let affectsTypeScript: boolean | undefined;
 	let affectsJavaScript: boolean | undefined;
@@ -392,103 +366,36 @@ test("workbench configuration change compares values after language overrides", 
 		affectsJavaScript = event.affectsConfiguration(tabSize, { overrideIdentifier: "javascript" });
 	});
 
-	api.emit({
-		revision: 1,
-		document: {
-			version: 1,
-			source: '{ "editor.tabSize": 6, "[typescript]": { "editor.tabSize": 8 } }\n',
-		},
-	});
+	await api.emit('{ "editor.tabSize": 6, "[typescript]": { "editor.tabSize": 8 } }\n');
+	await service.reloadConfiguration();
 
 	assert.equal(affectsTypeScript, false);
 	assert.equal(affectsJavaScript, true);
 });
 
-test("main configuration service persists atomic revisions", async () => {
-	const directory = await mkdtemp(join(tmpdir(), "ash-configuration-"));
-	try {
-		const filePath = join(directory, "settings.json");
-		const service = await ConfigurationMainService.create({ filePath });
-
-		const updated = await service.update({
-			expectedRevision: 0,
-			document: {
-				version: 1,
-				source: '{\n\t// persisted\n\t"editor.fontSize": 14,\n}\n',
-			},
-		});
-		assert.equal(updated.revision, 1);
-		await assert.rejects(
-			() => service.update({
-				expectedRevision: 0,
-				document: { version: 1, source: '{}' },
-			}),
-			/revision conflict/,
-		);
-		await service.close();
-
-		assert.equal(await readFile(filePath, "utf8"), updated.document.source);
-		assert.deepEqual(configurationValues(updated.document), { "editor.fontSize": 14 });
-		const reopened = await ConfigurationMainService.create({ filePath });
-		assert.deepEqual(reopened.read(), {
-			revision: 0,
-			document: updated.document,
-		});
-		await reopened.close();
-	} finally {
-		await rm(directory, { recursive: true, force: true });
-	}
+test('configuration reload preserves the last valid model after invalid external JSONC', async () => {
+	const registry = new ConfigurationRegistry();
+	registry.registerConfiguration({ key: 'editor.fontSize', defaultValue: 12, parse: value => Number(value) });
+	using files = new TestConfigurationFiles('{"editor.fontSize": 18}');
+	using service = new WorkbenchConfigurationService({ files, registry });
+	await service.reloadConfiguration();
+	await files.emit('{');
+	await assert.rejects(service.reloadConfiguration(), /invalid/i);
+	assert.equal(service.getValue('editor.fontSize'), 18);
+	await files.emit('{"editor.fontSize": 20}');
+	await service.reloadConfiguration();
+	assert.equal(service.getValue('editor.fontSize'), 20);
 });
 
 test('workbench configuration applies the startup snapshot before services choose window behavior', () => {
 	const registry = new ConfigurationRegistry();
 	registry.registerConfiguration({ key: 'window.menuStyle', defaultValue: 'inherit', parse: value => value });
 	registry.registerConfiguration({ key: 'window.titleBarStyle', defaultValue: 'custom', parse: value => value });
-	const snapshot: IConfigurationSnapshot = {
+	const snapshot = {
 		revision: 3,
 		document: { version: 1, source: '{ "window.titleBarStyle": "system" }' },
 	};
-	using service = new WorkbenchConfigurationService({ registry, api: new TestConfigurationApi(snapshot), initialSnapshot: snapshot });
+	using service = new WorkbenchConfigurationService({ registry, files: new TestConfigurationFiles((snapshot).document.source), source: (snapshot).document.source });
 	assert.equal(service.getValue('window.titleBarStyle'), 'system');
 	assert.equal(service.getValue('window.menuStyle'), 'inherit');
 });
-
-class TestConfigurationApi implements IConfigurationApi {
-	private readonly listeners = new Set<(snapshot: unknown) => void>();
-	private snapshot: IConfigurationSnapshot;
-
-	constructor(snapshot: IConfigurationSnapshot) {
-		this.snapshot = snapshot;
-	}
-
-	read(): Promise<unknown> {
-		return Promise.resolve(this.snapshot);
-	}
-
-	update(
-		request: IConfigurationUpdateRequest,
-	): Promise<unknown> {
-		if (request.expectedRevision !== this.snapshot.revision) {
-			return Promise.reject(new Error("revision conflict"));
-		}
-		this.snapshot = {
-			revision: this.snapshot.revision + 1,
-			document: request.document,
-		};
-		return Promise.resolve(this.snapshot);
-	}
-
-	onDidChange(
-		listener: (snapshot: unknown) => void,
-	): { dispose(): void; } {
-		this.listeners.add(listener);
-		return {
-			dispose: () => this.listeners.delete(listener),
-		};
-	}
-
-	emit(snapshot: IConfigurationSnapshot): void {
-		this.snapshot = snapshot;
-		for (const listener of this.listeners) listener(snapshot);
-	}
-}

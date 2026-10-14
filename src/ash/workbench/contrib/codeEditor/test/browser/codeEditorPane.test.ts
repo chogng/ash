@@ -32,7 +32,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { IFileTextModelService, ITextModelResourceService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { SaveParticipantsContribution } from '../../browser/saveParticipants.js';
 import '../../../codeActions/browser/codeActions.contribution.js';
-import { WorkbenchConfigurationService } from '../../../../services/configuration/browser/configurationService.js';
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
 import { ITextModelService } from '../../../../../editor/common/services/resolverService.js';
 import { TextModelResolverService } from '../../../../services/textmodelResolver/common/textModelResolverService.js';
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';

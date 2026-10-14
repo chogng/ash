@@ -20,7 +20,7 @@ import { ITerminalContributionService, ITerminalProfileResolverService, ITermina
 import { BrowserTerminalProfileResolverService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalProfileResolverService.js';
 import { MainThreadTerminalService } from '../../../src/ash/workbench/api/browser/mainThreadTerminalService.js';
 import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
-import { WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/browser/configurationService.js';
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
 import { TerminalConfigurationService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalConfigurationService.js';
 import { TerminalProfileService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalProfileService.js';

@@ -23,7 +23,7 @@ import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../
 import { ITerminalProcessService } from '../../../../../platform/terminal/common/terminal.js';
 import { registerTerminalPlatformConfiguration } from '../../../../../platform/terminal/common/terminalPlatformConfiguration.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
-import { WorkbenchConfigurationService } from '../../../../services/configuration/browser/configurationService.js';
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
 import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
 
 import { ITerminalService, type ITerminalProfile } from '../../../../services/terminal/browser/terminal.js';

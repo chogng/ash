@@ -12,7 +12,7 @@ import { ConfigurationTarget, IConfigurationService } from '../../../platform/co
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { darkColorTheme, lightColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../platform/theme/test/common/testThemeService.js';
-import { WorkbenchConfigurationService } from '../../../workbench/services/configuration/browser/configurationService.js';
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../../workbench/services/configuration/test/common/testServices.js';
 import { DesignConfiguration } from '../../contrib/creator/common/config/editorConfiguration.js';
 import { Emitter, Event as AshEvent, Event } from '../../../base/common/event.js';
 import { URI } from '../../../base/common/uri.js';

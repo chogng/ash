@@ -30,7 +30,7 @@ import { IQuickInputService } from '../../../platform/quickinput/common/quickInp
 import { INotificationService } from '../../../platform/notification/common/notification.js';
 import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
 import type { TurnChangesReadResult } from '../../../../../.build/protocol/typescript/index.js';
-import { WorkbenchConfigurationService } from '../../../workbench/services/configuration/browser/configurationService.js';
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../../workbench/services/configuration/test/common/testServices.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import { NotificationService } from '../../../workbench/services/notification/common/notificationService.js';
 import { IAgentThreadService, IAgentTurnService } from '../../../platform/agentHost/common/agentService.js';

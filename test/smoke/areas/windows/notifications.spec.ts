@@ -1,6 +1,7 @@
+import { readUserSettings } from '../../../automation/settings.js';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdir, readFile, realpath, rmdir, rm, writeFile } from 'node:fs/promises';
+import { readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join, relative } from 'node:path';
 import type { Locator, Page } from '@playwright/test';
@@ -815,83 +816,47 @@ for (const scenario of [
 	});
 }
 
-interface StoredConfiguration {
-	key: 'settings.json';
-	revision: number;
-	document: { version: 1; source: string; };
-}
-
-async function browserConfiguration(page: Page, operation: 'block' | 'read' | 'restore', original?: StoredConfiguration | null): Promise<StoredConfiguration | null> {
-	return page.evaluate(async ({ operation, original }) => {
-		const database = await new Promise<IDBDatabase>((resolve, reject) => {
-			const opening = indexedDB.open('ash-configuration', 1);
-			opening.onsuccess = () => resolve(opening.result);
-			opening.onerror = () => reject(opening.error);
-		});
-		try {
-			return await new Promise<StoredConfiguration | null>((resolve, reject) => {
-				const transaction = database.transaction('resources', operation === 'read' ? 'readonly' : 'readwrite');
-				const store = transaction.objectStore('resources');
-				const request = store.get('settings.json');
-				let stored: StoredConfiguration | null;
-				request.onsuccess = () => {
-					stored = request.result ?? null;
-					if (operation === 'block') {
-						// No broadcast: the real renderer retains its revision and the real
-						// IndexedDB compare-and-swap rejects its subsequent write.
-						store.put({
-							key: 'settings.json', revision: (stored?.revision ?? 0) + 1,
-							document: stored?.document ?? { version: 1, source: '{}\n' }
-						});
-					} else if (operation === 'restore') {
-						if (original) store.put(original);
-						else store.delete('settings.json');
-					}
-				};
-				transaction.oncomplete = () => resolve(stored);
-				transaction.onerror = () => reject(transaction.error);
-				transaction.onabort = () => reject(transaction.error);
-			});
-		} finally { database.close(); }
-	}, { operation, original });
-}
-
 async function blockConfigurationWrite(page: Page, application: PlaywrightApplication): Promise<{ message: string; assertUnchanged(): Promise<void>; dispose(): Promise<void>; }> {
+	const message = 'Injected settings file write failure';
+	const original = await readUserSettings(page);
 	if (!('windows' in application)) {
-		// Each browser fixture owns a fresh BrowserContext, including this database.
-		const original = await browserConfiguration(page, 'block');
-		const expected = {
-			key: 'settings.json', revision: (original?.revision ?? 0) + 1,
-			document: original?.document ?? { version: 1, source: '{}\n' }
-		};
+		await page.evaluate(message => {
+			const store = IDBObjectStore.prototype;
+			const put = store.put;
+			const state = globalThis as typeof globalThis & { restoreSettingsWrite(): void; };
+			state.restoreSettingsWrite = () => { store.put = put; delete (state as Partial<typeof state>).restoreSettingsWrite; };
+			store.put = function (value, key) {
+				if (this.name === 'files' && key === 'ash-userdata:/user/settings.json') throw new Error(message);
+				return put.call(this, value, key);
+			};
+		}, message);
 		return {
-			message: `Configuration revision conflict: expected ${expected.revision - 1}, actual ${expected.revision}`,
-			async assertUnchanged() { expect(await browserConfiguration(page, 'read')).toEqual(expected); },
-			async dispose() {
-				await browserConfiguration(page, 'restore', original);
-				expect(await browserConfiguration(page, 'read')).toEqual(original);
-			},
+			message,
+			async assertUnchanged() { expect(await readUserSettings(page)).toEqual(original); },
+			async dispose() { await page.evaluate(() => (globalThis as typeof globalThis & { restoreSettingsWrite(): void; }).restoreSettingsWrite()); },
 		};
 	}
-	const processProfile = await application.evaluate(({ app }) => ({ pid: process.pid, profile: process.env.ASH_HOME, userData: app.getPath('userData') }));
-	assert.ok(processProfile.profile);
-	const [profile, userData, temporaryRoot] = await Promise.all([realpath(processProfile.profile), realpath(processProfile.userData), realpath(tmpdir())]);
-	assert.equal(relative(userData, profile), 'profile');
-	assert.equal(relative(temporaryRoot, userData), basename(userData));
-	assert.ok(basename(userData).startsWith('ash-'));
-	const settings = join(profile, 'settings.json');
-	const blocker = `${settings}.${processProfile.pid}.tmp`;
-	const original = await page.evaluate(() => globalThis.ashTestMainProcess.call('configuration', 'read'));
-	const source = await readFile(settings).catch(error => { if (error.code === 'ENOENT') return undefined; throw error; });
-	// Exclusive mkdir never replaces an existing file or directory. The owner writes
-	// this exact temporary path before rename; rmdir only removes our empty blocker.
-	await mkdir(blocker);
+	await application.evaluate(async (_electron, { message, resource }) => {
+		const files = await import('node:fs/promises');
+		const { fileURLToPath } = await import('node:url');
+		const { syncBuiltinESMExports } = await import('node:module');
+		const settings = fileURLToPath(resource);
+		const write = files.default.writeFile;
+		const state = globalThis as typeof globalThis & { restoreSettingsWrite(): void; };
+		state.restoreSettingsWrite = () => {
+			files.default.writeFile = write;
+			syncBuiltinESMExports();
+			delete (state as Partial<typeof state>).restoreSettingsWrite;
+		};
+		files.default.writeFile = async (...args: Parameters<typeof write>) => {
+			if (typeof args[0] === 'string' && args[0].startsWith(settings + '.') && args[0].endsWith('.tmp')) throw new Error(message);
+			return write(...args);
+		};
+		syncBuiltinESMExports();
+	}, { message, resource: original.resource });
 	return {
-		message: 'EISDIR',
-		async assertUnchanged() {
-			expect(await page.evaluate(() => globalThis.ashTestMainProcess.call('configuration', 'read'))).toEqual(original);
-			assert.deepEqual(await readFile(settings).catch(error => { if (error.code === 'ENOENT') return undefined; throw error; }), source);
-		},
-		async dispose() { await rmdir(blocker); },
+		message,
+		async assertUnchanged() { expect(await readUserSettings(page)).toEqual(original); },
+		async dispose() { await application.evaluate(() => (globalThis as typeof globalThis & { restoreSettingsWrite(): void; }).restoreSettingsWrite()); },
 	};
 }

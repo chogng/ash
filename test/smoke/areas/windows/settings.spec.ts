@@ -1,3 +1,4 @@
+import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
 import { expect, test } from '../../../automation/test.js';
 
 test('Configure Editors opens workbench editor settings from the title menu in English and Chinese', async ({ workbench, application, restartWorkbench }) => {
@@ -424,12 +425,12 @@ test('Workbench and Sessions Models share model visibility', { tag: ['@electron-
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 	const page = workbench.page;
 	if (process.platform === 'darwin') {
-		await page.evaluate(async () => {
-			const snapshot = await globalThis.ashTestMainProcess.call('configuration', 'read') as { revision: number; document: { version: 1; source: string; }; };
-			const settings = JSON.parse(snapshot.document.source) as Record<string, unknown>;
+		await (async () => {
+			const snapshot = await readUserSettings(page);
+			const settings = JSON.parse(snapshot.content) as Record<string, unknown>;
 			settings['window.menuStyle'] = 'custom';
-			await globalThis.ashTestMainProcess.call('configuration', 'update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(settings) } });
-		});
+			await writeUserSettings(page, JSON.stringify(settings), snapshot.revision);
+		})();
 	}
 	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
