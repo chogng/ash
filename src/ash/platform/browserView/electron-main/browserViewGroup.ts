@@ -1,32 +1,65 @@
 import { randomUUID } from 'node:crypto';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable, DisposableMap, DisposableStore } from '../../../base/common/lifecycle.js';
-import { isRecord } from '../../../base/common/types.js';
 import { raceCancellationError } from '../../../base/common/async.js';
 import type { IBrowserViewInfo } from '../common/browserView.js';
 import type { IBrowserViewGroup, IBrowserViewGroupFilter } from '../common/browserViewGroup.js';
-import type { CDPEvent, CDPRequest, CDPResponse, CDPTargetInfo } from '../common/cdp/types.js';
+import type { CDPRequest, CDPTargetEvent, CDPTargetInfo } from '../common/cdp/types.js';
+import { CDPBrowserProxy } from '../common/cdp/proxy.js';
 import type { BrowserView } from './browserView.js';
 import { IBrowserViewMainService } from './browserViewMainService.js';
-
-type Session = { type: 'browser'; } | { type: 'page'; viewId: string; parent?: string; actual?: string; autoAttach: boolean; automatic?: boolean; };
 
 /** A logical CDP browser references pages selected by Main; it never owns their lifetime. */
 export class BrowserViewGroup extends Disposable implements IBrowserViewGroup {
 	public readonly id = randomUUID();
 	private readonly destroyed = this._register(new Emitter<void>());
 	public readonly onDidDestroy = this.destroyed.event;
-	private readonly messages = this._register(new Emitter<CDPEvent | CDPResponse>());
-	public readonly onCDPMessage = this.messages.event;
+	private readonly targetEvents = this._register(new Emitter<CDPTargetEvent>());
+	private readonly debugger: CDPBrowserProxy;
+	public get onCDPMessage() { return this.debugger.onMessage; }
 	private readonly pages = new Map<string, BrowserView>();
 	private readonly targetIds = new Map<string, string>();
 	private readonly pending = new Map<string, Promise<void>>();
 	private readonly attachments = this._register(new DisposableMap<string, DisposableStore>());
-	private readonly sessions = new Map<string, Session>();
-	private readonly discover = new Set<string | undefined>();
-	private readonly autoAttach = new Set<string | undefined>();
 	constructor(private readonly filter: IBrowserViewGroupFilter, private readonly retire: (id: string) => void, @IBrowserViewMainService private readonly views: IBrowserViewMainService) {
 		super();
+		this.debugger = this._register(new CDPBrowserProxy({
+			targetInfo: { targetId: this.id, type: 'browser', title: '', url: '', attached: true, canAccessOpener: false, browserContextId: this.id },
+			onTargetEvent: this.targetEvents.event,
+			whenReady: async () => { await Promise.all(this.pending.values()); },
+			getTargets: () => [...this.pages.keys()].map(id => this.info(id)),
+			getTargetInfo: id => this.info(id),
+			getVersion: () => ({
+				protocolVersion: '1.3', product: 'Chrome/' + process.versions.chrome, revision: '',
+				userAgent: 'Chrome/' + process.versions.chrome, jsVersion: process.versions.v8,
+			}),
+			getWindowForTarget: id => {
+				const page = this.page(id);
+				const bounds = page.view.getBounds();
+				return {
+					windowId: page.getInfo().host.windowId,
+					bounds: { left: bounds.x, top: bounds.y, width: bounds.width, height: bounds.height, windowState: 'normal' },
+				};
+			},
+			getBrowserContexts: () => [...new Set([...this.pages.values()].map(page => page.session.id))],
+			createTarget: async (url, contextId) => {
+				if (this.filter.browserIds) { throw new Error('BrowserGroupHasFixedTargets'); }
+				if (contextId !== undefined && ![...this.pages.values()].some(page => page.session.id === contextId)) { throw new Error('BrowserContextAccessDenied'); }
+				const page = await this.views.createTarget(url, this.filter.sandboxSessionId, new AbortController().signal);
+				await this.accept(page.getInfo());
+				return this.info(page.id);
+			},
+			activateTarget: id => this.page(id).focus(),
+			closeTarget: id => this.views.destroyBrowserView(this.page(id).id),
+			sendCommand: (id, method, params, sessionId) => {
+				const page = this.page(id);
+				return raceCancellationError(
+					page.debugger.sendCommand(method, params, sessionId),
+					this.views.agentAccessSignal(page.id, this.filter.sandboxSessionId),
+					'BrowserSharingRevoked',
+				);
+			},
+		}));
 		this._register(views.onDidEvent(event => {
 			if (event.type === 'created') { void this.accept(event.info).catch(() => this.dispose()); }
 			else if (event.type === 'closed') { this.remove(event.targetId); }
@@ -35,7 +68,7 @@ export class BrowserViewGroup extends Disposable implements IBrowserViewGroup {
 				else { const page = this.views.tryGetBrowserView(event.targetId); if (page) { void this.accept(page.getInfo()).catch(() => this.dispose()); } }
 			}
 			else if (event.type === 'stateChanged' && this.pages.has(event.state.targetId)) {
-				for (const parent of this.discover) { this.event('Target.targetInfoChanged', { targetInfo: this.info(event.state.targetId) }, parent); }
+				this.targetEvents.fire({ type: 'changed', targetInfo: this.info(event.state.targetId) });
 			}
 		}));
 	}
@@ -52,7 +85,10 @@ export class BrowserViewGroup extends Disposable implements IBrowserViewGroup {
 		if (!page) { return Promise.resolve(); }
 		const resources = new DisposableStore();
 		resources.add(page.debugger.acquire());
-		resources.add(page.debugger.onEvent(event => this.forward(page.id, event)));
+		resources.add(page.debugger.onEvent(message => {
+			const targetId = this.targetIds.get(page.id);
+			if (targetId) { this.targetEvents.fire({ type: 'message', targetId, message }); }
+		}));
 		this.attachments.set(page.id, resources);
 		const pending = page.debugger.getTargetId().then(targetId => {
 			if (this.isDisposed || page.signal.aborted || this.attachments.get(page.id) !== resources) { return; }
@@ -60,8 +96,7 @@ export class BrowserViewGroup extends Disposable implements IBrowserViewGroup {
 			// CDP target identity must remain Chromium's identity: its root frame uses that same ID.
 			this.targetIds.set(page.id, targetId);
 			this.pages.set(page.id, page);
-			for (const parent of this.discover) { this.event('Target.targetCreated', { targetInfo: this.info(page.id) }, parent); }
-			for (const parent of this.autoAttach) { this.attach(page.id, parent, true); }
+			this.targetEvents.fire({ type: 'created', targetInfo: this.info(page.id) });
 		}).catch(error => {
 			this.attachments.deleteAndDispose(page.id);
 			if (!page.signal.aborted && !this.isDisposed) { throw error; }
@@ -71,11 +106,9 @@ export class BrowserViewGroup extends Disposable implements IBrowserViewGroup {
 	}
 	private remove(id: string): void {
 		const known = this.pages.delete(id);
-		for (const [sessionId, session] of [...this.sessions]) {
-			if (session.type === 'page' && session.viewId === id && this.sessions.has(sessionId)) { this.detach(sessionId); }
-		}
+		const targetId = this.targetIds.get(id);
+		if (known && targetId) { this.targetEvents.fire({ type: 'destroyed', targetId }); }
 		this.attachments.deleteAndDispose(id);
-		if (known) { for (const parent of this.discover) { this.event('Target.targetDestroyed', { targetId: this.targetIds.get(id) }, parent); } }
 		this.targetIds.delete(id);
 	}
 	private page(id: unknown): BrowserView {
@@ -87,141 +120,18 @@ export class BrowserViewGroup extends Disposable implements IBrowserViewGroup {
 	private info(id: string): CDPTargetInfo {
 		const page = this.page(id);
 		const state = page.getState();
-		return { targetId: this.targetIds.get(page.id)!, browserViewId: page.id, type: 'page', title: state.title, url: state.url, attached: [...this.sessions.values()].some(session => session.type === 'page' && session.viewId === page.id), canAccessOpener: false, browserContextId: page.session.id };
+		return { targetId: this.targetIds.get(page.id)!, browserViewId: page.id, type: 'page', title: state.title, url: state.url, attached: false, canAccessOpener: false, browserContextId: page.session.id };
 	}
-	private attach(id: unknown, parent?: string, automatic = false): string {
-		const page = this.page(id);
-		if (!this.attachments.has(page.id)) {
-			const resources = new DisposableStore();
-			resources.add(page.debugger.acquire());
-			resources.add(page.debugger.onEvent(event => this.forward(page.id, event)));
-			this.attachments.set(page.id, resources);
-		}
-		const sessionId = randomUUID();
-		this.sessions.set(sessionId, { type: 'page', viewId: page.id, parent, autoAttach: false, automatic });
-		this.event('Target.attachedToTarget', { sessionId, targetInfo: this.info(page.id), waitingForDebugger: false }, parent);
-		return sessionId;
-	}
-	private detach(id: string): void {
-		const session = this.sessions.get(id);
-		if (!session) { throw new Error('BrowserCDPSessionUnavailable'); }
-		this.sessions.delete(id);
-		this.discover.delete(id);
-		this.autoAttach.delete(id);
-		if (session.type === 'page') {
-			for (const [childId, child] of [...this.sessions]) {
-				if (child.type === 'page' && child.parent === id) { this.detach(childId); }
-			}
-			this.event('Target.detachedFromTarget', { sessionId: id, targetId: this.targetIds.get(session.viewId) }, session.parent);
-		} else {
-			for (const [childId, child] of [...this.sessions]) {
-				if (child.type === 'page' && child.parent === id) { this.detach(childId); }
-			}
-		}
-	}
-	private event(method: string, params: unknown, sessionId?: string): void {
-		if (!this.isDisposed) { this.messages.fire({ method, params, ...(sessionId ? { sessionId } : {}) }); }
-	}
-	private forward(viewId: string, event: CDPEvent): void {
-		for (const [id, session] of [...this.sessions]) {
-			if (session.type !== 'page' || session.viewId !== viewId || session.actual !== event.sessionId) { continue; }
-			if (event.method === 'Target.attachedToTarget' && isRecord(event.params)) {
-				if (!session.autoAttach || typeof event.params.sessionId !== 'string') { continue; }
-				const childId = randomUUID();
-				this.sessions.set(childId, { type: 'page', viewId, parent: id, actual: event.params.sessionId, autoAttach: false });
-				this.event(event.method, { ...event.params, sessionId: childId }, id);
-			} else if (event.method === 'Target.detachedFromTarget' && isRecord(event.params)) {
-				for (const [childId, child] of [...this.sessions]) {
-					if (child.type === 'page' && child.parent === id && child.actual === event.params.sessionId) { this.detach(childId); }
-				}
-			} else { this.event(event.method, event.params, id); }
-		}
-	}
-	public async sendCDPMessage(message: CDPRequest): Promise<void> {
+	public sendCDPMessage(message: CDPRequest): Promise<void> {
 		this.assertNotDisposed();
-		try {
-			await Promise.all(this.pending.values());
-			const result = await this.command(message);
-			this.messages.fire({ id: message.id, result, ...(message.sessionId ? { sessionId: message.sessionId } : {}) });
-		} catch (error) {
-			this.messages.fire({ id: message.id, error: { code: -32000, message: error instanceof Error ? error.message : String(error) }, ...(message.sessionId ? { sessionId: message.sessionId } : {}) });
-		}
-	}
-	private async command(message: CDPRequest): Promise<unknown> {
-		const params = message.params === undefined ? {} : message.params;
-		if (!isRecord(params)) { throw new TypeError('Invalid CDP parameters'); }
-		const session = message.sessionId ? this.sessions.get(message.sessionId) : undefined;
-		if (message.sessionId && !session) { throw new Error('BrowserCDPSessionUnavailable'); }
-		const browser = !session || session.type === 'browser';
-		if (message.method === 'Browser.getVersion') {
-			return { protocolVersion: '1.3', product: 'Chrome/' + process.versions.chrome, revision: '', userAgent: 'Chrome/' + process.versions.chrome, jsVersion: process.versions.v8 };
-		}
-		if (message.method === 'Target.getTargetInfo') {
-			const id = params.targetId ?? (session?.type === 'page' ? session.viewId : undefined);
-			return { targetInfo: id === undefined ? { targetId: this.id, type: 'browser', title: '', url: '', attached: true, canAccessOpener: false, browserContextId: this.id } : this.info(this.page(id).id) };
-		}
-		if (message.method === 'Browser.getWindowForTarget') {
-			const page = this.page(params.targetId ?? (session?.type === 'page' ? session.viewId : undefined));
-			const bounds = page.view.getBounds();
-			return { windowId: page.getInfo().host.windowId, bounds: { left: bounds.x, top: bounds.y, width: bounds.width, height: bounds.height, windowState: 'normal' } };
-		}
-		if (browser || (message.method.startsWith('Target.') && message.method !== 'Target.setAutoAttach')) {
-			switch (message.method) {
-				case 'Target.getTargets': return { targetInfos: [...this.pages.keys()].map(id => this.info(id)) };
-				case 'Target.getBrowserContexts': return { browserContextIds: [...new Set([...this.pages.values()].map(page => page.session.id))] };
-				case 'Target.setDiscoverTargets':
-					if (params.discover === true) {
-						this.discover.add(message.sessionId);
-						for (const id of this.pages.keys()) { this.event('Target.targetCreated', { targetInfo: this.info(id) }, message.sessionId); }
-					} else { this.discover.delete(message.sessionId); }
-					return {};
-				case 'Target.setAutoAttach':
-					if (params.flatten !== true) { throw new Error('CDP requires flattened sessions'); }
-					if (params.autoAttach === true) {
-						this.autoAttach.add(message.sessionId);
-						for (const id of this.pages.keys()) {
-							if (![...this.sessions.values()].some(value => value.type === 'page' && value.viewId === id && value.parent === message.sessionId && value.automatic)) { this.attach(id, message.sessionId, true); }
-						}
-					} else {
-						this.autoAttach.delete(message.sessionId);
-						for (const [id, value] of [...this.sessions]) {
-							if (value.type === 'page' && value.parent === message.sessionId && value.automatic && this.sessions.has(id)) { this.detach(id); }
-						}
-					}
-					return {};
-				case 'Target.attachToBrowserTarget': {
-					const sessionId = randomUUID(); this.sessions.set(sessionId, { type: 'browser' }); return { sessionId };
-				}
-				case 'Target.attachToTarget':
-					if (params.flatten !== true) { throw new Error('CDP requires flattened sessions'); }
-					return { sessionId: this.attach(params.targetId, message.sessionId) };
-				case 'Target.detachFromTarget':
-					if (typeof params.sessionId !== 'string') { throw new TypeError('Invalid CDP session'); }
-					this.detach(params.sessionId); return {};
-				case 'Target.closeTarget': await this.views.destroyBrowserView(this.page(params.targetId).id); return { success: true };
-				case 'Target.activateTarget': this.page(params.targetId).focus(); return {};
-				case 'Target.createTarget': {
-					if (this.filter.browserIds) { throw new Error('BrowserGroupHasFixedTargets'); }
-					if (params.browserContextId !== undefined && ![...this.pages.values()].some(page => page.session.id === params.browserContextId)) { throw new Error('BrowserContextAccessDenied'); }
-					if (typeof params.url !== 'string') { throw new TypeError('Invalid target URL'); }
-					const page = await this.views.createTarget(params.url, this.filter.sandboxSessionId, new AbortController().signal);
-					await this.accept(page.getInfo());
-					return { targetId: this.targetIds.get(page.id)! };
-				}
-				default: throw new Error('Unsupported browser CDP command: ' + message.method);
-			}
-		}
-		if (session.type !== 'page' || message.method.startsWith('Browser.')) { throw new Error('BrowserCDPAccessDenied'); }
-		const page = this.page(session.viewId);
-		if (message.method === 'Target.setAutoAttach') { session.autoAttach = params.autoAttach === true; }
-		// Session-scoped Target commands belong to the selected page, including its child frames.
-		return raceCancellationError(page.debugger.sendCommand(message.method, params, session.actual), this.views.agentAccessSignal(page.id, this.filter.sandboxSessionId), 'BrowserSharingRevoked');
+		return this.debugger.sendMessage(message);
 	}
 	protected override disposeCore(): void {
 		this.retire(this.id);
 		this.destroyed.fire();
-		this.pages.clear(); this.sessions.clear(); this.targetIds.clear();
-		this.discover.clear(); this.autoAttach.clear();
+		this.debugger.dispose();
+		this.pages.clear();
+		this.targetIds.clear();
 		super.disposeCore();
 	}
 }
