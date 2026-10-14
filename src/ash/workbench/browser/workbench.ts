@@ -913,7 +913,6 @@ export class Workbench extends Disposable {
 			return openerService;
 		});
 		services.registerSingleton(IURLService, () => createURLService(services));
-		services.get(IMarkdownRendererService).setDefaultCodeBlockRenderer(services.createInstance(EditorMarkdownCodeBlockRenderer));
 		const userKeyboardLayoutService = userKeyboardLayoutApi ?? UnavailableUserKeyboardLayoutService;
 		services.registerInstance(IUserKeyboardLayoutService, userKeyboardLayoutService);
 		const notificationActionRunner = this._register(services.createInstance(NotificationActionRunner));
@@ -1107,6 +1106,8 @@ export class Workbench extends Disposable {
 		const editorService = this._register(new BrowserEditorService(editorParts));
 		services.registerInstance(IEditorService, editorService);
 		services.registerInstance(IEditorGroupsService, editorService);
+		// Markdown rendering resolves the code editor service, which depends on the registered editor parts.
+		services.get(IMarkdownRendererService).setDefaultCodeBlockRenderer(services.createInstance(EditorMarkdownCodeBlockRenderer));
 		// The URL opener requires the completed editor service graph before the window announces readiness.
 		services.get(IURLService);
 		// Commands follow focus across windows; each window title follows only that window's EditorPart.
