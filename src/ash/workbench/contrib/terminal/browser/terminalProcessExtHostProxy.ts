@@ -1,5 +1,5 @@
 import { CancellationError, onUnexpectedError } from '../../../../base/common/errors.js';
-import { TaskQueue } from '../../../../base/common/async.js';
+import { raceCancellationError, TaskQueue } from '../../../../base/common/async.js';
 import { ProcessPropertyType } from '../../../../platform/terminal/common/terminal.js';
 import type { JsonValue } from '../../../../platform/agentHost/common/extensionHostApi.js';
 import { localize } from '../../../../nls.js';
@@ -10,7 +10,7 @@ import { TerminalDataBufferer } from '../../../../platform/terminal/common/termi
 /** The instance owns its screen; this child owns only an extension's bounded opaque PTY stream. */
 export class TerminalProcessExtHostProxy extends BasePty {
 	private readonly sendInput = (data: string) => this.dispatch('inputTaskTerminal', { data });
-	get input(): ((data: string) => void) | undefined { return this.acceptsInput ? this.sendInput : undefined; }
+	get input(): ((data: string) => Promise<void>) | undefined { return this.acceptsInput ? this.sendInput : undefined; }
 	private readonly queue = new TaskQueue();
 	private readonly controller = new AbortController();
 	private timer: ReturnType<typeof setTimeout> | undefined;
@@ -45,10 +45,14 @@ export class TerminalProcessExtHostProxy extends BasePty {
 		this.poll();
 	}
 
-	resize(cols: number, rows: number): void {
+	resize(cols: number, rows: number): Promise<void> {
 		this.cols = cols;
 		this.rows = rows;
-		this.dispatch('resizeTaskTerminal', { dimensions: { columns: cols, rows } });
+		// Before profile creation, these dimensions become the initial open request.
+		if (!this.closed && this.ptyId === undefined) {
+			return Promise.resolve();
+		}
+		return this.dispatch('resizeTaskTerminal', { dimensions: { columns: cols, rows } });
 	}
 
 	shutdown(_immediate: boolean): void {
@@ -75,18 +79,31 @@ export class TerminalProcessExtHostProxy extends BasePty {
 		await this.invoke('closeTaskTerminal', { ptyId }, new AbortController().signal).catch(() => undefined);
 	}
 
-	private dispatch(operation: string, payload: Record<string, JsonValue>): void {
+	private async dispatch(operation: string, payload: Record<string, JsonValue>): Promise<void> {
 		const ptyId = this.ptyId;
-		if (this.closed || ptyId === undefined) return;
-		void this.queue.schedule(async () => {
-			if (this.closed) return;
-			this.consume(await this.invoke(operation, { ...payload, ptyId }, this.controller.signal));
-		}).catch(error => {
+		if (this.closed || ptyId === undefined) {
+			throw new CancellationError();
+		}
+		try {
+			await this.queue.schedule(async () => {
+				if (this.closed) {
+					throw new CancellationError();
+				}
+				const result = await raceCancellationError(
+					this.invoke(operation, { ...payload, ptyId }, this.controller.signal),
+					this.controller.signal,
+				);
+				if (this.closed) {
+					throw new CancellationError();
+				}
+				this.consume(result);
+			});
+		} catch (error) {
 			if (!this.closed) {
-				onUnexpectedError(error);
 				this.shutdown(true);
 			}
-		});
+			throw error;
+		}
 	}
 
 	private poll(): void {

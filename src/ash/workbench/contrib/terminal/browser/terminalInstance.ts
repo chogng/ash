@@ -309,8 +309,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			// Raw keys and terminal replies must bypass sendText's Enter normalization.
 			const input = screen.raw.onData(data => {
 				if (!this.isReadOnly && !this.closed && this._state === 'running') {
-					if (this.customProcess) this.customProcess.input?.(data);
-					else void this.shellProcessManager!.input(data).catch(onUnexpectedError);
+					void this.sendRawInput(data).catch(onUnexpectedError);
 				}
 			});
 			this._register(toDisposable(() => input.dispose()));
@@ -348,21 +347,23 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		}
 		text = text.replace(/\r?\n/g, '\r');
 		if (shouldExecute && !text.endsWith('\r')) { text += '\r'; }
-		if (this.customProcess?.input) {
-			await this.customProcess.input(text);
-			return;
-		}
-		if (this.isReadOnly || this.closed || this._state !== 'running' || !this.shellProcessManager) {
+		await this.sendRawInput(text);
+	}
+
+	private async sendRawInput(data: string): Promise<void> {
+		const process: ITerminalChildProcess | undefined = this.customProcess ?? this.shellProcessManager;
+		if (this.isReadOnly || this.closed || this._state !== 'running' || !process?.input) {
 			throw new CancellationError();
 		}
-		await this.shellProcessManager.input(text);
+		await process.input(data);
 	}
 
 	public processBinary(data: string): Promise<void> {
-		if (this.isReadOnly || this.closed || this._state !== 'running' || !this.shellProcessManager) {
+		const process: ITerminalChildProcess | undefined = this.customProcess ?? this.shellProcessManager;
+		if (this.isReadOnly || this.closed || this._state !== 'running' || !process?.processBinary) {
 			return Promise.reject(new CancellationError());
 		}
-		return this.shellProcessManager.processBinary(data);
+		return process.processBinary(data);
 	}
 
 	resize(dimensions: ITerminalDimensions): void {
@@ -370,7 +371,9 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		this.screenRecorder?.handleResize(dimensions.cols, dimensions.rows);
 		if (this.custom) {
 			this.custom.dimensions = dimensions;
-			if (!this.closed && this._state === 'running') this.customProcess?.resize?.(dimensions.cols, dimensions.rows);
+			if (!this.closed && this._state === 'running') {
+				void Promise.resolve(this.customProcess?.resize?.(dimensions.cols, dimensions.rows)).catch(onUnexpectedError);
+			}
 			return;
 		}
 		if (!this.closed && this._state === 'running') {

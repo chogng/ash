@@ -23,6 +23,7 @@ import { TerminalService } from "../../browser/terminalService.js";
 import { TerminalProcessManager } from '../../browser/terminalProcessManager.js';
 import { AgentHostTerminalService } from '../../browser/agentHostTerminalService.js';
 import { BasePty } from '../../common/basePty.js';
+import { TerminalProcessExtHostProxy } from '../../browser/terminalProcessExtHostProxy.js';
 import { ITerminalService, type ITerminalInstance, type ITerminalCommandStatusEvent } from "../../../../services/terminal/browser/terminal.js";
 import { WorkspaceContextService } from "../../../../services/workspaces/browser/workspaceContextService.js";
 
@@ -366,6 +367,65 @@ suite('Terminal process identity and raw input', () => {
 		await service.closeTerminal(instance);
 		await assert.rejects(instance.processBinary('\xff'), isCancellationError);
 		assert.deepEqual(processes.writeCalls, []);
+	});
+
+	for (const binary of [false, true]) test(`custom PTY ${binary ? 'uses its declared binary port' : 'does not convert binary input into text'}`, async () => {
+		const processes = new TestTerminalProcessService([]);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		const text: string[] = [];
+		const bytes: string[] = [];
+		class TestPty extends BasePty {
+			readonly processBinary = binary ? async (data: string) => { bytes.push(data); } : undefined;
+			input(data: string): void { text.push(data); }
+			async start(): Promise<void> { }
+			shutdown(): void { }
+		}
+		const instance = await services.get(ITerminalService).createTerminal({
+			dimensions: { cols: 80, rows: 24 }, deferStart: true,
+			config: { customPtyImplementation: id => new TestPty(id, false) },
+		});
+		if (binary) await instance.processBinary('\0\x80\xff\n');
+		else await assert.rejects(instance.processBinary('\0\x80\xff\n'), isCancellationError);
+		assert.deepEqual(bytes, binary ? ['\0\x80\xff\n'] : []);
+		assert.deepEqual(text, []);
+		assert.deepEqual(processes.writeCalls, []);
+		await instance.close();
+		await assert.rejects(instance.processBinary('late'), isCancellationError);
+	});
+
+	test('sendText over an extension PTY waits for the provider and preserves its failure', async () => {
+		const processes = new TestTerminalProcessService([]);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		const started = deferred<void>();
+		const acknowledgement = deferred<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue>();
+		const input: string[] = [];
+		const instance = await services.get(ITerminalService).createTerminal({
+			dimensions: { cols: 80, rows: 24 }, deferStart: true,
+			config: {
+				customPtyImplementation: id => new TerminalProcessExtHostProxy(id, 'provider-pty', true, 80, 24, async (operation, payload) => {
+					if (operation === 'inputTaskTerminal') {
+						input.push((payload as { data: string; }).data);
+						started.resolve();
+						return acknowledgement.promise;
+					}
+					return { events: [] };
+				}, () => { })
+			},
+		});
+		instance.start();
+		const failure = new Error('Provider input failed');
+		let completed = false;
+		const rejected = assert.rejects(instance.sendText('中文\n', true).then(() => { completed = true; }), error => error === failure);
+		await started.promise;
+		assert.equal(completed, false);
+		acknowledgement.reject(failure);
+		await rejected;
+		assert.deepEqual(input, ['中文\r']);
+		assert.equal(instance.state, 'exited');
+		assert.deepEqual(processes.createCalls, []);
+		await instance.close();
 	});
 });
 

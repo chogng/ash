@@ -17,6 +17,7 @@ import { IViewsService } from '../../../../services/views/common/viewsService.js
 import { TerminalTabsChatEntry } from '../../browser/terminalTabsChatEntry.js';
 import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
 import { captureTerminalAttachment } from '../../browser/chatTerminalCommandMirror.js';
+import { TerminalCapability } from '../../../../../platform/terminal/common/capabilities/capabilities.js';
 import { registerRemoteContributions } from '../../electron-browser/terminalRemote.js';
 import '../../electron-browser/localTerminalBackend.js';
 
@@ -27,18 +28,25 @@ function fixture(owner: DisposableStore, remote: boolean) {
 	const creation = new DeferredPromise<ITerminalProcessCreation>();
 	const closed: string[] = [];
 	const written: string[] = [];
+	const queries: { terminalId: string; dirId?: string; }[] = [];
+	let queryResult = Promise.resolve({ ready: { pid: 7, cwd: '/project' }, cwd: '/project/current', rows: 24, cols: 80 });
 	const processes = {
 		onConnectionState: () => Disposable.None, getConnectionState: async () => 'ready',
 		create: () => creation.p,
 		close: async ({ terminalId }: { terminalId: string; }) => { closed.push(terminalId); },
 		write: async ({ data }: { data: string; }) => { written.push(data); },
 		resize: async () => { },
+		getProcessInfo: async (options: { terminalId: string; dirId?: string; }) => {
+			queries.push(options);
+			return queryResult;
+		},
 	} as unknown as ITerminalProcessService;
 	const services = owner.add(new InstantiationService(new ServiceCollection([ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
 	const terminals = owner.add(services.createInstance(TerminalService));
 	services.registerInstance(ITerminalService, terminals);
 	return {
-		workspace, closed, written, services, terminals,
+		workspace, closed, written, queries, services, terminals,
+		setQuery: (value: typeof queryResult) => { queryResult = value; },
 		ready: () => creation.complete({ terminalId: 'original-pty', ready: { pid: 7, cwd: '/project' }, profile: { profileId: 'shell', title: 'Shell', isDefault: true }, connectionPersistence: 'reconnectable' }),
 		create: () => terminals.createTerminal({ dimensions: { cols: 80, rows: 24 }, profile: { type: 'default' }, deferStart: true }),
 	};
@@ -83,6 +91,35 @@ suite('Terminal execution host boundaries', () => {
 		await instance.sendText('still-original', false);
 		assert.equal(instance.initialCwd, '/project');
 		assert.equal(f.written.length, 1);
+		await instance.close();
+	});
+
+	for (const remote of [false, true]) test(`${remote ? 'remote' : 'local'} cwd queries reject a replaced execution host`, async () => {
+		using owner = new DisposableStore();
+		const f = fixture(owner, remote);
+		const pending = f.create();
+		await f.ready();
+		const instance = await pending;
+		const query = instance.capabilities!.get(TerminalCapability.NaiveCwdDetection)!;
+		f.workspace.updateWorkspace({ id: 'replacement', uri: URI.from({ scheme: 'ash-remote', authority: 'host-two', path: '/other' }) });
+		await assert.rejects(query.getCwd(), isCancellationError);
+		assert.deepEqual(f.queries, []);
+		await instance.close();
+	});
+
+	for (const remote of [false, true]) test(`late ${remote ? 'remote' : 'local'} cwd cannot escape a host replacement`, async () => {
+		using owner = new DisposableStore();
+		const f = fixture(owner, remote);
+		const pending = f.create();
+		await f.ready();
+		const instance = await pending;
+		const response = new DeferredPromise<{ ready: { pid: number; cwd: string; }; cwd: string; rows: number; cols: number; }>();
+		f.setQuery(response.p);
+		const rejected = assert.rejects(instance.capabilities!.get(TerminalCapability.NaiveCwdDetection)!.getCwd(), isCancellationError);
+		assert.equal(f.queries.length, 1);
+		f.workspace.updateWorkspace({ id: 'replacement', uri: URI.from({ scheme: 'ash-remote', authority: 'host-two', path: '/other' }) });
+		await response.complete({ ready: { pid: 7, cwd: '/project' }, cwd: '/retired-host', rows: 24, cols: 80 });
+		await rejected;
 		await instance.close();
 	});
 

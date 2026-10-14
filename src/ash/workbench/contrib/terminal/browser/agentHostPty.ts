@@ -30,8 +30,19 @@ export class AgentHostPty extends BasePty<IProcessDataEvent> {
 	get cwd() { return this.manager.cwd; }
 	async getCwd(): Promise<string> {
 		this.assertNotDisposed();
-		const info = await this.processes.getProcessInfo({ terminalId: this.creation.terminalId, ...(this.dirId === undefined ? {} : { dirId: this.dirId }) });
-		if (this.isDisposed) throw new CancellationError();
+		this.assertCanWrite();
+		if (this.closeTask) {
+			throw new CancellationError();
+		}
+		const info = await this.processes.getProcessInfo({
+			terminalId: this.creation.terminalId,
+			...(this.dirId === undefined ? {} : { dirId: this.dirId }),
+		});
+		if (this.isDisposed || this.closeTask) {
+			throw new CancellationError();
+		}
+		// A result from the retired host cannot supply cwd for a new Split request.
+		this.assertCanWrite();
 		if (info.cwd === undefined) throw new Error(localize('terminal.process.cwdUnavailable', 'The terminal working directory is unavailable.'));
 		return info.cwd;
 	}

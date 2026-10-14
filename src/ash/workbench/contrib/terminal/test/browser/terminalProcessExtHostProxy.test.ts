@@ -7,6 +7,7 @@ import type { JsonValue } from '../../../../../platform/agentHost/common/extensi
 import { TerminalProcessExtHostProxy } from '../../browser/terminalProcessExtHostProxy.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { TerminalDataBufferer } from '../../../../../platform/terminal/common/terminalDataBuffering.js';
+import { isCancellationError } from '../../../../../base/common/errors.js';
 
 suite('Extension terminal process boundary', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -109,5 +110,91 @@ suite('Extension terminal process boundary', () => {
 		child.dispose();
 		assert.deepEqual(output, []);
 		assert.equal(released, 1);
+	});
+
+	test('input and resize wait for provider confirmation in their original order', async () => {
+		using lifetime = new DisposableStore();
+		const started = new DeferredPromise<void>();
+		const acknowledgement = new DeferredPromise<JsonValue>();
+		const operations: { operation: string; payload: JsonValue; }[] = [];
+		const child = lifetime.add(new TerminalProcessExtHostProxy(10, 'input-pty', true, 80, 24, async (operation, payload) => {
+			operations.push({ operation, payload });
+			if (operation === 'inputTaskTerminal') {
+				await started.complete();
+				return acknowledgement.p;
+			}
+			return { events: [] };
+		}, () => { }));
+		await child.start();
+		let confirmed = false;
+		const input = child.input!('中文\r').then(() => { confirmed = true; });
+		await started.p;
+		const resize = child.resize(100, 30);
+		assert.equal(confirmed, false);
+		assert.equal(operations.some(value => value.operation === 'resizeTaskTerminal'), false);
+		await acknowledgement.complete({ events: [] });
+		await Promise.all([input, resize]);
+		assert.equal(confirmed, true);
+		assert.deepEqual(operations.filter(value => value.operation === 'inputTaskTerminal' || value.operation === 'resizeTaskTerminal'), [
+			{ operation: 'inputTaskTerminal', payload: { data: '中文\r', ptyId: 'input-pty' } },
+			{ operation: 'resizeTaskTerminal', payload: { dimensions: { columns: 100, rows: 30 }, ptyId: 'input-pty' } },
+		]);
+	});
+
+	test('a provider input failure reaches the caller and releases its PTY once', async () => {
+		using lifetime = new DisposableStore();
+		const failure = new Error('Provider rejected input');
+		let released = 0;
+		let closed = 0;
+		const child = lifetime.add(new TerminalProcessExtHostProxy(11, 'failed-input', true, 80, 24, async operation => {
+			if (operation === 'inputTaskTerminal') throw failure;
+			if (operation === 'closeTaskTerminal') closed++;
+			return { events: [] };
+		}, () => released++));
+		await child.start();
+		await assert.rejects(child.input!('first'), error => error === failure);
+		await assert.rejects(child.input!('late'), isCancellationError);
+		child.shutdown(true);
+		assert.deepEqual({ released, closed }, { released: 1, closed: 1 });
+	});
+
+	test('shutdown rejects in-flight and queued input before a late provider reply', async () => {
+		using lifetime = new DisposableStore();
+		const started = new DeferredPromise<void>();
+		const acknowledgement = new DeferredPromise<JsonValue>();
+		const input: string[] = [];
+		const output: string[] = [];
+		let inputSignal: AbortSignal | undefined;
+		const child = lifetime.add(new TerminalProcessExtHostProxy(12, 'closing-input', true, 80, 24, async (operation, payload, signal) => {
+			if (operation === 'inputTaskTerminal') {
+				input.push((payload as { data: string; }).data);
+				inputSignal = signal;
+				await started.complete();
+				return acknowledgement.p;
+			}
+			return { events: [] };
+		}, () => { }));
+		lifetime.add(child.onProcessData(data => output.push(data)));
+		await child.start();
+		const first = assert.rejects(child.input!('first'), isCancellationError);
+		await started.p;
+		const second = assert.rejects(child.input!('queued'), isCancellationError);
+		child.shutdown(true);
+		await Promise.all([first, second]);
+		assert.equal(inputSignal?.aborted, true);
+		await acknowledgement.complete({ events: [{ type: 'data', data: 'late' }] });
+		await Promise.resolve();
+		assert.deepEqual(input, ['first']);
+		assert.deepEqual(output, []);
+	});
+
+	test('an accepted input reply can report exit without turning its acknowledgement into cancellation', async () => {
+		using lifetime = new DisposableStore();
+		const child = lifetime.add(new TerminalProcessExtHostProxy(13, 'exit-input', true, 80, 24, async operation => ({
+			events: operation === 'inputTaskTerminal' ? [{ type: 'close', code: 0 }] : [],
+		}), () => { }));
+		await child.start();
+		await child.input!('exit\r');
+		await assert.rejects(child.input!('late'), isCancellationError);
 	});
 });

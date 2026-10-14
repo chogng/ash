@@ -284,7 +284,7 @@ export interface IProcessProperty {
 	readonly value: string;
 }
 
-/** Output PTY lifecycle. Shell input, properties and flow control still use the Rust process contract. */
+/** Client event and input ports; the backend or provider owns execution and resource lifetime. */
 export interface ITerminalChildProcess extends IDisposable {
 	readonly id: number;
 	readonly shouldPersist: boolean;
@@ -295,6 +295,8 @@ export interface ITerminalChildProcess extends IDisposable {
 	start(): Promise<void>;
 	shutdown(immediate: boolean): void;
 	input?(data: string): void | Promise<void>;
+	/** Raw single-byte input from xterm; output-only or text-only providers omit this capability. */
+	processBinary?(data: string): Promise<void>;
 	resize?(cols: number, rows: number): void | Promise<void>;
 	/** Output-only virtual PTYs do not own a working directory. Backed processes query their execution owner. */
 	getCwd?(): Promise<string>;
