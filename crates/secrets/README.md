@@ -16,7 +16,7 @@ request signing 和 Provider header materialization 均属于消费它的 domain
 | `MemorySecretStore`        | process-local ephemeral backend            | replacement、delete、drop 时 zeroize stored bytes                                         |
 | `UnavailableSecretStore`   | explicit fail-closed backend               | 所有操作返回 `BackendUnavailable`                                                         |
 | `FileSecretStore`          | profile-scoped durable backend             | hashed filenames、私有权限、有界读取、同步 staging 与 replace；所有值路径逐级拒绝 symlink |
-| `EncryptedFileSecretStore` | profile 加密文件 backend                   | 注入 keyring 主密钥、AES-256-GCM、跨进程锁、可恢复迁移，无 fallback                       |
+| `ProfileSecretStore` | profile 持久存储 backend                   | 默认加密文件、显式 file 选择、跨进程锁、可恢复迁移，无 fallback                       |
 | `SecretStoreError`         | sanitized error                            | message 不能包含 secret/header/raw backend response                                       |
 | `SecretStoreErrorKind`     | stable caller classification               | unavailable、access denied、backend failure、key missing、invalid data、migration failed  |
 
@@ -81,9 +81,14 @@ buffer 处理。
 
 ## 当前限制与演进
 
-当前具有 memory、unavailable、私有明文文件和认证加密文件 backend。`EncryptedFileSecretStore` 是本地产品默认，host 注入 `ash-keyring-store::KeyringSecretStore` 只保存随机主密钥。文件使用 AES-256-GCM，随机 nonce、版本头与绑定文件名的 AAD；AES key schedule 和 `SecretValue` 在释放时清理。Unix 使用 0700/0600 与原子 rename，Windows 使用 owner-only protected DACL 与 write-through atomic replacement。
+当前具有 memory、unavailable、私有明文文件和认证加密文件 backend。`ProfileSecretStore` 是本地产品默认，host 注入 `ash-keyring-store::KeyringSecretStore` 只保存随机主密钥。文件使用 AES-256-GCM，随机 nonce、版本头与绑定文件名的 AAD；AES key schedule 和 `SecretValue` 在释放时清理。Unix 使用 0700/0600 与原子 rename，Windows 使用 owner-only protected DACL 与 write-through atomic replacement。
 
 `open` 不访问 keyring。第一次操作或 `check_availability` 在跨进程文件锁下初始化主密钥并迁移旧 `values/`：密文进入 `encrypted/values/`，重读校验后才删除对应明文。中断后继续迁移，冲突时保留两份；key 缺失、错误或密文损坏返回稳定分类，绝不降级到明文或静默重置。每次操作重新读取 keyring，避免缓存绕过访问撤销。`check_availability` 同时验证现有密文。
+
+`ProfileSecretStore` 默认 encrypted，也支持用户显式选择 file：选择与迁移日志保存于 root 的
+`storage-mode`。两种模式沿用同一跨进程锁和私有文件 IO，切换先验证、逐项写入并重读核对后才
+清理源值；崩溃后恢复，缺失原密钥及冲突不降级。`SecretStore::storage_mode` 与
+`set_storage_mode` 用于这类可配置 profile，注入 store 默认不提供选择。
 
 `FileSecretStore` 保留作为显式 backend 和迁移源；其他平台仍明确返回 `BackendUnavailable`。密钥轮换与 profile/keyring 备份恢复尚无自动管理。后续 backend 不得扩大 `SecretValue` 的复制、序列化或日志接口。
 

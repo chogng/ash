@@ -57,11 +57,11 @@ test('Secret storage status is assembled on the shared renderer connection', asy
 	const transport = new FakeTransport();
 	const connected = await connectWebRendererApi(transport, connectorHostServices);
 	using cleanup = toDisposable(() => connected.dispose());
-	const pending = connected.api.secretStorage.readStatus();
+	const pending = connected.api.secretStorage.readState();
 	assert.equal(transport.requests.at(-1)?.method, 'secrets/status');
 	assert.deepEqual(transport.requests.at(-1)?.params, {});
 	transport.respondAt(-1, { status: 'keyMissing' });
-	assert.equal(await pending, 'keyMissing');
+	assert.deepEqual(await pending, { status: 'keyMissing' });
 });
 
 test('Secret storage RPC failures reach status and model consumers and permit a fresh retry', async () => {
@@ -77,7 +77,7 @@ test('Secret storage RPC failures reach status and model consumers and permit a 
 		['SecretStorageOperationFailed', 'failure'],
 	] as const) {
 		for (const operation of [
-			() => connected.api.secretStorage.readStatus(),
+			() => connected.api.secretStorage.readState(),
 			() => connected.api.model.listProviders(),
 			() => connected.api.model.listModels(),
 			() => connected.api.model.setProviderApiKey({ connection: 'openai', apiKey: 'fake' }),
@@ -93,9 +93,9 @@ test('Secret storage RPC failures reach status and model consumers and permit a 
 			});
 		}
 	}
-	const retry = connected.api.secretStorage.readStatus();
+	const retry = connected.api.secretStorage.readState();
 	transport.respondAt(-1, { status: 'available' });
-	assert.equal(await retry, 'available');
+	assert.deepEqual(await retry, { status: 'available' });
 	assert.equal(transport.requests.filter(request => request.method === 'initialize').length, 1);
 });
 
@@ -106,8 +106,8 @@ test('Secret storage reads stay with their window connection and disposal reject
 	const secondTransport = new FakeTransport();
 	const secondWindow = await connectWebRendererApi(secondTransport, connectorHostServices);
 	using secondCleanup = toDisposable(() => secondWindow.dispose());
-	const firstRead = firstWindow.api.secretStorage.readStatus();
-	const secondRead = secondWindow.api.secretStorage.readStatus();
+	const firstRead = firstWindow.api.secretStorage.readState();
+	const secondRead = secondWindow.api.secretStorage.readState();
 	const firstFailure = assert.rejects(firstRead, error => {
 		assert.ok(error instanceof Error);
 		assert.ok(!(error instanceof SecretStorageError));
@@ -118,10 +118,10 @@ test('Secret storage reads stay with their window connection and disposal reject
 	await firstFailure;
 	firstTransport.respondAt(-1, { status: 'corrupted' });
 	secondTransport.respondAt(-1, { status: 'keyMissing' });
-	assert.equal(await secondRead, 'keyMissing');
-	const retry = secondWindow.api.secretStorage.readStatus();
+	assert.deepEqual(await secondRead, { status: 'keyMissing' });
+	const retry = secondWindow.api.secretStorage.readState();
 	secondTransport.respondAt(-1, { status: 'available' });
-	assert.equal(await retry, 'available');
+	assert.deepEqual(await retry, { status: 'available' });
 	assert.equal(firstTransport.requests.filter(request => request.method === 'secrets/status').length, 1);
 	assert.equal(secondTransport.requests.filter(request => request.method === 'secrets/status').length, 2);
 });

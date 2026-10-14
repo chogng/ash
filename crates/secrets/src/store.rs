@@ -10,12 +10,29 @@ pub enum DeleteSecretOutcome {
     NotFound,
 }
 
+/// Profile persistence selected explicitly by the user, never as an error fallback.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SecretStorageMode {
+    Encrypted,
+    File,
+}
+
 /// Persists opaque secret values for domain runtimes.
 ///
 /// Implementations are expected to provide complete load/store/delete behavior, isolate Ash's
 /// namespace from other products, sanitize all errors, and never copy secret values into ordinary
 /// configuration, logs, telemetry, command arguments, or durable product events.
 pub trait SecretStore: Send + Sync {
+    /// Reports configurable profile persistence; injected stores need not expose a choice.
+    fn storage_mode(&self) -> Result<Option<SecretStorageMode>, SecretStoreError> {
+        Ok(None)
+    }
+
+    /// Migrates existing values before applying an explicitly requested persistence change.
+    fn set_storage_mode(&self, _: SecretStorageMode) -> Result<(), SecretStoreError> {
+        Err(unavailable())
+    }
+
     /// Checks the backing facility without exposing keys or secret values.
     ///
     /// Durable backends may initialize encryption and resume a pending migration. Availability

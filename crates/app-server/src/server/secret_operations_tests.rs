@@ -153,3 +153,67 @@ fn encrypted_storage_rpc_reports_available_without_exposing_values() {
     let reply: serde_json::Value = serde_json::from_str(&reply).unwrap();
     assert_eq!(reply["result"], json!({"status":"available"}));
 }
+
+#[test]
+fn encrypted_storage_rpc_changes_mode_through_the_shared_store_and_preserves_values() {
+    let root = tempfile::tempdir().unwrap();
+    let store = Arc::new(
+        ash_secrets::ProfileSecretStore::open(
+            root.path(),
+            Arc::new(ash_secrets::MemorySecretStore::default()),
+        )
+        .unwrap(),
+    );
+    let name = SecretKey::new("provider/test-token").unwrap();
+    store
+        .store(&name, &SecretValue::new(b"never-in-rpc-output".to_vec()))
+        .unwrap();
+    let server = server().with_secret_store(store.clone());
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    for (index, (method, params, mode)) in [
+        ("secrets/status", json!({}), "encrypted"),
+        ("secrets/authorize", json!({}), "encrypted"),
+        ("secrets/storageMode/set", json!({"mode":"file"}), "file"),
+        (
+            "secrets/storageMode/set",
+            json!({"mode":"encrypted"}),
+            "encrypted",
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let reply = server.handle_json(
+            &mut connection,
+            &json!({"jsonrpc":"2.0","id":index + 2,"method":method,"params":params}).to_string(),
+        );
+        assert!(!reply.contains("never-in-rpc-output"));
+        let reply: serde_json::Value = serde_json::from_str(&reply).unwrap();
+        assert_eq!(
+            reply["result"],
+            json!({"status":"available","mode":mode}),
+            "{reply}"
+        );
+        assert_eq!(
+            store.load(&name).unwrap().unwrap().expose(),
+            b"never-in-rpc-output"
+        );
+    }
+    for (index, params) in [
+        json!({"mode":"invalid"}),
+        json!({"mode":"file","extra":true}),
+        json!({}),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let reply = server.handle_json(
+            &mut connection,
+            &json!({"jsonrpc":"2.0","id":index + 6,"method":"secrets/storageMode/set","params":params})
+                .to_string(),
+        );
+        let reply: serde_json::Value = serde_json::from_str(&reply).unwrap();
+        assert_eq!(reply["error"]["code"], -32602);
+    }
+}

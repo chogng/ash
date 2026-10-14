@@ -12,8 +12,8 @@ use ash_app_server::AppServerOptions;
 use ash_app_server::open_app_server;
 use ash_app_server_daemon::ManagedEndpoint;
 use ash_secrets::DeleteSecretOutcome;
-use ash_secrets::EncryptedFileSecretStore;
 use ash_secrets::MemorySecretStore;
+use ash_secrets::ProfileSecretStore;
 use ash_secrets::SecretKey;
 use ash_secrets::SecretStore;
 use ash_secrets::SecretStoreError;
@@ -48,8 +48,7 @@ pub fn run() {
         };
     let profile = PathBuf::from(std::env::var_os("ASH_HOME").expect("isolated fixture profile"));
     let home = PathBuf::from(std::env::var_os("HOME").expect("isolated fixture home"));
-    let secrets =
-        Arc::new(EncryptedFileSecretStore::open(profile.join("secrets"), keyring).unwrap());
+    let secrets = Arc::new(ProfileSecretStore::open(profile.join("secrets"), keyring).unwrap());
     let plugins = PluginActivationAuthority::open(profile.join("plugins")).unwrap();
     let server = Arc::new(
         open_app_server(

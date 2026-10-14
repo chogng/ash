@@ -18,7 +18,7 @@ test('Secret storage status reads the current backend observation on every query
 			return { status: states[reads++] };
 		},
 	} as unknown as AppServerProtocolClient);
-	for (const state of states) assert.equal(await service.readStatus(), state);
+	for (const state of states) assert.deepEqual(await service.readState(), { status: state });
 	assert.equal(reads, states.length);
 });
 
@@ -34,7 +34,7 @@ test('Secret storage adapter converts structured failures to localized domain er
 	for (const [kind, status] of failures) {
 		const remoteError = new AppServerRemoteError(-32094, 'Private backend diagnostic', { kind });
 		const service = createAppServerSecretStorageStatusService({ request: async () => { throw remoteError; } } as unknown as AppServerProtocolClient);
-		for (const operation of [() => service.readStatus(), () => withSecretStorageErrors(Promise.reject(remoteError))]) {
+		for (const operation of [() => service.readState(), () => withSecretStorageErrors(Promise.reject(remoteError))]) {
 			await assert.rejects(operation(), error => {
 				assert.ok(error instanceof SecretStorageError);
 				assert.equal(error.status, status);
@@ -49,7 +49,7 @@ test('Secret storage adapter converts structured failures to localized domain er
 test('Secret storage adapter preserves unrelated operation and transport errors', async () => {
 	for (const original of [new Error('Connection closed'), new AppServerRemoteError(-32602, 'Invalid parameters', { kind: 'InvalidParams' })]) {
 		const service = createAppServerSecretStorageStatusService({ request: async () => { throw original; } } as unknown as AppServerProtocolClient);
-		await assert.rejects(service.readStatus(), error => error === original);
+		await assert.rejects(service.readState(), error => error === original);
 		await assert.rejects(withSecretStorageErrors(Promise.reject(original)), error => error === original);
 	}
 	const result = { configured: true };
@@ -58,7 +58,7 @@ test('Secret storage adapter preserves unrelated operation and transport errors'
 
 test('Disconnected secret storage status rejects explicitly instead of reporting profile storage health', async () => {
 	const service = createDisconnectedSecretStorageStatusService(unavailableOperation);
-	await assert.rejects(service.readStatus(), error => {
+	await assert.rejects(service.readState(), error => {
 		assert.ok(error instanceof WebAppServerUnavailableError);
 		assert.equal(error.operation, 'secrets.status');
 		return true;
@@ -69,10 +69,25 @@ test('Secret storage recovery messages retain the Chinese language pack', () => 
 	const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsMessages(catalog.locale, catalog.bundles);
 	try {
-		assert.equal(new SecretStorageError('accessDenied').message, '凭据存储访问被拒绝。请检查配置目录权限，解锁系统钥匙串并允许 Ash 访问，然后重试。');
+		assert.equal(new SecretStorageError('accessDenied').message, '凭据存储访问被拒绝。请检查配置目录权限，或使用“授权系统钥匙串”请求访问。后台操作不会显示系统窗口。');
 		assert.match(secretStorageMessage('keyMissing'), /已保留加密凭据/);
 		assert.match(secretStorageMessage('corrupted'), /已保留存储文件/);
 	} finally {
 		setNlsMessages('en', {});
 	}
+});
+
+test('Secret storage controls require separate explicit requests and preserve mode observations', async () => {
+	const calls: [string, unknown][] = [];
+	const service = createAppServerSecretStorageStatusService({
+		async request(definition: { method: string; }, params: unknown): Promise<unknown> {
+			calls.push([definition.method, params]);
+			return { status: 'available', mode: 'file' };
+		},
+	} as unknown as AppServerProtocolClient);
+	assert.deepEqual(await service.readState(), { status: 'available', mode: 'file' });
+	assert.deepEqual(calls, [['secrets/status', {}]]);
+	await service.authorizeAccess();
+	await service.setStorageMode('encrypted');
+	assert.deepEqual(calls, [['secrets/status', {}], ['secrets/authorize', {}], ['secrets/storageMode/set', { mode: 'encrypted' }]]);
 });

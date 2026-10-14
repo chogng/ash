@@ -131,6 +131,9 @@ use ash_app_server_protocol::protocol::search::{
     ContentSearchCancelParams, ContentSearchReadParams, ContentSearchReadResult,
     ContentSearchStartParams, ContentSearchStartResult,
 };
+use ash_app_server_protocol::protocol::secrets::SecretStorageMode;
+use ash_app_server_protocol::protocol::secrets::SecretStorageModeSetParams;
+use ash_app_server_protocol::protocol::secrets::SecretStorageStatusResult;
 use ash_app_server_protocol::protocol::session::{
     SessionCreateParams, SessionListResult, SessionReadParams, SessionRequestParams,
     SessionRequestResult, SessionResult, SessionSubscribeParams, SessionSubscribeResult,
@@ -1196,6 +1199,24 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
 
     pub fn list_providers(&mut self) -> Result<ProviderListResult, ClientError> {
         self.call(ClientMethod::ProviderList, EmptyParams {})
+    }
+
+    pub fn read_secret_storage_status(&mut self) -> Result<SecretStorageStatusResult, ClientError> {
+        self.call(ClientMethod::SecretsStatus, EmptyParams {})
+    }
+
+    pub fn authorize_secret_storage(&mut self) -> Result<SecretStorageStatusResult, ClientError> {
+        self.call(ClientMethod::SecretsAuthorize, EmptyParams {})
+    }
+
+    pub fn set_secret_storage_mode(
+        &mut self,
+        mode: SecretStorageMode,
+    ) -> Result<SecretStorageStatusResult, ClientError> {
+        self.call(
+            ClientMethod::SecretsStorageModeSet,
+            SecretStorageModeSetParams { mode },
+        )
     }
 
     pub fn set_provider_api_key(

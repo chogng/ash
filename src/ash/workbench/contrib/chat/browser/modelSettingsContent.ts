@@ -13,13 +13,14 @@ import { Disposable, DisposableStore, DisposableMap, toDisposable } from '../../
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { localize } from '../../../../nls.js';
 import { type ModelProviderCredentialStatus } from '../../../services/chat/common/chatService.js';
 import type { ModelCatalogEntry } from '../../../services/chat/common/modelCatalog.js';
 import type { SettingsContent, SettingsContentItem, SettingsTreeNode } from '../../preferences/browser/settingsTreeModels.js';
-import { ISecretStorageStatusService, SecretStorageError, secretStorageMessage, type SecretStorageStatus } from '../../../../platform/secrets/common/secrets.js';
+import { ISecretStorageStatusService, SecretStorageError, secretStorageMessage, type SecretStorageStatus, type SecretStorageMode } from '../../../../platform/secrets/common/secrets.js';
 
 /** Model and credential rows shared by Workbench and Sessions; the host owns navigation and search. */
 export class ModelSettingsContent extends Disposable implements SettingsContent {
@@ -35,6 +36,11 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 	private readonly storageStatus: HTMLElement;
 	private readonly storageMessage: HTMLElement;
 	private readonly storageRetry: Button;
+	private readonly storageAuthorize: Button;
+	private readonly storageModeButton: Button;
+	private storageMode: SecretStorageMode | undefined;
+	private storageAvailable = false;
+	private storageBusy = false;
 	private readonly rows = this._register(new DisposableMap<string, DisposableStore>());
 	private readonly apiRows = this._register(new DisposableMap<string, DisposableStore>());
 	private modelElements: readonly { readonly entry: ModelCatalogEntry; readonly row: HTMLElement; }[] = [];
@@ -49,7 +55,7 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 	private apiLoadVersion = 0;
 	public readonly categoryId = 'models';
 
-	constructor(container: HTMLElement, @ILanguageModelsService private readonly languageModels: ILanguageModelsService, @ISecretStorageStatusService private readonly secretStorage: ISecretStorageStatusService, @IAccessibleViewService accessibleView: IAccessibleViewService, @IConfigurationService configuration: IConfigurationService, @IInstantiationService private readonly instantiation: IInstantiationService, @INotificationService private readonly notifications: INotificationService) {
+	constructor(container: HTMLElement, @ILanguageModelsService private readonly languageModels: ILanguageModelsService, @ISecretStorageStatusService private readonly secretStorage: ISecretStorageStatusService, @IAccessibleViewService accessibleView: IAccessibleViewService, @IConfigurationService configuration: IConfigurationService, @IInstantiationService private readonly instantiation: IInstantiationService, @INotificationService private readonly notifications: INotificationService, @IDialogService private readonly dialogs: IDialogService) {
 		super();
 		this.document = container.ownerDocument;
 		this.status = h(this.document, 'p');
@@ -90,6 +96,14 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 			void this.loadApiConnections(++this.apiLoadVersion);
 			void this.loadModels(++this.modelLoadVersion);
 		}));
+		this.storageAuthorize = this._register(new Button(this.storageStatus, {
+			label: localize('credentials.storage.authorize', 'Authorize system keyring'), presentation: 'secondary',
+		}));
+		this._register(this.storageAuthorize.onDidClick(() => void this.changeStorage('authorize')));
+		this.storageModeButton = this._register(new Button(this.storageStatus, {
+			label: localize('credentials.storage.useFile', 'Use file storage'), presentation: 'secondary',
+		}));
+		this._register(this.storageModeButton.onDidClick(() => void this.changeStorage('mode')));
 		this.providerTitle = h(this.document, 'span');
 		this.providerTitle.className = 'ash-models-settings-provider-title';
 		const title = h(this.document, 'span');
@@ -100,7 +114,7 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 			const id = `custom-${createUuid()}`;
 			const card = this.instantiation.createInstance(ChatModelsWidget, this.document, { id, name: '', baseUrl: '', apiFormat: 'responses', order: Date.now(), models: [] }, false, true);
 			this.customProviders.set(id, card);
-			card.setCredentialStorageAvailable(this.storageStatus.hidden === true);
+			card.setCredentialStorageAvailable(this.storageAvailable);
 			void card.initialize();
 			this.changed.fire();
 			card.focus();
@@ -143,7 +157,7 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 						.filter(node => node.element.id !== 'models.catalog.expand')
 						.map(node => node.element.title).join('\n');
 					return new AccessibleContentProvider(AccessibleViewProviderId.ChatModelConfiguration, { type },
-						() => type === AccessibleViewType.View ? [this.storageMessage.textContent, [...this.customProviders].map(([, card]) => card.getAccessibleContent()).join('\n\n') || modelNames()].filter(Boolean).join('\n\n') : localize('models.settings.help', 'Models shows the newest model from each provider. Enabled models appear first; each group keeps the catalog order. Turning a model off restores its place among disabled models. Search models filters the full list by model name or ID. Clear the search to restore the list. Use viewall models to expand or collapse the full list. API keys save when the field loses focus; clear the field to remove a key. If credential storage is unavailable, follow the storage message and use Retry credential storage. Existing credentials remain preserved. New provider adds a card with provider name, Base URL, API key and API format. Test models tests the current table, fetching the endpoint list first when empty. Refresh models fetches the list again. Use Add model for a missing ID or to declare its context window. Edit context and delete manual declarations from the row actions. Each Enabled switch controls picker availability independently of test results. Test status: orange means it has not passed and green means it passed. Use Tab and Shift+Tab to move between fields and buttons.'),
+						() => type === AccessibleViewType.View ? [this.storageMessage.textContent, [...this.customProviders].map(([, card]) => card.getAccessibleContent()).join('\n\n') || modelNames()].filter(Boolean).join('\n\n') : localize('models.settings.help', 'Models shows the newest model from each provider. Enabled models appear first; each group keeps the catalog order. Turning a model off restores its place among disabled models. Search models filters the full list by model name or ID. Clear the search to restore the list. Use viewall models to expand or collapse the full list. API keys save when the field loses focus; clear the field to remove a key. Credential storage checks and retries are silent. Use Authorize system keyring to explicitly request system access. Use file storage migrates credentials to unencrypted private files after confirmation. Use encrypted storage migrates them back and may request system authorization. Missing original encryption keys block migration and preserve existing credentials. New provider adds a card with provider name, Base URL, API key and API format. Test models tests the current table, fetching the endpoint list first when empty. Refresh models fetches the list again. Use Add model for a missing ID or to declare its context window. Edit context and delete manual declarations from the row actions. Each Enabled switch controls picker availability independently of test results. Test status: orange means it has not passed and green means it passed. Use Tab and Shift+Tab to move between fields and buttons.'),
 						() => focused.focus(), AccessibilityVerbositySettingId.ChatModelConfiguration);
 				},
 			}));
@@ -241,13 +255,15 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 	}
 
 	private async loadApiConnections(version: number): Promise<void> {
-		const restoreStorageFocus = this.storageStatus.contains(this.document.activeElement);
+		const storageFocused = this.document.activeElement;
+		const restoreStorageFocus = this.storageStatus.contains(storageFocused);
 		this.storageRetry.enabled = false;
 		try {
-			const storage = await this.secretStorage.readStatus();
+			const storage = await this.secretStorage.readState();
 			if (version !== this.apiLoadVersion || this.isDisposed) return;
-			this.updateStorageStatus(storage);
-			if (storage !== 'available') {
+			this.storageMode = storage.mode;
+			this.updateStorageStatus(storage.status);
+			if (storage.status !== 'available') {
 				this.providersStatus.textContent = '';
 				this.changed.fire();
 				return;
@@ -298,11 +314,15 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 		} finally {
 			if (version === this.apiLoadVersion && !this.isDisposed) {
 				this.storageRetry.enabled = true;
-				if (restoreStorageFocus && !this.storageStatus.hidden) this.storageRetry.focus();
+				this.changed.fire();
+				if (restoreStorageFocus && !this.storageStatus.hidden) {
+					if (isHTMLElement(storageFocused) && !storageFocused.hidden) storageFocused.focus();
+					else if (!this.storageModeButton.domNode.hidden) this.storageModeButton.focus();
+					else this.storageRetry.focus();
+				}
 			}
 		}
-		this.changed.fire();
-		if (restoreStorageFocus) {
+		if (restoreStorageFocus && this.storageStatus.hidden) {
 			if (this.apiElements.length) this.apiElements[0].key.input.focus();
 			else if (this.customProviders.size) [...this.customProviders][0][1].focus();
 			else this.modelSearch.focus();
@@ -311,10 +331,64 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 
 	private updateStorageStatus(status: SecretStorageStatus): void {
 		const available = status === 'available';
-		this.storageMessage.textContent = available ? '' : secretStorageMessage(status);
-		this.storageStatus.hidden = available;
+		this.storageAvailable = available;
+		this.storageMessage.textContent = available ? this.storageMode === 'file'
+			? localize('credentials.storage.file', 'Credentials are stored without encryption in private files protected by your account permissions.')
+			: this.storageMode === 'encrypted' ? localize('credentials.storage.encrypted', 'Credentials are encrypted using a key in your system keyring.') : ''
+			: secretStorageMessage(status);
+		this.storageStatus.hidden = available && !this.storageMode;
+		this.storageRetry.domNode.hidden = available;
+		this.storageAuthorize.domNode.hidden = this.storageMode !== 'encrypted' || available;
+		this.storageModeButton.domNode.hidden = !this.storageMode;
+		this.storageModeButton.label = this.storageMode === 'file' ? localize('credentials.storage.useEncrypted', 'Use encrypted storage') : localize('credentials.storage.useFile', 'Use file storage');
+		this.storageAuthorize.enabled = !this.storageBusy;
+		this.storageModeButton.enabled = !this.storageBusy;
 		for (const { key } of this.apiElements) key.setEnabled(available);
 		for (const [, card] of this.customProviders) card.setCredentialStorageAvailable(available);
+	}
+
+	private async changeStorage(action: 'authorize' | 'mode'): Promise<void> {
+		if (this.storageBusy || !this.storageMode) return;
+		const focused = this.document.activeElement;
+		const restoreFocus = this.storageStatus.contains(focused);
+		this.storageBusy = true;
+		this.storageAuthorize.enabled = this.storageModeButton.enabled = this.storageRetry.enabled = false;
+		try {
+			const mode = this.storageMode === 'file' ? 'encrypted' : 'file';
+			if (action === 'mode' && mode === 'file') {
+				const confirmation = await this.dialogs.confirm({
+					message: localize('credentials.storage.fileConfirm', 'Store credentials without encryption?'),
+					detail: localize('credentials.storage.fileDetail', 'Existing credentials will be migrated to private files. File permissions protect them from other accounts, but applications running as your account can read them. Encrypted credentials require their original key before they can be migrated.'),
+					primaryButton: localize('credentials.storage.useFile', 'Use file storage'),
+				});
+				if (!confirmation.confirmed || this.isDisposed || !this.visible) return;
+			}
+			// Invalidate background observations before the explicit request. Only these actions
+			// may request OS authorization; refreshes and ordinary credential operations stay silent.
+			this.apiLoadVersion++;
+			const state = action === 'authorize' ? await this.secretStorage.authorizeAccess() : await this.secretStorage.setStorageMode(mode);
+			if (this.isDisposed) return;
+			this.storageMode = state.mode;
+			this.updateStorageStatus(state.status);
+		} catch (error) {
+			if (!this.isDisposed) this.notifications.error(error instanceof Error ? error.message : String(error));
+		} finally {
+			this.storageBusy = false;
+			if (!this.isDisposed) {
+				this.storageAuthorize.enabled = this.storageModeButton.enabled = this.storageRetry.enabled = true;
+				this.changed.fire();
+				if (this.visible) {
+					// Disabling the focused button or hiding it after authorization moves focus to
+					// the document. Restore a surviving control before the background refresh.
+					if (restoreFocus && (this.document.activeElement === this.document.body || this.storageStatus.contains(this.document.activeElement))) {
+						if (isHTMLElement(focused) && !focused.hidden) focused.focus();
+						else this.storageModeButton.focus();
+					}
+					void this.loadApiConnections(++this.apiLoadVersion);
+					void this.loadModels(++this.modelLoadVersion);
+				}
+			}
+		}
 	}
 
 	private modelRow(entry: ModelCatalogEntry, resources: DisposableStore): HTMLElement {

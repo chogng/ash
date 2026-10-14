@@ -1071,7 +1071,8 @@ test('Models Settings keeps loading API connections when the model catalog chang
 	services.registerInstance(ChatServiceId, chat);
 	services.registerInstance(INotificationService, disposables.add(new NotificationService()));
 	services.registerInstance(ILanguageModelsService, chat as unknown as ILanguageModelsService);
-	services.registerInstance(ISecretStorageStatusService, { readStatus: async () => 'available' });
+	services.registerInstance(IDialogService, {} as IDialogService);
+	services.registerInstance(ISecretStorageStatusService, { readState: async () => ({ status: 'available' }), authorizeAccess: async () => ({ status: 'available' }), setStorageMode: async mode => ({ status: 'available', mode }) });
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IContextViewService, disposables.add(new BrowserContextViewService(root)));
 	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
@@ -1138,7 +1139,8 @@ test('Models Settings orders enabled models by catalog position and restores dis
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	services.registerInstance(ILanguageModelsService, models);
-	services.registerInstance(ISecretStorageStatusService, { readStatus: async () => 'available' });
+	services.registerInstance(IDialogService, {} as IDialogService);
+	services.registerInstance(ISecretStorageStatusService, { readState: async () => ({ status: 'available' }), authorizeAccess: async () => ({ status: 'available' }), setStorageMode: async mode => ({ status: 'available', mode }) });
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(ConfigurationServiceId, resources.add(new WorkbenchConfigurationService()));
 	services.registerInstance(INotificationService, resources.add(new NotificationService()));
@@ -1378,7 +1380,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(IServerEventApi, { subscribe: listener => autoFetchChanged.event(() => listener({ method: 'config/changed', params: { revision: 1, generation: 1 } })) });
 	services.registerInstance(ChatServiceId, chatService);
 	services.registerInstance(ILanguageModelsService, chatService as unknown as ILanguageModelsService);
-	services.registerInstance(ISecretStorageStatusService, { readStatus: async () => 'available' });
+	services.registerInstance(ISecretStorageStatusService, { readState: async () => ({ status: 'available' }), authorizeAccess: async () => ({ status: 'available' }), setStorageMode: async mode => ({ status: 'available', mode }) });
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(ILocalTranscriptionService, disposables.add(new NullLocalTranscriptionService()));
 	const descriptor = EditorPanes.getEditorPanes().find(candidate => candidate.id === SettingsEditorId);
@@ -2124,7 +2126,8 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 	services.registerInstance(ChatServiceId, chat);
 	services.registerInstance(INotificationService, disposables.add(new NotificationService()));
 	services.registerInstance(ILanguageModelsService, chat as unknown as ILanguageModelsService);
-	services.registerInstance(ISecretStorageStatusService, { readStatus: async () => 'available' });
+	services.registerInstance(IDialogService, {} as IDialogService);
+	services.registerInstance(ISecretStorageStatusService, { readState: async () => ({ status: 'available' }), authorizeAccess: async () => ({ status: 'available' }), setStorageMode: async mode => ({ status: 'available', mode }) });
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IContextViewService, disposables.add(new BrowserContextViewService(root)));
 	services.registerInstance(ConfigurationServiceId, configuration);
@@ -2264,4 +2267,59 @@ test('Settings widgets require their scoped clipboard registration and clean up 
 	services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom' as const, showContextMenu() { }, hideContextMenu() { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None });
 	assert.throws(() => instantiateSettingWidget(root, new DefaultSettings().get('editor.lineNumbers'), { onStatus() { } }, services), /clipboardService/);
 	assert.equal(root.querySelector('.ash-configuration-setting'), null);
+});
+
+test('Models Settings keeps checks silent and requires explicit authorization and confirmed file migration', async () => {
+	using resources = new DisposableStore();
+	const root = h(browserEnvironment.window.document, 'div');
+	browserEnvironment.window.document.body.append(root);
+	resources.add(toDisposable(() => root.remove()));
+	const services = resources.add(new InstantiationService());
+	services.registerInstance(ConfigurationServiceId, resources.add(new WorkbenchConfigurationService()));
+	services.registerInstance(INotificationService, resources.add(new NotificationService()));
+	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
+	services.registerInstance(ILanguageModelsService, {
+		onDidChangeModels: Event.None,
+		listModelCatalog: async () => [],
+		listModelProviders: async () => [],
+		listCustomModelProviders: async () => [],
+	} as unknown as ILanguageModelsService);
+	let state: { status: 'accessDenied' | 'available'; mode: 'encrypted' | 'file'; } = { status: 'accessDenied', mode: 'encrypted' };
+	const mutations: string[] = [];
+	services.registerInstance(ISecretStorageStatusService, {
+		readState: async () => state,
+		authorizeAccess: async () => { mutations.push('authorize'); state = { status: 'available', mode: 'encrypted' }; return state; },
+		setStorageMode: async mode => { mutations.push(mode); state = { status: 'available', mode }; return state; },
+	});
+	let confirmed = false;
+	let confirmations = 0;
+	services.registerInstance(IDialogService, { confirm: async () => { confirmations++; return { confirmed }; } } as unknown as IDialogService);
+	const content = resources.add(services.createInstance(ModelSettingsContent, root));
+	content.setVisible(true);
+	await nextTurn();
+	const node = content.getNodes().flatMap(group => group.children ?? []).find(node => node.element.id === 'models.credentials.storage')!;
+	assert.equal(node.element.kind, 'item');
+	if (node.element.kind !== 'item') throw new Error('Expected credential storage item');
+	root.append(node.element.value.domNode);
+	const button = (label: string): HTMLButtonElement => [...root.querySelectorAll('button')].find(button => button.textContent === label)!;
+	assert.deepEqual(mutations, []);
+	button('Retry credential storage').click();
+	await nextTurn();
+	assert.deepEqual(mutations, []);
+	button('Authorize system keyring').click();
+	await nextTurn();
+	assert.deepEqual(mutations, ['authorize']);
+	button('Use file storage').click();
+	await nextTurn();
+	assert.equal(confirmations, 1);
+	assert.deepEqual(mutations, ['authorize']);
+	confirmed = true;
+	button('Use file storage').click();
+	await nextTurn();
+	assert.deepEqual(mutations, ['authorize', 'file']);
+	assert.match(root.textContent!, /without encryption/);
+	button('Use encrypted storage').click();
+	await nextTurn();
+	assert.deepEqual(mutations, ['authorize', 'file', 'encrypted']);
+	assert.equal(confirmations, 2);
 });

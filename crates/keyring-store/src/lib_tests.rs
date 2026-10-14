@@ -178,3 +178,72 @@ fn oversized_values_fail_before_reaching_the_backend() {
 fn system_service_identity_is_stable_and_nonempty() {
     assert_eq!(KEYRING_SERVICE, "com.ash.secret-store.v1");
 }
+
+#[cfg(target_os = "macos")]
+#[test]
+fn macos_background_operations_are_silent_and_authorization_does_not_leak() {
+    use security_framework::os::macos::keychain::SecKeychain;
+
+    struct InspectStore;
+    impl SecretStore for InspectStore {
+        fn check_availability(&self) -> Result<(), ash_secrets::SecretStoreError> {
+            super::with_keyring_access(|| {
+                assert!(SecKeychain::user_interaction_allowed().unwrap());
+                Ok(())
+            })
+            .map_err(super::backend_error)
+        }
+        fn load(
+            &self,
+            _: &SecretKey,
+        ) -> Result<Option<SecretValue>, ash_secrets::SecretStoreError> {
+            unreachable!()
+        }
+        fn store(
+            &self,
+            _: &SecretKey,
+            _: &SecretValue,
+        ) -> Result<(), ash_secrets::SecretStoreError> {
+            unreachable!()
+        }
+        fn delete(
+            &self,
+            _: &SecretKey,
+        ) -> Result<DeleteSecretOutcome, ash_secrets::SecretStoreError> {
+            unreachable!()
+        }
+    }
+    assert!(SecKeychain::user_interaction_allowed().unwrap());
+    super::with_user_authorization(|| InspectStore.check_availability()).unwrap();
+    std::thread::scope(|scope| {
+        for _ in 0..8 {
+            scope.spawn(|| {
+                super::with_keyring_access(|| {
+                    assert!(!SecKeychain::user_interaction_allowed().unwrap());
+                    Ok(())
+                })
+                .unwrap()
+            });
+        }
+    });
+    assert!(SecKeychain::user_interaction_allowed().unwrap());
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn macos_authentication_required_errors_are_access_denied_and_sanitized() {
+    for code in [-25293, -25308, -25315] {
+        let error = keyring::Error::PlatformFailure(Box::new(
+            security_framework::base::Error::from_code(code),
+        ));
+        let error = super::backend_error(super::classify_keyring_error(&error));
+        assert_eq!(error.kind(), SecretStoreErrorKind::AccessDenied);
+        assert_eq!(error.to_string(), "keyring operation failed");
+    }
+    let error =
+        keyring::Error::PlatformFailure(Box::new(security_framework::base::Error::from_code(-50)));
+    assert_eq!(
+        super::backend_error(super::classify_keyring_error(&error)).kind(),
+        SecretStoreErrorKind::BackendFailure
+    );
+}

@@ -863,3 +863,38 @@ fn unavailable_keyring_reports_account_and_api_key_failures_without_plaintext_fa
 fn account_server_fixture() {
     account_server::run();
 }
+
+#[test]
+fn credential_storage_commands_select_files_without_a_keyring_and_authorize_explicitly() {
+    let mut harness = Harness::new();
+    harness.start_account_server(account_server::KeyringMode::Unavailable);
+    assert_eq!(
+        harness.json(&["secrets", "status"])["status"],
+        "unavailable"
+    );
+    assert_eq!(
+        harness.json(&["secrets", "authorize"])["status"],
+        "unavailable"
+    );
+    assert_eq!(
+        harness.json(&["secrets", "mode", "file"]),
+        serde_json::json!({"status":"available","mode":"file"})
+    );
+    assert_eq!(
+        harness.json(&["secrets", "status"]),
+        serde_json::json!({"status":"available","mode":"file"})
+    );
+    let failed = harness.output(&["secrets", "mode", "encrypted"]);
+    assert!(!failed.status.success());
+    assert_eq!(harness.json(&["secrets", "status"])["mode"], "file");
+    let help = harness.output(&["secrets", "mode", "--help"]);
+    assert!(help.status.success());
+    assert!(String::from_utf8_lossy(&help.stdout).contains("unencrypted"));
+    let chinese_help = harness
+        .command(&["secrets", "mode", "--help"])
+        .env("LC_ALL", "zh_CN.UTF-8")
+        .output()
+        .unwrap();
+    assert!(chinese_help.status.success());
+    assert!(String::from_utf8_lossy(&chinese_help.stdout).contains("未加密凭据"));
+}

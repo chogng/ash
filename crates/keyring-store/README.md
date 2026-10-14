@@ -8,7 +8,7 @@
 secret trait，不解释 credential 内容，也不拥有 OAuth、refresh、revoke、Connector account 或 Plugin
 credential slot lifecycle。
 
-本地默认组合将它注入 `EncryptedFileSecretStore`，只保存 profile 的随机主密钥；业务凭据保存在认证加密文件中。显式 host 仍可选择直接把业务凭据保存到 keyring。两种模式无自动 fallback 或双写。
+本地默认组合将它注入 `ProfileSecretStore`，只保存 profile 的随机主密钥；业务凭据保存在认证加密文件中。显式 host 仍可选择直接把业务凭据保存到 keyring。两种模式无自动 fallback 或双写。
 
 ## 公共契约
 
@@ -48,6 +48,14 @@ SecretStore::{load,store,delete}
 - Linux：native async persistent Secret Service；
 - FreeBSD/OpenBSD：同步 Secret Service；
 - 其他 target：构造时返回 `BackendUnavailable`。
+
+macOS 的普通读取、写入、删除及显式命名条目复用均关闭 Keychain 用户交互；需要授权的条目返回
+`AccessDenied`，不会弹系统密码或授权窗口。完整 OS 操作由进程级锁串行，恢复交互状态也在锁内
+完成，避免并发后台读取借用另一个请求的授权窗口。
+
+只有显式 `secrets/authorize` 或用户选择 encrypted 存储的操作通过 `with_user_authorization` 允许
+系统交互。授权范围绑定同步调用线程，返回或 unwind 后恢复；不会形成允许后台弹窗的持久设置，
+也不会永久关闭进程内的系统交互。关闭交互失败时不会继续调用 keyring。
 
 构造成功只表示平台 adapter 已编译；实际 desktop session/keyring daemon 拒绝访问时，具体 operation
 仍会 fail closed。这里不实现自动文件 fallback，避免 backend 暂时不可用时读取另一份过期 credential。

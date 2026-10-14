@@ -12,10 +12,11 @@ mod value;
 
 pub use error::SecretStoreError;
 pub use error::SecretStoreErrorKind;
-pub use file::EncryptedFileSecretStore;
 pub use file::FileSecretStore;
+pub use file::ProfileSecretStore;
 pub use memory::MemorySecretStore;
 pub use store::DeleteSecretOutcome;
+pub use store::SecretStorageMode;
 pub use store::SecretStore;
 pub use store::UnavailableSecretStore;
 pub use value::InvalidSecretKey;

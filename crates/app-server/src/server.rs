@@ -2849,6 +2849,10 @@ impl AppServer {
             }
             Some(ClientMethod::ProviderList) => self.provider_list(),
             Some(ClientMethod::SecretsStatus) => self.secrets_status(&request.params),
+            Some(ClientMethod::SecretsAuthorize) => self.secrets_authorize(&request.params),
+            Some(ClientMethod::SecretsStorageModeSet) => {
+                self.secrets_storage_mode_set(&request.params)
+            }
             Some(ClientMethod::ProviderApiKeySet) => {
                 self.provider_api_key_set(std::mem::take(&mut request.params))
             }

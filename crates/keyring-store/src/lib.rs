@@ -157,18 +157,19 @@ struct SystemKeyringBackend;
 
 impl KeyringBackend for SystemKeyringBackend {
     fn load(&self, service: &str, account: &str) -> Result<Option<Vec<u8>>, KeyringBackendError> {
-        let entry = entry(service, account)?;
-        match entry.get_secret() {
+        with_keyring_access(|| match entry(service, account)?.get_secret() {
             Ok(secret) => Ok(Some(secret)),
             Err(keyring::Error::NoEntry) => Ok(None),
             Err(error) => Err(classify_keyring_error(&error)),
-        }
+        })
     }
 
     fn store(&self, service: &str, account: &str, value: &[u8]) -> Result<(), KeyringBackendError> {
-        entry(service, account)?
-            .set_secret(value)
-            .map_err(|error| classify_keyring_error(&error))
+        with_keyring_access(|| {
+            entry(service, account)?
+                .set_secret(value)
+                .map_err(|error| classify_keyring_error(&error))
+        })
     }
 
     fn delete(
@@ -176,11 +177,11 @@ impl KeyringBackend for SystemKeyringBackend {
         service: &str,
         account: &str,
     ) -> Result<DeleteSecretOutcome, KeyringBackendError> {
-        match entry(service, account)?.delete_credential() {
+        with_keyring_access(|| match entry(service, account)?.delete_credential() {
             Ok(()) => Ok(DeleteSecretOutcome::Deleted),
             Err(keyring::Error::NoEntry) => Ok(DeleteSecretOutcome::NotFound),
             Err(error) => Err(classify_keyring_error(&error)),
-        }
+        })
     }
 }
 
@@ -188,7 +189,84 @@ fn entry(service: &str, account: &str) -> Result<Entry, KeyringBackendError> {
     Entry::new(service, account).map_err(|error| classify_keyring_error(&error))
 }
 
+#[cfg(target_os = "macos")]
+#[derive(Clone, Copy)]
+enum KeyringInteraction {
+    Silent,
+    UserInitiated,
+}
+
+#[cfg(target_os = "macos")]
+thread_local! {
+    static INTERACTION: std::cell::Cell<KeyringInteraction> = const {
+        std::cell::Cell::new(KeyringInteraction::Silent)
+    };
+}
+
+/// Checks profile storage with system authorization permitted only for this explicit request.
+///
+/// Ordinary credential operations remain silent. Authorization stays on the calling thread and
+/// is restored on return or unwind; it is not a persisted permission to prompt in the background.
+pub fn with_user_authorization<T>(
+    operation: impl FnOnce() -> Result<T, SecretStoreError>,
+) -> Result<T, SecretStoreError> {
+    #[cfg(target_os = "macos")]
+    {
+        struct Restore(KeyringInteraction);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                INTERACTION.set(self.0);
+            }
+        }
+        let _restore = Restore(INTERACTION.replace(KeyringInteraction::UserInitiated));
+        operation()
+    }
+    #[cfg(not(target_os = "macos"))]
+    operation()
+}
+
+fn with_keyring_access<T>(
+    operation: impl FnOnce() -> Result<T, KeyringBackendError>,
+) -> Result<T, KeyringBackendError> {
+    #[cfg(target_os = "macos")]
+    {
+        use security_framework::os::macos::keychain::SecKeychain;
+        use std::sync::Mutex;
+
+        // Keychain's interaction switch is process-wide. Serialize the entire OS operation,
+        // including guard destruction, so an explicit authorization never enables a concurrent
+        // background read. Preserve an already-disabled host policy instead of restoring true.
+        static OPERATIONS: Mutex<()> = Mutex::new(());
+        let _operation = OPERATIONS
+            .lock()
+            .map_err(|_| KeyringBackendError::Failure)?;
+        let _silent = match INTERACTION.get() {
+            KeyringInteraction::Silent
+                if SecKeychain::user_interaction_allowed()
+                    .map_err(|_| KeyringBackendError::AccessDenied)? =>
+            {
+                Some(
+                    SecKeychain::disable_user_interaction()
+                        .map_err(|_| KeyringBackendError::AccessDenied)?,
+                )
+            }
+            KeyringInteraction::Silent | KeyringInteraction::UserInitiated => None,
+        };
+        operation()
+    }
+    #[cfg(not(target_os = "macos"))]
+    operation()
+}
+
 fn classify_keyring_error(error: &keyring::Error) -> KeyringBackendError {
+    #[cfg(target_os = "macos")]
+    if let keyring::Error::PlatformFailure(error) = error
+        && let Some(error) = error.downcast_ref::<security_framework::base::Error>()
+        // errSecAuthFailed, errSecInteractionNotAllowed and errSecInteractionRequired.
+        && matches!(error.code(), -25293 | -25308 | -25315)
+    {
+        return KeyringBackendError::AccessDenied;
+    }
     match error {
         keyring::Error::NoStorageAccess(_) => KeyringBackendError::AccessDenied,
         _ => KeyringBackendError::Failure,

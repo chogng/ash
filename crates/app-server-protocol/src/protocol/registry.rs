@@ -1881,6 +1881,10 @@ use crate::protocol::search::GrepIndexStatusResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::search::LocalIndexClearOutcomeDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::secrets::SecretStorageMode;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::secrets::SecretStorageModeSetParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::secrets::SecretStorageStatus;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::secrets::SecretStorageStatusResult;
@@ -4016,6 +4020,16 @@ client_methods! {
     },
     SecretsStatus => "secrets/status" {
         params: EmptyParams,
+        response: SecretStorageStatusResult,
+        serialization: GlobalExclusive,
+    },
+    SecretsAuthorize => "secrets/authorize" {
+        params: EmptyParams,
+        response: SecretStorageStatusResult,
+        serialization: GlobalExclusive,
+    },
+    SecretsStorageModeSet => "secrets/storageMode/set" {
+        params: SecretStorageModeSetParams,
         response: SecretStorageStatusResult,
         serialization: GlobalExclusive,
     },
@@ -6268,6 +6282,8 @@ typescript_bindings! {
     ProviderListResult,
     SecretStorageStatus,
     SecretStorageStatusResult,
+    SecretStorageMode,
+    SecretStorageModeSetParams,
     StableTurnErrorCode,
     StableTurnError,
     ThreadStatus,

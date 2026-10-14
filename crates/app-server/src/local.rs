@@ -72,7 +72,7 @@ use ash_protocol::ContextWindow;
 use ash_protocol::ModelAccess;
 use ash_protocol::ModelBillingScope;
 use ash_rollout::LocalStateRepository;
-use ash_secrets::EncryptedFileSecretStore;
+use ash_secrets::ProfileSecretStore;
 use ash_secrets::SecretStore;
 use ash_skills_extension::BuiltInSkillSource;
 use ash_skills_extension::SkillConfigSnapshotProvider;
@@ -905,7 +905,7 @@ impl LocalProfileRuntime {
             )))
             .map_err(open_error)?;
         let secrets: Arc<dyn SecretStore> = Arc::new(
-            EncryptedFileSecretStore::open(
+            ProfileSecretStore::open(
                 profile_root.join("secrets"),
                 Arc::new(
                     ash_keyring_store::KeyringSecretStore::for_profile(&profile_root)
@@ -1314,7 +1314,7 @@ pub fn open_app_server_with_codebase_providers(
         (Some(runtime), None) => Arc::clone(&runtime.secrets),
         (None, Some(connectors)) => Arc::clone(&connectors.secrets),
         (None, None) => Arc::new(
-            EncryptedFileSecretStore::open(
+            ProfileSecretStore::open(
                 options.profile_root.join("secrets"),
                 Arc::new(
                     ash_keyring_store::KeyringSecretStore::for_profile(&options.profile_root)

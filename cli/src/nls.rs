@@ -2,6 +2,10 @@
 
 #[derive(Clone, Copy)]
 pub(crate) enum Message {
+    SecretsAbout,
+    SecretsStatusHelp,
+    SecretsAuthorizeHelp,
+    SecretsModeHelp,
     McpLoginHelp,
     McpHttpOnly,
     McpCallbackUrl,
@@ -44,6 +48,24 @@ pub(crate) fn format(message: Message, argument: impl AsRef<str>) -> String {
 fn localized(message: Message, locale: &str) -> &'static str {
     let language = locale.split(['-', '_', '.']).next().unwrap_or_default();
     match (message, language) {
+        (Message::SecretsAbout, "zh") => "管理当前配置目录的凭据存储。",
+        (Message::SecretsAbout, _) => "Manage credential storage for the current profile.",
+        (Message::SecretsStatusHelp, "zh") => "静默检查凭据存储并输出 JSON 状态。",
+        (Message::SecretsStatusHelp, _) => {
+            "Check credential storage silently and print its JSON status."
+        }
+        (Message::SecretsAuthorizeHelp, "zh") => {
+            "主动请求系统钥匙串授权；可能显示系统密码或授权窗口。"
+        }
+        (Message::SecretsAuthorizeHelp, _) => {
+            "Request system keyring access; may show a system password or authorization dialog."
+        }
+        (Message::SecretsModeHelp, "zh") => {
+            "迁移并选择存储方式：encrypted 使用系统钥匙串加密；file 保存受文件权限保护的未加密凭据。"
+        }
+        (Message::SecretsModeHelp, _) => {
+            "Migrate and select storage: encrypted uses the system keyring; file stores unencrypted credentials protected by file permissions."
+        }
         (Message::McpHttpOnly, "zh") => "MCP 登录需要已配置的 HTTPS 服务器。",
         (Message::McpCallbackUrl, "zh") => "OAuth 回调地址：{0}",
         (Message::McpHttpOnly, _) => "MCP sign-in requires a configured HTTPS server.",

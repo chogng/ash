@@ -1,9 +1,9 @@
 use std::fs;
 use std::sync::Arc;
 
-use super::EncryptedFileSecretStore;
 use super::MASTER_KEY_NAME;
 use super::MAX_SECRET_BYTES;
+use super::ProfileSecretStore;
 use crate::DeleteSecretOutcome;
 use crate::FileSecretStore;
 use crate::MemorySecretStore;
@@ -22,7 +22,7 @@ fn key(name: &str) -> SecretKey {
 fn encrypted_round_trip_restart_replace_delete_and_private_ciphertext() {
     let root = tempfile::tempdir().unwrap();
     let keyring = Arc::new(MemorySecretStore::default());
-    let store = EncryptedFileSecretStore::open(root.path(), keyring.clone()).unwrap();
+    let store = ProfileSecretStore::open(root.path(), keyring.clone()).unwrap();
     let name = key("provider/test/api-key");
     let value = b"sensitive-credential-unique\0\xff";
     store
@@ -41,7 +41,7 @@ fn encrypted_round_trip_restart_replace_delete_and_private_ciphertext() {
         );
     }
     drop(store);
-    let store = EncryptedFileSecretStore::open(root.path(), keyring).unwrap();
+    let store = ProfileSecretStore::open(root.path(), keyring).unwrap();
     assert_eq!(store.load(&name).unwrap().unwrap().expose(), value);
     store
         .store(&name, &SecretValue::new(value.to_vec()))
@@ -70,8 +70,8 @@ fn existing_plaintext_is_migrated_before_any_secret_operation() {
             .store(name, &SecretValue::new(b"old-credential".to_vec()))
             .unwrap();
     }
-    let store = EncryptedFileSecretStore::open(root.path(), Arc::new(MemorySecretStore::default()))
-        .unwrap();
+    let store =
+        ProfileSecretStore::open(root.path(), Arc::new(MemorySecretStore::default())).unwrap();
     store.check_availability().unwrap();
     assert_eq!(fs::read_dir(root.path().join("values")).unwrap().count(), 0);
     for name in &names {
@@ -85,8 +85,8 @@ fn existing_plaintext_is_migrated_before_any_secret_operation() {
 #[test]
 fn interrupted_migration_resumes_after_a_verified_ciphertext_commit() {
     let root = tempfile::tempdir().unwrap();
-    let store = EncryptedFileSecretStore::open(root.path(), Arc::new(MemorySecretStore::default()))
-        .unwrap();
+    let store =
+        ProfileSecretStore::open(root.path(), Arc::new(MemorySecretStore::default())).unwrap();
     let name = key("connector/oauth");
     store
         .store(&name, &SecretValue::new(b"credential".to_vec()))
@@ -104,8 +104,8 @@ fn interrupted_migration_resumes_after_a_verified_ciphertext_commit() {
 #[test]
 fn conflicting_migration_preserves_both_values() {
     let root = tempfile::tempdir().unwrap();
-    let store = EncryptedFileSecretStore::open(root.path(), Arc::new(MemorySecretStore::default()))
-        .unwrap();
+    let store =
+        ProfileSecretStore::open(root.path(), Arc::new(MemorySecretStore::default())).unwrap();
     let name = key("provider/test");
     store
         .store(&name, &SecretValue::new(b"new".to_vec()))
@@ -131,8 +131,7 @@ fn unavailable_keyring_does_not_write_plaintext_or_remove_legacy_values() {
     legacy
         .store(&name, &SecretValue::new(b"old".to_vec()))
         .unwrap();
-    let store =
-        EncryptedFileSecretStore::open(root.path(), Arc::new(UnavailableSecretStore)).unwrap();
+    let store = ProfileSecretStore::open(root.path(), Arc::new(UnavailableSecretStore)).unwrap();
     assert_eq!(
         store.check_availability().unwrap_err().kind(),
         SecretStoreErrorKind::BackendUnavailable
@@ -152,7 +151,7 @@ fn unavailable_keyring_does_not_write_plaintext_or_remove_legacy_values() {
 fn missing_master_key_does_not_regenerate_or_overwrite_ciphertext() {
     let root = tempfile::tempdir().unwrap();
     let keyring = Arc::new(MemorySecretStore::default());
-    let store = EncryptedFileSecretStore::open(root.path(), keyring.clone()).unwrap();
+    let store = ProfileSecretStore::open(root.path(), keyring.clone()).unwrap();
     let name = key("provider/test");
     store
         .store(&name, &SecretValue::new(b"credential".to_vec()))
@@ -178,7 +177,7 @@ fn missing_master_key_does_not_regenerate_or_overwrite_ciphertext() {
 fn wrong_master_key_and_corrupted_witness_fail_closed() {
     let root = tempfile::tempdir().unwrap();
     let keyring = Arc::new(MemorySecretStore::default());
-    let store = EncryptedFileSecretStore::open(root.path(), keyring.clone()).unwrap();
+    let store = ProfileSecretStore::open(root.path(), keyring.clone()).unwrap();
     store.check_availability().unwrap();
     keyring
         .store(&key(MASTER_KEY_NAME), &SecretValue::new(vec![7; 32]))
@@ -197,8 +196,8 @@ fn wrong_master_key_and_corrupted_witness_fail_closed() {
 #[test]
 fn tampered_and_swapped_values_cannot_be_read_as_plaintext() {
     let root = tempfile::tempdir().unwrap();
-    let store = EncryptedFileSecretStore::open(root.path(), Arc::new(MemorySecretStore::default()))
-        .unwrap();
+    let store =
+        ProfileSecretStore::open(root.path(), Arc::new(MemorySecretStore::default())).unwrap();
     let first = key("provider/first");
     let second = key("provider/second");
     store
@@ -228,8 +227,8 @@ fn tampered_and_swapped_values_cannot_be_read_as_plaintext() {
 #[test]
 fn full_plaintext_size_limit_survives_envelope_overhead() {
     let root = tempfile::tempdir().unwrap();
-    let store = EncryptedFileSecretStore::open(root.path(), Arc::new(MemorySecretStore::default()))
-        .unwrap();
+    let store =
+        ProfileSecretStore::open(root.path(), Arc::new(MemorySecretStore::default())).unwrap();
     let name = key("provider/large");
     let value = SecretValue::new(vec![42; MAX_SECRET_BYTES as usize]);
     store.store(&name, &value).unwrap();
@@ -253,13 +252,13 @@ fn concurrent_store_instances_share_one_key_and_preserve_each_value() {
             let keyring = keyring.clone();
             let path = root.path();
             scope.spawn(move || {
-                let store = EncryptedFileSecretStore::open(path, keyring).unwrap();
+                let store = ProfileSecretStore::open(path, keyring).unwrap();
                 let name = key(&format!("provider/{index}"));
                 store.store(&name, &SecretValue::new(vec![index])).unwrap();
             });
         }
     });
-    let store = EncryptedFileSecretStore::open(root.path(), keyring).unwrap();
+    let store = ProfileSecretStore::open(root.path(), keyring).unwrap();
     for index in 0..12 {
         assert_eq!(
             store
@@ -280,10 +279,7 @@ fn encrypted_store_rejects_symlinked_ciphertext_directory() {
     let root = tempfile::tempdir().unwrap();
     let outside = tempfile::tempdir().unwrap();
     symlink(outside.path(), root.path().join("encrypted")).unwrap();
-    assert!(
-        EncryptedFileSecretStore::open(root.path(), Arc::new(MemorySecretStore::default()))
-            .is_err()
-    );
+    assert!(ProfileSecretStore::open(root.path(), Arc::new(MemorySecretStore::default())).is_err());
     assert_eq!(fs::read_dir(outside.path()).unwrap().count(), 0);
 }
 
@@ -334,7 +330,7 @@ fn encrypted_process_worker() {
         .unwrap()
         .parse::<u8>()
         .unwrap();
-    let store = EncryptedFileSecretStore::open(
+    let store = ProfileSecretStore::open(
         root.join("profile"),
         Arc::new(ProcessKeyring(root.join("fake-system-keyring"))),
     )
@@ -368,7 +364,7 @@ fn independent_processes_initialize_one_key_and_read_each_others_ciphertext() {
     for mut child in children {
         assert!(child.wait().unwrap().success());
     }
-    let store = EncryptedFileSecretStore::open(
+    let store = ProfileSecretStore::open(
         root.path().join("profile"),
         Arc::new(ProcessKeyring(root.path().join("fake-system-keyring"))),
     )
@@ -384,4 +380,158 @@ fn independent_processes_initialize_one_key_and_read_each_others_ciphertext() {
             &[index]
         );
     }
+}
+
+#[test]
+fn explicit_file_mode_survives_restart_and_never_accesses_unavailable_keyring() {
+    let root = tempfile::tempdir().unwrap();
+    let store = ProfileSecretStore::open(root.path(), Arc::new(UnavailableSecretStore)).unwrap();
+    assert!(store.check_availability().is_err());
+    store
+        .set_storage_mode(crate::SecretStorageMode::File)
+        .unwrap();
+    let name = key("provider/file-mode");
+    store
+        .store(&name, &SecretValue::new(b"private-file-value".to_vec()))
+        .unwrap();
+    let reopened = ProfileSecretStore::open(root.path(), Arc::new(UnavailableSecretStore)).unwrap();
+    assert_eq!(
+        reopened.storage_mode().unwrap(),
+        Some(crate::SecretStorageMode::File)
+    );
+    reopened.check_availability().unwrap();
+    assert_eq!(
+        reopened.load(&name).unwrap().unwrap().expose(),
+        b"private-file-value"
+    );
+    assert_eq!(
+        reopened.delete(&name).unwrap(),
+        DeleteSecretOutcome::Deleted
+    );
+}
+
+#[test]
+fn explicit_mode_changes_migrate_values_and_are_visible_to_other_profile_handles() {
+    let root = tempfile::tempdir().unwrap();
+    let keyring = Arc::new(MemorySecretStore::default());
+    let first = ProfileSecretStore::open(root.path(), keyring.clone()).unwrap();
+    let second = ProfileSecretStore::open(root.path(), keyring).unwrap();
+    let name = key("provider/migrated");
+    first
+        .store(&name, &SecretValue::new(b"first-value".to_vec()))
+        .unwrap();
+    first
+        .set_storage_mode(crate::SecretStorageMode::File)
+        .unwrap();
+    assert_eq!(fs::read_dir(&first.files.values).unwrap().count(), 0);
+    assert_eq!(
+        second.load(&name).unwrap().unwrap().expose(),
+        b"first-value"
+    );
+    second
+        .store(&name, &SecretValue::new(b"changed-in-file-mode".to_vec()))
+        .unwrap();
+    second
+        .set_storage_mode(crate::SecretStorageMode::Encrypted)
+        .unwrap();
+    assert_eq!(fs::read_dir(&second.legacy.values).unwrap().count(), 0);
+    assert_eq!(
+        first.load(&name).unwrap().unwrap().expose(),
+        b"changed-in-file-mode"
+    );
+}
+
+#[test]
+fn missing_original_key_refuses_file_switch_and_preserves_ciphertext() {
+    let root = tempfile::tempdir().unwrap();
+    let keyring = Arc::new(MemorySecretStore::default());
+    let store = ProfileSecretStore::open(root.path(), keyring.clone()).unwrap();
+    let name = key("provider/preserved");
+    store
+        .store(&name, &SecretValue::new(b"existing-credential".to_vec()))
+        .unwrap();
+    let ciphertext = fs::read(store.files.value_path(&name)).unwrap();
+    keyring.delete(&key(MASTER_KEY_NAME)).unwrap();
+    assert_eq!(
+        store
+            .set_storage_mode(crate::SecretStorageMode::File)
+            .unwrap_err()
+            .kind(),
+        SecretStoreErrorKind::KeyMissing
+    );
+    assert_eq!(
+        store.storage_mode().unwrap(),
+        Some(crate::SecretStorageMode::Encrypted)
+    );
+    assert_eq!(fs::read(store.files.value_path(&name)).unwrap(), ciphertext);
+    assert!(store.legacy.load(&name).unwrap().is_none());
+}
+
+#[test]
+fn interrupted_file_migration_resumes_without_reencrypting_its_destination() {
+    let root = tempfile::tempdir().unwrap();
+    let keyring = Arc::new(MemorySecretStore::default());
+    let store = ProfileSecretStore::open(root.path(), keyring.clone()).unwrap();
+    let name = key("provider/interrupted");
+    store
+        .store(
+            &name,
+            &SecretValue::new(b"persisted-before-interruption".to_vec()),
+        )
+        .unwrap();
+    store
+        .write_storage_state(super::StorageState::Migrating(
+            crate::SecretStorageMode::File,
+        ))
+        .unwrap();
+    store
+        .legacy
+        .store(
+            &name,
+            &SecretValue::new(b"persisted-before-interruption".to_vec()),
+        )
+        .unwrap();
+    let reopened = ProfileSecretStore::open(root.path(), keyring).unwrap();
+    assert_eq!(
+        reopened.load(&name).unwrap().unwrap().expose(),
+        b"persisted-before-interruption"
+    );
+    assert_eq!(fs::read_dir(&reopened.files.values).unwrap().count(), 0);
+    assert_eq!(
+        fs::read(root.path().join(super::STORAGE_MODE)).unwrap(),
+        b"file"
+    );
+}
+
+#[test]
+fn interrupted_mode_migration_keeps_conflicting_values_for_recovery() {
+    let root = tempfile::tempdir().unwrap();
+    let store =
+        ProfileSecretStore::open(root.path(), Arc::new(MemorySecretStore::default())).unwrap();
+    let name = key("provider/conflict");
+    store
+        .store(&name, &SecretValue::new(b"original-value".to_vec()))
+        .unwrap();
+    store
+        .write_storage_state(super::StorageState::Migrating(
+            crate::SecretStorageMode::File,
+        ))
+        .unwrap();
+    store
+        .legacy
+        .store(&name, &SecretValue::new(b"conflicting-value".to_vec()))
+        .unwrap();
+    assert_eq!(
+        store.check_availability().unwrap_err().kind(),
+        SecretStoreErrorKind::MigrationFailed
+    );
+    assert!(store.files.value_path(&name).is_file());
+    assert_eq!(
+        store.legacy.load(&name).unwrap().unwrap().expose(),
+        b"conflicting-value"
+    );
+    assert_eq!(
+        fs::read(root.path().join(super::STORAGE_MODE)).unwrap(),
+        b"to-file"
+    );
 }

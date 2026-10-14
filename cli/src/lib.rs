@@ -11,6 +11,7 @@ mod mcp_login;
 mod nls;
 mod reconnect;
 mod remote;
+mod secrets;
 mod update;
 
 use clap::Args;
@@ -78,6 +79,11 @@ enum Command {
     },
     /// Check the installation, local App Server, configuration, and accounts.
     Doctor(doctor::Options),
+    #[command(about = nls::text(nls::Message::SecretsAbout))]
+    Secrets {
+        #[command(subcommand)]
+        command: secrets::Command,
+    },
     /// Run the App Server or manage its daemon.
     #[command(
         after_help = "Examples:\n  ash app-server --listen stdio://\n  ash app-server connect\n  ash app-server daemon start|update|ensure-selected|restart|stop|version"
@@ -157,6 +163,7 @@ fn dispatch(cli: Cli) -> Result<i32, CliError> {
         Some(Command::Mcp { command }) => management::mcp(command),
         Some(Command::Plugin { command }) => management::plugin(command),
         Some(Command::Doctor(options)) => doctor::run(options),
+        Some(Command::Secrets { command }) => secrets::run(command),
         Some(Command::AppServer(arguments)) => return run_app_server(arguments.arguments),
         Some(Command::Remote(arguments)) => {
             remote::run(arguments.arguments).map_err(CliError::failure)

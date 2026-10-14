@@ -2045,7 +2045,7 @@ fn encrypted_storage_shared_profile_runtime_reuses_one_store_across_env_hosts() 
     let keyring = Arc::new(ash_secrets::MemorySecretStore::default());
     let mut runtime = LocalProfileRuntime::open(profile.path()).unwrap();
     runtime.secrets = Arc::new(
-        ash_secrets::EncryptedFileSecretStore::open(
+        ash_secrets::ProfileSecretStore::open(
             profile.path().join("secrets"),
             keyring.clone(),
         )
@@ -2140,7 +2140,7 @@ fn encrypted_storage_unavailable_keyring_keeps_local_composition_running() {
     let profile = tempfile::tempdir().unwrap();
     let mut runtime = LocalProfileRuntime::open(profile.path()).unwrap();
     runtime.secrets = Arc::new(
-        ash_secrets::EncryptedFileSecretStore::open(
+        ash_secrets::ProfileSecretStore::open(
             profile.path().join("secrets"),
             Arc::new(ash_secrets::UnavailableSecretStore),
         )

@@ -27,6 +27,7 @@ use super::set_private_directory_permissions;
 use super::store_io;
 use crate::DeleteSecretOutcome;
 use crate::SecretKey;
+use crate::SecretStorageMode;
 use crate::SecretStore;
 use crate::SecretStoreError;
 use crate::SecretStoreErrorKind;
@@ -39,13 +40,19 @@ const ENVELOPE_BYTES: usize = HEADER.len() + NONCE_BYTES + 16;
 const KEY_CHECK: &str = "key-check";
 const KEY_CHECK_VALUE: &[u8] = b"ash-profile-secret-key-v1";
 const MASTER_KEY_NAME: &str = "storage/file-encryption-key/v1";
+const STORAGE_MODE: &str = "storage-mode";
 
-/// Authenticated profile files whose random master key lives in an injected OS keyring.
+enum StorageState {
+    Ready(SecretStorageMode),
+    Migrating(SecretStorageMode),
+}
+
+/// Profile persistence with encrypted files by default and an explicit private-file alternative.
 ///
 /// The host injects its profile-scoped keyring adapter; this crate never chooses or falls back to
 /// another key facility. Operations reread the keyring, so revocation is not bypassed by a cached
 /// key. A process-shared file lock serializes key creation, migration and writes across hosts.
-pub struct EncryptedFileSecretStore {
+pub struct ProfileSecretStore {
     root: PathBuf,
     boundary: CanonicalPathRoot,
     files: FileSecretStore,
@@ -54,7 +61,7 @@ pub struct EncryptedFileSecretStore {
     operations: Mutex<()>,
 }
 
-impl EncryptedFileSecretStore {
+impl ProfileSecretStore {
     /// Opens private directories without accessing the keyring or displaying system prompts.
     ///
     /// The first availability check or secret operation initializes encryption and migrates old
@@ -82,7 +89,7 @@ impl EncryptedFileSecretStore {
         })
     }
 
-    fn prepare(&self) -> Result<SecretValue, SecretStoreError> {
+    fn encryption_key(&self) -> Result<SecretValue, SecretStoreError> {
         let key_name = SecretKey::new(MASTER_KEY_NAME).expect("fixed internal secret key");
         let check_path = self.files.values.join(KEY_CHECK);
         let existing_check = self.files.load_path(&check_path, MAX_SECRET_BYTES)?;
@@ -133,15 +140,138 @@ impl EncryptedFileSecretStore {
                 self.files.store_path(&check_path, &check)?;
             }
         }
-        self.migrate(&cipher).map_err(|error| match error.kind() {
-            SecretStoreErrorKind::BackendFailure => migration_failed(),
-            SecretStoreErrorKind::BackendUnavailable
-            | SecretStoreErrorKind::AccessDenied
-            | SecretStoreErrorKind::KeyMissing
-            | SecretStoreErrorKind::InvalidData
-            | SecretStoreErrorKind::MigrationFailed => error,
-        })?;
         Ok(key)
+    }
+
+    fn prepare(&self) -> Result<SecretValue, SecretStoreError> {
+        let key = self.encryption_key()?;
+        self.migrate(&cipher(&key)?)
+            .map_err(|error| match error.kind() {
+                SecretStoreErrorKind::BackendFailure => migration_failed(),
+                SecretStoreErrorKind::BackendUnavailable
+                | SecretStoreErrorKind::AccessDenied
+                | SecretStoreErrorKind::KeyMissing
+                | SecretStoreErrorKind::InvalidData
+                | SecretStoreErrorKind::MigrationFailed => error,
+            })?;
+        Ok(key)
+    }
+
+    fn storage_state(&self) -> Result<StorageState, SecretStoreError> {
+        let value = self.legacy.load_path(&self.root.join(STORAGE_MODE), 32)?;
+        match value.as_ref().map(SecretValue::expose) {
+            None | Some(b"encrypted") => Ok(StorageState::Ready(SecretStorageMode::Encrypted)),
+            Some(b"file") => Ok(StorageState::Ready(SecretStorageMode::File)),
+            Some(b"to-encrypted") => Ok(StorageState::Migrating(SecretStorageMode::Encrypted)),
+            Some(b"to-file") => Ok(StorageState::Migrating(SecretStorageMode::File)),
+            Some(_) => Err(invalid_data()),
+        }
+    }
+
+    fn write_storage_state(&self, state: StorageState) -> Result<(), SecretStoreError> {
+        let value: &[u8] = match state {
+            StorageState::Ready(SecretStorageMode::Encrypted) => b"encrypted",
+            StorageState::Ready(SecretStorageMode::File) => b"file",
+            StorageState::Migrating(SecretStorageMode::Encrypted) => b"to-encrypted",
+            StorageState::Migrating(SecretStorageMode::File) => b"to-file",
+        };
+        self.legacy.store_path(
+            &self.root.join(STORAGE_MODE),
+            &SecretValue::new(value.to_vec()),
+        )
+    }
+
+    fn current_mode(&self) -> Result<SecretStorageMode, SecretStoreError> {
+        match self.storage_state()? {
+            StorageState::Ready(mode) => {
+                if mode == SecretStorageMode::File {
+                    for entry in fs::read_dir(&self.files.values).map_err(store_io)? {
+                        if entry.map_err(store_io)?.file_name() != KEY_CHECK {
+                            return Err(migration_failed());
+                        }
+                    }
+                    self.files.delete_path(&self.files.values.join(KEY_CHECK))?;
+                }
+                Ok(mode)
+            }
+            StorageState::Migrating(mode) => {
+                // The journal is written before moving any value. Every process finishes the
+                // same transition under store.lock before serving a read or mutation.
+                match mode {
+                    SecretStorageMode::Encrypted => {
+                        self.prepare()?;
+                    }
+                    SecretStorageMode::File => self.migrate_to_file()?,
+                }
+                self.write_storage_state(StorageState::Ready(mode))?;
+                if mode == SecretStorageMode::File {
+                    self.files.delete_path(&self.files.values.join(KEY_CHECK))?;
+                }
+                Ok(mode)
+            }
+        }
+    }
+
+    fn validate_files(&self, mode: SecretStorageMode) -> Result<(), SecretStoreError> {
+        let (files, limit, master) = match mode {
+            SecretStorageMode::Encrypted => (&self.files, encrypted_limit(), Some(self.prepare()?)),
+            SecretStorageMode::File => (&self.legacy, MAX_SECRET_BYTES, None),
+        };
+        for entry in fs::read_dir(&files.values).map_err(store_io)? {
+            let entry = entry.map_err(store_io)?;
+            let name = entry.file_name();
+            let name = name.to_str().ok_or_else(invalid_data)?;
+            if name != KEY_CHECK || mode == SecretStorageMode::File {
+                validate_value_name(name)?;
+            }
+            let value = files
+                .load_path(&entry.path(), limit)?
+                .ok_or_else(invalid_data)?;
+            if let Some(master) = &master {
+                decrypt(&cipher(master)?, name, value.expose())?;
+            }
+        }
+        Ok(())
+    }
+
+    fn migrate_to_file(&self) -> Result<(), SecretStoreError> {
+        // Do not run legacy -> encrypted migration here: plaintext already written by this
+        // transition is its destination, not a legacy source to move back into ciphertext.
+        let master = self.encryption_key()?;
+        let cipher = cipher(&master)?;
+        for entry in fs::read_dir(&self.files.values).map_err(store_io)? {
+            let entry = entry.map_err(store_io)?;
+            let name = entry.file_name();
+            let name = name.to_str().ok_or_else(migration_failed)?;
+            if name == KEY_CHECK {
+                continue;
+            }
+            validate_value_name(name)?;
+            let ciphertext = self
+                .files
+                .load_path(&entry.path(), encrypted_limit())?
+                .ok_or_else(migration_failed)?;
+            let plaintext = decrypt(&cipher, name, ciphertext.expose())?;
+            let destination = self.legacy.values.join(name);
+            if self
+                .legacy
+                .load_path(&destination, MAX_SECRET_BYTES)?
+                .is_none()
+            {
+                self.legacy.store_path(&destination, &plaintext)?;
+            }
+            let persisted = self
+                .legacy
+                .load_path(&destination, MAX_SECRET_BYTES)?
+                .ok_or_else(migration_failed)?;
+            if persisted.expose() != plaintext.expose() {
+                return Err(migration_failed());
+            }
+            self.files.delete_path(&entry.path())?;
+        }
+        // Keep the witness until the mode commit. A restart can verify the original key even
+        // when the last ciphertext value was already removed before interruption.
+        Ok(())
     }
 
     fn migrate(&self, cipher: &Cipher) -> Result<(), SecretStoreError> {
@@ -151,13 +281,7 @@ impl EncryptedFileSecretStore {
             let entry = entry.map_err(store_io)?;
             let name = entry.file_name();
             let name = name.to_str().ok_or_else(migration_failed)?;
-            if name.len() != 64
-                || !name
-                    .bytes()
-                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-            {
-                return Err(migration_failed());
-            }
+            validate_value_name(name)?;
             let plaintext = self
                 .legacy
                 .load_path(&entry.path(), MAX_SECRET_BYTES)?
@@ -186,28 +310,60 @@ impl EncryptedFileSecretStore {
     }
 }
 
-impl SecretStore for EncryptedFileSecretStore {
+impl SecretStore for ProfileSecretStore {
+    fn storage_mode(&self) -> Result<Option<SecretStorageMode>, SecretStoreError> {
+        let _guard = self.operations.lock().map_err(lock_error)?;
+        let _lock = acquire_file_lock(&self.root, &self.boundary)?;
+        let mode = match self.storage_state()? {
+            StorageState::Ready(mode) | StorageState::Migrating(mode) => mode,
+        };
+        Ok(Some(mode))
+    }
+
+    fn set_storage_mode(&self, mode: SecretStorageMode) -> Result<(), SecretStoreError> {
+        let _guard = self.operations.lock().map_err(lock_error)?;
+        let _lock = acquire_file_lock(&self.root, &self.boundary)?;
+        let current = self.current_mode()?;
+        if current == mode {
+            return Ok(());
+        }
+        // An empty profile can select files even when no system keyring is available. Existing
+        // ciphertext always requires its original key; never invent a replacement or fallback.
+        let has_ciphertext = fs::read_dir(&self.files.values)
+            .map_err(store_io)?
+            .map(|entry| {
+                entry
+                    .map(|entry| entry.file_name() != KEY_CHECK)
+                    .map_err(store_io)
+            })
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .any(|value| value);
+        if mode == SecretStorageMode::File && !has_ciphertext {
+            self.validate_files(SecretStorageMode::File)?;
+            return self.write_storage_state(StorageState::Ready(mode));
+        }
+        self.validate_files(current)?;
+        if mode == SecretStorageMode::Encrypted {
+            self.encryption_key()?;
+        }
+        self.write_storage_state(StorageState::Migrating(mode))?;
+        self.current_mode()?;
+        Ok(())
+    }
+
     fn check_availability(&self) -> Result<(), SecretStoreError> {
         let _guard = self.operations.lock().map_err(lock_error)?;
         let _lock = acquire_file_lock(&self.root, &self.boundary)?;
-        let master = self.prepare()?;
-        let cipher = cipher(&master)?;
-        for entry in fs::read_dir(&self.files.values).map_err(store_io)? {
-            let entry = entry.map_err(store_io)?;
-            let name = entry.file_name();
-            let name = name.to_str().ok_or_else(invalid_data)?;
-            let value = self
-                .files
-                .load_path(&entry.path(), encrypted_limit())?
-                .ok_or_else(invalid_data)?;
-            decrypt(&cipher, name, value.expose())?;
-        }
-        Ok(())
+        self.validate_files(self.current_mode()?)
     }
 
     fn load(&self, key: &SecretKey) -> Result<Option<SecretValue>, SecretStoreError> {
         let _guard = self.operations.lock().map_err(lock_error)?;
         let _lock = acquire_file_lock(&self.root, &self.boundary)?;
+        if self.current_mode()? == SecretStorageMode::File {
+            return self.legacy.load(key);
+        }
         let master = self.prepare()?;
         let path = self.files.value_path(key);
         let Some(value) = self.files.load_path(&path, encrypted_limit())? else {
@@ -226,6 +382,9 @@ impl SecretStore for EncryptedFileSecretStore {
         }
         let _guard = self.operations.lock().map_err(lock_error)?;
         let _lock = acquire_file_lock(&self.root, &self.boundary)?;
+        if self.current_mode()? == SecretStorageMode::File {
+            return self.legacy.store(key, value);
+        }
         let master = self.prepare()?;
         let path = self.files.value_path(key);
         let name = path
@@ -239,8 +398,23 @@ impl SecretStore for EncryptedFileSecretStore {
     fn delete(&self, key: &SecretKey) -> Result<DeleteSecretOutcome, SecretStoreError> {
         let _guard = self.operations.lock().map_err(lock_error)?;
         let _lock = acquire_file_lock(&self.root, &self.boundary)?;
+        if self.current_mode()? == SecretStorageMode::File {
+            return self.legacy.delete(key);
+        }
         self.prepare()?;
         self.files.delete_path(&self.files.value_path(key))
+    }
+}
+
+fn validate_value_name(name: &str) -> Result<(), SecretStoreError> {
+    if name.len() == 64
+        && name
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        Ok(())
+    } else {
+        Err(migration_failed())
     }
 }
 

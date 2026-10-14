@@ -1,17 +1,29 @@
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
+import type { SecretStorageStatusResult } from '../../../../../.build/protocol/typescript/index.js';
 import { appServerRequest } from '../../agentHost/browser/appServerRequest.js';
 import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
 import type { UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
-import { SecretStorageError, type ISecretStorageStatusService } from '../common/secrets.js';
+import { SecretStorageError, type ISecretStorageStatusService, type SecretStorageState } from '../common/secrets.js';
 
 export function createAppServerSecretStorageStatusService(connection: AppServerProtocolClient): ISecretStorageStatusService {
 	return {
-		readStatus: async () => (await withSecretStorageErrors(appServerRequest(connection, 'secrets/status', {}))).status,
+		readState: () => storageState(appServerRequest(connection, 'secrets/status', {})),
+		authorizeAccess: () => storageState(appServerRequest(connection, 'secrets/authorize', {})),
+		setStorageMode: mode => storageState(appServerRequest(connection, 'secrets/storageMode/set', { mode })),
 	};
 }
 
+async function storageState(operation: Promise<SecretStorageStatusResult>): Promise<SecretStorageState> {
+	const result = await withSecretStorageErrors(operation);
+	return { status: result.status, ...(result.mode ? { mode: result.mode } : {}) };
+}
+
 export function createDisconnectedSecretStorageStatusService(unavailable: UnavailableOperation): ISecretStorageStatusService {
-	return { readStatus: () => unavailable('secrets.status') };
+	return {
+		readState: () => unavailable('secrets.status'),
+		authorizeAccess: () => unavailable('secrets.authorize'),
+		setStorageMode: () => unavailable('secrets.storageMode'),
+	};
 }
 
 /** Domain adapters share storage errors without exposing transport diagnostics to the UI. */

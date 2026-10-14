@@ -133,7 +133,7 @@ MCP/Connector 使用自己的 namespace，不能把 Provider key schema 当成�
 | Standalone embedded host | injected              | host 必须显式注入与自己 authority 一致的 backend                   |
 | Explicit keyring host    | OS keyring            | host 明确选择时直接保存业务凭据；默认组合只在 keyring 保存主密钥   |
 
-生产 backend 必须一次实现完整的 `load/store/delete`。`LocalProfileRuntime` 为一个 profile 只打开一个 `EncryptedFileSecretStore`，并把同一个 `Arc<dyn SecretStore>` 注入该 daemon 内所有 App Server connection、Connector、MCP 与 Provider credential adapter。
+生产 backend 必须一次实现完整的 `load/store/delete`。`LocalProfileRuntime` 为一个 profile 只打开一个 `ProfileSecretStore`，并把同一个 `Arc<dyn SecretStore>` 注入该 daemon 内所有 App Server connection、Connector、MCP 与 Provider credential adapter。
 
 profile file backend 的最低要求：
 
@@ -150,9 +150,15 @@ profile file backend 的最低要求：
 
 构造 store 不访问系统 keyring；无法访问 keyring 时 App Server 仍可启动。`secrets/status` 返回 available、unavailable、accessDenied、keyMissing、corrupted、migrationFailed 或 failure，并验证已有密文完整性。状态不包含凭据、主密钥、路径或原始系统错误。前端保留已有的凭据遮蔽值，显示本地化恢复提示并提供显式重试；操作时的存储错误也通过稳定 `data.kind` 返回。查询可能触发初始化和迁移，因此协议按全局写操作串行。
 
+macOS 的后台状态检查、启动和普通凭据操作保持静默；需要系统授权时返回 `accessDenied`。模型设置中的“授权系统钥匙串”或 `ash secrets authorize` 显式调用 `secrets/authorize`，允许本次调用显示系统授权窗口；用户主动选择 encrypted 存储也允许系统授权。授权不会让后续后台操作弹窗。
+
+profile 存储方式由唯一 `ProfileSecretStore` 保存于 `<profile>/secrets/storage-mode`，不是目录级或 Session 配置。未设置时为 `encrypted`；用户可在模型设置中经说明及确认选择 `file`，或运行 `ash secrets mode file`。文件模式在 `secrets/values/` 保存未加密字节，由现有私有目录、文件权限和原子 IO 保护；同账户进程可读。`ash secrets mode encrypted` 切回认证加密存储，`ash secrets status` 静默返回状态和当前模式。没有 `auto` 或错误后的隐式降级。
+
+`secrets/storageMode/set` 按 profile 全局写操作串行；同一 profile 的不同进程在 `store.lock` 下重新读取模式。切换会验证源数据，原子记录 `to-file` / `to-encrypted` 迁移状态，逐项写入并重读核对后才删除源值，完成后原子提交目标模式。重启或另一进程访问时先恢复未完成的迁移，不暴露部分目标数据。缺失原密钥、损坏或冲突会保留尚未迁移的数据并返回错误；不会生成替代密钥、自动切换或长期双写。
+
 备份或移动 profile 时必须同时考虑 keyring 中的原始密钥与 profile namespace；仅复制密文不能恢复凭据。没有自动重置丢失密钥或密钥轮换功能。
 
-Desktop 的通用存储状态与错误契约位于 `src/ash/platform/secrets/common/secrets.ts`。`ISecretStorageStatusService.readStatus()` 由同目录的 App Server adapter 对接 `secrets/status`，在 Editor 和 Agents 窗口各自的服务容器中注册；模型设置页直接消费该服务。模型等领域的 RPC adapter 通过 secrets adapter 统一转换结构化存储错误，领域接口不转发通用存储状态。当前没有通用凭据存取或变更事件接口，待真实消费者需要时再补充。
+Desktop 的通用存储状态与错误契约位于 `src/ash/platform/secrets/common/secrets.ts`。`ISecretStorageStatusService.readState()` 由同目录的 App Server adapter 对接 `secrets/status`，在 Editor 和 Agents 窗口各自的服务容器中注册；模型设置页直接消费该服务及其授权和存储切换操作。模型等领域的 RPC adapter 通过 secrets adapter 统一转换结构化存储错误，领域接口不转发通用存储状态。当前没有通用凭据存取或变更事件接口，待真实消费者需要时再补充。
 
 ## 6. 生命周期与一致性
 

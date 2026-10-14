@@ -140,7 +140,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	const { IChatService: ChatService } = await import('../../../workbench/services/chat/common/chatService.js');
 	services.registerInstance(ChatService, chat);
 	services.registerInstance(ILanguageModelsService, chat as unknown as ILanguageModelsService);
-	services.registerInstance(ISecretStorageStatusService, { readStatus: async () => 'available' });
+	services.registerInstance(ISecretStorageStatusService, { readState: async () => ({ status: 'available' }), authorizeAccess: async () => ({ status: 'available' }), setStorageMode: async mode => ({ status: 'available', mode }) });
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(ILocalTranscriptionService, transcription);

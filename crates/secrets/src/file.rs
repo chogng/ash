@@ -22,7 +22,7 @@ use crate::SecretValue;
 
 #[path = "encrypted_file.rs"]
 mod encrypted;
-pub use encrypted::EncryptedFileSecretStore;
+pub use encrypted::ProfileSecretStore;
 
 #[cfg(windows)]
 #[path = "file_windows.rs"]
@@ -154,7 +154,11 @@ impl FileSecretStore {
             file.write_all(value.expose()).map_err(store_io)?;
             file.sync_all().map_err(store_io)?;
             promote_file(&staging, destination)?;
-            sync_directory(&self.values)
+            sync_directory(
+                destination
+                    .parent()
+                    .expect("store destination has a parent"),
+            )
         })();
         if staging.exists() {
             let _ = fs::remove_file(staging);

@@ -55,7 +55,11 @@ import type { IContextMenuService } from '../../../src/ash/platform/contextview/
 
 import type { ChatInputDelegate } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { ILanguageModelsService } from '../../../src/ash/workbench/contrib/chat/common/languageModels.js';
-import { ISecretStorageStatusService, type SecretStorageStatus } from '../../../src/ash/platform/secrets/common/secrets.js';
+import { ISecretStorageStatusService, type SecretStorageStatus, type SecretStorageMode } from '../../../src/ash/platform/secrets/common/secrets.js';
+import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
+import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
+import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.js';
+import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.web.contribution.js';
 import { ModelSettingsContent } from '../../../src/ash/workbench/contrib/chat/browser/modelSettingsContent.js';
 import { SettingsTreeModel, type SettingsContentItem } from '../../../src/ash/workbench/contrib/preferences/browser/settingsTreeModels.js';
 import { SettingsTree } from '../../../src/ash/workbench/contrib/preferences/browser/settingsTree.js';
@@ -65,6 +69,8 @@ declare global {
 		ashTableIntegration: {
 			showCredentialSettings(): void;
 			setCredentialStorage(status: SecretStorageStatus): void;
+			setCredentialStorageMode(mode: SecretStorageMode): void;
+			readonly credentialOperations: readonly string[];
 			progress(): void;
 			finish(): void;
 			theme(name: string): void;
@@ -108,11 +114,20 @@ const configuration = resources.add(new WorkbenchConfigurationService());
 const services = resources.add(new InstantiationService());
 const modelChanges = resources.add(new Emitter<void>());
 let credentialStorage: SecretStorageStatus = 'available';
+let credentialStorageMode: SecretStorageMode | undefined;
+const credentialOperations: string[] = [];
 let credentialSettings = false;
 services.registerInstance(IMessageHistoryService, undefined);
 services.registerSingleton(IQuickInputService, () => new TestQuickInputService({ instantiationService: services, container: document.body }));
 services.registerInstance(IConfigurationService, configuration);
-services.registerInstance(ISecretStorageStatusService, { readStatus: async () => credentialStorage });
+services.registerInstance(ISecretStorageStatusService, {
+	readState: async () => ({ status: credentialStorage, mode: credentialStorageMode }),
+	authorizeAccess: async () => { credentialOperations.push('authorize'); credentialStorage = 'available'; return { status: credentialStorage, mode: credentialStorageMode }; },
+	setStorageMode: async mode => { credentialOperations.push(mode); credentialStorageMode = mode; credentialStorage = 'available'; return { status: credentialStorage, mode }; },
+});
+const dialogs = resources.add(new DialogService());
+resources.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(document.body)));
+services.registerInstance(IDialogService, dialogs);
 services.registerInstance(ILanguageModelsService, {
 	onDidChangeModels: modelChanges.event,
 	listModels: async () => [], listModelCatalog: async () => [], refreshModels: async () => [],
@@ -278,6 +293,8 @@ window.ashTableIntegration = {
 		content.setVisible(true);
 	},
 	setCredentialStorage: status => { credentialStorage = status; modelChanges.fire(); },
+	setCredentialStorageMode: mode => { credentialStorageMode = mode; modelChanges.fire(); },
+	credentialOperations,
 	extensionSpeech: async (admitted, lazy = false) => {
 		if (!lazy && !declaredSpeech) { speechBridge.update(speechSnapshot(admitted)); if (!admitted) extensionEmit = undefined; return; }
 		declaredSpeech = admitted && lazy;

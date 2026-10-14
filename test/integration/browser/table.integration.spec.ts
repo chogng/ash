@@ -354,3 +354,40 @@ for (const locale of ['en', 'zh-CN']) {
 		expect(await page.evaluate(() => window.ashTableIntegration.secondDraft())).toBe('kept phrase');
 	});
 }
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`credential storage authorizes only on request and confirms file migration (${locale})`, async ({ page }) => {
+		await page.goto(`/table.html?locale=${locale}`);
+		await page.evaluate(() => {
+			window.ashTableIntegration.setCredentialStorageMode('encrypted');
+			window.ashTableIntegration.setCredentialStorage('accessDenied');
+			window.ashTableIntegration.showCredentialSettings();
+		});
+		const root = page.locator('#credential-settings');
+		const authorize = root.getByRole('button', { name: locale === 'zh-CN' ? '授权系统钥匙串' : 'Authorize system keyring' });
+		const file = root.getByRole('button', { name: locale === 'zh-CN' ? '使用文件存储' : 'Use file storage' });
+		const encrypted = root.getByRole('button', { name: locale === 'zh-CN' ? '使用加密存储' : 'Use encrypted storage' });
+		await expect(authorize).toBeVisible();
+		await expect.poll(() => page.evaluate(() => [...window.ashTableIntegration.credentialOperations])).toEqual([]);
+		await authorize.focus();
+		await page.keyboard.press('Enter');
+		await expect(root.locator('input[type="password"]')).toBeEnabled();
+		await expect(file).toBeFocused();
+		await expect.poll(() => page.evaluate(() => [...window.ashTableIntegration.credentialOperations])).toEqual(['authorize']);
+		await page.keyboard.press('Enter');
+		const confirmation = page.getByRole('dialog');
+		await expect(confirmation).toContainText(locale === 'zh-CN' ? '不加密保存凭据' : 'Store credentials without encryption');
+		await confirmation.getByRole('button', { name: locale === 'zh-CN' ? '取消' : 'Cancel', exact: true }).click();
+		await expect(file).toBeFocused();
+		await expect.poll(() => page.evaluate(() => [...window.ashTableIntegration.credentialOperations])).toEqual(['authorize']);
+		await file.click();
+		await confirmation.getByRole('button', { name: locale === 'zh-CN' ? '使用文件存储' : 'Use file storage', exact: true }).click();
+		await expect(encrypted).toBeVisible();
+		await expect(encrypted).toBeFocused();
+		await expect(root.getByRole('status').filter({ hasText: locale === 'zh-CN' ? '未加密形式' : 'without encryption' })).toBeVisible();
+		await expect(root.locator('input[type="password"]')).toHaveValue('••••••••');
+		await page.keyboard.press('Enter');
+		await expect(file).toBeVisible();
+		await expect.poll(() => page.evaluate(() => [...window.ashTableIntegration.credentialOperations])).toEqual(['authorize', 'file', 'encrypted']);
+	});
+}

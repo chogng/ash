@@ -20,4 +20,19 @@ pub enum SecretStorageStatus {
 #[serde(rename_all = "camelCase")]
 pub struct SecretStorageStatusResult {
     pub status: SecretStorageStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mode: Option<SecretStorageMode>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum SecretStorageMode {
+    Encrypted,
+    File,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SecretStorageModeSetParams {
+    pub mode: SecretStorageMode,
 }
