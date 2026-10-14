@@ -489,6 +489,25 @@ fn frozen_tool_profile_rejects_definition_drift_before_model_invocation() {
     );
     assert!(requests[0].parallel_tool_calls);
 
+    *tools.description.lock().unwrap() = "drifted definition".into();
+    let before_inspection = threads.read_thread(&thread_id).unwrap();
+    let inspect = || {
+        executor.inspect_context(core_api::ContextInspectionRequest {
+            context_policy: Default::default(),
+            scope: core_api::ContextInspectionScope::Thread(&thread_id),
+            model: None,
+            instructions: crate::test_turn_instructions(),
+            approval_mode: ash_protocol::ApprovalMode::Manual,
+            tool_mode: ash_protocol::ToolMode::Direct,
+        })
+    };
+    let idle = inspect().unwrap();
+    assert_eq!(idle.tool_definitions[0].description, "drifted definition");
+    assert_eq!(
+        threads.read_thread(&thread_id).unwrap().sequence,
+        before_inspection.sequence
+    );
+
     let drift_turn_id = threads
         .start_turn(
             &thread_id,
@@ -518,7 +537,9 @@ fn frozen_tool_profile_rejects_definition_drift_before_model_invocation() {
         .unwrap()
         .turn_id;
 
-    *tools.description.lock().unwrap() = "drifted definition".into();
+    assert!(
+        matches!(inspect(), Err(CoreError::Context(message)) if message.contains("frozen tool profile"))
+    );
     let error = match executor.execute(
         &thread_id,
         &drift_turn_id,

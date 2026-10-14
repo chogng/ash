@@ -10,6 +10,7 @@ use crate::context::ResolvedContextBudget;
 use crate::context::calibrated_budget;
 use ash_protocol::ModelContextAllocation;
 use ash_protocol::ModelContextInspection;
+use ash_protocol::TurnStatus;
 use core_api::ContextInspection;
 use core_api::ContextInspectionRequest;
 use core_api::ContextInspectionScope;
@@ -105,9 +106,18 @@ impl TurnExecutor {
             )?,
             _ => Default::default(),
         };
+        // A completed Turn's tool profile belongs to its past requests. The next Turn
+        // freezes the current catalog, which can change across hosts or cold restore.
+        // Live execution still validates its immutable profile before invoking a model.
+        let live_turn = latest.filter(|turn| {
+            !matches!(
+                turn.status,
+                TurnStatus::Completed | TurnStatus::Failed | TurnStatus::Interrupted
+            )
+        });
         let catalog = self.context_tool_catalog(
             &activated,
-            latest,
+            live_turn,
             request.tool_mode,
             Some(&request.instructions),
         )?;
