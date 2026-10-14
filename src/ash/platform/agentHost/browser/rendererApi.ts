@@ -11,7 +11,6 @@ import { createDisconnectedLanguageServerService } from "../../language/browser/
 import { createDisconnectedAppServerApi, createDisconnectedResourceApi, createDisconnectedServerEventApi, createDisconnectedSkillOperations } from "./appServerApi.js";
 import { createDisconnectedFileApi } from "../../files/browser/fileApi.js";
 import { createDisconnectedExtensionApi } from "../../extensions/browser/extensionApi.js";
-import { createDisconnectedDiffApi } from "../../diff/browser/diffApi.js";
 import { createDisconnectedSyntaxApi } from "../../syntax/browser/syntaxApi.js";
 import type { IRendererHost } from "../../renderer/common/rendererHost.js";
 import { unavailableOperation, WebAppServerUnavailableError } from "../../renderer/browser/disconnectedHost.js";
@@ -60,7 +59,6 @@ export function createDisconnectedRendererApi(): IRendererHost {
 		extensions: createDisconnectedExtensionApi(unavailableOperation),
 		extensionHost: createDisconnectedExtensionHostApi(unavailableOperation),
 		fs: createDisconnectedFileApi(unavailableOperation),
-		diff: createDisconnectedDiffApi(unavailableOperation),
 		syntax: createDisconnectedSyntaxApi(unavailableOperation),
 		language: createDisconnectedLanguageApi(unavailableOperation),
 		languageServers: createDisconnectedLanguageServerService(unavailableOperation),

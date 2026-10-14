@@ -22,7 +22,6 @@ import { type AppServerTransport } from "../common/appServerTransport.js";
 import { AppServerProtocolClient, type AppServerProtocolClientOptions, type AppServerConnectionMetadata } from "./appServerProtocolClient.js";
 import { createAppServerFileApi } from "../../files/browser/fileApi.js";
 import { createAppServerExtensionApi } from "../../extensions/browser/extensionApi.js";
-import { createAppServerDiffApi } from "../../diff/browser/diffApi.js";
 import { createAppServerSyntaxApi } from "../../syntax/browser/syntaxApi.js";
 import { mergeRendererHostCapabilities, type IRendererHost, type RendererHostCapabilities } from "../../renderer/common/rendererHost.js";
 import { createAppServerContentSearchApi, createAppServerContentSearchConfigurationApi } from "../../search/browser/searchApi.js";
@@ -124,7 +123,6 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 		extensionHost: createAppServerExtensionHostApi(connection),
 		extensionBackend: createExtensionBackendApi(connection),
 		fs: createAppServerFileApi(connection),
-		diff: createAppServerDiffApi(connection),
 		syntax: createAppServerSyntaxApi(connection),
 		language: createAppServerLanguageApi(connection),
 		languageServers: createAppServerLanguageServerService(connection),
