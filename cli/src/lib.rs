@@ -7,6 +7,7 @@ mod exec;
 mod local_tui;
 mod login;
 mod management;
+mod mcp_login;
 mod nls;
 mod reconnect;
 mod remote;

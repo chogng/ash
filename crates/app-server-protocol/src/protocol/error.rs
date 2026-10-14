@@ -179,6 +179,8 @@ pub enum AppServerErrorName {
     McpOAuthUnavailable,
     McpOAuthInvalidCallback,
     McpOAuthExpired,
+    McpOAuthReauthenticationRequired,
+    McpOAuthRegistrationRequired,
     McpOAuthOperationFailed,
     AccountUnavailable,
     AccountLoginNotFound,

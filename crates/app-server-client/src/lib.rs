@@ -1,6 +1,7 @@
 //! Reusable typed app-server client boundary and contract-test entry point.
 
 mod infrastructure;
+pub use infrastructure::McpOAuthCompleteRequest;
 mod memories;
 mod memory;
 pub use memory::MemoryRecording;

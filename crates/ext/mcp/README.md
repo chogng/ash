@@ -98,8 +98,13 @@ Config server。`McpOAuthTarget` 绑定 server ID、endpoint 和 SecretKey 的�
 旧的 raw bearer SecretStore value 仍可直接 materialize，以保持既有配置兼容。OAuth envelope 的
 格式是本 crate 私有存储格式，不得进入 Config、protocol DTO 或日志。
 
-`McpOAuthService` 本身不是通用 OAuth discovery client。没有 host 注入的 exact
-`McpOAuthProvider` 时，server 明确返回 unavailable。
+`McpOAuthService` 不拥有具体 HTTP wire。产品 host 默认装配 `HttpOAuthProvider`，支持 protected-resource/authorization-server metadata、DCR、预注册 public client ID 与显式 CIMD URL；注入的 exact Provider 优先。标准 adapter 校验 issuer、S256 和 resource，并在每次 bearer 使用前检查存储的 resource binding。
+
+Desktop 的 MCP 详情提供登录、取消登录与本地退出；CLI 使用 `ash mcp login ID` / `ash mcp logout ID`。预注册 client 可传 `--client-id`，CIMD 可传 `--client-metadata-url`。两端使用按 MCP URL SHA-256 绑定的稳定 `/mcp-oauth/<hash>/callback` loopback 路径和动态端口，需按 RFC 8252 注册回调。
+
+请求前自动刷新即将过期的 token，401 最多刷新/重试一次；不重试 403 或不确定副作用。Provider 保留旋转后的 refresh token，保存完成才允许重试。调用方超时不取消已开始的持久化事务。标准生产 HTTP discovery 仅访问公网；私网/代理部署须在用户 outbound host allowlist 中明确授权相应 MCP 与 issuer 主机。
+
+callback、refresh、logout 和 revoke 持有整个读/网络请求/写事务的 credential 文件锁；持久化 epoch 使另一个进程退出后旧 callback 与 transport 同样失效。flow 绑定发起 connection，取消与完成通过原子提交状态决定先后，connection 关闭不会注销已经完成的共享账号。`logout` 先失效并删除本地 secret，不依赖远端 revoke；`revoke` 的远端失败仍保留 lifecycle secret 供重试。
 
 ## MCP 表单交互
 

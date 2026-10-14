@@ -21,7 +21,20 @@ export interface McpServerConfigurationSnapshot {
 }
 
 /** Config is persistent user intent; connect/disconnect affect only the running backend process. */
+/** The server requires client registration details before a browser flow can start. */
+export class McpOAuthClientRequiredError extends Error {}
+
+export interface McpOAuthLoginOptions {
+	readonly clientId?: string;
+	readonly clientMetadataUrl?: string;
+	readonly scopes?: readonly string[];
+}
+
 export interface IMcpServerManagementService extends IDisposable {
+	readonly isOAuthAvailable: boolean;
+	login(serverId: string, options?: McpOAuthLoginOptions, signal?: AbortSignal): Promise<void>;
+	logout(serverId: string): Promise<void>;
+
 	readonly isAvailable: boolean;
 	/** Invalidates snapshots after configuration changes or a completed local lifecycle request. */
 	readonly onDidChange: Event<void>;

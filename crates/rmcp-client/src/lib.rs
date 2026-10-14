@@ -3,6 +3,8 @@
 mod client;
 mod error;
 mod handler;
+mod http_auth;
+pub use http_auth::HttpCredentialProvider;
 mod transport;
 
 pub use client::{RmcpClient, RmcpClientOptions, RmcpTimeouts};

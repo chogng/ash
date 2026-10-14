@@ -354,3 +354,71 @@ fn app_server_exposes_one_shot_mcp_oauth_and_reconciles_refresh_and_revoke() {
         Some(McpServerRuntimeIntent::Disconnect)
     );
 }
+
+#[test]
+fn mcp_oauth_flow_is_connection_owned_and_logout_rejects_an_old_callback() {
+    let (server, _, _profile) = server();
+    let mut owner = server.connection();
+    initialize_and_configure(&server, &mut owner);
+    let started = call(
+        &server,
+        &mut owner,
+        50,
+        "mcp/oauth/start",
+        serde_json::json!({"serverId":"user:mcp:calendar", "redirectUri":"http://127.0.0.1:3333/callback"}),
+    );
+    let state = Url::parse(started["result"]["authorizationUrl"].as_str().unwrap())
+        .unwrap()
+        .query_pairs()
+        .find_map(|(key, value)| (key == "state").then(|| value.into_owned()))
+        .unwrap();
+    let callback = serde_json::json!({"flowId":started["result"]["flowId"], "state":state, "authorizationCode":"one-shot-code"});
+    let mut other = server.connection();
+    call(
+        &server,
+        &mut other,
+        51,
+        "initialize",
+        serde_json::json!({"clientInfo":{"name":"other","version":"test"}}),
+    );
+    assert!(
+        call(
+            &server,
+            &mut other,
+            52,
+            "mcp/oauth/complete",
+            callback.clone()
+        )
+        .get("error")
+        .is_some()
+    );
+    assert!(
+        call(&server, &mut owner, 53, "mcp/oauth/complete", callback)
+            .get("result")
+            .is_some()
+    );
+    let pending = call(
+        &server,
+        &mut owner,
+        54,
+        "mcp/oauth/start",
+        serde_json::json!({"serverId":"user:mcp:calendar", "redirectUri":"http://127.0.0.1:3333/callback"}),
+    );
+    let state = Url::parse(pending["result"]["authorizationUrl"].as_str().unwrap())
+        .unwrap()
+        .query_pairs()
+        .find_map(|(key, value)| (key == "state").then(|| value.into_owned()))
+        .unwrap();
+    assert!(
+        call(
+            &server,
+            &mut other,
+            55,
+            "mcp/oauth/logout",
+            serde_json::json!({"serverId":"user:mcp:calendar"})
+        )
+        .get("result")
+        .is_some()
+    );
+    assert!(call(&server, &mut owner, 56, "mcp/oauth/complete", serde_json::json!({"flowId":pending["result"]["flowId"],"state":state,"authorizationCode":"one-shot-code"})).get("error").is_some());
+}

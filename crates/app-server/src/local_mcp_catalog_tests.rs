@@ -320,6 +320,7 @@ fn mcp_notifications_refresh_code_mode_catalog_without_changing_model_tools() {
         env_tools: server.local_env_tool_ports().unwrap(),
         env_runtime: server.env_runtime_control().unwrap(),
         connector_runtime: None,
+        mcp_oauth: Arc::new(McpOAuthService::new(Arc::new(ash_secrets::MemorySecretStore::default()), [])),
         mcp_runtime_intent_changes: intents.subscribe(),
         mcp_runtime_intents: intents,
         mcp_changes: changes,

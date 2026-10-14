@@ -2,6 +2,14 @@
 
 #[derive(Clone, Copy)]
 pub(crate) enum Message {
+    McpLoginHelp,
+    McpHttpOnly,
+    McpCallbackUrl,
+    McpLogoutHelp,
+    McpLoginUrl,
+    McpLoginCancelled,
+    McpCallbackInvalid,
+    McpCallbackComplete,
     AppAbout,
     Workspace,
     AppPath,
@@ -36,6 +44,26 @@ pub(crate) fn format(message: Message, argument: impl AsRef<str>) -> String {
 fn localized(message: Message, locale: &str) -> &'static str {
     let language = locale.split(['-', '_', '.']).next().unwrap_or_default();
     match (message, language) {
+        (Message::McpHttpOnly, "zh") => "MCP 登录需要已配置的 HTTPS 服务器。",
+        (Message::McpCallbackUrl, "zh") => "OAuth 回调地址：{0}",
+        (Message::McpHttpOnly, _) => "MCP sign-in requires a configured HTTPS server.",
+        (Message::McpCallbackUrl, _) => "OAuth callback URL: {0}",
+        (Message::McpLoginHelp, "zh") => "通过浏览器登录独立 MCP 服务器。",
+        (Message::McpLogoutHelp, "zh") => "退出独立 MCP 服务器并删除本地凭据。",
+        (Message::McpLoginUrl, "zh") => "打开此网址登录：\n{0}",
+        (Message::McpLoginCancelled, "zh") => "MCP 登录已取消或超时。",
+        (Message::McpCallbackInvalid, "zh") => "授权回调无效。",
+        (Message::McpCallbackComplete, "zh") => "授权回调已收到。可以关闭窗口并返回 Ash。",
+        (Message::McpLoginHelp, _) => "Sign in to a standalone MCP server through a browser.",
+        (Message::McpLogoutHelp, _) => {
+            "Sign out of a standalone MCP server and delete local credentials."
+        }
+        (Message::McpLoginUrl, _) => "Open this URL to sign in:\n{0}",
+        (Message::McpLoginCancelled, _) => "MCP sign-in was cancelled or timed out.",
+        (Message::McpCallbackInvalid, _) => "The authorization callback is invalid.",
+        (Message::McpCallbackComplete, _) => {
+            "Authorization callback received. Close this window and return to Ash."
+        }
         (Message::UpdatePackageFailed, "zh") => "无法准备更新包：{0}",
         (Message::UpdatePackageFailed, "ja") => "更新パッケージを準備できません：{0}",
         (Message::UpdatePackageFailed, "fr") => {

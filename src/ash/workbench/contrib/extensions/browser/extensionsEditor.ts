@@ -28,7 +28,7 @@ import type { ParsedPromptFile } from '../../chat/common/promptSyntax/promptFile
 import { IPromptsService } from '../../chat/common/promptSyntax/service/promptsService.js';
 import { ILanguageModelToolsService } from '../../chat/common/tools/languageModelToolsService.js';
 import { IMcpServerStatusService } from '../../../../platform/mcp/common/mcpServerStatusService.js';
-import { IMcpServerManagementService } from '../../../../platform/mcp/common/mcpServerManagementService.js';
+import { IMcpServerManagementService, McpOAuthClientRequiredError } from '../../../../platform/mcp/common/mcpServerManagementService.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -225,14 +225,15 @@ export class ExtensionsEditor extends EditorPane {
 		this.capabilities.textContent = '';
 		this.contentHeading.textContent = localize({ bundle: 'ash.extensions', key: 'capabilities' }, 'Capabilities');
 		this.status.textContent = localize({ bundle: 'ash.extensions', key: 'loading' }, 'Loading Extensions…');
-		const button = (label: string, action: () => Promise<void>, enabled = true, presentation: 'primary' | 'secondary' = 'secondary') => {
+		const button = (label: string, action: () => Promise<void>, enabled = true, presentation: 'primary' | 'secondary' = 'secondary', allowWhileWorking = false) => {
 			const control = this.actionResources.add(new Button(this.actions, { label, presentation, enabled }));
 			this.actionResources.add(control.onDidClick(() => {
-				if (this.working) { return; }
+				if (this.working) { if (allowWhileWorking) { void action(); } return; }
 				this.working = true;
 				this.domNode.setAttribute('aria-busy', 'true');
 				void action().catch(error => { if (!this.isDisposed && version === this.loadVersion) { this.status.textContent = error instanceof Error ? error.message : String(error); } }).finally(() => { this.working = false; if (!this.isDisposed) { this.domNode.setAttribute('aria-busy', 'false'); } });
 			}));
+			return control;
 		};
 		if (input instanceof ExtensionsCapabilityInput) {
 			const target = input.target;
@@ -366,6 +367,32 @@ export class ExtensionsEditor extends EditorPane {
 						this.focus();
 					}
 				};
+				if (configuredServer.transport.type === 'streamableHttp' && this.mcpManagement.isOAuthAvailable) {
+					let loginCancellation: AbortController | undefined;
+					const cancel = button(localize({ bundle: 'ash.extensions', key: 'mcpCancelSignIn' }, 'Cancel sign-in'), async () => { loginCancellation?.abort(); }, false, 'secondary', true);
+					button(localize({ bundle: 'ash.extensions', key: 'mcpSignIn' }, 'Sign in'), () => apply(async () => {
+						loginCancellation = new AbortController(); cancel.enabled = true;
+						this.status.textContent = localize({ bundle: 'ash.extensions', key: 'mcpWaitingSignIn' }, 'Complete sign-in in your browser.');
+						announceStatus(this.status.textContent);
+						try {
+							const loginSignal = AbortSignal.any([operationSignal, loginCancellation.signal]);
+							try { await this.mcpManagement.login(configuredServer.id, {}, loginSignal); }
+							catch (error) {
+								if (!(error instanceof McpOAuthClientRequiredError) || loginSignal.aborted) { throw error; }
+								const details = await this.dialogs.input({
+									title: localize({ bundle: 'ash.extensions', key: 'mcpSignIn' }, 'Sign in'), message: error.message,
+									inputs: [
+										{ placeholder: localize({ bundle: 'ash.extensions', key: 'mcpOAuthClientId' }, 'Registered OAuth client ID'), value: '' },
+										{ placeholder: localize({ bundle: 'ash.extensions', key: 'mcpOAuthMetadataUrl' }, 'Client metadata URL (optional)'), value: '' },
+									], primaryButton: localize({ bundle: 'ash.extensions', key: 'mcpSignIn' }, 'Sign in'),
+								});
+								if (!details.confirmed || loginSignal.aborted) { return false; }
+								await this.mcpManagement.login(configuredServer.id, { clientId: details.values?.[0]?.trim() || undefined, clientMetadataUrl: details.values?.[1]?.trim() || undefined }, loginSignal);
+							}
+						} finally { cancel.enabled = false; loginCancellation = undefined; }
+					}));
+					button(localize({ bundle: 'ash.extensions', key: 'mcpSignOut' }, 'Sign out'), () => apply(() => this.mcpManagement.logout(configuredServer.id)));
+				}
 				button(localize({ bundle: 'ash.extensions', key: 'mcpEditServer' }, 'Edit MCP server'), () => apply(async () => {
 					const id = await configureMcpServer(this.mcpManagement, this.dialogs, configuration, configuredServer, operationSignal);
 					return id !== undefined;

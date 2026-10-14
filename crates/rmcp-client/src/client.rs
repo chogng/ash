@@ -171,9 +171,14 @@ impl RmcpClient {
     ) -> Result<Self, RmcpClientError> {
         let (uri, authorization) = server.into_parts();
         let mut transport_config = StreamableHttpClientTransportConfig::with_uri(uri);
-        if let HttpAuthorization::Bearer(token) = authorization {
-            transport_config = transport_config.auth_header(token.into_inner());
-        }
+        let credentials = match authorization {
+            HttpAuthorization::Unauthenticated => None,
+            HttpAuthorization::Bearer(token) => {
+                transport_config = transport_config.auth_header(token.into_inner());
+                None
+            }
+            HttpAuthorization::Managed(credentials) => Some(credentials.0),
+        };
         // Preserve the SDK's OS trust, no redirects, and disabled idle pooling.
         let client = ash_http_client::ReqwestHttpClient::sdk_client_builder()
             .map_err(|error| RmcpClientError::TransportStart(std::io::Error::other(error)))?
@@ -181,7 +186,21 @@ impl RmcpClient {
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(|error| RmcpClientError::TransportStart(std::io::Error::other(error)))?;
-        let transport = StreamableHttpClientTransport::with_client(client, transport_config);
+        if let Some(credentials) = credentials.clone() {
+            // Token rotation has its own bounded provider deadline; initialization gets its full
+            // MCP deadline only after authentication is ready. Dropping this wait never drops storage.
+            tokio::task::spawn_blocking(move || credentials.bearer(None))
+                .await
+                .map_err(|error| RmcpClientError::TransportStart(std::io::Error::other(error)))?
+                .map_err(RmcpClientError::TransportStart)?;
+        }
+        let transport = StreamableHttpClientTransport::with_client(
+            crate::http_auth::AuthenticatedClient {
+                client,
+                credentials,
+            },
+            transport_config,
+        );
         Self::connect(transport, options).await
     }
 

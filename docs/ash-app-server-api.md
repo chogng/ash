@@ -181,7 +181,7 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
     "cloudCodebase": false,
     "terminal": true,
     "mcp": true,
-    "mcpOAuth": false,
+    "mcpOAuth": true,
     "updateReplay": true,
     "contracts": {
       "memoryDiagnostics": { "version": 1 }
@@ -525,13 +525,17 @@ composition 显式注入。
 ### 独立 MCP OAuth
 
 `initialize.capabilities.mcp` 表示 host 安装了 Config-backed MCP runtime surface；
-`initialize.capabilities.mcpOAuth` 只有在 host 注入至少一个 standalone MCP OAuth provider 时为 true。
+`initialize.capabilities.mcpOAuth` 在本地产品 host 默认启用；host 注入的 exact Provider 优先于标准 HTTP OAuth adapter。
 这两个 capability 分开：有 MCP Config/状态 RPC 不代表任意 server 都有 OAuth adapter。
 
-`mcp/oauth/start` 只接受 exact server ID 与 redirect URI，返回 browser navigation URL 和 process-local
-flow ID。目标必须是带 credential reference 的 HTTPS Streamable HTTP server；redirect 只允许 HTTPS 或
+`mcp/oauth/start` 接受 exact server ID、redirect URI，以及可选的 `clientId`、`clientMetadataUrl` 和 `scopes`，返回 browser navigation URL 和 process-local
+flow ID。目标必须是 HTTPS Streamable HTTP server；start 通过 ConfigStore 绑定专属 OAuth credential reference，redirect 只允许 HTTPS 或
 本机 loopback HTTP。`mcp/oauth/complete` 的 state 与 authorization code 是 inbound-only zeroizing
 field，不出现在 result/error/debug；flow 一次性消费，并在 exchange 前重新读取当前 Config target。
+
+`mcp/oauth/cancel` 只取消发起 connection 的指定 flow；它不等待全局写操作，可在 token exchange 中途使迟到提交失效。
+`mcp/oauth/logout` 使该 credential 的 pending flow 和旧 transport 失效，删除本地 secret，再断开 runtime；不依赖远端撤销服务，重复调用保持安全。
+HTTP 请求前按 expiry 自动刷新；401 最多刷新并重试一次，403 和结果不确定的请求不重试。刷新、callback commit、logout 和 revoke 通过 profile 下按 credential key 的文件锁串行化；刷新拒绝后必须重新登录。
 
 `mcp/oauth/refresh` 轮换 SecretStore 中分离的 runtime bearer 与 lifecycle secret，并触发 connect
 reconcile。`mcp/oauth/revoke` 先设置 disconnect intent，等待 active Tool generation 移除该 server，

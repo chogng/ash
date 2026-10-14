@@ -9,6 +9,8 @@ pub enum McpOAuthErrorKind {
     Expired,
     ProviderFailure,
     Credential,
+    ReauthenticationRequired,
+    RegistrationRequired,
 }
 
 /// Sanitized OAuth failure safe to classify at the host boundary.

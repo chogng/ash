@@ -18,13 +18,17 @@ export class OAuthCallbackHost extends Disposable {
 			return value.id;
 		};
 		return [{
-			channel: 'ash:oauth-callback:listen', validate: () => undefined, invoke: async () => {
+			channel: 'ash:oauth-callback:listen', validate: value => {
+				if (value === undefined) { return undefined; }
+				if (!isRecord(value) || typeof value.path !== 'string' || !/^\/mcp-oauth\/[a-f0-9]{64}\/callback$/.test(value.path)) { throw new Error('Invalid callback path'); }
+				return value.path;
+			}, invoke: async path => {
 				this.assertNotDisposed();
 				if (this.callbacks.size + this.opening >= 8) { throw new Error('Too many OAuth callbacks'); }
 				this.opening++;
 				try {
 					const id = randomUUID();
-					const callback = await LoopbackOAuthCallback.listen(`/connector-oauth/${id}`);
+					const callback = await LoopbackOAuthCallback.listen(typeof path === 'string' ? path : `/connector-oauth/${id}`);
 					if (this.isDisposed) { callback.close(); throw new Error('Window closed'); }
 					this.callbacks.set(id, callback);
 					return { id, redirectUri: callback.redirectUri };

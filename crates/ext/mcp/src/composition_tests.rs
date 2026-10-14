@@ -379,7 +379,7 @@ fn materializes_direct_http_credentials_only_from_the_host_secret_store() {
         .unwrap();
 
     let (definitions, authorities) =
-        materialize_servers(&config, Some(&secrets), &BTreeMap::new()).unwrap();
+        materialize_servers(&config, Some(&secrets), &BTreeMap::new(), None).unwrap();
     assert_eq!(definitions.len(), 1);
     assert_eq!(authorities.len(), 1);
     assert!(matches!(
@@ -409,7 +409,7 @@ fn runtime_intents_override_durable_enablement_without_mutating_config() {
         ..ResolvedConfig::default()
     };
     let connect = BTreeMap::from([(server.clone(), McpServerRuntimeIntent::Connect)]);
-    let (definitions, _) = materialize_servers(&config, None, &connect).unwrap();
+    let (definitions, _) = materialize_servers(&config, None, &connect, None).unwrap();
     assert_eq!(definitions.len(), 1);
     assert_eq!(
         config.mcp.servers[&server].enablement,
@@ -429,7 +429,7 @@ fn runtime_intents_override_durable_enablement_without_mutating_config() {
         ..ResolvedConfig::default()
     };
     let disconnect = BTreeMap::from([(server, McpServerRuntimeIntent::Disconnect)]);
-    let (definitions, _) = materialize_servers(&enabled_config, None, &disconnect).unwrap();
+    let (definitions, _) = materialize_servers(&enabled_config, None, &disconnect, None).unwrap();
     assert!(definitions.is_empty());
 }
 

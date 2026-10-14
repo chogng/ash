@@ -21,6 +21,8 @@ struct TestProvider {
     refreshes: Mutex<usize>,
     revocations: Mutex<usize>,
     fail_revocation: Mutex<bool>,
+    exchange_entered: Mutex<Option<std::sync::mpsc::SyncSender<()>>>,
+    exchange_resume: Mutex<Option<std::sync::mpsc::Receiver<()>>>,
 }
 
 impl McpOAuthProvider for TestProvider {
@@ -47,6 +49,12 @@ impl McpOAuthProvider for TestProvider {
         assert_eq!(request.authorization_code.expose(), b"authorization-code");
         assert_eq!(request.redirect_uri, "http://127.0.0.1:49152/callback");
         assert_eq!(request.resource.as_str(), "https://mcp.example.test/rpc");
+        if let Some(entered) = self.exchange_entered.lock().unwrap().as_ref() {
+            entered.send(()).unwrap();
+        }
+        if let Some(resume) = self.exchange_resume.lock().unwrap().as_ref() {
+            resume.recv().unwrap();
+        }
         *self.verifier.lock().unwrap() = Some(request.pkce_verifier.to_string());
         Ok(McpOAuthCredential {
             runtime_secret: SecretValue::new(b"access-token".to_vec()),
@@ -134,6 +142,8 @@ fn oauth_pkce_callback_stores_an_envelope_but_projects_only_the_runtime_token() 
     let (oauth, target, secrets, provider) = fixture();
     let authorization = oauth
         .start(McpOAuthStartRequest {
+            owner: 0,
+            options: Default::default(),
             target: target.clone(),
             redirect_uri: "http://127.0.0.1:49152/callback".into(),
         })
@@ -145,6 +155,8 @@ fn oauth_pkce_callback_stores_an_envelope_but_projects_only_the_runtime_token() 
     let state = callback_state(&authorization.authorization_url);
     oauth
         .complete(McpOAuthCompleteRequest {
+            owner: 0,
+            issuer: None,
             flow_id: authorization.flow_id,
             state,
             authorization_code: SecretValue::new(b"authorization-code".to_vec()),
@@ -169,6 +181,8 @@ fn callback_rejects_a_target_changed_while_the_browser_flow_was_open() {
     let (oauth, target, secrets, _) = fixture();
     let authorization = oauth
         .start(McpOAuthStartRequest {
+            owner: 0,
+            options: Default::default(),
             target,
             redirect_uri: "http://127.0.0.1:49152/callback".into(),
         })
@@ -177,6 +191,8 @@ fn callback_rejects_a_target_changed_while_the_browser_flow_was_open() {
     let changed = McpOAuthTarget::from_config(&config("https://mcp.example.test/changed")).unwrap();
     let error = oauth
         .complete(McpOAuthCompleteRequest {
+            owner: 0,
+            issuer: None,
             flow_id: authorization.flow_id,
             state,
             authorization_code: SecretValue::new(b"authorization-code".to_vec()),
@@ -193,6 +209,8 @@ fn refresh_rotates_both_credential_parts_and_revoke_deletes_the_envelope() {
     let (oauth, target, secrets, provider) = fixture();
     let authorization = oauth
         .start(McpOAuthStartRequest {
+            owner: 0,
+            options: Default::default(),
             target: target.clone(),
             redirect_uri: "http://127.0.0.1:49152/callback".into(),
         })
@@ -200,6 +218,8 @@ fn refresh_rotates_both_credential_parts_and_revoke_deletes_the_envelope() {
     let state = callback_state(&authorization.authorization_url);
     oauth
         .complete(McpOAuthCompleteRequest {
+            owner: 0,
+            issuer: None,
             flow_id: authorization.flow_id,
             state,
             authorization_code: SecretValue::new(b"authorization-code".to_vec()),
@@ -234,6 +254,8 @@ fn failed_remote_revoke_keeps_the_local_lifecycle_credential_for_retry() {
     let (oauth, target, secrets, provider) = fixture();
     let authorization = oauth
         .start(McpOAuthStartRequest {
+            owner: 0,
+            options: Default::default(),
             target: target.clone(),
             redirect_uri: "http://127.0.0.1:49152/callback".into(),
         })
@@ -241,6 +263,8 @@ fn failed_remote_revoke_keeps_the_local_lifecycle_credential_for_retry() {
     let state = callback_state(&authorization.authorization_url);
     oauth
         .complete(McpOAuthCompleteRequest {
+            owner: 0,
+            issuer: None,
             flow_id: authorization.flow_id,
             state,
             authorization_code: SecretValue::new(b"authorization-code".to_vec()),
@@ -259,6 +283,8 @@ fn expired_flow_keeps_its_target_available_for_typed_callback_expiry() {
     let (oauth, target, _, _) = fixture();
     let authorization = oauth
         .start(McpOAuthStartRequest {
+            owner: 0,
+            options: Default::default(),
             target: target.clone(),
             redirect_uri: "http://127.0.0.1:49152/callback".into(),
         })
@@ -278,6 +304,8 @@ fn expired_flow_keeps_its_target_available_for_typed_callback_expiry() {
     );
     let error = oauth
         .complete(McpOAuthCompleteRequest {
+            owner: 0,
+            issuer: None,
             flow_id: authorization.flow_id,
             state,
             authorization_code: SecretValue::new(b"authorization-code".to_vec()),
@@ -293,6 +321,8 @@ fn pending_oauth_flows_are_bounded() {
     for _ in 0..MAX_PENDING_OAUTH_FLOWS {
         oauth
             .start(McpOAuthStartRequest {
+                owner: 0,
+                options: Default::default(),
                 target: target.clone(),
                 redirect_uri: "http://127.0.0.1:49152/callback".into(),
             })
@@ -301,9 +331,399 @@ fn pending_oauth_flows_are_bounded() {
 
     let error = oauth
         .start(McpOAuthStartRequest {
+            owner: 0,
+            options: Default::default(),
             target,
             redirect_uri: "http://127.0.0.1:49152/callback".into(),
         })
         .unwrap_err();
     assert_eq!(error.kind(), McpOAuthErrorKind::ProviderFailure);
+}
+
+#[test]
+fn logout_invalidates_pending_callbacks_and_old_transports_and_is_idempotent() {
+    let (oauth, target, secrets, _) = fixture();
+    let oauth = Arc::new(oauth);
+    let first = oauth
+        .start(McpOAuthStartRequest {
+            owner: 0,
+            options: Default::default(),
+            target: target.clone(),
+            redirect_uri: "http://127.0.0.1:49152/callback".into(),
+        })
+        .unwrap();
+    let state = callback_state(&first.authorization_url);
+    oauth
+        .complete(McpOAuthCompleteRequest {
+            owner: 0,
+            issuer: None,
+            flow_id: first.flow_id,
+            state,
+            authorization_code: SecretValue::new(b"authorization-code".to_vec()),
+            current_target: target.clone(),
+        })
+        .unwrap();
+    let transport = oauth.authorization(target.clone()).unwrap();
+    assert_eq!(transport.bearer(None).unwrap(), "access-token");
+    let pending = oauth
+        .start(McpOAuthStartRequest {
+            owner: 0,
+            options: Default::default(),
+            target: target.clone(),
+            redirect_uri: "http://127.0.0.1:49152/callback".into(),
+        })
+        .unwrap();
+    let state = callback_state(&pending.authorization_url);
+    oauth.logout(&target).unwrap();
+    oauth.logout(&target).unwrap();
+    assert!(transport.bearer(None).is_err());
+    assert!(
+        oauth
+            .complete(McpOAuthCompleteRequest {
+                owner: 0,
+                issuer: None,
+                flow_id: pending.flow_id,
+                state,
+                authorization_code: SecretValue::new(b"authorization-code".to_vec()),
+                current_target: target.clone()
+            })
+            .is_err()
+    );
+    assert!(secrets.load(target.credential_key()).unwrap().is_none());
+}
+
+#[test]
+fn rejected_bearer_refreshes_once_and_other_requests_adopt_the_winner() {
+    let (oauth, target, _, provider) = fixture();
+    let oauth = Arc::new(oauth);
+    let started = oauth
+        .start(McpOAuthStartRequest {
+            owner: 0,
+            options: Default::default(),
+            target: target.clone(),
+            redirect_uri: "http://127.0.0.1:49152/callback".into(),
+        })
+        .unwrap();
+    let state = callback_state(&started.authorization_url);
+    oauth
+        .complete(McpOAuthCompleteRequest {
+            owner: 0,
+            issuer: None,
+            flow_id: started.flow_id,
+            state,
+            authorization_code: SecretValue::new(b"authorization-code".to_vec()),
+            current_target: target.clone(),
+        })
+        .unwrap();
+    let transport = oauth.authorization(target).unwrap();
+    std::thread::scope(|scope| {
+        for _ in 0..8 {
+            let transport = Arc::clone(&transport);
+            scope.spawn(move || {
+                assert_eq!(
+                    transport.bearer(Some("access-token")).unwrap(),
+                    "refreshed-access-token"
+                )
+            });
+        }
+    });
+    assert_eq!(*provider.refreshes.lock().unwrap(), 1);
+}
+
+#[test]
+fn another_runtime_logout_invalidates_a_callback_even_when_its_pending_map_is_separate() {
+    let (oauth, target, secrets, provider) = fixture();
+    let second = McpOAuthService::new(
+        secrets.clone(),
+        [(
+            target.server_id().clone(),
+            provider as Arc<dyn McpOAuthProvider>,
+        )],
+    );
+    let started = oauth
+        .start(McpOAuthStartRequest {
+            owner: 0,
+            options: Default::default(),
+            target: target.clone(),
+            redirect_uri: "http://127.0.0.1:49152/callback".into(),
+        })
+        .unwrap();
+    let state = callback_state(&started.authorization_url);
+    second.logout(&target).unwrap();
+    assert!(
+        oauth
+            .complete(McpOAuthCompleteRequest {
+                owner: 0,
+                issuer: None,
+                flow_id: started.flow_id,
+                state,
+                authorization_code: SecretValue::new(b"authorization-code".to_vec()),
+                current_target: target.clone()
+            })
+            .is_err()
+    );
+    assert!(secrets.load(target.credential_key()).unwrap().is_none());
+}
+
+#[test]
+fn logout_waits_for_refresh_persistence_then_removes_the_rotated_token() {
+    struct BlockingProvider {
+        inner: TestProvider,
+        entered: std::sync::mpsc::SyncSender<()>,
+        resume: Mutex<std::sync::mpsc::Receiver<()>>,
+    }
+    impl McpOAuthProvider for BlockingProvider {
+        fn authorization_url(
+            &self,
+            target: &McpOAuthTarget,
+            challenge: McpOAuthChallenge<'_>,
+        ) -> Result<String, McpOAuthError> {
+            self.inner.authorization_url(target, challenge)
+        }
+        fn exchange(
+            &self,
+            target: &McpOAuthTarget,
+            request: McpOAuthExchangeRequest<'_>,
+        ) -> Result<McpOAuthCredential, McpOAuthError> {
+            self.inner.exchange(target, request)
+        }
+        fn refresh(
+            &self,
+            target: &McpOAuthTarget,
+            request: McpOAuthRefreshRequest<'_>,
+        ) -> Result<McpOAuthCredentialReplacement, McpOAuthError> {
+            self.entered.send(()).unwrap();
+            self.resume.lock().unwrap().recv().unwrap();
+            self.inner.refresh(target, request)
+        }
+        fn revoke(
+            &self,
+            target: &McpOAuthTarget,
+            request: McpOAuthRevokeRequest<'_>,
+        ) -> Result<(), McpOAuthError> {
+            self.inner.revoke(target, request)
+        }
+    }
+    let (_, target, secrets, _) = fixture();
+    let (entered, entered_receiver) = std::sync::mpsc::sync_channel(1);
+    let (resume, resume_receiver) = std::sync::mpsc::sync_channel(1);
+    let provider = Arc::new(BlockingProvider {
+        inner: TestProvider::default(),
+        entered,
+        resume: Mutex::new(resume_receiver),
+    });
+    let oauth = Arc::new(McpOAuthService::new(
+        secrets.clone(),
+        [(
+            target.server_id().clone(),
+            provider as Arc<dyn McpOAuthProvider>,
+        )],
+    ));
+    let started = oauth
+        .start(McpOAuthStartRequest {
+            owner: 0,
+            options: Default::default(),
+            target: target.clone(),
+            redirect_uri: "http://127.0.0.1:49152/callback".into(),
+        })
+        .unwrap();
+    let state = callback_state(&started.authorization_url);
+    oauth
+        .complete(McpOAuthCompleteRequest {
+            owner: 0,
+            issuer: None,
+            flow_id: started.flow_id,
+            state,
+            authorization_code: SecretValue::new(b"authorization-code".to_vec()),
+            current_target: target.clone(),
+        })
+        .unwrap();
+    std::thread::scope(|scope| {
+        let refresh = scope.spawn(|| oauth.refresh(&target).unwrap());
+        entered_receiver
+            .recv_timeout(Duration::from_secs(2))
+            .unwrap();
+        let logout = scope.spawn(|| oauth.logout(&target).unwrap());
+        resume.send(()).unwrap();
+        refresh.join().unwrap();
+        logout.join().unwrap();
+    });
+    assert!(secrets.load(target.credential_key()).unwrap().is_none());
+}
+
+#[test]
+fn cancelling_during_code_exchange_prevents_the_late_credential_commit() {
+    let (oauth, target, secrets, provider) = fixture();
+    let (entered, entered_receiver) = std::sync::mpsc::sync_channel(1);
+    let (resume, resume_receiver) = std::sync::mpsc::sync_channel(1);
+    *provider.exchange_entered.lock().unwrap() = Some(entered);
+    *provider.exchange_resume.lock().unwrap() = Some(resume_receiver);
+    let started = oauth
+        .start(McpOAuthStartRequest {
+            owner: 7,
+            options: Default::default(),
+            target: target.clone(),
+            redirect_uri: "http://127.0.0.1:49152/callback".into(),
+        })
+        .unwrap();
+    let state = callback_state(&started.authorization_url);
+    std::thread::scope(|scope| {
+        let flow = started.flow_id.clone();
+        let completing = scope.spawn(|| {
+            oauth.complete(McpOAuthCompleteRequest {
+                owner: 7,
+                issuer: None,
+                flow_id: started.flow_id,
+                state,
+                authorization_code: SecretValue::new(b"authorization-code".to_vec()),
+                current_target: target.clone(),
+            })
+        });
+        entered_receiver
+            .recv_timeout(Duration::from_secs(2))
+            .unwrap();
+        oauth.cancel(&flow, 7);
+        resume.send(()).unwrap();
+        assert!(completing.join().unwrap().is_err());
+    });
+    assert!(secrets.load(target.credential_key()).unwrap().is_none());
+}
+
+#[test]
+fn a_failed_local_delete_keeps_the_credential_closed_after_runtime_restart() {
+    struct DeleteFails(Arc<MemorySecretStore>);
+    impl SecretStore for DeleteFails {
+        fn load(
+            &self,
+            key: &ash_secrets::SecretKey,
+        ) -> Result<Option<SecretValue>, ash_secrets::SecretStoreError> {
+            self.0.load(key)
+        }
+        fn store(
+            &self,
+            key: &ash_secrets::SecretKey,
+            value: &SecretValue,
+        ) -> Result<(), ash_secrets::SecretStoreError> {
+            self.0.store(key, value)
+        }
+        fn delete(
+            &self,
+            _: &ash_secrets::SecretKey,
+        ) -> Result<ash_secrets::DeleteSecretOutcome, ash_secrets::SecretStoreError> {
+            Err(ash_secrets::SecretStoreError::new(
+                ash_secrets::SecretStoreErrorKind::BackendUnavailable,
+                "fixture deletion unavailable",
+            ))
+        }
+    }
+    let (_, target, secrets, provider) = fixture();
+    secrets
+        .store(
+            target.credential_key(),
+            &encode_oauth_credential(
+                SecretValue::new(b"access".to_vec()),
+                SecretValue::new(b"refresh".to_vec()),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let store: Arc<dyn SecretStore> = Arc::new(DeleteFails(secrets.clone()));
+    let provider: Arc<dyn McpOAuthProvider> = provider;
+    let oauth = Arc::new(McpOAuthService::new(
+        store.clone(),
+        [(target.server_id().clone(), provider.clone())],
+    ));
+    assert!(oauth.logout(&target).is_err());
+    assert!(secrets.load(target.credential_key()).unwrap().is_some());
+    let restarted = Arc::new(McpOAuthService::new(
+        store,
+        [(target.server_id().clone(), provider)],
+    ));
+    assert!(restarted.authorization(target).is_err());
+}
+
+#[test]
+fn failed_login_persistence_does_not_reactivate_an_old_credential_after_restart() {
+    struct CredentialWriteFails {
+        inner: Arc<MemorySecretStore>,
+        credential_key: ash_secrets::SecretKey,
+    }
+    impl SecretStore for CredentialWriteFails {
+        fn load(
+            &self,
+            key: &ash_secrets::SecretKey,
+        ) -> Result<Option<SecretValue>, ash_secrets::SecretStoreError> {
+            self.inner.load(key)
+        }
+        fn store(
+            &self,
+            key: &ash_secrets::SecretKey,
+            value: &SecretValue,
+        ) -> Result<(), ash_secrets::SecretStoreError> {
+            if key == &self.credential_key {
+                return Err(ash_secrets::SecretStoreError::new(
+                    ash_secrets::SecretStoreErrorKind::BackendUnavailable,
+                    "fixture write unavailable",
+                ));
+            }
+            self.inner.store(key, value)
+        }
+        fn delete(
+            &self,
+            key: &ash_secrets::SecretKey,
+        ) -> Result<ash_secrets::DeleteSecretOutcome, ash_secrets::SecretStoreError> {
+            self.inner.delete(key)
+        }
+    }
+    let (_, target, secrets, provider) = fixture();
+    secrets
+        .store(
+            target.credential_key(),
+            &encode_oauth_credential(
+                SecretValue::new(b"old-access".to_vec()),
+                SecretValue::new(b"old-refresh".to_vec()),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let store: Arc<dyn SecretStore> = Arc::new(CredentialWriteFails {
+        inner: secrets.clone(),
+        credential_key: target.credential_key().clone(),
+    });
+    let provider: Arc<dyn McpOAuthProvider> = provider;
+    let oauth = McpOAuthService::new(
+        store.clone(),
+        [(target.server_id().clone(), provider.clone())],
+    );
+    let started = oauth
+        .start(McpOAuthStartRequest {
+            owner: 0,
+            options: Default::default(),
+            target: target.clone(),
+            redirect_uri: "http://127.0.0.1:49152/callback".into(),
+        })
+        .unwrap();
+    assert!(
+        oauth
+            .complete(McpOAuthCompleteRequest {
+                owner: 0,
+                issuer: None,
+                state: callback_state(&started.authorization_url),
+                flow_id: started.flow_id,
+                authorization_code: SecretValue::new(b"authorization-code".to_vec()),
+                current_target: target.clone()
+            })
+            .is_err()
+    );
+    assert_eq!(
+        project_runtime_credential(secrets.load(target.credential_key()).unwrap().unwrap())
+            .unwrap()
+            .expose(),
+        b"old-access"
+    );
+    let restarted = Arc::new(McpOAuthService::new(
+        store,
+        [(target.server_id().clone(), provider)],
+    ));
+    assert!(restarted.authorization(target).is_err());
 }

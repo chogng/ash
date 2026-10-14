@@ -90,3 +90,54 @@ test('Unsupported and disconnected MCP management rejects every operation withou
 		]) { await assert.rejects(operation); }
 	}
 });
+
+test('MCP browser login completes on the same connection and forwards the issuer, then signs out locally', async () => {
+	using notifications = new Emitter<{ method: string; }>();
+	using states = new Emitter<void>();
+	const calls: Array<[string, unknown]> = [];
+	const resources: string[] = [];
+	using service = new AppServerMcpServerManagementService({
+		capabilities: { mcp: true, mcpOAuth: true }, state: 'ready', onNotification: notifications.event, onStateChange: states.event,
+		request: async (definition: { method: string; }, params: unknown) => {
+			calls.push([definition.method, params]);
+			if (definition.method === 'config/read') { return { revision: 1, mcpServers: { 'user:mcp:test': { id: 'user:mcp:test', displayName: 'Test', transport: { type: 'streamableHttp', url: 'https://mcp.test/rpc' }, credential: { type: 'unauthenticated' }, enablement: 'enabled' } } }; }
+			return definition.method === 'mcp/oauth/start' ? { flowId: 'flow', authorizationUrl: 'https://issuer.test/authorize' } : { serverId: 'user:mcp:test' };
+		},
+	} as unknown as AppServerProtocolClient, {
+		externalOpener: { openExternal: async () => { resources.push('open'); return true; } },
+		clipboardService: {} as never,
+		callbackHost: {
+			listen: async () => ({ id: 'callback', redirectUri: 'http://127.0.0.1:3333/callback' }),
+			wait: async () => ({ state: 'state', code: 'code', issuer: 'https://issuer.test' }),
+			close: async id => { resources.push(`close:${id}`); },
+		},
+	});
+	await service.login('user:mcp:test');
+	await service.logout('user:mcp:test');
+	assert.deepEqual(calls, [
+		['config/read', {}],
+		['mcp/oauth/start', { serverId: 'user:mcp:test', redirectUri: 'http://127.0.0.1:3333/callback', clientId: undefined, clientMetadataUrl: undefined, scopes: [] }],
+		['mcp/oauth/complete', { flowId: 'flow', state: 'state', authorizationCode: 'code', issuer: 'https://issuer.test' }],
+		['mcp/oauth/logout', { serverId: 'user:mcp:test' }],
+	]);
+	assert.deepEqual(resources, ['open', 'close:callback']);
+});
+
+test('Cancelling MCP sign-in closes the callback and cancels the backend flow without completing it', async () => {
+	using notifications = new Emitter<{ method: string; }>(); using states = new Emitter<void>();
+	const calls: string[] = []; const controller = new AbortController();
+	let waiting!: () => void; const startedWaiting = new Promise<void>(resolve => { waiting = resolve; });
+	let rejectCallback!: (reason: Error) => void;
+	const callback = new Promise<{ state: string; code: string; }>((_, reject) => { rejectCallback = reject; });
+	using service = new AppServerMcpServerManagementService({
+		capabilities: { mcp: true, mcpOAuth: true }, state: 'ready', onNotification: notifications.event, onStateChange: states.event,
+		request: async (definition: { method: string; }) => { calls.push(definition.method); if (definition.method === 'config/read') { return { revision: 1, mcpServers: { 'user:mcp:test': { id: 'user:mcp:test', displayName: 'Test', transport: { type: 'streamableHttp', url: 'https://mcp.test/rpc' }, credential: { type: 'unauthenticated' }, enablement: 'enabled' } } }; } return { flowId: 'flow', authorizationUrl: 'https://issuer.test/authorize' }; },
+	} as unknown as AppServerProtocolClient, {
+		externalOpener: { openExternal: async () => true }, clipboardService: {} as never,
+		callbackHost: { listen: async () => ({ id: 'callback', redirectUri: 'http://127.0.0.1:3333/callback' }), wait: () => { waiting(); return callback; }, close: async () => { rejectCallback(new Error('Closed')); } },
+	});
+	const login = service.login('user:mcp:test', {}, controller.signal);
+	const rejected = assert.rejects(login, /cancelled/);
+	await startedWaiting; controller.abort(); await rejected;
+	assert.deepEqual(calls, ['config/read', 'mcp/oauth/start', 'mcp/oauth/cancel']);
+});

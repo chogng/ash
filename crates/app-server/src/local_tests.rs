@@ -3719,6 +3719,7 @@ fn directory_edit_before_watcher_start_is_applied_without_another_event() {
         env_tools: server.local_env_tool_ports().unwrap(),
         env_runtime: server.env_runtime_control().unwrap(),
         connector_runtime: None,
+        mcp_oauth: Arc::new(McpOAuthService::new(Arc::new(ash_secrets::MemorySecretStore::default()), [])),
         mcp_changes: mcp_updates.subscribe(),
         mcp_updates,
         mcp_runtime_intent_changes: intents.subscribe(),
@@ -5504,4 +5505,16 @@ fn shared_profile_runtime_owns_one_editor_extension_policy_across_real_env_hosts
         .unwrap();
     assert_eq!(read(&first), 2);
     assert_eq!(read(&second), 2);
+}
+
+#[test]
+fn ordinary_local_host_installs_standalone_mcp_oauth_without_provider_injection() {
+    let profile = tempfile::tempdir().unwrap();
+    let directory = tempfile::tempdir().unwrap();
+    let server = open_app_server(AppServerOptions::new(profile.path()).with_codex_home(profile.path().join("codex")).with_dir_root(directory.path()).without_built_in_skills()).unwrap();
+    let mut connection = server.connection();
+    let initialized: serde_json::Value = serde_json::from_str(&server.handle_json(&mut connection, r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"oauth-production-fixture","version":"1"},"capabilities":{}}}"#)).unwrap();
+    assert_eq!(initialized["result"]["capabilities"]["mcpOAuth"], true);
+    assert!(server.mcp_oauth.as_ref().unwrap().supports(&ash_config::McpServerId::new("user:mcp:any-http-server").unwrap()));
+    server.close_connection(connection);
 }

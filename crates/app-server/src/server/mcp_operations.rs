@@ -378,24 +378,53 @@ impl AppServer {
         )
     }
 
-    pub(super) fn mcp_oauth_start(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn mcp_oauth_start(
+        &self,
+        connection: &super::ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        if self
+            .request_scheduler
+            .is_connection_cancelled(connection.connection_id)
+        {
+            return Err(RpcError::new(-32800, AppServerErrorName::RequestCancelled));
+        }
         let params: McpOAuthStartParams = decode(params)?;
         let server_id = parse_server_id(params.server_id)?;
+        self.ensure_mcp_oauth_binding(&server_id)?;
         let target = self.mcp_oauth_target(&server_id)?;
         let authorization = self
             .mcp_oauth_service()?
             .start(McpOAuthStartRequest {
+                owner: connection.connection_id,
+                options: ash_mcp_extension::McpOAuthOptions {
+                    client_id: params.client_id,
+                    client_metadata_url: params.client_metadata_url,
+                    scopes: params.scopes,
+                },
                 target,
                 redirect_uri: params.redirect_uri,
             })
             .map_err(mcp_oauth_start_error)?;
+        if self
+            .request_scheduler
+            .is_connection_cancelled(connection.connection_id)
+        {
+            self.mcp_oauth_service()?
+                .cancel_owner(connection.connection_id);
+            return Err(RpcError::new(-32800, AppServerErrorName::RequestCancelled));
+        }
         result(&McpOAuthStartResult {
             flow_id: authorization.flow_id.as_str().to_owned(),
             authorization_url: authorization.authorization_url,
         })
     }
 
-    pub(super) fn mcp_oauth_complete(&self, params: Value) -> Result<Value, RpcError> {
+    pub(super) fn mcp_oauth_complete(
+        &self,
+        connection: &super::ConnectionState,
+        params: Value,
+    ) -> Result<Value, RpcError> {
         let Value::Object(mut params) = params else {
             return Err(invalid_params());
         };
@@ -418,6 +447,8 @@ impl AppServer {
         let current_target = self.mcp_oauth_target(&server_id)?;
         let server_id = oauth
             .complete(McpOAuthCompleteRequest {
+                owner: connection.connection_id,
+                issuer: metadata.issuer,
                 flow_id,
                 state: SecretValue::new(state.into_bytes()),
                 authorization_code: SecretValue::new(authorization_code.into_bytes()),
@@ -428,6 +459,69 @@ impl AppServer {
         result(&McpOAuthMutationResult {
             server_id: server_id.to_string(),
         })
+    }
+
+    pub(super) fn mcp_oauth_cancel(
+        &self,
+        connection: &super::ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: ash_app_server_protocol::protocol::mcp::McpOAuthCancelParams = decode(params)?;
+        let flow = McpOAuthFlowId::new(params.flow_id).map_err(|_| invalid_params())?;
+        self.mcp_oauth_service()?
+            .cancel(&flow, connection.connection_id);
+        result(&())
+    }
+
+    pub(super) fn mcp_oauth_logout(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: McpOAuthMutationParams = decode(params)?;
+        let server_id = parse_server_id(params.server_id)?;
+        let target = self.mcp_oauth_target(&server_id)?;
+        // Invalidate credentials first: even a transport awaiting reconciliation cannot refresh.
+        self.mcp_oauth_service()?
+            .logout(&target)
+            .map_err(mcp_oauth_operation_error)?;
+        self.disconnect_mcp_before_revoke(&server_id)?;
+        result(&McpOAuthMutationResult {
+            server_id: server_id.to_string(),
+        })
+    }
+
+    fn ensure_mcp_oauth_binding(&self, server_id: &McpServerId) -> Result<(), RpcError> {
+        let store = self
+            .config
+            .as_ref()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let snapshot = store.read_snapshot().map_err(|_| invalid_params())?;
+        let mut server = snapshot
+            .values
+            .mcp
+            .servers
+            .get(server_id)
+            .cloned()
+            .ok_or_else(|| RpcError::new(-32011, AppServerErrorName::McpServerNotFound))?;
+        let credential_ref = format!("mcp/oauth/{}", server_id.as_str());
+        if !matches!(&server.credential, ash_config::McpCredentialBinding::Reference { credential_ref: key } if *key == credential_ref)
+        {
+            server.credential = ash_config::McpCredentialBinding::Reference { credential_ref };
+            // Validate transport before changing the declaration.
+            oauth_target(&server)?;
+            let mut nonce = [0_u8; 16];
+            getrandom::getrandom(&mut nonce).map_err(|_| invalid_params())?;
+            use base64::Engine as _;
+            store
+                .apply(ash_config::ConfigCommandRequest {
+                    command_id: ash_protocol::CommandId::new(format!(
+                        "mcp-oauth-{}",
+                        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(nonce)
+                    ))
+                    .map_err(|_| invalid_params())?,
+                    expected_revision: snapshot.revision,
+                    command: ash_config::UserConfigCommand::UpsertMcpServer { server },
+                })
+                .map_err(|_| RpcError::new(-32031, AppServerErrorName::ConfigRevisionConflict))?;
+        }
+        Ok(())
     }
 
     pub(super) fn mcp_oauth_refresh(&self, params: &Value) -> Result<Value, RpcError> {
@@ -637,6 +731,8 @@ impl AppServer {
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct McpOAuthCompleteMetadata {
+    #[serde(default)]
+    issuer: Option<String>,
     flow_id: String,
 }
 
@@ -673,6 +769,12 @@ fn mcp_oauth_operation_error(error: McpOAuthError) -> RpcError {
         McpOAuthErrorKind::InvalidRequest => invalid_params(),
         McpOAuthErrorKind::StateMismatch => {
             RpcError::new(-32094, AppServerErrorName::McpOAuthOperationFailed)
+        }
+        McpOAuthErrorKind::RegistrationRequired => {
+            RpcError::new(-32096, AppServerErrorName::McpOAuthRegistrationRequired)
+        }
+        McpOAuthErrorKind::ReauthenticationRequired => {
+            RpcError::new(-32095, AppServerErrorName::McpOAuthReauthenticationRequired)
         }
         McpOAuthErrorKind::Expired => RpcError::new(-32093, AppServerErrorName::McpOAuthExpired),
         McpOAuthErrorKind::ProviderFailure | McpOAuthErrorKind::Credential => {

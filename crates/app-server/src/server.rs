@@ -1062,6 +1062,9 @@ impl AppServer {
     }
 
     fn cancel_connection_logins(&self, connection_id: u64) {
+        if let Some(oauth) = &self.mcp_oauth {
+            oauth.cancel_owner(connection_id);
+        }
         if let Some(login) = &self.login {
             for id in self.updates.take_connection_logins(connection_id) {
                 if let Ok(id) = ash_login::LoginId::new(id) {
@@ -2860,10 +2863,12 @@ impl AppServer {
             Some(ClientMethod::McpServerStatus) => self.mcp_server_status(),
             Some(ClientMethod::McpServerConnect) => self.mcp_server_connect(&request.params),
             Some(ClientMethod::McpServerDisconnect) => self.mcp_server_disconnect(&request.params),
-            Some(ClientMethod::McpOAuthStart) => self.mcp_oauth_start(&request.params),
+            Some(ClientMethod::McpOAuthStart) => self.mcp_oauth_start(connection, &request.params),
             Some(ClientMethod::McpOAuthComplete) => {
-                self.mcp_oauth_complete(std::mem::take(&mut request.params))
+                self.mcp_oauth_complete(connection, std::mem::take(&mut request.params))
             }
+            Some(ClientMethod::McpOAuthCancel) => self.mcp_oauth_cancel(connection, &request.params),
+            Some(ClientMethod::McpOAuthLogout) => self.mcp_oauth_logout(&request.params),
             Some(ClientMethod::McpOAuthRefresh) => self.mcp_oauth_refresh(&request.params),
             Some(ClientMethod::McpOAuthRevoke) => self.mcp_oauth_revoke(&request.params),
             Some(ClientMethod::SkillSourceAdd) => self.skill_source_add(&request.params),

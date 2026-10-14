@@ -12,8 +12,8 @@ export interface BrowserConnectorHostServices {
 	readonly externalOpener: IExternalOpener;
 	readonly clipboardService: IClipboardService;
 	readonly callbackHost?: {
-		listen(): Promise<{ readonly id: string; readonly redirectUri: string; }>;
-		wait(id: string): Promise<{ readonly state: string; readonly code: string; }>;
+		listen(options?: { readonly path: `/mcp-oauth/${string}/callback`; }): Promise<{ readonly id: string; readonly redirectUri: string; }>;
+		wait(id: string): Promise<{ readonly state: string; readonly code: string; readonly issuer?: string; }>;
 		close(id: string): Promise<void>;
 	};
 }

@@ -1964,13 +1964,31 @@ pub fn open_app_server_with_codebase_providers(
     let mcp_runtime_intents = server.mcp_runtime_intents.clone();
     let mcp_runtime_intent_changes = mcp_runtime_intents.subscribe();
     let mcp_runtime_intent_snapshot = mcp_runtime_intents.snapshot();
+    let oauth_targets = match network_access(&user_config.values.network) {
+        NetworkAccess::Any => ash_http_client::NetworkTargetPolicy::PublicInternetOnly,
+        NetworkAccess::Hosts(_) => ash_http_client::NetworkTargetPolicy::Any,
+    };
+    let mut oauth_http_config = ash_http_client::HttpClientConfig::default()
+        .with_network_target_policy(oauth_targets)
+        .with_response_body_limit(ash_http_client::ResponseBodyLimit::new(std::num::NonZeroUsize::new(1024 * 1024).expect("nonzero OAuth response limit")).map_err(open_error)?)
+        .with_timeouts(ash_http_client::TransportTimeouts::new(
+            ash_http_client::Timeout::After(Duration::from_secs(15)), ash_http_client::Timeout::After(Duration::from_secs(30)),
+            ash_http_client::Timeout::Disabled, ash_http_client::Timeout::After(Duration::from_secs(45))));
+    if oauth_targets == ash_http_client::NetworkTargetPolicy::PublicInternetOnly {
+        oauth_http_config = oauth_http_config.with_proxy_policy(ash_http_client::ProxyPolicy::Direct);
+    }
+    let oauth_network = ash_http_client::OutboundNetworkSnapshot::with_policy(oauth_http_config, network_policy.clone()).map_err(open_error)?;
+    let oauth_http: Arc<dyn ash_http_client::HttpClient> = Arc::new(ash_http_client::ReqwestHttpClient::with_network(oauth_network).map_err(open_error)?);
+    let mcp_oauth = Arc::new(McpOAuthService::new(Arc::clone(&profile_secrets), mcp_oauth_providers)
+        .with_http_provider(oauth_http, options.profile_root.join("mcp-oauth-locks")));
+    server = server.with_mcp_oauth_service(Arc::clone(&mcp_oauth));
     let mcp = match &connector_runtime {
         Some(connectors) => compose_mcp_tools_with_connectors_and_runtime_intents_and_updates(
             &runtime_config,
             1,
             &mcp_runtime_intent_snapshot,
             connectors.service.authority().clone(),
-            Arc::clone(&connectors.secrets),
+            ash_mcp_extension::McpAuthentication { secrets: Arc::clone(&connectors.secrets), oauth: Arc::clone(&mcp_oauth) },
             Arc::clone(&connectors.mcp),
             mcp_updates.clone(),
         ),
@@ -1990,12 +2008,6 @@ pub fn open_app_server_with_codebase_providers(
     server = server.with_mcp_status_snapshot(mcp_status);
     if let Some(connectors) = &connector_runtime {
         server = server.with_connector_service(Arc::clone(&connectors.service));
-        if !mcp_oauth_providers.is_empty() {
-            server = server.with_mcp_oauth_service(Arc::new(McpOAuthService::new(
-                Arc::clone(&connectors.secrets),
-                mcp_oauth_providers,
-            )));
-        }
         if let Some(authority) = &connectors.plugin_authority {
             server = server.with_plugin_authority(authority.clone());
         }
@@ -2107,6 +2119,7 @@ pub fn open_app_server_with_codebase_providers(
         env_tools,
         env_runtime,
         connector_runtime,
+        mcp_oauth,
         mcp_runtime_intents,
         mcp_updates,
         mcp_changes,
@@ -2159,6 +2172,7 @@ struct ToolConfigWatcherInputs {
     env_tools: Arc<EnvToolPorts>,
     env_runtime: crate::server::EnvRuntimeControl,
     connector_runtime: Option<LocalConnectorRuntime>,
+    mcp_oauth: Arc<McpOAuthService>,
     mcp_runtime_intents: crate::mcp_runtime::McpRuntimeIntents,
     mcp_updates: McpCatalogUpdates,
     mcp_changes: McpCatalogUpdateSubscription,
@@ -2175,6 +2189,7 @@ impl ToolConfigWatcher {
             env_tools,
             env_runtime,
             mut connector_runtime,
+            mcp_oauth,
             mcp_runtime_intents,
             mcp_updates,
             mcp_changes,
@@ -2369,7 +2384,7 @@ impl ToolConfigWatcher {
                                 catalog_generation,
                                 &runtime_intents,
                                 connectors.service.authority().clone(),
-                                Arc::clone(&connectors.secrets),
+                                ash_mcp_extension::McpAuthentication { secrets: Arc::clone(&connectors.secrets), oauth: Arc::clone(&mcp_oauth) },
                                 Arc::clone(&connectors.mcp),
                                 mcp_updates.clone(),
                             )

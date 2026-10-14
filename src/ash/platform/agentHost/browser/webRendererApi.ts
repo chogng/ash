@@ -150,7 +150,7 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 		agentCapabilities: createAppServerAgentCapabilitiesApi(connection),
 		agentTools: createAppServerAgentToolsApi(connection),
 		mcpServerStatus: createAppServerMcpServerStatusApi(connection),
-		mcpServerManagement: new AppServerMcpServerManagementService(connection),
+		mcpServerManagement: new AppServerMcpServerManagementService(connection, connectorHostServices),
 		traceSettings: createAppServerTraceSettingsApi(connection),
 		executionSettings: createAppServerExecutionSettingsService(connection),
 		hooks: createAppServerHookOperations(connection),

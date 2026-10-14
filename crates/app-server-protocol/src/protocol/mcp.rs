@@ -34,6 +34,14 @@ impl Drop for McpSecretDto {
 pub struct McpOAuthStartParams {
     pub server_id: String,
     pub redirect_uri: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub client_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub client_metadata_url: Option<String>,
+    #[serde(default)]
+    pub scopes: Vec<String>,
 }
 
 /// Browser navigation values for one process-local standalone MCP OAuth flow.
@@ -49,8 +57,18 @@ pub struct McpOAuthStartResult {
 #[serde(rename_all = "camelCase")]
 pub struct McpOAuthCompleteParams {
     pub flow_id: String,
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub issuer: Option<String>,
     pub state: McpSecretDto,
     pub authorization_code: McpSecretDto,
+}
+
+/// Cancels exactly one browser login; it does not sign out a shared credential.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpOAuthCancelParams {
+    pub flow_id: String,
 }
 
 /// Selects one standalone MCP server for credential refresh or revocation.

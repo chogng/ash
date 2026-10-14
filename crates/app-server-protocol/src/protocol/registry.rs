@@ -1634,6 +1634,8 @@ use crate::protocol::language::LanguageTextEditDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::mcp::McpOAuthCompleteParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::mcp::McpOAuthCancelParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::mcp::McpOAuthMutationParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::mcp::McpOAuthMutationResult;
@@ -3762,6 +3764,16 @@ client_methods! {
         response: McpOAuthMutationResult,
         serialization: GlobalExclusive,
     },
+    McpOAuthCancel => "mcp/oauth/cancel" {
+        params: McpOAuthCancelParams,
+        response: (),
+        serialization: None,
+    },
+    McpOAuthLogout => "mcp/oauth/logout" {
+        params: McpOAuthMutationParams,
+        response: McpOAuthMutationResult,
+        serialization: GlobalExclusive,
+    },
     McpOAuthRefresh => "mcp/oauth/refresh" {
         params: McpOAuthMutationParams,
         response: McpOAuthMutationResult,
@@ -5651,6 +5663,7 @@ typescript_bindings! {
     ToolResourceCancelParams,
     McpOAuthStartResult,
     McpOAuthCompleteParams,
+    McpOAuthCancelParams,
     McpOAuthMutationParams,
     McpOAuthMutationResult,
     McpServerRuntimeIntentDto,

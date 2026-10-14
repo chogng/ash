@@ -13,6 +13,30 @@ use ash_app_server_protocol::protocol::queue::QueueListResult;
 use ash_app_server_protocol::protocol::registry::ClientMethod;
 
 impl<T: JsonRpcTransport> AppServerClient<T> {
+    pub fn start_mcp_oauth(
+        &mut self,
+        params: ash_app_server_protocol::protocol::mcp::McpOAuthStartParams,
+    ) -> Result<ash_app_server_protocol::protocol::mcp::McpOAuthStartResult, ClientError> {
+        self.call(ClientMethod::McpOAuthStart, params)
+    }
+    pub fn complete_mcp_oauth(
+        &mut self,
+        params: McpOAuthCompleteRequest,
+    ) -> Result<ash_app_server_protocol::protocol::mcp::McpOAuthMutationResult, ClientError> {
+        self.call_secret(ClientMethod::McpOAuthComplete, params)
+    }
+    pub fn logout_mcp_oauth(
+        &mut self,
+        params: ash_app_server_protocol::protocol::mcp::McpOAuthMutationParams,
+    ) -> Result<ash_app_server_protocol::protocol::mcp::McpOAuthMutationResult, ClientError> {
+        self.call(ClientMethod::McpOAuthLogout, params)
+    }
+    pub fn cancel_mcp_oauth(
+        &mut self,
+        params: ash_app_server_protocol::protocol::mcp::McpOAuthCancelParams,
+    ) -> Result<(), ClientError> {
+        self.call(ClientMethod::McpOAuthCancel, params)
+    }
     pub fn edit_queued_message(
         &mut self,
         params: ash_app_server_protocol::protocol::queue::QueueEditParams,
@@ -64,5 +88,46 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         params: ExtensionItemsParams,
     ) -> Result<ExtensionItemsResult, ClientError> {
         self.call(ClientMethod::ExtensionItems, params)
+    }
+}
+
+/// Secret-bearing callback request; never passed through the ordinary diagnostic serializer.
+pub struct McpOAuthCompleteRequest {
+    flow_id: String,
+    state: String,
+    authorization_code: String,
+    issuer: Option<String>,
+}
+impl McpOAuthCompleteRequest {
+    pub fn new(
+        flow_id: String,
+        state: String,
+        authorization_code: String,
+        issuer: Option<String>,
+    ) -> Self {
+        Self {
+            flow_id,
+            state,
+            authorization_code,
+            issuer,
+        }
+    }
+}
+impl serde::Serialize for McpOAuthCompleteRequest {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let mut value = serializer.serialize_struct("McpOAuthCompleteRequest", 4)?;
+        value.serialize_field("flowId", &self.flow_id)?;
+        value.serialize_field("state", &self.state)?;
+        value.serialize_field("authorizationCode", &self.authorization_code)?;
+        value.serialize_field("issuer", &self.issuer)?;
+        value.end()
+    }
+}
+impl Drop for McpOAuthCompleteRequest {
+    fn drop(&mut self) {
+        use zeroize::Zeroize;
+        self.state.zeroize();
+        self.authorization_code.zeroize();
     }
 }

@@ -76,6 +76,12 @@ pub(crate) struct McpInvocationAuthority {
     pub runtime_fence: Option<Arc<dyn RuntimeInvocationFence>>,
 }
 
+/// Credential authority used by direct Config MCP servers; Connector accounts keep their own owner.
+pub struct McpAuthentication {
+    pub secrets: Arc<dyn SecretStore>,
+    pub oauth: Arc<crate::auth::McpOAuthService>,
+}
+
 pub struct McpToolComposition {
     pub tools: Arc<dyn ToolService>,
     pub policy: Arc<dyn ActionPolicyService>,
@@ -87,7 +93,7 @@ pub fn compose_mcp_tools(
     config: &ResolvedConfig,
     generation: ConfigGeneration,
 ) -> Result<Option<McpToolComposition>, McpToolCompositionError> {
-    let (definitions, authorities) = materialize_servers(config, None, &BTreeMap::new())?;
+    let (definitions, authorities) = materialize_servers(config, None, &BTreeMap::new(), None)?;
     if definitions.is_empty() {
         return Ok(None);
     }
@@ -104,7 +110,7 @@ pub fn compose_mcp_tools_with_updates(
     generation: ConfigGeneration,
     updates: McpCatalogUpdates,
 ) -> Result<Option<McpToolComposition>, McpToolCompositionError> {
-    let (definitions, authorities) = materialize_servers(config, None, &BTreeMap::new())?;
+    let (definitions, authorities) = materialize_servers(config, None, &BTreeMap::new(), None)?;
     if definitions.is_empty() {
         return Ok(None);
     }
@@ -133,7 +139,7 @@ pub fn compose_mcp_tools_at_generation_with_updates(
             "MCP catalog generation must be non-zero".into(),
         ));
     }
-    let (definitions, authorities) = materialize_servers(config, None, &BTreeMap::new())?;
+    let (definitions, authorities) = materialize_servers(config, None, &BTreeMap::new(), None)?;
     if definitions.is_empty() {
         return Ok(None);
     }
@@ -159,7 +165,7 @@ pub fn compose_mcp_tools_at_generation_with_runtime_intents_and_updates(
             "MCP catalog generation must be non-zero".into(),
         ));
     }
-    let (definitions, authorities) = materialize_servers(config, None, runtime_intents)?;
+    let (definitions, authorities) = materialize_servers(config, None, runtime_intents, None)?;
     if definitions.is_empty() {
         return Ok(None);
     }
@@ -191,7 +197,7 @@ pub fn compose_mcp_tools_with_connectors(
         ));
     }
     let (mut definitions, mut authorities) =
-        materialize_servers(config, Some(secrets.as_ref()), &BTreeMap::new())?;
+        materialize_servers(config, Some(secrets.as_ref()), &BTreeMap::new(), None)?;
     materialize_standalone_plugin_servers(provider.as_ref(), &mut definitions, &mut authorities)?;
     let connectors =
         materialize_connector_servers(connector_authority, secrets.as_ref(), provider.as_ref())?;
@@ -225,7 +231,7 @@ pub fn compose_mcp_tools_with_connectors_and_updates(
         ));
     }
     let (mut definitions, mut authorities) =
-        materialize_servers(config, Some(secrets.as_ref()), &BTreeMap::new())?;
+        materialize_servers(config, Some(secrets.as_ref()), &BTreeMap::new(), None)?;
     materialize_standalone_plugin_servers(provider.as_ref(), &mut definitions, &mut authorities)?;
     let connectors =
         materialize_connector_servers(connector_authority, secrets.as_ref(), provider.as_ref())?;
@@ -257,7 +263,7 @@ pub fn compose_mcp_tools_with_connectors_and_runtime_intents_and_updates(
     catalog_generation: u64,
     runtime_intents: &BTreeMap<McpServerId, McpServerRuntimeIntent>,
     connector_authority: ConnectorAuthority,
-    secrets: Arc<dyn SecretStore>,
+    authentication: McpAuthentication,
     provider: Arc<dyn ConnectorMcpRuntimeProvider>,
     updates: McpCatalogUpdates,
 ) -> Result<Option<McpToolComposition>, McpToolCompositionError> {
@@ -266,8 +272,13 @@ pub fn compose_mcp_tools_with_connectors_and_runtime_intents_and_updates(
             "MCP catalog generation must be non-zero".into(),
         ));
     }
-    let (mut definitions, mut authorities) =
-        materialize_servers(config, Some(secrets.as_ref()), runtime_intents)?;
+    let secrets = &authentication.secrets;
+    let (mut definitions, mut authorities) = materialize_servers(
+        config,
+        Some(secrets.as_ref()),
+        runtime_intents,
+        Some(&authentication.oauth),
+    )?;
     materialize_standalone_plugin_servers(provider.as_ref(), &mut definitions, &mut authorities)?;
     let connectors =
         materialize_connector_servers(connector_authority, secrets.as_ref(), provider.as_ref())?;
@@ -396,6 +407,7 @@ fn materialize_servers(
     config: &ResolvedConfig,
     secrets: Option<&dyn SecretStore>,
     runtime_intents: &BTreeMap<McpServerId, McpServerRuntimeIntent>,
+    oauth: Option<&Arc<crate::auth::McpOAuthService>>,
 ) -> Result<
     (
         Vec<McpServerDefinition>,
@@ -451,39 +463,46 @@ fn materialize_servers(
                             server.id
                         ))
                     })?;
-                    let value = secrets
-                        .load(&key)
-                        .map_err(|error| {
-                            McpToolCompositionError(format!(
-                                "MCP credential for '{}' is unavailable: {error}",
-                                server.id
-                            ))
-                        })?
-                        .ok_or_else(|| {
-                            McpToolCompositionError(format!(
-                                "MCP credential for '{}' is unavailable",
-                                server.id
-                            ))
-                        })?;
-                    let value = project_runtime_credential(value).map_err(|error| {
+                    let value = secrets.load(&key).map_err(|error| {
                         McpToolCompositionError(format!(
-                            "MCP credential for '{}' is invalid: {error}",
+                            "MCP credential for '{}' is unavailable: {error}",
                             server.id
                         ))
                     })?;
-                    let token = std::str::from_utf8(value.expose()).map_err(|_| {
-                        McpToolCompositionError(format!(
-                            "MCP credential for '{}' is not valid UTF-8 bearer material",
-                            server.id
-                        ))
-                    })?;
-                    endpoint =
-                        endpoint.with_bearer_token(BearerToken::new(token).map_err(|error| {
+                    let Some(value) = value else {
+                        continue;
+                    };
+                    let is_oauth = value.expose().starts_with(b"ash-mcp-oauth-credential-v1\0");
+                    if is_oauth && let Some(oauth) = oauth {
+                        let target = crate::auth::McpOAuthTarget::from_config(server)
+                            .map_err(|error| McpToolCompositionError(error.to_string()))?;
+                        endpoint = endpoint.with_credentials(
+                            oauth
+                                .authorization(target)
+                                .map_err(|error| McpToolCompositionError(error.to_string()))?,
+                        );
+                    } else {
+                        let value = project_runtime_credential(value).map_err(|error| {
                             McpToolCompositionError(format!(
                                 "MCP credential for '{}' is invalid: {error}",
                                 server.id
                             ))
-                        })?);
+                        })?;
+                        let token = std::str::from_utf8(value.expose()).map_err(|_| {
+                            McpToolCompositionError(format!(
+                                "MCP credential for '{}' is not valid UTF-8 bearer material",
+                                server.id
+                            ))
+                        })?;
+                        endpoint = endpoint.with_bearer_token(BearerToken::new(token).map_err(
+                            |error| {
+                                McpToolCompositionError(format!(
+                                    "MCP credential for '{}' is invalid: {error}",
+                                    server.id
+                                ))
+                            },
+                        )?);
+                    }
                 }
                 (
                     McpServerTransport::StreamableHttp(endpoint),

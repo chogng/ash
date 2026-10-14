@@ -16,6 +16,8 @@ extension-api = { package = "ash-extension-api", path = "../extension-api" }
 file-system = { package = "ash-file-system", path = "../../file-system" }
 file-access = { package = "ash-file-access", path = "../../file-access" }
 base64 = { workspace = true }
+fs2 = { workspace = true }
+ash-http-client = { workspace = true }
 getrandom = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }

@@ -13,6 +13,7 @@ import { SettingsTree } from '../../../src/ash/workbench/contrib/preferences/bro
 import { TOCTree, TOCTreeModel } from '../../../src/ash/workbench/contrib/preferences/browser/tocTree.js';
 import type { ISetting } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
 import '../../../src/ash/workbench/contrib/preferences/browser/media/settingsEditor.css';
+import { setARIAContainer } from '../../../src/ash/base/browser/ui/aria/aria.js';
 import { localize } from '../../../src/ash/nls.js';
 import { ICustomizationMarketplaceService } from '../../../src/ash/platform/customizationMarketplace/common/customizationMarketplaceService.js';
 import { CustomizationMarketplaceWorkbenchService } from '../../../src/ash/workbench/contrib/chat/browser/aiCustomization/customizationMarketplaceWorkbenchService.js';
@@ -398,7 +399,10 @@ let mcpStatusFailure = false;
 let mcpToolsFailure = false;
 let holdMcpStatus = false;
 let completeMcpStatus: (() => void) | undefined;
-const mcpCapabilities = { mcp: true };
+setARIAContainer(document.body);
+const mcpCapabilities = { mcp: true, mcpOAuth: false };
+let finishMcpLogin: ((value: { state: string; code: string; issuer?: string }) => void) | undefined;
+let rejectMcpLogin: ((error: Error) => void) | undefined;
 let mcpRevision = 1;
 let mcpConfigured: Record<string, McpServerConfiguration> = {};
 let failMcpConnect = false;
@@ -410,6 +414,12 @@ const mcpConnection = {
 	request: async (definition: { method: string; }, params: unknown) => {
 		requests.push([definition.method, params]);
 		if (definition.method === 'config/read') { return { revision: mcpRevision, mcpServers: structuredClone(mcpConfigured) }; }
+        if (definition.method === 'mcp/oauth/start') { return { flowId: 'synthetic-flow', authorizationUrl: 'https://issuer.test/authorize' }; }
+        if (definition.method === 'mcp/oauth/cancel') { return null; }
+        if (definition.method === 'mcp/oauth/complete' || definition.method === 'mcp/oauth/logout') {
+            mcpServers = mcpServers.map(server => ({ ...server, state: { status: definition.method === 'mcp/oauth/complete' ? 'connected' : 'disconnected' } }));
+            return { serverId: 'user:mcp:oauth' };
+        }
 		if (definition.method !== 'mcp/server/status') {
 			const input = params as { expectedRevision: number; serverId: string; server: McpServerConfiguration; enablement: 'enabled' | 'disabled'; };
 			if (['mcp/server/upsert', 'mcp/server/remove', 'mcp/server/enablement/set'].includes(definition.method)) {
@@ -455,7 +465,15 @@ const mcpConnection = {
 	},
 } as unknown as AppServerProtocolClient;
 services.registerInstance(IMcpServerStatusService, createAppServerMcpServerStatusApi(mcpConnection));
-services.registerInstance(IMcpServerManagementService, disposables.add(new AppServerMcpServerManagementService(mcpConnection)));
+services.registerInstance(IMcpServerManagementService, disposables.add(new AppServerMcpServerManagementService(mcpConnection, {
+    externalOpener: { openExternal: async target => { requests.push(['oauth/openBrowser', target]); return true; } },
+    clipboardService: {} as never,
+    callbackHost: {
+        listen: async () => ({ id: 'synthetic-callback', redirectUri: 'http://127.0.0.1:3333/callback' }),
+        wait: () => new Promise((resolve, reject) => { finishMcpLogin = resolve; rejectMcpLogin = reject; }),
+        close: async () => { rejectMcpLogin?.(new Error('Sign-in cancelled')); finishMcpLogin = undefined; rejectMcpLogin = undefined; },
+    },
+})));
 services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService({
 	isAvailable: true,
 	read: async () => {
@@ -559,6 +577,9 @@ function prepareSettings(): void {
 }
 
 window.ashExtensionsIntegration = {
+    enableMcpOAuth: () => { mcpCapabilities.mcpOAuth = true; },
+    completeMcpLogin: () => { finishMcpLogin?.({ state: 'synthetic-state', code: 'synthetic-code', issuer: 'https://issuer.test' }); },
+    mcpLoginWaiting: () => !!finishMcpLogin,
 	setMcpServers: servers => { mcpServers = servers; },
 	changeMcpRevision: () => { mcpRevision++; },
 	setMcpConnectFailure: () => { failMcpConnect = true; },
@@ -615,6 +636,6 @@ window.ashExtensionsIntegration = {
 declare global {
 	interface Window {
 
-		ashExtensionsIntegration: { holdDiscoverySearch(): void; discoverySearchStarted(): boolean; setDiscoveryEnabled(value: boolean): void; changeMcpRevision(): void; setMcpConnectFailure(): void; deferMcpConnection(): void; configureMcp(server: McpServerConfiguration): void; setMcpServers(servers: readonly McpServerStatus[]): void; failMcpStatus(): void; failMcpTools(): void; setMcpSupported(supported: boolean): void; refreshMcp(): Promise<void>; holdMcpStatus(): void; mcpStatusStarted(): boolean; completeMcpStatus(): void; prepareSettings(): void; readSetting(key: string): unknown; openEditorExtension(): Promise<void>; holdReadme(): void; readmeStarted(): boolean; completeReadme(): void; setRecommendations(content: string): Promise<void>; leaveWorkspace(): void; holdInstructions(): void; instructionsStarted(): boolean; instructionsAborted(): boolean; completeInstructions(): void; setSession(id: string): void; addMcpPackage(): void; addSkillOnlyPlugin(): void; requests: unknown[]; startCommand(id: string): void; waitCommand(): Promise<void>; changePluginRevision(): void; removeEditorEntrypoint(): void; localPackages(): PluginPackageDto[]; open(options: ExtensionsOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void; };
+		ashExtensionsIntegration: { enableMcpOAuth(): void; completeMcpLogin(): void; mcpLoginWaiting(): boolean; holdDiscoverySearch(): void; discoverySearchStarted(): boolean; setDiscoveryEnabled(value: boolean): void; changeMcpRevision(): void; setMcpConnectFailure(): void; deferMcpConnection(): void; configureMcp(server: McpServerConfiguration): void; setMcpServers(servers: readonly McpServerStatus[]): void; failMcpStatus(): void; failMcpTools(): void; setMcpSupported(supported: boolean): void; refreshMcp(): Promise<void>; holdMcpStatus(): void; mcpStatusStarted(): boolean; completeMcpStatus(): void; prepareSettings(): void; readSetting(key: string): unknown; openEditorExtension(): Promise<void>; holdReadme(): void; readmeStarted(): boolean; completeReadme(): void; setRecommendations(content: string): Promise<void>; leaveWorkspace(): void; holdInstructions(): void; instructionsStarted(): boolean; instructionsAborted(): boolean; completeInstructions(): void; setSession(id: string): void; addMcpPackage(): void; addSkillOnlyPlugin(): void; requests: unknown[]; startCommand(id: string): void; waitCommand(): Promise<void>; changePluginRevision(): void; removeEditorEntrypoint(): void; localPackages(): PluginPackageDto[]; open(options: ExtensionsOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void; };
 	}
 }

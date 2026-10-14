@@ -96,6 +96,14 @@ pub enum HttpAuthorization {
     #[default]
     Unauthenticated,
     Bearer(BearerToken),
+    Managed(ManagedHttpCredential),
+}
+
+pub struct ManagedHttpCredential(pub(crate) std::sync::Arc<dyn crate::HttpCredentialProvider>);
+impl std::fmt::Debug for ManagedHttpCredential {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("ManagedHttpCredential([REDACTED])")
+    }
 }
 
 /// Streamable HTTP endpoint and connection-time authorization.
@@ -121,6 +129,14 @@ impl StreamableHttpServer {
 
     pub fn with_bearer_token(mut self, token: BearerToken) -> Self {
         self.authorization = HttpAuthorization::Bearer(token);
+        self
+    }
+
+    pub fn with_credentials(
+        mut self,
+        credentials: std::sync::Arc<dyn crate::HttpCredentialProvider>,
+    ) -> Self {
+        self.authorization = HttpAuthorization::Managed(ManagedHttpCredential(credentials));
         self
     }
 

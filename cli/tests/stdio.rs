@@ -232,6 +232,7 @@ fn remote_runtime_preserves_a_terminal_between_real_connections() {
             profile: TerminalProfileSelection::Default,
             lifecycle: TerminalLifecycle::Reconnectable,
             env: None,
+            strict_env: None,
             cwd: None,
             execution: None,
         })

@@ -49,9 +49,9 @@ runtime 负责多 server 启动、provider-neutral tool catalog/binding、分页
 取消与失效标记。Current App Server adapter 将 user config 与 ready Connector snapshot 接入 Core
 `ToolService`、逐次用户 approval 和 durable result，并在两类 generation 变化时重建 tool port。
 Connector API-token materialization、Extensions HTTP/packaged-stdio MCP、package-rooted legacy Plugin MCP、通用 Connector OAuth PKCE 编排与 Desktop
-browser callback 已实现。独立 Config credential reference materialization、provider-injected OAuth
-PKCE/callback/refresh/revoke、process-local connect/disconnect/status，以及 MCP form elicitation 到 Core
-durable interaction 的同调用恢复也已实现。通用自动 OAuth discovery、内建具体 provider、resources、
+browser callback 已实现。独立 Config credential reference materialization、标准 HTTP OAuth
+PKCE/callback/自动刷新/本地退出/远端 revoke、process-local connect/disconnect/status，以及 MCP form elicitation 到 Core
+durable interaction 的同调用恢复也已实现。resources、
 prompts、reconnect/health 和更完整的 interaction surface 仍是 Proposed。
 
 它不是：
@@ -127,8 +127,8 @@ server 启动，Connector connected 也不等于自动批准每次 Tool call。
 - Desktop 与 Browser 的 Extensions/MCP 窗格通过前端 MCP management service 读取独立 User 配置，提供添加、编辑、删除和持久启停，以及 process-local connect/disconnect。配置写入绑定读取时的 revision，操作后重新读取配置与后端状态。Package MCP 继续通过所属 package 管理；运行意图的响应不代表连接已成功。
 
 因此 low-level protocol/transport、独立 tools-only runtime、窄 App Server/Core tools slice、
-process-local connect/disconnect/status、provider-injected 独立 OAuth lifecycle 和基础 form interaction
-是 Current；自动 provider discovery、完整 interaction surface 与其他 MCP capability 仍是 Proposed。
+process-local connect/disconnect/status、独立 OAuth lifecycle 和基础 form interaction
+是 Current；完整 interaction surface 与其他 MCP capability 仍是 Proposed。
 
 ## 3. 标准基线
 
@@ -143,7 +143,7 @@ operation。[官方架构](https://modelcontextprotocol.io/specification/2025-11
 | ----------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | Base JSON-RPC lifecycle | Current                                     | Current 多 session startup/shutdown；reconnect/health Proposed                                                           |
 | stdio                   | Current direct-local + injectable transport | Current absolute executable startup；sandboxed launcher Proposed                                                         |
-| Streamable HTTP         | Current unauthenticated/bearer transport    | Current unauthenticated/SecretStore bearer；provider-injected OAuth lifecycle Current；自动 discovery/reconnect Proposed |
+| Streamable HTTP         | Current unauthenticated/bearer transport    | Current unauthenticated/SecretStore bearer；标准 OAuth lifecycle Current；自动 discovery/刷新 Current；reconnect Proposed |
 | Tools                   | Current 原始 list/call                      | Current catalog/binding/Core approval/durable result；Config/Connector hot rebuild Current                               |
 | Resources               | 尚未暴露                                    | 首发只做 list/read，显式进入 context                                                                                     |
 | Prompts                 | 尚未暴露                                    | 首发只做 list/get，不当作 Skill                                                                                          |
@@ -177,7 +177,7 @@ HTTP+SSE 是旧 revision 的兼容面，不进入 Ash 第一版。
 - startup/shutdown diagnostics 和 caller cancellation 传播。
 
 Proposed 扩展仍包括 resources/prompts、reconnect/health state machine、roots、sampling、URL 或更复杂
-form elicitation，以及通用 OAuth metadata discovery 和 concrete provider adapter。
+form elicitation。
 
 ### 4.3 两个 MCP 客户端 crate 都不拥有
 
@@ -562,9 +562,7 @@ MCP 内容可能包含 prompt injection。Ash 必须带 provenance 传入 Core C
 
 当前独立 Config MCP 的实现把上述责任拆为两层。`McpOAuthService` 拥有 process-local flow、S256
 PKCE、state、exact redirect/resource/Config target 复核、一次性 callback 和 SecretStore envelope；
-host 注入的 exact `McpOAuthProvider` 拥有 authorization-server discovery、endpoint allowlist、client
-identity、scope、token response parsing、audience、refresh 和 remote revoke。Ash 当前不提供通用自动
-discovery 或内建 concrete provider；未注入 provider 时 OAuth capability 明确 unavailable。
+`McpOAuthProvider` 拥有 authorization-server discovery、endpoint allowlist、client identity、scope、token response parsing、resource binding、refresh 和 remote revoke。产品 host 默认装配标准 HTTP adapter，支持 protected-resource/AS metadata、DCR、预注册 public client ID 与显式 CIMD URL；exact 注入的 Provider 优先。Desktop 与 CLI 使用同一认证服务，支持 browser login、取消与本地退出。
 
 SecretStore envelope 分离 runtime bearer 与 lifecycle secret。MCP transport 只能 materialize bearer，
 refresh/revoke 只能取得 lifecycle 部分；旧 raw bearer 仍可读取以兼容已有配置。App Server callback 会
@@ -615,7 +613,7 @@ OAuth coordinator；complete/refresh 强制 reconcile 为 connect，revoke 先�
 | Config      | `mcp/server/upsert`、`mcp/server/remove`、`mcp/server/enablement/set`            | Current typed command 管理定义和 enablement；读取并入 `config/read` |
 | Runtime     | `mcp/server/connect`、`mcp/server/disconnect`                                    | process-local lifecycle intent，已接入 reconcile                    |
 | Catalog     | `mcp/tool/list`、`mcp/resource/list`、`mcp/prompt/list`                          | Proposed 读取 snapshot                                              |
-| Auth        | `mcp/oauth/start`、`mcp/oauth/complete`、`mcp/oauth/refresh`、`mcp/oauth/revoke` | Current process-local one-shot OAuth flow 与 credential lifecycle   |
+| Auth        | `mcp/oauth/start`、`mcp/oauth/complete`、`mcp/oauth/cancel`、`mcp/oauth/logout`、`mcp/oauth/refresh`、`mcp/oauth/revoke` | Current process-local one-shot OAuth flow 与 credential lifecycle   |
 | Diagnostics | `mcp/server/status`、`mcp/server/log/read`                                       | status 已实现；log/read 尚未实现                                    |
 
 命名只是目标语义，实施时必须与 `ash-app-server-protocol` 同步生成 schema/TypeScript。配置修改
@@ -720,8 +718,9 @@ security 和 identity。resources/prompts/auth/reconnect 落地时按独立 owne
 - ✅ 直接 Config HTTPS bearer credential 的 host SecretStore materialization；
 - ✅ 独立 Config MCP 的 provider-injected PKCE/start/complete/refresh/revoke、target revalidation 与
   runtime/lifecycle secret isolation；
-- session resume/reconnect、protected resource metadata、自动 discovery、内建具体 provider，以及完整
-  endpoint/origin/redirect/egress policy 尚未具备。
+- ✅ 标准 metadata discovery、DCR/public client ID/显式 CIMD、请求前自动刷新和单次 401 恢复；
+- ✅ Desktop 与 CLI 登录/退出，以及跨 runtime 的 refresh/logout/callback 事务与失效保护；
+- session resume/reconnect 与第三方额外 OAuth 扩展仍未具备。
 
 完成条件：token 不进入 config/log/event，断线不被误判为取消或成功。
 

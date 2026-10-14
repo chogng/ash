@@ -23,6 +23,18 @@ use crate::print_json;
 
 #[derive(Subcommand)]
 pub(super) enum McpCommand {
+    #[command(about = crate::nls::text(crate::nls::Message::McpLoginHelp))]
+    Login {
+        id: String,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        client_metadata_url: Option<String>,
+        #[arg(long, value_delimiter = ',')]
+        scopes: Vec<String>,
+    },
+    #[command(about = crate::nls::text(crate::nls::Message::McpLogoutHelp))]
+    Logout { id: String },
     /// List configured servers as JSON.
     List,
     /// Show one server declaration as JSON.
@@ -107,12 +119,30 @@ fn command_id() -> CommandId {
 }
 
 pub(super) fn mcp(command: McpCommand) -> Result<(), CliError> {
-    with_client(|client| run_mcp(client, command))
+    match command {
+        McpCommand::Login {
+            id,
+            client_id,
+            client_metadata_url,
+            scopes,
+        } => crate::mcp_login::run(id, client_id, client_metadata_url, scopes),
+        other => with_client(|client| run_mcp(client, other)),
+    }
 }
 
 fn run_mcp(client: &mut AppServerRequestHandle, command: McpCommand) -> Result<(), CliError> {
+    if let McpCommand::Logout { id } = &command {
+        return print_json(&client.logout_mcp_oauth(
+            ash_app_server_protocol::protocol::mcp::McpOAuthMutationParams {
+                server_id: id.clone(),
+            },
+        )?);
+    }
     let config = client.read_config()?;
     let result = match command {
+        McpCommand::Login { .. } | McpCommand::Logout { .. } => {
+            unreachable!("authentication is dispatched before declaration management")
+        }
         McpCommand::List => return print_json(&config.mcp_servers),
         McpCommand::Get { id } => {
             let server = config

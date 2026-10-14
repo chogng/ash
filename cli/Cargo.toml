@@ -29,6 +29,9 @@ fs2 = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+url = { workspace = true }
+zeroize = { workspace = true }
+sha2 = { workspace = true }
 signal-hook = { workspace = true }
 ureq-update = { workspace = true }
 ash-app-server-client = { workspace = true }
@@ -46,7 +49,6 @@ ash-tui = { workspace = true }
 flate2 = { workspace = true }
 tar = { workspace = true }
 zip = { workspace = true }
-sha2 = { workspace = true }
 ash-app-server = { workspace = true }
 ash-async-utils = { workspace = true }
 ash-http-client = { workspace = true }
