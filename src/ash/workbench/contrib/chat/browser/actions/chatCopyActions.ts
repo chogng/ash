@@ -7,7 +7,6 @@ import { IAccessibilityService } from '../../../../../platform/accessibility/com
 import { IAppServerApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { buildOpenSessionLinkUri, OPEN_SESSION_LINK_SCHEME, parseOpenSessionLinkUri } from '../../../../../platform/agentHost/common/openSessionLink.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
-import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { IChatService } from '../../../../services/chat/common/chatService.js';

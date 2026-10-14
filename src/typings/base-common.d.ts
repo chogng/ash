@@ -63,8 +63,11 @@ declare class URL {
 }
 
 declare class URLSearchParams {
-	constructor(init?: string);
+	constructor(init?: string | Record<string, string>);
 	get(name: string): string | null;
+	getAll(name: string): string[];
+	keys(): IterableIterator<string>;
 	has(name: string): boolean;
 	set(name: string, value: string): void;
+	toString(): string;
 }

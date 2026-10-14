@@ -400,12 +400,15 @@ test('Sending a selected code reference forwards its snapshot and restores it af
 test('Chat dictation startup failure appears in notifications and leaves input status clear', async () => {
 	using notifications = new NotificationService();
 	using part = inputPart(notifications, { start: async () => { throw new Error('HTTP 403'); } });
+	const failure = new DeferredPromise<void>();
+	using notification = notifications.onDidAdd(() => { void failure.complete(); });
 	part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mic"] button')?.click();
-	await new Promise(resolve => setTimeout(resolve, 0));
+	await failure.p;
 	assert.deepEqual(notifications.getNotifications().map(item => ({ severity: item.severity, message: item.message })), [
 		{ severity: NotificationSeverity.Error, message: 'Dictation failed: Error: HTTP 403' },
 	]);
 	assert.equal(part.element.querySelector('.ash-chat-status-summary')?.textContent, 'Loading chat…');
+	assert.equal(part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mic"] button')?.disabled, false);
 });
 
 test('Chat keeps model preparation in settings and reads it only when dictation is requested', async () => {
@@ -992,13 +995,19 @@ test('Draft handoff carries user context and leaves source-owned App context wit
 	using part = inputPart(sharedNotifications);
 	let sourceReads = 0;
 	const source = { id: 'app', kind: 'mcpApp', lifetime: 'source' as const, name: 'App context', resolve: async () => { sourceReads++; return { name: 'App context', content: 'Live source context' }; } };
+	edit(part, 'User draft');
 	part.addContext(source);
 	part.addContext({ id: 'file', kind: 'file', name: 'file.ts', resolve: async () => ({ name: 'file.ts', content: 'User file' }) });
-	edit(part, 'User draft');
 	const captured = await part.captureDraft();
 	assert.ok(captured);
-	assert.deepEqual(captured.draft.contexts, [{ id: 'file', kind: 'file', name: 'file.ts', content: 'User file' }]);
+	assert.deepEqual(captured.draft, {
+		mode: 'agent', text: 'User draft  file.ts ',
+		contexts: [{ id: 'file', kind: 'file', name: 'file.ts', content: 'User file', reference: { start: 12, end: 19 } }],
+	});
 	assert.equal(sourceReads, 0);
+	using target = inputPart(sharedNotifications);
+	target.restoreDraft(captured.draft);
+	assert.deepEqual((await target.captureDraft())?.draft, captured.draft);
 	captured.clear();
 	assert.deepEqual(part.attachmentModel.attachments, [source]);
 	assert.equal(await part.captureDraft(), undefined);

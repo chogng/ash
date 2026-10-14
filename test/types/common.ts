@@ -30,3 +30,9 @@ handle.unref();
 const uuid: string = crypto.randomUUID();
 const bytes: Uint8Array<ArrayBuffer> = new TextEncoder().encode(uuid);
 new TextDecoder().decode(bytes);
+
+// Conversation links use these URL APIs in both browser and server runtimes.
+const query = new URLSearchParams({ sessionId: 'session', threadId: 'thread' });
+const values: string[] = query.getAll('threadId');
+const keys: string[] = [...query.keys()];
+const encodedQuery: string = query.toString();

@@ -286,7 +286,12 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 		this.dictationSession = this._register(instantiationService.createInstance(DictationSession, this.input, this.dictationPreview, () => this.visible, () => this.delegate.openModelSettings('dictation')));
 		this._register(this.speechToText.onDidChangeState(() => { this.renderStatus(); this.renderToolbarActions(); }));
-		this._register(this.dictationSession.onDidEnd(error => { if (error) { this.notifications.error(localize('chat.input.dictationFailed', 'Dictation failed: {0}', error)); } }));
+		this._register(this.dictationSession.onDidEnd(error => {
+			// The speech service can become idle before the input session releases its active state.
+			this.renderStatus();
+			this.renderToolbarActions();
+			if (error) { this.notifications.error(localize('chat.input.dictationFailed', 'Dictation failed: {0}', error)); }
+		}));
 		if (!this.secondaryToolbarContainer) this.element.append(this.status);
 		this.element.append(this.dictationPreview, this.interaction, this.changesPill.domNode, this.inputContainer);
 		if (this.secondaryToolbarContainer) this.element.append(this.secondaryToolbarContainer);
@@ -591,10 +596,21 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			if (lifecycle.aborted) return undefined;
 		}
 		if (this.isDisposed || lifecycle.aborted) return undefined;
-		const text = this.input.value;
+		let text = this.input.value;
 		const mode = this.mode;
-		const attachments = this.contexts;
-		if (!text && attachments.length === 0) return undefined;
+		let attachments = this.contexts.filter(attachment => attachment.lifetime !== 'source');
+		// App references belong to their live producer. Removing their labels from the
+		// transferred text also shifts the positions of any user references that follow.
+		for (const attachment of [...this.contexts].reverse()) {
+			if (attachment.lifetime !== 'source' || !attachment.reference) continue;
+			const { start, end } = attachment.reference;
+			text = text.slice(0, start) + text.slice(end);
+			attachments = attachments.map(context => context.reference && context.reference.start >= end ? {
+				...context,
+				reference: { start: context.reference.start - (end - start), end: context.reference.end - (end - start) },
+			} : context);
+		}
+		if (!text.trim() && attachments.length === 0) return undefined;
 		const revision = this.draftRevision;
 		const contexts = await Promise.all(attachments.map(async attachment => ({
 			id: attachment.id,

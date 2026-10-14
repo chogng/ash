@@ -225,7 +225,7 @@ export class NewChatInputWidget extends ChatInputPart {
 		this.draftWriteRevisions.set(draftId, revision);
 		const text = this.input.value;
 		const mode = this.model.inputState.mode;
-		const attachments = this.attachmentModel.attachments.filter(attachment => attachment.lifetime !== 'source');
+		const attachments = this.contexts.filter(attachment => attachment.lifetime !== 'source');
 		if (attachments.length === 0) {
 			writeNewChatDraftState(this.storage, { mode, text, contexts: [] }, draftId);
 			return;
