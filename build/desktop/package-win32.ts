@@ -1,5 +1,6 @@
 import { packager } from '@electron/packager';
 import { writeApplicationChecksums } from './host.ts';
+import { ignoreApplicationFile, productionDependencyDeployOptions } from './packageApplication.ts';
 import { rebuild } from '@electron/rebuild';
 import { spawn } from 'node:child_process';
 import { cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
@@ -57,7 +58,7 @@ async function assembleBundle(stage: string, bundlePath: string, options: Map<st
 	const updatePublicKey = requireUpdatePublicKey();
 	const destination = dirname(bundlePath);
 	const appStage = join(stage, 'app');
-	await runPnpm(['--filter', 'ash', 'deploy', '--prod', '--ignore-scripts', appStage]);
+	await runPnpm([...productionDependencyDeployOptions, appStage]);
 
 	const metadata = JSON.parse(await readFile(join(appStage, 'package.json'), 'utf8'));
 	metadata.main = 'dist/main/src/main.js';
@@ -99,13 +100,7 @@ async function assembleBundle(stage: string, bundlePath: string, options: Map<st
 		asar: false,
 		prune: false,
 		derefSymlinks: true,
-		// Packager passes POSIX-style paths relative to appStage (for example, /node_modules/pkg).
-		ignore: path => {
-			const [top, second] = path.slice(1).split('/');
-			if (!top) return false;
-			if (!['package.json', 'node_modules', 'dist', 'resources', 'licenses', 'THIRD_PARTY_NOTICES.md'].includes(top)) return true;
-			return top === 'node_modules' && ['.bin', 'electron'].includes(second);
-		},
+		ignore: ignoreApplicationFile,
 	});
 	if (packagePaths.length !== 1 || resolve(packagePaths[0]) !== bundlePath) throw new Error('Electron packager returned an unexpected bundle path');
 

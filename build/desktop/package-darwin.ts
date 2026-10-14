@@ -1,5 +1,6 @@
 import { packager } from '@electron/packager';
 import { writeApplicationChecksums } from './host.ts';
+import { ignoreApplicationFile, productionDependencyDeployOptions } from './packageApplication.ts';
 import { rebuild } from '@electron/rebuild';
 import { spawn } from 'node:child_process';
 import { cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
@@ -29,7 +30,7 @@ await mkdir(buildRoot, { recursive: true });
 const stage = await mkdtemp(join(buildRoot, 'package-darwin-'));
 try {
 	const appStage = join(stage, 'app');
-	await runPnpm(['--filter', 'ash', 'deploy', '--prod', '--ignore-scripts', appStage]);
+	await runPnpm([...productionDependencyDeployOptions, appStage]);
 	const metadata = JSON.parse(await readFile(join(appStage, 'package.json'), 'utf8'));
 	metadata.main = 'dist/main/src/main.js';
 	await writeFile(join(appStage, 'package.json'), `${JSON.stringify(metadata, null, 2)}\n`);
@@ -92,12 +93,7 @@ try {
 		derefSymlinks: true,
 		extraResource: resources,
 		...(options.unsigned ? {} : { osxSign: { identity: signingIdentity! } }),
-		ignore: path => {
-			const [top, second] = path.slice(1).split('/');
-			if (!top) return false;
-			if (!['package.json', 'node_modules', 'dist', 'resources', 'licenses', 'THIRD_PARTY_NOTICES.md'].includes(top)) return true;
-			return top === 'node_modules' && ['.bin', 'electron'].includes(second);
-		},
+		ignore: ignoreApplicationFile,
 	});
 	if (packages.length !== 1 || resolve(packages[0]) !== dirname(bundlePath)) throw new Error('Electron packager returned an unexpected bundle path');
 	for (const file of [
