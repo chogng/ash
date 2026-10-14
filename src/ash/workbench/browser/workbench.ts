@@ -92,6 +92,7 @@ import { ILocalTranscriptionService } from '../../platform/localTranscription/co
 import { NullLocalTranscriptionService } from '../services/localTranscription/browser/localTranscriptionService.js';
 import { IAgentCapabilitiesService } from '../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { IMcpServerStatusService } from '../../platform/mcp/common/mcpServerStatusService.js';
+import { IMcpServerManagementService } from '../../platform/mcp/common/mcpServerManagementService.js';
 import { ITraceSettingsService } from '../../platform/trace/common/traceSettingsService.js';
 import { IBrowserViewService } from '../../platform/browserView/common/browserView.js';
 import { IRemoteConnectionApi, IRemoteConnectionService, RemoteConnectionService } from "../../platform/remote/common/remoteConnectionService.js";
@@ -565,6 +566,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(ILocalTranscriptionService, api.localTranscription ?? this._register(new NullLocalTranscriptionService()));
 		services.registerInstance(IAgentCapabilitiesService, api.agentCapabilities);
 		services.registerInstance(IMcpServerStatusService, api.mcpServerStatus);
+		services.registerInstance(IMcpServerManagementService, api.mcpServerManagement);
 		services.registerInstance(ITraceSettingsService, api.traceSettings);
 		services.registerInstance(IAgentExecutionSettingsService, api.executionSettings);
 		services.registerInstance(INetworkDiagnosticsService, api.networkDiagnostics);

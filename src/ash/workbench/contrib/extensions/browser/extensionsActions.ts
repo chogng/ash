@@ -13,6 +13,93 @@ import { ExtensionsInputSource, type ExtensionsInput } from '../common/extension
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import type { McpServerRuntimeState } from '../../../../platform/mcp/common/mcpServerStatusService.js';
+import type { IMcpServerManagementService, McpServerConfiguration, McpServerConfigurationSnapshot } from '../../../../platform/mcp/common/mcpServerManagementService.js';
+
+/** The dialog edits one revision-bound declaration; changing transports never changes its identity. */
+export async function configureMcpServer(service: IMcpServerManagementService, dialogs: IDialogService, snapshot: McpServerConfigurationSnapshot, previous?: McpServerConfiguration, signal?: AbortSignal): Promise<string | undefined> {
+	const title = previous
+		? localize({ bundle: 'ash.extensions', key: 'mcpEditServer' }, 'Edit MCP server')
+		: localize({ bundle: 'ash.extensions', key: 'mcpAddServer' }, 'Add MCP server');
+	const choice = await dialogs.prompt<'streamableHttp' | 'stdio'>({
+		title,
+		message: localize({ bundle: 'ash.extensions', key: 'mcpChooseTransport' }, 'Choose how to connect to this server.'),
+		buttons: [
+			{ label: localize({ bundle: 'ash.extensions', key: 'mcpHttpTransport' }, 'HTTP server'), run: () => 'streamableHttp' },
+			{ label: localize({ bundle: 'ash.extensions', key: 'mcpStdioTransport' }, 'Local process (stdio)'), run: () => 'stdio' },
+		],
+	});
+	if (!choice.result || signal?.aborted) { return undefined; }
+	const transport = choice.result;
+	const fields = [
+		...(!previous ? [{ placeholder: localize({ bundle: 'ash.extensions', key: 'mcpLocalId' }, 'Server ID'), value: '' }] : []),
+		{ placeholder: localize({ bundle: 'ash.extensions', key: 'mcpDisplayName' }, 'Display name'), value: previous?.displayName ?? '' },
+		...(transport === 'streamableHttp'
+			? [{ placeholder: localize({ bundle: 'ash.extensions', key: 'mcpServerUrl' }, 'HTTP or HTTPS server URL'), value: previous?.transport.type === 'streamableHttp' ? previous.transport.url : '' }]
+			: [
+				{ placeholder: localize({ bundle: 'ash.extensions', key: 'mcpCommand' }, 'Executable path'), value: previous?.transport.type === 'stdio' ? previous.transport.command : '' },
+				{ placeholder: localize({ bundle: 'ash.extensions', key: 'mcpArguments' }, 'Arguments (JSON array of strings)'), value: previous?.transport.type === 'stdio' ? JSON.stringify(previous.transport.args) : '[]' },
+			]),
+		{ placeholder: localize({ bundle: 'ash.extensions', key: 'mcpCredentialReference' }, 'Credential reference (optional)'), value: previous?.credential.type === 'reference' ? previous.credential.credentialRef : '' },
+	];
+	let enabled = previous?.enablement === 'enabled';
+	let detail = localize({ bundle: 'ash.extensions', key: 'mcpConfigurationHelp' }, 'Use a unique server ID without spaces or colons. Credentials are references to stored credentials. Enabling is saved; Connect and Disconnect control this running instance.');
+	for (; ;) {
+		const input = await dialogs.input({
+			title, message: previous ? previous.id : title, detail, inputs: fields,
+			checkbox: { label: localize({ bundle: 'ash.extensions', key: 'mcpEnableServer' }, 'Enable this server'), checked: enabled },
+			primaryButton: localize({ bundle: 'ash.extensions', key: 'mcpSaveServer' }, 'Save'),
+		});
+		if (!input.confirmed || signal?.aborted) { return undefined; }
+		const values = input.values ?? [];
+		for (let index = 0; index < fields.length; index++) { fields[index].value = values[index] ?? ''; }
+		enabled = input.checkboxChecked ?? enabled;
+		let server: McpServerConfiguration;
+		try {
+			let index = 0;
+			const localId = previous ? undefined : values[index++]?.trim() ?? '';
+			if (localId !== undefined && (!localId || /[:\s\0]/u.test(localId))) {
+				throw new Error(localize({ bundle: 'ash.extensions', key: 'mcpInvalidId' }, 'Enter a server ID without spaces or colons.'));
+			}
+			const id = previous?.id ?? `user:mcp:${localId}`;
+			if (!previous && snapshot.servers.some(server => server.id === id)) {
+				throw new Error(localize({ bundle: 'ash.extensions', key: 'mcpDuplicateId' }, 'A server with this ID already exists. Choose another ID.'));
+			}
+			const displayName = values[index++]?.trim() ?? '';
+			const endpoint = values[index++]?.trim() ?? '';
+			if (!displayName || !endpoint || /[\r\n\0]/u.test(displayName + endpoint)) {
+				throw new Error(localize({ bundle: 'ash.extensions', key: 'mcpRequiredFields' }, 'Enter a display name and a valid server URL or executable path.'));
+			}
+			let args: string[] = [];
+			if (transport === 'stdio') {
+				const raw = values[index++] ?? '';
+				let parsed: unknown;
+				try { parsed = JSON.parse(raw); } catch { /* The same validation message covers malformed JSON and invalid arguments. */ }
+				if (!Array.isArray(parsed) || !parsed.every(arg => typeof arg === 'string' && arg.trim() && !/[\r\n\0]/u.test(arg))) {
+					throw new Error(localize({ bundle: 'ash.extensions', key: 'mcpInvalidArguments' }, 'Arguments must be a JSON array of non-empty strings, for example ["--port", "3000"].'));
+				}
+				args = parsed;
+			} else {
+				let url: URL | undefined;
+				try { url = new URL(endpoint); } catch { /* Report one localized error for an invalid HTTP endpoint. */ }
+				if (!url || !['http:', 'https:'].includes(url.protocol) || url.username || url.password) {
+					throw new Error(localize({ bundle: 'ash.extensions', key: 'mcpInvalidUrl' }, 'Enter an HTTP or HTTPS URL without embedded credentials.'));
+				}
+			}
+			const credentialRef = values[index]?.trim() ?? '';
+			if (/[\r\n\0]/u.test(credentialRef)) {
+				throw new Error(localize({ bundle: 'ash.extensions', key: 'mcpInvalidCredential' }, 'Enter a credential reference on one line.'));
+			}
+			server = {
+				id, displayName,
+				transport: transport === 'stdio' ? { type: 'stdio', command: endpoint, args } : { type: 'streamableHttp', url: endpoint },
+				credential: credentialRef ? { type: 'reference', credentialRef } : { type: 'unauthenticated' },
+				enablement: enabled ? 'enabled' : 'disabled',
+			};
+		} catch (error) { detail = error instanceof Error ? error.message : String(error); continue; }
+		await service.save(server, snapshot.revision);
+		return server.id;
+	}
+}
 
 export function describeMcpServerState(state: McpServerRuntimeState): string {
 	switch (state.status) {

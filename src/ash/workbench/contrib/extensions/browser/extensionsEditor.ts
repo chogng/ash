@@ -23,11 +23,12 @@ import { IExtensionApi, type ExtensionDescriptor } from '../../../../platform/ex
 import { toExtensionResourceURI } from '../../../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { URI } from '../../../../base/common/uri.js';
-import { changeExtensionEnablement, describeMcpServerState, describePluginPermission, extensionEnablementLabel, reviewExtensionExecution, reviewLocalExtensionPermissions } from './extensionsActions.js';
+import { changeExtensionEnablement, configureMcpServer, describeMcpServerState, describePluginPermission, extensionEnablementLabel, reviewExtensionExecution, reviewLocalExtensionPermissions } from './extensionsActions.js';
 import type { ParsedPromptFile } from '../../chat/common/promptSyntax/promptFileParser.js';
 import { IPromptsService } from '../../chat/common/promptSyntax/service/promptsService.js';
 import { IAgentCapabilitiesService } from '../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { IMcpServerStatusService } from '../../../../platform/mcp/common/mcpServerStatusService.js';
+import { IMcpServerManagementService } from '../../../../platform/mcp/common/mcpServerManagementService.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -35,6 +36,7 @@ import { AccessibleViewRegistry } from '../../../../platform/accessibility/brows
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
+import { alert, status as announceStatus } from '../../../../base/browser/ui/aria/aria.js';
 import './media/extensionEditor.css';
 
 enum DetailTab { Details = 'details', Features = 'features', Instructions = 'instructions' }
@@ -119,6 +121,7 @@ export class ExtensionsEditor extends EditorPane {
 		@IPromptsService private readonly prompts: IPromptsService,
 		@IAgentCapabilitiesService private readonly agentCapabilities: IAgentCapabilitiesService,
 		@IMcpServerStatusService private readonly mcpStatus: IMcpServerStatusService,
+		@IMcpServerManagementService private readonly mcpManagement: IMcpServerManagementService,
 		@IEditorService private readonly editors: IEditorService,
 		@IExtensionApi private readonly editorExtensions: IExtensionApi,
 		@IOpenerService private readonly opener: IOpenerService,
@@ -136,6 +139,7 @@ export class ExtensionsEditor extends EditorPane {
 		this._register(enablement.onDidChangeEnablement(refresh));
 		this._register(plugins.onDidChange(refresh));
 		this._register(prompts.onDidChangeSkills(refresh));
+		this._register(mcpManagement.onDidChange(refresh));
 	}
 
 	public override create(container: HTMLElement): void {
@@ -189,7 +193,7 @@ export class ExtensionsEditor extends EditorPane {
 				getProvider: () => {
 					const focused = mainWindow.document.activeElement;
 					if (!this.currentInput || !(focused instanceof HTMLElement) || !this.domNode.contains(focused)) { return undefined; }
-					return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type }, () => type === AccessibleViewType.View ? this.domNode.innerText : localize({ bundle: 'ash.extensions', key: 'detailsHelp' }, 'These are the selected extension, plugin, skill or MCP server details. The header contains identity and actions. Use Tab to reach the tabs, then Left and Right to move and Enter to select. Details shows the description or README; other tabs show features, permissions, tools or skill instructions and diagnostics. Additional information is beside the content and moves below it in a narrow editor. Open package opens the owning package for installation and permission management. MCP server details show backend connection status and diagnostics. Refresh reloads server status.'), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
+					return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type }, () => type === AccessibleViewType.View ? this.domNode.innerText : localize({ bundle: 'ash.extensions', key: 'detailsHelp' }, 'These are the selected extension, plugin, skill or MCP server details. The header contains identity and actions. Use Tab to reach the tabs, then Left and Right to move and Enter to select. Details shows the description or README; other tabs show features, permissions, tools or skill instructions and diagnostics. Additional information is beside the content and moves below it in a narrow editor. Open package opens the owning package for installation and permission management. MCP server details show backend connection status and diagnostics. Refresh reloads server status. Add MCP server opens a transport choice and configuration dialog. Independent server details provide Edit, Enable or Disable, Connect, Disconnect and Remove. Enablement is saved; Connect and Disconnect affect this running instance. Operations refresh backend state. Escape cancels a dialog.'), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
 				},
 			}));
 		}
@@ -284,10 +288,11 @@ export class ExtensionsEditor extends EditorPane {
 				return;
 			}
 			this.contentHeading.textContent = localize({ bundle: 'ash.extensions', key: 'mcpToolsHeading' }, 'Tools');
-			const [installedResult, statusResult, catalogResult] = await Promise.allSettled([
+			const [installedResult, statusResult, catalogResult, configurationResult] = await Promise.allSettled([
 				this.extensions.listInstalled(),
 				this.mcpStatus.isAvailable ? this.mcpStatus.read() : Promise.resolve(undefined),
 				this.agentCapabilities.isAvailable ? this.agentCapabilities.read() : Promise.resolve(undefined),
+				this.mcpManagement.isAvailable ? this.mcpManagement.readConfiguration() : Promise.resolve(undefined),
 			]);
 			if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
 			const installed = installedResult.status === 'fulfilled' ? installedResult.value : [];
@@ -295,6 +300,8 @@ export class ExtensionsEditor extends EditorPane {
 			const capability = installation?.capabilities.find(entry => entry.kind === 'mcp' && entry.reference.id === target.capabilityId);
 			const snapshot = statusResult.status === 'fulfilled' ? statusResult.value : undefined;
 			const server = snapshot?.servers.find(server => server.id === target.serverId);
+			const configuration = configurationResult.status === 'fulfilled' ? configurationResult.value : undefined;
+			const configuredServer = configuration?.servers.find(server => server.id === target.serverId);
 			const statusLabel = server ? describeMcpServerState(server.state) : snapshot
 				? localize({ bundle: 'ash.extensions', key: 'mcpStatusNotReported' }, 'No runtime status reported')
 				: localize({ bundle: 'ash.extensions', key: 'mcpStatusUnavailable' }, 'MCP server status is unavailable.');
@@ -303,7 +310,7 @@ export class ExtensionsEditor extends EditorPane {
 				: server?.state.status === 'unavailable' ? server.state.reason : '';
 			const catalog = catalogResult.status === 'fulfilled' ? catalogResult.value : undefined;
 			const tools = catalog?.tools.filter(tool => tool.source === 'mcp' && tool.sourceDetails.includes(target.serverId)) ?? [];
-			this.title.textContent = server?.displayName || capability?.id || target.serverId;
+			this.title.textContent = configuredServer?.displayName || server?.displayName || capability?.id || target.serverId;
 			this.metadata.textContent = installation ? `${installation.package.id} · ${installation.package.version}` : target.serverId;
 			this.description.textContent = localize({ bundle: 'ash.extensions', key: 'detailMcpDescription' }, 'Tools provided by {0}.', this.title.textContent);
 			this.renderOverview();
@@ -311,6 +318,12 @@ export class ExtensionsEditor extends EditorPane {
 				label: localize({ bundle: 'ash.extensions', key: 'detailServer' }, 'Server'), rows: [
 					{ label: localize({ bundle: 'ash.extensions', key: 'detailIdentifier' }, 'Identifier'), value: target.serverId },
 					{ label: localize({ bundle: 'ash.extensions', key: 'mcpState' }, 'Status'), value: statusLabel },
+					...(configuredServer ? [{
+						label: localize({ bundle: 'ash.extensions', key: 'mcpSavedEnablement' }, 'Saved enablement'),
+						value: configuredServer.enablement === 'enabled'
+							? localize({ bundle: 'ash.extensions', key: 'enabledState' }, 'Enabled')
+							: localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled'),
+					}] : []),
 					{ label: localize({ bundle: 'ash.extensions', key: 'mcpDiagnostic' }, 'Diagnostic'), value: diagnostic },
 					{ label: localize({ bundle: 'ash.extensions', key: 'mcpOrigin' }, 'HTTP origin'), value: server?.httpOrigin ?? '' },
 					{ label: localize({ bundle: 'ash.extensions', key: 'detailPackage' }, 'Package'), value: installation?.package.id ?? '' },
@@ -321,6 +334,7 @@ export class ExtensionsEditor extends EditorPane {
 			}]);
 			this.status.textContent = [statusLabel, diagnostic,
 				installedResult.status === 'rejected' ? localize({ bundle: 'ash.extensions', key: 'mcpPackagesReadFailed' }, 'Could not load installed packages: {0}', String(installedResult.reason)) : '',
+				configurationResult.status === 'rejected' ? localize({ bundle: 'ash.extensions', key: 'mcpConfigurationReadFailed' }, 'Could not load MCP configuration: {0}', String(configurationResult.reason)) : '',
 			].filter(Boolean).join(' · ');
 			this.capabilities.textContent = [
 				...(capability ? [localize({ bundle: 'ash.extensions', key: 'mcpContract' }, 'Contract version: {0}', capability.contractVersion), localize({ bundle: 'ash.extensions', key: 'localExtensionPermissions' }, 'Requested permissions: {0}', capability.permissions.join(', '))] : []),
@@ -328,6 +342,51 @@ export class ExtensionsEditor extends EditorPane {
 				server?.toolCount === 0 ? localize({ bundle: 'ash.extensions', key: 'mcpNoTools' }, 'No tools are currently registered for this server.') : '',
 				...tools.map(tool => `${tool.name}\n${tool.description}`),
 			].filter(Boolean).join('\n\n');
+			if (configuredServer && configuration) {
+				const operationLifetime = new AbortController();
+				this.actionResources.add(toDisposable(() => operationLifetime.abort()));
+				const operationSignal = AbortSignal.any([signal, operationLifetime.signal]);
+				// Acknowledged lifecycle intent is not connection success. Render only a fresh backend snapshot.
+				const apply = async (operation: () => Promise<unknown>): Promise<void> => {
+					let failure: unknown;
+					let result: unknown;
+					try { result = await operation(); } catch (error) { failure = error; }
+					// Cancelling a dialog keeps its originating control alive for the dialog's focus restoration.
+					if (result === false) { return; }
+					if (!signal.aborted && !this.isDisposed && version === this.loadVersion) {
+						const refresh = this.setInput(input, signal);
+						const refreshVersion = this.loadVersion;
+						await refresh;
+						if (signal.aborted || this.isDisposed || refreshVersion !== this.loadVersion) { return; }
+						if (failure !== undefined) {
+							const message = failure instanceof Error ? failure.message : String(failure);
+							this.status.textContent = `${this.status.textContent} · ${message}`;
+							alert(message);
+						} else { announceStatus(this.status.textContent ?? ''); }
+						this.focus();
+					}
+				};
+				button(localize({ bundle: 'ash.extensions', key: 'mcpEditServer' }, 'Edit MCP server'), () => apply(async () => {
+					const id = await configureMcpServer(this.mcpManagement, this.dialogs, configuration, configuredServer, operationSignal);
+					return id !== undefined;
+				}));
+				button(configuredServer.enablement === 'enabled'
+					? localize({ bundle: 'ash.extensions', key: 'mcpDisable' }, 'Disable')
+					: localize({ bundle: 'ash.extensions', key: 'mcpEnable' }, 'Enable'),
+					() => apply(() => this.mcpManagement.setEnablement(configuredServer.id, configuredServer.enablement !== 'enabled', configuration.revision)));
+				button(localize({ bundle: 'ash.extensions', key: 'mcpConnect' }, 'Connect'), () => apply(() => this.mcpManagement.connect(configuredServer.id)), configuredServer.enablement === 'enabled');
+				button(localize({ bundle: 'ash.extensions', key: 'mcpDisconnect' }, 'Disconnect'), () => apply(() => this.mcpManagement.disconnect(configuredServer.id)), configuredServer.enablement === 'enabled');
+				button(localize({ bundle: 'ash.extensions', key: 'mcpRemoveServer' }, 'Remove MCP server'), () => apply(async () => {
+					const review = await this.dialogs.confirm({
+						title: localize({ bundle: 'ash.extensions', key: 'mcpRemoveServer' }, 'Remove MCP server'),
+						message: localize({ bundle: 'ash.extensions', key: 'mcpRemoveConfirmation' }, 'Remove {0} ({1}) from your configuration?', configuredServer.displayName, configuredServer.id),
+						primaryButton: localize({ bundle: 'ash.extensions', key: 'mcpRemove' }, 'Remove'),
+					});
+					if (!review.confirmed || signal.aborted || this.isDisposed || version !== this.loadVersion) { return false; }
+					await this.mcpManagement.remove(configuredServer.id, configuration.revision);
+					return true;
+				}));
+			}
 			if (installation && capability) {
 				button(localize({ bundle: 'ash.extensions', key: 'openPackage' }, 'Open package'), async () => {
 					await this.editors.openEditor(new ExtensionsInput({ id: installation.package.id, version: installation.package.version, displayName: installation.package.id, description: '', packageType: 'plugin' }, installation.installationId));

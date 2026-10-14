@@ -12,6 +12,49 @@ test.beforeEach(async ({ workbench }) => {
 });
 
 for (const window of ['Code', 'Agents']) {
+	test(`Independent MCP configuration persists across reload and can be removed in ${window}`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
+		const page = window === 'Code' ? workbench.page : await workbench.openAgentsWindow(target.kind);
+		const quickaccess = new QuickAccess(page);
+		const command = window === 'Code' ? 'ash.extensions.open' : 'workbench.action.chat.configure.skills';
+		await quickaccess.runCommand(command);
+		let mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
+		await mcp.getByRole('button', { name: 'MCP Servers', exact: true }).click();
+		const search = mcp.getByRole('searchbox');
+		await search.focus();
+		await search.press('Alt+F1');
+		await expect(page.getByRole('dialog', { name: 'Accessibility Help', exact: true }).getByRole('textbox')).toHaveValue(/Add MCP server/u);
+		await page.keyboard.press('Escape');
+		await expect(search).toBeFocused();
+		await mcp.getByRole('button', { name: 'Add MCP server', exact: true }).click();
+		const add = page.getByRole('dialog', { name: 'Add MCP server', exact: true });
+		await add.getByRole('button', { name: 'HTTP server', exact: true }).click();
+		await add.getByPlaceholder('Server ID', { exact: true }).fill('persistent-test');
+		await add.getByPlaceholder('Display name', { exact: true }).fill('Persistent MCP test');
+		await add.getByPlaceholder('HTTP or HTTPS server URL', { exact: true }).fill('http://127.0.0.1:9/mcp');
+		await add.getByRole('button', { name: 'Save', exact: true }).click();
+		let details = page.locator('.ash-extension-editor');
+		await expect(details.getByRole('heading', { name: 'Persistent MCP test', exact: true })).toBeVisible();
+		await expect(details.getByRole('status')).toHaveText('Disabled');
+		await workbench.reloadWindow(page);
+		await quickaccess.runCommand(command);
+		mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
+		const header = mcp.getByRole('button', { name: 'MCP Servers', exact: true });
+		if (await header.getAttribute('aria-expanded') !== 'true') { await header.click(); }
+		await mcp.getByRole('option').filter({ hasText: 'Persistent MCP test' }).click();
+		details = page.locator('.ash-extension-editor');
+		await expect(details.getByRole('status')).toHaveText('Disabled');
+		await details.getByRole('button', { name: 'Edit MCP server', exact: true }).click();
+		const edit = page.getByRole('dialog', { name: 'Edit MCP server', exact: true });
+		await edit.getByRole('button', { name: 'HTTP server', exact: true }).click();
+		await expect(edit.getByPlaceholder('HTTP or HTTPS server URL', { exact: true })).toHaveValue('http://127.0.0.1:9/mcp');
+		await page.keyboard.press('Escape');
+		await details.getByRole('button', { name: 'Remove MCP server', exact: true }).click();
+		await page.getByRole('dialog', { name: 'Remove MCP server', exact: true }).getByRole('button', { name: 'Remove', exact: true }).click();
+		await expect(mcp.getByRole('option').filter({ hasText: 'Persistent MCP test' })).toHaveCount(0);
+	});
+}
+
+for (const window of ['Code', 'Agents']) {
 	test(`Built-in extension details open in the registered Editor in ${window}`, async ({ target, workbench }) => {
 		const page = window === 'Code' ? workbench.page : await workbench.openAgentsWindow(target.kind);
 		await new QuickAccess(page).runCommand(window === 'Code' ? 'ash.extensions.open' : 'workbench.action.chat.configure.skills');

@@ -124,6 +124,7 @@ server 启动，Connector connected 也不等于自动批准每次 Tool call。
   `AgentRequest::UserInput`，解决或取消后唤醒同一次 live execution；URL elicitation、数组/多选、完整
   JSON Schema format 校验和跨重启 remote request 恢复仍不支持；
 - 自动 reconnect/health state machine、resource/prompt product adapter 和 progress 产品投影仍未实现。
+- Desktop 与 Browser 的 Extensions/MCP 窗格通过前端 MCP management service 读取独立 User 配置，提供添加、编辑、删除和持久启停，以及 process-local connect/disconnect。配置写入绑定读取时的 revision，操作后重新读取配置与后端状态。Package MCP 继续通过所属 package 管理；运行意图的响应不代表连接已成功。
 
 因此 low-level protocol/transport、独立 tools-only runtime、窄 App Server/Core tools slice、
 process-local connect/disconnect/status、provider-injected 独立 OAuth lifecycle 和基础 form interaction

@@ -92,15 +92,23 @@ import { ExtensionRecommendationsService } from '../../../src/ash/workbench/cont
 import { IAgentCapabilitiesService } from '../../../src/ash/platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { IMcpServerStatusService, type McpServerStatus } from '../../../src/ash/platform/mcp/common/mcpServerStatusService.js';
 import { createAppServerMcpServerStatusApi } from '../../../src/ash/platform/mcp/browser/mcpServerStatusApi.js';
+import { AppServerMcpServerManagementService } from '../../../src/ash/platform/mcp/browser/appServerMcpServerManagementService.js';
+import { IMcpServerManagementService, type McpServerConfiguration } from '../../../src/ash/platform/mcp/common/mcpServerManagementService.js';
+import { AppServerRemoteError } from '../../../src/ash/platform/agentHost/common/appServerError.js';
 import type { AppServerProtocolClient } from '../../../src/ash/platform/agentHost/browser/appServerProtocolClient.js';
 import { PaneView } from '../../../src/ash/base/browser/ui/splitview/paneview.js';
 import { registerSkillActions } from '../../../src/ash/workbench/contrib/chat/browser/promptSyntax/skillActions.js';
 import { LanguageServerSettingsContent } from '../../../src/ash/workbench/contrib/language/browser/languageServerSettingsContent.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import chineseMessages from '../../../extensions/language-pack-zh-cn/translations/extensions.json' with { type: 'json' };
+import chineseWorkbenchMessages from '../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 
 if (new URLSearchParams(window.location.search).get('locale') === 'zh-CN') {
-	setNlsMessages('zh-CN', { ...chineseMessages, ...chineseSettingsMessages });
+	const bundles: Record<string, Record<string, string>> = {};
+	for (const resource of [chineseWorkbenchMessages, chineseMessages, chineseSettingsMessages]) {
+		for (const [bundle, messages] of Object.entries(resource)) { bundles[bundle] = { ...bundles[bundle], ...messages }; }
+	}
+	setNlsMessages('zh-CN', bundles);
 }
 
 const disposables = new DisposableStore();
@@ -243,7 +251,7 @@ const api: IExtensionManagementApi = {
 	acquireCapability: async () => { throw new Error('unused'); }, releaseCapability: async () => { }, openResource: async () => { throw new Error('unused'); },
 };
 services.registerInstance(IExtensionManagementService, disposables.add(new AppServerExtensionManagementService(api, { subscribe: listener => changed.event(() => listener({ method: 'extensions/changed', params: { instanceId: 'fixture', generation } })) })));
-services.registerInstance(IConfigurationService, { getValue: () => true } as unknown as IConfigurationService);
+services.registerInstance(IConfigurationService, { getValue: () => true, onDidChangeConfiguration: Event.None } as unknown as IConfigurationService);
 const dialogs = disposables.add(new DialogService());
 services.registerInstance(IDialogService, dialogs);
 services.registerInstance(IDialogsModel, dialogs.model);
@@ -327,6 +335,7 @@ let editorAbort = new AbortController();
 disposables.add(toDisposable(() => { editorAbort.abort(); pane?.dispose(); }));
 services.registerInstance(IEditorService, {
 	onDidActiveEditorChange: Event.None,
+	focusActiveEditor: () => pane?.focus(),
 	openEditor: async (input, options) => {
 		if (!(input instanceof ExtensionsInput) && !(input instanceof ExtensionsCapabilityInput)) { requests.push(['document', input], ['documentOptions', options]); return; }
 		disposables.add(input); editorAbort.abort(); editorAbort = new AbortController();
@@ -358,11 +367,52 @@ let mcpToolsFailure = false;
 let holdMcpStatus = false;
 let completeMcpStatus: (() => void) | undefined;
 const mcpCapabilities = { mcp: true };
-services.registerInstance(IMcpServerStatusService, createAppServerMcpServerStatusApi({
+let mcpRevision = 1;
+let mcpConfigured: Record<string, McpServerConfiguration> = {};
+let failMcpConnect = false;
+let deferMcpConnect = false;
+const mcpChanged = disposables.add(new Emitter<{ method: string; }>());
+const mcpConnection = {
 	capabilities: mcpCapabilities,
+	onNotification: mcpChanged.event, onStateChange: Event.None,
 	request: async (definition: { method: string; }, params: unknown) => {
-		if (definition.method !== 'mcp/server/status') { throw new Error('Unexpected MCP request'); }
 		requests.push([definition.method, params]);
+		if (definition.method === 'config/read') { return { revision: mcpRevision, mcpServers: structuredClone(mcpConfigured) }; }
+		if (definition.method !== 'mcp/server/status') {
+			const input = params as { expectedRevision: number; serverId: string; server: McpServerConfiguration; enablement: 'enabled' | 'disabled'; };
+			if (['mcp/server/upsert', 'mcp/server/remove', 'mcp/server/enablement/set'].includes(definition.method)) {
+				if (input.expectedRevision !== mcpRevision) { throw new AppServerRemoteError(-32031, 'Conflict', { kind: 'ConfigRevisionConflict' }); }
+				if (definition.method === 'mcp/server/upsert') {
+					mcpConfigured[input.server.id] = structuredClone(input.server);
+				} else if (definition.method === 'mcp/server/remove') {
+					delete mcpConfigured[input.serverId];
+					mcpServers = mcpServers.filter(server => server.id !== input.serverId);
+				} else {
+					mcpConfigured[input.serverId] = { ...mcpConfigured[input.serverId], enablement: input.enablement };
+				}
+				const server = mcpConfigured[input.server?.id ?? input.serverId];
+				if (server) {
+					mcpServers = [...mcpServers.filter(entry => entry.id !== server.id), {
+						id: server.id, displayName: server.displayName,
+						httpOrigin: server.transport.type === 'streamableHttp' ? new URL(server.transport.url).origin : null,
+						state: { status: server.enablement === 'disabled' ? 'disabled' : 'disconnected' },
+						catalogGeneration: 1, connectionGeneration: null, toolCount: 0,
+					}];
+				}
+				mcpRevision++;
+				mcpChanged.fire({ method: 'config/changed' });
+				return { revision: mcpRevision };
+			}
+			if (!['mcp/server/connect', 'mcp/server/disconnect'].includes(definition.method)) { throw new Error('Unexpected MCP request'); }
+			mcpServers = mcpServers.map(server => server.id !== input.serverId ? server : {
+				...server,
+				state: failMcpConnect
+					? { status: 'unavailable', reason: 'Connection refused' }
+					: { status: definition.method === 'mcp/server/connect' && !deferMcpConnect ? 'connected' : 'disconnected' },
+			});
+			if (failMcpConnect) { throw new AppServerRemoteError(-32090, 'Runtime unavailable', { kind: 'McpRuntimeUnavailable' }); }
+			return { serverId: input.serverId, intent: definition.method === 'mcp/server/connect' ? 'connect' : 'disconnect' };
+		}
 		if (mcpStatusFailure) { throw new Error('Status connection lost'); }
 		const result = { catalogGeneration: 1, servers: structuredClone(mcpServers) };
 		if (holdMcpStatus) {
@@ -371,7 +421,9 @@ services.registerInstance(IMcpServerStatusService, createAppServerMcpServerStatu
 		}
 		return result;
 	},
-} as unknown as AppServerProtocolClient));
+} as unknown as AppServerProtocolClient;
+services.registerInstance(IMcpServerStatusService, createAppServerMcpServerStatusApi(mcpConnection));
+services.registerInstance(IMcpServerManagementService, disposables.add(new AppServerMcpServerManagementService(mcpConnection)));
 services.registerInstance(IAgentCapabilitiesService, {
 	isAvailable: true,
 	read: async () => {
@@ -476,6 +528,13 @@ function prepareSettings(): void {
 
 window.ashExtensionsIntegration = {
 	setMcpServers: servers => { mcpServers = servers; },
+	changeMcpRevision: () => { mcpRevision++; },
+	setMcpConnectFailure: () => { failMcpConnect = true; },
+	deferMcpConnection: () => { deferMcpConnect = true; },
+	configureMcp: server => {
+		mcpConfigured[server.id] = server;
+		mcpServers = [...mcpServers, { id: server.id, displayName: server.displayName, httpOrigin: null, state: { status: 'disconnected' }, catalogGeneration: 1, connectionGeneration: null, toolCount: 0 }];
+	},
 	failMcpStatus: () => { mcpStatusFailure = true; },
 	failMcpTools: () => { mcpToolsFailure = true; },
 	setMcpSupported: supported => { mcpCapabilities.mcp = supported; },
@@ -518,6 +577,6 @@ window.ashExtensionsIntegration = {
 declare global {
 	interface Window {
 
-		ashExtensionsIntegration: { setMcpServers(servers: readonly McpServerStatus[]): void; failMcpStatus(): void; failMcpTools(): void; setMcpSupported(supported: boolean): void; refreshMcp(): Promise<void>; holdMcpStatus(): void; mcpStatusStarted(): boolean; completeMcpStatus(): void; prepareSettings(): void; readSetting(key: string): unknown; openEditorExtension(): Promise<void>; holdReadme(): void; readmeStarted(): boolean; completeReadme(): void; setRecommendations(content: string): Promise<void>; leaveWorkspace(): void; holdInstructions(): void; instructionsStarted(): boolean; instructionsAborted(): boolean; completeInstructions(): void; setSession(id: string): void; addMcpPackage(): void; addSkillOnlyPlugin(): void; requests: unknown[]; startCommand(id: string): void; waitCommand(): Promise<void>; changePluginRevision(): void; removeEditorEntrypoint(): void; localPackages(): PluginPackageDto[]; open(options: ExtensionsOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void; };
+		ashExtensionsIntegration: { changeMcpRevision(): void; setMcpConnectFailure(): void; deferMcpConnection(): void; configureMcp(server: McpServerConfiguration): void; setMcpServers(servers: readonly McpServerStatus[]): void; failMcpStatus(): void; failMcpTools(): void; setMcpSupported(supported: boolean): void; refreshMcp(): Promise<void>; holdMcpStatus(): void; mcpStatusStarted(): boolean; completeMcpStatus(): void; prepareSettings(): void; readSetting(key: string): unknown; openEditorExtension(): Promise<void>; holdReadme(): void; readmeStarted(): boolean; completeReadme(): void; setRecommendations(content: string): Promise<void>; leaveWorkspace(): void; holdInstructions(): void; instructionsStarted(): boolean; instructionsAborted(): boolean; completeInstructions(): void; setSession(id: string): void; addMcpPackage(): void; addSkillOnlyPlugin(): void; requests: unknown[]; startCommand(id: string): void; waitCommand(): Promise<void>; changePluginRevision(): void; removeEditorEntrypoint(): void; localPackages(): PluginPackageDto[]; open(options: ExtensionsOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void; };
 	}
 }

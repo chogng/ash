@@ -1,4 +1,4 @@
-import { Emitter } from '../../../src/ash/base/common/event.js';
+import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import { addDisposableListener } from '../../../src/ash/base/browser/dom.js';
 import { ILanguageFeaturesService } from '../../../src/ash/editor/common/services/languageFeatures.js';
@@ -41,7 +41,11 @@ api.completions = async params => {
 		}],
 	};
 };
-store.add(new AppServerLanguageProviders(features, api, workspace, { events: { subscribe: listener => changes.event(listener) } }));
+store.add(new AppServerLanguageProviders(api, { checkWorkspaceTrust: false }, features, workspace, {
+	onDidChangeTrust: Event.None,
+	getUriTrustInfo: async () => { throw new Error('Backend-authorized requests must not inspect host grants'); },
+	getWorkspaceTrustInfo: async () => undefined,
+}, { subscribe: listener => changes.event(listener) }));
 for (const [id, value] of [['install', true], ['uninstall', false]] as const) {
 	store.add(addDisposableListener(document.getElementById(id)!, 'click', () => {
 		installed = value;

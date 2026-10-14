@@ -1,5 +1,117 @@
 import { expect, test } from '@playwright/test';
 
+for (const labels of [
+	{ locale: 'en', add: 'Add MCP server', http: 'HTTP server', id: 'Server ID', name: 'Display name', url: 'HTTP or HTTPS server URL', credential: 'Credential reference (optional)', save: 'Save', disabled: 'Disabled', enable: 'Enable', disconnect: 'Disconnect', disconnected: 'Disconnected', connect: 'Connect', connected: 'Connected', edit: 'Edit MCP server', remove: 'Remove MCP server', confirm: 'Remove', cancel: 'Cancel' },
+	{ locale: 'zh-CN', add: '添加 MCP 服务器', http: 'HTTP 服务器', id: '服务器标识符', name: '显示名称', url: 'HTTP 或 HTTPS 服务器地址', credential: '凭据引用（可选）', save: '保存', disabled: '已禁用', enable: '启用', disconnect: '断开', disconnected: '已断开', connect: '连接', connected: '已连接', edit: '编辑 MCP 服务器', remove: '移除 MCP 服务器', confirm: '移除', cancel: '取消' },
+]) {
+	test(`Independent MCP configuration and lifecycle actions refresh the pane and details in ${labels.locale}`, async ({ page }) => {
+		await page.goto(`/extensions.html?locale=${labels.locale}`);
+		const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
+		await mcp.getByRole('button', { name: 'MCP Servers', exact: true }).click();
+		await mcp.getByRole('button', { name: labels.add, exact: true }).click();
+		const add = page.getByRole('dialog', { name: labels.add, exact: true });
+		await add.getByRole('button', { name: labels.http, exact: true }).click();
+		await expect(add.getByPlaceholder(labels.id, { exact: true })).toBeFocused();
+		await add.getByPlaceholder(labels.id, { exact: true }).fill('standalone');
+		await add.getByPlaceholder(labels.name, { exact: true }).fill('Standalone test');
+		await add.getByPlaceholder(labels.url, { exact: true }).fill('https://example.test/mcp');
+		await add.getByPlaceholder(labels.credential, { exact: true }).fill('stored-token');
+		await add.getByRole('button', { name: labels.save, exact: true }).click();
+		const details = page.locator('.ash-extension-editor');
+		await expect(details.getByRole('heading', { name: 'Standalone test', exact: true })).toBeVisible();
+		await expect(details.getByRole('status')).toHaveText(labels.disabled);
+		await expect(details.getByRole('button', { name: labels.connect, exact: true })).toBeDisabled();
+		await expect(details.getByRole('button', { name: labels.edit, exact: true })).toBeFocused();
+		await details.getByRole('button', { name: labels.enable, exact: true }).press('Enter');
+		await expect(details.getByRole('status')).toHaveText(labels.disconnected);
+		await details.getByRole('button', { name: labels.connect, exact: true }).click();
+		await expect(details.getByRole('status')).toHaveText(labels.connected);
+		await expect(mcp.getByRole('option').filter({ hasText: 'Standalone test' })).toContainText(labels.connected);
+		await details.getByRole('button', { name: labels.disconnect, exact: true }).click();
+		await expect(details.getByRole('status')).toHaveText(labels.disconnected);
+		await details.getByRole('button', { name: labels.edit, exact: true }).click();
+		const edit = page.getByRole('dialog', { name: labels.edit, exact: true });
+		await edit.getByRole('button', { name: labels.http, exact: true }).click();
+		await expect(edit.getByPlaceholder(labels.url, { exact: true })).toHaveValue('https://example.test/mcp');
+		await expect(edit.getByPlaceholder(labels.credential, { exact: true })).toHaveValue('stored-token');
+		await edit.getByPlaceholder(labels.name, { exact: true }).fill('Renamed standalone');
+		await edit.getByRole('button', { name: labels.save, exact: true }).click();
+		await expect(details.getByRole('heading', { name: 'Renamed standalone', exact: true })).toBeVisible();
+		await expect(mcp.getByRole('option').filter({ hasText: 'Renamed standalone' })).toHaveCount(1);
+		await details.getByRole('button', { name: labels.remove, exact: true }).click();
+		await page.getByRole('dialog', { name: labels.remove, exact: true }).getByRole('button', { name: labels.cancel, exact: true }).click();
+		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'mcp/server/remove'))).toEqual([]);
+		await details.getByRole('button', { name: labels.remove, exact: true }).click();
+		await page.getByRole('dialog', { name: labels.remove, exact: true }).getByRole('button', { name: labels.confirm, exact: true }).click();
+		await expect(mcp.getByRole('option').filter({ hasText: 'Renamed standalone' })).toHaveCount(0);
+		await expect(details.getByRole('button', { name: labels.edit, exact: true })).toHaveCount(0);
+		const mutations = await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => ['mcp/server/upsert', 'mcp/server/enablement/set', 'mcp/server/connect', 'mcp/server/disconnect', 'mcp/server/remove'].includes(entry[0])));
+		expect(mutations).toMatchObject([
+			['mcp/server/upsert', { expectedRevision: 1, server: { id: 'user:mcp:standalone', displayName: 'Standalone test', enablement: 'disabled', credential: { type: 'reference', credentialRef: 'stored-token' } } }],
+			['mcp/server/enablement/set', { expectedRevision: 2, serverId: 'user:mcp:standalone', enablement: 'enabled' }],
+			['mcp/server/connect', { serverId: 'user:mcp:standalone' }],
+			['mcp/server/disconnect', { serverId: 'user:mcp:standalone' }],
+			['mcp/server/upsert', { expectedRevision: 3, server: { id: 'user:mcp:standalone', displayName: 'Renamed standalone', enablement: 'enabled' } }],
+			['mcp/server/remove', { expectedRevision: 4, serverId: 'user:mcp:standalone' }],
+		]);
+	});
+}
+
+test('MCP stdio arguments are validated without losing the draft and Escape cancels editing', async ({ page }) => {
+	await page.goto('/extensions.html');
+	const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
+	await mcp.getByRole('button', { name: 'MCP Servers', exact: true }).click();
+	await mcp.getByRole('button', { name: 'Add MCP server', exact: true }).click();
+	const dialog = page.getByRole('dialog', { name: 'Add MCP server', exact: true });
+	await dialog.getByRole('button', { name: 'Local process (stdio)', exact: true }).click();
+	await dialog.getByPlaceholder('Server ID', { exact: true }).fill('local');
+	await dialog.getByPlaceholder('Display name', { exact: true }).fill('Local test');
+	await dialog.getByPlaceholder('Executable path', { exact: true }).fill('/bin/mcp-server');
+	await dialog.getByPlaceholder('Arguments (JSON array of strings)', { exact: true }).fill('[1]');
+	await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+	await expect(dialog).toContainText('Arguments must be a JSON array');
+	await expect(dialog.getByPlaceholder('Executable path', { exact: true })).toHaveValue('/bin/mcp-server');
+	await dialog.getByPlaceholder('Arguments (JSON array of strings)', { exact: true }).fill('["--path", "a b"]');
+	await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+	const details = page.locator('.ash-extension-editor');
+	await expect(details.getByRole('heading', { name: 'Local test', exact: true })).toBeVisible();
+	expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'mcp/server/upsert'))).toMatchObject([
+		['mcp/server/upsert', { server: { transport: { type: 'stdio', command: '/bin/mcp-server', args: ['--path', 'a b'] } } }],
+	]);
+	await details.getByRole('button', { name: 'Edit MCP server', exact: true }).click();
+	await page.getByRole('dialog', { name: 'Edit MCP server', exact: true }).getByRole('button', { name: 'Local process (stdio)', exact: true }).click();
+	await page.keyboard.press('Escape');
+	await expect(page.getByRole('dialog')).toBeHidden();
+	await expect(details.getByRole('button', { name: 'Edit MCP server', exact: true })).toBeFocused();
+	expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'mcp/server/upsert'))).toHaveLength(1);
+});
+
+test('MCP failed mutations refresh actual state and stale revisions never overwrite configuration', async ({ page }) => {
+	await page.goto('/extensions.html');
+	await page.evaluate(() => window.ashExtensionsIntegration.configureMcp({
+		id: 'user:mcp:reviewed', displayName: 'Reviewed server', transport: { type: 'streamableHttp', url: 'https://example.test/mcp' },
+		credential: { type: 'unauthenticated' }, enablement: 'enabled',
+	}));
+	const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
+	await mcp.getByRole('button', { name: 'MCP Servers', exact: true }).click();
+	await mcp.getByRole('option').filter({ hasText: 'Reviewed server' }).click();
+	const details = page.locator('.ash-extension-editor');
+	await expect(details.getByRole('button', { name: 'Disable', exact: true })).toBeVisible();
+	await page.evaluate(() => window.ashExtensionsIntegration.changeMcpRevision());
+	await details.getByRole('button', { name: 'Disable', exact: true }).click();
+	await expect(details.getByRole('status')).toContainText('MCP configuration changed.');
+	await expect(details.getByRole('button', { name: 'Disable', exact: true })).toBeVisible();
+	expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'mcp/server/enablement/set'))).toHaveLength(1);
+	await page.evaluate(() => window.ashExtensionsIntegration.deferMcpConnection());
+	await details.getByRole('button', { name: 'Connect', exact: true }).click();
+	await expect(details.getByRole('status')).toHaveText('Disconnected');
+	await page.evaluate(() => window.ashExtensionsIntegration.setMcpConnectFailure());
+	await details.getByRole('button', { name: 'Connect', exact: true }).click();
+	await expect(details.getByRole('status')).toContainText('Connection refused');
+	await expect(details.getByRole('status')).toContainText('MCP server management is unavailable.');
+	await expect(mcp.getByRole('option').filter({ hasText: 'Reviewed server' })).toContainText('Connection refused');
+});
+
 for (const [locale, title, urlLabel, refLabel, pathLabel] of [
 	['en', 'Install plugin from Git repository', 'Git repository URL', 'Branch, tag or full commit ID (optional)', 'Package directory (optional)'],
 	['zh-CN', '从 Git 仓库安装插件', 'Git 仓库地址', '分支、标签或完整提交 ID（可选）', '包目录（可选）'],

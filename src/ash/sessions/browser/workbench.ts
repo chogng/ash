@@ -30,6 +30,7 @@ import { PromptsService } from '../../workbench/contrib/chat/common/promptSyntax
 import { IWorkspaceTrustApi } from '../../platform/workspace/common/workspaceTrust.js';
 import { IAgentCapabilitiesService } from '../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { IMcpServerStatusService } from '../../platform/mcp/common/mcpServerStatusService.js';
+import { IMcpServerManagementService } from '../../platform/mcp/common/mcpServerManagementService.js';
 import { IInstructionService } from '../../platform/instructions/common/instructionService.js';
 import { ISessionGroupsService, SessionGroupsService } from '../services/sessions/browser/sessionGroupsService.js';
 import { IFileSearchService } from '../../platform/search/common/fileSearch.js';
@@ -474,6 +475,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IInstructionService, options.api.instructions);
 		services.registerInstance(IAgentCapabilitiesService, options.api.agentCapabilities);
 		services.registerInstance(IMcpServerStatusService, options.api.mcpServerStatus);
+		services.registerInstance(IMcpServerManagementService, options.api.mcpServerManagement);
 		services.registerInstance(IWorkspaceTrustApi, options.api.workspaceTrust);
 		services.registerInstance(IAppServerHookApi, options.api.hooks);
 		services.registerInstance(ITraceSettingsService, options.api.traceSettings);

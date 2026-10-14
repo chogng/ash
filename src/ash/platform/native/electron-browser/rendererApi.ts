@@ -177,6 +177,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 				},
 				clipboardService: new ElectronRendererClipboardService(),
 			}, contributions);
+			resources.add(backend.mcpServerManagement);
 			resources.add(registerAppServerWorkspaceHost(client, () => connecting, workspaceTrust, backend.workspaceTrust));
 			backend = { ...backend, backup: new AppServerBackupService(localExtensions ? localClient : client, 'ash-editor'), ...(windowExtensions ? { extensionHost: windowExtensions } : {}) };
 			if (client.capabilities?.memories) { backend = { ...backend, memories: resources.add(new AppServerMemoriesService(client)) }; }

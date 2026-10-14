@@ -39,6 +39,7 @@ import { createAppServerExtensionManagementApi } from "../../extensionManagement
 import { createAppServerWorkspaceTrustApi } from '../../workspace/browser/workspaceTrustApi.js';
 import { createAppServerAgentCapabilitiesApi } from '../../agentCapabilities/browser/agentCapabilitiesApi.js';
 import { createAppServerMcpServerStatusApi } from '../../mcp/browser/mcpServerStatusApi.js';
+import { AppServerMcpServerManagementService } from '../../mcp/browser/appServerMcpServerManagementService.js';
 import { createAppServerTraceSettingsApi } from '../../trace/browser/traceSettingsApi.js';
 import { createAppServerAccountApi } from "../../accounts/browser/accountApi.js";
 import { createAppServerTurnChangesApi } from "../../turnChanges/browser/turnChangesApi.js";
@@ -85,10 +86,11 @@ export async function connectWebRendererApi(transport: AppServerTransport, conne
 		const calls = connection.capabilities?.contracts.calls?.version === 1 ? new AppServerCallService(connection) : undefined;
 		const symphony = connection.capabilities?.contracts.symphony?.version === 1 ? new AppServerSymphonyService(connection) : undefined;
 		const automation = connection.capabilities?.contracts.automation?.version === 1 ? new AppServerAutomationService(connection) : undefined;
+		const api = { ...createRendererHost(connection, connectorHostServices, contributions), calls, automation, symphony, memoryDiagnostics, memories };
 		return {
-			api: { ...createRendererHost(connection, connectorHostServices, contributions), calls, automation, symphony, memoryDiagnostics, memories },
+			api,
 			metadata,
-			dispose: () => { disposed = true; reconnect.dispose(); clearTimeout(retryTimer); releaseWait?.(); memories?.dispose(); memoryDiagnostics?.dispose(); automation?.dispose(); symphony?.dispose(); calls?.dispose(); connection.dispose(); },
+			dispose: () => { disposed = true; reconnect.dispose(); clearTimeout(retryTimer); releaseWait?.(); memories?.dispose(); memoryDiagnostics?.dispose(); automation?.dispose(); symphony?.dispose(); calls?.dispose(); api.mcpServerManagement.dispose(); connection.dispose(); },
 		};
 	} catch (error) {
 		connection.dispose();
@@ -144,6 +146,7 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 		github: new AppServerGitHubService(connection),
 		agentCapabilities: createAppServerAgentCapabilitiesApi(connection),
 		mcpServerStatus: createAppServerMcpServerStatusApi(connection),
+		mcpServerManagement: new AppServerMcpServerManagementService(connection),
 		traceSettings: createAppServerTraceSettingsApi(connection),
 		executionSettings: createAppServerExecutionSettingsService(connection),
 		hooks: createAppServerHookOperations(connection),

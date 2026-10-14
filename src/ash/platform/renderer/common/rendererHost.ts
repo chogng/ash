@@ -42,6 +42,7 @@ import type { IWorkspaceTrustApi } from '../../workspace/common/workspaceTrust.j
 
 import type { IAgentCapabilitiesService } from '../../agentCapabilities/common/agentCapabilitiesService.js';
 import type { IMcpServerStatusService } from '../../mcp/common/mcpServerStatusService.js';
+import type { IMcpServerManagementService } from '../../mcp/common/mcpServerManagementService.js';
 import type { IAgentExecutionSettingsService } from '../../agentHost/common/agentExecutionSettingsService.js';
 import type { ITraceSettingsService } from '../../trace/common/traceSettingsService.js';
 import type { IAccountApi } from "../../accounts/common/accountApi.js";
@@ -130,6 +131,7 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly workspaceTrust: IWorkspaceTrustApi;
 	readonly agentCapabilities: IAgentCapabilitiesService;
 	readonly mcpServerStatus: IMcpServerStatusService;
+	readonly mcpServerManagement: IMcpServerManagementService;
 	readonly traceSettings: ITraceSettingsService;
 	readonly executionSettings: IAgentExecutionSettingsService;
 	readonly networkDiagnostics: INetworkDiagnosticsService;
