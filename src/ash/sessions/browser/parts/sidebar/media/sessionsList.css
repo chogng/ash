@@ -17,6 +17,28 @@
 	white-space: nowrap;
 }
 
+.ash-sessions-list-navigation {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-sessions-list-navigation[hidden] {
+	display: none;
+}
+
+.ash-sessions-list-navigation .ash-button {
+	justify-content: flex-start;
+	min-width: 0;
+	width: 100%;
+	border-radius: var(--ash-cornerRadius-medium);
+}
+
+.ash-sessions-list-navigation .ash-button[aria-current="page"] {
+	color: var(--ash-foreground);
+	background: var(--ash-sessions-selectionBackground);
+}
+
 .ash-sessions-list-controls {
 	display: flex;
 	min-width: 0;

@@ -1,3 +1,6 @@
+import { observableValue } from '../../../src/ash/base/common/observable.js';
+import type { ICustomViewService } from '../../../src/ash/sessions/services/customView/browser/customViewService.js';
+import type { IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
 import { CommandsRegistry, type ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import type { ISCMService } from '../../../src/ash/workbench/contrib/scm/common/scm.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
@@ -27,6 +30,10 @@ import { SessionsList } from '../../../src/ash/sessions/browser/parts/sidebar/se
 import { TestQuickInputService } from '../../../src/ash/platform/quickinput/test/browser/testQuickInputService.js';
 import type { GitHubPullRequestReference, GitHubIssueReference } from '../../../src/ash/platform/github/common/githubService.js';
 
+
+const listCustomViews = { activeCustomView: observableValue('testCustomView', undefined) } as unknown as ICustomViewService;
+const listMenus = { createMenu: () => ({ getActions: () => [], onDidChange: Event.None, ...toDisposable(() => { }) }) } as unknown as IMenuService;
+const listNotifications = { error: (error: unknown) => { throw error; } } as unknown as INotificationService;
 interface Request { readonly id: number; readonly method: string; readonly params: Record<string, unknown>; }
 type State = 'open' | 'draft' | 'closed' | 'merged';
 
@@ -163,7 +170,7 @@ const notifications = { error: (error: unknown) => { throw error; } } as unknown
 const quickInput = resources.add(new TestQuickInputService({ container: document.body }));
 const toolbar = resources.add(new SessionChatInputToolbar(main, { sessionId: 'session', onDidChange: Event.None }, github, opener, notifications, quickInput, { openEditor: async input => { opened.push(input.resource.toString()); } } as IEditorService));
 toolbar.render();
-const list = resources.add(new SessionsList(main, management, sessions, 'Sessions', 'New Session', github));
+const list = resources.add(new SessionsList(main, management, sessions, 'Sessions', 'New Session', github, undefined, listCustomViews, listMenus, listNotifications));
 github.initialize();
 
 window.ashSessionGitHub = {

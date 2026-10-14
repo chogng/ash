@@ -1,3 +1,4 @@
+import { IRendererHostService } from '../../../platform/renderer/common/rendererHost.js';
 import { quickInputServiceTestControls } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { CommandsRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
 import { OPEN_CHAT_CHANGES_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
@@ -56,6 +57,7 @@ test('Sessions registers its regular Workbench service and starts its catalog', 
 		events: { subscribe() { subscriptions++; return { dispose() { } }; } },
 	} as unknown as IRendererHost;
 	using services = new InstantiationService();
+	if (!services.has(IRendererHostService)) services.registerInstance(IRendererHostService, api);
 	services.registerInstance(IAgentSessionService, api.session);
 	services.registerInstance(IAgentModelsService, api.model);
 	services.registerInstance(IAgentTurnService, api.turn);

@@ -4,6 +4,8 @@ import { JSDOM } from 'jsdom';
 import { StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
 import { SessionsService } from '../../browser/sessionsService.js';
+import { CustomViewService } from '../../../customView/browser/customViewService.js';
+import { NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Event } from '../../../../../base/common/event.js';
 import { canceled, isCancellationError } from '../../../../../base/common/errors.js';
@@ -17,6 +19,9 @@ import type { ChatAgent } from '../../../../../workbench/services/chat/common/ch
 ensureNoDisposablesAreLeakedInTestSuite();
 
 class Provider extends Disposable implements ISessionsProvider {
+	readonly id = 'test-provider';
+	readonly label = 'Test provider';
+	readonly order = 0;
 	readonly onDidChangeCatalog = Event.None;
 	readonly onDidChangeSession = Event.None;
 	items: ISession[] = [session('first'), session('second')];
@@ -210,7 +215,8 @@ test('closing a sibling while it opens preserves both visible and management sel
 		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'pending-sibling', flushInterval: 0 });
 		const visible = provider.items.map(value => ({ kind: 'session', sessionId: value.sessionId, threadId: value.chats[0]!.threadId }));
 		storage.store('sessions.viewState', JSON.stringify({ version: 2, drafts: [], visible, active: 0 }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
-		using view = new SessionsService(management, storage);
+		using customViews = new CustomViewService(new NullLoggerService(), storage);
+		using view = new SessionsService(management, storage, customViews);
 		await view.initialize();
 		const opening = view.openThread('second', 'second-thread');
 		await subscribed.p;

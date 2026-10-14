@@ -1,4 +1,8 @@
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
+import { Menus } from '../../../../browser/menus.js';
+import { AUTOMATIONS_CUSTOM_VIEW_ID } from '../automationsConstants.js';
+
 import { localize, localize2 } from '../../../../../nls.js';
 import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { ChatSessionArchiveActionWording, ChatSessionArchiveActionWordingSettingId, getChatSessionArchiveActionPresentation, getChatSessionArchiveActionWording, getChatSessionArchivedSectionLabel } from '../../../../../platform/chat/common/sessionArchiveActions.js';
@@ -9,6 +13,21 @@ import type { ServicesAccessor } from '../../../../../platform/instantiation/com
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IChatSessionNavigationService } from '../../../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
+
+registerAction2(class ManageAutomationsAction extends Action2 {
+	constructor() {
+		super({
+			id: 'sessionsView.manageAutomations', title: localize2('automations.manage', 'Manage Automations'),
+			precondition: ContextKeyExpr.has('sessions.automationsAvailable'),
+			toggled: ContextKeyExpr.has('sessions.activity.automationsSelected'),
+			menu: { id: Menus.SidebarSessionsHeader, group: 'navigation', when: ContextKeyExpr.has('sessions.automationsAvailable') },
+		});
+	}
+
+	override run(accessor: ServicesAccessor): void {
+		accessor.get(ICustomViewService).showCustomView(AUTOMATIONS_CUSTOM_VIEW_ID);
+	}
+});
 
 const archiveId = 'agentSession.archive';
 const restoreId = 'agentSession.restore';

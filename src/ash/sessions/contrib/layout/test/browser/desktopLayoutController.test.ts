@@ -17,6 +17,7 @@ import { SESSIONS_LAYOUT_SCOPE_SETTING } from '../../../../common/chatLayout.js'
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { NullLoggerService } from '../../../../../platform/log/common/log.js';
+import { CustomViewService, ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
@@ -451,6 +452,7 @@ class LayoutFixture extends Disposable {
 		this.services.registerInstance(IConfigurationService, this.configuration);
 		this.services.registerInstance(ILifecycleService, this.lifecycle);
 		this.services.registerInstance(ISessionsManagementService, this.catalog as unknown as ISessionsManagementService);
+		this.services.registerInstance(ICustomViewService, this._register(new CustomViewService(new NullLoggerService(), this.storage)));
 		this.sessions = this._register(this.services.createInstance(SessionsService));
 		this.services.registerInstance(ISessionsService, this.sessions);
 		this.services.registerInstance(IEditorPart, this.editor as unknown as import('../../../../../workbench/browser/parts/editor/editorPart.js').IEditorPart);

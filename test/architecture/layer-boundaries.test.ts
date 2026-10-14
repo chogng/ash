@@ -100,7 +100,12 @@ test("Workbench production imports do not depend on Sessions", () => {
 test("Sessions owns canonical Session management independently from Workbench contributions", () => {
 	const sessionsServicesRoot = join(sourceRoot, "sessions/services");
 	const contributionRoot = join(sourceRoot, "workbench/contrib");
-	const violations = productionTypeScriptFiles(sessionsServicesRoot).flatMap(file => localImports(file).filter(target => target.startsWith(contributionRoot)).map(target => `${sourceName(file)} -> ${sourceName(target)}`));
+	// Provider capabilities share the Chat automation contract, never its Workbench implementation.
+	const providerContract = join(sessionsServicesRoot, 'sessions/common/sessionsProvider.ts');
+	const automationContract = join(contributionRoot, 'chat/common/automations/automationService.ts');
+	const violations = productionTypeScriptFiles(sessionsServicesRoot).flatMap(file => localImports(file)
+		.filter(target => target.startsWith(contributionRoot) && !(file === providerContract && target === automationContract))
+		.map(target => `${sourceName(file)} -> ${sourceName(target)}`));
 	assert.equal(existsSync(join(sessionsServicesRoot, "sessions/common/session.ts")), true);
 	assert.equal(existsSync(join(sessionsServicesRoot, "sessions/common/sessionsManagement.ts")), true);
 	assert.equal(existsSync(join(sessionsServicesRoot, "sessions/browser/sessionsManagementService.ts")), true);

@@ -77,6 +77,30 @@ function createParts(ownerDocument: Document): Map<SessionsPartId, WorkbenchPart
 	return new Map(sessionsPartIds.map(partId => [partId, new TestSessionsPart(partId, ownerDocument.body)]));
 }
 
+test('Custom Views cover retained content without changing its desired visibility and sizes', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const parts = createParts(dom.window.document);
+	parts.set('customview', new TestSessionsPart('customview', dom.window.document.body));
+	try {
+		using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(1600, 1000) });
+		layout.showPart('editor'); layout.showPart('auxiliarybar'); layout.showPart('panel');
+		const previous = layout.state;
+		layout.setCustomViewVisible(true);
+		assert.equal(layout.isPartVisible('customview'), true);
+		for (const id of ['sessions', 'editor', 'auxiliarybar', 'panel'] as const) assert.equal(layout.isPartVisible(id), false);
+		assert.deepEqual(layout.state, previous);
+		layout.layout(new Dimension(1800, 1100));
+		assert.equal(layout.state.editor.width, previous.editor.width);
+		assert.equal(layout.state.auxiliarybar.width, previous.auxiliarybar.width);
+		layout.setCustomViewVisible(false);
+		assert.equal(layout.isPartVisible('customview'), false);
+		for (const id of ['sessions', 'editor', 'auxiliarybar', 'panel'] as const) assert.equal(layout.isPartVisible(id), true);
+	} finally {
+		for (const part of parts.values()) part.dispose();
+		dom.window.close();
+	}
+});
+
 test('Code docks Details below one tab strip and preserves the side pane boundary when Details toggles', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const parts = createParts(dom.window.document);

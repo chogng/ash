@@ -1,6 +1,6 @@
 # 自动化任务：时间、调度与执行边界
 
-> 状态：已接入本机 profile 后台宿主和 Workbench 管理界面。系统登录启动、宿主异常退出后的系统级拉起尚未接入；远程宿主未发布 automation capability。
+> 状态：已接入本机 profile 后台宿主和 Agents Window 管理界面。系统登录启动、宿主异常退出后的系统级拉起尚未接入；远程宿主未发布 automation capability。
 > 本文由共享 Rust 后端拥有，面向 automation、App Server 和产品界面的实现者。关联架构见 [Rust 后端架构](../../docs/rust-architecture.md)、[App Server](../app-server/README.md) 和 [后台宿主](../app-server-daemon/README.md)。
 
 ## 快速理解
@@ -46,18 +46,21 @@ flowchart TD
 
 以下为实现归属。crate 用于隔离能力和依赖，不按每个内部步骤拆分 crate。
 
-| 位置                                    | 职责                                                             | 边界                                                   |
-| --------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------ |
-| `crates/automation`                     | 计划校验、下次执行时间计算、调度、运行记录和恢复；拥有持久化规则 | 日期、时区、调度依赖留在这里；不实现模型调用或工具执行 |
-| `crates/protocol`                       | automation 跨模块共享的稳定身份、时间戳和领域值对象              | 不引入日期时间库，不保存进程内计时器                   |
-| `crates/app-server-protocol`            | automation 请求、响应、通知和生成类型                            | 协议不暴露日期库类型或内部调度器                       |
-| `crates/app-server`                     | 请求分派、订阅、协调 automation 与 Agent 执行                    | 不保存第二份计划状态，不自行计算日历规则               |
-| `crates/core`                           | 执行 Thread、Turn、模型调用和工具操作                            | 不计算“下一次周一几点运行”                             |
-| `crates/app-server-daemon`              | 每个 profile 的后台进程生命周期与保活                            | 不解释计划规则；不得因窗口连接清空而丢失调度能力       |
-| `crates/app-server`                     | 产品无关的后端命令入口和进程装配                                 | 不依赖 `ash-code` 的产品入口                           |
-| `src/ash/workbench/contrib/automation/` | 创建、编辑、暂停、立即运行、运行历史和可访问交互                 | 不持久化权威计划，不持有执行计时器                     |
-| `src/ash/platform/automation/`          | 前端领域接口、订阅通知和 App Server adapter                      | 生成协议类型止于 adapter，不传入普通界面代码           |
-| `app`、`ash-code` 的对应产品界面        | 消费同一后端能力并呈现产品交互                                   | 不另建调度器或计划存储                                 |
+| 位置                                                                                                            | 职责                                                             | 边界                                                   |
+| --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------ |
+| `crates/automation`                                                                                             | 计划校验、下次执行时间计算、调度、运行记录和恢复；拥有持久化规则 | 日期、时区、调度依赖留在这里；不实现模型调用或工具执行 |
+| `crates/protocol`                                                                                               | automation 跨模块共享的稳定身份、时间戳和领域值对象              | 不引入日期时间库，不保存进程内计时器                   |
+| `crates/app-server-protocol`                                                                                    | automation 请求、响应、通知和生成类型                            | 协议不暴露日期库类型或内部调度器                       |
+| `crates/app-server`                                                                                             | 请求分派、订阅、协调 automation 与 Agent 执行                    | 不保存第二份计划状态，不自行计算日历规则               |
+| `crates/core`                                                                                                   | 执行 Thread、Turn、模型调用和工具操作                            | 不计算“下一次周一几点运行”                             |
+| `crates/app-server-daemon`                                                                                      | 每个 profile 的后台进程生命周期与保活                            | 不解释计划规则；不得因窗口连接清空而丢失调度能力       |
+| `crates/app-server`                                                                                             | 产品无关的后端命令入口和进程装配                                 | 不依赖 `ash-code` 的产品入口                           |
+| `src/ash/sessions/contrib/automations/` | Provider 聚合、编辑对话框、立即运行与取消协调 | 不持久化权威计划，不持有调度计时器 |
+| `src/ash/sessions/contrib/sessions/browser/views/automationsView.ts` | 独立 Custom View 中的计划卡片和运行历史 | 不内嵌编辑表单，不创建执行 Session |
+| `src/ash/sessions/contrib/providers/agentHost/browser/agentHostAutomationStore.ts` | 单个 provider 的可观察目录、历史和操作路由 | 断连和移除不回退到其他 provider |
+| `src/ash/workbench/contrib/chat/common/automations/` | 前端产品领域契约 | 不依赖 Sessions 实现或线上 DTO |
+| `src/ash/platform/automation/`                                                                                  | 前端领域接口、订阅通知和 App Server adapter                      | 生成协议类型止于 adapter，不传入普通界面代码           |
+| `app`、`ash-code` 的对应产品界面                                                                                | 消费同一后端能力并呈现产品交互                                   | 不另建调度器或计划存储                                 |
 
 automation 通过窄的执行请求和结果契约与现有 Agent 能力协作，App Server 完成装配。core 不反向依赖 automation；automation 不导入 App Server 传输实现。没有独立消费者前，不另建通用 scheduler、calendar 或 clock crate。
 
@@ -140,13 +143,13 @@ automation 通过窄的执行请求和结果契约与现有 Agent 能力协作�
 | [管理协议](../app-server-protocol/src/protocol/automation.rs)                                | list、write、delete、run、runs、stop 六个方法；`automation/changed` 通知             |
 | [Agent 执行接入](../app-server/src/server/automation_execution.rs)                           | 稳定命令身份查找原 Thread/Turn，使用已有执行和中断入口；结果未确认时不新建另一次执行 |
 | [后台宿主](../app-server/src/managed.rs)                                                     | 启用中且有下次运行的计划，以及未结束运行，均阻止空闲退出                             |
-| [管理面板](../../src/ash/workbench/contrib/automation/browser/automationViewPane.ts)         | 创建、编辑、暂停、立即运行、停止、历史及打开关联 Chat                                |
+| [管理视图](../../src/ash/sessions/contrib/sessions/browser/views/automationsView.ts)         | 创建、编辑、暂停、立即运行、停止、历史及打开关联 Chat                                |
 | [Renderer 协议客户端](../../src/ash/platform/app-server/browser/appServerProtocolClient.ts)  | 每个窗口独立连接，负责初始化、生成协议解码、请求表、通知和反向请求                   |
 | [Main 连接载体](../../src/ash/platform/app-server/electron-main/appServerConnectionRelay.ts) | 启动连接进程、传递 MessagePort、限制帧大小与队列；不分派后端方法                     |
 
-Workbench 使用命令面板的 **Open Automations** 打开管理面板。后端通过 `contracts.automation.version = 1` 发布能力；没有该能力的宿主不显示管理入口。计划明确保存执行目录和新建或继续对话的目标，不随活动窗口改变。
+Agents Window 从会话侧栏的 **Manage Automations** 入口执行 `sessionsView.manageAutomations`，打开独立管理视图；创建和编辑在对话框中进行。UI contribution 由 `automationsView.ts` 持有，`sessions.contribution.ts` 在 `BlockRestore` 阶段注册，自动化 contribution 仅注册服务。启动恢复底层会话和布局时保留 Custom View，用户显式导航时关闭；前进、后退可在两者间访问。后端通过 `contracts.automation.version = 1` 发布能力；没有该能力的宿主不显示管理入口。计划明确保存执行目录和新建或继续对话的目标，不随活动窗口改变。新建表单从当前 Sessions 对话捕获本地执行目录；运行记录通过当前 Agents Window 的会话导航打开。共享产品契约位于 `workbench/contrib/chat/common/automations`，后端领域接口与 App Server adapter 留在 platform；Rust 后台调度、持久化和执行不依赖管理窗口的存活。
 
-固定间隔最多为 525600 分钟；每个 profile 最多保存 1000 个计划。历史每次最多读取 100 条，当前面板显示最近 50 条。计划暂停与停止当前运行分开；删除仍有运行的计划会返回冲突。删除的计划身份不可重新使用，已有运行历史仍保留在存储中。
+固定间隔最多为 525600 分钟；每个 profile 最多保存 1000 个计划。历史每次最多读取 100 条，界面按计划读取最近 50 条。计划暂停与停止当前运行分开；删除仍有运行的计划会返回冲突。删除的计划身份不可重新使用，已有运行历史仍保留在存储中。
 
 当前夏令时策略是跳过不存在的本地时间，并选择重复本地时间的第一次；夏令时空缺本身不另外生成运行记录。关机或长时间休眠错过的周期触发合并为一条跳过记录；一次性计划恢复后补执行。日期库仅在 automation 日历计算和 TUI 绝对日期展示中使用，不改变 Agent loop 的计时类型。
 

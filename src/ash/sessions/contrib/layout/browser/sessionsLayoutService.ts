@@ -1,6 +1,7 @@
+import { ICustomViewService } from '../../../services/customView/browser/customViewService.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../base/common/event.js';
-import { derived, observableValue } from '../../../../base/common/observable.js';
+import { autorun, derived, observableValue } from '../../../../base/common/observable.js';
 import { extUri } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
 import { isRecord } from '../../../../base/common/types.js';
@@ -46,14 +47,14 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 	public get conversationVisible(): boolean { return this.activeEntry.get()?.conversation === 'optional' && this.layout.isPartVisible('sessions'); }
 	private readonly controller: DesktopLayoutController;
 	private readonly activeEntry = observableValue<ISessionsEntry | undefined>(this, undefined);
-	public readonly documentContent = derived(reader => this.activeEntry.read(reader)?.content === 'documents');
+	public readonly documentContent = derived(reader => !this.customViews.activeCustomView.read(reader) && this.activeEntry.read(reader)?.content === 'documents');
 	private readonly visibility = new Map<string, EntryVisibility>();
 	private readonly editorEntries = new Map<string, ISessionsEntry>();
 	private readonly activityKeys = new Map<string, IContextKey<boolean>>();
 	private readonly pageGroupId: string;
 	private navigationQueue = Promise.resolve();
 	public isChangingContent = false;
-	public get isSessionContent(): boolean { return this.activeEntry.get()?.content !== 'editor'; }
+	public get isSessionContent(): boolean { return !this.customViews.activeCustomView.get() && this.activeEntry.get()?.content !== 'editor'; }
 	public get isDocumentContent(): boolean { return this.documentContent.get(); }
 
 	constructor(
@@ -68,6 +69,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		@ILifecycleService lifecycle: ILifecycleService,
 		@IInstantiationService instantiation: IInstantiationService,
 		@ISessionsConversationService private readonly conversation: ISessionsConversationService,
+		@ICustomViewService private readonly customViews: ICustomViewService,
 	) {
 		super();
 		this.pageGroupId = (editor as SessionsEditorPart).pageGroupId;
@@ -103,6 +105,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		this._register(lifecycle.onWillShutdown(event => event.join(this.navigationQueue.then(() => this.saveVisibility()), 'Sessions entry layout')));
 		this._register(lifecycle.onDidShutdown(() => this.dispose()));
 		this._register(editor.onDidChangeEditors(event => {
+			if (this.customViews.activeCustomView.get()) { return; }
 			// A modal borrows the current entry. Opening or closing it does not navigate its underlying document groups.
 			if (event.kind !== 'activeGroupChanged' && !(event.kind === 'groupChanged' && event.groupId === editor.activeGroup.id && event.event.kind === 'activeEditorChanged')) { return; }
 			if (editor.isModalEditorVisible || this.isChangingContent || this.controller.isRestoringEditors || !editors.activeEditor) { return; }
@@ -115,6 +118,17 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 			}
 		}));
 		this._register(toDisposable(() => { for (const key of this.activityKeys.values()) { key.reset(); } }));
+		this._register(autorun(reader => {
+			const entry = this.activeEntry.read(reader);
+			const covered = this.customViews.activeCustomView.read(reader) !== undefined;
+			this.contextKeys.bufferChangeEvents(() => {
+				for (const key of this.activityKeys.values()) key.reset();
+				if (!entry) return;
+				let key = this.activityKeys.get(entry.activityContext);
+				if (!key) { key = this.contextKeys.createKey(entry.activityContext, false); this.activityKeys.set(entry.activityContext, key); }
+				key.set(!covered);
+			});
+		}));
 	}
 
 	public runOperation(operation: () => Promise<void>): Promise<void> {
@@ -127,7 +141,8 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		return pending;
 	}
 
-	public openEntry(entry: ISessionsEntry, initialize?: () => ISessionsEntry): Promise<void> {
+	public openEntry(entry: ISessionsEntry, initialize?: () => ISessionsEntry, options?: { readonly source: 'restore'; }): Promise<void> {
+		if (options?.source !== 'restore' && this.customViews.activeCustomView.get()) this.customViews.hideCustomView();
 		return this.runOperation(async () => {
 			await this.controller.prepareContentChange();
 			if (this.isDisposed) { return; }
@@ -163,21 +178,16 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 					this.setVisible('auxiliarybar', state.details);
 					this.setVisible('panel', documents && state.panel);
 				});
-				await this.views.openViewContainer(entry.sidebarContainerId, entry.focus === 'sidebar' && state.sidebar);
+				await this.views.openViewContainer(entry.sidebarContainerId, entry.focus === 'sidebar' && state.sidebar && !this.customViews.activeCustomView.get());
 				if (this.isDisposed) { return; }
 				this.setVisible('sidebar', state.sidebar);
 				if (entry.detailsContainerId) { await this.views.openViewContainer(entry.detailsContainerId); }
 				if (this.isDisposed) { return; }
-				if (documents) { await this.controller.activate(state.details); }
+				if (documents && !this.customViews.activeCustomView.get()) { await this.controller.activate(state.details); }
 				else { this.setVisible('auxiliarybar', state.details); }
 				if (this.isDisposed) { return; }
-				this.contextKeys.bufferChangeEvents(() => {
-					for (const key of this.activityKeys.values()) { key.reset(); }
-					let key = this.activityKeys.get(entry.activityContext);
-					if (!key) { key = this.contextKeys.createKey(entry.activityContext, false); this.activityKeys.set(entry.activityContext, key); }
-					key.set(true);
-				});
 				this.storage.store(activeEntryKey, entry.restoreCommand, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+				if (this.customViews.activeCustomView.get()) { return; }
 				if (entry.focus === 'conversation') { this.layout.focus(); }
 				else if (entry.focus === 'editor') { documents ? this.controller.focus() : this.editors.focusActiveEditor(); }
 				else if (!state.sidebar) { this.layout.focus(); }
@@ -202,7 +212,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 
 	private saveVisibility(): void {
 		const entry = this.activeEntry.get();
-		if (this.isDisposed || this.isChangingContent || !entry) { return; }
+		if (this.isDisposed || this.isChangingContent || !entry || this.customViews.activeCustomView.get()) { return; }
 		this.visibility.set(entry.id, {
 			sidebar: this.layout.isPartVisible('sidebar'), details: this.layout.isPartVisible('auxiliarybar'),
 			panel: this.layout.isPartVisible('panel'), documents: this.isDocumentContent && this.layout.isPartVisible('editor'),
@@ -227,7 +237,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		if (!saved && oldEntry !== undefined && !Object.hasOwn(oldCommands, oldEntry)) {
 			throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'));
 		}
-		await this.commands.executeCommand(saved ?? (oldEntry ? oldCommands[oldEntry]! : 'sessions.open.chat'));
+		await this.commands.executeCommand(saved ?? (oldEntry ? oldCommands[oldEntry]! : 'sessions.open.chat'), 'restore');
 		if (this.isDisposed) { return; }
 		for (const key of ['sessions.layout.activeMode', 'sessions.layout.primaryPage', 'sessions.activityBar.activePage', 'sessions.layout.primaryEditor']) {
 			this.storage.remove(key, StorageScope.WORKSPACE);

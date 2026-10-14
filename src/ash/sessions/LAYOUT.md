@@ -215,6 +215,10 @@ Session providers register internal per-session directories as resource label ho
 ## Custom views
 
 `ICustomViewService` owns the active contributed full-surface view.
+`CustomViewGridPart` is a passive retained Part; Workbench drives its descriptor,
+visibility and explicit-open focus. The desktop Grid keeps a hidden `customview`
+leaf alongside its normal content. Custom-view visibility is transient and does
+not overwrite the underlying entry's desired visibility or saved dimensions.
 
 A custom view is mutually exclusive with the Sessions Part, grid Editor, Auxiliary Bar, and Panel. The title bar and Sidebar remain available. Covered parts retain desired visibility separately from effective grid visibility so their state can be restored when the custom view closes.
 

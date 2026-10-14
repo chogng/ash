@@ -59,8 +59,8 @@ registerAction2(class OpenTraceNavigation extends Action2 {
 			toggled: ContextKeyExpr.has('sessions.activity.traceSelected'), menu: { id: Menus.ActivityBar, group: 'navigation', order: 60, when: ContextKeyExpr.has('sessions.traceAvailable') }
 		});
 	}
-	public override async run(accessor: ServicesAccessor): Promise<void> {
-		await openTraceEntry(accessor, readLastAgentTraceResource(accessor.get(IStorageService)) ?? currentTraceResource(accessor));
+	public override async run(accessor: ServicesAccessor, source?: unknown): Promise<void> {
+		await openTraceEntry(accessor, readLastAgentTraceResource(accessor.get(IStorageService)) ?? currentTraceResource(accessor), source === 'restore' ? source : undefined);
 	}
 });
 
@@ -77,7 +77,7 @@ function currentTraceResource(accessor: ServicesAccessor): URI {
 	} : undefined);
 }
 
-async function openTraceEntry(accessor: ServicesAccessor, resource: URI): Promise<void> {
+async function openTraceEntry(accessor: ServicesAccessor, resource: URI, source?: 'restore'): Promise<void> {
 	const storage = accessor.get(IStorageService);
 	const layout = accessor.get(ISessionsLayoutService);
 	const contextKeys = accessor.get(IContextKeyService);
@@ -87,6 +87,6 @@ async function openTraceEntry(accessor: ServicesAccessor, resource: URI): Promis
 		id: 'trace', activityContext: 'sessions.activity.traceSelected', content: 'editor',
 		sidebarContainerId: TraceNavigationContainerId, restoreCommand: 'sessions.open.trace', focus: 'editor',
 		editorInput: createAgentTraceInput(resource),
-	});
+	}, undefined, source ? { source } : undefined);
 	rememberAgentTraceResource(storage, resource);
 }

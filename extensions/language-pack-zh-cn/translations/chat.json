@@ -954,7 +954,6 @@
     "agentsWindowInvitation.open": "在智能体窗口中继续"
   },
   "ash.workbench": {
-    "command.OpenAutomations": "打开自动化",
     "command.OpenCalls": "打开通话",
     "command.OpenMemories": "打开记忆",
     "command.SaveMemory": "保存记忆",

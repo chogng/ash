@@ -42,6 +42,15 @@ The registry:
 
 It does not aggregate sessions, choose a provider for an operation, or own UI state.
 
+The window registers the same App Server provider used by Session management;
+registry registrations borrow it and never dispose it. Optional
+`ISessionsProvider.automations` implements the shared Chat automation contract.
+`ProviderAutomationService` aggregates those observable catalogues and routes
+mutations by the owning provider. This type-only contract is the permitted
+`workbench/contrib/chat/common/automations/automationService.ts` dependency of
+`sessionsProvider.ts`; Sessions services do not import Workbench automation
+implementations. Disconnection never selects another execution authority.
+
 ### `ISessionsManagementService`
 
 The model-orchestration service:

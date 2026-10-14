@@ -1,3 +1,6 @@
+import { observableValue } from '../../../src/ash/base/common/observable.js';
+import type { ICustomViewService } from '../../../src/ash/sessions/services/customView/browser/customViewService.js';
+import type { IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
 import { IEnvironmentVariableService } from '../../../src/ash/workbench/contrib/terminal/common/environmentVariable.js';
 import { EnvironmentVariableService } from '../../../src/ash/workbench/contrib/terminal/common/environmentVariableService.js';
 import { TaskService } from '../../../src/ash/workbench/contrib/tasks/browser/taskService.js';
@@ -59,6 +62,10 @@ import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeSty
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 
+
+const listCustomViews = { activeCustomView: observableValue('testCustomView', undefined) } as unknown as ICustomViewService;
+const listMenus = { createMenu: () => ({ getActions: () => [], onDidChange: Event.None, ...toDisposable(() => { }) }) } as unknown as IMenuService;
+const listNotifications = { error: (error: unknown) => { throw error; } } as unknown as INotificationService;
 if (new URL(location.href).searchParams.get('locale') === 'zh-CN') setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
 class Transport implements AppServerTransport {
 	private readonly listeners = new Map<string, Set<(payload: unknown) => void>>();
@@ -120,7 +127,7 @@ const management = { sessions, state: 'ready' } as unknown as ISessionsManagemen
 const view = { activeSelection: undefined, visibleSelections: [], onDidChange: changes.event, openNewSession: () => { }, openSession: (sessionId: string) => opened.push(sessionId) } as unknown as ISessionsService;
 const container = document.createElement('main');
 document.body.append(container);
-resources.add(new SessionsList(container, management, view, 'Tasks', 'New task', { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { } }, groups));
+resources.add(new SessionsList(container, management, view, 'Tasks', 'New task', { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { } }, groups, listCustomViews, listMenus, listNotifications));
 const services = resources.add(new InstantiationService());
 services.registerInstance(IStorageService, storage);
 const platform = new URL(location.href).searchParams.get('os') ?? 'linux';

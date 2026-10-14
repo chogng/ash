@@ -1,3 +1,7 @@
+import type { INotificationService } from '../../../platform/notification/common/notification.js';
+import { observableValue } from '../../../base/common/observable.js';
+import type { ICustomViewService } from '../../services/customView/browser/customViewService.js';
+import type { IMenuService } from '../../../platform/actions/common/actions.js';
 import { productLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
 import { formatNlsMessage, setNlsResolver, resetNlsResolver } from '../../../nls.js';
 import { sessionManagementLabel } from '../../browser/sessionManagementLabels.js';
@@ -13,6 +17,10 @@ import type { ISessionsManagementService } from "../../services/sessions/common/
 import type { ISessionsService } from "../../services/sessions/browser/sessionsService.js";
 import { SessionsList } from "../../browser/parts/sidebar/sessionsList.js";
 
+
+const listCustomViews = { activeCustomView: observableValue('testCustomView', undefined) } as unknown as ICustomViewService;
+const listMenus = { createMenu: () => ({ getActions: () => [], onDidChange: Event.None, ...toDisposable(() => { }) }) } as unknown as IMenuService;
+const listNotifications = { error: (error: unknown) => { throw error; } } as unknown as INotificationService;
 test("SessionsList keeps session buttons and focus while refreshing", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const changes = new Emitter<void>();
@@ -34,7 +42,7 @@ test("SessionsList keeps session buttons and focus while refreshing", () => {
 		openNewSession() { },
 		openUntitledSession(id: string) { opened.push(id); },
 	} as unknown as ISessionsService;
-	const list = new SessionsList(dom.window.document.body, sessionService, viewService, "Sessions", "New Session", { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { } });
+	const list = new SessionsList(dom.window.document.body, sessionService, viewService, "Sessions", "New Session", { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { } }, undefined, listCustomViews, listMenus, listNotifications);
 	const buttons = [...list.domNode.querySelectorAll<HTMLButtonElement>(".ash-sessions-list-item")];
 	buttons[0].focus();
 	untitledSessions = [
@@ -85,7 +93,7 @@ test('SessionsList updates passive status without changing row identity or selec
 	const sessionService = { get sessions() { return [session]; }, untitledSessions: [], state: 'ready' } as unknown as ISessionsManagementService;
 	const viewService = { onDidChange: changes.event, activeSelection: undefined, visibleSelections: [], openSession(id: string) { opened.push(id); } } as unknown as ISessionsService;
 	const request: IResolvedSessionPullRequest = { uri: URI.parse('https://github.com/fixture/repo/pull/7'), owner: 'fixture', repo: 'repo', number: 7, title: 'Synthetic PR', state: 'open', status: { hasFailingChecks: true }, icon: computePullRequestIcon('open', { hasFailingChecks: true }) };
-	using list = new SessionsList(dom.window.document.body, sessionService, viewService, 'Sessions', 'New Session', { onDidChange: Event.None, getSessionPullRequests: () => [request], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { } });
+	using list = new SessionsList(dom.window.document.body, sessionService, viewService, 'Sessions', 'New Session', { onDidChange: Event.None, getSessionPullRequests: () => [request], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { } }, undefined, listCustomViews, listMenus, listNotifications);
 	const button = list.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-item')!;
 	button.focus();
 	const items = list.domNode.querySelector<HTMLDivElement>('.ash-sessions-list-items')!;

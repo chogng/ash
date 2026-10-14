@@ -16,6 +16,12 @@ import { sessionManagementLabel } from '../../sessionManagementLabels.js';
 import type { SessionManagementInfo } from '../../../services/sessions/common/session.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
 import { colorCssVariable } from '../../../../platform/theme/common/colorUtils.js';
+import { Button } from '../../../../base/browser/ui/button/button.js';
+import { autorun } from '../../../../base/common/observable.js';
+import { IMenuService, type MenuActionGroup } from '../../../../platform/actions/common/actions.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { ICustomViewService } from '../../../services/customView/browser/customViewService.js';
+import { Menus } from '../../menus.js';
 
 /** Session picker owned by the dedicated Sessions Workbench sidebar. */
 export class SessionsList extends DomWidget {
@@ -29,16 +35,24 @@ export class SessionsList extends DomWidget {
 	private readonly empty: HTMLParagraphElement;
 	private readonly sessionService: ISessionsManagementService;
 	private readonly viewService: ISessionsService;
+	private readonly navigation: HTMLElement;
+	private readonly navigationButtons = this._register(new DisposableMap<string, Button>());
+	private readonly navigationActions = new Map<string, MenuActionGroup[1][number]>();
 
 	public get element(): HTMLElement { return this.domNode; }
 
-	constructor(container: HTMLElement, sessionService: ISessionsManagementService, viewService: ISessionsService, title: string, newSessionLabel: string, private readonly github: IGitHubService, private readonly groups?: ISessionGroupsService) {
+	constructor(container: HTMLElement, sessionService: ISessionsManagementService, viewService: ISessionsService, title: string, newSessionLabel: string, private readonly github: IGitHubService, private readonly groups: ISessionGroupsService | undefined,
+		@ICustomViewService private readonly customViews: ICustomViewService,
+		@IMenuService menus: IMenuService,
+		@INotificationService notifications: INotificationService,
+	) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this.sessionService = sessionService;
 		this.viewService = viewService;
 		this.domNode = h(ownerDocument, "section");
 		this.domNode.className = "ash-sessions-list";
+		this.navigation = h(ownerDocument, 'nav', { className: 'ash-sessions-list-navigation', attributes: { 'aria-label': localize('sessions.list.navigation', 'Sessions navigation') } });
 		this.heading = h(ownerDocument, "h2");
 		this.heading.textContent = title;
 		const controls = h(ownerDocument, 'div');
@@ -62,7 +76,7 @@ export class SessionsList extends DomWidget {
 		this.list.className = "ash-sessions-list-items";
 		this.empty = h(ownerDocument, "p");
 		this.empty.className = "ash-sessions-empty";
-		this.domNode.append(this.heading, controls, this.list);
+		this.domNode.append(this.navigation, this.heading, controls, this.list);
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		this._register(addDisposableListener(this.newSessionButton, "click", () => viewService.openNewSession(newSessionLabel)));
@@ -70,10 +84,35 @@ export class SessionsList extends DomWidget {
 		this._register(viewService.onDidChange(() => this.render()));
 		this._register(github.onDidChange(() => this.render()));
 		if (groups) this._register(groups.onDidChange(() => this.render()));
+		const menu = this._register(menus.createMenu(Menus.SidebarSessionsHeader));
+		const updateNavigation = (): void => {
+			const actions = menu.getActions().filter(([group]) => group === 'navigation').flatMap(([, actions]) => actions);
+			this.navigationActions.clear();
+			for (const action of actions) {
+				this.navigationActions.set(action.id, action);
+				let button = this.navigationButtons.get(action.id);
+				if (!button) {
+					button = this.navigationButtons.set(action.id, new Button(this.navigation, {
+						label: action.label, presentation: 'quiet',
+						onClick: () => { void Promise.resolve().then(() => this.navigationActions.get(action.id)?.run()).catch(error => notifications.error(String(error))); },
+					}));
+				}
+				button.label = action.label;
+				button.enabled = action.enabled;
+				button.domNode.setAttribute('aria-current', action.checked ? 'page' : 'false');
+			}
+			for (const id of this.navigationButtons.keys()) if (!this.navigationActions.has(id)) this.navigationButtons.deleteAndDispose(id);
+			this.navigation.hidden = actions.length === 0;
+		};
+		this._register(menu.onDidChange(updateNavigation));
+		updateNavigation();
+		this._register(autorun(reader => { customViews.activeCustomView.read(reader); this.render(); }));
 		this.render();
 	}
 
 	focus(): void {
+		const activeNavigation = this.navigation.querySelector<HTMLButtonElement>('[aria-current="page"]');
+		if (activeNavigation) { activeNavigation.focus(); return; }
 		const firstItem = this.list.querySelector<HTMLButtonElement>("button");
 		if (firstItem) firstItem.focus();
 		else this.newSessionButton.focus();
@@ -82,7 +121,8 @@ export class SessionsList extends DomWidget {
 	public getViewState(): { readonly query: string; readonly top: number; readonly focus: string | undefined; } {
 		const active = this.domNode.ownerDocument.activeElement;
 		const item = [...this.items].find(([, item]) => item.domNode === active);
-		const focus = active === this.searchInput ? 'search' : active === this.newSessionButton ? 'new' : item?.[0];
+		const navigation = [...this.navigationButtons].find(([, button]) => button.domNode === active);
+		const focus = active === this.searchInput ? 'search' : active === this.newSessionButton ? 'new' : navigation ? `navigation:${navigation[0]}` : item?.[0];
 		return { query: this.searchInput.value, top: this.list.scrollTop, focus };
 	}
 
@@ -92,6 +132,7 @@ export class SessionsList extends DomWidget {
 		this.list.scrollTop = state.top;
 		if (state.focus === 'search') this.searchInput.focus({ preventScroll: true });
 		else if (state.focus === 'new') this.newSessionButton.focus({ preventScroll: true });
+		else if (state.focus?.startsWith('navigation:')) this.navigationButtons.get(state.focus.slice('navigation:'.length))?.focus();
 		else if (state.focus) this.items.get(state.focus)?.domNode.focus({ preventScroll: true });
 	}
 
@@ -100,7 +141,7 @@ export class SessionsList extends DomWidget {
 		const ordered: HTMLElement[] = [];
 		const grouped = new Map<string, HTMLElement>();
 		const present = new Set<string>();
-		const activeSelection = this.viewService.activeSelection;
+		const activeSelection = this.customViews.activeCustomView.get() ? undefined : this.viewService.activeSelection;
 		const query = this.searchInput.value.trim().toLocaleLowerCase();
 		for (const selection of this.viewService.visibleSelections) {
 			if (selection.kind !== "untitled") continue;

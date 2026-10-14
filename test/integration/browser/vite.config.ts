@@ -51,6 +51,7 @@ export default defineConfig({
 				chatInput: resolve(import.meta.dirname, "chatInput.html"),
 				chatTranscript: resolve(import.meta.dirname, 'chatTranscript.html'),
 				agentsVoice: resolve(import.meta.dirname, 'agentsVoice.html'),
+				automations: resolve(import.meta.dirname, 'automations.html'),
 				aiCustomization: resolve(import.meta.dirname, 'aiCustomization.html'),
 				dataChannel: resolve(import.meta.dirname, 'dataChannel.html'),
 				extensionHost: resolve(import.meta.dirname, 'extensionHost.html'),

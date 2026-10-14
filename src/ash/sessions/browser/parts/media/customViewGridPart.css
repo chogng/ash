@@ -1,0 +1,38 @@
+.ash-sessions-window .ash-custom-view-grid > .ash-workbench-part-content {
+	display: flex;
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+}
+.ash-sessions-window .ash-custom-view-scroll {
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+}
+.ash-sessions-window .ash-custom-view-page {
+	box-sizing: border-box;
+	margin-inline: auto;
+	padding: 24px;
+	width: 100%;
+}
+.ash-sessions-window .ash-custom-view-header {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	margin-bottom: 24px;
+}
+.ash-sessions-window .ash-custom-view-header h1 {
+	font-size: var(--ash-fontSize-heading1);
+	font-weight: var(--ash-fontWeight-semiBold);
+	margin: 0;
+}
+.ash-sessions-window .ash-custom-view-header p {
+	color: var(--ash-description-foreground);
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+.ash-sessions-window .ash-custom-view-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}

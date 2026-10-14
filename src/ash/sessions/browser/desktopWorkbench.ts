@@ -211,6 +211,7 @@ function createSessionsWorkbenchGridDescriptor(
 								priority: SESSIONS_LAYOUT_PRIORITY,
 								children: [
 									leaf('sessions', sessionsWidth, !editorPrimary, editorPrimary ? 'normal' : SESSIONS_LAYOUT_PRIORITY),
+									...(views.has('customview') ? [leaf('customview', sessionsWidth, false, SESSIONS_LAYOUT_PRIORITY)] : []),
 									leaf('editor', editorPrimary ? sessionsWidth : state.editor.visible ? state.editor.width : state.auxiliarybar.width, state.editor.visible || state.auxiliarybar.visible, editorPrimary ? SESSIONS_LAYOUT_PRIORITY : 'normal'),
 									leaf('auxiliarybar', state.auxiliarybar.width, editorPrimary && state.auxiliarybar.visible),
 								],
@@ -233,6 +234,7 @@ function resolveSessionsInitialDimension(container: HTMLElement, dimension: IDim
 }
 
 function parseSessionsPartId(value: unknown): SessionsPartId {
+	if (value === 'customview') return value;
 	if (value === 'titlebar' || value === 'activitybar' || value === 'sidebar' || value === 'sessions' || value === 'editor' || value === 'auxiliarybar' || value === 'panel') return value;
 	throw new TypeError('Sessions Grid contains an unknown Part');
 }
@@ -273,7 +275,7 @@ class SessionsWorkbenchPartView extends WorkbenchPartView<SessionsPartId> {
 		return this.partId === 'sidebar' || this.partId === 'auxiliarybar' ? this.part.preferredWidth : super.preferredWidth;
 	}
 	public get priority(): 'high' | 'normal' {
-		return (this.partId === 'sessions' && !this.isEditorPrimary()) || (this.partId === 'editor' && this.isEditorPrimary()) ? 'high' : 'normal';
+		return this.partId === 'customview' || (this.partId === 'sessions' && !this.isEditorPrimary()) || (this.partId === 'editor' && this.isEditorPrimary()) ? 'high' : 'normal';
 	}
 
 	public override layout(bounds: IPositionedRectangle): void {
@@ -303,6 +305,7 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 	private detailsWidth: number;
 	private conversationWidth: number;
 	private primaryPart: 'sessions' | 'editor' = 'sessions';
+	private customViewVisible = false;
 	private get isDocked(): boolean { return this.primaryPart === 'sessions'; }
 
 	readonly onDidChangePartVisibility = this._onDidChangePartVisibility.event;
@@ -339,7 +342,7 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 		if (this.grid) {
 			throw new Error('Sessions Parts are already attached');
 		}
-		for (const partId of sessionsPartIds) {
+		for (const partId of parts.keys()) {
 			this.views.set(partId, new SessionsWorkbenchPartView(partId, requiredPart(parts, partId), () => this.primaryPart === 'editor', () => this.partUpdateDepth > 0, () => {
 				const editorWidth = this.desiredVisibility.editor && !this.unavailableParts.has('editor') ? requiredPart(parts, 'editor').minimumWidth : 0;
 				const detailsWidth = this.desiredVisibility.auxiliarybar && !this.unavailableParts.has('auxiliarybar') ? requiredPart(parts, 'auxiliarybar').minimumWidth : 0;
@@ -417,6 +420,7 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 
 	override layout(dimension: IDimension = getClientArea(this.mainContainer)): void {
 		assertDimension(dimension);
+		if (this.customViewVisible) this.applyCustomViewVisibility();
 		this.grid.layout(dimension.width, dimension.height);
 		if (this.partUpdateDepth > 0) return;
 		if (this.isDocked && this.desiredVisibility.editor && this.grid.isViewVisible(this.view('editor'))) {
@@ -497,6 +501,7 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 	}
 
 	private updatePartVisibility(partId: SessionsPartId, visible: boolean): void {
+		if (partId === 'customview') { this.setCustomViewVisible(visible); return; }
 		if (partId === 'titlebar' || partId === 'activitybar' || partId === 'sessions') throw new Error(`Required Sessions Part cannot be hidden: ${partId}`);
 		this.desiredVisibility[partId] = visible;
 		if (this.isDocked && (partId === 'editor' || partId === 'auxiliarybar')) {
@@ -551,6 +556,26 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 		}
 	}
 
+	/** Custom content borrows the center without changing the saved visibility of its underlying entry. */
+	public setCustomViewVisible(visible: boolean): void {
+		if (visible === this.customViewVisible) return;
+		this.customViewVisible = visible;
+		if (visible) this.applyCustomViewVisibility();
+		else {
+			this.grid.setViewVisible(this.view('customview'), false);
+			for (const id of ['sessions', 'editor', 'auxiliarybar', 'panel'] as const) {
+				this.grid.setViewVisible(this.view(id), this.desiredVisibility[id] && !this.unavailableParts.has(id));
+			}
+			if (this.isDocked) this.updateDockedVisibility();
+		}
+		this.projectFrameInsets();
+		this.layout(new Dimension(this.grid.width, this.grid.height));
+	}
+	private applyCustomViewVisibility(): void {
+		this.grid.setViewVisible(this.view('customview'), true);
+		for (const id of ['sessions', 'editor', 'auxiliarybar', 'panel'] as const) this.grid.setViewVisible(this.view(id), false);
+	}
+
 	private saveState(): void {
 		this.stateModel.save(this.state);
 		this.storageService.store('sessions.layout.conversation.width', this.conversationWidth, StorageScope.PROFILE, StorageTarget.MACHINE);
@@ -565,19 +590,20 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 		this.view('activitybar').setFrameInsets({ top: 0, right: 0, bottom: 0, left: 0 });
 		this.view('panel').setFrameInsets({ top: 0, right: rightEdge, bottom: rightEdge, left: 0 });
 		const sidebarVisible = this.desiredVisibility.sidebar && !this.unavailableParts.has('sidebar');
-		const editorVisible = this.desiredVisibility.editor && !this.unavailableParts.has('editor');
-		const sessionsVisible = !this.unavailableParts.has('sessions');
+		const editorVisible = !this.customViewVisible && this.desiredVisibility.editor && !this.unavailableParts.has('editor');
+		const sessionsVisible = !this.customViewVisible && !this.unavailableParts.has('sessions');
 		const contentLeftEdge = this.activityBarLocation === ActivityBarPosition.DEFAULT ? 0 : leftEdge;
 		this.view('sidebar').setFrameInsets({ top: 0, right: 0, bottom: rightEdge, left: contentLeftEdge });
 		this.view('sessions').setFrameInsets({ top: 0, right: auxiliarybarVisible || editorVisible ? 0 : rightEdge, bottom: rightEdge, left: sidebarVisible ? 0 : contentLeftEdge });
 		this.view('auxiliarybar').setFrameInsets({ top: 0, right: rightEdge, bottom: rightEdge, left: 0 });
 		this.view('editor').setFrameInsets({ top: 0, right: this.isDocked || !auxiliarybarVisible ? rightEdge : 0, bottom: rightEdge, left: !sidebarVisible && !sessionsVisible ? contentLeftEdge : 0 });
-		const mainPart: SessionsPartId = sessionsVisible ? 'sessions' : 'editor';
+		if (this.views.has('customview')) this.view('customview').setFrameInsets({ top: 0, right: rightEdge, bottom: rightEdge, left: sidebarVisible ? 0 : contentLeftEdge });
+		const mainPart: SessionsPartId = this.customViewVisible ? 'customview' : sessionsVisible ? 'sessions' : 'editor';
 		const firstPart = sidebarVisible ? 'sidebar' : mainPart;
 		let lastPart: SessionsPartId = mainPart;
 		if (editorVisible) lastPart = 'editor';
 		if (auxiliarybarVisible) lastPart = this.isDocked ? 'editor' : 'auxiliarybar';
-		for (const partId of ['sidebar', 'sessions', 'editor', 'auxiliarybar'] as const) {
+		for (const partId of ['sidebar', 'sessions', 'editor', 'auxiliarybar', ...(this.views.has('customview') ? ['customview' as const] : [])] as const) {
 			this.view(partId).part.domNode.classList.toggle('ash-sessions-frame-start', partId === firstPart);
 			this.view(partId).part.domNode.classList.toggle('ash-sessions-frame-end', partId === lastPart);
 		}
@@ -590,7 +616,7 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 	}
 
 	private publishPartVisibility(): void {
-		for (const partId of sessionsPartIds) {
+		for (const partId of this.views.keys()) {
 			const visible = this.isPartVisible(partId);
 			if (this.partVisibility.get(partId) === visible) continue;
 			this.partVisibility.set(partId, visible);

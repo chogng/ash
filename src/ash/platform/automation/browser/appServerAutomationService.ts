@@ -4,9 +4,9 @@ import { Emitter } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
-import type { Automation, AutomationDefinition, AutomationRun, AutomationStatus, IAutomationService } from '../common/automationService.js';
+import type { Automation, AutomationDefinition, AutomationRun, AutomationStatus, IAutomationBackendService } from '../common/automationService.js';
 
-export class AppServerAutomationService extends Disposable implements IAutomationService {
+export class AppServerAutomationService extends Disposable implements IAutomationBackendService {
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
 

@@ -52,7 +52,6 @@ import './contrib/snippets/browser/snippets.contribution.js';
 import './contrib/scrollLocking/browser/scrollLocking.contribution.js';
 import './contrib/call/browser/call.contribution.js';
 import './contrib/agentsVoice/browser/agentsVoice.contribution.js';
-import './contrib/automation/browser/automation.contribution.js';
 import '../editor/editor.code.all.js';
 import '../editor/standalone/browser/quickAccess/standaloneGotoSymbolQuickAccess.js';
 import './contrib/codeEditor/browser/codeEditor.contribution.js';

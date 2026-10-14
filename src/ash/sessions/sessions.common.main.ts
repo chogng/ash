@@ -44,6 +44,8 @@ import './contrib/creator/contrib/make/browser/make.contribution.js';
 import './contrib/creator/contrib/prototype/browser/prototype.contribution.js';
 import './contrib/library/browser/library.contribution.js';
 import './contrib/symphony/browser/symphony.contribution.js';
+import './contrib/automations/browser/automations.contribution.js';
+import './contrib/sessions/browser/sessions.contribution.js';
 import './contrib/layout/browser/sessions.layout.contribution.js';
 import '../workbench/contrib/codeEditor/browser/codeEditor.contribution.js';
 import '../workbench/contrib/snippets/browser/snippets.contribution.js';

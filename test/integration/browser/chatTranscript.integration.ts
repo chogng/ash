@@ -1,3 +1,4 @@
+import { IRendererHostService } from '../../../src/ash/platform/renderer/common/rendererHost.js';
 import { createTestLanguageModelToolsService } from '../../../src/ash/workbench/contrib/chat/test/common/tools/testLanguageModelToolsService.js';
 import { ImagePreview } from '../../../src/ash/workbench/contrib/mediaPreview/browser/imagePreview.js';
 import { MediaPreview } from '../../../src/ash/workbench/contrib/mediaPreview/browser/mediaPreview.js';
@@ -706,6 +707,7 @@ window.ashChatTranscriptIntegration = {
 		const lifecycleServices = resources.add(services.createChild());
 		lifecycleCommands = resources.add(new CommandService(lifecycleServices));
 		const disconnected = createDisconnectedRendererApi();
+		lifecycleServices.registerInstance(IRendererHostService, disconnected);
 		let catalog: AgentSession[] = [{ sessionId: 'lifecycle', title: 'Synthetic task', status: 'active', manager: { status: 'idle', statusChangedAtUnixMs: 0 }, threads: [{ threadId: 'lifecycle', title: 'Root', status: 'active' }, { threadId: 'lifecycle-child', title: 'Child', parentThreadId: 'lifecycle', status: 'active' }] }];
 		const read = () => ({ session: catalog[0]!, agentTree: { roots: [] } });
 		lifecycleServices.registerInstance(IAppServerApi, { connectionGeneration: 1, getConnectionState: async () => 'ready', getSlashCommands: async () => [], onConnectionState: () => Disposable.None });

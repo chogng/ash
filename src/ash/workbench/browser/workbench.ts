@@ -58,7 +58,6 @@ import { IApprovalEnvironmentService } from '../../platform/approvalEnvironment/
 import { IMemoriesService } from '../../platform/memories/common/memoriesService.js';
 import { IMemoryDiagnosticsService } from '../../platform/memory/common/memoryDiagnosticsService.js';
 import "./style.js";
-import { IAutomationService } from '../../platform/automation/common/automationService.js';
 import { disposableWindowTimeout } from "../../base/browser/scheduler.js";
 import { getWindow } from '../../base/browser/dom.js';
 import { TextFileSaveErrorHandler } from '../contrib/files/browser/editors/textFileSaveErrorHandler.js';
@@ -584,9 +583,6 @@ export class Workbench extends Disposable {
 		if (api.memories) { services.registerInstance(IMemoriesService, api.memories); }
 		if (api.memoryDiagnostics) { services.registerInstance(IMemoryDiagnosticsService, api.memoryDiagnostics); }
 		if (api.calls) { services.registerInstance(ICallService, api.calls); }
-		if (api.automation) {
-			services.registerInstance(IAutomationService, api.automation);
-		}
 		services.registerInstance(AppServerApiId, api.appServer);
 		const remoteAgentService = this._register(services.createInstance(AppServerRemoteAgentService, { remoteApi: api.remote }));
 		services.registerInstance(IAppServerRemoteAgentService, remoteAgentService);

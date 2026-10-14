@@ -1,3 +1,4 @@
+import { IRendererHostService, type IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { isCancellationError } from "../../../../../base/common/errors.js";
@@ -409,6 +410,7 @@ test('a failed catalog restoration retries on the next ready connection', async 
 
 function createProvider(fake: ReturnType<typeof sessionHost>, omitted?: unknown): AppServerSessionsProvider {
 	using services = new InstantiationService();
+	services.registerInstance(IRendererHostService, fake.host as unknown as IRendererHost);
 	if (omitted !== IAppServerApi) { services.registerInstance(IAppServerApi, fake.appServer); }
 	if (omitted !== IAgentSessionService) { services.registerInstance(IAgentSessionService, fake.host.session); }
 	if (omitted !== IAgentModelsService) { services.registerInstance(IAgentModelsService, fake.host.model); }

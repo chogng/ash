@@ -1,0 +1,43 @@
+.ash-sessions-window .ash-automations {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	min-width: 0;
+}
+.ash-sessions-window .ash-automation-cards {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+	gap: 12px;
+}
+.ash-sessions-window .ash-automation-card,
+.ash-sessions-window .ash-automation-run {
+	padding: 16px;
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border-radius: var(--ash-cornerRadius-large);
+	min-width: 0;
+}
+.ash-sessions-window .ash-automation-card h3 {
+	margin: 0;
+}
+.ash-sessions-window .ash-automation-card p,
+.ash-sessions-window .ash-automation-run p {
+	overflow-wrap: anywhere;
+	color: var(--ash-description-foreground);
+}
+.ash-sessions-window .ash-automation-card-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+.ash-sessions-window .ash-automation-history {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.ash-sessions-window .ash-automations [hidden] {
+	display: none;
+}
+.ash-sessions-window .ash-automations :focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}

@@ -41,10 +41,10 @@ export function registerSessionsNavigation(listRoles: () => Promise<readonly Tea
 class SessionsNavigationView extends ViewPane {
 	private list: SessionsList;
 	private hiddenListState: ReturnType<SessionsList['getViewState']> | undefined;
-	constructor(parent: HTMLElement, options: IViewPaneOptions, @ISessionsManagementService management: ISessionsManagementService, @ISessionsService sessions: ISessionsService, @IGitHubService github: IGitHubService, @ISessionGroupsService groups: ISessionGroupsService) {
+	constructor(parent: HTMLElement, options: IViewPaneOptions, @ISessionsManagementService management: ISessionsManagementService, @ISessionsService sessions: ISessionsService, @IGitHubService github: IGitHubService, @ISessionGroupsService groups: ISessionGroupsService, @IInstantiationService instantiation: IInstantiationService) {
 		super(parent, options);
 		this.contentElement.classList.add('ash-sessions-navigation-view');
-		const lists = SessionsList.createObservable(this._store, h(this.contentElement.ownerDocument, 'div'), management, sessions, localize('sessions.activity.chat', 'Chat'), localize('chat.sessions.new', 'New Session'), github, groups);
+		const lists = SessionsList.instantiateObservable(instantiation, this._store, h(this.contentElement.ownerDocument, 'div'), management, sessions, localize('sessions.activity.chat', 'Chat'), localize('chat.sessions.new', 'New Session'), github, groups);
 		this.list = lists.get();
 		this.contentElement.append(this.list.element);
 		this._register(lists.onDidChange(list => {

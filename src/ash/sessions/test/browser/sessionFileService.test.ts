@@ -22,6 +22,8 @@ import type { ISessionsProvider } from '../../services/sessions/common/sessionsP
 import type { ISession, SessionId } from '../../services/sessions/common/session.js';
 import { SessionsWorkspaceContextService } from '../../services/workspace/browser/workspaceContextService.js';
 import { SessionFileService } from '../../contrib/providers/agentHost/browser/sessionFileService.js';
+import { CustomViewService, ICustomViewService } from '../../services/customView/browser/customViewService.js';
+import { NullLoggerService } from '../../../platform/log/common/log.js';
 
 test('Session files preserve their original directory through selection, directory moves and archive', async () => {
 	const browser = new JSDOM('<!doctype html>', { url: 'https://sessions.test' });
@@ -32,6 +34,8 @@ test('Session files preserve their original directory through selection, directo
 		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'sessions', flushInterval: 0 });
 		services.registerInstance(ISessionsManagementService, management);
 		services.registerInstance(IStorageService, storage);
+		using customViews = new CustomViewService(new NullLoggerService(), storage);
+		services.registerInstance(ICustomViewService, customViews);
 		using sessions = services.createInstance(SessionsService);
 		services.registerInstance(ISessionsService, sessions);
 		await sessions.initialize();
@@ -101,6 +105,9 @@ test('Session files preserve their original directory through selection, directo
 });
 
 class MemoryProvider extends Disposable implements ISessionsProvider {
+	readonly id = 'test-provider';
+	readonly label = 'Test provider';
+	readonly order = 0;
 	readonly onDidChangeCatalog = Event.None;
 	private readonly changed = this._register(new Emitter<{ sessionId: SessionId; detailChanged: boolean; }>());
 	readonly onDidChangeSession = this.changed.event;
@@ -177,6 +184,8 @@ test('restored file identity waits for the real Session directory instead of rea
 		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'directory-restore', flushInterval: 0 });
 		services.registerInstance(ISessionsManagementService, management);
 		services.registerInstance(IStorageService, storage);
+		using customViews = new CustomViewService(new NullLoggerService(), storage);
+		services.registerInstance(ICustomViewService, customViews);
 		using sessions = services.createInstance(SessionsService);
 		services.registerInstance(ISessionsService, sessions);
 		using workspace = services.createInstance(SessionsWorkspaceContextService, () => ({ id: 'source', folders: [{ id: 'source', index: 0, name: 'source', uri: URI.file('/source') }] }));

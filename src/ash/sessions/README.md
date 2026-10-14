@@ -105,6 +105,21 @@ their last result for the current window and refresh when selected again; Sessio
 that have not been selected have no resolved association yet. PR artifacts produced
 by agents are not automatically recorded by this service.
 
+Automations load through `sessions.common.main.ts` in Web and Electron.
+`contrib/automations/browser/automations.contribution.ts` registers the provider
+aggregate, editing-dialog service and manual-run coordinator. The UI contribution
+in `contrib/sessions/browser/views/automationsView.ts` is registered by
+`sessions.contribution.ts` at `BlockRestore`. The Sidebar Sessions navigation
+invokes `sessionsView.manageAutomations` to open its independent Custom View;
+creation and editing use a modal dialog that retains the reviewed revision.
+Startup restores the covered entry and session without closing the Custom View
+or stealing focus. Explicit navigation closes it; Back and Forward visit both.
+The provider registry borrows the window's existing App Server Sessions provider.
+Its automation store owns observable frontend snapshots; `platform/automation`
+remains the shared backend contract and adapter. Rust owns persistence,
+scheduling and execution. Closing a view or window does not stop its runs.
+See [Automation ownership and lifecycle](../../../crates/docs/automation.md).
+
 ## Ownership
 
 | Area                                  | Owner                                                                                                                                                                                          | Current implementation                                                                                                                                                                                                                                                                                                                                                                                                                                   |

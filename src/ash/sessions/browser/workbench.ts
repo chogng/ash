@@ -77,6 +77,11 @@ import { ILocalGitService } from '../../platform/git/common/localGitService.js';
 import { AppServerPluginManagementService } from '../../workbench/services/extensionManagement/browser/appServerPluginManagementService.js';
 import { IAppServerRemoteAgentService } from '../../workbench/services/remote/common/appServerRemoteAgentService.js';
 import { AppServerRemoteAgentService } from '../../workbench/services/remote/browser/appServerRemoteAgentService.js';
+import { autorun } from '../../base/common/observable.js';
+import { CustomViewGridPart } from './parts/customViewGridPart.js';
+import { ICustomViewService } from '../services/customView/browser/customViewService.js';
+import { ICustomViewGridPartService } from '../services/customView/browser/customViewGridPartService.js';
+import { ISessionsProvidersService } from '../services/sessions/browser/sessionsProvidersService.js';
 import { IChatSessionNavigationService } from '../../workbench/services/chat/common/chatSessionNavigationService.js';
 import '../../workbench/contrib/chat/browser/actions/chatSpeechToTextActions.js';
 import '../../workbench/contrib/quickaccess/browser/quickAccess.contribution.js';
@@ -416,13 +421,15 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(ServerEventApiId, options.api.events);
 		services.registerInstance(IAppServerSkillApi, options.api.skills);
 		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
-		const sessions = this._register(new SessionsManagementService(services.createInstance(AppServerSessionsProvider, {
+		const provider = services.createInstance(AppServerSessionsProvider, {
 			workspace: options.workspaceSelection,
 			selectWorkspace: async folders => {
 				using selection = services.createInstance(WorkspaceSelection);
 				return await selection.pick(folders);
 			},
-		} satisfies AppServerSessionsProviderHost)));
+		} satisfies AppServerSessionsProviderHost);
+		const sessions = this._register(new SessionsManagementService(provider));
+		this._register(services.get(ISessionsProvidersService).registerProvider(provider));
 		const teams = new TeamsManagementService(new AppServerTeamsProvider(options.api.teams));
 		services.registerInstance(ITeamsManagementService, teams);
 		const storage = this._register(storageService);
@@ -773,6 +780,8 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IViewsService, views);
 		// Extension adapters require the completed editor and view service graph.
 		installWorkbenchServiceContributions({ container: services, register: value => this._register(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
+		const customViewPart = this._register(services.createInstance(CustomViewGridPart, this.domNode));
+		services.registerInstance(ICustomViewGridPartService, customViewPart);
 		const parts = new Map<SessionsPartId, Part>([
 			["titlebar", titlebar],
 			['activitybar', activitybar],
@@ -781,8 +790,16 @@ export abstract class Workbench extends Disposable {
 			['editor', editor],
 			["auxiliarybar", auxiliarybar],
 			['panel', panel],
+			['customview', customViewPart],
 		]);
 		layout.createWorkbenchLayout(parts);
+		const customViews = services.get(ICustomViewService);
+		this._register(autorun(reader => {
+			const opening = customViews.activeCustomViewOpen.read(reader);
+			customViewPart.setView(opening?.descriptor);
+			layout.setCustomViewVisible(!!opening);
+			if (opening?.source === 'explicit') customViewPart.focusActiveView();
+		}));
 		this._register(this.lifecycleService.onBeforeShutdown(event => {
 			event.veto(textModels.waitForSaveRecovery().then(() => false), 'Sessions text save recovery');
 			// Pending rejection decisions are captured by the review service's shutdown
@@ -843,15 +860,15 @@ export abstract class Workbench extends Disposable {
 		if (this.isDisposed) return;
 		await view.initialize();
 		if (this.isDisposed) return;
-		if (!view.activeSelection) view.openNewSession();
+		if (!view.activeSelection) view.openNewSession(undefined, { source: 'restore' });
 		const selected = view.activeSelection!;
 		for (const recovered of recoveredDrafts) {
-			const session = view.openNewSession(undefined, { sideBySide: true });
+			const session = view.openNewSession(undefined, { sideBySide: true, source: 'restore' });
 			writeNewChatDraftState(storage, recovered.draft, `untitled:${session.untitledSessionId}`);
 			this.sessionsPart.restoreDraft(recovered.draft);
 			storage.remove(recovered.key, StorageScope.WORKSPACE);
 		}
-		view.activateSelection(selected);
+		view.activateSelection(selected, { source: 'restore' });
 		await entryLayout.restore();
 		if (this.isDisposed) return;
 		this.lifecycleService.phase = LifecyclePhase.Restored;
@@ -884,6 +901,7 @@ export interface IAgentWorkbenchLayoutService extends ILayoutService {
 	setLayoutStyle(style: SessionsLayoutStyle): void;
 	/** Determines which center absorbs window resizing; supporting Parts retain their user widths. */
 	setPrimaryPart(partId: 'sessions' | 'editor'): void;
+	setCustomViewVisible(visible: boolean): void;
 	isPartVisible(partId: SessionsPartId): boolean;
 	isPartAvailable(partId: SessionsPartId): boolean;
 	setPartAvailable(partId: 'sessions' | 'sidebar' | 'auxiliarybar' | 'editor' | 'panel', available: boolean): void;

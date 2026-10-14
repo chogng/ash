@@ -132,6 +132,42 @@ test('Sessions can directly dispose and recreate a restored window without captu
 	}
 });
 
+for (const locale of ['en', 'zh-CN']) test(`Automations management stays selected through window restoration and yields to explicit navigation (${locale})`, async ({ page }) => {
+	await expect(page.getByRole('button', { name: 'Manage Automations', exact: true })).toHaveCount(0);
+	await page.goto(`/sessions.html?automations=1&locale=${locale}`);
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	const chinese = locale === 'zh-CN';
+	if (chinese) await page.evaluate(() => window.ashSessionsIntegration.setTheme('ash-high-contrast-dark'));
+	const activity = page.locator('.ash-sessions-activity-content');
+	const manage = page.getByRole('navigation', { name: chinese ? '会话导航' : 'Sessions navigation' }).getByRole('button', { name: chinese ? '管理自动化' : 'Manage Automations', exact: true });
+	const custom = page.locator('[data-part="customview"]');
+	const code = activity.getByRole('button', { name: chinese ? '代码' : 'Code', exact: true });
+	await code.click();
+	await manage.focus();
+	await manage.press('Enter');
+	await expect(custom).toBeVisible();
+	await expect(manage).toHaveAttribute('aria-current', 'page');
+	await expect(code).not.toHaveAttribute('aria-current', 'page');
+	await expect(page.locator('.ash-sessions-list-item.selected')).toHaveCount(0);
+	await expect(activity.getByRole('button', { name: /Automations/ })).toHaveCount(0);
+	for (let attempt = 0; attempt < 2; attempt++) {
+		await page.evaluate(() => window.ashSessionsIntegration.remountAfterDirectDispose());
+		await expect(custom).toBeVisible();
+		await expect(manage).toHaveAttribute('aria-current', 'page');
+		await expect(code).not.toHaveAttribute('aria-current', 'page');
+		await expect(page.locator('[data-part="auxiliarybar"]')).toBeHidden();
+		await code.click();
+		await expect(custom).toBeHidden();
+		await expect(code).toHaveAttribute('aria-current', 'page');
+		await expect(page.locator('[data-part="editor"] .ash-editor-title-control').getByRole('tab', { name: chinese ? '更改' : 'Changes', exact: true })).toBeVisible();
+		await manage.click();
+	}
+	await page.locator('.ash-sessions-list-item').first().click();
+	await expect(custom).toBeHidden();
+	await expect(manage).not.toHaveAttribute('aria-current', 'page');
+	await expect(page.locator('.ash-sessions-list-item.selected')).toHaveCount(1);
+});
+
 test('Code defaults stay in document groups after visiting a retained Trace page', async ({ page }) => {
 	await new QuickAccess(page).runCommand('sessions.trace.import');
 	await expect(page.locator('.ash-agent-trace')).toBeVisible();

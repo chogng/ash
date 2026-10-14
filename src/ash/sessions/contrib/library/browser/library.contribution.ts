@@ -26,7 +26,7 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 
 registerSingleton(ILibraryService, LibraryService, InstantiationType.Delayed);
 
-CommandsRegistry.register('sessions.show.library', accessor => accessor.get(ISessionsLayoutService).openEntry({
+CommandsRegistry.register('sessions.show.library', (accessor, source) => accessor.get(ISessionsLayoutService).openEntry({
 	id: 'library', activityContext: 'sessions.activity.librarySelected', content: 'editor',
 	sidebarContainerId: LIBRARY_NAVIGATION_CONTAINER_ID, detailsContainerId: LIBRARY_DETAILS_CONTAINER_ID,
 	restoreCommand: 'sessions.show.library', focus: 'editor',
@@ -34,7 +34,7 @@ CommandsRegistry.register('sessions.show.library', accessor => accessor.get(ISes
 		resource: URI.from({ scheme: 'ash-library', path: '/page' }), label: localize('library.title', 'Library'),
 		showBreadcrumbs: false, readOnly: true, capabilities: EditorInputCapabilities.CannotClose,
 	},
-}));
+}, undefined, source === 'restore' ? { source } : undefined));
 
 registerEditorPane({ id: 'sessions.editor.library', name: 'Library', canOpen: input => input.resource.scheme === 'ash-library' ? EditorPaneMatch.Default : EditorPaneMatch.None, create: options => options.instantiationService!.createInstance(LibraryEditorPane) });
 

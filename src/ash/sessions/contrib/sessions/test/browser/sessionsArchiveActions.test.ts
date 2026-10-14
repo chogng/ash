@@ -24,6 +24,9 @@ import { ISessionsManagementService } from '../../../../services/sessions/common
 import type { ISessionsProvider } from '../../../../services/sessions/common/sessionsProvider.js';
 
 class Provider extends Disposable implements ISessionsProvider {
+	readonly id = 'test-provider';
+	readonly label = 'Test provider';
+	readonly order = 0;
 	readonly onDidChangeCatalog = Event.None;
 	readonly onDidChangeSession = Event.None;
 	items: ISession[] = [session('first'), session('second')];

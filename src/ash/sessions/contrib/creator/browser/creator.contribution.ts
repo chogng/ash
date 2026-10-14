@@ -28,7 +28,7 @@ import { SessionsViewRegistry } from '../../../common/views.js';
 
 registerEditorPane({ id: 'sessions.editor.creator', name: 'Creator', canOpen: input => input.resource.scheme === 'ash-creator' ? EditorPaneMatch.Default : EditorPaneMatch.None, create: options => options.instantiationService!.createInstance(CreatorEditorPane) });
 
-function openCreator(accessor: ServicesAccessor, workspace?: CreatorMode | 'home'): Promise<void> {
+function openCreator(accessor: ServicesAccessor, workspace?: CreatorMode | 'home', source?: 'restore'): Promise<void> {
 	const editor = accessor.get(IEditorPart);
 	const entry: ISessionsEntry = {
 		id: 'creator.home', activityContext: 'sessions.activity.creatorSelected', content: 'editor',
@@ -47,12 +47,12 @@ function openCreator(accessor: ServicesAccessor, workspace?: CreatorMode | 'home
 			conversation: page.activeMode === CreatorMode.Design ? 'optional' : undefined, sidebarContainerId: DESIGN_LAYERS_CONTAINER_ID,
 			detailsContainerId: DESIGN_PROPERTIES_CONTAINER_ID,
 		} : entry;
-	});
+	}, source ? { source } : undefined);
 }
 
 CommandsRegistry.register('sessions.show.creator', accessor => openCreator(accessor, 'home'));
-CommandsRegistry.register('sessions.restore.creator', accessor => openCreator(accessor));
-CommandsRegistry.register('sessions.restore.creatorDesign', accessor => openCreator(accessor, CreatorMode.Design));
+CommandsRegistry.register('sessions.restore.creator', (accessor, source) => openCreator(accessor, undefined, source === 'restore' ? source : undefined));
+CommandsRegistry.register('sessions.restore.creatorDesign', (accessor, source) => openCreator(accessor, CreatorMode.Design, source === 'restore' ? source : undefined));
 CommandsRegistry.register('sessions.creator.openMode', (accessor, value) => {
 	if (!Object.values(CreatorMode).includes(value as CreatorMode)) { throw new TypeError(localize('sessions.creator.invalidMode', 'Invalid Creator document mode.')); }
 	return openCreator(accessor, value as CreatorMode);

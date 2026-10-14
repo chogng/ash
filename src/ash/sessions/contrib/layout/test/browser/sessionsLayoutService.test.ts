@@ -1,3 +1,6 @@
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { CustomViewService, ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -6,6 +9,9 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { observableValue } from '../../../../../base/common/observable.js';
+import { constObservable } from '../../../../../base/common/observable.js';
+import { SyncDescriptor } from '../../../../../platform/instantiation/common/descriptors.js';
+import { AbstractCustomView } from '../../../../services/customView/browser/customView.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
@@ -93,6 +99,39 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		assert.equal(fixture.focused, 'details');
 	});
 
+	test('background entry restoration preserves the Custom View, focus and activity selection', async () => {
+		using fixture = new EntryFixture();
+		using registration = fixture.customViews.registerCustomView({ id: 'automations', ctor: new SyncDescriptor(TestCustomView) });
+		fixture.customViews.showCustomView('automations');
+		await fixture.service.openEntry(documentEntry, undefined, { source: 'restore' });
+		assert.equal(fixture.customViews.activeCustomView.get()?.id, 'automations');
+		assert.equal(fixture.focused, undefined);
+		assert.equal(fixture.contextKeys.getContext().getValue('sessions.activity.codeSelected'), false);
+		fixture.activeInput = { resource: URI.file('/background.ts') };
+		fixture.editorChanged.fire({ kind: 'activeGroupChanged', groupId: 'documents' });
+		await fixture.service.runOperation(async () => { });
+		assert.equal(fixture.customViews.activeCustomView.get()?.id, 'automations');
+		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), documentEntry.restoreCommand);
+		await fixture.service.openEntry(chatEntry);
+		assert.equal(fixture.customViews.activeCustomView.get(), undefined);
+		assert.equal(fixture.focused, 'conversation');
+		assert.equal(fixture.contextKeys.getContext().getValue('sessions.activity.chatSelected'), true);
+	});
+
+	test('a Custom View opened while navigation awaits keeps its focus after navigation completes', async () => {
+		using fixture = new EntryFixture();
+		using registration = fixture.customViews.registerCustomView({ id: 'automations', ctor: new SyncDescriptor(TestCustomView) });
+		const gate = new DeferredPromise<void>();
+		fixture.navigationGate = gate.p;
+		const restoring = fixture.service.openEntry(chatEntry, undefined, { source: 'restore' });
+		await fixture.navigationStarted.p;
+		fixture.customViews.showCustomView('automations');
+		await gate.complete();
+		await restoring;
+		assert.equal(fixture.customViews.activeCustomView.get()?.id, 'automations');
+		assert.equal(fixture.focused, undefined);
+	});
+
 	test('a remembered hidden sidebar does not take focus during entry restoration', async () => {
 		using fixture = new EntryFixture({ teams: { sidebar: false, details: false, panel: false, documents: false } });
 		await fixture.service.openEntry({ ...chatEntry, id: 'teams', focus: 'sidebar' });
@@ -115,13 +154,19 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 
 const chatEntry: ISessionsEntry = { id: 'chat', content: 'conversation', activityContext: 'sessions.activity.chatSelected', sidebarContainerId: 'navigation', restoreCommand: 'sessions.open.chat', focus: 'conversation' };
 class TestLifecycle extends AbstractLifecycleService { }
+class TestCustomView extends AbstractCustomView {
+	readonly title = constObservable('Automations');
+	render(): void { }
+	layout(): void { }
+}
 
 class EntryFixture extends Disposable {
 	private readonly dom = new JSDOM('', { url: 'https://entry-layout.test' });
 	private readonly services = this._register(new InstantiationService());
 	public readonly storage = this._register(new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, workspaceId: 'sessions', backend: this.dom.window.localStorage, flushInterval: 0 }));
 	public readonly lifecycle = this._register(new TestLifecycle(undefined, new NullLoggerService(), this.storage));
-	private readonly contextKeys = this._register(new ContextKeyService());
+	public readonly contextKeys = this._register(new ContextKeyService());
+	public readonly customViews = this._register(new CustomViewService(new NullLoggerService(), this.storage));
 	private readonly workspace = this._register(new WorkspaceContextService({ id: 'sessions', folders: [] }));
 	public readonly editorChanged = this._register(new Emitter<EditorPartChangeEvent>());
 	public readonly activeEditorChanged = this._register(new Emitter<void>());
@@ -146,6 +191,8 @@ class EntryFixture extends Disposable {
 		const documentGroup = { id: 'documents', inputs: [] };
 		const pageGroup = { id: 'pages', inputs: [] };
 		this.services.registerInstance(IStorageService, this.storage);
+		this.services.registerInstance(IConfigurationService, this._register(new InMemoryConfigurationService()));
+		this.services.registerInstance(ICustomViewService, this.customViews);
 		this.services.registerInstance(ILifecycleService, this.lifecycle);
 		this.services.registerInstance(IContextKeyService, this.contextKeys);
 		this.services.registerInstance(IWorkspaceContextService, this.workspace);

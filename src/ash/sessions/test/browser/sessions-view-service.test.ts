@@ -1,5 +1,5 @@
 import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
-import { observableValue } from '../../../base/common/observable.js';
+import { autorun, constObservable, observableValue } from '../../../base/common/observable.js';
 import assert from "node:assert/strict";
 import { setup, teardown, test } from "mocha";
 import { JSDOM } from 'jsdom';
@@ -14,6 +14,10 @@ import { ISessionsManagementService, type SessionsManagementState } from "../../
 import { SessionsService } from "../../../sessions/services/sessions/browser/sessionsService.js";
 import type { SessionsViewSelection } from "../../../sessions/services/sessions/browser/sessionsService.js";
 import { WELCOME_COMPLETE_KEY } from '../../common/welcome.js';
+import { CustomViewService, ICustomViewService } from '../../services/customView/browser/customViewService.js';
+import { NullLoggerService } from '../../../platform/log/common/log.js';
+import { SyncDescriptor } from '../../../platform/instantiation/common/descriptors.js';
+import { AbstractCustomView } from '../../services/customView/browser/customView.js';
 
 let storageResources: DisposableStore;
 setup(() => { storageResources = new DisposableStore(); });
@@ -26,12 +30,150 @@ function createTestStorage(): BrowserStorageService {
 	return new BrowserStorageService({ ownerWindow: storageEnvironment.window as unknown as Window, workspaceId: 'sessions', flushInterval: 0 });
 }
 
-function createView(sessions: ISessionsManagementService, storage: IStorageService): SessionsService {
+function createView(sessions: ISessionsManagementService, storage: IStorageService, customViews = storageResources.add(new CustomViewService(new NullLoggerService(), storage))): SessionsService {
 	using services = new InstantiationService();
 	services.registerInstance(ISessionsManagementService, sessions);
 	services.registerInstance(IStorageService, storage);
+	services.registerInstance(ICustomViewService, customViews);
 	return services.createInstance(SessionsService);
 }
+
+class TestCustomView extends AbstractCustomView {
+	readonly title = constObservable('Automations');
+	render(): void { }
+	layout(): void { }
+}
+
+test('A restored Custom View survives delayed catalog initialization and automatic draft recovery', async () => {
+	const ready = new DeferredPromise<void>();
+	using sessions = new class extends FakeSessionService {
+		override initialize(): Promise<void> { return ready.p; }
+	}([session('saved', 'root')]);
+	using storage = createTestStorage();
+	storage.store('sessions.activeCustomView', 'automations', StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	using custom = new CustomViewService(new NullLoggerService(), storage);
+	using view = createView(sessions, storage, custom);
+	const initializing = view.initialize();
+	using registration = custom.registerCustomView({ id: 'automations', ctor: new SyncDescriptor(TestCustomView) });
+	await ready.complete();
+	await initializing;
+	const selected = view.activeSelection!;
+	view.openNewSession('Recovered draft', { sideBySide: true, source: 'restore' });
+	view.activateSelection(selected, { source: 'restore' });
+	assert.equal(custom.activeCustomView.get()?.id, 'automations');
+	assert.equal(selectionId(view.activeSelection), 'session:saved:root');
+	view.navigateBack();
+	assert.equal(custom.activeCustomView.get(), undefined);
+	assert.equal(selectionId(view.activeSelection), 'session:saved:root');
+	assert.equal(view.canNavigateBack, false, 'Recovered drafts must not become navigation visits');
+	view.navigateForward();
+	assert.equal(custom.activeCustomView.get()?.id, 'automations');
+});
+
+test('The automatic startup draft remains behind the restored Custom View', async () => {
+	using sessions = new FakeSessionService([]);
+	using storage = createTestStorage();
+	storage.store('sessions.activeCustomView', 'automations', StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	using custom = new CustomViewService(new NullLoggerService(), storage);
+	using registration = custom.registerCustomView({ id: 'automations', ctor: new SyncDescriptor(TestCustomView) });
+	using view = createView(sessions, storage, custom);
+	await view.initialize();
+	const draft = view.openNewSession('Startup draft', { source: 'restore' });
+	assert.equal(custom.activeCustomView.get()?.id, 'automations');
+	view.navigateBack();
+	assert.equal(custom.activeCustomView.get(), undefined);
+	assert.equal(selectionId(view.activeSelection), `untitled:${draft.untitledSessionId}`);
+	view.navigateForward();
+	assert.equal(custom.activeCustomView.get()?.id, 'automations');
+	view.activateSelection(view.activeSelection!);
+	assert.equal(custom.activeCustomView.get(), undefined);
+});
+
+test('Explicit Session opens dismiss Custom Views atomically and Back/Forward revisits both destinations', async () => {
+	using sessions = new FakeSessionService([session('first', 'first-thread'), session('second', 'second-thread')]);
+	using storage = createTestStorage();
+	using custom = new CustomViewService(new NullLoggerService(), storage);
+	using registration = custom.registerCustomView({ id: 'automations', ctor: new SyncDescriptor(TestCustomView) });
+	using view = createView(sessions, storage, custom);
+	await view.initialize();
+	custom.showCustomView('automations');
+	const observed: string[] = [];
+	using observer = autorun(reader => {
+		const selected = view.getSelection(reader).activeSelection;
+		observed.push(custom.activeCustomView.read(reader)?.id ?? selectionId(selected)!);
+	});
+	view.openSession('second', 'second-thread');
+	assert.deepEqual(observed.filter((destination, index) => index === 0 || destination !== observed[index - 1]), ['automations', 'session:second:second-thread']);
+	view.navigateBack();
+	assert.equal(custom.activeCustomView.get()?.id, 'automations');
+	view.navigateBack();
+	assert.equal(custom.activeCustomView.get(), undefined);
+	assert.equal(selectionId(view.activeSelection), 'session:first:first-thread');
+	view.navigateForward();
+	assert.equal(custom.activeCustomView.get()?.id, 'automations');
+	view.navigateForward();
+	assert.equal(custom.activeCustomView.get(), undefined);
+	assert.equal(selectionId(view.activeSelection), 'session:second:second-thread');
+	assert.equal(view.canNavigateForward, false);
+});
+
+test('Opening the covered Session again and creating a draft each close the Custom View', async () => {
+	using sessions = new FakeSessionService([session('first', 'first-thread')]);
+	using storage = createTestStorage();
+	using custom = new CustomViewService(new NullLoggerService(), storage);
+	using registration = custom.registerCustomView({ id: 'automations', ctor: new SyncDescriptor(TestCustomView) });
+	using view = createView(sessions, storage, custom);
+	await view.initialize();
+	custom.showCustomView('automations');
+	view.openSession('first', 'first-thread');
+	assert.equal(custom.activeCustomView.get(), undefined);
+	view.navigateBack();
+	assert.equal(custom.activeCustomView.get()?.id, 'automations');
+	const draft = view.openNewSession('New draft');
+	assert.equal(custom.activeCustomView.get(), undefined);
+	assert.equal(selectionId(view.activeSelection), `untitled:${draft.untitledSessionId}`);
+	view.navigateBack();
+	assert.equal(custom.activeCustomView.get()?.id, 'automations');
+});
+
+test('Custom View navigation supersedes a pending Thread open and survives automatic fallback', async () => {
+	using sessions = new FakeSessionService([session('first', 'first-thread'), session('second', 'second-thread')]);
+	using storage = createTestStorage();
+	using custom = new CustomViewService(new NullLoggerService(), storage);
+	using registration = custom.registerCustomView({ id: 'automations', ctor: new SyncDescriptor(TestCustomView) });
+	using view = createView(sessions, storage, custom);
+	await view.initialize();
+	const gate = new DeferredPromise<void>();
+	sessions.openThread = async () => gate.p;
+	const pending = view.openThread('second', 'second-thread');
+	custom.showCustomView('automations');
+	await gate.complete();
+	await pending;
+	assert.equal(selectionId(view.activeSelection), 'session:first:first-thread');
+	sessions.removeSession('first');
+	assert.equal(custom.activeCustomView.get()?.id, 'automations');
+	view.openSession('second', 'second-thread');
+	custom.showCustomView('automations');
+	view.closeVisibleSelection(view.activeSelection!);
+	assert.equal(custom.activeCustomView.get()?.id, 'automations');
+	assert.equal(view.activeSelection?.kind, 'untitled');
+});
+
+test('History skips a Custom View whose contribution was removed', async () => {
+	using sessions = new FakeSessionService([session('first', 'first-thread'), session('second', 'second-thread')]);
+	using storage = createTestStorage();
+	using custom = new CustomViewService(new NullLoggerService(), storage);
+	using registration = custom.registerCustomView({ id: 'automations', ctor: new SyncDescriptor(TestCustomView) });
+	using view = createView(sessions, storage, custom);
+	await view.initialize();
+	custom.showCustomView('automations');
+	view.openSession('second', 'second-thread');
+	registration.dispose();
+	view.navigateBack();
+	assert.equal(custom.activeCustomView.get(), undefined);
+	assert.equal(selectionId(view.activeSelection), 'session:first:first-thread');
+	assert.equal(view.canNavigateBack, false);
+});
 
 test('welcome completion persists for a durable catalog and stays incomplete for drafts alone', async () => {
 	using storage = createTestStorage();

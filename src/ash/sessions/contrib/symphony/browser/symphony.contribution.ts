@@ -33,14 +33,14 @@ SessionsViewRegistry.registerViewContainer({ id: SymphonyNavigationId, title: 'S
 SessionsViewRegistry.registerViews(SymphonyNavigationId, [{ id: SymphonyNavigationId + '.view', title: 'Symphony', ctorDescriptor: new SyncDescriptor(SymphonyTasksView), canToggleVisibility: false }]);
 registerEditorPane({ id: 'sessions.editor.symphony', name: 'Symphony', canOpen: input => input.resource.scheme === 'ash-symphony' ? EditorPaneMatch.Default : EditorPaneMatch.None, create: options => options.instantiationService!.createInstance(SymphonyMonitorEditor) });
 
-async function openSymphony(accessor: ServicesAccessor): Promise<void> {
+async function openSymphony(accessor: ServicesAccessor, source?: 'restore'): Promise<void> {
 	const symphony = accessor.get(ISymphonyService);
 	await symphony.refresh();
 	await accessor.get(ISessionsLayoutService).openEntry({
 		id: 'symphony', activityContext: 'sessions.activity.symphonySelected', content: 'editor',
 		sidebarContainerId: SymphonyNavigationId, restoreCommand: 'sessions.open.symphony', focus: 'editor',
 		editorInput: { resource: SymphonyMonitorResource, label: 'Symphony', readOnly: true, showBreadcrumbs: false },
-	});
+	}, undefined, source ? { source } : undefined);
 }
 
 registerAction2(class OpenSymphony extends Action2 {
@@ -50,7 +50,7 @@ registerAction2(class OpenSymphony extends Action2 {
 			toggled: ContextKeyExpr.has('sessions.activity.symphonySelected'), menu: { id: Menus.ActivityBar, group: 'navigation', order: 70 }
 		});
 	}
-	public override async run(accessor: ServicesAccessor): Promise<void> { await openSymphony(accessor); }
+	public override async run(accessor: ServicesAccessor, source?: unknown): Promise<void> { await openSymphony(accessor, source === 'restore' ? source : undefined); }
 });
 
 for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {

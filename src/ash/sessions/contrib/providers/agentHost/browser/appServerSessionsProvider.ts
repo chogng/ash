@@ -1,3 +1,6 @@
+import { IRendererHostService, type IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
+import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+import { AgentHostAutomationStore } from './agentHostAutomationStore.js';
 import type {
 	AgentExecutionNode,
 	AgentSession,
@@ -28,6 +31,13 @@ export interface AppServerSessionsProviderHost {
 /** Adapts shared Agent execution records into Sessions product models. */
 export class AppServerSessionsProvider extends Disposable implements IAgentHostSessionsProvider {
 	public readonly id = LOCAL_AGENT_HOST_PROVIDER_ID;
+	public readonly label = localize('automations.localHost', 'Local Agent Host');
+	public readonly order = 0;
+	private automationStore: AgentHostAutomationStore | undefined;
+	public get automations(): AgentHostAutomationStore | undefined {
+		if (!this.rendererHost.automation) return undefined;
+		return this.automationStore ??= this._register(this.instantiation.createInstance(AgentHostAutomationStore, this.id, this.connectionStatus));
+	}
 	public readonly connectionStatus = observableValue<'connecting' | 'connected' | 'disconnected'>(this, 'connecting');
 	private readonly subscribed = new Set<SessionId>();
 	private catalogSubscribed = false;
@@ -50,6 +60,8 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		@IAgentModelsService private readonly modelApi: IAgentModelsService,
 		@IAgentTurnService private readonly turnApi: IAgentTurnService,
 		@IServerEventApi events: IServerEventApi,
+		@IRendererHostService private readonly rendererHost: IRendererHost,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
 	) {
 		super();
 		let observedState = false;

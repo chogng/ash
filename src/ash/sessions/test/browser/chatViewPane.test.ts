@@ -1,3 +1,4 @@
+import { IRendererHostService } from '../../../platform/renderer/common/rendererHost.js';
 import { setARIAContainer } from '../../../base/browser/ui/aria/aria.js';
 import { ChatResponseResourceFileSystemProvider, IChatResponseResourceFileSystemProvider } from '../../../workbench/contrib/chat/common/widget/chatResponseResourceFileSystemProvider.js';
 import { installEditorTestGlobals } from '../../../editor/test/browser/editorTestGlobals.js';
@@ -59,6 +60,7 @@ import { Emitter, Event } from "../../../base/common/event.js";
 import { isCancellationError } from '../../../base/common/errors.js';
 import { DeferredPromise } from '../../../base/common/async.js';
 import { SessionsService } from '../../services/sessions/browser/sessionsService.js';
+import { CustomViewService, ICustomViewService } from '../../services/customView/browser/customViewService.js';
 import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
 import { Lxicon } from "../../../base/common/lxicons.js";
@@ -161,6 +163,7 @@ class SessionsManagementService extends BaseSessionsManagementService {
 		const services = inputResources.add(new InstantiationService());
 		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 		services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
+		services.registerInstance(IRendererHostService, api);
 		services.registerInstance(IAppServerApi, api.appServer);
 		services.registerInstance(IAgentSessionService, api.session);
 		services.registerInstance(IAgentModelsService, api.model);
@@ -1054,6 +1057,8 @@ test('sending from one session preserves a later draft during first-session crea
 	using sessions = new SessionsManagementService(fake.api);
 	await sessions.initialize();
 	editorServices.registerInstance(ISessionsManagementService, sessions);
+	using customViews = editorServices.createInstance(CustomViewService);
+	editorServices.registerInstance(ICustomViewService, customViews);
 	using view = editorServices.createInstance(SessionsService);
 	await view.initialize();
 	view.openNewSession();
@@ -2161,6 +2166,7 @@ function createChatService(api: IRendererHost, configurationService?: WorkbenchC
 function registerChatBackend(services: InstantiationService, api: IRendererHost, omitted?: unknown, configuration?: WorkbenchConfigurationService): void {
 	if (omitted !== IConfigurationService) { services.registerInstance(IConfigurationService, configuration ?? inputResources.add(new WorkbenchConfigurationService())); }
 	if (omitted !== IAgentModelsService) { services.registerInstance(IAgentModelsService, api.model); }
+	services.registerInstance(IRendererHostService, api);
 	if (omitted !== IAppServerApi) { services.registerInstance(IAppServerApi, api.appServer); }
 	if (omitted !== IAgentThreadService) { services.registerInstance(IAgentThreadService, api.thread); }
 	if (omitted !== IAgentTurnService) { services.registerInstance(IAgentTurnService, api.turn); }

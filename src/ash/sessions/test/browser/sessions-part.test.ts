@@ -1,6 +1,7 @@
 import { createDisconnectedRendererApi } from '../../../platform/agentHost/browser/rendererApi.js';
 import { IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
 import { IRendererHostService } from '../../../platform/renderer/common/rendererHost.js';
+import { CustomViewService, ICustomViewService } from '../../services/customView/browser/customViewService.js';
 import { IPathService } from '../../../platform/path/common/pathService.js';
 import { BrowserPathService } from '../../../workbench/services/path/browser/pathService.js';
 import { IAgentExecutionSettingsService } from '../../../platform/agentHost/common/agentExecutionSettingsService.js';
@@ -282,6 +283,8 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 			code: { visible: [], active: -1 },
 		}
 	}), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	const customViews = resources.add(services.createInstance(CustomViewService));
+	services.registerInstance(ICustomViewService, customViews);
 	const viewService = services.createInstance(SessionsService);
 	await viewService.initialize();
 	services.registerInstance(IChatTipService, resources.add(services.createInstance(ChatTipService)));
