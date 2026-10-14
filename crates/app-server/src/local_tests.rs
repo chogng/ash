@@ -3697,7 +3697,10 @@ fn directory_edit_before_watcher_start_is_applied_without_another_event() {
     server
         .activate_host_configured_dir_root(root.path().to_path_buf())
         .unwrap();
-    let original = server.test_action_policy_revision();
+    assert!(matches!(
+        server.test_local_shell_policy_decision().unwrap(),
+        ash_action_policy::ExecutionDecision::RunSandboxed(_)
+    ));
     std::fs::write(&path, DIR_DENY_CONFIG).unwrap();
     tracker.read().unwrap();
     let network_policy = OutboundNetworkPolicy::new(NetworkAccess::Any);
@@ -3721,11 +3724,18 @@ fn directory_edit_before_watcher_start_is_applied_without_another_event() {
         mcp_runtime_intent_changes: intents.subscribe(),
         mcp_runtime_intents: intents,
     });
-    let deadline = std::time::Instant::now() + Duration::from_secs(5);
-    while server.test_action_policy_revision() == original {
+    // Startup codebase preparation shares this poller; observe the policy itself afterward.
+    let deadline = std::time::Instant::now() + Duration::from_secs(30);
+    while !matches!(
+        server.test_local_shell_policy_decision(),
+        Ok(ash_action_policy::ExecutionDecision::Block(
+            ash_action_policy::BlockReason::DeterministicRule { reason, .. }
+        )) if reason == "directory restriction"
+    ) {
         assert!(
             std::time::Instant::now() < deadline,
-            "startup directory edit was not applied"
+            "startup directory edit was not applied: {:?}",
+            server.test_local_shell_policy_decision()
         );
         std::thread::sleep(Duration::from_millis(20));
     }
