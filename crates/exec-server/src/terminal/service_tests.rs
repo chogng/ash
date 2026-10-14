@@ -1663,3 +1663,56 @@ fn strict_terminal_spawn_uses_only_explicit_environment_and_keeps_host_defaults(
     );
     service.close(1, &created.terminal_id).unwrap();
 }
+
+#[cfg(unix)]
+#[test]
+fn interactive_terminal_agent_identity_is_explicit_and_does_not_mutate_the_host() {
+    const CHILD: &str = "ASH_AI_AGENT_TERMINAL_TEST_CHILD";
+    if std::env::var_os(CHILD).is_none() {
+        let current = std::thread::current();
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", current.name().unwrap(), "--nocapture"])
+            .env(CHILD, "1")
+            .env("AI_AGENT", "enclosing-agent")
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{output:?}");
+        return;
+    }
+
+    let root = tempfile::tempdir().unwrap();
+    let service = terminal_service_for(root.path());
+    assert!(
+        service
+            .environment(&["AI_AGENT".into()])
+            .unwrap()
+            .is_empty()
+    );
+    for (explicit, expected) in [
+        (None, "unset"),
+        (Some("user-selected-agent"), "user-selected-agent"),
+    ] {
+        let mut request = terminal_request(TerminalLifecycle::ConnectionOwned);
+        request.execution = Some(TerminalExecution::Process {
+            program: "/bin/sh".into(),
+            args: TerminalArguments::Argv(vec![
+                "-c".into(),
+                "printf 'MANUAL_AGENT=%s\n' \"${AI_AGENT-unset}\"".into(),
+            ]),
+        });
+        request.env =
+            explicit.map(|value| HashMap::from([("AI_AGENT".into(), Some(value.into()))]));
+        let created = service.create(1, request).unwrap();
+        let marker = format!("MANUAL_AGENT={expected}");
+        let output = read_until(&service, &created.terminal_id, &marker);
+        assert!(String::from_utf8_lossy(&output).contains(&marker));
+        service.close(1, &created.terminal_id).unwrap();
+    }
+    assert!(
+        service
+            .environment(&["AI_AGENT".into()])
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(std::env::var("AI_AGENT").unwrap(), "enclosing-agent");
+}

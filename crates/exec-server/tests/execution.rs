@@ -37,6 +37,9 @@ impl Host {
         Self::with_access("read-write")
     }
     fn with_access(access: &str) -> Self {
+        Self::with_environment(access, &[])
+    }
+    fn with_environment(access: &str, environment: &[(&str, &str)]) -> Self {
         let root = tempfile::tempdir().unwrap();
         let token_file = tempfile::NamedTempFile::new().unwrap();
         let token = "a1".repeat(32);
@@ -49,6 +52,7 @@ impl Host {
             .args(["--access", access])
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
+            .envs(environment.iter().copied())
             .spawn()
             .unwrap();
         let stdout = child.stdout.take().unwrap();
@@ -756,4 +760,38 @@ fn process_read_waits_for_output_and_limits_the_wait_budget() {
         })),
         Err(exec_server::Error::Remote(ExecError::InvalidInput))
     ));
+}
+
+#[cfg(unix)]
+#[test]
+fn agent_commands_stamp_their_identity_in_pipes_and_ptys_without_inheriting_another_agent() {
+    for inherited in ["enclosing-agent", "", "invalid agent\nidentity"] {
+        let host = Host::with_environment("read-write", &[("AI_AGENT", inherited)]);
+        let client = host.client();
+        for (id, input) in [
+            ("agent-closed", exec_server_protocol::ProcessInput::Closed),
+            ("agent-open", exec_server_protocol::ProcessInput::Open),
+            (
+                "agent-pty",
+                exec_server_protocol::ProcessInput::Terminal { rows: 24, cols: 80 },
+            ),
+        ] {
+            let mut request = command(
+                id,
+                "printf 'AI_AGENT=%s\n' \"$AI_AGENT\"; /bin/sh -c 'printf \"child=%s\\n\" \"$AI_AGENT\"'",
+            );
+            request.input = input;
+            client.request(Request::ProcessStart(request)).unwrap();
+            let result = finish(&client, id);
+            assert_eq!(
+                result.state,
+                ProcessState::Exited { code: Some(0) },
+                "{result:?}"
+            );
+            assert_eq!(
+                result.stdout.text.replace("\r\n", "\n").trim(),
+                "AI_AGENT=ash\nchild=ash"
+            );
+        }
+    }
 }

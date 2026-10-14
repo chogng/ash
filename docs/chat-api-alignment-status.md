@@ -10,6 +10,46 @@
 
 文件集合差异和公开声明差异是待调查项，不等于对应行为全部缺失。完整路径、imports、exports、公开成员、CSS selector/token、生产与测试调用方已保存在 `.build/chat-alignment/inventory.json`；可读版为 `.build/chat-alignment/report.html`。不将未验证的上游公开成员计为已实现。
 
+## Platform Chat 进程归因（2026-10-14）
+
+`platform/chat/common/aiAgentEnv.ts` 的真实 TS 消费方是
+`platform/agentHost/common/appServerEnvironment.ts`，经
+`app-server-daemon/electron-main/appServerDaemonLauncher.ts` 到共享宿主启动边界。
+该宿主同时服务 Agent、手动终端和扩展，不能直接套用上游纯 Agent Host 的进程标记方式。
+`AiAgentEnvVar` 按上游同路径建立，并用于排除继承的 `AI_AGENT`（含大小写变体）；不修改源环境。
+`AiAgentEnvValue` 没有 TS 生产消费方，因此不导出或建立转发，值由下面的 Rust child owner 定义。
+
+| 真实生产链                                                                                                   | 环境 owner 与可观察结果                                                                                                  |
+| ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| Core Tool → LocalToolSuite / ShellCommand → CommandExecutor → ProcessExecutor → sandbox spawn                | `crates/exec-server/src/execution.rs` 在最终环境中设置 `AI_AGENT=ash`，覆盖父进程身份。                                  |
+| Hook runtime → LocalHookProcessExecutor 的 `execute` / `execute_process` → CommandExecutor → ProcessExecutor | 同一环境 owner，Hook 及其后代均获得 Ash 身份；不修改父进程环境。                                                         |
+| EnvironmentTools → authenticated `ProcessStart` → exec-server Processes → ProcessExecutor                    | 执行宿主自行设置标记，不依赖 Main 环境透传；管道、开放 stdin 和 Agent PTY 均覆盖。                                       |
+| 手动 TerminalService → TerminalEnvironment / profiles → PTY spawn                                            | `terminal/environment.rs` 不继承 Agent 身份；显式 `TerminalCreateRequest.env` 仍允许用户选择该值，宿主 snapshot 不改变。 |
+| 扩展宿主等 shared process → `safe_process_environment`                                                       | 共用原开发环境边界，排除继承标记；没有将共享宿主整体标为 Agent。                                                         |
+
+`AI_AGENT=ash` 是产品归因，不是审批、身份认证或权限事实；不携带 Session、Thread、账号或模型。
+标记遵循 [AI_AGENT 工具名称约定](https://github.com/vercel/detect-agent#the-ai_agent-standard)，
+不使用 Copilot 的报告值。Rust 中的值只由 `ProcessExecutor` 设置，TS 不持有另一份可配置值；
+没有环境配置、协议字段、全局 `set_var` 或用户 shell 文件写入。
+
+本批准确生产改动为缺失的上游 TS 同路径 `aiAgentEnv.ts`，已有 Ash 环境构建器的局部过滤，
+以及既有 Rust execution/terminal environment owner 的局部设置和过滤。其余 TS/Rust 文件为
+对应测试，文档记录当前边界；未改动无关共享工作区变化。
+
+macOS 本机 `just verify ash-exec-server`（77 unit + 17 executable/RPC integration）和
+`just verify ash-hooks`（17 unit）全部通过，均包含正常 check 与所有 target 的零 warning 检查。
+新的 executable 场景用独立 server 环境验证正常、空和非法父标记 × 管道/开放 stdin/PTY；
+嵌套 shell 验证继承。真实 Hook 测试覆盖两种入口。独立测试子进程内的实际手动 PTY 对照确认
+默认无标记、显式覆盖可用且父进程不变，未更改并行测试 runner 的环境。
+
+相同编译选项的定向 TS 编译和仓库 runner：9 项环境/daemon 启动测试通过，覆盖三种平台映射、
+Desktop/Web 模式、源环境不变、Workbench/Agents 实际 launcher 和 case 变体；分层 13 项通过。
+Main 1843 文件检查、4 个 TS 和 6 个 Rust 文件格式检查、diff check 通过。首次标准 unit 准备
+因任务外两个 Chat fixture 缺少新 `startVoiceConversation` 字段失败，原失败日志保留；共享任务
+补齐后，最终标准 `pnpm test:unit --run …` 的完整编译和本批 9 项测试通过。本批没有修改这些
+fixture。没有 UI、NLS、配置或协议变化，因此不启动 UI 场景或生成协议。
+证据在 `.build/ai-agent-env-*`。本轮只验证本机进程行为，不将 Windows/Linux 实际运行计为通过。
+
 ## Hooks 职责归属
 
 用户确认让 `src/ash/platform/hooks` 退场，并保留 Ash 事件和 TOML 语义。前端事件集合迁至上游对应

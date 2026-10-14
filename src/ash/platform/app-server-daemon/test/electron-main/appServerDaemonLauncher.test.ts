@@ -27,7 +27,7 @@ test('packaged daemon connections use verified binaries and an explicit workspac
 		}));
 		const { launcher, generationFile } = createAppServerDaemonLauncher({
 			packageLocation: { appPath: '/unused', expectedVersion: '1.2.3', isPackaged: true, platform: 'linux', resourcesPath },
-			sourceEnvironment: { PATH: '/bin', DISPLAY: ':0', ASH_DEV_APP_SERVER_RELOAD: '1', ASH_RG_PATH: '/package/rg', ASH_PRODUCT_SERVICES_PATH: '/product/services.json', API_SECRET: 'private', ASH_HOME: '/ignored', ASH_WORKSPACE_ROOT: '/ignored' },
+			sourceEnvironment: { AI_AGENT: 'enclosing-agent', PATH: '/bin', DISPLAY: ':0', ASH_DEV_APP_SERVER_RELOAD: '1', ASH_RG_PATH: '/package/rg', ASH_PRODUCT_SERVICES_PATH: '/product/services.json', API_SECRET: 'private', ASH_HOME: '/ignored', ASH_WORKSPACE_ROOT: '/ignored' },
 			profileRoot: '/selected/profile',
 			electronExecutable: '/electron',
 			workspaceRoot: '/selected/workspace',
@@ -65,7 +65,7 @@ test('Agents daemon connections identify their role without a workspace grant', 
 		}));
 		const { launcher } = createAppServerDaemonLauncher({
 			packageLocation: { appPath: '/unused', isPackaged: true, platform: 'win32', resourcesPath },
-			sourceEnvironment: { Path: 'C:\\Windows', DISPLAY: ':0', ASH_WORKSPACE_ROOT: '/ignored' },
+			sourceEnvironment: { AI_AGENT: 'enclosing-agent', ai_agent: 'other-agent', Path: 'C:\\Windows', DISPLAY: ':0', ASH_WORKSPACE_ROOT: '/ignored' },
 			profileRoot: '/profile', electronExecutable: '/electron', role: 'agents',
 		});
 		using ownedLauncher = launcher;

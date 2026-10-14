@@ -1,3 +1,4 @@
+use crate::execution::AI_AGENT_ENV_VAR;
 use std::collections::HashMap;
 use std::ffi::OsString;
 
@@ -87,7 +88,9 @@ pub fn is_private_process_environment_key(key: &str) -> bool {
 }
 
 fn inherited_environment_key(key: &str) -> bool {
-    !is_private_process_environment_key(key) && !key.starts_with("ELECTRON_")
+    !is_private_process_environment_key(key)
+        && !key.eq_ignore_ascii_case(AI_AGENT_ENV_VAR)
+        && !key.starts_with("ELECTRON_")
 }
 
 fn is_valid_environment_name(name: &str) -> bool {

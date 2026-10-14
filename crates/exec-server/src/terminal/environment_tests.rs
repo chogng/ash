@@ -1,5 +1,23 @@
 use super::*;
 
+#[test]
+fn interactive_environment_does_not_inherit_an_enclosing_agents_identity() {
+    let environment = TerminalEnvironment::from_variables([
+        ("AI_AGENT".into(), "enclosing-agent".into()),
+        ("ai_agent".into(), "other-agent".into()),
+        ("PATH".into(), "/bin".into()),
+        ("GITHUB_TOKEN".into(), "synthetic-developer-token".into()),
+    ]);
+
+    assert!(!environment.variables().contains_key("AI_AGENT"));
+    assert!(!environment.variables().contains_key("ai_agent"));
+    assert_eq!(environment.variables()["TERM_PROGRAM"], "ash");
+    assert_eq!(
+        environment.variables()["GITHUB_TOKEN"],
+        "synthetic-developer-token"
+    );
+}
+
 #[cfg(any(unix, windows))]
 #[test]
 fn process_environment_ignores_non_unicode_without_losing_safe_values() {

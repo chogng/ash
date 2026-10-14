@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { buildAppServerEnvironment, isAllowedAppServerEnvironmentKey } from "../../common/appServerEnvironment.js";
+import { AiAgentEnvVar } from '../../../chat/common/aiAgentEnv.js';
 
 test("App Server environment inherits developer POSIX credentials and session variables", () => {
 	const environment = buildAppServerEnvironment({
@@ -108,4 +109,17 @@ test("App Server environment excludes host authentication and launcher controls 
 	for (const key of Object.keys(source).filter(key => key !== 'GITHUB_TOKEN' && key !== 'HTTPS_PROXY' && !key.endsWith('VALUE'))) {
 		assert.equal(isAllowedAppServerEnvironmentKey(key), false, key);
 	}
+});
+
+test('Shared App Server environment discards inherited agent attribution for every host and launch mode', () => {
+	for (const platform of ['linux', 'macos', 'windows'] as const) {
+		for (const mode of ['desktop', 'web'] as const) {
+			const source = { [AiAgentEnvVar]: 'enclosing-agent', ai_agent: 'other-agent', PATH: '/bin', GITHUB_TOKEN: 'synthetic-developer-token' };
+			assert.deepEqual(buildAppServerEnvironment(source, platform, {}, mode), { PATH: '/bin', GITHUB_TOKEN: 'synthetic-developer-token' });
+			assert.equal(source[AiAgentEnvVar], 'enclosing-agent');
+		}
+	}
+	assert.equal(isAllowedAppServerEnvironmentKey(AiAgentEnvVar), false);
+	assert.equal(isAllowedAppServerEnvironmentKey('ai_agent'), false);
+	assert.throws(() => buildAppServerEnvironment({}, 'macos', { [AiAgentEnvVar]: 'ash' }, 'desktop'), /Invalid App Server product environment variable/);
 });

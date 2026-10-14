@@ -36,6 +36,11 @@ use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 
+pub(crate) const AI_AGENT_ENV_VAR: &str = "AI_AGENT";
+// This executor serves Agent tools and Hooks in both local and remote environments. Stamp at
+// the final child boundary: the shared host also runs interactive terminals and extensions.
+const AI_AGENT_ENV_VALUE: &str = "ash";
+
 #[derive(Clone, Debug)]
 pub struct CommandRequest {
     pub program: String,
@@ -468,7 +473,7 @@ fn prepare_runtime_scope(
 }
 
 fn execution_environment() -> Vec<(String, String)> {
-    [
+    let mut environment: Vec<_> = [
         "PATH",
         "HOME",
         "USER",
@@ -496,7 +501,10 @@ fn execution_environment() -> Vec<(String, String)> {
     ]
     .into_iter()
     .filter_map(|key| std::env::var(key).ok().map(|value| (key.to_owned(), value)))
-    .collect()
+    .collect();
+    // Ignore the enclosing process's agent identity, including empty or malformed values.
+    environment.push((AI_AGENT_ENV_VAR.to_owned(), AI_AGENT_ENV_VALUE.to_owned()));
+    environment
 }
 
 fn check_cancellation_before_start(cancellation: &CancellationToken) -> Result<(), ExecutionError> {

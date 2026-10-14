@@ -15,7 +15,10 @@ fn real_process_hooks_execute_inside_the_bound_directory() {
         enablement: HookEnablement::Enabled,
         action: HookAction::Process {
             program: "/bin/sh".into(),
-            args: vec!["-c".into(), "pwd > hook-cwd".into()],
+            args: vec![
+                "-c".into(),
+                "pwd > hook-cwd; /bin/sh -c 'printf %s \"$AI_AGENT\"' > hook-ai-agent".into(),
+            ],
         },
     };
     let cancellation = CancellationSource::new();
@@ -34,7 +37,12 @@ fn real_process_hooks_execute_inside_the_bound_directory() {
             .trim(),
         dir.canonical_path().to_str().unwrap()
     );
+    assert_eq!(
+        std::fs::read_to_string(root.path().join("hook-ai-agent")).unwrap(),
+        "ash"
+    );
     std::fs::remove_file(root.path().join("hook-cwd")).unwrap();
+    std::fs::remove_file(root.path().join("hook-ai-agent")).unwrap();
     LocalHookProcessExecutor::new(dir.clone())
         .execute(
             &hook,
@@ -54,6 +62,10 @@ fn real_process_hooks_execute_inside_the_bound_directory() {
             },
         )
         .unwrap();
+    assert_eq!(
+        std::fs::read_to_string(root.path().join("hook-ai-agent")).unwrap(),
+        "ash"
+    );
     assert_eq!(
         std::fs::read_to_string(root.path().join("hook-cwd"))
             .unwrap()

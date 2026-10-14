@@ -1,3 +1,5 @@
+import { AiAgentEnvVar } from '../../chat/common/aiAgentEnv.js';
+
 const PRODUCT_ENVIRONMENT_KEYS = ["ASH_DEV_RUNTIME_ROOT", "ASH_APP_SERVER_PATH", "ASH_APP_SERVER_SHA256", "ASH_APP_SERVER_CONNECTION_ROLE", "ASH_ELECTRON_RUN_AS_NODE_PATH", "ASH_PRODUCT_SERVICES_PATH", "ASH_HOME", "ASH_RG_PATH", "ASH_SSH_PATH", "ASH_WORKSPACE_ROOT", "ASH_DIR_GRANT_SOURCE", "ASH_REMOTE_HOST", "ASH_REMOTE_ROOT", "ASH_REMOTE_RUNTIME"] as const;
 // Match the process boundary in exec-server: developer credentials stay usable,
 // while launcher authentication cannot pass to developer or extension child processes.
@@ -13,7 +15,7 @@ export type AppServerLaunchMode = "desktop" | "web";
 /** Whether a variable may cross the Electron Main to App Server process boundary. */
 export function isAllowedAppServerEnvironmentKey(key: string): boolean {
 	const normalized = key.toUpperCase();
-	return isValidEnvironmentName(key) && !PRIVATE_HOST_ENVIRONMENT_KEYS.has(normalized) && !normalized.startsWith("ELECTRON_");
+	return isValidEnvironmentName(key) && !PRIVATE_HOST_ENVIRONMENT_KEYS.has(normalized) && normalized !== AiAgentEnvVar && !normalized.startsWith("ELECTRON_");
 }
 
 /** Builds the developer environment supplied to the local App Server process. */
