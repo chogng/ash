@@ -1,3 +1,5 @@
+import { IChatResponseResourceFileSystemProvider, type IChatResourceAssociation } from '../../../common/widget/chatResponseResourceFileSystemProvider.js';
+import { IEditorService } from '../../../../../services/editor/common/editorService.js';
 import './media/chatMarkdownPart.css';
 import { addDisposableListener, h } from '../../../../../../base/browser/dom.js';
 import { createObjectUrl } from '../../../../../../base/browser/fileAccess.js';
@@ -20,6 +22,8 @@ class MediaRow extends Disposable {
 	public readonly element: HTMLElement;
 	public readonly status: HTMLElement;
 	public readonly loadButton: HTMLButtonElement;
+	public readonly openButton: HTMLButtonElement;
+	public readonly association = this._register(new MutableDisposable<IChatResourceAssociation>());
 	public readonly media: HTMLImageElement | HTMLAudioElement;
 	public readonly objectUrl = this._register(new MutableDisposable());
 	public readonly resources = this._register(new DisposableStore());
@@ -54,7 +58,11 @@ class MediaRow extends Disposable {
 		this.loadButton = h(document, 'button');
 		this.loadButton.type = 'button';
 		this.loadButton.textContent = image ? localize('chat.media.loadImage', 'Load image') : localize('chat.media.loadAudio', 'Load audio');
-		this.element.append(this.status, this.loadButton, this.media);
+		this.openButton = h(document, 'button');
+		this.openButton.type = 'button';
+		this.openButton.textContent = image ? localize('chat.media.openImage', 'Open image') : localize('chat.media.openAudio', 'Open audio');
+		this.openButton.hidden = true;
+		this.element.append(this.status, this.loadButton, this.media, this.openButton);
 		this._register(toDisposable(() => {
 			this.controller.abort();
 			if (!image && this.loaded) {
@@ -74,7 +82,7 @@ export class ChatAttachmentsContentPart extends Disposable {
 	private readonly _onDidChangeHeight = this._register(new Emitter<void>());
 	public readonly onDidChangeHeight = this._onDidChangeHeight.event;
 
-	constructor(private readonly options: IChatAttachmentsContentPartOptions, @IAgentThreadService private readonly threads: IAgentThreadService) {
+	constructor(private readonly options: IChatAttachmentsContentPartOptions, @IAgentThreadService private readonly threads: IAgentThreadService, @IChatResponseResourceFileSystemProvider private readonly files: IChatResponseResourceFileSystemProvider, @IEditorService private readonly editors: IEditorService) {
 		super();
 		this.domNode = h(options.ownerDocument, 'div');
 		this.domNode.className = 'ash-chat-media-attachments';
@@ -97,6 +105,7 @@ export class ChatAttachmentsContentPart extends Disposable {
 				const current = row;
 				// The row owns listeners even when a later update replaces it at the same content index.
 				row.resources.add(addDisposableListener(row.loadButton, 'click', () => { void this.load(current); }));
+				row.resources.add(addDisposableListener(row.openButton, 'click', () => { void this.open(current); }));
 				row.resources.add(addDisposableListener(row.media, 'load', () => this._onDidChangeHeight.fire()));
 				row.resources.add(addDisposableListener(row.media, 'loadedmetadata', () => this._onDidChangeHeight.fire()));
 				row.resources.add(addDisposableListener(row.media, 'error', () => {
@@ -119,6 +128,11 @@ export class ChatAttachmentsContentPart extends Disposable {
 		if (changed) this._onDidChangeHeight.fire();
 	}
 
+	public setVisible(visible: boolean): void {
+		if (visible) return;
+		for (const [, row] of this.rows) if (row.loaded && (row.part.type === 'audioAttachment' || row.part.type === 'audioUrl')) (row.media as HTMLAudioElement).pause();
+	}
+
 	private async load(row: MediaRow): Promise<void> {
 		if (row.loaded || row.loading || row.isDisposed) return;
 		if (!row.source) {
@@ -138,6 +152,11 @@ export class ChatAttachmentsContentPart extends Disposable {
 			if (!ownerWindow) return;
 			const objectUrl = createObjectUrl(ownerWindow, new Blob([new Uint8Array(data.bytes)], { type: data.mimeType }));
 			row.objectUrl.value = objectUrl.registration;
+			if (row.part.type === 'imageAttachment' || row.part.type === 'audioAttachment') {
+				const name = `${row.part.type === 'imageAttachment' ? localize('chat.media.image', 'Image') : localize('chat.media.audio', 'Audio')}.${row.part.attachment.mediaType}`;
+				row.association.value = this.files.associate(data.bytes, { id: JSON.stringify([row.source, row.index, row.part.type, row.part.attachment.contentDigest]), name });
+				row.openButton.hidden = false;
+			}
 			const focused = this.options.ownerDocument.activeElement === row.loadButton;
 			this.reveal(row, objectUrl.url.toString());
 			if (focused) row.element.focus();
@@ -150,6 +169,19 @@ export class ChatAttachmentsContentPart extends Disposable {
 				row.element.removeAttribute('aria-busy');
 				this._onDidChangeHeight.fire();
 			}
+		}
+	}
+
+	private async open(row: MediaRow): Promise<void> {
+		if (row.isDisposed || this.isDisposed || !row.association.value || row.openButton.disabled) return;
+		row.openButton.disabled = true;
+		try {
+			if (row.part.type === 'audioAttachment' || row.part.type === 'audioUrl') (row.media as HTMLAudioElement).pause();
+			await this.editors.openEditor({ resource: row.association.value.resource, readOnly: true });
+		} catch (error) {
+			if (!row.isDisposed && !this.isDisposed) row.status.textContent = localize('chat.media.openFailed', 'Could not open this media: {0}', String(error));
+		} finally {
+			if (!row.isDisposed) row.openButton.disabled = false;
 		}
 	}
 

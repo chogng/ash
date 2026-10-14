@@ -1,3 +1,8 @@
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { BrowserClipboardService } from '../../../../../platform/clipboard/browser/clipboardService.js';
+import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
+import { registerChatCopyActions } from '../../browser/actions/chatCopyActions.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { ITextModelService } from '../../../../../editor/common/services/resolverService.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
@@ -23,7 +28,7 @@ import { browserEnvironment } from '../../../../../editor/test/browser/testEdito
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
-import { test } from 'mocha';
+import { suite, test } from 'mocha';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { createCodeEditorServices, registerCodeEditorServices } from '../../../../../editor/test/browser/testCodeEditor.js';
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
@@ -37,6 +42,7 @@ import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfig
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
 
+registerChatCopyActions();
 const document = browserEnvironment.window.document;
 
 test('Chat renders connection-qualified conversation links without permitting script links', () => {
@@ -356,4 +362,53 @@ test('Skill resource content provider shares readonly models and cancels a late 
 	await pending.complete('late text');
 	await assert.rejects(reading, /cancel/iu);
 	assert.equal(services.get(IModelService).getModels().length, 0);
+});
+
+for (const classPrefix of ['ash-chat', 'ash-cowork']) {
+	test(`${classPrefix} shows exact accepted context as inert text and preserves its disclosure and focus`, () => {
+		using resources = new DisposableStore();
+		const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+		const container = document.createElement('main'); document.body.append(container); resources.add(toDisposable(() => container.remove()));
+		using widget = services.createInstance(ChatListWidget, container, { classPrefix });
+		const items = (content: string) => chatTranscriptListItems([{ type: 'item', entryId: 'context', turnId: 'turn', transient: false, item: { type: 'userContext', itemId: 'context', turnId: 'turn', name: 'Context name', content } }]);
+		widget.render(items('<img src=x onerror=alert(1)>\nOriginal text'));
+		const disclosure = widget.element.querySelector<HTMLDetailsElement>('.ash-chat-context')!;
+		const summary = disclosure.querySelector<HTMLElement>('summary')!;
+		const body = disclosure.querySelector<HTMLElement>('pre')!;
+		assert.equal(disclosure.open, false); assert.equal(summary.textContent, 'Context name'); assert.equal(body.querySelector('img'), null);
+		disclosure.open = true; body.focus();
+		widget.render(items('Updated exact body'));
+		assert.equal(widget.element.querySelector('.ash-chat-context'), disclosure); assert.equal(disclosure.open, true); assert.equal(document.activeElement, body); assert.equal(body.textContent, 'Updated exact body');
+		const state = widget.getViewState(); disclosure.open = false; widget.restoreViewState(state, items('Updated exact body'));
+		assert.equal(disclosure.open, true); assert.equal(document.activeElement, body);
+		const provider = resources.add(services.invokeFunction(accessor => AccessibleViewRegistry.getImplementations().filter(implementation => implementation.type === AccessibleViewType.View && implementation.name.startsWith('chatTranscript-')).map(implementation => implementation.getProvider(accessor)).find(candidate => candidate !== undefined)!));
+		assert.match(provider.provideContent(), /Context name\n\nUpdated exact body/);
+		widget.render([]); assert.equal(body.isConnected, false);
+	});
+}
+
+suite('Chat message copy ownership', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+	test('the actual row command copies current raw text and releases feedback after removal', async () => {
+		using resources = new DisposableStore();
+		const parent = resources.add(new InstantiationService());
+		const entered = new DeferredPromise<string>(); const completed = new DeferredPromise<void>(); let writes = 0;
+		const clipboard = resources.add(new class extends BrowserClipboardService {
+			constructor() { super(undefined); }
+			public override async writeText(text: string): Promise<void> { writes++; await entered.complete(text); await completed.p; }
+		}());
+		parent.registerInstance(IClipboardService, clipboard);
+		const services = createCodeEditorServices(resources, parent);
+		using widget = services.createInstance(ChatListWidget, document.createElement('main'), {});
+		document.body.append(widget.element); widget.setVisible(true);
+		widget.render([{ id: 'response', type: 'agentMessage', text: '**first**', transient: true }]);
+		widget.render([{ id: 'response', type: 'agentMessage', text: '**first** and second\n\n[link](https://example.com)', transient: false }]);
+		const button = widget.element.querySelector<HTMLButtonElement>('.ash-chat-message-actions button')!;
+		button.click(); assert.equal(await entered.p, '**first** and second\n\n[link](https://example.com)');
+		button.click(); assert.equal(writes, 1);
+		widget.render([]); await completed.complete(); await Promise.resolve();
+		assert.equal(button.isConnected, false); assert.equal(widget.element.querySelectorAll('.ash-chat-message-actions').length, 0);
+		button.click(); assert.equal(writes, 1);
+		widget.element.remove();
+	});
 });

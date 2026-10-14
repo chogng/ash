@@ -1,11 +1,26 @@
+import { ImagePreview } from '../../../src/ash/workbench/contrib/mediaPreview/browser/imagePreview.js';
+import { MediaPreview } from '../../../src/ash/workbench/contrib/mediaPreview/browser/mediaPreview.js';
+import '../../../src/ash/workbench/contrib/mediaPreview/browser/mediaPreview.contribution.js';
+import { TerminalConfigurationService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalConfigurationService.js';
+import { ITerminalConfigurationService } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
+import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
+import { readNewChatDraftState } from '../../../src/ash/sessions/contrib/chat/common/newChatDraftState.js';
+import type { ChatInputDelegate } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInput.js';
+import { CoworkWidget } from '../../../src/ash/sessions/contrib/cowork/browser/widget/coworkWidget.js';
+import { NewCoworkInputWidget } from '../../../src/ash/sessions/contrib/cowork/browser/newCoworkInput.js';
+import { ChatTipService, IChatTipService } from '../../../src/ash/sessions/contrib/cowork/browser/chatTipService.js';
+import { ILifecycleService } from '../../../src/ash/workbench/services/lifecycle/common/lifecycle.js';
+import { registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
-import { ILogService, type LogEntry } from '../../../src/ash/platform/log/common/log.js';
+import { ILogService, ILoggerService, type LogEntry } from '../../../src/ash/platform/log/common/log.js';
+import { ITerminalLogService } from '../../../src/ash/platform/terminal/common/terminal.js';
+import { TerminalLogService } from '../../../src/ash/platform/terminal/common/terminalLogService.js';
 import { LogService } from '../../../src/ash/platform/log/common/logServiceImpl.js';
 import { IDialogsModel } from '../../../src/ash/workbench/common/dialogs.js';
 import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
 import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.js';
 import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.web.contribution.js';
-import { IVoiceService, type VoiceSessionState, type VoiceTaskRequest } from '../../../src/ash/platform/voice/common/voiceService.js';
+import { IAgentVoiceService, type AgentVoiceSessionState, type AgentVoiceTaskRequest, type AgentVoiceSelection } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import { IWebviewService } from '../../../src/ash/workbench/contrib/webview/browser/webview.js';
 import '../../../src/ash/workbench/contrib/webview/browser/webview.contribution.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
@@ -26,7 +41,7 @@ import { AccessibleViewService } from '../../../src/ash/workbench/contrib/access
 import '../../../src/ash/workbench/contrib/chat/browser/chat.contribution.js';
 import '../../../src/ash/base/browser/ui/styles.css';
 import '../../../src/ash/editor/browser/coreCommands.js';
-import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
+import { Disposable, DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { Selection } from '../../../src/ash/editor/common/core/selection.js';
@@ -44,7 +59,7 @@ import { createAppServerAgentThreadService } from '../../../src/ash/platform/age
 import { ChatWidget, type IChatWidgetModel } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatWidget.js';
 import { IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
-import { IContextViewService, type IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
+import { IContextViewService, IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
 import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
@@ -65,6 +80,8 @@ import { IUntitledTextEditorService } from '../../../src/ash/workbench/services/
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { BrowserClipboardService } from '../../../src/ash/platform/clipboard/browser/clipboardService.js';
+import { MainThreadSpeech } from '../../../src/ash/workbench/api/browser/mainThreadSpeech.js';
+import type { IExtensionHostApi, ExtensionHostFleetSnapshot, JsonValue } from '../../../src/ash/platform/agentHost/common/extensionHostApi.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
@@ -82,7 +99,9 @@ if (locale) {
 const resources = new DisposableStore();
 const appLogs: LogEntry[] = [];
 const parentServices = resources.add(new InstantiationService());
-parentServices.registerInstance(ILogService, resources.add(new LogService({ sinks: [{ log: entry => appLogs.push(entry) }] })));
+const windowLogger = resources.add(new LogService({ sinks: [{ log: entry => appLogs.push(entry) }] }));
+parentServices.registerInstance(ILogService, windowLogger);
+parentServices.registerInstance(ILoggerService, windowLogger);
 const services = resources.add(createTestEditorServices(undefined, parentServices, document));
 const theme = services.get(IThemeService) as TestThemeService;
 const dialogs = resources.add(new DialogService());
@@ -91,12 +110,19 @@ services.registerInstance(IDialogsModel, dialogs.model);
 resources.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(document.body)));
 resources.add(bindColorTheme(theme, document.body));
 let clipboardText = '';
+let clipboardReady = Promise.resolve();
+let releaseClipboard!: () => void;
+let clipboardFailure = false;
 class Clipboard extends BrowserClipboardService {
 	constructor() { super(undefined); }
-	public override async writeText(text: string): Promise<void> { clipboardText = text; }
+	public override async writeText(text: string): Promise<void> { await clipboardReady; if (clipboardFailure) throw new Error('clipboard rejected'); clipboardText = text; }
 }
 services.registerInstance(IClipboardService, resources.add(new Clipboard()));
 services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
+services.registerInstance(IDictationService, undefined);
+registerTestDictationOnboarding(services);
+services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
+services.registerSingleton(ITerminalLogService, () => services.createInstance(TerminalLogService));
 registerCodeEditorServices(services);
 services.registerInstance(IAgentCapabilitiesService, { isAvailable: true, read: async () => ({ tools: [{ name: 'read_file', description: 'Read authorized files', source: 'local', sourceDetails: ['Ash'], exposure: 'direct', authority: 'directoryRead' }, { name: 'internal_tool', description: 'Internal', source: 'local', sourceDetails: [], exposure: 'hidden', authority: 'providerDefined' }], toolSets: [], localProcessSandboxConfigured: false, directoryGrantsReadable: true, sandboxBackends: [], sandboxDiagnostics: [] }) });
 const skillResourceRequests: unknown[] = [];
@@ -145,12 +171,32 @@ resources.add(services.get(ICodeEditorService).registerCodeEditorOpenHandler(asy
 	return file;
 }));
 services.registerInstance(IEditorPart, { get activePane() { return { getControl: () => file }; } } as unknown as IEditorPart);
+let mediaPreview: ImagePreview | MediaPreview | undefined;
+let mediaPreviewRoot: HTMLElement | undefined;
 services.registerInstance(IEditorService, {
 	onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None,
 	get activeEditor() { return { resource: activeResource }; },
 	visibleEditorPanes: [],
 	get visibleEditors() { return [{ resource: activeResource }]; },
 	openEditor: async input => {
+		if (input.resource.scheme === 'chat-response-resource' && /\.(?:png|jpeg|gif|webp|wav|mp3|m4a|webm|ogg)$/u.test(input.resource.path)) {
+			mediaPreview?.dispose();
+			mediaPreviewRoot?.remove();
+			const previewServices = resources.add(services.createChild());
+			previewServices.registerInstance(IAccessibleViewService, accessibleView);
+			previewServices.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', showContextMenu() { }, hideContextMenu() { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None });
+			mediaPreviewRoot = document.createElement('section');
+			mediaPreviewRoot.style.cssText = 'height:240px;width:600px';
+			document.body.append(mediaPreviewRoot);
+			mediaPreview = /\.(?:png|jpeg|gif|webp)$/u.test(input.resource.path) ? resources.add(previewServices.createInstance(ImagePreview)) : resources.add(previewServices.createInstance(MediaPreview, 'audio', 'Audio'));
+			mediaPreview.create(mediaPreviewRoot);
+			await mediaPreview.setInput({ resource: input.resource, readOnly: input.readOnly }, new AbortController().signal);
+			mediaPreview.setVisible(true);
+			mediaPreview.layout({ width: 600, height: 240 });
+			mediaPreview.focus();
+			activeResource = input.resource;
+			return;
+		}
 		if (input.resource.scheme === 'chat-response-resource') {
 			const bytes = await services.get(IFileService).readFileBytes(input.resource);
 			const model = services.get(IModelService).getModel(input.resource) ?? services.get(IModelService).createModel(new TextDecoder('utf-8', { fatal: true }).decode(bytes.bytes), services.get(ILanguageService).createByFilepathOrFirstLine(input.resource), input.resource);
@@ -182,10 +228,11 @@ let list = resources.add(appServices.createInstance(ChatListWidget, root, listOp
 list.setVisible(true);
 const toolNotifications = resources.add(new Emitter<ServerNotification>());
 const connectionChanges = resources.add(new Emitter<void>());
-const appHtml = `<h1>Report</h1><output id="context"></output><output id="input"></output><output id="result"></output><output id="called"></output><output id="resource"></output><output id="binary"></output><output id="catalog"></output><output id="link-result"></output><output id="mode-result"></output><input id="link-url" aria-label="App link URL" value="https://example.com/report?view=8#result"><button id="open-link">Open external link</button><button id="fullscreen">Fullscreen</button><button id="inline">Inline</button><button id="pip">Picture in picture</button><button id="list-tools">List tools</button><output id="error"></output><output id="capabilities"></output><output id="context-ack"></output><output id="message-ack"></output><input aria-label="App context text" id="context-text" value="First context"><button id="update-context">Update context</button><button id="send-message">Send Chat message</button><button id="invalid-message">Invalid role</button><button id="increment">Increment</button><button id="call">Call tool</button><button id="cancel">Cancel call</button><button id="unsupported">Unsupported</button><button id="read">Read resource</button><button id="binary-read">Read binary</button><button id="logs">Send logs</button><button id="invalid-log">Invalid log</button><button id="large-log">Large log</button><button id="flood-log">Flood logs</button><output id="download-result"></output><button id="download-inline">Download inline</button><button id="download-linked">Download linked</button><button id="download-invalid">Invalid download</button><button id="download-cancel">Cancel download</button><output id="count">0</output>
+const appHtml = `<h1>Report</h1><output id="context"></output><output id="input"></output><output id="result"></output><output id="called"></output><output id="resource"></output><output id="binary"></output><output id="catalog"></output><output id="link-result"></output><output id="mode-result"></output><input id="link-url" aria-label="App link URL" value="https://example.com/report?view=8#result"><button id="open-link">Open external link</button><button id="fullscreen">Fullscreen</button><button id="inline">Inline</button><button id="pip">Picture in picture</button><button id="list-tools">List tools</button><output id="error"></output><output id="capabilities"></output><output id="context-ack"></output><output id="message-ack"></output><input aria-label="App context text" id="context-text" value="First context"><button id="update-context">Update context</button><button id="image-context">Image context</button><button id="clear-context">Clear context</button><button id="bad-image-context">Invalid image context</button><button id="bad-image-data">Undecodable image context</button><button id="audio-context">Unsupported audio context</button><output id="image-ack"></output><button id="resource-context">Resource context</button><button id="binary-context">Binary resource context</button><button id="cancel-context">Cancel resource context</button><output id="resource-context-ack"></output><button id="send-message">Send Chat message</button><button id="mixed-message">Send image message</button><button id="image-only-message">Send image only</button><button id="cancel-message">Cancel image message</button><button id="invalid-message">Invalid role</button><button id="increment">Increment</button><button id="call">Call tool</button><button id="cancel">Cancel call</button><button id="unsupported">Unsupported</button><button id="read">Read resource</button><button id="binary-read">Read binary</button><button id="logs">Send logs</button><button id="invalid-log">Invalid log</button><button id="large-log">Large log</button><button id="flood-log">Flood logs</button><output id="download-result"></output><button id="download-inline">Download inline</button><button id="download-linked">Download linked</button><button id="download-invalid">Invalid download</button><button id="download-cancel">Cancel download</button><output id="count">0</output>
 <script>
 let count = 0;
 let callId = 1;
+let imageMessageId = 213;
 const rpc = message => parent.postMessage({jsonrpc:'2.0',...message}, '*');
 window.addEventListener('message', event => {
   if (event.source !== parent) return;
@@ -203,7 +250,9 @@ window.addEventListener('message', event => {
     document.querySelector('#context').textContent = JSON.stringify(message.params);
   } else if (message.error) document.querySelector('#error').textContent = JSON.stringify(message.error);
   else if (message.result && message.id === 201) document.querySelector('#context-ack').textContent = JSON.stringify(message.result);
-  else if (message.result && message.id === 202) document.querySelector('#message-ack').textContent = JSON.stringify(message.result);
+  else if (message.result && message.id === 213) document.querySelector('#resource-context-ack').textContent = JSON.stringify(message.result);
+  else if (message.result && (message.id === 211 || message.id === 212)) document.querySelector('#image-ack').textContent = JSON.stringify(message.result);
+  else if (message.result && (message.id === 202 || message.id >= 214 && message.id <= 260)) document.querySelector('#message-ack').textContent = JSON.stringify(message.result);
   else if (message.result && message.id === 103) document.querySelector('#link-result').textContent = JSON.stringify(message.result);
   else if (message.result && message.id === 301) document.querySelector('#download-result').textContent = JSON.stringify(message.result);
   else if (message.result && message.id === 104) document.querySelector('#mode-result').textContent = JSON.stringify(message.result);
@@ -222,7 +271,22 @@ document.querySelector('#list-tools').onclick = () => rpc({id:102,method:'tools/
 document.querySelector('#binary-read').onclick = () => rpc({id:101,method:'resources/read',params:{uri:'mcp://server/blob'}});
 document.querySelector('#cancel').onclick = () => rpc({method:'notifications/cancelled',params:{requestId:callId}});
 document.querySelector('#update-context').onclick = () => rpc({id:201,method:'ui/update-model-context',params:{content:[{type:'text',text:document.querySelector('#context-text').value}],structuredContent:{value:8}}});
+document.querySelector('#image-context').onclick = () => { document.querySelector('#image-ack').textContent=''; rpc({id:211,method:'ui/update-model-context',params:{content:[{type:'text',text:'Image context'}, {type:'image',mimeType:'image/png',data:'iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAADklEQVR4nGP4z8DwHwQBEPgD/U6VwW8AAAAASUVORK5CYII='}]}}); };
+document.querySelector('#clear-context').onclick = () => { document.querySelector('#image-ack').textContent=''; rpc({id:212,method:'ui/update-model-context',params:{content:[]}}); };
+document.querySelector('#bad-image-context').onclick = () => rpc({id:211,method:'ui/update-model-context',params:{content:[{type:'image',mimeType:'image/png',data:'AB=='}]}});
+document.querySelector('#bad-image-data').onclick = () => rpc({id:211,method:'ui/update-model-context',params:{content:[{type:'image',mimeType:'image/png',data:'eA=='}]}});
+document.querySelector('#audio-context').onclick = () => rpc({id:211,method:'ui/update-model-context',params:{content:[{type:'audio',mimeType:'audio/wav',data:'eA=='}]}});
+document.querySelector('#resource-context').onclick = () => { document.querySelector('#resource-context-ack').textContent=''; rpc({id:213,method:'ui/update-model-context',params:{content:[{type:'resource',resource:{uri:'file:///ignored/source',mimeType:'application/octet-stream',text:'Embedded <safe>',_meta:{private:'private-inline'}}},{type:'resource',resource:{uri:'file:///ignored/binary',mimeType:'text/plain',blob:'aGVsbG8='}},{type:'resource_link',uri:'https://server/report/data',name:'linked.json'}]}}); };
+document.querySelector('#binary-context').onclick = () => rpc({id:213,method:'ui/update-model-context',params:{content:[{type:'resource_link',uri:'mcp://server/blob',name:'binary'}]}});
+document.querySelector('#cancel-context').onclick = () => rpc({method:'notifications/cancelled',params:{requestId:213}});
+
+
 document.querySelector('#send-message').onclick = () => rpc({id:202,method:'ui/message',params:{role:'user',content:[{type:'text',text:'Follow-up from App'}]}});
+const messageImage = {type:'image',mimeType:'image/png',data:'iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAADklEQVR4nGP4z8DwHwQBEPgD/U6VwW8AAAAASUVORK5CYII='};
+document.querySelector('#mixed-message').onclick = () => { document.querySelector('#message-ack').textContent=''; rpc({id:++imageMessageId,method:'ui/message',params:{role:'user',content:[{type:'text',text:'Read image'},messageImage,{type:'resource',resource:{uri:'file:///message/report',text:'Message report',_meta:{private:'private-message-only'}}}]}}); };
+document.querySelector('#image-only-message').onclick = () => { document.querySelector('#message-ack').textContent=''; rpc({id:++imageMessageId,method:'ui/message',params:{role:'user',content:[messageImage]}}); };
+document.querySelector('#cancel-message').onclick = () => rpc({method:'notifications/cancelled',params:{requestId:imageMessageId}});
+
 document.querySelector('#invalid-message').onclick = () => rpc({id:203,method:'ui/message',params:{role:'system',content:{type:'text',text:'untrusted instruction'}}});
 document.querySelector('#unsupported').onclick = () => rpc({id:99,method:'sampling/createMessage',params:{}});
 document.querySelector('#download-inline').onclick = () => rpc({id:301,method:'ui/download-file',params:{contents:[{type:'resource',resource:{uri:'file:///app/export.txt',mimeType:'text/plain',text:'中文\\r\\n<safe>\\r\\n'}}]}});
@@ -239,19 +303,23 @@ let appRequests = false;
 let allowAppCsp = false;
 let appCallMode: 'read' | 'delay' | 'error' = 'read';
 let appItems: readonly IChatListItem[] = [];
-let appChat: ChatWidget | undefined;
+let appChat: ChatWidget | CoworkWidget | undefined;
+const createBitmap = window.createImageBitmap.bind(window);
+let completeImageDecode: (() => void) | undefined;
 let appChatThread = 'app-thread';
 let appChatGeneration = 0;
 const appChatMessages: unknown[] = [];
+const composerChanges = resources.add(new Emitter<void>());
 const chatChanges = resources.add(new Emitter<void>());
 const voiceChanges = resources.add(new Emitter<void>());
-const voiceTasks = resources.add(new Emitter<VoiceTaskRequest>());
-let voiceSession: VoiceSessionState | undefined;
+const voiceTasks = resources.add(new Emitter<AgentVoiceTaskRequest>());
+let voiceSession: AgentVoiceSessionState | undefined;
+let chosenVoice: AgentVoiceSelection | undefined;
 const voiceControls: string[] = [];
-const voiceFixture: IVoiceService = {
+const voiceFixture: IAgentVoiceService = {
 	isAvailable: true, get state() { return voiceSession; }, onDidChange: voiceChanges.event, onDidRequestTask: voiceTasks.event,
-	getOptions: async () => [{ connectionId: 'fixture', name: 'Voice fixture', defaultModel: 'speech', models: [] }],
-	start: async source => { voiceControls.push('start'); voiceSession = { ...source, resourceId: 'voice-media', mediaEpoch: (voiceSession?.mediaEpoch ?? 0) + 1, sequence: 1, state: 'connected', usageMilliseconds: 0 }; voiceChanges.fire(); return voiceSession; },
+	getOptions: async () => [{ connectionId: 'fixture', name: 'Voice fixture', defaultModel: 'speech', models: [{ modelId: 'speech', defaultVoice: 'cedar', voices: ['cedar', 'marin'] }] }],
+	start: async (source, selection) => { chosenVoice = { ...selection }; voiceControls.push('start'); voiceSession = { ...source, resourceId: 'voice-media', mediaEpoch: (voiceSession?.mediaEpoch ?? 0) + 1, sequence: 1, state: 'connected', usageMilliseconds: 0 }; voiceChanges.fire(); return voiceSession; },
 	stop: async () => { voiceControls.push('stop'); if (voiceSession) voiceSession = { ...voiceSession, state: 'ended' }; voiceChanges.fire(); },
 	interrupt: async () => { voiceControls.push('interrupt'); if (voiceSession) voiceSession = { ...voiceSession, mediaEpoch: voiceSession.mediaEpoch + 1 }; voiceChanges.fire(); },
 	rejectTask: async () => { voiceControls.push('reject'); },
@@ -343,6 +411,8 @@ list.render([{ id: 'reply', type: 'agentMessage', text, transient: false }]);
 declare global {
 	interface Window {
 		ashChatTranscriptIntegration: {
+			holdClipboard(fail?: boolean): void;
+			releaseClipboard(): void;
 			state(): { copied: string; file: string; resource: string; editorCount: number; selection: unknown; notifications: readonly string[]; };
 			openSkill(): Promise<void>;
 			referenceReady(line: number, column: number): boolean;
@@ -370,19 +440,39 @@ declare global {
 			showArtifacts(revise: boolean): void;
 			showLink(mode: 'read' | 'delay' | 'error'): void;
 			showApp(mode?: 'read' | 'delay' | 'error', allowCsp?: boolean, withMedia?: boolean): void;
-			showChatApp(voice?: boolean): void;
+			showReadAloudMessage(text: string, cowork?: boolean): Promise<void>;
+			finishReadAloud(failure?: boolean): void;
+			stopReadAloudCommand(): Promise<void>;
+			revokeReadAloudProvider(): void;
+			readAloudState(): { readonly text: readonly string[]; readonly open: number; readonly closed: number; };
+			showCopiedMessage(text: string, cowork?: boolean): void;
+			updateCopiedMessage(text: string, transient?: boolean): void;
+			clearCopiedMessage(): void;
+			showAcceptedContext(text: string, cowork?: boolean): void;
+			updateAcceptedContext(text: string): void;
+			showChatApp(voice?: boolean, cowork?: boolean, withMedia?: boolean): void;
 			voiceState(): readonly string[];
+			voiceSelection(): AgentVoiceSelection | undefined;
 			proposeVoiceTask(): void;
-            delayAppResources(): void;
-            appLogs(): readonly LogEntry[];
+			delayAppResources(): void;
+			appLogs(): readonly LogEntry[];
 			retireChat(): void;
+			setChatVisible(visible: boolean): void;
+			chatDraft(): Promise<string | undefined>;
+			persistedChatDraft(): unknown;
+			appImagePending(): boolean;
+			delayAppImages(): void;
+			finishAppImages(): void;
 			addUserContext(): void;
+			addTerminalContext(): void;
 			chatMessages(): readonly unknown[];
 			closeConnection(): void;
 			appState(): { messages: readonly unknown[]; views: number; };
 			linkRequests(): readonly { method: string; params: unknown; }[];
 			finishLink(): void;
 			readResource(uri: string): Promise<number[]>;
+			mediaPreviewState(): Promise<{ readonly resource: string; readonly content: string | undefined; readonly readonly: boolean; }>;
+			closeMediaPreview(): void;
 			refreshMedia(): void;
 			finishMedia(): void;
 			openedAppLinks(): readonly { uri: string; options: unknown; }[];
@@ -392,7 +482,41 @@ declare global {
 		};
 	}
 }
+
+const readEvents = new Map<string, JsonValue[]>();
+const spokenText: string[] = [];
+let closedReadSessions = 0;
+const readSnapshot: ExtensionHostFleetSnapshot = {
+	generation: 1, extensions: [{
+		id: 'example.reader', version: '1', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1,
+		incarnation: 1, activationGeneration: 1, lifecycle: 'ready', failure: undefined, stderr: '', outputEvents: [],
+		registrations: [{ registrationId: 'reader', kind: 'speechProvider', identifier: 'example.reader' }]
+	}]
+};
+const readApi: IExtensionHostApi = {
+	onDidChange: Event.None, onConnectionState: Event.None, isAvailable: async () => true, getConnectionState: async () => 'ready',
+	list: async () => readSnapshot, start: async () => readSnapshot, reconcile: async () => readSnapshot, activateByEvent: async () => readSnapshot,
+	registerClientHandler: () => Disposable.None,
+	invoke: async (request, signal): Promise<JsonValue> => {
+		signal.throwIfAborted();
+		const payload = request.payload as { sessionId: string; kind?: string; text?: string; };
+		if (request.operation === 'createSpeechSession') {
+			if (payload.kind !== 'textToSpeech') throw new Error('Unexpected media session');
+			readEvents.set(payload.sessionId, []); return {};
+		}
+		if (request.operation === 'synthesizeSpeech') {
+			spokenText.push(payload.text!); readEvents.get(payload.sessionId)?.push({ status: 1 }); return {};
+		}
+		if (request.operation === 'readSpeechSession') return { events: readEvents.get(payload.sessionId)?.splice(0) ?? [], closed: !readEvents.has(payload.sessionId) };
+		if (request.operation === 'closeSpeechSession') { if (readEvents.delete(payload.sessionId)) closedReadSessions++; return {}; }
+		throw new Error('Unexpected Speech request');
+	}
+};
+let readBridge: MainThreadSpeech | undefined;
+
 window.ashChatTranscriptIntegration = {
+	holdClipboard: (fail = false) => { clipboardFailure = fail; clipboardReady = new Promise(resolve => { releaseClipboard = resolve; }); },
+	releaseClipboard: () => releaseClipboard(),
 	state: () => ({
 		copied: clipboardText, file: file.getModel()!.getValue(), resource: activeResource.toString(),
 		editorCount: services.get(ICodeEditorService).listCodeEditors().length,
@@ -468,8 +592,9 @@ window.ashChatTranscriptIntegration = {
 	finishLink: () => completeLink?.(),
 	closeConnection: () => connectionChanges.fire(),
 	appState: () => ({ messages: appMessages, views: [...webviews.webviews].length }),
-	showChatApp: (voice = false) => {
-		window.ashChatTranscriptIntegration.showApp();
+	showChatApp: (voice = false, cowork = false, withMedia = false) => {
+		appChat?.dispose();
+		window.ashChatTranscriptIntegration.showApp('read', false, withMedia);
 		root.hidden = true;
 		const chatServices = resources.add(services.createChild());
 		chatServices.registerInstance(IAccessibleViewService, accessibleView);
@@ -477,15 +602,21 @@ window.ashChatTranscriptIntegration = {
 		chatServices.registerInstance(IChatSessionNavigationService, { openConversation: async () => { throw new Error('Unexpected conversation navigation'); } } as unknown as IChatSessionNavigationService);
 		chatServices.registerInstance(IOpenerService, { open: async () => { throw new Error('Unexpected link opening'); } } as unknown as IOpenerService);
 		chatServices.registerInstance(IDictationService, undefined);
-		chatServices.registerInstance(IVoiceService, voice ? voiceFixture : undefined);
-		chatServices.registerSingleton(ISpeechService, () => chatServices.createInstance(SpeechService));
+		chatServices.registerInstance(IAgentVoiceService, voice ? voiceFixture : undefined);
+		registerTestDictationOnboarding(chatServices);
 		chatServices.registerSingleton(IMenuService, () => chatServices.createInstance(MenuService));
 		const contextView = resources.add(new BrowserContextViewService(document.body));
 		chatServices.registerInstance(IContextViewService, contextView);
 		chatServices.registerInstance(IDialogService, { confirm: async () => ({ confirmed: false }) } as unknown as IDialogService);
 		const contextMenus: IContextMenuService = { contextMenuStyle: 'custom', showContextMenu() { }, hideContextMenu() { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None };
+		if (cowork) {
+			chatServices.registerSingleton(ITerminalConfigurationService, () => chatServices.createInstance(TerminalConfigurationService));
+			chatServices.registerInstance(IContextMenuService, contextMenus);
+			chatServices.registerSingleton(IChatTipService, () => chatServices.createInstance(ChatTipService));
+			chatServices.registerInstance(ILifecycleService, { onWillShutdown: Event.None } as unknown as ILifecycleService);
+		}
 		const model: IChatWidgetModel = {
-			onDidChange: chatChanges.event, onDidChangeComposer: Event.None, get composerGeneration() { return appChatGeneration; }, sessionId: 'app-session', get threadId() { return appChatThread; }, untitledSessionId: undefined, goal: undefined, get items() { return appItems; },
+			onDidChange: chatChanges.event, onDidChangeComposer: composerChanges.event, get composerGeneration() { return appChatGeneration; }, sessionId: 'app-session', get threadId() { return appChatThread; }, untitledSessionId: undefined, goal: undefined, get items() { return appItems; },
 			inputState: { mode: 'plan', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false },
 			send: async (text, mode, _skills, contexts, submissionOptions) => { appChatMessages.push({ text, mode, contexts, ...(submissionOptions ? { commandId: submissionOptions.commandId, source: submissionOptions.source } : {}) }); },
 			executeServerCommand: async () => { }, interrupt: async () => { }, selectModel: async () => { }, selectReasoningEffort: async () => { }, selectAutomaticModel: async () => { },
@@ -494,12 +625,49 @@ window.ashChatTranscriptIntegration = {
 		const container = document.createElement('main');
 		container.style.cssText = 'height:700px;width:800px';
 		document.body.append(container);
-		appChat = resources.add(chatServices.createInstance(ChatWidget, container, 'app-chat', model, () => { }, contextMenus, contextView, chatServices.get(ICommandService), accessibleView, chatServices.get(INotificationService), undefined, undefined, undefined, undefined));
+		appChat = cowork ? resources.add(chatServices.createInstance(CoworkWidget, container, 'app-chat', model, () => { }, chatServices.get(ICommandService), undefined, undefined, undefined, (host: HTMLElement, delegate: ChatInputDelegate) => chatServices.createInstance(NewCoworkInputWidget, host, delegate, model))) : resources.add(chatServices.createInstance(ChatWidget, container, 'app-chat', model, () => { }, contextMenus, contextView, chatServices.get(ICommandService), accessibleView, chatServices.get(INotificationService), undefined, undefined, undefined, undefined));
 		appChat.setVisible(true);
 	},
+	showReadAloudMessage: async (text, cowork = false) => {
+		await import('../../../src/ash/workbench/contrib/chat/electron-browser/actions/voiceChatActions.js');
+		readBridge ??= resources.add(new MainThreadSpeech(1000, readApi, services.get(ISpeechService)));
+		readBridge.update(readSnapshot);
+		window.ashChatTranscriptIntegration.showCopiedMessage(text, cowork);
+	},
+	finishReadAloud: (failure = false) => {
+		for (const events of readEvents.values()) events.push(failure ? { status: 3, text: 'reader failed' } : { status: 2 });
+	},
+	stopReadAloudCommand: () => services.get(ICommandService).executeCommand('workbench.action.speech.stopReadAloud'),
+	revokeReadAloudProvider: () => readBridge?.clear(),
+	readAloudState: () => ({ text: [...spokenText], open: readEvents.size, closed: closedReadSessions }),
+	showCopiedMessage: (text, cowork = false) => {
+		window.ashChatTranscriptIntegration.showChatApp(false, cowork);
+		window.ashChatTranscriptIntegration.updateCopiedMessage(text);
+	},
+	clearCopiedMessage: () => { appItems = []; chatChanges.fire(); },
+	updateCopiedMessage: (text, transient = false) => {
+		appItems = chatTranscriptListItems([{ type: 'item', entryId: 'copy-response', turnId: 'turn', transient, item: { type: 'agentMessage', itemId: 'response', turnId: 'turn', text } }]);
+		chatChanges.fire();
+	},
+	showAcceptedContext: (text, cowork = false) => {
+		window.ashChatTranscriptIntegration.showChatApp(false, cowork);
+		window.ashChatTranscriptIntegration.updateAcceptedContext(text);
+	},
+	updateAcceptedContext: text => {
+		appItems = chatTranscriptListItems([{ type: 'item', entryId: 'accepted-context', turnId: 'turn', transient: false, item: { type: 'userContext', itemId: 'accepted-context', turnId: 'turn', name: 'Accepted <context>', content: text } }]);
+		chatChanges.fire();
+	},
+	addTerminalContext: () => appChat?.addContext({ id: 'terminal:saved', kind: 'terminal', name: 'Terminal: saved', resource: URI.parse('internal://terminal?id=saved'), terminalSnapshot: { text: 'Saved <script>unsafe()</script>\nTerminal output', columns: 80 }, resolve: async () => ({ name: 'Terminal: saved', content: 'Saved terminal context' }) }),
 	addUserContext: () => appChat?.addContext({ id: 'private-file', kind: 'file', name: 'private.txt', resolve: async () => ({ name: 'private.txt', content: 'private file body' }) }),
-	retireChat: () => { appChatGeneration++; appChatThread = 'replacement-thread'; chatChanges.fire(); },
+	appImagePending: () => completeImageDecode !== undefined,
+	delayAppImages: () => { window.createImageBitmap = ((...args: Parameters<typeof createImageBitmap>) => new Promise<ImageBitmap>((resolve, reject) => { completeImageDecode = () => { window.createImageBitmap = createBitmap; void createBitmap(...args).then(resolve, reject); }; })) as typeof createImageBitmap; },
+	finishAppImages: () => { completeImageDecode?.(); completeImageDecode = undefined; },
+	persistedChatDraft: () => readNewChatDraftState(services.get(IStorageService), appChatThread),
+	chatDraft: async () => (await appChat?.captureDraft())?.draft.text,
+	setChatVisible: visible => appChat?.setVisible(visible),
+	retireChat: () => { appChatGeneration++; composerChanges.fire(); appChatThread = 'replacement-thread'; chatChanges.fire(); },
 	voiceState: () => voiceControls,
+	voiceSelection: () => chosenVoice,
 	proposeVoiceTask: () => {
 		if (!voiceSession) throw new Error('Voice is not connected');
 		voiceTasks.fire({ ...voiceSession, delegationId: 'voice-proposal', commandId: 'voice-command', transcript: 'run tests <script>unsafe()</script>' });
@@ -507,7 +675,7 @@ window.ashChatTranscriptIntegration = {
 		chatChanges.fire();
 	},
 	appLogs: () => appLogs,
-    delayAppResources: () => { appCallMode = 'delay'; },
+	delayAppResources: () => { appCallMode = 'delay'; },
 	chatMessages: () => appChatMessages,
 	showApp: (mode = 'read', allowCsp = false, withMedia = false) => {
 		mediaRequests = [];
@@ -552,6 +720,8 @@ window.ashChatTranscriptIntegration = {
 		});
 		list.render(chatTranscriptListItems(update.changes.flatMap(change => change.type === 'upsert' ? [change.entry] : []), undefined, [], { sessionId: update.sessionId, threadId: update.threadId }));
 	},
+	mediaPreviewState: async () => ({ resource: activeResource.toString(), content: mediaPreview?.getAccessibleContent(), readonly: (await services.get(IFileService).stat(activeResource)).readonly === true }),
+	closeMediaPreview: () => { mediaPreview?.dispose(); mediaPreview = undefined; mediaPreviewRoot?.remove(); mediaPreviewRoot = undefined; },
 	readResource: async uri => [...(await services.get(IFileService).readFileBytes(URI.parse(uri))).bytes],
 	showArtifacts: revise => {
 		const update = receiveToolUpdate({

@@ -25,7 +25,7 @@ import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../src/ash
 import { GitHubLinkPresentationContribution } from '../../../src/ash/workbench/contrib/github/browser/githubLinkPresentation.contribution.js';
 import { ChatListWidget } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatListWidget.js';
 import { renderMarkdown } from '../../../src/ash/base/browser/markdownRenderer.js';
-import { ChatMarkdownDecorationsRenderer as CoworkMarkdownDecorationsRenderer } from '../../../src/ash/sessions/contrib/cowork/browser/widget/chatContentParts/chatMarkdownDecorationsRenderer.js';
+import { ChatMarkdownDecorationsRenderer } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatContentParts/chatMarkdownDecorationsRenderer.js';
 import { IGitHubConnectionService } from '../../../src/ash/workbench/services/accounts/common/gitHubConnectionService.js';
 import '../../../src/ash/workbench/services/dataChannel/browser/dataChannelService.js';
 
@@ -125,7 +125,7 @@ if (new URL(location.href).searchParams.has('cowork')) {
 	}));
 	markdown.element.classList.add('cowork-test-message');
 	container.append(markdown.element);
-	resources.add(services.createInstance(CoworkMarkdownDecorationsRenderer, markdown.element));
+	resources.add(services.createInstance(ChatMarkdownDecorationsRenderer, markdown.element));
 }
 window.ashGitHubIntegration = {
 	requests: transport.requests, opened, releaseChecks: outcome => transport.releaseChecks(outcome), releaseIssue: () => transport.releaseIssue(),

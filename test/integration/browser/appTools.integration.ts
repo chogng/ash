@@ -131,6 +131,13 @@ const terminalProcesses: ITerminalProcessService = {
 	get operatingSystem() { return executionOS; },
 	onConnectionState: terminalConnection.event, getConnectionState: async () => 'ready',
 	getEnvironment: async () => ({ HOME: '/execution/home', BASE: 'inherited' }),
+	getProcessInfo: async ({ terminalId }) => {
+		const index = Number(terminalId.slice('terminal-'.length)) - 1;
+		const launch = terminalCreations[index];
+		if (!launch) throw new Error('Terminal not found');
+		const cwd = launch.cwd ?? '/workspace';
+		return { ready: { pid: index + 1, cwd }, cwd, rows: launch.rows, cols: launch.cols };
+	},
 	listProfiles: async () => [{ profileId: 'bash', title: 'Bash', isDefault: true }],
 	resolveProfile: async selection => {
 		profileSelections.push(selection);

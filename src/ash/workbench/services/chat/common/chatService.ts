@@ -125,7 +125,16 @@ export interface IChatHookPart {
 	readonly run: ChatHookRun;
 }
 
+/** Correlation and identity for a producer already bound to one Chat; normal composer sends omit it. */
+export interface ChatSubmissionOptions {
+	readonly commandId?: string;
+	readonly source?: { readonly sessionId: string; readonly threadId: string; };
+	readonly signal?: AbortSignal;
+}
+
 export interface StartTurnOptions {
+	/** An existing external request correlation uses the normal Core receipt and replay rules. */
+	readonly commandId?: string;
 	readonly sessionId: SessionId;
 	readonly threadId: ThreadId;
 	readonly expectedSequence: number;
@@ -143,7 +152,7 @@ export type ChatMode = SessionMode;
 export interface ConfigureAdvisorOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly selection: AdvisorSelection; }
 export interface ConsultAdvisorOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly question: string; }
 export interface CompactContextOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly retentionPrompt?: string; }
-export interface SteerTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number; readonly text: string; readonly contexts?: readonly ResolvedChatContext[]; }
+export interface SteerTurnOptions { readonly commandId?: string; readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number; readonly text: string; readonly contexts?: readonly ResolvedChatContext[]; }
 export interface InterruptTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number; }
 export interface ResolveInteractionOptions extends InterruptTurnOptions { readonly requestId: string; readonly response: AgentResponse; }
 

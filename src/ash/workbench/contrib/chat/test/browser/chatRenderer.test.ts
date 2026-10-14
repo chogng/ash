@@ -39,6 +39,8 @@ const image = { type: 'imageAttachment' as const, detail: 'auto' as const, attac
 
 function mount(resources: DisposableStore, services: ReturnType<typeof createTestEditorServices>): ChatListWidget {
 	if (!services.has(IAgentThreadService)) services.registerInstance(IAgentThreadService, createDisconnectedRendererApi().thread);
+	if (!services.has(IChatResponseResourceFileSystemProvider)) services.registerInstance(IChatResponseResourceFileSystemProvider, resources.add(services.createInstance(ChatResponseResourceFileSystemProvider)));
+	if (!services.has(IEditorService)) services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { throw new Error('Unexpected media preview'); }, focusActiveEditor() { } });
 	const container = document.createElement('main');
 	document.body.append(container);
 	resources.add(toDisposable(() => container.remove()));
@@ -251,3 +253,36 @@ for (const locale of ['en', 'zh-CN']) {
 		} finally { resetNlsResolver(); }
 	});
 }
+
+
+test('Opening a stored media row uses immutable read-only response bytes and retires the association with its source', async () => {
+	using resources = new DisposableStore();
+	const urls = browserEnvironment.window.URL;
+	for (const key of ['createObjectURL', 'revokeObjectURL'] as const) {
+		const descriptor = Object.getOwnPropertyDescriptor(urls, key);
+		Object.defineProperty(urls, key, { configurable: true, value: key === 'createObjectURL' ? () => 'blob:fixture' : () => { } });
+		resources.add(toDisposable(() => { if (descriptor) Object.defineProperty(urls, key, descriptor); else Reflect.deleteProperty(urls, key); }));
+	}
+	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const files = resources.add(new ChatResponseResourceFileSystemProvider());
+	services.registerInstance(IChatResponseResourceFileSystemProvider, files);
+	const data = new Uint8Array([1, 2, 3]);
+	services.registerInstance(IAgentThreadService, { ...createDisconnectedRendererApi().thread, readAttachment: async () => ({ bytes: data, mimeType: 'image/png' }) });
+	const opened: { resource: URI; readonly: boolean | undefined; }[] = [];
+	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async input => { opened.push({ resource: input.resource, readonly: input.readOnly }); }, focusActiveEditor() { } });
+	const widget = mount(resources, services);
+	widget.render([{ ...response, content: [image], attachmentSource: source }]);
+	widget.element.querySelector<HTMLButtonElement>('.ash-chat-media > button')!.click();
+	await new Promise(resolve => setTimeout(resolve, 0));
+	const open = [...widget.element.querySelectorAll<HTMLButtonElement>('.ash-chat-media > button')].find(button => button.textContent === 'Open image')!;
+	assert.equal(open.hidden, false);
+	open.click();
+	await new Promise(resolve => setTimeout(resolve, 0));
+	assert.equal(opened.length, 1);
+	assert.equal(opened[0]!.readonly, true);
+	assert.deepEqual((await files.readFile(opened[0]!.resource)).bytes, data);
+	data.fill(0);
+	assert.deepEqual((await files.readFile(opened[0]!.resource)).bytes, new Uint8Array([1, 2, 3]));
+	widget.render([]);
+	await assert.rejects(files.readFile(opened[0]!.resource), /no longer available/);
+});

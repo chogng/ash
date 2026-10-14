@@ -108,6 +108,8 @@ export class ChatToolInvocationPart extends Disposable {
 		} else { this.appChanges.clear(); this.app.clear(); }
 	}
 
+	public setVisible(visible: boolean): void { this.media.value?.setVisible(visible); }
+
 	private setText(element: HTMLElement, text: string, label?: string): void {
 		const value = text && label ? `${label}\n${text}` : text;
 		if (element.textContent !== value) element.textContent = value;

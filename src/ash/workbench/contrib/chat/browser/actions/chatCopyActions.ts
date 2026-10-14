@@ -7,6 +7,7 @@ import { IAccessibilityService } from '../../../../../platform/accessibility/com
 import { IAppServerApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { buildOpenSessionLinkUri, OPEN_SESSION_LINK_SCHEME, parseOpenSessionLinkUri } from '../../../../../platform/agentHost/common/openSessionLink.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
+import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { IChatService } from '../../../../services/chat/common/chatService.js';
@@ -92,5 +93,12 @@ export class ChatSessionLinkOpener extends Disposable {
 }
 
 export function registerChatCopyActions(): void {
+	registerAction2(class CopyItemAction extends Action2 {
+		constructor() { super({ id: 'workbench.action.chat.copyItem', title: localize2('chat.message.copy', 'Copy message') }); }
+		public override async run(accessor: ServicesAccessor, context: unknown): Promise<void> {
+			if (!context || typeof context !== 'object' || !('text' in context) || typeof context.text !== 'string' || !('type' in context) || context.type !== 'agentMessage' && context.type !== 'userMessage') return;
+			await accessor.get(IClipboardService).writeText(context.text);
+		}
+	});
 	registerAction2(CopyChatSessionLinkAction);
 }

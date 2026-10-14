@@ -1,3 +1,4 @@
+import { IAgentVoiceService } from '../../platform/agentHost/common/agentService.js';
 import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../editor/common/services/languageFeatureDebounce.js';
 import { IInlineCompletionsService, InlineCompletionsService } from '../../editor/browser/services/inlineCompletionsService.js';
 import { IMarkerDecorationsService } from '../../editor/common/services/markerDecorations.js';
@@ -124,7 +125,7 @@ import { migrateNewChatDraftState, writeNewChatDraftState } from '../contrib/cha
 import { IAccessibilityService } from '../../platform/accessibility/common/accessibility.js';
 import { AccessibilityService } from '../../platform/accessibility/browser/accessibilityService.js';
 import { NativeAccessibilityService } from '../../workbench/services/accessibility/electron-browser/accessibilityService.js';
-import { ILogService } from '../../platform/log/common/log.js';
+import { ILoggerService, ILogService } from '../../platform/log/common/log.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase, type WorkbenchContributionHost } from '../../workbench/common/contributions.js';
 import type { LogService } from '../../platform/log/common/logServiceImpl.js';
 import type { Constructor } from '../../platform/instantiation/common/descriptors.js';
@@ -345,6 +346,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(ITelemetryService, NullTelemetryService);
 		if (options.api.approvalEnvironment) { services.registerInstance(IApprovalEnvironmentService, options.api.approvalEnvironment); }
 		services.registerInstance(IDictationService, options.api.dictation);
+		services.registerInstance(IAgentVoiceService, options.api.agentVoice);
 		services.registerInstance(ILocalTranscriptionService, options.api.localTranscription ?? this._register(new NullLocalTranscriptionService()));
 		services.registerInstance(IConfigurationService, configurationService);
 		services.registerInstance(IConfigurationResourceService, configurationService);
@@ -363,6 +365,7 @@ export abstract class Workbench extends Disposable {
 		services.registerSingleton(IMarkerDecorationsService, () => services.createInstance(MarkerDecorationsService));
 		this.logService = this._register(logger);
 		services.registerInstance(ILogService, this.logService);
+		if (!services.has(ILoggerService)) services.registerInstance(ILoggerService, logger);
 		// Window errors must terminate at the host logger. The default handler rethrows,
 		// which sends the growing error message back through WorkbenchWindow indefinitely.
 		const previousErrorHandler = errorHandler.getUnexpectedErrorHandler();

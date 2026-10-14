@@ -1,3 +1,4 @@
+import type { ChatSubmissionOptions } from '../../../../workbench/services/chat/common/chatService.js';
 import { IAgentExecutionSettingsService } from '../../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { IPromptsService } from '../../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
@@ -5,7 +6,7 @@ import { toSkillSelectors } from '../../../../workbench/contrib/chat/common/skil
 import { ILanguageModelsService } from '../common/languageModels.js';
 import { ILanguageModelsConfigurationService } from '../common/languageModelsConfiguration.js';
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { isCancellationError } from "../../../../base/common/errors.js";
+import { canceled, isCancellationError } from "../../../../base/common/errors.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { AgentResponse, ChatAgent, ChatMode, IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnChangeDetails, TurnChangeSetSummary, TurnInteraction } from "../../../../workbench/services/chat/common/chatService.js";
 import { localize } from "../../../../nls.js";
@@ -13,7 +14,7 @@ import type { SkillReference } from "../../../../platform/agentHost/common/appSe
 import type { ResolvedChatContext } from "../../../../workbench/services/chat/common/chatContextService.js";
 import type { IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../../services/sessions/common/session.js";
 import type { ISessionsManagementService } from "../../../services/sessions/common/sessionsManagement.js";
-import { chatTranscriptListItems, type IChatListItem } from "./widget/chatListItems.js";
+import { chatTranscriptListItems, type IChatListItem } from "../../../../workbench/contrib/chat/browser/widget/chatListItems.js";
 import { getChatInputChanges, type ChatInputState } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { modelRefIdentity, type ModelReasoningEffort } from '../../../../workbench/services/chat/common/modelCatalog.js';
 import type { ApprovalMode } from '../../../../workbench/services/chat/common/chatService.js';
@@ -39,6 +40,8 @@ export type ChatWidgetSelection =
 export class CoworkWidgetModel extends Disposable {
 	private readonly chatService: IChatService;
 	private readonly sessionService: ISessionsManagementService;
+	private readonly _onDidChangeComposer = this._register(new Emitter<void>());
+	private _composerGeneration = 0;
 	private readonly _onDidChange = this._register(new Emitter<void>());
 	private transcriptEntries: ThreadTranscriptEntry[] = [];
 	private transcriptRevision = 0;
@@ -73,6 +76,7 @@ export class CoworkWidgetModel extends Disposable {
 	private changesGeneration = 0;
 
 	readonly onDidChange: Event<void> = this._onDidChange.event;
+	readonly onDidChangeComposer: Event<void> = this._onDidChangeComposer.event;
 
 	constructor(chatService: IChatService, selection: ChatWidgetSelection, sessionService: ISessionsManagementService, @IPromptsService private readonly skills: IPromptsService, @ILanguageModelsService private readonly languageModels: ILanguageModelsService, @ILanguageModelsConfigurationService private readonly modelPreferences: ILanguageModelsConfigurationService, @IAgentExecutionSettingsService private readonly execution: IAgentExecutionSettingsService) {
 		super();
@@ -98,6 +102,7 @@ export class CoworkWidgetModel extends Disposable {
 		}));
 		this._register(toDisposable(() => {
 			this.generation++;
+			this._composerGeneration++;
 			const active = this.activeSession;
 			if (active) void this.chatService.unsubscribeThread(active.session.sessionId, active.threadId, this);
 			this.transcriptEntries = [];
@@ -146,6 +151,7 @@ export class CoworkWidgetModel extends Disposable {
 		return this._thread?.goal ?? undefined;
 	}
 
+	get composerGeneration(): number { return this._composerGeneration; }
 	get sessionId(): SessionId | undefined {
 		return this.activeSession?.session.sessionId;
 	}
@@ -216,7 +222,7 @@ export class CoworkWidgetModel extends Disposable {
 
 	get items(): readonly IChatListItem[] {
 		const latestTurnId = this._thread?.turns.at(-1)?.turnId;
-		return chatTranscriptListItems(this.transcriptEntries, latestTurnId);
+		return chatTranscriptListItems(this.transcriptEntries, latestTurnId, this._thread?.turns ?? [], this.sessionId && this.threadId ? { sessionId: this.sessionId, threadId: this.threadId } : undefined);
 	}
 
 	get interaction(): TurnInteraction | undefined {
@@ -266,6 +272,10 @@ export class CoworkWidgetModel extends Disposable {
 		}
 		const previousThreadId = current.threadId;
 		const previousModel = current.session.model;
+		if (previousThreadId !== active.threadId) {
+			this._composerGeneration++;
+			this._onDidChangeComposer.fire();
+		}
 		this.selection = { kind: "session", active };
 		if (previousThreadId === active.threadId && this._thread?.threadId === active.threadId) {
 			if (!sameModel(previousModel, active.session.model)) void this.loadModels();
@@ -332,11 +342,24 @@ export class CoworkWidgetModel extends Disposable {
 		this._onDidChange.fire();
 	}
 
-	async send(text: string, mode: ChatMode = this.mode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[]): Promise<void> {
+	/** Materializes the existing Untitled owner without submitting an empty model Turn. */
+	async prepareConversation(): Promise<{ readonly sessionId: string; readonly threadId: string; }> {
+		const identity = this.threadId ?? this.untitledSessionId;
+		await this.initialize();
+		if (this.isDisposed || identity !== (this.threadId ?? this.untitledSessionId)) throw canceled();
+		const active = await this.ensureActiveSession();
+		if (this.isDisposed || this.sessionId !== active.session.sessionId || this.threadId !== active.threadId) throw canceled();
+		return { sessionId: active.session.sessionId, threadId: active.threadId };
+	}
+
+	async send(text: string, mode: ChatMode = this.mode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], submissionOptions?: ChatSubmissionOptions): Promise<void> {
+		const generation = this.composerGeneration;
 		const input = text.trim();
 		if (!input && !contexts?.length) return;
 		try {
+			if (submissionOptions?.signal?.aborted) throw canceled();
 			await this.initialize();
+			if (this.isDisposed || generation !== this.composerGeneration || submissionOptions?.signal?.aborted) throw canceled();
 			this.setState("submitting");
 			const active = await this.ensureActiveSession();
 			if (this._thread?.threadId !== active.threadId) {
@@ -346,8 +369,10 @@ export class CoworkWidgetModel extends Disposable {
 			if (!thread || thread.threadId !== active.threadId) {
 				throw new Error("Chat Thread is not available");
 			}
+			if (this.isDisposed || generation !== this.composerGeneration || submissionOptions?.signal?.aborted || submissionOptions?.source && (active.session.sessionId !== submissionOptions.source.sessionId || active.threadId !== submissionOptions.source.threadId)) throw canceled();
 			const turn = activeTurn(thread);
 			const submission = {
+				...(submissionOptions?.commandId ? { commandId: submissionOptions.commandId } : {}),
 				sessionId: active.session.sessionId,
 				threadId: active.threadId,
 				expectedSequence: thread.sequence,
@@ -369,9 +394,11 @@ export class CoworkWidgetModel extends Disposable {
 			} else {
 				await this.chatService.startTurn(submission);
 			}
+			if (this.isDisposed || generation !== this.composerGeneration) return;
 			await this.refreshThread();
-			this.setState("ready");
+			if (!this.isDisposed && generation === this.composerGeneration) this.setState("ready");
 		} catch (error) {
+			if (this.isDisposed || generation !== this.composerGeneration) throw error;
 			if (isCancellationError(error)) {
 				this.setState('ready');
 				throw error;
@@ -649,8 +676,13 @@ export class CoworkWidgetModel extends Disposable {
 	private acceptUpdate(update: ThreadUpdateEnvelope): void {
 		const selectedThreadId = this._thread?.threadId ?? this.threadId;
 		if (!selectedThreadId) return;
-		if (update.threadId !== selectedThreadId) return;
+		if (update.threadId !== selectedThreadId || update.sessionId !== this.sessionId) return;
 		if (update.update.type !== "committed") return;
+		if (update.update.event.type === 'voiceTranscriptRecorded' && this._thread && update.durableSequence === this._thread.sequence + 1) {
+			// Speech changes the journal boundary, never execution state or model inputs.
+			this._thread = { ...this._thread, sequence: update.durableSequence };
+			return;
+		}
 		this.acceptCommittedEvent(update);
 		this.scheduleRefresh();
 	}
@@ -797,6 +829,7 @@ export class CoworkWidgetModel extends Disposable {
 				generation !== this.generation ||
 				result.thread.threadId !== this.threadId
 			) return;
+			if (this._thread?.threadId === result.thread.threadId && this._thread.sequence > result.thread.sequence) return;
 			this._thread = result.thread;
 			if (result.transcript.revision >= this.transcriptRevision) {
 				this.transcriptEntries = result.transcript.entries.map((entry) => cloneTranscriptEntry(entry));
@@ -840,9 +873,10 @@ export class CoworkWidgetModel extends Disposable {
 		const untitledSession = this.selection.session;
 		const selectedModel = this.selectedModel;
 		const created = await this.sessionService.materializeUntitledSession(untitledSession.untitledSessionId);
-		if (this.isDisposed) {
+		if (this.isDisposed || this.selection.kind !== 'untitled' || this.selection.session.untitledSessionId !== untitledSession.untitledSessionId) {
+			// Keep the completed durable session, but never replace a newer conversation selection.
 			this.sessionService.promoteUntitledSession(untitledSession.untitledSessionId, created);
-			throw new Error("Untitled Chat Session was closed while its durable Session was being created");
+			throw canceled();
 		}
 		this.selection = { kind: "session", active: created };
 		// The durable Session may authorize directory Skills absent from the untitled catalog.
@@ -891,6 +925,7 @@ function sameModel(left: ModelRef | null | undefined, right: ModelRef | null | u
 
 function cloneTranscriptEntry(entry: ThreadTranscriptEntry): ThreadTranscriptEntry {
 	switch (entry.type) {
+		case 'voiceTranscript': return { ...entry, transcript: { ...entry.transcript } };
 		case 'hookRun': return { ...entry, run: { ...entry.run, status: { ...entry.run.status } } };
 		case "item": return { ...entry, item: { ...entry.item } };
 		case "turnPlan": return { ...entry, plan: { explanation: entry.plan.explanation, steps: entry.plan.steps.map((step) => ({ ...step })) } };

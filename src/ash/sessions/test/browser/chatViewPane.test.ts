@@ -1,6 +1,8 @@
 import { setARIAContainer } from '../../../base/browser/ui/aria/aria.js';
+import { ChatResponseResourceFileSystemProvider, IChatResponseResourceFileSystemProvider } from '../../../workbench/contrib/chat/common/widget/chatResponseResourceFileSystemProvider.js';
 import { installEditorTestGlobals } from '../../../editor/test/browser/editorTestGlobals.js';
 import { StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
+import { IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
 import { createAppServerAgentThreadService, createDisconnectedAgentThreadService } from '../../../platform/agentHost/browser/appServerAgentService.js';
 import type { AppServerProtocolClient } from '../../../platform/agentHost/browser/appServerProtocolClient.js';
 import { createAppServerAgentModelsService } from '../../../platform/agentHost/browser/appServerAgentModels.js';
@@ -127,6 +129,7 @@ function createInputServices(contextView: IContextViewService, chat: IChatServic
 	services.registerInstance(IAppServerSkillApi, skillServices.get(chat)!);
 	services.registerInstance(IAccessibleViewService, unavailableAccessibleViewService);
 	services.registerInstance(IDictationService, undefined);
+	services.registerInstance(IAgentVoiceService, undefined);
 	services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 	registerTestDictationOnboarding(services);
 	return services;
@@ -134,6 +137,8 @@ function createInputServices(contextView: IContextViewService, chat: IChatServic
 function createChatListWidget(container: HTMLElement, options: ConstructorParameters<typeof ChatListWidget>[1] = {}): InstanceType<typeof ChatListWidget> {
 	const services = inputResources.add(createTestEditorServices(undefined, createCodeEditorServices(inputResources)));
 	services.registerInstance(IAgentThreadService, createDisconnectedAgentThreadService(async operation => { throw new Error(operation); }));
+	services.registerInstance(IChatResponseResourceFileSystemProvider, inputResources.add(services.createInstance(ChatResponseResourceFileSystemProvider)));
+	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { throw new Error('Unexpected media preview'); }, focusActiveEditor() { } });
 	return services.createInstance(ChatListWidget, container, options);
 }
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -188,7 +193,7 @@ const storageResources = new DisposableStore();
 const testStorages: InstanceType<typeof BrowserStorageService>[] = [];
 const { ChatWidget, openChatMarkdownLink } = await import("../../../workbench/contrib/chat/browser/widget/chatWidget.js");
 const { NewChatInputWidget } = await import('../../contrib/chat/browser/newChatInput.js');
-const { readNewChatDraftState } = await import('../../contrib/chat/common/newChatDraftState.js');
+const { readNewChatDraftState, writeNewChatDraftState } = await import('../../contrib/chat/common/newChatDraftState.js');
 const { createCodeEditorServices } = await import('../../../editor/test/browser/testCodeEditor.js');
 await import(
 	"../../../workbench/contrib/preferences/browser/preferences.contribution.js"
@@ -1021,6 +1026,7 @@ test('sending from one session preserves a later draft during first-session crea
 		detachPullRequest: async () => { throw new Error('Unexpected PR removal'); },
 	});
 	editorServices.registerInstance(IDictationService, undefined);
+	editorServices.registerInstance(IAgentVoiceService, undefined);
 	editorServices.registerSingleton(ISpeechService, () => editorServices.createInstance(SpeechService));
 	using contextViewService = new BrowserContextViewService(dom.window.document.body);
 	editorServices.registerInstance(IAccessibleViewService, unavailableAccessibleViewService);
@@ -1066,6 +1072,7 @@ test('sending from one session preserves a later draft during first-session crea
 		(container, delegate) => editorServices.createInstance(NewChatInputWidget, container, delegate, widgetModel),
 		editorServices,
 		recordingDialogService([]),
+		editorServices.get(IQuickInputService),
 	);
 	widget.setVisible(true);
 	const input = widget.element.querySelector<HTMLElement>('.ash-chat-input-part');
@@ -1087,7 +1094,7 @@ test('sending from one session preserves a later draft during first-session crea
 	const chatModel = createWidgetModel(chat, { kind: 'untitled', session: chatSelection.session }, sessions);
 	using chatWidget = new ChatWidget(dom.window.document.body, 'separate-chat', chatModel, () => view.openNewSession(),
 		{ showContextMenu: () => undefined } as unknown as IContextMenuService, contextViewService, commands,
-		unavailableAccessibleViewService, notifications, undefined, undefined, undefined, (container, delegate) => editorServices.createInstance(NewChatInputWidget, container, delegate, chatModel), editorServices, recordingDialogService([]));
+		unavailableAccessibleViewService, notifications, undefined, undefined, undefined, (container, delegate) => editorServices.createInstance(NewChatInputWidget, container, delegate, chatModel), editorServices, recordingDialogService([]), editorServices.get(IQuickInputService));
 	chatWidget.setVisible(true);
 	const chatDraft = { mode: 'agent' as const, text: 'Keep my Chat draft', contexts: [{ id: 'chat-file', kind: 'file', name: 'chat.txt', content: 'Chat context', resource: 'file:///workspace/chat.txt' }] };
 	chatWidget.restoreDraft(chatDraft);
@@ -3992,7 +3999,7 @@ test('Chat footer permission changes use the current model and confirm full acce
 		undefined, undefined, undefined, (container, delegate) => {
 			delegates.push(delegate);
 			return services.createInstance(ChatInputPart, container, delegate, {} as IContextMenuService, contextView, unavailableAccessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading' });
-		}, services, dialogs);
+		}, services, dialogs, services.get(IQuickInputService));
 	const delegate = delegates[0]!;
 	assert.ok(delegate.selectApprovalMode);
 	await delegate.selectApprovalMode('auto');
@@ -4533,3 +4540,59 @@ for (const navigate of [false, true]) {
 		}
 	});
 }
+
+
+test('Cowork consumes rich tool evidence from its actual scoped transcript and cancels superseded input', async () => {
+	const base = thread('Existing answer');
+	const turn = base.turns[0]!;
+	const durable = session('session-1', 'thread-1');
+	let current: Thread = {
+		...base, turns: [
+			{
+				...turn, turnId: 'first', items: [
+					{ type: 'toolCall', itemId: 'call-first', turnId: 'first', toolCallId: 'reused', name: 'shell', argumentsJson: '{}' },
+					{ type: 'toolResult', itemId: 'result-first', turnId: 'first', toolCallId: 'reused', text: 'first result', isError: false, content: [{ type: 'imageAttachment', detail: 'auto', attachment: { contentDigest: 'sha256:image', mediaType: 'png', encodedBytes: 4, width: 2, height: 1 } }] },
+				]
+			},
+			{ ...turn, turnId: 'second', items: [{ type: 'toolCall', itemId: 'call-second', turnId: 'second', toolCallId: 'reused', name: 'shell', argumentsJson: '{}' }] },
+		]
+	};
+	const fake = fakeApi({ sessions: [durable], thread: () => current });
+	using chat = createChatService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
+	using contextView = new BrowserContextViewService(document.body);
+	using services = createInputServices(contextView, chat);
+	using preferences = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
+	services.registerInstance(ICoworkModelPreferences, preferences);
+	using model = services.createInstance(CoworkWidgetModel, chat, { kind: 'session', active: { session: durable, threadId: 'thread-1' } }, sessions);
+	await model.initialize();
+	assert.equal(model.items.length, 2);
+	assert.equal(model.items[0]!.toolInvocation?.result?.itemId, 'result-first');
+	assert.deepEqual(model.items[0]!.attachmentSource, { sessionId: 'session-1', threadId: 'thread-1', itemId: 'result-first', kind: 'toolResult' });
+	assert.equal(model.items[0]!.toolInvocation?.result?.content?.[0]?.type, 'imageAttachment');
+	assert.equal(model.items[1]!.toolInvocation?.result, undefined);
+	assert.equal(model.items[1]!.toolInvocation?.stopped, true);
+	let changes = 0;
+	using listener = model.onDidChangeComposer(() => changes++);
+	const generation = model.composerGeneration;
+	const sending = model.send('Old source request', 'agent');
+	const rejected = assert.rejects(sending, isCancellationError);
+	current = { ...current, threadId: 'child' };
+	await model.selectThread({ session: durable, threadId: 'child' });
+	await rejected;
+	assert.equal(changes, 1);
+	assert.equal(model.composerGeneration, generation + 1);
+	assert.equal(fake.turnStartRequests.length, 0);
+	await model.selectThread({ session: durable, threadId: 'child' });
+	assert.equal(changes, 1);
+});
+
+
+test('The original draft codec preserves terminal snapshots and rejects malformed stored geometry', () => {
+	using storage = createTestStorage();
+	const draft = { mode: 'agent' as const, text: 'Check this output', contexts: [{ id: 'terminal:saved', kind: 'terminal', name: 'Saved terminal', content: 'Context', resource: 'internal://terminal?id=saved', terminalSnapshot: { text: 'Saved output', columns: 80 } }] };
+	writeNewChatDraftState(storage, draft, 'thread');
+	assert.deepEqual(readNewChatDraftState(storage, 'thread'), draft);
+	storage.store('sessions.inputDraft:thread', JSON.stringify({ ...draft, contexts: [{ ...draft.contexts[0], terminalSnapshot: { text: 'Saved output', columns: 0 } }] }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	assert.throws(() => readNewChatDraftState(storage, 'thread'), /Invalid terminal snapshot/);
+});

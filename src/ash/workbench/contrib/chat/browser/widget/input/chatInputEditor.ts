@@ -203,7 +203,8 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 		const before = this.value.slice(0, this.model.offsetAt(selection.getStartPosition()));
 		const separator = /[A-Za-z0-9]$/u.test(before) && /^[A-Za-z0-9]/u.test(text) ? ' ' : '';
 		this.editor.pushUndoStop();
-		this.editor.executeEdits('dictation', [{ range: selection, text: separator + text }]);
+		this.editor.executeEdits('dictation', [{ range: selection, text: separator + text }], inverseEdits =>
+			inverseEdits.map(edit => Selection.fromPositions(edit.range.getEndPosition())));
 		this.editor.pushUndoStop();
 	}
 

@@ -1,12 +1,13 @@
+import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import type { ChatSubmissionOptions } from '../../../../services/chat/common/chatService.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { approvalModeDefinition } from '../../../../../platform/agentHost/common/approvalModes.js';
 import { OPEN_SESSION_LINK_SCHEME } from '../../../../../platform/agentHost/common/openSessionLink.js';
 import { localize } from '../../../../../nls.js';
 import './media/chat.css';
-import { Disposable, toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
 import type { Event } from "../../../../../base/common/event.js";
-import { canceled } from "../../../../../base/common/errors.js";
+import { canceled, isCancellationError } from "../../../../../base/common/errors.js";
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import type { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
@@ -35,8 +36,8 @@ import { ChatInputEditors } from './input/chatInputEditorRegistry.js';
 import type { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import type { IOpenAgentsWindowOptions } from '../../../../../platform/native/common/nativeHost.js';
 import type { IChatMcpAppDelegate } from './chatContentParts/toolInvocationParts/chatMcpAppSubPart.js';
-import { VoiceClientService, type IVoiceClientService } from '../../common/voiceClient/voiceClientService.js';
-import type { VoiceTaskRequest } from '../../../../../platform/voice/common/voiceService.js';
+import { VoiceSessionController, pickVoiceConversation } from '../voiceClient/voiceSessionController.js';
+import type { AgentVoiceTaskRequest } from '../../../../../platform/agentHost/common/agentService.js';
 
 /** The presentation consumes one conversation model owned by its product. */
 export interface IChatWidgetModel extends IDisposable {
@@ -67,7 +68,7 @@ export interface IChatWidgetModel extends IDisposable {
 /** Owns the content and interaction state for one local or durable Chat tab. */
 export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> extends Disposable {
 	readonly element: HTMLElement;
-	private readonly voiceClient: IVoiceClientService;
+	private readonly voiceSessionController: VoiceSessionController;
 	readonly model: TModel;
 	private listWidget: ChatListWidget;
 	private readonly inputPart: IChatInputPart;
@@ -84,17 +85,18 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		contextViewService: IContextViewService,
 		commandService: ICommandService,
 		accessibleViewService: IAccessibleViewService,
-		notifications: INotificationService,
+		private readonly notifications: INotificationService,
 		openerService: IOpenerService | undefined,
 		editorService: IEditorService | undefined,
 		imageResourceLoader: ((resource: URI) => Promise<Blob>) | undefined,
 		createInputPart: ((container: HTMLElement, delegate: ChatInputDelegate) => IChatInputPart) | undefined,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IDialogService dialogs: IDialogService,
+		@IQuickInputService private readonly quickInput: IQuickInputService,
 	) {
 		super();
 		this.model = this._register(model);
-		this.voiceClient = this._register(instantiationService.createInstance(VoiceClientService, async (request: VoiceTaskRequest, signal: AbortSignal) => {
+		this.voiceSessionController = this._register(instantiationService.createInstance(VoiceSessionController, async (request: AgentVoiceTaskRequest, signal: AbortSignal) => {
 			if (signal.aborted || this.isDisposed || this.model.sessionId !== request.sessionId || this.model.threadId !== request.threadId) throw canceled();
 			// The original composer/model owns mode, queue, steering and approval. Speech remains low-trust context.
 			await this.model.send(localize('chat.voice.task.submit', 'Handle the request I just spoke.'), this.model.inputState.mode, undefined, [{ name: localize('chat.voice.task.context', 'Voice request'), content: request.transcript }], { commandId: request.commandId, source: { sessionId: request.sessionId, threadId: request.threadId }, signal });
@@ -116,19 +118,27 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		const listWidgets = ChatListWidget.instantiateObservable(instantiationService, this._store, h(ownerDocument, 'div'), {
 			imageResourceLoader,
 			mcpAppDelegate: {
-				updateModelContext: (source, text) => {
+				updateModelContext: (source, text, images = []) => {
 					const id = this.appContextId(source);
 					const model = this.inputPart.attachmentModel;
-					if (!text) { model.delete(id); return Disposable.None; }
+					const owned = (attachment: ChatContextAttachment) => attachment.id === id || attachment.id.startsWith(`${id}:image:`);
+					for (const attachment of model.attachments.filter(owned)) model.delete(attachment.id);
+					const lifetime = new DisposableStore();
 					const name = localize('chat.mcpApp.contextLabel', 'App context');
-					const attachment: ChatContextAttachment = { id, kind: 'mcpApp', lifetime: 'source', name, resolve: async () => ({ name, content: text }) };
-					model.addContext(attachment);
-					return toDisposable(() => { if (model.attachments.includes(attachment)) model.delete(id); });
+					const attachments: ChatContextAttachment[] = [
+						...(text ? [{ id, kind: 'mcpApp', lifetime: 'source' as const, name, resolve: async () => ({ name, content: text }) }] : []),
+						...images.map((image, index) => ({ ...image, id: `${id}:image:${index}`, lifetime: 'source' as const })),
+					];
+					for (const attachment of attachments) {
+						model.addContext(attachment);
+						lifetime.add(toDisposable(() => { if (model.attachments.includes(attachment)) model.delete(attachment.id); }));
+					}
+					return lifetime;
 				},
-				sendMessage: async (source, text, signal) => {
+				sendMessage: async (source, text, signal, images = []) => {
 					const id = this.appContextId(source);
 					// An App follow-up includes its own source context, never a user's unsent draft or files.
-					const contexts = this.inputPart.attachmentModel.attachments.filter(attachment => attachment.id === id);
+					const contexts = [...this.inputPart.attachmentModel.attachments.filter(attachment => attachment.id === id || attachment.id.startsWith(`${id}:image:`)), ...images];
 					await this.send(text, this.model.inputState.mode, undefined, contexts, source, signal);
 				},
 			} satisfies IChatMcpAppDelegate,
@@ -139,9 +149,9 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			onDidRequestErrorAction: (action: ChatTurnErrorAction) => void this.handleTurnErrorAction(action).catch(() => undefined),
 		});
 		this.listWidget = listWidgets.get();
-		const voiceClient = this.voiceClient;
+		const voiceClient = this.voiceSessionController;
 		const inputDelegate: ChatInputDelegate = {
-			voiceConversation: { get isAvailable() { return voiceClient.isAvailable; }, get isActive() { return voiceClient.isActive; }, get isConnected() { return voiceClient.isConnected; }, toggle: () => voiceClient.isActive ? voiceClient.disconnect() : voiceClient.connect(ownerDocument.defaultView?.navigator.userActivation), interrupt: () => voiceClient.stopSpeaking() },
+			voiceConversation: { get isAvailable() { return voiceClient.isAvailable; }, get isActive() { return voiceClient.isActive; }, get isConnected() { return voiceClient.isConnected; }, toggle: () => this.runVoice(() => voiceClient.isActive ? voiceClient.disconnect() : voiceClient.connect(ownerDocument.defaultView!, (connections, signal) => pickVoiceConversation(this.quickInput, connections, signal))), interrupt: () => this.runVoice(() => voiceClient.stopSpeaking()) },
 			send: (text, mode, skills, contexts, submissionSignal) => this.send(text, mode, skills, contexts, undefined, submissionSignal),
 			executeCommand: (invocation) => invocation.commandId === OPEN_CHAT_PERMISSIONS_COMMAND_ID || invocation.commandId === OPEN_GUARDIAN_SETUP_COMMAND_ID
 				? commandService.executeCommand(invocation.commandId, this.model, invocation.argumentsText)
@@ -186,7 +196,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		}));
 		this._register(this.model.onDidChangeComposer(() => this.inputPart.invalidatePendingInput()));
 		this._register(this.model.onDidChange(() => this.render()));
-		this._register(this.voiceClient.onDidChange(() => { if (!this.isDisposed) this.render(); }));
+		this._register(this.voiceSessionController.onDidChange(() => { if (!this.isDisposed) this.render(); }));
 		this._register(toDisposable(() => this.element.remove()));
 		this.render();
 	}
@@ -215,6 +225,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 
 	setVisible(visible: boolean): void {
 		this.element.hidden = !visible;
+		if (!visible && this.voiceSessionController.isActive) void this.runVoice(() => this.voiceSessionController.disconnect());
 		this.inputPart.setVisible(visible);
 		this.listWidget.setVisible(visible);
 	}
@@ -242,6 +253,12 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	acceptInput(value?: string): Promise<void> {
 		return this.inputPart.acceptInput(value);
 	}
+
+	private async runVoice(operation: () => Promise<void>): Promise<void> {
+		try { await operation(); }
+		catch (error) { if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(localize('chat.voice.requestFailed', 'The voice request failed: {0}', String(error))); }
+	}
+
 
 	private async send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts: readonly ChatContextAttachment[] = [], appSource?: Parameters<IChatMcpAppDelegate['sendMessage']>[0], submissionSignal?: AbortSignal): Promise<void> {
 		const model = this.model;
@@ -291,7 +308,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			this.submittedMessage = false;
 		}
 		this.syncIdentity();
-		this.voiceClient.setSource(this.model.sessionId && this.model.threadId ? { sessionId: this.model.sessionId, threadId: this.model.threadId } : undefined, this.model.untitledSessionId);
+		this.voiceSessionController.setSource(this.model.sessionId && this.model.threadId ? { sessionId: this.model.sessionId, threadId: this.model.threadId } : undefined, this.model.untitledSessionId);
 		this.renderGoal();
 		const items = this.model.items;
 		this.updateConversationState(items.length > 0);

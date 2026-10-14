@@ -1,4 +1,6 @@
 import { quickInputServiceTestControls } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
+import { IExtensionService } from '../../../workbench/services/extensions/common/extensionService.js';
+import { TestExtensionService } from '../../../workbench/test/common/testExtensionServices.js';
 import { IAgentExecutionSettingsService } from '../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
@@ -142,6 +144,9 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	const { ISpeechService } = await import('../../../workbench/contrib/speech/common/speechService.js');
 	const { SpeechService } = await import('../../../workbench/contrib/speech/browser/speechService.js');
 	services.registerInstance(IDictationService, undefined);
+	const { IContextKeyService: ContextKeys } = await import('../../../platform/contextkey/browser/contextKeyService.js');
+	services.registerInstance(ContextKeys, contextKeys);
+	services.registerSingleton(IExtensionService, () => new TestExtensionService());
 	using speech = services.createInstance(SpeechService);
 	services.registerInstance(ISpeechService, speech);
 	const { INotificationService } = await import('../../../platform/notification/common/notification.js');
@@ -153,7 +158,6 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	const { IContextViewService } = await import('../../../platform/contextview/browser/contextView.js');
 	const { BrowserContextViewService } = await import('../../../platform/contextview/browser/contextViewService.js');
 	const { BrowserContextMenuService } = await import('../../../platform/contextview/browser/contextMenuService.js');
-	const { IContextKeyService: ContextKeys } = await import('../../../platform/contextkey/browser/contextKeyService.js');
 	const { IAccessibleViewService: AccessibleView } = await import('../../../platform/accessibility/browser/accessibleView.js');
 	const copied: string[] = [];
 	services.registerInstance(ClipboardService, {
@@ -174,7 +178,6 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	using windowContextView = new BrowserContextViewService(window.document.body);
 	services.registerInstance(IContextViewService, windowContextView);
 	services.registerSingleton(ContextMenus, () => services.createInstance(BrowserContextMenuService));
-	services.registerInstance(ContextKeys, contextKeys);
 	services.registerInstance(AccessibleView, accessibleView);
 	services.registerInstance(IAppServerSkillApi, { onDidChangeSkills: Event.None, readTextResource: async () => { throw new Error("No Skill body in this test fixture"); }, list: async () => ({ generation: 0, skills: [] }), read: async () => ({ revision: 0, catalog: { generation: 0, skills: [] }, diagnostics: [] }), setEnabled: async () => { } });
 	services.registerInstance(IExtensionManagementService, { onDidChangeInstalled: Event.None, listInstalled: async () => [], listEditorExtensions: async () => ({ extensions: [] }) } as unknown as IExtensionManagementService);

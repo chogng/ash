@@ -43,6 +43,7 @@ export interface ChatInputState {
 
 /** Operations that the input area may request from its owning Chat pane. */
 export interface ChatInputDelegate {
+	readonly voiceConversation?: { readonly isAvailable: boolean; readonly isActive: boolean; readonly isConnected: boolean; toggle(): Promise<void>; interrupt(): Promise<void>; };
 	/** Carries the original composer lifetime through the host’s asynchronous context resolution. */
 	send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts?: readonly ChatContextAttachment[], submissionSignal?: AbortSignal): Promise<void>;
 	executeCommand(invocation: ChatInputCommandInvocation): Promise<void>;

@@ -25,7 +25,7 @@ import { SessionsChatAccessibilityHelp } from './sessionsChatAccessibilityHelp.j
 import type { IOpenAgentsWindowOptions } from '../../../../platform/native/common/nativeHost.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
-import { readNewChatDraftState, writeNewChatDraftState } from '../common/newChatDraftState.js';
+import { readNewChatDraftState, writeNewChatDraftState } from '../../chat/common/newChatDraftState.js';
 import { status as announceStatus } from '../../../../base/browser/ui/aria/aria.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 
@@ -61,11 +61,11 @@ export class NewCoworkInputWidget extends ChatInputPart {
 	) {
 		super(container, {
 			...delegate,
-			send: async (text, mode, skills, contexts) => {
+			send: async (text, mode, skills, contexts, signal) => {
 				this.submittedMessage = true;
 				this.updateConversation();
 				try {
-					await delegate.send(text, mode, skills, contexts);
+					await delegate.send(text, mode, skills, contexts, signal);
 				} catch (error) {
 					if (this.model.items.length === 0) {
 						this.submittedMessage = false;
@@ -190,7 +190,7 @@ export class NewCoworkInputWidget extends ChatInputPart {
 		this.draftWriteRevisions.set(draftId, revision);
 		const text = this.input.value;
 		const mode = this.model.inputState.mode;
-		const attachments = this.contexts;
+		const attachments = this.attachmentModel.attachments.filter(attachment => attachment.lifetime !== 'source');
 		if (attachments.length === 0) {
 			writeNewChatDraftState(this.storage, { mode, text, contexts: [] }, draftId);
 			return;
@@ -200,6 +200,7 @@ export class NewCoworkInputWidget extends ChatInputPart {
 			content: (await attachment.resolve()).content,
 			...(attachment.resource ? { resource: attachment.resource.toString() } : {}),
 			...(attachment.reference ? { reference: attachment.reference } : {}),
+			...(attachment.terminalSnapshot ? { terminalSnapshot: attachment.terminalSnapshot } : {}),
 		})));
 		if (revision !== this.draftWriteRevisions.get(draftId)) return;
 		writeNewChatDraftState(this.storage, { mode, text, contexts }, draftId);

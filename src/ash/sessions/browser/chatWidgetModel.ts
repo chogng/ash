@@ -1,3 +1,4 @@
+import type { ChatSubmissionOptions } from '../../workbench/services/chat/common/chatService.js';
 import type { ChatContextUsage } from '../../workbench/services/chat/common/chatService.js';
 import { IAgentExecutionSettingsService } from '../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { CancellationToken } from '../../base/common/cancellation.js';
@@ -380,12 +381,23 @@ export class ChatWidgetModel extends Disposable {
 		this._onDidChange.fire();
 	}
 
-	async send(text: string, mode: ChatMode = this.mode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[]): Promise<void> {
+	/** Materializes the existing Untitled owner without submitting an empty model Turn. */
+	async prepareConversation(): Promise<{ readonly sessionId: string; readonly threadId: string; }> {
+		const identity = this.threadId ?? this.untitledSessionId;
+		await this.initialize();
+		if (this.isDisposed || identity !== (this.threadId ?? this.untitledSessionId)) throw canceled();
+		const active = await this.ensureActiveSession();
+		if (this.isDisposed || this.sessionId !== active.session.sessionId || this.threadId !== active.threadId) throw canceled();
+		return { sessionId: active.session.sessionId, threadId: active.threadId };
+	}
+
+	async send(text: string, mode: ChatMode = this.mode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], submissionOptions?: ChatSubmissionOptions): Promise<void> {
 		const input = text.trim();
 		if (!input && !contexts?.length) return;
 		const generation = this.composerGeneration;
 		let identity = this.composerIdentity;
 		try {
+			if (submissionOptions?.signal?.aborted) throw canceled();
 			await this.pendingModelSelection;
 			if (this.isDisposed || generation !== this.composerGeneration || identity !== this.composerIdentity) throw canceled();
 			await this.initialize();
@@ -403,8 +415,10 @@ export class ChatWidgetModel extends Disposable {
 			if (!thread || thread.threadId !== active.threadId) {
 				throw new Error("Chat Thread is not available");
 			}
+			if (submissionOptions?.signal?.aborted || submissionOptions?.source && (active.session.sessionId !== submissionOptions.source.sessionId || active.threadId !== submissionOptions.source.threadId)) throw canceled();
 			const turn = activeTurn(thread);
 			const submission = {
+				...(submissionOptions?.commandId ? { commandId: submissionOptions.commandId } : {}),
 				sessionId: active.session.sessionId,
 				threadId: active.threadId,
 				expectedSequence: thread.sequence,
@@ -733,8 +747,13 @@ export class ChatWidgetModel extends Disposable {
 	private acceptUpdate(update: ThreadUpdateEnvelope): void {
 		const selectedThreadId = this._thread?.threadId ?? this.threadId;
 		if (!selectedThreadId) return;
-		if (update.threadId !== selectedThreadId) return;
+		if (update.threadId !== selectedThreadId || update.sessionId !== this.sessionId) return;
 		if (update.update.type !== "committed") return;
+		if (update.update.event.type === 'voiceTranscriptRecorded' && this._thread && update.durableSequence === this._thread.sequence + 1) {
+			// Speech changes the journal boundary, never execution state or model inputs.
+			this._thread = { ...this._thread, sequence: update.durableSequence };
+			return;
+		}
 		this.acceptCommittedEvent(update);
 		this.scheduleRefresh();
 	}
@@ -898,6 +917,7 @@ export class ChatWidgetModel extends Disposable {
 				generation !== this.generation ||
 				result.thread.threadId !== this.threadId
 			) return;
+			if (this._thread?.threadId === result.thread.threadId && this._thread.sequence > result.thread.sequence) return;
 			this._thread = result.thread;
 			void this.loadContextUsage(generation);
 			if (result.transcript.revision >= this.transcriptRevision) {
@@ -941,9 +961,10 @@ export class ChatWidgetModel extends Disposable {
 		if (this.selection.kind === "session") return this.selection.active;
 		const untitledSession = this.selection.session;
 		const created = await this.sessionService.materializeUntitledSession(untitledSession.untitledSessionId);
-		if (this.isDisposed) {
+		if (this.isDisposed || this.selection.kind !== 'untitled' || this.selection.session.untitledSessionId !== untitledSession.untitledSessionId) {
+			// Keep the completed durable session, but never replace a newer conversation selection.
 			this.sessionService.promoteUntitledSession(untitledSession.untitledSessionId, created);
-			throw new Error("Untitled Chat Session was closed while its durable Session was being created");
+			throw canceled();
 		}
 		// A catalog notification can create a durable pane before the create response arrives.
 		// Capture the authoritative draft selection before promotion removes its untitled key.
@@ -999,6 +1020,7 @@ function sameModel(left: ModelRef | null | undefined, right: ModelRef | null | u
 
 function cloneTranscriptEntry(entry: ThreadTranscriptEntry): ThreadTranscriptEntry {
 	switch (entry.type) {
+		case 'voiceTranscript': return { ...entry, transcript: { ...entry.transcript } };
 		case 'hookRun': return { ...entry, run: { ...entry.run, status: { ...entry.run.status } } };
 		case "item": return { ...entry, item: { ...entry.item } };
 		case "turnPlan": return { ...entry, plan: { explanation: entry.plan.explanation, steps: entry.plan.steps.map((step) => ({ ...step })) } };

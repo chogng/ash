@@ -88,3 +88,39 @@
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: var(--ash-strokeThickness);
 }
+
+.ash-chat-context summary {
+ overflow-wrap: anywhere;
+ cursor: pointer;
+ padding: var(--ash-spacing-size80);
+}
+.ash-chat-context pre {
+ margin: 0;
+ padding: var(--ash-spacing-size80);
+ overflow-wrap: anywhere;
+ white-space: pre-wrap;
+ font: inherit;
+}
+.ash-chat-context summary:focus-visible,
+.ash-chat-context pre:focus-visible {
+ outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+ outline-offset: calc(-1 * var(--ash-strokeThickness));
+}
+
+.ash-chat-message-actions {
+ display: flex;
+ align-items: center;
+ flex-wrap: wrap;
+ gap: 4px;
+ margin: 4px 0;
+}
+.ash-chat-message-copy-status,
+.ash-chat-message-read-status {
+ min-width: 0;
+ color: var(--ash-description-foreground);
+ overflow-wrap: anywhere;
+}
+
+.ash-chat-message-actions > .ash-button[hidden] {
+ display: none;
+}

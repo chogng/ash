@@ -1,3 +1,10 @@
+import { Button } from '../../../../../base/browser/ui/button/button.js';
+import { ICommandService, CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
+import { IContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
+import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
+import { isCancellationError } from '../../../../../base/common/errors.js';
+import { HasSpeechProvider, TextToSpeechInProgress } from '../../../speech/common/speechService.js';
+import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { ChatResourceGroupWidget } from './chatContentParts/chatResourceGroupWidget.js';
 import { ChatAttachmentsContentPart } from './chatContentParts/chatAttachmentsContentPart.js';
 import './media/chatListWidget.css';
@@ -25,6 +32,8 @@ import { localize } from '../../../../../nls.js';
 import { ChatHookContentPart } from './chatContentParts/chatHookContentPart.js';
 
 interface ChatListWidgetOptions {
+	/** The host owns its transcript layout; content parts keep their shared styles. */
+	readonly classPrefix?: string;
 	readonly mcpAppDelegate?: IChatMcpAppDelegate;
 	readonly onDidRequestMemoryReference?: (reference: string) => void;
 	readonly onDidRequestErrorAction?: (action: ChatTurnErrorAction) => void;
@@ -34,8 +43,12 @@ interface ChatListWidgetOptions {
 
 const textInputSelector = 'textarea, [role="textbox"], [contenteditable="true"]';
 const focusableSelector = 'button, a, summary, textarea, audio, [role="textbox"], [tabindex="0"], [contenteditable="true"]';
+const speechContextKeys = new Set([HasSpeechProvider.key, TextToSpeechInProgress.key]);
 
 class RenderedItem extends Disposable {
+	public copyButton: Button | undefined;
+	public updateReadAloud: (() => void) | undefined;
+	public readonly reading = this._register(new MutableDisposable<IDisposable & { readonly source: CancellationTokenSource; readonly item: IChatListItem; }>());
 	readonly memoryReferences = this._register(new DisposableMap<string, IDisposable & { readonly element: HTMLButtonElement; }>());
 	readonly media = this._register(new MutableDisposable<ChatAttachmentsContentPart>());
 	readonly mediaChanges = this._register(new MutableDisposable());
@@ -49,6 +62,7 @@ class RenderedItem extends Disposable {
 		public readonly markdownPart?: ChatMarkdownContentPart,
 		public readonly attachments?: HTMLElement,
 		public readonly hookPart?: ChatHookContentPart,
+		public readonly context?: { readonly disclosure: HTMLDetailsElement; readonly summary: HTMLElement; readonly content: HTMLElement; },
 	) {
 		super();
 		this._register(disposables);
@@ -66,6 +80,7 @@ interface ChatListViewState {
 	readonly top: number;
 	readonly anchor: ReadingAnchor | undefined;
 	readonly advisorExpansion: readonly [string, boolean][];
+	readonly contextExpansion?: readonly [string, boolean][];
 	readonly toolExpansion?: readonly [string, boolean][];
 	readonly focus: { readonly itemId: string; readonly index: number; readonly textInput?: boolean; } | undefined;
 }
@@ -81,8 +96,10 @@ export class ChatListWidget extends DomWidget {
 	private readonly onDidRequestLink: ((target: string) => void) | undefined;
 	private readonly imageResourceLoader: ChatListWidgetOptions['imageResourceLoader'];
 	private readonly mcpAppDelegate: ChatListWidgetOptions['mcpAppDelegate'];
+	private readonly classPrefix: string;
 	private readonly _onDidChangeContent = this._register(new Emitter<void>());
 	private readonly advisorExpansion = new Map<string, boolean>();
+	private readonly contextExpansion = new Map<string, boolean>();
 	private visible = false;
 	private shouldFollow = true;
 	private readingPosition: ReadingAnchor | undefined;
@@ -92,13 +109,20 @@ export class ChatListWidget extends DomWidget {
 
 	public get element(): HTMLElement { return this.domNode; }
 
-	constructor(container: HTMLElement, options: ChatListWidgetOptions, @IInstantiationService private readonly instantiationService: IInstantiationService, @IConfigurationService private readonly configurationService: IConfigurationService) {
+	constructor(
+		container: HTMLElement, options: ChatListWidgetOptions,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IConfigurationService private readonly configurationService: IConfigurationService,
+		@ICommandService private readonly commands: ICommandService,
+		@IContextKeyService private readonly contextKeys: IContextKeyService,
+	) {
 		super();
 		this.onDidRequestErrorAction = options.onDidRequestErrorAction;
 		this.onDidRequestMemoryReference = options.onDidRequestMemoryReference;
 		this.onDidRequestLink = options.onDidRequestLink;
 		this.imageResourceLoader = options.imageResourceLoader;
 		this.mcpAppDelegate = options.mcpAppDelegate;
+		this.classPrefix = options.classPrefix ?? 'ash-chat';
 		this.scrollable = this._register(new ScrollableElement(container, {
 			direction: "vertical",
 			vertical: "auto",
@@ -110,9 +134,9 @@ export class ChatListWidget extends DomWidget {
 			this.readingPosition = this.shouldFollow ? undefined : this.readingAnchor();
 		}));
 		this.domNode = this.scrollable.element;
-		this.element.classList.add("ash-chat-list-widget", "ash-chat-transcript-scrollable");
+		this.element.classList.add(`${this.classPrefix}-list-widget`, `${this.classPrefix}-transcript-scrollable`);
 		this.transcript = this.scrollable.contentElement;
-		this.transcript.classList.add("ash-chat-transcript");
+		this.transcript.classList.add(`${this.classPrefix}-transcript`);
 		this.transcript.setAttribute("role", "log");
 		this.transcript.setAttribute('aria-label', localize('chat.transcript.label', 'Chat transcript'));
 		this.transcript.setAttribute("aria-live", "polite");
@@ -124,10 +148,10 @@ export class ChatListWidget extends DomWidget {
 					const active = this.element.ownerDocument.activeElement as HTMLElement | null;
 					if (!active || !this.transcript.contains(active)) return undefined;
 					const provider = new AccessibleContentProvider(AccessibleViewProviderId.SessionsChat, { type }, () => {
-						if (type === AccessibleViewType.Help) return localize("chat.transcript.help", "Chat responses\nUse Tab and Shift+Tab to reach response links, code block actions and tool summaries. Press Enter or Space on a tool summary to expand or collapse its input, source, execution target, output and result. Code block actions copy the complete source, insert it into the active editor, or open it in a new unsaved file. Use resource summaries to inspect returned data and Open resource for a read-only preview. Open interactive view loads a declared MCP App; use Tab or Shift+Tab to reach its controls and Close interactive view to return focus. Streaming updates and provider corrections keep code selections, keyboard focus and expansion. Reading older messages preserves the reading position; returning to the bottom follows new content. Failed calls show an error; a finished turn without a result is never shown as successful. Use <keybinding:editor.action.accessibleView> to read the transcript as plain text, including collapsed tool details. Closing this view returns focus to the response.");
+						if (type === AccessibleViewType.Help) return localize("chat.transcript.help", "Chat responses\nWith a Speech extension, use Read aloud on a completed response. The same button stops reading; Escape also stops it. Hiding or removing the response cancels reading. Use Stop reading aloud in the Command Palette after moving focus elsewhere. Use Tab and Shift+Tab to reach message copy actions, response links, code block actions and tool summaries. Copy message copies its current source text, including Markdown. Press Enter or Space on a tool summary to expand or collapse its input, source, execution target, output and result. Code block actions copy the complete source, insert it into the active editor, or open it in a new unsaved file. Use context summaries to inspect the exact text attached to a request. Use resource summaries to inspect returned data and Open resource for a read-only preview. Use Load image or Load audio to read a stored attachment. Open image or Open audio opens its original bytes in a read-only editor. Opening audio pauses the transcript player. Open interactive view loads a declared MCP App; use Tab or Shift+Tab to reach its controls and Close interactive view to return focus. Streaming updates and provider corrections keep code selections, keyboard focus and expansion. Reading older messages preserves the reading position; returning to the bottom follows new content. Failed calls show an error; a finished turn without a result is never shown as successful. Use <keybinding:editor.action.accessibleView> to read the transcript as plain text, including collapsed tool details. Closing this view returns focus to the response.");
 						return [...this.renderedItems].map(([, row]) => row.toolPart || row.hookPart
 							? [...(row.toolPart?.domNode ?? row.hookPart!.domNode).children].map(child => child.textContent).filter(Boolean).join('\n\n')
-							: [itemLabel(row.item), row.item.text, row.item.detail].filter(Boolean).join('\n\n')).join('\n\n');
+							: [itemLabel(row.item), row.item.text, row.item.contextText, row.item.detail].filter(Boolean).join('\n\n')).join('\n\n');
 					}, () => { if (active.isConnected) active.focus(); }, AccessibilityVerbositySettingId.Chat);
 					provider.onDidChangeContent = this._onDidChangeContent.event;
 					return provider;
@@ -174,7 +198,12 @@ export class ChatListWidget extends DomWidget {
 		let next: ChildNode | null = this.transcript.firstChild;
 		for (const item of items) {
 			let row = this.renderedItems.get(item.id);
-			if (row?.hookPart && item.hookPart && row.item.hookPart?.run.runId === item.hookPart.run.runId) {
+			if (row?.context && item.type === 'userContext' && item.contextText !== undefined) {
+				row.context.summary.textContent = item.text;
+				row.context.content.setAttribute('aria-label', item.text);
+				if (row.item.contextText !== item.contextText) row.context.content.textContent = item.contextText;
+				row.item = item;
+			} else if (row?.hookPart && item.hookPart && row.item.hookPart?.run.runId === item.hookPart.run.runId) {
 				row.hookPart.render(item.hookPart);
 				row.item = item;
 				row.element.classList.toggle('error', item.isError === true);
@@ -198,11 +227,16 @@ export class ChatListWidget extends DomWidget {
 				row?.element.remove();
 				row = this.renderedItems.set(item.id, this.renderItem(item));
 			}
+			if (row.copyButton) row.copyButton.enabled = row.item.text.length > 0;
+			const reading = row.reading.value;
+			if (reading && (reading.item.text !== row.item.text || reading.item.attachmentSource?.sessionId !== row.item.attachmentSource?.sessionId || reading.item.attachmentSource?.threadId !== row.item.attachmentSource?.threadId)) row.reading.clear();
+			row.updateReadAloud?.();
 			this.renderAttachments(row);
 			this.renderMemoryReferences(row);
 			if (row.element !== next) this.transcript.insertBefore(row.element, next);
 			next = row.element.nextSibling;
 		}
+		for (const id of this.contextExpansion.keys()) if (!ids.has(id)) this.contextExpansion.delete(id);
 		for (const id of this.advisorExpansion.keys()) if (!ids.has(id)) this.advisorExpansion.delete(id);
 		// Reconciliation can temporarily shorten the DOM scroll range. Keep the position
 		// captured before moving retained widgets instead of interpreting that clamp as user input.
@@ -213,10 +247,12 @@ export class ChatListWidget extends DomWidget {
 	setVisible(visible: boolean): void {
 		if (this.visible === visible) return;
 		if (!visible) {
+			for (const [, row] of this.renderedItems) row.reading.clear();
 			this.captureFollowState();
 			this.pendingReadingPosition = { top: this.scrollable.state.top, anchor: this.shouldFollow ? undefined : this.readingPosition };
 		}
 		this.visible = visible;
+		for (const [, row] of this.renderedItems) { row.media.value?.setVisible(visible); row.toolPart?.setVisible(visible); }
 		if (visible) {
 			if (this.pendingReadingPosition) {
 				this.layingOut = true;
@@ -248,6 +284,7 @@ export class ChatListWidget extends DomWidget {
 			top: this.pendingReadingPosition?.top ?? this.scrollable.state.top,
 			anchor: this.pendingReadingPosition?.anchor ?? (this.visible && !this.shouldFollow ? this.readingPosition : undefined),
 			advisorExpansion: [...this.advisorExpansion],
+			contextExpansion: [...this.renderedItems].filter(([, row]) => row.context).map(([id, row]) => [id, row.context!.disclosure.open]),
 			toolExpansion: [...this.renderedItems].flatMap(([id, row]) => row.toolPart ? [[id, row.toolPart.domNode.open] as [string, boolean]] : []),
 			focus,
 		};
@@ -255,8 +292,13 @@ export class ChatListWidget extends DomWidget {
 
 	/** Re-renders from the model, then restores reading position after the host mounts the new root. */
 	public restoreViewState(state: ChatListViewState, items: readonly IChatListItem[]): void {
+		for (const [id, expanded] of state.contextExpansion ?? []) this.contextExpansion.set(id, expanded);
 		for (const [id, expanded] of state.advisorExpansion) this.advisorExpansion.set(id, expanded);
 		this.render(items);
+		for (const [id, expanded] of state.contextExpansion ?? []) {
+			const context = this.renderedItems.get(id)?.context;
+			if (context) context.disclosure.open = expanded;
+		}
 		for (const [id, expanded] of state.toolExpansion ?? []) {
 			const part = this.renderedItems.get(id)?.toolPart;
 			if (part) part.domNode.open = expanded;
@@ -339,6 +381,83 @@ export class ChatListWidget extends DomWidget {
 		} else { row.resourceChanges.clear(); row.resources.clear(); }
 	}
 
+	private renderCopyAction(row: RenderedItem, lifetime: DisposableStore): void {
+		const actions = h(row.element.ownerDocument, 'div');
+		actions.className = 'ash-chat-message-actions';
+		const button = lifetime.add(new Button(actions, { label: localize('chat.message.copy', 'Copy message'), icon: Lxicon.copy, presentation: 'quiet', size: 'small', enabled: row.item.text.length > 0 }));
+		row.copyButton = button;
+		const feedback = h(row.element.ownerDocument, 'span');
+		feedback.className = 'ash-chat-message-copy-status';
+		feedback.setAttribute('role', 'status');
+		actions.append(feedback);
+		row.element.append(actions);
+		const clear = lifetime.add(new RunOnceScheduler(() => { feedback.textContent = ''; }, 2000));
+		let copying = false;
+		lifetime.add(button.onDidClick(() => {
+			if (copying || row.isDisposed || !this.visible || !row.item.text) return;
+			const item = row.item;
+			const context = { type: item.type, text: item.text };
+			copying = true;
+			button.domNode.setAttribute('aria-busy', 'true');
+			clear.cancel();
+			feedback.textContent = '';
+			void this.commands.executeCommand('workbench.action.chat.copyItem', context).then(() => {
+				if (row.isDisposed || row.item !== item) return;
+				feedback.textContent = localize('chat.message.copied', 'Message copied.');
+				clear.schedule();
+			}, error => {
+				if (row.isDisposed || row.item !== item) return;
+				feedback.textContent = localize('chat.message.copyFailed', 'Could not copy message: {0}', String(error));
+			}).finally(() => { copying = false; if (!row.isDisposed) button.domNode.removeAttribute('aria-busy'); });
+		}));
+		if (row.item.type === 'agentMessage') this.renderReadAloudAction(row, actions, lifetime);
+	}
+
+	private renderReadAloudAction(row: RenderedItem, actions: HTMLElement, lifetime: DisposableStore): void {
+		const button = lifetime.add(new Button(actions, { label: localize('chat.message.readAloud', 'Read aloud'), presentation: 'quiet', size: 'small' }));
+		const feedback = h(actions.ownerDocument, 'span');
+		feedback.className = 'ash-chat-message-read-status';
+		feedback.setAttribute('role', 'status');
+		actions.append(feedback);
+		const update = () => {
+			if (row.isDisposed) return;
+			const context = this.contextKeys.getContext();
+			button.domNode.hidden = !CommandsRegistry.hasCommand('workbench.action.chat.readChatResponseAloud') || context.getValue(HasSpeechProvider.key) !== true;
+			const reading = !!row.reading.value;
+			button.label = reading ? localize('chat.message.stopReadAloud', 'Stop reading aloud') : localize('chat.message.readAloud', 'Read aloud');
+			button.enabled = reading || !row.item.transient && !!row.item.text && context.getValue(TextToSpeechInProgress.key) !== true;
+			button.domNode.setAttribute('aria-pressed', String(reading));
+		};
+		row.updateReadAloud = update;
+		lifetime.add(this.contextKeys.onDidChangeContext(event => { if (event.affectsSome(speechContextKeys)) update(); }));
+		lifetime.add(CommandsRegistry.onDidChangeCommands(update));
+		lifetime.add(addDisposableListener(row.element, 'keydown', event => {
+			if ((event as KeyboardEvent).key !== 'Escape' || !row.reading.value) return;
+			row.reading.clear(); update(); event.preventDefault(); event.stopPropagation();
+		}));
+		lifetime.add(button.onDidClick(() => {
+			if (row.isDisposed || !this.visible) return;
+			const current = row.reading.value;
+			if (current) {
+				void this.commands.executeCommand('workbench.action.chat.stopReadChatItemAloud', { source: current.source });
+				return;
+			}
+			const item = row.item;
+			const source = new CancellationTokenSource();
+			const operation = Object.assign(toDisposable(() => source.dispose(true)), { source, item });
+			row.reading.value = operation; feedback.textContent = ''; update();
+			void this.commands.executeCommand('workbench.action.chat.readChatResponseAloud', { type: item.type, text: item.text, source }).catch(error => {
+				if (!row.isDisposed && row.reading.value === operation && !source.token.isCancellationRequested && !isCancellationError(error)) {
+					feedback.textContent = localize('chat.message.readAloudFailed', 'Could not read response aloud: {0}', String(error));
+				}
+			}).finally(() => {
+				if (row.reading.value === operation) row.reading.clear();
+				update();
+			});
+		}));
+		update();
+	}
+
 	private renderMemoryReferences(row: RenderedItem): void {
 		if (!this.onDidRequestMemoryReference) return;
 		const references = [...new Set(row.item.text.match(/memory:[A-Za-z0-9_-]+/g) ?? [])].filter(reference => reference.length <= 4096).slice(0, 8);
@@ -361,7 +480,7 @@ export class ChatListWidget extends DomWidget {
 	private renderItem(item: IChatListItem): RenderedItem {
 		const disposables = new DisposableStore();
 		const article = h(this.element.ownerDocument, "article");
-		article.className = `ash-chat-item ash-chat-item-${item.type}`;
+		article.className = `${this.classPrefix}-item ${this.classPrefix}-item-${item.type}`;
 		article.dataset.itemId = item.id;
 		if (item.transient) article.dataset.transient = "true";
 		if (item.isError) article.classList.add("error");
@@ -376,8 +495,29 @@ export class ChatListWidget extends DomWidget {
 			article.append(part.domNode);
 			return new RenderedItem(item, article, disposables, undefined, undefined, undefined, part);
 		}
+		if (item.type === 'userContext' && item.contextText !== undefined) {
+			const label = h(article.ownerDocument, 'div');
+			label.className = `${this.classPrefix}-item-label`;
+			label.textContent = itemLabel(item);
+			const disclosure = h(article.ownerDocument, 'details');
+			disclosure.className = 'ash-chat-context';
+			const summary = h(article.ownerDocument, 'summary');
+			summary.textContent = item.text;
+			const content = h(article.ownerDocument, 'pre');
+			content.textContent = item.contextText;
+			content.tabIndex = 0;
+			content.setAttribute('aria-label', item.text);
+			disclosure.open = this.contextExpansion.get(item.id) ?? false;
+			disclosure.append(summary, content);
+			article.append(label, disclosure);
+			disposables.add(addDisposableListener(disclosure, 'toggle', () => {
+				this.contextExpansion.set(item.id, disclosure.open);
+				this.relayout.schedule();
+			}));
+			return new RenderedItem(item, article, disposables, undefined, undefined, undefined, undefined, { disclosure, summary, content });
+		}
 		const label = h(this.element.ownerDocument, item.type === "advisor" ? "summary" : "div");
-		label.className = "ash-chat-item-label";
+		label.className = `${this.classPrefix}-item-label`;
 		label.textContent = itemLabel(item);
 		const body = item.type === "advisor" ? h(this.element.ownerDocument, "details") : article;
 		body.append(label);
@@ -410,7 +550,7 @@ export class ChatListWidget extends DomWidget {
 		body.append(attachments);
 		if (item.detail) {
 			const detail = h(this.element.ownerDocument, "p");
-			detail.className = "ash-chat-turn-error-detail";
+			detail.className = `${this.classPrefix}-turn-error-detail`;
 			detail.textContent = item.detail;
 			body.append(detail);
 		}
@@ -418,17 +558,19 @@ export class ChatListWidget extends DomWidget {
 			const action = item.action;
 			const button = h(this.element.ownerDocument, "button");
 			button.type = "button";
-			button.className = "ash-chat-turn-error-action";
+			button.className = `${this.classPrefix}-turn-error-action`;
 			button.textContent = action.label;
 			article.append(button);
 			disposables.add(addDisposableListener(button, "click", () => this.onDidRequestErrorAction?.(action)));
 		}
-		return new RenderedItem(item, article, disposables, undefined, markdownPart, attachments);
+		const row = new RenderedItem(item, article, disposables, undefined, markdownPart, attachments);
+		if (item.type === 'agentMessage' || item.type === 'userMessage') this.renderCopyAction(row, disposables);
+		return row;
 	}
 }
 
 function sameItem(left: IChatListItem, right: IChatListItem): boolean {
-	return left.id === right.id && left.type === right.type && left.text === right.text
+	return left.id === right.id && left.type === right.type && left.text === right.text && left.contextText === right.contextText
 		&& left.hookPart?.run === right.hookPart?.run
 		&& left.transient === right.transient && left.isError === right.isError
 		&& left.label === right.label && left.detail === right.detail && left.errorCode === right.errorCode

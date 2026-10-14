@@ -225,7 +225,7 @@ export class NewChatInputWidget extends ChatInputPart {
 		this.draftWriteRevisions.set(draftId, revision);
 		const text = this.input.value;
 		const mode = this.model.inputState.mode;
-		const attachments = this.contexts;
+		const attachments = this.attachmentModel.attachments.filter(attachment => attachment.lifetime !== 'source');
 		if (attachments.length === 0) {
 			writeNewChatDraftState(this.storage, { mode, text, contexts: [] }, draftId);
 			return;
@@ -235,6 +235,7 @@ export class NewChatInputWidget extends ChatInputPart {
 			content: (await attachment.resolve()).content,
 			...(attachment.resource ? { resource: attachment.resource.toString() } : {}),
 			...(attachment.reference ? { reference: attachment.reference } : {}),
+			...(attachment.terminalSnapshot ? { terminalSnapshot: attachment.terminalSnapshot } : {}),
 		}))).catch(error => {
 			// A removed attachment or closed pane no longer owns a persistence error.
 			if (revision !== this.draftWriteRevisions.get(draftId)) return undefined;

@@ -1,3 +1,6 @@
+import { IEditorService } from '../../../../services/editor/common/editorService.js';
+import { ChatResponseResourceFileSystemProvider, IChatResponseResourceFileSystemProvider } from '../../common/widget/chatResponseResourceFileSystemProvider.js';
+import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { readFileSync } from 'node:fs';
@@ -9,8 +12,6 @@ import { createCodeEditorServices } from '../../../../../editor/test/browser/tes
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
 import { ChatListWidget } from '../../browser/widget/chatListWidget.js';
 import { chatTranscriptListItems } from '../../browser/widget/chatListItems.js';
-import { ChatListWidget as CoworkListWidget } from '../../../../../sessions/contrib/cowork/browser/widget/chatListWidget.js';
-import { chatTranscriptListItems as coworkTranscriptListItems } from '../../../../../sessions/contrib/cowork/browser/widget/chatListItems.js';
 import { IAgentThreadService } from '../../../../../platform/agentHost/common/agentService.js';
 import { createDisconnectedRendererApi } from '../../../../../platform/agentHost/browser/rendererApi.js';
 import type { ChatHookRun, ThreadTranscriptEntry } from '../../../../services/chat/common/chatService.js';
@@ -24,7 +25,7 @@ const entry = (status: ChatHookRun['status']): Extract<ThreadTranscriptEntry, { 
 
 for (const host of [
 	{ name: 'Code', map: chatTranscriptListItems, create: (services: ReturnType<typeof createTestEditorServices>, container: HTMLElement) => services.createInstance(ChatListWidget, container, {}) },
-	{ name: 'Cowork', map: coworkTranscriptListItems, create: (services: ReturnType<typeof createTestEditorServices>, container: HTMLElement) => services.createInstance(CoworkListWidget, container, {}) },
+	{ name: 'Cowork', map: chatTranscriptListItems, create: (services: ReturnType<typeof createTestEditorServices>, container: HTMLElement) => services.createInstance(ChatListWidget, container, { classPrefix: 'ash-cowork' }) },
 ]) {
 	test(`${host.name} Hook transcript retains all five domain states and their canonical run identities`, () => {
 		for (const status of statuses) {
@@ -42,6 +43,8 @@ for (const host of [
 		using resources = new DisposableStore();
 		const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
 		if (!services.has(IAgentThreadService)) services.registerInstance(IAgentThreadService, createDisconnectedRendererApi().thread);
+		if (!services.has(IChatResponseResourceFileSystemProvider)) services.registerInstance(IChatResponseResourceFileSystemProvider, resources.add(services.createInstance(ChatResponseResourceFileSystemProvider)));
+		if (!services.has(IEditorService)) services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { throw new Error('Unexpected media preview'); }, focusActiveEditor() { } });
 		const container = document.createElement('main');
 		document.body.append(container);
 		resources.add(toDisposable(() => container.remove()));

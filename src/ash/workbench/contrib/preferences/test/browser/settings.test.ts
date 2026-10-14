@@ -104,6 +104,9 @@ const { IContextMenuService } = await import('../../../../../platform/contextvie
 const { IContextViewService } = await import('../../../../../platform/contextview/browser/contextView.js');
 const { BrowserContextViewService } = await import('../../../../../platform/contextview/browser/contextViewService.js');
 const { InstantiationService } = await import('../../../../../platform/instantiation/common/instantiationService.js');
+const { IExtensionService } = await import('../../../../services/extensions/common/extensionService.js');
+const { TestExtensionService } = await import('../../../../test/common/testExtensionServices.js');
+const { ContextKeyService, IContextKeyService } = await import('../../../../../platform/contextkey/browser/contextKeyService.js');
 const { Registry } = await import('../../../../../platform/registry/common/platform.js');
 const { darkColorTheme } = await import('../../../../../platform/theme/common/colorTheme.js');
 const { AccessibilityConfiguration } = await import('../../../../../platform/accessibility/common/accessibility.js');
@@ -1282,6 +1285,9 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(INotificationService, disposables.add(new NotificationService()));
 	services.registerInstance(IDictationService, undefined);
+	services.registerInstance(ConfigurationServiceId, configuration);
+	services.registerInstance(IContextKeyService, disposables.add(new ContextKeyService()));
+	services.registerInstance(IExtensionService, disposables.add(new TestExtensionService()));
 	services.registerInstance(ISpeechService, disposables.add(services.createInstance(SpeechService)));
 	const skillsChanged = disposables.add(new Emitter<void>());
 	let skillEnabled = true;
@@ -1300,7 +1306,6 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(ICodeEditorService, { getActiveCodeEditor: () => null } as ICodeEditorService);
 	services.registerInstance(IDialogService, disposables.add(new DialogService()));
 	services.registerInstance(ClipboardServiceId, clipboardService);
-	services.registerInstance(ConfigurationServiceId, configuration);
 	services.registerInstance(IContextMenuService, contextMenuProvider);
 	services.registerInstance(IContextViewService, contextView);
 	services.registerInstance(LocalizationServiceId, workbenchLocalization);
@@ -1695,8 +1700,14 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	root.querySelector<HTMLElement>('[data-settings-category-id="hooks"]')?.click();
 	await nextTurn();
 	assert.equal(hookReads, 0, 'Settings only links to the Chat-owned editor');
-	[...root.querySelectorAll<HTMLButtonElement>('.ash-settings-section button')].find(button => button.textContent === 'Manage Hooks')?.click();
-	await nextTurn();
+	const managementOpened = new DeferredPromise<void>();
+	using managementListener = editorServices.get(IEditorService).onDidActiveEditorChange(() => {
+		if (editor.activePane?.id === AI_CUSTOMIZATION_MANAGEMENT_EDITOR_ID) void managementOpened.complete();
+	});
+	const manageHooks = [...root.querySelectorAll<HTMLButtonElement>('.ash-settings-section button')].find(button => button.textContent === 'Manage Hooks');
+	assert.ok(manageHooks, [...root.querySelectorAll<HTMLButtonElement>('.ash-settings-section button')].map(button => button.textContent).join(', '));
+	manageHooks.click();
+	await managementOpened.p;
 	const managementPane = editor.activePane!;
 	const hooksRoot = root.querySelector<HTMLElement>('.ash-ai-customization-management');
 	assert.ok(hooksRoot && !hooksRoot.hidden);

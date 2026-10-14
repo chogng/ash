@@ -542,7 +542,10 @@ test('Shared dictation only changes its owning input and returns the complete tr
 	const started = waitForSpeechState(speech, SpeechToTextState.Recording);
 	first.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mic"] button')!.click();
 	await started;
+	const firstChanged = new DeferredPromise<void>();
+	using firstInputChanged = first.onDidChangeInputForTest(() => { if (first.element.querySelector('textarea')!.value === 'first') void firstChanged.complete(); });
 	transcript('first', true);
+	await firstChanged.p;
 	assert.deepEqual([first.element.querySelector('textarea')!.value, second.element.querySelector('textarea')!.value], ['first', '']);
 	assert.equal(second.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mic"] button')!.disabled, true);
 	second.setVisible(false);
@@ -588,7 +591,10 @@ test('Hiding the recording input discards stop-time text and permits another inp
 	const restarted = waitForSpeechState(speech, SpeechToTextState.Recording);
 	second.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mic"] button')!.click();
 	await restarted;
+	const secondChanged = new DeferredPromise<void>();
+	using secondInputChanged = second.onDidChangeInputForTest(() => { if (second.element.querySelector('textarea')!.value === 'new input') void secondChanged.complete(); });
 	transcript('new input', true);
+	await secondChanged.p;
 	assert.deepEqual([first.element.querySelector('textarea')!.value, second.element.querySelector('textarea')!.value], ['', 'new input']);
 	stopReady = new Promise<void>(resolve => { stopRequested = resolve; });
 	const stopped = speech.stopAndTranscribe();
@@ -617,15 +623,18 @@ test('A failed shared session notifies its owning input only', async () => {
 	const started = waitForSpeechState(speech, SpeechToTextState.Recording);
 	first.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mic"] button')!.click();
 	await started;
+	const notified = new DeferredPromise<void>();
+	using notificationAdded = firstNotifications.onDidAdd(() => { void notified.complete(); });
 	ended('capture lost');
+	await notified.p;
 	assert.deepEqual([firstNotifications.getNotifications().map(item => item.message), secondNotifications.getNotifications().map(item => item.message)], [['Dictation failed: capture lost'], []]);
 	assert.equal(speech.state, SpeechToTextState.Idle);
 });
 
-function waitForSpeechState(service: ISpeechService, state: SpeechToTextState): Promise<void> {
-	return new Promise(resolve => {
+async function waitForSpeechState(service: ISpeechService, state: SpeechToTextState): Promise<void> {
+	await new Promise<void>(resolve => {
 		const subscription = service.onDidChangeState(next => {
-			if (next === state) {
+			if (next === state && !service.isStarting) {
 				subscription.dispose();
 				resolve();
 			}
@@ -977,4 +986,21 @@ test('Live App context survives inline draft submission and is revoked by its ow
 	edit(part, 'Without App');
 	await part.acceptInput();
 	assert.deepEqual(sent, [['first source state'], ['updated source state'], []]);
+});
+
+test('Draft handoff carries user context and leaves source-owned App context with its producer', async () => {
+	using part = inputPart(sharedNotifications);
+	let sourceReads = 0;
+	const source = { id: 'app', kind: 'mcpApp', lifetime: 'source' as const, name: 'App context', resolve: async () => { sourceReads++; return { name: 'App context', content: 'Live source context' }; } };
+	part.addContext(source);
+	part.addContext({ id: 'file', kind: 'file', name: 'file.ts', resolve: async () => ({ name: 'file.ts', content: 'User file' }) });
+	edit(part, 'User draft');
+	const captured = await part.captureDraft();
+	assert.ok(captured);
+	assert.deepEqual(captured.draft.contexts, [{ id: 'file', kind: 'file', name: 'file.ts', content: 'User file' }]);
+	assert.equal(sourceReads, 0);
+	captured.clear();
+	assert.deepEqual(part.attachmentModel.attachments, [source]);
+	assert.equal(await part.captureDraft(), undefined);
+	assert.equal(sourceReads, 0);
 });

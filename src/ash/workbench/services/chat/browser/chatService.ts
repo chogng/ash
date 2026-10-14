@@ -171,7 +171,7 @@ export class ChatService extends Disposable implements IChatService {
 
 	async startTurn(options: StartTurnOptions): Promise<void> {
 		const input = turnInput(options);
-		await this.turnApi.start({ commandId: commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, mode: options.mode, approvalMode: options.approvalMode, model: options.model, reasoningEffort: options.reasoningEffort, input });
+		await this.turnApi.start({ commandId: options.commandId ?? commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, mode: options.mode, approvalMode: options.approvalMode, model: options.model, reasoningEffort: options.reasoningEffort, input });
 	}
 
 	async queueTurn(options: StartTurnOptions): Promise<void> {
@@ -179,7 +179,7 @@ export class ChatService extends Disposable implements IChatService {
 		const generation = this.appServerApi.connectionGeneration;
 		const approvalMode = options.approvalMode ?? (await this.execution.read()).settings.approvalMode;
 		if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServerApi.connectionGeneration) throw canceled();
-		await this.turnApi.enqueue({ commandId: commandId("queued-turn"), sessionId: options.sessionId, threadId: options.threadId, mode: options.mode, model: options.model, reasoningEffort: options.reasoningEffort, input: turnInput(options), approvalMode });
+		await this.turnApi.enqueue({ commandId: options.commandId ?? commandId("queued-turn"), sessionId: options.sessionId, threadId: options.threadId, mode: options.mode, model: options.model, reasoningEffort: options.reasoningEffort, input: turnInput(options), approvalMode });
 	}
 
 	async queuedMessageCount(sessionId: SessionId, threadId: ThreadId): Promise<number> {
@@ -215,7 +215,7 @@ export class ChatService extends Disposable implements IChatService {
 
 	async steerTurn(options: SteerTurnOptions): Promise<void> {
 		await this.turnApi.steer({
-			commandId: commandId("steer"),
+			commandId: options.commandId ?? commandId("steer"),
 			sessionId: options.sessionId,
 			threadId: options.threadId,
 			turnId: options.turnId,

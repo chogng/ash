@@ -1,17 +1,26 @@
+import { VoiceSessionController, pickVoiceConversation } from '../../../../../workbench/contrib/chat/browser/voiceClient/voiceSessionController.js';
+import type { AgentVoiceTaskRequest } from '../../../../../platform/agentHost/common/agentService.js';
+import { canceled, isCancellationError } from '../../../../../base/common/errors.js';
+import { localize } from '../../../../../nls.js';
+import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
+import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import type { ChatSubmissionOptions } from '../../../../../workbench/services/chat/common/chatService.js';
 import { OPEN_CHAT_CHANGES_COMMAND_ID } from '../../../../../workbench/contrib/chat/common/chat.js';
 import './media/chat.css';
-import { Disposable, toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
+import './media/chatListWidget.css';
+import type { IChatMcpAppDelegate } from '../../../../../workbench/contrib/chat/browser/widget/chatContentParts/toolInvocationParts/chatMcpAppSubPart.js';
+import { Disposable, DisposableStore, toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
 import type { Event } from "../../../../../base/common/event.js";
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import type { AgentResponse, ApprovalMode, ChatAgent, ChatMode, ModelRef, SessionId, ThreadGoal, ThreadId } from "../../../../../workbench/services/chat/common/chatService.js";
 import type { ChatInputDelegate } from "../../../../../workbench/contrib/chat/browser/widget/input/chatInput.js";
 import type { SkillReference } from "../../../../../platform/agentHost/common/appServerApi.js";
 import type { IChatInputPart } from "../../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js";
-import type { ChatTurnErrorAction } from "./chatListItems.js";
-import { ChatListWidget } from "./chatListWidget.js";
+import type { ChatTurnErrorAction } from "../../../../../workbench/contrib/chat/browser/widget/chatListItems.js";
+import { ChatListWidget } from "../../../../../workbench/contrib/chat/browser/widget/chatListWidget.js";
 import type { ChatInputState } from "../../../../../workbench/contrib/chat/browser/widget/input/chatInput.js";
 import type { ModelReasoningEffort } from "../../../../../workbench/services/chat/common/modelCatalog.js";
-import type { IChatListItem } from "./chatListItems.js";
+import type { IChatListItem } from "../../../../../workbench/contrib/chat/browser/widget/chatListItems.js";
 import type { ResolvedChatContext } from "../../../../../workbench/services/chat/common/chatContextService.js";
 import { h } from "../../../../../base/browser/dom.js";
 import type { ChatContextAttachment } from "../../../../../workbench/services/chat/common/chatContextService.js";
@@ -28,13 +37,16 @@ import type { IOpenAgentsWindowOptions } from '../../../../../platform/native/co
 /** The presentation consumes one conversation model owned by its product. */
 export interface ICoworkWidgetModel extends IDisposable {
 	readonly onDidChange: Event<void>;
+	readonly onDidChangeComposer: Event<void>;
+	readonly composerGeneration: number;
 	readonly sessionId: SessionId | undefined;
 	readonly threadId: ThreadId | undefined;
 	readonly untitledSessionId: string | undefined;
 	readonly goal: ThreadGoal | undefined;
 	readonly items: readonly IChatListItem[];
 	readonly inputState: ChatInputState;
-	send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[]): Promise<void>;
+	prepareConversation?(): Promise<{ readonly sessionId: string; readonly threadId: string; }>;
+	send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], submissionOptions?: ChatSubmissionOptions): Promise<void>;
 	executeServerCommand(name: string, argumentsText: string): Promise<void>;
 	interrupt(): Promise<void>;
 	selectModel(model: ModelRef): Promise<void>;
@@ -57,6 +69,7 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 	private readonly goalElement: HTMLDivElement;
 	private submittedMessage = false;
 	private displayedThreadId: ThreadId | undefined;
+	private readonly voiceSessionController: VoiceSessionController;
 
 	constructor(
 		container: HTMLElement,
@@ -69,6 +82,8 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 		imageResourceLoader: ((resource: URI) => Promise<Blob>) | undefined,
 		createInputPart: (container: HTMLElement, delegate: ChatInputDelegate) => IChatInputPart,
 		@IInstantiationService instantiationService: IInstantiationService,
+		@IQuickInputService private readonly quickInput: IQuickInputService,
+		@INotificationService private readonly notifications: INotificationService,
 	) {
 		super();
 		const ownerDocument = container.ownerDocument;
@@ -79,11 +94,44 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 		this.element.hidden = true;
 		container.append(this.element);
 		this.model = this._register(model);
+		this.voiceSessionController = this._register(instantiationService.createInstance(VoiceSessionController, async (request: AgentVoiceTaskRequest, signal: AbortSignal) => {
+			if (this.isDisposed || signal.aborted || this.model.sessionId !== request.sessionId || this.model.threadId !== request.threadId) throw canceled();
+			await this.model.send(localize('chat.voice.task.submit', 'Handle the request I just spoke.'), this.model.inputState.mode, undefined, [{ name: localize('chat.voice.task.context', 'Voice request'), content: request.transcript }], { commandId: request.commandId, source: { sessionId: request.sessionId, threadId: request.threadId }, signal });
+		}, (error: unknown) => this.reportVoiceError(error), this.model.prepareConversation ? async () => {
+			const source = await this.model.prepareConversation!();
+			if (this.isDisposed || source.sessionId !== this.model.sessionId || source.threadId !== this.model.threadId) throw canceled();
+			return source;
+		} : undefined));
 		this.goalElement = h(ownerDocument, "div");
 		this.goalElement.className = "ash-cowork-goal";
 		this.goalElement.hidden = true;
 		const listWidgets = ChatListWidget.instantiateObservable(instantiationService, this._store, h(ownerDocument, 'div'), {
 			imageResourceLoader,
+			classPrefix: 'ash-cowork',
+			mcpAppDelegate: {
+				updateModelContext: (source, text, images = []) => {
+					const id = this.appContextId(source);
+					const model = this.inputPart.attachmentModel;
+					const owned = (attachment: ChatContextAttachment) => attachment.id === id || attachment.id.startsWith(`${id}:image:`);
+					for (const attachment of model.attachments.filter(owned)) model.delete(attachment.id);
+					const lifetime = new DisposableStore();
+					const name = localize('chat.mcpApp.contextLabel', 'App context');
+					const attachments: ChatContextAttachment[] = [
+						...(text ? [{ id, kind: 'mcpApp', lifetime: 'source' as const, name, resolve: async () => ({ name, content: text }) }] : []),
+						...images.map((image, index) => ({ ...image, id: `${id}:image:${index}`, lifetime: 'source' as const })),
+					];
+					for (const attachment of attachments) {
+						model.addContext(attachment);
+						lifetime.add(toDisposable(() => { if (model.attachments.includes(attachment)) model.delete(attachment.id); }));
+					}
+					return lifetime;
+				},
+				sendMessage: async (source, text, signal, images = []) => {
+					const id = this.appContextId(source);
+					const contexts = [...this.inputPart.attachmentModel.attachments.filter(attachment => attachment.id === id || attachment.id.startsWith(`${id}:image:`)), ...images];
+					await this.send(text, this.model.inputState.mode, undefined, contexts, source, signal);
+				},
+			} satisfies IChatMcpAppDelegate,
 			onDidRequestLink: (target: string) => {
 				void openChatMarkdownLink(target, openerService, editorService).catch(error => console.error("Could not open Markdown link", error));
 			},
@@ -91,8 +139,10 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 			onDidRequestErrorAction: (action: ChatTurnErrorAction) => void this.handleTurnErrorAction(action).catch(() => undefined),
 		});
 		this.listWidget = listWidgets.get();
+		const voice = this.voiceSessionController;
 		const inputDelegate: ChatInputDelegate = {
-			send: (text, mode, skills, contexts) => this.send(text, mode, skills, contexts),
+			voiceConversation: { get isAvailable() { return voice.isAvailable; }, get isActive() { return voice.isActive; }, get isConnected() { return voice.isConnected; }, toggle: () => this.runVoice(() => voice.isActive ? voice.disconnect() : voice.connect(ownerDocument.defaultView!, (connections, signal) => pickVoiceConversation(this.quickInput, connections, signal))), interrupt: () => this.runVoice(() => voice.stopSpeaking()) },
+			send: (text, mode, skills, contexts, signal) => this.send(text, mode, skills, contexts, undefined, signal),
 			executeCommand: (invocation) => invocation.commandId === OPEN_CHAT_PERMISSIONS_COMMAND_ID || invocation.commandId === OPEN_GUARDIAN_SETUP_COMMAND_ID
 				? commandService.executeCommand(invocation.commandId, this.model, invocation.argumentsText)
 				: invocation.argumentsText ? commandService.executeCommand(invocation.commandId, invocation.argumentsText) : commandService.executeCommand(invocation.commandId),
@@ -120,6 +170,8 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 			widget.restoreViewState(state, this.model.items);
 		}));
 		this._register(this.model.onDidChange(() => this.render()));
+		this._register(this.model.onDidChangeComposer(() => this.inputPart.invalidatePendingInput()));
+		this._register(this.voiceSessionController.onDidChange(() => { if (!this.isDisposed) this.render(); }));
 		this._register(toDisposable(() => this.element.remove()));
 		this.render();
 	}
@@ -148,6 +200,7 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 
 	setVisible(visible: boolean): void {
 		this.element.hidden = !visible;
+		if (!visible && this.voiceSessionController.isActive) void this.runVoice(() => this.voiceSessionController.disconnect());
 		this.inputPart.setVisible(visible);
 		this.listWidget.setVisible(visible);
 	}
@@ -176,19 +229,31 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 		return this.inputPart.acceptInput(value);
 	}
 
-	private async send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts: readonly ChatContextAttachment[] = []): Promise<void> {
+	private reportVoiceError(error: unknown): void { if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(localize('chat.voice.requestFailed', 'The voice request failed: {0}', String(error))); }
+	private async runVoice(operation: () => Promise<void>): Promise<void> { try { await operation(); } catch (error) { this.reportVoiceError(error); } }
+
+	private async send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts: readonly ChatContextAttachment[] = [], appSource?: Parameters<IChatMcpAppDelegate['sendMessage']>[0], signal?: AbortSignal): Promise<void> {
+		const generation = this.model.composerGeneration;
+		if (this.isDisposed || signal?.aborted) throw canceled();
 		this.submittedMessage = true;
 		this.updateConversationState();
 		try {
 			const resolvedContexts = await Promise.all(contexts.map(context => context.resolve()));
-			await this.model.send(text, mode, skills, resolvedContexts);
+			if (this.isDisposed || signal?.aborted || generation !== this.model.composerGeneration) throw canceled();
+			if (appSource) this.appContextId(appSource);
+			await this.model.send(text, mode, skills, resolvedContexts, appSource ? { source: { sessionId: appSource.sessionId, threadId: appSource.threadId }, signal } : signal ? { signal } : undefined);
 		} catch (error) {
-			if (this.model.items.length === 0) {
+			if (!this.isDisposed && !signal?.aborted && generation === this.model.composerGeneration && this.model.items.length === 0) {
 				this.submittedMessage = false;
 				this.updateConversationState();
 			}
 			throw error;
 		}
+	}
+
+	private appContextId(source: Parameters<IChatMcpAppDelegate['sendMessage']>[0]): string {
+		if (this.isDisposed || source.sessionId !== this.model.sessionId || source.threadId !== this.model.threadId) throw new Error(localize('chat.mcpApp.chatUnavailable', 'The App conversation is no longer available.'));
+		return JSON.stringify(['mcpApp', source.sessionId, source.threadId, source.itemId, source.contentIndex]);
 	}
 
 	private async handleTurnErrorAction(action: ChatTurnErrorAction): Promise<void> {
@@ -214,6 +279,7 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 			this.submittedMessage = false;
 		}
 		this.syncIdentity();
+		this.voiceSessionController.setSource(this.model.sessionId && this.model.threadId ? { sessionId: this.model.sessionId, threadId: this.model.threadId } : undefined, this.model.untitledSessionId);
 		this.renderGoal();
 		const items = this.model.items;
 		this.updateConversationState(items.length > 0);

@@ -1,3 +1,4 @@
+import { CancellationToken } from '../../../base/common/cancellation.js';
 import { registerTestComponentServices } from '../../../workbench/test/common/testEditorServices.js';
 import assert from 'node:assert/strict';
 import { setup, test, suiteTeardown } from 'mocha';
@@ -56,8 +57,8 @@ test('Sessions common entry registers the shared speech service for unavailable 
 	using services = new InstantiationService(new ServiceCollection(...registrations));
 	services.registerInstance(IDictationService, undefined);
 	const speech = services.get(ISpeechService);
-	assert.equal(speech.isConfigured, false);
-	await assert.rejects(speech.start(), /Dictation is unavailable/);
+	assert.equal(speech.hasSpeechProvider, false);
+	await assert.rejects(speech.createSpeechToTextSession(CancellationToken.None), /Dictation is unavailable/);
 	assert.equal(speech.state, SpeechToTextState.Idle);
 });
 

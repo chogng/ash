@@ -1,3 +1,9 @@
+import '../../../src/ash/workbench/contrib/accessibility/browser/accessibilityConfiguration.js';
+import { IExtensionService } from '../../../src/ash/workbench/services/extensions/common/extensionService.js';
+import { TestExtensionService } from '../../../src/ash/workbench/test/common/testExtensionServices.js';
+import { ExtensionResourceLoaderService } from '../../../src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
+import { MainThreadSpeech } from '../../../src/ash/workbench/api/browser/mainThreadSpeech.js';
+import type { IExtensionHostApi, ExtensionHostFleetSnapshot, JsonValue } from '../../../src/ash/platform/agentHost/common/extensionHostApi.js';
 import { IMessageHistoryService } from '../../../src/ash/platform/messageHistory/common/messageHistory.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../src/ash/platform/quickinput/test/browser/testQuickInputService.js';
@@ -16,7 +22,7 @@ import { IContextViewService } from '../../../src/ash/platform/contextview/brows
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
 import { IDictationService } from '../../../src/ash/platform/dictation/common/dictationService.js';
-import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
+import { ISpeechService, SPEECH_LANGUAGE_CONFIG } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import '../../../src/ash/base/browser/ui/button/button.css';
 import '../../../src/ash/base/browser/ui/inputbox/inputbox.css';
 import '../../../src/ash/base/browser/ui/splitview/splitview.css';
@@ -58,6 +64,15 @@ declare global {
 			theme(name: string): void;
 			dispose(): void;
 			readonly operations: string[];
+			extensionSpeech(admitted: boolean, lazy?: boolean): Promise<void>;
+			holdSpeechActivation(): void;
+			releaseSpeechActivation(): void;
+			readonly speechActivations: number;
+			readonly extensionStarts: number;
+			readonly extensionLanguage: string | undefined;
+			setSpeechLanguage(language: string): Promise<void>;
+			readonly speechFlags: readonly boolean[];
+			cancelSpeechCommand(): Promise<void>;
 			startDictation(): Promise<void>;
 			codeDictation(): Promise<void>;
 			readonly codeText: string;
@@ -158,7 +173,21 @@ let stops = 0;
 let captureReady = Promise.resolve();
 let releaseCapture!: () => void;
 let transcript!: (text: string, final: boolean) => void;
-services.registerInstance(IDictationService, {
+let declaredSpeech = false;
+let speechActivations = 0;
+let activationReady = Promise.resolve();
+let releaseSpeechActivation!: () => void;
+const speechManifest = JSON.stringify({ name: 'speech', publisher: 'example', version: '1.0.0', contributes: { speechProviders: [{ name: 'example.recognition', description: 'Recognition' }] } });
+const speechExtensions = resources.add(new TestExtensionService({
+	list: async () => {
+		if (!declaredSpeech) return { generation: 1, extensions: [], diagnostics: [] };
+		const digest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(speechManifest)))].map(value => value.toString(16).padStart(2, '0')).join('');
+		return { generation: 2, diagnostics: [], extensions: [{ id: 'example.speech', name: 'speech', publisher: 'example', version: '1.0.0', displayName: 'Recognition', sourceKind: 'user', manifestJson: speechManifest, manifestSha256: `sha256:${digest}`, packageSha256: `sha256:${'b'.repeat(64)}` }] };
+	},
+	resources: new ExtensionResourceLoaderService(async () => { throw new Error('Speech metadata must not read resources'); }),
+}));
+services.registerInstance(IExtensionService, speechExtensions);
+services.registerInstance(IDictationService, new URLSearchParams(location.search).has('extensionOnly') ? undefined : {
 	onDidChangePreparation: Event.None, getOptions: async () => ({ inputDevices: [{ id: 'microphone-1', label: 'Test microphone', isDefault: true }], languages: ['en', 'zh'] }), getPreparation: async () => undefined, prepareModel: async () => { }, cancelPreparation: async () => { },
 	start: async (onTranscript: (text: string, isFinal: boolean) => void) => { starts++; transcript = onTranscript; await captureReady; return { stop: async () => { stops++; } }; },
 });
@@ -184,7 +213,65 @@ const secondInput = resources.add(services.createInstance(ChatInputPart, documen
 }, [], { modePicker: 'visible', modelPickerPosition: 'leading' }));
 secondInput.element.id = 'second-input';
 secondInput.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+let extensionStarts = 0;
+let extensionLanguage: string | undefined;
+let extensionEmit: ((text: string, final: boolean) => void) | undefined;
+const speechEvents = new Map<string, JsonValue[]>();
+const speechSnapshot = (admitted: boolean): ExtensionHostFleetSnapshot => ({
+	generation: 1, extensions: [{
+		id: 'example.speech', version: '1', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1,
+		incarnation: 1, activationGeneration: 1, lifecycle: 'ready', failure: undefined, stderr: '', outputEvents: [],
+		registrations: admitted ? [{ registrationId: 'speech', kind: 'speechProvider', identifier: 'example.recognition' }] : [],
+	}]
+});
+const speechApi: IExtensionHostApi = {
+	onDidChange: Event.None, onConnectionState: Event.None,
+	getConnectionState: async () => 'ready', isAvailable: async () => true,
+	list: async () => speechSnapshot(true), start: async () => speechSnapshot(true), reconcile: async () => speechSnapshot(true), activateByEvent: async () => speechSnapshot(true),
+	registerClientHandler: () => ({ dispose() { } }),
+	invoke: async (request, signal): Promise<JsonValue> => {
+		signal.throwIfAborted();
+		const payload = request.payload as { readonly sessionId: string; readonly kind?: string; readonly language?: string; };
+		if (request.operation === 'createSpeechSession') {
+			if (payload.kind !== 'speechToText') throw new Error('Only transcription is used in this UI fixture');
+			extensionStarts++;
+			extensionLanguage = payload.language;
+			speechEvents.set(payload.sessionId, [{ status: 1 }]);
+			extensionEmit = (text, final) => speechEvents.get(payload.sessionId)?.push({ status: final ? 3 : 2, text });
+			return {};
+		}
+		if (request.operation === 'closeSpeechSession') { speechEvents.delete(payload.sessionId); return {}; }
+		if (request.operation === 'readSpeechSession') return { events: speechEvents.get(payload.sessionId)?.splice(0) ?? [], closed: !speechEvents.has(payload.sessionId) };
+		throw new Error('Unexpected speech operation');
+	},
+};
+const speechBridge = resources.add(new MainThreadSpeech(1000, speechApi, services.get(ISpeechService)));
+resources.add(speechExtensions.registerActivationHandler(async (event, signal) => {
+	if (event !== 'onSpeech' || !declaredSpeech) return;
+	speechActivations++;
+	await activationReady;
+	signal?.throwIfAborted();
+	speechBridge.update(speechSnapshot(true));
+}));
 window.ashTableIntegration = {
+	extensionSpeech: async (admitted, lazy = false) => {
+		if (!lazy && !declaredSpeech) { speechBridge.update(speechSnapshot(admitted)); if (!admitted) extensionEmit = undefined; return; }
+		declaredSpeech = admitted && lazy;
+		await speechExtensions.reload();
+		speechBridge.update(speechSnapshot(admitted && !lazy));
+		if (!admitted) extensionEmit = undefined;
+	},
+	holdSpeechActivation: () => { activationReady = new Promise(resolve => { releaseSpeechActivation = resolve; }); },
+	releaseSpeechActivation: () => releaseSpeechActivation(),
+	get speechActivations() { return speechActivations; },
+	get extensionStarts() { return extensionStarts; },
+	get extensionLanguage() { return extensionLanguage; },
+	setSpeechLanguage: language => configuration.updateValue(SPEECH_LANGUAGE_CONFIG, language),
+	get speechFlags() {
+		const context = services.get(IContextKeyService).getContext();
+		return ['hasSpeechProvider', 'speechToTextInProgress', 'textToSpeechInProgress'].map(key => context.getValue(key) === true);
+	},
+	cancelSpeechCommand: () => services.get(ICommandService).executeCommand('workbench.action.chat.dictation.cancel'),
 	codeDictation: async () => { codeEditor.focus(); await services.get(ICommandService).executeCommand('workbench.action.editorDictation.start'); },
 	get codeText() { return codeModel.getValue(); },
 	freshIntroduction: () => services.get(IStorageService).remove('dictation.introductionSeen', StorageScope.PROFILE),
@@ -199,7 +286,7 @@ window.ashTableIntegration = {
 	startDictation: async () => { await dictationSession.action.run(); },
 	stopDictation: () => services.get(ISpeechService).stopAndTranscribe(),
 	hideSecondInput: () => { secondInput.setVisible(false); secondInput.element.hidden = true; },
-	transcript: (text, final) => transcript(text, final),
+	transcript: (text, final) => { if (extensionEmit) extensionEmit(text, final); else transcript?.(text, final); },
 	get draft() { return editor.value; },
 	progress: () => publish({ state: LocalTranscriptionModelState.Downloading, file: 'encoder.onnx', downloadedBytes: 1024 * 1024 }),
 	finish: () => {

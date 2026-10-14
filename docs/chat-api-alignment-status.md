@@ -1,12 +1,12 @@
 # Chat 文件与 API 对齐状态
 
-只读参照：`../vscode/src/vs/workbench/contrib/chat`，提交 `f2d375b9623eb7245db28d3a7dab1c9fb3dddb0f`。范围为生产 `.ts` / `.css`，排除测试、图片与文档。
+只读参照：`../vscode/src/vs/workbench/contrib/chat`；首次参照提交 `f2d375b9623eb7245db28d3a7dab1c9fb3dddb0f`，当前 checkout 已更新至 `3fd165bbb0d1dcafd9e3df36c3aa26474c6ecb85`。范围为生产 `.ts` / `.css`，排除测试、图片与文档。
 
 | 源码文件 | Ash | VS Code | 同路径 | 仅 Ash | 仅 VS Code |
 | -------- | --: | ------: | -----: | -----: | ---------: |
 | 首次审计 |  95 |     965 |     72 |     23 |        893 |
 | 本批前   | 108 |     965 |     90 |     18 |        875 |
-| 当前审计 | 119 |     965 |    100 |     19 |        865 |
+| 当前审计 | 123 |     971 |    104 |     19 |        867 |
 
 文件集合差异和公开声明差异是待调查项，不等于对应行为全部缺失。完整路径、imports、exports、公开成员、CSS selector/token、生产与测试调用方已保存在 `.build/chat-alignment/inventory.json`；可读版为 `.build/chat-alignment/report.html`。不将未验证的上游公开成员计为已实现。
 
@@ -91,21 +91,19 @@ Workbench 与 Sessions 注入同一平台契约，New Chat / Cowork 使用共享
 
 ## 仍未闭合的能力
 
-### 语音对话
+### 语音对话（Ash 自有实现，上游契约仍待核对）
 
-`ChatInputPart` 当前 Voice conversation action 明确禁用且回调为空。已有听写服务不能计为语音对话。需要先闭合实时 Voice 会话、音频播放、权限、取消和连接关闭契约，再接入 UI；尚未创建占位服务或按钮回调。
+VS Code 没有 `src/vs/platform/voice`。原 `src/ash/platform/voice` 是 Ash 自有的 App Server 领域适配层，已按用户确认删除；其职责迁回现有 agentHost 领域契约与 adapter，不能计作上游同路径/API 对齐。上游语音职责位于 `workbench/contrib/chat/common/voiceClient`、`chat/common/voiceChatService.ts` / `voicePlaybackService.ts`、Chat 的 browser/electron-browser 入口和 `workbench/contrib/speech`；原同路径 VoiceClient 的 Widget 控制器也已退出，回到 Chat/browser/voiceClient/voiceSessionController.ts；上游完整 VoiceClient transport 契约仍待兼容后端和真实消费链闭合。以下测试只证明 Ash 实时语音实现的行为，不证明上游 API 已补齐。
 
-已继续核实：`crates/voice-agent` 已能桥接授权人类房间音频与 `model-provider::VoiceModelSession`，但它不执行工具，尚未接入 App Server、Core 任务授权或 Chat 线程。其模型事件没有响应代次，打断播放后需要新建模型会话才能安全恢复播报。现有 `platform/call` 属于多人通话，`platform/dictation` 属于文字回填，两者的既有职责继续保留。
+本机 Desktop 的原 Voice 按钮已接入实时会话。agentHost 的 optional agentVoice 领域契约和适配连接已有 Call、VoiceAgent 和 VoiceModelSession；Core journal 保存无执行 Turn 的转写，agentHost 负责其领域转换，普通 Chat/Cowork 用纯文本展示。明确的人类任务经原 model.send/start/queue/steer 执行，原 Core/Queue 决定审批、状态与结果。打断关闭原房间和模型后建立新媒体代次，并从原 Core 恢复有界上下文；最终 SDK 时长跨同一 resource 累计，不推断价格。
 
-用户已确认下层设计：新增 `src/ash/platform/voice/common/voiceService.ts`（前端异步 start/stop/interrupt、会话状态与转写的领域契约）和 `src/ash/platform/voice/browser/appServerVoiceService.ts`（生成协议适配）；App Server 的 `voice_operations.rs` 使用现有 `voice-agent` / `model-provider` / 音频运行时。标准 Chat 的语音状态、播放和操作落到上游对应的 `common/voiceClient/voiceClientService.ts`、`common/voicePlaybackService.ts`、`electron-browser/actions/voiceChatActions.ts`。
-
-start 绑定调用连接、目标 Thread 和媒体代次；stop 只关闭该会话，interrupt 淘汰该代次的待播及迟到音频。房间成员变化、断线、关闭和重启均释放麦克风与模型连接。任务委托仅经 Core 的现有授权入口执行，混音转写不推断请求人；文本记录进入现有线程 owner，不创建另一套 Chat 历史。验证需覆盖真实媒体桥、协议模拟供应商、迟到音频、权限与 Core 委托；真实账户音频质量与计费另作验收。两个 Ash 平台 owner 已获准确路径确认；当前继续核对房间权限、媒体释放与 Core 线程接入；尚未创建这些文件或启用按钮。
+已有验证覆盖真实本地 Call/LiveKit 与独立 Live wire 供应商模拟、明确注入的 AudioHost IPC 设备替身，以及生成 decoder/client、原 Widget、英文/中文、焦点、草稿和附件。它们不代表真实账户音频质量或物理设备验收。远端 Thread 的自有 Voice/Core bridge不作为本次对齐实施队列继续扩展；尚无兼容 producer 的上游语音成员保持明确缺口。本次媒体会话的供应商/模型/声音选择已接入；不创建空 VoicePlayback service。验证细节见后续记录。
 
 ### Prompt 语法与响应内容
 
 已接入的正文、补全、Hover 和代码块操作见上方完成项。Prompt 已具备 Skill schema 对应的 YAML AST、编辑诊断、目录名/工具值补全与正文引用，验证结果见后续准入记录。后端 Skill catalog 继续拥有接受、版本和权限判断；上游 VS Code 专属 Agent/Prompt 格式仍按真实 Ash 产品调用逐项调查。
 
-工具进度与结果、持久图片/音频、流式 Markdown 与 Skill 引用已接入并验证。响应仍需继续核对终端关联、其他引用、可交互 MCP 内容和语音。现有 `ChatHookContentPart`、provider 链接装饰、Advisor 和编辑审核保持原 owner；本轮只接入真实调用链需要的 Markdown/代码块职责，不把其他缺失 content parts 计为完成。
+工具进度与结果、持久图片/音频、流式 Markdown 与 Skill 引用已接入并验证。MCP App 已接入原工具执行、来源资源、消息/context、CSP、链接、真实 fullscreen、文件导出和诊断日志；后续继续调查实际产品需要的 sampling、media context、双向 App tools 及其他引用。终端关联由共享工作区同批的 Terminal domain contract 提供，保持其 owner 并验证 Chat 消费链。现有 `ChatHookContentPart`、provider 链接装饰、Advisor 和编辑审核保持原 owner；本轮只接入真实调用链需要的 Markdown/代码块职责，不把其他缺失 content parts 计为完成。
 
 ### 其他目录中的已有职责
 
@@ -336,3 +334,214 @@ Core 转写条目准入：语音增量由原 VoiceAgent worker 交给原 Core Th
 转写 snapshot 的精确边界补充：保持现有公开 Thread DTO 的执行领域职责，Voice 字段只在原 Core ThreadSnapshot / journal；App Server 既有 transcript read/subscribe 在通过 Session scope 后读取同 durable sequence 的原 Core voice 条目，再加入原 ThreadTranscriptSnapshot，不创建另一份业务保存。Core 复用 load_snapshot_at_sequence 读取历史边界，分页只包含具有可见原 Item 锚点的转写；现有没有 Turn 的 voice spans 不混入执行默认 model/mode/retry。原 core_api ThreadView 与生成 Thread DTO 不增加未消费字段。
 
 新无 Turn entry 的机械闭合准入：crates/tui/src/thread/transcript/model.rs 的既有终端内容 cell 直接使用原 speaker role/text，Turn owner 为 None，不生成工具或执行；原 client-id/Hook filtering match 只加入 VoiceTranscript 的明确 none。App Server update_broker_tests.rs 原 snapshot调用只显式空 voice slice；其余真实 source读原 Core记录。Core 既有 snapshot/test literals 与 ThreadEvent exhaustive match 的确切文件随后根据 compiler输出登记，不将未知 variant 用通配符静默吞掉。
+
+依赖审计追加准入：Agent read/subscribe handler 不直接访问 Core implementation。core-api/runtime.rs 在原 AgentRuntime 增加实际三个 handler 消费的只读 read_voice_transcripts(threadId, sequence)，core/runtime.rs 仅委托原 Controller；operations.rs / session_operations.rs 经原 agent_runtime 读取相同 journal boundary。保留共享工作区同期 Session subscribe 的统一 ThreadView 改动，恢复其 Voice slice 参数，不另建缓存或 store。
+编译闭合的准确文件：Core context/assembler_tests.rs、context/planner_tests.rs、context_manager_tests.rs、thread_controller/mailbox_tests.rs 的 snapshot literal 显式空 voice_transcripts；App Server session_operations.rs 原 Session subscribe 组装只读 voice snapshot，update_broker_tests.rs 原调用加空 slice；Sessions chatWidgetModel.ts 与 contrib/cowork/browser/coworkWidgetModel.ts 的原 cloneTranscriptEntry 深拷贝 Voice record，Cowork 原 widget/chatListItems.ts 和 chatListWidget.ts 仅复用正常 Chat 的 Voice presentation/既有 plain-text body。agentHost common 的 committed event type 集合补真实 VoiceTranscriptRecorded 标签（完整数据仍由原 Transcript entry DTO转换），不新建事件存储。
+
+转写发布实现细化：运行中 Voice host 只需现有 ThreadController 的规范事实写入及原 ThreadUpdateSink，因此不增加未消费的 Runtime/AgentRuntime 方法；已移除尚无生产调用的 Runtime.record_voice_transcript wrapper。新的 sender caller 在 voice_operations worker，且由该 connection/epoch 生命周期守卫后调用原 Core owner。
+
+Voice 会话实际端口准入：新增 app-server-protocol/protocol/voice.rs 并由原 mod/registry 生成 start/stop/interrupt/options/state、connection-scoped changed/delegation notifications（versioned voiceConversation contract）。App Server 已批准 voice_operations.rs 同时拥有 connection/epoch 的临时媒体生命周期，Core 拥有持久转写/任务；新 App Server dependency 只引用现有 ash-voice-agent，Cargo.lock/BUILD.bazel 只闭合该现有包边。原 Calls 改为 Arc 的同一服务实例，供 Voice worker 调用原 fresh Local call、CallRole.Agent invite/join、设备/麦克风授权与 leave/end；原 Calls executor 可供同 host 复用，不新建音频 owner。原 Calls/Dictation microphone gate 继续排他，关闭调用连接先取消其 Voice，再关闭原 Call/Dictation。interrupt 结束旧 room/model/AudioHost epoch 后重建 model session，不能用 StopPlayback 后继续旧 session 输出。
+准确 server hunk：server.rs 注册/字段/初始化/close、operations.rs optional contract广告、request_processing.rs start background与 stop/interrupt control、managed/gateway.rs Voice media操作留在本机 Profile，不能把 capture路由 SSH；voice start 只接受 canonical本地 Thread scope，远端 Voice/Core bridge 另行闭合后才宣告支持。Core 当前 read/record_voice_transcript 有实际 worker caller；ThreadController.read_voice_task_progress 在原 snapshot 下读取由原 UserContext.client_id 与 exact transcript识别的真实 Core Turn/status/result，Voice worker仅缓存通知投递签名，任务执行/审批始终原 Core owner。Frontend 新 Voice service只保留状态领域镜像，不保留第二份转写，原 Chat Voice client通过已绑定 widget 的正常 model.send（附原低信任 UserContext）提交授权 1:1 人类任务，拒绝过期source/epoch。
+
+Voice frontend 闭合范围细化：已批准的 platform/voice/common/voiceService.ts 和 browser/appServerVoiceService.ts 定义异步领域服务、显式 connection/epoch/current-request cancellation与 domain转换；IRendererHost 只加 optional voice领域字段。原 platform/native/electron-browser/rendererApi.ts 仅在本机 connection 的 voiceConversation contract成立时装配；原 workbench/browser/workbench.ts 注册 optional IVoiceService，缺少产品能力的 host显式 undefined，与现有 Dictation模式一致，不建假 capture服务。common/voiceClient/voiceClientService.ts 是原 ChatWidget scope controller，连接具体 canonical Session/Thread，关闭/identity替换停止自己的 room，VoiceDelegation只送原 model.send 的固定用户请求与本地化标签的低信任 context；绝不凭焦点重选任务目标。ChatInputDelegate/InputPart 仅消费该已接通 controller 的 available/active/toggle/interrupt，中文文字在chat.json。必要Standalone/Sessions fixture只显式注册 unavailable capture，browser fixture以明确的领域设备替身接入原 Widget；正式生成 decoder/client → Voice adapter 单独由 agentHost 单测验证。
+
+Voice task correlation 细化：不把 opaque context marker显示为用户标签。正式 delegation给出原 Core submission commandId（由 voice resource/epoch/delegation tuple哈希生成），原 ChatWidgetModel/CoworkWidgetModel.send 的实际第五参数把它交给原 ChatService start/queue/steer options，三条既有路径仅在提供该值时复用该 commandId。Core 用原 UserContext.client_id + exact transcript查真实 Turn，而 UserContext.name使用客户端 NLS“Voice request”。准确额外 hunk 为 services/chat/common/chatService.ts 的既有 Start/Steer options、browser/chatService.ts 原三个commandId选择、两个原 model.send 与 IChatWidgetModel、voice proto/adapter/controller；没有新增任务队列或持久状态。原自动 commandId行为与正常模型/审批维持原逻辑，需覆盖 start/queue/steer和重放/来源拒绝。
+
+Scoped submit补充：第五参数实际为 ChatSubmissionOptions（source、可选commandId/signal），不是裸ID。两个原 model在 initialize/ensureActiveSession/subscribe 的异步边界后再次核对同 Session/Thread 与abort，避免语音/MCP来源在切换Thread时把接受请求送入另一个目标。此值只约束原 send，不新建 sender/队列；现有 composer不提供该值，行为不变。原 service options仍只携带已接受correlation ID；中文UserContext标签不包含opaque协议IDs。
+
+空 Chat 语音入口闭合：原 ChatWidgetModel/CoworkWidgetModel.prepareConversation 复用 materializeUntitledSession/promote/subscribe，不创建空模型Turn，不丢失用户选定model/mode/approval；真实 Voice connect 在provider choices就绪后取得该canonicalSource。VoiceClient.connect的Window为原Widget所属窗口，并要求当前用户激活，命令/工具的后台调用不能静默开启麦克风。目标变更在options/preparation后再次比较，原scope被替换时取消，不跟随焦点。Standalone/Sessions两个现有fixture明确提供 undefined IVoiceService以覆盖无音频host，其他测试缺依赖仅按实际compiler/runtime证据同步。
+
+## 实时语音联动验证准入（2026-10-13）
+
+Voice 的实际调用链已进入原 Call 本地房间、麦克风门禁、VoiceAgent 和独立 VoiceModelSession；Core 在原 Thread journal 保存 VoiceTranscriptRecorded，转写不启动或修改执行 Turn。agentHost 将无 Turn 的转写条目转换为领域值，普通 Chat 与 Cowork 用纯文本展示。任务提议携带来源 Session/Thread、媒体代次与原 Core command ID，经原 ChatWidgetModel 的 start/queue/steer 提交；播放器和物理设备继续由 Call/AudioHost 拥有。尚未验证的真实 App Server 生命周期和完整 UI 行为不计为闭合。
+
+验证准确范围追加既有 agentHost/test/browser/webRendererApi.test.ts（正式 decoder/client→Voice adapter）与上游同职责 common/voiceClient 的本地测试，既有 Sessions ChatViewPane/浏览器 transcript fixture 验证语音按钮、转写及草稿保留。Rust sibling server/voice_operations_tests.rs 使用原 AppServer/ConnectionState/Core，真实本地 Call/LiveKit 与明确注入的 AudioHost IPC fixture；fixture 仅替代物理设备，不替代媒体、房间权限或 ModelProvider Live wire。测试必须区分媒体桥验证与真实账号/物理麦克风，不把它们混计。停止与打断按原连接/代次串行，房间清理单一所有者，断线取消旧媒体；重播和交错通知不能操作新代次。继续后续台账项，不以此批收尾。
+
+Voice 历史边界追加准入：原 thread_reducer 的 HistoryMoved / HistoryPrefixBound 已从同一不可变 source snapshot 恢复文本、Hook 与上下文；同批恢复该 snapshot 的 voice_transcripts，复用原 prefix digest 和精确 sequence，不增加历史存储、运输 DTO 或重新执行媒体/任务。create_forked_thread / create_rewound_thread 的原测试验证父线程后来追加的转写不进入早期 prefix、重开保持一致、转写仍无执行 Turn；legacy Turn-only import 沿其实际已有数据，不猜测缺失语音。
+
+编译闭合追加：原 App Server hook_events_tests.rs 的 transcript snapshot caller 传入同一 Core voice slice；原 TUI transcript/batch.rs 的增量字节预算计入 Voice 文本，原 renderer/turn filter 仍使用 None（无执行 Turn）。原两个 WidgetModel.ensureActiveSession 在 materialize 完成后检查原 Untitled identity，保留已创建 durable Session，但取消已切换视图的请求，不覆盖新选中的会话。VoiceClient 在 provider lookup 前保存该 Untitled identity，避免两个尚无 canonical Thread 的草稿被当作相同来源。
+
+最终语音时长验证追加准入：App Server 取消后仍需等待原 VoiceAgent 的 bounded model close，并只排空最终 Usage/Closed，拒绝迟到转写/提议；同一 resource 的打断累计原 SDK 报告时长，不把时长当价格。真实测试发现 VoiceAgent pump 把外部取消直接传入 Live receive，可能先触发 SDK 退役 socket，导致未发送 session.close。准确追加既有 crates/voice-agent/src/session.rs：receive 使用不可外部取消的读取 token，由原 select 的取消分支丢弃 receive future（该 SDK 的公开 cancel-safe 合同保留连接），发送的 partial-write 保护不变。既有 tests/bridge.rs 增加原 CancellationSource 路径，仍使用真实媒体和 mock Live wire，必须观察权威 Closed usage。
+
+## MCP App 文件导出准入（2026-10-13）
+
+实际 View ui/download-file（SDK 公共 contents: resource/resource_link；结果 isError）→ 既有 ChatMcpAppSubPart → 原 IDialogsModel confirmation handle / BrowserDialogHandler → inline 精确 UTF-8/base64 字节或原 IAgentThreadService.readAppResource 的同 server/frozen tool 来源 → 原 triggerDownload(Blob, filename, ownerDocument)。确认使用同一 Workbench 对话框，source/request abort 取消其原 handle；关闭、断线和重用 request ID 后不得下载迟到资源。URI 不成为本机路径或前端网络 fetch；一次请求在原八个 pending operation 限额内，文件数/消息与总字节受限，文件名经过下载边界规范化，成功和取消分别返回实际结果。
+
+准确修改为现有 chatMcpAppSubPart.ts、现有 browser transcript integration fixture/spec 与 chat.json 中文；不新增 backend/DTO/文件服务/下载 owner。fixture 显式装配原 DialogService.model 和 BrowserDialogHandler/Contribution，浏览器实际下载事件校验文件名、原字节、中文确认/取消、链接来源、无任意 host IO、取消后零下载及 blob 生命周期。公开规格只参照 https://apps.extensions.modelcontextprotocol.io/api/interfaces/app.McpUiDownloadFileRequest.html 和 McpUiDownloadFileResult / McpUiHostCapabilities 的声明，不复制 SDK 或 VS Code 实现。下载功能真正闭合后才广告 downloadFile；不宣告未实现的 logging/sampling/media context。
+
+## MCP App 日志准入（2026-10-13）
+
+View App.sendLog 的公开 notifications/message(level/logger/data) → 原 ChatMcpAppSubPart 的已初始化来源 → 原 ILogService / runtime sinks。日志是诊断，不能写入原 Chat input context 或 Core transcript；JSON 编码保留数据并防止多行伪造，附原 Session/Thread/Item 坐标。只消费 SDK 已声明的八个 level，按原日志服务 severity 映射，单 App 的条数和消息长度受限；关闭/断线后的通知不再投递。准确修改仍是既有 subpart、browser transcript fixture/spec；ILogService 和 LogService 只读复用，fixture 使用真实 LogService 的可释放 sink观察日志，不新建 store/DTO/trace owner。真正处理该通知后才广告 logging，sampling 等不作空承诺。
+
+本轮已通过：Core 323 项、Chat 152 项、合并新版草稿/审阅/粘贴处理后的 Sessions/agentHost/Voice 202 项；完整 Transcript/Webview Chromium 49 项，新增下载 4 项和日志 2 项分别覆盖 en/zh-CN；实际 App Server Voice RPC 3 项、真实媒体桥 5 项、协议 129+2+1 项通过。Renderer 3827 文件检查、App Server check、TUI check、App Server all-target warnings 和依赖 208 members/92 reviewed versions 通过。共享工作区变基合并后的全量回归仍在继续；Git rebase/index 由发起任务负责，未执行提交、继续/中止变基或发布。
+
+Voice 供应商准备边界追加准入：现有 options 只看声明的 Live profile，会把未配置 direct credential 的默认 OpenAI 排在可用连接前，并在 New Chat 创建 durable Session 后才报错。准确追加 crates/model-provider/src/websocket_session.rs：由既有 connect_voice 同一私有 factory 解析 profile、独立 voice selection、direct authentication/target；实际 App Server caller 使用其公开 check_voice_selection 进行无 socket/device 的预检。voice_operations 的 options 仅返回该 factory 能准备的连接，start 在建立 Call 前重检；不从 text subscription readiness 推断 voice，不另查/存密钥或新增字段。原 websocket_session_tests / voice RPC tests 验证缺少凭据的连接不列入 choices、配置后独立模型可准备，真正连接仍由原 factory 执行。
+
+多 Widget 语音关闭边界追加：等待 provider lookup 的 Widget 尚未拥有媒体；其取消不能调用共享 VoiceService.stop 关闭另一个 Widget 的会话。原 VoiceClientService 记录 start receipt 的 resourceId，只有该 resource 才能 stop/interrupt/接收任务；pending start 由原 AbortSignal 取消并等待自身 promise，早到任务先有界缓冲，receipt 到达后只投递匹配 resource/epoch/source。原 common client 与正式 adapter 单测验证两个 Widget（含同 Thread）互不停止、同来源早到任务不丢、失败/关闭只影响自身会话。没有新增全局 voice owner 或任务状态。
+
+Voice 显式选择准入：用户首次点击 Voice → 原 VoiceClient 的 source/AbortSignal 生命周期 → 原 ChatWidget 的 IQuickInputService → 实际 ready connection/model/voice catalog → 原 VoiceService.start(selection)。选择只属于此次媒体会话，不写新的 settings/state，不改变文字模型或 backend config；取消及来源切换关闭原 Quick Pick，未创建媒体时不发送 stop。准确 hunk 为既有 common client、Widget / 原 direct constructor fixture、chat.json 与 browser transcript fixture/spec。所有选项来自原 factory，没有自由文本假模型/声音；选项只有一个时直接采用该真实选择。客户端错误走原本地化通知，取消无错误通知。通过实际键盘、非默认声音、取消和切换验证后，才计入可选语音功能。
+
+Cowork 实际消费入口追加准入：审计发现 CoworkWidget 是独立 presentation，虽然原 CoworkModel 和 agentHost 已有 Voice records，原按钮没有接共享 VoiceClient；其 list 也仍用旧的 plain tool/Markdown 路径。准确扩展既有 sessions/browser/workbench.ts（同 api.voice optional 注册）、contrib/cowork/browser/widget/{coworkWidget.ts,chatListItems.ts,chatListWidget.ts} 与 CoworkModel 的原 scope。Voice 与选择 UI 复用 common/voiceClient 的实际控制器和同一 Quick Pick helper，不复制媒体 owner；MCP delegate 仍由 Cowork 的原 attachmentModel/model.send 拥有。内容使用已有共享 mapper/Markdown/tool/media parts，保留 Cowork root/布局与自身 host，真实 browser fixture 和原 Sessions/Cowork tests 验证后才计为接入。没有把领域映射存在误当作 Cowork UI 已完整实现。
+
+Cowork 消费闭合的准确依赖补充：共享 chatListWidget.ts 的 classPrefix 由原 CoworkWidget 实际消费，其仅选择宿主已有 root/row/layout 类，所有内容、视图状态与可访问性仍由原共享 list 拥有；Cowork media/chatListWidget.css 仅增加共享 Markdown 字体/换行继承。原 coworkWidgetModel.ts 改用共享 mapper 并传递原 Thread turns / Session/Thread 坐标，避免 tool ID 跨 Turn 合并与附件来源丢失。newCoworkInput.ts 的实际 delegate.send 补传原 submissionSignal，不另造取消状态。以上均为既有路径的局部 hunk。Sessions 的旧 chatListItems/chatListWidget/ChatMarkdownDecorationsRenderer 已退出生产调用链，用户确认后已按准确路径退役，不创建兼容别名。验证在现有 chatTranscript fixture 直接装配 CoworkWidget 与 NewCoworkInputWidget，复用原 agentHost adapter；测试覆盖同来源 App 上下文、草稿独立、语音选择、来源替换及媒体清理。
+
+来源切换追加验证：Cowork 原 composerGeneration 独立于后台订阅代次，onDidChangeComposer 只在切换 Thread 时发出，原输入 invalidatePendingInput 立即取消上下文解析/提交；首轮 materialize 和同 Thread 重订阅不误取消。原 model.send 在 initialize/subscribe 后核对同代次，旧提交的完成或错误不改新来源状态。准确范围仍为 CoworkModel/Widget、新输入包装与既有 Sessions unit/browser fixture。
+
+Voice 重播边界准入：voice/start 的当前 receipt 可幂等读取，但 interrupt 换代后原 operationId 不得重新打开麦克风。准确修改现有 server/voice_operations.rs 和其真实 RPC tests：由原 Voices owner 保留每连接有界 start identity 集合（不复制媒体/任务状态），失败前验证、关闭连接释放；旧 operationId 与跨 resource 重用拒绝，不重试写入，不调用 AudioHost/供应商。原实际 Room 测试在 stop 后重播最初 start，必须拒绝，fresh operation 仍正常恢复。
+
+Cowork 本轮实际验证：原 Sessions/Voice 137 项单测、Cowork 原模型的富工具/重复 callId/来源坐标/取消 1 项、完整 Transcript/Webview Chromium 61 项通过；包含两个实际 Widget 与 Cowork Stanza 输入、en/zh-CN、真实 iframe。Voice 实际 Room/RPC 4 项通过，加入退休 operationId 重播拒绝；App Server all-target warnings 通过。终端快照输入预览已由原 Terminal owner 接入；尚无工具调用→实际 PTY command ID 的领域契约，不从工具名称或同名 ID 猜测活终端身份。
+
+MCP App 图片 context 准入：原 ui/update-model-context 声明允许 ContentBlock（https://apps.extensions.modelcontextprotocol.io/api/interfaces/app.McpUiUpdateModelContextRequest.html）；原 caller 当前只有 text/structured context，Chat 领域已有 image URL 输入、createImageAttachment 和 source lifetime 附件。准确扩展现有 chatMcpAppSubPart.ts、ChatWidget/CoworkWidget 的原 delegate hunk、chat.json 中文与原 transcript fixture/spec。App 的图片经同一严格 base64/消息预算边界和 createImageAttachment 实际解码/缩放，再在原 attachmentModel 按 exact source/slot 替换，最后发送原 ResolvedChatContext(kind:image)。不取任意 URL/路径、不写新媒体模型、不重用 tool-result `_meta`；新的有效更新覆盖旧准备代次，旧解码、关闭、取消与来源替换不得覆盖新 context。公开 image capability 只在行为验证通过后宣告，audio/resource/sampling 仍不宣告。测试在两个真实 Widget、实际图片解码、中文、用户删除/关闭、失效数据与异步竞态后验证提交内容和草稿不串。
+
+MCP image context 定向浏览器 4 项通过：Chat/Cowork × en/zh-CN，真实解码与原 image 输入、App 独立提交、严格 base64/非法图片/audio 拒绝、用户删除、异步最后更新优先和关闭后迟到解码零副作用。原 downloads 的 canonical base64 边界合并为同一私有 helper，需回归文件导出。
+
+临时 context 与持久草稿边界准入：source-lifetime App text/image 由原 View 拥有，不能通过 captureDraft 或 Sessions 自动保存变成另一个来源的持久附件；用户输入和普通文件/terminal snapshot 才属于原 Thread/untitled 草稿。准确范围为共享 chatInputPart.ts 的 capture/clear、sessions/contrib/{chat,cowork}/browser/new*Input.ts 的 writeDraft、已有 chat/common/newChatDraftState.ts 持久解析、原输入 unit 和 browser fixture/spec。只过滤原 lifetime，不新建设置/状态/格式；保存与窗口传递使用已存在的完整 draft 合同（含 Terminal owner 提供的 immutable terminalSnapshot / resource），复用既有 validateOpenAgentsWindow 校验持久边界。Cowork 消费同一 draft codec，旧 Cowork codec 退出生产调用链，不创建第二存储。清理 handoff 只移除捕获到的用户附件，保持活 View context；测试验证临时数据不读取/导出/保存、terminal metadata 重开和实际源取消。
+
+持续回归：全 Chat 263 项（37 文件）、全 agentHost 163 项（14 文件）、完整 Transcript/Webview Chromium 67 项通过；持久草稿共享 codec / terminal 几何边界 2 项和源隔离 163 项通过。审计保持 121/965/102/19/863，所有 Chat 生产模块有消费引用。中文新增项有实际 en/zh-CN 验证；全仓唯一缺失译文为既有 editorGutter.itemBackground，本范围不改 Editor 色彩。上游文件差异仍不能当作行为差异：MCP sampling 尚无 Core-owned sampling 请求端口，活 PTY↔tool call 关联尚无领域身份；不从名字/JSON 猜测，不宣告这些能力。
+
+MCP resource context 准入：原 update-model-context 的 ContentBlock 包括 resource/resource_link。准确扩展同一现有 subpart 和 browser fixture/spec、chat.json：embedded 的明确 text/blob 只消费值，不读取 uri；linked 只经原 IAgentThreadService.readAppResource 的精确 Session/Thread/Item/contentIndex + frozen server。资源原 encoding 决定文本，image 经原 createImageAttachment，其他不可消费二进制明确拒绝；`_meta`/annotations/private metadata 不进入模型。原逐 View pending/cancel/source/代次边界继续约束 linked reads，最多 8 个资源/图片槽、总体 256 KiB，串行资源读取保持已有并发预算。原 delegate / attachmentModel / Core input 不新建传输或 context owner。必须验证真实 iframe→agentHost adapter→ResourceStore read/release/cancel→原 Chat 提交，包含中文、无任意文件/URL访问、迟到读取与关闭后零副作用，再宣告 resource/resourceLink。
+
+MCP resource context 的实际 12 项定向浏览器与 Renderer 检查通过（含原图片/文本 context 回归）；linked resource 始终走原来源 RPC，embedded uri 没有 host I/O，明确 text encoding 在非 text MIME 下仍保留正文，私有 metadata 排除；cancel/release 和关闭后迟到返回均覆盖两个 Widget、en/zh-CN。
+
+MCP 混合消息准入：原 ui/message ContentBlock → 同一私有 content 准备函数 → 原 delegate.sendMessage(source,text,signal,images) → 原两个 Widget.send / model.send。准确 hunk 为既有 subpart、两个 Widget、chat.json、原 browser fixture/spec。仅接受 user role；text/image/resource 继续使用上一链的编码、解码、预算与原冻结资源来源。一次消息的图片只属于该次原 Core 用户输入，不修改或持久化 App context，不附加用户未发送文件/文本；App source context 仍由原附件模型消费。消息等待最后有效 context 准备，再交原模型，取消/关闭/切源前不能提交迟到内容，已接受的原 Turn 由 Core 正常完成。没有第三条发送路径或后台模型调用。image-only 请求与普通 image-only 输入使用同一实际契约。完成实际混合消息、中文、草稿、旧 source/媒体与资源取消验证后才宣告 message modalities。
+
+混合消息实际入口 4 项与完整 Transcript/Webview Chromium 75 项通过，Renderer 3823 文件通过；image-only/mixed resource 使用原 Widget 提交，源附件与用户草稿均保持原 owner，准备中取消与换源零提交。共享工作区新一轮 rebase 由发起任务完成；本任务仅保留工作源文件快照（.build/chat-alignment/latest-tested-wip），没有运行 Git commit/push/stash/rebase 控制命令。
+
+持久媒体独立预览准入：用户加载原 Thread 图片/音频后激活 Open image/audio → 已有 ChatAttachmentsContentPart → 已有 IChatResponseResourceFileSystemProvider.associate(exact bytes) → 原 IEditorService / MediaPreview editor。准确修改为双方已有 chatAttachmentsContentPart.ts 的 row/load/open hunk、ChatListWidget 现有无障碍 help / chat.json、既有 transcript fixture/spec。URI 是同一响应 bytes 的只读 view association，受原 row/disposal 生命周期约束；不从任意 image URL 抓取 host 文件或重建资源授权，不新造 carousel、播放器或编辑器。原 Sessions/Workbench main 已装配 mediaPreview contribution，双产品依赖就绪。预览消费已核验的 source bytes，Source index/row 更换立即退役旧 action；音频移交预览前暂停原 row playback。实际浏览器通过原 ImagePreview/MediaPreview 类观察尺寸、格式、焦点、播放停止和释放，覆盖 en/zh-CN 与 readonly 拒绝；若实际 editor 依赖缺失，先闭合依赖，不创建空 preview。
+
+媒体预览验证的依赖追加：原 chatRenderer.test.ts 的 mount assembly 先装配真实只读 response provider 与明确的 Editor fake（未请求 open 时失败），保留已有测试的自定义实例。没有在生产做 service locator/空实现回退。原 ChatInputPart voice help 补选择器搜索/Enter/Escape，原 ChatListWidget help 补媒体读取/独立只读预览与音频暂停；两处 en/zh-CN 参数与键盘行为沿已有UI测试验证。
+
+隐藏会话的媒体生命周期准入：Sessions ChatViewPane 对非活动 pane 调用原 Widget.setVisible(false)，仅隐藏DOM不能停止已播放的音频或已开始的语音。准确追加现有 ChatWidget/CoworkWidget 的 own VoiceClient.disconnect；现有 ChatListWidget → ChatToolInvocationPart/ChatAttachmentsContentPart 的可见性端口，只暂停它们自己拥有的 HTMLAudioElement，不重新执行/清空 Thread、草稿、媒体字节或 accepted Turn。新的 setVisible 端口有原列表真实消费，属于原 presentation 生命周期，不是新状态服务。其他 Widget 的媒体不得被停止（沿已验证的 resource ownership）。原 browser fixture/spec 覆盖两个实际 Widget、en/zh-CN、hide 后 Voice stop 与 native audio pause、重显草稿/快照保留；此前手工切 source 的测试不能替代真实 retained tab 隐藏。
+
+本批真实媒体 UI 定向 6 项通过（en/zh-CN：独立 image/audio preview + 两个 retained Widget 的 hide/show），媒体 renderer/list 23 项 unit 通过；原 Sessions 独立列表 assembly 补真实 response provider / Editor dependency，Audio history 单独 1 项通过。隐藏不清理草稿或 snapshot，不恢复自动播放；独立预览持有原字节，row 退役后 response association 不可重读。
+
+目录 Session Voice/Core 联动准入：gateway 将 Voice 控制固定在 Profile，这对本机媒体 owner 正确，但 start/记录/反馈同时使用 Profile Core，会找不到已由目录 App Server 拥有的 Thread。准确修改现有 server/voice_operations.rs、managed/gateway.rs 与原 voice/gateway tests：gateway 按同一 ProfileRegistry.local_session 的 canonical executionTarget 解析原 open_local_session，不复制 Thread；只为 Voice 提供该既有 Core 的 ThreadController/Queue/updates。语音供应商、Call、AudioHost、媒体 epoch、连接资源仍在 Profile owner。注册仅保留 Registry Weak，防止 Profile/server 生命周期环；standalone 的默认 Core 维持本机原实例。源 Session/Thread、archived 和取消在开始设备前仍校验。Remote SSH Core bridge 没有现成端口，仍明确拒绝，不把整套 Voice RPC 转到远端麦克风。测试必须从 gateway 创建目录 Session，再启动同一 Profile 的真实 Voice，观察目录 journal/原广播/Task feedback 和本机房间 cleanup 后才计完成。
+
+目录 Voice/Core 实际验证：Profile/独立原 Core 的真实 Room/RPC 5 项通过，含原 task command 接受、queue/Core feedback、重播、3 epochs 与时长；实际 gateway 从 Session.create(local root) 到 Voice.start/read/stop 的真实 Room 流程 1 项通过，目录 journal 收到 speech，Thread.turns 仍为空，本机 Profile 媒体正常停止并报告 500ms。gateway 目录来源/供应商准备边界 1 项通过。两种验证分别证明 Core source 接入与实际目录 routing，不把独立 test Core 标成真实目录。App Server check/all-target warnings 通过；当前全 Chat 264 项、Sessions/Voice 139 项与全 Chromium Transcript/Webview 81 项通过。远程 Voice Core bridge、MCP sampling / App-registered tools 和无真实 Ash caller 的上游成员仍待闭合。
+
+目录准备取消补充：原 request_cancellations 在整个 VoiceStart 进入前已注册 operationId，保留该唯一取消 owner；新 Core lookup 的取消错误必须映射 RequestCancelled（-32800），不能因 PreserveOutcome 把它改成 InternalError。准确 hunk 为现有 voice_operations.rs 的 await/error/post-await fence与其 test sibling。原 RequestDispatcher 的实际 start/cancel control lane 验证 pending lookup 被取消、没有 Call/Provider I/O；不增加 pending cancel 表或重复媒体状态。
+
+用户已明确确认删除四个准确 Cowork 旧路径（上述 list items / list widget / markdown decorations / draft codec）。替代调用链为原共享 Chat mapper/list/content parts 和 chat/common/newChatDraftState；现已删除，未保留 forwarding alias，Git 可恢复。迁移使用原 Widget、媒体和草稿状态 owner，不建竞争实现。
+
+用户指出 VS Code 不存在 platform/voice 后，停止继续扩展远程 Voice/Core bridge；该扩展尚未写入代码。重新核对确认：platform/voice 为 Ash 自有能力，现有 common/voiceClient 的同路径不代表其接口已对齐；上游 connect(window, authToken)、PTT/audio/session-context 等公开端口与本仓的 Widget scope connect/select/start 契约不同。不得把实时媒体、LiveKit 或 App Server 自有协议的验证记作 VS Code API 对齐成果。保留现有源代码等待归属处理，未擅自删除或搬动语音文件。
+
+语音归属纠正准入：保留已存在的后端行为，不扩展设备、LiveKit、Voice RPC、远程 Core bridge。当前 connection-owned 语音领域契约/DTO 转换回到已有 platform/agentHost/common/agentService.ts 与 browser/appServerAgentService.ts；RendererHost 仅暴露 agentVoice 领域能力，原 Electron assembly/两个 Workbench 注册该 optional agentHost 契约。Widget 生命周期、用户手势、来源切换、Quick Pick 与原 model.send 归 Chat 浏览器层，在上游对应 browser/voiceClient/voiceSessionController.ts 独立实现；common/voiceClient 不再承载浏览器控制器。真实 connect(window) 入口从原 Widget window 提取 activation，选择器由 controller 的明确 caller 提供。原上游 PTT/audio/session-context 的 VoiceClient transport 尚无兼容后端，不伪造其接口。准确变更为上述既有 agentHost/RendererHost/native assembly、ChatWidget/CoworkWidget、两个 Workbench、原 agentHost/controller unit 与 transcript browser fixture；旧 platform/voice 两文件及错误 common controller 退出引用后提出准确删除清单，等待用户确认。Speech 的 provider/session 契约随后由原 dictation 调用链单独闭合。
+
+旧 Cowork 删除后的必要测试迁移补充：chatHookRenderer.test.ts 仍在测试 import 旧 Cowork mapper/list。其生产入口已共享原 Chat，两种 host 的 Hook 回归也改为同一 mapper/list，Cowork 只传原 classPrefix；测试 assembly 显式注册真实 response file provider 与未使用时拒绝的 Editor fake。修复仅涉及该原测试，不重建旧实现。
+
+Speech 会话契约准入：原 SpeechService 唯一 recording 继续驱动 Dictation backend；补上游同名 SpeechToTextStatus、ISpeechToTextEvent/Session 和 createSpeechToTextSession(token, context)。每次会话的事件与 token 只绑定该 recording，开始前/开始中取消关闭其迟到 microphone handle，旧 token 不结束后来会话；开始时的 bounded 最后转写在首次 listener 安装后交付。原 DictationSession（Chat/Editor/Terminal 共享）与 onboarding trial 改为消费各自 session 的 Started/Recognizing/Recognized/Stopped/Error，不从全局转写猜录音身份。原 preparation/state/flush/cancel 端口仍有实际设置、toolbar、command 消费，保持原领域语义。准确范围为 workbench/contrib/speech/common/browser/test 原文件、Chat 的 dictationSession/onboarding、相关原 input/activityBar tests 与现有 table/terminal browser 回归；不新增 TTS、keyword、provider backend 或远端音频能力。尚无原产品调用方的 provider/TTS/keyword 端口留待后续调查，不能补占位实现。
+
+旧 Cowork 删除的浏览器依赖补充：github.integration.ts 的 Cowork 链仍引用旧 decorations renderer；该 fixture 迁入原共享 ChatMarkdownDecorationsRenderer，与产品的共享 Markdown 调用一致，无新增 provider 或 owner。
+
+用户已确认删除 platform/voice/common/voiceService.ts、platform/voice/browser/appServerVoiceService.ts、chat/common/voiceClient/voiceClientService.ts 三个准确旧路径。现已删除并留工作快照；平台不再有独立 Voice service 标识/注册/host slot。实际链为 IRendererHost.agentVoice → IAgentVoiceService / AppServerAgentVoiceService → 已有 Voice RPC；Chat/Cowork → browser VoiceSessionController → 原 model.send。没有新增 Rust、RPC、LiveKit、远端 Voice 能力。归属迁移 216 项单测、120 项 Chromium、全 Chat 264 项通过。Speech 的 createSpeechToTextSession 和标准状态/event 生命周期实际由原 Chat/Editor/Terminal DictationSession 和 onboarding 消费；两项 token 隔离/早期转写/最终刷新测试加入后，定向 52 项和最终 accessibility lifecycle 10 项通过，终端/录音实际浏览器续验中。
+
+已接受上下文的检查准入：Core ThreadItem.userContext(name,content) → 原 agentHost 领域 ThreadItem → chatListItems.contextText → 原共享 ChatListWidget 的只读 details/summary/pre。原列表已拥有 row DOM/滚动/展开/焦点，直接增补该 row variant，不新增 context service 或转调 component。标题保持原名称，正文始终 literal text、不渲染 HTML/Markdown/链接、不调用文件/网络；collapsed 状态与 Tab/Enter/Space、正文焦点、view state 保存、canonical 内容更新和移除沿原 row lifecycle。Accessible View 包含已接受正文，即使视觉折叠；帮助文字 en/zh-CN 同步。准确范围为现有 chatListItems/ListWidget、其 CSS 与原单测、transcript fixture/spec/类型、chat.json；没有修改 Core、未发送草稿、App source context 或审批边界。只显示 Core 已接受内容，不重复持久数据 owner。
+
+归属纠正后的后续行为：已接受 userContext 的 exact body 可在原 Chat/Cowork 列表折叠查看，默认收起；正文 literal、不可执行，无文件/网络读取，无模型发送。原行复用 DOM、保留展开/正文焦点，view state 恢复读取 live disclosure 状态，移除释放；Accessible View 可读折叠正文。两项 unit 与四项 Chromium（两个 Widget × en/zh-CN、dark/light/HC、220px宽度和原 focus）通过。全 Chat 266 项通过，Renderer 3826 文件通过；CSS 0 错误，仅原三个 font-role 建议。Speech 的标准 start/end lifecycle 两端与原无障碍提示接通，最终录音/Editor/Terminal 7 项实际浏览器通过。共享 Terminal 的 transient Event.filter 缺口已由同步任务修复，本任务没有修改该 Terminal/Base 文件；最初验证未通过，不计为通过。当前全 Transcript/Webview 与最终 linked units 续验中。当前 upstream checkout 变更到 3fd165b…，仅刷新对应审计，不批量同步其新增文件。
+
+最终联动验证补充：agentHost/ChatViewPane/Speech/accessibility 209 项通过。之后完整 Transcript/Webview 续验在启动前被共享 Terminal 的新 environment mutator fixture 缺失 variable 阻断；最终 Renderer prepare 又被其 common capability 对 @xterm/xterm 的类型依赖引入 DOM lib 阻断（公共 shim 重复声明），没有将两次失败记作通过。此前已通过的上下文4项、完整120项、录音7项和Chat266项仍按各自源码范围保留；本任务没有删改其他任务的 Terminal/typings 来绕过 common 层检查。
+
+当前浏览器验证的准确前置修复：terminal.integration.ts 的 MODE environment fixture 使用新 IEnvironmentVariableMutator，却遗漏同一 entry 的 variable 字段。仅在原测试生产者补 variable: 'MODE'，与已有 map key 完全对应；不修改 Terminal 领域实现、公共类型、配置或测试期望。该一行是全 browser fixture 编译的必要依赖，不通过禁用 typecheck 绕过它。common capability 的 DOM 依赖由同步任务自身修复后，当前 Renderer 3827 文件检查已通过。
+
+最终当前源码验证：Renderer 3827 文件通过；完整 Transcript/Webview Chromium 85 项通过（含新增4项 accepted-context）；Chat 266 项、agentHost/ChatViewPane/Speech/accessibility 联动209项通过；真实 Editor/Terminal/onboarding 录音7项通过。中文实际运行通过，CSS0错误，diff check通过。原缺译 editorGutter.itemBackground 不属于本批用户文字。上述 transient common/fixture 编译失败已在当前源码下闭合，不计旧失败运行作为成功。
+
+当前语音对应关系：
+
+| 职责 | 当前实际 owner / 调用方 | 状态 |
+| --- | --- | --- |
+| 连接所属语音领域适配 | 原 agentHost common/agentService.ts、browser/appServerAgentService.ts；RendererHost.agentVoice 装配 | 已纠正归属，保留既有 optional 后端能力；不算 VS Code 新平台 Voice |
+| Widget 语音生命周期 / 选择 / 原任务提交 | Chat/browser/voiceClient/voiceSessionController.ts，ChatWidget/CoworkWidget 实际消费 | 已迁入 browser，原错误 common 控制器已删除；完整上游契约仍未宣告 |
+| 转写会话 / 标准状态 / 成功开始与结束事件 | 原 SpeechService，Chat/Editor/Terminal 的 DictationSession 与 onboarding | 原后端唯一 capture、会话 token 与事件隔离；旧全局 transcript/end API 退出 |
+| PTT/audio/session-context VoiceClient transport | 上游 Chat/common + browser VoiceClient 职责 | 当前无兼容 Ash producer；不以现有 App Server start/stop 伪装 PTT，不扩展自有媒体系统 |
+| Speech provider 注册 / TTS / keyword | 标准扩展 → 原 Host capability / 注册 / 精确代次 → MainThreadSpeech → SpeechService | 已接通真实 Node/V8 producer 与标准会话、注销和取消；dormant onSpeech、语言偏好和实际听写已验证。Desktop已完成响应的朗读、行/窗口停止、逐段Stopped与来源取消已接通；PTT、自动keyword与自动朗读仍沿实际caller前置推进，不创建自有媒体backend |
+
+以上为已验证行为和真实前置缺口，整个 Chat 对齐仍未标记完成。继续项必须从原 Chat/agentHost 真实调用方到唯一 owner 闭合，不能从路径差异反向制造模块。
+
+Speech provider 前置链准入：标准 vscode.speech.registerSpeechProvider → 现有 resources/extension-host/vscode.js / host.mjs → 原外部扩展 speechProvider capability/registration → 原 extensionHostApi 的 incarnation/activationGeneration 绑定 → 上游同路径 MainThreadSpeech → 原 SpeechService。Provider 唯一拥有其 STT/TTS/keyword session，宿主兼容层只拥有有界事件交付和取消 token；原 bounded invoke/read/close 机制使用 opaque session ID、精确注册和代次，不新增媒体设备/RTC/供应商或后端 Voice RPC。注册撤销和 Host 关闭取消 provider 的所有 session，迟到创建关闭，不影响另一个注册。SpeechService 的标准 provider 注册与 availability、STT/TTS/keyword 生命周期直接消费此 producer；原 Dictation 作为已有无扩展时的输入路径保留，不伪装成支持 TTS 的 provider。多扩展不按启动顺序抢占：未作选择时多个注册明确拒绝，真实读/注册状态不复制 Core 事实。
+
+准确范围：resources/extension-host/{host.mjs,vscode.js}；crates/external-ext-protocol/src/{lib.rs,validation.rs,protocol_tests.rs}；crates/plugin/src/manifest/editor_extension.rs；crates/app-server/src/{extension_packages_editor_extensions.rs,server/extension_host_runtime.rs,server/extension_host_runtime/source.rs,server/extension_host_operations.rs}；crates/app-server-protocol/src/protocol/extension_host.rs 与正式生成物；agentHost common/extensionHostApi.ts 和 browser/extensionHostProtocol.ts；workbench/api/browser/{mainThreadSpeech.ts,mainThreadExtensionApi.ts}、Speech common/browser service 与实际输入的 availability 订阅。tests 为原 external-js-ext host 的真实标准扩展、协议注册/授权拒绝、Speech/MainThread 与输入 unit 和 browser。新的 Rust match hunk只闭合新增注册枚举的现有 consumer，不重排其他 owner。后台媒体与 provider 认证、LiveKit、agentVoice RPC 均不扩展。
+
+Speech assembly 前置补充：双方已有 workbench/api/browser/extensionHost.contribution.ts 仅增加 ISpeechService dependency，确保注册桥创建时服务已装配；双方已有 services/extensionHost/common/extensionHostService.ts 的注册摘要 union 增 speechProvider。MainThreadExtensionApi 的 constructor/update/clear/独立 bridge skip hunk 闭合原唯一 fleet 生命周期。原 extensionHost assembly 单测注册真实 SpeechService(undefined)，无替代 provider。
+
+真实 JS Host 验证发现 crates/external-js-ext/src/runtime.rs 的 existing Invoke 操作 allowlist 尚未接通新注册，Host 会拒绝 createSpeechSession。新增准入仅为该 match 的四个原 bounded invoke 操作，不改变 runtime authority、进程、watchdog 或媒体能力。
+
+Speech options 边界补充：扩展拥有 microphone/recognition options，不能给它显示原 Dictation backend 的设备选择。原 SpeechService.getOptions 返回 undefined 表示这条 session 没有由本服务管理的设备设置，原 onboarding/settings 的同一 options hunk 隐藏该选择器并订阅 availability；不增加配置字段或 provider 设置。trial 自己积累标准 final phrase，避免把标准事件重新变成累计文本。范围追加原 dictationSettingsContent.ts/options hunk、原 table.integration.ts/spec.ts 的真实 Chat/Editor 两种输入与中文验证。
+
+真实 Speech UI 发现的编辑前置：连续 final phrase 在 ChatInputEditor.insertText 中倒序，因为原 executeEdits 没有提供 endCursorState；普通 EditorDictation 原 target 也有相同缺口。双方已有 Chat/widget/input/chatInputEditor.ts 与 codeEditor/browser/dictation/editorDictation.ts 仅在原 dictation edit hunk 用原 editor 的逆向 edit range 计算尾部 selection，保持选区、模型、undo 唯一 owner；不改变 CodeEditor 底座或全局编辑语义。原 table browser 验证两句中文、拉丁分隔、原选区替换和undo。
+
+Speech runtime 验收补充准入：resources/extension-host/node.test.mjs 原独立 Node control socket fixture 增标准 Speech 注册/会话/异步创建取消/overflow 测试；crates/external-js-ext/tests/host.rs 已验证的是 Rust/V8 Host，不混称 Node。docs/editor-extensions.md 仅在已支持接口表与对应边界说明补本能力，明确 speechProvider ceiling 和 provider-owned media，不改架构目标。
+
+Speech 市场包前置准入：标准 Open VSX JS deployment 当前只有旧固定 capability 列表，新 speechProvider 只能通过 Plugin 显式 capability 声明接入。准确修改已在范围内的 extension_packages_editor_extensions.rs 原市场 discovery hunk：仅 package.json enabledApiProposals 明确包含 speech 时请求 speechProvider，送入原 exact package/admission binding；声明无效使该包 activation failure，不能扩展所有包的默认 ceiling。原 sibling tests 新增有/无/非法声明的 bounded manifest 行为测试。既有原 ActivationPlan 不承担 provider registry，不增加媒体配置或状态 owner。
+
+Speech 注册链当前验收：真实 Node control socket 全25项通过（含标准 Speech session、异步 factory token 取消与有界 overflow）、Rust/V8 Host Speech2项与 ceiling/重复身份协议1项通过；原 App Server 检查通过，市场 speech proposal 请求1项通过，协议130+2+1项与生成客户端/Renderer 检查通过。实际 Chromium11项验证 Chat/普通 Editor 两句插入、选区/undo、试录中文与 provider设备选项边界，含原 Terminal写入/隐藏取消。最新早完成 session 定向同编译选项18项通过；完整unit被同步 Terminal environment contract 测试未迁移阻断，未把旧101项作最新全部通过。无新增 microphone、player、RTC、模型或Voice RPC。
+
+下一前置准入：用户首次听写 → SpeechService读取原 ExtensionService 已提交的 speechProviders 描述 → 原 activateByEvent('onSpeech', signal) → 原 AppServerExtensionHostService精确 dormant owner → agentHost activation DTO/source代次 → MainThreadSpeech注册 → 原会话。声明事实唯一保留于 ExtensionService committed manifests，Speech直接读取而不再存 descriptor副本；新窗口生命周期订阅仅更新 availability。只有声明需要激活时等待，取消/断连/代次变更不启动 fallback microphone；无法注册的已声明扩展返回明确失败，不偷偷回落旧 Dictation。原无扩展 Dictation输入保留。
+
+准确路径/hunk：双方已有 speech/browser/speechService.ts 的声明验证、constructor依赖/availability/getOptions/getPreparation和acquisition前置；双方已有 services/extensions/common/extensionManifest.ts 的 speechProviders字段/原parser边界；双方已有 services/extensionHost/browser/appServerExtensionHostService.ts 的 selectActivationEvent；双方已有 agentHost/common/extensionHostApi.ts 的typed Speech activation；现有 Rust extension_host.rs DTO、extension_host_operations.rs validation/conversion、extension_host_runtime/source.rs match与source_tests.rs；原 extension_packages_editor_extensions.rs activationPlan从真实speechProviders产生onSpeech。测试仅上述原parser/activation/service/assembly，以及test/common/testDictationServices.ts注入真实 TestExtensionService 与已有 table/browser调用。公开 ISpeechProviderDescriptor(name,description)与speechProviders职责取自上游声明；只取 onSpeech activation 行为证据，不复制其内部 descriptor map。必须验证真正 dormant→registered 的Host与UI、取消、未授权、无fallback和非默认语言。
+
+Speech dormant 前置已闭合：原 ExtensionService committed manifest 直接提供 speechProviders(name,description)，原 onSpeech / Plugin onDemand:speechProvider 精确激活，MainThreadSpeech注册真实provider。acquisition等待回到同一个Recording，Started仍只由provider实际事件发出；取消中不启用fallback。当前联动unit95项、实际Chromium14项（en/zh、注册与首次activation/cancel、Chat与普通Editor、原录音与试录）通过；Rust声明/请求/match3项通过。共享Terminal fixture恢复后，原隐藏输出与dictation2项浏览器通过；没有改其生产代码来绕过失败。最新Node26项通过（含同步任务新增的一项），JS all-target warnings通过；完整Chat/agentHost回归继续。
+
+消息复制切片准入：用户激活原Chat/Cowork消息行Copy → 原共享ChatListWidget拥有DOM/当前item → 上游同路径browser/actions/chatCopyActions.ts的registerChatCopyActions与标准workbench.action.chat.copyItem → 原IClipboardService写入当时可见的原始文本。Thread/agentHost拥有消息事实，命令不复制数据owner；不读DOM HTML、不导出私有metadata、不发送模型请求。按钮属于原行、命令执行使用点击时immutable文字，来源移除只释放反馈/监听器，迟到回包不写新行。
+准确范围：缺失但上游存在的chat/browser/actions/chatCopyActions.ts只注册实际copyItem操作；双方已有chat.contribution.ts仅装配注册；已确认Ash的widget/chatListWidget.ts仅增加消息行copy按钮/反馈，原Owned CSS只增加footer布局；原chatListWidget.test.ts / chatCodeblockActions测试同类真实命令验证与已有chatTranscript.integration.ts/spec.ts增加Chat/Cowork、流式当前值、移除与异步、en/zh、主题/窄宽度/键盘回归；chat.json与原AccessibleHelp同步。ICommandService直接构造注入，剪贴板仍由窗口平台owner提供。没有复制上游CopyActionViewItem内部实现，也不提前造copyAll/sessionLink的全局widget查找端口。
+
+消息复制最小切片：20项mapper/list/hook unit、真实4项Chromium（Chat/Cowork×en/zh-CN，三主题、220px、键盘焦点、当前原始Markdown、异步校正与权限失败、行移除）通过；CSS0错误，仅原3项字体role建议。复制命令与footer沿原贡献和行owner，没有全局widget状态、模型发送或额外媒体API。空消息按钮禁用，正在复制不禁用原生按钮以保留焦点；item变化时旧回包不显示新文字的成功反馈。继续全链回归，整个Chat未标记全部完成。
+
+全Chat回归发现早完成consumer前置：原dictationSession在全局Idle时先清active，即使它尚在等待自己session的bounded receipt，丢失早期final/error。准确改其原state/start/subscribe hunk：未订阅时由自己的Stopped receipt结束，而非另一层状态通知；旧listener在新start前释放，订阅期间同步结束时不再持有已释放的句柄。原chatInputPart测试用现有输入变化/通知事件观察结果，退出固定两次microtask的ready猜测；不增加生产测试端口或另一个recording状态。
+
+Speech metadata 准入补充：MainThreadSpeech 的 metadata.extension/displayName 描述公开扩展，RPC invocation 仍使用原 Core runtime owner ID，两者不能混用。准确增加原该文件对 IExtensionService 的 constructor依赖，从其 committed catalog 的 packageSha256+version读取公开身份/名称；无对应声明目录的独立Host保留原runtime身份。不存第二份目录、不据公开名字反向选择Host、不增加DTO。原 mainThreadSpeech.test.ts增加真实TestExtensionService committed manifest与不同执行ID的验证，确保调用仍绑定原runtime/代次。
+
+Speech availability 职责修正准入：标准 ISpeechService.hasSpeechProvider 只表示注册/声明的 Speech provider，不能以原仅STT的Dictation backend冒充TTS/keyword provider。准确改其原getter/createSTT guard；原DictationSession、onboarding、settings在原constructor读取已存在optional IDictationService，仅为其旧听写可用性/设备界面，不拥有捕获状态或执行第二条capture。实际capture/flush仍唯一经过SpeechService。原ChatInputPart action消费DictationSession既有action，标准consumer读取标准hasSpeechProvider。tests明确无扩展时标准flag=false而原听写正常，现有浏览器旧录音/扩展回归都必须通过；不增加新的Speech capability getter、媒体系统或配置。
+
+Speech语言前置准入：现有createSpeechToTextSession/createTextToSpeechSession消费已注册provider，却一直不传language；原MainThreadSpeech/Host已能递交标准options。用户语言选择 → 原IConfigurationService → 标准SPEECH_LANGUAGE_CONFIG / speechLanguageConfigToLanguage → 同一次factory的language → 原注册Host，唯一偏好owner为TypeScript settings.json（原configuration层级，RESOURCE scope与上游注册继承契约对应），不另存Provider、Rust或旧Dictation副本。auto使用当前display language，未知/不支持输入回到en-US；支持的公开locale code集合取上游公开常量，名称用Intl独立生成，不复制其实现。旧dictation.language只控制原backend，不别名或双写。
+准确范围：双方已有speech/common/speechService.ts公共语言常量/转换、browser/speechService.ts在原factory hunk读取configuration并传options；双方已有accessibility/browser/accessibilityConfiguration.ts原注册owner增加该设置（不是speech.contribution）；原Speech/MainThread unit与table实际browser验证en/zh默认与明确覆盖、非法配置拒绝、相邻新session读取新值；其原fixture配置服务注册dependency，chat.json中文同步。新constructor依赖为真实IConfigurationService，不建立另一配置容器；没有新增媒体、声源、RTC或后端Voice接口。
+
+语言前置当前验证：同编译选项独立Speech/MainThread/agentHost24项通过；实际en/zh显示语言auto与下一会话覆盖tr-TR的2项Chromium通过。完整准备曾被同步TerminalShellIntegrationEvent遗漏导出阻断，随后原任务补齐；目前完整Renderer/unit/browser再被Terminal command contract迁移中的8项不一致阻断（agentHostOutputChannel/terminalInstance/terminalEvents.test），不修改其业务或用假的兼容字段绕过。实际目标fixture同编译选项typecheck与原browser runner通过，最新全仓失败保持记录，不宣告最新全仓全部通过。
+
+Keyword前置取消补充：标准recognizeKeyword在token预取消时返回Canceled；新增onSpeech等待也应保持同一结果，而不是因等待层改成抛错。准确补原SpeechService的keyword acquisition/factory catch，当前token取消或窗口释放返回Canceled，其他授权/注册错误仍拒绝；原Speech unit验证不创建session。没有增加keyword监听工作流或自有识别器。
+
+取消回包与测试装配准入：完整Chat回归发现新增Speech配置依赖被注册在输入child，而Speech singleton由window parent创建。准确追加原test/common/testDictationServices.ts仅在缺失时给其原window fixture注册InMemoryConfigurationService，不修改生产DI失败语义或覆盖已有配置。MainThreadSpeech取消creation的wrapper会拒绝迟到回包，旧accepted标志因此无法清理已经创建的Host session；准确改原MainThreadSpeech.finish：等原creation调用settle后，对自己生成的session ID执行一次幂等close，无论回包成功或因取消拒绝。注册代次撤销仍由原Host负责整体释放，不能向replacement发送旧close。原MainThread测试必须观察真实close invocation、无read与 replacement不受影响；真实Node测试补已完成create后取消invoke无效而显式close释放token的窗口。没有新增媒体或RPC。
+
+朗读前置准入：上游标准扩展TextToSpeechSession.synthesize返回void，原Chat朗读caller却顺序await Workbench ITextToSpeechSession.synthesize；目前MainThreadSpeech只await原invoke接受回包，下一段会早于真正Stopped。准确仅补双方对应api/browser/mainThreadSpeech.ts的原synthesize/deliver/finish hunk（缺失文件已在标准注册链创建）：每次实际合成在该session里拥有一个completion，先建立等待再发送原RPC，Stopped完成，Error拒绝，取消/撤销拒绝并释放，不能按RPC成功冒充播放完毕。允许下一段复用同一provider session；不新增播放器、全局朗读状态或媒体接口。公共speech/common/speechService.ts仅补Promise完成边界注释。原api/test/browser/mainThreadSpeech.test.ts通过真实请求/事件验证接受后仍pending、完成后才能下一段、错误与取消释放、void标准producer；不复制上游Event过滤器或私有controller。此层通过后再准入真实Chat朗读caller。
+
+命令可用性前置准入：原取消听写command在Idle也被展示可执行，标准Speech扩展的菜单when条件还读不到窗口Speech状态。唯一事实仍为SpeechService registered/declared providers与原STT/TTS leases；标准HasSpeechProvider/SpeechToTextInProgress/TextToSpeechInProgress仅投给原window IContextKeyService，不保存业务副本。准确增加双方speech/common/speechService.ts的三项公共外部when契约、browser/speechService.ts constructor绑定/事件同步/释放重置；原chat/browser/actions/chatSpeechToTextActions.ts仅给原CancelDictationAction加SpeechToTextInProgress条件。原test/common/testDictationServices.ts只在fixture root缺失时注册真实ContextKeyService，原Speech测试装配同类注册并验证provider声明/退休、STT获取与取消、多个TTS token释放前不能清true、窗口释放重置。原MainThreadSpeech测试再验证实际zh-CN合成错误翻译。没有创建全局Voice媒体owner或新的动作服务；真实朗读入口仍需自己的来源/取消controller准入，不能仅注册空命令。
+
+同一Speech前置的同步取消边界追加：发布Recording/context时已有命令消费者可同步Cancel，原start随后仍会调用backend.start。准确补原SpeechService.startRecording入口只检查它所持recording是否仍被接受/未stop，结束的旧请求不能重新获取麦克风或唤醒扩展；原Speech测试通过真实状态事件同步取消，验证factory调用数为0。只修原获取顺序，非另建状态。新MainThreadSpeech文件的长constructor/import/边界条件按相邻代码风格换行，均只属于本轮原有职责。
+
+上述context/Cancel验证准确追加原table.integration.ts/spec.ts：测试入口只读取window原ContextKeyService并调用已注册Cancel command，已存在en/zh Speech场景验证HasSpeechProvider/识别状态随注册、开始、结束和撤销同步；onSpeech等待中通过真实命令取消，保留草稿且无fallback capture。未增加生产测试API或第二状态。
+
+Desktop响应朗读准入：用户点击原Chat/Cowork已完成agentMessage行Read Aloud → 原ChatListWidget持有本次来源/CTS、窗口context显示标准Speech availability → 上游准确electron-browser/actions/voiceChatActions.ts的ReadChatResponseAloud / StopReadChatItemAloud标准command → 原renderAsPlaintext → 原ISpeechService / MainThreadSpeech逐段等待Stopped → 原Host扩展synthesize。唯一媒体owner仍是扩展；响应事实仍是Thread，row仅持交互取消令牌。action私有window操作准入防止同时朗读，不另存Speech capture状态。行文字/来源修正、移除、隐藏、Escape取消原CTS，迟到错误不显示新来源；完成关闭原session。仅已完成Agent回答可朗读，用户消息/流式未完成回复没有该操作；Web未装配Desktopcommand时不显示。
+准确允许路径：仅VS Code的chat/electron-browser/actions/voiceChatActions.ts原路径创建两项实际Action（不添加无caller的PTT/keyword/globalStop）；双方已有electron-browser/chat.contribution.ts与已确认Sessions desktop main仅装载该动作module（独立realm原装配，模块本身唯一注册，避免重复OpenAgents command）；双方已有chat/browser/widget/chatListWidget.ts原footer、reconcile/setVisible释放hunk与Help文案，原已确认DOM/CSS布局足够不新增CSS。输入只接同进程实际CancellationTokenSource和已有IChatListItem.type/text，不接受JSON伪token；输出plaintext使用已有base renderer、每段不超过Host16384 UTF-16限制且不拆surrogate。mainThreadSpeech保持唯一Host会话/事件owner。必要test准确同路径新test/electron-browser/actions/voiceChatActions.test.ts，原chatListWidget.test.ts与chatTranscript.integration.ts/spec.ts仅加真实command、标准bridge producer、en/zh-CN、焦点/主题/窄宽度/取消/来源隔离验证；chat.json翻译与本台账同步。旧Copy/UI内容owner保持，按原accessibility/design/CSS/theming门禁验证。
+
+朗读scope前置补充：原chatTranscript fixture的CommandService由window parent创建，旧Speech却在单widget child；该fixture必须同生产装配一样只在window注册一次SpeechService/其依赖，朗读命令才能到同一owner。不覆盖真实生产容器。反馈沿原footer独立status，原chatListWidget.css仅将既有status颜色/换行selector覆盖该新status，避免复制和朗读反馈互相覆盖；scope准确包含此hunk。
+
+朗读窗口命令追加准入：已闭合的消息行只在其自身焦点接收Escape；焦点离开消息行后仍需要标准workbench.action.speech.stopReadAloud，真实caller为原CommandPalette。准确仅在同一voiceChatActions.ts新增上游StopReadAloud class/标准ID/f1与TextToSpeechInProgress precondition，把原私有window准入WeakSet改为持本次CTS的WeakMap；媒体与全局TTS事实仍在SpeechService，不取消其他window/非Chat owner。原同路径action unit验证两个window同读时停止仅本window；原transcript fixture/spec添加该真实command调用、中英文既有场景验证，不新增globalEscape抢占对话框、配置或媒体状态。
+
+设置装配scope追加：全链单测确认SessionsPreferences创建真实SpeechService之前没有ExtensionService，ContextKey也在之后才注册；Workbench Settings同类fixture的Speech配置依赖也晚于创建。准确允许src/ash/sessions/test/browser/sessionsPreferences.test.ts与src/ash/workbench/contrib/preferences/test/browser/settings.test.ts，仅将原configuration/context实例提前给同window容器、补真实TestExtensionService并由原fixture生命周期释放。保留原缺服务失败断言，不将生产DI改成忽略错误或新建替代容器。
+
+设置fixture后续验证：原Manage Hooks导航仅等待一次timer便检查pane；改等原IEditorService事件后，实际open错误明确为缺ITextFileService，先前将其判为就绪竞态不准确。准确继续原settings.test.ts同一装配fixture，用现有createTestTextFileService和同一FileService注册真实文本文件owner；仍先订阅真实active事件并断言Manage Hooks按钮存在，保留Hooks结果与安全断言，不改Hooks生产逻辑或增加sleep。
+
+删除后测试调用链追加scope：全src/test名称扫描找到test/smoke/areas/windows/renderer-hot-reload.spec.ts仍按Cowork选择已获批准删除的旧chatListWidget.ts，实际两种widget已经共享Workbench实现。准确只把该paths.chat literal改为共享workbench路径，两种场景仍分别保留，不改HMR行为或测试期望。按smoke-tests技能验证开发Browser窗口的Cowork场景；其source写入/恢复需沿原测试已有written核对保护共享工作区。本轮无新删除。
+
+同一HMR fixture装配追加：第一次实际运行拒绝Unknown service: agentVoiceService，其自建window容器没有注册已确认optional agentHost Voice slot，model也仍缺原onDidChangeComposer/代次契约。准确仅给该fixture注册IAgentVoiceService=undefined（明确无Voice backend）及Event.None/0的原composer生命周期，保留真实Stanza输入factory、列表/sidebar状态与hot reload断言；不放宽生产注入或模拟媒体。
+
+HMR真实交互继续揭示旧fixture用列表第一个button聚焦却断言错误行Start a new chat；新增消息Copy后第一个button已是Copy，这不是组件丢焦点。准确仅把该fixture的聚焦查找改为既有data-item-id=error行内button，原Start a new chat焦点和键盘调用断言完整保留，避免测试把新增可访问操作当作回归。
+
+同一HMR的Code场景需其ChatWidget原IDialogService；真实运行明确缺slot（Cowork已通过）。准确在原fixture注册现有DialogService并由scope释放，仅闭合真实DI；测试不发起确认，不借此修改任何Voice或Dialog业务。
+
+听写启动状态准入：onSpeech等待与异步provider acquisition仍由原Recording/token持有，但原ChatInputPart.statusText把active请求立即写为Listening，早于provider Started。准确仅改双方chat/browser/widget/input/chatInputPart.ts原status hunk：原SpeechService.isStarting为true时显示本地化Starting dictation，实际Started后原Listening生效；不新存started/UI事实。原table.integration.spec.ts的en/zh真实ChatInputPart加声明激活等待→Started→窗口Cancel场景；chat.json追加翻译，保留无麦克风fallback、草稿和停止断言。其他Speech/Voice实现不改。
+
+Speech bridge释放准入：MainThreadSpeech.clear/dispose不等同于后端registration已撤销；当前close沿已abort的binding owner会被本地阻断，不能释放仍admitted的持续会话。准确只改原MainThreadSpeech binding/session的cleanup callback：close用原精确extension/registration/incarnation/activationGeneration和新cleanup signal，独立于本地取消；服务端仍拒绝撤销/旧代次，绝不选择replacement。原MainThread测试增加bridge clear时pending TTS被取消、read被fence且原session close实际到达，旧token不影响重建来源。朗读私有window CTS map在取消时释放准入，并以CTS身份fence旧finally，不能迟到擦除同window的新操作。原action test验证被取消的旧provider promise仍未settle时可以起新操作、旧回包不能清除新Stop owner。无新的媒体、服务或公开API。
+
+当前真实结果：完整Chat268项/37文件、Speech/MainThread/Extensions/原两种设置与Sessions264项/7文件、完整agentHost164项/14文件通过；完整Transcript/Webview93项Chromium通过，Speech/Editor/Terminal原20项通过。最新bridge清理/取消identity与Starting状态之后，全仓准备被共享Sessions Workbench的ILogService→ILoggerService装配缺createLogger阻断，未把旧全量结果当作最新全仓通过。相同编译选项的受影响Speech/MainThread/朗读/agentHost decoder36项与实际Chat/Cowork×en/zh朗读、Chat启动状态6项Chromium最新通过；原ChatInputPart36项通过。shared Chat hot reload的实际开发Browser两个场景（Code/Cowork）通过，原焦点、滚动、折叠、Stanza selection与sidebar状态保留，source已由原owner保护恢复。Node完整27项（含已完成create后普通cancel无效、精确close幂等与另一session隔离）通过；前述Rust/V8与后端/protocol验证保持，其源不因本轮UI扩展而改变。
+
+继续调查的真实前置：标准Speech注册当前由原Host sealActivation冻结，host.mjs register显式只允许activating；晚于activate的注册及其向后端fleet的即时增删尚无原admitted registry更新端口，不能把前端轮询或另一张provider表当作完整动态注册。标准Voice/hold命令还需要实际聚焦Chat widget与输入生命周期的准确IChatWidgetService调用链，原ChatWidget/Cowork不是上游SessionResource模型，不能从全量public成员差异造同名facade。PTT/audio/session-context完整VoiceClient仍缺兼容producer；App sampling/双向App tools仍需原Core-owned能力。整个Chat/Speech与agentHost对齐保持进行中，不因路径计数或本轮朗读链闭合而标记全部完成。
+
+共享Logger装配已由原任务恢复，最新Renderer3846文件再次通过；重新用原完整测试入口收尾，而不是保留隔离编译作为全仓通过的替代。所有本轮触及14项TS格式通过，原footer CSS0错误，仅原3项字体role建议；旧已删除Voice/Cowork调用链的src/test引用扫描为0。
+
+朗读不可用状态scope追加：通用Button的author display:inline-flex可覆盖浏览器hidden默认样式。准确只在已确认原chatListWidget.css为原footer child button[hidden]添加display:none，不改Base/其他按钮。原transcript Copy场景明确Web无Desktopcommand不显示朗读；朗读场景追加provider撤销后真实UI隐藏，沿原bridge/ContextKey事实不另存availability。fixture仅增加原bridge.clear入口，无新的产品API。最新全量unit又被共享terminalRecorder.test.ts的commandExecuted缺cwd字段阻断；新朗读/清理受影响36项与实际6项已通过、Renderer已恢复通过，不把该外部失败计为通过。
+
+全量结果更新：原完整入口Chat269项/37文件、Speech/MainThread/Extensions/Settings/Sessions265项/7文件均通过。最新browser为91通过/2失败，均为Cowork原持久Terminal只读预览；共享Terminal的ShellIntegrationAddon新增ITerminalLogService依赖，fixture尚未装配。准确只改原chatTranscript.integration.ts的window服务装配：同一既有LogService实例同时注册其真实ILoggerService角色，原window注册真实TerminalLogService；不改Terminal生产实现、预览断言、协议或业务配置。共享Source事实不从缺注入推断功能缺失，修好后验证原两个中英文immutable preview。
+
+最终本轮验证：原完整Chat269项/37文件、Speech/MainThread/Extensions/Settings/Sessions265项/7文件、agentHost164项/14文件；完整Transcript/Webview93项、Speech/Editor/Terminal22项Chromium、实际Code/Cowork开发HMR2项通过。Node控制通道27项通过。最新Renderer3846文件、协议1477文件、触及TS格式、CSS0错误与diff check通过；CSS保留原3项字体role建议。前述Logger/cwd/Terminal preview fixture失败均留有日志，最终对应原完整入口已恢复通过，未放宽业务或结果断言。清理/朗读取消identity36项同编译选项验证在恢复前先独立通过。
+
+当前可恢复源码快照：.build/chat-alignment/chat-speech-validated-slices-20261013（62个准确文件及manifest SHA256，7个已批准删除路径均不存在；whole-file快照可能含共享同路径任务变化，不允许盲目恢复）。库存123/971/104/19/867仅为当前路径关系，HTML已改为纯事实清单，行为结论以本台账为准。没有commit、push、Git索引或工作树替换；整个Chat/Speech/agentHost对齐仍不宣告完成。
