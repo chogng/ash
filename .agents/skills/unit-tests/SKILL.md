@@ -28,6 +28,7 @@ For repeated runs against unchanged sources and generated inputs, use `pnpm test
 | `--runGlob <pattern>`      | Match emitted `.js` paths relative to `.build/desktop/test`. Cannot be combined with `--run`.                                   |
 | `--grep <pattern>`         | Match full Mocha test titles in the selected files.                                                                             |
 | `--timeout <milliseconds>` | Positive integer; default 60,000 per test.                                                                                      |
+| `--workers <count>`         | Positive integer; defaults to the smaller of 4 and available CPUs. Use 1 for serial execution.                                  |
 
 ```bash
 pnpm test:unit --run src/ash/workbench/contrib/preferences/test/browser/settings.test.ts --grep 'Models Settings'
@@ -40,4 +41,4 @@ For test design and cleanup, read [Writing Tests](../../../.github/instructions/
 
 ## Stopping and reusing validation
 
-The runner owns each isolated Mocha child asynchronously. Ctrl-C / SIGINT or SIGTERM stops the current child and its descendants and prevents the next file from starting. Interrupt again to skip the graceful wait. Wait for the actual command to exit before reporting it stopped. Reuse passing results whose inputs still cover the changes; do not rerun tests merely for a commit or push. `test:editor` is an unfiltered combined target; use the individual editor commands for filtering.
+The runner keeps each file in an isolated Mocha process, rejects `.only`, and prints completed files without interleaving their reporters. Ctrl-C / SIGINT or SIGTERM stops all active children and their descendants and leaves queued files unstarted. Interrupt again to skip the graceful wait. Wait for the actual command to exit before reporting it stopped. Reuse passing results whose inputs still cover the changes; do not rerun tests merely for a commit or push. `test:editor` is an unfiltered combined target; use the individual editor commands for filtering.

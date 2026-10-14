@@ -10,6 +10,7 @@ const browserProjects = browserUi
 		: [];
 
 export default defineConfig({
+	forbidOnly: !!process.env.CI,
 	testDir: "./test/smoke",
 	outputDir: ".build/desktop/playwright/test-results",
 	fullyParallel: false,

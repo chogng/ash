@@ -19,15 +19,25 @@ const editorSpecs = [
 const runDirectory = process.env.ASH_EDITOR_BROWSER_RUN_DIRECTORY;
 
 export default defineConfig({
+	forbidOnly: !!process.env.CI,
 	testDir: ".",
 	testMatch: process.env.ASH_EDITOR_BROWSER_ONLY === "1" ? editorSpecs : "*.integration.spec.ts",
 	outputDir: runDirectory ? resolve(runDirectory, "results") : "../../../.build/desktop/playwright/editor-results",
 	fullyParallel: false,
 	workers: 1,
-	use: { baseURL: process.env.ASH_EDITOR_BROWSER_BASE_URL ?? "http://127.0.0.1:5185" },
+	use: { baseURL: process.env.ASH_EDITOR_BROWSER_BASE_URL ?? "http://127.0.0.1:5185", trace: "retain-on-failure" },
 	projects: [
 		{ name: "chromium", testIgnore: "gpuText.integration.spec.ts", use: { browserName: "chromium" } },
-		{ name: "chrome-gpu", testMatch: "gpuText.integration.spec.ts", use: { browserName: "chromium", channel: "chrome", deviceScaleFactor: 1.25 } },
+		{
+			name: "chrome-gpu", testMatch: "gpuText.integration.spec.ts", use: {
+				browserName: "chromium", channel: "chrome", deviceScaleFactor: 1.25,
+				// Hosted Linux runners have no GPU. Exercise Dawn's real rendering path
+				// with its software Vulkan adapter; local runs keep their hardware adapter.
+				launchOptions: process.env.CI && process.platform === 'linux' ? {
+					args: ['--enable-unsafe-webgpu', '--use-webgpu-adapter=swiftshader', '--use-vulkan=swiftshader', '--enable-features=Vulkan', '--use-angle=vulkan', '--disable-vulkan-surface'],
+				} : {},
+			},
+		},
 	],
 	webServer: process.env.ASH_EDITOR_BROWSER_EXTERNAL_SERVER ? undefined : {
 		command: "node ../../../node_modules/vite/bin/vite.js build --config vite.config.ts && node ../../../build/desktop/launch/web.ts ../../../.build/desktop/editor-browser 5185",

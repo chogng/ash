@@ -49,6 +49,9 @@ for (const profile of ['default', 'custom'] as const) {
         const output = '.build/desktop/preload/src/ash/base/parts/sandbox/electron-browser/preload.cjs';
         fs.mkdirSync(path.dirname(output), { recursive: true });
         fs.writeFileSync(output, phase === 'initial' || phase === 'invalid' ? "require('fs')" : "require('electron')");
+        const browserOutput = '.build/desktop/preload/src/ash/platform/browserView/electron-browser/preload-browserView.js';
+        fs.mkdirSync(path.dirname(browserOutput), { recursive: true });
+        fs.writeFileSync(browserOutput, "require('electron')");
         console.log('Found ' + (phase === 'error' ? 1 : 0) + ' errors. Watching for file changes.');
         fs.appendFileSync('phases.log', phase + '\\n');
       }, 25);

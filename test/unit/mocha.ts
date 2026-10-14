@@ -1,6 +1,6 @@
 import { withProcessRun } from '../../build/processes.ts';
-import { copyFileSync, cpSync, existsSync, globSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { constants, copyFileSync, cpSync, existsSync, globSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { availableParallelism, tmpdir } from 'node:os';
 import { dirname, resolve, sep } from 'node:path';
 
 interface Selection {
@@ -8,6 +8,7 @@ interface Selection {
 	readonly runGlob?: string;
 	readonly grep?: string;
 	readonly timeout: number;
+	readonly workers: number;
 }
 
 const desktopDirectory = resolve(import.meta.dirname, '../..');
@@ -23,7 +24,9 @@ export async function runUnitTests(patterns: readonly string[], editorEnvironmen
 	// Keep this run's modules alive when another invocation cleans the compiler output.
 	const outputDirectory = mkdtempSync(resolve(desktopDirectory, '.build/desktop/test-run-'));
 	try {
-		cpSync(compiledDirectory, outputDirectory, { recursive: true });
+		// Reflinks keep the snapshot independent of compiler writes without copying
+		// every byte on filesystems that support them; elsewhere Node copies normally.
+		cpSync(compiledDirectory, outputDirectory, { recursive: true, mode: constants.COPYFILE_FICLONE });
 		// TypeScript resolves vendored declarations but does not emit their adjacent JavaScript implementations.
 		for (const path of ['src/ash/base/common/marked/marked.js', 'src/ash/base/browser/dompurify/dompurify.js']) {
 			const output = resolve(outputDirectory, path);
@@ -48,35 +51,55 @@ export async function runUnitTests(patterns: readonly string[], editorEnvironmen
 		if (files.length === 0) {
 			throw new Error('No compiled unit tests matched the requested files');
 		}
+		for (const file of files) {
+			if (!file.startsWith(`${outputDirectory}${sep}`) || !existsSync(file)) {
+				throw new Error(`Compiled unit test does not exist: ${file}`);
+			}
+		}
 
 		const failed: string[] = [];
 		let executedTests = 0;
 		const resultDirectory = mkdtempSync(resolve(tmpdir(), 'ash-unit-results-'));
 		try {
 			await withProcessRun(desktopDirectory, async (run, environment) => {
-				for (const [index, file] of files.entries()) {
-					if (!file.startsWith(`${outputDirectory}${sep}`) || !existsSync(file)) {
-						throw new Error(`Compiled unit test does not exist: ${file}`);
+				let nextFile = 0;
+				const worker = async (): Promise<void> => {
+					while (!run.stopped && nextFile < files.length) {
+						const index = nextFile++;
+						const file = files[index];
+						const countFile = resolve(resultDirectory, `${index}.txt`);
+						const result = await run.command(process.execPath, [
+							'--import', './test/unit/ignore-css-imports.ts',
+							'--import', './test/unit/theme-resources.ts',
+							...(editorEnvironment ? ['--import', './test/unit/editor-environment.ts'] : []),
+							'node_modules/mocha/bin/mocha.js',
+							'--ui', 'tdd',
+							'--forbid-only',
+							'--reporter', './test/unit/reporter.ts',
+							'--reporter-option', `countFile=${countFile}`,
+							'--timeout', String(selection.timeout),
+							...(selection.grep ? ['--grep', selection.grep] : []),
+							file,
+						], { ...environment, ASH_UNIT_TEST_OUTPUT_DIRECTORY: outputDirectory }, true);
+						// Print one completed file at a time so concurrent reporters stay readable.
+						process.stdout.write(result.output);
+						if (run.stopped || result.code === 130 || result.code === 143) {
+							if (!run.stopped) {
+								process.exitCode = result.code;
+								await run.stop(result.code === 130 ? 'SIGINT' : 'SIGTERM');
+							}
+							return;
+						}
+						if (result.code !== 0) failed.push(file);
+						if (existsSync(countFile)) executedTests += Number(readFileSync(countFile, 'utf8'));
 					}
-					const countFile = resolve(resultDirectory, `${index}.txt`);
-					const result = await run.command(process.execPath, [
-						'--import', './test/unit/ignore-css-imports.ts',
-						'--import', './test/unit/theme-resources.ts',
-						...(editorEnvironment ? ['--import', './test/unit/editor-environment.ts'] : []),
-						'node_modules/mocha/bin/mocha.js',
-						'--ui', 'tdd',
-						'--reporter', './test/unit/reporter.ts',
-						'--reporter-option', `countFile=${countFile}`,
-						'--timeout', String(selection.timeout),
-						...(selection.grep ? ['--grep', selection.grep] : []),
-						file,
-					], { ...environment, ASH_UNIT_TEST_OUTPUT_DIRECTORY: outputDirectory });
-					if (run.stopped || result.code === 130 || result.code === 143) {
-						process.exitCode = result.code;
-						return;
-					}
-					if (result.code !== 0) failed.push(file);
-					if (existsSync(countFile)) executedTests += Number(readFileSync(countFile, 'utf8'));
+				};
+				const results = await Promise.allSettled(Array.from({ length: Math.min(selection.workers, files.length) }, async () => {
+					try { await worker(); }
+					catch (error) { await run.close(); throw error; }
+				}));
+				for (const result of results) {
+					if (result.status === 'rejected') throw result.reason;
 				}
 			});
 		} finally {
@@ -110,6 +133,7 @@ function parseSelection(args: readonly string[]): Selection {
 	let runGlob: string | undefined;
 	let grep: string | undefined;
 	let timeout = 60_000;
+	let workers = Math.min(4, availableParallelism());
 	for (let index = 0; index < args.length; index += 1) {
 		const option = args[index];
 		const value = args[index + 1];
@@ -127,10 +151,15 @@ function parseSelection(args: readonly string[]): Selection {
 				if (!Number.isSafeInteger(timeout) || timeout <= 0) throw new Error(`Invalid test timeout: ${value}`);
 				break;
 			}
+			case '--workers': {
+				workers = Number(value);
+				if (!Number.isSafeInteger(workers) || workers <= 0) throw new Error(`Invalid worker count: ${value}`);
+				break;
+			}
 			default: throw new Error(`Unsupported unit test option: ${option}`);
 		}
 		index += 1;
 	}
 	if (runs.length > 0 && runGlob) throw new Error('--run and --runGlob cannot be combined');
-	return { runs, runGlob, grep, timeout };
+	return { runs, runGlob, grep, timeout, workers };
 }

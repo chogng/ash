@@ -801,7 +801,7 @@ test('Reveal tab menu groups both destinations and targets the clicked inactive 
 	context.setContext(ActiveEditorStickyContext.key, false);
 	const menus = new MenuService(commands, context);
 	const actions = menus.getMenuActions(MenuId.EditorTitleContext, { arg: { groupId: group.id, editorIndex: 1 } }).find(([name]) => name === '2_files')![1];
-	assert.deepEqual(menus.getMenuActions(MenuId.EditorTitleContext).map(([name]) => name), ['1_close', '1_open', '2_files', '3_preview', '5_split']);
+	assert.deepEqual(menus.getMenuActions(MenuId.EditorTitleContext).map(([name]) => name), ['1_close', '1_open', '2_files', '3_preview', '5_split', '7_new_window']);
 	assert.deepEqual(actions.map(action => action.id), [COPY_PATH_COMMAND_ID, COPY_RELATIVE_PATH_COMMAND_ID, REVEAL_IN_EXPLORER_COMMAND_ID, REVEAL_IN_OS_COMMAND_ID]);
 	for (const action of actions.filter(action => action.id === REVEAL_IN_EXPLORER_COMMAND_ID || action.id === REVEAL_IN_OS_COMMAND_ID)) await action.run();
 	assert.deepEqual(effects, [['open', 'ash.explorer'], ['select', clicked.resource.toString(), 'force'], ['focus'], ['finder', clicked.resource.fsPath]]);

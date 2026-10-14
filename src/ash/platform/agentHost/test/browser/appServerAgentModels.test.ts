@@ -24,7 +24,7 @@ test('Credential operations preserve storage failures as domain errors and trans
 			await assert.rejects(operation(), error => {
 				assert.ok(error instanceof SecretStorageError);
 				assert.equal(error.status, 'accessDenied');
-				assert.equal(error.message, '凭据存储访问被拒绝。请检查配置目录权限，解锁系统钥匙串并允许 Ash 访问，然后重试。');
+				assert.equal(error.message, '凭据存储访问被拒绝。请检查配置目录权限，或使用“授权系统钥匙串”请求访问。后台操作不会显示系统窗口。');
 				return true;
 			});
 		}

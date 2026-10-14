@@ -124,7 +124,7 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Install Chromium
         if: matrix.surface == 'browser'
-        run: pnpm exec playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps chromium chrome
       - name: Check sources and build Desktop and Web on every platform
         # Each runner checks its own platform declarations once. The Desktop
         # and both Web bundles reuse these inputs without lifecycle rechecks.
@@ -136,7 +136,10 @@ jobs:
           pnpm run bundle:web
       - name: Test browser integration
         if: matrix.surface == 'browser'
-        run: pnpm run test:browser:integration:prepared --project=chromium
+        run: pnpm run test:browser:integration:prepared --project=chromium --project=chrome-gpu
+      - name: Test Windows process ownership
+        if: runner.os == 'Windows'
+        run: pnpm exec node --test build/processes.test.ts
       - name: Test production browser UI
         if: matrix.surface == 'browser'
         run: pnpm run test:smoke:browser:no-compile

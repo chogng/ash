@@ -258,6 +258,9 @@ function healthyGpuEditorState(): GpuEditorState {
 }
 
 async function gpuEditorState(page: Page): Promise<GpuEditorState> {
+	// Folding ranges arrive asynchronously after model creation and undo. The
+	// geometry probe requires their DOM; poll assertions cannot retry thrown errors.
+	await expect(page.locator('#editor-root .margin-view-overlays .view-overlay-line[data-line-index="0"] .ash-icon-folding-expanded')).toBeAttached();
 	return page.evaluate(() => {
 		const requireElement = <T extends Element = HTMLElement>(root: ParentNode, selector: string): T => {
 			const element = root.querySelector<T>(selector);

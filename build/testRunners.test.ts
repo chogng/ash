@@ -75,6 +75,26 @@ test('browser integration preserves filters and rejects discarded or empty selec
 	}
 });
 
+test('CI rejects exclusive tests during collection before browser or smoke launches', { timeout: 20_000 }, async t => {
+	const directory = await mkdtemp(join(repository, 'test/.exclusive-runner-'));
+	t.after(() => rm(directory, { recursive: true, force: true }));
+	await writeFile(join(directory, 'exclusive.spec.ts'), `import { test } from '@playwright/test'; test.only('exclusive', () => { throw Error('must not execute'); }); test('sibling', () => {});`);
+	for (const [name, source, entrypoint] of [
+		['integration', 'test/integration/browser/playwright.config.ts', ['test/integration/browser/run.ts']],
+		['smoke', 'playwright.config.ts', ['test/smoke/run.ts', 'electron-ui']],
+	] as const) {
+		const config = join(directory, `${name}.config.ts`);
+		await writeFile(config, `import config from ${JSON.stringify(join(repository, source))}; export default { ...config, testDir: '.', testMatch: '*.spec.ts', webServer: undefined, reporter: 'list' };`);
+		await assert.rejects(execute(process.execPath, [...entrypoint, '--config', config, '--list'], { cwd: repository, env: { ...process.env, CI: 'true' }, timeout: 10_000 }), error => {
+			assert.ok(error instanceof Error);
+			const failure = error as Error & { stdout: string; stderr: string; code: number; };
+			assert.match(failure.stdout + failure.stderr, /\.only.*forbidOnly/);
+			assert.doesNotMatch(failure.stdout, /Browser integration server|Running \d+ tests?/);
+			return failure.code === 1;
+		});
+	}
+});
+
 test('the combined editor target rejects filters before starting either suite', async () => {
 	await assert.rejects(execute(process.execPath, ['test/editor.ts', '--grep', 'selected'], { cwd: repository, timeout: 5_000 }), error => {
 		assert.ok(error instanceof Error);

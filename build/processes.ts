@@ -42,10 +42,10 @@ export async function registerRunResource(daemon?: RunResource['daemon'] | (() =
 	};
 }
 
-/** Owns sequential runner commands and cancellation, including detached product resources. */
+/** Owns runner commands and cancellation, including detached product resources. */
 export class ProcessRun {
-	private child: ChildProcess | undefined;
-	private exited: Promise<void> | undefined;
+	// Retain completed roots too: helpers may keep their process group alive.
+	private readonly children = new Map<ChildProcess, Promise<void>>();
 	private closing: Promise<void> | undefined;
 	private finishGrace: (() => void) | undefined;
 	private readonly owned = new Map<number, ProcessIdentity>();
@@ -59,50 +59,48 @@ export class ProcessRun {
 	public async command(command: string, args: readonly string[], env: NodeJS.ProcessEnv, capture = false): Promise<{ code: number; output: string; }> {
 		if (this.stopped) throw new Error('Process run was stopped; refusing to start another command.');
 		const child = spawn(command, args, { cwd: this.cwd, env, stdio: capture ? ['ignore', 'pipe', 'inherit'] : 'inherit', detached: process.platform !== 'win32', windowsHide: true });
-		this.child = child;
 		let output = '';
 		child.stdout?.on('data', (data: Buffer) => { output += data.toString(); });
 		const result = new Promise<{ code: number; output: string; }>((resolveExit, reject) => {
 			child.once('error', reject);
 			child.once(capture ? 'close' : 'exit', (code, signal) => resolveExit({ code: signal === 'SIGINT' ? 130 : signal === 'SIGTERM' ? 143 : code ?? 1, output }));
 		});
-		this.exited = result.then(() => undefined, () => undefined);
-		// Retain the last command for cleanup even if metadata collection fails or
+		this.children.set(child, result.then(() => undefined, () => undefined));
+		// Retain every command for cleanup even if metadata collection fails or
 		// its root exits while descendants still hold the process group.
-		await this.rememberTree(child.pid);
+		await this.rememberTree();
 		return await result;
 	}
 
 	public async own(child: ChildProcess): Promise<void> {
 		if (this.stopped) throw new Error('Process run was stopped; refusing to own another process.');
-		this.child = child;
 		let spawnError: Error | undefined;
 		child.once('error', error => { spawnError = error; });
-		this.exited = child.exitCode !== null || child.signalCode !== null || !child.pid
-			? Promise.resolve() : new Promise<void>(resolveExit => { child.once('exit', () => resolveExit()); child.once('error', () => resolveExit()); });
-		await this.rememberTree(child.pid);
+		this.children.set(child, child.exitCode !== null || child.signalCode !== null || !child.pid
+			? Promise.resolve() : new Promise<void>(resolveExit => { child.once('exit', () => resolveExit()); child.once('error', () => resolveExit()); }));
+		await this.rememberTree();
 		if (spawnError) throw spawnError;
 	}
 
 	public stop(signal: NodeJS.Signals): Promise<void> {
 		if (this.closing) { this.finishGrace?.(); return this.closing; }
 		this.stopped = true;
-		const child = this.child;
-		const exited = this.exited;
 		const interruptedAgain = new Promise<void>(resolveGrace => { this.finishGrace = resolveGrace; });
 		return this.closing = (async () => {
 			const errors: unknown[] = [];
-			try { await this.rememberTree(child?.pid); } catch (error) { errors.push(error); }
+			try { await this.rememberTree(); } catch (error) { errors.push(error); }
 			// Playwright first stops scheduling and runs fixture teardown. Electron
 			// and managed daemons have separate process groups, so a group signal alone
 			// cannot clean the run. Retain their identities before the worker exits.
-			if (child?.pid && child.exitCode === null && child.signalCode === null) child.kill(signal);
+			for (const child of this.children.keys()) {
+				if (child.pid && child.exitCode === null && child.signalCode === null) child.kill(signal);
+			}
 			let timeout: ReturnType<typeof setTimeout> | undefined;
 			try {
 				timeout = setTimeout(() => this.finishGrace?.(), this.graceMs);
-				await Promise.race([exited, interruptedAgain]);
+				await Promise.race([Promise.all(this.children.values()), interruptedAgain]);
 			} finally { clearTimeout(timeout); this.finishGrace = undefined; }
-			try { await this.rememberTree(child?.pid); } catch (error) { errors.push(error); }
+			try { await this.rememberTree(); } catch (error) { errors.push(error); }
 			try { await this.cleanup(); } catch (error) { errors.push(error); }
 			if (errors.length) throw new AggregateError(errors, 'Process cancellation failed');
 		})();
@@ -124,10 +122,12 @@ export class ProcessRun {
 		return resources;
 	}
 
-	private async rememberTree(root?: number): Promise<Map<number, ProcessIdentity>> {
+	private async rememberTree(): Promise<Map<number, ProcessIdentity>> {
 		const current = await processes();
 		const roots = new Set<number>();
-		if (root && current.has(root)) roots.add(root);
+		for (const child of this.children.keys()) {
+			if (child.pid && child.exitCode === null && child.signalCode === null && current.has(child.pid)) roots.add(child.pid);
+		}
 		for (const resource of await this.resources()) {
 			if (resource.process && current.get(resource.process.pid)?.started === resource.process.started) roots.add(resource.process.pid);
 		}
@@ -149,7 +149,7 @@ export class ProcessRun {
 	private async cleanup(): Promise<void> {
 		const errors: unknown[] = [];
 		let current: Map<number, ProcessIdentity> | undefined;
-		try { current = await this.rememberTree(this.child?.pid); } catch (error) { errors.push(error); }
+		try { current = await this.rememberTree(); } catch (error) { errors.push(error); }
 		const resources = await this.resources();
 		current ??= await processes();
 		const terminationErrors = new Map<number, unknown>();

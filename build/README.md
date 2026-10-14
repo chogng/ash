@@ -36,6 +36,9 @@ filters, skipping preparation and compilation. The runner regression suite uses
 `pnpm test:unit:runner` after test compilation; `test:main` and frontend CI run it
 once separately from business units. Use a compiling
 entry again when sources, generated inputs, compiler configuration or dependencies change.
+Unit files run in separate processes with at most four workers by default;
+`--workers 1` selects serial execution. Output snapshots use filesystem reflinks
+where available while retaining independent files when the compiler rebuilds.
 `pnpm bundle:web` and `pnpm bundle:web:full` only run
 Vite against those prepared, checked sources; use `pnpm build:web` or
 `pnpm build:web:full` for a standalone build. The two bundles have different

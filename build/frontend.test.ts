@@ -35,6 +35,16 @@ test('Frontend acceptance waits for shared contracts and unit tests', () => {
 	assert.match(contracts, /pnpm run test:unit:runner/u);
 });
 
+test('Frontend CI collects GPU regressions and schedules Windows process ownership', { timeout: 15_000 }, async () => {
+	assert.match(workflow, /playwright install --with-deps chromium chrome/u);
+	assert.match(workflow, /test:browser:integration:prepared --project=chromium --project=chrome-gpu/u);
+	assert.match(workflow, /name: Test Windows process ownership\n\s+if: runner.os == 'Windows'\n\s+run: pnpm exec node --test build\/processes.test.ts/u);
+	const { stdout } = await execute(process.execPath, ['test/integration/browser/run.ts', '--project=chrome-gpu', '--list'], { cwd: repositoryRoot, timeout: 10_000 });
+	assert.match(stdout, /GPU device loss restores DOM text/u);
+	assert.match(stdout, /GPU initialization falls back to editable DOM text/u);
+	assert.match(stdout, /Total: [1-9]\d* tests in 1 file/u);
+});
+
 test('Frontend CI smoke commands collect applicable tests from configured Playwright projects', { timeout: 30_000 }, async () => {
 	assert.ok(projects.length > 0, 'Frontend CI must retain explicit smoke project selections');
 	for (const project of projects) {

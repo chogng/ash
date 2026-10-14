@@ -62,12 +62,64 @@ test('a filter may select a test in only one of multiple isolated files', () => 
 });
 
 test('invalid unit filters fail before copying outputs or starting the selected file', () => {
-	for (const args of [['--grep', ''], ['--grep', '   '], ['--grepp', 'selected'], ['--', '--grep', 'selected']]) {
+	for (const args of [['--grep', ''], ['--grep', '   '], ['--grepp', 'selected'], ['--', '--grep', 'selected'], ['--workers', '0'], ['--workers', '-1'], ['--workers', '1.5'], ['--workers', 'NaN']]) {
 		const result = run(['--run', first, ...args], 'test/unit/run.ts', join(directory, 'missing-compiler-output'));
 		assert.equal(result.status, 1, result.output);
-		assert.match(result.output, /Missing value for --grep|nonempty pattern|Unsupported unit test option/);
+		assert.match(result.output, /Missing value for --grep|nonempty pattern|Unsupported unit test option|Invalid worker count/);
 		assert.doesNotMatch(result.output, /tests executed|runner regression sentinel/);
 	}
+});
+
+test('exclusive tests fail instead of silently dropping their siblings', () => {
+	const exclusive = join(directory, 'exclusive.test.js');
+	writeFileSync(exclusive, `import { test } from 'mocha'; test.only('exclusive', () => {}); test('sibling', () => { throw Error('missed sibling'); });`);
+	const result = run(['--run', relative(outputDirectory, exclusive).replaceAll('\\', '/')]);
+	assert.equal(result.status, 1, result.output);
+	assert.match(result.output, /ERR_MOCHA_FORBIDDEN_EXCLUSIVITY/);
+});
+
+test('all selected paths are validated before any test starts', () => {
+	const result = run(['--run', first, '--run', 'test/unit/missing.test.js']);
+	assert.equal(result.status, 1, result.output);
+	assert.match(result.output, /Compiled unit test does not exist/);
+	assert.doesNotMatch(result.output, /runner regression sentinel|tests executed/);
+});
+
+test('workers overlap isolated files without starting beyond their limit', { timeout: 20_000 }, async t => {
+	const release = join(directory, 'pool-release');
+	const fixtures = [0, 1, 2].map(index => {
+		const path = join(directory, `pool-${index}.test.js`);
+		writeFileSync(path, `
+import assert from 'node:assert/strict';
+import { existsSync, writeFileSync } from 'node:fs';
+import { setTimeout } from 'node:timers/promises';
+import { test } from 'mocha';
+test('isolated file ${index}', async () => {
+ assert.equal(globalThis.unitPoolOwner, undefined);
+ globalThis.unitPoolOwner = ${index};
+ writeFileSync(${JSON.stringify(join(directory, `pool-ready-${index}`))}, 'ready');
+ while (!existsSync(${JSON.stringify(release)})) await setTimeout(25);
+ assert.equal(globalThis.unitPoolOwner, ${index});
+});
+`);
+		return relative(outputDirectory, path).replaceAll('\\', '/');
+	});
+	const child = spawn(process.execPath, ['test/unit/run.ts', '--workers', '2', ...fixtures.flatMap(path => ['--run', path])], { cwd: desktopDirectory, env: runnerEnvironment, stdio: ['ignore', 'pipe', 'pipe'] });
+	let output = '';
+	child.stdout.on('data', chunk => { output += chunk; });
+	child.stderr.on('data', chunk => { output += chunk; });
+	const stopped = new Promise<number | null>((resolveExit, reject) => { child.once('error', reject); child.once('close', resolveExit); });
+	t.after(async () => { if (child.exitCode === null) child.kill('SIGTERM'); await stopped; });
+	const deadline = Date.now() + 10_000;
+	while (![0, 1].every(index => existsSync(join(directory, `pool-ready-${index}`))) && Date.now() < deadline) {
+		await new Promise(resolveWait => setTimeout(resolveWait, 25));
+		if (child.exitCode !== null) throw new Error(output);
+	}
+	assert.ok([0, 1].every(index => existsSync(join(directory, `pool-ready-${index}`))), output);
+	assert.equal(existsSync(join(directory, 'pool-ready-2')), false, 'A third file exceeded the two-worker limit');
+	writeFileSync(release, 'continue');
+	assert.equal(await stopped, 0, output);
+	assert.match(output, /3 tests executed across 3 files; 0 failed files/);
 });
 
 test('a filter matching no tests fails the run', () => {
@@ -126,12 +178,14 @@ test('retains a dependency loaded after cleanup', async () => {
 });
 
 for (const [signal, code] of [['SIGINT', 130], ['SIGTERM', 143]] as const) {
-	test(`${signal} stops Mocha descendants and prevents the next file from starting`, { skip: process.platform === 'win32', timeout: 20_000 }, async t => {
-		const marker = join(directory, `ready-${signal}`);
+	test(`${signal} stops all concurrent Mocha descendants and leaves queued files unstarted`, { skip: process.platform === 'win32', timeout: 20_000 }, async t => {
+		const markers = [0, 1].map(index => join(directory, `ready-${signal}-${index}`));
 		const later = join(directory, `later-${signal}`);
-		const waiting = join(directory, `00-waiting-${signal}.test.js`);
-		const following = join(directory, `01-following-${signal}.test.js`);
-		writeFileSync(waiting, `
+		const waiting = [0, 1].map(index => join(directory, `0${index}-waiting-${signal}.test.js`));
+		const following = join(directory, `02-following-${signal}.test.js`);
+		for (const [index, path] of waiting.entries()) {
+			const marker = markers[index];
+			writeFileSync(path, `
 import { test } from 'mocha';
 import { spawn } from 'node:child_process';
 import { rename, writeFile } from 'node:fs/promises';
@@ -145,9 +199,10 @@ test('waiting', async function() {
  await new Promise(() => {});
 });
 `);
+		}
 		writeFileSync(following, `import { test } from 'mocha'; import { writeFileSync } from 'node:fs'; test('must not start', () => writeFileSync(${JSON.stringify(later)}, 'ran'));`);
-		const paths = [waiting, following].map(path => relative(outputDirectory, path).replaceAll('\\', '/'));
-		const child = spawn(process.execPath, ['test/unit/run.ts', '--run', paths[0], '--run', paths[1]], { cwd: desktopDirectory, env: runnerEnvironment, stdio: ['ignore', 'pipe', 'pipe'] });
+		const paths = [...waiting, following].map(path => relative(outputDirectory, path).replaceAll('\\', '/'));
+		const child = spawn(process.execPath, ['test/unit/run.ts', '--workers', '2', ...paths.flatMap(path => ['--run', path])], { cwd: desktopDirectory, env: runnerEnvironment, stdio: ['ignore', 'pipe', 'pipe'] });
 		let output = '';
 		child.stdout.on('data', chunk => { output += chunk; });
 		child.stderr.on('data', chunk => { output += chunk; });
@@ -158,11 +213,12 @@ test('waiting', async function() {
 			await stopped;
 		});
 		const deadline = Date.now() + 10_000;
-		while (!existsSync(marker) && Date.now() < deadline) {
+		while (!markers.every(marker => existsSync(marker)) && Date.now() < deadline) {
 			await new Promise(resolveWait => setTimeout(resolveWait, 25));
 			if (child.exitCode !== null) throw new Error(output);
 		}
-		pids = JSON.parse(await readFile(marker, 'utf8'));
+		assert.ok(markers.every(marker => existsSync(marker)), output);
+		pids = (await Promise.all(markers.map(async marker => JSON.parse(await readFile(marker, 'utf8')) as number[]))).flat();
 		child.kill(signal);
 		assert.equal(await stopped, code, output);
 		assert.equal(existsSync(later), false, 'Another test file started after cancellation');
