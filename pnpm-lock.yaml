@@ -184,9 +184,6 @@ importers:
       native-keymap:
         specifier: 3.3.9
         version: 3.3.9
-      pdfjs-dist:
-        specifier: 6.1.200
-        version: 6.1.200
       playwright-core:
         specifier: 1.61.1
         version: 1.61.1
@@ -251,6 +248,9 @@ importers:
       node:
         specifier: runtime:24.21.0
         version: runtime:24.21.0
+      pdfjs-dist:
+        specifier: 6.1.200
+        version: 6.1.200
       prettier:
         specifier: 3.9.9
         version: 3.9.9

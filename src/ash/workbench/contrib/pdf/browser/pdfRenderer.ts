@@ -34,7 +34,8 @@ export class PdfJsRenderer implements IPdfRenderer {
 		throwIfCancelled(request.signal, "PDF rendering was cancelled");
 		const [{ getDocument, GlobalWorkerOptions }, { default: workerUrl }] = await Promise.all([
 			import("pdfjs-dist"),
-			import("pdfjs-dist/build/pdf.worker.mjs?url"),
+			// URL imports are copied as assets; use the upstream minified worker in releases.
+			import("pdfjs-dist/build/pdf.worker.min.mjs?url"),
 		]);
 		throwIfCancelled(request.signal, "PDF rendering was cancelled");
 		GlobalWorkerOptions.workerSrc = workerUrl;

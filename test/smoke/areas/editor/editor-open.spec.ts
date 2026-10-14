@@ -1321,6 +1321,10 @@ test("Code renders workspace PDFs and persists review annotations", { tag: ['@br
 
 	await reader.locator("[data-action-id='ash.pdf.annotations.highlight'] button").click();
 	const layer = reader.locator(".ash-pdf-annotation-layer");
+	await expect.poll(() => layer.evaluate(layer => {
+		const pages = layer.closest(".ash-pdf-pages")!;
+		return layer.getBoundingClientRect().left - pages.getBoundingClientRect().left;
+	}), { message: "PDF page leading edge remains reachable in the scroll viewport" }).toBeGreaterThanOrEqual(0);
 	const bounds = await layer.boundingBox();
 	if (!bounds) throw new Error("PDF annotation layer has no visual bounds");
 	await workbench.page.mouse.move(bounds.x + 24, bounds.y + 24);

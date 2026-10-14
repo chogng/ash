@@ -25,7 +25,8 @@
 }
 
 .ash-pdf-pages {
-	align-items: center;
+	/* Keep the leading edge of oversized pages reachable by horizontal scrolling. */
+	align-items: safe center;
 	background: var(--ash-editor-background);
 	display: flex;
 	flex: 1 1 auto;
