@@ -3,6 +3,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::OnceLock;
 
 use aes::Aes256;
 use aes_gcm::AesGcm;
@@ -50,14 +51,19 @@ enum StorageState {
 /// Profile persistence with encrypted files by default and an explicit private-file alternative.
 ///
 /// The host injects its profile-scoped keyring adapter; this crate never chooses or falls back to
-/// another key facility. Operations reread the keyring, so revocation is not bypassed by a cached
-/// key. A process-shared file lock serializes key creation, migration and writes across hosts.
+/// another key facility. Each store retains its successfully acquired master key until it is
+/// dropped, then clears its bytes. Background access remains silent at the injected keyring
+/// boundary; failures are not cached, so explicit user authorization can retry without restarting
+/// the runtime. Keyring revocation takes effect when the profile runtime is reopened; credential
+/// files are still read and authenticated on every operation. A process-shared file lock serializes
+/// key creation, migration and writes across hosts.
 pub struct ProfileSecretStore {
     root: PathBuf,
     boundary: CanonicalPathRoot,
     files: FileSecretStore,
     legacy: FileSecretStore,
     keyring: Arc<dyn SecretStore>,
+    master_key: OnceLock<SecretValue>,
     operations: Mutex<()>,
 }
 
@@ -85,26 +91,36 @@ impl ProfileSecretStore {
             files,
             legacy,
             keyring,
+            master_key: OnceLock::new(),
             operations: Mutex::new(()),
         })
     }
 
-    fn encryption_key(&self) -> Result<SecretValue, SecretStoreError> {
+    // All callers hold both operation locks. Only a successful load is retained: a silent
+    // access denial must not block a later explicit authorization request on the same runtime.
+    fn encryption_key(&self) -> Result<&SecretValue, SecretStoreError> {
+        if let Some(key) = self.master_key.get() {
+            self.validate_encryption_key(key)?;
+            return Ok(key);
+        }
+        let key = self.acquire_master_key()?;
+        self.validate_encryption_key(&key)?;
+        Ok(self.master_key.get_or_init(|| key))
+    }
+
+    fn acquire_master_key(&self) -> Result<SecretValue, SecretStoreError> {
         let key_name = SecretKey::new(MASTER_KEY_NAME).expect("fixed internal secret key");
-        let check_path = self.files.values.join(KEY_CHECK);
-        let existing_check = self.files.load_path(&check_path, MAX_SECRET_BYTES)?;
-        let key = match self.keyring.load(&key_name)? {
-            Some(key) => key,
+        match self.keyring.load(&key_name)? {
+            Some(key) => Ok(key),
             None => {
                 // A missing key must never replace the key of existing ciphertext, even when the
                 // integrity witness was removed or damaged. Recovery requires the original key.
-                if existing_check.is_some()
-                    || fs::read_dir(&self.files.values)
-                        .map_err(store_io)?
-                        .next()
-                        .transpose()
-                        .map_err(store_io)?
-                        .is_some()
+                if fs::read_dir(&self.files.values)
+                    .map_err(store_io)?
+                    .next()
+                    .transpose()
+                    .map_err(store_io)?
+                    .is_some()
                 {
                     return Err(SecretStoreError::new(
                         SecretStoreErrorKind::KeyMissing,
@@ -116,10 +132,15 @@ impl ProfileSecretStore {
                     .map_err(|_| backend_failure("secret storage key generation failed"))?;
                 let key = SecretValue::new(std::mem::take(&mut *bytes));
                 self.keyring.store(&key_name, &key)?;
-                key
+                Ok(key)
             }
-        };
-        let cipher = cipher(&key)?;
+        }
+    }
+
+    fn validate_encryption_key(&self, key: &SecretValue) -> Result<(), SecretStoreError> {
+        let cipher = cipher(key)?;
+        let check_path = self.files.values.join(KEY_CHECK);
+        let existing_check = self.files.load_path(&check_path, MAX_SECRET_BYTES)?;
         match existing_check {
             Some(check) => {
                 if decrypt(&cipher, KEY_CHECK, check.expose())?.expose() != KEY_CHECK_VALUE {
@@ -140,12 +161,12 @@ impl ProfileSecretStore {
                 self.files.store_path(&check_path, &check)?;
             }
         }
-        Ok(key)
+        Ok(())
     }
 
-    fn prepare(&self) -> Result<SecretValue, SecretStoreError> {
+    fn prepare(&self) -> Result<&SecretValue, SecretStoreError> {
         let key = self.encryption_key()?;
-        self.migrate(&cipher(&key)?)
+        self.migrate(&cipher(key)?)
             .map_err(|error| match error.kind() {
                 SecretStoreErrorKind::BackendFailure => migration_failed(),
                 SecretStoreErrorKind::BackendUnavailable
@@ -227,7 +248,7 @@ impl ProfileSecretStore {
             let value = files
                 .load_path(&entry.path(), limit)?
                 .ok_or_else(invalid_data)?;
-            if let Some(master) = &master {
+            if let Some(master) = master {
                 decrypt(&cipher(master)?, name, value.expose())?;
             }
         }
@@ -238,7 +259,7 @@ impl ProfileSecretStore {
         // Do not run legacy -> encrypted migration here: plaintext already written by this
         // transition is its destination, not a legacy source to move back into ciphertext.
         let master = self.encryption_key()?;
-        let cipher = cipher(&master)?;
+        let cipher = cipher(master)?;
         for entry in fs::read_dir(&self.files.values).map_err(store_io)? {
             let entry = entry.map_err(store_io)?;
             let name = entry.file_name();
@@ -373,7 +394,7 @@ impl SecretStore for ProfileSecretStore {
             .file_name()
             .and_then(|name| name.to_str())
             .expect("hashed secret key");
-        decrypt(&cipher(&master)?, name, value.expose()).map(Some)
+        decrypt(&cipher(master)?, name, value.expose()).map(Some)
     }
 
     fn store(&self, key: &SecretKey, value: &SecretValue) -> Result<(), SecretStoreError> {
@@ -391,7 +412,7 @@ impl SecretStore for ProfileSecretStore {
             .file_name()
             .and_then(|name| name.to_str())
             .expect("hashed secret key");
-        let ciphertext = encrypt(&cipher(&master)?, name, value.expose())?;
+        let ciphertext = encrypt(&cipher(master)?, name, value.expose())?;
         self.files.store_path(&path, &ciphertext)
     }
 

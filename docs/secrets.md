@@ -144,7 +144,7 @@ profile file backend 的最低要求：
 - delete 清理 exact value file；
 - error、backup、fixture 和 telemetry 不包含 secret。
 
-`config.toml`、SQLite、Extensions cache 和普通 JSON 只保存 non-secret reference。daemon 默认将凭据认证加密后写入 `<profile>/secrets/encrypted/values/`。256-bit 随机主密钥由 profile 隔离的 `KeyringSecretStore` 保存，每次操作重新读取，不缓存绕过钥匙串撤销。文件使用 AES-256-GCM、新随机 nonce、版本头及绑定文件名的附加认证数据；不同 key 的密文不能交换。私有权限、同步写入与原子替换继续适用，没有明文 fallback 或双写。
+`config.toml`、SQLite、Extensions cache 和普通 JSON 只保存 non-secret reference。daemon 默认将凭据认证加密后写入 `<profile>/secrets/encrypted/values/`。256-bit 随机主密钥由 profile 隔离的 `KeyringSecretStore` 保存。每个 profile runtime 在成功获取并验证主密钥后于 store 内持有 `SecretValue`，释放时清零；后续读写和状态查询复用该密钥。主密钥获取或校验失败不缓存结果，因此用户显式授权或恢复原始钥匙串条目后，同一个 runtime 可以重试。没有全局密钥或凭据值缓存，各次操作仍读取并认证最新文件。钥匙串锁定、条目删除或权限变更由重新打开的 runtime 观察；已有 runtime 持有的密钥不会立即失效。文件使用 AES-256-GCM、新随机 nonce、版本头及绑定文件名的附加认证数据；不同 key 的密文不能交换。私有权限、同步写入与原子替换继续适用，没有明文 fallback 或双写。
 
 `store.lock` 跨进程序列化主密钥创建、迁移和文件操作。第一次存储操作或 `check_availability` 将旧 `secrets/values/` 的明文逐项写入加密目录，重读校验持久密文后才删除对应旧文件。中断后可继续迁移，冲突时保留两份数据并返回错误。`key-check` 校验主密钥；已有密文但 keyring 条目丢失时不生成替代密钥。`FileSecretStore` 保留作为显式 backend 和迁移源。
 

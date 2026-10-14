@@ -1,5 +1,8 @@
 use std::fs;
 use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
 use super::MASTER_KEY_NAME;
 use super::MAX_SECRET_BYTES;
@@ -16,6 +19,137 @@ use crate::UnavailableSecretStore;
 
 fn key(name: &str) -> SecretKey {
     SecretKey::new(name).unwrap()
+}
+
+#[derive(Clone, Copy, Default)]
+enum KeyringState {
+    #[default]
+    Available,
+    LoadFailure(SecretStoreErrorKind),
+    StoreFailure(SecretStoreErrorKind),
+}
+
+/// Counts OS-boundary calls without accessing the developer's system keyring.
+#[derive(Default)]
+struct CountingKeyring {
+    values: MemorySecretStore,
+    loads: AtomicUsize,
+    stores: AtomicUsize,
+    state: Mutex<KeyringState>,
+}
+
+impl SecretStore for CountingKeyring {
+    fn load(&self, key: &SecretKey) -> Result<Option<SecretValue>, SecretStoreError> {
+        self.loads.fetch_add(1, Ordering::SeqCst);
+        match *self.state.lock().unwrap() {
+            KeyringState::LoadFailure(kind) => {
+                Err(SecretStoreError::new(kind, "fake keyring read failed"))
+            }
+            KeyringState::Available | KeyringState::StoreFailure(_) => self.values.load(key),
+        }
+    }
+
+    fn store(&self, key: &SecretKey, value: &SecretValue) -> Result<(), SecretStoreError> {
+        self.stores.fetch_add(1, Ordering::SeqCst);
+        match *self.state.lock().unwrap() {
+            KeyringState::StoreFailure(kind) => {
+                Err(SecretStoreError::new(kind, "fake keyring write failed"))
+            }
+            KeyringState::Available | KeyringState::LoadFailure(_) => self.values.store(key, value),
+        }
+    }
+
+    fn delete(&self, key: &SecretKey) -> Result<DeleteSecretOutcome, SecretStoreError> {
+        self.values.delete(key)
+    }
+}
+
+#[test]
+fn queued_secret_operations_and_status_queries_acquire_the_master_key_once() {
+    let root = tempfile::tempdir().unwrap();
+    let keyring = Arc::new(CountingKeyring::default());
+    let store = ProfileSecretStore::open(root.path(), keyring.clone()).unwrap();
+    assert_eq!(keyring.loads.load(Ordering::SeqCst), 0);
+    assert_eq!(keyring.stores.load(Ordering::SeqCst), 0);
+
+    std::thread::scope(|scope| {
+        for index in 0..12 {
+            let store = &store;
+            scope.spawn(move || {
+                let name = key(&format!("provider/{index}"));
+                store.store(&name, &SecretValue::new(vec![index])).unwrap();
+                assert_eq!(store.load(&name).unwrap().unwrap().expose(), &[index]);
+                store.check_availability().unwrap();
+                assert_eq!(store.delete(&name).unwrap(), DeleteSecretOutcome::Deleted);
+            });
+        }
+    });
+    assert_eq!(keyring.loads.load(Ordering::SeqCst), 1);
+    assert_eq!(keyring.stores.load(Ordering::SeqCst), 1);
+
+    // A new profile runtime reacquires the existing OS key, rather than sharing a global cache.
+    drop(store);
+    let reopened = ProfileSecretStore::open(root.path(), keyring.clone()).unwrap();
+    reopened.check_availability().unwrap();
+    reopened.check_availability().unwrap();
+    assert_eq!(keyring.loads.load(Ordering::SeqCst), 2);
+    assert_eq!(keyring.stores.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn failed_keyring_access_preserves_values_and_allows_same_runtime_authorization_retry() {
+    for kind in [
+        SecretStoreErrorKind::AccessDenied,
+        SecretStoreErrorKind::BackendUnavailable,
+        SecretStoreErrorKind::BackendFailure,
+    ] {
+        for state in [
+            KeyringState::LoadFailure(kind),
+            KeyringState::StoreFailure(kind),
+        ] {
+            let root = tempfile::tempdir().unwrap();
+            let keyring = Arc::new(CountingKeyring::default());
+            *keyring.state.lock().unwrap() = state;
+            let name = key("provider/test");
+            let legacy = FileSecretStore::open(root.path()).unwrap();
+            legacy
+                .store(&name, &SecretValue::new(b"old".to_vec()))
+                .unwrap();
+            let store = ProfileSecretStore::open(root.path(), keyring.clone()).unwrap();
+            let error = store.check_availability().unwrap_err();
+            assert_eq!(error.kind(), kind);
+
+            for _ in 0..4 {
+                assert_eq!(store.check_availability().unwrap_err(), error);
+                assert_eq!(store.load(&name).unwrap_err(), error);
+                assert_eq!(
+                    store
+                        .store(&name, &SecretValue::new(b"new".to_vec()))
+                        .unwrap_err(),
+                    error
+                );
+                assert_eq!(store.delete(&name).unwrap_err(), error);
+            }
+            assert_eq!(keyring.loads.load(Ordering::SeqCst), 17);
+            let expected_stores = match state {
+                KeyringState::LoadFailure(_) => 0,
+                KeyringState::StoreFailure(_) => 17,
+                KeyringState::Available => unreachable!("failure fixture"),
+            };
+            assert_eq!(keyring.stores.load(Ordering::SeqCst), expected_stores);
+            assert_eq!(legacy.load(&name).unwrap().unwrap().expose(), b"old");
+            assert_eq!(fs::read_dir(&store.files.values).unwrap().count(), 0);
+
+            // The platform adapter keeps ordinary requests silent. Once an explicit user
+            // authorization repairs access, this same runtime must be able to acquire its key.
+            *keyring.state.lock().unwrap() = KeyringState::Available;
+            assert_eq!(store.load(&name).unwrap().unwrap().expose(), b"old");
+            store.check_availability().unwrap();
+            assert_eq!(store.load(&name).unwrap().unwrap().expose(), b"old");
+            assert_eq!(keyring.loads.load(Ordering::SeqCst), 18);
+            assert_eq!(keyring.stores.load(Ordering::SeqCst), expected_stores + 1);
+        }
+    }
 }
 
 #[test]
@@ -158,6 +292,10 @@ fn missing_master_key_does_not_regenerate_or_overwrite_ciphertext() {
         .unwrap();
     let before = fs::read(store.files.value_path(&name)).unwrap();
     keyring.delete(&key(MASTER_KEY_NAME)).unwrap();
+    // An active runtime keeps its unlocked key; a new runtime must observe its removal.
+    assert_eq!(store.load(&name).unwrap().unwrap().expose(), b"credential");
+    drop(store);
+    let store = ProfileSecretStore::open(root.path(), keyring.clone()).unwrap();
     assert_eq!(
         store.check_availability().unwrap_err().kind(),
         SecretStoreErrorKind::KeyMissing
@@ -179,13 +317,18 @@ fn wrong_master_key_and_corrupted_witness_fail_closed() {
     let keyring = Arc::new(MemorySecretStore::default());
     let store = ProfileSecretStore::open(root.path(), keyring.clone()).unwrap();
     store.check_availability().unwrap();
+    let original = keyring.load(&key(MASTER_KEY_NAME)).unwrap().unwrap();
     keyring
         .store(&key(MASTER_KEY_NAME), &SecretValue::new(vec![7; 32]))
         .unwrap();
+    drop(store);
+    let store = ProfileSecretStore::open(root.path(), keyring.clone()).unwrap();
     assert_eq!(
         store.check_availability().unwrap_err().kind(),
         SecretStoreErrorKind::InvalidData
     );
+    keyring.store(&key(MASTER_KEY_NAME), &original).unwrap();
+    store.check_availability().unwrap();
     fs::write(store.files.values.join(super::KEY_CHECK), b"bad envelope").unwrap();
     assert_eq!(
         store.check_availability().unwrap_err().kind(),
@@ -452,6 +595,8 @@ fn missing_original_key_refuses_file_switch_and_preserves_ciphertext() {
         .unwrap();
     let ciphertext = fs::read(store.files.value_path(&name)).unwrap();
     keyring.delete(&key(MASTER_KEY_NAME)).unwrap();
+    drop(store);
+    let store = ProfileSecretStore::open(root.path(), keyring).unwrap();
     assert_eq!(
         store
             .set_storage_mode(crate::SecretStorageMode::File)
