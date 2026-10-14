@@ -85,6 +85,55 @@ impl ModelInvoker for RecordingInvoker {
 
 struct StaticResponseInvoker(String);
 
+struct StaticFailureInvoker(ModelProviderError);
+
+impl ModelInvoker for StaticFailureInvoker {
+    fn output_transport(&self) -> protocol::ModelOutputTransport {
+        protocol::ModelOutputTransport::Unary
+    }
+
+    fn stream_with_cancellation(
+        &self,
+        _: &ModelRequest,
+        _: &CancellationToken,
+        _: &mut dyn model_provider::ModelEventSink,
+    ) -> Result<ModelResponse, ModelProviderError> {
+        Err(self.0.clone())
+    }
+}
+
+#[test]
+fn review_adapter_preserves_rate_limit_deadlines_without_retrying_authentication_failures() {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
+    for retry_at in [None, Some(deadline)] {
+        let reviewer = ProviderReviewModel {
+            model: model_ref("test", "review-model"),
+            reasoning: None,
+            invoker: Arc::new(StaticFailureInvoker(ModelProviderError::Api(
+                model_provider::ApiError::RateLimited { retry_at },
+            ))),
+        };
+        assert_eq!(
+            LlmActionClassifier::new(reviewer)
+                .classify(&review_request(), &CancellationSource::new().token())
+                .unwrap_err(),
+            AutoReviewError::RateLimited { retry_at },
+        );
+    }
+    let reviewer = ProviderReviewModel {
+        model: model_ref("test", "review-model"),
+        reasoning: None,
+        invoker: Arc::new(StaticFailureInvoker(ModelProviderError::AuthFailed(
+            "expired".into(),
+        ))),
+    };
+    assert!(matches!(
+        LlmActionClassifier::new(reviewer)
+            .classify(&review_request(), &CancellationSource::new().token()),
+        Err(AutoReviewError::Model(_))
+    ));
+}
+
 impl ModelInvoker for StaticResponseInvoker {
     fn output_transport(&self) -> protocol::ModelOutputTransport {
         protocol::ModelOutputTransport::Unary

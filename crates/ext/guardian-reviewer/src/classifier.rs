@@ -7,6 +7,7 @@ use protocol::AssessmentId;
 use protocol::ClassifierAssessment;
 use protocol::ClassifierRecommendation;
 use std::fmt;
+use std::time::Instant;
 
 const MAX_MODEL_INPUT_BYTES: usize = 64 * 1024;
 const MAX_MODEL_INPUT_TOKENS: usize = 16 * 1024;
@@ -16,6 +17,7 @@ const MAX_MODEL_RESPONSE_BYTES: usize = 16 * 1024;
 pub enum AutoReviewError {
     Model(String),
     Transient(String),
+    RateLimited { retry_at: Option<Instant> },
     Cancelled,
     InvalidRequest(String),
     RequestTooLarge { bytes: usize },
@@ -30,6 +32,7 @@ impl fmt::Display for AutoReviewError {
                 write!(formatter, "review model failed: {message}")
             }
             Self::Cancelled => formatter.write_str("automatic review was cancelled"),
+            Self::RateLimited { .. } => formatter.write_str("review model is rate limited"),
             Self::InvalidRequest(message) => {
                 write!(formatter, "automatic review request was invalid: {message}")
             }
@@ -135,6 +138,9 @@ impl<M: ReviewModel> ActionClassifier for LlmActionClassifier<M> {
             Err(_) if cancellation.is_cancelled() => return Err(AutoReviewError::Cancelled),
             Err(ReviewModelError::Transient(message)) => {
                 return Err(AutoReviewError::Transient(message));
+            }
+            Err(ReviewModelError::RateLimited { retry_at }) => {
+                return Err(AutoReviewError::RateLimited { retry_at });
             }
             Err(ReviewModelError::Invocation(message)) => {
                 return Err(AutoReviewError::Model(message));

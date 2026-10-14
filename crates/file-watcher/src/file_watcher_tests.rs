@@ -221,7 +221,7 @@ async fn missing_directory_moves_watch_and_reports_requested_namespace() {
             paths: vec![skills.clone()],
         })
     );
-    assert_eq!(watcher.watch_counts_for_test(&dir.path), None);
+    assert_eq!(watcher.watch_counts_for_test(&dir.path), Some((1, 0)));
     assert_eq!(watcher.watch_counts_for_test(&skills), Some((1, 0)));
 
     fs::write(&skill_file, "name: rust\n").unwrap();
@@ -232,6 +232,9 @@ async fn missing_directory_moves_watch_and_reports_requested_namespace() {
             paths: vec![skill_file],
         })
     );
+    drop(_registration);
+    assert_eq!(watcher.watch_counts_for_test(&dir.path), None);
+    assert_eq!(watcher.watch_counts_for_test(&skills), None);
 }
 
 #[tokio::test]
@@ -256,6 +259,59 @@ async fn live_backend_upgrades_and_downgrades_effective_scope() {
     );
     drop(non_recursive);
     assert_eq!(watcher.backend_mode_for_test(&root), None);
+}
+
+#[tokio::test]
+async fn live_directory_deletion_and_recreation_resume_recursive_notifications() {
+    async fn changed(receiver: &mut crate::channel::Receiver, expected: &Path, phase: &str) {
+        let result = timeout(Duration::from_secs(3), async {
+            loop {
+                match receiver.recv().await.expect("watch subscriber closed") {
+                    FileWatcherEvent::PathsChanged { paths }
+                        if paths.iter().any(|path| path == expected) =>
+                    {
+                        break;
+                    }
+                    FileWatcherEvent::RescanRequired { watched_paths }
+                        if watched_paths.iter().any(|path| path == expected) =>
+                    {
+                        break;
+                    }
+                    FileWatcherEvent::PathsChanged { .. }
+                    | FileWatcherEvent::RescanRequired { .. } => {}
+                }
+            }
+        })
+        .await;
+        assert!(
+            result.is_ok(),
+            "directory watch did not recover during {phase}"
+        );
+    }
+    let dir = TestDir::new();
+    let root = dir.create_dir("recreated");
+    let watcher = Arc::new(FileWatcher::new().unwrap());
+    let (subscriber, mut receiver) = watcher.add_subscriber();
+    let _registration = subscriber.register_paths(vec![watch(&root, true)]).unwrap();
+    fs::remove_dir(&root).unwrap();
+    changed(&mut receiver, &root, "deletion").await;
+    fs::create_dir(&root).unwrap();
+    changed(&mut receiver, &root, "recreation").await;
+    let nested = root.join("nested");
+    fs::create_dir(&nested).unwrap();
+    let file = nested.join("after.txt");
+    fs::write(&file, "restored").unwrap();
+    changed(&mut receiver, &file, "nested write").await;
+
+    // The event loop must also recover when it never observes the root missing.
+    fs::rename(&root, dir.path.join("retired-root")).unwrap();
+    fs::create_dir(&root).unwrap();
+    changed(&mut receiver, &root, "immediate replacement").await;
+    let nested = root.join("replacement-nested");
+    fs::create_dir(&nested).unwrap();
+    let file = nested.join("after.txt");
+    fs::write(&file, "replacement").unwrap();
+    changed(&mut receiver, &file, "replacement nested write").await;
 }
 
 #[tokio::test]

@@ -20,6 +20,7 @@ use notify::RecommendedWatcher;
 use notify::RecursiveMode;
 use notify::Watcher;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -171,25 +172,27 @@ impl FileWatcher {
                     }
                 }
             };
-            let counts = state
-                .path_ref_counts
-                .entry(actual.path.clone())
-                .or_default();
-            let previous_mode = counts.effective_mode();
-            counts.increment(actual.recursive, 1);
-            let next_mode = counts.effective_mode();
-            if previous_mode != next_mode {
-                if let Err(error) =
-                    self.reconfigure_watch(&actual.path, next_mode, &mut inner_guard)
+            let scopes = Self::watch_scopes(&registration.key, &actual);
+            // Acquire every physical scope before configuring the backend so rollback
+            // cannot consume a parent lease belonging to a different registration.
+            for scope in &scopes {
+                state
+                    .path_ref_counts
+                    .entry(scope.path.clone())
+                    .or_default()
+                    .increment(scope.recursive, 1);
+            }
+            registered.push(registration.key.clone());
+            for scope in scopes {
+                let next_mode = state.path_ref_counts[&scope.path].effective_mode();
+                if let Err(error) = self.reconfigure_watch(&scope.path, next_mode, &mut inner_guard)
                 {
-                    registered.push(registration.key.clone());
                     drop(inner_guard);
                     drop(state);
                     self.unregister_paths(subscriber_id, &registered);
                     return Err(error);
                 }
             }
-            registered.push(registration.key.clone());
         }
         Ok(())
     }
@@ -216,13 +219,15 @@ impl FileWatcher {
                 }
                 actual
             };
-            Self::decrement_actual_watch(
-                &mut state.path_ref_counts,
-                &actual,
-                1,
-                self.inner.as_ref(),
-                &mut inner_guard,
-            );
+            for scope in Self::watch_scopes(key, &actual) {
+                Self::decrement_actual_watch(
+                    &mut state.path_ref_counts,
+                    &scope,
+                    1,
+                    self.inner.as_ref(),
+                    &mut inner_guard,
+                );
+            }
         }
     }
 
@@ -232,15 +237,35 @@ impl FileWatcher {
             return;
         };
         let mut inner_guard = None;
-        for watch in subscriber.watched_paths.into_values() {
-            Self::decrement_actual_watch(
-                &mut state.path_ref_counts,
-                &watch.actual,
-                watch.count,
-                self.inner.as_ref(),
-                &mut inner_guard,
-            );
+        for (key, watch) in subscriber.watched_paths {
+            for scope in Self::watch_scopes(&key, &watch.actual) {
+                Self::decrement_actual_watch(
+                    &mut state.path_ref_counts,
+                    &scope,
+                    watch.count,
+                    self.inner.as_ref(),
+                    &mut inner_guard,
+                );
+            }
         }
+    }
+
+    fn watch_scopes(key: &SubscriberWatchKey, actual: &WatchPath) -> Vec<WatchPath> {
+        let mut scopes = vec![actual.clone()];
+        // An OS directory watch can disappear silently with its inode. Its immediate
+        // parent observes removal/recreation; subscriber matching still hides siblings.
+        if let Some(parent) = key
+            .requested
+            .path
+            .parent()
+            .filter(|parent| *parent != actual.path)
+        {
+            scopes.push(WatchPath {
+                path: parent.to_path_buf(),
+                recursive: false,
+            });
+        }
+        scopes
     }
 
     fn decrement_actual_watch<'a>(
@@ -261,7 +286,7 @@ impl FileWatcher {
         }
         if previous_mode != next_mode {
             if let Err(error) =
-                Self::reconfigure_watch_inner(inner, &actual.path, next_mode, inner_guard)
+                Self::reconfigure_watch_inner(inner, &actual.path, next_mode, false, inner_guard)
             {
                 warn!(
                     "failed to reconfigure watch for {} during unregister: {error}",
@@ -277,13 +302,14 @@ impl FileWatcher {
         next_mode: Option<RecursiveMode>,
         inner_guard: &mut Option<std::sync::MutexGuard<'a, FileWatcherInner>>,
     ) -> notify::Result<()> {
-        Self::reconfigure_watch_inner(self.inner.as_ref(), path, next_mode, inner_guard)
+        Self::reconfigure_watch_inner(self.inner.as_ref(), path, next_mode, false, inner_guard)
     }
 
     fn reconfigure_watch_inner<'a>(
         inner: Option<&'a Arc<Mutex<FileWatcherInner>>>,
         path: &Path,
         next_mode: Option<RecursiveMode>,
+        force: bool,
         inner_guard: &mut Option<std::sync::MutexGuard<'a, FileWatcherInner>>,
     ) -> notify::Result<()> {
         let Some(inner) = inner else {
@@ -300,7 +326,7 @@ impl FileWatcher {
             return Ok(());
         };
         let existing_mode = inner.watched_paths.get(path).copied();
-        if existing_mode == next_mode {
+        if existing_mode == next_mode && !force {
             return Ok(());
         }
         if existing_mode.is_some() {
@@ -322,6 +348,7 @@ impl FileWatcher {
 
     fn apply_actual_watch_move<'a>(
         counts_by_path: &mut HashMap<PathBuf, PathWatchCounts>,
+        key: &SubscriberWatchKey,
         old_actual: WatchPath,
         new_actual: WatchPath,
         count: usize,
@@ -331,19 +358,28 @@ impl FileWatcher {
         if old_actual == new_actual {
             return;
         }
-        Self::decrement_actual_watch(counts_by_path, &old_actual, count, inner, inner_guard);
-        let counts = counts_by_path.entry(new_actual.path.clone()).or_default();
-        let previous_mode = counts.effective_mode();
-        counts.increment(new_actual.recursive, count);
-        let next_mode = counts.effective_mode();
-        if previous_mode != next_mode {
+        let old_scopes = Self::watch_scopes(key, &old_actual);
+        let new_scopes = Self::watch_scopes(key, &new_actual);
+        for scope in old_scopes
+            .iter()
+            .filter(|scope| !new_scopes.contains(scope))
+        {
+            Self::decrement_actual_watch(counts_by_path, scope, count, inner, inner_guard);
+        }
+        for scope in &new_scopes {
+            if !old_scopes.contains(scope) {
+                counts_by_path
+                    .entry(scope.path.clone())
+                    .or_default()
+                    .increment(scope.recursive, count);
+            }
+            let next_mode = counts_by_path[&scope.path].effective_mode();
+            // A counted parent may have been missing when registered. Ensure it is
+            // attached now even when its effective mode has not changed.
             if let Err(error) =
-                Self::reconfigure_watch_inner(inner, &new_actual.path, next_mode, inner_guard)
+                Self::reconfigure_watch_inner(inner, &scope.path, next_mode, false, inner_guard)
             {
-                warn!(
-                    "failed to move watch to {}: {error}",
-                    new_actual.path.display()
-                );
+                warn!("failed to move watch to {}: {error}", scope.path.display());
             }
         }
     }
@@ -385,6 +421,7 @@ impl FileWatcher {
                 .write()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             let mut moves = Vec::new();
+            let mut replaced_roots = HashSet::new();
             let mut subscribers = Vec::new();
             for subscriber in state.subscribers.values_mut() {
                 let mut changed_paths = Vec::new();
@@ -399,7 +436,14 @@ impl FileWatcher {
                             let old_actual = watch.actual.clone();
                             let count = watch.count;
                             watch.actual = new_actual.clone();
-                            moves.push((old_actual, new_actual, count));
+                            moves.push((key.clone(), old_actual, new_actual, count));
+                        } else if event_path == &key.requested.path
+                            || event_path == &key.matched.path
+                        {
+                            // A remove/create or rename pair may be processed only after
+                            // the replacement exists. Path equality cannot prove that
+                            // an OS handle still refers to the current directory.
+                            replaced_roots.insert(new_actual.path);
                         }
                     }
                 }
@@ -408,15 +452,30 @@ impl FileWatcher {
                 }
             }
             let mut inner_guard = None;
-            for (old_actual, new_actual, count) in moves {
+            for (key, old_actual, new_actual, count) in moves {
                 Self::apply_actual_watch_move(
                     &mut state.path_ref_counts,
+                    &key,
                     old_actual,
                     new_actual,
                     count,
                     inner,
                     &mut inner_guard,
                 );
+            }
+            for path in replaced_roots {
+                let next_mode = state
+                    .path_ref_counts
+                    .get(&path)
+                    .and_then(|counts| counts.effective_mode());
+                if let Err(error) =
+                    Self::reconfigure_watch_inner(inner, &path, next_mode, true, &mut inner_guard)
+                {
+                    warn!(
+                        "failed to rebind replaced watch root {}: {error}",
+                        path.display()
+                    );
+                }
             }
             subscribers
         };

@@ -12,11 +12,13 @@ import { CommandService } from '../../../../services/commands/common/commandServ
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { ChatViewTitleControl } from '../../browser/widgetHosts/viewPane/chatViewTitleControl.js';
+import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 
 test('Conversation title keeps one history picker open and restores focus when dismissed', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
 		using services = createTestEditorServices();
+		services.registerInstance(IChatSessionNavigationService, { getActiveConversation: () => undefined } as IChatSessionNavigationService);
 		using commands = new CommandService(services);
 		services.registerInstance(IMenuService, new MenuService(commands, services.get(IContextKeyService)));
 		services.registerInstance(IContextMenuService, { showContextMenu: () => { } } as unknown as IContextMenuService);
@@ -52,6 +54,7 @@ test('Conversation title and actions use the client language', () => {
 		const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		setNlsMessages('zh-CN', chinese.bundles);
 		using services = createTestEditorServices();
+		services.registerInstance(IChatSessionNavigationService, { getActiveConversation: () => undefined } as IChatSessionNavigationService);
 		using commands = new CommandService(services);
 		services.registerInstance(IMenuService, new MenuService(commands, services.get(IContextKeyService)));
 		services.registerInstance(IContextMenuService, { showContextMenu: () => { } } as unknown as IContextMenuService);

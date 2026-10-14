@@ -15,6 +15,9 @@ export const Promises = {
 				if (!isRecord(error) || !['EACCES', 'EPERM', 'EBUSY'].includes(error.code as string) || Date.now() >= deadline) {
 					throw error;
 				}
+				// A process can hold its working directory for its entire lifetime. Waiting
+				// the file-replacement retry budget would leave a folder rename stuck for a minute.
+				if (await fs.lstat(source).then(stat => stat.isDirectory(), () => false)) throw error;
 				await setTimeout(Math.min(50, deadline - Date.now()));
 			}
 		}

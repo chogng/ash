@@ -10,7 +10,7 @@ import { CancellationToken, CancellationTokenSource } from '../../../base/common
 import { canceled } from '../../../base/common/errors.js';
 import { consumeStream, newWriteableStream, type ReadableStreamEvents } from '../../../base/common/stream.js';
 import { parse } from '../../../base/common/glob.js';
-import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
 import { Promises } from '../../../base/node/pfs.js';
 import { readFileIntoStream } from '../common/io.js';
@@ -65,27 +65,82 @@ export class DiskFileSystemProvider extends Disposable implements IFileSystemPro
 		const resources = new DisposableStore();
 		this.watchers.set(id, resources);
 		void this.path(resource).then(async path => {
-			let isDirectory = false;
-			try { isDirectory = (await lstat(path)).isDirectory(); }
-			catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
-			if (resources.isDisposed) return;
-			// Watch a file's parent so an atomic replacement does not leave us watching its old inode.
-			const directory = isDirectory ? path : dirname(path);
-			const watcher = watch(directory, { persistent: false, recursive: isDirectory && options.recursive }, (_event, filename) => {
-				if (resources.isDisposed) return;
-				if (filename === null) { this.changes.fire({ resources: undefined }); return; }
-				const name = filename.toString();
-				if (!isDirectory && (process.platform === 'win32' ? name.toLowerCase() !== basename(path).toLowerCase() : name !== basename(path))) return;
-				if (excludes.some(matches => matches(name) || matches(resolve(directory, name)))) return;
-				this.changes.fire({ resources: [URI.file(resolve(directory, name))] });
-			});
-			resources.add(toDisposable(() => watcher.close()));
-			const onError = (error: Error): void => {
-				this.watchErrors.fire(String(error));
-				this.watchers.deleteAndDispose(id);
+			const directoryWatch = resources.add(new MutableDisposable<DisposableStore>());
+			let revision = 0;
+			const fail = (error: unknown): void => {
+				if (!resources.isDisposed) {
+					this.watchErrors.fire(String(error));
+					this.watchers.deleteAndDispose(id);
+				}
 			};
-			watcher.on('error', onError);
-			resources.add(toDisposable(() => watcher.off('error', onError)));
+			const bindDirectory = async (): Promise<void> => {
+				const current = ++revision;
+				directoryWatch.clear();
+				// Recheck the filesystem boundary: a restored root may now be a symlink.
+				await this.path(resource);
+				let isDirectory = false;
+				try { isDirectory = (await lstat(path)).isDirectory(); }
+				catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+				if (resources.isDisposed || current !== revision || !isDirectory) return;
+				let watcher: ReturnType<typeof watch>;
+				try {
+					watcher = watch(path, { persistent: false, recursive: options.recursive }, (_event, filename) => {
+						if (resources.isDisposed || current !== revision) return;
+						if (filename === null) { this.changes.fire({ resources: [resource] }); return; }
+						const name = filename.toString();
+						// Root replacement can produce synthetic names on Windows. A watcher hint
+						// cannot escape its root or turn into an invalid file URI; rescan that root.
+						if (isAbsolute(name) || name.split(/[\\/]/u).some(segment => segment === '..' || (process.platform === 'win32' && /[<>:"|?*]/u.test(segment)))) {
+							this.changes.fire({ resources: [resource] });
+							return;
+						}
+						if (excludes.some(matches => matches(name) || matches(resolve(path, name)))) return;
+						this.changes.fire({ resources: [URI.file(resolve(path, name))] });
+					});
+				} catch (error) {
+					// Deletion can win the race between stat and opening the watch. Keep
+					// the parent alive so recreation can bind this directory again.
+					if (resources.isDisposed || current !== revision || (error as NodeJS.ErrnoException).code === 'ENOENT') return;
+					throw error;
+				}
+				const owner = new DisposableStore();
+				owner.add(toDisposable(() => watcher.close()));
+				const onError = (error: Error): void => {
+					void lstat(path).then(() => {
+						if (!resources.isDisposed && current === revision) fail(error);
+					}, missing => {
+						if (resources.isDisposed || current !== revision) return;
+						if ((missing as NodeJS.ErrnoException).code !== 'ENOENT') { fail(error); return; }
+						// The parent watch will attach the replacement. Genuine I/O failures
+						// remain visible instead of entering an unlimited watcher restart loop.
+						revision++;
+						directoryWatch.clear();
+						this.changes.fire({ resources: [resource] });
+					});
+				};
+				watcher.on('error', onError);
+				owner.add(toDisposable(() => watcher.off('error', onError)));
+				directoryWatch.value = owner;
+			};
+			if (resources.isDisposed) return;
+			// Observe only this entry in its parent. Files survive atomic replacement and
+			// directory roots can be rebound after deletion without exposing sibling changes.
+			if (dirname(path) !== path) {
+				const parentWatch = watch(dirname(path), { persistent: false }, (_event, filename) => {
+					if (resources.isDisposed) return;
+					if (filename !== null) {
+						const name = filename.toString();
+						if (process.platform === 'win32' ? name.toLowerCase() !== basename(path).toLowerCase() : name !== basename(path)) return;
+						if (excludes.some(matches => matches(name) || matches(path))) return;
+					}
+					this.changes.fire({ resources: [resource] });
+					void bindDirectory().catch(fail);
+				});
+				resources.add(toDisposable(() => parentWatch.close()));
+				parentWatch.on('error', fail);
+				resources.add(toDisposable(() => parentWatch.off('error', fail)));
+			}
+			await bindDirectory();
 		}).catch(error => {
 			if (!resources.isDisposed) {
 				this.watchErrors.fire(String(error));

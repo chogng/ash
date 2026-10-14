@@ -627,6 +627,38 @@ test('Conversation title switches through history and preserves editor appearanc
 });
 
 
+for (const locale of ['en', 'zh-CN']) test(`Conversation title menus copy their opening target and restore keyboard focus (${locale})`, async ({ page }) => {
+	await page.goto(`/composite.html?editorTabs&chatLinks${locale === 'zh-CN' ? '&locale=zh-CN' : ''}`);
+	await page.waitForFunction(() => !!window.ashChatTitleIntegration);
+	const host = page.locator('#chat-tabs-host');
+	const title = host.locator('.ash-chat-view-title-button');
+	const copyLabel = locale === 'en' ? 'Copy Conversation Link' : '复制对话链接';
+	const copy = page.getByRole('menuitem', { name: copyLabel, exact: true });
+	await title.click({ button: 'right' });
+	await expect(copy).toBeVisible();
+	await page.evaluate(() => window.ashChatTitleIntegration.select('chat-beta'));
+	await copy.click();
+	await expect.poll(() => page.evaluate(() => window.ashChatTitleIntegration.clipboard())).toEqual(['agent-host-session://local/open?sessionId=session&threadId=chat-alpha']);
+	await title.focus();
+	await title.press('Shift+F10');
+	await expect(copy).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(copy).toBeHidden();
+	await expect(title).toBeFocused();
+	await host.getByRole('button', { name: locale === 'en' ? 'More Actions' : '更多操作', exact: true }).click();
+	await expect(copy).toBeVisible();
+	await copy.click();
+	await expect.poll(() => page.evaluate(() => window.ashChatTitleIntegration.clipboard())).toEqual([
+		'agent-host-session://local/open?sessionId=session&threadId=chat-alpha',
+		'agent-host-session://local/open?sessionId=session&threadId=chat-beta',
+	]);
+	await title.press('Shift+F10');
+	await expect(copy).toBeVisible();
+	await page.evaluate(() => window.ashChatTitleIntegration.dispose());
+	await expect(copy).toBeHidden();
+	await expect(title).toHaveCount(0);
+});
+
 test('Editor and conversation title share rounded outer corners across styles and themes', async ({ page }, testInfo) => {
 	await page.goto('/composite.html?editorTabs');
 	await page.waitForFunction(() => !!window.ashCompositeIntegration);

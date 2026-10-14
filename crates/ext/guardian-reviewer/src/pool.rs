@@ -8,6 +8,7 @@ use async_utils::CancellationSource;
 use async_utils::CancellationToken;
 use protocol::ClassifierAssessment;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc;
@@ -34,6 +35,7 @@ impl Default for ReviewLimits {
 pub struct ReviewerPool<M> {
     model: Arc<M>,
     active: Arc<AtomicUsize>,
+    cooldown: Arc<Mutex<Option<Instant>>>,
     limits: ReviewLimits,
 }
 impl<M: ReviewModel + 'static> ReviewerPool<M> {
@@ -41,6 +43,7 @@ impl<M: ReviewModel + 'static> ReviewerPool<M> {
         Self {
             model: Arc::new(model),
             active: Arc::new(AtomicUsize::new(0)),
+            cooldown: Arc::new(Mutex::new(None)),
             limits: ReviewLimits::default(),
         }
     }
@@ -56,6 +59,7 @@ impl<M: ReviewModel + 'static> ReviewerPool<M> {
         Ok(Self {
             model: Arc::new(model),
             active: Arc::new(AtomicUsize::new(0)),
+            cooldown: Arc::new(Mutex::new(None)),
             limits,
         })
     }
@@ -91,19 +95,24 @@ impl<M: ReviewModel + 'static> ReviewerPool<M> {
         let token = source.token();
         let timer = Deadline::start(source.clone(), deadline)?;
         let model = self.model.clone();
+        let cooldown = self.cooldown.clone();
         let (sender, receiver) = mpsc::sync_channel(1);
         let worker = std::thread::Builder::new()
             .name("ash-guardian-review".into())
             .spawn(move || {
                 let _permit = permit;
-                let classifier = LlmActionClassifier::new(SharedModel(model));
+                let classifier = LlmActionClassifier::new(SharedModel { model, cooldown });
                 let mut result = Err(AutoReviewError::Cancelled);
                 for attempt in 0..3 {
                     if token.is_cancelled() || Instant::now() >= deadline {
                         break;
                     }
                     result = classifier.classify(&request, &token);
-                    if !matches!(result, Err(AutoReviewError::Transient(_))) || attempt == 2 {
+                    if !matches!(
+                        result,
+                        Err(AutoReviewError::Transient(_) | AutoReviewError::RateLimited { .. })
+                    ) || attempt == 2
+                    {
                         break;
                     }
                     std::thread::sleep(Duration::from_millis(20));
@@ -136,14 +145,40 @@ impl Drop for Permit {
         self.0.fetch_sub(1, Ordering::AcqRel);
     }
 }
-struct SharedModel<M>(Arc<M>);
+struct SharedModel<M> {
+    model: Arc<M>,
+    cooldown: Arc<Mutex<Option<Instant>>>,
+}
 impl<M: ReviewModel> ReviewModel for SharedModel<M> {
     fn complete(
         &self,
         request: &crate::ReviewModelRequest,
         token: &CancellationToken,
     ) -> Result<String, crate::ReviewModelError> {
-        self.0.complete(request, token)
+        loop {
+            token.check().map_err(|signal| {
+                crate::ReviewModelError::Invocation(signal.reason().to_string())
+            })?;
+            let delay = self
+                .cooldown
+                .lock()
+                .expect("review cooldown poisoned")
+                .map(|deadline| deadline.saturating_duration_since(Instant::now()))
+                .unwrap_or_default();
+            if delay.is_zero() {
+                break;
+            }
+            // No lock is held while waiting; cancellation and the assessment deadline
+            // remain effective for every queued caller of this model.
+            std::thread::sleep(delay.min(Duration::from_millis(5)));
+        }
+        let result = self.model.complete(request, token);
+        if let Err(crate::ReviewModelError::RateLimited { retry_at }) = &result {
+            let deadline = retry_at.unwrap_or_else(|| Instant::now() + Duration::from_secs(60));
+            let mut cooldown = self.cooldown.lock().expect("review cooldown poisoned");
+            *cooldown = Some(cooldown.map_or(deadline, |previous| previous.max(deadline)));
+        }
+        result
     }
 }
 

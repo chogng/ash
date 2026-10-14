@@ -2445,8 +2445,10 @@ fn per_thread_mailboxes_run_independently_and_interrupt_the_active_turn() {
         .turn_id;
     let model = Arc::new(BlockingFirstModel::default());
     let activity = Arc::new(activity_tests::Activity::default());
+    let updates = Arc::new(RecordingUpdates::default());
     let executor = TurnExecutor::without_tools(threads.clone(), model.clone())
-        .with_execution_activity(activity.clone());
+        .with_execution_activity(activity.clone())
+        .with_thread_updates(updates.clone());
 
     executor.start(&slow_thread_id, &slow_turn_id).unwrap();
     model.wait_until_slow_invocation_enters();
@@ -2481,6 +2483,13 @@ fn per_thread_mailboxes_run_independently_and_interrupt_the_active_turn() {
     wait_for_flag(&model.slow_was_cancelled, "slow model was not cancelled");
     activity.wait_released(2);
     activity.assert_active(0);
+    assert!(model.late_delta_rejected.load(Ordering::Relaxed));
+    assert!(!updates.updates().iter().any(|update| matches!(
+        &update.update,
+        ThreadUpdate::ItemDelta {
+            delta: ash_protocol::ItemDelta::AgentMessage { text }, ..
+        } if text == "late result"
+    )));
 }
 
 #[test]
@@ -3435,6 +3444,7 @@ impl ModelService for HiddenMarkupChunkedModel {
 struct BlockingFirstModel {
     slow_has_entered: AtomicBool,
     slow_was_cancelled: AtomicBool,
+    late_delta_rejected: AtomicBool,
     entered_lock: Mutex<()>,
     entered: Condvar,
 }
@@ -3496,6 +3506,14 @@ impl ModelService for BlockingFirstModel {
         while !cancellation.is_cancelled() {
             thread::sleep(Duration::from_millis(1));
         }
+        // A provider callback can arrive after interruption but before its invocation returns.
+        self.late_delta_rejected.store(
+            matches!(
+                sink.emit(ModelStreamEvent::TextDelta("late result".into())),
+                Err(CoreError::Cancelled(_))
+            ),
+            Ordering::Relaxed,
+        );
         self.slow_was_cancelled.store(true, Ordering::Relaxed);
         Err(CoreError::Cancelled("cancelled during stream".into()))
     }

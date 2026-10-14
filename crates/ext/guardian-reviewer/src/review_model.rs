@@ -1,5 +1,6 @@
 use async_utils::CancellationToken;
 use std::fmt;
+use std::time::Instant;
 
 /// Failure reported by the review-only model adapter.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -7,6 +8,10 @@ pub enum ReviewModelError {
     Invocation(String),
     /// A transient service failure that may be retried within the same assessment deadline.
     Transient(String),
+    /// A provider cooldown shared by callers of this review model; absence uses bounded backoff.
+    RateLimited {
+        retry_at: Option<Instant>,
+    },
     ResponseTooLarge {
         bytes: usize,
     },
@@ -16,6 +21,7 @@ impl fmt::Display for ReviewModelError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Invocation(message) | Self::Transient(message) => formatter.write_str(message),
+            Self::RateLimited { .. } => formatter.write_str("review model is rate limited"),
             Self::ResponseTooLarge { bytes } => {
                 write!(
                     formatter,

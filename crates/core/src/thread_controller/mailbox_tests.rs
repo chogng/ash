@@ -336,6 +336,7 @@ fn install(loaded_threads: &LoadedThreads, snapshot: ThreadSnapshot) {
 
 fn snapshot(thread_id: &ThreadId) -> ThreadSnapshot {
     ThreadSnapshot {
+        voice_transcripts: Vec::new(),
         execution_target: None,
         advisor: Default::default(),
         user_time_contexts: Default::default(),

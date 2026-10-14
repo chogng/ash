@@ -3298,6 +3298,16 @@ impl ModelInvoker for ReviewModelInvoker {
                 CoreError::Cancelled(reason) => {
                     ash_model_provider::ModelProviderError::Cancelled(reason)
                 }
+                CoreError::ModelTransient { failure, retry_at }
+                    if failure.code == ash_protocol::StableTurnErrorCode::RateLimited =>
+                {
+                    ash_model_provider::ModelProviderError::Api(
+                        ash_model_provider::ApiError::RateLimited { retry_at },
+                    )
+                }
+                CoreError::ModelTransient { failure, .. } => {
+                    ash_model_provider::ModelProviderError::Unavailable(failure.message)
+                }
                 error => ash_model_provider::ModelProviderError::InvalidResponse(error.to_string()),
             })
     }

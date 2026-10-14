@@ -3,6 +3,7 @@ import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { EventEmitter, once } from "node:events";
 import { test } from "mocha";
 import { PassThrough, Writable } from "node:stream";
+import { DeferredPromise } from '../../../../base/common/async.js';
 import {
 	ChildProcessJsonlTransport,
 	type ChildProcessJsonlTransportOptions,
@@ -102,6 +103,70 @@ test("bounds and redacts stderr diagnostics", async () => {
 	assert.doesNotMatch(diagnostics, /super-secret-token/);
 	assert.match(diagnostics, /\[REDACTED\]/);
 	await jsonl.close();
+});
+
+test('queued byte capacity includes the active write and recovers after draining in order', async () => {
+	const child = new FakeChildProcess();
+	const started = new DeferredPromise<void>();
+	const chunks: Buffer[] = [];
+	let release: (() => void) | undefined;
+	child.stdin = new Writable({
+		highWaterMark: 1,
+		write(chunk: Buffer, _encoding, callback) {
+			chunks.push(Buffer.from(chunk));
+			if (chunks.length === 1) {
+				release = callback;
+				void started.complete();
+			} else {
+				setImmediate(callback);
+			}
+		},
+	});
+	const jsonl = transport(child, { maxFrameBytes: 8 });
+	try {
+		const first = jsonl.sendBytes(Buffer.from('1234'));
+		await started.p;
+		const second = jsonl.sendBytes(Buffer.from('56789'));
+		await assert.rejects(jsonl.sendBytes(Buffer.from('x')), /byte capacity/);
+		const complete = release!;
+		release = undefined;
+		complete();
+		await Promise.all([first, second]);
+		// One maximum-sized frame plus its LF remains admissible after capacity is released.
+		await jsonl.send('abcdefgh');
+		assert.deepEqual(chunks.map(chunk => chunk.toString()), ['1234', '56789', 'abcdefgh\n']);
+	} finally {
+		release?.();
+		await jsonl.close();
+	}
+});
+
+test('failed active and queued writes settle before another write checks byte capacity', async () => {
+	const child = new FakeChildProcess();
+	const started = new DeferredPromise<void>();
+	let failWrite: ((error: Error) => void) | undefined;
+	child.stdin = new Writable({
+		write(_chunk, _encoding, callback) {
+			failWrite = callback;
+			void started.complete();
+		},
+	});
+	const jsonl = transport(child, { maxFrameBytes: 8 });
+	try {
+		const first = jsonl.sendBytes(Buffer.from('1234'));
+		const second = jsonl.sendBytes(Buffer.from('56789'));
+		const results = Promise.allSettled([first, second]);
+		await started.p;
+		failWrite!(new Error('deliberate write failure'));
+		assert.deepEqual((await results).map(result => result.status), ['rejected', 'rejected']);
+		await assert.rejects(jsonl.send('abcdefgh'), error => {
+			assert.match(String(error), /stdin|deliberate write failure/);
+			assert.doesNotMatch(String(error), /byte capacity/);
+			return true;
+		});
+	} finally {
+		await jsonl.close();
+	}
 });
 
 test("close is asynchronous and idempotent", async () => {

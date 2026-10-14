@@ -580,6 +580,7 @@ fn test_environment(additional_root: PathBuf) -> AgentEnvironmentSnapshot {
 
 fn snapshot(turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
     ThreadSnapshot {
+        voice_transcripts: Vec::new(),
         execution_target: None,
         advisor: Default::default(),
         user_time_contexts: Default::default(),

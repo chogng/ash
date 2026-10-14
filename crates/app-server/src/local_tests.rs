@@ -3235,6 +3235,36 @@ struct SnapshotModel {
     gate: Arc<ResponseGate>,
 }
 
+struct RateLimitedReviewModel(Option<std::time::Instant>);
+
+impl ModelService for RateLimitedReviewModel {
+    fn invoke(
+        &self,
+        _: ModelSelection<'_>,
+        _: &ModelRequest,
+        _: &CancellationToken,
+    ) -> Result<ModelResponse, CoreError> {
+        Err(CoreError::ModelTransient {
+            failure: ash_protocol::StableTurnError::rate_limited(),
+            retry_at: self.0,
+        })
+    }
+}
+
+#[test]
+fn review_model_bridge_retains_rate_limit_guidance_from_the_frozen_model_service() {
+    let request = ModelRequest::text("review");
+    for retry_at in [None, Some(std::time::Instant::now())] {
+        let invoker = ReviewModelInvoker(Arc::new(RateLimitedReviewModel(retry_at)));
+        assert_eq!(
+            invoker.invoke_with_cancellation(&request, &CancellationSource::new().token()),
+            Err(ModelProviderError::Api(
+                ash_model_provider::ApiError::RateLimited { retry_at }
+            )),
+        );
+    }
+}
+
 impl ModelInvoker for SnapshotModel {
     fn image_input_policy(&self) -> PromptImageDetailLimits {
         let dimension = if self.model == "before-update" {

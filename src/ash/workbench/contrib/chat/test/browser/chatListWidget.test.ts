@@ -18,6 +18,7 @@ import { IModelService } from '../../../../../editor/common/services/model.js';
 import { ILanguageService } from '../../../../../editor/common/languages/language.js';
 import { IMarkerService, MarkerSeverity } from '../../../../../platform/markers/common/markers.js';
 import { URI } from '../../../../../base/common/uri.js';
+import { buildOpenSessionLinkUri } from '../../../../../platform/agentHost/common/openSessionLink.js';
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -37,6 +38,20 @@ import { IFileService } from '../../../../../platform/files/common/files.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
 
 const document = browserEnvironment.window.document;
+
+test('Chat renders connection-qualified conversation links without permitting script links', () => {
+	using resources = new DisposableStore();
+	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const opened: string[] = [];
+	using widget = services.createInstance(ChatListWidget, document.createElement('main'), { onDidRequestLink: (target: string) => opened.push(target) });
+	const link = buildOpenSessionLinkUri('session-1', 'peer-1', 'local').toString();
+	widget.render([{ id: 'links', type: 'agentMessage', text: `[Conversation](${link}) [Script](javascript:alert%281%29)`, transient: false }]);
+	const anchor = widget.element.querySelector<HTMLAnchorElement>('a[href]')!;
+	assert.equal(anchor.getAttribute('href'), link);
+	anchor.click();
+	assert.deepEqual(opened, [link]);
+	assert.equal(widget.element.querySelector('a[href^="javascript:"]'), null);
+});
 
 test('Workbench and Cowork tips use injected Markdown opening and preserve dismissal', () => {
 	using resources = new DisposableStore();

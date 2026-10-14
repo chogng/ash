@@ -8,6 +8,16 @@ import { Part } from '../../../src/ash/workbench/browser/part.js';
 import { PaneComposite } from '../../../src/ash/workbench/browser/parts/views/paneComposite.js';
 import type { PartTitleProjection } from '../../../src/ash/workbench/browser/parts/views/viewPane.js';
 import { ChatViewTitleControl } from '../../../src/ash/workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewTitleControl.js';
+import { CopyChatSessionLinkAction } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatCopyActions.js';
+import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
+import { IChatService } from '../../../src/ash/workbench/services/chat/common/chatService.js';
+import { IAppServerApi } from '../../../src/ash/platform/agentHost/common/appServerApi.js';
+import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
+import { IAccessibilityService } from '../../../src/ash/platform/accessibility/common/accessibility.js';
+import { AccessibilityService } from '../../../src/ash/platform/accessibility/browser/accessibilityService.js';
+import { BrowserContextMenuService } from '../../../src/ash/platform/contextview/browser/contextMenuService.js';
+import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
+import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { CompositeBar } from '../../../src/ash/workbench/browser/parts/compositeBar.js';
 import { HoverPosition } from '../../../src/ash/base/browser/ui/hover/hoverWidget.js';
@@ -22,13 +32,14 @@ import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeSty
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
+import chatMessages from '../../../extensions/language-pack-zh-cn/translations/chat.json' with { type: 'json' };
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { Keybinding, logicalKey, physicalKey, resolveKeybinding } from '../../../src/ash/base/common/keybindings.js';
 import { CommandRegistry, ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
 import { ShowAllCommandsCommandId } from '../../../src/ash/workbench/browser/quickaccess.js';
 import { DisposableStore, MutableDisposable, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
-import { IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
+import { IMenuService, registerAction2 } from '../../../src/ash/platform/actions/common/actions.js';
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
 import { IContextKeyService, ContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
@@ -83,6 +94,11 @@ interface CompositeState {
 
 declare global {
 	interface Window {
+		ashChatTitleIntegration: {
+			select(id: string): void;
+			clipboard(): readonly string[];
+			dispose(): void;
+		};
 		ashPartWidthIntegration: {
 			setMinimum(width: number): void;
 			resize(width: number): void;
@@ -152,7 +168,10 @@ const uriIdentityServices = resources.add(new TestUriIdentityServices());
 const locale = new URLSearchParams(location.search).get('locale');
 if (locale) {
 	const catalog = productLanguagePackCatalogs.find(candidate => candidate.locale === locale)!;
-	setNlsMessages(catalog.locale, catalog.bundles);
+	const linkMessages = new URLSearchParams(location.search).has('chatLinks') && locale === 'zh-CN'
+		? chatMessages.ash
+		: {};
+	setNlsMessages(catalog.locale, { ...catalog.bundles, ash: { ...catalog.bundles.ash, ...linkMessages } });
 }
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
 const registry = new WorkbenchViewRegistry();
@@ -300,8 +319,28 @@ if (new URLSearchParams(location.search).has('editorTabs')) {
 		{ id: 'chat-beta', label: 'Chat beta', panelId: 'chat-beta-panel' },
 	];
 	let activeChat = chats[0]!.id;
-	editorServices.registerInstance(IMenuService, services.get(IMenuService));
-	editorServices.registerInstance(IContextMenuService, services.get(IContextMenuService));
+	editorServices.registerInstance(IChatSessionNavigationService, {
+		getActiveConversation: () => ({ sessionId: 'session', threadId: activeChat }),
+	} as IChatSessionNavigationService);
+	const copiedLinks: string[] = [];
+	if (new URLSearchParams(location.search).has('chatLinks')) {
+		await import('../../../src/ash/base/browser/ui/styles.css');
+		const commands = resources.add(new CommandService(editorServices));
+		const menus = new MenuService(commands, editorServices.get(IContextKeyService));
+		editorServices.registerInstance(IMenuService, menus);
+		const views = resources.add(new BrowserContextViewService(document.body));
+		const notifications = resources.add(new NotificationService());
+		const menuKeybindings = { onDidUpdateKeybindings: Event.None, lookupKeybinding: () => undefined } as unknown as IKeybindingService;
+		editorServices.registerInstance(IContextMenuService, resources.add(new BrowserContextMenuService(menus, editorServices.get(IContextKeyService), menuKeybindings, views, notifications)));
+		editorServices.registerInstance(IAppServerApi, { connectionGeneration: 1, onConnectionState: Event.None, getConnectionState: async () => 'ready', getSlashCommands: async () => [] } as IAppServerApi);
+		editorServices.registerInstance(IChatService, { readThread: async (sessionId, threadId) => ({ thread: { sessionId, threadId } }) } as IChatService);
+		editorServices.registerInstance(IClipboardService, { writeText: async value => { copiedLinks.push(value); } } as IClipboardService);
+		editorServices.registerInstance(IAccessibilityService, resources.add(new AccessibilityService({ root: document.body, contextKeyService: editorServices.get(IContextKeyService), configurationService: editorServices.get(IConfigurationService) })));
+		resources.add(registerAction2(CopyChatSessionLinkAction));
+	} else {
+		editorServices.registerInstance(IMenuService, services.get(IMenuService));
+		editorServices.registerInstance(IContextMenuService, services.get(IContextMenuService));
+	}
 	const chat = resources.add(editorServices.createInstance(ChatViewTitleControl, chatPart.domNode, 'chat', () => {
 		const pick = editorServices.get(IQuickInputService).createQuickPick<{ label: string; id: string; }>();
 		const lifetime = new DisposableStore();
@@ -320,6 +359,11 @@ if (new URLSearchParams(location.search).has('editorTabs')) {
 	}));
 	chat.update(chats.find(entry => entry.id === activeChat)!.label);
 	chatPart.setChatTitle(chat.partTitleProjection);
+	window.ashChatTitleIntegration = {
+		select: id => { activeChat = id; chat.update(chats.find(entry => entry.id === id)!.label); },
+		clipboard: () => [...copiedLinks],
+		dispose: () => chat.dispose(),
+	};
 }
 
 const badgeBars: CompositeBar[] = [];

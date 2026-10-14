@@ -1,11 +1,14 @@
 import { Schemas } from '../../../../base/common/network.js';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { FileUserDataProvider } from '../../../userData/common/fileUserDataProvider.js';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { suite, test } from 'mocha';
 import { URI } from '../../../../base/common/uri.js';
+import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { FileNotFoundError, FileRevisionConflictError } from '../../common/files.js';
 import { DiskFileSystemProvider } from '../../node/diskFileSystemProvider.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
@@ -53,6 +56,90 @@ test('profile files map root, content and exact changes while ignoring workspace
 
 suite('Disk provider byte publication and watch disposal', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	(process.platform === 'win32' ? test : test.skip)('an occupied directory rename fails promptly after its child reports ready', async function () {
+		this.timeout(15_000);
+		const directory = await mkdtemp(join(tmpdir(), 'ash-held-directory-'));
+		const folder = join(directory, 'held');
+		await mkdir(folder);
+		const child = spawn(process.execPath, ['-e', "process.on('disconnect', () => process.exit()); process.send('ready'); setInterval(() => {}, 1000)"], {
+			cwd: folder, windowsHide: true, stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+		});
+		try {
+			await new Promise<void>((resolve, reject) => {
+				const cleanup = (): void => { child.off('message', ready); child.off('error', failed); child.off('exit', exited); };
+				const ready = (message: unknown): void => { if (message === 'ready') { cleanup(); resolve(); } };
+				const failed = (error: Error): void => { cleanup(); reject(error); };
+				const exited = (): void => { cleanup(); reject(new Error('Directory holder exited before readiness')); };
+				child.on('message', ready);
+				child.once('error', failed);
+				child.once('exit', exited);
+			});
+			using files = new DiskFileSystemProvider([URI.file(directory)]);
+			const started = performance.now();
+			await assert.rejects(files.rename(URI.file(folder), URI.file(join(directory, 'renamed')), 'error'), /EPERM|EACCES|EBUSY/u);
+			assert.ok(performance.now() - started < 10_000, 'A held directory must not use the file retry budget');
+		} finally {
+			if (child.pid && child.exitCode === null && child.signalCode === null) {
+				const exited = once(child, 'exit');
+				if (child.connected) child.disconnect(); else child.kill();
+				await exited;
+			}
+			await rm(directory, { recursive: true, force: true });
+		}
+	});
+
+	test('a recreated watched root resumes nested changes without publishing its siblings', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'ash-root-watch-'));
+		const rootPath = join(directory, 'workspace');
+		const root = URI.file(rootPath);
+		try {
+			await mkdir(rootPath);
+			using files = new DiskFileSystemProvider([root]);
+			const changes: URI[][] = [];
+			const errors: string[] = [];
+			using errorListener = files.onDidWatchError(error => errors.push(error));
+			using listener = files.onDidChangeFiles(event => changes.push([...(event.resources ?? [])]));
+			using watcher = files.watch(root, { recursive: true, excludes: [] });
+			const observe = (resource: URI, action: () => Promise<unknown>, retry = false): Promise<void> => new Promise((resolve, reject) => {
+				let finished = false;
+				const finish = (error?: unknown): void => {
+					if (finished) return;
+					finished = true;
+					clearTimeout(timeout);
+					clearInterval(probe);
+					change.dispose();
+					if (error) reject(error); else resolve();
+				};
+				const change = files.onDidChangeFiles(event => {
+					if (event.resources?.some(item => extUriBiasedIgnorePathCase.isEqual(item, resource))) finish();
+				});
+				const timeout = setTimeout(() => finish(new Error(`No filesystem change for ${resource.toString()}: ${JSON.stringify({ errors, recent: changes.slice(-5).map(resources => resources.map(item => item.toString())) })}`)), 10_000);
+				const run = (): void => { void action().catch(finish); };
+				const probe = retry ? setInterval(run, 20) : undefined;
+				run();
+			});
+			const first = join(rootPath, 'ready.txt');
+			await observe(URI.file(first), () => writeFile(first, 'ready'), true);
+			await observe(root, () => rm(rootPath, { recursive: true }));
+			await observe(root, () => mkdir(rootPath));
+			const nested = join(rootPath, 'nested');
+			await mkdir(nested);
+			const restored = join(nested, 'restored.txt');
+			await writeFile(join(directory, 'sibling.txt'), 'outside');
+			await observe(URI.file(restored), () => writeFile(restored, 'restored'), true);
+			watcher.dispose();
+			const before = changes.length;
+			await writeFile(join(directory, 'sibling.txt'), 'outside');
+			await writeFile(restored, 'after disposal');
+			await new Promise<void>(resolve => setImmediate(resolve));
+			assert.equal(changes.length, before);
+			assert.deepEqual(errors, []);
+			assert.deepEqual(changes.flat().filter(resource => !extUriBiasedIgnorePathCase.isEqualOrParent(resource, root)).map(resource => resource.toString()), []);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	});
 
 	test('exclusive creation preserves empty files and replacement requires an existing file', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'ash-file-modes-'));

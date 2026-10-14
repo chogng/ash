@@ -73,6 +73,17 @@ test('catalog discovery does not depend on reading the global default model', as
 	assert.deepEqual({ modelReads, released }, { modelReads: 0, released: 1 });
 });
 
+test('initial selection follows the recorded root even when a default-named peer is listed first', async () => {
+	const value = session('session-1', 'opaque-primary');
+	value.threads.unshift({ ...value.threads[0]!, threadId: 'default', parentThreadId: 'opaque-primary' });
+	const fake = sessionHost([value]);
+	using management = createManagement(fake);
+	await management.initialize();
+	assert.deepEqual({ selected: management.active?.threadId, roles: management.sessions[0]?.chats.map(chat => [chat.threadId, chat.origin.type]) }, {
+		selected: 'opaque-primary', roles: [['default', 'fork'], ['opaque-primary', 'root']],
+	});
+});
+
 test('list and subscription retain each root model independently of child and global models', async () => {
 	const rootModel = { provider: 'provider', model: 'root-a' };
 	const childModel = { provider: 'provider', model: 'child-b' };

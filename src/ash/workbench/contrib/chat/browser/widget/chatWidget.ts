@@ -1,6 +1,7 @@
 import type { ChatSubmissionOptions } from '../../../../services/chat/common/chatService.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { approvalModeDefinition } from '../../../../../platform/agentHost/common/approvalModes.js';
+import { OPEN_SESSION_LINK_SCHEME } from '../../../../../platform/agentHost/common/openSessionLink.js';
 import { localize } from '../../../../../nls.js';
 import './media/chat.css';
 import { Disposable, toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
@@ -141,7 +142,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		const voiceClient = this.voiceClient;
 		const inputDelegate: ChatInputDelegate = {
 			voiceConversation: { get isAvailable() { return voiceClient.isAvailable; }, get isActive() { return voiceClient.isActive; }, get isConnected() { return voiceClient.isConnected; }, toggle: () => voiceClient.isActive ? voiceClient.disconnect() : voiceClient.connect(ownerDocument.defaultView?.navigator.userActivation), interrupt: () => voiceClient.stopSpeaking() },
-						send: (text, mode, skills, contexts, submissionSignal) => this.send(text, mode, skills, contexts, undefined, submissionSignal),
+			send: (text, mode, skills, contexts, submissionSignal) => this.send(text, mode, skills, contexts, undefined, submissionSignal),
 			executeCommand: (invocation) => invocation.commandId === OPEN_CHAT_PERMISSIONS_COMMAND_ID || invocation.commandId === OPEN_GUARDIAN_SETUP_COMMAND_ID
 				? commandService.executeCommand(invocation.commandId, this.model, invocation.argumentsText)
 				: invocation.argumentsText ? commandService.executeCommand(invocation.commandId, invocation.argumentsText) : commandService.executeCommand(invocation.commandId),
@@ -342,6 +343,10 @@ export async function openChatMarkdownLink(
 		return;
 	}
 	const resource = URI.parse(target);
+	if (resource.scheme === OPEN_SESSION_LINK_SCHEME) {
+		if (openerService) await openerService.open(resource, { fromUserGesture: true });
+		return;
+	}
 	if (resource.scheme === Schemas.vscodeNotebookCell) {
 		if (editorService) await editorService.openEditor({ resource });
 		return;

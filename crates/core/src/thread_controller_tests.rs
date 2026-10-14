@@ -3306,7 +3306,7 @@ fn voice_transcripts_merge_in_the_original_thread_without_starting_or_steering_a
     let store = Arc::new(InMemoryThreadStore::default());
     let controller = ThreadController::with_store(store.clone());
     let thread = create_thread(&controller, "Voice");
-    let turn = start_turn(&controller, &thread, "coding");
+    start_turn(&controller, &thread, "coding");
     let before = controller.read_thread(&thread).unwrap();
     let request = |speaker, text: &str, epoch, end_ms| crate::RecordVoiceTranscriptRequest {
         voice_session_id: "voice-source".into(),

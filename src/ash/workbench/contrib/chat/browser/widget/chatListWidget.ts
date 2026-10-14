@@ -9,6 +9,7 @@ import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDispos
 import type { URI } from '../../../../../base/common/uri.js';
 import type { ChatTurnErrorAction, IChatListItem } from "./chatListItems.js";
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+import { OPEN_SESSION_LINK_SCHEME } from '../../../../../platform/agentHost/common/openSessionLink.js';
 import { ChatMarkdownContentPart } from './chatContentParts/chatMarkdownContentPart.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { BareFontInfo, EDITOR_FONT_DEFAULTS } from '../../../../../editor/common/config/fontInfo.js';
@@ -394,6 +395,7 @@ export class ChatListWidget extends DomWidget {
 				markedOptions: { breaks: true },
 				fillInIncompleteTokens: item.transient,
 				actionHandler: this.onDidRequestLink ? (target: string) => this.onDidRequestLink!(target) : undefined,
+				sanitizerConfig: { allowedLinkSchemes: { augment: [OPEN_SESSION_LINK_SCHEME] } },
 				imageResourceLoader: this.imageResourceLoader,
 			}));
 			disposables.add(markdown.onDidChangeHeight(() => { this.relayout.schedule(); this._onDidChangeContent.fire(); }));

@@ -89,3 +89,83 @@ fn review_deadline_cancels_the_provider_and_releases_capacity_without_waiting_fo
     drop(task);
     assert_eq!(pool.active.load(Ordering::SeqCst), 0);
 }
+
+struct RateLimitedModel {
+    calls: Arc<Mutex<Vec<Instant>>>,
+    retry_at: Option<Instant>,
+}
+
+impl ReviewModel for RateLimitedModel {
+    fn complete(
+        &self,
+        _: &ReviewModelRequest,
+        _: &CancellationToken,
+    ) -> Result<String, ReviewModelError> {
+        let mut calls = self.calls.lock().unwrap();
+        calls.push(Instant::now());
+        if calls.len() == 1 {
+            Err(ReviewModelError::RateLimited {
+                retry_at: self.retry_at,
+            })
+        } else {
+            Ok(r#"{"recommendation":"deny","reason":"test denial"}"#.into())
+        }
+    }
+}
+
+#[test]
+fn rate_limit_guidance_holds_back_other_reviews_of_the_same_model() {
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let retry_at = Instant::now() + Duration::from_millis(100);
+    let pool = ReviewerPool::new(RateLimitedModel {
+        calls: calls.clone(),
+        retry_at: Some(retry_at),
+    });
+    let source = CancellationSource::new();
+    let first = pool.submit(request(), &source.token()).unwrap();
+    // Wait for the known rate limit, rather than guessing when the first provider call finishes.
+    while *pool.cooldown.lock().unwrap() != Some(retry_at) {
+        assert!(
+            Instant::now() < retry_at,
+            "review did not publish its cooldown"
+        );
+        std::thread::yield_now();
+    }
+    let second = pool.submit(request(), &source.token()).unwrap();
+    assert!(first.wait().is_ok());
+    assert!(second.wait().is_ok());
+    let calls = calls.lock().unwrap();
+    assert_eq!(
+        calls.len(),
+        3,
+        "independent assessments are not cached or deduplicated"
+    );
+    assert!(calls[1..].iter().all(|started| *started >= retry_at));
+    assert_eq!(pool.active.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn absent_rate_limit_guidance_respects_the_review_deadline_and_expired_guidance_retries() {
+    for retry_at in [None, Some(Instant::now())] {
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let pool = ReviewerPool::with_limits(
+            RateLimitedModel {
+                calls: calls.clone(),
+                retry_at,
+            },
+            ReviewLimits {
+                concurrent: 1,
+                timeout: Duration::from_millis(100),
+            },
+        )
+        .unwrap();
+        let source = CancellationSource::new();
+        let result = pool.submit(request(), &source.token()).unwrap().wait();
+        assert_eq!(result.is_ok(), retry_at.is_some());
+        assert_eq!(
+            calls.lock().unwrap().len(),
+            if retry_at.is_some() { 2 } else { 1 }
+        );
+        assert_eq!(pool.active.load(Ordering::SeqCst), 0);
+    }
+}

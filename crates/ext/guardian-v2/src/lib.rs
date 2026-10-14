@@ -132,9 +132,13 @@ impl ReviewModel for ProviderReviewModel {
             .invoker
             .invoke_with_cancellation(&self.request(request), cancellation)
             .map_err(|error| match error {
+                model_provider::ModelProviderError::Api(
+                    model_provider::ApiError::RateLimited { retry_at },
+                ) => ReviewModelError::RateLimited { retry_at },
                 model_provider::ModelProviderError::Unavailable(message) => {
                     ReviewModelError::Transient(message)
                 }
+                error if error.is_transient() => ReviewModelError::Transient(error.to_string()),
                 error => ReviewModelError::Invocation(error.to_string()),
             })?;
         cancellation

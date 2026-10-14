@@ -43,6 +43,7 @@ export class ChildProcessJsonlTransport implements IDisposable {
 	private stderr = Buffer.alloc(0);
 	private terminalError?: Error;
 	private pendingWrites = 0;
+	private pendingWriteBytes = 0;
 	private writeTail: Promise<void> = Promise.resolve();
 	private closePromise?: Promise<void>;
 
@@ -132,13 +133,20 @@ export class ChildProcessJsonlTransport implements IDisposable {
 		if (this.pendingWrites >= this.maxPendingWrites) {
 			return Promise.reject(new Error('JSONL transport write queue is full'));
 		}
+		// Count the active write too: stream backpressure must not retain one maximum-sized
+		// frame for every queued request. The byte budget still admits one complete frame.
+		if (this.pendingWriteBytes + bytes.byteLength > this.maxFrameBytes + 1) {
+			return Promise.reject(new Error('JSONL transport write byte capacity reached'));
+		}
 		// Own the queued bytes: a caller can reuse its buffer before the stream accepts the write.
 		const owned = Buffer.from(bytes);
 		this.pendingWrites += 1;
+		this.pendingWriteBytes += owned.byteLength;
 		const write = this.writeTail.then(() => this.writeFrame(owned));
 		this.writeTail = write.catch(() => { });
 		return write.finally(() => {
 			this.pendingWrites -= 1;
+			this.pendingWriteBytes -= owned.byteLength;
 		});
 	}
 

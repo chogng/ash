@@ -1,5 +1,13 @@
 {
   "ash": {
+    "chat.copySessionLink": "聊天：复制对话链接",
+    "chat.copySessionLink.label": "复制对话链接",
+    "chat.sessionLink.missing": "此对话在当前连接中不可用。",
+    "chat.sessionLink.draft": "请先在此对话中发送消息，再复制链接。",
+    "chat.sessionLink.copied": "已将对话链接复制到剪贴板",
+    "chat.sessionLink.invalid": "此对话链接无效。",
+    "chat.sessionLink.connection": "此对话链接所属的连接不可用。",
+    "chat.sessionLink.help": "在聊天的“更多操作”中选择“复制对话链接”，或在命令面板中选择“聊天：复制对话链接”。也可右击对话标题，或聚焦标题后按 Shift+F10 打开菜单。请先在草稿中发送消息。按 Tab 移动到聊天回复中的对话链接，按 Enter 打开链接。链接会保留准确的对话分支；所属连接不可用时不会改为打开其他对话。",
     "chat.title.default": "聊天",
     "chat.title.new": "新聊天",
     "chat.title.switch": "切换会话：{0}",

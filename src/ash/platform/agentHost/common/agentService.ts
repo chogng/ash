@@ -608,7 +608,8 @@ export type ThreadCommittedEvent =
 		| 'agentMessageSent'
 		| 'agentMessageReceived'
 		| 'agentJoinRequested'
-		| 'agentJoinSatisfied';
+		| 'agentJoinSatisfied'
+		| 'voiceTranscriptRecorded';
 	};
 
 export type ThreadUpdate =

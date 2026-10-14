@@ -95,7 +95,8 @@ fn changed_path_for_namespace(
             return should_notify.then(|| requested.path.clone());
         }
         state.last_exists = now_exists;
-        return Some(event_path.to_path_buf());
+        // Parent watches invalidate the requested root, never its ancestor's namespace.
+        return Some(requested.path.clone());
     }
     if !event_path.starts_with(&matched.path) {
         return None;
