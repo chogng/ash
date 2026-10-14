@@ -1032,6 +1032,11 @@ fn approval_request(session_id: &SessionId, thread_id: &ThreadId) -> AgentReques
                         scope: "api.example.test".into(),
                     }],
                     reason: "connect to the test service".into(),
+                    command: None,
+                    allowed_decisions: vec![
+                        ash_protocol::ActionApprovalDecision::ApproveOnce,
+                        ash_protocol::ActionApprovalDecision::Decline,
+                    ],
                     sandbox_denial: None,
                 },
             },

@@ -248,3 +248,71 @@ fn english_punctuation_converts_typed_custom_answers_and_preserves_paste() {
     };
     assert_eq!(answers[0].value, "粘贴，中文.");
 }
+
+#[test]
+fn permission_query_returns_a_subset_and_shorter_lifetime_with_chinese_controls() {
+    let request = ash_protocol::PermissionRequest {
+        environment_id: "local".into(),
+        duration: ash_protocol::PermissionGrantDuration::Session,
+        directories: vec![ash_protocol::RequestedDirectoryGrant {
+            path: "/project".into(),
+            permissions: vec![
+                ash_protocol::DirectoryCapability::ReadFiles,
+                ash_protocol::DirectoryCapability::WriteFiles,
+            ],
+        }],
+        network_hosts: vec!["api.example.test".into()],
+        reason: "Read this project".into(),
+    };
+    let mut query = Query::open_permissions(
+        ash_protocol::TurnId::new("turn").unwrap(),
+        ash_protocol::RequestId::new("permissions").unwrap(),
+        request.clone(),
+    )
+    .unwrap();
+    let mut terminal = Terminal::new(TestBackend::new(70, 12)).unwrap();
+    terminal
+        .draw(|frame| {
+            super::draw(
+                frame,
+                Rect::new(0, 0, 70, 12),
+                query.view(),
+                None,
+                None,
+                crate::render::test_context().with_language(crate::nls::Language::Chinese),
+            )
+        })
+        .unwrap();
+    // Wide glyphs retain padding cells in the backend buffer; compare the displayed text.
+    let visible = terminal
+        .backend()
+        .buffer()
+        .content
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>()
+        .replace(' ', "");
+    assert!(visible.contains("读取文件"), "{visible}");
+    assert!(visible.contains("允许"), "{visible}");
+    assert!(visible.contains("拒绝"));
+    assert_eq!(query.activate(1), QueryOutcome::Consumed);
+    assert_eq!(query.activate(0), QueryOutcome::Consumed);
+    assert_eq!(query.activate(0), QueryOutcome::Consumed);
+    let QueryOutcome::Completed(answers) = query.activate(0) else {
+        panic!("duration must finish the permission query");
+    };
+    let ash_protocol::AgentResponse::Permissions { response } = query.response(answers).response
+    else {
+        panic!("permission response required");
+    };
+    assert!(request.accepts(&response));
+    assert_eq!(
+        response.duration,
+        ash_protocol::PermissionGrantDuration::Turn
+    );
+    assert_eq!(
+        response.directories[0].permissions,
+        vec![ash_protocol::DirectoryCapability::ReadFiles]
+    );
+    assert!(response.network_hosts.is_empty());
+}

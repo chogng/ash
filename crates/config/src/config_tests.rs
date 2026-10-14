@@ -384,7 +384,7 @@ fn issue_execution_settings_are_removed_once_from_versioned_configuration() {
     ] {
         assert!(!encoded.contains(removed));
     }
-    assert!(encoded.contains("schemaVersion = 10"));
+    assert!(encoded.contains(&format!("schemaVersion = {CONFIG_FILE_SCHEMA_VERSION}")));
     assert!(
         !crate::document_migration::decode(&encoded)
             .unwrap()
@@ -426,7 +426,7 @@ fn model_settings_are_migrated_once_from_version_two() {
         document.agent.model_reasoning_effort
     );
     let persisted = std::fs::read_to_string(&config_path).unwrap();
-    assert!(persisted.contains("schemaVersion = 10"));
+    assert!(persisted.contains(&format!("schemaVersion = {CONFIG_FILE_SCHEMA_VERSION}")));
     assert!(!persisted.contains("preferredModel"));
     assert!(!persisted.contains("preferredReasoningEffort"));
     drop(store);
@@ -590,7 +590,7 @@ fn update_preferences(
     }
 }
 
-fn dir_permissions_id() -> DirId {
+fn directory_grant_id() -> DirId {
     format!("sha256:{}", "12".repeat(32)).parse().unwrap()
 }
 
@@ -681,9 +681,9 @@ type = "disabled"
     );
 
     let persisted = persisted_config_document(&database_path);
-    assert!(persisted.contains("schemaVersion = 10"));
+    assert!(persisted.contains(&format!("schemaVersion = {CONFIG_FILE_SCHEMA_VERSION}")));
     assert!(persisted.contains("[codebase]"));
-    assert!(persisted.contains("[dirPermissions.entries]"));
+    assert!(persisted.contains("[directoryGrants.entries]"));
     assert!(!persisted.contains("semanticCodeIndex"));
     assert!(!persisted.contains("workspaceTrust"));
     assert!(!persisted.contains("/tmp/restricted"));
@@ -794,11 +794,18 @@ fn versioned_config_keeps_unknown_fields_strict() {
 #[test]
 fn newer_file_schema_is_rejected_explicitly() {
     let database_path = config_path("newer-file-schema");
-    std::fs::write(database_path.with_extension("toml"), "schemaVersion = 11\n").unwrap();
+    std::fs::write(
+        database_path.with_extension("toml"),
+        &format!("schemaVersion = {}\n", CONFIG_FILE_SCHEMA_VERSION + 1),
+    )
+    .unwrap();
 
     let error = ConfigStore::open(&database_path).err().unwrap();
 
-    assert!(error.0.contains("newer than supported version 10"));
+    assert!(error.0.contains(&format!(
+        "newer than supported version {}",
+        CONFIG_FILE_SCHEMA_VERSION
+    )));
     remove_config_files(&database_path);
 }
 
@@ -1027,7 +1034,7 @@ fn codebase_config_persists_model_selection_without_runtime_state() {
 
 #[test]
 fn commit_message_egress_grant_is_bound_to_dir_model_and_endpoint() {
-    let dir = dir_permissions_id();
+    let dir = directory_grant_id();
     let provider = provider_id("openai-compatible");
     let mut provider_config = ModelProviderConfig::new(provider.clone());
     provider_config.base_url = Some("https://models.example.test/v1".into());
@@ -1123,11 +1130,11 @@ fn built_in_skill() -> SkillId {
 }
 
 fn dir_scope() -> DirConfigScope {
-    DirConfigScope::new(dir_permissions_id())
+    DirConfigScope::new(directory_grant_id())
 }
 
 fn dir_document(model: Option<ModelRef>) -> DirConfigDocument {
-    let namespace = format!("dir:{}", dir_permissions_id());
+    let namespace = format!("dir:{}", directory_grant_id());
     let mcp_id = format!("{namespace}:mcp:github");
     let skill_id = format!("{namespace}:skill-source:review");
     let hook_id = format!("{namespace}:hook:review");
@@ -1328,7 +1335,7 @@ fn additive_document_schema_upgrade_keeps_revision_and_generation() {
             |row| row.get(0),
         )
         .unwrap();
-    assert_eq!(document_schema_version, 10);
+    assert_eq!(document_schema_version, CONFIG_FILE_SCHEMA_VERSION as u32);
     drop(store);
     remove_config_files(&path);
 }
@@ -1359,10 +1366,10 @@ fn preference_patches_preserve_missing_fields_and_clear_null_fields() {
 }
 
 #[test]
-fn dir_permissions_commands_persist_user_owned_decisions() {
+fn directory_grant_commands_persist_user_owned_decisions() {
     let path = config_path("dir-permissions");
     let store = ConfigStore::open(&path).unwrap();
-    let dir = dir_permissions_id();
+    let dir = directory_grant_id();
     let display_path = std::path::PathBuf::from("/tmp/ash-dir-permissions");
     let permissions = Permissions::new([Permission::ReadFiles, Permission::SearchFiles]);
     let configured = store
@@ -1395,7 +1402,7 @@ fn dir_permissions_commands_persist_user_owned_decisions() {
             .path_for(&dir),
         Some(display_path.as_path())
     );
-    assert!(persisted_config_document(&path).contains("[dirPermissions.entries]"));
+    assert!(persisted_config_document(&path).contains("[directoryGrants.entries]"));
 
     store
         .apply(ConfigCommandRequest {
@@ -2247,7 +2254,7 @@ args = []
         &path,
         format!(
             "[workspaceTrust.roots]\n\"{}\" = \"trusted\"\n",
-            dir_permissions_id()
+            directory_grant_id()
         ),
     )
     .unwrap();
@@ -2319,7 +2326,7 @@ fn dir_resolution_overrides_only_a_user_configured_model_provider() {
     );
     assert_eq!(
         resolved.provenance.model,
-        Some(ConfigValueSource::Dir(dir_permissions_id()))
+        Some(ConfigValueSource::Dir(directory_grant_id()))
     );
     assert_eq!(
         resolved
@@ -2766,7 +2773,7 @@ model = "glm-5.1"
     );
     assert_eq!(migrated.document.tui["pinnedModels"][0]["provider"], "glm");
     let encoded = crate::document_migration::encode(&migrated.document).unwrap();
-    assert!(encoded.contains("schemaVersion = 10"));
+    assert!(encoded.contains(&format!("schemaVersion = {CONFIG_FILE_SCHEMA_VERSION}")));
     assert!(!encoded.contains("activeConnections"));
     let with_old_selection = format!("{encoded}\n[activeConnections]\nglm = \"zai-coding-plan\"\n");
     let rewritten = crate::document_migration::decode(&with_old_selection).unwrap();
@@ -3187,5 +3194,46 @@ fn execution_defaults_persist_reset_and_reject_unknown_modes() {
             .is_err()
     );
     drop(reopened);
+    remove_config_files(&path);
+}
+
+#[test]
+fn directory_receipts_upgrade_once_and_replay_with_only_current_command_tags() {
+    let path = config_path("directory-receipt-upgrade");
+    let store = ConfigStore::open(&path).unwrap();
+    let request = ConfigCommandRequest {
+        command_id: ash_protocol::CommandId::new("persisted-directory-grant").unwrap(),
+        expected_revision: ConfigRevision::new(0),
+        command: UserConfigCommand::SetDirectoryGrant {
+            dir: directory_grant_id(),
+            permissions: ash_file_access::Permissions::new([
+                ash_file_access::Permission::ReadFiles,
+            ]),
+            display_path: None,
+        },
+    };
+    let original = store.apply(request.clone()).unwrap();
+    drop(store);
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    connection
+        .execute("UPDATE config_metadata SET document_schema_version=10", [])
+        .unwrap();
+    connection.execute("UPDATE config_command_receipts SET command_json=replace(command_json,'setDirectoryGrant','setDirPermissions')", []).unwrap();
+    drop(connection);
+    let store = ConfigStore::open(&path).unwrap();
+    let replay = store.apply(request).unwrap();
+    assert_eq!(replay.revision, original.revision);
+    assert_eq!(replay.generation, original.generation);
+    let persisted: String = rusqlite::Connection::open(&path)
+        .unwrap()
+        .query_row(
+            "SELECT command_json FROM config_command_receipts",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert!(persisted.contains("setDirectoryGrant"));
+    assert!(!persisted.contains("setDirPermissions"));
+    drop(store);
     remove_config_files(&path);
 }

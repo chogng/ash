@@ -592,7 +592,7 @@ fn probe_app_server(
         .ok_or_else(|| "Local App Server daemon control endpoint is unavailable".to_string())?;
     let mut stream = DeadlineStream::new(stream, Instant::now() + PROBE_TIMEOUT)
         .map_err(|error| format!("App Server initialize probe deadline failed: {error}"))?;
-    if let crate::ConnectionRole::Execution { environment } = options.role() {
+    if let crate::ConnectionRole::Execution { environment, .. } = options.role() {
         // An execution-only remote host deliberately has no Agent RPC service. Probe its
         // selected execution contract without opening or recovering profile history.
         write_json_line(&mut stream, &ConnectionPrelude::from_options(options))

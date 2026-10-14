@@ -33,6 +33,14 @@ pub struct ActionApprovalCapability {
     pub scope: String,
 }
 
+/// Host-materialized command displayed before granting reusable authority.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ActionApprovalCommand {
+    pub program: String,
+    pub arguments: Vec<String>,
+}
+
 /// Durable request for approval of one policy-bound action.
 ///
 /// `sandbox_denial` is present only for one exact retry after a safe sandbox denial.
@@ -47,6 +55,11 @@ pub struct ActionApprovalRequest {
     pub capabilities: Vec<ActionApprovalCapability>,
     #[schemars(length(min = 1))]
     pub reason: String,
+    #[serde(default = "default_decisions")]
+    pub allowed_decisions: Vec<ActionApprovalDecision>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub command: Option<ActionApprovalCommand>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub sandbox_denial: Option<SandboxDenialOutput>,
@@ -57,6 +70,8 @@ pub struct ActionApprovalRequest {
 #[serde(rename_all = "camelCase")]
 pub enum ActionApprovalDecision {
     ApproveOnce,
+    ApproveForSession,
+    ApproveAndSaveRule,
     Decline,
 }
 
@@ -65,4 +80,11 @@ pub enum ActionApprovalDecision {
 #[serde(rename_all = "camelCase")]
 pub struct ActionApprovalResponse {
     pub decision: ActionApprovalDecision,
+}
+
+fn default_decisions() -> Vec<ActionApprovalDecision> {
+    vec![
+        ActionApprovalDecision::ApproveOnce,
+        ActionApprovalDecision::Decline,
+    ]
 }

@@ -3932,7 +3932,7 @@ test('approval capabilities reach the composer through committed backend notific
 	using sessions = new SessionsManagementService(fake.api);
 	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
-	const interaction = { requestId: 'approval-1', request: { type: 'approval' as const, request: { actionDigest: 'action', policyRevision: 'policy', reason: 'Review this write', capabilities: [{ kind: 'fileWrite' as const, scope: String.raw`C:\Users\name\file.txt` }] } } };
+	const interaction = { requestId: 'approval-1', request: { type: 'approval' as const, request: { actionDigest: 'action', policyRevision: 'policy', reason: 'Review this write', allowedDecisions: ['approveOnce' as const, 'decline' as const], capabilities: [{ kind: 'fileWrite' as const, scope: String.raw`C:\Users\name\file.txt` }] } } };
 	fake.emit({ method: 'session/thread/update', params: { sessionId: 'session-1', threadId: 'thread-1', durableSequence: 2, update: { type: 'committed', event: { type: 'interactionRequested', threadId: 'thread-1', turnId: 'turn-1', interaction } } } });
 	assert.deepEqual(model.inputState.interaction?.request, interaction.request);
 	await nextTask();

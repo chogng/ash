@@ -74,6 +74,7 @@ pub(crate) struct Query {
     submitting: bool,
     error: Option<String>,
     custom_answer: Option<String>,
+    permission_request: Option<ash_protocol::PermissionRequest>,
 }
 
 impl Query {
@@ -105,6 +106,68 @@ impl Query {
             })
             .collect();
         Self::from_questions(turn_id, request_id, questions)
+    }
+
+    pub(crate) fn open_permissions(
+        turn_id: TurnId,
+        request_id: RequestId,
+        request: ash_protocol::PermissionRequest,
+    ) -> Result<Self, String> {
+        let choices = || {
+            vec![
+                QueryChoice {
+                    label: "Decline".into(),
+                    description: String::new(),
+                },
+                QueryChoice {
+                    label: "Allow".into(),
+                    description: String::new(),
+                },
+            ]
+        };
+        let mut questions = Vec::new();
+        for (directory_index, directory) in request.directories.iter().enumerate() {
+            for (permission_index, permission) in directory.permissions.iter().enumerate() {
+                let name = permission.to_string();
+                let name = format!("{}{}", name[..1].to_ascii_uppercase(), &name[1..]);
+                questions.push(QueryQuestion {
+                    id: format!("directory:{directory_index}:{permission_index}"),
+                    header: directory.path.clone(),
+                    prompt: name,
+                    choices: choices(),
+                    custom_answer: QueryCustomAnswer::Unavailable,
+                });
+            }
+        }
+        for (index, host) in request.network_hosts.iter().enumerate() {
+            questions.push(QueryQuestion {
+                id: format!("network:{index}"),
+                header: host.clone(),
+                prompt: "Access network".into(),
+                choices: choices(),
+                custom_answer: QueryCustomAnswer::Unavailable,
+            });
+        }
+        let mut durations = vec![QueryChoice {
+            label: "This turn".into(),
+            description: String::new(),
+        }];
+        if request.duration == ash_protocol::PermissionGrantDuration::Session {
+            durations.push(QueryChoice {
+                label: "This session".into(),
+                description: String::new(),
+            });
+        }
+        questions.push(QueryQuestion {
+            id: "duration".into(),
+            header: "Permissions".into(),
+            prompt: "Permission duration".into(),
+            choices: durations,
+            custom_answer: QueryCustomAnswer::Unavailable,
+        });
+        let mut query = Self::from_questions(turn_id, request_id, questions)?;
+        query.permission_request = Some(request);
+        Ok(query)
     }
 
     #[cfg(test)]
@@ -139,6 +202,7 @@ impl Query {
             submitting: false,
             error: None,
             custom_answer: None,
+            permission_request: None,
         })
     }
 
@@ -224,6 +288,60 @@ impl Query {
     }
 
     pub(crate) fn response(&self, answers: Vec<QueryAnswer>) -> ThreadRequestResponse {
+        if let Some(request) = &self.permission_request {
+            let allowed = |key: &str| {
+                answers
+                    .iter()
+                    .any(|answer| answer.question_id == key && answer.value == "Allow")
+            };
+            let duration = if answers
+                .iter()
+                .any(|answer| answer.question_id == "duration" && answer.value == "This session")
+            {
+                ash_protocol::PermissionGrantDuration::Session
+            } else {
+                ash_protocol::PermissionGrantDuration::Turn
+            };
+            let directories = request
+                .directories
+                .iter()
+                .enumerate()
+                .filter_map(|(index, directory)| {
+                    let permissions = directory
+                        .permissions
+                        .iter()
+                        .enumerate()
+                        .filter(|(permission_index, _)| {
+                            allowed(&format!("directory:{index}:{permission_index}"))
+                        })
+                        .map(|(_, permission)| *permission)
+                        .collect::<Vec<_>>();
+                    (!permissions.is_empty()).then(|| ash_protocol::RequestedDirectoryGrant {
+                        path: directory.path.clone(),
+                        permissions,
+                    })
+                })
+                .collect();
+            let network_hosts = request
+                .network_hosts
+                .iter()
+                .enumerate()
+                .filter(|(index, _)| allowed(&format!("network:{index}")))
+                .map(|(_, host)| host.clone())
+                .collect();
+            return ThreadRequestResponse {
+                kind: ThreadRequestKind::Query,
+                turn_id: self.turn_id.clone(),
+                request_id: self.request_id.clone(),
+                response: AgentResponse::Permissions {
+                    response: ash_protocol::PermissionResponse {
+                        duration,
+                        directories,
+                        network_hosts,
+                    },
+                },
+            };
+        }
         let answers = answers
             .into_iter()
             .map(|answer| {
@@ -262,6 +380,7 @@ impl Query {
             submitting: self.submitting,
             error: self.error.as_deref(),
             custom_answer: self.custom_answer.as_deref(),
+            permission_request: self.permission_request.as_ref(),
         }
     }
 
@@ -308,12 +427,14 @@ pub(crate) struct QueryView<'a> {
     pub(crate) submitting: bool,
     pub(crate) error: Option<&'a str>,
     pub(crate) custom_answer: Option<&'a str>,
+    pub(crate) permission_request: Option<&'a ash_protocol::PermissionRequest>,
 }
 
 pub(crate) fn desired_height(view: QueryView<'_>) -> u16 {
     let choice_count = view.question.choices.len()
         + usize::from(view.question.custom_answer == QueryCustomAnswer::Allowed);
     let content_rows = 2usize
+        .saturating_add(usize::from(view.permission_request.is_some()) * 2)
         .saturating_add(choice_count.min(MAX_CHOICE_ROWS))
         .saturating_add(usize::from(view.custom_answer.is_some()))
         .saturating_add(usize::from(view.submitting || view.error.is_some()));
@@ -336,10 +457,25 @@ pub(crate) fn draw(
     let states = (0..choice_count)
         .map(|index| choice_state(index, view.selected, hovered, pressed))
         .collect::<Vec<_>>();
-    let mut lines = vec![Line::styled(
-        &view.question.prompt,
+    let mut lines = Vec::new();
+    if let Some(request) = view.permission_request {
+        lines.push(Line::raw(format!(
+            "{}: {}",
+            context.localize("Environment"),
+            request.environment_id
+        )));
+        lines.push(Line::raw(
+            request.reason.lines().next().unwrap_or_default().to_owned(),
+        ));
+    }
+    lines.push(Line::styled(
+        if view.permission_request.is_some() {
+            context.localize(&view.question.prompt).into_owned()
+        } else {
+            view.question.prompt.clone()
+        },
         Style::default().add_modifier(Modifier::BOLD),
-    )];
+    ));
     lines.extend(
         view.question
             .choices
@@ -347,7 +483,12 @@ pub(crate) fn draw(
             .enumerate()
             .take(MAX_CHOICE_ROWS)
             .map(|(index, choice)| {
-                choice_line(&choice.label, &choice.description, states[index], context)
+                let label = if view.permission_request.is_some() {
+                    context.localize(&choice.label).into_owned()
+                } else {
+                    choice.label.clone()
+                };
+                choice_line(&label, &choice.description, states[index], context)
             }),
     );
     if view.question.custom_answer == QueryCustomAnswer::Allowed
@@ -379,7 +520,11 @@ pub(crate) fn draw(
             Block::default()
                 .title(format!(
                     "{}  ({}/{})",
-                    view.question.header,
+                    if view.permission_request.is_some() && view.question.id == "duration" {
+                        context.localize(&view.question.header).into_owned()
+                    } else {
+                        view.question.header.clone()
+                    },
                     view.current + 1,
                     view.total
                 ))
@@ -389,7 +534,10 @@ pub(crate) fn draw(
         area,
     );
     for (index, state) in states.into_iter().enumerate() {
-        let row = choice_row(area, index);
+        let row = choice_row(
+            area,
+            index + usize::from(view.permission_request.is_some()) * 2,
+        );
         if row < area.bottom().saturating_sub(1) {
             frame.buffer_mut().set_style(
                 Rect::new(
@@ -420,7 +568,10 @@ pub(crate) fn choice_at(
     (0..count).find(|index| {
         Rect::new(
             area.x.saturating_add(1),
-            choice_row(area, *index),
+            choice_row(
+                area,
+                *index + usize::from(view.permission_request.is_some()) * 2,
+            ),
             area.width.saturating_sub(2),
             1,
         )

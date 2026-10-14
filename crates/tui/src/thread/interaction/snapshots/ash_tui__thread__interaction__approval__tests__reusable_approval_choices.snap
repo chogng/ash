@@ -1,0 +1,17 @@
+---
+source: crates/tui/src/thread/interaction/approval_tests.rs
+assertion_line: 135
+expression: text
+---
+┌需 要 批 准 ──────────────────────────────────────────────────────────────┐
+│Run exact command?                                                    │
+│echo ["a b","<input>"]                                                │
+│运 行 命 令   ·  /project                                                 │
+│> 仅 批 准 一 次                                                           │
+│  本 会 话 内 批 准 同 一 操 作                                                 │
+│  保 存 此 精 确 操 作 的 批 准                                                 │
+│  拒 绝                                                                 │
+│                                                                      │
+│                                                                      │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘

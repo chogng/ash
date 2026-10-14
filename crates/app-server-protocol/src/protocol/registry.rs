@@ -801,11 +801,11 @@ use crate::protocol::environment::SessionDirMutationDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::environment::SessionDirMutationResult;
 #[cfg(any(test, feature = "export"))]
-use crate::protocol::environment::SessionDirPermissionsSetParams;
-#[cfg(any(test, feature = "export"))]
 use crate::protocol::environment::SessionDirRemoveParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::environment::SessionDirSelector;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::environment::SessionDirectoryGrantSetParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::error::AppServerError;
 #[cfg(any(test, feature = "export"))]
@@ -2286,6 +2286,8 @@ use ash_protocol::ActionApprovalCapability;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ActionApprovalCapabilityKind;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::ActionApprovalCommand;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::ActionApprovalDecision;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ActionApprovalRequest;
@@ -2402,6 +2404,8 @@ use ash_protocol::DelegationResult;
 use ash_protocol::DelegationResultDigest;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::DelegationResultStatus;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::DirectoryCapability;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::DynamicToolCall;
 #[cfg(any(test, feature = "export"))]
@@ -2521,6 +2525,12 @@ use ash_protocol::ModelVerbosity;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::PendingInteraction;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::PermissionGrantDuration;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::PermissionRequest;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::PermissionResponse;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::Personality;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::PlanStep;
@@ -2548,6 +2558,8 @@ use ash_protocol::RepositoryCheckpoint;
 use ash_protocol::RequestUserInput;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::RequestUserInputResponse;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::RequestedDirectoryGrant;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ReviewTarget;
 #[cfg(any(test, feature = "export"))]
@@ -3370,8 +3382,8 @@ client_methods! {
         response: SessionDirMutationResult,
         serialization: SessionExclusive,
     },
-    SessionDirPermissionsSet => "session/dirs/permissions/set" {
-        params: SessionDirPermissionsSetParams,
+    SessionDirectoryGrantSet => "session/directoryGrants/set" {
+        params: SessionDirectoryGrantSetParams,
         response: SessionDirMutationResult,
         serialization: SessionExclusive,
     },
@@ -6169,7 +6181,7 @@ typescript_bindings! {
     SessionDirMoveResult,
     SessionDirMutationResult,
     PermissionDto,
-    SessionDirPermissionsSetParams,
+    SessionDirectoryGrantSetParams,
     DirectoryGrantsReadParams,
     DirectoryGrantsReadResult,
     DirectoryGrantsEntryDto,
@@ -6313,7 +6325,13 @@ typescript_bindings! {
     TurnLoopReason,
     ActionApprovalCapabilityKind,
     ActionApprovalCapability,
+    DirectoryCapability,
+    PermissionGrantDuration,
+    RequestedDirectoryGrant,
+    PermissionRequest,
+    PermissionResponse,
     ActionApprovalRequest,
+    ActionApprovalCommand,
     ActionApprovalDecision,
     ActionApprovalResponse,
     AgentInteractionKind,

@@ -85,8 +85,7 @@ impl<C: ActionClassifier> ActionPolicyEngine<C> {
         cancellation: &CancellationToken,
     ) -> Result<ExecutionDecision, PolicyError> {
         self.ensure_revision(request)?;
-        let evaluation = self.evaluate_exec_policy(request);
-        if let Some(decision) = self.apply_exec_policy(request, &evaluation)? {
+        if let Some(decision) = decide_exec_policy(&self.exec_policy, request)? {
             return Ok(decision);
         }
         if let Some(grant) = self.user_allowlist.matching_grant(request) {
@@ -133,92 +132,6 @@ impl<C: ActionClassifier> ActionPolicyEngine<C> {
                 request: request.action_policy_revision().clone(),
             })
         }
-    }
-
-    fn evaluate_exec_policy(&self, request: &ActionReviewRequest) -> ExecPolicyEvaluation {
-        let capabilities = request
-            .action()
-            .required_capabilities()
-            .iter()
-            .map(|capability| {
-                ExecPolicyCapability::new(
-                    crate::action::capability_policy_name(capability.kind()),
-                    capability.scope(),
-                )
-            });
-        let subject = ExecPolicySubject::new(
-            request.action().digest().as_str(),
-            crate::action::action_policy_kind(request.action().kind()),
-            crate::action::action_source_policy_name(request.provenance().source()),
-            request.provenance().source_id(),
-            capabilities,
-            request.action().command(),
-            request.action().network_target(),
-        );
-        self.exec_policy.evaluate(&subject)
-    }
-
-    fn apply_exec_policy(
-        &self,
-        request: &ActionReviewRequest,
-        evaluation: &ExecPolicyEvaluation,
-    ) -> Result<Option<ExecutionDecision>, PolicyError> {
-        let decision = match evaluation.effect() {
-            ExecPolicyEffect::Continue => return Ok(None),
-            ExecPolicyEffect::AllowUnsandboxed => {
-                let source = evaluation
-                    .source()
-                    .cloned()
-                    .ok_or(PolicyError::ExecPolicyAuthorityMissing)?;
-                ExecutionDecision::RunExecPolicyGranted(DeterministicPolicyGrant::new(
-                    source,
-                    evaluation.revision().clone(),
-                    request.action().digest().clone(),
-                    request.action().required_capabilities().clone(),
-                    request.action_policy_revision().clone(),
-                ))
-            }
-            ExecPolicyEffect::RequireApproval => ExecutionDecision::AskUser(ApprovalRequest::new(
-                request.action().digest().clone(),
-                request.action().required_capabilities().clone(),
-                "a deterministic execution-policy rule requires user approval",
-            )),
-            ExecPolicyEffect::RequireSandbox => {
-                let source = evaluation
-                    .source()
-                    .cloned()
-                    .ok_or(PolicyError::ExecPolicyAuthorityMissing)?;
-                match (request.phase(), request.sandbox()) {
-                    (ActionReviewPhase::Initial, SandboxCompatibility::Supported(policy)) => {
-                        ExecutionDecision::RunSandboxed(*policy)
-                    }
-                    (ActionReviewPhase::SandboxDenial(denial), _) => {
-                        ExecutionDecision::Block(BlockReason::SandboxRequiredButUnavailable {
-                            source,
-                            reason: format!(
-                                "the required sandbox denied the action: {}",
-                                denial.reason()
-                            ),
-                        })
-                    }
-                    (
-                        ActionReviewPhase::Initial,
-                        SandboxCompatibility::Unsupported { reason }
-                        | SandboxCompatibility::NotApplicable { reason },
-                    ) => ExecutionDecision::Block(BlockReason::SandboxRequiredButUnavailable {
-                        source,
-                        reason: reason.clone(),
-                    }),
-                }
-            }
-            ExecPolicyEffect::Deny(reason) => {
-                ExecutionDecision::Block(BlockReason::DeterministicRule {
-                    source: evaluation.source().cloned(),
-                    reason: reason.clone(),
-                })
-            }
-        };
-        Ok(Some(decision))
     }
 
     fn apply_assessment(
@@ -336,3 +249,100 @@ impl<C: ActionClassifier> ActionPolicyEngine<C> {
 #[cfg(test)]
 #[path = "engine_tests.rs"]
 mod tests;
+
+/// Applies deterministic rules to an exact prepared action. Domain owners still validate their
+/// own invocation contract; a shared grant never overrides a domain denial or invalid binding.
+pub fn decide_exec_policy(
+    policy: &ExecPolicySnapshot,
+    request: &ActionReviewRequest,
+) -> Result<Option<ExecutionDecision>, PolicyError> {
+    apply_exec_policy(request, &evaluate_exec_policy(policy, request))
+}
+
+fn evaluate_exec_policy(
+    policy: &ExecPolicySnapshot,
+    request: &ActionReviewRequest,
+) -> ExecPolicyEvaluation {
+    let capabilities = request
+        .action()
+        .required_capabilities()
+        .iter()
+        .map(|capability| {
+            ExecPolicyCapability::new(
+                crate::action::capability_policy_name(capability.kind()),
+                capability.scope(),
+            )
+        });
+    let subject = ExecPolicySubject::new(
+        request.action().digest().as_str(),
+        crate::action::action_policy_kind(request.action().kind()),
+        crate::action::action_source_policy_name(request.provenance().source()),
+        request.provenance().source_id(),
+        capabilities,
+        request.action().command(),
+        request.action().network_target(),
+    );
+    policy.evaluate(&subject)
+}
+
+fn apply_exec_policy(
+    request: &ActionReviewRequest,
+    evaluation: &ExecPolicyEvaluation,
+) -> Result<Option<ExecutionDecision>, PolicyError> {
+    let decision = match evaluation.effect() {
+        ExecPolicyEffect::Continue => return Ok(None),
+        ExecPolicyEffect::AllowUnsandboxed => {
+            let source = evaluation
+                .source()
+                .cloned()
+                .ok_or(PolicyError::ExecPolicyAuthorityMissing)?;
+            ExecutionDecision::RunExecPolicyGranted(DeterministicPolicyGrant::new(
+                source,
+                evaluation.revision().clone(),
+                request.action().digest().clone(),
+                request.action().required_capabilities().clone(),
+                request.action_policy_revision().clone(),
+            ))
+        }
+        ExecPolicyEffect::RequireApproval => ExecutionDecision::AskUser(ApprovalRequest::new(
+            request.action().digest().clone(),
+            request.action().required_capabilities().clone(),
+            "a deterministic execution-policy rule requires user approval",
+        )),
+        ExecPolicyEffect::RequireSandbox => {
+            let source = evaluation
+                .source()
+                .cloned()
+                .ok_or(PolicyError::ExecPolicyAuthorityMissing)?;
+            match (request.phase(), request.sandbox()) {
+                (ActionReviewPhase::Initial, SandboxCompatibility::Supported(policy)) => {
+                    ExecutionDecision::RunSandboxed(*policy)
+                }
+                (ActionReviewPhase::SandboxDenial(denial), _) => {
+                    ExecutionDecision::Block(BlockReason::SandboxRequiredButUnavailable {
+                        source,
+                        reason: format!(
+                            "the required sandbox denied the action: {}",
+                            denial.reason()
+                        ),
+                    })
+                }
+                (
+                    ActionReviewPhase::Initial,
+                    SandboxCompatibility::Unsupported { reason }
+                    | SandboxCompatibility::NotApplicable { reason },
+                ) => ExecutionDecision::Block(BlockReason::SandboxRequiredButUnavailable {
+                    source,
+                    reason: reason.clone(),
+                }),
+            }
+        }
+        ExecPolicyEffect::Deny(reason) => {
+            ExecutionDecision::Block(BlockReason::DeterministicRule {
+                source: evaluation.source().cloned(),
+                reason: reason.clone(),
+            })
+        }
+    };
+    Ok(Some(decision))
+}

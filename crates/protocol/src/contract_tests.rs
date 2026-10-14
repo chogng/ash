@@ -883,6 +883,11 @@ fn approval_interaction_serializes_its_exact_policy_binding() {
                     scope: "api.example.com".into(),
                 }],
                 reason: "network requires unsandboxed execution".into(),
+                command: None,
+                allowed_decisions: vec![
+                    ActionApprovalDecision::ApproveOnce,
+                    ActionApprovalDecision::Decline,
+                ],
                 sandbox_denial: Some(SandboxDenialOutput::safe_to_retry(
                     "network access denied",
                     ProcessExecutionOutput::from_captured_streams(
@@ -910,6 +915,7 @@ fn approval_interaction_serializes_its_exact_policy_binding() {
                         "scope": "api.example.com"
                     }],
                     "reason": "network requires unsandboxed execution",
+                "allowedDecisions": ["approveOnce", "decline"],
                     "sandboxDenial": {
                         "reason": "network access denied",
                         "output": {
@@ -958,6 +964,11 @@ fn ordinary_approval_omits_the_sandbox_escalation_payload() {
             scope: "api.example.com".into(),
         }],
         reason: "network requires unsandboxed execution".into(),
+        command: None,
+        allowed_decisions: vec![
+            crate::ActionApprovalDecision::ApproveOnce,
+            crate::ActionApprovalDecision::Decline,
+        ],
         sandbox_denial: None,
     };
 

@@ -98,6 +98,7 @@ pub fn client_capabilities() -> ClientCapabilities {
             version: 1,
             kinds: vec![
                 AgentInteractionKind::Approval,
+                AgentInteractionKind::Permissions,
                 AgentInteractionKind::UserInput,
             ],
             dynamic_tools: None,

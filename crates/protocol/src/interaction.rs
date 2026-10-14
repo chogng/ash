@@ -2,6 +2,12 @@
 //! Durable interaction state is separate from App Server connection selection and delivery.
 
 mod approval;
+mod permissions;
+pub use permissions::DirectoryCapability;
+pub use permissions::PermissionGrantDuration;
+pub use permissions::PermissionRequest;
+pub use permissions::PermissionResponse;
+pub use permissions::RequestedDirectoryGrant;
 mod dynamic_tool;
 mod request_user_input;
 mod turn_interaction;
@@ -9,6 +15,7 @@ mod user_input;
 
 pub use approval::ActionApprovalCapability;
 pub use approval::ActionApprovalCapabilityKind;
+pub use approval::ActionApprovalCommand;
 pub use approval::ActionApprovalDecision;
 pub use approval::ActionApprovalRequest;
 pub use approval::ActionApprovalResponse;

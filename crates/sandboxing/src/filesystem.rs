@@ -114,6 +114,10 @@ impl SandboxPathRule {
         })
     }
 
+    pub(crate) fn policy_identity(&self) -> String {
+        format!("{}:{:?}:{:?}", self.owner.id(), self.selector, self.access)
+    }
+
     pub fn owner(&self) -> &Dir {
         &self.owner
     }

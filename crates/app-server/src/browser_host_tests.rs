@@ -543,11 +543,7 @@ fn browser_network_requests_use_exact_tool_authority_and_fail_closed_after_relea
     let source = CancellationSource::new();
     let lease = Arc::new(
         host.with_network_policy(
-            crate::network_policy::ExecutionNetworkPolicy::new(
-                review,
-                "turn:open-call".into(),
-                interactions.clone(),
-            ),
+            crate::network_policy::ExecutionNetworkPolicy::new(review, interactions.clone()),
             &source.token(),
         )
         .unwrap(),

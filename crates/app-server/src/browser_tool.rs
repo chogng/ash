@@ -357,15 +357,11 @@ impl ToolService for BrowserToolService {
         interactions: Arc<dyn ash_core::ToolInteractionService>,
         _: &mut dyn ash_core::ToolOutputSink,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        let identity = facts.execution_identity().ok_or_else(|| {
-            CoreError::Policy("browser network authority requires a turn identity".into())
-        })?;
         let lease = self
             .browser_for(facts)?
             .with_network_policy(
                 crate::network_policy::ExecutionNetworkPolicy::new(
                     self.prepare(call)?,
-                    format!("{}:{}", identity.turn_id(), call.id),
                     interactions,
                 ),
                 cancellation,

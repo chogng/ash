@@ -181,20 +181,25 @@ impl GitService {
     pub(crate) fn snapshot(
         &self,
     ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
+        self.snapshot_for_request(&ash_async_utils::CancellationSource::new().token())
+    }
+
+    pub(crate) fn snapshot_for_request(
+        &self,
+        cancellation: &CancellationToken,
+    ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
         self.ensure_readable()?;
-        let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
+        let runtime = lock_for_request(&self.runtime, cancellation)?;
         run(&runtime, async {
-            let repository = self
-                .client
-                .open_repository(&self.projection_root)
-                .await
-                .map_err(GitServiceError::Git)?;
-            let snapshot = self
-                .client
-                .snapshot(&repository)
-                .await
-                .map_err(GitServiceError::Git)?;
-            Ok((repository, snapshot))
+            tokio::select! {
+                biased;
+                _ = cancellation.cancelled() => Err(GitServiceError::Cancelled),
+                result = async {
+                    let repository = self.client.open_repository(&self.projection_root).await.map_err(GitServiceError::Git)?;
+                    let snapshot = self.client.snapshot(&repository).await.map_err(GitServiceError::Git)?;
+                    Ok((repository, snapshot))
+                } => result,
+            }
         })
     }
 
@@ -202,34 +207,53 @@ impl GitService {
         &self.projection_root
     }
 
-    pub(crate) fn repository(&self) -> Result<GitRepository, GitServiceError> {
+    pub(crate) fn repository_for_request(
+        &self,
+        cancellation: &CancellationToken,
+    ) -> Result<GitRepository, GitServiceError> {
         self.ensure_readable()?;
-        let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
-        run(&runtime, self.open_repository())
+        let runtime = lock_for_request(&self.runtime, cancellation)?;
+        run(&runtime, async {
+            tokio::select! {
+                biased;
+                _ = cancellation.cancelled() => Err(GitServiceError::Cancelled),
+                result = self.open_repository() => result,
+            }
+        })
     }
 
-    pub(crate) fn reference_state(
+    pub(crate) fn reference_state_for_request(
         &self,
         repository: &GitRepository,
+        cancellation: &CancellationToken,
     ) -> Result<ash_git::GitReferenceState, GitServiceError> {
         self.ensure_readable()?;
-        let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
-        run(&runtime, self.client.reference_state(repository)).map_err(GitServiceError::Git)
+        let runtime = lock_for_request(&self.runtime, cancellation)?;
+        run(&runtime, async {
+            tokio::select! {
+                biased;
+                _ = cancellation.cancelled() => Err(GitServiceError::Cancelled),
+                result = self.client.reference_state(repository) => result.map_err(GitServiceError::Git),
+            }
+        })
     }
 
-    pub(crate) fn same_graph_roots(
+    pub(crate) fn same_graph_roots_for_request(
         &self,
         repository: &GitRepository,
         previous: &[String],
         current: &[String],
+        cancellation: &CancellationToken,
     ) -> Result<bool, GitServiceError> {
         self.ensure_readable()?;
-        let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
-        run(
-            &runtime,
-            self.client.same_graph_roots(repository, previous, current),
-        )
-        .map_err(GitServiceError::Git)
+        let runtime = lock_for_request(&self.runtime, cancellation)?;
+        run(&runtime, async {
+            tokio::select! {
+                biased;
+                _ = cancellation.cancelled() => Err(GitServiceError::Cancelled),
+                result = self.client.same_graph_roots(repository, previous, current) => result.map_err(GitServiceError::Git),
+            }
+        })
     }
 
     pub(crate) fn check_ignore(
@@ -251,13 +275,20 @@ impl GitService {
         })
     }
 
-    pub(crate) fn ignore_watch_paths(
+    pub(crate) fn ignore_watch_paths_for_request(
         &self,
         repository: &GitRepository,
+        cancellation: &CancellationToken,
     ) -> Result<Vec<PathBuf>, GitServiceError> {
         self.ensure_readable()?;
-        let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
-        run(&runtime, self.client.ignore_watch_paths(repository)).map_err(GitServiceError::Git)
+        let runtime = lock_for_request(&self.runtime, cancellation)?;
+        run(&runtime, async {
+            tokio::select! {
+                biased;
+                _ = cancellation.cancelled() => Err(GitServiceError::Cancelled),
+                result = self.client.ignore_watch_paths(repository) => result.map_err(GitServiceError::Git),
+            }
+        })
     }
 
     pub(crate) fn dir(&self) -> &Dir {

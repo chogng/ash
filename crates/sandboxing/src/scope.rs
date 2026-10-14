@@ -41,6 +41,7 @@ impl SandboxDirGrant {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SandboxScope {
     command_dir: Dir,
+    policy_ceiling: Option<crate::SandboxPolicy>,
     grants: Vec<SandboxDirGrant>,
     hidden_dirs: Vec<Dir>,
     host_read: HostReadScope,
@@ -56,6 +57,7 @@ impl SandboxScope {
                 SandboxDirAccess::ReadWrite,
             )],
             command_dir,
+            policy_ceiling: None,
             hidden_dirs: Vec::new(),
             host_read: HostReadScope::Host,
             path_rules: Vec::new(),
@@ -133,12 +135,63 @@ impl SandboxScope {
 
         Ok(Self {
             command_dir,
+            policy_ceiling: None,
             grants,
             hidden_dirs,
             host_read: HostReadScope::Host,
             path_rules: Vec::new(),
             private_ipc_dirs: Vec::new(),
         })
+    }
+
+    /// A configured profile is a maximum authority, including after user or automatic approval.
+    pub fn with_policy_ceiling(mut self, policy: crate::SandboxPolicy) -> Self {
+        self.policy_ceiling = Some(self.constrain_policy(policy));
+        self
+    }
+
+    pub fn policy_ceiling(&self) -> Option<crate::SandboxPolicy> {
+        self.policy_ceiling
+    }
+
+    pub fn constrain_policy(&self, policy: crate::SandboxPolicy) -> crate::SandboxPolicy {
+        let Some(ceiling) = self.policy_ceiling else {
+            return policy;
+        };
+        use crate::FileSystemAccess as Files;
+        use crate::NetworkAccess as Network;
+        let files = match (ceiling.file_system(), policy.file_system()) {
+            (Files::ReadOnly, _) | (_, Files::ReadOnly) => Files::ReadOnly,
+            (Files::DirectoryWrite, _) | (_, Files::DirectoryWrite) => Files::DirectoryWrite,
+            (Files::FullAccess, Files::FullAccess) => Files::FullAccess,
+        };
+        let network = match (ceiling.network(), policy.network()) {
+            (Network::Denied, _) | (_, Network::Denied) => Network::Denied,
+            (Network::Managed, _) | (_, Network::Managed) => Network::Managed,
+            (Network::Allowed, Network::Allowed) => Network::Allowed,
+        };
+        crate::SandboxPolicy::new(files, network)
+            .with_host_acl_changes(ceiling.host_acl_changes())
+            .with_file_system_isolation(ceiling.file_system_isolation())
+    }
+
+    /// Stable policy material for exact action identity, independent of open handles and leases.
+    pub fn policy_identity(&self) -> String {
+        format!(
+            "{:?}:{:?}:{:?}:{:?}:{:?}:{:?}",
+            self.command_dir.id(),
+            self.grants
+                .iter()
+                .map(|grant| (grant.dir().id(), grant.access()))
+                .collect::<Vec<_>>(),
+            self.hidden_dirs.iter().map(Dir::id).collect::<Vec<_>>(),
+            self.host_read,
+            self.path_rules
+                .iter()
+                .map(SandboxPathRule::policy_identity)
+                .collect::<Vec<_>>(),
+            self.policy_ceiling
+        )
     }
 
     pub fn command_dir(&self) -> &Dir {

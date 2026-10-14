@@ -198,14 +198,45 @@ impl ApplyPatchTool {
         {
             match provider.for_turn(thread, invocation.turn_id()) {
                 Ok(Some(editor)) => {
+                    let editor = match Self::authorized_editor(&dir, editor, &invocation) {
+                        Ok(editor) => editor,
+                        Err(error) => return returned_error(error),
+                    };
                     return Self::run_document_patch(&dir, document, editor.as_ref(), &invocation);
                 }
                 Ok(None) => {}
                 Err(error) => return returned_error(error.to_string()),
             }
         }
-        let files = FileTextDocuments::new(dir.clone());
-        Self::run_document_patch(&dir, document, &files, &invocation)
+        let files: Arc<dyn TextDocumentEditor> = Arc::new(FileTextDocuments::new(dir.clone()));
+        let files = match Self::authorized_editor(&dir, files, &invocation) {
+            Ok(files) => files,
+            Err(error) => return returned_error(error),
+        };
+        Self::run_document_patch(&dir, document, files.as_ref(), &invocation)
+    }
+
+    fn authorized_editor(
+        dir: &Dir,
+        editor: Arc<dyn TextDocumentEditor>,
+        invocation: &ToolInvocation,
+    ) -> Result<Arc<dyn TextDocumentEditor>, String> {
+        let authorizations = invocation.context().directory_authorizations();
+        // Standalone product hosts retain their own directory boundary; Agent hosts supply proofs.
+        if authorizations.is_empty() {
+            return Ok(editor);
+        }
+        let authorization = authorizations
+            .iter()
+            .find(|proof| {
+                proof.dir() == dir && proof.permission() == ash_file_access::Permission::WriteFiles
+            })
+            .ok_or_else(|| "patch directory has no exact WriteFiles authorization".to_owned())?;
+        Ok(Arc::new(ash_file_system::AuthorizedTextDocuments::new(
+            authorization.clone(),
+            editor,
+            [],
+        )))
     }
 
     fn run_document_patch(

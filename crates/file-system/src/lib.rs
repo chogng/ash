@@ -21,8 +21,8 @@ pub use local::commit_file_mutations;
 pub use service::FileSystem;
 pub use service::SystemFileTransferOperation;
 pub use text_document::{
-    FileTextDocuments, TextDocumentChange, TextDocumentContent, TextDocumentEditor,
-    TextDocumentError, TextDocumentSnapshot,
+    AuthorizedTextDocuments, FileTextDocuments, TextDocumentChange, TextDocumentContent,
+    TextDocumentEditor, TextDocumentError, TextDocumentSnapshot,
 };
 pub use text_file::TextFileFormat;
 pub use types::FileMutation;

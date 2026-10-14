@@ -73,6 +73,16 @@ pub trait ToolInteractionService: Send + Sync {
         cancellation: &CancellationToken,
     ) -> Result<ash_protocol::ActionApprovalDecision, CoreError>;
 
+    /// Requests a temporary permission subset from the current Turn's user interaction owner.
+    fn request_permissions(
+        &self,
+        _: ash_protocol::PermissionRequest,
+    ) -> Result<Option<ash_protocol::PermissionResponse>, CoreError> {
+        Err(CoreError::Policy(
+            "permission requests are unavailable in this host".into(),
+        ))
+    }
+
     fn request_user_input(
         &self,
         request: RequestUserInput,

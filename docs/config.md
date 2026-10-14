@@ -53,7 +53,7 @@ v6 将旧 `xai-subscription` 模型引用和提供商配置迁到 `xai`。模型
 v8 将 BigModel 与 Z.AI 的 GLM 模型引用统一为 `glm`，保留四条连接和各自凭据，并移除旧的 `activeConnections` 选择字段。已就绪连接按 BigModel 订阅、Z.AI 订阅、BigModel API、Z.AI API 排序。
 
 用户文档的主要 section 是 `agent`、`gui`、`tui`、`connections`、`mcp`、`skills`、`plugins`、
-`hooks`、`toolSearch`、`execPolicy`、`dirPermissions`、`codebase`、`network` 和 `git`。Config 保存非敏感引用，不保存
+`hooks`、`toolSearch`、`execPolicy`、`directoryGrants`、`permissions`、`codebase`、`network` 和 `git`。Config 保存非敏感引用，不保存
 API key、OAuth token、authorization header 或 refresh 状态。
 
 `[network]` 控制 App Server 内置的模型、鉴权、图片、tokenizer 下载和通话请求。缺省允许所有主机；`allowedHosts` 只接受完整的小写主机名或 IP 地址，不支持通配符。空数组禁止这些出站请求。修改文件后，App Server 会热更新策略，撤销不再允许的在途 HTTP 请求并停止其响应体读取，同时结束对应的 WebSocket 与通话会话。命令执行的网络审批仍由 `execPolicy` 管理。
@@ -218,8 +218,9 @@ config/directoryGrants/forget
 ```
 
 持久授权的协议 DTO 与 CRUD 由 config owner 管理；environment 只负责运行时 Grant 和撤权后的同步。
-内部字段为 `directory_grants`；`[dirPermissions]` 和命令回执中的旧名称作为存储兼容边界保留，
-已有细粒度集合与显式空集合原样读取和保存。无版本的旧 `workspaceTrust` 继续走既有的一次性迁移，
+当前文件格式为 v11，目录配置使用 `[directoryGrants]`，回执命令使用 `setDirectoryGrant` / `forgetDirectoryGrant`。
+升级旧版本时一次性转换历史配置键和 SQLite 回执标签，保留细粒度集合、显式空集合和回执身份；
+当前格式不接受旧配置键，正常命令解码不接受旧标签。无版本的旧 `workspaceTrust` 继续走既有的一次性迁移，
 不会把当前 capability 集合重新压成布尔信任状态。
 
 产品宿主通过 `directoryGrantsHost: { version: 1 }` 声明目录授权管理能力；后端仍检查连接是否为可信产品宿主，
@@ -264,11 +265,11 @@ BuiltInDefaults
 | 模型与 Tool Mode                    | 下一次模型请求或 Turn 创建                                   |
 | MCP / Skill / Plugin / Hook catalog | 各管理器完成协调后，由新 generation 发布                     |
 | 目录权限                            | 新 Grant 发布后；撤销会使旧 Authorization 失效并停止依赖资源 |
-| execution policy                    | 下一次动作评估；已经准备的调用保留冻结版本                   |
+| execution policy                    | 每次动作评估与 IO 前重查；策略改变后停止旧授权继续执行      |
 | TUI/Electron device preference      | 对应 Renderer 服务自己的更新周期                             |
 
-运行中的 Turn 不读取可变 ConfigStore，也不持有 live manager。它只消费创建时冻结的快照和后续
-明确允许的安全点更新。
+Turn 的模型与执行快照在创建时冻结。权限 owner 在动作评估及 IO 前检查当前硬约束；策略版本改变
+会阻止旧授权继续执行。用户明确选择保存精确规则时，Core 记录策略版本更新，允许对应调用继续。
 
 配置监听订阅后会应用一次当前状态，覆盖初始装配与监听启动之间的变化。各领域协调失败保留
 自己的待处理更新，不跳过其他领域；语义索引重建先准备新服务、工具和监听，全部准备成功后
@@ -298,3 +299,83 @@ BuiltInDefaults
 - 已冻结的 Turn 不随可变配置漂移。
 - Config 使用 `Dir` 与明确权限，不重新引入 Workspace 身份或目录级 Trust。
 - 配置迁移必须先完成完整校验再替换原文件；失败时保留原文件并阻止运行时启动。
+
+## Agent permission ownership and policy ceilings
+
+Directory grants retain all 15 independent capabilities. Workspace trust owns their selection and
+persistence; language, watcher, repository, configuration and discovery services consume their own
+capabilities. Language execution requires both `useLanguageServices` and `executeCommands`.
+Watching requires `watchFiles`; code indexing and retrieval require `searchFiles`. Removing those
+capabilities retires the associated consumers instead of treating command execution as a directory
+trust flag. Agent file and process policy does not replace the editor's document and save owner.
+
+`permissions.defaultProfile` selects `:readOnly`, `:workspace`, `:fullAccess`, or a named entry in
+`permissions.profiles`. Named profiles can extend another profile and supply `fileSystem`, `network`,
+`hostRead` and relative `paths` rules. Inherited path ceilings accumulate; an allow rule cannot
+reopen a denied path. A selected profile constrains Agent reads, edits, patches, searches and process
+execution, including approved actions. Without a selected profile, the existing command defaults
+remain defaults; exact action approval can still authorize the established escalation path.
+
+For example:
+
+```toml
+[permissions]
+defaultProfile = "restricted"
+[permissions.profiles.restricted]
+extends = ":workspace"
+hostRead = "grantedRoots"
+[[permissions.profiles.restricted.paths]]
+pattern = "secrets"
+access = "denied"
+```
+
+`permissions.approvalPrompts` controls `commands`, `fileMutations`, `sandboxRetries`, `network`,
+`mcp`, and `permissionRequests`, all enabled by default. A disabled category rejects an action
+that needs its prompt before Manual, Auto or Bypass can grant it. Effective profiles, path rules,
+directory capabilities, temporary grants and managed source information are supplied to the model
+and approval reviewer through the same owning policy.
+
+Administrator ceilings are loaded separately from `/etc/ash/requirements.toml` on Unix and the
+OS ProgramData `Ash/requirements.toml` path on Windows. This file is not part of user or directory
+configuration and no user configuration command writes it. It can constrain `maximumFileSystem`,
+`maximumNetwork`, `hostRead`, `paths`, execution `rules`, `allowedApprovalModes`, and
+`approvalPrompts`. Managed rules cannot grant unsandboxed execution. Unix requires root ownership
+and protected ancestors; Windows requires administrator/System ownership and a protected writable
+namespace. Untrusted, malformed or oversized input fails closed. Source changes take effect when
+the host is restarted.
+
+`request_permissions` creates a real Core interaction for local directory capabilities and exact
+network host names. Model arguments use `duration`, `directories`, `network_hosts`, and `reason`.
+The Agent can request `readFiles`, `writeFiles`, `executeCommands`, `browseFiles`, and `searchFiles`;
+service discovery remains with its host owner. The user may grant any subset or shorten Session to
+Turn. The issuer retains opened directory identities across the approval wait, rejects changed
+policy or identities, and issues revocable transient leases. Empty responses grant nothing. Turn
+completion retires Turn leases; closing the Session retires Session leases. These decisions never
+write persistent directory grants or widen an explicit profile or administrator ceiling.
+
+Action approval can offer `approveForSession` or `approveAndSaveRule` in addition to one-time
+approval. The UI displays exact materialized program arguments when present. Reuse is bound to the
+semantic action digest, capabilities, source and permission revision. Saved approval writes an
+exact-digest/source execution rule, followed by a durable, explicit policy continuation for that
+Turn; it does not save a wildcard command prefix. Required sandbox and path/network ceilings remain
+in force after every approval, and live policy is checked again before IO begins.
+
+The execution protocol is version 6. Each remote operation carries environment-relative caller
+ceilings, intersected with that host's immutable root and administrator requirements. Process
+idempotency and file upload commit bind the whole effective snapshot. Paths are scoped to the
+remote environment, not interpreted as local workspace paths. Managed networking forwards exact
+proxy-observed destinations through the process operation back to Core and consumes only the
+matching reply before opening the upstream connection. Host mode limits and effective constraints
+are included in the same permission facts. SSH execution configuration can select `network` as
+`denied`, `managed`, or `allowed`; omission retains `denied`. The standalone execution host accepts
+an explicit `--network` ceiling. Reusing an environment identity with another root or network ceiling
+is a conflict, not an ambient authority upgrade.
+
+Old `config/dirPermissions/*`, `session/dirs/permissions/set`, host capability names and live
+`dirPermissions` configuration/command aliases are removed. Schema 11 reads `directoryGrants`.
+Historical artifacts at schema 10 or below are upgraded once, including stored command receipts,
+without changing receipt identities or revisions. A current artifact using old names or competing
+old/new grant authorities is rejected. Old protocol peers fail version or schema negotiation.
+Configured continuous path restrictions require a supporting kernel backend; unsupported backends
+reject them rather than replacing them with a preparation-time snapshot. macOS validation does
+not establish Windows/Linux or PSEC runtime coverage.

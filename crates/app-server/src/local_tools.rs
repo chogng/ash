@@ -86,6 +86,7 @@ use crate::tool_executor_adapter::PreparedToolExecution;
 use crate::tool_executor_adapter::ToolExecutorReviewer;
 
 mod grep_output;
+mod permission_requests;
 mod suite;
 
 pub(crate) use suite::LocalToolSuite;
@@ -103,18 +104,49 @@ pub(crate) struct LocalToolComposition {
 }
 
 /// Durable configuration inputs used to compose the local Agent Tool suite.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct LocalToolConfig {
     execution: ash_config::ExecutionConfig,
+    pub(super) requirements: Result<ash_config::ManagedPermissions, ash_config::ConfigError>,
     user: UserExecPolicyConfig,
+    permissions: ash_config::PermissionsConfig,
     dir_config: Option<(DirId, DirExecPolicyConfig)>,
 }
 
+impl Default for LocalToolConfig {
+    fn default() -> Self {
+        Self::from_resolved(&ResolvedConfig::default())
+    }
+}
+
 impl LocalToolConfig {
+    /// The store owns execution rules; remote operation snapshots must not wait for local tool recomposition.
+    pub(crate) fn with_current_user_policy(mut self, user: UserExecPolicyConfig) -> Self {
+        self.user = user;
+        self
+    }
+
+    pub(crate) fn networking_matches(&self, user: &UserExecPolicyConfig) -> bool {
+        let needs_managed = user
+            .rules
+            .iter()
+            .any(|rule| rule.selector().targets_network());
+        !needs_managed
+            || self.common_policy_snapshot(None).is_ok_and(|snapshot| {
+                snapshot
+                    .layers()
+                    .iter()
+                    .flat_map(|layer| layer.rules())
+                    .any(|rule| rule.selector().targets_network())
+            })
+    }
+
     pub(crate) fn from_resolved(config: &ResolvedConfig) -> Self {
         Self {
             execution: config.execution,
+            requirements: ash_config::load_system_permission_requirements(),
             user: config.exec_policy.clone(),
+            permissions: config.permissions.clone(),
             dir_config: config
                 .dir_config
                 .as_ref()
@@ -122,10 +154,66 @@ impl LocalToolConfig {
         }
     }
 
+    pub(super) fn approval_controls(&self) -> &ash_config::ApprovalPromptControls {
+        &self.permissions.approval_prompts
+    }
+
+    pub(super) fn permission_revision(&self, user: Option<&ResolvedConfig>) -> String {
+        let desired = user.map(|user| user.permissions.active(user.execution));
+        ActionDigest::from_canonical_bytes(
+            format!(
+                "{:?}:{desired:?}:{:?}:{:?}:{:?}",
+                self.profile(),
+                self.requirements,
+                self.approval_controls(),
+                user.map(|user| &user.permissions.approval_prompts)
+            )
+            .as_bytes(),
+        )
+        .as_str()
+        .to_owned()
+    }
+
+    pub(super) fn matches_runtime_permissions(&self, user: &ResolvedConfig) -> bool {
+        self.profile().ok() == user.permissions.active(user.execution).ok()
+    }
+
+    pub(super) fn profile(
+        &self,
+    ) -> Result<ash_config::ResolvedPermissionProfile, ash_config::ConfigError> {
+        self.permissions.active(self.execution)
+    }
+
+    pub(crate) fn common_policy_snapshot(
+        &self,
+        user: Option<&UserExecPolicyConfig>,
+    ) -> Result<ExecPolicySnapshot, ash_config::ConfigError> {
+        ash_config::compose_exec_policy(
+            ExecPolicyDefault::Continue,
+            vec![
+                self.requirements
+                    .as_ref()
+                    .map_err(Clone::clone)?
+                    .values
+                    .layer()?,
+            ],
+            user.unwrap_or(&self.user),
+            self.dir_config.as_ref().map(|(id, config)| (id, config)),
+        )
+    }
+
     fn snapshot(&self) -> Result<ExecPolicySnapshot, LocalToolError> {
         ash_config::compose_exec_policy(
             ExecPolicyDefault::Deny("action is outside the local Tool policy contract".into()),
-            vec![LOCAL_EXEC_POLICY_HOST_LAYER.clone()],
+            vec![
+                LOCAL_EXEC_POLICY_HOST_LAYER.clone(),
+                self.requirements
+                    .as_ref()
+                    .map_err(|error| LocalToolError::policy(error.clone()))?
+                    .values
+                    .layer()
+                    .map_err(LocalToolError::policy)?,
+            ],
             &self.user,
             self.dir_config.as_ref().map(|(dir_id, dir)| (dir_id, dir)),
         )
@@ -147,7 +235,29 @@ pub(crate) fn compose_local_tools_with_config(
     file_search: Arc<file_search::Service>,
     pty_helper: Option<&std::path::PathBuf>,
     documents: Option<Arc<dyn ash_tools::TextDocumentEditorProvider>>,
+    threads: Arc<ash_core::ThreadController>,
 ) -> Result<LocalToolComposition, LocalToolError> {
+    let requirements = config
+        .requirements
+        .as_ref()
+        .map_err(|error| LocalToolError::policy(error.clone()))?;
+    let profile = requirements
+        .values
+        .constrain(
+            config
+                .permissions
+                .active(config.execution)
+                .map_err(LocalToolError::policy)?,
+        )
+        .map_err(LocalToolError::policy)?;
+    let mut path_policy = profile.path_policy().map_err(LocalToolError::policy)?;
+    if requirements.values.maximum_file_system == Some(ash_protocol::SandboxMode::ReadOnly) {
+        path_policy = path_policy.intersect(
+            &ash_file_access::PathAccessPolicy::new(ash_file_access::PathAccess::ReadOnly, vec![])
+                .map_err(LocalToolError::policy)?,
+        );
+    }
+    let grant = grant.with_path_policy(path_policy);
     let authorization = grant
         .authorize(DirPermission::ExecuteCommands)
         .map_err(|error| LocalToolError::permission(error.to_string()))?;
@@ -162,17 +272,50 @@ pub(crate) fn compose_local_tools_with_config(
     let ripgrep = resolve_ripgrep(&install_context).map_err(LocalToolError::ripgrep)?;
     let environment_id = ash_tools::EnvId::local();
     let exec_policy = config.snapshot()?;
-    let shell_policy = configured_shell_policy(&exec_policy, config.execution);
+    let mut execution = config.execution;
+    execution.command_file_access = match profile.file_system {
+        ash_protocol::SandboxMode::ReadOnly => ash_config::CommandFileAccess::ReadOnly,
+        ash_protocol::SandboxMode::DirectoryWrite | ash_protocol::SandboxMode::FullAccess => {
+            ash_config::CommandFileAccess::DirectoryWrite
+        }
+    };
+    execution.command_network_access = profile.network;
+    let configured = configured_shell_policy(&exec_policy, execution);
+    let shell_policy = SandboxPolicy::new(
+        match profile.file_system {
+            ash_protocol::SandboxMode::ReadOnly => FileSystemAccess::ReadOnly,
+            ash_protocol::SandboxMode::DirectoryWrite => FileSystemAccess::DirectoryWrite,
+            ash_protocol::SandboxMode::FullAccess => FileSystemAccess::FullAccess,
+        },
+        if (profile.scope == ash_config::PermissionProfileScope::AllOperations
+            || requirements.values.maximum_network.is_some())
+            && profile.network == ash_config::CommandNetworkAccess::Denied
+        {
+            NetworkAccess::Denied
+        } else {
+            configured.network()
+        },
+    )
+    .with_host_acl_changes(local_acl_changes())
+    .with_file_system_isolation(local_isolation());
+    let profile_policy = (config.permissions.default_profile.is_some()
+        || requirements.values.has_execution_ceiling())
+    .then_some(shell_policy);
+    let host_contract = ash_execpolicy::ExecPolicySnapshot::new(
+        ExecPolicyDefault::Continue,
+        vec![LOCAL_EXEC_POLICY_HOST_LAYER.clone()],
+    )
+    .map_err(|error| LocalToolError::policy(ash_config::ConfigError(error.to_string())))?;
     let action_policy_revision = ash_action_policy::derive_action_policy_revision(
-        exec_policy.revision(),
+        host_contract.revision(),
         LOCAL_GRANT_SNAPSHOT_REVISION,
-        &format!(
-            "{LOCAL_REVIEWER_POLICY_REVISION}:{:?}:{:?}",
-            config.execution.command_file_access, config.execution.command_network_access
-        ),
+        &format!("{LOCAL_REVIEWER_POLICY_REVISION}:{profile:?}:{requirements:?}"),
     );
     let reviewer: Arc<dyn ToolExecutorReviewer> = Arc::new(LocalExecutorReviewer {
         shell_policy,
+        profile_policy,
+        grant: grant.clone(),
+        threads: Some(threads.clone()),
         authorization: authorization.clone(),
         ripgrep: ripgrep.clone(),
         action_policy_revision: action_policy_revision.clone(),
@@ -205,14 +348,25 @@ pub(crate) fn compose_local_tools_with_config(
         exec_policy,
         action_policy_revision: action_policy_revision.clone(),
     };
-    let shell = LocalShellToolService::new_with_action_policy_revision(
+    let mut shell = LocalShellToolService::new_with_action_policy_revision(
         authorization.clone(),
         ripgrep.clone(),
         sandbox(),
         action_policy_revision.clone(),
         shell_policy,
     )?;
-    let mut service = LocalToolSuite::new(shell, grep, file_search, dir_grants, grant);
+    shell.profile_policy = profile_policy;
+    let requests = permission_requests::PermissionRequests {
+        threads,
+        grants: Arc::clone(&dir_grants),
+        authorization: authorization.clone(),
+        profile,
+        requirements: requirements.values.clone(),
+        enabled: config.permissions.approval_prompts.permission_requests,
+        revision: action_policy_revision.clone(),
+    };
+    let mut service = LocalToolSuite::new(shell, grep, file_search, dir_grants, grant)
+        .with_permission_requests(requests);
     if let Some(documents) = documents {
         service = service.with_text_document_editor(documents);
     }
@@ -498,6 +652,7 @@ struct LocalShellToolService<B> {
     definition: ToolDefinition,
     action_policy_revision: ActionPolicyRevision,
     shell_policy: SandboxPolicy,
+    profile_policy: Option<SandboxPolicy>,
 }
 
 impl<B: SandboxBackend> LocalShellToolService<B> {
@@ -542,6 +697,7 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
             shell,
             definition,
             shell_policy,
+            profile_policy: None,
             action_policy_revision,
         })
     }
@@ -632,14 +788,14 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         call: &ToolCall,
         authorization: &Authorization,
         relative: PathBuf,
+        scope: &SandboxScope,
     ) -> Result<ActionReviewRequest, CoreError> {
         let request = ShellCommandRequest::from_arguments(&ToolPayload::FunctionArguments(
             call.arguments.clone(),
         ))
         .map_err(|error| CoreError::Policy(error.to_string()))?;
         let request = self.materialize_at(request, authorization.dir(), relative)?;
-        let scope = local_sandbox_scope(authorization.dir())?;
-        self.review_request_scoped(&request, Some(&scope))
+        self.review_request_scoped(&request, Some(scope))
     }
 
     fn prepare_session_at(
@@ -647,10 +803,10 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         request: ShellCommandRequest,
         authorization: &Authorization,
         relative: PathBuf,
+        scope: &SandboxScope,
     ) -> Result<ActionReviewRequest, CoreError> {
         let request = self.materialize_at(request, authorization.dir(), relative)?;
-        let scope = local_sandbox_scope(authorization.dir())?;
-        self.review_request_scoped(&request, Some(&scope))
+        self.review_request_scoped(&request, Some(scope))
     }
 
     fn execute_at(
@@ -661,18 +817,18 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         dir_authorization: &Authorization,
         relative: PathBuf,
         network_policy: Option<&network_proxy::NetworkPolicyHandle>,
+        scope: &SandboxScope,
     ) -> Result<ToolExecutionOutput, CoreError> {
         let request = ShellCommandRequest::from_arguments(&ToolPayload::FunctionArguments(
             call.arguments.clone(),
         ))
         .map_err(|error| CoreError::Execution(error.to_string()))?;
         let request = self.materialize_at(request, dir_authorization.dir(), relative)?;
-        let scope = local_sandbox_scope(dir_authorization.dir())?;
         self.execute_request_scoped(
             request,
             authorization,
             cancellation,
-            Some(&scope),
+            Some(scope),
             network_policy,
         )
     }
@@ -681,13 +837,7 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         &self,
         request: &ShellCommandRequest,
     ) -> Result<ActionReviewRequest, CoreError> {
-        let selected_root = request
-            .dir_root()
-            .map(Dir::open_local)
-            .transpose()
-            .map_err(|error| CoreError::Policy(error.to_string()))?
-            .unwrap_or_else(|| self.authorization.dir().clone());
-        let scope = local_sandbox_scope(&selected_root)?;
+        let scope = local_sandbox_scope(&self.authorization, self.profile_policy)?;
         self.review_request_scoped(request, Some(&scope))
     }
 
@@ -716,6 +866,7 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
                     "access": format!("{:?}", grant.access()),
                 })).collect::<Vec<_>>(),
                 "hiddenDirs": scope.hidden_dirs().iter().map(Dir::id).collect::<Vec<_>>(),
+                "constraints": scope.policy_identity(),
             })),
         }))
         .map_err(|error| CoreError::Policy(error.to_string()))?;
@@ -728,7 +879,15 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         let sandbox = if is_ripgrep {
             read_only_sandbox()
         } else {
-            self.shell_policy
+            sandbox_scope
+                .and_then(SandboxScope::policy_ceiling)
+                .filter(|policy| policy.network() == NetworkAccess::Managed)
+                .map(|_| {
+                    SandboxPolicy::new(self.shell_policy.file_system(), NetworkAccess::Managed)
+                        .with_host_acl_changes(local_acl_changes())
+                        .with_file_system_isolation(local_isolation())
+                })
+                .unwrap_or(self.shell_policy)
         };
         Ok(ActionReviewRequest::new(
             ResolvedAction::new(
@@ -758,13 +917,7 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         authorization: &ToolAuthorization,
         cancellation: &CancellationToken,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        let selected_root = request
-            .dir_root()
-            .map(Dir::open_local)
-            .transpose()
-            .map_err(|error| CoreError::Execution(error.to_string()))?
-            .unwrap_or_else(|| self.authorization.dir().clone());
-        let scope = local_sandbox_scope(&selected_root)?;
+        let scope = local_sandbox_scope(&self.authorization, self.profile_policy)?;
         self.execute_request_scoped(request, authorization, cancellation, Some(&scope), None)
     }
 
@@ -866,6 +1019,9 @@ impl<B: SandboxBackend> ToolService for LocalShellToolService<B> {
 
 struct LocalExecutorReviewer {
     shell_policy: SandboxPolicy,
+    profile_policy: Option<SandboxPolicy>,
+    grant: ash_file_access::Grant,
+    threads: Option<Arc<ash_core::ThreadController>>,
     authorization: Authorization,
     ripgrep: RipgrepExecutable,
     action_policy_revision: ActionPolicyRevision,
@@ -975,13 +1131,44 @@ impl LocalExecutorReviewer {
         } else {
             self.shell_policy
         };
-        let scope = local_sandbox_scope(authorization.dir())?;
+        let mut scope = local_sandbox_scope(&authorization, self.profile_policy)?;
+        if let (Some(session), Some(thread), Some(threads)) = (session_id, thread_id, &self.threads)
+        {
+            let snapshot = threads.read_thread(thread)?;
+            if let Some(turn) = snapshot
+                .turns
+                .iter()
+                .rev()
+                .find(|turn| turn.status == ash_protocol::TurnStatus::Running)
+                && self
+                    .dir_grants
+                    .has_requested_network(session, thread, &turn.turn_id)
+            {
+                scope = scope.with_policy_ceiling(
+                    SandboxPolicy::new(FileSystemAccess::FullAccess, NetworkAccess::Managed)
+                        .with_host_acl_changes(local_acl_changes())
+                        .with_file_system_isolation(local_isolation()),
+                );
+            }
+        }
+        let sandbox = if scope
+            .policy_ceiling()
+            .is_some_and(|policy| policy.network() == NetworkAccess::Managed)
+            && !is_ripgrep
+        {
+            SandboxPolicy::new(sandbox.file_system(), NetworkAccess::Managed)
+                .with_host_acl_changes(local_acl_changes())
+                .with_file_system_isolation(local_isolation())
+        } else {
+            sandbox
+        };
         let canonical = serde_json::to_vec(&json!({
             "program": request.program(),
             "arguments": request.arguments(),
             "working_directory": working_directory,
             "sandboxDir": scope.command_dir().id(),
             "deniedPathPatterns": LOCAL_DENIED_GLOBS,
+            "constraints": scope.policy_identity(),
         }))
         .map_err(|error| CoreError::Policy(error.to_string()))?;
         let review = ActionReviewRequest::new(
@@ -1037,7 +1224,8 @@ impl LocalExecutorReviewer {
             let authorization = thread_scope
                 .as_ref()
                 .map(|scope| scope.primary().clone())
-                .unwrap_or_else(|| self.authorization.clone());
+                .unwrap_or_else(|| self.authorization.clone())
+                .constrained_by(self.authorization.path_policy());
             let absolute = authorization
                 .dir()
                 .resolve_existing(requested)
@@ -1062,8 +1250,26 @@ impl LocalExecutorReviewer {
         {
             authorizations.extend(snapshot.authorizations().iter().cloned());
         }
+        if let (Some(session), Some(thread), Some(threads)) = (session_id, thread_id, &self.threads)
+        {
+            let snapshot = threads.read_thread(thread)?;
+            if let Some(turn) = snapshot
+                .turns
+                .iter()
+                .rev()
+                .find(|turn| turn.status == ash_protocol::TurnStatus::Running)
+            {
+                authorizations.extend(self.dir_grants.requested_authorizations(
+                    session,
+                    thread,
+                    &turn.turn_id,
+                    DirPermission::ExecuteCommands,
+                ));
+            }
+        }
         let (authorization, relative) = authorizations
             .into_iter()
+            .map(|authorization| authorization.constrained_by(self.authorization.path_policy()))
             .filter_map(|authorization| {
                 requested
                     .strip_prefix(authorization.dir().canonical_path())
@@ -1111,7 +1317,7 @@ impl LocalExecutorReviewer {
         let thread_scope = thread_id
             .map(|thread_id| {
                 self.dir_grants
-                    .thread_scope(thread_id, DirPermission::MutateRepository)
+                    .thread_scope(thread_id, DirPermission::WriteFiles)
                     .map_err(|error| CoreError::Policy(error.to_string()))
             })
             .transpose()?
@@ -1119,21 +1325,49 @@ impl LocalExecutorReviewer {
         let mut authorizations = thread_scope
             .as_ref()
             .map(|scope| scope.authorizations().cloned().collect::<Vec<_>>())
-            .unwrap_or_else(|| vec![self.authorization.clone()]);
-        if !authorizations
-            .iter()
-            .any(|value| value.dir() == self.authorization.dir())
+            .unwrap_or_else(|| {
+                self.grant
+                    .authorize(DirPermission::WriteFiles)
+                    .ok()
+                    .into_iter()
+                    .collect()
+            });
+        if let Ok(default) = self.grant.authorize(DirPermission::WriteFiles)
+            && !authorizations
+                .iter()
+                .any(|value| value.dir() == default.dir())
         {
-            authorizations.push(self.authorization.clone());
+            authorizations.push(default);
         }
         if let Some(session_id) = session_id
             && let Some(snapshot) = self
                 .dir_grants
-                .snapshot_for(session_id, DirPermission::MutateRepository)
+                .snapshot_for(session_id, DirPermission::WriteFiles)
                 .map_err(|error| CoreError::Policy(error.to_string()))?
         {
             authorizations.extend(snapshot.authorizations().iter().cloned());
         }
+        if let (Some(session), Some(thread), Some(threads)) = (session_id, thread_id, &self.threads)
+        {
+            let snapshot = threads.read_thread(thread)?;
+            if let Some(turn) = snapshot
+                .turns
+                .iter()
+                .rev()
+                .find(|turn| turn.status == ash_protocol::TurnStatus::Running)
+            {
+                authorizations.extend(self.dir_grants.requested_authorizations(
+                    session,
+                    thread,
+                    &turn.turn_id,
+                    DirPermission::WriteFiles,
+                ));
+            }
+        }
+        let authorizations = authorizations
+            .into_iter()
+            .map(|authorization| authorization.constrained_by(self.authorization.path_policy()))
+            .collect::<Vec<_>>();
         let (authorization, rewritten_patch, targets) =
             materialize_patch_targets(&authorizations, patch, &[])?;
         let capabilities = targets.iter().flat_map(|target| {
@@ -1254,6 +1488,20 @@ fn materialize_patch_targets(
         }
         .map_err(|error| CoreError::Policy(error.to_string()))?;
         ensure_local_file_access(authorization.dir(), &resolved)?;
+        if !authorization
+            .path_policy()
+            .allows(&relative, ash_file_access::PathOperation::Write)
+            || !authorization.path_policy().allows(
+                resolved
+                    .strip_prefix(authorization.dir().canonical_path())
+                    .map_err(|error| CoreError::Policy(error.to_string()))?,
+                ash_file_access::PathOperation::Write,
+            )
+        {
+            return Err(CoreError::Policy(
+                "apply_patch target is denied by the permission profile".into(),
+            ));
+        }
         targets.push(resolved.display().to_string());
         rewritten.push(format!("{prefix}{}", relative.display()));
     }
@@ -1307,6 +1555,12 @@ static LOCAL_EXEC_POLICY_HOST_LAYER: LazyLock<ExecPolicyLayer> = LazyLock::new(|
             "grep",
             ExecPolicyActionKind::SystemOperation,
             ExecPolicyEffect::Continue,
+        ),
+        local_rule(
+            "permission-request",
+            "request_permissions",
+            ExecPolicyActionKind::SystemOperation,
+            ExecPolicyEffect::AllowUnsandboxed,
         ),
         local_rule(
             "local-glob",
@@ -1407,9 +1661,11 @@ static LOCAL_EXEC_POLICY_HOST_LAYER: LazyLock<ExecPolicyLayer> = LazyLock::new(|
 });
 
 static LOCAL_ACTION_POLICY_REVISION: LazyLock<ActionPolicyRevision> = LazyLock::new(|| {
-    let exec_policy = LocalToolConfig::default()
-        .snapshot()
-        .expect("static local execution policy is valid");
+    let exec_policy = ExecPolicySnapshot::new(
+        ExecPolicyDefault::Continue,
+        vec![LOCAL_EXEC_POLICY_HOST_LAYER.clone()],
+    )
+    .expect("static local execution policy is valid");
     ash_action_policy::derive_action_policy_revision(
         exec_policy.revision(),
         LOCAL_GRANT_SNAPSHOT_REVISION,
@@ -1546,26 +1802,67 @@ fn local_isolation() -> ash_sandboxing::FileSystemIsolation {
 const LOCAL_DENIED_NAME: &str = ".env";
 const LOCAL_DENIED_GLOBS: &[&str] = &["**/.env"];
 
-fn local_sandbox_scope(dir: &Dir) -> Result<SandboxScope, CoreError> {
-    let rules = LOCAL_DENIED_GLOBS
+fn local_sandbox_scope(
+    authorization: &Authorization,
+    ceiling: Option<SandboxPolicy>,
+) -> Result<SandboxScope, CoreError> {
+    let dir = authorization.dir();
+    let policy = authorization.path_policy();
+    let timing = if cfg!(target_os = "macos") {
+        PatternMatchTiming::Continuous
+    } else {
+        PatternMatchTiming::PreparationSnapshot
+    };
+    let mut rules = LOCAL_DENIED_GLOBS
         .iter()
         .map(|pattern| {
-            SandboxPathRule::pattern(
-                dir.clone(),
-                *pattern,
-                SandboxPathAccess::Denied,
-                if cfg!(target_os = "macos") {
-                    PatternMatchTiming::Continuous
-                } else {
-                    PatternMatchTiming::PreparationSnapshot
-                },
-            )
+            SandboxPathRule::pattern(dir.clone(), *pattern, SandboxPathAccess::Denied, timing)
         })
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| CoreError::Policy(error.to_string()))?;
-    SandboxScope::single(dir.clone())
-        .with_path_rules(rules)
-        .map_err(|error| CoreError::Policy(error.to_string()))
+    for rule in policy.rules() {
+        let access = match rule.access {
+            ash_file_access::PathAccess::Denied => SandboxPathAccess::Denied,
+            ash_file_access::PathAccess::ReadOnly => SandboxPathAccess::ReadOnly,
+            ash_file_access::PathAccess::ReadWrite => continue,
+        };
+        // Configured rules describe continuous ceilings. Unsupported backends reject these
+        // rather than turning them into a snapshot that new files could escape.
+        rules.push(
+            SandboxPathRule::pattern(
+                dir.clone(),
+                rule.pattern.clone(),
+                access,
+                PatternMatchTiming::Continuous,
+            )
+            .map_err(|error| CoreError::Policy(error.to_string()))?,
+        );
+    }
+    let access = match policy.baseline() {
+        ash_file_access::PathAccess::ReadOnly => ash_sandboxing::SandboxDirAccess::ReadOnly,
+        ash_file_access::PathAccess::ReadWrite => ash_sandboxing::SandboxDirAccess::ReadWrite,
+        ash_file_access::PathAccess::Denied => {
+            return Err(CoreError::Policy(
+                "profile denies the execution directory".into(),
+            ));
+        }
+    };
+    let mut scope = SandboxScope::new(
+        dir.clone(),
+        vec![ash_sandboxing::SandboxDirGrant::new(dir.clone(), access)],
+        vec![],
+    )
+    .map_err(|error| CoreError::Policy(error.to_string()))?
+    .with_host_read(match policy.host_read() {
+        ash_file_access::HostReadAccess::Host => ash_sandboxing::HostReadScope::Host,
+        ash_file_access::HostReadAccess::GrantedRoots => ash_sandboxing::HostReadScope::Minimal,
+    })
+    .with_path_rules(rules)
+    .map_err(|error| CoreError::Policy(error.to_string()))?;
+    if let Some(ceiling) = ceiling {
+        scope = scope.with_policy_ceiling(ceiling);
+    }
+    Ok(scope)
 }
 
 fn local_command_authority(
@@ -1573,6 +1870,21 @@ fn local_command_authority(
     shell_policy: SandboxPolicy,
     scope: Option<&SandboxScope>,
 ) -> Result<CommandExecutionAuthority, CoreError> {
+    if let Some(scope) = scope.filter(|scope| scope.policy_ceiling().is_some()) {
+        let requested = match authorization {
+            ToolAuthorization::Sandboxed(policy) => *policy,
+            ToolAuthorization::UnsandboxedGrant { .. }
+            | ToolAuthorization::ExecPolicyGranted(_)
+            | ToolAuthorization::AutoReviewed(_)
+            | ToolAuthorization::PermissionBypassed(_)
+            | ToolAuthorization::ApprovedOnce(_) => {
+                SandboxPolicy::new(FileSystemAccess::FullAccess, NetworkAccess::Allowed)
+            }
+        };
+        return Ok(CommandExecutionAuthority::Sandboxed(
+            scope.constrain_policy(requested),
+        ));
+    }
     match authorization {
         ToolAuthorization::Sandboxed(policy) => {
             return Ok(CommandExecutionAuthority::Sandboxed(*policy));

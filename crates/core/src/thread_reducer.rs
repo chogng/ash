@@ -1675,6 +1675,27 @@ pub(crate) fn reduce_thread_event_with_prefix(
             turn.mode = *mode;
             turn.instructions = Some(instructions.clone());
         }
+        ThreadEvent::TurnPermissionPolicyChanged {
+            turn_id,
+            request_id,
+            policy_revision,
+            ..
+        } => {
+            require_no_command(envelope)?;
+            if policy_revision.is_empty() || !snapshot.resolved_interactions.iter().any(|resolved|
+                &resolved.turn_id == turn_id && &resolved.interaction.request_id == request_id
+                    && matches!(&resolved.response, AgentResponse::Approval { response }
+                        if response.decision == ash_protocol::ActionApprovalDecision::ApproveAndSaveRule)) {
+                return Err(CoreError::Journal("permission policy continuation requires an explicit saved-rule approval".into()));
+            }
+            let turn = find_turn_mut(&mut snapshot, turn_id)?;
+            if turn.status != TurnStatus::Running {
+                return Err(CoreError::Journal(
+                    "permission policy cannot change outside a running Turn".into(),
+                ));
+            }
+            turn.policy_revision = policy_revision.clone();
+        }
         ThreadEvent::PlanUpdated { turn_id, plan, .. } => {
             require_no_command(envelope)?;
             crate::turn::validate_plan_update(plan).map_err(CoreError::Journal)?;
@@ -1737,6 +1758,22 @@ pub(crate) fn reduce_thread_event_with_prefix(
             if interaction.request.kind() != response.kind() {
                 return Err(CoreError::Journal(
                     "interaction response does not match the outstanding request kind".into(),
+                ));
+            }
+            if let (AgentRequest::Permissions { request }, AgentResponse::Permissions { response }) =
+                (&interaction.request, response)
+                && !request.accepts(response)
+            {
+                return Err(CoreError::Journal(
+                    "permission response exceeds its durable request".into(),
+                ));
+            }
+            if let (AgentRequest::Approval { request }, AgentResponse::Approval { response }) =
+                (&interaction.request, response)
+                && !request.allowed_decisions.contains(&response.decision)
+            {
+                return Err(CoreError::Journal(
+                    "approval decision is not offered by this host".into(),
                 ));
             }
             let receipt = envelope.command.clone().ok_or_else(|| {
@@ -2961,6 +2998,9 @@ fn canonicalize_json(value: &mut serde_json::Value) {
 }
 
 pub(crate) fn validate_agent_request(request: &AgentRequest) -> Result<(), String> {
+    if let AgentRequest::Permissions { request } = request {
+        return request.validate();
+    }
     if let AgentRequest::DynamicTool { call } = request {
         if !is_sha256_hex(&call.definition_digest) {
             return Err("dynamic tool definition digest must be a SHA-256 hex digest".into());
@@ -2978,6 +3018,30 @@ pub(crate) fn validate_agent_request(request: &AgentRequest) -> Result<(), Strin
     }
     if request.reason.trim().is_empty() {
         return Err("approval reason must not be empty".into());
+    }
+    if request.allowed_decisions.is_empty()
+        || request.allowed_decisions.len() > 4
+        || !request
+            .allowed_decisions
+            .contains(&ash_protocol::ActionApprovalDecision::Decline)
+        || request
+            .allowed_decisions
+            .iter()
+            .enumerate()
+            .any(|(index, decision)| request.allowed_decisions[..index].contains(decision))
+    {
+        return Err("approval decisions must be a bounded unique set including decline".into());
+    }
+    if request.command.as_ref().is_some_and(|command| {
+        command.program.is_empty()
+            || command.program.len() > 4096
+            || command.arguments.len() > 256
+            || command
+                .arguments
+                .iter()
+                .any(|argument| argument.len() > 65536 || argument.contains('\0'))
+    }) {
+        return Err("approval command exceeds its display limits".into());
     }
     if let Some(denial) = &request.sandbox_denial
         && (denial.replay_safety() != ash_protocol::ToolReplaySafety::SafeToRetry
@@ -3237,7 +3301,9 @@ fn pending_interaction(
 fn waiting_status_for(request: &AgentRequest) -> TurnStatus {
     match request {
         AgentRequest::Approval { .. } => TurnStatus::WaitingForApproval,
-        AgentRequest::UserInput { .. } => TurnStatus::WaitingForUserInput,
+        AgentRequest::UserInput { .. } | AgentRequest::Permissions { .. } => {
+            TurnStatus::WaitingForUserInput
+        }
         AgentRequest::DynamicTool { .. } => TurnStatus::WaitingForCapability,
     }
 }
@@ -3249,6 +3315,11 @@ fn resolution_command(
 ) -> ThreadCommand {
     match response {
         AgentResponse::Approval { response } => ThreadCommand::ResolveApproval {
+            turn_id: turn_id.clone(),
+            request_id: request_id.clone(),
+            response: response.clone(),
+        },
+        AgentResponse::Permissions { response } => ThreadCommand::ResolvePermissions {
             turn_id: turn_id.clone(),
             request_id: request_id.clone(),
             response: response.clone(),

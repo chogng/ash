@@ -43,6 +43,8 @@ pub enum ConnectionRole {
     /// Authenticated execution protocol; no Agent requests are accepted on this connection.
     Execution {
         environment: String,
+        #[serde(default)]
+        network: exec_server_protocol::NetworkAccess,
     },
 }
 

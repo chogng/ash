@@ -188,7 +188,7 @@ impl GitRuntime {
             discovery: Mutex::new(()),
             registry: RwLock::new(GitRepositoryRegistry::default()),
         });
-        runtime.reconcile_with_notification(false)?;
+        runtime.reconcile_with_notification(false, &CancellationSource::new().token())?;
         Ok(runtime)
     }
 
@@ -224,19 +224,24 @@ impl GitRuntime {
 
     /// Keep unchanged repository owners alive: their streams and graph cursors belong to clients.
     pub(super) fn reconcile(&self) -> Result<(), GitRuntimeError> {
-        self.reconcile_with_notification(true)
+        self.reconcile_with_notification(true, &CancellationSource::new().token())
     }
 
-    fn reconcile_with_notification(&self, notify: bool) -> Result<(), GitRuntimeError> {
-        let _discovery = self
-            .discovery
-            .lock()
-            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+    fn reconcile_with_notification(
+        &self,
+        notify: bool,
+        cancellation: &CancellationToken,
+    ) -> Result<(), GitRuntimeError> {
+        let _discovery = crate::git_service::lock_for_request(&self.discovery, cancellation)
+            .map_err(GitRuntimeError::Service)?;
         let previous = self.repository_runtimes();
         let mut repositories = Vec::new();
         let mut worktrees = Vec::<PathBuf>::new();
         for (dir_id, authorization) in &self.dirs {
             for root in discover_repository_roots(authorization) {
+                cancellation
+                    .check()
+                    .map_err(|_| GitRuntimeError::Service(GitServiceError::Cancelled))?;
                 if !root.is_dir() {
                     continue;
                 }
@@ -247,7 +252,7 @@ impl GitRuntime {
                 let runtime = if let Some(existing) = existing
                     && existing
                         .service
-                        .repository()
+                        .repository_for_request(cancellation)
                         .is_ok_and(|identity| identity == existing.identity)
                 {
                     Arc::clone(existing)
@@ -257,6 +262,7 @@ impl GitRuntime {
                         root,
                         descriptor,
                         Arc::clone(&self.updates),
+                        cancellation,
                     )?
                     else {
                         continue;
@@ -292,6 +298,9 @@ impl GitRuntime {
                 .iter()
                 .zip(&repositories)
                 .all(|(left, right)| Arc::ptr_eq(left, right));
+        cancellation
+            .check()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Cancelled))?;
         if !unchanged {
             let repositories_by_id = repositories
                 .iter()
@@ -719,15 +728,35 @@ impl GitRuntime {
         }
     }
 
-    pub(super) fn start_watching(self: &Arc<Self>, config: Option<Arc<ConfigStore>>) -> GitWatcher {
+    pub(super) fn start_watching(
+        self: &Arc<Self>,
+        config: Option<Arc<ConfigStore>>,
+        watch_dirs: Vec<Authorization>,
+    ) -> GitWatcher {
+        if watch_dirs.is_empty()
+            || watch_dirs.iter().any(|proof| {
+                proof.permission() != ash_file_access::Permission::WatchFiles
+                    || proof.ensure_active().is_err()
+            })
+        {
+            return GitWatcher::default();
+        }
+        let (ready, started) = mpsc::channel();
         let (shutdown, shutdown_rx) = tokio::sync::oneshot::channel();
         let runtime = Arc::downgrade(self);
         let cancellation = CancellationSource::new();
         let token = cancellation.token();
         let thread = std::thread::Builder::new()
             .name("ash-git-discovery".into())
-            .spawn(move || watch_repositories(runtime, config, token, shutdown_rx))
+            .spawn(move || {
+                watch_repositories(runtime, config, token, shutdown_rx, watch_dirs, ready)
+            })
             .ok();
+        if started.recv_timeout(Duration::from_secs(10)).is_err() {
+            // This domain remains usable for explicit queries even if its optional watcher fails.
+            log::warn!("Git discovery subscription did not become ready");
+            cancellation.cancel();
+        }
         GitWatcher {
             shutdown: Some(shutdown),
             thread,
@@ -745,10 +774,27 @@ impl GitRuntime {
             .unwrap_or_default()
     }
 
-    fn discovery_paths(&self) -> Vec<WatchPath> {
+    fn watched_repositories(&self, watch_dirs: &[Authorization]) -> Vec<Arc<GitRepositoryRuntime>> {
+        self.repository_runtimes()
+            .into_iter()
+            .filter(|repository| {
+                watch_dirs.iter().any(|proof| {
+                    proof.ensure_active().is_ok()
+                        && proof.dir().id() == repository.service.dir().id()
+                })
+            })
+            .collect()
+    }
+
+    fn discovery_paths(&self, watch_dirs: &[Authorization]) -> Vec<WatchPath> {
         let mut paths = self
             .dirs
             .iter()
+            .filter(|(_, authorization)| {
+                watch_dirs.iter().any(|proof| {
+                    proof.ensure_active().is_ok() && proof.dir().id() == authorization.dir().id()
+                })
+            })
             .flat_map(|(_, authorization)| {
                 [
                     WatchPath {
@@ -763,7 +809,7 @@ impl GitRuntime {
             })
             .collect::<Vec<_>>();
         // A directory grant can sit inside a checkout whose metadata is outside that grant.
-        for runtime in self.repository_runtimes() {
+        for runtime in self.watched_repositories(watch_dirs) {
             paths.extend(
                 [runtime.identity.git_dir(), runtime.identity.common_dir()]
                     .into_iter()
@@ -835,14 +881,15 @@ impl GitRepositoryRuntime {
         projection_root: PathBuf,
         descriptor: GitRepositoryDto,
         updates: Arc<UpdateBroker>,
+        cancellation: &CancellationToken,
     ) -> Result<Option<Self>, GitRuntimeError> {
         let service =
             GitService::new(authorization, projection_root).map_err(GitRuntimeError::Service)?;
-        let Ok((repository, _)) = service.snapshot() else {
+        let Ok((repository, _)) = service.snapshot_for_request(cancellation) else {
             return Ok(None);
         };
         let ignore_watch_paths = service
-            .ignore_watch_paths(&repository)
+            .ignore_watch_paths_for_request(&repository, cancellation)
             .map_err(GitRuntimeError::Service)?;
         Ok(Some(Self {
             operation: ash_git::repository_operation_lock(&repository),
@@ -1375,20 +1422,27 @@ impl GitRepositoryRuntime {
         self.mutate_remote(GitService::push, cancellation)
     }
 
-    pub(super) fn start_watching(self: &Arc<Self>) -> GitWatcher {
+    pub(super) fn start_watching(self: &Arc<Self>, parent: &CancellationToken) -> GitWatcher {
+        let cancellation = parent.child_source();
+        let token = cancellation.token();
+        let (ready, started) = mpsc::channel();
         let (shutdown, shutdown_rx) = tokio::sync::oneshot::channel();
         let runtime = Arc::downgrade(self);
         let thread = std::thread::Builder::new()
             .name("ash-git-watcher".into())
-            .spawn(move || watch_git(runtime, shutdown_rx))
+            .spawn(move || watch_git(runtime, shutdown_rx, token, ready))
             .ok();
         if thread.is_none() {
             return GitWatcher::default();
         }
+        if started.recv_timeout(Duration::from_secs(10)).is_err() {
+            log::warn!("Git repository subscription did not become ready");
+            cancellation.cancel();
+        }
         GitWatcher {
             shutdown: Some(shutdown),
             auto_fetch_shutdown: None,
-            cancellation: None,
+            cancellation: Some(cancellation),
             thread,
             children: Vec::new(),
         }
@@ -1444,12 +1498,16 @@ impl GitRepositoryRuntime {
         let (repository, snapshot) = match outcome {
             Ok(snapshot) => snapshot,
             Err(error) => {
-                // A failed fetch may have updated some refs. Publish the observed state,
-                // preserving the original error even if recovery itself fails.
-                match self.service.snapshot() {
+                // Failure can leave updated refs. Recovery shares the request's cancellation;
+                // a cancelled fetch must not begin fresh queries while its watcher is stopping.
+                match self.service.snapshot_for_request(cancellation) {
                     Ok((repository, snapshot)) => {
-                        let _ =
-                            self.accept_status(repository, snapshot, StatusNotification::Always);
+                        let _ = self.accept_status_for_request(
+                            repository,
+                            snapshot,
+                            StatusNotification::Always,
+                            cancellation,
+                        );
                     }
                     Err(_) => {
                         let _ = self.invalidate_graphs();
@@ -1458,7 +1516,12 @@ impl GitRepositoryRuntime {
                 return Err(GitRuntimeError::Service(error));
             }
         };
-        self.accept_status(repository, snapshot, StatusNotification::Always)
+        self.accept_status_for_request(
+            repository,
+            snapshot,
+            StatusNotification::Always,
+            cancellation,
+        )
     }
 
     fn accept(
@@ -1475,6 +1538,21 @@ impl GitRepositoryRuntime {
         snapshot: GitRepositorySnapshot,
         notification: StatusNotification,
     ) -> Result<GitStatusResult, GitRuntimeError> {
+        self.accept_status_for_request(
+            repository,
+            snapshot,
+            notification,
+            &CancellationSource::new().token(),
+        )
+    }
+
+    fn accept_status_for_request(
+        &self,
+        repository: GitRepository,
+        snapshot: GitRepositorySnapshot,
+        notification: StatusNotification,
+        cancellation: &CancellationToken,
+    ) -> Result<GitStatusResult, GitRuntimeError> {
         let mut projected = project_status(
             self.descriptor.id.clone(),
             self.stream_instance_id.clone(),
@@ -1484,7 +1562,7 @@ impl GitRepositoryRuntime {
         )?;
         let references = self
             .service
-            .reference_state(&repository)
+            .reference_state_for_request(&repository, cancellation)
             .map_err(GitRuntimeError::Service)?;
         let mut state = self
             .state
@@ -1514,8 +1592,16 @@ impl GitRepositoryRuntime {
         let graph_changed = state.repository.as_ref() != Some(&repository)
             || !self
                 .service
-                .same_graph_roots(&repository, &state.graph_roots, &graph_roots)
+                .same_graph_roots_for_request(
+                    &repository,
+                    &state.graph_roots,
+                    &graph_roots,
+                    cancellation,
+                )
                 .unwrap_or(false);
+        cancellation
+            .check()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Cancelled))?;
         let unchanged = !history_changed
             && state
                 .status
@@ -1563,13 +1649,38 @@ impl GitRepositoryRuntime {
         )
     }
 
+    #[cfg(test)]
     fn refresh_from_watcher(&self) {
-        let _ = self.status();
+        self.refresh_from_watcher_for_request(&CancellationSource::new().token());
     }
 
+    fn refresh_from_watcher_for_request(&self, cancellation: &CancellationToken) {
+        let Ok(_operation) = lock_operation_for_request(&self.operation, cancellation) else {
+            return;
+        };
+        let Ok((repository, snapshot)) = self.service.snapshot_for_request(cancellation) else {
+            return;
+        };
+        let _ = self.accept_status_for_request(
+            repository,
+            snapshot,
+            StatusNotification::OnChange,
+            cancellation,
+        );
+    }
+
+    #[cfg(test)]
     fn ignore_change(
         &self,
         event: &FileWatcherEvent,
+    ) -> Result<Option<GitIgnoreChanged>, GitRuntimeError> {
+        self.ignore_change_for_request(event, &CancellationSource::new().token())
+    }
+
+    fn ignore_change_for_request(
+        &self,
+        event: &FileWatcherEvent,
+        cancellation: &CancellationToken,
     ) -> Result<Option<GitIgnoreChanged>, GitRuntimeError> {
         let root = self.service.dir_root();
         let mut affected = Vec::new();
@@ -1620,7 +1731,7 @@ impl GitRepositoryRuntime {
         if all {
             let updated = self
                 .service
-                .ignore_watch_paths(&self.identity)
+                .ignore_watch_paths_for_request(&self.identity, cancellation)
                 .map_err(GitRuntimeError::Service)?;
             *self
                 .ignore_watch_paths
@@ -1811,6 +1922,8 @@ fn watch_repositories(
     config: Option<Arc<ConfigStore>>,
     cancellation: CancellationToken,
     mut shutdown: tokio::sync::oneshot::Receiver<()>,
+    watch_dirs: Vec<Authorization>,
+    ready: mpsc::Sender<()>,
 ) {
     let Some(runtime) = runtime.upgrade() else {
         return;
@@ -1841,20 +1954,21 @@ fn watch_repositories(
         }
     };
     let (subscriber, receiver) = watcher.add_subscriber();
-    let mut paths = runtime.discovery_paths();
+    let mut paths = runtime.discovery_paths(&watch_dirs);
     let Ok(mut registration) = subscriber.register_paths(paths.clone()) else {
         return;
     };
     let mut receiver = DebouncedWatchReceiver::new(receiver, GIT_WATCH_DEBOUNCE);
     let mut children = HashMap::<String, (Arc<GitRepositoryRuntime>, GitWatcher)>::new();
+    let mut ready = Some(ready);
     loop {
         if cancellation.is_cancelled() {
             break;
         }
-        if let Err(error) = runtime.reconcile() {
+        if let Err(error) = runtime.reconcile_with_notification(true, &cancellation) {
             log::warn!("Git repository discovery failed: {error:?}");
         }
-        let repositories = runtime.repository_runtimes();
+        let repositories = runtime.watched_repositories(&watch_dirs);
         children.retain(|id, (owner, _)| {
             repositories
                 .iter()
@@ -1864,7 +1978,7 @@ fn watch_repositories(
             children
                 .entry(repository.descriptor.id.clone())
                 .or_insert_with(|| {
-                    let mut watches = vec![repository.start_watching()];
+                    let mut watches = vec![repository.start_watching(&cancellation)];
                     if repository.service.can_mutate()
                         && let Some(config) = &config
                     {
@@ -1880,7 +1994,10 @@ fn watch_repositories(
                     (repository, watcher)
                 });
         }
-        let next_paths = runtime.discovery_paths();
+        if let Some(ready) = ready.take() {
+            let _ = ready.send(());
+        }
+        let next_paths = runtime.discovery_paths(&watch_dirs);
         if next_paths != paths {
             match subscriber.register_paths(next_paths.clone()) {
                 Ok(next) => {
@@ -1919,6 +2036,8 @@ fn watch_repositories(
 fn watch_git(
     runtime: std::sync::Weak<GitRepositoryRuntime>,
     mut shutdown: tokio::sync::oneshot::Receiver<()>,
+    cancellation: CancellationToken,
+    ready: mpsc::Sender<()>,
 ) {
     // Keep the final strong reference on the watcher thread stack. `GitService` owns a Tokio
     // runtime, which must not be dropped from inside the async block when the parent runtime is
@@ -1954,6 +2073,7 @@ fn watch_git(
         let Ok(mut registration) = subscriber.register_paths(watched_paths.clone()) else {
             return;
         };
+        let _ = ready.send(());
         // Re-read sources after registering so startup config changes cannot leave missing watches.
         let mut initial = Some(FileWatcherEvent::RescanRequired {
             watched_paths: watched_paths
@@ -1964,10 +2084,14 @@ fn watch_git(
         drop(git_runtime);
         let mut receiver = DebouncedWatchReceiver::new(receiver, GIT_WATCH_DEBOUNCE);
         loop {
+            if cancellation.is_cancelled() {
+                break;
+            }
             let event = if let Some(event) = initial.take() {
                 event
             } else {
                 tokio::select! {
+                _ = cancellation.cancelled() => break,
                 _ = &mut shutdown => break,
                 event = receiver.recv() => {
                     let Some(event) = event else {
@@ -1981,16 +2105,18 @@ fn watch_git(
                 break;
             };
             let refresh_runtime = Arc::clone(&git_runtime);
-            let change =
-                match tokio::task::spawn_blocking(move || refresh_runtime.ignore_change(&event))
-                    .await
-                {
-                    Ok(Ok(change)) => change,
-                    error => {
-                        log::warn!("Unable to refresh Git ignore rules: {error:?}");
-                        continue;
-                    }
-                };
+            let request_cancellation = cancellation.clone();
+            let change = match tokio::task::spawn_blocking(move || {
+                refresh_runtime.ignore_change_for_request(&event, &request_cancellation)
+            })
+            .await
+            {
+                Ok(Ok(change)) => change,
+                error => {
+                    log::warn!("Unable to refresh Git ignore rules: {error:?}");
+                    continue;
+                }
+            };
             let next_paths = git_runtime.watched_paths();
             if next_paths != watched_paths {
                 match subscriber.register_paths(next_paths.clone()) {
@@ -2008,7 +2134,11 @@ fn watch_git(
             if let Some(change) = change {
                 git_runtime.updates.publish_git_ignore_changed(change);
             }
-            let _ = tokio::task::spawn_blocking(move || git_runtime.refresh_from_watcher()).await;
+            let request_cancellation = cancellation.clone();
+            let _ = tokio::task::spawn_blocking(move || {
+                git_runtime.refresh_from_watcher_for_request(&request_cancellation)
+            })
+            .await;
         }
         drop(registration);
     });

@@ -88,6 +88,57 @@ impl ActionPolicyService for TurnActionPolicy {
         )
     }
 
+    fn permission_context(
+        &self,
+        session: &ash_protocol::SessionId,
+        thread: &ash_protocol::ThreadId,
+    ) -> Result<Vec<ash_protocol::ReviewEvidence>, CoreError> {
+        self.base.permission_context(session, thread)
+    }
+
+    fn check_approval_mode(&self, mode: ApprovalMode) -> Result<(), CoreError> {
+        self.base.check_approval_mode(mode)
+    }
+
+    fn approval_decisions(
+        &self,
+        request: &ActionReviewRequest,
+    ) -> Vec<ash_protocol::ActionApprovalDecision> {
+        self.base.approval_decisions(request)
+    }
+
+    fn record_approval(
+        &self,
+        context: &core_api::ActionPolicyContext<'_>,
+        request: &ActionReviewRequest,
+        decision: ash_protocol::ActionApprovalDecision,
+    ) -> Result<core_api::ApprovalRecordEffect, CoreError> {
+        self.base.record_approval(context, request, decision)
+    }
+
+    fn validate_execution(
+        &self,
+        request: &ActionReviewRequest,
+        authority: ash_protocol::ToolExecutionAuthority,
+        cancellation: &CancellationToken,
+    ) -> Result<(), CoreError> {
+        self.base
+            .validate_execution(request, authority, cancellation)
+    }
+
+    fn decide_in_context(
+        &self,
+        context: &core_api::ActionPolicyContext<'_>,
+        request: &ActionReviewRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<ExecutionDecision, CoreError> {
+        // Isolated controls still use the Core-owned contract; all host operations retain context.
+        if request.provenance().source_id() == "code-mode" {
+            return self.decide(request, cancellation);
+        }
+        self.base.decide_in_context(context, request, cancellation)
+    }
+
     fn decide(
         &self,
         request: &ActionReviewRequest,
@@ -116,6 +167,13 @@ impl ActionPolicyService for TurnActionPolicy {
                     "Code Mode control request exceeds its isolated runtime authority".into(),
                 ));
             }
+            self.base.validate_execution(
+                request,
+                ash_protocol::ToolExecutionAuthority::UnsandboxedGrant {
+                    grant_id: "host-code-mode-control".into(),
+                },
+                cancellation,
+            )?;
             // The runtime has no ambient host authority. Every nested tool re-enters its own policy.
             return Ok(ash_action_policy::ExecutionDecision::RunUnsandboxed {
                 grant_id: ash_action_policy::GrantId::new("host-code-mode-control"),
@@ -159,13 +217,35 @@ pub fn decide_turn_action(
     request: &ActionReviewRequest,
     cancellation: &CancellationToken,
 ) -> Result<ExecutionDecision, CoreError> {
+    decide_turn_action_in_context(
+        policy,
+        frozen_revision,
+        approval_mode,
+        request,
+        cancellation,
+        None,
+    )
+}
+
+pub(crate) fn decide_turn_action_in_context(
+    policy: &dyn ActionPolicyService,
+    frozen_revision: &str,
+    approval_mode: ApprovalMode,
+    request: &ActionReviewRequest,
+    cancellation: &CancellationToken,
+    context: Option<&core_api::ActionPolicyContext<'_>>,
+) -> Result<ExecutionDecision, CoreError> {
     let current_revision = policy.revision();
     if current_revision != frozen_revision {
         return Err(CoreError::Policy(format!(
             "Turn policy revision changed from {frozen_revision} to {current_revision}; continuation requires explicit authorization"
         )));
     }
-    let decision = policy.decide(request, cancellation)?;
+    policy.check_approval_mode(approval_mode)?;
+    let decision = match context {
+        Some(context) => policy.decide_in_context(context, request, cancellation)?,
+        None => policy.decide(request, cancellation)?,
+    };
     if !matches!(decision, ExecutionDecision::AskUser(_)) {
         return Ok(decision);
     }

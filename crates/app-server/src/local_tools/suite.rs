@@ -140,6 +140,7 @@ pub(crate) struct LocalToolSuite<B> {
     dir_grants: Arc<DirGrants>,
     read_fingerprints: Mutex<std::collections::BTreeMap<(String, PathBuf), String>>,
     definitions: Vec<ToolDefinition>,
+    permission_requests: Option<super::permission_requests::PermissionRequests>,
     documents: Option<Arc<dyn TextDocumentEditorProvider>>,
     document_reads: Mutex<std::collections::BTreeMap<(String, PathBuf), DocumentRead>>,
 }
@@ -193,9 +194,20 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
             dir_grants,
             read_fingerprints: Mutex::new(std::collections::BTreeMap::new()),
             definitions,
+            permission_requests: None,
             documents: None,
             document_reads: Mutex::new(std::collections::BTreeMap::new()),
         }
+    }
+
+    pub(super) fn with_permission_requests(
+        mut self,
+        requests: super::permission_requests::PermissionRequests,
+    ) -> Self {
+        self.definitions
+            .push(super::permission_requests::PermissionRequests::definition());
+        self.permission_requests = Some(requests);
+        self
     }
 
     pub(super) fn with_text_document_editor(
@@ -237,6 +249,13 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
             Some(editor) => editor,
             None => Arc::new(FileTextDocuments::new(resolved.root.clone())),
         };
+        let document_owner = editor.clone();
+        let editor: Arc<dyn TextDocumentEditor> =
+            Arc::new(ash_file_system::AuthorizedTextDocuments::new(
+                resolved.authorization.clone(),
+                editor,
+                [],
+            ));
         let key = (scope.to_string(), resolved.absolute.clone());
         if reading {
             let snapshot = editor
@@ -258,7 +277,13 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
                 let mut retired = reads
-                    .insert(key, DocumentRead { editor, snapshot })
+                    .insert(
+                        key,
+                        DocumentRead {
+                            editor: document_owner.clone(),
+                            snapshot,
+                        },
+                    )
                     .into_iter()
                     .collect::<Vec<_>>();
                 while reads.len() > 128 {
@@ -287,7 +312,7 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                     .read(&resolved.absolute, cancellation)
                     .map_err(|e| CoreError::Execution(e.to_string()))?;
                 snapshot.map(|snapshot| DocumentRead {
-                    editor: Arc::clone(&editor),
+                    editor: document_owner.clone(),
                     snapshot,
                 })
             }
@@ -352,10 +377,18 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 text: text.clone(),
             },
         };
-        let editor = read
+        let owner = read
             .as_ref()
             .map(|read| Arc::clone(&read.editor))
-            .unwrap_or(editor);
+            .unwrap_or(document_owner);
+        let snapshots = read
+            .as_ref()
+            .map(|read| (read.snapshot.id.clone(), resolved.absolute.clone()));
+        let editor = ash_file_system::AuthorizedTextDocuments::new(
+            resolved.authorization.clone(),
+            owner,
+            snapshots,
+        );
         match editor.apply(vec![change], cancellation) {
             Ok(()) => {}
             Err(TextDocumentError::OutcomeUnknown(message)) => {
@@ -380,6 +413,39 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
         }
     }
 
+    fn sandbox_scope_for(
+        &self,
+        authorization: &Authorization,
+        session: Option<&SessionId>,
+        thread: Option<&ThreadId>,
+    ) -> Result<ash_sandboxing::SandboxScope, CoreError> {
+        let mut scope = super::local_sandbox_scope(authorization, self.shell.profile_policy)?;
+        if let (Some(session), Some(thread), Some(requests)) =
+            (session, thread, &self.permission_requests)
+        {
+            let snapshot = requests.threads.read_thread(thread)?;
+            if let Some(turn) = snapshot
+                .turns
+                .iter()
+                .rev()
+                .find(|turn| turn.status == ash_protocol::TurnStatus::Running)
+                && self
+                    .dir_grants
+                    .has_requested_network(session, thread, &turn.turn_id)
+            {
+                scope = scope.with_policy_ceiling(
+                    super::SandboxPolicy::new(
+                        super::FileSystemAccess::FullAccess,
+                        ash_sandboxing::NetworkAccess::Managed,
+                    )
+                    .with_host_acl_changes(super::local_acl_changes())
+                    .with_file_system_isolation(super::local_isolation()),
+                );
+            }
+        }
+        Ok(scope)
+    }
+
     fn resolve(
         &self,
         value: &str,
@@ -401,7 +467,7 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
             .transpose()?
             .flatten();
         let default = self.grant.authorize(permission).ok();
-        let primary = thread_scope
+        let mut primary = thread_scope
             .as_ref()
             .map(|scope| scope.primary().clone())
             .or_else(|| default.clone());
@@ -432,6 +498,30 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 );
             }
         }
+        if let (Some(session), Some(thread), Some(requests)) =
+            (session_id, thread_id, &self.permission_requests)
+        {
+            let snapshot = requests
+                .threads
+                .read_thread(thread)
+                .map_err(|error| error.to_string())?;
+            if let Some(turn) = snapshot
+                .turns
+                .iter()
+                .rev()
+                .find(|turn| turn.status == ash_protocol::TurnStatus::Running)
+            {
+                authorizations.extend(self.dir_grants.requested_authorizations(
+                    session,
+                    thread,
+                    &turn.turn_id,
+                    permission,
+                ));
+            }
+        }
+        if primary.is_none() {
+            primary = authorizations.first().cloned();
+        }
         let (authorization, relative) = if path.is_absolute() {
             authorizations
                 .into_iter()
@@ -451,6 +541,18 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 path,
             )
         };
+        let authorization = authorization.constrained_by(self.authorization.path_policy());
+        let operation = if matches!(
+            permission,
+            DirPermission::WriteFiles | DirPermission::MutateRepository
+        ) {
+            ash_file_access::PathOperation::Write
+        } else {
+            ash_file_access::PathOperation::Read
+        };
+        if !authorization.path_policy().allows(&relative, operation) {
+            return Err("path is denied by the permission profile".into());
+        }
         let root = authorization.dir().clone();
         let absolute = if relative.as_os_str().is_empty() {
             Ok(root.canonical_path().to_path_buf())
@@ -460,6 +562,14 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
             root.resolve_for_write(&relative)
         }
         .map_err(|_| format!("path is outside the authorized directories: {value}"))?;
+        if !authorization.path_policy().allows(
+            absolute
+                .strip_prefix(root.canonical_path())
+                .map_err(|error| error.to_string())?,
+            operation,
+        ) {
+            return Err("path is denied by the permission profile".into());
+        }
         match permission {
             DirPermission::ReadFiles | DirPermission::InspectRepository => {
                 super::ensure_local_file_access(&root, &absolute)
@@ -508,7 +618,11 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 } else if call.name.as_str() == "read_file" {
                     DirPermission::ReadFiles
                 } else {
-                    DirPermission::InspectRepository
+                    if call.name.as_str() == "grep" {
+                        DirPermission::SearchFiles
+                    } else {
+                        DirPermission::BrowseFiles
+                    }
                 },
             )
             .map_err(CoreError::Policy)?;
@@ -573,7 +687,7 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 false,
                 session_id,
                 thread_id,
-                DirPermission::InspectRepository,
+                DirPermission::SearchFiles,
             )
             .map_err(CoreError::Execution)?;
         let glob = nullable_string(&call.arguments, "glob")?;
@@ -623,7 +737,7 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 false,
                 session_id,
                 thread_id,
-                DirPermission::InspectRepository,
+                DirPermission::BrowseFiles,
             )
             .map_err(CoreError::Execution)?;
         let mut include_patterns = Vec::new();
@@ -653,6 +767,12 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
         let paths = result
             .paths
             .into_iter()
+            .filter(|path| {
+                resolved
+                    .authorization
+                    .path_policy()
+                    .allows(path, ash_file_access::PathOperation::Read)
+            })
             .map(|path| resolved.root.canonical_path().join(path))
             .collect::<Vec<_>>();
         let mut text = paths
@@ -711,7 +831,11 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 let request = ShellCommandRequest::new(program, arguments, command_directory)
                     .map_err(|error| CoreError::Execution(error.to_string()))?
                     .with_dir_root(resolved.root.canonical_path());
-                let scope = super::local_sandbox_scope(&resolved.root)?;
+                let scope = self.sandbox_scope_for(
+                    &resolved.authorization,
+                    Some(session_id),
+                    Some(thread_id),
+                )?;
                 let authority = super::local_command_authority(
                     authorization,
                     self.shell.shell_policy,
@@ -863,6 +987,7 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 request,
                 &resolved.authorization,
                 resolved.relative,
+                &self.sandbox_scope_for(&resolved.authorization, session_id, thread_id)?,
             );
         }
         let canonical = serde_json::to_vec(&json!({
@@ -933,6 +1058,13 @@ impl<B: ash_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
     }
 
     fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
+        if call.name.as_str() == "request_permissions" {
+            return self
+                .permission_requests
+                .as_ref()
+                .ok_or_else(|| CoreError::Policy("permission requests are unavailable".into()))?
+                .prepare(call);
+        }
         if call.name.as_str() == "shell-command" {
             return self.shell.prepare(call);
         }
@@ -954,6 +1086,13 @@ impl<B: ash_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
         call: &ToolCall,
         facts: &ToolExecutionFacts,
     ) -> Result<ActionReviewRequest, CoreError> {
+        if call.name.as_str() == "request_permissions" {
+            return self
+                .permission_requests
+                .as_ref()
+                .ok_or_else(|| CoreError::Policy("permission requests are unavailable".into()))?
+                .prepare(call);
+        }
         if call.name.as_str() == "shell-command" {
             let identity = facts.execution_identity().ok_or_else(|| {
                 CoreError::Policy("local tools require durable caller identity".into())
@@ -971,9 +1110,16 @@ impl<B: ash_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
                     DirPermission::ExecuteCommands,
                 )
                 .map_err(CoreError::Policy)?;
-            return self
-                .shell
-                .prepare_at(call, &resolved.authorization, resolved.relative);
+            return self.shell.prepare_at(
+                call,
+                &resolved.authorization,
+                resolved.relative,
+                &self.sandbox_scope_for(
+                    &resolved.authorization,
+                    Some(identity.session_id()),
+                    Some(identity.thread_id()),
+                )?,
+            );
         }
         let identity = facts.execution_identity().ok_or_else(|| {
             CoreError::Policy("local tools require durable caller identity".into())
@@ -1115,6 +1261,13 @@ impl<B: ash_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
         interactions: Arc<dyn ash_core::ToolInteractionService>,
         sink: &mut dyn ToolOutputSink,
     ) -> Result<ToolExecutionOutput, CoreError> {
+        if call.name.as_str() == "request_permissions" {
+            return self
+                .permission_requests
+                .as_ref()
+                .ok_or_else(|| CoreError::Policy("permission requests are unavailable".into()))?
+                .execute(call, cancellation, facts, interactions.as_ref());
+        }
         if !matches!(call.name.as_str(), "shell-command" | "shell-session") {
             return self.execute_streaming_with_facts(
                 call,
@@ -1130,14 +1283,11 @@ impl<B: ash_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
         let starts_process = call.name.as_str() == "shell-command"
             || (call.name.as_str() == "shell-session"
                 && call.arguments.get("action").and_then(Value::as_str) == Some("start"));
+        let review = self.prepare_with_facts(call, facts)?;
         let network = if starts_process
-            && self.shell.shell_policy.network() == ash_sandboxing::NetworkAccess::Managed
+            && matches!(review.sandbox(), SandboxCompatibility::Supported(policy) if policy.network() == ash_sandboxing::NetworkAccess::Managed)
         {
-            Some(crate::network_policy::for_execution(
-                self.prepare_with_facts(call, facts)?,
-                format!("{}:{}", identity.turn_id(), call.id),
-                interactions,
-            ))
+            Some(crate::network_policy::for_execution(review, interactions))
         } else {
             None
         };
@@ -1209,6 +1359,7 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 &resolved.authorization,
                 resolved.relative,
                 network_policy,
+                &self.sandbox_scope_for(&resolved.authorization, session_id, thread_id)?,
             );
         }
         if call.name.as_str() == "shell-session" {

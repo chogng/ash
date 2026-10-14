@@ -6049,6 +6049,11 @@ fn approval_interaction_resolves_through_the_typed_app_server_contract() {
                             scope: "api.example.com".into(),
                         }],
                         reason: "network requires approval".into(),
+                        command: None,
+                        allowed_decisions: vec![
+                            ash_protocol::ActionApprovalDecision::ApproveOnce,
+                            ash_protocol::ActionApprovalDecision::Decline,
+                        ],
                         sandbox_denial: None,
                     },
                 },
@@ -6223,6 +6228,11 @@ fn interaction_response_is_rejected_from_a_capable_non_owner_connection() {
                             scope: "api.example.com".into(),
                         }],
                         reason: "network requires approval".into(),
+                        command: None,
+                        allowed_decisions: vec![
+                            ash_protocol::ActionApprovalDecision::ApproveOnce,
+                            ash_protocol::ActionApprovalDecision::Decline,
+                        ],
                         sandbox_denial: None,
                     },
                 },
@@ -8144,9 +8154,12 @@ fn git_watcher_publishes_external_repository_changes() {
     let initial_revision = initial["result"]["revision"].as_u64().unwrap();
     server.drain_notifications(&mut connection);
 
+    std::fs::write(root.join("tracked.txt"), "external change\n").unwrap();
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
     let mut observed = None;
-    for attempt in 0..60 {
-        std::fs::write(root.join("tracked.txt"), format!("external {attempt}\n")).unwrap();
+    while std::time::Instant::now() < deadline {
+        // Wait for the real subscription to report one external edit. Repeated writes can
+        // obscure the observed snapshot and make this test depend on host scheduling speed.
         thread::sleep(Duration::from_millis(50));
         for raw in server.drain_notifications(&mut connection) {
             let notification: serde_json::Value = serde_json::from_str(&raw).unwrap();

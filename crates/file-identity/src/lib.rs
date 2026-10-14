@@ -80,3 +80,16 @@ impl FileInformation {
 #[cfg(test)]
 #[path = "file_identity_tests.rs"]
 mod tests;
+
+/// Resolves the OS-owned shared application-data location, without trusting process environment.
+#[cfg(windows)]
+pub fn common_application_data_dir() -> io::Result<std::path::PathBuf> {
+    platform::common_application_data_dir()
+}
+
+/// Checks administrator/System ownership and denies effective write grants to other principals.
+/// The handle being inspected is also the handle the caller must use to read the authority file.
+#[cfg(windows)]
+pub fn validate_administrator_owned(file: &File) -> io::Result<()> {
+    platform::validate_administrator_owned(file)
+}

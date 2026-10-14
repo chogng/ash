@@ -528,7 +528,7 @@ fn dirs_are_session_scoped_and_removable() {
         .add_session_dir(
             &first.session_id,
             session_dir.path.clone(),
-            host_dir_permissions(),
+            host_directory_capabilities(),
         )
         .unwrap();
 
@@ -583,7 +583,7 @@ fn cwd_directory_can_be_added_explicitly() {
         .add_session_dir(
             &session.session_id,
             primary.path.clone(),
-            host_dir_permissions(),
+            host_directory_capabilities(),
         )
         .unwrap();
 
@@ -748,7 +748,7 @@ fn projectless_session_terminal_uses_its_grant_without_enabling_an_unscoped_term
 }
 
 #[test]
-fn dir_permissions_are_revision_bound_and_filter_capability_snapshots() {
+fn directory_grants_are_revision_bound_and_filter_capability_snapshots() {
     let primary = TestDir::new("add-dir-permission-primary", "primary.txt");
     let session_dir = TestDir::new("add-dir-permission-extra", "extra.txt");
     let server = server().with_local_env_host(None, host_policy()).unwrap();
@@ -810,7 +810,7 @@ fn dir_permissions_are_revision_bound_and_filter_capability_snapshots() {
             &serde_json::json!({
                 "jsonrpc": "2.0",
                 "id": 3,
-                "method": "session/dirs/permissions/set",
+                "method": "session/directoryGrants/set",
                 "params": {
                     "sessionId": session.session_id,
                     "path": session_dir.path,
@@ -849,7 +849,7 @@ fn dir_permissions_are_revision_bound_and_filter_capability_snapshots() {
             &serde_json::json!({
                 "jsonrpc": "2.0",
                 "id": 4,
-                "method": "session/dirs/permissions/set",
+                "method": "session/directoryGrants/set",
                 "params": {
                     "sessionId": session.session_id,
                     "path": session_dir.path,
@@ -939,7 +939,7 @@ fn dir_permissions_are_revision_bound_and_filter_capability_snapshots() {
             &serde_json::json!({
                 "jsonrpc": "2.0",
                 "id": 6,
-                "method": "session/dirs/permissions/set",
+                "method": "session/directoryGrants/set",
                 "params": {
                     "sessionId": session.session_id,
                     "path": session_dir.path,
@@ -992,7 +992,7 @@ fn dir_permissions_are_revision_bound_and_filter_capability_snapshots() {
             &serde_json::json!({
                 "jsonrpc": "2.0",
                 "id": 8,
-                "method": "session/dirs/permissions/set",
+                "method": "session/directoryGrants/set",
                 "params": {
                     "sessionId": session.session_id,
                     "path": session_dir.path,
@@ -1220,6 +1220,31 @@ fn dir_activation_loads_dir_skill_source() {
 
     server.switch_local_dir_root(dir.path.clone()).unwrap();
 
+    assert!(
+        server
+            .skills
+            .as_ref()
+            .unwrap()
+            .list(ash_skills_extension::SkillCatalogReload::Cached)
+            .unwrap()
+            .entries
+            .is_empty()
+    );
+    server
+        .commit_limited_dir_runtime(
+            Grant::for_environment(
+                dir.root(),
+                GrantSource::HostConfiguration,
+                Permissions::new([
+                    Permission::ReadFiles,
+                    Permission::BrowseFiles,
+                    Permission::DiscoverSkills,
+                ]),
+            ),
+            server.local_env_host.as_ref().unwrap(),
+        )
+        .unwrap();
+
     let snapshot = server
         .skills
         .as_ref()
@@ -1255,7 +1280,7 @@ fn user_config_permissions_are_resolved_for_each_client_requested_dir() {
             expected_revision: ConfigRevision::INITIAL,
             command: UserConfigCommand::SetDirectoryGrant {
                 dir: root.id(),
-                permissions: host_dir_permissions(),
+                permissions: host_directory_capabilities(),
                 display_path: None,
             },
         })
@@ -1289,7 +1314,7 @@ fn user_config_permissions_reactivate_an_active_restricted_dir() {
             expected_revision: ConfigRevision::INITIAL,
             command: UserConfigCommand::SetDirectoryGrant {
                 dir: root.id(),
-                permissions: host_dir_permissions(),
+                permissions: host_directory_capabilities(),
                 display_path: None,
             },
         })
@@ -1312,7 +1337,7 @@ fn user_config_revocation_removes_executable_services_but_keeps_file_access() {
             expected_revision: ConfigRevision::INITIAL,
             command: UserConfigCommand::SetDirectoryGrant {
                 dir: root.id(),
-                permissions: host_dir_permissions(),
+                permissions: host_directory_capabilities(),
                 display_path: None,
             },
         })
@@ -1437,7 +1462,7 @@ fn user_config_revocation_removes_local_semantic_model_access() {
             expected_revision: ConfigRevision::INITIAL,
             command: UserConfigCommand::SetDirectoryGrant {
                 dir: root.id(),
-                permissions: host_dir_permissions(),
+                permissions: host_directory_capabilities(),
                 display_path: None,
             },
         })
@@ -1485,7 +1510,7 @@ fn user_config_revocation_deletes_cloud_grant_and_removes_cloud_runtime() {
             expected_revision: ConfigRevision::INITIAL,
             command: UserConfigCommand::SetDirectoryGrant {
                 dir: root.id(),
-                permissions: host_dir_permissions(),
+                permissions: host_directory_capabilities(),
                 display_path: None,
             },
         })
@@ -1705,7 +1730,7 @@ fn active_turn_accepts_session_access_changes_and_revokes_old_snapshots() {
         .add_session_dir(
             &thread.session_id,
             session_dir.path.clone(),
-            host_dir_permissions(),
+            host_directory_capabilities(),
         )
         .unwrap();
     assert_eq!(path, session_dir.root().canonical_path());
@@ -1823,7 +1848,7 @@ fn session_files_copy_within_the_selected_directory_and_reject_ambiguous_targets
         .add_session_dir(
             &thread.session_id,
             primary.path.clone(),
-            host_dir_permissions(),
+            host_directory_capabilities(),
         )
         .unwrap();
     let copied = server.fs_copy(&serde_json::json!({
@@ -2001,7 +2026,7 @@ impl TestDir {
         Grant::for_environment(
             self.root(),
             GrantSource::HostConfiguration,
-            host_dir_permissions(),
+            host_directory_capabilities(),
         )
     }
 }
@@ -2557,6 +2582,834 @@ fn directory_grants_protocol_preserves_legacy_profiles_precise_grants_and_revisi
             .is_empty()
     );
     let persisted = std::fs::read_to_string(database.with_extension("toml")).unwrap();
-    assert!(persisted.contains("[dirPermissions"));
-    assert!(!persisted.contains("directoryGrants"));
+    assert!(persisted.contains("[directoryGrants"));
+    assert!(!persisted.contains("dirPermissions"));
+}
+
+#[test]
+fn precise_language_and_watcher_grants_are_enforced_by_the_backend() {
+    let directory = TestDir::new("precise-runtime-grants", "main.rs");
+    let config = Arc::new(ConfigStore::open(directory.path.join("config.sqlite3")).unwrap());
+    let grant = |id: &str, permissions| {
+        config
+            .apply(ConfigCommandRequest {
+                command_id: CommandId::new(id).unwrap(),
+                expected_revision: config.read_snapshot().unwrap().revision,
+                command: UserConfigCommand::SetDirectoryGrant {
+                    dir: directory.root().id(),
+                    permissions,
+                    display_path: None,
+                },
+            })
+            .unwrap();
+    };
+    grant(
+        "execute-without-language",
+        Permissions::new([
+            Permission::ReadFiles,
+            Permission::SearchFiles,
+            Permission::BrowseFiles,
+            Permission::InspectRepository,
+            Permission::ExecuteCommands,
+        ]),
+    );
+    let server = server()
+        .with_config_store(config.clone())
+        .with_local_env_host(None, DirGrantPolicy::UserConfig(config.clone()))
+        .unwrap();
+    server
+        .switch_local_dir_root(directory.path.clone())
+        .unwrap();
+    assert!(server.language_dir_root_for(None, None).is_err());
+    server
+        .env_runtime_control()
+        .unwrap()
+        .reconcile_codebase_runtime()
+        .unwrap();
+    assert!(
+        server
+            .env_runtime
+            .read()
+            .unwrap()
+            .workspace
+            ._file_system_watcher
+            .is_none()
+    );
+    grant(
+        "allow-language",
+        Permissions::new([
+            Permission::ReadFiles,
+            Permission::SearchFiles,
+            Permission::BrowseFiles,
+            Permission::InspectRepository,
+            Permission::ExecuteCommands,
+            Permission::UseLanguageServices,
+        ]),
+    );
+    server.reconcile_active_directory_grant().unwrap();
+    assert!(server.language_dir_root_for(None, None).is_ok());
+    grant(
+        "revoke-language",
+        Permissions::new([Permission::ReadFiles, Permission::ExecuteCommands]),
+    );
+    server.reconcile_active_directory_grant().unwrap();
+    assert!(server.language_dir_root_for(None, None).is_err());
+    let runtime = server.env_runtime.read().unwrap();
+    assert!(runtime.workspace.codebase.is_none());
+    assert!(runtime.workspace.symbol_index.is_none());
+    assert!(runtime.workspace.cloud_codebase.is_none());
+}
+
+struct PermissionRequestModel {
+    extra: std::path::PathBuf,
+    requests: Mutex<Vec<ash_protocol::ModelRequest>>,
+}
+
+impl core_api::ModelService for PermissionRequestModel {
+    fn invoke(
+        &self,
+        _: core_api::ModelSelection<'_>,
+        request: &ash_protocol::ModelRequest,
+        _: &CancellationToken,
+    ) -> Result<ash_protocol::ModelResponse, CoreError> {
+        let mut requests = self.requests.lock().unwrap();
+        let step = requests.len();
+        requests.push(request.clone());
+        let output = match step {
+            0 => vec![ash_protocol::ResponseItem::ToolCall(
+                ash_protocol::ToolCall {
+                    id: ash_protocol::ToolCallId::new("request-extra-permissions").unwrap(),
+                    name: ash_protocol::ToolName::new("request_permissions").unwrap(),
+                    arguments: serde_json::json!({"duration":"session","directories":[{"path":self.extra,"permissions":["readFiles","writeFiles"]}],"network_hosts":[],"reason":"Read the selected extra directory"}),
+                },
+            )],
+            1 => vec![ash_protocol::ResponseItem::ToolCall(
+                ash_protocol::ToolCall {
+                    id: ash_protocol::ToolCallId::new("read-approved-extra").unwrap(),
+                    name: ash_protocol::ToolName::new("read_file").unwrap(),
+                    arguments: serde_json::json!({"path":self.extra.join("file"),"offset":null,"limit":null}),
+                },
+            )],
+            2 => vec![ash_protocol::ResponseItem::ToolCall(
+                ash_protocol::ToolCall {
+                    id: ash_protocol::ToolCallId::new("write-unapproved-extra").unwrap(),
+                    name: ash_protocol::ToolName::new("write_file").unwrap(),
+                    arguments: serde_json::json!({"path":self.extra.join("file"),"content":"unauthorized"}),
+                },
+            )],
+            _ => vec![ash_protocol::ResponseItem::Text("done".into())],
+        };
+        Ok(ash_protocol::ModelResponse {
+            output,
+            usage: None,
+            billing: None,
+            stop_reason: ash_protocol::StopReason::Completed,
+        })
+    }
+}
+
+#[test]
+fn permission_requests_follow_core_interaction_enforce_subset_and_expire_on_completion() {
+    let main = tempfile::tempdir().unwrap();
+    let extra = tempfile::tempdir().unwrap();
+    std::fs::write(extra.path().join("file"), "approved read").unwrap();
+    let model = Arc::new(PermissionRequestModel {
+        extra: extra.path().to_path_buf(),
+        requests: Mutex::new(Vec::new()),
+    });
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        InMemoryThreadStore::default(),
+    )));
+    let server = AppServer::new(threads, model.clone())
+        .with_ephemeral_env_state()
+        .with_local_env_host(None, host_policy())
+        .unwrap();
+    server
+        .switch_local_dir_root(main.path().to_path_buf())
+        .unwrap();
+    let thread = server
+        .start_thread(StartThreadRequest {
+            execution_target: None,
+            branch_name: None,
+            agent_id: None,
+            agent: None,
+            command_id: CommandId::new("permission-create-thread").unwrap(),
+            title: "permissions".into(),
+        })
+        .unwrap();
+    let executor = server.turn_executor_snapshot();
+    let turn = server
+        .admit_bound_turn(
+            &thread.thread_id,
+            StartTurnRequest {
+                context_policy: Default::default(),
+                mode: Default::default(),
+                advisor: None,
+                kind: ash_protocol::TurnKind::Coding,
+                instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
+                command_id: CommandId::new("permission-start").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                model: None,
+                reasoning_effort: None,
+                policy_revision: executor.policy_revision(),
+                approval_mode: ash_protocol::ApprovalMode::BypassPermissions,
+                tool_mode: ash_protocol::ToolMode::Direct,
+                tool_profile: Some(executor.tool_profile_snapshot().unwrap()),
+                activated_skills: Vec::new(),
+                input: vec![UserInput::Text {
+                    text: "Read the extra directory".into(),
+                }],
+            },
+            None,
+            crate::client_host::TextDocumentMode::FileSystem,
+        )
+        .unwrap()
+        .turn_id;
+    executor.start(&thread.thread_id, &turn).unwrap();
+    let wait = |status| {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            let snapshot = server.threads.read_thread(&thread.thread_id).unwrap();
+            if snapshot.turns.last().unwrap().status == status {
+                break snapshot;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "permission Turn did not reach {status:?}: {:?}",
+                snapshot.turns.last().unwrap()
+            );
+            std::thread::yield_now();
+        }
+    };
+    let waiting = wait(ash_protocol::TurnStatus::WaitingForUserInput);
+    let interaction = waiting
+        .turns
+        .last()
+        .unwrap()
+        .pending_interaction
+        .as_ref()
+        .unwrap();
+    let ash_protocol::AgentRequest::Permissions { request } = &interaction.request else {
+        panic!("Core must expose a permission request");
+    };
+    let invalid = ash_protocol::PermissionResponse {
+        duration: ash_protocol::PermissionGrantDuration::Session,
+        directories: vec![ash_protocol::RequestedDirectoryGrant {
+            path: request.directories[0].path.clone(),
+            permissions: vec![Permission::ExecuteCommands],
+        }],
+        network_hosts: Vec::new(),
+    };
+    let respond = |id: &str, response| {
+        server.threads.resolve_turn_interaction(
+            &thread.thread_id,
+            core_api::ResolveTurnInteractionRequest {
+                turn_id: turn.clone(),
+                command_id: CommandId::new(id).unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                request_id: interaction.request_id.clone(),
+                response: ash_protocol::AgentResponse::Permissions { response },
+            },
+        )
+    };
+    assert!(respond("permission-invalid", invalid).is_err());
+    respond(
+        "permission-subset",
+        ash_protocol::PermissionResponse {
+            duration: ash_protocol::PermissionGrantDuration::Turn,
+            directories: vec![ash_protocol::RequestedDirectoryGrant {
+                path: request.directories[0].path.clone(),
+                permissions: vec![Permission::ReadFiles],
+            }],
+            network_hosts: Vec::new(),
+        },
+    )
+    .unwrap();
+    let completed = wait(ash_protocol::TurnStatus::Completed);
+    let results = serde_json::to_string(&completed.items).unwrap();
+    assert!(results.contains("approved read"), "{results}");
+    assert!(
+        results.contains("outside the authorized directories")
+            || results.contains("directory permission required")
+    );
+    assert_eq!(
+        std::fs::read_to_string(extra.path().join("file")).unwrap(),
+        "approved read"
+    );
+    let deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        if server
+            .env_runtime
+            .read()
+            .unwrap()
+            .dir_grants
+            .requested_authorizations(
+                &completed.session_id,
+                &thread.thread_id,
+                &turn,
+                Permission::ReadFiles,
+            )
+            .is_empty()
+        {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "completed Turn did not revoke its permission leases"
+        );
+        std::thread::yield_now();
+    }
+}
+
+struct ReusableApprovalModel {
+    step: Mutex<usize>,
+}
+impl core_api::ModelService for ReusableApprovalModel {
+    fn invoke(
+        &self,
+        _: core_api::ModelSelection<'_>,
+        _: &ash_protocol::ModelRequest,
+        _: &CancellationToken,
+    ) -> Result<ash_protocol::ModelResponse, CoreError> {
+        let mut step = self.step.lock().unwrap();
+        let output = if *step < 3 {
+            vec![ash_protocol::ResponseItem::ToolCall(
+                ash_protocol::ToolCall {
+                    id: ash_protocol::ToolCallId::new(format!("reusable-action-{}", *step))
+                        .unwrap(),
+                    name: ash_protocol::ToolName::new("environment").unwrap(),
+                    arguments: serde_json::json!({"environment":"worker", "operation":{"type":"command","program":"/bin/echo", "arguments":[if *step < 2 { "same" } else { "different" }], "cwd":".", "timeout_millis":10000}}),
+                },
+            )]
+        } else {
+            vec![ash_protocol::ResponseItem::Text("done".into())]
+        };
+        *step += 1;
+        Ok(ash_protocol::ModelResponse {
+            output,
+            usage: None,
+            billing: None,
+            stop_reason: ash_protocol::StopReason::Completed,
+        })
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn reusable_approvals_follow_core_and_bind_the_exact_action() {
+    for decision in [
+        ash_protocol::ActionApprovalDecision::ApproveForSession,
+        ash_protocol::ActionApprovalDecision::ApproveAndSaveRule,
+    ] {
+        let directory = tempfile::tempdir().unwrap();
+        let store = Arc::new(ConfigStore::open(directory.path().join("config.db")).unwrap());
+        let model = Arc::new(ReusableApprovalModel {
+            step: Mutex::new(0),
+        });
+        let threads = Arc::new(ThreadController::with_store(Arc::new(
+            InMemoryThreadStore::default(),
+        )));
+        let server = AppServer::new(threads, model)
+            .with_ephemeral_env_state()
+            .with_config_store(store.clone())
+            .with_local_env_host(None, host_policy())
+            .unwrap();
+        server
+            .activate_local_dirs(vec![(
+                "primary".into(),
+                Grant::for_environment(
+                    Dir::open_local(directory.path()).unwrap(),
+                    GrantSource::HostConfiguration,
+                    Permissions::new([
+                        Permission::ReadFiles,
+                        Permission::WriteFiles,
+                        Permission::BrowseFiles,
+                        Permission::ExecuteCommands,
+                    ]),
+                ),
+            )])
+            .unwrap();
+        let environment = Arc::new(
+            exec_server::LocalEnvironment::open(
+                "worker".into(),
+                directory.path(),
+                exec_server_protocol::FileAccess::ReadWrite,
+                exec_server_protocol::NetworkAccess::Denied,
+                Arc::new(mxc_sandbox::MxcSandbox::new(
+                    ash_install_context::InstallContext::current(),
+                )),
+            )
+            .unwrap(),
+        );
+        let server = server
+            .with_execution_environments(vec![exec_server::ExecutionEnvironment::Local(
+                environment,
+            )])
+            .unwrap();
+        let thread = server
+            .start_thread(StartThreadRequest {
+                execution_target: None,
+                branch_name: None,
+                agent_id: None,
+                agent: None,
+                command_id: CommandId::new("reusable-thread").unwrap(),
+                title: "approvals".into(),
+            })
+            .unwrap();
+        let executor = server.turn_executor_snapshot();
+        let turn = server
+            .admit_bound_turn(
+                &thread.thread_id,
+                StartTurnRequest {
+                    context_policy: Default::default(),
+                    mode: Default::default(),
+                    advisor: None,
+                    kind: ash_protocol::TurnKind::Coding,
+                    instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
+                    command_id: CommandId::new("reusable-turn").unwrap(),
+                    expected_sequence: SequenceExpectation::Any,
+                    model: None,
+                    reasoning_effort: None,
+                    policy_revision: executor.policy_revision(),
+                    approval_mode: ash_protocol::ApprovalMode::Manual,
+                    tool_mode: ash_protocol::ToolMode::Direct,
+                    tool_profile: Some(executor.tool_profile_snapshot().unwrap()),
+                    activated_skills: vec![],
+                    input: vec![UserInput::Text {
+                        text: "Run exact actions".into(),
+                    }],
+                },
+                None,
+                crate::client_host::TextDocumentMode::FileSystem,
+            )
+            .unwrap()
+            .turn_id;
+        let wait = |status| {
+            let deadline = Instant::now() + Duration::from_secs(10);
+            loop {
+                let snapshot = server.threads.read_thread(&thread.thread_id).unwrap();
+                if snapshot.turns.last().unwrap().status == status {
+                    break snapshot;
+                }
+                assert!(
+                    Instant::now() < deadline,
+                    "approval Turn did not reach {status:?}: {:?}",
+                    snapshot
+                        .items
+                        .iter()
+                        .filter(|item| matches!(item, ash_protocol::ThreadItem::ToolResult { .. }))
+                        .collect::<Vec<_>>()
+                );
+                std::thread::yield_now();
+            }
+        };
+        executor.start(&thread.thread_id, &turn).unwrap();
+        let waiting = wait(ash_protocol::TurnStatus::WaitingForApproval);
+        let interaction = waiting
+            .turns
+            .last()
+            .unwrap()
+            .pending_interaction
+            .as_ref()
+            .unwrap();
+        let ash_protocol::AgentRequest::Approval { request } = &interaction.request else {
+            panic!("expected approval");
+        };
+        assert!(request.allowed_decisions.contains(&decision));
+        assert_eq!(request.command.as_ref().unwrap().program, "/bin/echo");
+        server
+            .threads
+            .resolve_turn_interaction(
+                &thread.thread_id,
+                core_api::ResolveTurnInteractionRequest {
+                    turn_id: turn.clone(),
+                    command_id: CommandId::new("reusable-approve").unwrap(),
+                    expected_sequence: SequenceExpectation::Any,
+                    request_id: interaction.request_id.clone(),
+                    response: ash_protocol::AgentResponse::Approval {
+                        response: ash_protocol::ActionApprovalResponse { decision },
+                    },
+                },
+            )
+            .unwrap();
+        executor.resume(&thread.thread_id, &turn).unwrap();
+        let waiting = wait(ash_protocol::TurnStatus::WaitingForApproval);
+        let interaction = waiting
+            .turns
+            .last()
+            .unwrap()
+            .pending_interaction
+            .as_ref()
+            .unwrap();
+        let ash_protocol::AgentRequest::Approval { request } = &interaction.request else {
+            panic!("expected changed-action approval");
+        };
+        assert_eq!(request.command.as_ref().unwrap().arguments, ["different"]);
+        assert_eq!(
+            waiting.started_tool_calls.len(),
+            2,
+            "same action must reuse the exact approved authority"
+        );
+        if decision == ash_protocol::ActionApprovalDecision::ApproveAndSaveRule {
+            assert_eq!(store.committed_snapshot().values.exec_policy.rules.len(), 1);
+        } else {
+            assert!(
+                store
+                    .committed_snapshot()
+                    .values
+                    .exec_policy
+                    .rules
+                    .is_empty()
+            );
+        }
+        server
+            .threads
+            .resolve_turn_interaction(
+                &thread.thread_id,
+                core_api::ResolveTurnInteractionRequest {
+                    turn_id: turn.clone(),
+                    command_id: CommandId::new("reusable-decline").unwrap(),
+                    expected_sequence: SequenceExpectation::Any,
+                    request_id: interaction.request_id.clone(),
+                    response: ash_protocol::AgentResponse::Approval {
+                        response: ash_protocol::ActionApprovalResponse {
+                            decision: ash_protocol::ActionApprovalDecision::Decline,
+                        },
+                    },
+                },
+            )
+            .unwrap();
+        executor.resume(&thread.thread_id, &turn).unwrap();
+        let complete = wait(ash_protocol::TurnStatus::Completed);
+        assert_eq!(complete.started_tool_calls.len(), 2);
+    }
+}
+
+#[cfg(unix)]
+struct RemoteNetworkModel {
+    url: String,
+    step: Mutex<usize>,
+}
+#[cfg(unix)]
+impl core_api::ModelService for RemoteNetworkModel {
+    fn invoke(
+        &self,
+        _: core_api::ModelSelection<'_>,
+        _: &ash_protocol::ModelRequest,
+        _: &CancellationToken,
+    ) -> Result<ash_protocol::ModelResponse, CoreError> {
+        let mut step = self.step.lock().unwrap();
+        let output = if *step == 0 {
+            vec![ash_protocol::ResponseItem::ToolCall(
+                ash_protocol::ToolCall {
+                    id: ash_protocol::ToolCallId::new("remote-network-command").unwrap(),
+                    name: ash_protocol::ToolName::new("environment").unwrap(),
+                    arguments: serde_json::json!({"environment":"network-worker", "operation":{"type":"command","program":"/usr/bin/curl",
+                "arguments":["--silent","--show-error","--max-time","15",self.url], "cwd":".", "timeout_millis":20000}}),
+                },
+            )]
+        } else {
+            vec![ash_protocol::ResponseItem::Text("done".into())]
+        };
+        *step += 1;
+        Ok(ash_protocol::ModelResponse {
+            output,
+            usage: None,
+            billing: None,
+            stop_reason: ash_protocol::StopReason::Completed,
+        })
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn remote_network_connections_require_the_exact_core_approval_before_upstream_io() {
+    use std::io::Read;
+    use std::io::Write;
+    for allow in [false, true] {
+        let target = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        target.set_nonblocking(true).unwrap();
+        let address = target.local_addr().unwrap();
+        let contacted = Arc::new(AtomicUsize::new(0));
+        let stopped = Arc::new(AtomicBool::new(false));
+        let target_contacts = contacted.clone();
+        let target_stopped = stopped.clone();
+        let target_worker = std::thread::spawn(move || {
+            while !target_stopped.load(Ordering::SeqCst) {
+                match target.accept() {
+                    Ok((mut connection, _)) => {
+                        target_contacts.fetch_add(1, Ordering::SeqCst);
+                        connection
+                            .set_read_timeout(Some(Duration::from_secs(5)))
+                            .unwrap();
+                        let mut bytes = [0; 4096];
+                        let _ = connection.read(&mut bytes);
+                        connection.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 15\r\nConnection: close\r\n\r\nremote-approved").unwrap();
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        std::thread::sleep(Duration::from_millis(5))
+                    }
+                    Err(error) => panic!("target listener failed: {error}"),
+                }
+            }
+        });
+        let directory = tempfile::tempdir().unwrap();
+        let store = Arc::new(ConfigStore::open(directory.path().join("config.db")).unwrap());
+        store
+            .apply(ConfigCommandRequest {
+                command_id: CommandId::new("require-network-approval").unwrap(),
+                expected_revision: ConfigRevision::new(0),
+                command: UserConfigCommand::UpsertExecPolicyRule {
+                    rule: ash_execpolicy::ExecPolicyRule::new(
+                        ash_execpolicy::ExecPolicyRuleId::new("observed-target"),
+                        ash_execpolicy::ExecPolicySelector::Network {
+                            protocol: None,
+                            host: ash_execpolicy::HostMatcher::exact("127.0.0.1"),
+                            port: Some(address.port()),
+                        },
+                        ash_execpolicy::ExecPolicyEffect::RequireApproval,
+                    ),
+                },
+            })
+            .unwrap();
+        let threads = Arc::new(ThreadController::with_store(Arc::new(
+            InMemoryThreadStore::default(),
+        )));
+        let server = AppServer::new(
+            threads,
+            Arc::new(RemoteNetworkModel {
+                url: format!("http://{address}/"),
+                step: Mutex::new(0),
+            }),
+        )
+        .with_ephemeral_env_state()
+        .with_config_store(store)
+        .with_local_env_host(None, host_policy())
+        .unwrap();
+        server
+            .activate_local_dirs(vec![(
+                "primary".into(),
+                Grant::for_environment(
+                    Dir::open_local(directory.path()).unwrap(),
+                    GrantSource::HostConfiguration,
+                    Permissions::new([
+                        Permission::ReadFiles,
+                        Permission::WriteFiles,
+                        Permission::BrowseFiles,
+                        Permission::ExecuteCommands,
+                    ]),
+                ),
+            )])
+            .unwrap();
+        let environment = Arc::new(
+            exec_server::LocalEnvironment::open(
+                "network-worker".into(),
+                directory.path(),
+                exec_server_protocol::FileAccess::ReadWrite,
+                exec_server_protocol::NetworkAccess::Allowed,
+                Arc::new(mxc_sandbox::MxcSandbox::new(
+                    ash_install_context::InstallContext::current(),
+                )),
+            )
+            .unwrap(),
+        );
+        let token = "b2".repeat(32);
+        let listener =
+            exec_server::ExecListener::bind("127.0.0.1:0".parse().unwrap(), &token, environment)
+                .unwrap();
+        let client = exec_server::ExecClient::connect(
+            exec_server::RemoteEndpoint::new(listener.address(), token).unwrap(),
+        )
+        .unwrap();
+        let server = server
+            .with_execution_environments(vec![exec_server::ExecutionEnvironment::Remote(client)])
+            .unwrap();
+        let thread = server
+            .start_thread(StartThreadRequest {
+                execution_target: None,
+                branch_name: None,
+                agent_id: None,
+                agent: None,
+                command_id: CommandId::new("remote-network-thread").unwrap(),
+                title: "network".into(),
+            })
+            .unwrap();
+        let executor = server.turn_executor_snapshot();
+        let turn = server
+            .admit_bound_turn(
+                &thread.thread_id,
+                StartTurnRequest {
+                    context_policy: Default::default(),
+                    mode: Default::default(),
+                    advisor: None,
+                    kind: ash_protocol::TurnKind::Coding,
+                    instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
+                    command_id: CommandId::new("remote-network-turn").unwrap(),
+                    expected_sequence: SequenceExpectation::Any,
+                    model: None,
+                    reasoning_effort: None,
+                    policy_revision: executor.policy_revision(),
+                    approval_mode: ash_protocol::ApprovalMode::Manual,
+                    tool_mode: ash_protocol::ToolMode::Direct,
+                    tool_profile: Some(executor.tool_profile_snapshot().unwrap()),
+                    activated_skills: vec![],
+                    input: vec![UserInput::Text {
+                        text: "Contact this target".into(),
+                    }],
+                },
+                None,
+                crate::client_host::TextDocumentMode::FileSystem,
+            )
+            .unwrap()
+            .turn_id;
+        let wait = |status| {
+            let deadline = Instant::now() + Duration::from_secs(15);
+            loop {
+                let snapshot = server.threads.read_thread(&thread.thread_id).unwrap();
+                if snapshot.turns.last().unwrap().status == status {
+                    break snapshot;
+                }
+                assert!(
+                    Instant::now() < deadline,
+                    "network Turn did not reach {status:?}: {:?}",
+                    snapshot
+                        .items
+                        .iter()
+                        .filter(|item| matches!(item, ash_protocol::ThreadItem::ToolResult { .. }))
+                        .collect::<Vec<_>>()
+                );
+                std::thread::yield_now();
+            }
+        };
+        let respond = |command: &str, request_id: ash_protocol::RequestId, decision| {
+            server
+                .threads
+                .resolve_turn_interaction(
+                    &thread.thread_id,
+                    core_api::ResolveTurnInteractionRequest {
+                        turn_id: turn.clone(),
+                        command_id: CommandId::new(command).unwrap(),
+                        expected_sequence: SequenceExpectation::Any,
+                        request_id,
+                        response: ash_protocol::AgentResponse::Approval {
+                            response: ash_protocol::ActionApprovalResponse { decision },
+                        },
+                    },
+                )
+                .unwrap()
+        };
+        executor.start(&thread.thread_id, &turn).unwrap();
+        let initial = wait(ash_protocol::TurnStatus::WaitingForApproval);
+        respond(
+            "approve-process",
+            initial
+                .turns
+                .last()
+                .unwrap()
+                .pending_interaction
+                .as_ref()
+                .unwrap()
+                .request_id
+                .clone(),
+            ash_protocol::ActionApprovalDecision::ApproveOnce,
+        );
+        executor.resume(&thread.thread_id, &turn).unwrap();
+        let pending = wait(ash_protocol::TurnStatus::WaitingForApproval);
+        let interaction = pending
+            .turns
+            .last()
+            .unwrap()
+            .pending_interaction
+            .as_ref()
+            .unwrap();
+        let ash_protocol::AgentRequest::Approval { request } = &interaction.request else {
+            panic!("network approval required");
+        };
+        assert_eq!(request.capabilities.len(), 1);
+        assert_eq!(
+            request.capabilities[0].kind,
+            ash_protocol::ActionApprovalCapabilityKind::Network
+        );
+        assert!(request.capabilities[0].scope.contains(&address.to_string()));
+        assert_eq!(
+            contacted.load(Ordering::SeqCst),
+            0,
+            "proxy must not connect upstream before the exact approval"
+        );
+        respond(
+            "resolve-network",
+            interaction.request_id.clone(),
+            if allow {
+                ash_protocol::ActionApprovalDecision::ApproveOnce
+            } else {
+                ash_protocol::ActionApprovalDecision::Decline
+            },
+        );
+        let completed = wait(ash_protocol::TurnStatus::Completed);
+        let output = serde_json::to_string(&completed.items).unwrap();
+        assert_eq!(contacted.load(Ordering::SeqCst), usize::from(allow));
+        assert_eq!(output.contains("remote-approved"), allow);
+        stopped.store(true, Ordering::SeqCst);
+        target_worker.join().unwrap();
+    }
+}
+
+#[test]
+fn capability_scoped_directory_startup_keeps_repository_watching_and_indexing_optional() {
+    let primary = TestDir::new("command-only-primary", "main.rs");
+    let secondary = TestDir::new("inspect-only-secondary", "other.rs");
+    let server = server().with_local_env_host(None, host_policy()).unwrap();
+    let command_grant = || {
+        Grant::for_environment(
+            primary.root(),
+            GrantSource::HostConfiguration,
+            Permissions::new([
+                Permission::ReadFiles,
+                Permission::BrowseFiles,
+                Permission::ExecuteCommands,
+            ]),
+        )
+    };
+    server
+        .activate_local_dirs(vec![
+            ("primary".into(), command_grant()),
+            (
+                "secondary".into(),
+                Grant::for_environment(
+                    secondary.root(),
+                    GrantSource::HostConfiguration,
+                    Permissions::new([
+                        Permission::ReadFiles,
+                        Permission::BrowseFiles,
+                        Permission::InspectRepository,
+                    ]),
+                ),
+            ),
+        ])
+        .unwrap();
+    {
+        let runtime = server.env_runtime.read().unwrap();
+        assert!(runtime.workspace.git.is_some());
+        assert!(runtime.workspace._git_watcher.is_none());
+        assert!(runtime.workspace.codebase.is_none());
+        assert!(runtime.workspace.symbol_index.is_none());
+        assert!(runtime.workspace._file_system_watcher.is_none());
+    }
+    server
+        .activate_local_dirs(vec![("primary".into(), command_grant())])
+        .unwrap();
+    assert!(server.env_runtime.read().unwrap().workspace.git.is_none());
+    server
+        .commit_limited_dir_runtime(
+            Grant::for_environment(
+                primary.root(),
+                GrantSource::HostConfiguration,
+                Permissions::new([Permission::ReadFiles, Permission::BrowseFiles]),
+            ),
+            server.local_env_host.as_ref().unwrap(),
+        )
+        .unwrap();
+    let runtime = server.env_runtime.read().unwrap();
+    assert!(runtime.workspace.codebase.is_none());
+    assert!(runtime.workspace.symbol_index.is_none());
 }

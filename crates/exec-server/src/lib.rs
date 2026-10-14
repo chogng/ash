@@ -4,6 +4,7 @@ mod client;
 mod environment;
 pub mod execution;
 mod file_transfer;
+mod network_approval;
 mod process;
 #[cfg(feature = "local-sandbox")]
 mod sandbox;

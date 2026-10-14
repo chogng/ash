@@ -281,7 +281,7 @@ fn panel_add_uses_server_paths_preserves_permissions_and_reports_missing_directo
     use ash_app_server_client::InProcessClientOptions;
     use ash_app_server_client::start_in_process_client;
     use ash_app_server_protocol::protocol::common::ClientInfo;
-    use ash_app_server_protocol::protocol::environment::SessionDirPermissionsSetParams;
+    use ash_app_server_protocol::protocol::environment::SessionDirectoryGrantSetParams;
     let _guard = crate::test_support::in_process_test_guard();
     struct NoModel;
     impl ash_client::OperationClient for NoModel {
@@ -339,7 +339,7 @@ fn panel_add_uses_server_paths_preserves_permissions_and_reports_missing_directo
     );
     assert!(!panel.state().search().unwrap().input_active());
     let updated = client
-        .set_session_dir_permissions(SessionDirPermissionsSetParams {
+        .set_session_directory_grant(SessionDirectoryGrantSetParams {
             session_id: session.clone(),
             path: canonical.clone(),
             expected_revision: 1,

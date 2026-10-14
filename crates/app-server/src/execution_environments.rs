@@ -48,10 +48,14 @@ const RECOVERY_BUDGET: Duration = Duration::from_secs(5);
 
 pub(crate) struct EnvironmentTools {
     environments: BTreeMap<String, ExecutionEnvironment>,
+    permissions: Arc<dyn Fn() -> crate::local_tools::LocalToolConfig + Send + Sync>,
 }
 
 impl EnvironmentTools {
-    pub(crate) fn new(environments: Vec<ExecutionEnvironment>) -> Result<Self, String> {
+    pub(crate) fn new(
+        environments: Vec<ExecutionEnvironment>,
+        permissions: Arc<dyn Fn() -> crate::local_tools::LocalToolConfig + Send + Sync>,
+    ) -> Result<Self, String> {
         let mut mapped = BTreeMap::new();
         for environment in environments {
             let id = environment.info().environment_id.clone();
@@ -64,20 +68,81 @@ impl EnvironmentTools {
         }
         Ok(Self {
             environments: mapped,
+            permissions,
         })
+    }
+
+    fn permission_snapshot(
+        &self,
+        environment: &ExecutionEnvironment,
+    ) -> Result<ExecutionEnvironment, CoreError> {
+        let config = (self.permissions)();
+        let requirements = config
+            .requirements
+            .as_ref()
+            .map_err(|error| CoreError::Policy(error.to_string()))?;
+        let profile = requirements
+            .values
+            .constrain(
+                config
+                    .profile()
+                    .map_err(|error| CoreError::Policy(error.to_string()))?,
+            )
+            .map_err(|error| CoreError::Policy(error.to_string()))?;
+        // Endpoint rules use the execution host's proxy and Core's exact network approvals;
+        // an explicitly denied profile remains a ceiling even when rules permit one target.
+        let managed_network = config
+            .common_policy_snapshot(None)
+            .map_err(|error| CoreError::Policy(error.to_string()))?
+            .layers()
+            .iter()
+            .flat_map(|layer| layer.rules())
+            .any(|rule| rule.selector().targets_network());
+        let constraints = exec_server_protocol::ExecutionConstraints {
+            file_access: if profile.file_operations == ash_file_access::PathAccess::ReadOnly {
+                exec_server_protocol::FileAccess::ReadOnly
+            } else {
+                exec_server_protocol::FileAccess::ReadWrite
+            },
+            command_access: if profile.file_system == ash_protocol::SandboxMode::ReadOnly {
+                exec_server_protocol::FileAccess::ReadOnly
+            } else {
+                exec_server_protocol::FileAccess::ReadWrite
+            },
+            network: if profile.scope == ash_config::PermissionProfileScope::AllOperations
+                && profile.network == ash_config::CommandNetworkAccess::Denied
+                || requirements.values.maximum_network
+                    == Some(ash_config::CommandNetworkAccess::Denied)
+            {
+                exec_server_protocol::NetworkAccess::Denied
+            } else if managed_network {
+                exec_server_protocol::NetworkAccess::Managed
+            } else if profile.network == ash_config::CommandNetworkAccess::Denied {
+                exec_server_protocol::NetworkAccess::Denied
+            } else {
+                exec_server_protocol::NetworkAccess::Allowed
+            },
+            host_read: profile.host_read,
+            paths: profile.paths,
+        };
+        environment
+            .clone()
+            .constrained(constraints)
+            .map_err(|error| CoreError::Policy(error.to_string()))
     }
 
     fn materialize(
         &self,
         call: &ToolCall,
         facts: &ToolExecutionFacts,
-    ) -> Result<(&ExecutionEnvironment, PreparedOperation), CoreError> {
+    ) -> Result<(ExecutionEnvironment, PreparedOperation), CoreError> {
         let arguments: Arguments = serde_json::from_value(call.arguments.clone())
             .map_err(|error| CoreError::Policy(error.to_string()))?;
         let environment = self
             .environments
             .get(&arguments.environment)
             .ok_or_else(|| CoreError::Policy("unknown execution environment".into()))?;
+        let environment = self.permission_snapshot(environment)?;
         let request = match arguments.operation {
             Operation::Command {
                 program,
@@ -85,7 +150,7 @@ impl EnvironmentTools {
                 cwd,
                 timeout_millis,
             } => {
-                let id = operation_id(environment, call, facts)?;
+                let id = operation_id(&environment, call, facts)?;
                 let params = ProcessStart {
                     input: exec_server_protocol::ProcessInput::Closed,
                     operation_id: id,
@@ -113,7 +178,7 @@ impl EnvironmentTools {
                     return Err(CoreError::Policy("file content exceeds limit".into()));
                 }
                 PreparedOperation::Write {
-                    operation_id: operation_id(environment, call, facts)?,
+                    operation_id: operation_id(&environment, call, facts)?,
                     path,
                     bytes: content.into_bytes(),
                     condition: match expected_revision {
@@ -225,43 +290,71 @@ impl ToolService for EnvironmentTools {
             PreparedOperation::Write { .. } => CapabilityKind::FileWrite,
             PreparedOperation::Command(_) => CapabilityKind::ProcessSpawn,
         };
+        // Operation IDs prevent transport replay; they are not part of the action being approved.
+        let action_value = match &request {
+            PreparedOperation::Command(start) => {
+                json!({"type":"command", "program": start.program, "arguments": start.arguments,
+                "cwd": start.cwd, "timeoutMillis": start.timeout_millis, "input": start.input})
+            }
+            PreparedOperation::Read { path } => json!({"type":"read", "path": path}),
+            PreparedOperation::Write {
+                path,
+                bytes,
+                condition,
+                ..
+            } => json!({"type":"write", "path": path, "bytes": bytes, "condition": condition}),
+        };
         let canonical =
-            serde_json::to_vec(&json!({"environment":environment.info(),"request":request}))
+            serde_json::to_vec(&json!({"environment":environment.info(),"permissions":environment.constraints(),"request":action_value}))
                 .map_err(|error| CoreError::Policy(error.to_string()))?;
-        Ok(ActionReviewRequest::new(
-            ResolvedAction::new(
-                ActionDigest::from_canonical_bytes(&canonical),
-                ActionKind::ExternalServiceMutation,
-                match &request {
-                    PreparedOperation::Command(start) => format!(
-                        "Run {} in environment {} (directory {})",
-                        start.program,
-                        environment.info().environment_id,
-                        start.cwd
-                    ),
-                    PreparedOperation::Read { path } => format!(
-                        "Read {path} in environment {}",
-                        environment.info().environment_id
-                    ),
-                    PreparedOperation::Write { path, .. } => format!(
-                        "Write {path} in environment {}",
-                        environment.info().environment_id
-                    ),
-                },
-                CapabilitySet::new([Capability::new(
-                    kind,
-                    format!(
-                        "{}:{}",
-                        environment.info().environment_id,
-                        environment.info().incarnation
-                    ),
-                )]),
-            ),
+        let mut action = ResolvedAction::new(
+            ActionDigest::from_canonical_bytes(&canonical),
+            match &request {
+                PreparedOperation::Command(_) => {
+                    ActionKind::LocalProcess(ash_protocol::ProcessInvocationKind::Direct)
+                }
+                PreparedOperation::Read { .. } => ActionKind::SystemOperation,
+                PreparedOperation::Write { .. } => ActionKind::FileSystemMutation,
+            },
+            match &request {
+                PreparedOperation::Command(start) => format!(
+                    "Run {} in environment {} (directory {})",
+                    start.program,
+                    environment.info().environment_id,
+                    start.cwd
+                ),
+                PreparedOperation::Read { path } => format!(
+                    "Read {path} in environment {}",
+                    environment.info().environment_id
+                ),
+                PreparedOperation::Write { path, .. } => format!(
+                    "Write {path} in environment {}",
+                    environment.info().environment_id
+                ),
+            },
+            CapabilitySet::new([Capability::new(
+                kind,
+                format!(
+                    "{}:{}",
+                    environment.info().environment_id,
+                    environment.info().incarnation
+                ),
+            )]),
+        );
+        if let PreparedOperation::Command(start) = &request {
+            action = action.with_command(start.program.clone(), start.arguments.clone());
+        }
+        Ok(ActionReviewRequest::new(action,
             ActionProvenance::new(ActionSource::BuiltInTool, "environment"),
-            SandboxCompatibility::NotApplicable {
-                reason:
-                    "the execution host enforces its own immutable filesystem and network ceiling"
-                        .into(),
+            match &request {
+                PreparedOperation::Command(_) => SandboxCompatibility::Supported(ash_sandboxing::SandboxPolicy::new(
+                    if environment.constraints().command_access == exec_server_protocol::FileAccess::ReadOnly { ash_sandboxing::FileSystemAccess::ReadOnly }
+                    else { ash_sandboxing::FileSystemAccess::DirectoryWrite }, match environment.constraints().network {
+                        exec_server_protocol::NetworkAccess::Denied => ash_sandboxing::NetworkAccess::Denied,
+                        exec_server_protocol::NetworkAccess::Managed => ash_sandboxing::NetworkAccess::Managed,
+                        exec_server_protocol::NetworkAccess::Allowed => ash_sandboxing::NetworkAccess::Allowed })),
+                PreparedOperation::Read { .. } | PreparedOperation::Write { .. } => SandboxCompatibility::NotApplicable {
+                    reason: "the execution host enforces its own immutable filesystem and caller ceilings".into() },
             },
             ActionPolicyRevision::new(REVISION),
         ))
@@ -297,18 +390,71 @@ impl ToolService for EnvironmentTools {
     fn execute_streaming_with_facts(
         &self,
         call: &ToolCall,
-        _: &ToolAuthorization,
+        authorization: &ToolAuthorization,
         cancellation: &CancellationToken,
         facts: &ToolExecutionFacts,
+        sink: &mut dyn ToolOutputSink,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        self.execute_admitted(call, authorization, cancellation, facts, None, sink)
+    }
+
+    fn execute_streaming_with_facts_and_interactions(
+        &self,
+        call: &ToolCall,
+        authorization: &ToolAuthorization,
+        cancellation: &CancellationToken,
+        facts: &ToolExecutionFacts,
+        interactions: Arc<dyn ash_core::ToolInteractionService>,
+        sink: &mut dyn ToolOutputSink,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        self.execute_admitted(
+            call,
+            authorization,
+            cancellation,
+            facts,
+            Some(interactions),
+            sink,
+        )
+    }
+}
+
+impl EnvironmentTools {
+    fn execute_admitted(
+        &self,
+        call: &ToolCall,
+        authorization: &ToolAuthorization,
+        cancellation: &CancellationToken,
+        facts: &ToolExecutionFacts,
+        interactions: Option<Arc<dyn ash_core::ToolInteractionService>>,
         sink: &mut dyn ToolOutputSink,
     ) -> Result<ToolExecutionOutput, CoreError> {
         cancellation
             .check()
             .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
-        let (environment, request) = self.materialize(call, facts)?;
+        let (mut environment, request) = self.materialize(call, facts)?;
+        if let ToolAuthorization::Sandboxed(policy) = authorization {
+            let mut ceiling = environment.constraints();
+            if policy.file_system() == ash_sandboxing::FileSystemAccess::ReadOnly {
+                ceiling.command_access = exec_server_protocol::FileAccess::ReadOnly;
+            }
+            if policy.network() == ash_sandboxing::NetworkAccess::Denied {
+                ceiling.network = exec_server_protocol::NetworkAccess::Denied;
+            }
+            environment = environment
+                .constrained(ceiling)
+                .map_err(|error| CoreError::Policy(error.to_string()))?;
+        }
+        let parent = self.prepare_with_facts(call, facts)?;
         let outcome = match request {
             PreparedOperation::Command(start) => {
-                return run_command(environment, start, cancellation, sink);
+                return run_command(
+                    &environment,
+                    start,
+                    cancellation,
+                    interactions,
+                    parent,
+                    sink,
+                );
             }
             PreparedOperation::Read { path } => match environment.read_file(&path, cancellation) {
                 Ok(content) => Ok(match String::from_utf8(content.bytes) {
@@ -354,8 +500,24 @@ fn run_command(
     environment: &ExecutionEnvironment,
     start: ProcessStart,
     cancellation: &CancellationToken,
+    interactions: Option<Arc<dyn ash_core::ToolInteractionService>>,
+    parent: ActionReviewRequest,
     sink: &mut dyn ToolOutputSink,
 ) -> Result<ToolExecutionOutput, CoreError> {
+    let network = if environment.constraints().network
+        == exec_server_protocol::NetworkAccess::Managed
+    {
+        Some(crate::network_policy::ExecutionNetworkPolicy::new(
+            parent,
+            interactions.ok_or_else(|| {
+                CoreError::Policy(
+                    "managed execution networking requires Core's live approval authority".into(),
+                )
+            })?,
+        ))
+    } else {
+        None
+    };
     let id = start.operation_id.clone();
     let deadline =
         Instant::now() + Duration::from_millis(start.timeout_millis) + Duration::from_secs(10);
@@ -382,6 +544,65 @@ fn run_command(
             let _ = environment.request(Request::ProcessCancel {
                 operation_id: id.clone(),
             });
+        }
+        if let Some(network) = &network {
+            match environment.request(Request::ProcessNetworkRequests {
+                operation_id: id.clone(),
+            }) {
+                Ok(Response::ProcessNetworkRequests(requests)) => {
+                    for request in requests {
+                        exec_server_protocol::validate_id(&request.request_id).map_err(|_| {
+                            CoreError::Policy("invalid remote network correlation".into())
+                        })?;
+                        let mut target = network_proxy::NetworkRequest::new(
+                            request.protocol,
+                            &request.host,
+                            request.port,
+                        )
+                        .map_err(|error| CoreError::Policy(error.to_string()))?;
+                        if let Some(method) = &request.method {
+                            if method.is_empty()
+                                || method.len() > 64
+                                || !method
+                                    .bytes()
+                                    .all(|byte| byte.is_ascii_uppercase() || byte == b'-')
+                            {
+                                return Err(CoreError::Policy(
+                                    "invalid remote network method".into(),
+                                ));
+                            }
+                            target = target.with_method(method);
+                        }
+                        let allow = matches!(
+                            network.decide_blocking(target, cancellation),
+                            network_proxy::NetworkDecision::Allow
+                        );
+                        if let Err(error) =
+                            environment.request(Request::ResolveProcessNetworkRequest {
+                                operation_id: id.clone(),
+                                request_id: request.request_id,
+                                allow,
+                            })
+                        {
+                            let _ = environment.request(Request::ProcessCancel {
+                                operation_id: id.clone(),
+                            });
+                            return Ok(ToolExecutionOutput::OutcomeUnknown(format!(
+                                "remote network approval reply was lost: {error}"
+                            )));
+                        }
+                    }
+                }
+                Err(exec_server::Error::Remote(exec_server_protocol::ExecError::NotFound)) => {}
+                other => {
+                    let _ = environment.request(Request::ProcessCancel {
+                        operation_id: id.clone(),
+                    });
+                    return Ok(ToolExecutionOutput::OutcomeUnknown(format!(
+                        "remote network approval authority is unavailable: {other:?}"
+                    )));
+                }
+            }
         }
         match environment.request(Request::ProcessRead(ProcessRead {
             operation_id: id.clone(),
@@ -467,8 +688,40 @@ fn append_tail(tail: &mut String, text: &str) {
     tail.drain(..remove);
 }
 
-pub(crate) struct EnvironmentPolicy;
+#[derive(Default)]
+pub(crate) struct EnvironmentPolicy {
+    tools: Option<Arc<EnvironmentTools>>,
+}
 impl ActionPolicyService for EnvironmentPolicy {
+    fn check_approval_mode(&self, mode: ash_protocol::ApprovalMode) -> Result<(), CoreError> {
+        if self.tools.as_ref().is_some_and(|tools| {
+            tools
+                .environments
+                .values()
+                .any(|environment| !environment.info().allowed_approval_modes.contains(&mode))
+        }) {
+            return Err(CoreError::Policy(
+                "approval mode is prohibited by an execution host's permission requirements".into(),
+            ));
+        }
+        Ok(())
+    }
+    fn permission_context(
+        &self,
+        _: &ash_protocol::SessionId,
+        _: &ash_protocol::ThreadId,
+    ) -> Result<Vec<ash_protocol::ReviewEvidence>, CoreError> {
+        let Some(tools) = &self.tools else {
+            return Ok(vec![]);
+        };
+        tools.environments.values().take(32).map(|environment| {
+            let constrained = tools.permission_snapshot(environment)?;
+            Ok(ash_protocol::ReviewEvidence::new(ash_protocol::ReviewEvidenceKind::EnvironmentFact,
+                ash_protocol::ReviewEvidenceTrust::TrustedHost, format!("execution-permissions:{}", environment.info().environment_id),
+                json!({"environment": environment.info(), "effectiveConstraints": constrained.constraints(),
+                    "networkApproval": "core-exact-request"}).to_string()))
+        }).collect()
+    }
     fn revision(&self) -> String {
         REVISION.into()
     }
@@ -510,6 +763,8 @@ enum EndpointConfig {
         root: String,
         runtime: String,
         ssh_executable: Option<std::path::PathBuf>,
+        #[serde(default)]
+        network: exec_server_protocol::NetworkAccess,
     },
 }
 
@@ -604,9 +859,11 @@ fn connect_environment(path: &Path, entry: EndpointConfig) -> Result<ExecutionEn
             root,
             runtime,
             ssh_executable,
+            network,
         } => {
             let mut target = exec_server::SshEndpoint::new(&host, &root, &runtime, &environment)
-                .map_err(|error| error.to_string())?;
+                .map_err(|error| error.to_string())?
+                .with_network_access(network);
             if let Some(executable) = ssh_executable {
                 target = target.with_executable(executable);
             }
@@ -622,10 +879,12 @@ fn connect_environment(path: &Path, entry: EndpointConfig) -> Result<ExecutionEn
 
 pub(crate) fn port(
     environments: Vec<ExecutionEnvironment>,
+    permissions: Arc<dyn Fn() -> crate::local_tools::LocalToolConfig + Send + Sync>,
 ) -> Result<crate::tool_composition::ToolPort, String> {
+    let tools = Arc::new(EnvironmentTools::new(environments, permissions)?);
     Ok(crate::tool_composition::ToolPort::environment(
-        Arc::new(EnvironmentTools::new(environments)?),
-        Arc::new(EnvironmentPolicy),
+        tools.clone(),
+        Arc::new(EnvironmentPolicy { tools: Some(tools) }),
     ))
 }
 

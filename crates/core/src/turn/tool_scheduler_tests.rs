@@ -1435,10 +1435,9 @@ fn safe_sandbox_denial_waits_for_one_time_approval_and_resumes_after_recovery() 
         DenialAskingClassifier,
         ReviewFailurePolicy::Block,
     );
-    let fixture = fixture_with(
-        tools,
-        Arc::new(crate::approval_request::tests::EnginePolicy(engine)),
-    );
+    let policy: Arc<dyn ActionPolicyService> =
+        Arc::new(crate::approval_request::tests::EnginePolicy(engine));
+    let fixture = fixture_with(tools, Arc::clone(&policy));
 
     assert!(matches!(
         fixture.scheduler.run_pending(
@@ -1468,17 +1467,13 @@ fn safe_sandbox_denial_waits_for_one_time_approval_and_resumes_after_recovery() 
     resolve(&fixture, ActionApprovalDecision::ApproveOnce);
     let recovered = Arc::new(ThreadController::with_store(fixture.store.clone()));
     recovered.recover_thread(&fixture.thread_id).unwrap();
-    ToolScheduler::new(
-        recovered.clone(),
-        fixture.tools.clone(),
-        Arc::new(AskPolicy),
-    )
-    .run_pending(
-        &fixture.thread_id,
-        &fixture.turn_id,
-        &CancellationSource::new().token(),
-    )
-    .unwrap();
+    ToolScheduler::new(recovered.clone(), fixture.tools.clone(), policy)
+        .run_pending(
+            &fixture.thread_id,
+            &fixture.turn_id,
+            &CancellationSource::new().token(),
+        )
+        .unwrap();
 
     let authorizations = fixture.tools.authorizations.lock().unwrap();
     assert!(matches!(

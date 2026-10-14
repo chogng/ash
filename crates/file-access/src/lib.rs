@@ -12,7 +12,13 @@ mod dir;
 mod dir_entry;
 mod dir_id;
 mod grant;
+mod path_policy;
 mod snapshot;
+pub use path_policy::HostReadAccess;
+pub use path_policy::PathAccess;
+pub use path_policy::PathAccessPolicy;
+pub use path_policy::PathAccessRule;
+pub use path_policy::PathOperation;
 
 pub use access::Access;
 pub use access_error::AccessError;

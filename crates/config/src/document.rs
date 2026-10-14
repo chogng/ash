@@ -312,9 +312,10 @@ pub struct UserConfigDocument {
     pub commit_messages: CommitMessageConfig,
     #[serde(default)]
     pub exec_policy: UserExecPolicyConfig,
-    // Keep the persisted key stable for existing profiles.
-    #[serde(default, rename = "dirPermissions")]
+    #[serde(default)]
     pub directory_grants: DirectoryGrantsConfig,
+    #[serde(default)]
+    pub permissions: crate::PermissionsConfig,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub gui: BTreeMap<String, serde_json::Value>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -333,6 +334,7 @@ impl UserConfigDocument {
     }
 
     pub(crate) fn validate(&self) -> Result<(), ConfigError> {
+        self.permissions.validate()?;
         if let Some(trace) = &self.agent.trace {
             trace.validate()?;
         }
@@ -507,6 +509,7 @@ pub struct ResolvedConfig {
     pub commit_messages: CommitMessageConfig,
     pub exec_policy: UserExecPolicyConfig,
     pub directory_grants: DirectoryGrantsConfig,
+    pub permissions: crate::PermissionsConfig,
     pub gui: BTreeMap<String, serde_json::Value>,
     pub tui: BTreeMap<String, serde_json::Value>,
     pub desktop: HashMap<String, serde_json::Value>,
@@ -703,6 +706,7 @@ impl From<&UserConfigDocument> for ResolvedConfig {
             commit_messages: document.commit_messages.clone(),
             exec_policy: document.exec_policy.clone(),
             directory_grants: document.directory_grants.clone(),
+            permissions: document.permissions.clone(),
             gui: document.gui.clone(),
             tui: document.tui.clone(),
             desktop: document.desktop.clone(),

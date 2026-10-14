@@ -432,7 +432,10 @@ fn automatic_fetch_runs_from_shared_config_without_a_frontend() {
     let runtime = GitRuntime::new(mutation_authorization(consumer.root()), broker).unwrap();
     runtime.status().unwrap();
     queue.drain();
-    let watcher = runtime.start_watching(Some(config.clone()));
+    let watcher = runtime.start_watching(
+        Some(config.clone()),
+        vec![watch_authorization(consumer.root())],
+    );
     config
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("enable-autofetch").unwrap(),
@@ -1181,7 +1184,7 @@ fn discovery_watches_empty_dirs_and_preserves_existing_repository_owners() {
     broker.register(2, false, &second);
     let runtime = GitRuntime::new(inspection_authorization(repository.root()), broker).unwrap();
     assert!(runtime.repositories().repositories.is_empty());
-    let watcher = runtime.start_watching(None);
+    let watcher = runtime.start_watching(None, vec![watch_authorization(repository.root())]);
     repository.git(&["init", "-b", "main"]);
     await_repository_count(&runtime, 1);
     let owner = runtime.repository(None).unwrap();
@@ -1608,6 +1611,43 @@ fn stopping_watchers_cancels_an_active_automatic_fetch_before_joining_refresh() 
     let url = format!("git://{}/repo.git", listener.local_addr().unwrap());
     repository.git(&["remote", "add", "origin", &url]);
     listener.set_nonblocking(true).unwrap();
+    let config_path = repository.root().join("autofetch.sqlite3");
+    std::fs::write(
+        config_path.with_extension("toml"),
+        "schemaVersion = 5\n[git]\nautofetch = 'off'\nautofetchPeriod = 60\n",
+    )
+    .unwrap();
+    let config = Arc::new(ConfigStore::open(&config_path).unwrap());
+    let broker = Arc::new(UpdateBroker::default());
+    let notifications = NotificationQueue::default();
+    broker.register(1, false, &notifications);
+    let runtime = GitRuntime::new(mutation_authorization(repository.root()), broker).unwrap();
+    runtime.status().unwrap();
+    notifications.drain();
+    repository.write("watcher-ready.txt", "ready\n");
+    let watcher = runtime.start_watching(
+        Some(config.clone()),
+        vec![watch_authorization(repository.root())],
+    );
+    // Observe subscription readiness before starting the blocked fetch. The stop deadline
+    // below still includes every owned worker and remains three seconds.
+    let ready_deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        if notifications
+            .drain()
+            .iter()
+            .any(|event| event["method"] == "git/statusChanged")
+        {
+            break;
+        }
+        assert!(
+            Instant::now() < ready_deadline,
+            "Git watcher did not finish initialization"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    // Time the listening phase after setup; profile migration and repository discovery are
+    // unrelated to the cancellation deadline asserted below.
     let accepting = std::thread::spawn(move || {
         let deadline = Instant::now() + Duration::from_secs(3);
         loop {
@@ -1621,20 +1661,33 @@ fn stopping_watchers_cancels_an_active_automatic_fetch_before_joining_refresh() 
             }
         }
     });
-    let config_path = repository.root().join("autofetch.sqlite3");
-    std::fs::write(
-        config_path.with_extension("toml"),
-        "schemaVersion = 5\n[git]\nautofetch = 'all'\nautofetchPeriod = 60\n",
-    )
-    .unwrap();
-    let config = Arc::new(ConfigStore::open(&config_path).unwrap());
-    let runtime = GitRuntime::new(
-        mutation_authorization(repository.root()),
-        Arc::new(UpdateBroker::default()),
-    )
-    .unwrap();
-    runtime.status().unwrap();
-    let watcher = runtime.start_watching(Some(config));
+    config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("start-blocked-fetch").unwrap(),
+            expected_revision: config.read_snapshot().unwrap().revision,
+            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                execution: Patch::Missing,
+                context: Patch::Missing,
+                time_context: Patch::Missing,
+                features: Patch::Missing,
+                model: Patch::Missing,
+                model_reasoning_effort: Patch::Missing,
+                approval_review_model: Patch::Missing,
+                commit_message_model: Patch::Missing,
+                advisor: Patch::Missing,
+                tool_mode: Patch::Missing,
+                grep_backend: Patch::Missing,
+                trace: Patch::Missing,
+                gui: Patch::Missing,
+                tui: Patch::Missing,
+                git: Patch::Value(GitConfig {
+                    autofetch: GitAutoFetchMode::All,
+                    autofetch_period: 60,
+                    rebase_when_sync: false,
+                }),
+            }),
+        })
+        .unwrap();
     let mut remote = accepting.join().unwrap();
     remote.set_nonblocking(false).unwrap();
     remote
@@ -1649,8 +1702,14 @@ fn stopping_watchers_cancels_an_active_automatic_fetch_before_joining_refresh() 
         drop(watcher);
         done.send(()).unwrap();
     });
-    completed.recv_timeout(Duration::from_secs(3)).unwrap();
+    let stopped = completed.recv_timeout(Duration::from_secs(3));
+    if stopped.is_err() {
+        // Release this fixture's blocked peer before reporting failure, so its owned workers
+        // cannot leak into the next test. The original three-second stop assertion stays intact.
+        let _ = remote.shutdown(std::net::Shutdown::Both);
+    }
     closing.join().unwrap();
+    stopped.unwrap();
     // Killing the Git process can close its TCP connection with FIN or RST; both prove that
     // cancellation released the active fetch. A timeout or additional data still fails.
     match remote.read(&mut bytes) {
@@ -2041,4 +2100,46 @@ fn pull_test_repositories() -> (TestRepository, TestRepository) {
     target.git(&["fetch", "origin"]);
     target.git(&["switch", "-C", "main", "--track", "origin/main"]);
     (source, target)
+}
+
+fn watch_authorization(root: &Path) -> Authorization {
+    Grant::for_environment(
+        Dir::open_local(root).unwrap(),
+        GrantSource::HostConfiguration,
+        Permissions::new([Permission::WatchFiles]),
+    )
+    .authorize(Permission::WatchFiles)
+    .unwrap()
+}
+
+#[test]
+fn capability_scoped_git_watch_paths_exclude_other_roots_and_revoked_proofs() {
+    let first = TestRepository::init();
+    let second = TestRepository::init();
+    let runtime = GitRuntime::new_for_dirs(
+        vec![
+            ("first".into(), inspection_authorization(first.root())),
+            ("second".into(), inspection_authorization(second.root())),
+        ],
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    let grant = Grant::for_environment(
+        Dir::open_local(second.root()).unwrap(),
+        GrantSource::HostConfiguration,
+        Permissions::new([Permission::WatchFiles]),
+    );
+    let proofs = vec![grant.authorize(Permission::WatchFiles).unwrap()];
+    let paths = runtime.discovery_paths(&proofs);
+    assert!(paths.iter().any(|path| path.path == second.root()));
+    assert!(!paths.iter().any(|path| path.path.starts_with(first.root())));
+    assert!(
+        runtime
+            .watched_repositories(&proofs)
+            .iter()
+            .all(|repository| repository.service.dir().id() == grant.dir().id())
+    );
+    grant.revoke();
+    assert!(runtime.discovery_paths(&proofs).is_empty());
+    assert!(runtime.watched_repositories(&proofs).is_empty());
 }

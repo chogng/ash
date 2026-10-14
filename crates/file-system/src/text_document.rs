@@ -89,6 +89,172 @@ pub trait TextDocumentEditor: Send + Sync {
     fn release(&self, snapshots: Vec<String>);
 }
 
+/// Agent view of either disk or editor documents. The document owner retains revisions and
+/// undo; this boundary retains the exact directory lease and checks paths before every IO.
+pub struct AuthorizedTextDocuments {
+    authorization: ash_file_access::Authorization,
+    editor: std::sync::Arc<dyn TextDocumentEditor>,
+    paths: Mutex<BTreeMap<String, PathBuf>>,
+}
+
+impl AuthorizedTextDocuments {
+    pub fn new(
+        authorization: ash_file_access::Authorization,
+        editor: std::sync::Arc<dyn TextDocumentEditor>,
+        snapshots: impl IntoIterator<Item = (String, PathBuf)>,
+    ) -> Self {
+        Self {
+            authorization,
+            editor,
+            paths: Mutex::new(snapshots.into_iter().collect()),
+        }
+    }
+
+    fn path(
+        &self,
+        path: &Path,
+        operation: ash_file_access::PathOperation,
+    ) -> Result<PathBuf, TextDocumentError> {
+        let dir = self.authorization.dir();
+        let relative = path
+            .strip_prefix(dir.canonical_path())
+            .map_err(|error| TextDocumentError::Failed(error.to_string()))?;
+        let canonical = dir
+            .resolve_for_write(relative)
+            .map_err(|error| TextDocumentError::Failed(error.to_string()))?;
+        let resolved = canonical
+            .strip_prefix(dir.canonical_path())
+            .map_err(|error| TextDocumentError::Failed(error.to_string()))?;
+        if !self.authorization.path_policy().allows(relative, operation)
+            || !self.authorization.path_policy().allows(resolved, operation)
+        {
+            return Err(TextDocumentError::Failed(
+                "document path exceeds the permission profile".into(),
+            ));
+        }
+        Ok(canonical)
+    }
+
+    fn admitted<T>(
+        &self,
+        operation: impl FnOnce() -> Result<T, TextDocumentError>,
+    ) -> Result<T, TextDocumentError> {
+        self.authorization
+            .execute(
+                self.authorization.subject(),
+                self.authorization.dir(),
+                self.authorization.permission(),
+                operation,
+            )
+            .map_err(|error| TextDocumentError::Failed(error.to_string()))?
+    }
+}
+
+impl TextDocumentEditor for AuthorizedTextDocuments {
+    fn read(
+        &self,
+        path: &Path,
+        cancellation: &CancellationToken,
+    ) -> Result<Option<TextDocumentSnapshot>, TextDocumentError> {
+        self.admitted(|| {
+            let path = self.path(path, ash_file_access::PathOperation::Read)?;
+            let snapshot = self.editor.read(&path, cancellation)?;
+            if let Some(snapshot) = &snapshot {
+                self.paths
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .insert(snapshot.id.clone(), path);
+            }
+            Ok(snapshot)
+        })
+    }
+
+    fn apply(
+        &self,
+        changes: Vec<TextDocumentChange>,
+        cancellation: &CancellationToken,
+    ) -> Result<(), TextDocumentError> {
+        if self.authorization.permission() != ash_file_access::Permission::WriteFiles {
+            return Err(TextDocumentError::Failed(
+                "document mutation requires WriteFiles".into(),
+            ));
+        }
+        self.admitted(|| {
+            let paths = self
+                .paths
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let changes = changes
+                .into_iter()
+                .map(|change| {
+                    match &change {
+                        TextDocumentChange::Create { path, .. } => {
+                            self.path(path, ash_file_access::PathOperation::Write)?;
+                        }
+                        TextDocumentChange::Update { snapshot, .. }
+                        | TextDocumentChange::Delete { snapshot }
+                        | TextDocumentChange::Move { snapshot, .. } => {
+                            self.path(
+                                paths.get(snapshot).ok_or(TextDocumentError::Conflict)?,
+                                ash_file_access::PathOperation::Write,
+                            )?;
+                        }
+                    }
+                    match change {
+                        TextDocumentChange::Create { path, text } => {
+                            Ok(TextDocumentChange::Create {
+                                path: self.path(&path, ash_file_access::PathOperation::Write)?,
+                                text,
+                            })
+                        }
+                        TextDocumentChange::Move {
+                            snapshot,
+                            target,
+                            text,
+                        } => Ok(TextDocumentChange::Move {
+                            snapshot,
+                            target: self.path(&target, ash_file_access::PathOperation::Write)?,
+                            text,
+                        }),
+                        other => Ok(other),
+                    }
+                })
+                .collect::<Result<Vec<_>, TextDocumentError>>()?;
+            self.editor.apply(changes, cancellation)
+        })
+    }
+
+    fn open_documents(
+        &self,
+        root: &Path,
+        cancellation: &CancellationToken,
+    ) -> Result<Vec<TextDocumentContent>, TextDocumentError> {
+        self.admitted(|| {
+            Ok(self
+                .editor
+                .open_documents(root, cancellation)?
+                .into_iter()
+                .filter(|document| {
+                    self.path(&document.path, ash_file_access::PathOperation::Read)
+                        .is_ok()
+                })
+                .collect())
+        })
+    }
+
+    fn release(&self, snapshots: Vec<String>) {
+        let mut paths = self
+            .paths
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for snapshot in &snapshots {
+            paths.remove(snapshot);
+        }
+        drop(paths);
+        self.editor.release(snapshots);
+    }
+}
+
 struct FileSnapshot {
     path: PathBuf,
     revision: String,

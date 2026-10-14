@@ -13,6 +13,10 @@ pub enum GrantSubject {
     Environment(crate::EnvId),
     SessionTree(SessionId),
     Thread(ThreadId),
+    Turn {
+        thread: ThreadId,
+        turn: ash_protocol::TurnId,
+    },
 }
 
 /// Host-owned source that issued one directory grant.
@@ -23,60 +27,7 @@ pub enum GrantSource {
     HostConfiguration,
 }
 
-/// Permission kind that can be granted for one directory scope.
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Deserialize,
-    Eq,
-    Hash,
-    Ord,
-    PartialEq,
-    PartialOrd,
-    Serialize,
-    schemars::JsonSchema,
-)]
-#[serde(rename_all = "camelCase")]
-pub enum Permission {
-    ReadFiles,
-    WriteFiles,
-    ExecuteCommands,
-    WatchFiles,
-    BrowseFiles,
-    SearchFiles,
-    LoadInstructions,
-    LoadConfig,
-    DiscoverSkills,
-    DiscoverMcp,
-    UseLanguageServices,
-    DiscoverHooks,
-    DiscoverPlugins,
-    InspectRepository,
-    MutateRepository,
-}
-
-impl fmt::Display for Permission {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(match self {
-            Self::ReadFiles => "read files",
-            Self::WriteFiles => "write files",
-            Self::ExecuteCommands => "execute commands",
-            Self::WatchFiles => "watch files",
-            Self::BrowseFiles => "browse files",
-            Self::SearchFiles => "search files",
-            Self::LoadInstructions => "load instructions",
-            Self::LoadConfig => "load configuration",
-            Self::DiscoverSkills => "discover skills",
-            Self::DiscoverMcp => "discover MCP servers",
-            Self::UseLanguageServices => "use language services",
-            Self::DiscoverHooks => "discover hooks",
-            Self::DiscoverPlugins => "discover plugins",
-            Self::InspectRepository => "inspect a repository",
-            Self::MutateRepository => "mutate a repository",
-        })
-    }
-}
+pub use ash_protocol::DirectoryCapability as Permission;
 
 /// Complete permission set granted to one directory.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize, schemars::JsonSchema)]
@@ -165,6 +116,7 @@ pub struct Grant {
     dir: Dir,
     source: GrantSource,
     permissions: Permissions,
+    path_policy: Arc<crate::PathAccessPolicy>,
     lease: Arc<Lease>,
 }
 
@@ -197,6 +149,21 @@ impl Grant {
         Self::new(GrantSubject::Thread(thread_id), dir, source, permissions)
     }
 
+    pub fn for_turn(
+        thread: ThreadId,
+        turn: ash_protocol::TurnId,
+        dir: Dir,
+        source: GrantSource,
+        permissions: Permissions,
+    ) -> Self {
+        Self::new(
+            GrantSubject::Turn { thread, turn },
+            dir,
+            source,
+            permissions,
+        )
+    }
+
     pub(crate) fn new(
         subject: GrantSubject,
         dir: Dir,
@@ -208,6 +175,7 @@ impl Grant {
             dir,
             source,
             permissions,
+            path_policy: Arc::new(crate::PathAccessPolicy::default()),
             lease: Arc::new(Lease::new()),
         }
     }
@@ -222,6 +190,15 @@ impl Grant {
 
     pub fn source(&self) -> GrantSource {
         self.source
+    }
+
+    pub fn with_path_policy(mut self, policy: crate::PathAccessPolicy) -> Self {
+        self.path_policy = Arc::new(self.path_policy.intersect(&policy));
+        self
+    }
+
+    pub fn path_policy(&self) -> &crate::PathAccessPolicy {
+        &self.path_policy
     }
 
     pub fn permissions(&self) -> &Permissions {
@@ -254,6 +231,7 @@ impl Grant {
             dir: self.dir.clone(),
             source: self.source,
             permission,
+            path_policy: Arc::clone(&self.path_policy),
             lease: Arc::clone(&self.lease),
         })
     }
@@ -271,6 +249,7 @@ pub struct Authorization {
     dir: Dir,
     source: GrantSource,
     permission: Permission,
+    path_policy: Arc<crate::PathAccessPolicy>,
     lease: Arc<Lease>,
 }
 
@@ -299,6 +278,16 @@ impl Authorization {
 
     pub fn permission(&self) -> Permission {
         self.permission
+    }
+
+    pub fn path_policy(&self) -> &crate::PathAccessPolicy {
+        &self.path_policy
+    }
+
+    /// Narrows this proof without replacing its subject, identity, capability, or revocation lease.
+    pub fn constrained_by(mut self, policy: &crate::PathAccessPolicy) -> Self {
+        self.path_policy = Arc::new(self.path_policy.intersect(policy));
+        self
     }
 
     /// Validates the full operation binding, then holds the lease until I/O completes.

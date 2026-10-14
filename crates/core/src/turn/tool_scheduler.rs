@@ -325,7 +325,9 @@ impl ToolScheduler {
                             cancellation,
                         );
                     }
-                    ActionApprovalDecision::ApproveOnce => {
+                    ActionApprovalDecision::ApproveOnce
+                    | ActionApprovalDecision::ApproveForSession
+                    | ActionApprovalDecision::ApproveAndSaveRule => {
                         let Some(reviewed) = self.prepare_review_or_record_failure(
                             &snapshot,
                             turn_id,
@@ -344,6 +346,42 @@ impl ToolScheduler {
                             )?;
                             continue;
                         }
+                        if self.policy.revision() != frozen_policy_revision {
+                            self.record_failure(
+                                thread_id,
+                                turn_id,
+                                pending.call.id,
+                                "permission policy changed while awaiting approval",
+                            )?;
+                            continue;
+                        }
+                        let approval_context = core_api::ActionPolicyContext {
+                            session: &snapshot.session_id,
+                            thread: thread_id,
+                            turn: turn_id,
+                        };
+                        let effect =
+                            self.policy
+                                .record_approval(&approval_context, &reviewed, decision)?;
+                        let approved_policy_revision = self.policy.revision();
+                        if effect == core_api::ApprovalRecordEffect::PolicyChanged {
+                            self.threads.record_permission_policy_change(
+                                thread_id,
+                                turn_id,
+                                request_id,
+                                approved_policy_revision.clone(),
+                            )?;
+                        }
+                        let execution = ToolExecutionContext::new(
+                            &snapshot.session_id,
+                            thread_id,
+                            turn_id,
+                            &pending.item_id,
+                            snapshot.sequence,
+                            &approved_policy_revision,
+                            approval_mode,
+                            cancellation,
+                        );
                         let authorization = ToolAuthorization::ApprovedOnce(OneTimeToolGrant::new(
                             request_id.clone(),
                             pending.call.id.clone(),
@@ -435,12 +473,18 @@ impl ToolScheduler {
             else {
                 continue;
             };
-            let decision = crate::decide_turn_action(
+            let policy_context = core_api::ActionPolicyContext {
+                session: &snapshot.session_id,
+                thread: thread_id,
+                turn: turn_id,
+            };
+            let decision = crate::turn_policy::decide_turn_action_in_context(
                 self.policy.as_ref(),
                 frozen_policy_revision,
                 approval_mode,
                 &reviewed,
                 cancellation,
+                Some(&policy_context),
             )?;
             if approval_mode == ash_protocol::ApprovalMode::Auto
                 && self.threads.read_thread(thread_id)?.sequence != snapshot.sequence
@@ -595,7 +639,8 @@ impl ToolScheduler {
                         );
                         continue;
                     }
-                    let request = durable_approval_request(&reviewed, &approval)?;
+                    let mut request = durable_approval_request(&reviewed, &approval)?;
+                    request.allowed_decisions = self.policy.approval_decisions(&reviewed);
                     self.threads.request_turn_interaction(
                         thread_id,
                         turn_id,

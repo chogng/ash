@@ -43,6 +43,7 @@ pub struct CodebaseRetrievalService {
     symbol_index: Option<Arc<SymbolIndex>>,
     deployment: RetrievalDeployment,
     budget: CodebaseRetrievalBudget,
+    authorization: Option<ash_file_access::Authorization>,
 }
 
 impl CodebaseRetrievalService {
@@ -54,6 +55,7 @@ impl CodebaseRetrievalService {
             symbol_index: None,
             deployment: RetrievalDeployment::LocalOnly,
             budget: CodebaseRetrievalBudget::default(),
+            authorization: None,
         }
     }
 
@@ -100,6 +102,37 @@ impl CodebaseRetrievalService {
         }
         self.deployment = RetrievalDeployment::LocalSemantic(semantic);
         Ok(self)
+    }
+
+    /// Constrains Agent retrieval without changing the editor-owned index or its dirty overlays.
+    pub fn with_authorization(
+        mut self,
+        authorization: ash_file_access::Authorization,
+    ) -> Result<Self, CodebaseRetrievalError> {
+        if authorization.permission() != ash_file_access::Permission::SearchFiles
+            || authorization.dir().canonical_path() != self.index.root().canonical_path()
+        {
+            return Err(CodebaseRetrievalError::RootMismatch);
+        }
+        self.authorization = Some(authorization);
+        Ok(self)
+    }
+
+    fn path_allowed(&self, relative: &std::path::Path) -> bool {
+        self.authorization.as_ref().is_none_or(|authorization| {
+            let policy = authorization.path_policy();
+            policy.allows(relative, ash_file_access::PathOperation::Read)
+                && authorization
+                    .dir()
+                    .resolve_for_write(relative)
+                    .ok()
+                    .and_then(|path| {
+                        path.strip_prefix(authorization.dir().canonical_path())
+                            .ok()
+                            .map(std::path::Path::to_owned)
+                    })
+                    .is_some_and(|path| policy.allows(&path, ash_file_access::PathOperation::Read))
+        })
     }
 
     pub fn root_id(&self) -> &crate::IndexRootId {
@@ -200,6 +233,7 @@ impl CodebaseRetrievalService {
         });
         let mut seen = std::collections::BTreeSet::new();
         hits.retain(|hit| seen.insert(hit.reference.clone()));
+        hits.retain(|hit| self.path_allowed(&hit.reference.relative_path));
         hits.truncate(result_limit);
         Ok(hits)
     }
@@ -214,6 +248,24 @@ impl CodebaseRetrievalService {
 
     /// Retrieves while forwarding cancellation into local semantic model calls.
     pub fn retrieve_with_cancellation(
+        &self,
+        query: &CodebaseRetrievalQuery,
+        cancellation: &CancellationToken,
+    ) -> Result<CodebaseRetrievalResult, CodebaseRetrievalError> {
+        if let Some(authorization) = &self.authorization {
+            return authorization
+                .execute(
+                    authorization.subject(),
+                    authorization.dir(),
+                    ash_file_access::Permission::SearchFiles,
+                    || self.retrieve_admitted(query, cancellation),
+                )
+                .map_err(|error| CodebaseRetrievalError::Permission(error.to_string()))?;
+        }
+        self.retrieve_admitted(query, cancellation)
+    }
+
+    fn retrieve_admitted(
         &self,
         query: &CodebaseRetrievalQuery,
         cancellation: &CancellationToken,
@@ -247,6 +299,9 @@ impl CodebaseRetrievalService {
                 Ok(hits) => {
                     let mut references = Vec::with_capacity(hits.len());
                     for hit in hits {
+                        if !self.path_allowed(&hit.symbol.reference.relative_path) {
+                            continue;
+                        }
                         let source = indexed_source(&hit.symbol.reference);
                         let span = declaration_span(&hit.symbol.reference);
                         match self.index.materialize_verified_excerpt(&source, span) {
@@ -315,6 +370,9 @@ impl CodebaseRetrievalService {
         let mut budget_discarded = 0usize;
         let mut total_bytes = 0usize;
         for candidate in ranked {
+            if !self.path_allowed(&candidate.reference.relative_path) {
+                continue;
+            }
             check_cancelled(cancellation)?;
             if hits.len() == query.result_limit().get() {
                 break;

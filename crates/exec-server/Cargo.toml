@@ -33,6 +33,9 @@ sha2 = { workspace = true }
 getrandom = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "sync", "time"] }
 ash-file-access = { workspace = true }
+ash-config = { workspace = true }
+ash-action-policy = { workspace = true }
+ash-execpolicy = { workspace = true }
 ash-file-system = { workspace = true }
 ash-utils-pty = { workspace = true }
 ash-sandboxing = { workspace = true }

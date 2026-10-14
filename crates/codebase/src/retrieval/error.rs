@@ -3,6 +3,8 @@ use thiserror::Error;
 /// Failure to validate or execute the required local side of code retrieval.
 #[derive(Debug, Error)]
 pub enum CodebaseRetrievalError {
+    #[error("code retrieval permission denied: {0}")]
+    Permission(String),
     #[error("codebase-retrieval query is invalid: {0}")]
     InvalidQuery(&'static str),
     #[error("code retrieval sources belong to different directory roots")]

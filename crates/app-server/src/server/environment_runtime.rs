@@ -162,6 +162,11 @@ pub(super) struct LocalEnvHost {
 }
 
 impl LocalEnvHost {
+    /// Review facts observe the same live domain composition used for execution.
+    pub(super) fn permission_policy(&self) -> Arc<dyn core_api::ActionPolicyService> {
+        self.tools.reloadable.policy()
+    }
+
     pub(super) fn replace_browser_host_available(
         &self,
         available: bool,
@@ -177,7 +182,7 @@ impl LocalEnvHost {
 /// Host-owned configuration for independently composed environment capabilities.
 #[derive(Clone)]
 pub(super) struct EnvRuntimeConfig {
-    tools: LocalToolConfig,
+    pub(super) tools: LocalToolConfig,
     grep_backend: grep::Backend,
 }
 
@@ -204,6 +209,7 @@ pub(crate) struct EnvRuntimeControl {
     text_document_host: Arc<crate::text_document_host::TextDocumentHost>,
     authority_gate: Arc<Mutex<()>>,
     runtime: Arc<RwLock<EnvRuntime>>,
+    language: Arc<Mutex<super::language_runtime::AppServerLanguageRuntime>>,
     tools: Arc<EnvToolPorts>,
     threads: Arc<ThreadController>,
     multi_agent: Arc<MultiAgentCoordinator>,
@@ -305,9 +311,6 @@ impl EnvRuntimeControl {
                 .unwrap_or_else(|poisoned| poisoned.into_inner()) = env_config;
             return Ok(());
         }
-        let execution = authorization
-            .authorize(Permission::ExecuteCommands)
-            .map_err(|_| EnvRuntimeError::PermissionRequired)?;
         let mut local = compose_local_tools_with_config(
             authorization.clone(),
             &env_config.tools,
@@ -316,15 +319,18 @@ impl EnvRuntimeControl {
             Arc::clone(&self.file_search),
             self.pty_helper.as_ref(),
             Some(self.text_document_host.clone()),
+            self.threads.clone(),
         )
         .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
-        if let Some(codebase) = codebase {
+        if let Some(codebase) = codebase
+            && authorization.permissions().allows(Permission::SearchFiles)
+        {
             let action_policy_revision = local.action_policy_revision().clone();
             local = append_local_tool(
                 local,
                 Arc::new(
                     CodebaseRetrievalTool::new(
-                        execution,
+                        agent_search_authorization(&authorization, &env_config.tools)?,
                         codebase.retrieval(),
                         symbol_index.map(|runtime| runtime.index()),
                         semantic,
@@ -444,9 +450,6 @@ impl EnvRuntimeControl {
             .map(|service| SemanticIndexJobController::start(Arc::clone(service)))
             .transpose()
             .map_err(EnvRuntimeError::Failed)?;
-        let execution = authorization
-            .authorize(Permission::ExecuteCommands)
-            .map_err(|_| EnvRuntimeError::PermissionRequired)?;
         let env_config = self
             .env_config
             .read()
@@ -472,22 +475,27 @@ impl EnvRuntimeControl {
             Arc::clone(&self.file_search),
             self.pty_helper.as_ref(),
             Some(self.text_document_host.clone()),
+            self.threads.clone(),
         )
         .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
         let action_policy_revision = local.action_policy_revision().clone();
-        let local = append_local_tool(
-            local,
-            Arc::new(
-                CodebaseRetrievalTool::new(
-                    execution,
-                    codebase.retrieval(),
-                    Some(symbol_index.index()),
-                    semantic.clone(),
-                    cloud.clone(),
-                )
-                .with_action_policy_revision(action_policy_revision),
-            ),
-        );
+        let local = if authorization.permissions().allows(Permission::SearchFiles) {
+            append_local_tool(
+                local,
+                Arc::new(
+                    CodebaseRetrievalTool::new(
+                        agent_search_authorization(&authorization, &env_config.tools)?,
+                        codebase.retrieval(),
+                        Some(symbol_index.index()),
+                        semantic.clone(),
+                        cloud.clone(),
+                    )
+                    .with_action_policy_revision(action_policy_revision),
+                ),
+            )
+        } else {
+            local
+        };
         let turn_backend: Arc<dyn ash_core::TurnExecutionBackend> = self.turn_backend.clone();
         let local = append_multi_agent_tools(
             local,
@@ -499,30 +507,46 @@ impl EnvRuntimeControl {
             &turn_backend,
             Some(&customizations),
         )?;
-        let watcher = FileSystemWatcher::start_with_observers(
-            authorization.dir().clone(),
-            Arc::clone(&self.updates),
-            Arc::clone(&codebase),
-            Arc::clone(&symbol_index),
-            semantic_job.clone(),
-            customizations,
-        )
-        .map_err(|error| {
-            EnvRuntimeError::Failed(format!(
-                "failed to rebind semantic codebase watcher: {error}"
-            ))
-        })?;
+        let watcher = if authorization.permissions().allows(Permission::WatchFiles) {
+            Some(
+                FileSystemWatcher::start_with_observers(
+                    authorization.dir().clone(),
+                    Arc::clone(&self.updates),
+                    Arc::clone(&codebase),
+                    Arc::clone(&symbol_index),
+                    semantic_job.clone(),
+                    customizations,
+                )
+                .map_err(|error| {
+                    EnvRuntimeError::Failed(format!(
+                        "failed to rebind semantic codebase watcher: {error}"
+                    ))
+                })?,
+            )
+        } else {
+            None
+        };
         let local_port = local
             .tool_port()
             .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
         self.tools.replace_local(Some(local_port))?;
-        let context_source = Arc::new(CodebaseRetrievalContextSource::new(
-            codebase.retrieval(),
-            Some(symbol_index.index()),
-            semantic.clone(),
-            cloud.clone(),
-            self.config.clone(),
-        ));
+        let context_source = if authorization.permissions().allows(Permission::SearchFiles) {
+            Some(Arc::new(CodebaseRetrievalContextSource::new(
+                codebase
+                    .retrieval()
+                    .with_authorization(agent_search_authorization(
+                        &authorization,
+                        &env_config.tools,
+                    )?)
+                    .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?,
+                Some(symbol_index.index()),
+                semantic.clone(),
+                cloud.clone(),
+                self.config.clone(),
+            )))
+        } else {
+            None
+        };
         let mut runtime = self
             .runtime
             .write()
@@ -530,11 +554,18 @@ impl EnvRuntimeControl {
         runtime.workspace.codebase_semantic = semantic;
         let previous_job =
             std::mem::replace(&mut runtime.workspace.codebase_semantic_job, semantic_job);
-        let previous_watcher = runtime.workspace._file_system_watcher.replace(watcher);
-        runtime.turn_executor = runtime
-            .turn_executor
-            .clone()
-            .with_context_source("codebase", context_source);
+        let previous_watcher =
+            std::mem::replace(&mut runtime.workspace._file_system_watcher, watcher);
+        runtime.turn_executor = match context_source {
+            Some(source) => runtime
+                .turn_executor
+                .clone()
+                .with_context_source("codebase", source),
+            None => runtime
+                .turn_executor
+                .clone()
+                .without_context_source("codebase"),
+        };
         drop(runtime);
         // The replacement is committed. Retired watchers can still be indexing a large
         // directory; joining them must not hold the gate needed by other windows to bind it.
@@ -586,9 +617,16 @@ impl EnvRuntimeControl {
             .map(|authorization| GitRuntime::new(authorization, Arc::clone(&self.updates)))
             .transpose()
             .map_err(|_| EnvRuntimeError::Failed("failed to initialize Git runtime".into()))?;
-        let replacement_git_watcher = replacement_git
-            .as_ref()
-            .map(|git| git.start_watching(self.config.clone()));
+        let replacement_git_watcher = replacement_git.as_ref().map(|git| {
+            git.start_watching(
+                self.config.clone(),
+                replacement
+                    .authorize(Permission::WatchFiles)
+                    .ok()
+                    .into_iter()
+                    .collect(),
+            )
+        });
         if let Some(extension_hosts) = &self.extension_hosts {
             extension_hosts.unbind_dir();
         }
@@ -618,7 +656,12 @@ impl EnvRuntimeControl {
         runtime.selected_grant = Some(replacement);
         runtime.workspace.git = replacement_git;
         runtime.workspace._git_watcher = replacement_git_watcher;
+        let language_roots = language_roots_for(&runtime);
         drop(runtime);
+        self.language
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .retain_dir_roots(&language_roots);
 
         for (_, authorization) in dir_grants {
             authorization.revoke();
@@ -752,7 +795,7 @@ impl DirGrantPolicy {
             #[cfg(test)]
             Self::InspectOnly => (GrantSource::HostConfiguration, inspection_permissions()),
             #[cfg(test)]
-            Self::HostSelectedDirs(source) => (*source, host_dir_permissions()),
+            Self::HostSelectedDirs(source) => (*source, host_directory_capabilities()),
             Self::UserConfig(config) => {
                 let snapshot = config
                     .read_snapshot()
@@ -781,7 +824,7 @@ fn inspection_permissions() -> Permissions {
     ])
 }
 
-fn host_dir_permissions() -> Permissions {
+fn host_directory_capabilities() -> Permissions {
     Permissions::new([
         Permission::ReadFiles,
         Permission::WriteFiles,
@@ -1072,7 +1115,23 @@ impl AppServer {
         if environments.is_empty() {
             return Ok(self);
         }
-        let port = crate::execution_environments::port(environments)?;
+        let config = self.env_config.clone();
+        let store = self.config.clone();
+        let port = crate::execution_environments::port(
+            environments,
+            Arc::new(move || {
+                let tools = config
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .tools
+                    .clone();
+                match &store {
+                    Some(store) => tools
+                        .with_current_user_policy(store.committed_snapshot().values.exec_policy),
+                    None => tools,
+                }
+            }),
+        )?;
         if let Some(host) = &self.local_env_host {
             host.tools
                 .replace(|state| {
@@ -1246,19 +1305,17 @@ impl AppServer {
             &providers,
             self.semantic_model_provider.clone(),
         )?;
+        let base_policy = self.shared_action_policy(tools.reloadable.policy());
         let policy = Arc::new(match &self.approval_review_model {
             Some(factory) => {
-                TurnActionPolicy::with_reviewer_factory(tools.reloadable.policy(), factory.clone())
+                TurnActionPolicy::with_reviewer_factory(base_policy.clone(), factory.clone())
             }
             None => TurnActionPolicy::new(
-                tools.reloadable.policy(),
+                base_policy.clone(),
                 ash_extension_api::ApprovalReviewer::Unavailable,
             ),
         });
-        let hooks = Arc::new(DeclarativeHookRuntime::new(
-            hook_config,
-            tools.reloadable.policy(),
-        ));
+        let hooks = Arc::new(DeclarativeHookRuntime::new(hook_config, base_policy));
         hooks.set_run_observer(Arc::new(super::hook_events::HookRunUpdates {
             threads: Arc::downgrade(&self.threads),
             updates: Arc::downgrade(&self.updates),
@@ -1278,6 +1335,12 @@ impl AppServer {
             .with_thread_updates(Arc::new(AppServerThreadUpdates {
                 client_host: Arc::clone(&self.client_host),
                 threads: Arc::clone(&self.threads),
+                grants: self
+                    .env_runtime
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .dir_grants
+                    .clone(),
                 updates: Arc::clone(&self.updates),
             }));
         executor = executor.with_extensions(Arc::clone(&self.agent_extensions));
@@ -1321,6 +1384,7 @@ impl AppServer {
             text_document_host: Arc::clone(&self.text_document_host),
             authority_gate: Arc::clone(&self.env_runtime_gate),
             runtime: Arc::clone(&self.env_runtime),
+            language: Arc::clone(&self.language),
             tools: Arc::clone(&host.tools),
             threads: self.threads.clone(),
             multi_agent: Arc::clone(&self.multi_agent),
@@ -1371,8 +1435,11 @@ impl AppServer {
         self.ensure_directory_transition_is_idle()?;
         let dir =
             Dir::open_local(root).map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
-        let authorization =
-            Grant::for_environment(dir, GrantSource::HostConfiguration, host_dir_permissions());
+        let authorization = Grant::for_environment(
+            dir,
+            GrantSource::HostConfiguration,
+            host_directory_capabilities(),
+        );
         self.activate_dir_runtime(authorization, host)
     }
 
@@ -1467,6 +1534,9 @@ impl AppServer {
         if dirs.is_empty() {
             host.hooks.unbind_dir();
             host.tools.replace_executable(None, false)?;
+            if let Some(skills) = &self.skills {
+                skills.unbind_dir_root().map_err(EnvRuntimeError::Failed)?;
+            }
             if let Some(extension_hosts) = &self.extension_hosts {
                 extension_hosts.unbind_dir();
             }
@@ -1521,28 +1591,33 @@ impl AppServer {
         };
         let git_dirs = dirs
             .iter()
-            .map(|(id, authorization)| {
-                let permission = if authorization
-                    .permissions()
-                    .allows(Permission::MutateRepository)
-                {
-                    Permission::MutateRepository
-                } else {
-                    Permission::InspectRepository
-                };
-                authorization
-                    .authorize(permission)
-                    .map(|dir| (id.clone(), dir))
-                    .map_err(|_| EnvRuntimeError::PermissionRequired)
+            .filter_map(|(id, grant)| {
+                grant
+                    .authorize(Permission::MutateRepository)
+                    .ok()
+                    .or_else(|| grant.authorize(Permission::InspectRepository).ok())
+                    .map(|permission| (id.clone(), permission))
             })
-            .collect::<Result<Vec<_>, _>>()?;
-        let git =
-            GitRuntime::new_for_dirs(git_dirs, Arc::clone(&self.updates)).map_err(|error| {
-                EnvRuntimeError::Failed(format!(
-                    "failed to initialize multi-root Git runtime: {error:?}"
-                ))
-            })?;
-        let watcher = git.start_watching(self.config.clone());
+            .collect::<Vec<_>>();
+        let watch_dirs = dirs
+            .iter()
+            .filter_map(|(_, grant)| grant.authorize(Permission::WatchFiles).ok())
+            .collect::<Vec<_>>();
+        let git = if git_dirs.is_empty() {
+            None
+        } else {
+            Some(
+                GitRuntime::new_for_dirs(git_dirs, Arc::clone(&self.updates)).map_err(|error| {
+                    EnvRuntimeError::Failed(format!(
+                        "failed to initialize multi-root Git runtime: {error:?}"
+                    ))
+                })?,
+            )
+        };
+        let watcher = git
+            .as_ref()
+            .filter(|_| !watch_dirs.is_empty())
+            .map(|git| git.start_watching(self.config.clone(), watch_dirs));
         let dirs = dirs.iter().cloned().collect::<BTreeMap<_, _>>();
         let dir_file_systems = dirs
             .iter()
@@ -1568,6 +1643,7 @@ impl AppServer {
         let dir_file_system_watchers = dirs
             .iter()
             .skip(1)
+            .filter(|(_, grant)| grant.permissions().allows(Permission::WatchFiles))
             .map(|(id, authorization)| {
                 FileSystemWatcher::start_for_dir(
                     authorization.dir().clone(),
@@ -1674,8 +1750,8 @@ impl AppServer {
             runtime.workspace.dir_content_search = dir_content_search;
             runtime.execution.dir_terminals = dir_terminals;
             runtime.execution.dir_debug_adapters = dir_debug_adapters;
-            runtime.workspace.git = Some(git);
-            runtime.workspace._git_watcher = Some(watcher);
+            runtime.workspace.git = git;
+            runtime.workspace._git_watcher = watcher;
             (previous_watcher, previous_dir_watchers)
         };
         drop(previous_watcher);
@@ -1869,7 +1945,7 @@ impl AppServer {
         Ok((mutation, snapshots))
     }
 
-    pub(super) fn set_session_dir_permissions(
+    pub(super) fn set_session_directory_grant(
         &self,
         session_id: &SessionId,
         root: &std::path::Path,
@@ -1935,9 +2011,12 @@ impl AppServer {
                 .replace_session_dirs(session_id.clone(), hook_dirs)
                 .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
         }
-        let mut language_roots = access.dirs_for(Permission::UseLanguageServices);
-        let execution_roots = access.dirs_for(Permission::ExecuteCommands);
-        language_roots.retain(|root| execution_roots.contains(root));
+        let language_roots = language_roots_for(
+            &self
+                .env_runtime
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
         self.language
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -2069,6 +2148,7 @@ impl AppServer {
                 Arc::clone(&self.file_search),
                 self.pty_helper.as_ref(),
                 Some(self.text_document_host.clone()),
+                self.threads.clone(),
             )
             .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
             self.commit_full_env_runtime(authorization, local, grep, host)
@@ -2111,16 +2191,26 @@ impl AppServer {
                     .map_err(|error| EnvRuntimeError::Failed(error.to_string()))
             })
             .transpose()?;
-        let codebase = self.open_codebase_runtime(
-            dir.clone(),
-            grep.clone().map(|s| s as Arc<dyn grep::Search>),
-        )?;
-        let symbol_index = self.open_symbol_index_runtime(&codebase)?;
-        self.retry_persisted_cloud_index_deletion(&codebase);
-        let repository_inspection = authorization
+        let codebase = if authorization.permissions().allows(Permission::SearchFiles) {
+            Some(self.open_codebase_runtime(
+                dir.clone(),
+                grep.clone().map(|s| s as Arc<dyn grep::Search>),
+            )?)
+        } else {
+            None
+        };
+        let symbol_index = codebase
+            .as_ref()
+            .map(|codebase| self.open_symbol_index_runtime(codebase))
+            .transpose()?;
+        if let Some(codebase) = &codebase {
+            self.retry_persisted_cloud_index_deletion(codebase);
+        }
+        let git = authorization
             .authorize(Permission::InspectRepository)
-            .map_err(|_| EnvRuntimeError::Failed("failed to authorize Git inspection".into()))?;
-        let git = GitRuntime::new(repository_inspection, Arc::clone(&self.updates))
+            .ok()
+            .map(|permission| GitRuntime::new(permission, Arc::clone(&self.updates)))
+            .transpose()
             .map_err(|_| EnvRuntimeError::Failed("failed to initialize Git runtime".into()))?;
         let dir_grants = self
             .env_runtime
@@ -2135,21 +2225,34 @@ impl AppServer {
             self.home.clone(),
         )
         .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
-        let file_system_watcher = FileSystemWatcher::start_with_observers(
-            dir,
-            Arc::clone(&self.updates),
-            Arc::clone(&codebase),
-            Arc::clone(&symbol_index),
-            None,
-            customizations.clone(),
-        )
-        .map_err(|error| {
-            EnvRuntimeError::Failed(format!("failed to initialize filesystem watcher: {error}"))
-        })?;
+        let file_system_watcher = if authorization.permissions().allows(Permission::WatchFiles) {
+            Some(
+                match (&codebase, &symbol_index) {
+                    (Some(codebase), Some(symbol_index)) => {
+                        FileSystemWatcher::start_with_observers(
+                            dir,
+                            Arc::clone(&self.updates),
+                            Arc::clone(codebase),
+                            Arc::clone(symbol_index),
+                            None,
+                            customizations.clone(),
+                        )
+                    }
+                    _ => FileSystemWatcher::start(dir, Arc::clone(&self.updates)),
+                }
+                .map_err(|error| {
+                    EnvRuntimeError::Failed(format!(
+                        "failed to initialize filesystem watcher: {error}"
+                    ))
+                })?,
+            )
+        } else {
+            None
+        };
 
         host.hooks.unbind_dir();
         host.tools.replace_executable(None, false)?;
-        self.bind_dir_skills(&canonical_root)?;
+        self.bind_dir_skills(&authorization)?;
         if let Some(extension_hosts) = &self.extension_hosts {
             extension_hosts.unbind_dir();
         }
@@ -2171,17 +2274,17 @@ impl AppServer {
                 .with_harness_context_provider(customizations)
                 .without_context_source("codebase"),
             workspace: WorkspaceRuntime {
-                _file_system_watcher: Some(file_system_watcher),
+                _file_system_watcher: file_system_watcher,
                 _dir_file_system_watchers: Vec::new(),
                 session_dir_watchers: BTreeMap::new(),
                 _git_watcher: None,
-                git: Some(Arc::clone(&git)),
+                git: git.clone(),
                 content_search,
                 dir_content_search: BTreeMap::new(),
                 session_dir_search: BTreeMap::new(),
                 grep,
-                codebase: Some(codebase),
-                symbol_index: Some(symbol_index),
+                codebase,
+                symbol_index,
                 codebase_semantic: None,
                 codebase_semantic_job: None,
                 cloud_codebase: None,
@@ -2207,12 +2310,28 @@ impl AppServer {
         grep: Arc<grep::Service>,
         host: &LocalEnvHost,
     ) -> Result<PathBuf, EnvRuntimeError> {
+        let env_config = self
+            .env_config
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
         let dir = authorization.dir().clone();
         let file_system: Arc<dyn FileSystem> =
             Arc::new(LocalFileSystem::new(authorization.clone()));
-        let codebase = self.open_codebase_runtime(dir.clone(), Some(grep.clone()))?;
-        let symbol_index = self.open_symbol_index_runtime(&codebase)?;
-        let codebase_semantic = self.open_codebase_semantic(&codebase)?;
+        let codebase = if authorization.permissions().allows(Permission::SearchFiles) {
+            Some(self.open_codebase_runtime(dir.clone(), Some(grep.clone()))?)
+        } else {
+            None
+        };
+        let symbol_index = codebase
+            .as_ref()
+            .map(|codebase| self.open_symbol_index_runtime(codebase))
+            .transpose()?;
+        let codebase_semantic = codebase
+            .as_ref()
+            .map(|codebase| self.open_codebase_semantic(codebase))
+            .transpose()?
+            .flatten();
         let codebase_semantic_job =
             codebase_semantic
                 .as_ref()
@@ -2225,7 +2344,9 @@ impl AppServer {
                         }
                     },
                 );
-        let cloud_codebase = self.open_cloud_codebase_controller(&codebase);
+        let cloud_codebase = codebase
+            .as_ref()
+            .and_then(|codebase| self.open_cloud_codebase_controller(codebase));
         let canonical_root = dir.canonical_path().to_path_buf();
         let dir_grants = self
             .env_runtime
@@ -2240,39 +2361,55 @@ impl AppServer {
             self.home.clone(),
         )
         .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
-        let repository_mutation = authorization
+        let git = authorization
             .authorize(Permission::MutateRepository)
-            .map_err(|_| EnvRuntimeError::PermissionRequired)?;
-        let git = GitRuntime::new(repository_mutation, Arc::clone(&self.updates))
+            .ok()
+            .or_else(|| authorization.authorize(Permission::InspectRepository).ok())
+            .map(|permission| GitRuntime::new(permission, Arc::clone(&self.updates)))
+            .transpose()
             .map_err(|_| EnvRuntimeError::Failed("failed to initialize Git runtime".into()))?;
-        let file_system_watcher = FileSystemWatcher::start_with_observers(
-            dir.clone(),
-            Arc::clone(&self.updates),
-            Arc::clone(&codebase),
-            Arc::clone(&symbol_index),
-            codebase_semantic_job.clone(),
-            customizations.clone(),
-        )
-        .map_err(|error| {
-            EnvRuntimeError::Failed(format!("failed to initialize filesystem watcher: {error}"))
-        })?;
-        let retrieval_authorization = authorization
-            .authorize(Permission::ExecuteCommands)
-            .map_err(|_| EnvRuntimeError::PermissionRequired)?;
+        let file_system_watcher = if authorization.permissions().allows(Permission::WatchFiles) {
+            Some(
+                match (&codebase, &symbol_index) {
+                    (Some(codebase), Some(symbol_index)) => {
+                        FileSystemWatcher::start_with_observers(
+                            dir.clone(),
+                            Arc::clone(&self.updates),
+                            Arc::clone(codebase),
+                            Arc::clone(symbol_index),
+                            codebase_semantic_job.clone(),
+                            customizations.clone(),
+                        )
+                    }
+                    _ => FileSystemWatcher::start(dir.clone(), Arc::clone(&self.updates)),
+                }
+                .map_err(|error| {
+                    EnvRuntimeError::Failed(format!(
+                        "failed to initialize filesystem watcher: {error}"
+                    ))
+                })?,
+            )
+        } else {
+            None
+        };
         let action_policy_revision = local.action_policy_revision().clone();
-        let local = append_local_tool(
-            local,
-            Arc::new(
-                CodebaseRetrievalTool::new(
-                    retrieval_authorization,
-                    codebase.retrieval(),
-                    Some(symbol_index.index()),
-                    codebase_semantic.clone(),
-                    cloud_codebase.clone(),
-                )
-                .with_action_policy_revision(action_policy_revision),
-            ),
-        );
+        let local = if let Some(codebase) = &codebase {
+            append_local_tool(
+                local,
+                Arc::new(
+                    CodebaseRetrievalTool::new(
+                        agent_search_authorization(&authorization, &env_config.tools)?,
+                        codebase.retrieval(),
+                        symbol_index.as_ref().map(|index| index.index()),
+                        codebase_semantic.clone(),
+                        cloud_codebase.clone(),
+                    )
+                    .with_action_policy_revision(action_policy_revision),
+                ),
+            )
+        } else {
+            local
+        };
         let turn_backend: Arc<dyn ash_core::TurnExecutionBackend> = self.turn_backend.clone();
         let local = append_multi_agent_tools(
             local,
@@ -2300,15 +2437,13 @@ impl AppServer {
         if let Some(search) = existing_search {
             search.cancel_all();
         }
-        let content_search = Arc::new(
-            ContentSearchService::new_authorized(
-                authorization
-                    .authorize(Permission::SearchFiles)
-                    .map_err(|_| EnvRuntimeError::PermissionRequired)?,
-                grep.clone(),
-            )
-            .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?,
-        );
+        let content_search = authorization
+            .authorize(Permission::SearchFiles)
+            .ok()
+            .map(|permission| ContentSearchService::new_authorized(permission, grep.clone()))
+            .transpose()
+            .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?
+            .map(Arc::new);
         let terminal_capability = authorization
             .authorize(Permission::ExecuteCommands)
             .map_err(|_| EnvRuntimeError::PermissionRequired)?;
@@ -2346,19 +2481,36 @@ impl AppServer {
         } else {
             None
         };
-        host.hooks
-            .bind_dir(dir.clone())
-            .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
+        if authorization
+            .permissions()
+            .allows(Permission::DiscoverHooks)
+        {
+            host.hooks
+                .bind_dir(dir.clone())
+                .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
+        } else {
+            host.hooks.unbind_dir();
+        }
         customizations.bind_hooks(Arc::clone(&host.hooks));
         host.tools.replace_executable(Some(local_port), true)?;
-        self.bind_dir_skills(&canonical_root)?;
-        let context_source = Arc::new(CodebaseRetrievalContextSource::new(
-            codebase.retrieval(),
-            Some(symbol_index.index()),
-            codebase_semantic.clone(),
-            cloud_codebase.clone(),
-            self.config.clone(),
-        ));
+        self.bind_dir_skills(&authorization)?;
+        let context_source = if let Some(codebase) = &codebase {
+            Some(Arc::new(CodebaseRetrievalContextSource::new(
+                codebase
+                    .retrieval()
+                    .with_authorization(agent_search_authorization(
+                        &authorization,
+                        &env_config.tools,
+                    )?)
+                    .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?,
+                symbol_index.as_ref().map(|index| index.index()),
+                codebase_semantic.clone(),
+                cloud_codebase.clone(),
+                self.config.clone(),
+            )))
+        } else {
+            None
+        };
         let extension_authorization = if authorization
             .permissions()
             .allows(Permission::DiscoverPlugins)
@@ -2386,23 +2538,28 @@ impl AppServer {
             dir_file_systems: BTreeMap::new(),
             _dir_contributions: Some(Arc::clone(&customizations)),
             dir_grants: Arc::clone(&current.dir_grants),
-            turn_executor: current
-                .turn_executor
-                .clone()
-                .with_harness_context_provider(customizations)
-                .with_context_source("codebase", context_source),
+            turn_executor: {
+                let executor = current
+                    .turn_executor
+                    .clone()
+                    .with_harness_context_provider(customizations);
+                match context_source {
+                    Some(source) => executor.with_context_source("codebase", source),
+                    None => executor.without_context_source("codebase"),
+                }
+            },
             workspace: WorkspaceRuntime {
-                _file_system_watcher: Some(file_system_watcher),
+                _file_system_watcher: file_system_watcher,
                 _dir_file_system_watchers: Vec::new(),
                 session_dir_watchers: BTreeMap::new(),
                 _git_watcher: None,
-                git: Some(Arc::clone(&git)),
-                content_search: Some(Arc::clone(&content_search)),
+                git: git.clone(),
+                content_search: content_search.clone(),
                 dir_content_search: BTreeMap::new(),
                 session_dir_search: BTreeMap::new(),
                 grep: Some(grep),
-                codebase: Some(codebase),
-                symbol_index: Some(symbol_index),
+                codebase,
+                symbol_index,
                 codebase_semantic,
                 codebase_semantic_job,
                 cloud_codebase,
@@ -2419,7 +2576,7 @@ impl AppServer {
         drop(current);
         retire_env_runtime(
             previous,
-            Some(&content_search),
+            content_search.as_ref(),
             Some(&terminals),
             debug_adapters.as_ref(),
         );
@@ -2429,25 +2586,48 @@ impl AppServer {
         {
             log::warn!("failed to bind executable Editor Extensions to the new dir");
         }
-        let git_watcher = git.start_watching(self.config.clone());
+        let git_watcher = git
+            .as_ref()
+            .filter(|_| {
+                self.env_runtime
+                    .read()
+                    .unwrap_or_else(|p| p.into_inner())
+                    .selected_grant
+                    .as_ref()
+                    .is_some_and(|grant| grant.permissions().allows(Permission::WatchFiles))
+            })
+            .map(|git| {
+                let watch_dirs = self
+                    .env_runtime
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .selected_grant
+                    .as_ref()
+                    .and_then(|grant| grant.authorize(Permission::WatchFiles).ok())
+                    .into_iter()
+                    .collect();
+                git.start_watching(self.config.clone(), watch_dirs)
+            });
         let mut runtime = self
             .env_runtime
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        runtime.workspace._git_watcher = Some(git_watcher);
+        runtime.workspace._git_watcher = git_watcher;
         Ok(canonical_root)
     }
 
-    fn bind_dir_skills(&self, dir_root: &std::path::Path) -> Result<(), EnvRuntimeError> {
+    fn bind_dir_skills(&self, grant: &Grant) -> Result<(), EnvRuntimeError> {
         let Some(skills) = &self.skills else {
             return Ok(());
         };
-        skills
-            .bind_dir_root(dir_root.to_path_buf())
-            .map(|_| ())
-            .map_err(|error| {
-                EnvRuntimeError::Failed(format!("failed to bind Directory Skill source: {error}"))
-            })
+        let result = if grant.permissions().allows(Permission::DiscoverSkills) {
+            skills.bind_dir_root(grant.dir().canonical_path().to_path_buf())
+        } else {
+            skills.unbind_dir_root()
+        };
+        result.map(|_| ()).map_err(|error| {
+            EnvRuntimeError::Failed(format!("failed to bind Directory Skill source: {error}"))
+        })
     }
 
     fn selected_grant_is_current(&self, authorization: &Grant) -> bool {
@@ -2755,6 +2935,9 @@ impl AppServer {
                 RpcError::new(-32040, AppServerErrorName::LanguageServiceUnavailable)
             })?,
         };
+        authorization
+            .authorize(Permission::UseLanguageServices)
+            .map_err(|_| RpcError::new(-32043, AppServerErrorName::PermissionRequired))?;
         authorization
             .authorize(Permission::ExecuteCommands)
             .map_err(|_| RpcError::new(-32043, AppServerErrorName::PermissionRequired))?;
@@ -3415,3 +3598,45 @@ fn retire_env_runtime(
 #[cfg(test)]
 #[path = "env_runtime_tests.rs"]
 mod tests;
+
+/// One live directory set shared by selected, multi-folder, and session LSP consumers.
+fn language_roots_for(runtime: &EnvRuntime) -> std::collections::BTreeSet<PathBuf> {
+    let mut roots = runtime.dir_grants.dirs_for(Permission::UseLanguageServices);
+    let executable = runtime.dir_grants.dirs_for(Permission::ExecuteCommands);
+    roots.retain(|root| executable.contains(root));
+    for grant in runtime.dirs.values().chain(runtime.selected_grant.iter()) {
+        if grant.is_active()
+            && grant.permissions().allows(Permission::UseLanguageServices)
+            && grant.permissions().allows(Permission::ExecuteCommands)
+        {
+            roots.insert(grant.dir().canonical_path().to_path_buf());
+        }
+    }
+    roots
+}
+
+/// Retrieval consumes SearchFiles and the same applied profile as Agent file tools.
+fn agent_search_authorization(
+    grant: &Grant,
+    config: &LocalToolConfig,
+) -> Result<Authorization, EnvRuntimeError> {
+    let profile = config
+        .requirements
+        .as_ref()
+        .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?
+        .values
+        .constrain(
+            config
+                .profile()
+                .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?,
+        )
+        .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
+    Ok(grant
+        .authorize(Permission::SearchFiles)
+        .map_err(|_| EnvRuntimeError::PermissionRequired)?
+        .constrained_by(
+            &profile
+                .path_policy()
+                .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?,
+        ))
+}

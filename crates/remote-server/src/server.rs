@@ -119,7 +119,21 @@ pub fn run_from_environment_with_product_services(
                 .export_history(&receiver, &attachments, std::io::stdout().lock())
                 .map_err(|error| RemoteServerError::new(error.to_string()))
         }
-        [command, environment] if command == "execution-connect" => {
+        [command, environment, tail @ ..] if command == "execution-connect" => {
+            let network = match tail {
+                [] => exec_server_protocol::NetworkAccess::Denied,
+                [flag, value] if flag == "--network" => match value.as_str() {
+                    "denied" => exec_server_protocol::NetworkAccess::Denied,
+                    "managed" => exec_server_protocol::NetworkAccess::Managed,
+                    "allowed" => exec_server_protocol::NetworkAccess::Allowed,
+                    _ => return Err(RemoteServerError::new("Invalid execution network ceiling")),
+                },
+                _ => {
+                    return Err(RemoteServerError::new(
+                        "Invalid execution connection arguments",
+                    ));
+                }
+            };
             exec_server_protocol::validate_id(environment)
                 .map_err(|_| RemoteServerError::new("Invalid execution environment identity"))?;
             let options = options()?;
@@ -134,6 +148,7 @@ pub fn run_from_environment_with_product_services(
             )
             .with_role(ash_app_server_daemon::ConnectionRole::Execution {
                 environment: environment.clone(),
+                network,
             });
             let executable =
                 ash_app_server_daemon::backend_executable_path().map_err(RemoteServerError::new)?;

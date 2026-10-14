@@ -67,6 +67,16 @@ fn initial_connection_observation_includes_handshake_identity_and_failures() {
                     root: "/workspace".into(),
                     access: exec_server_protocol::FileAccess::ReadWrite,
                     network: exec_server_protocol::NetworkAccess::Denied,
+                    constraints: exec_server_protocol::ExecutionConstraints {
+                        file_access: exec_server_protocol::FileAccess::ReadWrite,
+                        command_access: exec_server_protocol::FileAccess::ReadWrite,
+                        network: exec_server_protocol::NetworkAccess::Denied,
+                        host_read: ash_file_access::HostReadAccess::Host,
+                        paths: vec![],
+                    },
+                    permission_source: "/etc/ash/requirements.toml".into(),
+                    permission_policy_revision: "fixture".into(),
+                    allowed_approval_modes: ash_protocol::ApprovalMode::ALL.to_vec(),
                 },
             );
             serde_json::to_writer(&mut socket, &response).unwrap();

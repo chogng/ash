@@ -1473,3 +1473,29 @@ for (const locale of ['en', 'zh-CN']) {
 		expect(help).toContain(locale === 'en' ? 'Sending waits until file preparation finishes; a failed preparation keeps the draft.' : '发送会等待文件准备完成；准备失败时会保留草稿。');
 	});
 }
+
+
+for (const locale of ['en', 'zh-CN']) {
+	for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
+		test(`permission subsets use keyboard controls in ${locale} ${theme}`, async ({ page }) => {
+			await page.goto(`/chatInput.html?permissions=1&locale=${locale}&theme=${theme}`);
+			const chinese = locale === 'zh-CN';
+			const read = page.getByRole('checkbox', { name: chinese ? '读取文件' : 'Read files', exact: true });
+			const write = page.getByRole('checkbox', { name: chinese ? '写入文件' : 'Write files', exact: true });
+			await expect(read).not.toBeChecked();
+			await expect(write).not.toBeChecked();
+			await read.focus();
+			await page.keyboard.press('Space');
+			await expect(read).toBeChecked();
+			await page.evaluate(() => window.ashChatInputIntegration.refresh());
+			await expect(read).toBeFocused();
+			const duration = page.getByRole('combobox', { name: chinese ? '权限有效期' : 'Permission duration', exact: true });
+			await expect(duration).toHaveValue('turn');
+			await page.getByRole('button', { name: chinese ? '批准所选权限' : 'Approve selected', exact: true }).press('Enter');
+			await expect(page.getByRole('status', { name: 'Decision' })).toHaveText(JSON.stringify({ duration: 'turn', directories: [{ path: '/workspace/<img src=x>', permissions: ['readFiles'] }], networkHosts: [] }));
+			await expect(page.locator('.ash-chat-interaction img')).toHaveCount(0);
+			await page.getByRole('button', { name: chinese ? '拒绝' : 'Decline', exact: true }).press('Space');
+			await expect(page.getByRole('status', { name: 'Decision' })).toHaveText(JSON.stringify({ duration: 'turn', directories: [], networkHosts: [] }));
+		});
+	}
+}

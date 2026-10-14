@@ -2151,6 +2151,26 @@ impl ThreadController {
     }
 
     /// Resolves a durable interaction through a retry-safe client command.
+    pub(crate) fn record_permission_policy_change(
+        &self,
+        thread: &ThreadId,
+        turn: &TurnId,
+        request: &RequestId,
+        revision: String,
+    ) -> Result<(), CoreError> {
+        self.mutate_thread(thread, |snapshot| {
+            self.record_batch(
+                snapshot,
+                vec![ThreadEvent::TurnPermissionPolicyChanged {
+                    thread_id: thread.clone(),
+                    turn_id: turn.clone(),
+                    request_id: request.clone(),
+                    policy_revision: revision,
+                }],
+            )
+        })
+    }
+
     pub fn resolve_turn_interaction(
         &self,
         thread_id: &ThreadId,
@@ -3514,6 +3534,11 @@ fn resolution_command(request: &ResolveTurnInteractionRequest) -> ThreadCommand 
             request_id: request.request_id.clone(),
             response: response.clone(),
         },
+        AgentResponse::Permissions { response } => ThreadCommand::ResolvePermissions {
+            turn_id: request.turn_id.clone(),
+            request_id: request.request_id.clone(),
+            response: response.clone(),
+        },
         AgentResponse::UserInput { response } => ThreadCommand::ResolveUserInput {
             turn_id: request.turn_id.clone(),
             request_id: request.request_id.clone(),
@@ -3715,6 +3740,7 @@ fn latest_catalog_turn(
 fn interaction_question(request: &AgentRequest) -> String {
     match request {
         AgentRequest::Approval { request } => request.reason.clone(),
+        AgentRequest::Permissions { request } => request.reason.clone(),
         AgentRequest::UserInput { request } => request
             .questions
             .first()

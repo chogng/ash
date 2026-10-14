@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
 
-pub(crate) const CURRENT_FILE_SCHEMA_VERSION: i64 = 10;
+pub(crate) const CURRENT_FILE_SCHEMA_VERSION: i64 = 11;
 // Raise this only when the product support window no longer includes the removed versions.
 const MIN_SUPPORTED_FILE_SCHEMA_VERSION: i64 = 1;
 
@@ -79,6 +79,7 @@ pub(crate) fn decode(source: &str) -> Result<DecodedDocument, ConfigError> {
     let migrate_acceleration =
         !matches!(version.as_ref(), Some(toml::Value::Integer(v)) if *v >= 9);
     let migrate_context = !matches!(version.as_ref(), Some(toml::Value::Integer(v)) if *v >= 10);
+    let migrate_grants = !matches!(version.as_ref(), Some(toml::Value::Integer(v)) if *v >= 11);
     let obsolete_selection = root.remove("activeConnections").is_some();
     let rewrite_required = (match version {
         None => {
@@ -136,6 +137,9 @@ pub(crate) fn decode(source: &str) -> Result<DecodedDocument, ConfigError> {
     if migrate_context {
         migrate_long_context(root)?;
     }
+    if migrate_grants {
+        migrate_directory_grants(root)?;
+    }
     let mut document = value
         .try_into::<UserConfigDocument>()
         .map_err(|error| ConfigError(error.to_string()))?;
@@ -147,6 +151,22 @@ pub(crate) fn decode(source: &str) -> Result<DecodedDocument, ConfigError> {
         document,
         rewrite_required,
     })
+}
+
+/// Schema 11 retires the old directory contract before normal decoding. Current documents
+/// reject the retired key; migration never merges two competing grant authorities.
+fn migrate_directory_grants(
+    root: &mut toml::map::Map<String, toml::Value>,
+) -> Result<(), ConfigError> {
+    if let Some(grants) = root.remove("dirPermissions") {
+        if root.contains_key("directoryGrants") {
+            return Err(ConfigError(
+                "configuration contains competing directory grant authorities".into(),
+            ));
+        }
+        root.insert("directoryGrants".into(), grants);
+    }
+    Ok(())
 }
 
 /// This is a one-way file-schema migration. Normal readers never interpret the old boolean

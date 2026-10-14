@@ -690,6 +690,12 @@ function toAgentResponse(response: AgentResponse): AgentResponseDto {
 	switch (response.type) {
 		case 'approval':
 			return { type: 'approval', response: { ...response.response } };
+		case 'permissions':
+			return { type: 'permissions', response: {
+				duration: response.response.duration,
+				directories: response.response.directories.map(entry => ({ path: entry.path, permissions: [...entry.permissions] })),
+				networkHosts: [...response.response.networkHosts],
+			} };
 		case 'userInput':
 			return { type: 'userInput', response: { answers: { ...response.response.answers } } };
 		case 'dynamicTool':

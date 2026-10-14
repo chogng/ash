@@ -278,6 +278,14 @@ impl AppServerLanguageRuntime {
     pub(super) fn retain_dir_roots(&mut self, roots: &std::collections::BTreeSet<PathBuf>) {
         self.env_runtimes.retain(|root, _| roots.contains(root));
         if self
+            .dir_state
+            .root
+            .as_ref()
+            .is_some_and(|root| !roots.contains(root))
+        {
+            self.shutdown_selected();
+        }
+        if self
             .active_dir_root
             .as_ref()
             .is_some_and(|root| !roots.contains(root))

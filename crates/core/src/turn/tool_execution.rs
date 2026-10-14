@@ -184,6 +184,17 @@ impl ToolExecutionOrchestrator {
         reviewed: &ActionReviewRequest,
         authorization: ToolAuthorization,
     ) -> Result<ToolExecutionCompletion, CoreError> {
+        if self.policy.revision() != context.frozen_policy_revision {
+            return Err(CoreError::Policy(
+                "permission policy changed before execution".into(),
+            ));
+        }
+        self.policy.check_approval_mode(context.approval_mode)?;
+        self.policy.validate_execution(
+            reviewed,
+            execution_authority(&authorization),
+            context.cancellation,
+        )?;
         if matches!(authorization, ToolAuthorization::AutoReviewed(_)) {
             self.validate_review_environment(context.thread_id, reviewed)?;
         }
@@ -265,6 +276,17 @@ impl ToolExecutionOrchestrator {
         authorization: ToolAuthorization,
         operation: impl FnOnce() -> Result<ToolExecutionOutput, CoreError>,
     ) -> Result<ToolExecutionCompletion, CoreError> {
+        if self.policy.revision() != context.frozen_policy_revision {
+            return Err(CoreError::Policy(
+                "permission policy changed before isolated execution".into(),
+            ));
+        }
+        self.policy.check_approval_mode(context.approval_mode)?;
+        self.policy.validate_execution(
+            reviewed,
+            execution_authority(&authorization),
+            context.cancellation,
+        )?;
         self.threads.record_tool_execution_started(
             context.thread_id,
             context.turn_id,
@@ -353,6 +375,17 @@ impl ToolExecutionOrchestrator {
         denial: SandboxDenialOutput,
         authorization: ToolAuthorization,
     ) -> Result<ToolExecutionCompletion, CoreError> {
+        if self.policy.revision() != context.frozen_policy_revision {
+            return Err(CoreError::Policy(
+                "permission policy changed before execution".into(),
+            ));
+        }
+        self.policy.check_approval_mode(context.approval_mode)?;
+        self.policy.validate_execution(
+            reviewed,
+            execution_authority(&authorization),
+            context.cancellation,
+        )?;
         context
             .cancellation
             .check()
@@ -574,12 +607,18 @@ impl ToolExecutionOrchestrator {
             context.item_id,
             evidence,
         )?;
-        let decision = match crate::decide_turn_action(
+        let policy_context = core_api::ActionPolicyContext {
+            session: context.session_id,
+            thread: context.thread_id,
+            turn: context.turn_id,
+        };
+        let decision = match crate::turn_policy::decide_turn_action_in_context(
             self.policy.as_ref(),
             context.frozen_policy_revision,
             context.approval_mode,
             &second_review,
             context.cancellation,
+            Some(&policy_context),
         ) {
             Ok(decision) => decision,
             Err(error @ CoreError::Cancelled(_)) => return Err(error),
@@ -657,8 +696,9 @@ impl ToolExecutionOrchestrator {
                 });
             }
             ExecutionDecision::AskUser(approval) => {
-                let request =
+                let mut request =
                     durable_sandbox_escalation_approval_request(&second_review, &approval, denial)?;
+                request.allowed_decisions = self.policy.approval_decisions(&second_review);
                 self.threads.request_turn_interaction(
                     context.thread_id,
                     context.turn_id,
@@ -801,12 +841,19 @@ impl ToolInteractionService for CoreToolInteractions {
                     .into(),
             ));
         }
-        let decision = crate::decide_turn_action(
+        let snapshot = self.threads.read_thread(&self.thread_id)?;
+        let context = core_api::ActionPolicyContext {
+            session: &snapshot.session_id,
+            thread: &self.thread_id,
+            turn: &self.turn_id,
+        };
+        let decision = crate::turn_policy::decide_turn_action_in_context(
             self.policy.as_ref(),
             &self.frozen_policy_revision,
             self.approval_mode,
             request,
             cancellation,
+            Some(&context),
         )?;
         match decision {
             ExecutionDecision::RunExecPolicyGranted(grant)
@@ -838,15 +885,50 @@ impl ToolInteractionService for CoreToolInteractions {
             }
             ExecutionDecision::RunUnsandboxed { .. } => Ok(ActionApprovalDecision::ApproveOnce),
             ExecutionDecision::AskUser(approval) => {
-                let request =
+                let mut durable =
                     crate::approval_request::durable_approval_request(request, &approval)?;
-                match self.request_live(AgentRequest::Approval { request }, cancellation)? {
-                    crate::thread_controller::live_interaction::LiveInteractionOutcome::Response(AgentResponse::Approval { response }) => Ok(response.decision),
+                durable.allowed_decisions = self.policy.approval_decisions(request);
+                match self.request_live(AgentRequest::Approval { request: durable }, cancellation)? {
+                    crate::thread_controller::live_interaction::LiveInteractionOutcome::Response(AgentResponse::Approval { response }) => {
+                        if self.policy.revision() != self.frozen_policy_revision { return Ok(ActionApprovalDecision::Decline); }
+                        self.policy.record_approval(&context, request, response.decision)?;
+                        Ok(response.decision)
+                    },
                     crate::thread_controller::live_interaction::LiveInteractionOutcome::Cancelled(_) => Ok(ActionApprovalDecision::Decline),
                     _ => Err(CoreError::Journal("network approval resolved with the wrong response kind".into())),
                 }
             }
             _ => Ok(ActionApprovalDecision::Decline),
+        }
+    }
+
+    fn request_permissions(
+        &self,
+        request: ash_protocol::PermissionRequest,
+    ) -> Result<Option<ash_protocol::PermissionResponse>, CoreError> {
+        match self.request_live(
+            AgentRequest::Permissions {
+                request: request.clone(),
+            },
+            &self.cancellation,
+        )? {
+            crate::thread_controller::live_interaction::LiveInteractionOutcome::Response(
+                AgentResponse::Permissions { response },
+            ) if request.accepts(&response) => {
+                if self.policy.revision() != self.frozen_policy_revision {
+                    return Err(CoreError::Policy(
+                        "permission policy changed while awaiting the permission response".into(),
+                    ));
+                }
+                self.policy.check_approval_mode(self.approval_mode)?;
+                Ok(Some(response))
+            }
+            crate::thread_controller::live_interaction::LiveInteractionOutcome::Cancelled(_) => {
+                Ok(None)
+            }
+            _ => Err(CoreError::Policy(
+                "permission response exceeds the requested scope".into(),
+            )),
         }
     }
 

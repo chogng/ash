@@ -15,6 +15,7 @@ fn execution_scope_requires_a_versioned_host_grant_and_identity() {
         None,
     )
     .with_role(ConnectionRole::Execution {
+        network: exec_server_protocol::NetworkAccess::Denied,
         environment: "project".into(),
     });
     let mut value = serde_json::to_value(ConnectionPrelude::from_options(&options)).unwrap();

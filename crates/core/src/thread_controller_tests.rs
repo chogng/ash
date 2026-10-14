@@ -315,6 +315,11 @@ fn approval_interaction() -> AgentRequest {
                 scope: "api.example.com".into(),
             }],
             reason: "network requires unsandboxed execution".into(),
+            command: None,
+            allowed_decisions: vec![
+                ash_protocol::ActionApprovalDecision::ApproveOnce,
+                ash_protocol::ActionApprovalDecision::Decline,
+            ],
             sandbox_denial: None,
         },
     }

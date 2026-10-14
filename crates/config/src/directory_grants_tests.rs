@@ -39,7 +39,7 @@ fn legacy_profile_key_preserves_fine_grained_and_empty_grants() {
 "#
     );
     let decoded = crate::document_migration::decode(&source).unwrap();
-    assert!(!decoded.rewrite_required);
+    assert!(decoded.rewrite_required);
     let grants = &decoded.document.directory_grants;
     assert_eq!(
         grants.permissions_for(&dir),
@@ -54,8 +54,8 @@ fn legacy_profile_key_preserves_fine_grained_and_empty_grants() {
         Some(Path::new("/tmp/ash-directory-grants"))
     );
     let encoded = crate::document_migration::encode(&decoded.document).unwrap();
-    assert!(encoded.contains("[dirPermissions.entries]"));
-    assert!(!encoded.contains("directoryGrants"));
+    assert!(encoded.contains("[directoryGrants.entries]"));
+    assert!(!encoded.contains("dirPermissions"));
     assert_eq!(
         crate::document_migration::decode(&encoded)
             .unwrap()
@@ -72,12 +72,35 @@ fn legacy_profile_key_preserves_fine_grained_and_empty_grants() {
 }
 
 #[test]
-fn command_serialization_preserves_existing_receipt_identity() {
+fn commands_use_only_the_current_directory_grant_contract() {
     for command in [
-        serde_json::json!({"type":"setDirPermissions", "dir":identity(), "permissions":["readFiles"], "display_path":"/tmp/ash-directory-grants"}),
-        serde_json::json!({"type":"forgetDirPermissions", "dir":identity()}),
+        serde_json::json!({"type":"setDirectoryGrant", "dir":identity(), "permissions":["readFiles"], "display_path":"/tmp/ash-directory-grants"}),
+        serde_json::json!({"type":"forgetDirectoryGrant", "dir":identity()}),
     ] {
         let decoded: crate::UserConfigCommand = serde_json::from_value(command.clone()).unwrap();
         assert_eq!(serde_json::to_value(decoded).unwrap(), command);
     }
+}
+
+#[test]
+fn current_documents_and_commands_reject_retired_contracts() {
+    let source = format!(
+        "schemaVersion = {}\n[dirPermissions.entries]\n",
+        crate::CONFIG_FILE_SCHEMA_VERSION
+    );
+    assert!(crate::document_migration::decode(&source).is_err());
+    for tag in ["setDirPermissions", "forgetDirPermissions"] {
+        assert!(
+            serde_json::from_value::<crate::UserConfigCommand>(serde_json::json!({
+                "type":tag, "dir":identity(), "permissions":["readFiles"]
+            }))
+            .is_err()
+        );
+    }
+    assert!(
+        crate::document_migration::decode(
+            "schemaVersion = 10\n[dirPermissions]\n[directoryGrants]\n"
+        )
+        .is_err()
+    );
 }

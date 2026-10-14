@@ -117,7 +117,7 @@ pub(crate) fn run(profile_root: PathBuf, product_services: Option<PathBuf>) -> R
                 .name("ash-local-app-server-connection".into())
                 .spawn(move || {
                     let _registration = registration;
-                    if let ConnectionRole::Execution { environment } = connection.options.role() {
+                    if let ConnectionRole::Execution { environment, .. } = connection.options.role() {
                         if let Err(error) = execution_registry.serve(connection, &environment) {
                             eprintln!("managed execution connection failed: {error}");
                         }

@@ -530,6 +530,12 @@ impl AppServer {
             let updates: Arc<dyn ThreadUpdateSink> = Arc::new(super::AppServerThreadUpdates {
                 client_host: source.client_host.clone(),
                 threads: source.threads.clone(),
+                grants: source
+                    .env_runtime
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .dir_grants
+                    .clone(),
                 updates: source.updates.clone(),
             });
             let host = VoiceHost {

@@ -14,7 +14,7 @@ use std::sync::Mutex;
 
 #[derive(Default)]
 pub(super) struct ExecutionRegistry {
-    environments: Mutex<BTreeMap<String, Arc<LocalEnvironment>>>,
+    environments: Mutex<BTreeMap<String, (NetworkAccess, Arc<LocalEnvironment>)>>,
 }
 
 impl ExecutionRegistry {
@@ -56,11 +56,15 @@ impl ExecutionRegistry {
         options: &ash_app_server_daemon::ConnectionOptions,
         id: &str,
     ) -> Result<Arc<LocalEnvironment>, ExecError> {
+        let network = match options.role() {
+            ash_app_server_daemon::ConnectionRole::Execution { network, .. } => network,
+            _ => return Err(ExecError::InvalidInput),
+        };
         let root = options.dir_root().ok_or(ExecError::InvalidInput)?;
         let root = dunce::canonicalize(root).map_err(|_| ExecError::InvalidInput)?;
         let mut environments = self.environments.lock().map_err(|_| ExecError::Busy)?;
-        if let Some(environment) = environments.get(id) {
-            if PathBuf::from(&environment.info().root) != root {
+        if let Some((bound_network, environment)) = environments.get(id) {
+            if *bound_network != network || PathBuf::from(&environment.info().root) != root {
                 return Err(ExecError::Conflict);
             }
             return Ok(Arc::clone(environment));
@@ -77,7 +81,7 @@ impl ExecutionRegistry {
                 id.into(),
                 &root,
                 FileAccess::ReadWrite,
-                NetworkAccess::Denied,
+                network,
                 Arc::new(sandbox),
             )
             .map_err(|error| match error {
@@ -89,12 +93,12 @@ impl ExecutionRegistry {
                 | exec_server::Error::Cancelled(_) => ExecError::Io,
             })?,
         );
-        environments.insert(id.into(), Arc::clone(&environment));
+        environments.insert(id.into(), (network, Arc::clone(&environment)));
         Ok(environment)
     }
 
     pub(super) fn needs_host(&self) -> Result<bool, String> {
-        for environment in self
+        for (_, environment) in self
             .environments
             .lock()
             .map_err(|_| "Execution registry lock poisoned")?
@@ -111,7 +115,7 @@ impl ExecutionRegistry {
     }
 
     pub(super) fn stop(&self) -> Result<(), String> {
-        for environment in self
+        for (_, environment) in self
             .environments
             .lock()
             .map_err(|_| "Execution registry lock poisoned")?

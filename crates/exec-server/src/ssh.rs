@@ -21,6 +21,7 @@ use std::time::Duration;
 pub struct SshEndpoint {
     profile: RemoteProfile,
     environment: String,
+    network: exec_server_protocol::NetworkAccess,
     executable: PathBuf,
 }
 
@@ -33,6 +34,7 @@ impl SshEndpoint {
         Ok(Self {
             profile: RemoteProfile::new(SshTarget::new(host, root), runtime),
             environment: environment.into(),
+            network: exec_server_protocol::NetworkAccess::Denied,
             executable: "ssh".into(),
         })
     }
@@ -43,12 +45,18 @@ impl SshEndpoint {
         self
     }
 
+    /// Freezes the host-selected network ceiling; model arguments cannot change the launch.
+    pub fn with_network_access(mut self, network: exec_server_protocol::NetworkAccess) -> Self {
+        self.network = network;
+        self
+    }
+
     pub(crate) fn environment(&self) -> &str {
         &self.environment
     }
 
     fn command(&self) -> String {
-        [
+        let mut arguments = vec![
             "env".into(),
             format!(
                 "ASH_WORKSPACE_ROOT={}",
@@ -57,11 +65,23 @@ impl SshEndpoint {
             self.profile.runtime().executable().into(),
             "execution-connect".into(),
             self.environment.clone(),
-        ]
-        .into_iter()
-        .map(|argument: String| format!("'{}'", argument.replace('\'', "'\\''")))
-        .collect::<Vec<_>>()
-        .join(" ")
+        ];
+        if self.network != exec_server_protocol::NetworkAccess::Denied {
+            arguments.extend([
+                "--network".into(),
+                match self.network {
+                    exec_server_protocol::NetworkAccess::Denied => "denied",
+                    exec_server_protocol::NetworkAccess::Managed => "managed",
+                    exec_server_protocol::NetworkAccess::Allowed => "allowed",
+                }
+                .into(),
+            ]);
+        }
+        arguments
+            .into_iter()
+            .map(|argument: String| format!("'{}'", argument.replace('\'', "'\\''")))
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 }
 

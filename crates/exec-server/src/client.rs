@@ -140,6 +140,17 @@ impl ExecClient {
             return Err(Error::Protocol);
         };
         exec_server_protocol::validate_id(&info.environment_id).map_err(|_| Error::Protocol)?;
+        info.constraints.validate().map_err(|_| Error::Protocol)?;
+        if info.allowed_approval_modes.is_empty()
+            || info.allowed_approval_modes.len() > ash_protocol::ApprovalMode::ALL.len()
+            || info
+                .allowed_approval_modes
+                .iter()
+                .enumerate()
+                .any(|(index, mode)| info.allowed_approval_modes[..index].contains(mode))
+        {
+            return Err(Error::Protocol);
+        }
         if !transport::valid_token(&info.incarnation) || info.root.is_empty() {
             return Err(Error::Protocol);
         }

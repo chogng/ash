@@ -289,6 +289,19 @@ impl ToolExecutorRuntime {
             | ToolAuthorization::PermissionBypassed(_)
             | ToolAuthorization::ApprovedOnce(_) => ToolRuntimeAuthority::Unrestricted,
         };
+        if let Some(scope) = sandbox_scope
+            .as_ref()
+            .filter(|scope| scope.policy_ceiling().is_some())
+        {
+            let requested = match authority {
+                ToolRuntimeAuthority::Sandboxed(policy) => policy,
+                ToolRuntimeAuthority::Unrestricted => ash_sandboxing::SandboxPolicy::new(
+                    ash_sandboxing::FileSystemAccess::FullAccess,
+                    ash_sandboxing::NetworkAccess::Allowed,
+                ),
+            };
+            authority = ToolRuntimeAuthority::Sandboxed(scope.constrain_policy(requested));
+        }
         let managed = matches!(review.sandbox(), ash_action_policy::SandboxCompatibility::Supported(policy) if policy.network() == ash_sandboxing::NetworkAccess::Managed);
         if managed && authority == ToolRuntimeAuthority::Unrestricted {
             authority = ToolRuntimeAuthority::Sandboxed(ash_sandboxing::SandboxPolicy::new(
@@ -299,7 +312,8 @@ impl ToolExecutorRuntime {
         let mut context =
             ToolExecutionContext::new(self.environment_id.clone(), cancellation.clone(), authority)
                 .with_session_id(session_id.clone())
-                .with_thread_id(thread_id.clone());
+                .with_thread_id(thread_id.clone())
+                .with_directory_authorizations(dir_authorizations);
         if managed {
             let interactions = interactions.ok_or_else(|| {
                 self.prepared
@@ -310,11 +324,8 @@ impl ToolExecutorRuntime {
                     "managed networking requires Core's live approval authority".into(),
                 )
             })?;
-            context = context.with_network_policy(crate::network_policy::for_execution(
-                review,
-                operation_id.as_str().to_owned(),
-                interactions,
-            ));
+            context = context
+                .with_network_policy(crate::network_policy::for_execution(review, interactions));
         }
         if let Some(execution_dir) = execution_dir {
             context = context.with_execution_dir(execution_dir);

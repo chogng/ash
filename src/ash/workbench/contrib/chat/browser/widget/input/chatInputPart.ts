@@ -1,3 +1,4 @@
+import { workspaceTrustPermissionNames } from '../../../../../../platform/workspace/common/workspaceTrust.js';
 import { createChatFileAttachments } from './editor/chatPasteProviders.js';
 import { ChatDragAndDrop } from '../chatDragAndDrop.js';
 import { CancellationError, isCancellationError } from '../../../../../../base/common/errors.js';
@@ -1091,6 +1092,11 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			case "approval": {
 				const reason = h(this.element.ownerDocument, "p");
 				reason.textContent = request.request.reason;
+				if (request.request.command) {
+					const command = h(this.element.ownerDocument, 'pre');
+					command.textContent = `${request.request.command.program} ${JSON.stringify(request.request.command.arguments)}`;
+					this.interaction.append(command);
+				}
 				const capabilities = h(this.element.ownerDocument, "ul");
 				capabilities.className = "ash-chat-approval-capabilities";
 				capabilities.setAttribute('aria-label', localize('chat.approval.targets', 'Requested actions and targets'));
@@ -1119,6 +1125,18 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				const decline = this.interactionButton(localize('chat.approval.decline', 'Decline'));
 				const approve = this.interactionButton(localize('chat.approval.approveOnce', 'Approve once'), true);
 				actions.append(decline, approve);
+				for (const choice of request.request.allowedDecisions ?? []) {
+					if (choice !== 'approveForSession' && choice !== 'approveAndSaveRule') continue;
+					const label = choice === 'approveForSession'
+						? localize('chat.approval.approveForSession', 'Approve same action this session')
+						: localize('chat.approval.saveRule', 'Save approval for this exact action');
+					const button = this.interactionButton(label);
+					actions.append(button);
+					this.interactionListeners.add(addDisposableListener(button, 'click', () => void this.delegate.resolveInteraction({
+						type: 'approval', response: { decision: choice },
+					}).catch(() => undefined)));
+				}
+
 				this.interaction.append(reason, capabilities, actions);
 				this.interactionListeners.add(addDisposableListener(decline, "click", () => void this.delegate.resolveInteraction({
 					type: "approval",
@@ -1128,6 +1146,75 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 					type: "approval",
 					response: { decision: "approveOnce" },
 				}).catch(() => undefined)));
+				break;
+			}
+			case "permissions": {
+				const form = h(this.element.ownerDocument, 'form');
+				form.className = 'ash-chat-interaction-form';
+				const heading = h(this.element.ownerDocument, 'p');
+				heading.textContent = localize('chat.permissions.environment', 'Permissions in {0}', request.request.environmentId);
+				const reason = h(this.element.ownerDocument, 'p');
+				reason.textContent = request.request.reason;
+				form.append(heading, reason);
+				const directories = request.request.directories.map(entry => {
+					const group = h(this.element.ownerDocument, 'fieldset');
+					const legend = h(this.element.ownerDocument, 'legend');
+					legend.textContent = entry.path;
+					group.append(legend);
+					const permissions = entry.permissions.map(permission => {
+						const label = h(this.element.ownerDocument, 'label');
+						const input = h(this.element.ownerDocument, 'input');
+						input.type = 'checkbox';
+						const name = localize({ bundle: 'ash.settings', key: `capabilities.permission.${permission}` }, workspaceTrustPermissionNames[permission]);
+						label.append(input, this.element.ownerDocument.createTextNode(name));
+						group.append(label);
+						return { permission, input };
+					});
+					form.append(group);
+					return { path: entry.path, permissions };
+				});
+				const hosts = request.request.networkHosts.map(host => {
+					const label = h(this.element.ownerDocument, 'label');
+					const input = h(this.element.ownerDocument, 'input');
+					input.type = 'checkbox';
+					label.append(input, this.element.ownerDocument.createTextNode(localize('chat.permissions.networkHost', 'Access network: {0}', host)));
+					form.append(label);
+					return { host, input };
+				});
+				const durationLabel = h(this.element.ownerDocument, 'label');
+				durationLabel.textContent = localize('chat.permissions.duration', 'Permission duration');
+				const duration = h(this.element.ownerDocument, 'select');
+				const turnOption = h(this.element.ownerDocument, 'option');
+				turnOption.value = 'turn';
+				turnOption.textContent = localize('chat.permissions.turn', 'This turn');
+				duration.append(turnOption);
+				if (request.request.duration === 'session') {
+					const sessionOption = h(this.element.ownerDocument, 'option');
+					sessionOption.value = 'session';
+					sessionOption.textContent = localize('chat.permissions.session', 'This session');
+					duration.append(sessionOption);
+				}
+				durationLabel.append(duration);
+				form.append(durationLabel);
+				const actions = h(this.element.ownerDocument, 'div');
+				actions.className = 'ash-chat-interaction-actions';
+				const decline = this.interactionButton(localize('chat.approval.decline', 'Decline'));
+				const approve = this.interactionButton(localize('chat.permissions.approveSelected', 'Approve selected'), true);
+				approve.type = 'submit';
+				actions.append(decline, approve);
+				form.append(actions);
+				this.interaction.append(form);
+				this.interactionListeners.add(addDisposableListener(decline, 'click', () => void this.delegate.resolveInteraction({
+					type: 'permissions', response: { duration: 'turn', directories: [], networkHosts: [] },
+				}).catch(() => undefined)));
+				this.interactionListeners.add(addDisposableListener(form, 'submit', event => {
+					event.preventDefault();
+					void this.delegate.resolveInteraction({ type: 'permissions', response: {
+						duration: duration.value === 'session' ? 'session' : 'turn',
+						directories: directories.map(entry => ({ path: entry.path, permissions: entry.permissions.filter(value => value.input.checked).map(value => value.permission) })).filter(entry => entry.permissions.length > 0),
+						networkHosts: hosts.filter(value => value.input.checked).map(value => value.host),
+					} }).catch(() => undefined);
+				}));
 				break;
 			}
 			case "userInput": {

@@ -1218,3 +1218,70 @@ fn path_case_queries_require_the_directory_browse_permission() {
         Err(FileSystemError::PermissionDenied(_))
     ));
 }
+
+#[test]
+fn profile_constraints_cover_file_io_listings_aliases_and_revocation() {
+    use ash_file_access::PathAccess;
+    use ash_file_access::PathAccessPolicy;
+    use ash_file_access::PathAccessRule;
+    let directory = TestDir::new();
+    fs::create_dir(directory.path.join("secret")).unwrap();
+    fs::write(directory.path.join("secret/token"), "credential").unwrap();
+    fs::write(directory.path.join("locked"), "original").unwrap();
+    fs::write(directory.path.join("open"), "visible").unwrap();
+    let grant = Grant::for_environment(
+        Dir::open_local(&directory.path).unwrap(),
+        ash_file_access::GrantSource::ExplicitUser,
+        ash_file_access::Permissions::new([
+            Permission::ReadFiles,
+            Permission::WriteFiles,
+            Permission::BrowseFiles,
+        ]),
+    );
+    let policy = PathAccessPolicy::new(
+        PathAccess::ReadWrite,
+        vec![
+            PathAccessRule {
+                pattern: "secret".into(),
+                access: PathAccess::Denied,
+            },
+            PathAccessRule {
+                pattern: "locked".into(),
+                access: PathAccess::ReadOnly,
+            },
+        ],
+    )
+    .unwrap();
+    let files = LocalFileSystem::new(grant.clone().with_path_policy(policy));
+    assert!(files.read_file(Path::new("secret/token"), 100).is_err());
+    assert_eq!(
+        files.read_file(Path::new("locked"), 100).unwrap(),
+        b"original"
+    );
+    assert!(
+        files
+            .write_file(Path::new("locked"), b"modified", 100)
+            .is_err()
+    );
+    files
+        .write_file(Path::new("open"), b"modified", 100)
+        .unwrap();
+    let names = files
+        .read_directory(Path::new("."))
+        .unwrap()
+        .into_iter()
+        .map(|entry| entry.name)
+        .collect::<Vec<_>>();
+    assert!(!names.contains(&"secret".into()));
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink("secret/token", directory.path.join("alias")).unwrap();
+        assert!(files.read_file(Path::new("alias"), 100).is_err());
+    }
+    grant.revoke();
+    assert!(files.read_file(Path::new("open"), 100).is_err());
+    assert_eq!(
+        fs::read(directory.path.join("locked")).unwrap(),
+        b"original"
+    );
+}

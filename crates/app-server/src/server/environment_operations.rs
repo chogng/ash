@@ -23,8 +23,8 @@ use ash_app_server_protocol::protocol::environment::SessionDirMoveParams;
 use ash_app_server_protocol::protocol::environment::SessionDirMoveResult;
 use ash_app_server_protocol::protocol::environment::SessionDirMutationDto;
 use ash_app_server_protocol::protocol::environment::SessionDirMutationResult;
-use ash_app_server_protocol::protocol::environment::SessionDirPermissionsSetParams;
 use ash_app_server_protocol::protocol::environment::SessionDirRemoveParams;
+use ash_app_server_protocol::protocol::environment::SessionDirectoryGrantSetParams;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_config::ConfigCommandRequest;
 use ash_config::ConfigRevision;
@@ -110,17 +110,17 @@ impl AppServer {
         })
     }
 
-    pub(super) fn session_dir_permissions_set(
+    pub(super) fn session_directory_grant_set(
         &self,
         connection: &ConnectionState,
         params: &Value,
     ) -> Result<Value, RpcError> {
         connection.require_directory_grants_host()?;
-        let params: SessionDirPermissionsSetParams = decode(params)?;
+        let params: SessionDirectoryGrantSetParams = decode(params)?;
         validate_path(&params.path, DirectoryPathRequirement::NonEmpty)?;
         let permissions = permissions(params.permissions)?;
         let (mutation, snapshot) = self
-            .set_session_dir_permissions(
+            .set_session_directory_grant(
                 &params.session_id,
                 &params.path,
                 params.expected_revision,

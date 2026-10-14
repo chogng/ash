@@ -1085,6 +1085,7 @@ dependencies = [
  "ash-execpolicy",
  "ash-features",
  "ash-file-access",
+ "ash-file-identity",
  "ash-model-provider-info",
  "ash-plugin",
  "ash-protocol",
@@ -1096,6 +1097,7 @@ dependencies = [
  "sha2 0.10.9",
  "toml",
  "url",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -1295,9 +1297,12 @@ dependencies = [
 name = "ash-exec-server"
 version = "0.1.0"
 dependencies = [
+ "ash-action-policy",
  "ash-arg0",
  "ash-async-utils",
+ "ash-config",
  "ash-exec-server-protocol",
+ "ash-execpolicy",
  "ash-file-access",
  "ash-file-system",
  "ash-install-context",
@@ -1324,6 +1329,9 @@ dependencies = [
 name = "ash-exec-server-protocol"
 version = "0.1.0"
 dependencies = [
+ "ash-file-access",
+ "ash-network-proxy",
+ "ash-protocol",
  "serde",
  "serde_json",
 ]
@@ -1456,6 +1464,7 @@ dependencies = [
  "ash-environment",
  "ash-protocol",
  "dunce",
+ "globset",
  "schemars",
  "serde",
  "sha2 0.10.9",
@@ -2207,6 +2216,7 @@ dependencies = [
  "http-body-util",
  "hyper",
  "hyper-util",
+ "serde",
  "tokio",
  "url",
 ]
@@ -2909,6 +2919,7 @@ version = "0.1.0"
 dependencies = [
  "ash-async-utils",
  "ash-environment",
+ "ash-file-access",
  "ash-file-system",
  "ash-network-proxy",
  "ash-protocol",

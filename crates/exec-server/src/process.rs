@@ -39,6 +39,7 @@ const MAX_ACTIVE: usize = 32;
 const RETENTION: Duration = Duration::from_secs(3600);
 
 pub(crate) struct Processes {
+    requirements: ash_config::PermissionRequirements,
     grant: Grant,
     policy: SandboxPolicy,
     executor: Arc<ProcessExecutor<SandboxBackends>>,
@@ -47,6 +48,8 @@ pub(crate) struct Processes {
 }
 struct Record {
     request: ProcessStart,
+    constraints: exec_server_protocol::ExecutionConstraints,
+    network: Arc<crate::network_approval::NetworkApprovals>,
     cancellation: CancellationSource,
     state: Mutex<LaunchState>,
     launched: Condvar,
@@ -88,6 +91,7 @@ impl Processes {
         access: FileAccess,
         network: NetworkAccess,
         backend: Arc<dyn SandboxBackend>,
+        requirements: ash_config::PermissionRequirements,
     ) -> Self {
         let policy = SandboxPolicy::new(
             match access {
@@ -97,6 +101,7 @@ impl Processes {
             match network {
                 NetworkAccess::Denied => ash_sandboxing::NetworkAccess::Denied,
                 NetworkAccess::Allowed => ash_sandboxing::NetworkAccess::Allowed,
+                NetworkAccess::Managed => ash_sandboxing::NetworkAccess::Managed,
             },
         );
         let executor = Arc::new(ProcessExecutor::new(
@@ -108,6 +113,7 @@ impl Processes {
             },
         ));
         Self {
+            requirements,
             grant,
             policy,
             executor,
@@ -115,8 +121,13 @@ impl Processes {
             workers: Mutex::new(Vec::new()),
         }
     }
-    pub fn start(&self, request: ProcessStart) -> Result<ProcessSnapshot, ExecError> {
+    pub fn start(
+        &self,
+        request: ProcessStart,
+        constraints: &exec_server_protocol::ExecutionConstraints,
+    ) -> Result<ProcessSnapshot, ExecError> {
         request.validate()?;
+        constraints.validate()?;
         let authorization = self
             .grant
             .authorize(Permission::ExecuteCommands)
@@ -134,7 +145,7 @@ impl Processes {
             !expired
         });
         if let Some(record) = records.get(&request.operation_id) {
-            if record.request != request {
+            if record.request != request || &record.constraints != constraints {
                 return Err(ExecError::Conflict);
             }
             return self.snapshot(record, 0, 0, Duration::ZERO);
@@ -150,6 +161,11 @@ impl Processes {
         }
         let record = Arc::new(Record {
             request: request.clone(),
+            constraints: constraints.clone(),
+            network: Arc::new(crate::network_approval::NetworkApprovals::new(
+                request.operation_id.clone(),
+                self.requirements.clone(),
+            )),
             cancellation: CancellationSource::new(),
             state: Mutex::new(LaunchState::Starting),
             launched: Condvar::new(),
@@ -158,7 +174,68 @@ impl Processes {
         records.insert(request.operation_id, record.clone());
         let worker = record.clone();
         let executor = self.executor.clone();
-        let policy = self.policy;
+        let policy = ash_sandboxing::SandboxPolicy::new(
+            if self.policy.file_system() == ash_sandboxing::FileSystemAccess::ReadOnly
+                || constraints.command_access == FileAccess::ReadOnly
+            {
+                ash_sandboxing::FileSystemAccess::ReadOnly
+            } else {
+                self.policy.file_system()
+            },
+            if self.policy.network() == ash_sandboxing::NetworkAccess::Denied
+                || constraints.network == NetworkAccess::Denied
+            {
+                ash_sandboxing::NetworkAccess::Denied
+            } else if constraints.network == NetworkAccess::Managed {
+                ash_sandboxing::NetworkAccess::Managed
+            } else {
+                self.policy.network()
+            },
+        );
+        let dir = self.grant.dir().clone();
+        let access = if policy.file_system() == ash_sandboxing::FileSystemAccess::ReadOnly {
+            ash_sandboxing::SandboxDirAccess::ReadOnly
+        } else {
+            ash_sandboxing::SandboxDirAccess::ReadWrite
+        };
+        let rules = constraints
+            .paths
+            .iter()
+            .filter(|rule| rule.access != ash_file_access::PathAccess::ReadWrite)
+            .map(|rule| {
+                ash_sandboxing::SandboxPathRule::pattern(
+                    dir.clone(),
+                    rule.pattern.clone(),
+                    match rule.access {
+                        ash_file_access::PathAccess::Denied => {
+                            ash_sandboxing::SandboxPathAccess::Denied
+                        }
+                        ash_file_access::PathAccess::ReadOnly
+                        | ash_file_access::PathAccess::ReadWrite => {
+                            ash_sandboxing::SandboxPathAccess::ReadOnly
+                        }
+                    },
+                    ash_sandboxing::PatternMatchTiming::Continuous,
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| ExecError::PermissionDenied)?;
+        let scope = ash_sandboxing::SandboxScope::new(
+            dir.clone(),
+            vec![ash_sandboxing::SandboxDirGrant::new(dir, access)],
+            vec![],
+        )
+        .and_then(|scope| {
+            scope
+                .with_host_read(match constraints.host_read {
+                    ash_file_access::HostReadAccess::Host => ash_sandboxing::HostReadScope::Host,
+                    ash_file_access::HostReadAccess::GrantedRoots => {
+                        ash_sandboxing::HostReadScope::Minimal
+                    }
+                })
+                .with_path_rules(rules)
+        })
+        .map_err(|_| ExecError::PermissionDenied)?;
         let handle = thread::Builder::new()
             .name("exec-process".into())
             .spawn(move || {
@@ -166,7 +243,7 @@ impl Processes {
                     authorization.subject(),
                     authorization.dir(),
                     Permission::ExecuteCommands,
-                    || run(&worker, &executor, policy),
+                    || run(&worker, &executor, policy, &scope),
                 );
                 if result.is_err() {
                     worker.reject("execution permission revoked".into());
@@ -263,6 +340,22 @@ impl Processes {
             Duration::from_millis(request.wait_millis),
         )
     }
+    pub(crate) fn network_requests(
+        &self,
+        operation: &str,
+    ) -> Result<Vec<exec_server_protocol::ProcessNetworkRequest>, ExecError> {
+        self.record(operation)?.network.requests()
+    }
+
+    pub(crate) fn resolve_network(
+        &self,
+        operation: &str,
+        request_id: &str,
+        allow: bool,
+    ) -> Result<(), ExecError> {
+        self.record(operation)?.network.respond(request_id, allow)
+    }
+
     pub fn cancel(&self, id: &str) -> Result<ProcessSnapshot, ExecError> {
         let record = self.record(id)?;
         record.cancellation.cancel();
@@ -357,7 +450,12 @@ impl Record {
         }
     }
 }
-fn run(record: &Record, executor: &ProcessExecutor<SandboxBackends>, policy: SandboxPolicy) {
+fn run(
+    record: &Record,
+    executor: &ProcessExecutor<SandboxBackends>,
+    policy: SandboxPolicy,
+    scope: &ash_sandboxing::SandboxScope,
+) {
     let terminal = match record.request.input {
         exec_server_protocol::ProcessInput::Terminal { rows, cols } => {
             Some(CommandTerminalSize { rows, cols })
@@ -365,6 +463,8 @@ fn run(record: &Record, executor: &ProcessExecutor<SandboxBackends>, policy: San
         _ => None,
     };
     let owner = record.owner();
+    let network = (policy.network() == ash_sandboxing::NetworkAccess::Managed)
+        .then(|| record.network.policy());
     let result = executor.start_retained_session(
         CommandRequest {
             program: record.request.program.clone(),
@@ -374,8 +474,8 @@ fn run(record: &Record, executor: &ProcessExecutor<SandboxBackends>, policy: San
         },
         CommandExecutionAuthority::Sandboxed(policy),
         &record.cancellation.token(),
-        None,
-        None,
+        Some(scope),
+        network.as_ref(),
         owner.clone(),
         CommandSessionOptions {
             execution_timeout: Duration::from_millis(record.request.timeout_millis),

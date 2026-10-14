@@ -19,6 +19,16 @@ use ash_protocol::ThreadId;
 /// App Server ownership of directory grants by Session tree or Thread subject.
 #[derive(Default)]
 pub(crate) struct DirGrants {
+    requested: RwLock<Vec<RequestedGrant>>,
+    approvals: RwLock<
+        BTreeMap<
+            SessionId,
+            Vec<(
+                ash_protocol::ActionProvenance,
+                ash_protocol::ActionApprovalRequest,
+            )>,
+        >,
+    >,
     session_trees: RwLock<BTreeMap<SessionId, Access>>,
     threads: RwLock<BTreeMap<ThreadId, ThreadDirs>>,
 }
@@ -31,9 +41,13 @@ struct ThreadDirs {
 #[derive(Clone, Debug)]
 pub(crate) struct ThreadDirScope {
     authorization: Authorization,
+    permissions: Permissions,
 }
 
 impl ThreadDirScope {
+    pub(crate) fn permissions(&self) -> &Permissions {
+        &self.permissions
+    }
     pub(crate) fn primary(&self) -> &Authorization {
         &self.authorization
     }
@@ -59,8 +73,231 @@ impl DirGrantEntry {
     }
 }
 
+struct RequestedGrant {
+    session: SessionId,
+    thread: ThreadId,
+    turn: ash_protocol::TurnId,
+    duration: ash_protocol::PermissionGrantDuration,
+    directories: Vec<Grant>,
+    network_hosts: Vec<String>,
+}
+
+impl Drop for RequestedGrant {
+    fn drop(&mut self) {
+        for grant in &self.directories {
+            grant.revoke();
+        }
+    }
+}
+
 impl DirGrants {
+    pub(crate) fn remember_approval(
+        &self,
+        session: SessionId,
+        provenance: ash_protocol::ActionProvenance,
+        request: ash_protocol::ActionApprovalRequest,
+    ) -> Result<(), String> {
+        let mut approvals = self
+            .approvals
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let entries = approvals.entry(session).or_default();
+        if entries.iter().any(|(source, entry)| {
+            source == &provenance
+                && entry.action_digest == request.action_digest
+                && entry.policy_revision == request.policy_revision
+                && entry.capabilities == request.capabilities
+        }) {
+            return Ok(());
+        }
+        if entries.len() >= 512 {
+            return Err("too many reusable action approvals".into());
+        }
+        entries.push((provenance, request));
+        Ok(())
+    }
+
+    pub(crate) fn has_approval(
+        &self,
+        session: &SessionId,
+        provenance: &ash_protocol::ActionProvenance,
+        request: &ash_protocol::ActionApprovalRequest,
+    ) -> bool {
+        self.approvals
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(session)
+            .is_some_and(|entries| {
+                entries.iter().any(|(source, entry)| {
+                    source == provenance
+                        && entry.action_digest == request.action_digest
+                        && entry.policy_revision == request.policy_revision
+                        && entry.capabilities == request.capabilities
+                })
+            })
+    }
+
+    pub(crate) fn grant_requested(
+        &self,
+        session: SessionId,
+        thread: ThreadId,
+        turn: ash_protocol::TurnId,
+        response: &ash_protocol::PermissionResponse,
+        bindings: &[Dir],
+    ) -> Result<(), String> {
+        if response
+            .directories
+            .iter()
+            .all(|entry| entry.permissions.is_empty())
+            && response.network_hosts.is_empty()
+        {
+            return Ok(());
+        }
+        let mut requested = self
+            .requested
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if requested.len() >= 512 {
+            return Err("too many live permission grants".into());
+        }
+        let directories = response
+            .directories
+            .iter()
+            .filter(|entry| !entry.permissions.is_empty())
+            .map(|entry| {
+                // Keep the opened identity and original path spelling from before the approval wait.
+                let dir = bindings
+                    .iter()
+                    .find(|dir| dir.canonical_path().to_string_lossy() == entry.path)
+                    .ok_or_else(|| "approved directory has no matching host identity".to_owned())?
+                    .clone();
+                dir.directory()
+                    .ensure_current()
+                    .map_err(|error| error.to_string())?;
+                let permissions = Permissions::new(entry.permissions.iter().copied());
+                Ok(match response.duration {
+                    ash_protocol::PermissionGrantDuration::Turn => Grant::for_turn(
+                        thread.clone(),
+                        turn.clone(),
+                        dir,
+                        GrantSource::ExplicitUser,
+                        permissions,
+                    ),
+                    ash_protocol::PermissionGrantDuration::Session => Grant::for_session_tree(
+                        session.clone(),
+                        dir,
+                        GrantSource::ExplicitUser,
+                        permissions,
+                    ),
+                })
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        requested.push(RequestedGrant {
+            session,
+            thread,
+            turn,
+            duration: response.duration,
+            directories,
+            network_hosts: response.network_hosts.clone(),
+        });
+        Ok(())
+    }
+
+    pub(crate) fn expire_turn(&self, thread: &ThreadId, turn: &ash_protocol::TurnId) {
+        self.requested
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .retain(|grant| {
+                grant.duration != ash_protocol::PermissionGrantDuration::Turn
+                    || &grant.thread != thread
+                    || &grant.turn != turn
+            });
+    }
+
+    pub(crate) fn requested_authorizations(
+        &self,
+        session: &SessionId,
+        thread: &ThreadId,
+        turn: &ash_protocol::TurnId,
+        permission: Permission,
+    ) -> Vec<Authorization> {
+        self.requested
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .filter(|grant| {
+                &grant.session == session
+                    && (grant.duration == ash_protocol::PermissionGrantDuration::Session
+                        || (&grant.thread == thread && &grant.turn == turn))
+            })
+            .flat_map(|grant| {
+                grant
+                    .directories
+                    .iter()
+                    .filter_map(|directory| directory.authorize(permission).ok())
+            })
+            .collect()
+    }
+
+    pub(crate) fn has_requested_network(
+        &self,
+        session: &SessionId,
+        thread: &ThreadId,
+        turn: &ash_protocol::TurnId,
+    ) -> bool {
+        self.requested
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .any(|grant| {
+                &grant.session == session
+                    && (grant.duration == ash_protocol::PermissionGrantDuration::Session
+                        || (&grant.thread == thread && &grant.turn == turn))
+                    && !grant.network_hosts.is_empty()
+            })
+    }
+
+    pub(crate) fn requested_network(
+        &self,
+        session: &SessionId,
+        thread: &ThreadId,
+        turn: &ash_protocol::TurnId,
+        host: &str,
+    ) -> bool {
+        self.requested
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .any(|grant| {
+                &grant.session == session
+                    && (grant.duration == ash_protocol::PermissionGrantDuration::Session
+                        || (&grant.thread == thread && &grant.turn == turn))
+                    && grant.network_hosts.iter().any(|allowed| allowed == host)
+            })
+    }
+
+    pub(crate) fn requested_context(
+        &self,
+        session: &SessionId,
+        thread: &ThreadId,
+    ) -> Vec<serde_json::Value> {
+        self.requested.read().unwrap_or_else(std::sync::PoisonError::into_inner).iter()
+            .filter(|grant| &grant.session == session && (grant.duration == ash_protocol::PermissionGrantDuration::Session || &grant.thread == thread))
+            .take(64).map(|grant| serde_json::json!({"duration": grant.duration, "turn": grant.turn,
+                "directories": grant.directories.iter().filter(|directory| directory.is_active()).map(|directory|
+                    serde_json::json!({"path": directory.dir().canonical_path(), "permissions": directory.permissions()})).collect::<Vec<_>>(),
+                "networkHosts": grant.network_hosts, "source": "requested-user-permission"})).collect()
+    }
+
     pub(crate) fn clear(&self) {
+        self.approvals
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
+        self.requested
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
         self.session_trees
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -68,6 +305,14 @@ impl DirGrants {
     }
 
     pub(crate) fn clear_session(&self, session_id: &SessionId) {
+        self.approvals
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(session_id);
+        self.requested
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .retain(|grant| &grant.session != session_id);
         self.session_trees
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -84,7 +329,7 @@ impl DirGrants {
             thread_id,
             dir,
             GrantSource::HostConfiguration,
-            thread_dir_permissions(),
+            thread_directory_capabilities(),
         )) {
             previous.revoke();
         }
@@ -133,7 +378,10 @@ impl DirGrants {
             .map(|grant| {
                 grant
                     .authorize(permission)
-                    .map(|authorization| ThreadDirScope { authorization })
+                    .map(|authorization| ThreadDirScope {
+                        authorization,
+                        permissions: grant.permissions().clone(),
+                    })
             })
             .transpose()
             .map_err(|error| AccessError::PermissionUnavailable {
@@ -156,6 +404,15 @@ impl DirGrants {
     }
 
     pub(crate) fn remove_dir(&self, session_id: &SessionId, path: &Path) -> Mutation {
+        self.requested
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .retain(|grant| {
+                &grant.session != session_id
+                    || !grant.directories.iter().any(|entry| {
+                        path == entry.dir().canonical_path() || path == entry.dir().requested_path()
+                    })
+            });
         let mut session_trees = self
             .session_trees
             .write()
@@ -224,12 +481,22 @@ impl DirGrants {
         let Some(dir) = access.find(&ash_file_access::EnvId::local(), path) else {
             return Ok(Mutation::NotPresent);
         };
-        access.set_permissions(
+        let result = access.set_permissions(
             &dir,
             DirSource::SessionRequest,
             expected_revision,
             permissions,
-        )
+        );
+        if result.is_ok() {
+            self.requested
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .retain(|grant| {
+                    &grant.session != session_id
+                        || !grant.directories.iter().any(|entry| entry.dir() == &dir)
+                });
+        }
+        result
     }
 
     pub(crate) fn snapshot_for(
@@ -285,11 +552,12 @@ impl DirGrants {
     }
 }
 
-fn thread_dir_permissions() -> Permissions {
+fn thread_directory_capabilities() -> Permissions {
     Permissions::new([
         Permission::ReadFiles,
-        Permission::WriteFiles,
+        Permission::SearchFiles,
         Permission::BrowseFiles,
+        Permission::WriteFiles,
         Permission::ExecuteCommands,
         Permission::InspectRepository,
         Permission::MutateRepository,

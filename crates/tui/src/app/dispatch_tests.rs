@@ -632,8 +632,8 @@ args = ["--check"]
         dir.canonical_path().join(".ash/config.toml")
     );
     client
-        .set_session_dir_permissions(
-            ash_app_server_protocol::protocol::environment::SessionDirPermissionsSetParams {
+        .set_session_directory_grant(
+            ash_app_server_protocol::protocol::environment::SessionDirectoryGrantSetParams {
                 session_id: conversation.session_id().clone(),
                 path: workspace.clone(),
                 expected_revision: added.revision,

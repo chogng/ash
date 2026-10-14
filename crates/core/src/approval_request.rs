@@ -56,6 +56,17 @@ pub fn durable_approval_request(
         policy_revision: reviewed.action_policy_revision().as_str().to_owned(),
         capabilities,
         reason: approval.reason().to_owned(),
+        command: reviewed
+            .action()
+            .command()
+            .map(|command| ash_protocol::ActionApprovalCommand {
+                program: command.program().to_owned(),
+                arguments: command.arguments().to_vec(),
+            }),
+        allowed_decisions: vec![
+            ash_protocol::ActionApprovalDecision::ApproveOnce,
+            ash_protocol::ActionApprovalDecision::Decline,
+        ],
         sandbox_denial: None,
     })
 }

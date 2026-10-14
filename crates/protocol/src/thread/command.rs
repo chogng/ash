@@ -109,6 +109,11 @@ pub enum ThreadCommand {
         request_id: RequestId,
         response: ActionApprovalResponse,
     },
+    ResolvePermissions {
+        turn_id: TurnId,
+        request_id: RequestId,
+        response: crate::PermissionResponse,
+    },
     ResolveUserInput {
         turn_id: TurnId,
         request_id: RequestId,

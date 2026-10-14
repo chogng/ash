@@ -104,3 +104,99 @@ fn document_creation_cannot_replace_an_intervening_writer() {
     );
     assert_eq!(fs::read_to_string(&path).unwrap(), "external");
 }
+
+#[test]
+fn authorized_documents_enforce_paths_and_revocation_at_commit() {
+    use ash_file_access::Grant;
+    use ash_file_access::GrantSource;
+    use ash_file_access::PathAccess;
+    use ash_file_access::PathAccessPolicy;
+    use ash_file_access::PathAccessRule;
+    use ash_file_access::Permission;
+    use ash_file_access::Permissions;
+    let temp = tempfile::tempdir().unwrap();
+    let dir = Dir::open_local(temp.path()).unwrap();
+    let visible = dir.canonical_path().join("visible");
+    let secret = dir.canonical_path().join("secret");
+    fs::write(&visible, "old").unwrap();
+    fs::write(&secret, "private").unwrap();
+    let grant = Grant::for_environment(
+        dir.clone(),
+        GrantSource::ExplicitUser,
+        Permissions::new([Permission::WriteFiles]),
+    )
+    .with_path_policy(
+        PathAccessPolicy::new(
+            PathAccess::ReadWrite,
+            vec![PathAccessRule {
+                pattern: "secret".into(),
+                access: PathAccess::Denied,
+            }],
+        )
+        .unwrap(),
+    );
+    let editor = AuthorizedTextDocuments::new(
+        grant.authorize(Permission::WriteFiles).unwrap(),
+        std::sync::Arc::new(FileTextDocuments::new(dir.clone())),
+        [],
+    );
+    let token = CancellationSource::new().token();
+    assert!(editor.read(&secret, &token).is_err());
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink("secret", dir.canonical_path().join("alias")).unwrap();
+        assert!(
+            editor
+                .read(&dir.canonical_path().join("alias"), &token)
+                .is_err()
+        );
+        fs::create_dir(dir.canonical_path().join("denied-directory")).unwrap();
+        std::os::unix::fs::symlink(
+            "denied-directory",
+            dir.canonical_path().join("directory-alias"),
+        )
+        .unwrap();
+        let policy = ash_file_access::PathAccessPolicy::new(
+            PathAccess::ReadWrite,
+            vec![PathAccessRule {
+                pattern: "denied-directory".into(),
+                access: PathAccess::Denied,
+            }],
+        )
+        .unwrap();
+        let restricted = AuthorizedTextDocuments::new(
+            grant
+                .authorize(Permission::WriteFiles)
+                .unwrap()
+                .constrained_by(&policy),
+            std::sync::Arc::new(FileTextDocuments::new(dir.clone())),
+            [],
+        );
+        assert!(
+            restricted
+                .apply(
+                    vec![TextDocumentChange::Create {
+                        path: dir.canonical_path().join("directory-alias/new"),
+                        text: "denied".into()
+                    }],
+                    &token
+                )
+                .is_err()
+        );
+        assert!(!dir.canonical_path().join("denied-directory/new").exists());
+    }
+    let snapshot = editor.read(&visible, &token).unwrap().unwrap();
+    grant.revoke();
+    assert!(
+        editor
+            .apply(
+                vec![TextDocumentChange::Update {
+                    snapshot: snapshot.id,
+                    text: "unauthorized".into()
+                }],
+                &token
+            )
+            .is_err()
+    );
+    assert_eq!(fs::read_to_string(visible).unwrap(), "old");
+}

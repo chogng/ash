@@ -11,6 +11,9 @@ doctest = false
 
 [dependencies]
 serde = { workspace = true }
+ash-file-access = { workspace = true }
+ash-protocol = { workspace = true }
+network-proxy = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }

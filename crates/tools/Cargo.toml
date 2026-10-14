@@ -12,6 +12,7 @@ path = "src/lib.rs"
 
 [dependencies]
 ash-file-system = { workspace = true }
+ash-file-access = { workspace = true }
 network-proxy = { workspace = true }
 bm25 = { workspace = true }
 regex = { workspace = true }

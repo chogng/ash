@@ -806,6 +806,12 @@ fn refresh_server_event(
                             turn_id, request_id, request,
                         )));
                     }
+                    ash_protocol::AgentRequest::Permissions { request } => {
+                        match Query::open_permissions(turn_id, request_id, request) {
+                            Ok(query) => app.update(ThreadEvent::QueryRequested(query)),
+                            Err(error) => app.update(ThreadEvent::FailureReported(error)),
+                        }
+                    }
                     ash_protocol::AgentRequest::UserInput { request } => {
                         match Query::open(turn_id, request_id, request) {
                             Ok(query) => app.update(ThreadEvent::QueryRequested(query)),

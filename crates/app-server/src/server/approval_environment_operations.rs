@@ -30,6 +30,8 @@ use std::sync::Arc;
 struct ThreadReviewEnvironment {
     environment: Arc<Environment>,
     dirs: Arc<DirGrants>,
+    threads: Arc<ash_core::ThreadController>,
+    policy: Arc<dyn core_api::ActionPolicyService>,
 }
 
 impl ReviewEnvironmentService for ThreadReviewEnvironment {
@@ -38,16 +40,23 @@ impl ReviewEnvironmentService for ThreadReviewEnvironment {
         thread: &ash_protocol::ThreadId,
         request: &ash_action_policy::ActionReviewRequest,
     ) -> Result<Vec<ash_protocol::ReviewEvidence>, core_api::CoreError> {
+        let snapshot = self.threads.read_thread(thread)?;
+        let mut evidence = self
+            .policy
+            .permission_context(&snapshot.session_id, thread)?;
         let Some(scope) = self
             .dirs
             .thread_scope(thread, Permission::ReadFiles)
             .map_err(|error| core_api::CoreError::Policy(error.to_string()))?
         else {
-            return Ok(Vec::new());
+            return Ok(evidence);
         };
-        self.environment
-            .evidence(scope.primary(), request)
-            .map_err(|error| core_api::CoreError::Policy(error.to_string()))
+        evidence.extend(
+            self.environment
+                .evidence(scope.primary(), request)
+                .map_err(|error| core_api::CoreError::Policy(error.to_string()))?,
+        );
+        Ok(evidence)
     }
 }
 
@@ -60,9 +69,20 @@ impl AppServer {
             ash_state::SqliteEnvironmentStore::open(database).map_err(|error| error.to_string())?,
         );
         let environment = Arc::new(Environment::new(store));
+        let owner = self
+            .local_env_host
+            .as_ref()
+            .map(|host| host.permission_policy())
+            .unwrap_or_else(|| {
+                Arc::new(crate::execution_environments::EnvironmentPolicy::default())
+            });
+        let policy = self.shared_action_policy(owner);
+        let dirs = self.env_runtime_mut().dir_grants.clone();
         let service = Arc::new(ThreadReviewEnvironment {
             environment: environment.clone(),
-            dirs: self.env_runtime_mut().dir_grants.clone(),
+            dirs,
+            threads: self.threads.clone(),
+            policy,
         });
         let executor = self
             .env_runtime_mut()

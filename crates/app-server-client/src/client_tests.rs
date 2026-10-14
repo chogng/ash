@@ -8,8 +8,8 @@ use ash_app_server_protocol::protocol::environment::PermissionDto;
 use ash_app_server_protocol::protocol::environment::SessionDirAddParams;
 use ash_app_server_protocol::protocol::environment::SessionDirListParams;
 use ash_app_server_protocol::protocol::environment::SessionDirMutationDto;
-use ash_app_server_protocol::protocol::environment::SessionDirPermissionsSetParams;
 use ash_app_server_protocol::protocol::environment::SessionDirRemoveParams;
+use ash_app_server_protocol::protocol::environment::SessionDirectoryGrantSetParams;
 use ash_app_server_protocol::protocol::fs::{
     FsFileType, FsGetMetadataParams, FsReadBinaryFileParams, FsReadDirectoryParams,
     FsReadFileParams, FsWriteFileParams,
@@ -224,7 +224,7 @@ fn client_manages_session_dirs_through_typed_contracts() {
     assert_eq!(added.mutation, SessionDirMutationDto::Added);
     assert_eq!(added.dirs[0].path, PathBuf::from("/tmp/extra"));
     let updated = client
-        .set_session_dir_permissions(SessionDirPermissionsSetParams {
+        .set_session_directory_grant(SessionDirectoryGrantSetParams {
             session_id: session_id.clone(),
             path: "/tmp/extra".into(),
             expected_revision: 1,

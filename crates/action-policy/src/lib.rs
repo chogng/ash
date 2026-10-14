@@ -21,6 +21,7 @@ pub use decision::{
     PermissionBypassGrant, PolicyError, ReviewFailurePolicy, SaferActionRequest,
 };
 pub use engine::ActionPolicyEngine;
+pub use engine::decide_exec_policy;
 pub use grant::{GrantId, UnsandboxedGrant};
 pub use grants::UserAllowlist;
 

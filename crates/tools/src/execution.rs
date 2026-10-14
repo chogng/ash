@@ -64,6 +64,7 @@ pub struct ToolExecutionContext {
     thread_id: Option<ash_protocol::ThreadId>,
     execution_dir: Option<PathBuf>,
     sandbox_scope: Option<SandboxScope>,
+    directory_authorizations: Vec<ash_file_access::Authorization>,
     network_policy: Option<network_proxy::NetworkPolicyHandle>,
 }
 
@@ -92,8 +93,22 @@ impl ToolExecutionContext {
             thread_id: None,
             execution_dir: None,
             sandbox_scope: None,
+            directory_authorizations: Vec::new(),
             network_policy: None,
         }
+    }
+
+    /// Exact proofs from the host preparation boundary, shared with document IO and revocation.
+    pub fn with_directory_authorizations(
+        mut self,
+        authorizations: Vec<ash_file_access::Authorization>,
+    ) -> Self {
+        self.directory_authorizations = authorizations;
+        self
+    }
+
+    pub fn directory_authorizations(&self) -> &[ash_file_access::Authorization] {
+        &self.directory_authorizations
     }
 
     pub fn with_session_id(mut self, session_id: ash_protocol::SessionId) -> Self {

@@ -1003,6 +1003,21 @@ struct ReloadableActionPolicyService {
 }
 
 impl ActionPolicyService for ReloadableActionPolicyService {
+    fn check_approval_mode(&self, mode: ash_protocol::ApprovalMode) -> Result<(), CoreError> {
+        self.ports.generation().policy.check_approval_mode(mode)
+    }
+
+    fn permission_context(
+        &self,
+        session: &ash_protocol::SessionId,
+        thread: &ash_protocol::ThreadId,
+    ) -> Result<Vec<ash_protocol::ReviewEvidence>, CoreError> {
+        self.ports
+            .generation()
+            .policy
+            .permission_context(session, thread)
+    }
+
     fn revision_for(&self, provenance: &ActionProvenance) -> String {
         self.ports.generation().policy.revision_for(provenance)
     }
@@ -1862,6 +1877,47 @@ struct CompositeActionPolicyService {
 }
 
 impl ActionPolicyService for CompositeActionPolicyService {
+    fn check_approval_mode(&self, mode: ash_protocol::ApprovalMode) -> Result<(), CoreError> {
+        for policy in [
+            &self.environment,
+            &self.dynamic,
+            &self.extension,
+            &self.host,
+            &self.application,
+            &self.local,
+            &self.mcp,
+        ]
+        .into_iter()
+        .flatten()
+        {
+            policy.check_approval_mode(mode)?;
+        }
+        Ok(())
+    }
+
+    fn permission_context(
+        &self,
+        session: &ash_protocol::SessionId,
+        thread: &ash_protocol::ThreadId,
+    ) -> Result<Vec<ash_protocol::ReviewEvidence>, CoreError> {
+        let mut evidence = Vec::new();
+        for policy in [
+            &self.environment,
+            &self.dynamic,
+            &self.extension,
+            &self.host,
+            &self.application,
+            &self.local,
+            &self.mcp,
+        ]
+        .into_iter()
+        .flatten()
+        {
+            evidence.extend(policy.permission_context(session, thread)?);
+        }
+        Ok(evidence)
+    }
+
     fn revision_for(&self, provenance: &ActionProvenance) -> String {
         if provenance.source() == &ActionSource::User
             && ash_config::HookId::new(provenance.source_id()).is_ok()

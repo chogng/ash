@@ -65,7 +65,7 @@ use ash_app_server_protocol::protocol::diff::DiffComputeResult;
 use ash_app_server_protocol::protocol::environment::{
     EnvDirsSetParams, EnvDirsSetResult, SessionDirAddParams, SessionDirAddResult,
     SessionDirListParams, SessionDirListResult, SessionDirMoveParams, SessionDirMoveResult,
-    SessionDirMutationResult, SessionDirPermissionsSetParams, SessionDirRemoveParams,
+    SessionDirMutationResult, SessionDirRemoveParams, SessionDirectoryGrantSetParams,
 };
 use ash_app_server_protocol::protocol::error::AppServerErrorData;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
@@ -443,11 +443,11 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         self.call(ClientMethod::SessionDirRemove, params)
     }
 
-    pub fn set_session_dir_permissions(
+    pub fn set_session_directory_grant(
         &mut self,
-        params: SessionDirPermissionsSetParams,
+        params: SessionDirectoryGrantSetParams,
     ) -> Result<SessionDirMutationResult, ClientError> {
-        self.call(ClientMethod::SessionDirPermissionsSet, params)
+        self.call(ClientMethod::SessionDirectoryGrantSet, params)
     }
 
     /// Lists enabled, resolved language servers without starting their processes.

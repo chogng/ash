@@ -795,3 +795,75 @@ fn agent_commands_stamp_their_identity_in_pipes_and_ptys_without_inheriting_anot
         }
     }
 }
+
+#[cfg(unix)]
+#[test]
+fn caller_permission_snapshots_narrow_remote_file_and_process_authority() {
+    let host = Host::start();
+    std::fs::write(host.root.path().join("secret"), "private").unwrap();
+    let client = host.client();
+    let constraints = exec_server_protocol::ExecutionConstraints {
+        file_access: exec_server_protocol::FileAccess::ReadOnly,
+        command_access: exec_server_protocol::FileAccess::ReadOnly,
+        network: exec_server_protocol::NetworkAccess::Denied,
+        host_read: ash_file_access::HostReadAccess::Host,
+        paths: vec![ash_file_access::PathAccessRule {
+            pattern: "secret".into(),
+            access: ash_file_access::PathAccess::Denied,
+        }],
+    };
+    let environment = exec_server::ExecutionEnvironment::Remote(client)
+        .constrained(constraints.clone())
+        .unwrap();
+    assert!(matches!(
+        environment.read_file(
+            "secret",
+            &ash_async_utils::CancellationSource::new().token()
+        ),
+        Err(exec_server::Error::Remote(ExecError::PermissionDenied))
+    ));
+    assert!(
+        environment
+            .write_file(
+                "constrained-write",
+                "new",
+                b"denied",
+                WriteCondition::MissingOrEmpty,
+                &ash_async_utils::CancellationSource::new().token()
+            )
+            .is_err()
+    );
+    assert!(!host.root.path().join("new").exists());
+    // No path pattern is needed for this assertion; the runtime kernel must enforce read-only.
+    let mut process_constraints = constraints;
+    process_constraints.paths.clear();
+    let process = exec_server::ExecutionEnvironment::Remote(host.client())
+        .constrained(process_constraints)
+        .unwrap();
+    process
+        .request(Request::ProcessStart(command(
+            "readonly-process",
+            "printf forbidden > process-file",
+        )))
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(15);
+    loop {
+        let Response::Process(snapshot) = process
+            .request(Request::ProcessRead(ProcessRead {
+                operation_id: "readonly-process".into(),
+                stdout_cursor: 0,
+                stderr_cursor: 0,
+                wait_millis: 100,
+            }))
+            .unwrap()
+        else {
+            panic!("expected process response");
+        };
+        if snapshot.state != ProcessState::Running {
+            assert_ne!(snapshot.state, ProcessState::Exited { code: Some(0) });
+            break;
+        }
+        assert!(Instant::now() < deadline);
+    }
+    assert!(!host.root.path().join("process-file").exists());
+}

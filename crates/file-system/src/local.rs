@@ -172,6 +172,7 @@ impl LocalFileSystem {
         cancellation: &ash_async_utils::CancellationToken,
     ) -> Result<FileMetadata, FileSystemError> {
         self.execute(Permission::WriteFiles, |files| {
+            files.resolve_for_write(path)?;
             crate::elevated::write(&files.dir, path, content, expected_revision, cancellation)
         })
     }
@@ -195,7 +196,16 @@ impl LocalFileSystem {
         };
         authorization
             .execute(authorization.subject(), &self.files.dir, permission, || {
-                operation(&self.files)
+                let files = ScopedFiles {
+                    dir: self.files.dir.clone(),
+                    policy: std::sync::Arc::new(authorization.path_policy().clone()),
+                    operation: if permission == Permission::WriteFiles {
+                        ash_file_access::PathOperation::Write
+                    } else {
+                        ash_file_access::PathOperation::Read
+                    },
+                };
+                operation(&files)
             })
             .map_err(|error| FileSystemError::PermissionDenied(error.to_string()))?
     }
@@ -278,6 +288,21 @@ impl FileSystem for LocalFileSystem {
                         &source_path,
                         target_files.handle(),
                         &target_path,
+                        &|source, target| {
+                            if source_files
+                                .policy
+                                .allows(source, ash_file_access::PathOperation::Read)
+                                && target_files
+                                    .policy
+                                    .allows(target, ash_file_access::PathOperation::Write)
+                            {
+                                Ok(())
+                            } else {
+                                Err(FileSystemError::PermissionDenied(
+                                    "copy path exceeds its permission profile".into(),
+                                ))
+                            }
+                        },
                     )
                 })
             })
@@ -569,6 +594,18 @@ fn transfer_system_files(
                     Path::new(name),
                     target_files.handle(),
                     target,
+                    &|_, target| {
+                        if target_files
+                            .policy
+                            .allows(target, ash_file_access::PathOperation::Write)
+                        {
+                            Ok(())
+                        } else {
+                            Err(FileSystemError::PermissionDenied(
+                                "copy target exceeds its permission profile".into(),
+                            ))
+                        }
+                    },
                 )?;
                 copied_targets.push(target.clone());
             }
@@ -912,7 +949,9 @@ fn copy_resource(
     source: &Path,
     target_dir: &Directory,
     target: &Path,
+    permitted: &dyn Fn(&Path, &Path) -> Result<(), FileSystemError>,
 ) -> Result<(), FileSystemError> {
+    permitted(source, target)?;
     let kind = source_dir
         .symlink_metadata(source)
         .map_err(io_error)?
@@ -971,6 +1010,7 @@ fn copy_resource(
                 &source.join(&name),
                 target_dir,
                 &target.join(&name),
+                permitted,
             )?;
         }
         target_dir
@@ -986,6 +1026,8 @@ fn copy_resource(
 /// Local implementation that confines all operations to one canonical directory.
 struct ScopedFiles {
     dir: Dir,
+    policy: std::sync::Arc<ash_file_access::PathAccessPolicy>,
+    operation: ash_file_access::PathOperation,
 }
 
 /// Commits mutations under the same directory lock as ordinary conditional writes.
@@ -1166,10 +1208,15 @@ fn validate_file_mutation(
 
 impl ScopedFiles {
     pub fn new(dir: Dir) -> Self {
-        Self { dir }
+        Self {
+            dir,
+            policy: std::sync::Arc::new(ash_file_access::PathAccessPolicy::default()),
+            operation: ash_file_access::PathOperation::Read,
+        }
     }
 
     fn resolve_existing(&self, path: &Path) -> Result<PathBuf, FileSystemError> {
+        self.check_requested(path)?;
         match self.dir.resolve_existing(path) {
             Ok(resolved) => self.relative(resolved),
             Err(_) => match self.dir.resolve_for_write(path) {
@@ -1183,6 +1230,7 @@ impl ScopedFiles {
     }
 
     fn resolve_for_write(&self, path: &Path) -> Result<PathBuf, FileSystemError> {
+        self.check_requested(path)?;
         let resolved = self
             .dir
             .resolve_for_write(path)
@@ -1190,11 +1238,28 @@ impl ScopedFiles {
         self.relative(resolved)
     }
 
+    fn check_requested(&self, path: &Path) -> Result<(), FileSystemError> {
+        if !self.policy.allows(path, self.operation) {
+            return Err(FileSystemError::PermissionDenied(
+                "path is denied by the permission profile".into(),
+            ));
+        }
+        Ok(())
+    }
+
     fn handle(&self) -> &Directory {
         self.dir.directory().handle()
     }
 
     fn relative(&self, path: PathBuf) -> Result<PathBuf, FileSystemError> {
+        let relative = path
+            .strip_prefix(self.dir.canonical_path())
+            .map_err(|_| FileSystemError::InvalidPath(path.clone()))?;
+        if !self.policy.allows(relative, self.operation) {
+            return Err(FileSystemError::PermissionDenied(
+                "path is outside the effective permission profile".into(),
+            ));
+        }
         path.strip_prefix(self.dir.canonical_path())
             .map(|path| {
                 if path.as_os_str().is_empty() {
@@ -1435,10 +1500,22 @@ impl ScopedFiles {
         }
         let mut entries = self
             .handle()
-            .read_dir(resolved)
+            .read_dir(&resolved)
             .map_err(io_error)?
+            .filter_map(|entry| match entry {
+                Ok(entry) => {
+                    let child = resolved.join(entry.file_name());
+                    match self.resolve_existing(&child) {
+                        Ok(_) => Some(Ok(entry)),
+                        Err(FileSystemError::PermissionDenied(_))
+                        | Err(FileSystemError::InvalidPath(_)) => None,
+                        Err(error) => Some(Err(error)),
+                    }
+                }
+                Err(error) => Some(Err(io_error(error))),
+            })
             .map(|entry| {
-                let entry = entry.map_err(io_error)?;
+                let entry = entry?;
                 let entry_type = entry.file_type().map_err(io_error)?;
                 Ok(DirectoryEntry {
                     name: entry.file_name().to_string_lossy().into_owned(),

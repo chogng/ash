@@ -29,6 +29,10 @@ ash-protocol = { workspace = true }
 plugin = { package = "ash-plugin", path = "../plugin" }
 ash-state = { workspace = true }
 ash-file-access = { workspace = true }
+ash-file-identity = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = ["Win32_Storage_FileSystem"] }
 
 [lints]
 workspace = true

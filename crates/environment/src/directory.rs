@@ -194,8 +194,13 @@ impl Directory {
                 message: error.to_string(),
             }
         })?;
-        self.ensure_contained(canonical_parent)?;
-        Ok(candidate)
+        self.ensure_contained(canonical_parent.clone())?;
+        let suffix = candidate
+            .strip_prefix(existing_parent)
+            .map_err(|_| DirPathError::InvalidRelativePath(relative_path.to_path_buf()))?;
+        // Return the actual parent spelling even when the leaf does not exist. Path policy owners
+        // must see a symlink's destination instead of a lexical alias that hides a denied subtree.
+        Ok(canonical_parent.join(suffix))
     }
 
     /// Projects an observed absolute path into this directory's relative namespace.

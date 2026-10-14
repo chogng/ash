@@ -116,3 +116,67 @@ fn pointer_choice_uses_the_full_row_and_the_ordinary_activation_path() {
         ApprovalOutcome::Respond(ApprovalDecision::Decline)
     );
 }
+
+#[test]
+fn reusable_approval_choices_render_and_submit_the_advertised_authority() {
+    let mut approval = Approval::open(
+        ash_protocol::TurnId::new("turn").unwrap(),
+        ash_protocol::RequestId::new("approval").unwrap(),
+        ash_protocol::ActionApprovalRequest {
+            action_digest: "a".repeat(64),
+            policy_revision: "policy".into(),
+            reason: "Run exact command?".into(),
+            capabilities: vec![ash_protocol::ActionApprovalCapability {
+                kind: ash_protocol::ActionApprovalCapabilityKind::ProcessSpawn,
+                scope: "/project".into(),
+            }],
+            allowed_decisions: vec![
+                ash_protocol::ActionApprovalDecision::ApproveOnce,
+                ash_protocol::ActionApprovalDecision::ApproveForSession,
+                ash_protocol::ActionApprovalDecision::ApproveAndSaveRule,
+                ash_protocol::ActionApprovalDecision::Decline,
+            ],
+            command: Some(ash_protocol::ActionApprovalCommand {
+                program: "echo".into(),
+                arguments: vec!["a b".into(), "<input>".into()],
+            }),
+            sandbox_denial: None,
+        },
+    );
+    let mut terminal = Terminal::new(TestBackend::new(72, 12)).unwrap();
+    terminal
+        .draw(|frame| {
+            super::draw(
+                frame,
+                Rect::new(0, 0, 72, 12),
+                approval.view(),
+                None,
+                None,
+                crate::render::test_context().with_language(crate::nls::Language::Chinese),
+            )
+        })
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let text = (0..12)
+        .map(|row| {
+            (0..72)
+                .map(|column| buffer[(column, row)].symbol())
+                .collect::<String>()
+                .trim_end()
+                .to_owned()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    insta::assert_snapshot!("reusable_approval_choices", text);
+    let visible = text.replace(' ', "");
+    assert!(visible.contains("本会话内批准同一操作"));
+    assert!(visible.contains("保存此精确操作的批准"));
+    assert_eq!(
+        approval.activate(2),
+        ApprovalOutcome::Respond(ApprovalDecision::ApproveAndSaveRule)
+    );
+    assert!(
+        matches!(approval.response(ApprovalDecision::ApproveAndSaveRule).response, ash_protocol::AgentResponse::Approval { response }
+        if response.decision == ash_protocol::ActionApprovalDecision::ApproveAndSaveRule)
+    );
+}

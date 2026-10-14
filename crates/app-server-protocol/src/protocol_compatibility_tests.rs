@@ -314,6 +314,9 @@ fn directory_grants_host_has_one_wire_name_and_old_methods_are_unregistered() {
         DirectoryGrantsHostCapability::name(&ts_rs::Config::default()),
         "DirectoryGrantsHostCapability"
     );
+    assert!(client_method("session/dirs/permissions/set").is_none());
+    assert!(client_method_definition("session/dirs/permissions/set").is_none());
+    assert!(client_method("session/directoryGrants/set").is_some());
     // Unknown initialize fields cannot become authority, even on a product connection.
     let legacy: ClientCapabilities =
         serde_json::from_value(serde_json::json!({"dirPermissionsHost":{"version":1}})).unwrap();

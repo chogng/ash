@@ -596,7 +596,7 @@ fn development_task_approval_accepts_or_declines_the_reviewed_recipe_before_exec
                 &harness.server,
                 &mut harness.owner,
                 json!({
-                    "jsonrpc":"2.0","id":31,"method":"session/dirs/permissions/set",
+                    "jsonrpc":"2.0","id":31,"method":"session/directoryGrants/set",
                     "params":{"sessionId":harness.session_id,"path":dependency.path(),"expectedRevision":2,"permissions":["readFiles"]}
                 }),
             );

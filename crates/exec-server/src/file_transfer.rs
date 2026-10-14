@@ -35,6 +35,7 @@ struct ReadSnapshot {
 }
 
 struct Upload {
+    scope_identity: String,
     path: String,
     total_bytes: usize,
     condition: WriteCondition,
@@ -51,6 +52,16 @@ pub(super) struct FileTransfers {
 }
 
 impl FileTransfers {
+    pub(super) fn upload_path(&self, operation_id: &str) -> Result<String, ExecError> {
+        exec_server_protocol::validate_id(operation_id)?;
+        self.uploads
+            .lock()
+            .map_err(|_| ExecError::Busy)?
+            .get(operation_id)
+            .map(|upload| upload.path.clone())
+            .ok_or(ExecError::NotFound)
+    }
+
     pub(super) fn read(
         &self,
         files: &LocalFileSystem,
@@ -124,6 +135,7 @@ impl FileTransfers {
         &self,
         files: &LocalFileSystem,
         request: Request,
+        scope_identity: &str,
     ) -> Result<FileWriteState, ExecError> {
         let operation_id = match &request {
             Request::FileWriteBegin { operation_id, .. }
@@ -131,8 +143,11 @@ impl FileTransfers {
             | Request::FileWriteCommit { operation_id }
             | Request::FileWriteAbort { operation_id }
             | Request::FileWriteStatus { operation_id } => operation_id,
-            Request::EnvironmentInfo
+            Request::Constrained { .. }
+            | Request::EnvironmentInfo
             | Request::ProcessStart(_)
+            | Request::ProcessNetworkRequests { .. }
+            | Request::ResolveProcessNetworkRequest { .. }
             | Request::ProcessRead(_)
             | Request::ProcessCancel { .. }
             | Request::ProcessWrite { .. }
@@ -166,7 +181,8 @@ impl FileTransfers {
                 .ensure_permission(Permission::WriteFiles)
                 .map_err(file_error)?;
             if let Some(upload) = uploads.get(&operation_id) {
-                if upload.path != path
+                if upload.scope_identity != scope_identity
+                    || upload.path != path
                     || upload.total_bytes as u64 != total_bytes
                     || upload.condition != condition
                     || upload.content_revision != content_revision
@@ -187,6 +203,7 @@ impl FileTransfers {
             uploads.insert(
                 operation_id,
                 Upload {
+                    scope_identity: scope_identity.into(),
                     path,
                     total_bytes: total_bytes as usize,
                     condition,
@@ -199,6 +216,9 @@ impl FileTransfers {
             return Ok(state);
         }
         let upload = uploads.get_mut(operation_id).ok_or(ExecError::NotFound)?;
+        if upload.scope_identity != scope_identity {
+            return Err(ExecError::Conflict);
+        }
         match request {
             Request::FileWriteChunk { offset, bytes, .. } => {
                 if bytes.is_empty() || bytes.len() > MAX_FILE_CHUNK_BYTES {
@@ -269,8 +289,11 @@ impl FileTransfers {
             }
             Request::FileWriteStatus { .. } => {}
             Request::FileWriteBegin { .. }
+            | Request::Constrained { .. }
             | Request::EnvironmentInfo
             | Request::ProcessStart(_)
+            | Request::ProcessNetworkRequests { .. }
+            | Request::ResolveProcessNetworkRequest { .. }
             | Request::ProcessRead(_)
             | Request::ProcessCancel { .. }
             | Request::ProcessWrite { .. }

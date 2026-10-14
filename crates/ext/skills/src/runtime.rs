@@ -522,14 +522,26 @@ impl SkillRuntime {
         paths
     }
 
-    /// Rebinds the native `.ash/skills` source for the active directory.
+    /// Rebinds the `.ash/skills` source for an explicitly authorized directory.
     pub fn bind_dir_root(&self, dir_root: PathBuf) -> Result<Arc<SkillRuntimeSnapshot>, String> {
+        self.replace_directory_source(Some(dir_root))
+    }
+
+    /// Removes directory-owned skills after the root is closed or discovery authority is revoked.
+    pub fn unbind_dir_root(&self) -> Result<Arc<SkillRuntimeSnapshot>, String> {
+        self.replace_directory_source(None)
+    }
+
+    fn replace_directory_source(
+        &self,
+        dir_root: Option<PathBuf>,
+    ) -> Result<Arc<SkillRuntimeSnapshot>, String> {
         let previous = {
             let mut current = self
                 .dir_root
                 .lock()
                 .map_err(|_| "Directory Skill source lock poisoned".to_string())?;
-            current.replace(dir_root)
+            std::mem::replace(&mut *current, dir_root)
         };
         match self.reconcile(SkillCatalogReload::Refresh) {
             Ok(snapshot) => Ok(snapshot),

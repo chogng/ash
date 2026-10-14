@@ -1184,6 +1184,22 @@ impl TurnExecutor {
                     "Your last response declared progress or a partial answer but supplied no next action. Continue with the necessary tool calls, or provide your final answer for this turn. Do not repeat a progress-only response.",
                 ));
             }
+            for fact in self
+                .policy
+                .permission_context(&snapshot.session_id, thread_id)
+                .map_err(ExecutionFailure::model)?
+            {
+                extension_fragments.push(ash_extension_api::PromptFragment::new(
+                    ash_extension_api::PromptFragmentSource::new(
+                        "host",
+                        fact.source(),
+                        &self.policy.revision(),
+                    ),
+                    ash_extension_api::PromptFragmentLayer::Product,
+                    ash_extension_api::PromptFragmentRetention::Required,
+                    format!("Current host permission facts: {}", fact.content()),
+                ));
+            }
             let harness_context = harness_context.as_ref().clone().with_time_context(
                 self.threads
                     .sample_time_context()

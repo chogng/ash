@@ -861,6 +861,11 @@ fn fork_session_binds_extensions_and_delivers_approval_after_subscription() {
                             scope: "example.test".into(),
                         }],
                         reason: "test approval".into(),
+                        command: None,
+                        allowed_decisions: vec![
+                            ash_protocol::ActionApprovalDecision::ApproveOnce,
+                            ash_protocol::ActionApprovalDecision::Decline,
+                        ],
                         sandbox_denial: None,
                     },
                 },
@@ -1402,6 +1407,11 @@ fn rejected_thread_subscription_does_not_deliver_or_cancel_a_pending_interaction
                                     scope: "example.test".into(),
                                 }],
                                 reason: "Approve test access".into(),
+                                command: None,
+                                allowed_decisions: vec![
+                                    ash_protocol::ActionApprovalDecision::ApproveOnce,
+                                    ash_protocol::ActionApprovalDecision::Decline,
+                                ],
                                 sandbox_denial: None,
                             },
                         }

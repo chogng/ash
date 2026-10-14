@@ -146,7 +146,7 @@ pub struct SessionDirMoveResult {
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct SessionDirPermissionsSetParams {
+pub struct SessionDirectoryGrantSetParams {
     pub session_id: SessionId,
     pub path: PathBuf,
     #[schemars(range(min = 0))]

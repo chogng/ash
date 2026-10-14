@@ -5,7 +5,7 @@ pub mod terminal;
 use serde::Deserialize;
 use serde::Serialize;
 
-pub const VERSION: u32 = 5;
+pub const VERSION: u32 = 6;
 pub const MAX_FRAME_BYTES: usize = 2 * 1024 * 1024;
 pub const MAX_FILE_BYTES: usize = 10 * 1024 * 1024;
 pub const MAX_FILE_CHUNK_BYTES: usize = 256 * 1024;
@@ -20,6 +20,10 @@ pub struct EnvironmentInfo {
     pub root: String,
     pub access: FileAccess,
     pub network: NetworkAccess,
+    pub constraints: ExecutionConstraints,
+    pub permission_source: String,
+    pub permission_policy_revision: String,
+    pub allowed_approval_modes: Vec<ash_protocol::ApprovalMode>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq)]
@@ -29,11 +33,88 @@ pub enum FileAccess {
     ReadWrite,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum NetworkAccess {
+    #[default]
     Denied,
+    /// Every observed connection is authorized through an exact execution-host request.
+    Managed,
     Allowed,
+}
+
+/// Environment-relative ceilings for one admitted operation. This is not an authorization grant.
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExecutionConstraints {
+    pub file_access: FileAccess,
+    pub command_access: FileAccess,
+    pub network: NetworkAccess,
+    pub host_read: ash_file_access::HostReadAccess,
+    pub paths: Vec<ash_file_access::PathAccessRule>,
+}
+
+impl ExecutionConstraints {
+    pub fn validate(&self) -> Result<(), ExecError> {
+        if self.paths.len() > 2048 {
+            return Err(ExecError::InvalidInput);
+        }
+        for rule in &self.paths {
+            rule.validate().map_err(|_| ExecError::InvalidInput)?;
+        }
+        Ok(())
+    }
+
+    pub fn intersect(&self, other: &Self) -> Self {
+        let narrow = |left, right| {
+            if left == FileAccess::ReadOnly || right == FileAccess::ReadOnly {
+                FileAccess::ReadOnly
+            } else {
+                FileAccess::ReadWrite
+            }
+        };
+        let mut paths = self.paths.clone();
+        for path in &other.paths {
+            if !paths.contains(path) {
+                paths.push(path.clone());
+            }
+        }
+        Self {
+            file_access: narrow(self.file_access, other.file_access),
+            command_access: narrow(self.command_access, other.command_access),
+            network: if self.network == NetworkAccess::Denied
+                || other.network == NetworkAccess::Denied
+            {
+                NetworkAccess::Denied
+            } else if self.network == NetworkAccess::Managed
+                || other.network == NetworkAccess::Managed
+            {
+                NetworkAccess::Managed
+            } else {
+                NetworkAccess::Allowed
+            },
+            host_read: if self.host_read == ash_file_access::HostReadAccess::GrantedRoots
+                || other.host_read == ash_file_access::HostReadAccess::GrantedRoots
+            {
+                ash_file_access::HostReadAccess::GrantedRoots
+            } else {
+                ash_file_access::HostReadAccess::Host
+            },
+            paths,
+        }
+    }
+
+    pub fn path_policy(&self) -> Result<ash_file_access::PathAccessPolicy, ExecError> {
+        ash_file_access::PathAccessPolicy::new(
+            match self.file_access {
+                FileAccess::ReadOnly => ash_file_access::PathAccess::ReadOnly,
+                FileAccess::ReadWrite => ash_file_access::PathAccess::ReadWrite,
+            },
+            self.paths.clone(),
+        )
+        .map(|policy| policy.with_host_read(self.host_read))
+        .map_err(|_| ExecError::InvalidInput)
+    }
 }
 
 /// Stable client-generated identity is scoped to the authenticated environment incarnation.
@@ -159,6 +240,17 @@ pub struct FileChunk {
     pub total_bytes: u64,
 }
 
+/// An exact proxy-observed target, scoped to one immutable process operation and request ID.
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProcessNetworkRequest {
+    pub request_id: String,
+    pub protocol: network_proxy::NetworkProtocol,
+    pub host: String,
+    pub port: u16,
+    pub method: Option<String>,
+}
+
 /// Uploads never change a workspace file until an explicit commit succeeds.
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase", tag = "state", deny_unknown_fields)]
@@ -185,9 +277,22 @@ pub enum WriteCondition {
     deny_unknown_fields
 )]
 pub enum Request {
+    /// Caller-supplied ceilings can only narrow the execution host's immutable permissions.
+    Constrained {
+        constraints: ExecutionConstraints,
+        request: Box<Request>,
+    },
     EnvironmentInfo,
     ProcessStart(ProcessStart),
     ProcessRead(ProcessRead),
+    ProcessNetworkRequests {
+        operation_id: String,
+    },
+    ResolveProcessNetworkRequest {
+        operation_id: String,
+        request_id: String,
+        allow: bool,
+    },
     ProcessCancel {
         operation_id: String,
     },
@@ -252,6 +357,7 @@ pub enum Response {
     FileReadReleased,
     FileWrite(FileWriteState),
     ProcessUpdated,
+    ProcessNetworkRequests(Vec<ProcessNetworkRequest>),
     Error(ExecError),
 }
 

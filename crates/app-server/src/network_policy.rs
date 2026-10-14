@@ -15,40 +15,28 @@ use network_proxy::NetworkPolicy;
 use network_proxy::NetworkPolicyHandle;
 use network_proxy::NetworkRequest;
 use std::sync::Arc;
-use std::sync::atomic::AtomicU64;
-use std::sync::atomic::Ordering;
 
 /// Binds the proxy's observed destination to the running Tool and Core's approval authority.
 pub(crate) fn for_execution(
     parent: ActionReviewRequest,
-    execution_id: String,
     interactions: Arc<dyn ToolInteractionService>,
 ) -> NetworkPolicyHandle {
-    NetworkPolicyHandle::new(ExecutionNetworkPolicy::new(
-        parent,
-        execution_id,
-        interactions,
-    ))
+    NetworkPolicyHandle::new(ExecutionNetworkPolicy::new(parent, interactions))
 }
 
 pub(crate) struct ExecutionNetworkPolicy {
     parent: ActionReviewRequest,
-    execution_id: String,
     interactions: Arc<dyn ToolInteractionService>,
-    sequence: AtomicU64,
 }
 
 impl ExecutionNetworkPolicy {
     pub(crate) fn new(
         parent: ActionReviewRequest,
-        execution_id: String,
         interactions: Arc<dyn ToolInteractionService>,
     ) -> Self {
         Self {
             parent,
-            execution_id,
             interactions,
-            sequence: AtomicU64::new(0),
         }
     }
 
@@ -59,7 +47,11 @@ impl ExecutionNetworkPolicy {
     ) -> NetworkDecision {
         let review = self.review(target);
         match self.interactions.approve_network(&review, cancellation) {
-            Ok(ActionApprovalDecision::ApproveOnce) => NetworkDecision::Allow,
+            Ok(
+                ActionApprovalDecision::ApproveOnce
+                | ActionApprovalDecision::ApproveForSession
+                | ActionApprovalDecision::ApproveAndSaveRule,
+            ) => NetworkDecision::Allow,
             Ok(ActionApprovalDecision::Decline) => {
                 NetworkDecision::Deny("network request denied by policy or user".into())
             }
@@ -68,10 +60,8 @@ impl ExecutionNetworkPolicy {
     }
 
     fn review(&self, target: NetworkRequest) -> ActionReviewRequest {
-        let sequence = self.sequence.fetch_add(1, Ordering::Relaxed);
         let canonical = serde_json::to_vec(&serde_json::json!({
-            "execution": self.execution_id, "parent": self.parent.action().digest().as_str(),
-            "sequence": sequence, "protocol": target.protocol().as_str(),
+            "parent": self.parent.action().digest().as_str(), "protocol": target.protocol().as_str(),
             "host": target.host(), "port": target.port(), "method": target.method(),
         }))
         .expect("network request contains serializable primitives");
@@ -103,7 +93,11 @@ impl NetworkPolicy for ExecutionNetworkPolicy {
             })
             .await
             {
-                Ok(Ok(ActionApprovalDecision::ApproveOnce)) => NetworkDecision::Allow,
+                Ok(Ok(
+                    ActionApprovalDecision::ApproveOnce
+                    | ActionApprovalDecision::ApproveForSession
+                    | ActionApprovalDecision::ApproveAndSaveRule,
+                )) => NetworkDecision::Allow,
                 Ok(Ok(ActionApprovalDecision::Decline)) => {
                     NetworkDecision::Deny("network request denied by policy or user".into())
                 }

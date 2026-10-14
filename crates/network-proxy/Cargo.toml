@@ -14,6 +14,7 @@ default = []
 server = ["dep:bytes", "dep:http-body-util", "dep:hyper", "dep:hyper-util", "dep:tokio"]
 
 [dependencies]
+serde = { workspace = true }
 bytes = { workspace = true, optional = true }
 http-body-util = { workspace = true, optional = true }
 hyper = { workspace = true, features = ["http1", "client", "server"], optional = true }

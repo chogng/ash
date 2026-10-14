@@ -76,6 +76,12 @@ pub enum ToolExecutionAuthority {
     rename_all_fields = "camelCase"
 )]
 pub enum ThreadEvent {
+    TurnPermissionPolicyChanged {
+        thread_id: ThreadId,
+        turn_id: TurnId,
+        request_id: RequestId,
+        policy_revision: String,
+    },
     /// Hook observations are separate from model-visible conversation items.
     HookRunUpdated {
         thread_id: ThreadId,
@@ -423,6 +429,7 @@ impl ThreadEvent {
     }
     pub fn kind(&self) -> &'static str {
         match self {
+            Self::TurnPermissionPolicyChanged { .. } => "turn.permission_policy_changed",
             Self::HookRunUpdated { .. } => "hook.run_updated",
             Self::ThreadCreated { .. } => "thread.created",
             Self::AdvisorConfigured { .. } => "advisor.configured",
@@ -481,6 +488,7 @@ impl ThreadEvent {
 
     pub fn thread_id(&self) -> &ThreadId {
         match self {
+            Self::TurnPermissionPolicyChanged { thread_id, .. } => thread_id,
             Self::HookRunUpdated { thread_id, .. } => thread_id,
             Self::ThreadCreated { thread_id, .. }
             | Self::ModelProvidersMigrated { thread_id, .. }

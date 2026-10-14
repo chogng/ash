@@ -25,6 +25,7 @@ use ts_rs::TS;
 )]
 pub enum AgentRequest {
     Approval { request: ActionApprovalRequest },
+    Permissions { request: crate::PermissionRequest },
     UserInput { request: RequestUserInput },
     DynamicTool { call: DynamicToolCall },
 }
@@ -33,6 +34,7 @@ impl AgentRequest {
     pub fn kind(&self) -> AgentInteractionKind {
         match self {
             Self::Approval { .. } => AgentInteractionKind::Approval,
+            Self::Permissions { .. } => AgentInteractionKind::Permissions,
             Self::UserInput { .. } => AgentInteractionKind::UserInput,
             Self::DynamicTool { .. } => AgentInteractionKind::DynamicTool,
         }
@@ -43,6 +45,7 @@ impl AgentRequest {
 #[serde(rename_all = "camelCase")]
 pub enum AgentInteractionKind {
     Approval,
+    Permissions,
     UserInput,
     DynamicTool,
 }
@@ -127,6 +130,7 @@ pub struct AgentRequestEnvelope {
 )]
 pub enum AgentResponse {
     Approval { response: ActionApprovalResponse },
+    Permissions { response: crate::PermissionResponse },
     UserInput { response: RequestUserInputResponse },
     DynamicTool { response: DynamicToolResponse },
 }
@@ -135,6 +139,7 @@ impl AgentResponse {
     pub fn kind(&self) -> AgentInteractionKind {
         match self {
             Self::Approval { .. } => AgentInteractionKind::Approval,
+            Self::Permissions { .. } => AgentInteractionKind::Permissions,
             Self::UserInput { .. } => AgentInteractionKind::UserInput,
             Self::DynamicTool { .. } => AgentInteractionKind::DynamicTool,
         }

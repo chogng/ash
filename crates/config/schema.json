@@ -138,6 +138,37 @@
       ],
       "type": "string"
     },
+    "ApprovalPromptControls": {
+      "additionalProperties": false,
+      "description": "Availability of user approval prompts by their owning operation category.",
+      "properties": {
+        "commands": {
+          "default": true,
+          "type": "boolean"
+        },
+        "fileMutations": {
+          "default": true,
+          "type": "boolean"
+        },
+        "mcp": {
+          "default": true,
+          "type": "boolean"
+        },
+        "network": {
+          "default": true,
+          "type": "boolean"
+        },
+        "permissionRequests": {
+          "default": true,
+          "type": "boolean"
+        },
+        "sandboxRetries": {
+          "default": true,
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
     "ApprovalReviewModelSelection": {
       "description": "User-selected model source for automatic approval review.\n\n`Automatic` follows the active Agent model's provider and delegates the exact model choice to\nthat provider's definition. `Explicit` binds review to one configured provider/model without\nchanging the main Agent model.",
       "oneOf": [
@@ -399,6 +430,27 @@
         "responses",
         "chatCompletions",
         "anthropicMessages"
+      ],
+      "type": "string"
+    },
+    "DirectoryCapability": {
+      "description": "Permission kind that can be granted for one directory scope.",
+      "enum": [
+        "readFiles",
+        "writeFiles",
+        "executeCommands",
+        "watchFiles",
+        "browseFiles",
+        "searchFiles",
+        "loadInstructions",
+        "loadConfig",
+        "discoverSkills",
+        "discoverMcp",
+        "useLanguageServices",
+        "discoverHooks",
+        "discoverPlugins",
+        "inspectRepository",
+        "mutateRepository"
       ],
       "type": "string"
     },
@@ -1004,6 +1056,14 @@
         }
       ]
     },
+    "HostReadAccess": {
+      "description": "Visibility outside explicitly granted roots, consumed by process isolation owners.",
+      "enum": [
+        "host",
+        "grantedRoots"
+      ],
+      "type": "string"
+    },
     "HttpCompatibilityMode": {
       "description": "HTTP/2 negotiates the best supported HTTP version; HTTP/1.1 restricts ALPN for proxies.",
       "enum": [
@@ -1371,34 +1431,119 @@
       },
       "type": "object"
     },
-    "Permission": {
-      "description": "Permission kind that can be granted for one directory scope.",
+    "PathAccess": {
+      "description": "Maximum access to an exact path or subtree. Explicit denial always wins.",
       "enum": [
-        "readFiles",
-        "writeFiles",
-        "executeCommands",
-        "watchFiles",
-        "browseFiles",
-        "searchFiles",
-        "loadInstructions",
-        "loadConfig",
-        "discoverSkills",
-        "discoverMcp",
-        "useLanguageServices",
-        "discoverHooks",
-        "discoverPlugins",
-        "inspectRepository",
-        "mutateRepository"
+        "denied",
+        "readOnly",
+        "readWrite"
       ],
       "type": "string"
+    },
+    "PathAccessRule": {
+      "additionalProperties": false,
+      "description": "A relative glob anchored to the directory identity that owns the grant.",
+      "properties": {
+        "access": {
+          "$ref": "#/$defs/PathAccess"
+        },
+        "pattern": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "pattern",
+        "access"
+      ],
+      "type": "object"
+    },
+    "PermissionProfileConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "extends": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fileSystem": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SandboxMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hostRead": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HostReadAccess"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "network": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CommandNetworkAccess"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "paths": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PathAccessRule"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
     },
     "Permissions": {
       "description": "Complete permission set granted to one directory.",
       "items": {
-        "$ref": "#/$defs/Permission"
+        "$ref": "#/$defs/DirectoryCapability"
       },
       "type": "array",
       "uniqueItems": true
+    },
+    "PermissionsConfig": {
+      "additionalProperties": false,
+      "description": "Canonical user artifact for named profile inheritance and selection.",
+      "properties": {
+        "approvalPrompts": {
+          "$ref": "#/$defs/ApprovalPromptControls",
+          "default": {
+            "commands": true,
+            "fileMutations": true,
+            "mcp": true,
+            "network": true,
+            "permissionRequests": true,
+            "sandboxRetries": true
+          }
+        },
+        "defaultProfile": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "profiles": {
+          "additionalProperties": {
+            "$ref": "#/$defs/PermissionProfileConfig"
+          },
+          "default": {},
+          "type": "object"
+        }
+      },
+      "type": "object"
     },
     "PluginRequest": {
       "additionalProperties": false,
@@ -1455,6 +1600,14 @@
         "high",
         "extraHigh",
         "max"
+      ],
+      "type": "string"
+    },
+    "SandboxMode": {
+      "enum": [
+        "readOnly",
+        "directoryWrite",
+        "fullAccess"
       ],
       "type": "string"
     },
@@ -1714,7 +1867,7 @@
       "default": {},
       "type": "object"
     },
-    "dirPermissions": {
+    "directoryGrants": {
       "$ref": "#/$defs/DirectoryGrantsConfig",
       "default": {
         "entries": {},
@@ -1801,6 +1954,20 @@
         "httpMode": "http2"
       }
     },
+    "permissions": {
+      "$ref": "#/$defs/PermissionsConfig",
+      "default": {
+        "approvalPrompts": {
+          "commands": true,
+          "fileMutations": true,
+          "mcp": true,
+          "network": true,
+          "permissionRequests": true,
+          "sandboxRetries": true
+        },
+        "profiles": {}
+      }
+    },
     "plugins": {
       "$ref": "#/$defs/PluginsConfig",
       "default": {
@@ -1808,7 +1975,7 @@
       }
     },
     "schemaVersion": {
-      "const": 10,
+      "const": 11,
       "type": "integer"
     },
     "skills": {

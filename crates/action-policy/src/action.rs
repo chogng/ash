@@ -134,11 +134,11 @@ impl ResolvedAction {
         &self.required_capabilities
     }
 
-    pub(crate) fn command(&self) -> Option<&ExecPolicyCommand> {
+    pub fn command(&self) -> Option<&ExecPolicyCommand> {
         self.command.as_ref()
     }
 
-    pub(crate) fn network_target(&self) -> Option<&ExecPolicyNetworkTarget> {
+    pub fn network_target(&self) -> Option<&ExecPolicyNetworkTarget> {
         self.network_target.as_ref()
     }
 }

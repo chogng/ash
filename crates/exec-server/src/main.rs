@@ -31,6 +31,19 @@ fn main() {
 }
 fn run() -> Result<(), String> {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
+    let (args, network) = if let [prefix @ .., flag, access] = args.as_slice()
+        && flag == "--network"
+    {
+        let network = match access.as_str() {
+            "denied" => NetworkAccess::Denied,
+            "managed" => NetworkAccess::Managed,
+            "allowed" => NetworkAccess::Allowed,
+            _ => return Err("invalid network ceiling".into()),
+        };
+        (prefix, network)
+    } else {
+        (args.as_slice(), NetworkAccess::Denied)
+    };
     let [
         listen,
         address,
@@ -42,9 +55,9 @@ fn run() -> Result<(), String> {
         token_file,
         access_flag,
         access,
-    ] = args.as_slice()
+    ] = args
     else {
-        return Err("usage: ash-exec-server --listen 127.0.0.1:0 --root PATH --environment ID --token-file PATH --access read-only|read-write".into());
+        return Err("usage: ash-exec-server --listen 127.0.0.1:0 --root PATH --environment ID --token-file PATH --access read-only|read-write [--network denied|managed|allowed]".into());
     };
     if (
         listen.as_str(),
@@ -72,7 +85,7 @@ fn run() -> Result<(), String> {
             id.clone(),
             Path::new(root),
             access,
-            NetworkAccess::Denied,
+            network,
             Arc::new(
                 exec_server::LocalSandbox::new(ash_install_context::InstallContext::current())
                     .with_pty_helper(std::env::current_exe().map_err(|error| error.to_string())?)

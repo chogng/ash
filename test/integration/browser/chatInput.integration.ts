@@ -509,7 +509,7 @@ const delegate: ChatInputDelegate = {
 	},
 	listAgents: async () => [], selectAgent: () => { }, selectMode: () => { }, selectApprovalMode: async approvalMode => { state = { ...state, approvalMode, interaction: undefined }; part.render(state); recordDestination({ approvalMode }); },
 	openModelSettings: async () => { recordDestination({ settings: 'models' }); },
-	resolveInteraction: async response => { if (response.type === 'approval') document.querySelector('output')!.textContent = response.response.decision; },
+	resolveInteraction: async response => { if (response.type === 'approval') document.querySelector('output')!.textContent = response.response.decision; else if (response.type === 'permissions') document.querySelector('output')!.textContent = JSON.stringify(response.response); },
 };
 const cowork = new URLSearchParams(location.search).get('surface') === 'cowork';
 const inlineCode = new URLSearchParams(location.search).has('inlineCode');
@@ -607,6 +607,12 @@ let state: ChatInputState = {
 		}
 	},
 };
+if (new URLSearchParams(location.search).has('permissions')) {
+	state = { ...state, interaction: { requestId: 'permissions', request: { type: 'permissions', request: {
+		environmentId: 'local', duration: 'session', reason: 'Read this project',
+		directories: [{ path: '/workspace/<img src=x>', permissions: ['readFiles', 'writeFiles'] }], networkHosts: ['api.example.test'],
+	} } } };
+}
 function renderModels(): void {
 	state = { ...state, models, selectedModel, isAutomaticModel: automatic, selectedReasoningEffort };
 	part.render({ ...state, interaction: undefined });

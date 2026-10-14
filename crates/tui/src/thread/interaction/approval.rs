@@ -17,6 +17,8 @@ use crossterm::event::KeyEventKind;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ApprovalDecision {
     ApproveOnce,
+    ApproveForSession,
+    ApproveAndSaveRule,
     Decline,
 }
 
@@ -24,7 +26,7 @@ pub(crate) enum ApprovalDecision {
 pub(crate) struct ApprovalSpec {
     pub(crate) title: String,
     pub(crate) reason: String,
-    pub(crate) details: Vec<String>,
+    pub(crate) details: Vec<crate::nls::Text>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -39,6 +41,7 @@ pub(crate) struct Approval {
     turn_id: TurnId,
     request_id: RequestId,
     spec: ApprovalSpec,
+    choices: Vec<ApprovalDecision>,
     selected: ApprovalDecision,
     submitting: bool,
     error: Option<String>,
@@ -50,15 +53,38 @@ impl Approval {
         request_id: RequestId,
         request: ActionApprovalRequest,
     ) -> Self {
+        let choices = [
+            ApprovalDecision::ApproveOnce,
+            ApprovalDecision::ApproveForSession,
+            ApprovalDecision::ApproveAndSaveRule,
+            ApprovalDecision::Decline,
+        ]
+        .into_iter()
+        .filter(|decision| request.allowed_decisions.contains(&decision.protocol()))
+        .collect::<Vec<_>>();
+        let mut details = Vec::new();
+        if let Some(command) = request.command {
+            details.push(crate::nls::Text::literal(format!(
+                "{} {}",
+                command.program,
+                serde_json::to_string(&command.arguments).unwrap_or_default()
+            )));
+        }
+        details.extend(request.capabilities.iter().map(capability_detail));
+        let selected = choices
+            .first()
+            .copied()
+            .unwrap_or(ApprovalDecision::Decline);
         Self {
             turn_id,
             request_id,
+            choices,
             spec: ApprovalSpec {
                 title: "Approval required".into(),
                 reason: request.reason,
-                details: request.capabilities.iter().map(capability_detail).collect(),
+                details,
             },
-            selected: ApprovalDecision::ApproveOnce,
+            selected,
             submitting: false,
             error: None,
         }
@@ -70,6 +96,7 @@ impl Approval {
             turn_id: TurnId::new("test-turn").expect("the test Turn ID is valid"),
             request_id: RequestId::new("test-request").expect("the test request ID is valid"),
             spec,
+            choices: vec![ApprovalDecision::ApproveOnce, ApprovalDecision::Decline],
             selected: ApprovalDecision::ApproveOnce,
             submitting: false,
             error: None,
@@ -85,10 +112,7 @@ impl Approval {
     }
 
     pub(crate) fn response(&self, decision: ApprovalDecision) -> ThreadRequestResponse {
-        let decision = match decision {
-            ApprovalDecision::ApproveOnce => ActionApprovalDecision::ApproveOnce,
-            ApprovalDecision::Decline => ActionApprovalDecision::Decline,
-        };
+        let decision = decision.protocol();
         ThreadRequestResponse {
             kind: ThreadRequestKind::Approval,
             turn_id: self.turn_id.clone(),
@@ -104,12 +128,14 @@ impl Approval {
             return ApprovalOutcome::Consumed;
         }
         if let Some(navigation) = Navigation::from_key(key) {
-            let index = usize::from(self.selected == ApprovalDecision::Decline);
-            self.selected = if navigation.offset(index, 1, 2) == 0 {
-                ApprovalDecision::ApproveOnce
-            } else {
-                ApprovalDecision::Decline
-            };
+            let index = self
+                .choices
+                .iter()
+                .position(|choice| *choice == self.selected)
+                .unwrap_or_default();
+            if !self.choices.is_empty() {
+                self.selected = self.choices[navigation.offset(index, 1, self.choices.len())];
+            }
             return ApprovalOutcome::Consumed;
         }
         if key.kind != KeyEventKind::Press {
@@ -127,11 +153,10 @@ impl Approval {
     }
 
     pub(crate) fn activate(&mut self, index: usize) -> ApprovalOutcome {
-        self.selected = match index {
-            0 => ApprovalDecision::ApproveOnce,
-            1 => ApprovalDecision::Decline,
-            _ => return ApprovalOutcome::Consumed,
+        let Some(choice) = self.choices.get(index).copied() else {
+            return ApprovalOutcome::Consumed;
         };
+        self.selected = choice;
         self.handle_key(KeyEvent::new(
             KeyCode::Enter,
             crossterm::event::KeyModifiers::NONE,
@@ -149,17 +174,39 @@ impl Approval {
             reason: &self.spec.reason,
             details: &self.spec.details,
             selected: self.selected,
+            choices: &self.choices,
             submitting: self.submitting,
             error: self.error.as_deref(),
         }
     }
 }
 
-fn capability_detail(capability: &ActionApprovalCapability) -> String {
-    format!(
-        "{}  ·  {}",
-        capability_kind(capability.kind),
-        capability.scope
+impl ApprovalDecision {
+    fn protocol(self) -> ActionApprovalDecision {
+        match self {
+            Self::ApproveOnce => ActionApprovalDecision::ApproveOnce,
+            Self::ApproveForSession => ActionApprovalDecision::ApproveForSession,
+            Self::ApproveAndSaveRule => ActionApprovalDecision::ApproveAndSaveRule,
+            Self::Decline => ActionApprovalDecision::Decline,
+        }
+    }
+    fn label(self) -> &'static str {
+        match self {
+            Self::ApproveOnce => "Approve once",
+            Self::ApproveForSession => "Approve same action this session",
+            Self::ApproveAndSaveRule => "Save approval for this exact action",
+            Self::Decline => "Decline",
+        }
+    }
+}
+
+fn capability_detail(capability: &ActionApprovalCapability) -> crate::nls::Text {
+    crate::nls::Text::template(
+        "{0}  ·  {1}",
+        vec![
+            capability_kind(capability.kind).into(),
+            crate::nls::Text::literal(capability.scope.clone()),
+        ],
     )
 }
 
@@ -180,8 +227,9 @@ fn capability_kind(kind: ActionApprovalCapabilityKind) -> &'static str {
 pub(crate) struct ApprovalView<'a> {
     pub(crate) title: &'a str,
     pub(crate) reason: &'a str,
-    pub(crate) details: &'a [String],
+    pub(crate) details: &'a [crate::nls::Text],
     pub(crate) selected: ApprovalDecision,
+    pub(crate) choices: &'a [ApprovalDecision],
     pub(crate) submitting: bool,
     pub(crate) error: Option<&'a str>,
 }
@@ -204,7 +252,8 @@ use ratatui::widgets::Paragraph;
 const MAX_DETAIL_ROWS: usize = 5;
 
 pub(crate) fn desired_height(view: ApprovalView<'_>) -> u16 {
-    let content_rows = 4usize
+    let content_rows = 2usize
+        .saturating_add(view.choices.len())
         .saturating_add(view.details.len().min(MAX_DETAIL_ROWS))
         .saturating_add(usize::from(view.error.is_some()));
     u16::try_from(content_rows.saturating_add(2)).unwrap_or(u16::MAX)
@@ -218,40 +267,28 @@ pub(crate) fn draw(
     pressed: Option<usize>,
     context: RenderContext<'_>,
 ) {
-    let states = [
-        choice_state(
-            0,
-            view.selected == ApprovalDecision::ApproveOnce,
-            hovered,
-            pressed,
-        ),
-        choice_state(
-            1,
-            view.selected == ApprovalDecision::Decline,
-            hovered,
-            pressed,
-        ),
-    ];
+    let states = view
+        .choices
+        .iter()
+        .enumerate()
+        .map(|(index, choice)| choice_state(index, view.selected == *choice, hovered, pressed))
+        .collect::<Vec<_>>();
     let mut lines = vec![Line::styled(
         view.reason,
         Style::default().add_modifier(Modifier::BOLD),
     )];
-    lines.extend(
-        view.details
-            .iter()
-            .take(MAX_DETAIL_ROWS)
-            .map(|detail| Line::styled(detail, Style::default().fg(context.muted()))),
-    );
-    lines.push(choice_line(
-        &context.localize("Approve once"),
-        states[0],
-        context,
-    ));
-    lines.push(choice_line(
-        &context.localize("Decline"),
-        states[1],
-        context,
-    ));
+    lines.extend(view.details.iter().take(MAX_DETAIL_ROWS).map(|detail| {
+        let mut detail = detail.clone();
+        detail.localize(context.language());
+        Line::styled(detail.to_string(), Style::default().fg(context.muted()))
+    }));
+    for (index, choice) in view.choices.iter().enumerate() {
+        lines.push(choice_line(
+            &context.localize(choice.label()),
+            states[index],
+            context,
+        ));
+    }
     if view.submitting {
         lines.push(Line::styled(
             context.localize("Submitting…"),
@@ -293,7 +330,7 @@ pub(crate) fn choice_at(
     if view.submitting {
         return None;
     }
-    (0..2).find(|index| {
+    (0..view.choices.len()).find(|index| {
         Rect::new(
             area.x.saturating_add(1),
             choice_row(area, view, *index),

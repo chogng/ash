@@ -92,7 +92,7 @@ impl ConnectionPrelude {
             }
             ssh.options()?;
         }
-        if let ConnectionRole::Execution { environment } = &self.role {
+        if let ConnectionRole::Execution { environment, .. } = &self.role {
             if self.version != PRELUDE_VERSION
                 || self
                     .dir_root

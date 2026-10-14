@@ -76,7 +76,17 @@ impl SandboxBackend for DeniedPathBackend {
 fn approved_shell_keeps_an_existing_env_denial() {
     let temp = tempfile::tempdir().unwrap();
     let dir = Dir::open_local(temp.path()).unwrap();
-    let scope = local_sandbox_scope(&dir).unwrap();
+    let scope = local_sandbox_scope(
+        &Grant::for_environment(
+            dir.clone(),
+            GrantSource::ExplicitUser,
+            Permissions::new([Permission::ExecuteCommands]),
+        )
+        .authorize(Permission::ExecuteCommands)
+        .unwrap(),
+        None,
+    )
+    .unwrap();
     let approval = ToolAuthorization::UnsandboxedGrant {
         grant_id: GrantId::new("approved-shell"),
     };
@@ -281,6 +291,9 @@ fn shell_executor_runs_in_a_session_dir() {
         .unwrap();
     let reviewer = LocalExecutorReviewer {
         shell_policy: shell_sandbox(),
+        profile_policy: None,
+        threads: None,
+        grant: cwd_dir.grant(),
         authorization: cwd_dir.authorization(),
         ripgrep: RipgrepExecutable::from_path(cwd_dir.ripgrep()).unwrap(),
         action_policy_revision: local_policy_revision(),
@@ -366,6 +379,8 @@ fn durable_user_and_dir_exec_rules_drive_local_authorization() {
     );
     let policy_config = LocalToolConfig {
         execution: ash_config::ExecutionConfig::default(),
+        permissions: ash_config::PermissionsConfig::default(),
+        requirements: ash_config::load_system_permission_requirements(),
         user: UserExecPolicyConfig {
             rules: vec![user_rule],
         },
@@ -405,6 +420,8 @@ fn durable_user_and_dir_exec_rules_drive_local_authorization() {
 
     let restrictive_config = LocalToolConfig {
         execution: policy_config.execution,
+        permissions: policy_config.permissions,
+        requirements: policy_config.requirements,
         user: policy_config.user,
         dir_config: Some((
             dir.root().id(),
@@ -487,6 +504,9 @@ fn apply_patch_reviewer_materializes_paths_before_policy() {
     let dir = TestDir::new();
     let reviewer = LocalExecutorReviewer {
         shell_policy: shell_sandbox(),
+        profile_policy: None,
+        threads: None,
+        grant: dir.grant(),
         authorization: dir.authorization(),
         ripgrep: RipgrepExecutable::from_path(dir.ripgrep()).unwrap(),
         action_policy_revision: local_policy_revision(),
@@ -540,6 +560,9 @@ fn apply_patch_reviewer_selects_the_session_dir() {
         .unwrap();
     let reviewer = LocalExecutorReviewer {
         shell_policy: shell_sandbox(),
+        profile_policy: None,
+        threads: None,
+        grant: cwd_dir.grant(),
         authorization: cwd_dir.authorization(),
         ripgrep: RipgrepExecutable::from_path(cwd_dir.ripgrep()).unwrap(),
         action_policy_revision: local_policy_revision(),
@@ -575,6 +598,9 @@ fn local_composition(
     let environment_id = ash_tools::EnvId::local();
     let reviewer: Arc<dyn ToolExecutorReviewer> = Arc::new(LocalExecutorReviewer {
         shell_policy: shell_sandbox(),
+        profile_policy: None,
+        threads: None,
+        grant: dir.grant(),
         authorization: authorization.clone(),
         ripgrep: ripgrep.clone(),
         action_policy_revision: local_policy_revision(),
@@ -1116,6 +1142,8 @@ impl TestDir {
                 Permission::ReadFiles,
                 Permission::WriteFiles,
                 Permission::InspectRepository,
+                Permission::SearchFiles,
+                Permission::BrowseFiles,
                 Permission::MutateRepository,
             ]),
         )
@@ -1324,11 +1352,12 @@ fn agent_shell_git_changes_refresh_every_connected_git_client() {
         std::thread::sleep(Duration::from_millis(20));
     }
     for client in &mut clients {
+        request_id += 1;
         let response: serde_json::Value = serde_json::from_str(
             &server.handle_json(
                 client,
                 &json!({
-                    "jsonrpc":"2.0","id":100,"method":"git/graph","params":{"limit":10}
+                    "jsonrpc":"2.0","id":request_id,"method":"git/graph","params":{"limit":10}
                 })
                 .to_string(),
             ),
@@ -1337,7 +1366,7 @@ fn agent_shell_git_changes_refresh_every_connected_git_client() {
         assert!(
             response["result"]["references"]
                 .as_array()
-                .unwrap()
+                .unwrap_or_else(|| panic!("Git graph request failed: {response}"))
                 .iter()
                 .any(|reference| reference["name"] == "agent-topic")
         );

@@ -19,6 +19,13 @@ pub(super) fn execute(
         .iter()
         .map(|s| (*s).to_owned())
         .collect::<Vec<_>>();
+    exclude_patterns.extend(
+        path.authorization
+            .path_policy()
+            .rules()
+            .filter(|rule| rule.access == ash_file_access::PathAccess::Denied)
+            .map(|rule| rule.pattern.clone()),
+    );
     if let Some(glob) = glob {
         match glob.strip_prefix('!') {
             Some(exclude) => exclude_patterns.push(exclude.to_owned()),
@@ -45,11 +52,27 @@ pub(super) fn execute(
         }
         None => grep::Search::search(search, &path.root, &query, cancellation),
     };
-    let result = match searched {
+    let mut result = match searched {
         Ok(result) => result,
         Err(grep::Error::Cancelled(reason)) => return Err(CoreError::Cancelled(reason)),
         Err(error) => return Ok(ToolExecutionOutput::Failure(error.to_string())),
     };
+    result.matches.retain(|found| {
+        let policy = path.authorization.path_policy();
+        policy.allows(&found.path, ash_file_access::PathOperation::Read)
+            && path
+                .root
+                .resolve_existing(&found.path)
+                .ok()
+                .is_some_and(|resolved| {
+                    resolved
+                        .strip_prefix(path.root.canonical_path())
+                        .ok()
+                        .is_some_and(|relative| {
+                            policy.allows(relative, ash_file_access::PathOperation::Read)
+                        })
+                })
+    });
     if result.matches.is_empty() {
         return Ok(ToolExecutionOutput::Success(
             match result.freshness {

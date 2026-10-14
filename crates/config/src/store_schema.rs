@@ -118,6 +118,9 @@ fn upgrade_document_schema(
             "unsupported config document schema version {stored_version}"
         )));
     }
+    if stored_version < 11 {
+        migrate_directory_grant_receipts(connection)?;
+    }
     connection
         .execute(
             "UPDATE config_metadata
@@ -185,10 +188,24 @@ fn migrate_v1(
             [CONFIG_SQLITE_SCHEMA_VERSION],
         )
         .map_err(sql_error)?;
+    if legacy.0 < 11 {
+        migrate_directory_grant_receipts(connection)?;
+    }
     Ok(LegacyDocument {
         schema_version: legacy.0,
         document_json: legacy.3,
     })
+}
+
+// Receipts are data, not a second serializer contract. Rewrite them transactionally once,
+// preserving exact command identity and revisions while normal decoders accept only new tags.
+fn migrate_directory_grant_receipts(connection: &Connection) -> Result<(), ConfigError> {
+    connection.execute_batch(
+        "UPDATE config_command_receipts SET command_json = json_set(command_json, '$.type', 'setDirectoryGrant')
+         WHERE json_extract(command_json, '$.type') = 'setDirPermissions';
+         UPDATE config_command_receipts SET command_json = json_set(command_json, '$.type', 'forgetDirectoryGrant')
+         WHERE json_extract(command_json, '$.type') = 'forgetDirPermissions';"
+    ).map_err(sql_error)
 }
 
 fn sql_error(error: impl std::fmt::Display) -> ConfigError {

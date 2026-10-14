@@ -132,6 +132,9 @@ impl CodebaseRetrievalTool {
             (None, None) => Ok(self.retrieval.clone()),
         }
         .map_err(|error| CoreError::Execution(error.to_string()))?;
+        let service = service
+            .with_authorization(self.authorization.clone())
+            .map_err(|error| CoreError::Policy(error.to_string()))?;
         match &self.symbol_index {
             Some(symbol_index) => service
                 .with_symbol_index(Arc::clone(symbol_index))

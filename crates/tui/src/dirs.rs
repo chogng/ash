@@ -17,7 +17,7 @@ use ash_app_server_protocol::protocol::environment::SessionDirListParams;
 use ash_app_server_protocol::protocol::environment::SessionDirListResult;
 use ash_app_server_protocol::protocol::environment::SessionDirMoveParams;
 use ash_app_server_protocol::protocol::environment::SessionDirMutationDto;
-use ash_app_server_protocol::protocol::environment::SessionDirPermissionsSetParams;
+use ash_app_server_protocol::protocol::environment::SessionDirectoryGrantSetParams;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
@@ -42,7 +42,7 @@ pub(crate) enum Event {
 pub(crate) enum Command {
     Add { request_id: u64, path: PathBuf },
     Remove { path: std::path::PathBuf },
-    SetPermissions(SessionDirPermissionsSetParams),
+    SetPermissions(SessionDirectoryGrantSetParams),
     MoveSession { path: PathBuf },
 }
 
@@ -69,7 +69,7 @@ pub(crate) enum DirSelectionAction {
     Remove {
         path: PathBuf,
     },
-    SetPermissions(SessionDirPermissionsSetParams),
+    SetPermissions(SessionDirectoryGrantSetParams),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -164,13 +164,13 @@ where
 
 pub(crate) fn set_permissions<T>(
     client: &mut AppServerClient<T>,
-    params: SessionDirPermissionsSetParams,
+    params: SessionDirectoryGrantSetParams,
 ) -> Result<DirChoices, ClientError>
 where
     T: JsonRpcTransport,
 {
     let session_id = params.session_id.clone();
-    client.set_session_dir_permissions(params).map(|result| {
+    client.set_session_directory_grant(params).map(|result| {
         choices(
             &session_id,
             SessionDirListResult {
@@ -267,7 +267,7 @@ fn choices_with_title(
                 let enabled = dir.permissions.contains(permission);
                 actions.insert(
                     item_id.clone(),
-                    DirSelectionAction::SetPermissions(SessionDirPermissionsSetParams {
+                    DirSelectionAction::SetPermissions(SessionDirectoryGrantSetParams {
                         session_id: session_id.clone(),
                         path: dir.path.clone(),
                         expected_revision: result.revision,

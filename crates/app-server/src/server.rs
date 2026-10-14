@@ -100,6 +100,7 @@ mod dir_contributions;
 mod directory_grants_protocol;
 mod environment_operations;
 mod environment_runtime;
+mod execution_policy;
 mod extension_config_operations;
 mod extension_host_operations;
 pub(crate) mod extension_host_runtime;
@@ -623,6 +624,7 @@ impl AppServer {
         )
         .expect("static application tools compose")
         .expect("application tools are present");
+        let directory_grants = Arc::new(crate::dir_grants::DirGrants::default());
         let turn_executor = TurnExecutor::new(
             threads.clone(),
             model.clone(),
@@ -633,6 +635,7 @@ impl AppServer {
         .with_thread_updates(Arc::new(AppServerThreadUpdates {
             client_host: Arc::clone(&client_host),
             threads: Arc::clone(&threads),
+            grants: Arc::clone(&directory_grants),
             updates: updates.clone(),
         }))
         .with_extensions(Arc::clone(&agent_extensions));
@@ -650,7 +653,9 @@ impl AppServer {
         let turn_backend = Arc::new(turn_backend_router::TurnBackendHandle::new(
             turn_executor.clone(),
         ));
-        let env_runtime = Arc::new(RwLock::new(EnvRuntime::empty(turn_executor)));
+        let mut initial_runtime = EnvRuntime::empty(turn_executor);
+        initial_runtime.dir_grants = directory_grants;
+        let env_runtime = Arc::new(RwLock::new(initial_runtime));
         let diagnostics = diagnostics::Diagnostics::default();
         let telemetry = ash_otel::Telemetry::new(diagnostics.clone());
         Self {
@@ -1837,14 +1842,21 @@ impl AppServer {
         )
     }
 
-    /// Enables directory-scoped Git queries without exposing arbitrary host paths to clients.
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// Test host with both repository access and explicitly granted directory watching.
+    #[cfg(test)]
     pub(crate) fn with_git_root(
         mut self,
         authorization: ash_file_access::Authorization,
     ) -> Result<Self, git_runtime::GitRuntimeError> {
+        let watch = ash_file_access::Grant::for_environment(
+            authorization.dir().clone(),
+            ash_file_access::GrantSource::HostConfiguration,
+            ash_file_access::Permissions::new([ash_file_access::Permission::WatchFiles]),
+        )
+        .authorize(ash_file_access::Permission::WatchFiles)
+        .expect("test host grants watching");
         let runtime = git_runtime::GitRuntime::new(authorization, Arc::clone(&self.updates))?;
-        let watcher = runtime.start_watching(self.config.clone());
+        let watcher = runtime.start_watching(self.config.clone(), vec![watch]);
         {
             let mut state = self.env_runtime_mut();
             state.workspace._git_watcher = Some(watcher);
@@ -1894,6 +1906,7 @@ impl AppServer {
         tools: Arc<dyn ToolService>,
         policy: Arc<dyn ActionPolicyService>,
     ) -> Self {
+        let policy = self.shared_action_policy(policy);
         let policy = Arc::new(match &self.approval_review_model {
             Some(factory) => TurnActionPolicy::with_reviewer_factory(policy, factory.clone()),
             None => TurnActionPolicy::new(policy, ash_extension_api::ApprovalReviewer::Unavailable),
@@ -1904,6 +1917,12 @@ impl AppServer {
             .with_thread_updates(Arc::new(AppServerThreadUpdates {
                 client_host: Arc::clone(&self.client_host),
                 threads: Arc::clone(&self.threads),
+                grants: self
+                    .env_runtime
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .dir_grants
+                    .clone(),
                 updates: self.updates.clone(),
             }));
         executor = executor.with_extensions(Arc::clone(&self.agent_extensions));
@@ -1972,6 +1991,12 @@ impl AppServer {
             Arc::new(AppServerThreadUpdates {
                 client_host: Arc::clone(&self.client_host),
                 threads: Arc::clone(&self.threads),
+                grants: self
+                    .env_runtime
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .dir_grants
+                    .clone(),
                 updates: Arc::clone(&self.updates),
             }),
         )
@@ -2443,8 +2468,8 @@ impl AppServer {
             Some(ClientMethod::SessionDirRemove) => {
                 self.session_dir_remove(connection, &request.params)
             }
-            Some(ClientMethod::SessionDirPermissionsSet) => {
-                self.session_dir_permissions_set(connection, &request.params)
+            Some(ClientMethod::SessionDirectoryGrantSet) => {
+                self.session_directory_grant_set(connection, &request.params)
             }
             Some(ClientMethod::DirectoryGrantsRead) => {
                 self.directory_grants_read(connection, &request.params)
@@ -3370,6 +3395,7 @@ impl AppServer {
 }
 
 struct AppServerThreadUpdates {
+    grants: Arc<crate::dir_grants::DirGrants>,
     client_host: Arc<crate::client_host::ClientHost>,
     threads: Arc<ThreadController>,
     updates: Arc<UpdateBroker>,
@@ -3378,6 +3404,14 @@ struct AppServerThreadUpdates {
 impl ThreadUpdateSink for AppServerThreadUpdates {
     fn publish(&self, update: ThreadUpdateEnvelope) {
         if let ash_protocol::ThreadUpdate::Committed { event } = &update.update {
+            match event {
+                ash_protocol::ThreadEvent::TurnCompleted { turn_id, .. }
+                | ash_protocol::ThreadEvent::TurnFailed { turn_id, .. }
+                | ash_protocol::ThreadEvent::TurnInterrupted { turn_id, .. } => {
+                    self.grants.expire_turn(&update.thread_id, turn_id)
+                }
+                _ => {}
+            }
             match event {
                 ash_protocol::ThreadEvent::TurnCompleted { turn_id, .. } => self.client_host.finish_turn(&update.thread_id, turn_id, ash_app_server_protocol::protocol::text_document::TextDocumentTurnOutcome::Completed),
                 ash_protocol::ThreadEvent::TurnFailed { turn_id, .. } => self.client_host.finish_turn(&update.thread_id, turn_id, ash_app_server_protocol::protocol::text_document::TextDocumentTurnOutcome::Failed),

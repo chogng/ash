@@ -125,7 +125,8 @@ fn codebase_retrieval_error(error: CodebaseRetrievalError) -> RpcError {
         CodebaseRetrievalError::InvalidQuery(_) => {
             RpcError::new(-32602, AppServerErrorName::InvalidParams)
         }
-        CodebaseRetrievalError::RootMismatch
+        CodebaseRetrievalError::Permission(_)
+        | CodebaseRetrievalError::RootMismatch
         | CodebaseRetrievalError::LocalIndex(_)
         | CodebaseRetrievalError::Grep(_)
         | CodebaseRetrievalError::Cancelled(_) => {

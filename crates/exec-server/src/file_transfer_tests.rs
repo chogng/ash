@@ -70,7 +70,7 @@ impl Fixture {
                 .map_err(Error::Remote),
             request => self
                 .transfers
-                .write(&self.files, request)
+                .write(&self.files, request, "fixture")
                 .map(Response::FileWrite)
                 .map_err(Error::Remote),
         }
@@ -564,7 +564,8 @@ fn read_only_authority_denies_uploads_before_allocating_resources() {
                 total_bytes: MAX_FILE_BYTES as u64,
                 content_revision: ash_file_system::file_revision(&payload(MAX_FILE_BYTES)),
                 condition: WriteCondition::MissingOrEmpty,
-            }
+            },
+            "fixture",
         ),
         Err(ExecError::PermissionDenied)
     );
@@ -590,7 +591,8 @@ fn malformed_revisions_and_oversized_chunks_do_not_consume_upload_capacity() {
                     total_bytes: 1,
                     content_revision,
                     condition,
-                }
+                },
+                "fixture",
             ),
             Err(ExecError::InvalidInput)
         );

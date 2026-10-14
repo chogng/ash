@@ -3,6 +3,7 @@ import { createServiceIdentifier } from '../../instantiation/common/instantiatio
 import type { SkillReference } from './appServerApi.js';
 import type { ModelRef, ModelReasoningEffort, AdvisorConfig, AdvisorSelection } from './agentModels.js';
 import type { ApprovalMode } from './approvalModes.js';
+import type { WorkspaceTrustPermission } from '../../workspace/common/workspaceTrust.js';
 
 export type SessionMode = 'agent' | 'plan' | 'debug' | 'multitask' | 'ask';
 export type SessionId = string;
@@ -512,7 +513,11 @@ export interface ActionApprovalCapability {
 	| 'userInterface';
 	readonly scope: string;
 }
+export type ActionApprovalDecision = 'approveOnce' | 'approveForSession' | 'approveAndSaveRule' | 'decline';
+
 export interface ActionApprovalRequest {
+	readonly allowedDecisions?: readonly ActionApprovalDecision[];
+	readonly command?: { readonly program: string; readonly arguments: readonly string[]; } | null;
 	readonly reason: string;
 	readonly capabilities: readonly ActionApprovalCapability[];
 }
@@ -523,13 +528,31 @@ export interface DynamicToolCall {
 	readonly arguments: unknown;
 }
 
+export interface RequestedDirectoryGrant {
+	readonly path: string;
+	readonly permissions: readonly WorkspaceTrustPermission[];
+}
+
+export interface PermissionResponse {
+	readonly duration: 'turn' | 'session';
+	readonly directories: readonly RequestedDirectoryGrant[];
+	readonly networkHosts: readonly string[];
+}
+
+export interface PermissionRequest extends PermissionResponse {
+	readonly environmentId: string;
+	readonly reason: string;
+}
+
 export type AgentRequest =
 	| { readonly type: 'approval'; readonly request: ActionApprovalRequest; }
+	| { readonly type: 'permissions'; readonly request: PermissionRequest; }
 	| { readonly type: 'userInput'; readonly request: RequestUserInput; }
 	| { readonly type: 'dynamicTool'; readonly call: DynamicToolCall; };
 
 export type AgentResponse =
-	| { readonly type: 'approval'; readonly response: { readonly decision: 'approveOnce' | 'decline'; }; }
+	| { readonly type: 'approval'; readonly response: { readonly decision: ActionApprovalDecision; }; }
+	| { readonly type: 'permissions'; readonly response: PermissionResponse; }
 	| {
 		readonly type: 'userInput';
 		readonly response: { readonly answers: Readonly<Record<string, { readonly value: string; }>>; };
@@ -585,6 +608,7 @@ export type ThreadCommittedEvent =
 		| 'contextOverflowRecoveryCommitted'
 		| 'turnAccepted'
 		| 'turnStarted'
+		| 'turnPermissionPolicyChanged'
 		| 'turnSteered'
 		| 'turnSteerDelivered'
 		| 'turnExecutionAttempted'
