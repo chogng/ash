@@ -165,7 +165,7 @@ Project 根目录表与 Workspace 都可能展示多个文件夹，但生命周�
 
 | 场景                             | 推荐                                             | 避免                                               |
 | -------------------------------- | ------------------------------------------------ | -------------------------------------------------- |
-| 跨模块公开类型                   | `AuthorizationDecision`、`DirPermissionsService` | `AuthResult`、`PermSvc`                            |
+| 跨模块公开类型                   | `AuthorizationDecision`、`DirectoryGrantsConfig` | `AuthResult`、`PermSvc`                            |
 | 目录模块内公开动作               | `add_dir`、`remove_dir`                          | `add_additional_directory`                         |
 | `Dirs` 或 `DirGrants` 的私有方法 | `add`、`remove`、`list`                          | 重复接收者已经表达的领域词                         |
 | 局部集合                         | `dirs`、`grants`                                 | `additional_directories`、`permission_grant_items` |

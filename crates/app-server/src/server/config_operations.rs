@@ -3,10 +3,10 @@ use super::ConnectionState;
 use super::RpcError;
 use super::core_error;
 use super::decode;
-use super::environment_operations::permission_dtos;
-use super::environment_operations::permissions;
-use super::environment_operations::require_directory_grants_host;
-use super::environment_operations::validate_path;
+use super::directory_grants_protocol::DirectoryPathRequirement;
+use super::directory_grants_protocol::permission_dtos;
+use super::directory_grants_protocol::permissions;
+use super::directory_grants_protocol::validate_path;
 use super::extension_config_operations::hook_config_dto;
 use super::extension_config_operations::plugin_request_dto;
 use super::result;
@@ -143,9 +143,9 @@ impl AppServer {
         connection: &ConnectionState,
         params: &Value,
     ) -> Result<Value, RpcError> {
-        require_directory_grants_host(connection)?;
+        connection.require_directory_grants_host()?;
         let params: DirectoryGrantsReadParams = decode(params)?;
-        validate_path(&params.path, true)?;
+        validate_path(&params.path, DirectoryPathRequirement::Absolute)?;
         let dir = Dir::open_local(params.path)
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
         let snapshot = self.directory_grants_snapshot()?;
@@ -164,7 +164,7 @@ impl AppServer {
         &self,
         connection: &ConnectionState,
     ) -> Result<Value, RpcError> {
-        require_directory_grants_host(connection)?;
+        connection.require_directory_grants_host()?;
         let snapshot = self.directory_grants_snapshot()?;
         let entries = snapshot
             .values
@@ -192,9 +192,9 @@ impl AppServer {
         connection: &ConnectionState,
         params: &Value,
     ) -> Result<Value, RpcError> {
-        require_directory_grants_host(connection)?;
+        connection.require_directory_grants_host()?;
         let params: DirectoryGrantsSetParams = decode(params)?;
-        validate_path(&params.path, true)?;
+        validate_path(&params.path, DirectoryPathRequirement::Absolute)?;
         let dir = Dir::open_local(params.path)
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
         let command = UserConfigCommand::SetDirectoryGrant {
@@ -211,7 +211,7 @@ impl AppServer {
             })
             .map_err(config_operation_error)?;
         let command_result = config_command_result(outcome);
-        self.reconcile_active_dir_permissions()?;
+        self.reconcile_active_directory_grant()?;
         result(&command_result)
     }
 
@@ -220,7 +220,7 @@ impl AppServer {
         connection: &ConnectionState,
         params: &Value,
     ) -> Result<Value, RpcError> {
-        require_directory_grants_host(connection)?;
+        connection.require_directory_grants_host()?;
         let params: DirectoryGrantsForgetParams = decode(params)?;
         let outcome = self
             .directory_grants_store()?
@@ -231,7 +231,7 @@ impl AppServer {
             })
             .map_err(config_operation_error)?;
         let command_result = config_command_result(outcome);
-        self.reconcile_active_dir_permissions()?;
+        self.reconcile_active_directory_grant()?;
         result(&command_result)
     }
 

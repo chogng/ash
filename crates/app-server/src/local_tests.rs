@@ -3465,7 +3465,7 @@ model = "dir-model"
             &path,
             DirConfigScope::new(Dir::open_local(path.parent().unwrap()).unwrap().id()),
         ),
-        InitialDirPermissions::HostConfiguration,
+        InitialDirGrantPolicy::HostConfiguration,
     ));
     let provider_configs = test_provider_registry();
     let catalog_provider = Arc::new(ModelProviderRuntime::new(provider_configs.clone()));
@@ -3520,7 +3520,7 @@ fn local_model_resolution_rechecks_directory_config_permissions() {
         config: config.clone(),
         dir_config: Some(Arc::new(DirConfigTracker::new(
             DirConfigStore::open(&path, DirConfigScope::new(dir_id.clone())),
-            InitialDirPermissions::UserConfig,
+            InitialDirGrantPolicy::UserConfig,
         ))),
         provider_configs: provider_configs.clone(),
         models_manager: ModelsManager::new(provider_configs.clone()),
@@ -3578,6 +3578,8 @@ fn directory_config_watcher_applies_late_grants_and_revocation() {
     let directory = Dir::open_local(root.path()).unwrap();
     std::fs::write(root.path().join(".ash/config.toml"), DIR_DENY_CONFIG).unwrap();
     let runtime = Arc::new(LocalProfileRuntime::open(profile.path()).unwrap());
+    // This exercises the configuration poller; a file-indexing watcher would add unrelated
+    // startup and shutdown work before the policy assertion can observe LoadConfig changes.
     let mut permissions = ash_file_access::Permissions::new([
         DirPermission::ReadFiles,
         DirPermission::BrowseFiles,
@@ -3586,7 +3588,6 @@ fn directory_config_watcher_applies_late_grants_and_revocation() {
         DirPermission::MutateRepository,
         DirPermission::ExecuteCommands,
         DirPermission::WriteFiles,
-        DirPermission::WatchFiles,
     ]);
     let set_permissions = |id: &str, permissions| {
         runtime
@@ -3610,15 +3611,25 @@ fn directory_config_watcher_applies_late_grants_and_revocation() {
             .without_built_in_skills(),
     )
     .unwrap();
-    let original = server.test_action_policy_revision();
+    assert!(matches!(
+        server.test_local_shell_policy_decision().unwrap(),
+        ash_action_policy::ExecutionDecision::RunSandboxed(_)
+    ));
     permissions =
         ash_file_access::Permissions::new(permissions.entries().chain([DirPermission::LoadConfig]));
     set_permissions("grant-load-config", permissions);
-    let deadline = std::time::Instant::now() + Duration::from_secs(5);
-    while server.test_action_policy_revision() == original {
+    // The poller also waits for bounded startup codebase preparation before applying policy.
+    let deadline = std::time::Instant::now() + Duration::from_secs(30);
+    while !matches!(
+        server.test_local_shell_policy_decision(),
+        Ok(ash_action_policy::ExecutionDecision::Block(
+            ash_action_policy::BlockReason::DeterministicRule { reason, .. }
+        )) if reason == "directory restriction"
+    ) {
         assert!(
             std::time::Instant::now() < deadline,
-            "directory policy was not installed after grant"
+            "directory policy was not installed after grant: {:?}",
+            server.test_local_shell_policy_decision()
         );
         std::thread::sleep(Duration::from_millis(20));
     }
@@ -3633,14 +3644,17 @@ fn directory_config_watcher_applies_late_grants_and_revocation() {
             DirPermission::MutateRepository,
             DirPermission::ExecuteCommands,
             DirPermission::WriteFiles,
-            DirPermission::WatchFiles,
         ]),
     );
-    let deadline = std::time::Instant::now() + Duration::from_secs(5);
-    while server.test_action_policy_revision() != original {
+    let deadline = std::time::Instant::now() + Duration::from_secs(30);
+    while !matches!(
+        server.test_local_shell_policy_decision(),
+        Ok(ash_action_policy::ExecutionDecision::RunSandboxed(_))
+    ) {
         assert!(
             std::time::Instant::now() < deadline,
-            "directory policy survived revocation"
+            "directory policy survived revocation: {:?}",
+            server.test_local_shell_policy_decision()
         );
         std::thread::sleep(Duration::from_millis(20));
     }
@@ -3659,7 +3673,7 @@ fn directory_edit_before_watcher_start_is_applied_without_another_event() {
             &path,
             DirConfigScope::new(Dir::open_local(root.path()).unwrap().id()),
         ),
-        InitialDirPermissions::HostConfiguration,
+        InitialDirGrantPolicy::HostConfiguration,
     ));
     let initial = resolve_local_config(&user, Some(&tracker)).unwrap();
     let server = AppServer::new(

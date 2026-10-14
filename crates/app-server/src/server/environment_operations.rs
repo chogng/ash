@@ -3,6 +3,10 @@ use super::ConnectionState;
 use super::RpcError;
 use super::config_operations::config_operation_error;
 use super::decode;
+use super::directory_grants_protocol::DirectoryPathRequirement;
+use super::directory_grants_protocol::permission_dtos;
+use super::directory_grants_protocol::permissions;
+use super::directory_grants_protocol::validate_path;
 use super::environment_runtime::EnvRuntimeError;
 use super::result;
 use ash_app_server_protocol::protocol::environment::DirContributionsDto;
@@ -10,7 +14,6 @@ use ash_app_server_protocol::protocol::environment::DirGrantDto;
 use ash_app_server_protocol::protocol::environment::EnvDirDto;
 use ash_app_server_protocol::protocol::environment::EnvDirsSetParams;
 use ash_app_server_protocol::protocol::environment::EnvDirsSetResult;
-use ash_app_server_protocol::protocol::environment::PermissionDto;
 use ash_app_server_protocol::protocol::environment::SessionDirAddParams;
 use ash_app_server_protocol::protocol::environment::SessionDirAddResult;
 use ash_app_server_protocol::protocol::environment::SessionDirDto;
@@ -39,7 +42,7 @@ impl AppServer {
         connection: &ConnectionState,
         params: &Value,
     ) -> Result<Value, RpcError> {
-        require_directory_grants_host(connection)?;
+        connection.require_directory_grants_host()?;
         let params: SessionDirListParams = decode(params)?;
         let snapshot = self
             .list_session_dirs(&params.session_id)
@@ -55,9 +58,9 @@ impl AppServer {
         connection: &ConnectionState,
         params: &Value,
     ) -> Result<Value, RpcError> {
-        require_directory_grants_host(connection)?;
+        connection.require_directory_grants_host()?;
         let params: SessionDirAddParams = decode(params)?;
-        validate_path(&params.path, false)?;
+        validate_path(&params.path, DirectoryPathRequirement::NonEmpty)?;
         let permissions = permissions(params.permissions)?;
         let (path, mutation, snapshot) = self
             .add_session_dir(&params.session_id, params.path, permissions)
@@ -75,9 +78,9 @@ impl AppServer {
         connection: &ConnectionState,
         params: &Value,
     ) -> Result<Value, RpcError> {
-        require_directory_grants_host(connection)?;
+        connection.require_directory_grants_host()?;
         let params: SessionDirMoveParams = decode(params)?;
-        validate_path(&params.path, false)?;
+        validate_path(&params.path, DirectoryPathRequirement::NonEmpty)?;
         let permissions = permissions(params.permissions)?;
         let (cwd, snapshot) = self
             .move_session_dir(&params.session_id, params.path, permissions)
@@ -94,9 +97,9 @@ impl AppServer {
         connection: &ConnectionState,
         params: &Value,
     ) -> Result<Value, RpcError> {
-        require_directory_grants_host(connection)?;
+        connection.require_directory_grants_host()?;
         let params: SessionDirRemoveParams = decode(params)?;
-        validate_path(&params.path, false)?;
+        validate_path(&params.path, DirectoryPathRequirement::NonEmpty)?;
         let (mutation, snapshot) = self
             .remove_session_dir(&params.session_id, &params.path)
             .map_err(environment_runtime_error)?;
@@ -112,9 +115,9 @@ impl AppServer {
         connection: &ConnectionState,
         params: &Value,
     ) -> Result<Value, RpcError> {
-        require_directory_grants_host(connection)?;
+        connection.require_directory_grants_host()?;
         let params: SessionDirPermissionsSetParams = decode(params)?;
-        validate_path(&params.path, false)?;
+        validate_path(&params.path, DirectoryPathRequirement::NonEmpty)?;
         let permissions = permissions(params.permissions)?;
         let (mutation, snapshot) = self
             .set_session_dir_permissions(
@@ -146,7 +149,7 @@ impl AppServer {
             if entry.id.trim().is_empty() || entry.id.len() > 256 || !ids.insert(entry.id.clone()) {
                 return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
             }
-            validate_path(&entry.path, true)?;
+            validate_path(&entry.path, DirectoryPathRequirement::Absolute)?;
             let grant = self.resolve_dir_grant(connection, &entry.path, entry.grant)?;
             let grant = self
                 .authorize_local_dir_root(entry.path, grant)
@@ -177,7 +180,7 @@ impl AppServer {
             DirGrantDto::Host {
                 permissions: values,
             } => {
-                require_directory_grants_host(connection)?;
+                connection.require_directory_grants_host()?;
                 Some((GrantSource::HostConfiguration, permissions(values)?))
             }
             DirGrantDto::User {
@@ -185,7 +188,7 @@ impl AppServer {
                 expected_revision,
                 permissions: values,
             } => {
-                require_directory_grants_host(connection)?;
+                connection.require_directory_grants_host()?;
                 let dir = Dir::open_local(path)
                     .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
                 let permissions = permissions(values)?;
@@ -205,7 +208,7 @@ impl AppServer {
         })
     }
 
-    pub(crate) fn reconcile_active_dir_permissions(&self) -> Result<(), RpcError> {
+    pub(crate) fn reconcile_active_directory_grant(&self) -> Result<(), RpcError> {
         if self.local_env_host.is_none() {
             return Ok(());
         }
@@ -241,22 +244,12 @@ impl AppServer {
                     return Ok(());
                 };
                 runtime
-                    .reconcile_user_dir_permissions(&snapshot.values)
+                    .reconcile_user_directory_grants(&snapshot.values)
                     .map_err(environment_runtime_error)
             }
             None => Ok(()),
         }
     }
-}
-
-pub(super) fn validate_path(
-    path: &std::path::Path,
-    require_absolute: bool,
-) -> Result<(), RpcError> {
-    if path.as_os_str().is_empty() || (require_absolute && !path.is_absolute()) {
-        return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
-    }
-    Ok(())
 }
 
 fn session_dir_dtos(
@@ -340,73 +333,6 @@ fn session_dir_mutation(mutation: Mutation) -> SessionDirMutationDto {
         Mutation::RemovedDir | Mutation::RemovedSource => SessionDirMutationDto::Removed,
         Mutation::UpdatedPermissions => SessionDirMutationDto::Updated,
         Mutation::NotPresent => SessionDirMutationDto::NotPresent,
-    }
-}
-
-pub(super) fn permissions(values: Vec<PermissionDto>) -> Result<Permissions, RpcError> {
-    let permissions = values.into_iter().map(permission).collect::<Vec<_>>();
-    let unique = permissions
-        .iter()
-        .copied()
-        .collect::<std::collections::BTreeSet<_>>();
-    if unique.len() != permissions.len() {
-        return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
-    }
-    Ok(Permissions::new(permissions))
-}
-
-fn permission(value: PermissionDto) -> Permission {
-    match value {
-        PermissionDto::ReadFiles => Permission::ReadFiles,
-        PermissionDto::WriteFiles => Permission::WriteFiles,
-        PermissionDto::ExecuteCommands => Permission::ExecuteCommands,
-        PermissionDto::WatchFiles => Permission::WatchFiles,
-        PermissionDto::BrowseFiles => Permission::BrowseFiles,
-        PermissionDto::SearchFiles => Permission::SearchFiles,
-        PermissionDto::LoadInstructions => Permission::LoadInstructions,
-        PermissionDto::LoadConfig => Permission::LoadConfig,
-        PermissionDto::DiscoverSkills => Permission::DiscoverSkills,
-        PermissionDto::DiscoverMcp => Permission::DiscoverMcp,
-        PermissionDto::UseLanguageServices => Permission::UseLanguageServices,
-        PermissionDto::DiscoverHooks => Permission::DiscoverHooks,
-        PermissionDto::DiscoverPlugins => Permission::DiscoverPlugins,
-        PermissionDto::InspectRepository => Permission::InspectRepository,
-        PermissionDto::MutateRepository => Permission::MutateRepository,
-    }
-}
-
-pub(super) fn permission_dtos(value: &Permissions) -> Vec<PermissionDto> {
-    value.entries().map(permission_dto).collect()
-}
-
-fn permission_dto(value: Permission) -> PermissionDto {
-    match value {
-        Permission::ReadFiles => PermissionDto::ReadFiles,
-        Permission::WriteFiles => PermissionDto::WriteFiles,
-        Permission::ExecuteCommands => PermissionDto::ExecuteCommands,
-        Permission::WatchFiles => PermissionDto::WatchFiles,
-        Permission::BrowseFiles => PermissionDto::BrowseFiles,
-        Permission::SearchFiles => PermissionDto::SearchFiles,
-        Permission::LoadInstructions => PermissionDto::LoadInstructions,
-        Permission::LoadConfig => PermissionDto::LoadConfig,
-        Permission::DiscoverSkills => PermissionDto::DiscoverSkills,
-        Permission::DiscoverMcp => PermissionDto::DiscoverMcp,
-        Permission::UseLanguageServices => PermissionDto::UseLanguageServices,
-        Permission::DiscoverHooks => PermissionDto::DiscoverHooks,
-        Permission::DiscoverPlugins => PermissionDto::DiscoverPlugins,
-        Permission::InspectRepository => PermissionDto::InspectRepository,
-        Permission::MutateRepository => PermissionDto::MutateRepository,
-    }
-}
-
-pub(super) fn require_directory_grants_host(connection: &ConnectionState) -> Result<(), RpcError> {
-    if connection.supports_directory_grants_host() {
-        Ok(())
-    } else {
-        Err(RpcError::new(
-            -32073,
-            AppServerErrorName::PermissionRequired,
-        ))
     }
 }
 

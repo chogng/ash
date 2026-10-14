@@ -158,7 +158,7 @@ env dir remove <env-id> <dir-id>
 
 在目录领域内使用 `dirs`、`add_dir`、`remove_dir`；不要写
 `additional_directories` 或 `add_additional_directory`。跨模块公开类型使用完整且无歧义的
-`AuthorizationDecision`、`DirPermissionsService`；局部变量使用 `dir`、`grant`、`permission`、
+`AuthorizationDecision`、`DirectoryGrantsConfig`；局部变量使用 `dir`、`grant`、`permission`、
 `authorization`。
 
 ## 7. 所有权与不变量

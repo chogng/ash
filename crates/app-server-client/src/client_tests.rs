@@ -119,7 +119,7 @@ impl ModelService for TestModel {
                 ModelInputItem::Message(message) => {
                     message.content.iter().find_map(|content| match content {
                         ContentPart::Text(text) => Some(text.as_str()),
-                        ContentPart::ImageUrl { .. } => None,
+                        ContentPart::Artifact { .. } | ContentPart::ImageUrl { .. } => None,
                         ContentPart::ImageAttachment { .. } => None,
                         ContentPart::AudioAttachment { .. } | ContentPart::AudioUrl { .. } => None,
                     })
@@ -363,6 +363,7 @@ fn client_drives_terminal_lifecycle_through_typed_methods() {
             profile: TerminalProfileSelection::Default,
             lifecycle: TerminalLifecycle::Reconnectable,
             env: None,
+            strict_env: None,
             cwd: None,
             execution: None,
         })

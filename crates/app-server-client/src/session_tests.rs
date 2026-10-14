@@ -207,7 +207,7 @@ impl ModelService for TestModel {
                 ModelInputItem::Message(message) => {
                     message.content.iter().find_map(|content| match content {
                         ContentPart::Text(text) => Some(text.as_str()),
-                        ContentPart::ImageUrl { .. } => None,
+                        ContentPart::Artifact { .. } | ContentPart::ImageUrl { .. } => None,
                         ContentPart::ImageAttachment { .. } => None,
                         ContentPart::AudioAttachment { .. } | ContentPart::AudioUrl { .. } => None,
                     })

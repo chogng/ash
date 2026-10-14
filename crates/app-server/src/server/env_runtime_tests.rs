@@ -1294,7 +1294,7 @@ fn user_config_permissions_reactivate_an_active_restricted_dir() {
             },
         })
         .unwrap();
-    assert!(server.reconcile_active_dir_permissions().is_ok());
+    assert!(server.reconcile_active_directory_grant().is_ok());
 
     assert!(server.terminal_service().is_ok());
     assert!(server.content_search_service_for(None).is_ok());
@@ -1380,7 +1380,7 @@ fn user_config_revocation_removes_executable_services_but_keeps_file_access() {
     server
         .env_runtime_control()
         .unwrap()
-        .reconcile_user_dir_permissions(&config.read_snapshot().unwrap().values)
+        .reconcile_user_directory_grants(&config.read_snapshot().unwrap().values)
         .unwrap();
 
     assert!(
@@ -1467,7 +1467,7 @@ fn user_config_revocation_removes_local_semantic_model_access() {
     server
         .env_runtime_control()
         .unwrap()
-        .reconcile_user_dir_permissions(&config.read_snapshot().unwrap().values)
+        .reconcile_user_directory_grants(&config.read_snapshot().unwrap().values)
         .unwrap();
 
     assert!(server.codebase_semantic_service().is_none());
@@ -1537,7 +1537,7 @@ fn user_config_revocation_deletes_cloud_grant_and_removes_cloud_runtime() {
     server
         .env_runtime_control()
         .unwrap()
-        .reconcile_user_dir_permissions(&config.read_snapshot().unwrap().values)
+        .reconcile_user_directory_grants(&config.read_snapshot().unwrap().values)
         .unwrap();
 
     assert!(server.cloud_codebase_service().is_err());
@@ -2153,6 +2153,29 @@ impl AppServer {
     pub(crate) fn test_action_policy_revision(&self) -> String {
         self.turn_executor_snapshot().policy_revision()
     }
+
+    pub(crate) fn test_local_shell_policy_decision(
+        &self,
+    ) -> Result<ash_action_policy::ExecutionDecision, core_api::CoreError> {
+        // Prepared calls retain their original policy generation; each probe is a new call.
+        static NEXT_PROBE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let registry = &self.local_env_host.as_ref().unwrap().tools.reloadable;
+        let call = ash_protocol::ToolCall {
+            id: ash_protocol::ToolCallId::new(format!(
+                "directory-config-policy-probe-{}",
+                NEXT_PROBE.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            ))
+            .unwrap(),
+            name: ash_protocol::ToolName::new("shell-command").unwrap(),
+            arguments: serde_json::json!({
+                "program": std::env::current_exe().unwrap(), "arguments": [], "working_directory": "."
+            }),
+        };
+        let review = registry.tools().prepare(&call)?;
+        registry
+            .policy()
+            .decide(&review, &ash_async_utils::CancellationSource::new().token())
+    }
 }
 
 #[cfg(unix)]
@@ -2435,6 +2458,33 @@ fn directory_grants_protocol_preserves_legacy_profiles_precise_grants_and_revisi
     );
     assert_eq!(invalid["error"]["code"], -32602);
     assert_eq!(config.read_snapshot().unwrap().revision.get(), revision);
+    for (command_id, path, permissions) in [
+        (
+            "duplicate-capabilities",
+            dir.path.clone(),
+            serde_json::json!(["readFiles", "readFiles"]),
+        ),
+        (
+            "relative-profile-path",
+            PathBuf::from("relative"),
+            serde_json::json!(["readFiles"]),
+        ),
+        (
+            "empty-profile-path",
+            PathBuf::new(),
+            serde_json::json!(["readFiles"]),
+        ),
+    ] {
+        let invalid = rpc(
+            &mut connection,
+            "config/directoryGrants/set",
+            serde_json::json!({
+                "commandId":command_id, "expectedRevision":revision, "path":path, "permissions":permissions,
+            }),
+        );
+        assert_eq!(invalid["error"]["code"], -32602);
+        assert_eq!(config.read_snapshot().unwrap().revision.get(), revision);
+    }
     let permissions = serde_json::json!(["readFiles", "executeCommands", "useLanguageServices"]);
     let request = serde_json::json!({"commandId":"set-precise-grant","expectedRevision":revision,"path":dir.path,"permissions":permissions});
     let saved = rpc(

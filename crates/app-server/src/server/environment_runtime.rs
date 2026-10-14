@@ -544,7 +544,7 @@ impl EnvRuntimeControl {
         Ok(())
     }
 
-    pub(crate) fn reconcile_user_dir_permissions(
+    pub(crate) fn reconcile_user_directory_grants(
         &self,
         config: &ash_config::ResolvedConfig,
     ) -> Result<(), EnvRuntimeError> {

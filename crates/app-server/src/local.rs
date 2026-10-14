@@ -112,7 +112,7 @@ pub struct AppServerOptions {
     pub dir_root: Option<PathBuf>,
     pub built_in_skills: BuiltInSkillRoot,
     pub session_state_mode: SessionStateMode,
-    initial_dir_permissions: InitialDirPermissions,
+    initial_dir_grant_policy: InitialDirGrantPolicy,
     agent_model_service: Option<Arc<dyn ModelService>>,
     model_operation_client: Option<Arc<dyn OperationClient>>,
     web_search_backend: Option<Arc<dyn ash_web_search_extension::WebSearchBackend>>,
@@ -131,7 +131,7 @@ pub struct AppServerOptions {
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-enum InitialDirPermissions {
+enum InitialDirGrantPolicy {
     #[default]
     HostConfiguration,
     UserConfig,
@@ -173,7 +173,7 @@ impl AppServerOptions {
             dir_root: None,
             built_in_skills: BuiltInSkillRoot::AutoDetect,
             session_state_mode: SessionStateMode::Durable,
-            initial_dir_permissions: InitialDirPermissions::HostConfiguration,
+            initial_dir_grant_policy: InitialDirGrantPolicy::HostConfiguration,
             agent_model_service: None,
             model_operation_client: None,
             web_search_backend: None,
@@ -229,14 +229,14 @@ impl AppServerOptions {
     /// Enables local filesystem and shell tools under one canonical Directory root.
     pub fn with_dir_root(mut self, dir_root: impl Into<PathBuf>) -> Self {
         self.dir_root = Some(dir_root.into());
-        self.initial_dir_permissions = InitialDirPermissions::HostConfiguration;
+        self.initial_dir_grant_policy = InitialDirGrantPolicy::HostConfiguration;
         self
     }
 
     /// Resolves the initial directory through durable user configuration.
     pub fn with_user_config_dir_root(mut self, dir_root: impl Into<PathBuf>) -> Self {
         self.dir_root = Some(dir_root.into());
-        self.initial_dir_permissions = InitialDirPermissions::UserConfig;
+        self.initial_dir_grant_policy = InitialDirGrantPolicy::UserConfig;
         self
     }
 
@@ -415,7 +415,7 @@ impl fmt::Debug for AppServerOptions {
             .field("dir_config", &self.dir_config)
             .field("slash_commands", &self.slash_commands)
             .field("dir_root", &self.dir_root)
-            .field("initial_dir_permissions", &self.initial_dir_permissions)
+            .field("initial_dir_grant_policy", &self.initial_dir_grant_policy)
             .field("built_in_skills", &self.built_in_skills)
             .field("session_state_mode", &self.session_state_mode)
             .field(
@@ -469,7 +469,7 @@ impl PartialEq for AppServerOptions {
             && self.dir_config == other.dir_config
             && self.slash_commands == other.slash_commands
             && self.dir_root == other.dir_root
-            && self.initial_dir_permissions == other.initial_dir_permissions
+            && self.initial_dir_grant_policy == other.initial_dir_grant_policy
             && self.built_in_skills == other.built_in_skills
             && self.session_state_mode == other.session_state_mode
             && match (&self.agent_model_service, &other.agent_model_service) {
@@ -1283,9 +1283,9 @@ pub fn open_app_server_with_codebase_providers(
         ash_http_client::ReqwestHttpClient::with_network(network.clone()).map_err(open_error)?,
     );
     let dir_config_access = if options.dir_config.is_some() {
-        InitialDirPermissions::HostConfiguration
+        InitialDirGrantPolicy::HostConfiguration
     } else {
-        options.initial_dir_permissions
+        options.initial_dir_grant_policy
     };
     if options.dir_config.is_none()
         && let Some(dir_root) = &options.dir_root
@@ -2063,11 +2063,11 @@ pub fn open_app_server_with_codebase_providers(
         .map_err(open_error)?,
     );
     if let Some(dir_root) = options.dir_root {
-        match options.initial_dir_permissions {
-            InitialDirPermissions::HostConfiguration => server
+        match options.initial_dir_grant_policy {
+            InitialDirGrantPolicy::HostConfiguration => server
                 .activate_host_configured_dir_root(dir_root)
                 .map_err(|error| OpenAppServerError(error.to_string()))?,
-            InitialDirPermissions::UserConfig => server
+            InitialDirGrantPolicy::UserConfig => server
                 .switch_local_dir_root(dir_root)
                 .map_err(|error| OpenAppServerError(error.to_string()))?,
         };
@@ -2287,7 +2287,7 @@ impl ToolConfigWatcher {
                             snapshot.revision.get(),
                         );
                         if let Err(error) =
-                            env_runtime.reconcile_user_dir_permissions(&snapshot.values)
+                            env_runtime.reconcile_user_directory_grants(&snapshot.values)
                         {
                             env_tools.record_reconcile_failure(error.to_string());
                             applied = false;
@@ -3015,7 +3015,7 @@ fn runtime_catalog_entry(
 
 struct DirConfigTracker {
     store: DirConfigStore,
-    access: InitialDirPermissions,
+    access: InitialDirGrantPolicy,
     observed: Mutex<Option<DirConfigObservation>>,
 }
 
@@ -3025,7 +3025,7 @@ struct DirConfigObservation {
 }
 
 impl DirConfigTracker {
-    fn new(store: DirConfigStore, access: InitialDirPermissions) -> Self {
+    fn new(store: DirConfigStore, access: InitialDirGrantPolicy) -> Self {
         Self {
             store,
             access,
@@ -3039,7 +3039,7 @@ impl DirConfigTracker {
     ) -> Result<Option<(DirConfigDocument, DirConfigRevision)>, ash_config::ConfigError> {
         // Permission is part of each resolution, not a startup decision. In particular,
         // revocation must stop both filesystem reads and directory model/policy overrides.
-        if self.access == InitialDirPermissions::UserConfig
+        if self.access == InitialDirGrantPolicy::UserConfig
             && !user
                 .values
                 .directory_grants

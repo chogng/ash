@@ -97,6 +97,7 @@ mod diagnostics_operations;
 mod dictation_operations;
 mod diff_operations;
 mod dir_contributions;
+mod directory_grants_protocol;
 mod environment_operations;
 mod environment_runtime;
 mod extension_config_operations;
@@ -448,6 +449,18 @@ impl ConnectionState {
 
     pub(super) fn supports_directory_grants_host(&self) -> bool {
         connection_state(self).directory_grants_host
+    }
+
+    /// Enforces the connection authority negotiated by initialize, shared by grant RPC owners.
+    fn require_directory_grants_host(&self) -> Result<(), RpcError> {
+        if self.supports_directory_grants_host() {
+            Ok(())
+        } else {
+            Err(RpcError::new(
+                -32073,
+                AppServerErrorName::PermissionRequired,
+            ))
+        }
     }
 
     fn extension_packages_leases(&self) -> Vec<String> {
