@@ -2279,6 +2279,48 @@ test('comparison labels update in every group, survive restoration and release l
 	} finally { editor.dispose(); dom.window.close(); }
 });
 
+test('working-set restoration preserves the custom editor for an untitled JSON draft', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const registry = new EditorPaneRegistry();
+	using defaultRegistration = registry.registerEditorPane(descriptor('test.text', '.json', () => new TestEditorPane('test.text')));
+	using customRegistration = registry.registerEditorPane({
+		id: 'test.theme',
+		name: 'Theme Editor',
+		canOpen: input => input.editorId === 'test.theme' ? EditorPaneMatch.Default : EditorPaneMatch.Optional,
+		create: () => new TestEditorPane('test.theme'),
+	});
+	using editor = createEditorPart(dom.window.document.body, { registry });
+	const draft: IResourceEditorInput = {
+		resource: URI.parse('untitled:/theme-test.json'),
+		editorId: 'test.theme',
+		languageId: 'jsonc',
+		label: 'Theme Copy',
+		initialText: '{"name":"Theme Copy"}',
+	};
+	try {
+		await editor.openEditor(draft, { pinned: true });
+		assert.equal(editor.activePane?.id, 'test.theme');
+		const workingSet = JSON.parse(JSON.stringify(editor.saveWorkingSet('theme-draft')));
+		await editor.applyWorkingSet('empty');
+		await editor.applyWorkingSet(workingSet);
+		assert.equal(editor.activePane?.id, 'test.theme');
+		assert.deepEqual(editor.activeInput, draft);
+		assert.equal(editor.activeGroup.inputs.length, 1);
+	} finally {
+		editor.dispose();
+		dom.window.close();
+	}
+});
+
+test('editor input snapshots reject malformed editor IDs and accept legacy inputs', () => {
+	const registry = new EditorInputSerializerRegistry();
+	const input = { resource: URI.file('/project/theme.json') };
+	const snapshot = JSON.parse(JSON.stringify(registry.serialize(input)));
+	assert.deepEqual(registry.deserialize(snapshot), input);
+	snapshot.value.editorId = 42;
+	assert.throws(() => registry.deserialize(snapshot), /editor ID must be a string/);
+});
+
 test('editor input snapshots preserve semantic icon colors and reject malformed icons', () => {
 	const registry = new EditorInputSerializerRegistry();
 	const icon = { id: 'home', color: { id: 'editor.foreground' } };

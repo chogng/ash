@@ -470,6 +470,7 @@ export class Workbench extends Disposable {
 	private readonly untitledTextEditorService: IUntitledTextEditorService;
 	private readonly workbenchLayout: WorkbenchLayout;
 	private readonly workingCopyBackups: IWorkingCopyBackupService;
+	private readonly workingCopies: IWorkingCopyService;
 	private readonly workingCopyBackupTracker: WorkingCopyBackupTracker;
 	private readonly workbenchWindow: WorkbenchWindow;
 	private readonly logService: ILogService;
@@ -679,6 +680,7 @@ export class Workbench extends Disposable {
 		const textFileService = this._register(services.createInstance(TextFileService));
 		services.registerInstance(ITextFileService, textFileService);
 		const workingCopyService = this._register(services.createInstance(BrowserWorkingCopyService));
+		this.workingCopies = workingCopyService;
 		services.registerInstance(IWorkingCopyService, workingCopyService);
 		const documentTextModelService = this._register(services.createInstance(DocumentEditorTextModelService));
 		services.registerInstance(IDocumentEditorTextModelService, documentTextModelService);
@@ -1268,12 +1270,19 @@ export class Workbench extends Disposable {
 		try { pending = await backups.list(); }
 		catch (error) { this.logService.error("workingCopy", "Failed to list working-copy backups", error); return; }
 		for (const backup of pending) {
-			if (backup.kind === "text" && this.untitledTextEditorService.isUntitled(backup.resource)) {
+			if (backup.kind === "text" && this.untitledTextEditorService.isUntitled(backup.resource) && !this.workingCopies.get(backup.resource).some(copy => copy.backupKind === backup.kind)) {
 				this.untitledTextEditorService.create({ untitledResource: backup.resource, initialValue: backup.content, languageId: backup.languageId, label: backup.label });
 			}
 		}
 		for (const backup of pending) {
 			try {
+				// Session restoration already chose the editor and window. Recover its
+				// document in place instead of opening another default text view.
+				const restored = this.workingCopies.get(backup.resource).find(copy => copy.backupKind === backup.kind);
+				if (restored) {
+					restored.restoreBackup(backup.content);
+					continue;
+				}
 				let pane;
 				const untitled = backup.kind === "text" ? this.untitledTextEditorService.get(backup.resource) : undefined;
 				if (untitled) {

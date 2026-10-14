@@ -2,6 +2,26 @@ import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 
+test('Theme Editor restores one unsaved draft in its auxiliary window after restart', { tag: ['@electron-ui'] }, async ({ workbench, reloadWorkbench }, testInfo) => {
+	const mainTabs = workbench.page.getByRole('tablist', { name: 'Open editors', exact: true }).getByRole('tab');
+	const originalTabCount = await mainTabs.count();
+	const opened = workbench.page.context().waitForEvent('page');
+	await workbench.quickaccess.runCommand('workbench.action.openThemeEditor');
+	const popup = await opened;
+	await popup.getByRole('searchbox', { name: 'Search colors', exact: true }).fill('editor.background');
+	await popup.getByRole('textbox', { name: 'Hex color for editor.background', exact: true }).fill('#234567');
+	await expect(popup.frameLocator('.ash-theme-editor-preview').locator('#app')).toHaveCSS('--ash-editor-background', '#234567');
+	const label = await popup.getByRole('tablist', { name: 'Open editors', exact: true }).locator('.ash-tab-label .ash-icon-label-text').textContent();
+	const { workbench: restored } = await reloadWorkbench();
+	await expect.poll(() => restored.page.context().pages().length).toBe(2);
+	const auxiliary = restored.page.context().pages().find(page => page !== restored.page)!;
+	await expect(auxiliary.locator('.ash-theme-editor')).toHaveCount(1);
+	await expect(auxiliary.getByRole('tablist', { name: 'Open editors', exact: true }).locator('.ash-tab-label .ash-icon-label-text')).toHaveText(label!);
+	await expect(auxiliary.frameLocator('.ash-theme-editor-preview').locator('#app')).toHaveCSS('--ash-editor-background', '#234567');
+	await expect(restored.page.getByRole('tablist', { name: 'Open editors', exact: true }).getByRole('tab')).toHaveCount(originalTabCount);
+	await auxiliary.screenshot({ path: testInfo.outputPath('restored-theme-draft.png') });
+});
+
 test('Theme Editor connects its local file preview and isolates draft colors', { tag: ['@electron-app-server'] }, async ({ workbench }, testInfo) => {
 	const page = workbench.page;
 	const original = await workbench.element.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background'));
