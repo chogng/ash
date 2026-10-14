@@ -58,11 +58,14 @@ export type IAnyWorkspaceIdentifier =
 	| IEmptyWorkspaceIdentifier;
 
 /** A folder belonging to the current resolved workspace. */
-export interface IWorkspaceFolder {
-	readonly id: string;
+export interface IWorkspaceFolderData {
 	readonly uri: URI;
 	readonly name: string;
 	readonly index: number;
+}
+
+export interface IWorkspaceFolder extends IWorkspaceFolderData {
+	readonly id: string;
 }
 
 /**

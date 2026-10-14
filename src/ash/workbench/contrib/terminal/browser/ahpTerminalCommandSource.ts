@@ -1,3 +1,5 @@
+import { CwdDetectionCapability } from '../../../../platform/terminal/common/capabilities/cwdDetectionCapability.js';
+import { PromptTypeDetectionCapability } from '../../../../platform/terminal/common/capabilities/promptTypeDetectionCapability.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import type { CancellationToken } from '../../../../base/common/cancellation.js';
@@ -12,11 +14,12 @@ export class AhpTerminalCommandSource extends Disposable {
  readonly onDidChangeCommandStatus = this.commandStatusEmitter.event;
  private readonly pendingCommandEvents: ITerminalProcessCommandStatusEvent[] = [];
  private pendingCwd: ITerminalProcessReadResult['cwd'];
- private currentCwd: string | undefined;
+	readonly cwdDetection = this._register(new CwdDetectionCapability());
+	readonly promptTypeDetection = this._register(new PromptTypeDetectionCapability());
  private pendingShellIntegration: ITerminalProcessReadResult['shellIntegration'];
  private currentShellIntegration: ITerminalShellIntegration | undefined;
  get shellIntegration(): ITerminalShellIntegration | undefined { return this.currentShellIntegration; }
- get cwd(): string | undefined { return this.currentCwd; }
+ get cwd(): string | undefined { return this.cwdDetection.getCwd() || undefined; }
 
  receive(result: Pick<ITerminalProcessReadResult, 'cwd' | 'shellIntegration' | 'commandEvents'>): void {
   if (result.cwd) this.pendingCwd = result.cwd;
@@ -33,17 +36,22 @@ export class AhpTerminalCommandSource extends Disposable {
 	commitThrough(sequence: number, token: CancellationToken): void {
 		let changed = false;
 		if (!token.isCancellationRequested && this.pendingCwd && this.pendingCwd.afterOutputSequence <= sequence) {
-			this.currentCwd = this.pendingCwd.value;
+			this.cwdDetection.updateCwd(this.pendingCwd.value, this.pendingCwd.isTrusted);
 			this.pendingCwd = undefined;
 			changed = true;
 		}
 		if (!token.isCancellationRequested && this.pendingShellIntegration && this.pendingShellIntegration.afterOutputSequence <= sequence) {
 			const integration = this.pendingShellIntegration;
+			if (integration.promptType !== undefined && integration.promptType !== this.promptTypeDetection.promptType) {
+				this.promptTypeDetection.setPromptType(integration.promptType);
+			}
+			const promptType = this.promptTypeDetection;
 			this.currentShellIntegration = {
 				commandDetection: integration.commandDetection,
 				cwdDetection: integration.cwdDetection,
 				hasRichCommandDetection: integration.hasRichCommandDetection,
 				commandStorageDisabled: integration.commandStorageDisabled,
+				get promptType() { return promptType.promptType; },
 				commands: integration.commands.map(commandStatusEvent),
 			};
 			this.pendingShellIntegration = undefined;

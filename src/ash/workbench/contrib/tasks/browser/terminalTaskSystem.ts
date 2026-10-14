@@ -6,13 +6,17 @@ import { CancellationError, getErrorMessage, isCancellationError } from '../../.
 import { Disposable, DisposableMap } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
+import { formatMessageForTerminal } from '../../../../platform/terminal/common/terminalStrings.js';
+import { escapeNonWindowsPath } from '../../../../platform/terminal/common/terminalEnvironment.js';
+import { GeneralShellType, PosixShellType } from '../../../../platform/terminal/common/terminal.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IMarkerService } from '../../../../platform/markers/common/markers.js';
 import { IFileSearchService } from '../../../../platform/search/common/fileSearch.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IPathService } from '../../../../platform/path/common/pathService.js';
 import { OperatingSystem } from '../../../../base/common/platform.js';
-import { mergeEnvironments } from '../../../../platform/terminal/common/terminalEnvironment.js';
+import { getRemoteAuthority } from '../../../../platform/remote/common/remoteHosts.js';
+import { mergeEnvironments } from '../../terminal/common/terminalEnvironment.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IModelService } from '../../../../editor/common/services/model.js';
@@ -208,7 +212,7 @@ export class TerminalTaskSystem extends Disposable {
 				shellName = executable.split(/[\\/]/).at(-1)!.replace(/\.exe$/i, '').toLowerCase();
 				launch = { executable, args: shell.options?.shellArgs };
 			} else {
-				const resolution = this.profiles.getDefaultProfile({ os: os!, remoteAuthority: folder.uri.authority || undefined, allowAutomationShell: true });
+				const resolution = this.profiles.getDefaultProfile({ os: os!, remoteAuthority: getRemoteAuthority(folder.uri), allowAutomationShell: true });
 				const selected = await (signal ? raceCancellationError(resolution, signal) : resolution);
 				assertCurrent();
 				this.assertNotDisposed();
@@ -254,7 +258,8 @@ export class TerminalTaskSystem extends Disposable {
 		const commandText = execution?.type === 'process'
 			? typeof execution.args === 'string' ? `${JSON.stringify(execution.program)} ${execution.args}` : [execution.program, ...execution.args].map(value => JSON.stringify(value)).join(' ')
 			: execution?.commandLine;
-		const initialText = task.presentation?.echo !== false && commandText !== undefined ? localize('tasks.executingCommand', 'Executing task: {0}', commandText) : undefined;
+		const initialText = task.presentation?.echo !== false && commandText !== undefined
+			? { text: formatMessageForTerminal(localize('tasks.executingCommand', 'Executing task: {0}', commandText)), trailingNewLine: false } : undefined;
 		let waitOnExit: IShellLaunchConfig['waitOnExit'] = !task.presentation?.close;
 		if (waitOnExit && (task.presentation?.reveal !== 'never' || !task.isBackground || task.presentation?.close === false)) {
 			if (task.presentation?.panel === 'new') waitOnExit = localize('tasks.terminalCloseMessage', 'Press any key to close the terminal.');
@@ -465,7 +470,6 @@ export class TerminalTaskSystem extends Disposable {
 
 class TaskRun extends Disposable implements ITaskRun {
 	private outputText = '';
-	private readonly outputDecoder = new TextDecoder();
 	private outputStart = 0;
 	private outputEnd = 0;
 	private readonly changeEmitter = this._register(new Emitter<TaskRunStatus>());
@@ -499,8 +503,8 @@ class TaskRun extends Disposable implements ITaskRun {
 			this.completeExecution(undefined);
 		}));
 		this._register(terminal.onDidWriteData(event => {
-			this.appendOutput(this.outputDecoder.decode(event.data, { stream: true }));
-			collector.accept(event.data);
+			this.appendOutput(event.data);
+			collector.accept(new TextEncoder().encode(event.data));
 		}));
 		this._register(terminal.onDidChangeCommandStatus(event => this.acceptCommandStatus(event)));
 		this._register(terminal.onDidExit(exitCode => {
@@ -538,8 +542,8 @@ class TaskRun extends Disposable implements ITaskRun {
 	public get hasProblems(): boolean { return this.collector.hasProblems; }
 	public get onDidBecomeReady(): Event<void> { return this.collector.onDidBecomeReady; }
 
-	public cancel(): void { this.appendOutput(this.outputDecoder.decode()); this.stopCollection(); this.setStatus('canceled', undefined); }
-	public fail(canceled: boolean): void { this.appendOutput(this.outputDecoder.decode()); this.stopCollection(); this.setStatus(canceled ? 'canceled' : 'failed', undefined); }
+	public cancel(): void { this.stopCollection(); this.setStatus('canceled', undefined); }
+	public fail(canceled: boolean): void { this.stopCollection(); this.setStatus(canceled ? 'canceled' : 'failed', undefined); }
 
 	private stopCollection(): void {
 		const pending = this.collector.hasPendingResolutions;
@@ -555,7 +559,6 @@ class TaskRun extends Disposable implements ITaskRun {
 	}
 	public finish(exitCode: number | undefined, status: TaskRunStatus = exitCode === undefined ? 'completed' : exitCode === 0 ? 'succeeded' : 'failed'): void {
 		if (this._status !== 'running' || this.collectionCompletion) return;
-		this.appendOutput(this.outputDecoder.decode());
 		this.collector.done();
 		if (this.collector.hasPendingResolutions) {
 			// Keep the run and collector alive until asynchronous resources are
@@ -659,12 +662,8 @@ function shellCommandLine(execution: TaskShellExecution, shellName: string): str
 		}
 		const delimiter = kind === ShellQuoting.Strong ? strong : weak;
 		let content: string;
-		if (delimiter === "'" && !powershell && shellName !== 'fish') {
-			content = value.replaceAll("'", "'\\''");
-		} else if (delimiter === "'" && powershell) {
-			content = value.replaceAll("'", "''");
-		} else if (delimiter === "'" && shellName === 'fish') {
-			content = value.replaceAll('\\', '\\\\').replaceAll("'", "\\'");
+		if (delimiter === "'") {
+			return escapeNonWindowsPath(value, powershell ? GeneralShellType.PowerShell : shellName === 'fish' ? PosixShellType.Fish : undefined);
 		} else {
 			const character = powershell ? '`' : commandPrompt ? '^' : '\\';
 			content = value.replaceAll(character, character + character).replaceAll(delimiter, character + delimiter);

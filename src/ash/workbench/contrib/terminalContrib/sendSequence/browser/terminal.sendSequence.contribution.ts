@@ -1,3 +1,4 @@
+import { TerminalCapability } from '../../../../../platform/terminal/common/capabilities/capabilities.js';
 import { raceCancellation } from '../../../../../base/common/async.js';
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
@@ -68,7 +69,10 @@ registerAction2(class SendSequenceAction extends Action2 {
 			text = text.replace(/\\(?:n|r|x[0-9a-fA-F]{2})/g, escape =>
 				escape === '\\n' ? '\n' : escape === '\\r' ? '\r' : String.fromCharCode(Number.parseInt(escape.slice(2), 16)));
 		}
-		const resolved = await raceCancellation(resolver.resolveAsync(folder, text), cancellation.token);
+		const shellEnvironment = instance.capabilities?.get(TerminalCapability.ShellEnvDetection)?.env;
+		const resolution = shellEnvironment?.isTrusted && shellEnvironment.value !== undefined
+			? resolver.resolveWithEnvironment(shellEnvironment.value, folder, text) : resolver.resolveAsync(folder, text);
+		const resolved = await raceCancellation(resolution, cancellation.token);
 		if (resolved === undefined || !canSend()) return;
 		await instance.sendText(resolved, false);
 		if (canSend()) instance.xterm?.focus();

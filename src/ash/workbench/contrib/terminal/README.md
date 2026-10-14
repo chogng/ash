@@ -41,7 +41,7 @@ Attach to Chat 与原 Chat context picker 捕获 xterm 已解析输出、选择�
 
 桌面原始输入链路是 xterm 的 onData/onBinary → TerminalInstance 绑定 → `TerminalProcessManager.write`/`processBinary` → `ITerminalProcessService.write` → Renderer protocol client → MessagePort → Main 透明 relay → App Server → `exec-server` → PTY。Tasks 与 DAP runInTerminal 使用创建参数中的进程或 Shell 执行配置；听写和用户文本通过实例 `sendText` 进入同一管理器。输出走相反方向，实例创建并保留唯一 xterm 屏幕；Rust Desktop 的终端网格属于另一个产品，并不作为 Electron 屏幕的后端副本。
 
-Shell 实例从平台契约消费原始字节和前端退出码，不解析生成 DTO 或 base64。`TerminalProcessManager` 拥有轮询与两个读取游标，实例向进程观察者转发 `IProcessDataEvent`，并把显示内容交给唯一屏幕的 `write`。有屏幕时实例同步设置 `writePromise`，只在 xterm write 回调中完成；管理器等待解析后才续读、发布对应命令完成和退出。没有屏幕的 Shell 不制造解析确认，命令状态仍可供 Tasks 使用。实例单独按顺序保存显示数据及退出提示，即使任务观察者已消费过程输出，稍后 attach 仍能显示；隐藏历史最多 1 MiB、4096 个分块，超限先丢弃最旧内容并明确提示截断。已退出进程的输出和命令流均排空分页后才报告退出；未来输出对应的命令事件留在管理器中等待。
+Shell 进程管理器从平台契约消费原始字节和前端退出码，不解析生成 DTO 或 base64。`TerminalProcessManager` 拥有轮询、两个读取游标及增量 UTF-8 解码；实例向进程观察者转发标准文本 `IProcessDataEvent`，并把显示内容交给唯一屏幕的 `write`。有屏幕时实例同步设置 `writePromise`，只在 xterm write 回调中完成；管理器等待解析后才续读、发布对应命令完成和退出。没有屏幕的 Shell 不制造解析确认，命令状态仍可供 Tasks 使用。实例单独按顺序保存显示数据及退出提示，即使任务观察者已消费过程输出，稍后 attach 仍能显示；隐藏历史最多 1 MiB、4096 个分块，超限先丢弃最旧内容并明确提示截断。已退出进程的输出和命令流均排空分页后才报告退出；未来输出对应的命令事件留在管理器中等待。
 
 宿主提供的输出 PTY 从 `services/terminal/common/embedderTerminalService.ts` 经 `TerminalMainContribution` 接入同一个实例列表。实例先登记、发布再打开 PTY，保留界面订阅前的输出和退出；标题直接跟随宿主改名，后端连接变化不影响宿主 PTY。xterm 禁止输入，语音输入不启动；关闭与 Relaunch 使用宿主的生命周期，不请求 Rust Shell，也不要求打开 Workspace folder。宿主 PTY 无 OS 子进程，PID 使用 `-1`，cwd 为空。
 
@@ -125,3 +125,5 @@ Rename 和 Change Icon 使用现有 Quick Input，目标关闭时取消。原实
 当前同路径生产 TS/CSS 为 51，仍缺 38。完整 backend/capability、环境变量集合和同步 InstanceService 未完成；准确清单与契约边界见 [对齐状态](../../../../../docs/terminal-api-alignment-status.md)。
 
 `common/basePty.ts` 提供当前实际消费的 string-output child-process 事件端口；`terminalProcessExtHostProxy.ts` 接原扩展 provider 的 opaque PTY，拥有轮询/输入队列和取消，不创建 Shell 或屏幕。MainThread 继续拥有 profile 注册与 extension incarnation，实际工厂直接创建此代理；旧内嵌 PTY 类已退出。插件响应在代理边界校验，typed 内部 payload 不重复校验；关闭后忽略晚到数据并只发一次释放请求。完整 Rust byte-stream child-process/replay/backend API 仍待补。
+
+平台 Common 接线已迁回真实能力模型：已提交 cwd 由 `CwdDetectionCapability` 唯一持有，实例标准能力存储登记该实现；装饰 addon 使用 `BufferMarkCapability` 管理同一屏幕 marker，仍自己拥有装饰渲染。扩展 PTY 文本流经 `TerminalDataBufferer`，初始输出、标题与退出保序；Shell 输出不进入这个定时缓冲器。启动配置 schema 和已消费的配置 key/prefix 由平台声明，环境合并仍属于本层的启动组合。

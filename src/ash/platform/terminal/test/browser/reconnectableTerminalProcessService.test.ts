@@ -1,6 +1,7 @@
-import { AppServerTerminalProcessService } from '../../browser/appServerTerminalProcessService.js';
+import { AppServerTerminalProcessService, decodeTerminalProcessReadResult } from '../../browser/appServerTerminalProcessService.js';
 import type { IAppServerApi } from '../../../agentHost/common/appServerApi.js';
 import { OperatingSystem } from '../../../../base/common/platform.js';
+import { GeneralShellType } from '../../common/terminal.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { APP_SERVER_METHODS } from "../../../../../../.build/protocol/typescript/index.js";
@@ -13,6 +14,31 @@ import type { ITerminalProcessService } from "../../common/terminal.js";
 const FIRST_TOKEN = "a".repeat(64);
 const SECOND_TOKEN = "b".repeat(64);
 const THIRD_TOKEN = "c".repeat(64);
+
+test('display metadata preserves output ordering, nullable env values and per-process command identity', () => {
+	const result = decodeTerminalProcessReadResult({
+		terminalId: 'process-1', nextSequence: 3, outputGap: false,
+		commandEvents: [], nextCommandSequence: 0, commandEventGap: false, exited: false, exitCode: null,
+		chunks: [
+			{ sequence: 1, dataBase64: '', shellIntegration: { type: 'environment', values: { CURRENT: '中文🙂', UNSET: null }, isTrusted: true } },
+			{ sequence: 2, dataBase64: 'b3V0cHV0' },
+			{ sequence: 3, dataBase64: '', shellIntegration: { type: 'commandExecuted', commandId: 'command-1', command: null, cwd: null, isTrusted: false, commandStorageDisabled: true, timestampMillis: 123 } },
+		],
+	});
+	assert.deepEqual(result.chunks.map(chunk => [chunk.sequence, chunk.shellIntegration?.type]), [[1, 'environment'], [2, undefined], [3, 'commandExecuted']]);
+	assert.deepEqual(result.chunks[0]!.shellIntegration, { type: 'environment', values: { CURRENT: '中文🙂', UNSET: undefined }, isTrusted: true });
+	assert.deepEqual(result.chunks[2]!.shellIntegration, { type: 'commandExecuted', commandId: 'process-1:command-1', command: undefined, cwd: undefined, isTrusted: false, commandStorageDisabled: true, timestampMillis: 123 });
+	assert.equal(new TextDecoder().decode(result.chunks[1]!.data), 'output');
+});
+
+test('the execution host shell type is decoded into the domain without deriving it from titles', () => {
+	const result = decodeTerminalProcessReadResult({
+		terminalId: 'process-1', nextSequence: 1, outputGap: false,
+		commandEvents: [], nextCommandSequence: 0, commandEventGap: false, exited: false, exitCode: null,
+		chunks: [{ sequence: 1, dataBase64: '', shellIntegration: { type: 'processReady', isWindowsPty: true, shellType: 'pwsh' } }],
+	});
+	assert.deepEqual(result.chunks[0]!.shellIntegration, { type: 'processReady', isWindowsPty: true, shellType: GeneralShellType.PowerShell });
+});
 
 test("Remote terminal leases stay in the renderer and rotate across connection generations", async () => {
 	const supervisor = new TestSupervisor();
@@ -52,6 +78,9 @@ test("Remote terminal leases stay in the renderer and rotate across connection g
 	await waitFor(() => supervisor.successfulAttachments === 1);
 	await service.resize({ terminalId: "terminal-1", rows: 40, cols: 120 });
 	await service.read({ terminalId: "terminal-1", afterSequence: 0, afterCommandSequence: 0, maxChunks: 10 });
+	const info = await service.getProcessInfo({ terminalId: 'terminal-1' });
+	assert.deepEqual(info, { ready: { pid: 1234, cwd: '/backend/workspace' }, cwd: '/backend/current', rows: 40, cols: 120 });
+	assert.deepEqual(supervisor.requests.at(-1), { method: 'terminal/processInfo', params: { terminalId: 'terminal-1' } });
 
 	await service.write({ terminalId: 'terminal-1', data: new Uint8Array([0, 0x80, 0xff]) });
 	assert.deepEqual(supervisor.requests.at(-1), { method: 'terminal/writeBinary', params: { terminalId: 'terminal-1', dataBase64: 'AID/' } });
@@ -221,6 +250,8 @@ class TestSupervisor {
 				};
 			case APP_SERVER_METHODS["terminal/writeBinary"].method:
 				return null;
+			case APP_SERVER_METHODS['terminal/processInfo'].method:
+				return { ready: { pid: 1234, cwd: '/backend/workspace' }, cwd: '/backend/current', rows: 40, cols: 120 };
 			case APP_SERVER_METHODS["terminal/attach"].method:
 				if (this.attachFailures > 0) {
 					this.attachFailures -= 1;
@@ -243,7 +274,7 @@ class TestSupervisor {
 					outputGap: false,
 					...(this.cwd ? {
 						cwd: this.cwd, shellIntegration: {
-							commandDetection: true, cwdDetection: true, hasRichCommandDetection: true, commandStorageDisabled: false,
+							commandDetection: true, cwdDetection: true, hasRichCommandDetection: true, commandStorageDisabled: false, promptType: 'starship',
 							commands: [{ sequence: 2, commandId: 'command-1', status: 'failed', exitCode: 7, afterOutputSequence: 2, cwd: '/invocation', command: 'echo 中文; "quoted"', isTrusted: false }], afterOutputSequence: 2,
 						}
 					} : {}),
@@ -308,7 +339,8 @@ for (const remote of [false, true]) test(`${remote ? 'SSH' : 'local'} shell read
 	supervisor.output = Buffer.from('command output');
 	using adapter = new ReconnectableTerminalProcessService(supervisor as unknown as AppServerProtocolClient);
 	const service: ITerminalProcessService = remote ? adapter : new AppServerTerminalProcessService(supervisor as unknown as AppServerProtocolClient, {} as IAppServerApi);
-	await service.create({ rows: 24, cols: 80, profile: { type: 'default' } });
+	await service.create({ rows: 24, cols: 80, profile: { type: 'default' }, strictEnv: true, env: { ONLY: 'literal' } });
+	assert.equal((supervisor.requests.find(request => request.method === 'terminal/create')!.params as { strictEnv?: boolean; }).strictEnv, true);
 	const result = await service.read({ terminalId: 'terminal-1', afterSequence: 0, afterCommandSequence: 0, maxChunks: 128 });
 	assert.deepEqual(result.cwd, { value: 'C:\\work; with spaces', isTrusted: true, afterOutputSequence: 2 });
 	assert.equal(result.commandEvents[0].cwd, '/invocation');
@@ -317,6 +349,7 @@ for (const remote of [false, true]) test(`${remote ? 'SSH' : 'local'} shell read
 	assert.equal(result.commandEvents[0].command, 'echo 中文; \"quoted\"');
 	assert.equal(result.commandEvents[0].isTrusted, false);
 	assert.equal(result.shellIntegration?.hasRichCommandDetection, true);
+	assert.equal(result.shellIntegration?.promptType, 'starship');
 	assert.deepEqual(result.shellIntegration?.commands[0], { sequence: 2, commandId: 'command-1', status: 'failed', exitCode: 7, afterOutputSequence: 2, cwd: '/invocation', command: 'echo 中文; \"quoted\"', isTrusted: false });
 	await service.close({ terminalId: 'terminal-1' });
 });

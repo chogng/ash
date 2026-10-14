@@ -1,3 +1,6 @@
+import { TerminalCapability } from '../../../../../../platform/terminal/common/capabilities/capabilities.js';
+import { BufferMarkCapability } from '../../../../../../platform/terminal/common/capabilities/bufferMarkCapability.js';
+import { TerminalCapabilityStore } from '../../../../../../platform/terminal/common/capabilities/terminalCapabilityStore.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -23,11 +26,13 @@ function createScreen(lifetime: DisposableStore, viewportY: number, lines: reado
 		},
 		registerDecoration() { return undefined; },
 	} as unknown as Terminal;
-	const decorations = lifetime.add(new DecorationAddon());
+	const capabilities = lifetime.add(new TerminalCapabilityStore());
+	capabilities.add(TerminalCapability.BufferMarkDetection, lifetime.add(new BufferMarkCapability(terminal)));
+	const decorations = lifetime.add(new DecorationAddon(capabilities));
 	decorations.activate(terminal);
 	for (const { key } of lines) {
 		const [process, commandId = key] = key.split(':');
-		decorations.registerCommandDecoration({ commandId, status: 'running', exitCode: undefined }, Number(process) || 0);
+		decorations.registerCommandDecoration({ commandId, status: 'running', exitCode: undefined }, Number(process) || 0, terminal.registerMarker(0)!);
 	}
 	const navigation = lifetime.add(new MarkNavigationAddon(() => decorations.markers));
 	navigation.activate(terminal);

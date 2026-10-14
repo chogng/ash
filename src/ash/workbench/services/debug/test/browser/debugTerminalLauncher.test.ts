@@ -1,3 +1,4 @@
+import { MergedEnvironmentVariableCollection } from '../../../../../platform/terminal/common/environmentVariableCollection.js';
 import { IEnvironmentVariableService } from '../../../../contrib/terminal/common/environmentVariable.js';
 import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../../terminal/common/terminal.js';
 import { TerminalProfileService } from '../../../../contrib/terminal/browser/terminalProfileService.js';
@@ -85,6 +86,7 @@ suite('DAP terminal availability', () => {
 				operatingSystem: OperatingSystem.Linux,
 				resolveProfile: resolveTerminalProfile,
 				getConnectionState: async () => 'ready', onConnectionState: Event.None,
+				getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
 				getEnvironment: async () => ({}), listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
 				create: async () => ({ ready: { pid: 1234, cwd: '/workspace' }, terminalId: 'debug-process', profile: { profileId: 'shell', title: 'Shell', isDefault: true }, connectionPersistence: 'connectionOwned' }),
 				read: async () => ({ terminalId: 'debug-process', commandEventGap: false, chunks: [], nextSequence: 0, commandEvents: [], nextCommandSequence: 0, exited: false, exitCode: undefined, outputGap: false }),
@@ -121,6 +123,7 @@ suite('DAP terminal availability', () => {
 				resolveProfile: resolveTerminalProfile,
 				getConnectionState: async () => 'crashed',
 				onConnectionState: () => Disposable.None,
+				getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
 				getEnvironment: async () => ({}), listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
 				create: async () => ({ ready: { pid: 1234, cwd: '/backend/workspace' }, terminalId: 'debug-process', profile: { profileId: 'shell', title: 'Shell', isDefault: true }, connectionPersistence: persistence }),
 				read: async () => { throw new Error('Disconnected terminal must not poll'); },
@@ -155,6 +158,7 @@ suite('DAP terminal launch policies through execution owners', () => {
 		const disposed = new DeferredPromise<void>();
 		const processes: ITerminalProcessService = {
 			operatingSystem: os, onConnectionState: connection.event, getConnectionState: async () => 'ready',
+			getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
 			getEnvironment: async () => ({ HOME: '/execution/home', SOURCE: 'execution value' }),
 			listProfiles: async () => [{ profileId: 'bash', title: 'Bash', isDefault: true }, { profileId: 'powershell', title: 'PowerShell', isDefault: false }],
 			resolveProfile: resolveTerminalProfile,
@@ -293,6 +297,7 @@ async function launchWithTerminalRequest(terminals: ITerminalService, argumentsV
 	const unexpectedProcess = async (): Promise<never> => { throw new Error('Fake terminal must not access a PTY'); };
 	const terminalProcesses: ITerminalProcessService = options.terminalProcesses ?? {
 		operatingSystem: OperatingSystem.Linux, onConnectionState: Event.None, getConnectionState: async () => 'ready',
+		getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
 		getEnvironment: async () => ({}), listProfiles: () => terminals.getProfiles(), resolveProfile: resolveTerminalProfile,
 		create: unexpectedProcess, write: unexpectedProcess, resize: unexpectedProcess, read: unexpectedProcess, close: unexpectedProcess,
 	};
@@ -314,7 +319,7 @@ async function launchWithTerminalRequest(terminals: ITerminalService, argumentsV
 	if (!services.has(IEditorGroupsService)) services.registerInstance(IEditorGroupsService, {} as IEditorGroupsService);
 	services.registerInstance(ITerminalContributionService, { terminalProfiles: [], onDidChangeTerminalProfiles: Event.None, ...Disposable.None });
 	services.registerSingleton(ITerminalProfileService, () => services.createInstance(TerminalProfileService));
-	services.registerInstance(IEnvironmentVariableService, { collections: new Map(), mergedCollection: { applyToProcessEnvironment: async () => { } }, onDidChangeCollections: Event.None, refreshCollections: async () => { }, set: () => { }, delete: () => { }, registerCollectionProvider: () => Disposable.None });
+	services.registerInstance(IEnvironmentVariableService, { collections: new Map(), mergedCollection: new MergedEnvironmentVariableCollection(new Map()), onDidChangeCollections: Event.None, refreshCollections: async () => { }, set: () => { }, delete: () => { }, registerCollectionProvider: () => Disposable.None });
 	services.registerSingleton(ITerminalProfileResolverService, () => services.createInstance(BrowserTerminalProfileResolverService));
 	using service = services.createInstance(DebugService);
 	const session = await service.startDebugging({ id: 'debug-terminal', name: 'Terminal request', type: 'example', request: 'launch', adapter: { program: 'adapter', arguments: [] }, arguments: { cwd: URI.file('/workspace').fsPath } });

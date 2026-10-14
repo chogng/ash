@@ -21,6 +21,7 @@ export type TerminalInstanceState = "running" | "reconnecting" | "exited" | "dis
 
 /** The screen needs no process, membership, persistence, or launch authority. */
 export interface ITerminalScreenHost {
+	readonly capabilities?: ITerminalCapabilityStore;
 	readonly isReadOnly?: boolean;
 	readonly processId: number;
 	readonly state: TerminalInstanceState;
@@ -52,6 +53,7 @@ export interface ITerminalShellIntegration {
 	readonly hasRichCommandDetection: boolean;
 	readonly commandStorageDisabled: boolean;
 	readonly commands: readonly ITerminalCommandStatusEvent[];
+	readonly promptType?: string;
 }
 
 /** One available shell profile exposed to Workbench callers. */
@@ -74,6 +76,7 @@ export type ITerminalCreateOptions = {
 	readonly icon?: ThemeIcon;
 	readonly color?: string;
 	readonly env?: Readonly<Record<string, string | null>>;
+	readonly strictEnv?: boolean;
 	readonly cwd?: string;
 	readonly execution?: TerminalProcessExecution;
 	readonly initialText?: IShellLaunchConfig['initialText'];

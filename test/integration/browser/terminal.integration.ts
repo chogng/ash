@@ -52,6 +52,7 @@ import { IViewsService } from '../../../src/ash/workbench/services/views/common/
 import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { ITerminalService, type ITerminalDimensions, type ITerminalInstance } from '../../../src/ash/workbench/services/terminal/browser/terminal.js';
+import { GeneralShellType, ITerminalLogService, PosixShellType } from '../../../src/ash/platform/terminal/common/terminal.js';
 import { IDictationService } from '../../../src/ash/platform/dictation/common/dictationService.js';
 import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
@@ -65,6 +66,7 @@ import { extUri } from '../../../src/ash/base/common/resources.js';
 import { BrowserLayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
 import { createCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { XtermTerminal } from '../../../src/ash/workbench/contrib/terminal/browser/xterm/xtermTerminal.js';
+import { TerminalCapability } from '../../../src/ash/platform/terminal/common/capabilities/capabilities.js';
 
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
 import { BrowserClipboardService } from '../../../src/ash/platform/clipboard/browser/clipboardService.js';
@@ -150,6 +152,7 @@ widgetServices.registerInstance(IAccessibleViewService, { getOpenAriaHint: () =>
 const themeService = store.add(new TestThemeService(darkColorTheme));
 if (new URLSearchParams(location.search).has('find') || new URLSearchParams(location.search).has('browser')) { store.add(bindColorTheme(themeService, document.body)); }
 widgetServices.registerInstance(IThemeService, themeService);
+widgetServices.registerInstance(ITerminalLogService, new NullLoggerService());
 widgetServices.registerInstance(ITerminalConfigurationService, store.add(widgetServices.createInstance(TerminalConfigurationService)));
 widgetServices.registerInstance(IHoverService, store.add(new HoverService(widgetServices.get(IConfigurationService), store.add(new BrowserContextViewService(document.body)), { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } })));
 instance.attachToElement(document.querySelector<HTMLElement>('#terminal')!);
@@ -179,6 +182,7 @@ window.ashTerminalIntegration = {
 	},
 	ready: async () => { await completion; },
 	dimensions: () => ({ cols: widget.raw.cols, rows: widget.raw.rows }),
+	markers: () => [...widget.capabilities.get(TerminalCapability.PartialCommandDetection)?.commands ?? []].map(marker => marker.line),
 	dispose: () => store.dispose(),
 };
 
@@ -197,6 +201,7 @@ declare global {
 			start(): boolean;
 			ready(): Promise<void>;
 			dimensions(): ITerminalDimensions;
+			markers(): readonly number[];
 			dispose(): void;
 		};
 	}
@@ -333,8 +338,6 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		services.registerInstance(IContextKeyService, context);
 		services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 		services.registerInstance(IViewsService, { openView: () => pane, getViewWithId: () => pane, focusView: () => { pane.focus(); return true; } } as unknown as IViewsService);
-		services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
-		registerTestDictationOnboarding(services);
 		services.registerInstance(IPreferencesService, { openSettings: async () => { } } as unknown as IPreferencesService);
 		services.registerInstance(INotificationService, lifetime.add(new NotificationService()));
 		services.registerInstance(IWorkspaceContextService, { onDidChangeWorkspace: workspaceChanged.event, getWorkspace: () => workspace, getWorkbenchState: () => 2, getWorkspaceFolder: resource => workspace.folders.find(folder => extUri.isEqualOrParent(resource, folder.uri)) ?? null });
@@ -345,6 +348,8 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 			resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? (typeof profile.args === 'string' ? profile.args : [...profile.args]) : [] }),
 		} as unknown as ITerminalProcessService);
 		setupTerminalFixtureServices(services, lifetime);
+		services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
+		registerTestDictationOnboarding(services);
 		const profileService = lifetime.add(services.createInstance(TerminalProfileService));
 		services.registerInstance(ITerminalProfileService, profileService);
 		const resolver = lifetime.add(services.createInstance(BrowserTerminalProfileResolverService));
@@ -386,7 +391,7 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		pane.layout(Math.max(0, root.clientHeight - pane.partTitleProjection.actions!.offsetHeight), 0, root.clientWidth);
 		return {
 			configure: (key, value) => services.get(IConfigurationService).updateValue(key, value),
-			environment: enabled => enabled ? services.get(IEnvironmentVariableService).set('acme.environment', { persistent: false, map: new Map([['MODE', { type: 1, value: 'extension' }]]) }) : services.get(IEnvironmentVariableService).delete('acme.environment'),
+			environment: enabled => enabled ? services.get(IEnvironmentVariableService).set('acme.environment', { persistent: false, map: new Map([['MODE', { variable: 'MODE', type: 1, value: 'extension' }]]) }) : services.get(IEnvironmentVariableService).delete('acme.environment'),
 			createdProfiles: () => [...createdProfiles],
 			launches: () => [...launches],
 			defaultProfile: () => profileService.getDefaultProfile()?.profileId,
@@ -479,6 +484,7 @@ if (new URLSearchParams(location.search).has('assembly')) {
 		const written = new Set<string>();
 		let nextProcess = 1;
 		const processes: import('../../../src/ash/platform/terminal/common/terminal.js').ITerminalProcessService = {
+			getProcessInfo: async () => ({ ready: { pid: 1234, cwd: '/backend/workspace' }, cwd: '/backend/current', rows: 24, cols: 80 }),
 			getConnectionState: async () => 'ready',
 			onConnectionState: () => Disposable.None,
 			resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? (typeof profile.args === 'string' ? profile.args : [...profile.args]) : [] }), getEnvironment: async () => ({}), listProfiles: async () => [instance.profile],
@@ -516,7 +522,7 @@ if (new URLSearchParams(location.search).has('assembly')) {
 		const exits: Promise<number | undefined>[] = [];
 		for (const service of services) {
 			resources.add(service.onDidCreateInstance(terminal => {
-				resources.add(terminal.onDidWriteData(data => output.push(new TextDecoder().decode(data.data))));
+				resources.add(terminal.onDidWriteData(data => output.push(data.data)));
 				exits.push(new Promise(resolve => resources.add(terminal.onDidExit(resolve))));
 			}));
 			const terminal = await service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
@@ -561,7 +567,7 @@ if (new URLSearchParams(location.search).has('embedder')) {
 	const services = store.add(widgetServices.createChild(new ServiceCollection(
 		[IEmbedderTerminalService, descriptor],
 		[IWorkspaceContextService, workspace],
-		[ITerminalProcessService, { getEnvironment: async () => ({}), listProfiles: rejectBackend, create: rejectBackend, write: rejectBackend, resize: rejectBackend, read: rejectBackend, close: rejectBackend, getConnectionState: async () => 'crashed', onConnectionState: Event.None }],
+		[ITerminalProcessService, { getEnvironment: async () => ({}), listProfiles: rejectBackend, create: rejectBackend, write: rejectBackend, resize: rejectBackend, read: rejectBackend, getProcessInfo: rejectBackend, close: rejectBackend, getConnectionState: async () => 'crashed', onConnectionState: Event.None }],
 	)));
 	setupTerminalFixtureServices(services, store);
 	installWorkbenchServiceContributions({ container: services, register: value => store.add(value), blockRestorationUntil: () => { } });
@@ -639,21 +645,46 @@ if (new URLSearchParams(location.search).has('stream')) {
 	const reportCwd = new URLSearchParams(location.search).has('cwd');
 	const reportHistory = new URLSearchParams(location.search).has('history');
 	const reuseCommands = new URLSearchParams(location.search).has('reuseCommands');
+	const commandModel = new URLSearchParams(location.search).has('commandModel');
+	let modelSequence = 0;
+	const modelOutput: import('../../../src/ash/platform/terminal/common/terminal.js').ITerminalProcessOutputChunk[] = [];
+	const queueModel = (data: string, shellIntegration?: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalShellIntegrationEvent) => {
+		modelOutput.push({ sequence: ++modelSequence, data: new TextEncoder().encode(data), ...(shellIntegration ? { shellIntegration } : {}) });
+	};
+	if (commandModel) {
+		const powerShell = new URLSearchParams(location.search).has('powerShell');
+		queueModel('', { type: 'processReady', isWindowsPty: powerShell, shellType: powerShell ? GeneralShellType.PowerShell : PosixShellType.Bash });
+		queueModel('', { type: 'promptStart' });
+		queueModel('$ ');
+		queueModel('', { type: 'commandStart' });
+		queueModel('echo 中文🙂\r\n');
+		queueModel('', { type: 'commandExecuted', commandId: 'model-command', command: 'echo 中文🙂', isTrusted: true, cwd: '/workspace', timestampMillis: 123 });
+		queueModel('result 中文🙂\r\n');
+		queueModel('', { type: 'commandFinished', exitCode: 0, durationMillis: 25 });
+		queueModel('', { type: 'promptStart' });
+		queueModel('$ ');
+		queueModel('', { type: 'commandStart' });
+	}
 	let launch = 0;
 	const overflow = new URLSearchParams(location.search).has('overflow');
 	// This scenario observes the display-history cap independently of xterm's configurable scrollback.
 	if (overflow) await widgetServices.get(IConfigurationService).updateValue('terminal.integrated.scrollback', 5000);
 	const profile = { profileId: 'shell', title: 'Shell', isDefault: true };
 	const processes: import('../../../src/ash/platform/terminal/common/terminal.js').ITerminalProcessService = {
+		getProcessInfo: async () => ({ ready: { pid: 1234, cwd: '/workspace' }, cwd: '/workspace/current', rows: 24, cols: 80 }),
 		resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? (typeof profile.args === 'string' ? profile.args : [...profile.args]) : [] }), getEnvironment: async () => ({}), listProfiles: async () => [profile],
 		create: async () => { launch++; return { terminalId: reuseCommands ? `stream-shell-${launch}` : 'stream-shell', ready: { pid: reuseCommands ? 1234 + launch : 1234, cwd: '/workspace' }, profile, connectionPersistence: 'connectionOwned' }; },
-		write: async () => { },
+		write: async options => { if (commandModel && typeof options.data === 'string') queueModel(options.data); },
 		resize: async () => { },
 		close: async () => { closes++; },
 		getConnectionState: async () => 'ready',
 		onConnectionState: Event.None,
 		read: async options => {
 			reads.push(options.afterSequence);
+			if (commandModel) {
+				const chunks = modelOutput.filter(chunk => chunk.sequence > options.afterSequence).slice(0, options.maxChunks);
+				return { terminalId: options.terminalId, chunks, nextSequence: chunks.at(-1)?.sequence ?? options.afterSequence, outputGap: false, commandEvents: [], nextCommandSequence: 0, commandEventGap: false, exited: false, exitCode: undefined };
+			}
 			const first = options.afterSequence === 0;
 			const status = reuseCommands && launch > 1 ? 'failed' as const : 'succeeded' as const;
 			const code = reuseCommands && launch > 1 ? 11 : 0;
@@ -662,7 +693,13 @@ if (new URLSearchParams(location.search).has('stream')) {
 				chunks: overflow ? Array.from({ length: Math.min(options.maxChunks, 4100 - options.afterSequence) }, (_, offset) => {
 					const index = options.afterSequence + offset;
 					return { sequence: index + 1, data: new TextEncoder().encode(`line-${index}\r\n`) };
-				}) : [{ sequence: first ? 1 : 2, data: first ? bytes.slice(0, 2) : bytes.slice(2) }],
+				}) : [{
+					sequence: first ? 1 : 2, data: first ? bytes.slice(0, 2) : bytes.slice(2), ...((reuseCommands || reportHistory) ? {
+						shellIntegration: first
+							? { type: 'commandExecuted' as const, commandId: 'command', command: 'echo 中文; printf \"quoted\"', isTrusted: true, cwd: '/workspace', timestampMillis: 123 }
+							: { type: 'commandFinished' as const, exitCode: code, durationMillis: 25 }
+					} : {})
+				}],
 				nextSequence: overflow ? Math.min(4100, options.afterSequence + options.maxChunks) : first ? 1 : 2,
 				outputGap: false,
 				commandEvents: options.afterCommandSequence === 0 ? [{ sequence: 1, commandId: 'command', status, exitCode: code, afterOutputSequence: 2, ...(reportCwd ? { cwd: '/workspace' } : {}), ...(reportHistory ? { command: 'echo 中文; printf \"quoted\"', isTrusted: true } : {}) }] : [],
@@ -682,9 +719,9 @@ if (new URLSearchParams(location.search).has('stream')) {
 	const terminals = services.get(ITerminalService);
 	let screen: import('../../../src/ash/workbench/services/terminal/browser/terminal.js').IXtermTerminal | undefined;
 	const deferred = new URLSearchParams(location.search).has('deferred');
-	const observed: number[] = [];
+	const observed: string[] = [];
 	store.add(terminals.onDidCreateInstance(instance => {
-		store.add(instance.onDidWriteData(event => observed.push(...event.data)));
+		store.add(instance.onDidWriteData(event => observed.push(event.data)));
 		if (!deferred) {
 			instance.attachToElement(document.querySelector<HTMLElement>('#terminal')!);
 			screen = instance.xterm!;
@@ -701,7 +738,18 @@ if (new URLSearchParams(location.search).has('stream')) {
 			if (!screen) { terminal.attachToElement(document.querySelector<HTMLElement>('#terminal')!); screen = terminal.xterm!; screen.setVisible(true); }
 			await terminal.xtermReadyPromise; screen.focus();
 		},
-		observed: () => new TextDecoder().decode(new Uint8Array(observed)),
+		feedModel: text => queueModel(text),
+		environmentFrame: event => queueModel('', event),
+		environment: () => terminal.capabilities?.get(TerminalCapability.ShellEnvDetection)?.env,
+		serializeModel: () => terminal.capabilities!.get(TerminalCapability.CommandDetection)!.serialize(),
+		commandStartContents: () => terminal.capabilities!.get(TerminalCapability.CommandDetection)!.commands.map(command => command.commandStartLineContent),
+		restoreModel: value => terminal.capabilities!.get(TerminalCapability.CommandDetection)!.deserialize(value),
+		clearModel: () => terminal.capabilities!.get(TerminalCapability.CommandDetection)!.clearCommands(),
+		model: () => {
+			const capability = terminal.capabilities!.get(TerminalCapability.CommandDetection);
+			return { input: capability?.promptInputModel.getCombinedString(), state: capability?.promptInputModel.state, commands: capability?.commands.map(command => ({ id: command.id, text: command.command, output: command.getOutput(), timestamp: command.timestamp, duration: command.duration, trust: command.isTrusted, promptRows: command.getPromptRowCount(), commandRows: command.getCommandRowCount() })) };
+		},
+		observed: () => observed.join(''),
 		snapshot: () => screen?.getBufferText(100_000, new AbortController().signal) ?? Promise.resolve(undefined),
 		close: async () => { await terminal.close(); store.dispose(); },
 	};
@@ -712,6 +760,14 @@ declare global {
 		ashTerminalStreamIntegration: {
 			reuse(): Promise<void>;
 			status(): { reads: number[]; events: string[]; closes: number; state: string; remaining: number; cwd?: string; shellIntegration?: import('../../../src/ash/workbench/services/terminal/browser/terminal.js').ITerminalShellIntegration; };
+			feedModel(text: string): void;
+			environmentFrame(event: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalShellIntegrationEvent): void;
+			environment(): import('../../../src/ash/platform/terminal/common/capabilities/capabilities.js').TerminalShellIntegrationEnvironment | undefined;
+			serializeModel(): import('../../../src/ash/platform/terminal/common/capabilities/capabilities.js').ISerializedCommandDetectionCapability;
+			commandStartContents(): (string | undefined)[];
+			restoreModel(value: import('../../../src/ash/platform/terminal/common/capabilities/capabilities.js').ISerializedCommandDetectionCapability): void;
+			clearModel(): void;
+			model(): { input: string | undefined; state: number | undefined; commands: { id: string | undefined; text: string; output: string | undefined; timestamp: number; duration: number; trust: boolean; promptRows: number; commandRows: number; }[] | undefined; };
 			observed(): string;
 			snapshot(): Promise<string | undefined>;
 			start(): Promise<void>;
@@ -758,14 +814,19 @@ if (new URLSearchParams(location.search).has('input')) {
 	const connectionChanged = store.add(new Emitter<import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessConnectionState>());
 	const writes: Array<string | number[]> = [];
 	const routedWrites: { terminalId: string; data: string | number[]; }[] = [];
+	const launchDirectories: (string | undefined)[] = [];
 	const sizes: { terminalId: string; cols: number; rows: number; }[] = [];
 	const queuedOutput = [new TextEncoder().encode('retained screen\r\n\x1b[c')];
 	let sequence = 0;
 	const profile = { profileId: 'shell', title: 'Shell', isDefault: true };
 	const processes: import('../../../src/ash/platform/terminal/common/terminal.js').ITerminalProcessService = {
 		operatingSystem: OperatingSystem.Linux,
+		getProcessInfo: async () => ({ ready: { pid: 1234, cwd: '/workspace' }, cwd: '/workspace/current', rows: 24, cols: 80 }),
 		resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? (typeof profile.args === 'string' ? profile.args : [...profile.args]) : [] }), getEnvironment: async () => ({}), listProfiles: async () => [profile],
-		create: async () => ({ terminalId: `input-shell-${++nextTerminal}`, ready: { pid: 1234, cwd: '/workspace' }, profile, connectionPersistence: 'connectionOwned' }),
+		create: async options => {
+			launchDirectories.push(options.cwd);
+			return { terminalId: `input-shell-${++nextTerminal}`, ready: { pid: 1234, cwd: '/workspace' }, profile, connectionPersistence: 'connectionOwned' };
+		},
 		write: async options => {
 			writes.push(typeof options.data === 'string' ? options.data : [...options.data]);
 			routedWrites.push({ terminalId: options.terminalId, data: typeof options.data === 'string' ? options.data : [...options.data] });
@@ -890,6 +951,7 @@ if (new URLSearchParams(location.search).has('input')) {
 				command: (id, args) => commands.executeCommand(id, args),
 				metadata: () => ({ title: terminals.activeInstance?.title, icon: terminals.activeInstance?.profile.icon?.id, created: nextTerminal }),
 				groups: () => services.get(ITerminalGroupService).groups.map(group => group.terminalInstances.map(instance => instance.id)),
+				launchDirectories: () => launchDirectories,
 				active: () => terminals.activeInstance?.id,
 				writes: () => routedWrites,
 				clearWrites: () => { routedWrites.length = 0; },
@@ -1022,6 +1084,7 @@ declare global {
 			metadata(): { title: string | undefined; icon: string | undefined; created: number; };
 			command(id: string, args?: unknown): Promise<unknown>;
 			groups(): readonly (readonly string[])[];
+			launchDirectories(): readonly (string | undefined)[];
 			active(): string | undefined;
 			writes(): readonly { terminalId: string; data: string | number[]; }[];
 			clearWrites(): void;

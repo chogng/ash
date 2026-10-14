@@ -3,7 +3,7 @@ import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '..
 import { localize } from '../../../../nls.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
-import { TERMINAL_CONFIG_SECTION } from '../common/terminal.js';
+import { TerminalSettingPrefix } from '../../../../platform/terminal/common/terminal.js';
 import { ITerminalProfileService } from '../../../services/terminal/common/terminal.js';
 
 interface ProfileItem extends IQuickPickItem { readonly profileId: string; }
@@ -60,7 +60,7 @@ export class TerminalProfileQuickpick extends Disposable {
 		if (type === 'setDefault') {
 			if (contributed) await this.profiles.registerContributedProfile({ ...contributed, options: contributed.options ?? {} });
 			const title = profile?.profileName ?? contributed!.title;
-			await this.configuration.updateValue(`${TERMINAL_CONFIG_SECTION}.defaultProfile.${platform}`, title, ConfigurationTarget.USER);
+			await this.configuration.updateValue(`${TerminalSettingPrefix.DefaultProfile}${platform}`, title, ConfigurationTarget.USER);
 			return title;
 		}
 		return profileId;

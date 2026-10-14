@@ -26,8 +26,8 @@ export function createInstanceCapabilityEventMultiplexer<T extends TerminalCapab
 			if (capability) lease = multiplexer.add(Event.map(getEvent(capability), data => ({ instance, data })));
 		};
 		subscriptions.add(toDisposable(() => lease?.dispose()));
-		subscriptions.add(instance.capabilities.onDidAddCapability(id => { if (id === capabilityId) update(); }));
-		subscriptions.add(instance.capabilities.onDidRemoveCapability(id => { if (id === capabilityId) update(); }));
+		subscriptions.add(instance.capabilities.createOnDidAddCapabilityOfTypeEvent(capabilityId)(update));
+		subscriptions.add(instance.capabilities.createOnDidRemoveCapabilityOfTypeEvent(capabilityId)(update));
 		update();
 	};
 	for (const instance of currentInstances) add(instance);

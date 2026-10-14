@@ -13,7 +13,8 @@ import { SyncDescriptor } from "../../../../platform/instantiation/common/descri
 import { ViewContainerLocation, WorkbenchViewContainerId, type WorkbenchViewRegistry, ViewsRegistry } from "../../../common/views.js";
 import { TERMINAL_VIEW_ID } from "../common/terminal.js";
 import { TerminalViewPane } from "./terminalView.js";
-import { ITerminalProcessService } from '../../../../platform/terminal/common/terminal.js';
+import { ITerminalLogService, ITerminalProcessService } from '../../../../platform/terminal/common/terminal.js';
+import { TerminalLogService } from '../../../../platform/terminal/common/terminalLogService.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { registerWorkbenchServiceContribution } from '../../../browser/workbenchServiceContributions.js';
 import { ITerminalConfigurationService } from './terminal.js';
@@ -49,6 +50,7 @@ registerWorkbenchServiceContribution({
 });
 
 registerSingleton(ITerminalGroupService, TerminalGroupService, InstantiationType.Delayed);
+registerSingleton(ITerminalLogService, TerminalLogService, InstantiationType.Delayed);
 
 registerWorkbenchServiceContribution({
 	service: ITerminalProfileService,

@@ -3,6 +3,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { ITerminalProcessService, type IProcessDataEvent, type ITerminalProcessCreation } from '../../../../platform/terminal/common/terminal.js';
 import { BasePty } from '../common/basePty.js';
 import { TerminalProcessManager } from './terminalProcessManager.js';
+import { localize } from '../../../../nls.js';
 
 /** A client for one Rust-owned process; output and input keep their original commit/ACK mechanism. */
 export class AgentHostPty extends BasePty<IProcessDataEvent> {
@@ -24,7 +25,16 @@ export class AgentHostPty extends BasePty<IProcessDataEvent> {
 		this._register(this.manager.onProcessExit(code => this.handleExit(code)));
 	}
 
+	get cwdDetection() { return this.manager.cwdDetection; }
+	get promptTypeDetection() { return this.manager.promptTypeDetection; }
 	get cwd() { return this.manager.cwd; }
+	async getCwd(): Promise<string> {
+		this.assertNotDisposed();
+		const info = await this.processes.getProcessInfo({ terminalId: this.creation.terminalId, ...(this.dirId === undefined ? {} : { dirId: this.dirId }) });
+		if (this.isDisposed) throw new CancellationError();
+		if (info.cwd === undefined) throw new Error(localize('terminal.process.cwdUnavailable', 'The terminal working directory is unavailable.'));
+		return info.cwd;
+	}
 	get shellIntegration() { return this.manager.shellIntegration; }
 	get onProcessError() { return this.manager.onProcessError; }
 	get onDidChangeCommandStatus() { return this.manager.onDidChangeCommandStatus; }

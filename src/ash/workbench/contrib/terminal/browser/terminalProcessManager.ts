@@ -4,7 +4,7 @@ import { DeferredPromise, raceCancellationError, timeout } from '../../../../bas
 import { CancellationTokenSource, cancelOnDispose, type CancellationToken } from '../../../../base/common/cancellation.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
-import { ITerminalProcessService, type IProcessDataEvent, type ITerminalProcessCloseOptions, type ITerminalProcessReadResult } from '../../../../platform/terminal/common/terminal.js';
+import { ITerminalProcessService, type IProcessDataEvent, type TerminalShellIntegrationEvent, type ITerminalProcessCloseOptions, type ITerminalProcessReadResult } from '../../../../platform/terminal/common/terminal.js';
 import { AhpTerminalCommandSource } from './ahpTerminalCommandSource.js';
 
 const INPUT_BATCH_DELAY_MILLIS = 8;
@@ -37,6 +37,9 @@ export class TerminalProcessManager extends Disposable {
 	private nextSequence = 0;
 	private nextCommandSequence = 0;
 	private pendingCommit: Promise<void> | undefined;
+	private readonly decoder = new TextDecoder('utf-8', { ignoreBOM: true });
+	get cwdDetection() { return this.commandSource.cwdDetection; }
+	get promptTypeDetection() { return this.commandSource.promptTypeDetection; }
 	public get shellIntegration() { return this.commandSource.shellIntegration; }
 	public get cwd(): string | undefined { return this.commandSource.cwd; }
 
@@ -85,7 +88,11 @@ export class TerminalProcessManager extends Disposable {
 					return;
 				}
 				if (result.outputGap) {
+					// A missing byte range cannot complete a retained UTF-8 prefix.
+					const tail = this.decoder.decode();
+					if (tail) await this.emitProcessData(tail, token);
 					this.outputGapEmitter.fire();
+					await this.emitProcessData('', token, { type: 'outputGap' });
 				}
 				this.commandSource.receive(result);
 				this.nextCommandSequence = result.nextCommandSequence;
@@ -95,11 +102,9 @@ export class TerminalProcessManager extends Disposable {
 						return;
 					}
 					this.commandSource.commitThrough(chunk.sequence - 1, token);
-					const event: IProcessDataEvent = { data: chunk.data, trackCommit: true };
-					this.processDataEmitter.fire(event);
+					const data = this.decoder.decode(chunk.data, { stream: true });
 					this.nextSequence = chunk.sequence;
-					this.pendingCommit = event.writePromise;
-					await this.waitForCommit(token);
+					await this.emitProcessData(data, token, chunk.shellIntegration);
 					this.commandSource.commitThrough(this.nextSequence, token);
 				}
 				this.nextSequence = result.nextSequence;
@@ -110,6 +115,8 @@ export class TerminalProcessManager extends Disposable {
 				// The backend reports OS exit independently of pagination. A full page
 				// may still have a tail, so drain both streams before publishing exit.
 				if (result.exited && result.chunks.length < MAX_READ_CHUNKS && result.commandEvents.length < MAX_READ_CHUNKS) {
+					const tail = this.decoder.decode();
+					if (tail) await this.emitProcessData(tail, token);
 					this.stopInput();
 					this.processExitEmitter.fire(result.exitCode);
 					return;
@@ -254,6 +261,13 @@ export class TerminalProcessManager extends Disposable {
 			await raceCancellationError(this.pendingCommit, token);
 			this.pendingCommit = undefined;
 		}
+	}
+
+	private async emitProcessData(data: string, token: CancellationToken, shellIntegration?: TerminalShellIntegrationEvent): Promise<void> {
+		const event: IProcessDataEvent = { data, trackCommit: true, ...(shellIntegration === undefined ? {} : { shellIntegration }) };
+		this.processDataEmitter.fire(event);
+		this.pendingCommit = event.writePromise;
+		await this.waitForCommit(token);
 	}
 
 

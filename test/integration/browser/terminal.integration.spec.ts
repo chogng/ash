@@ -1,5 +1,22 @@
 import { expect, test } from '@playwright/test';
 
+test('Enter input without shell integration records fallback positions and erase releases them', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/terminal.html');
+	await page.evaluate(() => window.ashTerminalIntegration.start());
+	await page.evaluate(() => window.ashTerminalIntegration.ready());
+	await page.evaluate(() => window.ashTerminalIntegration.write('prompt> echo text'));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalIntegration.snapshot(100))).toContain('prompt> echo text');
+	await page.locator('.xterm-helper-textarea').focus();
+	await page.keyboard.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalIntegration.markers().length)).toBe(1);
+	await page.evaluate(() => window.ashTerminalIntegration.write('\x1b[2J'));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalIntegration.markers())).toEqual([]);
+	await page.evaluate(() => window.ashTerminalIntegration.dispose());
+	expect(errors).toEqual([]);
+});
+
 test('terminal Find navigates real matches without sending its keys to the process', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
@@ -1217,6 +1234,8 @@ test('terminal Split creates independent processes, preserves output and moves f
 	await expect(page.locator('.xterm-rows')).toContainText('original pane output');
 	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.split'));
 	await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.groups())).toEqual([['terminal-instance-1', 'terminal-instance-2']]);
+	// No shell cwd metadata has arrived: the split must query the live execution owner.
+	expect(await page.evaluate(() => window.ashTerminalGroupsIntegration.launchDirectories()[1])).toBe('/workspace/current');
 	const panes = page.locator('.ash-terminal-group-pane');
 	await expect(panes).toHaveCount(2);
 	await expect(panes.nth(0).locator('.xterm-rows')).toContainText('original pane output');
@@ -1443,3 +1462,100 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(tabs.first()).not.toHaveAttribute('title', /acme\.environment/);
 	});
 }
+
+
+test('decoded shell boundaries own prompt input and command output on the original xterm screen', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/terminal.html?stream&commandModel');
+	await expect.poll(async () => ({ model: await page.evaluate(() => window.ashTerminalStreamIntegration?.model()), errors })).toEqual({
+		model: {
+			input: '|', state: 1, commands: [{ id: 'model-command', text: 'echo 中文🙂', output: 'result 中文🙂', timestamp: 123, duration: 25, trust: true, promptRows: 1, commandRows: 1 }],
+		}, errors: []
+	});
+	await page.evaluate(() => window.ashTerminalStreamIntegration.feedModel('中文🙂'));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.model().input)).toBe('中文🙂|');
+	await page.evaluate(() => window.ashTerminalStreamIntegration.feedModel('\x1b[2D'));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.model().input)).toBe('中文|🙂');
+	await page.evaluate(() => window.ashTerminalStreamIntegration.feedModel('\x1b[2C\x1b[2mghost\x1b[0m\x1b[5D'));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.model().input)).toBe('中文🙂|[ghost]');
+	expect((await page.evaluate(() => window.ashTerminalStreamIntegration.model())).commands![0]!.output).toBe('result 中文🙂');
+	await page.evaluate(() => {
+		window.ashTerminalStreamIntegration.feedModel('\x1b[2K\r$ ');
+		window.ashTerminalStreamIntegration.environmentFrame({ type: 'promptStart' });
+		window.ashTerminalStreamIntegration.environmentFrame({ type: 'commandStart' });
+		window.ashTerminalStreamIntegration.feedModel('input\x1b[60G');
+		window.ashTerminalStreamIntegration.environmentFrame({ type: 'rightPromptStart' });
+		window.ashTerminalStreamIntegration.feedModel('right prompt');
+		window.ashTerminalStreamIntegration.environmentFrame({ type: 'rightPromptEnd' });
+		window.ashTerminalStreamIntegration.feedModel('\x1b[8G');
+	});
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.model().input)).toBe('input|');
+	await page.evaluate(() => {
+		window.ashTerminalStreamIntegration.feedModel('\x1b[2K\r$ echo\r\n');
+		window.ashTerminalStreamIntegration.environmentFrame({ type: 'continuationStart' });
+		window.ashTerminalStreamIntegration.feedModel('续🙂> ');
+		window.ashTerminalStreamIntegration.environmentFrame({ type: 'continuationEnd' });
+		window.ashTerminalStreamIntegration.feedModel('中文');
+	});
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.model().input)).toBe('echo\n中文|');
+	const serialized = await page.evaluate(() => window.ashTerminalStreamIntegration.serializeModel());
+	expect(serialized.commands[0]!.command).toBe('echo 中文🙂');
+	await page.evaluate(() => window.ashTerminalStreamIntegration.clearModel());
+	expect((await page.evaluate(() => window.ashTerminalStreamIntegration.model())).commands).toEqual([]);
+	await page.evaluate(value => window.ashTerminalStreamIntegration.restoreModel(value), serialized);
+	expect((await page.evaluate(() => window.ashTerminalStreamIntegration.model())).commands![0]!.output).toBe('result 中文🙂');
+	await page.evaluate(() => window.ashTerminalStreamIntegration.environmentFrame({ type: 'commandStorageDisabled' }));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.model().commands![0]!.text)).toBe('');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.commandStartContents())).toEqual([undefined]);
+	expect((await page.evaluate(() => window.ashTerminalStreamIntegration.serializeModel())).promptInputModel).toBeUndefined();
+	await page.evaluate(() => window.ashTerminalStreamIntegration.close());
+	expect(errors).toEqual([]);
+});
+
+
+test('execution-host shell type selects italic ghost text and resets with a legacy ready frame', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/terminal.html?stream&commandModel&powerShell');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration?.model().input)).toBe('|');
+	expect((await page.evaluate(() => window.ashTerminalStreamIntegration.serializeModel())).isWindowsPty).toBe(true);
+	await page.evaluate(() => window.ashTerminalStreamIntegration.feedModel('user \x1b[3mproposal\x1b[0m\x1b[8D'));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.model().input)).toBe('user |[proposal]');
+	await page.evaluate(() => {
+		window.ashTerminalStreamIntegration.environmentFrame({ type: 'processReady', isWindowsPty: false });
+		window.ashTerminalStreamIntegration.feedModel('\r\x1b[2K$ ');
+		window.ashTerminalStreamIntegration.environmentFrame({ type: 'promptStart' });
+		window.ashTerminalStreamIntegration.environmentFrame({ type: 'commandStart' });
+		window.ashTerminalStreamIntegration.feedModel('\x1b[3mother\x1b[0m\x1b[5D');
+	});
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.model().input)).toBe('|other');
+	expect((await page.evaluate(() => window.ashTerminalStreamIntegration.serializeModel())).isWindowsPty).toBe(false);
+	await page.evaluate(() => window.ashTerminalStreamIntegration.close());
+	expect(errors).toEqual([]);
+});
+
+test('shell environment commits through the original xterm and rejects partial trust across reuse', async ({ page }) => {
+	await page.goto('/terminal.html?stream&commandModel');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration?.model().input)).toBe('|');
+	await page.evaluate(() => window.ashTerminalStreamIntegration.environmentFrame({ type: 'environment', values: { CURRENT: 'startup' }, isTrusted: true }));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.environment())).toEqual({ value: { CURRENT: 'startup' }, isTrusted: true });
+	await page.evaluate(() => {
+		window.ashTerminalStreamIntegration.environmentFrame({ type: 'environmentStart', clear: true, isTrusted: true });
+		window.ashTerminalStreamIntegration.environmentFrame({ type: 'environmentEntry', key: 'CURRENT', value: 'pending 中文', isTrusted: true });
+	});
+	// A visible prompt model remains unchanged until the transaction's final boundary is parsed.
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.model().input)).toBe('|');
+	expect(await page.evaluate(() => window.ashTerminalStreamIntegration.environment())).toEqual({ value: { CURRENT: 'startup' }, isTrusted: true });
+	await page.evaluate(() => window.ashTerminalStreamIntegration.environmentFrame({ type: 'environmentEnd', isTrusted: true }));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.environment())).toEqual({ value: { CURRENT: 'pending 中文' }, isTrusted: true });
+	await page.evaluate(() => {
+		window.ashTerminalStreamIntegration.environmentFrame({ type: 'environmentStart', clear: false, isTrusted: true });
+		window.ashTerminalStreamIntegration.environmentFrame({ type: 'environmentEntry', key: 'CURRENT', value: 'forged', isTrusted: false });
+		window.ashTerminalStreamIntegration.environmentFrame({ type: 'environmentEnd', isTrusted: true });
+	});
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.environment())).toEqual({ value: { CURRENT: 'forged' }, isTrusted: false });
+	await page.evaluate(() => window.ashTerminalStreamIntegration.environmentFrame({ type: 'processReady', isWindowsPty: false }));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.environment())).toEqual({ value: undefined, isTrusted: false });
+	await page.evaluate(() => window.ashTerminalStreamIntegration.close());
+});

@@ -1,10 +1,8 @@
-import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import { TerminalCapability } from '../../../../platform/terminal/common/capabilities/capabilities.js';
 import type { IWorkbenchContribution } from '../../../common/contributions.js';
 import { IOutputService, type IOutputChannel } from '../../../services/output/common/output.js';
-import { ITerminalService } from '../../../services/terminal/browser/terminal.js';
-import { createInstanceCapabilityEventMultiplexer } from './terminalEvents.js';
+import { ITerminalService, type ITerminalInstance } from '../../../services/terminal/browser/terminal.js';
 
 /** A bounded diagnostic consumer of committed host events; Rust retains the command history. */
 export class AgentHostOutputChannel extends Disposable implements IWorkbenchContribution {
@@ -16,15 +14,22 @@ export class AgentHostOutputChannel extends Disposable implements IWorkbenchCont
 		@IOutputService private readonly output: IOutputService,
 	) {
 		super();
-		const events = this._register(createInstanceCapabilityEventMultiplexer(terminals.instances, terminals.onDidCreateInstance, terminals.onDidDisposeInstance, TerminalCapability.CommandDetection, capability => capability.onCommandFinished));
-		this._register(events.event(({ instance, data }) => {
-			this.channel ??= this._register(this.output.createChannel({ id: 'terminal-host', label: localize('terminal.output.host', 'Terminal Host'), kind: 'log', source: 'core' }));
-			const detection = instance.capabilities?.get(TerminalCapability.CommandDetection);
-			this.channel.appendLine({
-				severity: data.status === 'failed' ? 'error' : 'information',
-				category: 'terminal',
-				text: JSON.stringify({ terminalId: instance.id, commandId: data.commandId, status: data.status, exitCode: data.exitCode, ...(data.isTrusted && !detection?.commandStorageDisabled ? { command: data.command } : {}) }),
-			});
-		}));
+		const subscriptions = this._register(new DisposableMap<ITerminalInstance, IDisposable>());
+		const add = (instance: ITerminalInstance) => {
+			if (subscriptions.has(instance)) return;
+			subscriptions.set(instance, instance.onDidChangeCommandStatus(data => {
+				if (data.status === 'running') return;
+				this.channel ??= this._register(this.output.createChannel({ id: 'terminal-host', label: localize('terminal.output.host', 'Terminal Host'), kind: 'log', source: 'core' }));
+				this.channel.appendLine({
+					severity: data.status === 'failed' ? 'error' : 'information', category: 'terminal',
+					text: JSON.stringify({ terminalId: instance.id, commandId: data.commandId, status: data.status, exitCode: data.exitCode,
+						...(data.isTrusted && !instance.shellIntegration?.commandStorageDisabled ? { command: data.command } : {}) }),
+				});
+			}));
+		};
+		for (const instance of terminals.instances) add(instance);
+		this._register(terminals.onDidCreateInstance(add));
+		this._register(terminals.onDidDisposeInstance(instance => subscriptions.deleteAndDispose(instance)));
+
 	}
 }

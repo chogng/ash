@@ -5,9 +5,46 @@ import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import type { JsonValue } from '../../../../../platform/agentHost/common/extensionHostApi.js';
 import { TerminalProcessExtHostProxy } from '../../browser/terminalProcessExtHostProxy.js';
+import { Emitter } from '../../../../../base/common/event.js';
+import { TerminalDataBufferer } from '../../../../../platform/terminal/common/terminalDataBuffering.js';
 
 suite('Extension terminal process boundary', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('buffer leases preserve text order and cannot stop a replacement with the same process ID', () => {
+		using lifetime = new DisposableStore();
+		const first = lifetime.add(new Emitter<string>());
+		const second = lifetime.add(new Emitter<string>());
+		const observed: [number, string][] = [];
+		const bufferer = lifetime.add(new TerminalDataBufferer((id, text) => observed.push([id, text])));
+		const oldLease = lifetime.add(bufferer.startBuffering(1, first.event));
+		first.fire('中文');
+		first.fire('🙂');
+		lifetime.add(bufferer.startBuffering(1, second.event));
+		assert.equal(first.hasListeners(), false);
+		oldLease.dispose();
+		second.fire('replacement');
+		bufferer.stopBuffering(1);
+		second.fire('late');
+		assert.deepEqual(observed, [[1, '中文🙂'], [1, 'replacement']]);
+		assert.equal(second.hasListeners(), false);
+	});
+
+	test('adjacent extension output is drained before rename and process exit', async () => {
+		using lifetime = new DisposableStore();
+		const child = lifetime.add(new TerminalProcessExtHostProxy(7, 'opaque-pty', true, 90, 30, async (operation): Promise<JsonValue> => operation === 'openTaskTerminal' ? {
+			events: [
+				{ type: 'data', data: 'first' }, { type: 'data', data: ' second' },
+				{ type: 'name', name: 'Renamed' }, { type: 'data', data: ' tail' }, { type: 'close', code: 0 },
+			]
+		} : null, () => { }));
+		const observed: unknown[] = [];
+		lifetime.add(child.onProcessData(data => observed.push(data)));
+		lifetime.add(child.onDidChangeProperty(property => observed.push(property)));
+		lifetime.add(child.onProcessExit(code => observed.push(code)));
+		await child.start();
+		assert.deepEqual(observed, ['first second', { type: 'title', value: 'Renamed' }, ' tail', 0]);
+	});
 	test('publishes synchronous open output and releases the opaque handle once on exit', async () => {
 		using lifetime = new DisposableStore();
 		const operations: { operation: string; payload: JsonValue; }[] = [];

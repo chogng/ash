@@ -6,12 +6,14 @@ import { OperatingSystem } from '../../../../base/common/platform.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
 import { localize } from '../../../../nls.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { ITerminalProcessService, type ITerminalProfile, type ITerminalProfileObject, type IExtensionTerminalProfile, type IShellLaunchConfig } from '../../../../platform/terminal/common/terminal.js';
+import { ITerminalProcessService, TerminalSettingPrefix, type ITerminalProfile, type ITerminalProfileObject, type IExtensionTerminalProfile, type IShellLaunchConfig } from '../../../../platform/terminal/common/terminal.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IExtensionService } from '../../../services/extensions/common/extensionService.js';
 import { TERMINAL_CONFIG_SECTION } from '../common/terminal.js';
 import { ITerminalContributionService, ITerminalProfileService, type IRegisterContributedProfileArgs, type ITerminalProfileProvider } from '../../../services/terminal/common/terminal.js';
 import { ITerminalService } from '../../../services/terminal/browser/terminal.js';
+import { registerTerminalDefaultProfileConfiguration } from '../../../../platform/terminal/common/terminalPlatformConfiguration.js';
+import { terminalIconsEqual, terminalProfileArgsMatch } from '../../../../platform/terminal/common/terminalProfiles.js';
 
 type ProfileDefinition = ITerminalProfileObject | (IExtensionTerminalProfile & Pick<ITerminalProfileObject, 'icon' | 'color'>) | null;
 
@@ -36,6 +38,10 @@ export class TerminalProfileService extends Disposable implements ITerminalProfi
 		@ITerminalContributionService private readonly contributions: ITerminalContributionService,
 	) {
 		super();
+		this._register(this.onDidChangeAvailableProfiles(profiles => {
+			const os = this.processes.operatingSystem;
+			if (os) registerTerminalDefaultProfileConfiguration({ os, profiles }, this.contributedProfiles);
+		}));
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(TERMINAL_CONFIG_SECTION)) this.changed.fire(this.availableProfiles);
 		}));
@@ -48,6 +54,8 @@ export class TerminalProfileService extends Disposable implements ITerminalProfi
 			this.invalidate();
 			if (this.activated && workspace.getWorkspace().folders.length) this.refreshInBackground();
 		}));
+		const os = this.processes.operatingSystem;
+		if (os) registerTerminalDefaultProfileConfiguration({ os, profiles: this.availableProfiles }, this.contributedProfiles);
 	}
 
 	get profilesReady(): Promise<void> { return this.refreshAvailableProfiles(); }
@@ -66,7 +74,7 @@ export class TerminalProfileService extends Disposable implements ITerminalProfi
 
 	getDefaultProfileName(): string | undefined {
 		const platform = platformKey(this.processes.operatingSystem);
-		return platform ? this.configuration.getValue<string | null>(`${TERMINAL_CONFIG_SECTION}.defaultProfile.${platform}`) ?? undefined : undefined;
+		return platform ? this.configuration.getValue<string | null>(`${TerminalSettingPrefix.DefaultProfile}${platform}`) ?? undefined : undefined;
 	}
 
 	getDefaultProfile(os = this.processes.operatingSystem): ITerminalProfile | undefined {
@@ -75,13 +83,13 @@ export class TerminalProfileService extends Disposable implements ITerminalProfi
 
 	private selectDefault(profiles: readonly ITerminalProfile[], os: OperatingSystem | undefined): ITerminalProfile | undefined {
 		const platform = platformKey(os);
-		const name = platform ? this.configuration.getValue<string | null>(`${TERMINAL_CONFIG_SECTION}.defaultProfile.${platform}`) : undefined;
+		const name = platform ? this.configuration.getValue<string | null>(`${TerminalSettingPrefix.DefaultProfile}${platform}`) : undefined;
 		return profiles.find(profile => profile.profileName === name) ?? profiles.find(profile => profile.isDefault);
 	}
 
 	private profileEntries(os: OperatingSystem | undefined): ITerminalProfile[] {
 		const platform = platformKey(os);
-		const definitions = platform ? this.configuration.getValue<Readonly<Record<string, ProfileDefinition>>>(`${TERMINAL_CONFIG_SECTION}.profiles.${platform}`) : {};
+		const definitions = platform ? this.configuration.getValue<Readonly<Record<string, ProfileDefinition>>>(`${TerminalSettingPrefix.Profiles}${platform}`) : {};
 		const profiles = new Map(this.profiles.filter(profile => definitions[profile.profileName] !== null).map(profile => [profile.profileName, profile]));
 		for (const [name, definition] of Object.entries(definitions)) {
 			if (!definition || 'extensionIdentifier' in definition) continue;
@@ -118,8 +126,13 @@ export class TerminalProfileService extends Disposable implements ITerminalProfi
 				return Object.freeze({ ...profile, profileName: profile.title, path: result.executable, args: (typeof result.args === 'string' ? result.args : Object.freeze([...result.args])), isAutoDetected: true });
 			}));
 			if (this.isDisposed || revision !== this.revision) throw new CancellationError();
+			const changed = resolved.length !== this.profiles.length || resolved.some((profile, index) => {
+				const old = this.profiles[index];
+				return !old || profile.profileId !== old.profileId || profile.title !== old.title || profile.path !== old.path || profile.isDefault !== old.isDefault
+					|| !terminalProfileArgsMatch(profile.args, old.args) || !terminalIconsEqual(profile.icon, old.icon);
+			});
 			this.profiles = Object.freeze(resolved);
-			this.changed.fire(this.availableProfiles);
+			if (changed) this.changed.fire(this.availableProfiles);
 		}).finally(() => { if (this.request === request) this.request = undefined; });
 		this.request = request;
 		return request;
@@ -132,7 +145,7 @@ export class TerminalProfileService extends Disposable implements ITerminalProfi
 		const name = this.getDefaultProfileName();
 		if (!name) return undefined;
 		const platform = await this.getPlatformKey();
-		const definitions = this.configuration.getValue<Readonly<Record<string, ProfileDefinition>>>(`${TERMINAL_CONFIG_SECTION}.profiles.${platform}`);
+		const definitions = this.configuration.getValue<Readonly<Record<string, ProfileDefinition>>>(`${TerminalSettingPrefix.Profiles}${platform}`);
 		const definition = definitions[name];
 		if (definition && 'extensionIdentifier' in definition) {
 			const profile = this.contributedProfiles.find(profile => profileKey(profile.extensionIdentifier, profile.id) === profileKey(definition.extensionIdentifier, definition.id));
@@ -143,7 +156,7 @@ export class TerminalProfileService extends Disposable implements ITerminalProfi
 
 	async registerContributedProfile(args: IRegisterContributedProfileArgs): Promise<void> {
 		const platform = await this.getPlatformKey();
-		const key = `${TERMINAL_CONFIG_SECTION}.profiles.${platform}`;
+		const key = `${TerminalSettingPrefix.Profiles}${platform}`;
 		const profiles = this.configuration.getValue<Readonly<Record<string, ProfileDefinition>>>(key);
 		await this.configuration.updateValue(key, {
 			...profiles, [args.title]: {

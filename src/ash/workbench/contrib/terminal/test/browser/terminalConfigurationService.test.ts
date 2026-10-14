@@ -1,6 +1,7 @@
 import { IEnvironmentVariableService } from '../../common/environmentVariable.js';
 import { EnvironmentVariableService } from '../../common/environmentVariableService.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
+import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { resetNlsResolver } from '../../../../../nls.js';
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import { IExtensionService } from '../../../../services/extensions/common/extensionService.js';
@@ -20,6 +21,7 @@ import { IConfigurationService } from '../../../../../platform/configuration/com
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { ITerminalProcessService } from '../../../../../platform/terminal/common/terminal.js';
+import { registerTerminalPlatformConfiguration } from '../../../../../platform/terminal/common/terminalPlatformConfiguration.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { WorkbenchConfigurationService } from '../../../../services/configuration/browser/configurationService.js';
 import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
@@ -38,6 +40,7 @@ const shells = [
 
 function createServices(owner: DisposableStore, useInstances = false) {
 	const services = owner.add(new InstantiationService());
+	services.registerInstance(ILogService, new NullLoggerService());
 	const configuration = owner.add(new WorkbenchConfigurationService());
 	const connection = owner.add(new Emitter<import('../../../../../platform/terminal/common/terminal.js').TerminalProcessConnectionState>());
 	const workspace = owner.add(new WorkspaceContextService({ id: 'test', uri: URI.file('/workspace') }));
@@ -75,8 +78,8 @@ function createServices(owner: DisposableStore, useInstances = false) {
 	services.registerInstance(IWorkspaceContextService, workspace);
 	const stored = new Map<string, string>();
 	services.registerInstance(IStorageService, { get: (key: string) => stored.get(key), store: (key: string, value: string) => { stored.set(key, value); } } as unknown as IStorageService);
-	services.registerInstance(IEnvironmentVariableService, owner.add(services.createInstance(EnvironmentVariableService)));
 	services.registerInstance(ITerminalProcessService, processes);
+	services.registerInstance(IEnvironmentVariableService, owner.add(services.createInstance(EnvironmentVariableService)));
 	services.registerInstance(ITerminalService, useInstances
 		? owner.add(services.createInstance(TerminalService))
 		: { ...Disposable.None, getProfiles: () => { calls++; return read(); } } as ITerminalService);
@@ -87,17 +90,25 @@ function createServices(owner: DisposableStore, useInstances = false) {
 }
 
 function installPicker(owner: DisposableStore, services: InstantiationService) {
-	const accept = owner.add(new Emitter<IQuickPickItem>());
+	const accept = owner.add(new Emitter<void>());
 	const hide = owner.add(new Emitter<void>());
 	let shown = false;
 	let disposed = 0;
 	const picker = Object.assign(toDisposable(() => { disposed++; }), {
 		items: [] as readonly IQuickPickItem[], placeholder: '', ariaLabel: '',
+		selectedItems: [] as readonly IQuickPickItem[],
 		onDidAccept: accept.event, onDidHide: hide.event,
 		show: () => { shown = true; }, hide: () => hide.fire(),
 	});
 	services.registerInstance(IQuickInputService, { createQuickPick: () => picker as unknown as IQuickPick<IQuickPickItem> } as IQuickInputService);
-	return { picker, accept: (index: number) => accept.fire(picker.items[index]!), hide: () => hide.fire(), shown: () => shown, disposed: () => disposed };
+	return {
+		picker,
+		accept: (index: number) => {
+			picker.selectedItems = [picker.items[index]!];
+			accept.fire();
+		},
+		hide: () => hide.fire(), shown: () => shown, disposed: () => disposed,
+	};
 }
 
 async function waitFor(check: () => boolean): Promise<void> {
@@ -123,6 +134,20 @@ suite('Terminal configuration and interactive profiles', () => {
 		assert.equal(changes, 1);
 		await configuration.updateValue('terminal.integrated.cursorStyle', 'line');
 		assert.equal(terminalConfig.config.cursorStyle, 'line');
+	});
+
+	test('platform launch schema registration is idempotent and preserves environment validation', async () => {
+		using owner = new DisposableStore();
+		const { configuration } = createServices(owner);
+		registerTerminalPlatformConfiguration();
+		registerTerminalPlatformConfiguration();
+		assert.equal(configuration.getValue('terminal.integrated.defaultProfile.windows'), null);
+		assert.deepEqual(configuration.getValue('terminal.integrated.env.windows'), {});
+		await configuration.updateValue('terminal.integrated.env.windows', { Path: 'host override', REMOVED: null });
+		for (const invalid of [{ 'BAD=KEY': 'x' }, { PATH: 1 }, { PATH: 'x'.repeat(32769) }]) {
+			await assert.rejects(configuration.updateValue('terminal.integrated.env.windows', invalid));
+		}
+		assert.deepEqual(configuration.getValue('terminal.integrated.env.windows'), { Path: 'host override', REMOVED: null });
 	});
 
 	test('uses the execution host OS and refreshes default labels without rediscovery', async () => {
@@ -452,6 +477,86 @@ suite('Terminal configuration and interactive profiles', () => {
 		assert.equal(services.get(ITerminalService).instances.length, 1);
 	});
 
+	test('extension environment snapshots reach the process through the original profile creation entry', async () => {
+		using owner = new DisposableStore();
+		const { services, profiles, launches } = createServices(owner, true);
+		const digest = `sha256:${'b'.repeat(64)}`;
+		Object.assign(services.get(IExtensionService), { currentCatalog: { generation: 1, diagnostics: [], extensions: [{ id: 'acme.environment', packageSha256: digest }] } });
+		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
+		bridge.replaceEnvironmentProviders([{
+			runtimeId: 'environment', packageDigest: digest,
+			invoke: async () => ({
+				persistent: false, map: [
+					['PATH', { type: 2, value: ';${env:PROFILE_VALUE}' }],
+					['MODE', { type: 1, value: 'extension' }],
+					['scoped:PATH', { variable: 'PATH', type: 2, value: ';scoped', scope: { workspaceFolder: { uri: { scheme: 'file', path: '/workspace' }, name: 'workspace', index: 0 } } }],
+					['other:MODE', { variable: 'MODE', type: 1, value: 'wrong workspace', scope: { workspaceFolder: { uri: { scheme: 'file', path: '/other' }, name: 'other', index: 1 } } }],
+				]
+			}),
+		}]);
+		bridge.replaceProfiles([{
+			runtimeId: 'profile', packageDigest: digest, profileId: 'shell', title: 'Extension shell',
+			invoke: async () => ({ options: { shellPath: 'C:\\Windows\\cmd.exe', env: { Path: 'caller', REMOVED: null } } }),
+		}]);
+		await profiles.getContributedProfileProvider('acme.environment', 'shell')!.createContributedTerminalProfile({});
+		assert.deepEqual(launches[0]!.env, { Path: 'caller;environment value;scoped', REMOVED: null, MODE: 'extension' });
+		assert.equal(services.get(ITerminalService).instances.length, 1);
+	});
+
+	test('strict extension profile environment stays literal and bypasses configured and extension mutations', async () => {
+		using owner = new DisposableStore();
+		const { services, profiles, launches, workspace, configuration } = createServices(owner, true);
+		workspace.updateWorkspace({ id: 'unc', uri: URI.from({ scheme: 'file', authority: 'server', path: '/share' }) });
+		await configuration.updateValue('terminal.integrated.env.windows', { CONFIGURED: 'value', Path: 'configured' });
+		let strict: import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue = true;
+		const digest = `sha256:${'b'.repeat(64)}`;
+		Object.assign(services.get(IExtensionService), { currentCatalog: { generation: 1, diagnostics: [], extensions: [{ id: 'acme.environment', packageSha256: digest }] } });
+		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
+		bridge.replaceEnvironmentProviders([{
+			runtimeId: 'environment', packageDigest: digest,
+			invoke: async () => ({
+				persistent: false, map: [
+					['PATH', { type: 2, value: ';${env:PROFILE_VALUE}' }],
+					['MODE', { type: 1, value: 'extension' }],
+					['scoped:PATH', { variable: 'PATH', type: 2, value: ';scoped', scope: { workspaceFolder: { uri: { scheme: 'file', path: '/workspace' }, name: 'workspace', index: 0 } } }],
+					['other:MODE', { variable: 'MODE', type: 1, value: 'wrong workspace', scope: { workspaceFolder: { uri: { scheme: 'file', path: '/other' }, name: 'other', index: 1 } } }],
+				]
+			}),
+		}]);
+		bridge.replaceProfiles([{
+			runtimeId: 'profile', packageDigest: digest, profileId: 'shell', title: 'Extension shell',
+			invoke: async () => ({ options: { shellPath: 'C:\\Windows\\cmd.exe', strictEnv: strict, env: { Path: '${env:PROFILE_VALUE}', REMOVED: null } } }),
+		}]);
+		await profiles.getContributedProfileProvider('acme.environment', 'shell')!.createContributedTerminalProfile({});
+		assert.deepEqual(launches[0]!.env, { Path: '${env:PROFILE_VALUE}' });
+		assert.equal(launches[0]!.strictEnv, true);
+		assert.equal(services.get(ITerminalService).instances.length, 1);
+		strict = 'true';
+		await assert.rejects(profiles.getContributedProfileProvider('acme.environment', 'shell')!.createContributedTerminalProfile({}));
+		assert.equal(launches.length, 1);
+	});
+
+	test('an extension shell phase reaches the original process create request without changing its process value', async () => {
+		using owner = new DisposableStore();
+		const { services, profiles, launches } = createServices(owner, true);
+		const digest = `sha256:${'a'.repeat(64)}`;
+		Object.assign(services.get(IExtensionService), { currentCatalog: { generation: 1, diagnostics: [], extensions: [{ id: 'acme.environment', packageSha256: digest }] } });
+		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
+		bridge.replaceEnvironmentProviders([{
+			runtimeId: 'environment', packageDigest: digest, invoke: async () => ({
+				persistent: true, map: [['STAGE', {
+					variable: 'STAGE', type: 2, value: ':${env:PROFILE_VALUE}', options: { applyAtProcessCreation: false, applyAtShellIntegration: true },
+				}]], descriptionMap: []
+			}),
+		}]);
+		bridge.replaceProfiles([{
+			runtimeId: 'profile', packageDigest: digest, profileId: 'shell', title: 'Extension shell',
+			invoke: async () => ({ options: { shellPath: '/extension/shell', env: { STAGE: 'process' } } }),
+		}]);
+		await profiles.getContributedProfileProvider('acme.environment', 'shell')!.createContributedTerminalProfile({});
+		assert.deepEqual(launches[0]!.env, { STAGE: 'process', VSCODE_ENV_APPEND: 'STAGE=\\x3aenvironment value' });
+	});
+
 	test('resolver cancels a late environment result without partially changing launch data', async () => {
 		using owner = new DisposableStore();
 		const { services, processes, connection } = createServices(owner);
@@ -528,7 +633,12 @@ suite('Terminal configuration and interactive profiles', () => {
 		assert.equal(launches.length, 1);
 		if (custom) {
 			assert.deepEqual(writes, ['synchronous open output']);
-			child!.input!('typed'); await waitFor(() => writes.length === 2);
+			const echoed = new Promise<void>(resolve => {
+				const listener = owner.add(child!.onProcessData(data => {
+					if (data === 'echo:typed') { listener.dispose(); resolve(); }
+				}));
+			});
+			child!.input!('typed'); await echoed;
 			assert.deepEqual(writes, ['synchronous open output', 'echo:typed']);
 			child!.dispose();
 			child = owner.add(launches[0]!.config!.customPtyImplementation(1, 100, 30));
@@ -553,7 +663,7 @@ suite('Terminal configuration and interactive profiles', () => {
 		const output: string[] = [];
 		const exits: (number | undefined)[] = [];
 		owner.add(terminals.onDidCreateInstance(instance => {
-			owner.add(instance.onDidWriteData(event => output.push(new TextDecoder().decode(event.data))));
+			owner.add(instance.onDidWriteData(event => output.push(event.data)));
 			owner.add(instance.onDidExit(code => exits.push(code)));
 		}));
 		const operations: { operation: string; payload: unknown; }[] = [];
@@ -622,6 +732,37 @@ suite('Terminal configuration and interactive profiles', () => {
 		workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/replacement') });
 		release({ options: { name: 'Late PTY' }, pty: { ptyId: 'pty.1', acceptsInput: true } });
 		await cancelled;
+		assert.deepEqual(closed, [{ ptyId: 'pty.1' }]);
+	});
+
+	test('removing an extension profile cancels its pending callback and closes a late PTY', async () => {
+		using owner = new DisposableStore();
+		const { services, profiles } = createServices(owner);
+		const digest = `sha256:${'a'.repeat(64)}`;
+		Object.assign(services.get(IExtensionService), { currentCatalog: { generation: 1, diagnostics: [], extensions: [{ id: 'acme.extension', packageSha256: digest }] } });
+		let release!: (value: import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue) => void;
+		let signal: AbortSignal | undefined;
+		const closed: unknown[] = [];
+		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
+		bridge.replaceProfiles([{
+			runtimeId: 'runtime', packageDigest: digest, profileId: 'pty', title: 'PTY', invoke: async (operation, payload, cancellation) => {
+				if (operation === 'createTerminalProfile') {
+					signal = cancellation;
+					return new Promise(resolve => { release = resolve; });
+				}
+				assert.equal(operation, 'closeTaskTerminal');
+				assert.equal(cancellation?.aborted, false);
+				closed.push(payload);
+				return null;
+			}
+		}]);
+		const cancelled = assert.rejects(profiles.getContributedProfileProvider('acme.extension', 'pty')!.createContributedTerminalProfile({}), isCancellationError);
+		await waitFor(() => Boolean(release));
+		bridge.replaceProfiles([]);
+		await cancelled;
+		assert.equal(signal?.aborted, true);
+		release({ options: { name: 'Late PTY' }, pty: { ptyId: 'pty.1', acceptsInput: true } });
+		await waitFor(() => closed.length === 1);
 		assert.deepEqual(closed, [{ ptyId: 'pty.1' }]);
 	});
 

@@ -535,7 +535,8 @@ impl CommandBuilder {
         cmd.current_dir(dir);
 
         cmd.env_clear();
-        cmd.env("SHELL", shell);
+        // SHELL already belongs to the base environment. Do not restore it after
+        // env_clear or env_remove requested an explicit child environment.
         cmd.envs(self.envs.values().map(
             |EnvEntry {
                  is_from_base_env: _,

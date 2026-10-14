@@ -2,7 +2,11 @@ use crate::terminal::TerminalCommandStatus;
 use crate::terminal::TerminalCommandStatusEvent;
 use crate::terminal::TerminalCwd;
 use crate::terminal::TerminalShellIntegration;
+use exec_server_protocol::terminal::TerminalShellIntegrationEvent;
 use std::collections::VecDeque;
+use std::time::Instant;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 const OSC_633_PREFIX: &[u8] = b"\x1b]633;";
 const MAX_COMMAND_EVENTS: usize = 1_024;
@@ -26,12 +30,15 @@ pub(crate) enum ParsedTerminalOutput {
     PromptStart,
     RichCommandDetection(bool),
     CommandStorageDisabled,
+    PromptType(String),
+    ShellIntegration(TerminalShellIntegrationEvent),
 }
 
 /// Tracks shell command lifecycle independently of any renderer.
 pub(crate) struct TerminalCommandStatusTracker {
     mode: CommandStatusMode,
     pending_output: Vec<u8>,
+    discarded_osc: Option<OscDiscardState>,
     events: VecDeque<TerminalCommandStatusEvent>,
     next_event_sequence: u64,
     next_command_id: u64,
@@ -40,12 +47,20 @@ pub(crate) struct TerminalCommandStatusTracker {
     nonce: Option<String>,
     pending_command_line: Option<CommandLine>,
     integration: TerminalShellIntegration,
+    environment_budget: Option<(usize, usize)>,
+}
+
+enum OscDiscardState {
+    InPayload,
+    AfterEscape,
 }
 
 struct ActiveCommand {
     id: String,
     cwd: Option<String>,
     text: Option<CommandLine>,
+    started: Instant,
+    timestamp_millis: u64,
 }
 
 #[derive(Clone)]
@@ -59,6 +74,7 @@ impl TerminalCommandStatusTracker {
         Self {
             mode,
             pending_output: Vec::new(),
+            discarded_osc: None,
             events: VecDeque::new(),
             next_event_sequence: 0,
             next_command_id: 1,
@@ -66,11 +82,13 @@ impl TerminalCommandStatusTracker {
             cwd: None,
             nonce,
             pending_command_line: None,
+            environment_budget: None,
             integration: TerminalShellIntegration {
                 command_detection: false,
                 cwd_detection: false,
                 has_rich_command_detection: false,
                 command_storage_disabled: false,
+                prompt_type: None,
                 commands: Vec::new(),
                 after_output_sequence: 0,
             },
@@ -91,6 +109,12 @@ impl TerminalCommandStatusTracker {
             id: command_id.clone(),
             cwd: cwd.clone(),
             text: text.clone(),
+            started: Instant::now(),
+            timestamp_millis: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis()
+                .min(u64::MAX as u128) as u64,
         });
         self.push_event(
             command_id,
@@ -109,6 +133,28 @@ impl TerminalCommandStatusTracker {
         self.pending_output.extend(bytes);
         let mut parsed = Vec::new();
         loop {
+            if self.discarded_osc.is_some() {
+                let mut consumed = 0;
+                for byte in &self.pending_output {
+                    consumed += 1;
+                    if *byte == 0x07
+                        || (*byte == b'\\'
+                            && matches!(self.discarded_osc, Some(OscDiscardState::AfterEscape)))
+                    {
+                        self.discarded_osc = None;
+                        break;
+                    }
+                    self.discarded_osc = Some(if *byte == 0x1b {
+                        OscDiscardState::AfterEscape
+                    } else {
+                        OscDiscardState::InPayload
+                    });
+                }
+                self.pending_output.drain(..consumed);
+                if self.discarded_osc.is_some() {
+                    break;
+                }
+            }
             let Some(prefix_index) = find_bytes(&self.pending_output, OSC_633_PREFIX) else {
                 let retained = partial_prefix_len(&self.pending_output, OSC_633_PREFIX);
                 let visible_length = self.pending_output.len().saturating_sub(retained);
@@ -127,6 +173,21 @@ impl TerminalCommandStatusTracker {
             let Some((payload_end, terminator_length)) = osc_terminator(&self.pending_output)
             else {
                 if self.pending_output.len() > MAX_OSC_BYTES {
+                    let payload = &self.pending_output[OSC_633_PREFIX.len()..];
+                    if private_metadata(payload) {
+                        if payload.starts_with(b"Env") {
+                            self.environment_budget = None;
+                            parsed.push(ParsedTerminalOutput::ShellIntegration(
+                                TerminalShellIntegrationEvent::Environment {
+                                    values: None,
+                                    is_trusted: false,
+                                },
+                            ));
+                        }
+                        self.pending_command_line = None;
+                        self.discarded_osc = Some(OscDiscardState::InPayload);
+                        continue;
+                    }
                     // Release an unterminated OSC rather than retaining unbounded child output.
                     parsed.push(ParsedTerminalOutput::Bytes(
                         self.pending_output.drain(..1).collect(),
@@ -136,6 +197,20 @@ impl TerminalCommandStatusTracker {
                 break;
             };
             let payload = &self.pending_output[OSC_633_PREFIX.len()..payload_end];
+            if payload_end > MAX_OSC_BYTES && private_metadata(payload) {
+                if payload.starts_with(b"Env") {
+                    self.environment_budget = None;
+                    parsed.push(ParsedTerminalOutput::ShellIntegration(
+                        TerminalShellIntegrationEvent::Environment {
+                            values: None,
+                            is_trusted: false,
+                        },
+                    ));
+                }
+                self.pending_command_line = None;
+                self.pending_output.drain(..payload_end + terminator_length);
+                continue;
+            }
             let item = if payload_end > MAX_OSC_BYTES {
                 None
             } else if payload == b"C" {
@@ -159,15 +234,48 @@ impl TerminalCommandStatusTracker {
                 Some(ParsedTerminalOutput::RichCommandDetection(false))
             } else if payload == b"P;Task" || payload.starts_with(b"P;Task=") {
                 Some(ParsedTerminalOutput::CommandStorageDisabled)
-            } else if payload == b"B" {
-                self.pending_output.drain(..payload_end + terminator_length);
-                continue;
+            } else if let Some(value) = payload.strip_prefix(b"P;PromptType=") {
+                let value = self.decode_metadata(value).map(|(value, _)| value);
+                // This is display metadata. Drop malformed properties rather than
+                // forwarding a possible nonce suffix into a renderer's buffer.
+                if let Some(value) =
+                    value.filter(|value| value.len() <= 128 && !value.chars().any(char::is_control))
+                {
+                    Some(ParsedTerminalOutput::PromptType(value))
+                } else {
+                    self.pending_output.drain(..payload_end + terminator_length);
+                    continue;
+                }
+            } else if payload.starts_with(b"Env") {
+                Some(ParsedTerminalOutput::ShellIntegration(
+                    self.parse_environment(payload).unwrap_or(
+                        TerminalShellIntegrationEvent::Environment {
+                            values: None,
+                            is_trusted: false,
+                        },
+                    ),
+                ))
+            } else if let Some(boundary) = match payload {
+                b"B" => Some(TerminalShellIntegrationEvent::CommandStart),
+                b"F" => Some(TerminalShellIntegrationEvent::ContinuationStart),
+                b"G" => Some(TerminalShellIntegrationEvent::ContinuationEnd),
+                b"H" => Some(TerminalShellIntegrationEvent::RightPromptStart),
+                b"I" => Some(TerminalShellIntegrationEvent::RightPromptEnd),
+                _ => None,
+            } {
+                Some(ParsedTerminalOutput::ShellIntegration(boundary))
             } else {
                 None
             };
             if let Some(item) = item {
+                let item = match item {
+                    ParsedTerminalOutput::ShellIntegration(event) => {
+                        ParsedTerminalOutput::ShellIntegration(self.limit_environment(event))
+                    }
+                    other => other,
+                };
                 parsed.push(item);
-            } else {
+            } else if !private_metadata(payload) {
                 parsed.push(ParsedTerminalOutput::Bytes(
                     self.pending_output[..payload_end + terminator_length].to_vec(),
                 ));
@@ -178,7 +286,42 @@ impl TerminalCommandStatusTracker {
     }
 
     pub(crate) fn flush_output(&mut self) -> Vec<u8> {
+        // Never reflect an incomplete metadata value or nonce into a display replay.
+        if self.discarded_osc.is_some()
+            || self
+                .pending_output
+                .strip_prefix(OSC_633_PREFIX)
+                .is_some_and(private_metadata)
+        {
+            self.pending_output.clear();
+        }
         std::mem::take(&mut self.pending_output)
+    }
+
+    pub(crate) fn executed_boundary(&self) -> Option<TerminalShellIntegrationEvent> {
+        self.active_command
+            .as_ref()
+            .map(|command| TerminalShellIntegrationEvent::CommandExecuted {
+                command_id: command.id.clone(),
+                command: command.text.as_ref().map(|text| text.command.clone()),
+                is_trusted: command.text.as_ref().is_some_and(|text| text.is_trusted),
+                command_storage_disabled: self.integration.command_storage_disabled,
+                cwd: command.cwd.clone(),
+                timestamp_millis: command.timestamp_millis,
+            })
+    }
+
+    pub(crate) fn finished_boundary(
+        &self,
+        exit_code: Option<i32>,
+    ) -> TerminalShellIntegrationEvent {
+        TerminalShellIntegrationEvent::CommandFinished {
+            exit_code,
+            duration_millis: self
+                .active_command
+                .as_ref()
+                .map(|command| command.started.elapsed().as_millis().min(u64::MAX as u128) as u64),
+        }
     }
 
     pub(crate) fn finish_active(&mut self, exit_code: Option<i32>, after_output_sequence: u64) {
@@ -239,6 +382,112 @@ impl TerminalCommandStatusTracker {
         }
     }
 
+    fn nonce_matches(&self, nonce: Option<&[u8]>) -> bool {
+        self.nonce.as_ref().is_some_and(|expected| {
+            !expected.is_empty()
+                && nonce.is_some_and(|nonce| {
+                    std::str::from_utf8(nonce)
+                        .is_ok_and(|nonce| super::constant_time_eq(expected, nonce))
+                })
+        })
+    }
+
+    fn parse_environment(&self, payload: &[u8]) -> Option<TerminalShellIntegrationEvent> {
+        use TerminalShellIntegrationEvent as Event;
+        let mut fields = payload.split(|byte| *byte == b';');
+        let kind = fields.next()?;
+        match kind {
+            b"EnvSingleStart" => {
+                let clear = match fields.next()? {
+                    b"1" => true,
+                    b"0" => false,
+                    _ => return None,
+                };
+                let is_trusted = self.nonce_matches(fields.next());
+                if fields.next().is_some() {
+                    return None;
+                }
+                Some(Event::EnvironmentStart { clear, is_trusted })
+            }
+            b"EnvSingleEnd" => {
+                let is_trusted = self.nonce_matches(fields.next());
+                // Some producers include one empty final field after the nonce.
+                if fields.next().is_some_and(|field| !field.is_empty()) || fields.next().is_some() {
+                    return None;
+                }
+                Some(Event::EnvironmentEnd { is_trusted })
+            }
+            b"EnvSingleEntry" | b"EnvSingleDelete" => {
+                let key = decode_value(fields.next()?)?;
+                let value = decode_value(fields.next()?)?;
+                let is_trusted = self.nonce_matches(fields.next());
+                if fields.next().is_some() || !valid_env_entry(&key, &Some(value.clone())) {
+                    return None;
+                }
+                if kind == b"EnvSingleEntry" {
+                    Some(Event::EnvironmentEntry {
+                        key,
+                        value: Some(value),
+                        is_trusted,
+                    })
+                } else {
+                    Some(Event::EnvironmentDelete {
+                        key,
+                        value: Some(value),
+                        is_trusted,
+                    })
+                }
+            }
+            b"EnvJson" => {
+                let (value, is_trusted) =
+                    self.decode_metadata(payload.strip_prefix(b"EnvJson;")?)?;
+                let values: std::collections::BTreeMap<String, Option<String>> =
+                    serde_json::from_str(&value).ok()?;
+                if values.len() > 512
+                    || !values
+                        .iter()
+                        .all(|(key, value)| valid_env_entry(key, value))
+                {
+                    return None;
+                }
+                Some(Event::Environment {
+                    values: Some(values),
+                    is_trusted,
+                })
+            }
+            _ => None,
+        }
+    }
+
+    fn limit_environment(
+        &mut self,
+        event: TerminalShellIntegrationEvent,
+    ) -> TerminalShellIntegrationEvent {
+        use TerminalShellIntegrationEvent as Event;
+        match &event {
+            Event::EnvironmentStart { .. } => self.environment_budget = Some((0, 0)),
+            Event::EnvironmentEntry { key, value, .. }
+            | Event::EnvironmentDelete { key, value, .. } => {
+                if let Some((entries, bytes)) = self.environment_budget.as_mut() {
+                    *entries += 1;
+                    *bytes += key.len() + value.as_ref().map_or(0, String::len);
+                    if *entries > 512 || *bytes > 256 * 1024 {
+                        self.environment_budget = None;
+                        return Event::Environment {
+                            values: None,
+                            is_trusted: false,
+                        };
+                    }
+                }
+            }
+            Event::Environment { .. } | Event::EnvironmentEnd { .. } => {
+                self.environment_budget = None
+            }
+            _ => {}
+        }
+        event
+    }
+
     fn decode_metadata(&self, bytes: &[u8]) -> Option<(String, bool)> {
         let mut fields = bytes.split(|byte| *byte == b';');
         let value = decode_value(fields.next()?)?;
@@ -246,13 +495,7 @@ impl TerminalCommandStatusTracker {
         if fields.next().is_some() || value.len() > 32768 || value.contains('\0') {
             return None;
         }
-        let trusted = self.nonce.as_ref().is_some_and(|expected| {
-            !expected.is_empty()
-                && nonce.is_some_and(|nonce| {
-                    std::str::from_utf8(nonce)
-                        .is_ok_and(|nonce| super::constant_time_eq(expected, nonce))
-                })
-        });
+        let trusted = self.nonce_matches(nonce);
         Some((value, trusted))
     }
 
@@ -288,6 +531,15 @@ impl TerminalCommandStatusTracker {
         self.integration.after_output_sequence = sequence;
     }
 
+    pub(crate) fn record_prompt_type(&mut self, value: String, sequence: u64) {
+        self.integration.prompt_type = Some(value);
+        self.integration.after_output_sequence = sequence;
+    }
+
+    pub(crate) fn is_command_storage_disabled(&self) -> bool {
+        self.integration.command_storage_disabled
+    }
+
     pub(crate) fn disable_command_storage(&mut self, sequence: u64) {
         self.integration.command_storage_disabled = true;
         self.integration.commands.clear();
@@ -305,8 +557,9 @@ impl TerminalCommandStatusTracker {
     pub(crate) fn shell_integration(&self) -> Option<TerminalShellIntegration> {
         (self.integration.command_detection
             || self.integration.cwd_detection
-            || self.integration.command_storage_disabled)
-            .then(|| self.integration.clone())
+            || self.integration.command_storage_disabled
+            || self.integration.prompt_type.is_some())
+        .then(|| self.integration.clone())
     }
 
     pub(crate) fn cwd(&self) -> Option<&TerminalCwd> {
@@ -448,6 +701,12 @@ fn osc_terminator(bytes: &[u8]) -> Option<(usize, usize)> {
     None
 }
 
+fn private_metadata(payload: &[u8]) -> bool {
+    [b"Env".as_slice(), b"E;", b"P;Cwd=", b"P;PromptType="]
+        .iter()
+        .any(|prefix| payload.starts_with(prefix))
+}
+
 fn command_finished_payload(payload: &[u8]) -> Option<Option<i32>> {
     if payload == b"D" {
         return Some(None);
@@ -461,7 +720,7 @@ fn command_finished_payload(payload: &[u8]) -> Option<Option<i32>> {
 #[path = "command_status_tests.rs"]
 mod tests;
 
-fn decode_value(bytes: &[u8]) -> Option<String> {
+pub(super) fn decode_value(bytes: &[u8]) -> Option<String> {
     let mut value = Vec::with_capacity(bytes.len());
     let mut index = 0;
     while index < bytes.len() {
@@ -482,4 +741,13 @@ fn decode_value(bytes: &[u8]) -> Option<String> {
         }
     }
     String::from_utf8(value).ok()
+}
+
+fn valid_env_entry(key: &str, value: &Option<String>) -> bool {
+    !key.is_empty()
+        && key.len() <= 256
+        && !key.contains(['=', '\0'])
+        && value
+            .as_ref()
+            .is_none_or(|value| value.len() <= 32768 && !value.contains('\0'))
 }

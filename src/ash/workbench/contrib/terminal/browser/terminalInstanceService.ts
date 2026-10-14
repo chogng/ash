@@ -76,6 +76,7 @@ export class TerminalInstanceService extends Disposable {
 		const profile = options.profile.type === 'custom' ? Object.freeze({ ...options.profile, path: Object.freeze([...options.profile.path]), args: (typeof options.profile.args === 'string' ? options.profile.args : Object.freeze([...options.profile.args])) }) : Object.freeze({ ...options.profile });
 		const launch = Object.freeze({
 			...(environment === undefined ? {} : { env: environment }),
+			...(options.strictEnv === undefined ? {} : { strictEnv: options.strictEnv }),
 			...(options.cwd === undefined ? {} : { cwd: options.cwd }),
 			...(execution === undefined ? {} : { execution }),
 		});
@@ -87,6 +88,7 @@ export class TerminalInstanceService extends Disposable {
 			profile,
 			...(environment === undefined ? {} : { env: environment }),
 			...(launch.cwd === undefined ? {} : { cwd: launch.cwd }),
+			...(launch.strictEnv === undefined ? {} : { strictEnv: launch.strictEnv }),
 			...(execution === undefined ? {} : { execution }),
 		}, instanceNumber);
 		const created = child.creation;

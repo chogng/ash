@@ -46,7 +46,9 @@ fn visible_bytes(parsed: Vec<ParsedTerminalOutput>) -> Vec<u8> {
             | ParsedTerminalOutput::CommandLine(_, _)
             | ParsedTerminalOutput::PromptStart
             | ParsedTerminalOutput::RichCommandDetection(_)
-            | ParsedTerminalOutput::CommandStorageDisabled => None,
+            | ParsedTerminalOutput::CommandStorageDisabled
+            | ParsedTerminalOutput::PromptType(_)
+            | ParsedTerminalOutput::ShellIntegration(_) => None,
         })
         .flatten()
         .collect()
@@ -62,7 +64,7 @@ fn split_start_markers_and_unknown_exit_status_do_not_report_success() {
             match item {
                 ParsedTerminalOutput::CommandStarted => tracker.start_active(2),
                 ParsedTerminalOutput::CommandFinished(code) => tracker.finish_active(code, 3),
-                ParsedTerminalOutput::Bytes(_) => {}
+                ParsedTerminalOutput::Bytes(_) | ParsedTerminalOutput::ShellIntegration(_) => {}
                 ParsedTerminalOutput::Cwd(value, trusted) => tracker.record_cwd(value, trusted, 2),
                 ParsedTerminalOutput::CommandLine(command, trusted) => {
                     tracker.record_command_line(command, trusted, 2)
@@ -72,6 +74,7 @@ fn split_start_markers_and_unknown_exit_status_do_not_report_success() {
                     tracker.record_rich_detection(rich, 2)
                 }
                 ParsedTerminalOutput::CommandStorageDisabled => tracker.disable_command_storage(2),
+                ParsedTerminalOutput::PromptType(value) => tracker.record_prompt_type(value, 2),
             }
         }
     }
@@ -108,6 +111,7 @@ fn prompt_markers_and_fragmented_cwd_preserve_command_invocation_directory() {
         for item in tracker.parse_output(vec![*byte]) {
             match item {
                 ParsedTerminalOutput::Bytes(bytes) => visible.extend(bytes),
+                ParsedTerminalOutput::ShellIntegration(_) => {}
                 ParsedTerminalOutput::Cwd(value, trusted) => tracker.record_cwd(value, trusted, 4),
                 ParsedTerminalOutput::CommandLine(command, trusted) => {
                     tracker.record_command_line(command, trusted, 4)
@@ -117,6 +121,7 @@ fn prompt_markers_and_fragmented_cwd_preserve_command_invocation_directory() {
                     tracker.record_rich_detection(rich, 4)
                 }
                 ParsedTerminalOutput::CommandStorageDisabled => tracker.disable_command_storage(4),
+                ParsedTerminalOutput::PromptType(value) => tracker.record_prompt_type(value, 4),
                 ParsedTerminalOutput::CommandStarted => tracker.start_active(4),
                 ParsedTerminalOutput::CommandFinished(code) => tracker.finish_active(code, 5),
             }
@@ -162,15 +167,12 @@ fn escape_decoder_handles_literal_backslash_hex_unicode_and_missing_status() {
 }
 
 #[test]
-fn malformed_unknown_and_oversized_osc_do_not_mutate_commands_or_hide_output() {
+fn unknown_and_oversized_unowned_osc_preserve_output_without_mutating_commands() {
     for bytes in [
-        b"\x1b]633;P;Cwd=\x07".to_vec(),
-        b"\x1b]633;P;Cwd=/nul\\x00arg\x07".to_vec(),
         b"\x1b]633;D;garbage\x07".to_vec(),
         b"\x1b]633;F;unfinalized\x07".to_vec(),
-        b"\x1b]633;E;bad\\x00value;nonce\x07".to_vec(),
         [
-            b"\x1b]633;P;Cwd=".as_slice(),
+            b"\x1b]633;Unknown=".as_slice(),
             &vec![b'x'; MAX_OSC_BYTES + 1],
             b"\x07tail",
         ]
@@ -193,10 +195,79 @@ fn malformed_unknown_and_oversized_osc_do_not_mutate_commands_or_hide_output() {
     ));
 }
 
+#[test]
+fn malformed_and_oversized_owned_metadata_never_reflect_values_or_nonce() {
+    for bytes in [
+        b"\x1b]633;P;Cwd=\x07".to_vec(),
+        b"\x1b]633;P;Cwd=/nul\\x00arg\x07".to_vec(),
+        b"\x1b]633;E;bad\\x00value;nonce\x07".to_vec(),
+        [
+            b"\x1b]633;EnvJson;".as_slice(),
+            &vec![b'x'; MAX_OSC_BYTES + 1],
+            b";nonce\x07",
+        ]
+        .concat(),
+    ] {
+        let mut tracker =
+            TerminalCommandStatusTracker::new(CommandStatusMode::ShellIntegration, None);
+        assert!(visible_bytes(tracker.parse_output(bytes)).is_empty());
+        assert!(tracker.cwd().is_none());
+        assert!(tracker.read_events(0, 128).0.is_empty());
+    }
+    let mut tracker = TerminalCommandStatusTracker::new(CommandStatusMode::ShellIntegration, None);
+    let open = [
+        b"\x1b]633;EnvSingleEntry;TOKEN;".as_slice(),
+        &vec![b'x'; MAX_OSC_BYTES + 1],
+    ]
+    .concat();
+    let parsed = tracker.parse_output(open);
+    assert!(matches!(
+        parsed.first(),
+        Some(ParsedTerminalOutput::ShellIntegration(
+            TerminalShellIntegrationEvent::Environment {
+                values: None,
+                is_trusted: false,
+            }
+        ))
+    ));
+    assert!(tracker.pending_output.is_empty());
+    assert!(visible_bytes(tracker.parse_output(b"secret;nonce\x1b".to_vec())).is_empty());
+    assert_eq!(
+        visible_bytes(tracker.parse_output(b"\\visible\x1b]633;B\x07tail".to_vec())),
+        b"visibletail"
+    );
+    tracker.parse_output(b"\x1b]633;E;unfinished;nonce".to_vec());
+    assert!(tracker.flush_output().is_empty());
+}
+
+#[test]
+fn environment_end_accepts_the_standard_empty_final_field_without_weakening_nonce_checks() {
+    let mut tracker = TerminalCommandStatusTracker::new(
+        CommandStatusMode::ShellIntegration,
+        Some("private-nonce".into()),
+    );
+    assert!(matches!(
+        tracker
+            .parse_output(b"\x1b]633;EnvSingleEnd;private-nonce;\x07".to_vec())
+            .first(),
+        Some(ParsedTerminalOutput::ShellIntegration(
+            TerminalShellIntegrationEvent::EnvironmentEnd { is_trusted: true }
+        ))
+    ));
+    assert!(matches!(
+        tracker
+            .parse_output(b"\x1b]633;EnvSingleEnd;wrong;\x07".to_vec())
+            .first(),
+        Some(ParsedTerminalOutput::ShellIntegration(
+            TerminalShellIntegrationEvent::EnvironmentEnd { is_trusted: false }
+        ))
+    ));
+}
+
 fn apply_metadata(tracker: &mut TerminalCommandStatusTracker, bytes: &[u8], sequence: u64) {
     for item in tracker.parse_output(bytes.to_vec()) {
         match item {
-            ParsedTerminalOutput::Bytes(_) => {}
+            ParsedTerminalOutput::Bytes(_) | ParsedTerminalOutput::ShellIntegration(_) => {}
             ParsedTerminalOutput::Cwd(value, trusted) => {
                 tracker.record_cwd(value, trusted, sequence)
             }
@@ -204,6 +275,7 @@ fn apply_metadata(tracker: &mut TerminalCommandStatusTracker, bytes: &[u8], sequ
                 tracker.record_command_line(command, trusted, sequence)
             }
             ParsedTerminalOutput::PromptStart => tracker.record_prompt(sequence),
+            ParsedTerminalOutput::PromptType(value) => tracker.record_prompt_type(value, sequence),
             ParsedTerminalOutput::RichCommandDetection(rich) => {
                 tracker.record_rich_detection(rich, sequence)
             }
@@ -346,4 +418,99 @@ fn completed_history_is_bounded_and_task_opt_out_removes_text_without_breaking_s
         serde_json::to_vec(&(history, events)).unwrap().len()
             < exec_server_protocol::MAX_FRAME_BYTES
     );
+}
+
+#[test]
+fn prompt_type_is_fragmented_display_metadata_retained_at_its_output_boundary() {
+    let mut tracker = TerminalCommandStatusTracker::new(
+        CommandStatusMode::ShellIntegration,
+        Some("private-nonce".into()),
+    );
+    for byte in b"\x1b]633;P;PromptType=starship\x07" {
+        apply_metadata(&mut tracker, &[*byte], 9);
+    }
+    let integration = tracker.shell_integration().unwrap();
+    assert_eq!(integration.prompt_type.as_deref(), Some("starship"));
+    assert_eq!(integration.after_output_sequence, 9);
+    assert!(!integration.command_detection);
+    assert!(integration.commands.is_empty());
+    // A framework change replaces the current display value, including explicit reset.
+    apply_metadata(&mut tracker, b"\x1b]633;P;PromptType=\x07", 12);
+    assert_eq!(
+        tracker.shell_integration().unwrap().prompt_type.as_deref(),
+        Some("")
+    );
+    let malformed = b"\x1b]633;P;PromptType=bad\\x0avalue;private-nonce\x07";
+    assert!(visible_bytes(tracker.parse_output(malformed.to_vec())).is_empty());
+    assert_eq!(
+        tracker.shell_integration().unwrap().after_output_sequence,
+        12
+    );
+}
+
+#[test]
+fn environment_frames_decode_unicode_and_never_forward_nonce_or_malformed_values() {
+    let mut tracker = TerminalCommandStatusTracker::new(
+        CommandStatusMode::ShellIntegration,
+        Some("private-nonce".into()),
+    );
+    let stream = b"\x1b]633;EnvSingleStart;1;private-nonce\x07\x1b]633;EnvSingleEntry;NAME;value\\x3b\\x0aline;private-nonce\x07\x1b]633;EnvSingleEnd;wrong\x07";
+    let mut frames = Vec::new();
+    for byte in stream {
+        for event in tracker.parse_output(vec![*byte]) {
+            if let ParsedTerminalOutput::ShellIntegration(event) = event {
+                frames.push(event);
+            }
+        }
+    }
+    assert_eq!(
+        frames,
+        vec![
+            TerminalShellIntegrationEvent::EnvironmentStart {
+                clear: true,
+                is_trusted: true
+            },
+            TerminalShellIntegrationEvent::EnvironmentEntry {
+                key: "NAME".into(),
+                value: Some("value;\nline".into()),
+                is_trusted: true
+            },
+            TerminalShellIntegrationEvent::EnvironmentEnd { is_trusted: false },
+        ]
+    );
+    assert!(!format!("{frames:?}").contains("private-nonce"));
+    let invalid = tracker.parse_output(b"\x1b]633;EnvJson;{bad;private-nonce\x07".to_vec());
+    assert!(matches!(
+        &invalid[0],
+        ParsedTerminalOutput::ShellIntegration(TerminalShellIntegrationEvent::Environment {
+            values: None,
+            is_trusted: false
+        })
+    ));
+}
+
+#[test]
+fn oversized_environment_transactions_become_unavailable_instead_of_partial_trusted_values() {
+    let mut tracker = TerminalCommandStatusTracker::new(
+        CommandStatusMode::ShellIntegration,
+        Some("nonce".into()),
+    );
+    tracker.parse_output(b"\x1b]633;EnvSingleStart;1;nonce\x07".to_vec());
+    let mut aborted = false;
+    for index in 0..513 {
+        for event in tracker.parse_output(
+            format!("\x1b]633;EnvSingleEntry;KEY{index};value;nonce\x07").into_bytes(),
+        ) {
+            aborted |= matches!(
+                event,
+                ParsedTerminalOutput::ShellIntegration(
+                    TerminalShellIntegrationEvent::Environment {
+                        values: None,
+                        is_trusted: false
+                    }
+                )
+            );
+        }
+    }
+    assert!(aborted);
 }

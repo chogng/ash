@@ -4,6 +4,8 @@ import { ProcessPropertyType } from '../../../../platform/terminal/common/termin
 import type { JsonValue } from '../../../../platform/agentHost/common/extensionHostApi.js';
 import { localize } from '../../../../nls.js';
 import { BasePty } from '../common/basePty.js';
+import { Emitter } from '../../../../base/common/event.js';
+import { TerminalDataBufferer } from '../../../../platform/terminal/common/terminalDataBuffering.js';
 
 /** The instance owns its screen; this child owns only an extension's bounded opaque PTY stream. */
 export class TerminalProcessExtHostProxy extends BasePty {
@@ -13,9 +15,12 @@ export class TerminalProcessExtHostProxy extends BasePty {
 	private readonly controller = new AbortController();
 	private timer: ReturnType<typeof setTimeout> | undefined;
 	private closed = false;
+	private readonly incomingData = this._register(new Emitter<string>());
+	private readonly bufferer = this._register(new TerminalDataBufferer((_id, data) => this.handleData(data)));
 
 	constructor(id: number, private ptyId: string | undefined, private acceptsInput: boolean, private cols: number, private rows: number, private readonly invoke: (operation: string, payload: JsonValue, signal: AbortSignal) => Promise<JsonValue>, private readonly releaseOwner: () => void) {
 		super(id, false);
+		this._register(this.bufferer.startBuffering(id, this.incomingData.event));
 	}
 
 	async start(): Promise<void> {
@@ -34,6 +39,9 @@ export class TerminalProcessExtHostProxy extends BasePty {
 		if (this.closed) throw new CancellationError();
 		this.handleReady({ pid: -1, cwd: '' });
 		this.consume(result);
+		// open() may synchronously write before the instance has a screen. Publish
+		// that initial batch before start() resolves, then throttle later output.
+		this.bufferer.flushBuffer(this.id);
 		this.poll();
 	}
 
@@ -54,6 +62,7 @@ export class TerminalProcessExtHostProxy extends BasePty {
 		this.queue.clearPending();
 		clearTimeout(this.timer);
 		this.timer = undefined;
+		this.bufferer.stopBuffering(this.id);
 		this.releaseOwner();
 		this.handleExit(code);
 		void this.releasePty();
@@ -107,8 +116,11 @@ export class TerminalProcessExtHostProxy extends BasePty {
 		for (const value of result.events) {
 			if (this.closed) break;
 			const event = record(value);
-			if (event.type === 'data') this.handleData(text(event.data, 262144, true));
-			else if (event.type === 'name') this.handleDidChangeProperty({ type: ProcessPropertyType.Title, value: text(event.name, 256) });
+			if (event.type === 'data') this.incomingData.fire(text(event.data, 262144, true));
+			else if (event.type === 'name') {
+				this.bufferer.flushBuffer(this.id);
+				this.handleDidChangeProperty({ type: ProcessPropertyType.Title, value: text(event.name, 256) });
+			}
 			else if (event.type === 'close') {
 				if (event.code !== null && (typeof event.code !== 'number' || !Number.isSafeInteger(event.code) || event.code < 0 || event.code > 2147483647)) throw invalid();
 				this.finish(event.code === null ? undefined : event.code as number);

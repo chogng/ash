@@ -5,6 +5,7 @@ import type { AppServerConnectionState } from "../../agentHost/common/appServerA
 import type { AppServerProtocolClient } from "../../agentHost/browser/appServerProtocolClient.js";
 import type {
 	ITerminalProcessCloseOptions, ITerminalProcessCreateOptions, ITerminalProcessCreation,
+	ITerminalProcessInfo,
 	ITerminalProcessProfile, ITerminalProcessReadOptions, ITerminalProcessReadResult,
 	ITerminalProcessResizeOptions, ITerminalProcessService, ITerminalProcessWriteOptions,
 	TerminalProcessConnectionState, ITerminalResolvedProfile, TerminalProcessProfileSelection,
@@ -138,6 +139,12 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 		await this.ensureAttached(params.terminalId);
 		const result = await this.supervisor.request(APP_SERVER_METHODS["terminal/read"], params);
 		return decodeTerminalProcessReadResult(result);
+	}
+
+	async getProcessInfo(params: ITerminalProcessCloseOptions): Promise<ITerminalProcessInfo> {
+		await this.ensureAttached(params.terminalId);
+		const result = await this.supervisor.request(APP_SERVER_METHODS['terminal/processInfo'], params);
+		return { ...result, cwd: result.cwd ?? undefined };
 	}
 
 	async close(params: ITerminalProcessCloseOptions): Promise<void> {

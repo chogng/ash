@@ -1,6 +1,24 @@
 use super::*;
 
 #[test]
+fn terminal_display_metadata_round_trips_without_credentials_in_debug_output() {
+    let event = terminal::TerminalShellIntegrationEvent::Environment {
+        values: Some(std::collections::BTreeMap::from([
+            ("TOKEN".into(), Some("private-value".into())),
+            ("UNSET".into(), None),
+        ])),
+        is_trusted: true,
+    };
+    let value = serde_json::to_value(&event).unwrap();
+    assert_eq!(value["values"]["TOKEN"], "private-value");
+    assert_eq!(
+        serde_json::from_value::<terminal::TerminalShellIntegrationEvent>(value).unwrap(),
+        event
+    );
+    assert_eq!(format!("{event:?}"), "Environment { .. }");
+}
+
+#[test]
 fn rejects_traversal_and_platform_specific_absolute_paths() {
     for path in [
         "../file",
@@ -217,6 +235,7 @@ fn terminal_read_cwd_is_optional_for_old_frames_and_preserves_command_context() 
         cwd_detection: true,
         has_rich_command_detection: true,
         command_storage_disabled: false,
+        prompt_type: Some("starship".into()),
         commands: read.command_events.clone(),
         after_output_sequence: 4,
     });

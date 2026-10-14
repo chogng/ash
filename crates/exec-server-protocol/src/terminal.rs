@@ -68,6 +68,8 @@ pub struct TerminalCreateRequest {
     pub lifecycle: TerminalLifecycle,
     #[serde(default)]
     pub env: Option<std::collections::HashMap<String, Option<String>>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub strict_env: Option<bool>,
     #[serde(default)]
     pub cwd: Option<std::path::PathBuf>,
     #[serde(default)]
@@ -185,11 +187,89 @@ pub struct TerminalReadRequest {
     pub max_chunks: usize,
 }
 
+/// Shells with an integrated display protocol, selected by the execution host.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum TerminalShellType {
+    Bash,
+    Zsh,
+    #[serde(rename = "pwsh")]
+    PowerShell,
+}
+
+/// Shell display boundaries verified and decoded by the PTY owner, in output order.
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum TerminalShellIntegrationEvent {
+    ProcessReady {
+        is_windows_pty: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        shell_type: Option<TerminalShellType>,
+    },
+    PromptStart,
+    CommandStart,
+    CommandExecuted {
+        command_id: String,
+        command: Option<String>,
+        is_trusted: bool,
+        #[serde(default)]
+        command_storage_disabled: bool,
+        cwd: Option<String>,
+        timestamp_millis: u64,
+    },
+    CommandFinished {
+        exit_code: Option<i32>,
+        duration_millis: Option<u64>,
+    },
+    CommandLine {
+        value: String,
+        is_trusted: bool,
+    },
+    ContinuationStart,
+    ContinuationEnd,
+    RightPromptStart,
+    RightPromptEnd,
+    Cwd {
+        value: String,
+        is_trusted: bool,
+    },
+    HasRichCommandDetection {
+        value: bool,
+    },
+    CommandStorageDisabled,
+    PromptType {
+        value: String,
+    },
+    Environment {
+        values: Option<std::collections::BTreeMap<String, Option<String>>>,
+        is_trusted: bool,
+    },
+    EnvironmentStart {
+        clear: bool,
+        is_trusted: bool,
+    },
+    EnvironmentEntry {
+        key: String,
+        value: Option<String>,
+        is_trusted: bool,
+    },
+    EnvironmentDelete {
+        key: String,
+        value: Option<String>,
+        is_trusted: bool,
+    },
+    EnvironmentEnd {
+        is_trusted: bool,
+    },
+}
+
 /// One ordered raw PTY output chunk.
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct TerminalOutputChunk {
     pub sequence: u64,
     pub data: Vec<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shell_integration: Option<TerminalShellIntegrationEvent>,
 }
 
 /// Renderer-independent lifecycle state for one shell command.
@@ -235,6 +315,8 @@ pub struct TerminalShellIntegration {
     pub cwd_detection: bool,
     pub has_rich_command_detection: bool,
     pub command_storage_disabled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt_type: Option<String>,
     pub commands: Vec<TerminalCommandStatusEvent>,
     pub after_output_sequence: u64,
 }
@@ -255,4 +337,32 @@ pub struct TerminalReadResult {
     pub cwd: Option<TerminalCwd>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shell_integration: Option<TerminalShellIntegration>,
+}
+
+impl fmt::Debug for TerminalShellIntegrationEvent {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let kind = match self {
+            Self::ProcessReady { .. } => "ProcessReady",
+            Self::PromptStart => "PromptStart",
+            Self::CommandStart => "CommandStart",
+            Self::CommandExecuted { .. } => "CommandExecuted",
+            Self::CommandFinished { .. } => "CommandFinished",
+            Self::CommandLine { .. } => "CommandLine",
+            Self::ContinuationStart => "ContinuationStart",
+            Self::ContinuationEnd => "ContinuationEnd",
+            Self::RightPromptStart => "RightPromptStart",
+            Self::RightPromptEnd => "RightPromptEnd",
+            Self::Cwd { .. } => "Cwd",
+            Self::HasRichCommandDetection { .. } => "HasRichCommandDetection",
+            Self::CommandStorageDisabled => "CommandStorageDisabled",
+            Self::PromptType { .. } => "PromptType",
+            Self::Environment { .. } => "Environment",
+            Self::EnvironmentStart { .. } => "EnvironmentStart",
+            Self::EnvironmentEntry { .. } => "EnvironmentEntry",
+            Self::EnvironmentDelete { .. } => "EnvironmentDelete",
+            Self::EnvironmentEnd { .. } => "EnvironmentEnd",
+        };
+        // Payloads may contain credentials. Transport serialization remains complete.
+        formatter.debug_struct(kind).finish_non_exhaustive()
+    }
 }

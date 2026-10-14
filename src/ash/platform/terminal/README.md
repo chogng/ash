@@ -1,8 +1,8 @@
 # Terminal 进程接入
 
-此目录提供 Renderer 与交互式 PTY 后端之间的进程契约。Shell 进程、授权目录、输出缓冲和重连租约的最终判定由 Rust 后端拥有；这里不保存终端屏幕、Tab 或活动实例。
+此目录拥有共享终端契约、启动配置 schema、环境集合纯操作，以及 Renderer 与交互式 PTY 后端之间的协议适配。Shell 进程、授权目录、输出缓冲和重连租约的最终判定由 Rust 后端拥有；这里不保存终端屏幕、Tab 或活动实例。
 
-`common/terminal.ts` 同时提供宿主输出 PTY 的启动配置、进程事件、标题属性和启动/关闭契约，供 `services/terminal/common/embedderTerminalService.ts` 与 Terminal contribution 共享。宿主 child process 当前只覆盖输出生命周期；Shell 的 `IProcessDataEvent` 保留原始字节，并用 `trackCommit` / `writePromise` 连接 xterm 解析与 Renderer 续读。完整 child process 的输入、signal、通用属性和服务器 flow control 仍待接入，没有添加空操作实现。
+`common/terminal.ts` 同时提供宿主输出 PTY 的启动配置、进程事件、标题属性和启动/关闭契约，供 `services/terminal/common/embedderTerminalService.ts` 与 Terminal contribution 共享。宿主 child process 当前只覆盖输出生命周期；Shell 的读取结果保留原始字节，原 ProcessManager 增量解码为标准 string `IProcessDataEvent`，并用 `trackCommit` / `writePromise` 连接 xterm 解析与 Renderer 续读。Shell 的输入与尺寸已走原 Rust 进程链；完整 child process 的 signal、通用属性和服务器 flow control 仍待接入，没有添加空操作实现。
 
 | 文件                                             | 职责与生产入口                                                                                                                                                                          |
 | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -19,8 +19,26 @@
 
 后端链路是 `app-server/src/server/terminal_operations.rs` → `exec-server/src/terminal.rs` → `utils/pty`；App Server 只校验和分发协议，`exec-server` 拥有交互进程，PTY 工具层拥有操作系统句柄、原始字节、尺寸和进程终止。协议及 decoder 由 `app-server-protocol` 生成，不能在此手改生成物。
 
-重连测试当前仍位于 `test/electron-main/reconnectableTerminalMainService.test.ts`，正文已经测试 Renderer 实现；路径与职责不一致，迁移涉及旧文件退出，须取得准确路径确认。
+重连测试位于 `test/browser/reconnectableTerminalProcessService.test.ts`，覆盖 Renderer 的租约旋转、连接代次、二进制输出和目录路由；旧 Electron Main 测试路径已按用户确认退出。
 
 `getEnvironment(names, dirId?)` 通过 `terminal/environment/read` 查询选定执行宿主的冻结终端环境，最多 128 个变量；查询不创建进程，不读取 Renderer 或客户端机器的环境。缺失项省略，配置解析器将其替换为空字符串。后台仍采用已有环境白名单，不返回无关进程凭证。目录执行授权撤销后查询失败。
 
 终端创建支持可选 `env`：字符串覆盖子进程环境，`null` 删除继承变量；最多 128 项，变量名最多 256 字符且不能包含 `=`/NUL，值最多 32768 字符且不能包含 NUL。Rust 在分配 PTY 前校验；应用于冻结环境的副本，后续终端不受影响。TerminalService 在首次创建前捕获调用方对象，TerminalInstance 重启复用同一快照。Tasks 和 DAP `runInTerminal` 共用此契约。
+
+平台文件完整清单与缺口见 [Platform Terminal 文件清单与接线](../../../../docs/terminal-api-alignment-status.md#platform-terminal-文件清单与接线2026-10-13)。Workbench 的文件清单完成不代表平台 API 完成。
+
+扩展环境集合的边界解码由 `common/environmentVariableShared.ts` 拥有，callback 与持久化读取共用同一个入口。`common/environmentVariableCollection.ts` 提供 `MergedEnvironmentVariableCollection`，捕获启动时的独立快照并原子应用 Replace/Append/Prepend；标准 apply 接收 env/scope/resolver；调用方先补被修改键的 inherited 值，合并快照的 constructor 确定执行宿主大小写规则。Workbench EnvironmentVariableService 保留 provider 生命周期、同步与持久化，ProfileResolver 组合启动环境后交给原 Rust 创建请求；平台不反向导入 Workbench。
+
+启动配置 schema 由 `common/terminalPlatformConfiguration.ts` 的 `registerTerminalPlatformConfiguration()` 唯一注册，Workbench 入口仅调用它并注册自己的屏幕/增强设置。原键名、默认值、校验与配置存储保留；Node/Electron PTY host 不由前端建立，进程执行仍属于 Rust。
+
+Common 当前调用链与未完成契约见 [Common 基座台账](../../../../docs/terminal-api-alignment-status.md#common-基座当前接线与未完成项2026-10-13)。`TerminalCapabilityStore` 登记真实实现，`CwdDetectionCapability` 拥有已提交目录，`BufferMarkCapability` 管理同一 xterm 屏幕的 markers；Rust 继续拥有命令解析、nonce 与 history。marker 契约采用 DOM 无关结构，Common 不引入 xterm 类型包的 DOM globals。
+
+`TerminalDataBufferer` 接原扩展 PTY 的文本源，在初始 open、name、exit 和 shutdown 前排空。ProcessManager 仍唯一拥有 Shell 的读取游标、增量 UTF-8 解码、输入队列和解析等待；断线续读保留不完整字符前缀，输出 gap 重置状态，退出前排空尾部。普通/SSH 协议适配器继续保留原始读取字节和二进制输入，没有声明服务器 flow control / ACK / 持久重播已完成。
+
+`terminalProfiles.ts` 由真实 ProfileService/schema 消费。`terminalRecorder.ts` 和 `terminalProcess.ts` 的 ReplayEntry 只承接首次 screen 装载前的有限显示回放，保存尺寸并按 xterm write callback 排序；它们不替代 Rust 的输出保留或持久进程恢复。Tasks 消费 `terminalStrings.ts` 的 ANSI 格式，纯环境 helpers 按实际 shell 类型引用字面路径并规范化 cwd。
+
+能力 store multiplexer 合并原 process/screen store，并通过 disposable lease 控制登记生命周期。PartialCommandDetection 只由可输入的 xterm screen 登记，负责 Enter 回退导航位置；Shell history 仍在 Rust。NaiveCwdDetection 供 Split 查询真实 `terminal/processInfo`，无 shell cwd 时优先使用查询结果，失败才采用创建时目录。查询不会创建另一个进程。
+
+PromptType 的 producer 与 parser 都在 exec-server；App Server 和两个前端协议适配器只映射可选字段。原 command source 等关联 byte sequence 完成 screen commit 后才更新 PromptTypeDetectionCapability，字段不参与 nonce 信任或审批。三个 Browser 适配器只补本批必要端口，迁移、收敛和删除仍后置。
+
+`strictEnv` 已贯穿扩展 profile、启动快照、首次创建/重启与 Rust spawn。严格模式仅采用显式非 null 环境值，不展开 env 中的配置变量，不合入配置、profile 或扩展 mutations；Rust 从空环境开始应用 overrides。PTY 工具不再在清空后补回 SHELL；普通启动仍采用原冻结宿主环境。当前服务端 startup wrapper 的必要控制变量仍由 Rust 拥有。

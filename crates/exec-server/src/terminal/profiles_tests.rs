@@ -1,4 +1,5 @@
 use super::*;
+use crate::terminal::shell_integration::ShellEnvironmentMode;
 
 #[test]
 fn discovered_profiles_have_one_default_and_unique_programs() {
@@ -36,7 +37,12 @@ fn configured_shell_injection_preserves_explicit_commands_and_raw_arguments() {
             is_default: false,
         };
         assert!(profile.command_status_mode() == CommandStatusMode::ShellIntegration);
-        let launch = ShellIntegration::prepare(&profile, &HashMap::new()).unwrap();
+        let launch = ShellIntegration::prepare(
+            &profile,
+            &HashMap::new(),
+            ShellEnvironmentMode::ApplyCollections,
+        )
+        .unwrap();
         assert_eq!(launch.args, profile.args);
         assert!(launch.environment.is_empty());
 
@@ -44,7 +50,12 @@ fn configured_shell_injection_preserves_explicit_commands_and_raw_arguments() {
             args: TerminalArguments::CommandLine(" /quoted \"literal value\" ".into()),
             ..profile
         };
-        let launch = ShellIntegration::prepare(&profile, &HashMap::new()).unwrap();
+        let launch = ShellIntegration::prepare(
+            &profile,
+            &HashMap::new(),
+            ShellEnvironmentMode::ApplyCollections,
+        )
+        .unwrap();
         assert_eq!(launch.args, profile.args);
         assert!(launch.environment.is_empty());
     }
@@ -70,9 +81,12 @@ fn powershell_uses_host_markers_and_cmd_keeps_its_standard_launch() {
         is_default: false,
     };
     assert!(powershell.command_status_mode() == CommandStatusMode::ShellIntegration);
-    let integration =
-        crate::terminal::shell_integration::ShellIntegration::prepare(&powershell, &HashMap::new())
-            .unwrap();
+    let integration = crate::terminal::shell_integration::ShellIntegration::prepare(
+        &powershell,
+        &HashMap::new(),
+        ShellEnvironmentMode::ApplyCollections,
+    )
+    .unwrap();
     let TerminalArguments::Argv(args) = &integration.args else {
         panic!("expected argv");
     };
@@ -289,8 +303,18 @@ fn shell_nonce_rotates_per_launch_and_is_not_exported_to_children_or_read_snapsh
             args: TerminalArguments::Argv(Vec::new()),
             is_default: false,
         };
-        let first = ShellIntegration::prepare(&profile, &HashMap::new()).unwrap();
-        let second = ShellIntegration::prepare(&profile, &HashMap::new()).unwrap();
+        let first = ShellIntegration::prepare(
+            &profile,
+            &HashMap::new(),
+            ShellEnvironmentMode::ApplyCollections,
+        )
+        .unwrap();
+        let second = ShellIntegration::prepare(
+            &profile,
+            &HashMap::new(),
+            ShellEnvironmentMode::ApplyCollections,
+        )
+        .unwrap();
         let old = first.nonce.as_ref().unwrap();
         let new = second.nonce.as_ref().unwrap();
         assert_eq!(old.len(), 64);

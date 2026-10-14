@@ -1,5 +1,7 @@
 import type { Terminal, ITerminalAddon, IMarker, IDecoration } from '@xterm/xterm';
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { TerminalCapability, type IBufferMarkCapability } from '../../../../../platform/terminal/common/capabilities/capabilities.js';
+import { TerminalCapabilityStore } from '../../../../../platform/terminal/common/capabilities/terminalCapabilityStore.js';
 import type { ITerminalCommandStatusEvent } from '../../../../services/terminal/browser/terminal.js';
 import { getTerminalCommandDecorationTooltip } from './decorationStyles.js';
 
@@ -14,17 +16,25 @@ export class DecorationAddon extends Disposable implements ITerminalAddon {
 	private terminal: Terminal | undefined;
 	private readonly commands = new Map<string, ScreenCommand>();
 	private readonly lifetimes = this._register(new DisposableMap<string, DisposableStore>());
-	get markers(): readonly IMarker[] { return [...this.commands.values()].map(command => command.marker); }
+	private marks: IBufferMarkCapability | undefined;
+	get markers(): readonly IMarker[] { return [...this.marks?.markers() ?? []]; }
 
-	activate(terminal: Terminal): void { this.terminal = terminal; }
+	constructor(private readonly capabilities: TerminalCapabilityStore) { super(); }
 
-	registerCommandDecoration(event: ITerminalCommandStatusEvent, processId: number): void {
+	activate(terminal: Terminal): void {
+		this.lifetimes.clearAndDisposeAll();
+		this.marks = this.capabilities.get(TerminalCapability.BufferMarkDetection);
+		this.terminal = terminal;
+	}
+
+	registerCommandDecoration(event: ITerminalCommandStatusEvent, processId: number, suppliedMarker: IMarker): void {
 		const terminal = this.terminal;
-		if (!terminal || this.isDisposed) return;
-		const key = `${processId}:${event.commandId}`;
+		if (!terminal || !this.marks || this.isDisposed) return;
+		const key = `${processId}:${event.commandId}:${suppliedMarker.id}`;
 		let command = this.commands.get(key);
 		if (!command) {
-			const marker = terminal.registerMarker(0);
+			this.marks.addMark({ id: key, marker: suppliedMarker });
+			const marker = this.marks.getMark(key);
 			if (!marker) return;
 			const lifetime = new DisposableStore();
 			const decoration = terminal.registerDecoration({ marker, width: 1, layer: 'top' });
@@ -35,7 +45,6 @@ export class DecorationAddon extends Disposable implements ITerminalAddon {
 			lifetime.add(toDisposable(() => this.commands.delete(key)));
 			const markerListener = marker.onDispose(() => this.lifetimes.deleteAndDispose(key));
 			lifetime.add(toDisposable(() => markerListener.dispose()));
-			lifetime.add(toDisposable(() => marker.dispose()));
 			if (decoration) {
 				const item = command;
 				const renderListener = decoration.onRender(element => this.render(element, item.event));
@@ -60,6 +69,7 @@ export class DecorationAddon extends Disposable implements ITerminalAddon {
 
 	protected override disposeCore(): void {
 		this.terminal = undefined;
+		this.marks = undefined;
 		super.disposeCore();
 		this.commands.clear();
 	}

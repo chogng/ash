@@ -136,6 +136,9 @@ pub struct TerminalCreateParams {
     pub env: Option<std::collections::BTreeMap<String, Option<String>>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub strict_env: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub cwd: Option<std::path::PathBuf>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
@@ -333,6 +336,89 @@ pub struct TerminalReadParams {
     pub max_chunks: usize,
 }
 
+/// Shells with an integrated display protocol, selected by the execution host.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "lowercase")]
+pub enum TerminalShellType {
+    Bash,
+    Zsh,
+    #[serde(rename = "pwsh")]
+    PowerShell,
+}
+
+/// Shell display boundaries verified and decoded by the PTY owner, in output order.
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema, TS)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum TerminalShellIntegrationEvent {
+    ProcessReady {
+        is_windows_pty: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        shell_type: Option<TerminalShellType>,
+    },
+    PromptStart,
+    CommandStart,
+    CommandExecuted {
+        command_id: String,
+        command: Option<String>,
+        is_trusted: bool,
+        #[serde(default)]
+        command_storage_disabled: bool,
+        cwd: Option<String>,
+        #[ts(type = "number")]
+        timestamp_millis: u64,
+    },
+    CommandFinished {
+        exit_code: Option<i32>,
+        #[ts(type = "number | null")]
+        duration_millis: Option<u64>,
+    },
+    CommandLine {
+        value: String,
+        is_trusted: bool,
+    },
+    ContinuationStart,
+    ContinuationEnd,
+    RightPromptStart,
+    RightPromptEnd,
+    Cwd {
+        value: String,
+        is_trusted: bool,
+    },
+    HasRichCommandDetection {
+        value: bool,
+    },
+    CommandStorageDisabled,
+    PromptType {
+        value: String,
+    },
+    Environment {
+        values: Option<std::collections::BTreeMap<String, Option<String>>>,
+        is_trusted: bool,
+    },
+    EnvironmentStart {
+        clear: bool,
+        is_trusted: bool,
+    },
+    EnvironmentEntry {
+        key: String,
+        value: Option<String>,
+        is_trusted: bool,
+    },
+    EnvironmentDelete {
+        key: String,
+        value: Option<String>,
+        is_trusted: bool,
+    },
+    EnvironmentEnd {
+        is_trusted: bool,
+    },
+}
+
 /// One ordered raw PTY output chunk encoded for JSON transport.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -340,6 +426,9 @@ pub struct TerminalOutputChunk {
     #[ts(type = "number")]
     pub sequence: u64,
     pub data_base64: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub shell_integration: Option<TerminalShellIntegrationEvent>,
 }
 
 /// Renderer-independent lifecycle state for one shell command.
@@ -396,6 +485,10 @@ pub struct TerminalShellIntegration {
     pub cwd_detection: bool,
     pub has_rich_command_detection: bool,
     pub command_storage_disabled: bool,
+    /// Prompt framework identity reported by the shell; carries no execution trust.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub prompt_type: Option<String>,
     pub commands: Vec<TerminalCommandStatusEvent>,
     #[ts(type = "number")]
     pub after_output_sequence: u64,
@@ -438,6 +531,43 @@ pub struct TerminalCloseParams {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn terminal_display_metadata_uses_camel_case_and_redacts_debug_payloads() {
+        let value = serde_json::json!({
+            "type": "environmentEntry", "key": "TOKEN", "value": "private-value", "isTrusted": true
+        });
+        let event: TerminalShellIntegrationEvent = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(&event).unwrap(), value);
+        assert_eq!(format!("{event:?}"), "EnvironmentEntry { .. }");
+    }
+
+    #[test]
+    fn terminal_shell_type_is_optional_for_legacy_ready_frames() {
+        let legacy = serde_json::json!({"type": "processReady", "isWindowsPty": false});
+        let event: TerminalShellIntegrationEvent = serde_json::from_value(legacy.clone()).unwrap();
+        assert_eq!(serde_json::to_value(event).unwrap(), legacy);
+        let current =
+            serde_json::json!({"type": "processReady", "isWindowsPty": true, "shellType": "pwsh"});
+        let event: TerminalShellIntegrationEvent = serde_json::from_value(current.clone()).unwrap();
+        assert_eq!(serde_json::to_value(event).unwrap(), current);
+    }
+
+    #[test]
+    fn strict_environment_is_optional_and_rejects_non_boolean_requests() {
+        let mut value = serde_json::json!({"rows": 24, "cols": 80, "profile": {"type": "default"}, "lifecycle": {"type": "connectionOwned"}});
+        let legacy: TerminalCreateParams = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(legacy.strict_env, None);
+        assert_eq!(serde_json::to_value(legacy).unwrap(), value);
+        for strict in [true, false] {
+            value["strictEnv"] = serde_json::json!(strict);
+            let request: TerminalCreateParams = serde_json::from_value(value.clone()).unwrap();
+            assert_eq!(request.strict_env, Some(strict));
+            assert_eq!(serde_json::to_value(request).unwrap(), value);
+        }
+        value["strictEnv"] = serde_json::json!("true");
+        assert!(serde_json::from_value::<TerminalCreateParams>(value).is_err());
+    }
 
     #[test]
     fn terminal_command_line_and_argv_round_trip_without_changing_representation() {
@@ -537,5 +667,33 @@ mod tests {
         assert!(serde_json::from_value::<TerminalProfileResolveParams>(serde_json::json!({
             "profile": {"type": "custom", "name": "Custom shell", "path": ["/bin/sh"], "args": [], "execution": {"type": "process"}}
         })).is_err());
+    }
+}
+
+impl fmt::Debug for TerminalShellIntegrationEvent {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let kind = match self {
+            Self::ProcessReady { .. } => "ProcessReady",
+            Self::PromptStart => "PromptStart",
+            Self::CommandStart => "CommandStart",
+            Self::CommandExecuted { .. } => "CommandExecuted",
+            Self::CommandFinished { .. } => "CommandFinished",
+            Self::CommandLine { .. } => "CommandLine",
+            Self::ContinuationStart => "ContinuationStart",
+            Self::ContinuationEnd => "ContinuationEnd",
+            Self::RightPromptStart => "RightPromptStart",
+            Self::RightPromptEnd => "RightPromptEnd",
+            Self::Cwd { .. } => "Cwd",
+            Self::HasRichCommandDetection { .. } => "HasRichCommandDetection",
+            Self::CommandStorageDisabled => "CommandStorageDisabled",
+            Self::PromptType { .. } => "PromptType",
+            Self::Environment { .. } => "Environment",
+            Self::EnvironmentStart { .. } => "EnvironmentStart",
+            Self::EnvironmentEntry { .. } => "EnvironmentEntry",
+            Self::EnvironmentDelete { .. } => "EnvironmentDelete",
+            Self::EnvironmentEnd { .. } => "EnvironmentEnd",
+        };
+        // Payloads may contain credentials. Transport serialization remains complete.
+        formatter.debug_struct(kind).finish_non_exhaustive()
     }
 }

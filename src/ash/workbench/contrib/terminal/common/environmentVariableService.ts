@@ -1,11 +1,11 @@
-import { localize } from '../../../../nls.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-import type { IEnvironmentVariableMutator, IMergedEnvironmentVariableCollection } from '../../../../platform/terminal/common/environmentVariable.js';
+import type { IMergedEnvironmentVariableCollection } from '../../../../platform/terminal/common/environmentVariable.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IEnvironmentVariableService, type IEnvironmentVariableCollectionWithPersistence } from './environmentVariable.js';
-import { createTerminalEnvironment } from './terminalEnvironment.js';
+import { MergedEnvironmentVariableCollection } from '../../../../platform/terminal/common/environmentVariableCollection.js';
+import { deserializeEnvironmentDescriptionMap, deserializeEnvironmentVariableCollection, serializeEnvironmentDescriptionMap, serializeEnvironmentVariableCollection } from '../../../../platform/terminal/common/environmentVariableShared.js';
 
 const storageKey = 'terminal.integrated.environmentVariableCollections.v1';
 
@@ -18,13 +18,7 @@ export class EnvironmentVariableService extends Disposable implements IEnvironme
 	readonly onDidChangeCollections = this.changed.event;
 	get collections(): ReadonlyMap<string, IEnvironmentVariableCollectionWithPersistence> { return this.values; }
 	get mergedCollection(): IMergedEnvironmentVariableCollection {
-		const mutations = [...this.values].sort(([a], [b]) => a.localeCompare(b)).flatMap(([, collection]) => [...collection.map]);
-		return {
-			applyToProcessEnvironment: async (env, inherited, caseSensitive, resolve) => {
-				const result = await createTerminalEnvironment(env, inherited, mutations, caseSensitive, resolve);
-				for (const [key, value] of Object.entries(result)) Object.defineProperty(env, key, { value, enumerable: true, configurable: true, writable: true });
-			}
-		};
+		return new MergedEnvironmentVariableCollection(this.values);
 	}
 
 	constructor(
@@ -42,7 +36,16 @@ export class EnvironmentVariableService extends Disposable implements IEnvironme
 	}
 
 	set(extensionIdentifier: string, collection: IEnvironmentVariableCollectionWithPersistence): void {
-		this.values.set(extensionIdentifier, { persistent: collection.persistent, map: new Map(collection.map) });
+		const previous = this.mergedCollection;
+		const old = this.values.get(extensionIdentifier);
+		const snapshot = new MergedEnvironmentVariableCollection(new Map([[extensionIdentifier, collection]])).collections.get(extensionIdentifier)!;
+		const next = { ...snapshot, persistent: collection.persistent };
+		this.values.set(extensionIdentifier, next);
+		const merged = this.mergedCollection;
+		const scopes = [undefined, ...[old, next].flatMap(collection => [...collection?.map.values() ?? [], ...collection?.descriptionMap?.values() ?? []].map(entry => entry.scope))];
+		const variablesChanged = scopes.some(scope => previous.diff(merged, scope));
+		const descriptionsChanged = JSON.stringify([...old?.descriptionMap ?? []]) !== JSON.stringify([...next.descriptionMap ?? []]);
+		if (!variablesChanged && !descriptionsChanged && old?.persistent === next.persistent) return;
 		this.publish();
 	}
 
@@ -72,7 +75,7 @@ export class EnvironmentVariableService extends Disposable implements IEnvironme
 	}
 
 	private publish(): void {
-		const persistent = [...this.values].filter(([, collection]) => collection.persistent).map(([extension, collection]) => [extension, [...collection.map]]);
+		const persistent = [...this.values].filter(([, collection]) => collection.persistent).map(([extension, collection]) => [extension, serializeEnvironmentVariableCollection(collection.map), serializeEnvironmentDescriptionMap(collection.descriptionMap ?? new Map())]);
 		this.storage.store(storageKey, JSON.stringify(persistent), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		this.changed.fire(this.mergedCollection);
 	}
@@ -84,9 +87,10 @@ export class EnvironmentVariableService extends Disposable implements IEnvironme
 			const entries: unknown = JSON.parse(stored);
 			if (!Array.isArray(entries) || entries.length > 256) return;
 			for (const entry of entries) {
-				if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string') continue;
+				if (!Array.isArray(entry) || (entry.length !== 2 && entry.length !== 3) || typeof entry[0] !== 'string') continue;
 				const map = deserializeEnvironmentVariableCollection(entry[1]);
-				this.values.set(entry[0], { persistent: true, map });
+				const descriptionMap = entry.length === 3 ? deserializeEnvironmentDescriptionMap(entry[2]) : undefined;
+				this.values.set(entry[0], { persistent: true, map, descriptionMap });
 			}
 		} catch { /* Invalid persisted snapshots cannot become process input. */ }
 	}
@@ -96,17 +100,4 @@ export class EnvironmentVariableService extends Disposable implements IEnvironme
 		this.values.clear();
 		super.disposeCore();
 	}
-}
-
-/** Decodes external callback and persisted JSON at their shared boundary. */
-export function deserializeEnvironmentVariableCollection(value: unknown): ReadonlyMap<string, IEnvironmentVariableMutator> {
-	if (!Array.isArray(value) || value.length > 1024) throw new TypeError(localize('terminal.environment.invalidCollection', 'Invalid terminal environment collection.'));
-	const map = new Map<string, IEnvironmentVariableMutator>();
-	for (const entry of value) {
-		if (!Array.isArray(entry) || entry.length !== 2) throw new TypeError(localize('terminal.environment.invalidCollection', 'Invalid terminal environment collection.'));
-		const [key, mutator] = entry;
-		if (typeof key !== 'string' || !key || key.length > 32768 || /[=\0]/.test(key) || map.has(key) || !mutator || typeof mutator !== 'object' || typeof mutator.value !== 'string' || mutator.value.length > 32768 || mutator.value.includes('\0') || ![1, 2, 3].includes(mutator.type) || Object.keys(mutator).some(key => key !== 'value' && key !== 'type')) throw new TypeError(localize('terminal.environment.invalidCollection', 'Invalid terminal environment collection.'));
-		map.set(key, Object.freeze({ value: mutator.value, type: mutator.type }));
-	}
-	return map;
 }

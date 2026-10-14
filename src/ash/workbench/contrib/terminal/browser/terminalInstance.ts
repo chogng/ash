@@ -3,7 +3,6 @@ import type { ThemeIcon } from '../../../../base/common/themables.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { getTerminalUri } from './terminalUri.js';
 import type { URI } from '../../../../base/common/uri.js';
-import { VSBuffer } from '../../../../base/common/buffer.js';
 import { CancellationError, isCancellationError, onUnexpectedError } from '../../../../base/common/errors.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -27,7 +26,10 @@ import { XtermTerminal } from './xterm/xtermTerminal.js';
 import { localize } from '../../../../nls.js';
 import Severity from '../../../../base/common/severity.js';
 import { TerminalStatusList } from './terminalStatusList.js';
-import { TerminalCapabilityStore } from '../../../../platform/terminal/common/capabilities/terminalCapabilityStore.js';
+import { TerminalCapability } from '../../../../platform/terminal/common/capabilities/capabilities.js';
+import { TerminalCapabilityStore, TerminalCapabilityStoreMultiplexer } from '../../../../platform/terminal/common/capabilities/terminalCapabilityStore.js';
+import { TerminalRecorder } from '../../../../platform/terminal/common/terminalRecorder.js';
+import { NaiveCwdDetectionCapability } from '../../../../platform/terminal/common/capabilities/naiveCwdDetectionCapability.js';
 
 export interface CustomTerminalProcessOptions {
 	readonly create: NonNullable<IShellLaunchConfig['customPtyImplementation']>;
@@ -37,8 +39,8 @@ export interface CustomTerminalProcessOptions {
 }
 
 export class TerminalInstance extends Disposable implements ITerminalInstance {
-	private readonly capabilityChanged = this._register(new Emitter<void>());
-	readonly capabilities: TerminalCapabilityStore;
+	private readonly processCapabilities = this._register(new TerminalCapabilityStore());
+	readonly capabilities = this._register(new TerminalCapabilityStoreMultiplexer());
 	readonly resource: URI;
 	private hostTarget: TerminalLocation | undefined = TerminalLocation.Panel;
 	private readonly targetChanged = this._register(new Emitter<TerminalLocation | undefined>());
@@ -52,9 +54,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	}
 	readonly statusList = this._register(new TerminalStatusList());
 	private readonly pendingOutput: IProcessDataEvent[] = [];
-	private readonly pendingScreenData: Uint8Array[] = [];
-	private pendingScreenBytes = 0;
-	private screenDataTruncated = false;
+	private screenRecorder: TerminalRecorder | undefined;
 	private readonly shellLifetime = this._register(new MutableDisposable<DisposableStore>());
 	private shellProcessManager: AgentHostPty | undefined;
 	private screen: XtermTerminal | undefined;
@@ -113,7 +113,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		onClosed: () => void,
 		private readonly onTitleChanged: () => void,
 		private custom: CustomTerminalProcessOptions | undefined,
-		private launch: Pick<ITerminalProcessCreateOptions, 'env' | 'cwd' | 'execution' | 'profile'> | undefined,
+		private launch: Pick<ITerminalProcessCreateOptions, 'env' | 'strictEnv' | 'cwd' | 'execution' | 'profile'> | undefined,
 		private initialText: IShellLaunchConfig['initialText'],
 		private waitOnExit: IShellLaunchConfig['waitOnExit'],
 		private dimensions: ITerminalDimensions,
@@ -121,8 +121,10 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super();
+		this._register(this.capabilities.add(this.processCapabilities));
+		this.screenRecorder = this.createScreenRecorder();
 		this.shellProcessManager = child;
-		this.capabilities = this._register(new TerminalCapabilityStore(() => this.shellIntegration, () => this.cwd, this.capabilityChanged.event, this.onDidChangeCommandStatus));
+
 		this._profile = profile;
 		this._title = title;
 		this.resource = getTerminalUri(generateUuid(), instanceNumber, title);
@@ -136,8 +138,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	protected override disposeCore(): void {
 		void this.close();
 		this.pendingOutput.length = 0;
-		this.pendingScreenData.length = 0;
-		this.pendingScreenBytes = 0;
+		this.screenRecorder = undefined;
 		this.pendingExit = undefined;
 		// UI contributions must stop observing focus before removal of their screen's DOM.
 		this.contributions.clearAndDisposeAll();
@@ -173,6 +174,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			executable: profile?.type === 'custom' ? profile.path : undefined,
 			args: profile?.type === 'custom' ? profile.args : undefined,
 			env: this.launch?.env,
+			strictEnv: this.launch?.strictEnv,
 			cwd: this.launch?.cwd,
 			icon: this.profile.icon,
 			color: this.profile.color,
@@ -252,7 +254,8 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		this.customLifetime.value = lifetime;
 		lifetime.add(process);
 		lifetime.add(process.onProcessData(data => {
-			const event: IProcessDataEvent = typeof data === 'string' ? { data: VSBuffer.fromString(data).buffer, trackCommit: false } : data;
+			if (this.closed || this.isDisposed) return;
+			const event: IProcessDataEvent = typeof data === 'string' ? { data, trackCommit: false } : data;
 			this.writeScreenData(event.data);
 			// The PTY can write inside open(), before the view owns its xterm widget.
 			if (!this._onDidWriteData.hasListeners() || this.pendingOutput.length > 0) {
@@ -285,18 +288,24 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		}
 		const screen = this._register(this.instantiationService.createInstance(XtermTerminal, container, this));
 		this.screen = screen;
-		if (this.screenDataTruncated) {
-			screen.write(`\r\n${localize('terminal.outputTruncated', '[terminal output truncated]')}\r\n`);
-		}
-		for (const data of this.pendingScreenData) { screen.write(data); }
-		this.pendingScreenData.length = 0;
-		this.pendingScreenBytes = 0;
-		this.screenDataTruncated = false;
+		this._register(this.capabilities.add(screen.capabilities));
+		const recorder = this.screenRecorder!;
+		const replay = recorder.generateReplayEventSync();
+		const truncated = recorder.isTruncated;
+		this.screenRecorder = undefined;
 		for (const { id, ctor } of TerminalExtensionsRegistry.getTerminalContributions()) {
 			this.contributions.set(id, this.instantiationService.createInstance(ctor, { instance: this }));
 		}
-		this.screenInitialization = screen.initialize().then(() => {
+		this.screenInitialization = screen.initialize().then(async () => {
 			if (this.isDisposed || screen.isDisposed) { return undefined; }
+			if (truncated) screen.raw.write(`\r\n${localize('terminal.outputTruncated', '[terminal output truncated]')}\r\n`);
+			for (const entry of replay.events) {
+				if (entry.cols > 0 && entry.rows > 0) screen.raw.resize(entry.cols, entry.rows);
+				await new Promise<void>(resolve => screen.raw.write(entry.data, resolve));
+				if (entry.shellIntegration) screen.handleShellIntegration(entry.shellIntegration);
+				if (this.isDisposed || screen.isDisposed) return undefined;
+			}
+			screen.raw.resize(this.dimensions.cols, this.dimensions.rows);
 			// Raw keys and terminal replies must bypass sendText's Enter normalization.
 			const input = screen.raw.onData(data => {
 				if (!this.isReadOnly && !this.closed && this._state === 'running') {
@@ -358,6 +367,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 
 	resize(dimensions: ITerminalDimensions): void {
 		this.dimensions = dimensions;
+		this.screenRecorder?.handleResize(dimensions.cols, dimensions.rows);
 		if (this.custom) {
 			this.custom.dimensions = dimensions;
 			if (!this.closed && this._state === 'running') this.customProcess?.resize?.(dimensions.cols, dimensions.rows);
@@ -370,53 +380,49 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 
 	public clearBuffer(): void {
 		this.pendingOutput.length = 0;
-		this.pendingScreenData.length = 0;
-		this.pendingScreenBytes = 0;
-		this.screenDataTruncated = false;
+		this.screenRecorder = this.screen ? undefined : this.createScreenRecorder();
 		this.screen?.clearBuffer();
 	}
 
-	private writeScreenData(data: Uint8Array): void {
+	private writeScreenData(data: string): void {
 		if (this.screen) {
-			this.screen.write(data);
+			void this.screenInitialization?.then(screen => screen?.write(data)).catch(onUnexpectedError);
 			return;
 		}
-		if (data.byteLength === 0) { return; }
-		// Process observers can drain output before a view exists. Bound that retained
-		// display history independently of observers and the backend's own output ring.
-		const limit = 1024 * 1024;
-		if (data.byteLength > limit) {
-			data = data.slice(-limit);
-			this.screenDataTruncated = true;
-		}
-		this.pendingScreenData.push(data);
-		this.pendingScreenBytes += data.byteLength;
-		while (this.pendingScreenBytes > limit || this.pendingScreenData.length > 4096) {
-			this.pendingScreenBytes -= this.pendingScreenData.shift()!.byteLength;
-			this.screenDataTruncated = true;
-		}
+		this.screenRecorder?.handleData(data);
+	}
+
+	private createScreenRecorder(): TerminalRecorder {
+		return new TerminalRecorder(this.dimensions.cols, this.dimensions.rows, { maxBytes: 1024 * 1024, maxChunks: 4096 });
 	}
 
 	private writeInitialText(): void {
 		if (this.initialText !== undefined) {
 			const text = typeof this.initialText === 'string' ? `${this.initialText}\r\n` : this.initialText.text + (this.initialText.trailingNewLine ? '\r\n' : '');
-			this.writeScreenData(VSBuffer.fromString(text).buffer);
+			this.writeScreenData(text);
 		}
 	}
 
 	private handleProcessData(event: IProcessDataEvent): void {
+		if (this.closed || this.isDisposed) return;
 		const screen = this.screen;
+		const generation = this.pollGeneration;
 		if (screen && event.trackCommit) {
 			event.writePromise = new Promise((resolve, reject) => {
-				screen.write(event.data, resolve);
-				// A retained hidden screen parses immediately; a terminal with no screen
-				// queues display bytes without making task completion wait for a view.
-				void screen.initialize().catch(reject);
+				void this.screenInitialization!.then(ready => {
+					if (!ready || this.closed || this.isDisposed) throw new CancellationError();
+					ready.write(event.data, () => {
+						if (event.shellIntegration && generation === this.pollGeneration) ready.handleShellIntegration(event.shellIntegration);
+						resolve();
+					});
+				}).catch(reject);
 			});
+		} else if (!screen) {
+			this.screenRecorder?.handleData(event.data, event.shellIntegration);
 		} else {
 			this.writeScreenData(event.data);
 		}
-		this._onDidWriteData.fire(event);
+		if (event.data || !event.shellIntegration) this._onDidWriteData.fire(event);
 	}
 
 	private handleProcessExit(code: number | undefined): void {
@@ -425,10 +431,10 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		const message = code === undefined
 			? localize('terminal.processExitedUnknown', '[process exited with unknown code]')
 			: localize('terminal.processExited', '[process exited with code {0}]', code);
-		this.writeScreenData(VSBuffer.fromString(`\r\n${message}\r\n`).buffer);
+		this.writeScreenData(`\r\n${message}\r\n`);
 		try {
 			const waitMessage = typeof this.waitOnExit === 'function' && code !== undefined ? this.waitOnExit(code) : typeof this.waitOnExit === 'string' ? this.waitOnExit : undefined;
-			if (waitMessage) this.writeScreenData(VSBuffer.fromString(`${waitMessage}\r\n`).buffer);
+			if (waitMessage) this.writeScreenData(`${waitMessage}\r\n`);
 		} catch (error) {
 			// A caller's display callback must not prevent exit delivery or cleanup.
 			onUnexpectedError(error);
@@ -503,12 +509,12 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		if (this.connectionPersistence === "reconnectable") {
 			if (this._state !== "reconnecting") {
 				this.setState("reconnecting");
-				this.handleProcessData({ data: VSBuffer.fromString(`\r\n${localize('terminal.reconnecting', '[terminal reconnecting]')}\r\n`).buffer, trackCommit: false });
+				this.handleProcessData({ data: `\r\n${localize('terminal.reconnecting', '[terminal reconnecting]')}\r\n`, trackCommit: false });
 			}
 			return;
 		}
 		this.setState("disconnected");
-		this.handleProcessData({ data: VSBuffer.fromString(`\r\n${localize('terminal.connectionLost', '[terminal connection lost; process was not preserved]')}\r\n`).buffer, trackCommit: false });
+		this.handleProcessData({ data: `\r\n${localize('terminal.connectionLost', '[terminal connection lost; process was not preserved]')}\r\n`, trackCommit: false });
 	}
 
 	restoreConnection(): void {
@@ -562,6 +568,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 						args: typeof replacement.args === 'string' ? replacement.args : Object.freeze([...(replacement.args ?? [])]),
 					}) : { type: 'default' as const },
 					...(replacement.env === undefined ? {} : { env: Object.freeze({ ...replacement.env }) }),
+					...(replacement.strictEnv === undefined ? {} : { strictEnv: replacement.strictEnv }),
 					...(replacement.cwd === undefined ? {} : { cwd: replacement.cwd }),
 					...(replacement.execution === undefined ? {} : { execution: replacement.execution.type === 'process' ? Object.freeze({ ...replacement.execution, args: (typeof replacement.execution.args === 'string' ? replacement.execution.args : Object.freeze([...replacement.execution.args])) }) : Object.freeze({ ...replacement.execution }) }),
 				});
@@ -605,7 +612,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			this.shellProcessManager = child;
 			this.createShellProcessManager();
 			this._exitCode = undefined;
-			if (!replacement) this.handleProcessData({ data: VSBuffer.fromString(`\r\n${localize('terminal.relaunched', '[terminal relaunched]')}\r\n`).buffer, trackCommit: false });
+			if (!replacement) this.handleProcessData({ data: `\r\n${localize('terminal.relaunched', '[terminal relaunched]')}\r\n`, trackCommit: false });
 			this.setState("running");
 			if (!replacement?.deferStart) this.start();
 		} catch (error) {
@@ -619,6 +626,11 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		const lifetime = new DisposableStore();
 		this.shellLifetime.value = lifetime;
 		const manager = this.shellProcessManager!;
+		const cwdQuery = lifetime.add(new NaiveCwdDetectionCapability(manager));
+		this.processCapabilities.add(TerminalCapability.NaiveCwdDetection, cwdQuery);
+		lifetime.add(toDisposable(() => {
+			if (this.processCapabilities.get(TerminalCapability.NaiveCwdDetection) === cwdQuery) this.processCapabilities.remove(TerminalCapability.NaiveCwdDetection);
+		}));
 		// The backend owns the child. This instance holds a release lease, not a second disposable owner.
 		lifetime.add(toDisposable(() => { void manager.close().catch(() => { }); }));
 		lifetime.add(manager.onProcessReady(ready => { this.processReady = ready; }));
@@ -631,16 +643,36 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		}));
 		lifetime.add(manager.onProcessData(event => this.handleProcessData(event)));
 		lifetime.add(manager.onDidChangeCommandStatus(event => this._onDidChangeCommandStatus.fire(event)));
-		lifetime.add(manager.onDidChangeMetadata(() => this.capabilityChanged.fire()));
+		lifetime.add(manager.onDidChangeMetadata(() => this.refreshCapabilities()));
 		lifetime.add(manager.onOutputGap(() => {
-			this.handleProcessData({ data: VSBuffer.fromString(`\r\n${localize('terminal.outputTruncated', '[terminal output truncated]')}\r\n`).buffer, trackCommit: false });
+			this.handleProcessData({ data: `\r\n${localize('terminal.outputTruncated', '[terminal output truncated]')}\r\n`, trackCommit: false });
 		}));
 		lifetime.add(manager.onPtyReconnect(() => {
-			this.handleProcessData({ data: VSBuffer.fromString(`\r\n${localize('terminal.reconnected', '[terminal reconnected]')}\r\n`).buffer, trackCommit: false });
+			this.handleProcessData({ data: `\r\n${localize('terminal.reconnected', '[terminal reconnected]')}\r\n`, trackCommit: false });
 			this.setState("running");
 		}));
 		lifetime.add(manager.onProcessExit(code => this.handleProcessExit(code)));
-		this.capabilityChanged.fire();
+		this.refreshCapabilities();
+	}
+
+	private refreshCapabilities(): void {
+		const integration = this.shellIntegration;
+		for (const id of this.processCapabilities.items) {
+			if (id === TerminalCapability.CwdDetection && !integration?.cwdDetection) {
+				this.processCapabilities.remove(id);
+			}
+		}
+		const prompt = this.shellProcessManager?.promptTypeDetection;
+		if (integration?.promptType !== undefined && prompt && this.capabilities.get(TerminalCapability.PromptTypeDetection) !== prompt) {
+			this.processCapabilities.add(TerminalCapability.PromptTypeDetection, prompt);
+		} else if (integration?.promptType === undefined) {
+			this.processCapabilities.remove(TerminalCapability.PromptTypeDetection);
+		}
+		const cwd = this.shellProcessManager?.cwdDetection;
+		if (integration?.cwdDetection && cwd && this.capabilities.get(TerminalCapability.CwdDetection) !== cwd) {
+			this.processCapabilities.add(TerminalCapability.CwdDetection, cwd);
+		}
+
 	}
 
 	private async poll(generation: number, initialState: "running" | "reconnecting" = "running"): Promise<void> {
@@ -649,7 +681,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		} catch (error) {
 			if (!isCancellationError(error) && !this.closed && generation === this.pollGeneration) {
 				if (this._state === "reconnecting") {
-					this.handleProcessData({ data: VSBuffer.fromString(`\r\n${localize('terminal.recoveryFailed', '[terminal recovery failed; relaunch required]')}\r\n`).buffer, trackCommit: false });
+					this.handleProcessData({ data: `\r\n${localize('terminal.recoveryFailed', '[terminal recovery failed; relaunch required]')}\r\n`, trackCommit: false });
 				}
 				this.setState("error");
 			}
@@ -661,7 +693,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		this._state = state;
 		if (state === 'error') {
 			this.shellProcessManager?.stop();
-			this.writeScreenData(VSBuffer.fromString(`\r\n${localize('terminal.operationFailed', '[terminal operation failed]')}\r\n`).buffer);
+			this.writeScreenData(`\r\n${localize('terminal.operationFailed', '[terminal operation failed]')}\r\n`);
 		}
 		this._onDidChangeState.fire(state);
 	}

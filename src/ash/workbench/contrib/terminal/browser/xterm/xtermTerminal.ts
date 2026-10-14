@@ -1,6 +1,10 @@
 import type { IXtermCore } from '../xterm-private.js';
 import { LineDataEventAddon } from './lineDataEventAddon.js';
 import { DecorationAddon } from './decorationAddon.js';
+import { TerminalCapability } from '../../../../../platform/terminal/common/capabilities/capabilities.js';
+import { ShellIntegrationAddon } from '../../../../../platform/terminal/common/xterm/shellIntegrationAddon.js';
+import type { TerminalShellIntegrationEvent } from '../../../../../platform/terminal/common/terminal.js';
+import { TerminalCapabilityStore } from '../../../../../platform/terminal/common/capabilities/terminalCapabilityStore.js';
 import { MarkNavigationAddon } from './markNavigationAddon.js';
 import '../media/xterm.css';
 import { selectionBackground, selectionForeground } from "../../../../../platform/theme/common/colors/baseColors.js";
@@ -39,6 +43,7 @@ const addonImporter = new XtermAddonImporter();
 
 /** One persistent xterm renderer bound to exactly one Terminal instance. */
 export class XtermTerminal extends Disposable implements IXtermTerminal {
+	readonly capabilities = this._register(new TerminalCapabilityStore());
 	private readonly lineData = new LineDataEventAddon();
 	private readonly widgets = this._register(new TerminalWidgetManager());
 	private readonly linkHover = this._register(new MutableDisposable<import('../../../../../base/common/lifecycle.js').IDisposable>());
@@ -49,8 +54,10 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 	private readonly pendingWrites: ((terminal: Terminal) => void)[] = [];
 	private focusSource: Element | null | undefined;
 	private readonly alternateScroll = new AlternateScrollMode();
-	private readonly decorationAddon = this._register(new DecorationAddon());
-	private readonly markNavigationAddon = this._register(new MarkNavigationAddon(() => this.decorationAddon.markers));
+	private readonly shellIntegrationAddon: ShellIntegrationAddon;
+	private readonly decorationAddon = this._register(new DecorationAddon(this.capabilities));
+	private readonly markNavigationAddon = this._register(new MarkNavigationAddon(() => this.instance.capabilities?.has(TerminalCapability.CommandDetection)
+		? this.decorationAddon.markers : this.capabilities.get(TerminalCapability.PartialCommandDetection)?.commands ?? this.decorationAddon.markers));
 	private visible = false;
 	private readonly resizeDebouncer: TerminalResizeDebouncer = this._register(new TerminalResizeDebouncer(
 		() => this.visible,
@@ -80,6 +87,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 	) {
 		super();
+		this.shellIntegrationAddon = this._register(instantiation.createInstance(ShellIntegrationAddon, this.capabilities, undefined));
 		this.element = h(container.ownerDocument, "div");
 		this.element.className = "ash-terminal-instance";
 		this.element.hidden = true;
@@ -89,10 +97,17 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 			this.pendingWrites.length = 0;
 			this.element.remove();
 		}));
-		this._register(instance.onDidChangeCommandStatus((event) => {
-			// The screen survives reuse while backend command IDs are scoped to one PTY.
-			const processId = instance.processId;
-			this.writeWhenReady(() => this.decorationAddon.registerCommandDecoration(event, processId));
+		const commandListeners = this._register(new MutableDisposable<DisposableStore>());
+		this._register(this.capabilities.createOnDidAddCapabilityOfTypeEvent(TerminalCapability.CommandDetection)(capability => {
+			const listeners = new DisposableStore();
+			commandListeners.value = listeners;
+			const decorate = (command: import('../../../../../platform/terminal/common/capabilities/capabilities.js').ITerminalCommand, running: boolean) => {
+				if (!command.id || !command.marker) return;
+				this.decorationAddon.registerCommandDecoration({ commandId: command.id, command: command.command, isTrusted: command.isTrusted, cwd: command.cwd,
+					status: running ? 'running' : command.exitCode === undefined ? 'completed' : command.exitCode === 0 ? 'succeeded' : 'failed', exitCode: command.exitCode }, this.instance.processId, command.marker);
+			};
+			listeners.add(capability.onCommandExecuted(command => decorate(command, true)));
+			listeners.add(capability.onCommandFinished(command => decorate(command, false)));
 		}));
 		this._register(instance.onDidChangeState((state) => {
 			this.element.dataset.state = state;
@@ -141,6 +156,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		this.fitAddon = new FitAddon();
 		terminal.loadAddon(this.fitAddon);
 		terminal.loadAddon(this.lineData);
+		terminal.loadAddon(this.shellIntegrationAddon);
 		terminal.loadAddon(this.decorationAddon);
 		terminal.loadAddon(this.markNavigationAddon);
 		terminal.loadAddon(new WebLinksAddon((_event, url) => { void this.openLink(url).catch(onUnexpectedError); }, {
@@ -218,6 +234,10 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		this.resizeDebouncer.flush();
 		this.focusSource = this.element.ownerDocument.activeElement;
 		this.terminal?.focus();
+	}
+
+	handleShellIntegration(event: TerminalShellIntegrationEvent): void {
+		this.shellIntegrationAddon.handleSequence(event);
 	}
 
 	clearBuffer(): void {

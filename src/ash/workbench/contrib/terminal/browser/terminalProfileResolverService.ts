@@ -1,16 +1,18 @@
 import { CancellationError } from '../../../../base/common/errors.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { OperatingSystem } from '../../../../base/common/platform.js';
+import { OperatingSystem, type IProcessEnvironment } from '../../../../base/common/platform.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { ITerminalProcessService, type IShellLaunchConfig, type ITerminalProfile, type ITerminalProfileObject, type TerminalArguments } from '../../../../platform/terminal/common/terminal.js';
-import { mergeEnvironments } from '../../../../platform/terminal/common/terminalEnvironment.js';
+import { ITerminalProcessService, TerminalSettingId, TerminalSettingPrefix, type IShellLaunchConfig, type ITerminalProfile, type ITerminalProfileObject, type TerminalArguments } from '../../../../platform/terminal/common/terminal.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IConfigurationResolverService } from '../../../services/configurationResolver/common/configurationResolver.js';
 import { TERMINAL_CONFIG_SECTION } from '../common/terminal.js';
 import { IEnvironmentVariableService } from '../common/environmentVariable.js';
+import { MergedEnvironmentVariableCollection } from '../../../../platform/terminal/common/environmentVariableCollection.js';
+import { sanitizeCwd, shouldUseEnvironmentVariableCollection } from '../../../../platform/terminal/common/terminalEnvironment.js';
+import { createTerminalEnvironment, mergeEnvironments } from '../common/terminalEnvironment.js';
 import { ITerminalProfileResolverService, ITerminalProfileService, type IShellLaunchConfigResolveOptions } from '../../../services/terminal/common/terminal.js';
 
 /** Resolves caller-owned launch data against one initialized execution host and workspace generation. */
@@ -57,7 +59,10 @@ export abstract class BaseTerminalProfileResolverService extends Disposable impl
 		const platform = await this.profiles.getPlatformKey();
 		let profile = this.profiles.getDefaultProfile(options.os);
 		const kind = options.allowAgentHostShell ? 'agentHostProfile' : options.allowAutomationShell ? 'automationProfile' : undefined;
-		const configured = kind ? this.configuration.getValue<ITerminalProfileObject | null>(`${TERMINAL_CONFIG_SECTION}.${kind}.${platform}`) : undefined;
+		const key = kind === undefined ? undefined : kind === 'automationProfile'
+			? `${TerminalSettingPrefix.AutomationProfile}${platform}`
+			: `${TERMINAL_CONFIG_SECTION}.${kind}.${platform}`;
+		const configured = key ? this.configuration.getValue<ITerminalProfileObject | null>(key) : undefined;
 		if (configured?.path) {
 			const name = kind === 'agentHostProfile' ? localize('terminal.profile.agentHostShell', 'Agent host shell') : localize('terminal.profile.automationShell', 'Automation shell');
 			profile = {
@@ -102,17 +107,35 @@ export abstract class BaseTerminalProfileResolverService extends Disposable impl
 		mergeEnvironments(overrides, shell.env, options.os !== OperatingSystem.Windows);
 		const folder = this.workspace.getWorkspace().folders[0];
 		const resolve = (value: string) => this.variables.resolveWithEnvironment(environment, folder, value);
-		await this.environmentVariables.refreshCollections();
-		const env = Object.fromEntries(await Promise.all(Object.entries(overrides).map(async ([key, value]) => [key, value === null ? null : await resolve(value)])));
-		await this.environmentVariables.mergedCollection.applyToProcessEnvironment(env, environment, options.os !== OperatingSystem.Windows, resolve);
-		const cwd = shell.cwd ?? this.configuration.getValue<string>(`${TERMINAL_CONFIG_SECTION}.cwd`);
-		const resolvedCwd = cwd ? await resolve(cwd) : undefined;
+		let env: IProcessEnvironment;
+		if (!shouldUseEnvironmentVariableCollection(shell)) {
+			// Strict launch values are literal: no configured, inherited or extension mutations.
+			env = Object.fromEntries(Object.entries(shell.env ?? {}).flatMap(([key, value]) => value === null ? [] : [[key, value]]));
+		} else {
+			await this.environmentVariables.refreshCollections();
+			const launchEnv = await createTerminalEnvironment(overrides, resolve);
+			env = Object.fromEntries(Object.entries(launchEnv).map(([key, value]) => [key, value ?? undefined]));
+			const collection = new MergedEnvironmentVariableCollection(this.environmentVariables.collections, options.os !== OperatingSystem.Windows);
+			const scope = { workspaceFolder: folder };
+			// Materialize inheritance only for mutated variables. Other host values
+			// remain with the Rust spawn owner; null overrides still mean deletion.
+			for (const [name, mutations] of collection.getVariableMap(scope)) {
+				if (!mutations.some(mutator => mutator.options === undefined || mutator.options.applyAtProcessCreation === true)) continue;
+				const sameName = (key: string) => options.os === OperatingSystem.Windows ? key.toLowerCase() === name.toLowerCase() : key === name;
+				if (Object.keys(env).some(sameName)) continue;
+				const inheritedKey = Object.keys(environment).find(sameName);
+				if (inheritedKey) Object.defineProperty(env, inheritedKey, { value: environment[inheritedKey], enumerable: true, configurable: true, writable: true });
+			}
+			await collection.applyToProcessEnvironment(env, scope, resolve);
+		}
+		const cwd = shell.cwd ?? this.configuration.getValue<string>(TerminalSettingId.Cwd);
+		const resolvedCwd = cwd ? sanitizeCwd(await resolve(cwd), options.os) : undefined;
 		const resolvedArgs = shell.args === undefined ? profile.args ?? [] : typeof shell.args === 'string' ? await resolve(shell.args) : await Promise.all(shell.args.map(resolve));
 		const executable = typeof profile.path === 'string' ? profile.path : profile.path[0]!;
 		this.assertCurrent(generation);
 		shell.executable = executable;
 		shell.args = resolvedArgs;
-		shell.env = Object.freeze(env);
+		shell.env = Object.freeze(Object.fromEntries(Object.entries(env).map(([key, value]) => [key, value ?? null])));
 		shell.cwd = resolvedCwd;
 		shell.icon ??= profile.icon ?? this._guessProfileIcon(executable, resolvedArgs) ?? this.getDefaultIcon();
 		shell.color ??= profile.color;

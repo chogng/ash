@@ -233,6 +233,7 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	const { IConfigurationService } = await import('../../../../../platform/configuration/common/configuration.js');
 	const { IAccessibleViewService } = await import('../../../../../platform/accessibility/browser/accessibleView.js');
 	const { ISpeechService } = await import('../../../speech/common/speechService.js');
+	const { IDictationService } = await import('../../../../../platform/dictation/common/dictationService.js');
 	const { SpeechService } = await import('../../../speech/browser/speechService.js');
 	const { IDictationOnboardingService, DictationOnboardingService } = await import('../../../chat/browser/speechToText/dictationOnboarding.js');
 	const { WorkbenchViewRegistry, IViewDescriptorService, ViewContainerLocation } = await import('../../../../common/views.js');
@@ -276,6 +277,7 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	services.registerInstance(INotificationService, resources.add(new NotificationService()));
 	services.registerInstance(IAccessibleViewService, { ...toDisposable(() => { }), show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp() { } });
 	services.registerInstance(ISpeechService, resources.add(new SpeechService(undefined)));
+	services.registerInstance(IDictationService, undefined);
 	services.registerInstance(IDictationOnboardingService, resources.add(services.createInstance(DictationOnboardingService)));
 	services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, source) => source });
 	const unhosted = resources.add(services.createInstance(TerminalViewPane, browserEnvironment.window.document.body, { id: 'test.terminalGeometry', title: 'Terminal' }));

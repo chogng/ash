@@ -1,17 +1,24 @@
 import { TerminalProcessExtHostProxy } from '../../contrib/terminal/browser/terminalProcessExtHostProxy.js';
 import { IEnvironmentVariableService } from '../../contrib/terminal/common/environmentVariable.js';
-import { deserializeEnvironmentVariableCollection } from '../../contrib/terminal/common/environmentVariableService.js';
+import { deserializeEnvironmentDescriptionMap, deserializeEnvironmentVariableCollection } from '../../../platform/terminal/common/environmentVariableShared.js';
 import { CancellationError } from '../../../base/common/errors.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { ThemeIcon } from '../../../base/common/themables.js';
 import { localize } from '../../../nls.js';
 import { ITerminalProcessService, type IShellLaunchConfig, type TerminalArguments } from '../../../platform/terminal/common/terminal.js';
+import { getRemoteAuthority } from '../../../platform/remote/common/remoteHosts.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { IExtensionService } from '../../services/extensions/common/extensionService.js';
 import { ITerminalService, type ITerminalInstance } from '../../services/terminal/browser/terminal.js';
 import { ITerminalProfileResolverService, ITerminalProfileService } from '../../services/terminal/common/terminal.js';
 import type { ExtensionHostProviderInvoker } from './extensionHostLanguageBridge.js';
 import type { JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
+import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
+import { ILogService } from '../../../platform/log/common/log.js';
+import { RequestStore } from '../../../platform/terminal/common/requestStore.js';
+import { addDisposableListener } from '../../../base/browser/dom.js';
+
+type ProfileReply = { value: JsonValue } | { error: unknown };
 
 export interface ExtensionTerminalProfileRegistration {
 	readonly runtimeId: string;
@@ -43,6 +50,8 @@ export class MainThreadTerminalService extends Disposable {
 		@ITerminalProcessService private readonly processes: ITerminalProcessService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IEnvironmentVariableService private readonly environmentVariables: IEnvironmentVariableService,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
+		@ILogService private readonly log: ILogService,
 	) {
 		super();
 		this._register(workspace.onDidChangeWorkspace(() => this.workspaceGeneration++));
@@ -68,9 +77,10 @@ export class MainThreadTerminalService extends Disposable {
    const controller = new AbortController();
    lifetime.add(toDisposable(() => controller.abort()));
    lifetime.add(this.environmentVariables.registerCollectionProvider(extension.id, async () => {
-    const snapshot = record(await descriptor.invoke('getTerminalEnvironment', {}, controller.signal), ['persistent', 'map']);
+    const snapshot = record(await descriptor.invoke('getTerminalEnvironment', {}, controller.signal));
+    if (Object.keys(snapshot).some(key => !['persistent', 'map', 'descriptionMap'].includes(key))) throw invalid();
     if (typeof snapshot.persistent !== 'boolean') throw invalid();
-    return { persistent: snapshot.persistent, map: deserializeEnvironmentVariableCollection(snapshot.map) };
+    return { persistent: snapshot.persistent, map: deserializeEnvironmentVariableCollection(snapshot.map), descriptionMap: snapshot.descriptionMap === undefined ? undefined : deserializeEnvironmentDescriptionMap(snapshot.descriptionMap) };
    }));
    this.environmentRegistrations.set(key, lifetime);
    this.environmentDescriptors.set(key, descriptor);
@@ -97,20 +107,53 @@ export class MainThreadTerminalService extends Disposable {
 			const lifetime = new DisposableStore();
 			const controller = new AbortController();
 			lifetime.add(toDisposable(() => controller.abort()));
+			const requests = lifetime.add(this.instantiation.createInstance(RequestStore<ProfileReply, { signal: AbortSignal }>, undefined));
+			lifetime.add(requests.onCreateRequest(({ requestId, signal }) => {
+				if (signal.aborted) { requests.acceptReply(requestId, { error: new CancellationError() }); return; }
+				const cancellation = addDisposableListener(signal, 'abort', () => {
+					cancellation.dispose();
+					requests.acceptReply(requestId, { error: new CancellationError() });
+				}, { once: true });
+				void Promise.resolve().then(() => {
+					signal.throwIfAborted();
+					return descriptor.invoke('createTerminalProfile', {}, signal);
+				}).then(async value => {
+					if (signal.aborted) {
+						// A provider can ignore cancellation. Its late opaque PTY is still
+						// an owned resource and must be closed before discarding the reply.
+						const result = record(value, ['options', 'pty']);
+						if (result.pty !== undefined) await descriptor.invoke('closeTaskTerminal', { ptyId: text(record(result.pty).ptyId, 256) }, AbortSignal.timeout(5_000));
+						return;
+					}
+					cancellation.dispose();
+					requests.acceptReply(requestId, { value });
+				}, error => {
+					cancellation.dispose();
+					if (!signal.aborted) requests.acceptReply(requestId, { error });
+				}).catch(error => this.log.error('terminal', localize('terminal.profile.lateReleaseFailed', 'Failed to release a late extension terminal profile.'), error));
+			}));
 			try {
 
 				lifetime.add(this.profiles.registerInternalContributedProfile({ extensionIdentifier: extension.id, id: descriptor.profileId, title: descriptor.title }));
 				lifetime.add(this.profiles.registerTerminalProfileProvider(extension.id, descriptor.profileId, {
 					createContributedTerminalProfile: async presentation => {
 						const generation = this.workspaceGeneration;
-						const result = record(await descriptor.invoke('createTerminalProfile', {}, controller.signal), ['options', 'pty']);
-						if (lifetime.isDisposed) throw new CancellationError();
-						if (generation !== this.workspaceGeneration) {
-							if (result.pty !== undefined) await descriptor.invoke('closeTaskTerminal', { ptyId: text(record(result.pty).ptyId, 256) }, controller.signal);
+						const request = new AbortController();
+						let reply: ProfileReply;
+						try {
+							reply = await requests.createRequest({ signal: AbortSignal.any([controller.signal, request.signal]) });
+						} catch (error) {
+							request.abort();
+							throw error;
+						}
+						if ('error' in reply) throw reply.error;
+						const result = record(reply.value, ['options', 'pty']);
+						if (lifetime.isDisposed || generation !== this.workspaceGeneration) {
+							if (result.pty !== undefined) await descriptor.invoke('closeTaskTerminal', { ptyId: text(record(result.pty).ptyId, 256) }, AbortSignal.timeout(5_000));
 							throw new CancellationError();
 						}
 						if (result.options === null) return;
-						const options = record(result.options, ['name', 'shellPath', 'shellArgs', 'cwd', 'env', 'icon', 'color']);
+						const options = record(result.options, ['name', 'shellPath', 'shellArgs', 'cwd', 'env', 'strictEnv', 'icon', 'color']);
 						const name = text(options.name ?? descriptor.title, 256);
 						const icon = presentation.icon ?? (options.icon === undefined ? undefined : ThemeIcon.fromId(text(options.icon, 256)));
 						const color = presentation.color ?? (options.color === undefined ? undefined : text(options.color, 256));
@@ -141,12 +184,22 @@ export class MainThreadTerminalService extends Disposable {
 						} else {
 							const os = this.processes.operatingSystem;
 							if (os === undefined) throw new CancellationError();
-							const shell: IShellLaunchConfig = { name, executable: options.shellPath === undefined ? undefined : text(options.shellPath, 32768), args: options.shellArgs === undefined ? undefined : argumentsList(options.shellArgs), cwd: options.cwd === undefined ? undefined : text(options.cwd, 32768), env: environment(options.env), icon, color };
-							await this.resolver.resolveShellLaunchConfig(shell, { os, remoteAuthority: this.workspace.getWorkspace().folders[0]?.uri.authority || undefined });
+							const shell: IShellLaunchConfig = {
+								name, icon, color,
+								executable: options.shellPath === undefined ? undefined : text(options.shellPath, 32768),
+								args: options.shellArgs === undefined ? undefined : argumentsList(options.shellArgs),
+								cwd: options.cwd === undefined ? undefined : text(options.cwd, 32768),
+								env: environment(options.env),
+								strictEnv: options.strictEnv === undefined ? undefined : boolean(options.strictEnv),
+							};
+							const resource = this.workspace.getWorkspace().folders[0]?.uri;
+							await this.resolver.resolveShellLaunchConfig(shell, { os, remoteAuthority: resource && getRemoteAuthority(resource) });
 							if (lifetime.isDisposed) throw new CancellationError();
 							instance = await this.terminals.createTerminal({
 								dimensions: { cols: 80, rows: 24 }, title: name,
-								profile: { type: 'custom', name, path: typeof shell.executable === 'string' ? [shell.executable] : shell.executable!, args: shell.args ?? [] }, env: shell.env, cwd: shell.cwd, icon: shell.icon, color: shell.color,
+								profile: { type: 'custom', name, path: typeof shell.executable === 'string' ? [shell.executable] : shell.executable!, args: shell.args ?? [] },
+								env: shell.env, ...(shell.strictEnv === undefined ? {} : { strictEnv: shell.strictEnv }),
+								cwd: shell.cwd, icon: shell.icon, color: shell.color,
 							});
 						}
 						if (lifetime.isDisposed || generation !== this.workspaceGeneration) {
@@ -207,4 +260,9 @@ function environment(value: unknown): Readonly<Record<string, string | null>> | 
 		if (!key || key.length > 256 || /[=\u0000]/.test(key) || value !== null && (typeof value !== 'string' || value.length > 32768 || value.includes('\0'))) throw invalid();
 		return [key, value as string | null];
 	})));
+}
+
+function boolean(value: unknown): boolean {
+	if (typeof value !== 'boolean') throw invalid();
+	return value;
 }

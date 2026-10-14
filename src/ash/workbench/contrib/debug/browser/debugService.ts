@@ -30,8 +30,11 @@ import { ITaskService, waitForTask } from "../../../services/tasks/common/taskSe
 import { ITerminalService } from "../../../services/terminal/browser/terminal.js";
 import { ITerminalProfileResolverService, type IShellLaunchConfigResolveOptions } from '../../../services/terminal/common/terminal.js';
 import { ITerminalProcessService, type IShellLaunchConfig } from '../../../../platform/terminal/common/terminal.js';
-import { mergeEnvironments } from '../../../../platform/terminal/common/terminalEnvironment.js';
+import { escapeNonWindowsPath } from '../../../../platform/terminal/common/terminalEnvironment.js';
+import { GeneralShellType } from '../../../../platform/terminal/common/terminal.js';
+import { mergeEnvironments } from '../../terminal/common/terminalEnvironment.js';
 import { OperatingSystem } from '../../../../base/common/platform.js';
+import { getRemoteAuthority } from '../../../../platform/remote/common/remoteHosts.js';
 import { DebugAdapterSession } from "../../../services/debug/browser/debugAdapterSession.js";
 import { DebugAdapterFactoriesRegistry, IDebugAdapterFactorySource, type DebugAdapterFactorySource } from "../../../services/debug/common/debugAdapterFactory.js";
 import { type IResolvedDebugConfiguration, type IDebugStackFrame, type DebugBreakpoint, type IBaseBreakpoint, type IDebugBreakpoint, type IDebugBreakpointUpdate, type IDebugCompound, type IDebugConfiguration, type IDataBreakpoint, type IDataBreakpointOptions, type IFunctionBreakpoint, type IFunctionBreakpointOptions, type IInstructionBreakpoint, type IInstructionBreakpointOptions, IDebugService, DebugConsoleMode, type IDebugSessionOptions, type IDebugSession } from "../../../services/debug/common/debugService.js";
@@ -531,7 +534,7 @@ export class DebugService extends Disposable implements IDebugService {
 				if (os === undefined) throw new Error(localize('terminal.profile.platformUnavailable', 'The terminal execution host is not ready.'));
 				return runDebuggeeInTerminal(
 					this.terminals, this.terminalProfiles,
-					{ os, remoteAuthority: root?.authority || undefined, allowAutomationShell: true },
+					{ os, remoteAuthority: root && getRemoteAuthority(root), allowAutomationShell: true },
 					value, assertCurrent, current.dirId ?? undefined,
 				);
 			},
@@ -1271,12 +1274,12 @@ function posixPrefix(request: RunInTerminalArguments): string {
 }
 
 function quote(value: string, shell: "powershell" | "cmd" | "posix"): string {
-	if (shell === "powershell") return `'${value.replaceAll("'", "''")}'`;
+	if (shell === "powershell") return escapeNonWindowsPath(value, GeneralShellType.PowerShell);
 	if (shell === "cmd") {
 		if (/[\r\n]/.test(value)) throw new TypeError("cmd debug terminal arguments cannot contain line breaks");
 		return `"${value.replaceAll("%", "%%").replaceAll("\"", "\\\"")}"`;
 	}
-	return `'${value.replaceAll("'", `'"'"'`)}'`;
+	return escapeNonWindowsPath(value);
 }
 
 function shellKind(executable: string): "powershell" | "cmd" | "posix" {

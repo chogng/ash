@@ -7,6 +7,8 @@ import {
 import { TerminalCommandId } from '../common/terminal.js';
 import { ITerminalProfileResolverService, ITerminalProfileService } from '../../../services/terminal/common/terminal.js';
 import { ITerminalProcessService, TerminalLocation, type IShellLaunchConfig } from '../../../../platform/terminal/common/terminal.js';
+import { TerminalCapability } from '../../../../platform/terminal/common/capabilities/capabilities.js';
+import { getRemoteAuthority } from '../../../../platform/remote/common/remoteHosts.js';
 import { terminalProfileIcon } from "./terminalIcon.js";
 import { type IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
 import { ICommandService } from "../../../../platform/commands/common/commands.js";
@@ -200,8 +202,18 @@ export class TerminalViewPane extends ViewPane {
 			if (os === undefined) throw new Error(localize('terminal.profile.platformUnavailable', 'The terminal execution host is not ready.'));
 			const shell: IShellLaunchConfig = parent?.shellLaunchConfig?.executable ? { ...parent.shellLaunchConfig }
 				: profile ? { name: profile.profileName, executable: profile.path, args: profile.args, env: profile.env, icon: profile.icon, color: profile.color } : {};
-			if (parent) shell.cwd = parent.cwd ?? parent.initialCwd;
-			await this.profileResolver.resolveShellLaunchConfig(shell, { os, remoteAuthority: this.workspaceContext.getWorkspace().folders[0]?.uri.authority || undefined });
+			if (parent) {
+				shell.cwd = parent.cwd;
+				if (!shell.cwd) {
+					const query = parent.capabilities?.get(TerminalCapability.NaiveCwdDetection);
+					// Some execution hosts cannot inspect a process directory. Splitting
+					// still has the backend-confirmed launch directory as a fallback.
+					try { shell.cwd = await query?.getCwd(); } catch { shell.cwd = undefined; }
+				}
+				shell.cwd ??= parent.initialCwd;
+			}
+			const resource = this.workspaceContext.getWorkspace().folders[0]?.uri;
+			await this.profileResolver.resolveShellLaunchConfig(shell, { os, remoteAuthority: resource && getRemoteAuthority(resource) });
 			if (this.isDisposed) return;
 			if (parent && (!this.terminalService.instances.includes(parent) || parent.state !== 'running')) return;
 			const created = await this.terminalService.createTerminal({
@@ -209,7 +221,7 @@ export class TerminalViewPane extends ViewPane {
 				dimensions: this.activeItem()?.widget.dimensions() ?? DEFAULT_DIMENSIONS,
 				title: profile?.overrideName ? profile.profileName : undefined,
 				profile: profile?.isAutoDetected ? { type: 'profile', profileId: profile.profileId } : { type: 'custom', name: profile?.profileName ?? shell.name ?? localize('terminal.profile.shell', 'Shell'), path: typeof shell.executable === 'string' ? [shell.executable] : shell.executable!, args: shell.args ?? [] },
-				env: shell.env, cwd: shell.cwd, icon: shell.icon, color: shell.color,
+				env: shell.env, ...(shell.strictEnv === undefined ? {} : { strictEnv: shell.strictEnv }), cwd: shell.cwd, icon: shell.icon, color: shell.color,
 			});
 			if (parent) {
 				if (this.isDisposed || !this.terminalService.instances.includes(parent) || parent.state !== 'running') {

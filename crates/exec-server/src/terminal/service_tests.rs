@@ -11,6 +11,7 @@ fn revoked_directory_terminates_detached_sessions_and_rejects_new_work() {
     let service =
         TerminalService::new(grant.authorize(Permission::ExecuteCommands).unwrap()).unwrap();
     let request = TerminalCreateRequest {
+        strict_env: None,
         env: None,
         cwd: None,
         execution: None,
@@ -233,6 +234,16 @@ fn terminal_reports_shell_pid_and_real_cwd_after_cd() {
     assert!(
         String::from_utf8_lossy(&output).contains(&format!("ROOT_PID:{}\r\n", created.ready.pid))
     );
+    wait_shell_cwd(
+        &service,
+        &created.terminal_id,
+        root.path()
+            .join("changed")
+            .canonicalize()
+            .unwrap()
+            .to_str()
+            .unwrap(),
+    );
     assert_eq!(
         service.process_info(1, &created.terminal_id).unwrap().cwd,
         Some(
@@ -350,6 +361,7 @@ fn terminal_service_for(path: &std::path::Path) -> TerminalService {
 
 fn terminal_request(lifecycle: TerminalLifecycle) -> TerminalCreateRequest {
     TerminalCreateRequest {
+        strict_env: None,
         env: None,
         cwd: None,
         execution: None,
@@ -411,8 +423,8 @@ fn interactive_shell_commands_report_real_boundaries_and_keep_user_configuration
                 "export ZDOTDIR=\"$HOME/configured\"\n",
             )
             .unwrap();
-            std::fs::write(home.path().join("configured/.zshrc"), "PS1='ASH_PROMPT> '; PS2='ASH_CONTINUE> '; export ASH_RC_LOADED=yes\nprecmd() { return 0; }\nuser_precmd() { printf '%s\\n' \"$?\" >> \"$HOME/prompt-status\"; }\nprecmd_functions=(user_precmd)\nset -u\n").unwrap();
-            std::fs::write(home.path().join(".bashrc"), "PS1='ASH_PROMPT> '; PS2='ASH_CONTINUE> '; export ASH_RC_LOADED=yes\nPROMPT_COMMAND='printf \"%s\\n\" \"$?\" >> \"$HOME/prompt-status\"'\nset -u\n").unwrap();
+            std::fs::write(home.path().join("configured/.zshrc"), "PS1='ASH_PROMPT> '; PS2='ASH_CONTINUE> '; export ASH_RC_LOADED=yes\nexport STARSHIP_SESSION_KEY=prompt-framework-test\nprecmd() { return 0; }\nuser_precmd() { printf '%s\\n' \"$?\" >> \"$HOME/prompt-status\"; }\nprecmd_functions=(user_precmd)\nset -u\n").unwrap();
+            std::fs::write(home.path().join(".bashrc"), "PS1='ASH_PROMPT> '; PS2='ASH_CONTINUE> '; export ASH_RC_LOADED=yes\nexport STARSHIP_SESSION_KEY=prompt-framework-test\nPROMPT_COMMAND='printf \"%s\\n\" \"$?\" >> \"$HOME/prompt-status\"'\nset -u\n").unwrap();
             std::fs::write(
                 home.path().join(".bash_profile"),
                 "export ASH_LOGIN_LOADED=yes\nsource \"$HOME/.bashrc\"\n",
@@ -485,6 +497,7 @@ fn interactive_shell_commands_report_real_boundaries_and_keep_user_configuration
         .create(
             1,
             TerminalCreateRequest {
+                strict_env: None,
                 env: None,
                 cwd: None,
                 execution: None,
@@ -518,6 +531,15 @@ fn interactive_shell_commands_report_real_boundaries_and_keep_user_configuration
         .unwrap();
     let id = &created.terminal_id;
     read_until(&service, id, "ASH_PROMPT> ");
+    let expected_shell = if profile_id == "bash" {
+        TerminalShellType::Bash
+    } else {
+        TerminalShellType::Zsh
+    };
+    assert!(read_shell_boundaries(&service, id).iter().any(|event| matches!(
+        event,
+        TerminalShellIntegrationEvent::ProcessReady { shell_type: Some(shell), .. } if *shell == expected_shell
+    )));
     assert!(shell_status(&service, id).command_events.is_empty());
 
     if std::env::var_os("ASH_SHELL_STATUS_TEST_DEBUG").is_some() {
@@ -600,7 +622,33 @@ fn interactive_shell_commands_report_real_boundaries_and_keep_user_configuration
             .unwrap()
             .contains("CONFIG:")
     );
+    let boundaries = read_shell_boundaries(&service, id);
+    assert!(
+        boundaries
+            .iter()
+            .any(|event| matches!(event, TerminalShellIntegrationEvent::PromptStart))
+    );
+    assert!(
+        boundaries
+            .iter()
+            .any(|event| matches!(event, TerminalShellIntegrationEvent::CommandStart))
+    );
+    assert!(boundaries.iter().any(|event| matches!(event, TerminalShellIntegrationEvent::CommandExecuted { timestamp_millis, is_trusted: true, .. } if *timestamp_millis > 0)));
+    assert!(boundaries.iter().any(|event| matches!(
+        event,
+        TerminalShellIntegrationEvent::CommandFinished {
+            exit_code: Some(0),
+            duration_millis: Some(_),
+            ..
+        }
+    )));
+    assert!(boundaries.iter().any(|event| matches!(event, TerminalShellIntegrationEvent::EnvironmentEntry { key, value: Some(value), is_trusted: true } if key == "ASH_RC_LOADED" && value == "yes")));
+    assert!(boundaries.iter().any(|event| matches!(
+        event,
+        TerminalShellIntegrationEvent::EnvironmentEnd { is_trusted: true }
+    )));
     let integration = success.shell_integration.as_ref().unwrap();
+    assert_eq!(integration.prompt_type.as_deref(), Some("starship"));
     assert!(
         integration.command_detection
             && integration.cwd_detection
@@ -623,11 +671,19 @@ fn interactive_shell_commands_report_real_boundaries_and_keep_user_configuration
     assert_eq!(failure.command_events[3].exit_code, Some(1));
     assert_eq!(failure.command_events[3].command.as_deref(), Some("false"));
     assert_eq!(failure.command_events[3].is_trusted, Some(true));
-    let statuses = std::fs::read_to_string(
-        std::path::Path::new(&std::env::var("HOME").unwrap()).join("prompt-status"),
-    )
-    .unwrap();
-    assert_eq!(statuses.lines().last(), Some("1"));
+    let status_path = std::path::Path::new(&std::env::var("HOME").unwrap()).join("prompt-status");
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let statuses = std::fs::read_to_string(&status_path).unwrap();
+        if statuses.lines().last() == Some("1") {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "user prompt hook did not receive the failed command's status"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
 
     write_shell(
         &service,
@@ -681,8 +737,11 @@ fn interactive_shell_commands_report_real_boundaries_and_keep_user_configuration
         current.cwd.as_ref().map(|cwd| cwd.value.as_str())
     );
 
-    write_shell(&service, id, "sleep 60\n");
+    write_shell(&service, id, "printf 'ASH_SLEEP_READY\\n'; sleep 60\n");
     wait_shell_events(&service, id, 9);
+    // The preexec boundary precedes job startup. Wait until the foreground job
+    // has produced output before sending its interrupt.
+    read_until(&service, id, "ASH_SLEEP_READY\r\n");
     write_shell(&service, id, "\u{3}");
     wait_shell_events(&service, id, 10);
     let interrupted = shell_status(&service, id);
@@ -773,6 +832,39 @@ fn wait_shell_cwd(
         );
         std::thread::sleep(Duration::from_millis(10));
     }
+}
+
+#[cfg(unix)]
+fn read_shell_boundaries(
+    service: &TerminalService,
+    terminal_id: &str,
+) -> Vec<TerminalShellIntegrationEvent> {
+    let mut sequence = 0;
+    let mut boundaries = Vec::new();
+    loop {
+        let read = service
+            .read(
+                1,
+                TerminalReadRequest {
+                    terminal_id: terminal_id.into(),
+                    after_sequence: sequence,
+                    after_command_sequence: 0,
+                    max_chunks: 128,
+                },
+            )
+            .unwrap();
+        sequence = read.next_sequence;
+        let complete = read.chunks.len() < 128;
+        boundaries.extend(
+            read.chunks
+                .into_iter()
+                .filter_map(|chunk| chunk.shell_integration),
+        );
+        if complete {
+            break;
+        }
+    }
+    boundaries
 }
 
 #[cfg(unix)]
@@ -884,6 +976,7 @@ function global:prompt {
         .create(
             1,
             TerminalCreateRequest {
+                strict_env: None,
                 profile: TerminalProfileSelection::Custom {
                     name: "Configured PowerShell".into(),
                     path: vec![std::env::var("SHELL").unwrap()],
@@ -1345,6 +1438,127 @@ fn environment_overrides_apply_at_spawn_without_changing_the_host_snapshot() {
 
 #[cfg(unix)]
 #[test]
+fn shell_environment_metadata_runs_after_user_rc_without_evaluating_literal_values() {
+    let root = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    for file in [".bashrc", ".zshrc"] {
+        std::fs::write(home.path().join(file), "printf '%s:%s\\n' \"${STAGE-unset}\" \"${VSCODE_ENV_APPEND-unset}\" > \"$HOME/before-stage\"\nexport STAGE=rc\nPS1='MUTATION_READY> '\n").unwrap();
+    }
+    let service = terminal_service_for(root.path());
+    let literal = format!(
+        "quote ' 中文🙂 : \\x3a $HOME $(touch {}) __ASH_SHELL_NONCE__\n",
+        home.path().join("injected").display()
+    );
+    let encode = |value: &str| value.replace('\\', "\\\\").replace(':', "\\x3a");
+    let mut count = 0;
+    for profile in service
+        .profiles()
+        .iter()
+        .filter(|profile| matches!(profile.profile_id.as_str(), "bash" | "zsh"))
+    {
+        count += 1;
+        let mut request = terminal_request(TerminalLifecycle::ConnectionOwned);
+        request.profile = TerminalProfileSelection::Profile {
+            profile_id: profile.profile_id.clone(),
+        };
+        request.env = Some(HashMap::from([
+            (
+                "HOME".into(),
+                Some(home.path().to_string_lossy().into_owned()),
+            ),
+            (
+                "ZDOTDIR".into(),
+                Some(home.path().to_string_lossy().into_owned()),
+            ),
+            ("STAGE".into(), Some("process".into())),
+            (
+                "VSCODE_ENV_REPLACE".into(),
+                Some(format!(
+                    "LITERAL={}:EMPTY=:NODE_REPL_AUTH_TOKEN=forged:__ash_nonce=forged",
+                    encode(&literal)
+                )),
+            ),
+            (
+                "VSCODE_ENV_PREPEND".into(),
+                Some("STAGE=before\\x3a".into()),
+            ),
+            ("VSCODE_ENV_APPEND".into(), Some("STAGE=\\x3aafter".into())),
+        ]));
+        let created = service.create(1, request).unwrap();
+        read_until(&service, &created.terminal_id, "MUTATION_READY> ");
+        assert_eq!(
+            std::fs::read_to_string(home.path().join("before-stage")).unwrap(),
+            "process:unset\n"
+        );
+        let boundaries = read_shell_boundaries(&service, &created.terminal_id);
+        let entries: HashMap<_, _> = boundaries
+            .into_iter()
+            .filter_map(|event| match event {
+                TerminalShellIntegrationEvent::EnvironmentEntry {
+                    key,
+                    value,
+                    is_trusted: true,
+                } => Some((key, value)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            entries.get("STAGE").and_then(|value| value.as_deref()),
+            Some("before:rc:after")
+        );
+        assert_eq!(
+            entries.get("LITERAL").and_then(|value| value.as_deref()),
+            Some(literal.as_str())
+        );
+        assert_eq!(
+            entries.get("EMPTY").and_then(|value| value.as_deref()),
+            Some("")
+        );
+        assert!(!entries.contains_key("VSCODE_ENV_APPEND"));
+        assert!(!entries.contains_key("NODE_REPL_AUTH_TOKEN"));
+        assert!(!home.path().join("injected").exists());
+        service.close(1, &created.terminal_id).unwrap();
+
+        let mut strict = terminal_request(TerminalLifecycle::ConnectionOwned);
+        strict.strict_env = Some(true);
+        strict.profile = TerminalProfileSelection::Profile {
+            profile_id: profile.profile_id.clone(),
+        };
+        strict.env = Some(HashMap::from([
+            (
+                "HOME".into(),
+                Some(home.path().to_string_lossy().into_owned()),
+            ),
+            (
+                "ZDOTDIR".into(),
+                Some(home.path().to_string_lossy().into_owned()),
+            ),
+            ("STAGE".into(), Some("explicit".into())),
+            ("VSCODE_ENV_APPEND".into(), Some("not-metadata".into())),
+        ]));
+        let created = service.create(1, strict).unwrap();
+        read_until(&service, &created.terminal_id, "MUTATION_READY> ");
+        assert_eq!(
+            std::fs::read_to_string(home.path().join("before-stage")).unwrap(),
+            "explicit:not-metadata\n"
+        );
+        service.close(1, &created.terminal_id).unwrap();
+    }
+    assert!(count > 0);
+    let mut invalid = terminal_request(TerminalLifecycle::ConnectionOwned);
+    invalid.profile = TerminalProfileSelection::Profile {
+        profile_id: "bash".into(),
+    };
+    invalid.env = Some(HashMap::from([(
+        "VSCODE_ENV_APPEND".into(),
+        Some("BAD;NAME=value".into()),
+    )]));
+    assert_eq!(service.create(1, invalid), Err(TerminalError::InvalidInput));
+    assert_eq!(service.active_count(), 0);
+}
+
+#[cfg(unix)]
+#[test]
 fn custom_profile_resolution_and_creation_share_identity_argv_and_environment() {
     let root = tempfile::tempdir().unwrap();
     let service = terminal_service_for(root.path());
@@ -1365,6 +1579,7 @@ fn custom_profile_resolution_and_creation_share_identity_argv_and_environment() 
         .create(
             1,
             TerminalCreateRequest {
+                strict_env: None,
                 rows: 24,
                 cols: 80,
                 profile: selection,
@@ -1410,5 +1625,41 @@ fn task_process_execution_keeps_osc_output_without_creating_shell_command_state(
     let state = shell_status(&service, &created.terminal_id);
     assert!(state.command_events.is_empty());
     assert!(state.cwd.is_none());
+    service.close(1, &created.terminal_id).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn strict_terminal_spawn_uses_only_explicit_environment_and_keeps_host_defaults() {
+    let root = tempfile::tempdir().unwrap();
+    let service = terminal_service_for(root.path());
+    let mut request = terminal_request(TerminalLifecycle::ConnectionOwned);
+    request.strict_env = Some(true);
+    request.env = Some(HashMap::from([
+        ("ONLY".into(), Some("literal ${env:HOME} 中文".into())),
+        ("REMOVED".into(), None),
+    ]));
+    request.execution = Some(TerminalExecution::Process {
+        program: "/usr/bin/env".into(),
+        args: TerminalArguments::Argv(vec![]),
+    });
+    let created = service.create(1, request).unwrap();
+    let output = read_until(
+        &service,
+        &created.terminal_id,
+        "ONLY=literal ${env:HOME} 中文",
+    );
+    assert_eq!(
+        String::from_utf8(output).unwrap().trim(),
+        "ONLY=literal ${env:HOME} 中文"
+    );
+    assert_eq!(
+        service
+            .environment(&["COLORTERM".into()])
+            .unwrap()
+            .get("COLORTERM")
+            .map(String::as_str),
+        Some("truecolor")
+    );
     service.close(1, &created.terminal_id).unwrap();
 }

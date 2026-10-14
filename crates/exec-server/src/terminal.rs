@@ -9,6 +9,7 @@ use crate::terminal::command_status::CommandStatusMode;
 use crate::terminal::command_status::ParsedTerminalOutput;
 use crate::terminal::command_status::TerminalCommandStatusTracker;
 use crate::terminal::profiles::TerminalProfileCatalog;
+use crate::terminal::shell_integration::ShellEnvironmentMode;
 use crate::terminal::shell_integration::ShellIntegration;
 use ash_file_access::Authorization;
 use ash_file_access::Permission;
@@ -41,6 +42,8 @@ pub use exec_server_protocol::terminal::TerminalReconnectLease;
 pub use exec_server_protocol::terminal::TerminalResizeRequest;
 pub use exec_server_protocol::terminal::TerminalResolvedProfile;
 pub use exec_server_protocol::terminal::TerminalShellIntegration;
+pub use exec_server_protocol::terminal::TerminalShellIntegrationEvent;
+pub use exec_server_protocol::terminal::TerminalShellType;
 pub use exec_server_protocol::terminal::TerminalSignal;
 pub use exec_server_protocol::terminal::TerminalWriteBinaryRequest;
 pub use exec_server_protocol::terminal::TerminalWriteRequest;
@@ -208,7 +211,11 @@ impl TerminalService {
             }
             None => authorized_root.to_path_buf(),
         };
-        let mut environment = self.profiles.environment().clone();
+        let mut environment = if params.strict_env.unwrap_or(false) {
+            HashMap::new()
+        } else {
+            self.profiles.environment().clone()
+        };
         if let Some(overrides) = params.env {
             if overrides.len() > 128 {
                 return Err(TerminalError::InvalidInput);
@@ -246,8 +253,22 @@ impl TerminalService {
         // Task process/shell executions preserve argv and do not source those wrappers.
         let integration = if params.execution.is_none() {
             Some(
-                ShellIntegration::prepare(&profile, &environment)
-                    .map_err(|_| TerminalError::OperationFailed)?,
+                ShellIntegration::prepare(
+                    &profile,
+                    &environment,
+                    if params.strict_env.unwrap_or(false) {
+                        ShellEnvironmentMode::Literal
+                    } else {
+                        ShellEnvironmentMode::ApplyCollections
+                    },
+                )
+                .map_err(|error| {
+                    if error.kind() == std::io::ErrorKind::InvalidInput {
+                        TerminalError::InvalidInput
+                    } else {
+                        TerminalError::OperationFailed
+                    }
+                })?,
             )
         } else {
             None
@@ -328,6 +349,7 @@ impl TerminalService {
             integration
                 .as_ref()
                 .and_then(|integration| integration.nonce.clone()),
+            profile.shell_kind(),
         )));
         let process = spawn_output_drainers(&self.runtime, spawned, state.clone(), integration);
         sessions.insert(
@@ -686,8 +708,13 @@ struct TerminalState {
 }
 
 impl TerminalState {
-    fn new(command_status_mode: CommandStatusMode, nonce: Option<String>) -> Self {
-        Self {
+    fn new(
+        command_status_mode: CommandStatusMode,
+        nonce: Option<String>,
+        shell: profiles::ShellKind,
+    ) -> Self {
+        let integrated = matches!(command_status_mode, CommandStatusMode::ShellIntegration);
+        let mut state = Self {
             chunks: VecDeque::new(),
             next_sequence: 0,
             output_bytes: 0,
@@ -695,19 +722,40 @@ impl TerminalState {
             exited: false,
             output_closed: false,
             exit_code: None,
+        };
+        if integrated {
+            push_shell_boundary(
+                &mut state,
+                TerminalShellIntegrationEvent::ProcessReady {
+                    is_windows_pty: cfg!(windows),
+                    shell_type: match shell {
+                        profiles::ShellKind::Bash => Some(TerminalShellType::Bash),
+                        profiles::ShellKind::Zsh => Some(TerminalShellType::Zsh),
+                        profiles::ShellKind::PowerShell => Some(TerminalShellType::PowerShell),
+                        profiles::ShellKind::Other => None,
+                    },
+                },
+            );
         }
+        state
     }
 }
 
 impl Default for TerminalState {
     fn default() -> Self {
-        Self::new(CommandStatusMode::Disabled, None)
+        Self::new(
+            CommandStatusMode::Disabled,
+            None,
+            profiles::ShellKind::Other,
+        )
     }
 }
 
 struct BufferedOutput {
     sequence: u64,
     bytes: Vec<u8>,
+    shell_integration: Option<TerminalShellIntegrationEvent>,
+    retained_bytes: usize,
 }
 
 fn spawn_output_drainers(
@@ -732,31 +780,106 @@ fn spawn_output_drainers(
                         ParsedTerminalOutput::Bytes(bytes) => push_output(&mut state, bytes),
                         ParsedTerminalOutput::CommandStarted => {
                             let after_output_sequence = state.next_sequence;
+                            let already_active = state.command_status.executed_boundary().is_some();
                             state.command_status.start_active(after_output_sequence);
+                            if !already_active
+                                && let Some(boundary) = state.command_status.executed_boundary()
+                            {
+                                push_shell_boundary(&mut state, boundary);
+                            }
                         }
                         ParsedTerminalOutput::Cwd(value, trusted) => {
+                            push_shell_boundary(
+                                &mut state,
+                                TerminalShellIntegrationEvent::Cwd {
+                                    value: value.clone(),
+                                    is_trusted: trusted,
+                                },
+                            );
                             let sequence = state.next_sequence;
                             state.command_status.record_cwd(value, trusted, sequence);
                         }
                         ParsedTerminalOutput::CommandLine(command, trusted) => {
+                            if !state.command_status.is_command_storage_disabled() {
+                                push_shell_boundary(
+                                    &mut state,
+                                    TerminalShellIntegrationEvent::CommandLine {
+                                        value: command.clone(),
+                                        is_trusted: trusted,
+                                    },
+                                );
+                            }
                             let sequence = state.next_sequence;
                             state
                                 .command_status
                                 .record_command_line(command, trusted, sequence);
                         }
+                        ParsedTerminalOutput::ShellIntegration(boundary) => {
+                            push_shell_boundary(&mut state, boundary)
+                        }
                         ParsedTerminalOutput::PromptStart => {
+                            push_shell_boundary(
+                                &mut state,
+                                TerminalShellIntegrationEvent::PromptStart,
+                            );
                             let sequence = state.next_sequence;
                             state.command_status.record_prompt(sequence);
                         }
                         ParsedTerminalOutput::RichCommandDetection(rich) => {
+                            push_shell_boundary(
+                                &mut state,
+                                TerminalShellIntegrationEvent::HasRichCommandDetection {
+                                    value: rich,
+                                },
+                            );
                             let sequence = state.next_sequence;
                             state.command_status.record_rich_detection(rich, sequence);
                         }
                         ParsedTerminalOutput::CommandStorageDisabled => {
+                            push_shell_boundary(
+                                &mut state,
+                                TerminalShellIntegrationEvent::CommandStorageDisabled,
+                            );
+                            for chunk in &mut state.chunks {
+                                match chunk.shell_integration.as_mut() {
+                                    Some(TerminalShellIntegrationEvent::CommandLine {
+                                        value,
+                                        is_trusted,
+                                    }) => {
+                                        value.clear();
+                                        *is_trusted = false;
+                                    }
+                                    Some(TerminalShellIntegrationEvent::CommandExecuted {
+                                        command,
+                                        is_trusted,
+                                        command_storage_disabled,
+                                        ..
+                                    }) => {
+                                        *command = None;
+                                        *is_trusted = false;
+                                        *command_storage_disabled = true;
+                                    }
+                                    _ => {}
+                                }
+                            }
                             let sequence = state.next_sequence;
                             state.command_status.disable_command_storage(sequence);
                         }
+                        ParsedTerminalOutput::PromptType(value) => {
+                            push_shell_boundary(
+                                &mut state,
+                                TerminalShellIntegrationEvent::PromptType {
+                                    value: value.clone(),
+                                },
+                            );
+                            let sequence = state.next_sequence;
+                            state.command_status.record_prompt_type(value, sequence);
+                        }
                         ParsedTerminalOutput::CommandFinished(exit_code) => {
+                            if state.command_status.executed_boundary().is_some() {
+                                let boundary = state.command_status.finished_boundary(exit_code);
+                                push_shell_boundary(&mut state, boundary);
+                            }
                             let after_output_sequence = state.next_sequence;
                             state
                                 .command_status
@@ -772,8 +895,12 @@ fn spawn_output_drainers(
             state.output_closed = true;
             state.exited = state.exit_code.is_some();
             if state.exited {
-                let after_output_sequence = state.next_sequence;
                 let exit_code = state.exit_code;
+                if state.command_status.executed_boundary().is_some() {
+                    let boundary = state.command_status.finished_boundary(exit_code);
+                    push_shell_boundary(&mut state, boundary);
+                }
+                let after_output_sequence = state.next_sequence;
                 state
                     .command_status
                     .finish_active(exit_code, after_output_sequence);
@@ -791,6 +918,10 @@ fn spawn_output_drainers(
             state.exit_code = Some(exit_code);
             state.exited = state.output_closed;
             if state.exited {
+                if state.command_status.executed_boundary().is_some() {
+                    let boundary = state.command_status.finished_boundary(Some(exit_code));
+                    push_shell_boundary(&mut state, boundary);
+                }
                 let after_output_sequence = state.next_sequence;
                 state
                     .command_status
@@ -809,13 +940,74 @@ fn push_output(state: &mut TerminalState, bytes: Vec<u8>) {
     state.output_bytes = state.output_bytes.saturating_add(bytes.len());
     state.chunks.push_back(BufferedOutput {
         sequence: state.next_sequence,
+        retained_bytes: bytes.len(),
         bytes,
+        shell_integration: None,
     });
-    while state.output_bytes > MAX_OUTPUT_BYTES {
+    trim_output(state);
+}
+
+fn push_shell_boundary(state: &mut TerminalState, boundary: TerminalShellIntegrationEvent) {
+    state.next_sequence = state.next_sequence.saturating_add(1);
+    let retained_bytes = shell_boundary_bytes(&boundary);
+    state.output_bytes = state.output_bytes.saturating_add(retained_bytes);
+    state.chunks.push_back(BufferedOutput {
+        sequence: state.next_sequence,
+        bytes: Vec::new(),
+        shell_integration: Some(boundary),
+        retained_bytes,
+    });
+    trim_output(state);
+}
+
+fn shell_boundary_bytes(event: &TerminalShellIntegrationEvent) -> usize {
+    use TerminalShellIntegrationEvent as Event;
+    std::mem::size_of::<Event>()
+        + match event {
+            Event::CommandExecuted {
+                command_id,
+                command,
+                cwd,
+                ..
+            } => {
+                command_id.capacity()
+                    + command.as_ref().map_or(0, String::capacity)
+                    + cwd.as_ref().map_or(0, String::capacity)
+            }
+            Event::CommandLine { value, .. }
+            | Event::Cwd { value, .. }
+            | Event::PromptType { value } => value.capacity(),
+            Event::Environment { values, .. } => values.as_ref().map_or(0, |values| {
+                values
+                    .iter()
+                    .map(|(key, value)| key.capacity() + value.as_ref().map_or(0, String::capacity))
+                    .sum()
+            }),
+            Event::EnvironmentEntry { key, value, .. }
+            | Event::EnvironmentDelete { key, value, .. } => {
+                key.capacity() + value.as_ref().map_or(0, String::capacity)
+            }
+            Event::EnvironmentStart { .. } | Event::EnvironmentEnd { .. } => 0,
+            Event::ProcessReady { .. }
+            | Event::CommandFinished { .. }
+            | Event::PromptStart
+            | Event::CommandStart
+            | Event::ContinuationStart
+            | Event::ContinuationEnd
+            | Event::RightPromptStart
+            | Event::RightPromptEnd
+            | Event::HasRichCommandDetection { .. }
+            | Event::CommandStorageDisabled => 0,
+        }
+}
+
+fn trim_output(state: &mut TerminalState) {
+    // Metadata-only children must be bounded even when they produce no display bytes.
+    while state.output_bytes > MAX_OUTPUT_BYTES || state.chunks.len() > 16_384 {
         let Some(removed) = state.chunks.pop_front() else {
             break;
         };
-        state.output_bytes = state.output_bytes.saturating_sub(removed.bytes.len());
+        state.output_bytes = state.output_bytes.saturating_sub(removed.retained_bytes);
     }
 }
 
@@ -841,6 +1033,7 @@ fn read_state(params: &TerminalReadRequest, state: &TerminalState) -> TerminalRe
         .map(|chunk| TerminalOutputChunk {
             sequence: chunk.sequence,
             data: chunk.bytes.clone(),
+            shell_integration: chunk.shell_integration.clone(),
         })
         .collect::<Vec<_>>();
     let next_sequence = chunks.last().map_or_else(

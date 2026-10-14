@@ -1,3 +1,5 @@
+import { ShellEnvDetectionCapability } from '../../../../../platform/terminal/common/capabilities/shellEnvDetectionCapability.js';
+import { TerminalCapabilityStore, TerminalCapabilityStoreMultiplexer } from '../../../../../platform/terminal/common/capabilities/terminalCapabilityStore.js';
 import { TerminalGroupService } from '../../browser/terminalGroupService.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
@@ -16,6 +18,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from "../../../../../base/common/uri.js";
 import { ITerminalProcessService, type ITerminalProcessCreateOptions, type ITerminalProcessReadResult, type TerminalProcessConnectionState } from "../../../../../platform/terminal/common/terminal.js";
+import { TerminalCapability } from '../../../../../platform/terminal/common/capabilities/capabilities.js';
 import { TerminalService } from "../../browser/terminalService.js";
 import { TerminalProcessManager } from '../../browser/terminalProcessManager.js';
 import { AgentHostTerminalService } from '../../browser/agentHostTerminalService.js';
@@ -95,7 +98,7 @@ test("TerminalService exposes event-driven instances over the process service", 
 	]);
 	using services = terminalServices(processService, folderWorkspaceContext());
 	const service = services.get(ITerminalService);
-	const output: Uint8Array[] = [];
+	const output: string[] = [];
 	const commandStatuses: string[] = [];
 	let createdInstance: ITerminalInstance | undefined;
 	service.onDidCreateInstance((instance) => {
@@ -113,7 +116,7 @@ test("TerminalService exposes event-driven instances over the process service", 
 	assert.equal(instance, createdInstance);
 	assert.equal(service.activeInstance, instance);
 	assert.equal(instance.title, "cmd");
-	assert.equal(new TextDecoder().decode(output[0]), "hello");
+	assert.equal(output[0], "hello");
 	assert.deepEqual(commandStatuses, ["running", "succeeded"]);
 	assert.equal(instance.exitCode, 0);
 	assert.deepEqual(processService.createCalls, [{
@@ -123,6 +126,19 @@ test("TerminalService exposes event-driven instances over the process service", 
 	}]);
 	assert.deepEqual(processService.readCursors, [0, 1]);
 	assert.deepEqual(processService.commandReadCursors, [0, 2]);
+});
+
+test('a Shell directory query uses the backend cwd and retires with its PTY', async () => {
+	const processes = new TestTerminalProcessService([]);
+	using services = terminalServices(processes, folderWorkspaceContext());
+	const terminals = services.get(ITerminalService);
+	const instance = await terminals.createTerminal({ dimensions: { cols: 80, rows: 24 }, profile: { type: 'default' } });
+	const query = instance.capabilities!.get(TerminalCapability.NaiveCwdDetection)!;
+	assert.equal(await query.getCwd(), '/workspace/current');
+	assert.notEqual(instance.initialCwd, '/workspace/current');
+	await instance.close();
+	assert.equal(instance.capabilities!.has(TerminalCapability.NaiveCwdDetection), false);
+	await assert.rejects(query.getCwd());
 });
 
 test("TerminalService batches input, coalesces resize, and releases terminals", async () => {
@@ -224,7 +240,7 @@ test("TerminalService resumes reconnectable terminals from their existing output
 		profile: { type: "default" },
 	});
 	const output: string[] = [];
-	instance.onDidWriteData(data => output.push(new TextDecoder().decode(data.data)));
+	instance.onDidWriteData(data => output.push(data.data));
 	let initialReadConsumed = false;
 	using commandListener = instance.onDidChangeCommandStatus(() => { initialReadConsumed = true; });
 	await waitFor(() => initialReadConsumed);
@@ -267,7 +283,7 @@ test("TerminalService exposes failed reconnectable recovery as a relaunchable er
 		profile: { type: "default" },
 	});
 	const output: string[] = [];
-	instance.onDidWriteData(data => output.push(new TextDecoder().decode(data.data)));
+	instance.onDidWriteData(data => output.push(data.data));
 	await waitFor(() => processService.readCursors.length === 1);
 
 	processService.emitConnectionState("stopping");
@@ -373,6 +389,9 @@ class TestTerminalProcessService implements ITerminalProcessService {
 	constructor(private readonly reads: Array<ITerminalProcessReadResult | Promise<ITerminalProcessReadResult>>, private readonly connectionPersistence: "connectionOwned" | "reconnectable" = "connectionOwned") { }
 
 	async getEnvironment(): Promise<Readonly<Record<string, string>>> { return {}; }
+	async getProcessInfo() {
+		return { ready: { pid: 1, cwd: '/workspace' }, cwd: '/workspace/current', rows: 24, cols: 80 };
+	}
 
 	async listProfiles() {
 		this.profileListCalls += 1;
@@ -512,7 +531,7 @@ suite('TerminalService lifecycle', () => {
 		using services = terminalServices(processes, workspace);
 		const service = services.get(ITerminalService);
 		const commit = Promise.resolve();
-		const structured: import('../../../../../platform/terminal/common/terminal.js').IProcessDataEvent = { data: new TextEncoder().encode('structured'), trackCommit: true, writePromise: commit };
+		const structured: import('../../../../../platform/terminal/common/terminal.js').IProcessDataEvent = { data: 'structured', trackCommit: true, writePromise: commit };
 		class TestPty extends BasePty<string | typeof structured> {
 			async start(): Promise<void> {
 				this.handleData('string output');
@@ -528,7 +547,7 @@ suite('TerminalService lifecycle', () => {
 		using listener = instance.onDidWriteData(event => output.push(event));
 		instance.start();
 		await waitFor(() => output.length === 2);
-		assert.equal(new TextDecoder().decode(output[0]!.data), 'string output');
+		assert.equal(output[0]!.data, 'string output');
 		assert.equal(output[0]!.trackCommit, false);
 		assert.equal(output[1], structured);
 		assert.equal(output[1]!.writePromise, commit);
@@ -716,7 +735,7 @@ suite('TerminalService lifecycle', () => {
 			const service = services.get(ITerminalService);
 			const outputs: string[] = [];
 			using listeners = new DisposableStore();
-			listeners.add(service.onDidCreateInstance(instance => listeners.add(instance.onDidWriteData(data => outputs.push(new TextDecoder().decode(data.data))))));
+			listeners.add(service.onDidCreateInstance(instance => listeners.add(instance.onDidWriteData(data => outputs.push(data.data)))));
 			const pending = service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
 			processService.emitConnectionState('crashed');
 			creation.resolve();
@@ -843,7 +862,7 @@ suite('TerminalService lifecycle', () => {
 		using services = terminalServices(processService, workspace);
 		const service = services.get(ITerminalService);
 		const instance = await service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
-		const output: Uint8Array[] = [];
+		const output: string[] = [];
 		using listener = instance.onDidWriteData(event => output.push(event.data));
 		const cancelledInput = assert.rejects(instance.sendText('queued', false), isCancellationError);
 		instance.resize({ rows: 30, cols: 100 });
@@ -877,7 +896,7 @@ suite('TerminalService lifecycle', () => {
 		const instance = await service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' }, env: { OLD: 'old' }, cwd: '/workspace/old', execution: { type: 'process', program: 'first', args: [] } });
 		await waitFor(() => processes.readCursors.length === 1);
 		const output: string[] = [];
-		using listener = instance.onDidWriteData(event => output.push(new TextDecoder().decode(event.data)));
+		using listener = instance.onDidWriteData(event => output.push(event.data));
 		processes.closeGates.push(release.promise);
 		const executable = ['/custom/shell'];
 		const args = ['-l'];
@@ -902,12 +921,28 @@ suite('TerminalService lifecycle', () => {
 		assert.deepEqual(processes.closeCalls, ['terminal-1', 'terminal-2']);
 	});
 
+	test('strict environment survives first launch and replacement and resets when omitted', async () => {
+		const processes = new TestTerminalProcessService([]);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		const service = services.get(ITerminalService);
+		const instance = await service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' }, strictEnv: true, env: { ONLY: 'literal' }, deferStart: true });
+		assert.equal(processes.createCalls[0]!.strictEnv, true);
+		assert.equal(instance.shellLaunchConfig?.strictEnv, true);
+		await instance.reuseTerminal({ strictEnv: true, env: { ONLY: 'replacement' }, deferStart: true });
+		assert.equal(processes.createCalls[1]!.strictEnv, true);
+		assert.deepEqual(processes.createCalls[1]!.env, { ONLY: 'replacement' });
+		await instance.reuseTerminal({ deferStart: true });
+		assert.equal(processes.createCalls[2]!.strictEnv, undefined);
+		await service.closeTerminal(instance);
+	});
+
 	test('shell cwd and command completion wait for parsed output and preserve invocation cwd', async () => {
 		const firstCommit = deferred<void>();
 		const secondCommit = deferred<void>();
 		const secondRead = deferred<ITerminalProcessReadResult>();
 		const completed = { sequence: 2, commandId: 'command', status: 'failed' as const, exitCode: 17, afterOutputSequence: 2, cwd: '/invocation', command: 'cd /changed; false', isTrusted: true };
-		const integration = { commandDetection: true, cwdDetection: true, hasRichCommandDetection: true, commandStorageDisabled: false, commands: [completed], afterOutputSequence: 2 };
+		const integration = { commandDetection: true, cwdDetection: true, hasRichCommandDetection: true, commandStorageDisabled: false, commands: [completed], promptType: 'starship', afterOutputSequence: 2 };
 		const processes = new TestTerminalProcessService([readResult({
 			chunks: [{ sequence: 1, data: new TextEncoder().encode('before cd') }], nextSequence: 1,
 			commandEvents: [{ sequence: 1, commandId: 'command', status: 'running', exitCode: undefined, afterOutputSequence: 0, cwd: '/invocation' }, completed],
@@ -919,11 +954,12 @@ suite('TerminalService lifecycle', () => {
 		const instance = await service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' }, deferStart: true });
 		const output: string[] = [];
 		const commands: ITerminalCommandStatusEvent[] = [];
-		using data = instance.onDidWriteData(event => { output.push(new TextDecoder().decode(event.data)); event.writePromise = output.length === 1 ? firstCommit.promise : secondCommit.promise; });
+		using data = instance.onDidWriteData(event => { output.push(event.data); event.writePromise = output.length === 1 ? firstCommit.promise : secondCommit.promise; });
 		using state = instance.onDidChangeCommandStatus(event => commands.push(event));
 		instance.start();
 		await waitFor(() => output.length === 1);
 		assert.equal(instance.cwd, undefined);
+		assert.equal(instance.capabilities!.has(TerminalCapability.PromptTypeDetection), false);
 		assert.equal(Boolean(instance.shellIntegration), false);
 		assert.equal(commands.length, 1);
 		firstCommit.resolve();
@@ -931,14 +967,20 @@ suite('TerminalService lifecycle', () => {
 		secondRead.resolve(readResult({ chunks: [{ sequence: 2, data: new TextEncoder().encode('after cd') }], nextSequence: 2, nextCommandSequence: 2, cwd: { value: '/changed; directory', afterOutputSequence: 2 }, exited: true, exitCode: 0 }));
 		await waitFor(() => output.length === 2);
 		assert.equal(instance.cwd, undefined);
+		assert.equal(instance.capabilities!.has(TerminalCapability.PromptTypeDetection), false);
 		assert.equal(Boolean(instance.shellIntegration), false);
 		assert.equal(commands.length, 1);
 		secondCommit.resolve();
 		await waitFor(() => instance.state === 'exited');
 		assert.equal(instance.cwd, '/changed; directory');
+		const cwdCapability = instance.capabilities!.get(TerminalCapability.CwdDetection)!;
+		assert.equal(cwdCapability.getCwd(), instance.cwd);
+		assert.equal(cwdCapability.isTrusted, false);
+		assert.deepEqual(cwdCapability.cwds, ['/changed; directory']);
 		assert.equal(instance.initialCwd, '/backend/workspace');
 		assert.deepEqual(instance.shellIntegration?.commands, [{ commandId: 'command', status: 'failed', exitCode: 17, cwd: '/invocation', command: 'cd /changed; false', isTrusted: true }]);
 		assert.equal(instance.shellIntegration?.hasRichCommandDetection, true);
+		assert.equal(instance.capabilities!.get(TerminalCapability.PromptTypeDetection)!.promptType, 'starship');
 		assert.deepEqual(commands, [{ commandId: 'command', status: 'running', exitCode: undefined, cwd: '/invocation' }, { commandId: 'command', status: 'failed', exitCode: 17, cwd: '/invocation', command: 'cd /changed; false', isTrusted: true }]);
 	});
 
@@ -1173,7 +1215,7 @@ suite('TerminalService lifecycle', () => {
 		const service = services.get(ITerminalService);
 		const instance = await service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
 		await waitFor(() => instance.state === 'exited');
-		const output: Uint8Array[] = [];
+		const output: string[] = [];
 		using listener = instance.onDidWriteData(event => output.push(event.data));
 		processService.creationGates.push(creation.promise);
 		const cancelled = assert.rejects(service.relaunchTerminal(instance, { rows: 30, cols: 100 }), isCancellationError);
@@ -1215,6 +1257,67 @@ suite('TerminalService lifecycle', () => {
 suite('TerminalService output parsing', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('process text decoding retains an incomplete UTF-8 prefix across a transport interruption', async () => {
+		const stale = deferred<ITerminalProcessReadResult>();
+		const processes = new TestTerminalProcessService([
+			readResult({ chunks: [{ sequence: 1, data: new Uint8Array([0xe4]) }], nextSequence: 1 }), stale.promise,
+		]);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		using manager = services.createInstance(TerminalProcessManager, { terminalId: 'terminal-1' });
+		const output: string[] = [];
+		using listener = manager.onProcessData(event => output.push(event.data));
+		const reading = manager.start();
+		await waitFor(() => processes.readCursors.length === 2);
+		manager.stop();
+		await assert.rejects(reading, isCancellationError);
+		processes.queueRead(readResult({ chunks: [{ sequence: 2, data: new Uint8Array([0xb8, 0xad]) }], nextSequence: 2, exited: true }));
+		await manager.start(true);
+		stale.resolve(readResult({ chunks: [{ sequence: 2, data: new TextEncoder().encode('stale') }], nextSequence: 2 }));
+		await Promise.resolve();
+		assert.deepEqual(output, ['', '中']);
+		assert.deepEqual(processes.readCursors, [0, 1, 1]);
+	});
+
+	test('an output gap flushes an incomplete UTF-8 prefix before the gap notification', async () => {
+		const processes = new TestTerminalProcessService([
+			readResult({ chunks: [{ sequence: 1, data: new Uint8Array([0xe4]) }], nextSequence: 1 }),
+			readResult({ chunks: [{ sequence: 3, data: new TextEncoder().encode('tail') }], nextSequence: 3, outputGap: true, exited: true }),
+		]);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		using manager = services.createInstance(TerminalProcessManager, { terminalId: 'terminal-1' });
+		const observed: string[] = [];
+		const boundaries: unknown[] = [];
+		using data = manager.onProcessData(event => { if (event.shellIntegration) boundaries.push(event.shellIntegration); else observed.push(event.data); });
+		using gap = manager.onOutputGap(() => observed.push('gap'));
+		await manager.start();
+		assert.deepEqual(observed, ['', '�', 'gap', 'tail']);
+		assert.deepEqual(boundaries, [{ type: 'outputGap' }]);
+	});
+
+	test('final decoder output waits for parsing before publishing process exit', async () => {
+		const parsed = deferred<void>();
+		const processes = new TestTerminalProcessService([
+			readResult({ chunks: [{ sequence: 1, data: new Uint8Array([0xe4]) }], nextSequence: 1, exited: true, exitCode: 0 }),
+		]);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		using manager = services.createInstance(TerminalProcessManager, { terminalId: 'terminal-1' });
+		const observed: unknown[] = [];
+		using data = manager.onProcessData(event => {
+			observed.push(event.data);
+			if (event.data) event.writePromise = parsed.promise;
+		});
+		using exit = manager.onProcessExit(code => observed.push(code));
+		const reading = manager.start();
+		await waitFor(() => observed.length === 2);
+		assert.deepEqual(observed, ['', '�']);
+		parsed.resolve();
+		await reading;
+		assert.deepEqual(observed, ['', '�', 0]);
+	});
+
 	test('waits for screen parsing before command completion, another read and exit', async () => {
 		const parsed = deferred<void>();
 		const processes = new TestTerminalProcessService([
@@ -1236,7 +1339,7 @@ suite('TerminalService output parsing', () => {
 		const events: string[] = [];
 		listeners.add(terminals.onDidCreateInstance(instance => {
 			listeners.add(instance.onDidWriteData(event => {
-				events.push(new TextDecoder().decode(event.data));
+				events.push(event.data);
 				event.writePromise = parsed.promise;
 			}));
 			listeners.add(instance.onDidChangeCommandStatus(event => events.push(event.status)));
@@ -1269,7 +1372,7 @@ suite('TerminalService output parsing', () => {
 		const events: string[] = [];
 		listeners.add(terminals.onDidCreateInstance(instance => {
 			listeners.add(instance.onDidWriteData(event => {
-				events.push(new TextDecoder().decode(event.data));
+				events.push(event.data);
 				event.writePromise = Promise.resolve();
 			}));
 			listeners.add(instance.onDidChangeCommandStatus(event => events.push(event.status)));
@@ -1334,7 +1437,7 @@ suite('TerminalService output parsing', () => {
 		const terminals = services.get(ITerminalService);
 		const output: string[] = [];
 		listeners.add(terminals.onDidCreateInstance(instance => listeners.add(instance.onDidWriteData(event => {
-			output.push(new TextDecoder().decode(event.data));
+			output.push(event.data);
 			if (event.trackCommit) {
 				event.writePromise = parsed.promise;
 			}
@@ -1386,7 +1489,7 @@ suite('TerminalService parser failure and replacement', () => {
 		const terminals = services.get(ITerminalService);
 		const output: string[] = [];
 		listeners.add(terminals.onDidCreateInstance(instance => listeners.add(instance.onDidWriteData(event => {
-			const text = new TextDecoder().decode(event.data);
+			const text = event.data;
 			output.push(text);
 			if (event.trackCommit) {
 				event.writePromise = text === 'old' ? parsed.promise : Promise.resolve();
@@ -1456,6 +1559,29 @@ suite('Terminal Send Sequence', () => {
 		services.registerInstance(IConfigurationResolverService, resolver as IConfigurationResolverService);
 		return { processes, workspace, services, terminals, commands, resolver };
 	}
+
+	test('Send Sequence uses only committed trusted shell values and falls back after a forged update', async () => {
+		using owner = new DisposableStore();
+		const { processes, resolver, terminals, commands } = setup(owner);
+		const instance = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+		const store = owner.add(new TerminalCapabilityStore());
+		const env = owner.add(new ShellEnvDetectionCapability());
+		store.add(TerminalCapability.ShellEnvDetection, env);
+		owner.add((instance.capabilities as TerminalCapabilityStoreMultiplexer).add(store));
+		Object.assign(resolver, {
+			resolveWithEnvironment: async (values: Readonly<Record<string, string | undefined>>) => values.SHELL_VALUE ?? '',
+			resolveAsync: async () => 'frozen host value',
+		});
+		env.setEnvironment({ SHELL_VALUE: 'startup' }, true);
+		env.startEnvironmentSingleVar(true, true);
+		env.setEnvironmentSingleVar('SHELL_VALUE', 'pending', true);
+		await commands.executeCommand(TerminalCommandId.SendSequence, { text: '${env:SHELL_VALUE}' });
+		env.endEnvironmentSingleVar(true);
+		await commands.executeCommand(TerminalCommandId.SendSequence, { text: '${env:SHELL_VALUE}' });
+		env.setEnvironment({ SHELL_VALUE: 'forged' }, false);
+		await commands.executeCommand(TerminalCommandId.SendSequence, { text: '${env:SHELL_VALUE}' });
+		assert.deepEqual(processes.writeCalls.map(call => call.data), ['startup', 'pending', 'frozen host value']);
+	});
 
 	test('resolves for the initiating folder and waits for the actual input acknowledgement', async () => {
 		using owner = new DisposableStore();

@@ -141,6 +141,7 @@ impl AppServer {
                     profile: profile_selection(params.profile),
                     lifecycle: lifecycle(params.lifecycle),
                     env: None,
+                    strict_env: None,
                     cwd: None,
                     execution: None,
                 },
@@ -334,6 +335,7 @@ fn create_request(params: TerminalCreateParams) -> exec_server::terminal::Termin
         profile: profile_selection(params.profile),
         lifecycle: lifecycle(params.lifecycle),
         env: params.env.map(|values| values.into_iter().collect()),
+        strict_env: params.strict_env,
         cwd: params.cwd,
         execution: params.execution.map(|execution| match execution {
             wire::TerminalExecution::Process { program, args } => {
@@ -422,6 +424,7 @@ fn read_to_dto(value: exec_server::terminal::TerminalReadResult) -> wire::Termin
             .map(|chunk| wire::TerminalOutputChunk {
                 sequence: chunk.sequence,
                 data_base64: base64::engine::general_purpose::STANDARD.encode(chunk.data),
+                shell_integration: chunk.shell_integration.map(shell_boundary),
             })
             .collect(),
         next_sequence: value.next_sequence,
@@ -441,6 +444,7 @@ fn read_to_dto(value: exec_server::terminal::TerminalReadResult) -> wire::Termin
                 cwd_detection: integration.cwd_detection,
                 has_rich_command_detection: integration.has_rich_command_detection,
                 command_storage_disabled: integration.command_storage_disabled,
+                prompt_type: integration.prompt_type,
                 commands: integration
                     .commands
                     .into_iter()
@@ -485,5 +489,94 @@ fn command_status_event(
         cwd: event.cwd,
         command: event.command,
         is_trusted: event.is_trusted,
+    }
+}
+
+fn shell_boundary(
+    event: exec_server::terminal::TerminalShellIntegrationEvent,
+) -> wire::TerminalShellIntegrationEvent {
+    use exec_server::terminal::TerminalShellIntegrationEvent as Event;
+    match event {
+        Event::Environment { values, is_trusted } => {
+            wire::TerminalShellIntegrationEvent::Environment { values, is_trusted }
+        }
+        Event::EnvironmentStart { clear, is_trusted } => {
+            wire::TerminalShellIntegrationEvent::EnvironmentStart { clear, is_trusted }
+        }
+        Event::EnvironmentEntry {
+            key,
+            value,
+            is_trusted,
+        } => wire::TerminalShellIntegrationEvent::EnvironmentEntry {
+            key,
+            value,
+            is_trusted,
+        },
+        Event::EnvironmentDelete {
+            key,
+            value,
+            is_trusted,
+        } => wire::TerminalShellIntegrationEvent::EnvironmentDelete {
+            key,
+            value,
+            is_trusted,
+        },
+        Event::EnvironmentEnd { is_trusted } => {
+            wire::TerminalShellIntegrationEvent::EnvironmentEnd { is_trusted }
+        }
+        Event::ProcessReady {
+            is_windows_pty,
+            shell_type,
+        } => wire::TerminalShellIntegrationEvent::ProcessReady {
+            is_windows_pty,
+            shell_type: shell_type.map(|shell| match shell {
+                exec_server::terminal::TerminalShellType::Bash => wire::TerminalShellType::Bash,
+                exec_server::terminal::TerminalShellType::Zsh => wire::TerminalShellType::Zsh,
+                exec_server::terminal::TerminalShellType::PowerShell => {
+                    wire::TerminalShellType::PowerShell
+                }
+            }),
+        },
+        Event::Cwd { value, is_trusted } => {
+            wire::TerminalShellIntegrationEvent::Cwd { value, is_trusted }
+        }
+        Event::HasRichCommandDetection { value } => {
+            wire::TerminalShellIntegrationEvent::HasRichCommandDetection { value }
+        }
+        Event::CommandStorageDisabled => {
+            wire::TerminalShellIntegrationEvent::CommandStorageDisabled
+        }
+        Event::PromptType { value } => wire::TerminalShellIntegrationEvent::PromptType { value },
+        Event::PromptStart => wire::TerminalShellIntegrationEvent::PromptStart,
+        Event::CommandStart => wire::TerminalShellIntegrationEvent::CommandStart,
+        Event::CommandExecuted {
+            command_id,
+            command,
+            is_trusted,
+            command_storage_disabled,
+            cwd,
+            timestamp_millis,
+        } => wire::TerminalShellIntegrationEvent::CommandExecuted {
+            command_id,
+            command,
+            is_trusted,
+            command_storage_disabled,
+            cwd,
+            timestamp_millis,
+        },
+        Event::CommandFinished {
+            exit_code,
+            duration_millis,
+        } => wire::TerminalShellIntegrationEvent::CommandFinished {
+            exit_code,
+            duration_millis,
+        },
+        Event::CommandLine { value, is_trusted } => {
+            wire::TerminalShellIntegrationEvent::CommandLine { value, is_trusted }
+        }
+        Event::ContinuationStart => wire::TerminalShellIntegrationEvent::ContinuationStart,
+        Event::ContinuationEnd => wire::TerminalShellIntegrationEvent::ContinuationEnd,
+        Event::RightPromptStart => wire::TerminalShellIntegrationEvent::RightPromptStart,
+        Event::RightPromptEnd => wire::TerminalShellIntegrationEvent::RightPromptEnd,
     }
 }

@@ -65,7 +65,7 @@ for (const chatSurface of ['code', 'cowork'] as const) {
 		const desktopDirectory = resolve(import.meta.dirname, '../../../..');
 		const paths = {
 			card: 'workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerCard.ts',
-			chat: chatSurface === 'code' ? 'workbench/contrib/chat/browser/widget/chatListWidget.ts' : 'sessions/contrib/cowork/browser/widget/chatListWidget.ts',
+			chat: 'workbench/contrib/chat/browser/widget/chatListWidget.ts',
 			sidebar: 'sessions/browser/parts/sidebar/sessionsList.ts',
 		};
 		const sources = await Promise.all(Object.entries(paths).map(async ([name, path]) => {
@@ -100,6 +100,9 @@ for (const chatSurface of ['code', 'cowork'] as const) {
 				const { createTestEditorServices } = await import(moduleUrl('workbench/test/common/testEditorServices.ts'));
 				const { registerCodeEditorServices } = await import(moduleUrl('editor/test/browser/testCodeEditor.ts'));
 				const { IAccessibleViewService } = await import(moduleUrl('platform/accessibility/browser/accessibleView.ts'));
+				const { IAgentVoiceService } = await import(moduleUrl('platform/agentHost/common/agentService.ts'));
+				const { IDialogService } = await import(moduleUrl('platform/dialogs/common/dialogs.ts'));
+				const { DialogService } = await import(moduleUrl('workbench/services/dialogs/common/dialogService.ts'));
 				const { ModelPickerWidget } = await import(moduleUrl('workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerWidget.ts'));
 				const { ILanguageModelsService } = await import(moduleUrl('workbench/contrib/chat/common/languageModels.ts'));
 				const chatModule = await import(moduleUrl(chatSurface === 'code' ? 'workbench/contrib/chat/browser/widget/chatWidget.ts' : 'sessions/contrib/cowork/browser/widget/coworkWidget.ts'));
@@ -112,6 +115,8 @@ for (const chatSurface of ['code', 'cowork'] as const) {
 				const { ISessionGroupsService } = await import(moduleUrl('sessions/services/sessions/browser/sessionGroupsService.ts'));
 				const scope = new DisposableStore();
 				const services = scope.add(createTestEditorServices());
+				services.registerInstance(IAgentVoiceService, undefined);
+				services.registerInstance(IDialogService, scope.add(new DialogService()));
 				registerCodeEditorServices(services);
 				services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined, show: () => undefined });
 				const host = document.createElement('main');
@@ -142,7 +147,7 @@ for (const chatSurface of ['code', 'cowork'] as const) {
 					...Array.from({ length: 35 }, (_, index) => ({ id: `message-${index}`, type: 'userMessage', text: `Message ${index}`, transient: false })),
 					{ id: 'error', type: 'turnError', text: 'Retained failure', transient: false, action: { type: 'startNewChat', label: 'Start a new chat' } },
 				];
-				const conversation = Object.assign(toDisposable(() => undefined), { onDidChange: changes.event, items, inputState: {} });
+				const conversation = Object.assign(toDisposable(() => undefined), { onDidChange: changes.event, onDidChangeComposer: Event.None, composerGeneration: 0, items, inputState: {} });
 				// Retain the real Stanza editor through ChatWidget's input factory boundary.
 				const createInput = (container: HTMLElement) => {
 					const element = document.createElement('div');
@@ -207,7 +212,7 @@ for (const chatSurface of ['code', 'cowork'] as const) {
 				await page.evaluate(focus => {
 					const evidence = globalThis.uiHotReloadEvidence;
 					evidence.previous = evidence.chat.element.querySelector(`.${evidence.chatListClass}`)!;
-					evidence.previousButton = evidence.previous.querySelector('button')!;
+					evidence.previousButton = evidence.previous.querySelector('[data-item-id="error"] button')!;
 					if (focus) evidence.previousButton.focus({ preventScroll: true });
 				}, version === 'second');
 				const top = await host.locator('.ash-scrollbar-viewport').first().evaluate(element => element.scrollTop);
