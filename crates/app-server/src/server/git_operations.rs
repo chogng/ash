@@ -35,12 +35,14 @@ use ash_app_server_protocol::protocol::git::GitCommitModeDto;
 use ash_app_server_protocol::protocol::git::GitCommitParams;
 use ash_app_server_protocol::protocol::git::GitCommitResult as GitCommitResultDto;
 use ash_app_server_protocol::protocol::git::GitCommitScopeDto;
+use ash_app_server_protocol::protocol::git::GitCommitSigningDto;
 use ash_app_server_protocol::protocol::git::GitCommitSignoffDto;
 use ash_app_server_protocol::protocol::git::GitCommitStatisticsDto;
 use ash_app_server_protocol::protocol::git::GitCompareChangesParams;
 use ash_app_server_protocol::protocol::git::GitComparisonModeDto;
 use ash_app_server_protocol::protocol::git::GitCompleteConflictParams;
 use ash_app_server_protocol::protocol::git::GitConflictFileParams;
+use ash_app_server_protocol::protocol::git::GitEmptyCommitPolicyDto;
 use ash_app_server_protocol::protocol::git::GitFetchModeDto;
 use ash_app_server_protocol::protocol::git::GitFetchParams;
 use ash_app_server_protocol::protocol::git::GitGraphParams;
@@ -811,6 +813,14 @@ impl AppServer {
         let request = match params.signoff.unwrap_or(GitCommitSignoffDto::None) {
             GitCommitSignoffDto::None => request,
             GitCommitSignoffDto::Add => request.sign_off(),
+        };
+        let request = match params.signing.unwrap_or(GitCommitSigningDto::Configured) {
+            GitCommitSigningDto::Configured => request,
+            GitCommitSigningDto::Required => request.require_signing(),
+        };
+        let request = match params.empty.unwrap_or(GitEmptyCommitPolicyDto::Reject) {
+            GitEmptyCommitPolicyDto::Reject => request,
+            GitEmptyCommitPolicyDto::Allow => request.allow_empty(),
         };
         let request = match params.expected_head {
             Some(head) => {

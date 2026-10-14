@@ -793,7 +793,7 @@
     "media.playback.summary": "{0} · {1} 字节",
     "media.playback.verbosityTitle": "媒体预览无障碍帮助",
     "media.playback.verbosityDescription": "在音频或视频预览获得焦点时，提示如何打开无障碍帮助。",
-    "media.playback.help": "音频和视频预览\n聚焦播放器后按空格播放或暂停。按 Tab 到达播放控件，可跳转进度、调节音量，以及在支持时进入全屏。媒体加载失败时，选择“重试”再次读取文件。<keybinding:editor.action.accessibleView> 读取文件名、文件大小、时长和播放状态，不转录音频或描述视频内容。切换到其他标签页会停止播放。文件变化会重新加载预览。关闭标签页会停止播放并释放资源，原文件仍然保留。",
+    "media.playback.help": "音频和视频预览\n聚焦播放器后按空格播放或暂停。按 Tab 到达播放控件，可跳转进度、调节音量，以及在支持时进入全屏。媒体加载失败时，选择“重试”再次读取文件。<keybinding:editor.action.accessibleView> 读取文件名、文件大小、时长和播放状态，不转录音频或描述视频内容。可以在设置的“媒体预览”中配置视频自动播放和循环播放。音频只在手动播放时开始播放。切换到其他标签页会停止播放。文件变化会重新加载预览。关闭标签页会停止播放并释放资源，原文件仍然保留。",
     "diffEditor.collapsedLines": "已折叠 {0} 行未修改内容",
     "accessibility.editorStatus": "状态栏显示活动编辑器的位置、缩进、编码、行尾和语言。聚焦状态栏后，用左右方向键选择操作，按 Enter 执行。缩进、编码、行尾和语言操作会打开选择器，Escape 取消。行尾更改可以撤销。“以编码重新打开”会推荐检测到的编码。默认编码和自动检测可按语言配置。",
     "diffEditor.foldUnchanged": "折叠未修改区域",

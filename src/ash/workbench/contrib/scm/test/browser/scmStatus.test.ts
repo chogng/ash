@@ -142,9 +142,11 @@ function createFixture(changes: Emitter<GitStatus>, status: () => Promise<GitSta
 		...operations,
 	} as unknown as IGitService;
 	const services: GitSCMProviderServices = {
+		notify: () => { },
+		configuration: { get: (_key, defaultValue) => defaultValue, onDidChange: Event.None },
 		commandService: { executeCommand: async (id: string, repositoryId: string) => { commands.push({ id, repositoryId }); } } as unknown as ICommandService,
 		viewsService: { focusView: async (id: string) => { focusedViews.push(id); return true; } } as unknown as IViewsService,
-		dialogService: {} as IDialogService,
+		dialogService: { confirm: async () => ({ confirmed: true }) },
 		editorService: {} as IEditorService,
 		workingCopyService: {} as IWorkingCopyService,
 	};

@@ -145,6 +145,38 @@ test('packaged Markdown language service resolves unsaved headings and diagnoses
 	assert.equal(highlights.length, 2);
 });
 
+test('packaged Markdown preferences control completion, highlighting, preview breaks and live diagnostics', async () => {
+	const text = '# Heading\n\n[go](#heading)\n\n[missing](#absent)\n\nfirst\nsecond';
+	const uri = 'untitled:/settings.md';
+	let published: { diagnostics: { severity: string; }[]; }[] = [];
+	const { handlers, invoke } = await loadMarkdown('en', [{ uri, text, version: 1, languageId: 'markdown' }], {
+		markdown: { suggest: { paths: { enabled: false } }, occurrencesHighlight: { enabled: false }, preview: { breaks: true }, validate: { fragmentLinks: { enabled: 'error' }, fileLinks: { markdownFragmentLinks: 'inherit' } } },
+	}, [], async request => {
+		if (request.operation === 'setDiagnostics') published = (request as unknown as { entries: typeof published; }).entries;
+		return { result: 'done' };
+	});
+	const signal = new AbortController().signal;
+	const request = { resource: uri, text, version: 1, position: { lineIndex: 2, columnIndex: 7 } };
+	assert.equal(published[0]!.diagnostics[0]!.severity, 'error');
+	assert.deepEqual(await invoke('completion', request, signal), { items: [], isIncomplete: false });
+	assert.deepEqual(await invoke('documentHighlights', request, signal), []);
+	const preview = await handlers.get('vscode.markdown.preview.editor')!('resolveCustomTextEditor', { document: { uri, text, version: 1, languageId: 'markdown' } }, signal) as { html: string; };
+	assert.match(preview.html, /first<br>\s*second/);
+	const empty = { contents: {}, keys: [], overrides: [] };
+	await handlers.get('vscode.workspace.events')!('workspaceEvent', {
+		type: 'configuration', revision: 1, emit: true,
+		configurationValues: { markdown: { validate: { fragmentLinks: { enabled: 'ignore' } }, suggest: { paths: { enabled: true } }, occurrencesHighlight: { enabled: true } } },
+		configurationData: { defaults: empty, application: empty, userLocal: empty, userRemote: empty, workspace: empty, policy: empty, folders: [] },
+		change: { keys: ['markdown'], overrides: [] },
+	}, signal);
+	assert.ok(published.every(entry => entry.diagnostics.length === 0));
+	const completion = await invoke('completion', request, signal) as { items: { label: string; }[]; };
+	assert.ok(completion.items.some(item => item.label === '#heading'));
+	assert.ok((await invoke('documentHighlights', request, signal) as unknown[]).length > 0);
+	const reset = await handlers.get('vscode.markdown.preview.editor')!('resolveCustomTextEditor', { document: { uri, text, version: 1, languageId: 'markdown' } }, signal) as { html: string; };
+	assert.match(reset.html, /first\nsecond/);
+});
+
 test('Markdown workspace edits use dirty documents and localized validation respects configuration', async () => {
 	const heading = { uri: 'file:///workspace/heading.md', text: '# Current heading\n\n[broken](#missing)', languageId: 'markdown', version: 7 };
 	const referring = { uri: 'file:///workspace/referring.md', text: '[go](./heading.md#current-heading)', languageId: 'markdown', version: 9 };

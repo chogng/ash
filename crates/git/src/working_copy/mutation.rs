@@ -60,6 +60,8 @@ pub struct GitCommitRequest {
     scope: CommitScope,
     mode: CommitMode,
     signoff: CommitSignoff,
+    signing: CommitSigning,
+    empty: EmptyCommitPolicy,
     expected_head: Option<GitHead>,
 }
 
@@ -82,6 +84,20 @@ enum CommitSignoff {
     Add,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+enum CommitSigning {
+    #[default]
+    Configured,
+    Required,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+enum EmptyCommitPolicy {
+    #[default]
+    Reject,
+    Allow,
+}
+
 impl<'de> serde::Deserialize<'de> for GitCommitRequest {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         #[derive(serde::Deserialize)]
@@ -91,6 +107,10 @@ impl<'de> serde::Deserialize<'de> for GitCommitRequest {
             scope: CommitScope,
             mode: CommitMode,
             signoff: CommitSignoff,
+            #[serde(default)]
+            signing: CommitSigning,
+            #[serde(default)]
+            empty: EmptyCommitPolicy,
             expected_head: Option<GitHead>,
         }
         let fields = Fields::deserialize(deserializer)?;
@@ -98,6 +118,8 @@ impl<'de> serde::Deserialize<'de> for GitCommitRequest {
         request.scope = fields.scope;
         request.mode = fields.mode;
         request.signoff = fields.signoff;
+        request.signing = fields.signing;
+        request.empty = fields.empty;
         request.expected_head = fields.expected_head;
         Ok(request)
     }
@@ -122,6 +144,8 @@ impl GitCommitRequest {
             scope: CommitScope::Staged,
             mode: CommitMode::Create,
             signoff: CommitSignoff::None,
+            signing: CommitSigning::Configured,
+            empty: EmptyCommitPolicy::Reject,
             expected_head: None,
         })
     }
@@ -147,6 +171,18 @@ impl GitCommitRequest {
 
     pub fn sign_off(mut self) -> Self {
         self.signoff = CommitSignoff::Add;
+        self
+    }
+
+    /// Requires a signature from the repository's configured Git signing mechanism.
+    pub fn require_signing(mut self) -> Self {
+        self.signing = CommitSigning::Required;
+        self
+    }
+
+    /// Allows an explicit empty commit while still requiring a nonempty message.
+    pub fn allow_empty(mut self) -> Self {
+        self.empty = EmptyCommitPolicy::Allow;
         self
     }
 
@@ -351,6 +387,14 @@ impl GitClient {
         match request.signoff {
             CommitSignoff::None => {}
             CommitSignoff::Add => arguments.push("--signoff"),
+        }
+        match request.signing {
+            CommitSigning::Configured => {}
+            CommitSigning::Required => arguments.push("--gpg-sign"),
+        }
+        match request.empty {
+            EmptyCommitPolicy::Reject => {}
+            EmptyCommitPolicy::Allow => arguments.push("--allow-empty"),
         }
         self.run_mutation_with_stdin(root, arguments, request.message().as_bytes().to_vec())
             .await

@@ -14,6 +14,38 @@ shared Rust primitives directly; TUI uses the existing typed `git/*` App Server 
 None of these consumers requires the frontend Worker or a separate Git capability process.
 Shared configuration remains the only persistent autofetch owner.
 
+## Settings coverage
+
+The checked-out VS Code Git manifest declares 105 settings. Ash currently declares 23;
+settings only count here when their consumer is implemented. Frontend interaction preferences
+use the profile/workspace configuration service. Autofetch, its interval and synchronization
+rebase retain their shared Rust configuration owner.
+
+The additional policies cover smart commit and its scope, signing, empty-commit confirmation,
+post-commit push/sync, synchronization confirmation, fetching all remotes before pull, push
+notifications, initial branch names, branch prefixes/validation/whitespace, stash message
+prefill, short commit hashes and ignored repository presentation. Ignoring a repository hides
+its frontend SCM provider; shared Rust Git and Agent operations remain available. Both palette
+and history branch creation use the same naming policy before Rust validates the branch.
+
+Signing and empty commits are explicit intents on the existing `git/commit` contract. Signing
+requests Git's configured signer; a signing failure does not fall back to an unsigned commit.
+Empty commits require a message and use `--allow-empty`. The frontend binds an existing HEAD
+before interaction, and Rust checks it before staging. Post-commit operations run only after
+successful commit creation. Cancelling a prompt or editing the draft during confirmation
+preserves the draft and stops that commit.
+
+The remaining 82 settings need their actual capabilities: repository/submodule/worktree
+discovery policies and limits; fetch/pull/tag/force-push policies; branch protection and sorting;
+save-before-operation and commit editor/validation; SCM action visibility and lifecycle;
+blame and timeline providers; terminal authentication/editor integration; clone destination
+and window policy. Shared Git currently disables repository hooks, so VS Code's No Verify
+switches would have no independent effect. They are not advertised as implemented.
+
+This package remains a TS browser extension backed by shared Rust Git, rather than a separate
+Rust executable. GitHub authentication is a separate Rust provider; GitHub API operations are
+still implemented in the shared backend. Adding settings does not migrate these owners.
+
 Git retains `activationEvents: ["*"]` for early frontend availability. Activation registers
 commands and an initially empty SCM contribution without awaiting the first backend state read
 or repository discovery. `GitService` discovers automatically on workspace/connection updates;

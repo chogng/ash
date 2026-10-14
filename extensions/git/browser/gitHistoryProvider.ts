@@ -40,7 +40,7 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 	private referencesRevision = 0;
 	private historyStatus: Pick<GitStatus, 'streamInstanceId' | 'historyRevision'> | undefined;
 
-	constructor(private readonly gitService: IGitService, readonly repositoryId: string) {
+	constructor(private readonly gitService: IGitService, readonly repositoryId: string, private readonly shortHashLength: () => number = () => 7) {
 		super();
 		this._register(gitService.onDidChangeRepositoryStatus(status => this.handleStatus(status)));
 		this._register(gitService.onDidBecomeReady(async () => {
@@ -118,7 +118,7 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 			parentIds: commit.parentObjectIds,
 			subject: commit.subject,
 			message: commit.subject,
-			displayId: commit.objectId.slice(0, 7),
+			displayId: commit.objectId.slice(0, this.shortHashLength()),
 			timestamp: commit.timestampSeconds * 1000,
 			references: this.references.get(commit.objectId) ?? [],
 			remoteLinks: this.remoteLinks(commit.objectId),

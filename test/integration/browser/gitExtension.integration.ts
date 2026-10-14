@@ -72,7 +72,8 @@ import { localize, setNlsMessages } from '../../../src/ash/nls.js';
 import scmChineseMessages from '../../../extensions/language-pack-zh-cn/translations/scm.json' with { type: 'json' };
 import { CommandsRegistry } from '../../../src/ash/platform/commands/common/commands.js';
 import { ContextKeyExpr } from '../../../src/ash/platform/contextkey/common/contextkey.js';
-import type { CancellationToken } from '../../../src/ash/base/common/cancellation.js';
+import { CancellationToken } from '../../../src/ash/base/common/cancellation.js';
+import { normalizeExtensionHostPayload } from '../../../src/ash/platform/agentHost/browser/extensionHostProtocol.js';
 import { ILanguagePackService } from '../../../src/ash/platform/languagePacks/common/languagePacks.js';
 import { IExtensionApi } from '../../../src/ash/platform/extensions/common/extensionApi.js';
 import { createEmptyTestLanguagePacks } from '../../../src/ash/workbench/services/localization/test/common/localizationTestUtils.js';
@@ -87,7 +88,9 @@ for (const source of [scmChineseMessages, settingsChineseMessages]) {
 const lifetime = new DisposableStore();
 const services = lifetime.add(new InstantiationService());
 const workspace = lifetime.add(new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') }));
-const configuration = lifetime.add(new InMemoryConfigurationService());
+const gitConfigurationRegistry = new ConfigurationRegistry();
+gitConfigurationRegistry.updateConfigurations({ add: [...parseExtensionManifest(JSON.stringify(gitManifest), { id: 'ash.git', name: 'git', publisher: 'ash', version: '0.1.0' }).contributes.configuration], remove: [] });
+const configuration = lifetime.add(new InMemoryConfigurationService(gitConfigurationRegistry));
 const packages = createBuiltinExtensionFixture();
 const storage = lifetime.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'git-extension', profileId: 'git-extension-test', flushInterval: 0 }));
 const enablement = lifetime.add(new GlobalExtensionEnablementService(storage));
@@ -134,6 +137,7 @@ let sharedGit = { autofetch: 'off', autofetchPeriod: 180, rebaseWhenSync: false 
 let failSettingsWrite = false;
 let revision = 1;
 let clean = false;
+let includeUntracked = false;
 let upstream: { name: string; ahead: number; behind: number; } | null = null;
 let pullGate: DeferredPromise<void> | undefined;
 let pullFailure = false;
@@ -141,7 +145,7 @@ let startupStateGate: DeferredPromise<void> | undefined;
 let startupDiscoveryGate: DeferredPromise<void> | undefined;
 let startupStatusGate: DeferredPromise<void> | undefined;
 let startupStateReads = 0;
-const status = () => ({ repositoryId: 'root', streamInstanceId: 'stream', revision, historyRevision: 1, path: '', head: { type: 'branch', name: 'main', objectId: 'a'.repeat(40), upstream }, changes: clean ? [] : [{ path: 'one.ts', originalPath: null, indexStatus: revision > 1 ? 'modified' : 'unmodified', worktreeStatus: revision > 1 ? 'unmodified' : 'modified', conflicted: false }] });
+const status = () => ({ repositoryId: 'root', streamInstanceId: 'stream', revision, historyRevision: 1, path: '', head: { type: 'branch', name: 'main', objectId: 'a'.repeat(40), upstream }, changes: clean ? [] : [{ path: 'one.ts', originalPath: null, indexStatus: revision > 1 ? 'modified' : 'unmodified', worktreeStatus: revision > 1 ? 'unmodified' : 'modified', conflicted: false }, ...(includeUntracked ? [{ path: 'new.ts', originalPath: null, indexStatus: 'unmodified', worktreeStatus: 'untracked', conflicted: false }] : [])] });
 const backend = lifetime.add(new MainThreadExtensionBackend(catalog, {
 	request: async (method, params): Promise<JsonValue> => {
 		calls.push({ method, params });
@@ -170,8 +174,14 @@ const backend = lifetime.add(new MainThreadExtensionBackend(catalog, {
 				if (upstream) upstream = { ...upstream, ahead: 0 };
 				revision++;
 				return { status: status() };
+			case 'git/fetch': return { status: status() };
+			case 'git/commit':
+				clean = true;
+				revision++;
+				return { status: status(), objectId: 'c'.repeat(40) };
 			case 'git/command': {
 				const command = (params as { command: { kind: string; }; }).command;
+				if (command.kind === 'stash') return { status: status(), outcome: 'completed', operation: null };
 				if (command.kind !== 'publishBranch') throw new Error(`Unexpected Git command ${command.kind}`);
 				upstream = { name: 'origin/main', ahead: 0, behind: 0 };
 				revision++;
@@ -274,6 +284,34 @@ window.gitExtensionIntegration = {
 	history: async () => scm.getRepository('root')!.provider.historyProvider!.provideHistoryItems({ limit: 1 }),
 	dispose: () => lifetime.dispose(),
 };
+
+let presentationRevision = 0;
+const presentationIntegration = {
+	async update(key: string, value: JsonValue | undefined) {
+		await configuration.updateValue(key, value);
+		const runtime = (await host.list()).extensions.find(value => value.id === 'ash.git')!;
+		const registration = runtime.registrations.find(value => value.registrationId === 'vscode.workspace.events')!;
+		const initialization = createExtensionHostInitialization(workspace, configuration);
+		await host.invoke({
+			extensionId: runtime.id, incarnation: runtime.incarnation!, activationGeneration: runtime.activationGeneration, registrationId: registration.registrationId, operation: 'workspaceEvent', payload: normalizeExtensionHostPayload({
+				type: 'configuration', revision: ++presentationRevision, emit: true, configurationValues: initialization.configurationValues, configurationData: initialization.configurationData, change: { keys: [key], overrides: [] },
+			}), deadlineUnixMillis: Date.now() + 10_000
+		}, new AbortController().signal);
+	},
+	async addUntracked() { includeUntracked = true; revision++; await invoke('git.refresh'); },
+	async commit(message: string, command?: string) {
+		const provider = scm.getRepository('root')!.provider;
+		provider.input.value = message;
+		if (command) await invoke(command, [scm.getRepository('root')!]);
+		else await provider.input.accept();
+	},
+	draft(message: string) { scm.getRepository('root')!.provider.input.value = message; },
+	actions: () => scm.getRepository('root')?.provider.groups.flatMap(group => group.resources.flatMap(resource => resource.actions.map(action => action.id))),
+	async decoration() { return [...decorationProviders][0]!.provideDecorations(URI.file('/workspace/one.ts'), CancellationToken.None); },
+	async open() { await scm.getRepository('root')!.provider.groups[0]!.resources[0]!.open({}, false); },
+};
+declare global { interface Window { gitPresentationIntegration: typeof presentationIntegration; } }
+window.gitPresentationIntegration = presentationIntegration;
 
 const startupIntegration = {
 	hold: () => { startupStateGate = new DeferredPromise<void>(); startupDiscoveryGate = new DeferredPromise<void>(); startupStatusGate = new DeferredPromise<void>(); },

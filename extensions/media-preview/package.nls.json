@@ -1,5 +1,11 @@
 {
   "image.preview": "Image preview",
   "audio.preview": "Audio preview",
-  "video.preview": "Video preview"
+  "video.preview": "Video preview",
+  "settings.mediapreview": "Media preview",
+  "mediaPreview.video.autoPlay.title": "Automatically play videos",
+  "mediaPreview.video.autoPlay.description": "Automatically start playback when opening a video preview.",
+  "mediaPreview.video.loop.title": "Loop videos",
+  "mediaPreview.video.loop.description": "Restart videos after playback reaches the end.",
+  "displayName": "Media Preview"
 }

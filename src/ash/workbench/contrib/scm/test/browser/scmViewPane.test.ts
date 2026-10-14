@@ -59,6 +59,7 @@ import { isScmMergeEditorInput } from "../../../../../workbench/contrib/scm/brow
 import { emptyEditorServiceState } from '../../../../../workbench/test/common/testEditorService.js';
 import { GitHistoryProvider } from '../../../../../../../extensions/git/browser/gitHistoryProvider.js';
 import { GitSCMProvider, type GitSCMProviderServices } from '../../../../../../../extensions/git/browser/gitSCMProvider.js';
+import type { GitCommitOptions } from '../../../../../../../extensions/git/browser/types.js';
 import { SCMService } from '../../common/scmService.js';
 import { SCMViewService } from '../../browser/scmViewService.js';
 import { SCMRepositoriesViewPane } from '../../browser/scmRepositoriesViewPane.js';
@@ -145,6 +146,97 @@ test("SCM diff inputs open live files and keep deleted files on the readable sid
 		assert.deepEqual([snapshots.original?.initialText, snapshots.modified?.initialText, snapshots.original?.encoding, snapshots.modified?.encoding],
 			[prefix.slice(1) + 'before', prefix.slice(1) + 'after', prefix ? 'utf8bom' : undefined, prefix ? 'utf8bom' : undefined]);
 	}
+});
+
+test('Git presentation preferences update existing groups, decorations and file actions', async () => {
+	const status: GitStatus = {
+		repositoryId: 'settings', streamInstanceId: 'settings-stream', historyRevision: 1, revision: 1,
+		workspacePath: '/workspace', head: { type: 'branch', name: 'main', objectId: '1234567890', upstream: undefined },
+		changes: [change('tracked.ts', 'unmodified', 'modified'), change('new.ts', 'unmodified', 'untracked')],
+	};
+	const git = { status: async () => status, onDidChangeRepositoryStatus: Event.None, onDidBecomeReady: Event.None } as unknown as IGitService;
+	using changes = new Emitter<{ affectsConfiguration(section: string): boolean; }>();
+	const values = new Map<string, unknown>();
+	const opened: Array<{ readonly input: IResourceEditorInput; readonly options: EditorOpenOptions | undefined; readonly target?: EditorOpenTarget; }> = [];
+	using provider = new GitSCMProvider(git, { id: 'settings', label: 'Workspace', path: '/workspace', root: URI.file('/workspace') }, {} as GitHistoryProvider, testGitProviderServices({
+		editorService: testEditorService(opened),
+		configuration: { get: <T>(key: string, defaultValue: T): T => values.has(key) ? values.get(key) as T : defaultValue, onDidChange: changes.event },
+	}));
+	await provider.whenReady();
+	assert.deepEqual(provider.groups.map(group => [group.id, group.resources.map(resource => resource.path)]), [['changes', ['tracked.ts', 'new.ts']]]);
+	assert.ok(provider.provideDecorations(URI.file('/workspace/tracked.ts')));
+	values.set('git.untrackedChanges', 'separate');
+	values.set('git.showInlineOpenFileAction', false);
+	values.set('git.decorations.enabled', false);
+	values.set('git.openDiffOnClick', false);
+	changes.fire({ affectsConfiguration: section => section === 'git' });
+	assert.deepEqual(provider.groups.map(group => [group.id, group.resources.map(resource => resource.path)]), [['changes', ['tracked.ts']], ['untracked', ['new.ts']]]);
+	assert.equal(provider.provideDecorations(URI.file('/workspace/tracked.ts')), undefined);
+	const resource = provider.groups[0]!.resources[0]!;
+	assert.equal(resource.openLabel, 'Open File: tracked.ts');
+	assert.equal(resource.actions.some(action => action.id.startsWith('scm.change.openFile')), false);
+	await resource.open({}, false);
+	assert.deepEqual(opened[0]!.input, { resource: URI.file('/workspace/tracked.ts') });
+	values.set('git.untrackedChanges', 'hidden');
+	changes.fire({ affectsConfiguration: () => true });
+	assert.deepEqual(provider.groups.flatMap(group => group.resources.map(resource => resource.path)), ['tracked.ts']);
+	values.clear();
+	changes.fire({ affectsConfiguration: () => true });
+	assert.deepEqual(provider.groups.flatMap(group => group.resources.map(resource => resource.path)), ['tracked.ts', 'new.ts']);
+	assert.ok(provider.provideDecorations(URI.file('/workspace/tracked.ts')));
+	assert.ok(provider.groups[0]!.resources[0]!.actions.some(action => action.id.startsWith('scm.change.openFile')));
+});
+
+test('Git commit settings select scope and signing, run post-commit operations and retain a cancelled draft', async () => {
+	let status: GitStatus = {
+		repositoryId: 'commit-settings', streamInstanceId: 'commit-settings', historyRevision: 1, revision: 1, workspacePath: '/workspace',
+		head: { type: 'branch', name: 'main', objectId: 'a'.repeat(40), upstream: undefined },
+		changes: [change('tracked.ts', 'unmodified', 'modified'), change('new.ts', 'unmodified', 'untracked')],
+	};
+	const values = new Map<string, unknown>([['git.enableSmartCommit', true], ['git.smartCommitChanges', 'tracked'], ['git.enableCommitSigning', true], ['git.postCommitCommand', 'push'], ['git.showPushSuccessNotification', true]]);
+	const commits: { message: string; options: GitCommitOptions; }[] = [];
+	const operations: string[] = [];
+	const notifications: string[] = [];
+	const firstHead = status.head;
+	const git = {
+		onDidChangeRepositoryStatus: Event.None, onDidBecomeReady: Event.None, status: async () => status,
+		commit: async (message: string, _repositoryId: string, options: GitCommitOptions) => {
+			operations.push('commit'); commits.push({ message, options });
+			status = { ...status, revision: status.revision + 1, changes: [], head: { type: 'branch', name: 'main', objectId: 'b'.repeat(40), upstream: undefined } };
+			return { status, objectId: 'b'.repeat(40) };
+		},
+		push: async () => { operations.push('push'); return { ...status, revision: status.revision + 1 }; },
+	} as unknown as IGitService;
+	let confirmed = true;
+	let editDuringConfirmation = false;
+	using provider: GitSCMProvider = new GitSCMProvider(git, { id: status.repositoryId, label: 'Workspace', path: '/workspace', root: URI.file('/workspace') }, {} as GitHistoryProvider, testGitProviderServices({
+		configuration: { get: <T>(key: string, defaultValue: T): T => values.has(key) ? values.get(key) as T : defaultValue, onDidChange: Event.None },
+		notify: message => notifications.push(message),
+		dialogService: { confirm: async () => { if (editDuringConfirmation) provider.input.value = 'New draft'; return { confirmed }; } },
+	}));
+	await provider.whenReady();
+	provider.input.value = 'Smart commit';
+	await provider.commit();
+	assert.deepEqual(commits, [{ message: 'Smart commit', options: { scope: 'tracked', signing: 'required', expectedHead: firstHead } }]);
+	assert.deepEqual(operations, ['commit', 'push']);
+	assert.equal(provider.input.value, '');
+	assert.deepEqual(notifications, ['Successfully pushed repository Workspace.']);
+	values.clear();
+	provider.input.value = 'Empty commit';
+	confirmed = false;
+	await provider.commit({ scope: 'staged', empty: 'allow' });
+	assert.equal(commits.length, 1);
+	assert.equal(provider.input.value, 'Empty commit');
+	confirmed = true;
+	editDuringConfirmation = true;
+	await provider.commit({ scope: 'staged', empty: 'allow' });
+	assert.equal(commits.length, 1);
+	assert.equal(provider.input.value, 'New draft');
+	editDuringConfirmation = false;
+	values.set('git.confirmEmptyCommits', false);
+	await provider.commit({ scope: 'staged', empty: 'allow' });
+	assert.deepEqual(commits[1], { message: 'New draft', options: { scope: 'staged', empty: 'allow', expectedHead: status.head } });
+	assert.deepEqual(operations, ['commit', 'push', 'commit']);
 });
 
 test('SCM Open File actions open editable working files from each group and skip deleted files', async () => {
@@ -2091,6 +2183,8 @@ function inactiveCommandService(): ICommandService {
 
 function testGitProviderServices(overrides: Partial<GitSCMProviderServices> = {}): GitSCMProviderServices {
 	return {
+		notify: () => { },
+		configuration: { get: (_key, defaultValue) => defaultValue, onDidChange: Event.None },
 		commandService: inactiveCommandService(),
 		dialogService: testDialogs,
 		editorService: testEditorService(),

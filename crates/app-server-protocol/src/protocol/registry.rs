@@ -1033,6 +1033,10 @@ use crate::protocol::git::GitCommitScopeDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCommitSignoffDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitCommitSigningDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitEmptyCommitPolicyDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCommitStatisticsDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCommitSummaryDto;
@@ -6824,6 +6828,8 @@ typescript_bindings! {
     GitCommitScopeDto,
     GitCommitModeDto,
     GitCommitSignoffDto,
+    GitCommitSigningDto,
+    GitEmptyCommitPolicyDto,
     GitStashModeDto,
     GitCommandDto,
     GitCommandParams,

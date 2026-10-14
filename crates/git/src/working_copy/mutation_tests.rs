@@ -107,6 +107,79 @@ async fn amend_and_signoff_share_commit_execution_and_preserve_the_parent() {
 }
 
 #[tokio::test]
+async fn explicit_empty_commit_retains_the_tree_and_requires_a_message() {
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "initial\n");
+    repository.commit_all("initial");
+    let previous_head = repository.git(&["rev-parse", "HEAD"]);
+    let tree = repository.git(&["rev-parse", "HEAD^{tree}"]);
+    let client = GitClient::system();
+    let opened = client.open_repository(repository.root()).await.unwrap();
+    assert!(
+        client
+            .commit(&opened, &GitCommitRequest::new("rejected".into()).unwrap())
+            .await
+            .is_err()
+    );
+    client
+        .commit(
+            &opened,
+            &GitCommitRequest::new("intentional empty commit".into())
+                .unwrap()
+                .allow_empty(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(repository.git(&["rev-parse", "HEAD^{tree}"]), tree);
+    assert_eq!(repository.git(&["rev-parse", "HEAD^"]), previous_head);
+    assert_eq!(
+        repository.git(&["log", "-1", "--format=%s"]),
+        "intentional empty commit"
+    );
+    assert!(GitCommitRequest::new(" ".into()).is_err());
+}
+
+#[tokio::test]
+async fn required_signing_never_silently_creates_an_unsigned_commit() {
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "initial\n");
+    repository.commit_all("initial");
+    let previous_head = repository.git(&["rev-parse", "HEAD"]);
+    repository.git(&["config", "gpg.program", "ash-test-missing-signing-program"]);
+    repository.write("tracked.txt", "changed\n");
+    repository.git(&["add", "tracked.txt"]);
+    let client = GitClient::system();
+    let opened = client.open_repository(repository.root()).await.unwrap();
+    assert!(
+        client
+            .commit(
+                &opened,
+                &GitCommitRequest::new("signed".into())
+                    .unwrap()
+                    .require_signing()
+            )
+            .await
+            .is_err()
+    );
+    assert_eq!(repository.git(&["rev-parse", "HEAD"]), previous_head);
+    assert_eq!(
+        repository.git(&["diff", "--cached", "--name-only"]),
+        "tracked.txt"
+    );
+    client
+        .commit(
+            &opened,
+            &GitCommitRequest::new("configured signing".into()).unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        repository.git(&["log", "-1", "--format=%s"]),
+        "configured signing"
+    );
+}
+
+#[tokio::test]
 async fn commit_failure_keeps_successfully_staged_changes_and_never_invents_identity() {
     let repository = TestRepository::init();
     repository.write("tracked.txt", "initial\n");

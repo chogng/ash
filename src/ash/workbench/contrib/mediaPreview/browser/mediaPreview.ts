@@ -7,6 +7,7 @@ import { basename, extUri } from '../../../../base/common/resources.js';
 import { localize } from '../../../../nls.js';
 import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
@@ -40,6 +41,7 @@ export class MediaPreview extends EditorPane {
 		@IFileService private readonly files: IFileService,
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@IAccessibleViewService private readonly accessibleViews: IAccessibleViewService,
+		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
 	) {
@@ -82,6 +84,9 @@ export class MediaPreview extends EditorPane {
 		}));
 		this._register(this.contextKeys.createScoped(this.domNode)).createKey('mediaPreviewFocused', true);
 		this._register(addDisposableListener(this.domNode, 'focusin', () => this.updateLabels()));
+		this._register(this.configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration('mediaPreview.video')) this.updatePlaybackSettings();
+		}));
 		// Browser playback controls own their keys; handle Space only on the surrounding region.
 		this._register(addDisposableListener(this.domNode, 'keydown', event => {
 			if (event.key !== ' ' || event.ctrlKey || event.metaKey || event.altKey || event.repeat || event.target !== this.domNode || !this.source.value) { return; }
@@ -195,6 +200,7 @@ export class MediaPreview extends EditorPane {
 		player.tabIndex = 0;
 		player.setAttribute('aria-label', this.name);
 		this.playerDomNode = player;
+		this.updatePlaybackSettings();
 		this.viewportDomNode.replaceChildren(player);
 		const generation = this.generation;
 		for (const event of ['loadedmetadata', 'durationchange', 'play', 'pause', 'ended']) {
@@ -211,6 +217,12 @@ export class MediaPreview extends EditorPane {
 
 	private isCurrentPlayer(player: HTMLMediaElement, generation: number): boolean {
 		return !this.isDisposed && this.playerDomNode === player && this.generation === generation;
+	}
+
+	private updatePlaybackSettings(): void {
+		// Audio keeps explicit playback; these preferences belong to the video preview.
+		this.playerDomNode.autoplay = this.kind === 'video' && this.configuration.getValue<boolean>('mediaPreview.video.autoPlay') === true;
+		this.playerDomNode.loop = this.kind === 'video' && this.configuration.getValue<boolean>('mediaPreview.video.loop') === true;
 	}
 
 	private isCurrentInput(input: IResourceEditorInput, generation: number): boolean {

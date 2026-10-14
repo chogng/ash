@@ -50,8 +50,8 @@ export async function registerLanguageFeatures(context) {
 		}
 		const fragmentValidation = validation.fileLinks?.markdownFragmentLinks;
 		if (fragmentValidation !== undefined) {
-			if (!['ignore', 'hint', 'warning', 'error'].includes(fragmentValidation)) { throw new TypeError('Invalid Markdown file fragment validation'); }
-			options.validateMarkdownFileLinkFragments = fragmentValidation;
+			if (!['inherit', 'ignore', 'hint', 'warning', 'error'].includes(fragmentValidation)) { throw new TypeError('Invalid Markdown file fragment validation'); }
+			options.validateMarkdownFileLinkFragments = fragmentValidation === 'inherit' ? options.validateFileLinks : fragmentValidation;
 		}
 		options.ignoreLinks = validation.ignoredLinks ?? [];
 		if (!Array.isArray(options.ignoreLinks) || options.ignoreLinks.some((value) => typeof value !== 'string')) { throw new TypeError('Invalid Markdown ignored links'); }
@@ -126,6 +126,7 @@ export async function registerLanguageFeatures(context) {
 			return [...result.values()];
 		};
 		const service = createLanguageService({
+			...(configuration.preferredMdPathExtensionStyle ? { preferredMdPathExtensionStyle: configuration.preferredMdPathExtensionStyle } : {}),
 			parser: {
 				slugifier: githubSlugifier,
 				tokenize: async (document) => parser.parse(document.getText(), {}),
@@ -184,7 +185,7 @@ export async function registerLanguageFeatures(context) {
 			let result;
 			switch (operation) {
 				case 'documentHighlights':
-					result = (await service.getDocumentHighlights(document, location, token)).map((value) => ({
+					result = (configuration.occurrencesHighlight?.enabled === false ? [] : await service.getDocumentHighlights(document, location, token)).map((value) => ({
 						range: range(value.range),
 						kind: value.kind ?? 1,
 					}));
@@ -303,10 +304,10 @@ export async function registerLanguageFeatures(context) {
 					break;
 				}
 				case 'completion': {
-					const values = await service.getCompletionItems(
+					const values = configuration.suggest?.paths?.enabled === false ? [] : await service.getCompletionItems(
 						document,
 						location,
-						{ includeWorkspaceHeaderCompletions: 'onDoubleHash' },
+						{ includeWorkspaceHeaderCompletions: configuration.suggest?.paths?.includeWorkspaceHeaderCompletions ?? 'onDoubleHash' },
 						token,
 					);
 					result = {

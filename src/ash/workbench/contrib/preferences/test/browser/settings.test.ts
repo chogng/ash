@@ -7,6 +7,7 @@ import gitMessages from '../../../../../../../extensions/git/package.nls.json' w
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import { IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import manifest from '../../../../../../../extensions/git/package.json' with { type: 'json' };
+import { readFile } from 'node:fs/promises';
 import { parseExtensionManifest } from '../../../../services/extensions/common/extensionManifest.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { ITextFileService } from '../../../../services/textfile/common/textfiles.js';
@@ -338,6 +339,38 @@ test('Extension settings use catalog identities and standard schemas without a p
 	assert.equal(registry.getConfiguration('sample.nested')?.source?.id, 'test.sample');
 	registry.updateConfigurations({ add: [], remove: [...parsed.contributes.configuration] });
 	assert.equal(createSettingsLayout(new DefaultSettings(registry).all).some(category => category.id === extension.id), false);
+});
+
+test('Built-in Git, Markdown and Media settings localize, persist and reset through the canonical registry', async () => {
+	const registry = new ConfigurationRegistry();
+	for (const name of ['git', 'markdown-language-features', 'media-preview']) {
+		const manifest = JSON.parse(await readFile(`extensions/${name}/package.json`, 'utf8'));
+		const messages = JSON.parse(await readFile(`extensions/${name}/package.nls.zh-CN.json`, 'utf8')) as Record<string, string>;
+		const localized = JSON.stringify(manifest, (_key, value) => typeof value === 'string' ? value.replace(/%([^%]+)%/g, (match, key) => messages[key] ?? match) : value);
+		registry.updateConfigurations({ add: [...parseExtensionManifest(localized, { id: `${manifest.publisher}.${name}`, name, publisher: manifest.publisher, version: manifest.version }).contributes.configuration], remove: [] });
+	}
+	const defaults = new DefaultSettings(registry);
+	const layout = createSettingsLayout(defaults.all);
+	assert.deepEqual(layout.filter(category => category.id.startsWith('extension.')).map(category => [category.id, category.groups.flatMap(group => group.settings).length]), [
+		['extension.ash.git', 23], ['extension.vscode.markdown-language-features', 13], ['extension.ash.media-preview', 2],
+	]);
+	assert.equal(defaults.get('mediaPreview.video.loop').title, '循环播放视频');
+	assert.equal(defaults.get('markdown.validate.enabled').title, '检查链接');
+	const severity = defaults.get('markdown.validate.fragmentLinks.enabled');
+	assert.equal(severity.valueType, 'select');
+	assert.deepEqual(severity.configuration.setting?.valueType === 'select' ? severity.configuration.setting.options.map(option => option.label) : [], ['忽略', '警告', '错误']);
+	using configuration = new WorkbenchConfigurationService({ registry });
+	await configuration.updateValue('mediaPreview.video.loop', true);
+	await configuration.updateValue('markdown.validate.enabled', false);
+	await configuration.updateValue('git.untrackedChanges', 'separate');
+	const document = (await configuration.read()).source;
+	assert.deepEqual(JSON.parse(document), { 'mediaPreview.video.loop': true, 'markdown.validate.enabled': false, 'git.untrackedChanges': 'separate' });
+	using reopened = new WorkbenchConfigurationService({ registry, initialSnapshot: { revision: 1, document: { version: 1, source: document } } });
+	assert.equal(reopened.getValue('git.untrackedChanges'), 'separate');
+	await assert.rejects(reopened.updateValue('git.untrackedChanges', 'unsupported'), TypeError);
+	await reopened.updateValue('mediaPreview.video.loop', undefined);
+	assert.equal(reopened.getValue('mediaPreview.video.loop'), false);
+	assert.equal(reopened.getValue('git.untrackedChanges'), 'separate');
 });
 
 test('URL rule suggestions follow extension registration without changing saved IDs', async () => {
@@ -846,7 +879,8 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, GitConfiguration.rebaseWhenSync), 'extension.ash.git');
 	assert.equal(configurationRegistry.getConfiguration(GitConfiguration.rebaseWhenSync)?.defaultValue, false);
 	assert.equal(defaults.get(GitConfiguration.rebaseWhenSync).valueType, 'boolean');
-	assert.equal(defaults.all.every(setting => ['boolean', 'number', 'select', 'text', 'stringMap'].includes(setting.valueType)), true);
+	assert.equal(defaults.all.every(setting => ['boolean', 'number', 'select', 'text', 'stringMap', 'complex'].includes(setting.valueType)), true);
+	assert.equal(defaults.get('git.ignoredRepositories').valueType, 'complex');
 	const themeSetting = defaults.get(WorkbenchConfiguration.colorTheme);
 	assert.equal(themeSetting.valueType, 'select');
 	if (themeSetting.valueType === 'select') {

@@ -2,7 +2,7 @@
   "name": "markdown-language-features",
   "publisher": "vscode",
   "version": "1.0.0",
-  "displayName": "Markdown Language Features",
+  "displayName": "%displayName%",
   "engines": {
     "vscode": "*"
   },
@@ -136,6 +136,323 @@
             "filenamePattern": "*.mkdn"
           }
         ]
+      }
+    ],
+    "configuration": [
+      {
+        "title": "%settings.markdownvalidation%",
+        "properties": {
+          "markdown.validate.enabled": {
+            "type": "boolean",
+            "default": true,
+            "scope": "resource",
+            "title": "%markdown.validate.enabled.title%",
+            "description": "%markdown.validate.enabled.description%"
+          },
+          "markdown.validate.referenceLinks.enabled": {
+            "type": "string",
+            "enum": [
+              "ignore",
+              "warning",
+              "error"
+            ],
+            "default": "warning",
+            "scope": "resource",
+            "title": "%markdown.validate.referenceLinks.enabled.title%",
+            "description": "%markdown.validate.referenceLinks.enabled.description%",
+            "ashSetting": {
+              "valueType": "select",
+              "title": "%markdown.validate.referenceLinks.enabled.title%",
+              "description": "%markdown.validate.referenceLinks.enabled.description%",
+              "options": [
+                {
+                  "value": "ignore",
+                  "label": "%markdown.validate.referenceLinks.enabled.option.ignore%"
+                },
+                {
+                  "value": "warning",
+                  "label": "%markdown.validate.referenceLinks.enabled.option.warning%"
+                },
+                {
+                  "value": "error",
+                  "label": "%markdown.validate.referenceLinks.enabled.option.error%"
+                }
+              ]
+            }
+          },
+          "markdown.validate.fragmentLinks.enabled": {
+            "type": "string",
+            "enum": [
+              "ignore",
+              "warning",
+              "error"
+            ],
+            "default": "warning",
+            "scope": "resource",
+            "title": "%markdown.validate.fragmentLinks.enabled.title%",
+            "description": "%markdown.validate.fragmentLinks.enabled.description%",
+            "ashSetting": {
+              "valueType": "select",
+              "title": "%markdown.validate.fragmentLinks.enabled.title%",
+              "description": "%markdown.validate.fragmentLinks.enabled.description%",
+              "options": [
+                {
+                  "value": "ignore",
+                  "label": "%markdown.validate.fragmentLinks.enabled.option.ignore%"
+                },
+                {
+                  "value": "warning",
+                  "label": "%markdown.validate.fragmentLinks.enabled.option.warning%"
+                },
+                {
+                  "value": "error",
+                  "label": "%markdown.validate.fragmentLinks.enabled.option.error%"
+                }
+              ]
+            }
+          },
+          "markdown.validate.fileLinks.enabled": {
+            "type": "string",
+            "enum": [
+              "ignore",
+              "warning",
+              "error"
+            ],
+            "default": "warning",
+            "scope": "resource",
+            "title": "%markdown.validate.fileLinks.enabled.title%",
+            "description": "%markdown.validate.fileLinks.enabled.description%",
+            "ashSetting": {
+              "valueType": "select",
+              "title": "%markdown.validate.fileLinks.enabled.title%",
+              "description": "%markdown.validate.fileLinks.enabled.description%",
+              "options": [
+                {
+                  "value": "ignore",
+                  "label": "%markdown.validate.fileLinks.enabled.option.ignore%"
+                },
+                {
+                  "value": "warning",
+                  "label": "%markdown.validate.fileLinks.enabled.option.warning%"
+                },
+                {
+                  "value": "error",
+                  "label": "%markdown.validate.fileLinks.enabled.option.error%"
+                }
+              ]
+            }
+          },
+          "markdown.validate.unusedLinkDefinitions.enabled": {
+            "type": "string",
+            "enum": [
+              "ignore",
+              "hint",
+              "warning",
+              "error"
+            ],
+            "default": "hint",
+            "scope": "resource",
+            "title": "%markdown.validate.unusedLinkDefinitions.enabled.title%",
+            "description": "%markdown.validate.unusedLinkDefinitions.enabled.description%",
+            "ashSetting": {
+              "valueType": "select",
+              "title": "%markdown.validate.unusedLinkDefinitions.enabled.title%",
+              "description": "%markdown.validate.unusedLinkDefinitions.enabled.description%",
+              "options": [
+                {
+                  "value": "ignore",
+                  "label": "%markdown.validate.unusedLinkDefinitions.enabled.option.ignore%"
+                },
+                {
+                  "value": "hint",
+                  "label": "%markdown.validate.unusedLinkDefinitions.enabled.option.hint%"
+                },
+                {
+                  "value": "warning",
+                  "label": "%markdown.validate.unusedLinkDefinitions.enabled.option.warning%"
+                },
+                {
+                  "value": "error",
+                  "label": "%markdown.validate.unusedLinkDefinitions.enabled.option.error%"
+                }
+              ]
+            }
+          },
+          "markdown.validate.duplicateLinkDefinitions.enabled": {
+            "type": "string",
+            "enum": [
+              "ignore",
+              "warning",
+              "error"
+            ],
+            "default": "warning",
+            "scope": "resource",
+            "title": "%markdown.validate.duplicateLinkDefinitions.enabled.title%",
+            "description": "%markdown.validate.duplicateLinkDefinitions.enabled.description%",
+            "ashSetting": {
+              "valueType": "select",
+              "title": "%markdown.validate.duplicateLinkDefinitions.enabled.title%",
+              "description": "%markdown.validate.duplicateLinkDefinitions.enabled.description%",
+              "options": [
+                {
+                  "value": "ignore",
+                  "label": "%markdown.validate.duplicateLinkDefinitions.enabled.option.ignore%"
+                },
+                {
+                  "value": "warning",
+                  "label": "%markdown.validate.duplicateLinkDefinitions.enabled.option.warning%"
+                },
+                {
+                  "value": "error",
+                  "label": "%markdown.validate.duplicateLinkDefinitions.enabled.option.error%"
+                }
+              ]
+            }
+          },
+          "markdown.validate.fileLinks.markdownFragmentLinks": {
+            "type": "string",
+            "enum": [
+              "inherit",
+              "ignore",
+              "warning",
+              "error"
+            ],
+            "default": "inherit",
+            "scope": "resource",
+            "title": "%markdown.validate.fileLinks.markdownFragmentLinks.title%",
+            "description": "%markdown.validate.fileLinks.markdownFragmentLinks.description%",
+            "ashSetting": {
+              "valueType": "select",
+              "title": "%markdown.validate.fileLinks.markdownFragmentLinks.title%",
+              "description": "%markdown.validate.fileLinks.markdownFragmentLinks.description%",
+              "options": [
+                {
+                  "value": "inherit",
+                  "label": "%markdown.validate.fileLinks.markdownFragmentLinks.option.inherit%"
+                },
+                {
+                  "value": "ignore",
+                  "label": "%markdown.validate.fileLinks.markdownFragmentLinks.option.ignore%"
+                },
+                {
+                  "value": "warning",
+                  "label": "%markdown.validate.fileLinks.markdownFragmentLinks.option.warning%"
+                },
+                {
+                  "value": "error",
+                  "label": "%markdown.validate.fileLinks.markdownFragmentLinks.option.error%"
+                }
+              ]
+            }
+          },
+          "markdown.validate.ignoredLinks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "scope": "resource",
+            "title": "%markdown.validate.ignoredLinks.title%",
+            "description": "%markdown.validate.ignoredLinks.description%"
+          }
+        }
+      },
+      {
+        "title": "%settings.markdowncompletion%",
+        "properties": {
+          "markdown.suggest.paths.enabled": {
+            "type": "boolean",
+            "default": true,
+            "scope": "resource",
+            "title": "%markdown.suggest.paths.enabled.title%",
+            "description": "%markdown.suggest.paths.enabled.description%"
+          },
+          "markdown.suggest.paths.includeWorkspaceHeaderCompletions": {
+            "type": "string",
+            "default": "onDoubleHash",
+            "enum": [
+              "never",
+              "onDoubleHash",
+              "onSingleOrDoubleHash"
+            ],
+            "scope": "resource",
+            "title": "%markdown.suggest.paths.includeWorkspaceHeaderCompletions.title%",
+            "description": "%markdown.suggest.paths.includeWorkspaceHeaderCompletions.description%",
+            "ashSetting": {
+              "valueType": "select",
+              "title": "%markdown.suggest.paths.includeWorkspaceHeaderCompletions.title%",
+              "description": "%markdown.suggest.paths.includeWorkspaceHeaderCompletions.description%",
+              "options": [
+                {
+                  "value": "never",
+                  "label": "%markdown.suggest.paths.includeWorkspaceHeaderCompletions.option.never%"
+                },
+                {
+                  "value": "onDoubleHash",
+                  "label": "%markdown.suggest.paths.includeWorkspaceHeaderCompletions.option.onDoubleHash%"
+                },
+                {
+                  "value": "onSingleOrDoubleHash",
+                  "label": "%markdown.suggest.paths.includeWorkspaceHeaderCompletions.option.onSingleOrDoubleHash%"
+                }
+              ]
+            }
+          },
+          "markdown.preferredMdPathExtensionStyle": {
+            "type": "string",
+            "default": "auto",
+            "enum": [
+              "auto",
+              "includeExtension",
+              "removeExtension"
+            ],
+            "title": "%markdown.preferredMdPathExtensionStyle.title%",
+            "description": "%markdown.preferredMdPathExtensionStyle.description%",
+            "ashSetting": {
+              "valueType": "select",
+              "title": "%markdown.preferredMdPathExtensionStyle.title%",
+              "description": "%markdown.preferredMdPathExtensionStyle.description%",
+              "options": [
+                {
+                  "value": "auto",
+                  "label": "%markdown.preferredMdPathExtensionStyle.option.auto%"
+                },
+                {
+                  "value": "includeExtension",
+                  "label": "%markdown.preferredMdPathExtensionStyle.option.includeExtension%"
+                },
+                {
+                  "value": "removeExtension",
+                  "label": "%markdown.preferredMdPathExtensionStyle.option.removeExtension%"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "title": "%settings.markdowneditor%",
+        "properties": {
+          "markdown.occurrencesHighlight.enabled": {
+            "type": "boolean",
+            "default": true,
+            "scope": "resource",
+            "title": "%markdown.occurrencesHighlight.enabled.title%",
+            "description": "%markdown.occurrencesHighlight.enabled.description%"
+          }
+        }
+      },
+      {
+        "title": "%settings.markdownpreview%",
+        "properties": {
+          "markdown.preview.breaks": {
+            "type": "boolean",
+            "default": false,
+            "scope": "resource",
+            "title": "%markdown.preview.breaks.title%",
+            "description": "%markdown.preview.breaks.description%"
+          }
+        }
       }
     ]
   },

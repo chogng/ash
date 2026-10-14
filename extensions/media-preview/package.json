@@ -2,7 +2,7 @@
   "name": "media-preview",
   "publisher": "ash",
   "version": "1.0.0",
-  "displayName": "Media Preview",
+  "displayName": "%displayName%",
   "engines": {
     "vscode": "*"
   },
@@ -68,6 +68,25 @@
             "mimeType": "video/webm"
           }
         ]
+      }
+    ],
+    "configuration": [
+      {
+        "title": "%settings.mediapreview%",
+        "properties": {
+          "mediaPreview.video.autoPlay": {
+            "type": "boolean",
+            "default": false,
+            "title": "%mediaPreview.video.autoPlay.title%",
+            "description": "%mediaPreview.video.autoPlay.description%"
+          },
+          "mediaPreview.video.loop": {
+            "type": "boolean",
+            "default": false,
+            "title": "%mediaPreview.video.loop.title%",
+            "description": "%mediaPreview.video.loop.description%"
+          }
+        }
       }
     ]
   }

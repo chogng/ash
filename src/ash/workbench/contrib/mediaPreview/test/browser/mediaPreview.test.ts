@@ -14,6 +14,11 @@ import { installEditorTestDom } from '../../../../../editor/test/browser/editorT
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { ConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
+import { parseExtensionManifest } from '../../../../services/extensions/common/extensionManifest.js';
+import mediaManifest from '../../../../../../../extensions/media-preview/package.json' with { type: 'json' };
 import { FileKind, IFileService, type IFileChangeEvent, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { EditorPanes, getBuiltinEditorPaneFactory } from '../../../../browser/editor.js';
@@ -86,6 +91,7 @@ class MediaFixture extends Disposable {
 	public readonly kind: 'audio' | 'video';
 	public readonly changes = this._register(new Emitter<IFileChangeEvent>());
 	public readonly services = this._register(new InstantiationService());
+	public readonly configuration: InMemoryConfigurationService;
 	public readonly revoked: string[] = [];
 	public readonly operations: string[] = [];
 	public readonly preview: MediaPreview;
@@ -113,6 +119,10 @@ class MediaFixture extends Disposable {
 			createFile: unexpected, createDirectory: unexpected, copy: unexpected, rename: unexpected, delete: unexpected,
 		}));
 		registerTestComponentServices(this.services, this.browser.window.document);
+		const registry = new ConfigurationRegistry();
+		registry.updateConfigurations({ add: [...parseExtensionManifest(JSON.stringify(mediaManifest), { id: 'ash.media-preview', name: 'media-preview', publisher: 'ash', version: '1.0.0' }).contributes.configuration], remove: [] });
+		this.configuration = this._register(new InMemoryConfigurationService(registry));
+		this.services.registerInstance(IConfigurationService, this.configuration);
 		this.services.registerInstance(IContextKeyService, this._register(new ContextKeyService()));
 		this.services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, ...toDisposable(() => { }) });
 		const id = kind === 'audio' ? AUDIO_PREVIEW_ID : VIDEO_PREVIEW_ID;
@@ -143,6 +153,21 @@ test('Audio and video use the registered renderer, keyboard playback and stop be
 		fixture.operations.length = 0;
 		fixture.preview.clearInput();
 		assert.deepEqual([fixture.player.hasAttribute('src'), fixture.revoked, fixture.operations], [false, [url], ['pause', 'load-cleared', 'revoke']]);
+	}
+});
+
+test('Video playback preferences apply live, survive replacing the player and leave audio manual', async () => {
+	for (const kind of ['audio', 'video'] as const) {
+		using fixture = new MediaFixture(kind);
+		await fixture.preview.setInput({ resource: URI.file('/media/first') }, new AbortController().signal);
+		await fixture.configuration.updateValue('mediaPreview.video.autoPlay', true);
+		await fixture.configuration.updateValue('mediaPreview.video.loop', true);
+		assert.deepEqual([fixture.player.autoplay, fixture.player.loop], [kind === 'video', kind === 'video']);
+		await fixture.preview.setInput({ resource: URI.file('/media/second') }, new AbortController().signal);
+		assert.deepEqual([fixture.player.autoplay, fixture.player.loop], [kind === 'video', kind === 'video']);
+		await fixture.configuration.updateValue('mediaPreview.video.autoPlay', undefined);
+		await fixture.configuration.updateValue('mediaPreview.video.loop', undefined);
+		assert.deepEqual([fixture.player.autoplay, fixture.player.loop], [false, false]);
 	}
 });
 

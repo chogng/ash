@@ -646,6 +646,12 @@
       {
         "command": "git.updateRebaseWhenSync",
         "title": "%command.git.updateRebaseWhenSync%"
+      },
+      {
+        "command": "git.commitEmpty",
+        "title": "%git.commitEmpty.title%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       }
     ],
     "colors": [
@@ -1292,6 +1298,213 @@
             "readCommand": "git.readSettings",
             "writeCommand": "git.updateRebaseWhenSync",
             "property": "rebaseWhenSync"
+          }
+        },
+        "git.decorations.enabled": {
+          "type": "boolean",
+          "default": true,
+          "title": "%git.decorations.enabled.title%",
+          "description": "%git.decorations.enabled.description%"
+        },
+        "git.untrackedChanges": {
+          "type": "string",
+          "default": "mixed",
+          "enum": [
+            "mixed",
+            "separate",
+            "hidden"
+          ],
+          "scope": "resource",
+          "title": "%git.untrackedChanges.title%",
+          "description": "%git.untrackedChanges.description%",
+          "ashSetting": {
+            "valueType": "select",
+            "title": "%git.untrackedChanges.title%",
+            "description": "%git.untrackedChanges.description%",
+            "options": [
+              {
+                "value": "mixed",
+                "label": "%git.untrackedChanges.option.mixed%"
+              },
+              {
+                "value": "separate",
+                "label": "%git.untrackedChanges.option.separate%"
+              },
+              {
+                "value": "hidden",
+                "label": "%git.untrackedChanges.option.hidden%"
+              }
+            ]
+          }
+        },
+        "git.openDiffOnClick": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "title": "%git.openDiffOnClick.title%",
+          "description": "%git.openDiffOnClick.description%"
+        },
+        "git.showInlineOpenFileAction": {
+          "type": "boolean",
+          "default": true,
+          "title": "%git.showInlineOpenFileAction.title%",
+          "description": "%git.showInlineOpenFileAction.description%"
+        },
+        "git.confirmSync": {
+          "type": "boolean",
+          "default": true,
+          "title": "%git.confirmSync.title%",
+          "description": "%git.confirmSync.description%"
+        },
+        "git.enableSmartCommit": {
+          "type": "boolean",
+          "default": false,
+          "title": "%git.enableSmartCommit.title%",
+          "description": "%git.enableSmartCommit.description%",
+          "scope": "resource"
+        },
+        "git.smartCommitChanges": {
+          "type": "string",
+          "default": "all",
+          "title": "%git.smartCommitChanges.title%",
+          "description": "%git.smartCommitChanges.description%",
+          "scope": "resource",
+          "enum": [
+            "all",
+            "tracked"
+          ],
+          "ashSetting": {
+            "valueType": "select",
+            "title": "%git.smartCommitChanges.title%",
+            "description": "%git.smartCommitChanges.description%",
+            "options": [
+              {
+                "value": "all",
+                "label": "%git.smartCommitChanges.option.all%"
+              },
+              {
+                "value": "tracked",
+                "label": "%git.smartCommitChanges.option.tracked%"
+              }
+            ]
+          }
+        },
+        "git.suggestSmartCommit": {
+          "type": "boolean",
+          "default": true,
+          "title": "%git.suggestSmartCommit.title%",
+          "description": "%git.suggestSmartCommit.description%",
+          "scope": "resource"
+        },
+        "git.enableCommitSigning": {
+          "type": "boolean",
+          "default": false,
+          "title": "%git.enableCommitSigning.title%",
+          "description": "%git.enableCommitSigning.description%",
+          "scope": "resource"
+        },
+        "git.confirmEmptyCommits": {
+          "type": "boolean",
+          "default": true,
+          "title": "%git.confirmEmptyCommits.title%",
+          "description": "%git.confirmEmptyCommits.description%",
+          "scope": "resource"
+        },
+        "git.postCommitCommand": {
+          "type": "string",
+          "default": "none",
+          "title": "%git.postCommitCommand.title%",
+          "description": "%git.postCommitCommand.description%",
+          "scope": "resource",
+          "enum": [
+            "none",
+            "push",
+            "sync"
+          ],
+          "ashSetting": {
+            "valueType": "select",
+            "title": "%git.postCommitCommand.title%",
+            "description": "%git.postCommitCommand.description%",
+            "options": [
+              {
+                "value": "none",
+                "label": "%git.postCommitCommand.option.none%"
+              },
+              {
+                "value": "push",
+                "label": "%git.postCommitCommand.option.push%"
+              },
+              {
+                "value": "sync",
+                "label": "%git.postCommitCommand.option.sync%"
+              }
+            ]
+          }
+        },
+        "git.defaultBranchName": {
+          "type": "string",
+          "default": "main",
+          "title": "%git.defaultBranchName.title%",
+          "description": "%git.defaultBranchName.description%",
+          "scope": "resource"
+        },
+        "git.branchPrefix": {
+          "type": "string",
+          "default": "",
+          "title": "%git.branchPrefix.title%",
+          "description": "%git.branchPrefix.description%",
+          "scope": "resource"
+        },
+        "git.branchValidationRegex": {
+          "type": "string",
+          "default": "",
+          "title": "%git.branchValidationRegex.title%",
+          "description": "%git.branchValidationRegex.description%"
+        },
+        "git.branchWhitespaceChar": {
+          "type": "string",
+          "default": "-",
+          "title": "%git.branchWhitespaceChar.title%",
+          "description": "%git.branchWhitespaceChar.description%",
+          "maxLength": 32
+        },
+        "git.useCommitInputAsStashMessage": {
+          "type": "boolean",
+          "default": false,
+          "title": "%git.useCommitInputAsStashMessage.title%",
+          "description": "%git.useCommitInputAsStashMessage.description%",
+          "scope": "resource"
+        },
+        "git.fetchOnPull": {
+          "type": "boolean",
+          "default": false,
+          "title": "%git.fetchOnPull.title%",
+          "description": "%git.fetchOnPull.description%",
+          "scope": "resource"
+        },
+        "git.showPushSuccessNotification": {
+          "type": "boolean",
+          "default": false,
+          "title": "%git.showPushSuccessNotification.title%",
+          "description": "%git.showPushSuccessNotification.description%"
+        },
+        "git.commitShortHashLength": {
+          "type": "integer",
+          "default": 7,
+          "title": "%git.commitShortHashLength.title%",
+          "description": "%git.commitShortHashLength.description%",
+          "scope": "resource",
+          "minimum": 7,
+          "maximum": 40
+        },
+        "git.ignoredRepositories": {
+          "type": "array",
+          "default": [],
+          "title": "%git.ignoredRepositories.title%",
+          "description": "%git.ignoredRepositories.description%",
+          "scope": "window",
+          "items": {
+            "type": "string"
           }
         }
       }

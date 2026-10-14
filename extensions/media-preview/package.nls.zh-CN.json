@@ -1,5 +1,11 @@
 {
   "image.preview": "图片预览",
   "audio.preview": "音频预览",
-  "video.preview": "视频预览"
+  "video.preview": "视频预览",
+  "settings.mediapreview": "媒体预览",
+  "mediaPreview.video.autoPlay.title": "自动播放视频",
+  "mediaPreview.video.autoPlay.description": "打开视频预览时自动开始播放。",
+  "mediaPreview.video.loop.title": "循环播放视频",
+  "mediaPreview.video.loop.description": "视频播放结束后重新开始播放。",
+  "displayName": "媒体预览"
 }

@@ -54,6 +54,99 @@ test('Worker queues a large client request batch without retiring its incarnatio
 	}
 });
 
+test('Git presentation settings update the packaged Worker without restarting its repositories', async ({ page }) => {
+	const errors = collectErrors(page);
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(() => window.gitExtensionIntegration.activate('en'));
+		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().repositories[0]?.paths)).toEqual(['one.ts']);
+		await page.evaluate(() => window.gitPresentationIntegration.addUntracked());
+		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().repositories[0]?.paths)).toEqual(['one.ts', 'new.ts']);
+		await page.evaluate(() => window.gitPresentationIntegration.update('git.untrackedChanges', 'separate'));
+		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().repositories[0]?.groups)).toEqual(['Staged Changes', 'Untracked Changes']);
+		await page.evaluate(() => window.gitPresentationIntegration.update('git.untrackedChanges', 'hidden'));
+		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().repositories[0]?.paths)).toEqual(['one.ts']);
+		await page.evaluate(() => window.gitPresentationIntegration.update('git.showInlineOpenFileAction', false));
+		await expect.poll(() => page.evaluate(() => window.gitPresentationIntegration.actions()?.some(id => id.startsWith('scm.change.openFile')))).toBe(false);
+		await page.evaluate(() => window.gitPresentationIntegration.update('git.decorations.enabled', false));
+		await expect.poll(() => page.evaluate(() => window.gitPresentationIntegration.decoration())).toBeUndefined();
+		await page.evaluate(() => window.gitPresentationIntegration.update('git.openDiffOnClick', false));
+		await page.evaluate(() => window.gitPresentationIntegration.open());
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().requests.at(-1))).toMatchObject({ method: 'open', input: { resource: 'file:///workspace/one.ts' } });
+		await page.evaluate(() => window.gitPresentationIntegration.update('git.untrackedChanges', undefined));
+		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().repositories[0]?.paths)).toEqual(['one.ts', 'new.ts']);
+		expect(await page.evaluate(() => window.gitStartupIntegration.refresh())).toEqual({ generationPreserved: true, providerPreserved: true });
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().errors)).toEqual([]);
+		expect(errors).toEqual([]);
+	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
+});
+
+test('Git commit policies reach the Rust contract through the packaged Worker', async ({ page }) => {
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(() => window.gitExtensionIntegration.activate('en'));
+		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().repositories[0]?.paths)).toEqual(['one.ts']);
+		await page.evaluate(async () => {
+			await window.gitPresentationIntegration.update('git.enableSmartCommit', true);
+			await window.gitPresentationIntegration.update('git.smartCommitChanges', 'tracked');
+			await window.gitPresentationIntegration.update('git.enableCommitSigning', true);
+			await window.gitPresentationIntegration.update('git.postCommitCommand', 'push');
+			await window.gitPresentationIntegration.commit('Signed smart commit');
+		});
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'git/commit' || call.method === 'git/push'))).toEqual([
+			{ method: 'git/commit', params: { repositoryId: 'root', message: 'Signed smart commit', scope: 'tracked', signing: 'required', expectedHead: { type: 'branch', name: 'main', objectId: 'a'.repeat(40), upstream: null } } },
+			{ method: 'git/push', params: { repositoryId: 'root' } },
+		]);
+		await page.evaluate(async () => {
+			await window.gitPresentationIntegration.update('git.enableCommitSigning', false);
+			await window.gitPresentationIntegration.update('git.postCommitCommand', 'none');
+			await window.gitPresentationIntegration.commit('Empty commit', 'git.commitEmpty');
+		});
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'git/commit').at(-1)?.params)).toEqual({ repositoryId: 'root', message: 'Empty commit', scope: 'staged', empty: 'allow', expectedHead: { type: 'branch', name: 'main', objectId: 'a'.repeat(40), upstream: null } });
+		await page.evaluate(async () => {
+			await window.gitPresentationIntegration.update('git.fetchOnPull', true);
+			await window.gitExtensionIntegration.invoke('git.pullRebase', ['root']);
+		});
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'git/fetch' || call.method === 'git/pull').map(call => call.method))).toEqual(['git/fetch', 'git/pull']);
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().errors)).toEqual([]);
+	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
+});
+
+test('Git naming, stash, history and repository preferences apply in the packaged Worker', async ({ page }) => {
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(() => window.gitExtensionIntegration.activate('en'));
+		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().repositories[0]?.paths)).toEqual(['one.ts']);
+		await page.evaluate(async () => {
+			await window.gitPresentationIntegration.update('git.branchPrefix', 'feature/');
+			await window.gitPresentationIntegration.update('git.branchWhitespaceChar', '_');
+			await window.gitPresentationIntegration.update('git.branchValidationRegex', '^feature/[a-z_]+$');
+			window.gitExtensionIntegration.answer(['Invalid!', 'team feature']);
+			await window.gitExtensionIntegration.invoke('git.branch', ['root']);
+		});
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().calls.find(call => call.method === 'git/branch/create')?.params)).toEqual({ repositoryId: 'root', name: 'feature/team_feature' });
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().requests.some(request => (request as { validationMessage?: string; }).validationMessage?.includes('git.branchValidationRegex')))).toBe(true);
+		await page.evaluate(async () => {
+			await window.gitPresentationIntegration.update('git.defaultBranchName', 'trunk');
+			window.gitExtensionIntegration.answer(['trunk']);
+			await window.gitExtensionIntegration.invoke('git.init');
+			await window.gitPresentationIntegration.update('git.useCommitInputAsStashMessage', true);
+			window.gitPresentationIntegration.draft('Stash draft');
+			window.gitExtensionIntegration.answer(['Edited stash']);
+			await window.gitExtensionIntegration.invoke('git.stash', ['root']);
+		});
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().requests.some(request => (request as { method?: string; value?: string; }).method === 'input' && (request as { value?: string; }).value === 'trunk'))).toBe(true);
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().requests.some(request => (request as { value?: string; }).value === 'Stash draft'))).toBe(true);
+		await page.evaluate(() => window.gitPresentationIntegration.update('git.commitShortHashLength', 12));
+		expect((await page.evaluate(() => window.gitExtensionIntegration.history()) as { displayId: string; }[])[0]?.displayId).toBe('a'.repeat(12));
+		await page.evaluate(() => window.gitPresentationIntegration.update('git.ignoredRepositories', ['/workspace']));
+		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().repositories)).toEqual([]);
+		await page.evaluate(() => window.gitPresentationIntegration.update('git.ignoredRepositories', []));
+		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().repositories[0]?.paths)).toEqual(['one.ts']);
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().errors)).toEqual([]);
+	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
+});
+
 test('SCM delivers changes queued while its initialization update is in flight', async ({ page }) => {
 	const errors = collectErrors(page);
 	await page.goto('/gitExtension.html');

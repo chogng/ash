@@ -52,7 +52,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 				AccessibleViewProviderId.MediaPreview,
 				{ type },
 				() => type === AccessibleViewType.Help
-					? localize('media.playback.help', 'Audio and video preview\nPress Space on the player to play or pause. Use Tab to reach playback controls for seeking, volume and fullscreen where available. If loading fails, choose Retry to read the file again. <keybinding:editor.action.accessibleView> reads the filename, file size, duration and playback state; it does not transcribe audio or describe video. Playback stops when you switch away from the preview. File changes reload the preview. Closing the tab stops playback and releases its resources; the original file stays intact.')
+					? localize('media.playback.help', 'Audio and video preview\nPress Space on the player to play or pause. Use Tab to reach playback controls for seeking, volume and fullscreen where available. If loading fails, choose Retry to read the file again. <keybinding:editor.action.accessibleView> reads the filename, file size, duration and playback state; it does not transcribe audio or describe video. Video autoplay and looping can be configured in Settings under Media Preview. Audio starts only when you play it. Playback stops when you switch away from the preview. File changes reload the preview. Closing the tab stops playback and releases its resources; the original file stays intact.')
 					: preview.getAccessibleContent(),
 				() => focused.focus(),
 				AccessibilityVerbositySettingId.MediaPreview,

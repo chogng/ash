@@ -39,7 +39,8 @@ export async function activate(context) {
 	context.subscriptions.push(vscode.window.registerCustomEditorProvider(preview.viewType, {
 		async resolveCustomTextEditor(document, panel, token) {
 			if (token.isCancellationRequested) return;
-			panel.webview.html = `<style>${previewStyle}</style><main>${parser.parse(document.getText())}</main><script>
+			const configuration = vscode.workspace.getConfiguration('markdown', document.uri);
+			panel.webview.html = `<style>${previewStyle}</style><main>${parser.parse(document.getText(), { breaks: configuration.get('preview.breaks', false) })}</main><script>
 			const api = acquireVsCodeApi();
 			document.addEventListener('click', event => {
 				const anchor = event.target.closest('a');

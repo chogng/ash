@@ -721,6 +721,16 @@ UI，也必须保留两种 package identity、authority、generation 和 failure
 
 ## 3. 当前支持的声明式贡献
 
+扩展的 `contributes.configuration` 由目录加载器注册到客户端 Configuration Registry；设置页
+按配置来源生成扩展分类，不把没有设置的语法包和主题包列为空分类。标量使用现有设置控件，
+结构值使用 JSON 编辑器；manifest 的标题、说明和选项通过包 NLS 本地化。
+普通前端偏好保存到配置服务拥有的 `settings.json`。Git 的自动获取、间隔和同步变基继续通过
+扩展设置绑定读写共享 Git 配置，不另存一份前端值。
+
+目前 Git 声明 23 项设置，Markdown Language Features 声明 13 项，Media Preview 声明 2 项。
+Git 的显示设置与 Markdown 的语言功能在配置事件后更新；Markdown 预览换行在渲染预览时读取。
+视频自动播放和循环设置应用到播放器并跟随配置变化，音频仍由用户手动开始播放。
+
 | `package.json` 贡献                            | 当前状态     | 当前边界                                                                                                 |
 | ---------------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------- |
 | `languages`                                    | ✅           | ID、aliases、extensions、filenames、filename patterns、MIME type、first-line pattern                     |

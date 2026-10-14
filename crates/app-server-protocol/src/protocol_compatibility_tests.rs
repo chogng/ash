@@ -37,6 +37,8 @@ fn commit_options_preserve_legacy_requests_and_reject_unknown_intents() {
     assert!(decoded.scope.is_none());
     assert!(decoded.mode.is_none());
     assert!(decoded.signoff.is_none());
+    assert!(decoded.signing.is_none());
+    assert!(decoded.empty.is_none());
     assert!(decoded.expected_head.is_none());
     assert_eq!(serde_json::to_value(decoded).unwrap(), legacy);
     for scope in ["staged", "tracked", "includeUntracked"] {
@@ -48,7 +50,20 @@ fn commit_options_preserve_legacy_requests_and_reject_unknown_intents() {
             }
         }
     }
-    for (field, value) in [("scope", "all"), ("mode", "reset"), ("signoff", "gpg")] {
+    for signing in ["configured", "required"] {
+        for empty in ["reject", "allow"] {
+            let request = serde_json::json!({ "message": "explicit intent", "signing": signing, "empty": empty });
+            let decoded: GitCommitParams = serde_json::from_value(request.clone()).unwrap();
+            assert_eq!(serde_json::to_value(decoded).unwrap(), request);
+        }
+    }
+    for (field, value) in [
+        ("scope", "all"),
+        ("mode", "reset"),
+        ("signoff", "gpg"),
+        ("signing", "unsignedFallback"),
+        ("empty", "automatic"),
+    ] {
         let mut invalid = legacy.clone();
         invalid[field] = serde_json::json!(value);
         assert!(serde_json::from_value::<GitCommitParams>(invalid).is_err());

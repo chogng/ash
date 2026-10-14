@@ -20,6 +20,7 @@ import { gitErrorMessage } from './gitError.js';
 import { CancellationError } from './support.js';
 import type { GitChangeFileComparison, GitChangeStatus, GitCommitOptions, GitHead, GitPullMode, GitRepository, GitRepositoryChange, GitStatus, IGitService } from './types.js';
 import { GitHistoryProvider } from './gitHistoryProvider.js';
+import type { Event } from '../../../sdk/browser/index.js';
 
 type ChangeSide = 'index' | 'worktree';
 type PathAction = 'stage' | 'unstage' | 'discard';
@@ -32,11 +33,16 @@ const untrackedForeground = 'gitDecoration.untrackedResourceForeground';
 const conflictingForeground = 'gitDecoration.conflictingResourceForeground';
 
 export interface GitSCMProviderServices {
+	readonly configuration: {
+		get<T>(key: string, defaultValue: T, resource?: URI): T;
+		readonly onDidChange: Event<{ affectsConfiguration(section: string, resource?: URI): boolean; }>;
+	};
 	readonly commandService: CommandClient;
 	readonly dialogService: DialogClient;
 	readonly editorService: EditorClient;
 	readonly viewsService: ViewsClient;
 	readonly workingCopyService: WorkingCopyClient;
+	notify(message: string): void;
 }
 
 /** Owns Git state and operations exposed through one SCM repository. */
@@ -91,9 +97,19 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 			},
 			// Git work disables acceptance separately; users can keep composing the next draft.
 			enabled: true,
-			get canAccept() { return provider.status?.changes.some(change => !change.conflicted && change.indexStatus !== 'unmodified') === true; },
+			get canAccept() {
+				const changes = provider.status?.changes ?? [];
+				const smartScope = provider.services.configuration.get<string>('git.smartCommitChanges', 'all', provider.rootUri);
+				const staged = changes.some(change => change.indexStatus !== 'unmodified');
+				const unstaged = changes.some(change => change.worktreeStatus !== 'unmodified' && (smartScope === 'all' || change.worktreeStatus !== 'untracked'));
+				return !changes.some(change => change.conflicted) && (staged || unstaged && (
+					provider.services.configuration.get('git.enableSmartCommit', false, provider.rootUri)
+					|| provider.services.configuration.get('git.suggestSmartCommit', true, provider.rootUri)));
+			},
 			buttonLabel: localize('git.commit', 'Commit'),
-			buttonTooltip: localize('git.commitStagedTooltip', 'Commit staged changes'),
+			get buttonTooltip() {
+				return provider.status?.changes.some(change => change.indexStatus !== 'unmodified') ? localize('git.commitStagedTooltip', 'Commit staged changes') : localize('git.commitChangesTooltip', 'Commit changes');
+			},
 			accept: () => this.commit(),
 		};
 		this.mergeProvider = {
@@ -107,6 +123,12 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 			if (status.repositoryId === this.id) this.acceptStatus(status);
 		}));
 		this._register(gitService.onDidBecomeReady(() => { void this.refresh(); }));
+		this._register(services.configuration.onDidChange(event => {
+			if (!event.affectsConfiguration('git', this.rootUri)) return;
+			if (this.status) this.resourceGroups = this.createGroups(this.status);
+			this.updateDecorations();
+			this.changeEmitter.fire();
+		}));
 		void this.refresh();
 	}
 
@@ -128,6 +150,7 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 	public get groups(): readonly ISCMResourceGroup[] { return this.resourceGroups; }
 
 	public provideDecorations(resource: URI): IDecorationData | undefined {
+		if (!this.services.configuration.get('git.decorations.enabled', true)) return undefined;
 		return this.decorations.get(extUriBiasedIgnorePathCase.getComparisonKey(resource))?.data;
 	}
 
@@ -162,11 +185,14 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 	private createGroups(status: GitStatus): readonly ISCMResourceGroup[] {
 		const conflicts = status.changes.filter(change => change.conflicted);
 		const staged = status.changes.filter(change => !change.conflicted && change.indexStatus !== 'unmodified');
-		const working = status.changes.filter(change => !change.conflicted && change.worktreeStatus !== 'unmodified');
+		const untrackedMode = this.services.configuration.get<string>('git.untrackedChanges', 'mixed', this.rootUri);
+		const working = status.changes.filter(change => !change.conflicted && change.worktreeStatus !== 'unmodified' && (untrackedMode === 'mixed' || change.worktreeStatus !== 'untracked'));
+		const untracked = untrackedMode === 'separate' ? status.changes.filter(change => !change.conflicted && change.worktreeStatus === 'untracked') : [];
 		return [
 			this.group(status, 'merge', localize('git.mergeChanges', 'Merge Changes'), conflicts, 'worktree'),
 			this.group(status, 'staged', localize('git.stagedChanges', 'Staged Changes'), staged, 'index'),
 			this.group(status, 'changes', localize('git.changes', 'Changes'), working, 'worktree'),
+			this.group(status, 'untracked', localize('git.untrackedChanges', 'Untracked Changes'), untracked, 'worktree'),
 		].filter(group => group.resources.length > 0);
 	}
 
@@ -258,7 +284,7 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 				this.pathAction(`scm.change.stage.${change.path}`, localize('git.stagePath', 'Stage {0}', change.path), 'stage', changePaths(change)),
 			];
 		const hasWorkingFile = change.worktreeStatus !== 'deleted' && !(change.indexStatus === 'deleted' && change.worktreeStatus === 'unmodified');
-		if (hasWorkingFile) {
+		if (hasWorkingFile && this.services.configuration.get('git.showInlineOpenFileAction', true)) {
 			actions.unshift(this.action(`scm.change.openFile.${change.path}`, localize('git.openFile', 'Open File: {0}', change.path), Lxicon.goToFile, async () => {
 				await this.services.editorService.openEditor({ resource: repositoryFileUri(status.workspacePath, change.path) }, { pinned: false, revealIfOpened: true, preserveFocus: false });
 			}));
@@ -268,7 +294,9 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 			path: change.path,
 			originalPath: change.originalPath,
 			decorations: { badge: statusCode(state), tooltip: statusLabel(state), kind: state },
-			openLabel: change.conflicted ? localize('git.openConflictPath', 'Open merge conflict in {0}', change.path) : localize('git.openChangePath', 'Open {0} for {1}', side === 'index' ? localize('git.stagedChanges', 'Staged Changes') : localize('git.changes', 'Changes'), change.path),
+			openLabel: change.conflicted ? localize('git.openConflictPath', 'Open merge conflict in {0}', change.path)
+				: hasWorkingFile && !this.services.configuration.get('git.openDiffOnClick', true, this.rootUri) ? localize('git.openFile', 'Open File: {0}', change.path)
+					: localize('git.openChangePath', 'Open {0} for {1}', side === 'index' ? localize('git.stagedChanges', 'Staged Changes') : localize('git.changes', 'Changes'), change.path),
 			actions,
 			open: (options, sideBySide) => this.openChange(status, change, side, options, sideBySide),
 		};
@@ -301,18 +329,56 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 				const before = await this.gitService.status(this.id);
 				this.acceptStatus(before);
 				if (this.isDisposed || before.head.type !== 'branch' || !before.head.upstream) return;
+				if (this.services.configuration.get('git.confirmSync', true)) {
+					const confirmed = await this.services.dialogService.confirm({ message: localize('git.syncConfirm', 'Pull and push commits for branch {0}?', before.head.name) });
+					if (!confirmed.confirmed || this.isDisposed) return;
+					const current = await this.gitService.status(this.id);
+					if (!sameHead(before.head, current.head) || current.head.type !== 'branch' || current.head.upstream?.name !== before.head.upstream.name) return;
+				}
 				this.setMessage(localize('git.status.synchronizing', 'Synchronizing Changes…'));
-				const pulled = await this.gitService.pull(this.id, mode);
+				const pulled = await this.pullChanges(before, mode);
+				if (!pulled) return;
 				this.acceptStatus(pulled);
 				// A concurrent checkout or unresolved integration must not push a different branch.
 				if (this.isDisposed || pulled.head.type !== 'branch' || pulled.head.name !== before.head.name
 					|| pulled.head.upstream?.name !== before.head.upstream.name || pulled.changes.some(change => change.conflicted)) return;
 				this.acceptStatus(await this.gitService.push(this.id));
+				this.notifyPush();
 				if (this.status) this.setMessage(statusSummary(this.status));
 			});
 		} finally {
 			this.syncing = false;
 			this.changeEmitter.fire();
+		}
+	}
+
+	public async pull(mode: GitPullMode = 'configured'): Promise<void> {
+		await this.runAction(async () => {
+			const before = await this.gitService.status(this.id);
+			const pulled = await this.pullChanges(before, mode);
+			if (pulled) this.acceptStatus(pulled);
+		});
+	}
+
+	private async pullChanges(before: GitStatus, mode: GitPullMode): Promise<GitStatus | undefined> {
+		if (this.services.configuration.get('git.fetchOnPull', false, this.rootUri)) {
+			const fetched = await this.gitService.fetch(this.id, 'all');
+			this.acceptStatus(fetched);
+			if (this.isDisposed || !sameHead(before.head, fetched.head)) return undefined;
+		}
+		return this.gitService.pull(this.id, mode);
+	}
+
+	public async push(): Promise<void> {
+		await this.runAction(async () => {
+			this.acceptStatus(await this.gitService.push(this.id));
+			this.notifyPush();
+		});
+	}
+
+	private notifyPush(): void {
+		if (!this.isDisposed && this.services.configuration.get('git.showPushSuccessNotification', false)) {
+			this.services.notify(localize('git.pushSucceeded', 'Successfully pushed repository {0}.', this.label));
 		}
 	}
 
@@ -376,6 +442,7 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 	public async commit(options: GitCommitOptions = {}, chooseScope?: () => Promise<GitCommitOptions['scope']>): Promise<string | undefined> {
 		let resultId: string | undefined;
 		await this.runAction(async () => {
+			const before = this.status;
 			let revision = this.inputRevision;
 			let message = this.input.value.trim();
 			const commitOptions = { ...options };
@@ -412,6 +479,30 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 				this.setMessage(localize('git.commitMessageRequired', 'Enter a commit message.'));
 				return;
 			}
+			if (commitOptions.scope === undefined && commitOptions.empty !== 'allow' && commitOptions.mode !== 'amend'
+				&& !this.status?.changes.some(change => !change.conflicted && change.indexStatus !== 'unmodified')) {
+				if (this.services.configuration.get('git.enableSmartCommit', false, this.rootUri)) {
+					commitOptions.scope = this.services.configuration.get<string>('git.smartCommitChanges', 'all', this.rootUri) === 'tracked' ? 'tracked' : 'includeUntracked';
+				} else if (this.services.configuration.get('git.suggestSmartCommit', true, this.rootUri)) {
+					if (!this.status?.changes.length) { this.setMessage(localize('git.noChangesToCommit', 'There are no changes to commit. Use Commit Empty to create an empty commit.')); return; }
+					const confirmed = await this.services.dialogService.confirm({ message: localize('git.smartCommitConfirm', 'No changes are staged. Stage and commit the selected scope of changes?') });
+					if (!confirmed.confirmed || this.isDisposed || revision !== this.inputRevision) return;
+					commitOptions.scope = this.services.configuration.get<string>('git.smartCommitChanges', 'all', this.rootUri) === 'tracked' ? 'tracked' : 'includeUntracked';
+				} else {
+					this.setMessage(localize('git.stageBeforeCommit', 'Stage changes before committing.'));
+					return;
+				}
+			}
+			if (commitOptions.empty === 'allow' && this.services.configuration.get('git.confirmEmptyCommits', true, this.rootUri)) {
+				const confirmed = await this.services.dialogService.confirm({ message: localize('git.emptyCommitConfirm', 'Create a commit even if there are no staged changes?') });
+				if (!confirmed.confirmed || this.isDisposed || revision !== this.inputRevision) return;
+			}
+			if (commitOptions.signing === undefined && this.services.configuration.get('git.enableCommitSigning', false, this.rootUri)) commitOptions.signing = 'required';
+			if (before && this.status && !sameHead(before.head, this.status.head)) {
+				this.setMessage(localize('git.commitHeadChanged', 'The branch or commit changed while preparing this commit. Review the current repository and retry.'));
+				return;
+			}
+			if (commitOptions.expectedHead === undefined && before && before.head.type !== 'unborn') commitOptions.expectedHead = before.head;
 			try {
 				this.setMessage(localize('git.committing', 'Committing selected changes…'));
 				const result = await this.gitService.commit(message, this.id, commitOptions);
@@ -420,13 +511,18 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 				// A later edit, even one restoring the same text, belongs to the next commit.
 				if (this.inputRevision === revision) this.input.value = '';
 				this.acceptStatus(result.status);
-				this.setMessage(localize('git.commitCreated', 'Created commit {0}. {1}', result.objectId.slice(0, 7), this.message));
+				this.setMessage(localize('git.commitCreated', 'Created commit {0}. {1}', result.objectId.slice(0, this.services.configuration.get('git.commitShortHashLength', 7, this.rootUri)), this.message));
 			} catch (error) {
 				// An all-changes commit can stage successfully before commit creation fails.
 				await this.refresh();
 				throw error;
 			}
 		});
+		if (resultId && !this.isDisposed) {
+			const postCommit = this.services.configuration.get<string>('git.postCommitCommand', 'none', this.rootUri);
+			if (postCommit === 'push') await this.push();
+			else if (postCommit === 'sync') await this.sync();
+		}
 		return resultId;
 	}
 
@@ -471,6 +567,11 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 				await this.services.editorService.openEditor(createScmMergeEditorInput(this.id, change.path, resource, repositoryFileUri(status.workspacePath, change.path)), options, target);
 				return;
 			}
+			if (!this.services.configuration.get('git.openDiffOnClick', true, this.rootUri)
+				&& change.worktreeStatus !== 'deleted' && !(change.indexStatus === 'deleted' && change.worktreeStatus === 'unmodified')) {
+				await this.services.editorService.openEditor({ resource: repositoryFileUri(status.workspacePath, change.path) }, options, target);
+				return;
+			}
 			const comparison: GitChangeFileComparison = side === 'index' ? 'staged' : 'unstaged';
 			const inputs = await resolveGitChangeInputs(this.gitService, status, change, comparison);
 			if (inputs.binary && inputs.original && inputs.modified) {
@@ -494,6 +595,12 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 		if (message) this.message = message;
 		this.changeEmitter.fire();
 	}
+}
+
+function sameHead(left: GitHead, right: GitHead): boolean {
+	if (left.type === 'unborn') return right.type === 'unborn' && left.name === right.name;
+	if (left.type === 'detached') return right.type === 'detached' && left.objectId === right.objectId;
+	return right.type === 'branch' && left.name === right.name && left.objectId === right.objectId;
 }
 
 function branchCommand(head: GitHead, repositoryId: string, commandService: CommandClient, busy: boolean): ISCMStatusBarCommand {

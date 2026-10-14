@@ -796,6 +796,20 @@ pub enum GitCommitSignoffDto {
     Add,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum GitCommitSigningDto {
+    Configured,
+    Required,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum GitEmptyCommitPolicyDto {
+    Reject,
+    Allow,
+}
+
 /// Omitted options retain index-only creation without sign-off.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -814,7 +828,13 @@ pub struct GitCommitParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub signoff: Option<GitCommitSignoffDto>,
-    /// Captured Amend target, checked before staging; upstream counts are ignored.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub signing: Option<GitCommitSigningDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub empty: Option<GitEmptyCommitPolicyDto>,
+    /// Captured existing HEAD, checked before staging; upstream counts are ignored.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub expected_head: Option<GitHeadDto>,

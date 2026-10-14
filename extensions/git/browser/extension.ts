@@ -1,7 +1,7 @@
 import { GitIgnoreDecorationProvider } from './gitIgnoreDecorationProvider.js';
 import { scm, editors } from 'ash';
-import { workspace, window, env, type ExtensionContext } from 'vscode';
-import { DisposableStore, toDisposable, URI } from '../../../sdk/browser/index.js';
+import { workspace, window, env, Uri, type ExtensionContext } from 'vscode';
+import { DisposableStore, toDisposable, URI, Emitter } from '../../../sdk/browser/index.js';
 import { GitBackendMonitor } from './monitor.js';
 import { GitService } from './gitService.js';
 import { GitSCMProvider } from './gitSCMProvider.js';
@@ -11,12 +11,19 @@ import { createGitApi } from './backend.js';
 import { registerGitCommands } from './commands.js';
 import { commandClient, dialogClient, editorClient, viewsClient, workingCopyClient } from './editors.js';
 import { createGitMultiDiffEditorInput } from './multiDiff.js';
-import { localize, setLanguage } from './support.js';
+import { localize, setLanguage, extUriBiasedIgnorePathCase } from './support.js';
 
 export async function activate(context: ExtensionContext): Promise<void> {
 	setLanguage(env.language);
 	const lifetime = new DisposableStore();
 	context.subscriptions.push(lifetime);
+	const configurationChanges = lifetime.add(new Emitter<{ affectsConfiguration(section: string, resource?: URI): boolean; }>());
+	// Declare the Workspace event subscription during activation, before asynchronous
+	// discovery creates repositories. Provider listeners share this one subscription.
+	const configurationListener = workspace.onDidChangeConfiguration(event => configurationChanges.fire({
+		affectsConfiguration: (section, resource) => event.affectsConfiguration(section, resource ? Uri.parse(resource.toString()) : undefined),
+	}));
+	lifetime.add(toDisposable(() => configurationListener.dispose()));
 	scm.initialize();
 	const channel = window.createOutputChannel('Git');
 	context.subscriptions.push(channel);
@@ -33,13 +40,23 @@ export async function activate(context: ExtensionContext): Promise<void> {
 	const quickDiff = lifetime.add(new GitQuickDiffProvider(git));
 	const ignored = lifetime.add(new GitIgnoreDecorationProvider(git));
 	const sync = (): void => {
-		const current = new Set(git.repositories.map(repository => repository.id));
+		const ignoredRepositories = workspace.getConfiguration('git').get<string[]>('ignoredRepositories', []).map(path => /^[a-z][\w+.-]*:\//i.test(path) ? URI.parse(path) : URI.file(path));
+		const visible = git.repositories.filter(repository => !ignoredRepositories.some(root => extUriBiasedIgnorePathCase.isEqual(root, repository.root)));
+		const current = new Set(visible.map(repository => repository.id));
 		for (const [id, owner] of owners) { if (!current.has(id)) { owner.dispose(); owners.delete(id); providers.delete(id); } }
-		for (const repository of git.repositories) {
+		for (const repository of visible) {
 			if (providers.has(repository.id)) { continue; }
 			const owner = new DisposableStore();
-			const history = owner.add(new GitHistoryProvider(git, repository.id));
-			const provider = owner.add(new GitSCMProvider(git, repository, history, { commandService: commandClient, dialogService: dialogClient, editorService: editorClient, viewsService: viewsClient, workingCopyService: workingCopyClient }));
+			const history = owner.add(new GitHistoryProvider(git, repository.id, () => workspace.getConfiguration('git', Uri.parse(repository.root.toString())).get('commitShortHashLength', 7)));
+			owner.add(configurationChanges.event(event => { if (event.affectsConfiguration('git.commitShortHashLength', repository.root)) history.refresh(); }));
+			const provider = owner.add(new GitSCMProvider(git, repository, history, {
+				commandService: commandClient, dialogService: dialogClient, editorService: editorClient, viewsService: viewsClient, workingCopyService: workingCopyClient,
+				notify: message => { void window.showInformationMessage(message); },
+				configuration: {
+					get: (key, defaultValue, resource) => workspace.getConfiguration(undefined, resource ? Uri.parse(resource.toString()) : undefined).get(key, defaultValue),
+					onDidChange: configurationChanges.event,
+				},
+			}));
 			owners.set(repository.id, owner);
 			providers.set(repository.id, provider);
 			owner.add(scm.registerSCMProvider(provider, {
@@ -55,6 +72,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
 				}, decorations: {
 					label: 'Git', onDidChange: listener => { const listeners = new DisposableStore(); listeners.add(provider.onDidChange(listener)); listeners.add(ignored.onDidChange(listener)); return listeners; },
 					async provideDecorations(resource, token) {
+						if (!workspace.getConfiguration('git').get('decorations.enabled', true)) return undefined;
 						const decoration = provider.provideDecorations(resource);
 						if (decoration) { return decoration; }
 						return ignored.provideDecorations(resource, token);
@@ -64,6 +82,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
 			owner.add(provider.onDidChangeResources(() => { if (provider.statusMessage) { channel.appendLine(`[${repository.label}] ${provider.statusMessage}`); } }));
 		}
 	};
+	lifetime.add(configurationChanges.event(event => { if (event.affectsConfiguration('git.ignoredRepositories')) sync(); }));
 	lifetime.add(git.onDidChangeRepositories(sync));
 	lifetime.add(git.onDidChangeActiveRepository(repository => scm.selectRepository(repository?.id)));
 	// GitService discovers repositories from workspace/connection events in the background.

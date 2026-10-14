@@ -1,4 +1,4 @@
-import { commands, window, type ExtensionContext } from 'vscode';
+import { commands, window, workspace, Uri, type ExtensionContext } from 'vscode';
 import { editors } from 'ash';
 import { AppServerRemoteError, CancellationError, localize, URI, extUriBiasedIgnorePathCase } from './support.js';
 import { runDiffChange } from './diffActions.js';
@@ -50,6 +50,7 @@ export function registerGitCommands(context: ExtensionContext, git: GitService, 
 	const providerCommands = [
 		['git.commit', {}], ['git.commitStaged', { scope: 'staged' }], ['git.commitSigned', { signoff: 'add' }], ['git.commitStagedSigned', { scope: 'staged', signoff: 'add' }],
 		['git.commitAmend', { mode: 'amend' }], ['git.commitStagedAmend', { scope: 'staged', mode: 'amend' }],
+		['git.commitEmpty', { scope: 'staged', empty: 'allow' }],
 	] as const;
 	for (const [id, options] of providerCommands) { register(id, value => provider(value)?.commit(options)); }
 	for (const [id, options] of [['git.commitAll', {}], ['git.commitAllSigned', { signoff: 'add' }], ['git.commitAllAmend', { mode: 'amend' }]] as const) {
@@ -93,8 +94,8 @@ export function registerGitCommands(context: ExtensionContext, git: GitService, 
 			else await current.sync(mode);
 		});
 	}
-	register('git.pullRebase', value => provider(value)?.runTitleOperation(() => git.pull(repositoryId(value), 'rebase')));
-	for (const method of ['pull', 'push'] as const) { register(`git.${method}`, value => provider(value)?.runTitleOperation(() => git[method](repositoryId(value)))); }
+	register('git.pullRebase', value => provider(value)?.pull('rebase'));
+	for (const method of ['pull', 'push'] as const) { register(`git.${method}`, value => provider(value)?.[method]()); }
 	for (const definition of repositoryCommands) {
 		register(definition.id, async value => {
 			if (definition.kind === 'createTag' && value && typeof value === 'object' && 'type' in value && value.type === 'historyItemViewModel') { return runGraphAction(ctx, 'createTag', reviveHistoryTarget(value)); }
@@ -106,7 +107,7 @@ export function registerGitCommands(context: ExtensionContext, git: GitService, 
 		});
 	}
 	registerBranchCommands(register, ctx, repositoryId);
-	register('git.init', async () => { const folders = monitor.workspace.getWorkspace().folders; const selected = await pickGitItem(ctx.input, folders.map(folder => ({ label: folder.name, folder })), localize('git.initFolder', 'Choose a workspace folder to initialize')); if (!selected) { return; } const branch = await input({ value: 'main', placeHolder: localize('git.initBranch', 'Initial branch name') }); if (branch !== undefined) { await git.initializeRepository(branch.trim(), selected.folder.id); ctx.notifications.info(localize('git.initialized', 'Git repository initialized.')); } });
+	register('git.init', async () => { const folders = monitor.workspace.getWorkspace().folders; const selected = await pickGitItem(ctx.input, folders.map(folder => ({ label: folder.name, folder })), localize('git.initFolder', 'Choose a workspace folder to initialize')); if (!selected) { return; } const branch = await input({ value: workspace.getConfiguration('git', Uri.parse(selected.folder.uri.toString())).get('defaultBranchName', 'main'), placeHolder: localize('git.initBranch', 'Initial branch name') }); if (branch !== undefined) { await git.initializeRepository(branch.trim(), selected.folder.id); ctx.notifications.info(localize('git.initialized', 'Git repository initialized.')); } });
 	register('git.clone', async () => { if (!git.canCloneRepository) { throw new Error(localize('git.cloneUnavailable', 'Cloning is unavailable in this host.')); } const url = await input({ title: localize('git.cloneUrlTitle', 'Clone Repository'), placeHolder: localize('git.cloneUrlPlaceholder', 'Enter a repository URL'), validateInput: async value => value.trim() ? undefined : localize('git.cloneUrlRequired', 'Enter a repository URL.') }); if (url === undefined) { return; } const parentPath = await editors.request<string | null>({ method: 'pickFolder' }); if (!parentPath) { return; } const path = await git.cloneRepository(url.trim(), parentPath); if ((await dialogClient.confirm({ title: localize('git.cloneCompleteTitle', 'Repository cloned'), message: localize('git.cloneCompleteMessage', 'Open the cloned repository at {0}?', path), primaryButton: localize('git.openClonedRepository', 'Open Repository') })).confirmed) { await editors.request({ method: 'openWorkspace', path }); } });
 	register('git.createWorktree', async value => { const id = (await git.getRepository(repositoryId(value))).id; const name = await input({ title: localize('git.createWorktreeCommandTitle', 'Git: Create Worktree'), placeHolder: localize('git.newWorktreeName', 'Name of the new detached worktree at HEAD'), validateInput: async value => /^[a-zA-Z0-9_-]{1,64}$/.test(value.trim()) ? undefined : localize('git.worktreeNameInvalid', 'Use 1–64 letters, numbers, hyphens or underscores.') }); if (!name) { return; } const path = await git.createWorktree(name.trim(), id); if ((await dialogClient.confirm({ title: localize('git.openWorktreeCommandTitle', 'Git: Open Worktree'), primaryButton: localize('git.openWorktreeButton', 'Open Worktree'), message: localize('git.openWorktreeConfirm', 'Open the worktree at {0}?', path) })).confirmed) { await editors.request({ method: 'openWorkspace', path }); } });
 	for (const method of ['open', 'delete'] as const) { register(`git.${method}Worktree`, async value => { const id = (await git.getRepository(repositoryId(value))).id; const selected = await pickGitItem(ctx.input, (await git.worktrees(id)).filter(worktree => !worktree.current && worktree.state === 'ready').map(worktree => ({ label: worktree.checkoutRoot, worktree })), localize(method === 'open' ? 'git.selectWorktreeToOpen' : 'git.selectWorktreeToDelete', method === 'open' ? 'Select a Git worktree to open' : 'Select a Git worktree to delete')); if (!selected) { return; } if (method === 'open') { await editors.request({ method: 'openWorkspace', path: await git.resolveWorktree(selected.worktree.checkoutRoot, id) }); } else if ((await dialogClient.confirm({ title: localize('git.deleteWorktreeCommandTitle', 'Git: Delete Worktree'), primaryButton: localize('git.deleteWorktreeButton', 'Delete Worktree'), detail: localize('git.deleteWorktreeDetail', 'Git only removes clean linked worktrees that are not held by a session or currently open in this workspace.'), message: localize('git.deleteWorktreeConfirm', 'Delete the worktree at {0}?', selected.label) })).confirmed) { try { await git.deleteWorktree(selected.worktree.checkoutRoot, id); } catch (error) { const reason = error instanceof AppServerRemoteError && error.errorName === 'GitOperationFailed' ? localize('git.deleteWorktreeRejected', 'The worktree could not be deleted. Check local changes, locks and session ownership.') : gitErrorMessage(error); ctx.notifications.error(localize('git.deleteWorktreeFailed', 'Could not delete worktree: {0}', reason)); } } }); }
@@ -173,18 +174,23 @@ function registerBranchCommands(register: (id: string, callback: (...args: reado
 		try {
 			const id = (await ctx.git.getRepository(repositoryId(value))).id;
 			const branches = await ctx.git.branches(id);
+			const repository = await ctx.git.getRepository(id);
+			const policy = branchNamePolicy(repository.root);
 			const name = await input({
 				title: localize('git.createBranchCommandTitle', 'Git: Create Branch'),
 				placeHolder: localize('git.newBranchName', 'Name of the new branch at HEAD'),
+				value: policy.prefix,
 				validateInput: async value => {
-					if (!value.trim()) { return localize('git.branchNameRequired', 'Enter a branch name.'); }
-					if (branches.some(branch => branch.name === value.trim())) { return localize('git.branchAlreadyExists', 'This branch already exists.'); }
+					const error = policy.validate(value);
+					if (error) return error;
+					const name = policy.normalize(value);
+					if (branches.some(branch => branch.name === name)) { return localize('git.branchAlreadyExists', 'This branch already exists.'); }
 					return undefined;
 				},
 			});
 			if (name === undefined) { return; }
-			await ctx.git.createBranch(name.trim(), id);
-			ctx.notifications.info(localize('git.branchCreated', 'Created branch {0}. The current branch is unchanged.', name.trim()));
+			await ctx.git.createBranch(policy.normalize(name), id);
+			ctx.notifications.info(localize('git.branchCreated', 'Created branch {0}. The current branch is unchanged.', policy.normalize(name)));
 		} catch (error) { ctx.notifications.error(localize('git.createBranchFailed', 'Could not create branch: {0}', gitErrorMessage(error))); }
 	});
 	register('git.deleteBranch', async value => {
@@ -303,7 +309,9 @@ async function prepareGitCommand(accessor: GitCommandContext, kind: RepositoryCo
 			return { kind, operation };
 		}
 		case 'stash': {
-			const message = await prompt(localize('git.stashMessage', 'Stash message'));
+			const repository = await git.getRepository(repositoryId);
+			const initialMessage = workspace.getConfiguration('git', Uri.parse(repository.root.toString())).get('useCommitInputAsStashMessage', false) ? accessor.providers.get(repositoryId)?.input.value : undefined;
+			const message = await prompt(localize('git.stashMessage', 'Stash message'), initialMessage);
 			if (message === undefined) { return undefined; }
 			const mode = await pickGitItem(input, [
 				{ label: localize('git.stashTracked', 'Tracked changes'), mode: 'tracked' as const },
@@ -402,9 +410,10 @@ async function runGraphAction(accessor: GitCommandContext, kind: GraphActionKind
 		}
 		case 'createBranch':
 		case 'createTag': {
-			const name = await promptName(kind === 'createBranch' ? localize('git.graph.branchName', 'Branch name (created at the selected commit without switching)') : localize('git.tagName', 'Tag name'));
+			const policy = kind === 'createBranch' ? branchNamePolicy((await git.getRepository(repositoryId)).root) : undefined;
+			const name = policy ? await input.input({ placeHolder: localize('git.graph.branchName', 'Branch name (created at the selected commit without switching)'), value: policy.prefix, validateInput: async value => policy.validate(value) }) : await promptName(localize('git.tagName', 'Tag name'));
 			if (name === undefined) { return; }
-			command = kind === 'createBranch' ? { kind: 'createBranchAt', name: name.trim(), objectId: commit.id } : { kind: 'createTag', name: name.trim(), reference: commit.id };
+			command = kind === 'createBranch' ? { kind: 'createBranchAt', name: policy!.normalize(name), objectId: commit.id } : { kind: 'createTag', name: name.trim(), reference: commit.id };
 			break;
 		}
 		case 'deleteBranch': {
@@ -488,6 +497,29 @@ async function runGraphAction(accessor: GitCommandContext, kind: GraphActionKind
 	} else {
 		notifications.info(localize('git.commandCompleted', 'Git operation completed.'));
 	}
+}
+
+/** Palette and history actions use the same naming policy before entering Rust validation. */
+function branchNamePolicy(root: URI) {
+	const configuration = workspace.getConfiguration('git', Uri.parse(root.toString()));
+	const prefix = configuration.get('branchPrefix', '');
+	const whitespace = configuration.get('branchWhitespaceChar', '-');
+	const pattern = configuration.get('branchValidationRegex', '');
+	let expression: RegExp | undefined;
+	try { expression = pattern ? new RegExp(pattern) : undefined; }
+	catch { throw new Error(localize('git.invalidBranchRegex', 'The branch validation regular expression is invalid. Correct git.branchValidationRegex in Settings.')); }
+	const normalize = (value: string): string => {
+		const name = value.trim().replace(/\s+/g, () => whitespace);
+		return name.startsWith(prefix) ? name : prefix + name;
+	};
+	return {
+		prefix, normalize,
+		validate: (value: string): string | undefined => {
+			if (!value.trim()) return localize('git.branchNameRequired', 'Enter a branch name.');
+			if (expression && !expression.test(normalize(value))) return localize('git.branchNameDoesNotMatch', 'The branch name does not match git.branchValidationRegex.');
+			return undefined;
+		},
+	};
 }
 
 async function runIndexSelection(ctx: GitCommandContext, comparison: GitChangeFileComparison, mode: 'hunk' | 'lines'): Promise<void> {

@@ -46,7 +46,9 @@ export interface GitCommitOptions {
 	readonly scope?: 'staged' | 'tracked' | 'includeUntracked';
 	readonly mode?: 'create' | 'amend';
 	readonly signoff?: 'none' | 'add';
-	/** Target confirmed for Amend; upstream counts do not identify the commit. */
+	readonly signing?: 'configured' | 'required';
+	readonly empty?: 'reject' | 'allow';
+	/** Existing HEAD captured before interaction; upstream counts do not identify the commit. */
 	readonly expectedHead?: GitHead;
 }
 
