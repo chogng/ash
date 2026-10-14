@@ -86,7 +86,7 @@ Agent loop 全部由 Rust 后端拥有。前端保留 Workbench 交互、屏幕�
 
 平台环境合并算法已回到 `common/environmentVariableCollection.ts`；上游存在的 Workbench `common/terminalEnvironment.ts` 保留，继续拥有启动 override 解析。已确认的重连测试从 `test/electron-main/reconnectableTerminalMainService.test.ts` 迁至 `test/browser/reconnectableTerminalProcessService.test.ts`，旧测试路径退出。
 
-本轮 macOS 验证：正常 `pnpm test:unit` 选择 TerminalService / TerminalBackend / TerminalProcessExtHostProxy / TerminalConfigurationService 四文件，**137 项通过**；Common **2458** 文件、Renderer **3863** 文件类型检查通过。修复正常准备入口中重复的中文翻译、失效的听写翻译、重复 Chat imports，以及共享 URLSearchParams 声明缺少已使用标准成员的问题。
+本轮 macOS 验证：正常 `pnpm test:unit` 选择 TerminalService / TerminalBackend / TerminalProcessExtHostProxy / TerminalConfigurationService 四文件，**137 项通过**；Common / Renderer 类型检查通过。正常准备入口通过，中文语言包生成无缺译。
 
 正常浏览器入口的全 fixture 类型检查在范围外 `chatTranscript.integration.ts` 的 diagnostic code 类型、`textModel.integration.ts` 的 SyntaxToken fixture 上失败。终端切片继承原浏览器 compiler options 的 **2504** 文件检查通过；原 `test/integration/browser/run.ts` 执行 Chromium **3 场景通过**：粘贴与原始键盘输入、重新附着只订阅一次、鼠标原始高字节。没有将全浏览器类型检查记为通过。受影响 TS formatter、文档/NLS JSON Prettier 和 diff whitespace 检查通过。
 
