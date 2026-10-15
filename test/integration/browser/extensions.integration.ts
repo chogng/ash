@@ -402,7 +402,7 @@ let holdMcpStatus = false;
 let completeMcpStatus: (() => void) | undefined;
 setARIAContainer(document.body);
 const mcpCapabilities = { mcp: true, mcpOAuth: false };
-let finishMcpLogin: ((value: { state: string; code: string; issuer?: string }) => void) | undefined;
+let finishMcpLogin: ((value: { state: string; code: string; issuer?: string; }) => void) | undefined;
 let rejectMcpLogin: ((error: Error) => void) | undefined;
 let mcpRevision = 1;
 let mcpConfigured: Record<string, McpServerConfiguration> = {};
@@ -415,12 +415,12 @@ const mcpConnection = {
 	request: async (definition: { method: string; }, params: unknown) => {
 		requests.push([definition.method, params]);
 		if (definition.method === 'config/read') { return { revision: mcpRevision, mcpServers: structuredClone(mcpConfigured) }; }
-        if (definition.method === 'mcp/oauth/start') { return { flowId: 'synthetic-flow', authorizationUrl: 'https://issuer.test/authorize' }; }
-        if (definition.method === 'mcp/oauth/cancel') { return null; }
-        if (definition.method === 'mcp/oauth/complete' || definition.method === 'mcp/oauth/logout') {
-            mcpServers = mcpServers.map(server => ({ ...server, state: { status: definition.method === 'mcp/oauth/complete' ? 'connected' : 'disconnected' } }));
-            return { serverId: 'user:mcp:oauth' };
-        }
+		if (definition.method === 'mcp/oauth/start') { return { flowId: 'synthetic-flow', authorizationUrl: 'https://issuer.test/authorize' }; }
+		if (definition.method === 'mcp/oauth/cancel') { return null; }
+		if (definition.method === 'mcp/oauth/complete' || definition.method === 'mcp/oauth/logout') {
+			mcpServers = mcpServers.map(server => ({ ...server, state: { status: definition.method === 'mcp/oauth/complete' ? 'connected' : 'disconnected' } }));
+			return { serverId: 'user:mcp:oauth' };
+		}
 		if (definition.method !== 'mcp/server/status') {
 			const input = params as { expectedRevision: number; serverId: string; server: McpServerConfiguration; enablement: 'enabled' | 'disabled'; };
 			if (['mcp/server/upsert', 'mcp/server/remove', 'mcp/server/enablement/set'].includes(definition.method)) {
@@ -467,13 +467,13 @@ const mcpConnection = {
 } as unknown as AppServerProtocolClient;
 services.registerInstance(IMcpServerStatusService, createAppServerMcpServerStatusApi(mcpConnection));
 services.registerInstance(IMcpServerManagementService, disposables.add(new AppServerMcpServerManagementService(mcpConnection, {
-    externalOpener: { openExternal: async target => { requests.push(['oauth/openBrowser', target]); return true; } },
-    clipboardService: {} as never,
-    callbackHost: {
-        listen: async () => ({ id: 'synthetic-callback', redirectUri: 'http://127.0.0.1:3333/callback' }),
-        wait: () => new Promise((resolve, reject) => { finishMcpLogin = resolve; rejectMcpLogin = reject; }),
-        close: async () => { rejectMcpLogin?.(new Error('Sign-in cancelled')); finishMcpLogin = undefined; rejectMcpLogin = undefined; },
-    },
+	externalOpener: { openExternal: async target => { requests.push(['oauth/openBrowser', target]); return true; } },
+	clipboardService: {} as never,
+	callbackHost: {
+		listen: async () => ({ id: 'synthetic-callback', redirectUri: 'http://127.0.0.1:3333/callback' }),
+		wait: () => new Promise((resolve, reject) => { finishMcpLogin = resolve; rejectMcpLogin = reject; }),
+		close: async () => { rejectMcpLogin?.(new Error('Sign-in cancelled')); finishMcpLogin = undefined; rejectMcpLogin = undefined; },
+	},
 })));
 services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService({
 	isAvailable: true,
@@ -579,9 +579,9 @@ function prepareSettings(): void {
 }
 
 window.ashExtensionsIntegration = {
-    enableMcpOAuth: () => { mcpCapabilities.mcpOAuth = true; },
-    completeMcpLogin: () => { finishMcpLogin?.({ state: 'synthetic-state', code: 'synthetic-code', issuer: 'https://issuer.test' }); },
-    mcpLoginWaiting: () => !!finishMcpLogin,
+	enableMcpOAuth: () => { mcpCapabilities.mcpOAuth = true; },
+	completeMcpLogin: () => { finishMcpLogin?.({ state: 'synthetic-state', code: 'synthetic-code', issuer: 'https://issuer.test' }); },
+	mcpLoginWaiting: () => !!finishMcpLogin,
 	setMcpServers: servers => { mcpServers = servers; },
 	changeMcpRevision: () => { mcpRevision++; },
 	setMcpConnectFailure: () => { failMcpConnect = true; },
