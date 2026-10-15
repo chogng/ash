@@ -285,6 +285,7 @@ fn remote_server_forwards_the_terminal_lifecycle_over_stdio() {
             profile: TerminalProfileSelection::Default,
             lifecycle: TerminalLifecycle::ConnectionOwned,
             env: None,
+            strict_env: None,
             cwd: None,
             execution: None,
         })
@@ -394,6 +395,7 @@ fn shared_backend_preserves_a_reconnectable_terminal_between_stdio_clients() {
             profile: TerminalProfileSelection::Default,
             lifecycle: TerminalLifecycle::Reconnectable,
             env: None,
+            strict_env: None,
             cwd: None,
             execution: None,
         })
