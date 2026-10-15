@@ -62,7 +62,10 @@ import { IViewsService } from '../../../src/ash/workbench/services/views/common/
 import { createTestEditorServices, registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { EditorPaneRegistry } from '../../../src/ash/workbench/browser/editor.js';
 import { EditorPaneMatch } from '../../../src/ash/workbench/browser/parts/editor/editorPane.js';
-import { EditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
+import { EditorPart, IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
+import { BrowserEditorService } from '../../../src/ash/workbench/services/editor/browser/browserEditorService.js';
+import { IEditorGroupsService } from '../../../src/ash/workbench/services/editor/common/editorGroupsService.js';
+import { Direction } from '../../../src/ash/base/browser/ui/grid/grid.js';
 import { CODE_EDITOR_ID, TextResourceEditor, type EditorPaneOptions } from '../../../src/ash/workbench/browser/parts/editor/textResourceEditor.js';
 import { IFileTextModelService, ITextModelResourceService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
 import { BrowserTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/browser/browserTextModelService.js';
@@ -94,6 +97,12 @@ interface CompositeState {
 
 declare global {
 	interface Window {
+		ashEditorTitleIntegration: {
+			split(): Promise<void>;
+			open(name: string, preview?: boolean): Promise<void>;
+			state(): { active: string; groups: { id: string; visible: boolean; locked: boolean; tabs: string[]; previews: boolean[]; }[]; };
+			activate(index: number): void;
+		};
 		ashChatTitleIntegration: {
 			select(id: string): void;
 			clipboard(): readonly string[];
@@ -414,7 +423,33 @@ if (watermarkKeybindings) {
 	editorServices.registerInstance(IKeybindingService, watermarkKeybindings);
 	editorServices.registerInstance(ICommandService, resources.add(new CommandService(editorServices, watermarkRegistry)));
 }
-const editor = resources.add(editorServices.createInstance(EditorPart, editorHost, { registry: editorRegistry, configurationService: editorServices.get(IConfigurationService), keybindingService: watermarkKeybindings }));
+const editorMenu = new URLSearchParams(location.search).has('editorMenu');
+let editorTitleActions: { menuService: MenuService; contextMenuProvider: BrowserContextMenuService; } | undefined;
+if (editorMenu) {
+	await import('../../../src/ash/base/browser/ui/styles.css');
+	await import('../../../src/ash/workbench/browser/media/style.css');
+	await import('../../../src/ash/workbench/browser/parts/editor/editor.contribution.js');
+	const commands = resources.add(new CommandService(editorServices));
+	editorServices.registerInstance(ICommandService, commands);
+	const menus = new MenuService(commands, editorServices.get(IContextKeyService));
+	const views = resources.add(new BrowserContextViewService(document.body));
+	const notifications = resources.add(new NotificationService());
+	const keybindings = { onDidUpdateKeybindings: Event.None, lookupKeybinding: () => undefined } as unknown as IKeybindingService;
+	editorTitleActions = { menuService: menus, contextMenuProvider: resources.add(new BrowserContextMenuService(menus, editorServices.get(IContextKeyService), keybindings, views, notifications)) };
+}
+const editor = resources.add(editorServices.createInstance(EditorPart, editorHost, { registry: editorRegistry, configurationService: editorServices.get(IConfigurationService), keybindingService: watermarkKeybindings, ...(editorMenu ? { contextKeyService: editorServices.get(IContextKeyService), titleActions: editorTitleActions } : {}) }));
+if (editorMenu) {
+	editorServices.registerInstance(IEditorPart, editor);
+	editorServices.registerInstance(IEditorGroupsService, resources.add(new BrowserEditorService(editor)));
+	window.ashEditorTitleIntegration = {
+		async split() { await editor.splitActiveGroup(Direction.Right); },
+		async open(name, preview = false) { await editor.activeGroup.openEditor({ resource: URI.file(`/menu/${name}.ts`), label: `${name}.ts`, initialText: name }, { pinned: !preview }); },
+		activate(index) { editor.activateGroup(editor.groups[index]!.id); },
+		state() {
+			return { active: editor.activeGroup.id, groups: editor.groups.map(group => ({ id: group.id, visible: editor.isGroupVisible(group.id), locked: group.isLocked, tabs: group.inputs.map(input => input.label!), previews: group.inputs.map(input => group.isPreview(input)) })) };
+		},
+	};
+}
 editor.layout({ width: 800, height: 260 });
 const editorPanes = new Map<string, { pane: IEditorPane; control: unknown; }>();
 const editorEvents: string[] = [];

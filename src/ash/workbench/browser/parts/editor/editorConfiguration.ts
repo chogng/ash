@@ -1,6 +1,6 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { match as globMatch } from "../../../../base/common/glob.js";
-import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../../../platform/configuration/common/configurationRegistry.js";
+import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../../../platform/configuration/common/configurationRegistry.js";
 import { Registry } from "../../../../platform/registry/common/platform.js";
 import { localize } from "../../../../nls.js";
 import type { IWorkbenchContribution } from "../../../common/contributions.js";
@@ -8,6 +8,20 @@ import { EditorPanes, type IEditorPaneRegistry } from "../../editor.js";
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 const binaryEditorOptions: { value: string; label: string; }[] = [{ value: "", get label() { return localize("workbench.editor.defaultBinaryEditor.default", "Default"); } }];
+
+export const EditorEnablePreviewConfiguration = configurationRegistry.registerConfiguration<boolean>({
+	key: 'workbench.editor.enablePreview', scope: ConfigurationScope.WINDOW,
+	schema: { type: 'boolean' }, defaultValue: true,
+	parse(value): boolean {
+		if (typeof value !== 'boolean') throw new TypeError(localize('workbench.editor.enablePreview.invalid', 'Enable Preview must be true or false.'));
+		return value;
+	},
+	setting: {
+		get title() { return localize('workbench.editor.enablePreview.title', 'Workbench › Editor: Enable Preview'); },
+		get description() { return localize('workbench.editor.enablePreview.description', 'Open files in a reusable preview tab. Editing a file or choosing Keep Open keeps its tab open.'); },
+		valueType: 'boolean',
+	},
+});
 
 export const EditorOpenErrorDialogConfiguration = configurationRegistry.registerConfiguration<boolean>({
 	key: "workbench.editor.openErrorDialog",

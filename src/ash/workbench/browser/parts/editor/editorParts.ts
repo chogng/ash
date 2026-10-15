@@ -99,6 +99,11 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		return part.findGroup(scope, source);
 	}
 	toggleActiveGroupLock(): boolean { return this._activePart.toggleActiveGroupLock(); }
+	hasMaximizedGroup(): boolean { return this._activePart.hasMaximizedGroup(); }
+	toggleMaximizeGroup(group: IEditorGroup | EditorGroupId = this.activeGroup): void {
+		const id = typeof group === 'string' ? group : group.id;
+		this.parts.find(part => part.groups.some(candidate => candidate.id === id))?.toggleMaximizeGroup(group);
+	}
 	get activeInput(): IResourceEditorInput | undefined { return this._activePart.activeInput; }
 	get activePane(): IEditorPane | undefined { return this._activePart.activePane; }
 	get isModalEditorVisible(): boolean { return this._activePart.isModalEditorVisible; }

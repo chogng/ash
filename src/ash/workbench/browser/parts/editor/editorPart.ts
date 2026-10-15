@@ -63,6 +63,7 @@ import { ModalEditorPart, type ModalEditorPartOptions } from "./modalEditorPart.
 import type { EditorGroupChangeEvent, EditorGroupId, EditorIdentifier, EditorPartChangeEvent, EditorPartState, IEditorStateSource } from "../../../services/editor/common/editorState.js";
 import { WorkbenchConfiguration } from "../../../common/configuration.js";
 import { EditorCloseEmptyGroupsConfiguration, EditorOpenSideBySideDirectionConfiguration } from '../../../services/editor/common/editorConfiguration.js';
+import { EditorPartMaximizedEditorGroupContext, EditorPartMultipleEditorGroupsContext } from '../../../common/contextkeys.js';
 
 export { EditorOpenSupersededError } from "./editorGroupView.js";
 
@@ -84,6 +85,8 @@ export interface IEditorPart extends IEditorStateSource, IDisposable {
 	findGroup(scope: IFindGroupScope, source?: IEditorGroup): IEditorGroup | undefined;
 	isGroupVisible(id: EditorGroupId): boolean;
 	setGroupVisible(id: EditorGroupId, visible: boolean): void;
+	hasMaximizedGroup(): boolean;
+	toggleMaximizeGroup(group?: IEditorGroup | EditorGroupId): void;
 	toggleActiveGroupLock(): boolean;
 	readonly activeInput: IResourceEditorInput | undefined;
 	readonly activePane: IEditorPane | undefined;
@@ -179,6 +182,8 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	private readonly modalEditor: ModalEditorPart;
 	private readonly groupOptions: Omit<EditorGroupOptions, "onDidActivate" | "dragAndDrop">;
 	private readonly _groups: EditorGroupHost[] = [];
+	/** Grid retains hidden sizes; retain only the visibility and layout needed to restore this operation. */
+	private maximizedGroup: { id: EditorGroupId; visible: readonly EditorGroupId[]; layout: EditorWorkingSetLayout; } | undefined;
 	private _activeGroup: EditorGroupView;
 	private readonly tabDragAndDrop: EditorTabDragAndDropController;
 	private dimension = Dimension.Zero;
@@ -222,7 +227,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			onWillOpenEditor: input => this.confirmLargeFileOpen(input),
 			onOpenError: (error, input, openOptions) => this.showEditorOpenErrorDialog(error, input, openOptions),
 			configurationService: options.configurationService,
-			contextKeyService: options.contextKeyService,
+			contextKeyService: options.contextKeyService ? this._register(options.contextKeyService.createScoped(this.domNode)) : undefined,
 			keybindingService: options.keybindingService,
 			keyboardLayoutService: options.keyboardLayoutService,
 			fileService: options.fileService,
@@ -417,6 +422,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	public setGroupVisible(id: EditorGroupId, visible: boolean): void {
+		if (this.maximizedGroup && visible !== (id === this.maximizedGroup.id)) this.restoreMaximizedGroup();
 		const host = this.groupHosts.get(id)!;
 		if (this.editorGrid.isViewVisible(host.view) === visible) return;
 		host.group.setEditorContentVisible(visible);
@@ -424,6 +430,36 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		this.layoutEditorContent();
 		this.notifyConstraintsChanged();
 		this.editorChangeEmitter.fire({ kind: 'groupVisibilityChanged', groupId: id, visible });
+	}
+
+	hasMaximizedGroup(): boolean { return this.maximizedGroup !== undefined; }
+
+	toggleMaximizeGroup(group: IEditorGroup | EditorGroupId = this.activeGroup): void {
+		const id = typeof group === 'string' ? group : group.id;
+		const host = this.groupHosts.get(id);
+		if (!host) return;
+		const restoring = this.maximizedGroup?.id === id;
+		this.restoreMaximizedGroup();
+		if (!restoring && this._groups.length > 1) {
+			const visible = this._groups.filter(candidate => this.editorGrid.isViewVisible(candidate.view)).map(candidate => candidate.group.id);
+			const layout = this.serializeLayout();
+			this.setGroupVisible(id, true);
+			this.maximizedGroup = { id, visible, layout };
+			for (const candidate of this._groups) {
+				if (candidate !== host) this.setGroupVisible(candidate.group.id, false);
+			}
+		}
+		this.layoutEditorContent();
+		this.setActiveGroup(host.group);
+		host.group.focus();
+	}
+
+	private restoreMaximizedGroup(): void {
+		const previous = this.maximizedGroup;
+		if (!previous) return;
+		this.maximizedGroup = undefined;
+		for (const host of this._groups) this.setGroupVisible(host.group.id, previous.visible.includes(host.group.id));
+		this.layoutEditorContent();
 	}
 
 	private get editorGrid(): SerializableGrid<EditorGroupGridView> {
@@ -795,6 +831,10 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	private layoutEditorContent(): void {
+		this.groupOptions.contextKeyService?.bufferChangeEvents(() => {
+			this.groupOptions.contextKeyService!.setContext(EditorPartMultipleEditorGroupsContext.key, this._groups.length > 1);
+			this.groupOptions.contextKeyService!.setContext(EditorPartMaximizedEditorGroupContext.key, this.hasMaximizedGroup());
+		});
 		// A single group keeps its tabs across the shared column. Split groups reserve
 		// Details once at the grid boundary, rather than subtracting it from every pane.
 		const visibleGroups = this._groups.filter(host => this.editorGrid.isViewVisible(host.view));
@@ -922,6 +962,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	protected insertGroup(source: IEditorGroupView, direction: GridDirection, id?: EditorGroupId): EditorGroupHost {
+		this.restoreMaximizedGroup();
 		const sourceIndex = this.groupIndex(source);
 		const sourceHost = this._groups[sourceIndex]!;
 		const created = this.createGroup(id);
@@ -935,6 +976,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	private removeGroupHost(host: EditorGroupHost): void {
+		this.restoreMaximizedGroup();
 		const index = this._groups.indexOf(host);
 		if (index < 0) return;
 		if (this._groups.length === 1) throw new Error("EditorPart cannot remove its last group");
@@ -1032,7 +1074,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 				activeEditorIndex: group.activeInput ? group.inputs.indexOf(group.activeInput) : -1,
 				size: totalArea > 0 ? areas[index]! / totalArea : 1 / this._groups.length,
 			}))),
-			layout: this.serializeLayout(),
+			layout: this.maximizedGroup?.layout ?? this.serializeLayout(),
 		});
 		if (excludedGroups.length === 0) return state;
 		const groups = state.groups.filter(group => !excludedGroups.includes(group.id!));
@@ -1043,6 +1085,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 
 	async applyWorkingSet(workingSet: EditorWorkingSetTarget, options: ApplyEditorWorkingSetOptions = {}): Promise<void> {
 		const target = workingSet === "empty" ? emptyWorkingSet() : validateWorkingSet(workingSet);
+		this.restoreMaximizedGroup();
 		const restoredGroups = target.groups.map(group => {
 			const restored = group.editors.flatMap((editor, index) => {
 				try { return [{ editor, index, input: this.inputSerializers.deserialize(editor.input) }]; }
@@ -1170,6 +1213,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	private setActiveGroup(group: EditorGroupView): void {
+		if (this.maximizedGroup && group.id !== this.maximizedGroup.id) this.restoreMaximizedGroup();
 		if (this._activeGroup === group) return;
 		this._activeGroup = group;
 		this.editorChangeEmitter.fire(Object.freeze({ kind: "activeGroupChanged", groupId: group.id }));

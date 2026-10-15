@@ -105,6 +105,13 @@ export const ActiveEditorGroupLastContext = new RawContextKey<boolean>('activeEd
 /** Whether more than one editor group is open. */
 export const MultipleEditorGroupsContext = new RawContextKey<boolean>('multipleEditorGroups', false);
 
+/** Lock state of the group whose title menu is open. */
+export const ActiveEditorGroupLockedContext = new RawContextKey<boolean>('activeEditorGroupLocked', false);
+/** Part-local group count; auxiliary windows have their own editor layout. */
+export const EditorPartMultipleEditorGroupsContext = new RawContextKey<boolean>('editorPartMultipleEditorGroups', false);
+/** Whether the containing EditorPart temporarily displays one maximized group. */
+export const EditorPartMaximizedEditorGroupContext = new RawContextKey<boolean>('editorPartMaximizedEditorGroup', false);
+
 /** Whether any Workbench editor is open. */
 export const EditorsVisibleContext = new RawContextKey<boolean>('editorIsOpen', false);
 

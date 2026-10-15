@@ -8,22 +8,55 @@ import { localize } from "../../../../nls.js";
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
 import { IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
 import { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
-import { CopyEditorToNewWindowCommandId, MoveEditorToNewWindowCommandId } from "./editorActions.js";
-import "./editorCommands.js";
+import { CopyEditorToNewWindowCommandId, MoveEditorToNewWindowCommandId, ToggleEditorGroupLockCommandId } from "./editorActions.js";
+import { CLOSE_EDITORS_IN_GROUP_COMMAND_ID, CLOSE_SAVED_EDITORS_COMMAND_ID } from "./editorCommands.js";
 import "./diffEditor.workbench.contribution.js";
 import '../../../../editor/browser/widget/diffEditor/diffEditor.contribution.js';
 import { ToggleCollapseUnchangedRegions } from '../../../../editor/browser/widget/diffEditor/commands.js';
 import { GOTO_NEXT_CHANGE, GOTO_PREVIOUS_CHANGE, registerDiffEditorCommands } from "./diffEditorCommands.js";
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { MenuId, MenusRegistry } from '../../../../platform/actions/common/actions.js';
-import { ActiveEditorContext, EditorPartModalVisibleContext, EditorsVisibleContext } from '../../../common/contextkeys.js';
+import { ActiveEditorContext, ActiveEditorGroupLockedContext, EditorPartMaximizedEditorGroupContext, EditorPartMultipleEditorGroupsContext, EditorPartModalVisibleContext, EditorsVisibleContext, IsAuxiliaryWindowContext } from '../../../common/contextkeys.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { ConfigureEditorAction } from '../../actions/layoutActions.js';
 import { DIFF_EDITOR_ID } from '../../../common/editor/diffEditorInput.js';
 import { EditorAutoSave } from "./editorAutoSave.js";
 import { IEditorPart } from "./editorPart.js";
-import { AllEditorsByMostRecentlyUsedQuickAccess } from "./editorQuickAccess.js";
+import { ActiveGroupEditorsByMostRecentlyUsedQuickAccess, AllEditorsByMostRecentlyUsedQuickAccess } from "./editorQuickAccess.js";
 import { ChangeEncodingAction, ChangeEOLAction, ChangeLanguageAction, EditorStatusContribution } from "./editorStatus.js";
 import { DynamicEditorConfigurations } from "./editorConfiguration.js";
+
+const outsideModalEditor = EditorPartModalVisibleContext.isEqualTo(false);
+
+MenusRegistry.appendMenuItem(MenuId.EditorTitle, {
+	command: { id: 'workbench.action.showEditorsInGroup', title: localize('workbench.showOpenedEditors', 'Show Opened Editors') },
+	group: '3_open', order: 10, when: outsideModalEditor,
+});
+MenusRegistry.appendMenuItem(MenuId.EditorTitle, {
+	command: { id: CLOSE_EDITORS_IN_GROUP_COMMAND_ID, title: localize('workbench.editorCloseAll', 'Close All') },
+	group: '5_close', order: 10, when: outsideModalEditor,
+});
+MenusRegistry.appendMenuItem(MenuId.EditorTitle, {
+	command: { id: CLOSE_SAVED_EDITORS_COMMAND_ID, title: localize('workbench.closeSavedEditors', 'Close Saved') },
+	group: '5_close', order: 20, when: outsideModalEditor,
+});
+MenusRegistry.appendMenuItem(MenuId.EditorTitle, {
+	command: { id: 'workbench.action.toggleKeepEditors', title: localize('workbench.enablePreviewEditors', 'Enable Preview Editors'), toggled: ContextKeyExpr.equals('config.workbench.editor.enablePreview', true) },
+	group: '7_settings', order: 10, when: outsideModalEditor,
+});
+MenusRegistry.appendMenuItem(MenuId.EditorTitle, {
+	command: { id: 'workbench.action.toggleMaximizeEditorGroup', title: localize('workbench.maximizeEditorGroup', 'Maximize Group') },
+	group: '8_group_operations', order: 5,
+	when: ContextKeyExpr.and(EditorPartMultipleEditorGroupsContext.isEqualTo(true), EditorPartMaximizedEditorGroupContext.isEqualTo(false)),
+});
+MenusRegistry.appendMenuItem(MenuId.EditorTitle, {
+	command: { id: 'workbench.action.toggleMaximizeEditorGroup', title: localize('workbench.unmaximizeEditorGroup', 'Unmaximize Group') },
+	group: '8_group_operations', order: 5, when: EditorPartMaximizedEditorGroupContext.isEqualTo(true),
+});
+MenusRegistry.appendMenuItem(MenuId.EditorTitle, {
+	command: { id: ToggleEditorGroupLockCommandId, title: localize('workbench.lockEditorGroup', 'Lock Group'), toggled: ActiveEditorGroupLockedContext.isEqualTo(true) },
+	group: '8_group_operations', order: 10, when: ContextKeyExpr.and(outsideModalEditor, IsAuxiliaryWindowContext.isEqualTo(false)),
+});
 
 registerAction2(ChangeLanguageAction);
 registerAction2(ChangeEOLAction);
@@ -85,6 +118,13 @@ QuickAccessRegistry.register({
 	get placeholder() { return localize("workbench.editorQuickAccessPlaceholder", "Select an open editor"); },
 	get helpLabel() { return localize("workbench.showAllEditors", "Show All Editors"); },
 	ctor: AllEditorsByMostRecentlyUsedQuickAccess,
+});
+
+QuickAccessRegistry.register({
+	prefix: ActiveGroupEditorsByMostRecentlyUsedQuickAccess.PREFIX,
+	get placeholder() { return localize('workbench.editorQuickAccessPlaceholder', 'Select an open editor'); },
+	get helpLabel() { return localize('workbench.showOpenedEditors', 'Show Opened Editors'); },
+	ctor: ActiveGroupEditorsByMostRecentlyUsedQuickAccess,
 });
 
 registerWorkbenchContribution(

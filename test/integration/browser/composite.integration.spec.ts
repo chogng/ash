@@ -715,3 +715,55 @@ test('Editor and conversation title share rounded outer corners across styles an
 		await expect(part).toHaveCSS('border-radius', '0px');
 	}
 });
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`editor title menu operates on its group and restores layout (${locale})`, async ({ page }, testInfo) => {
+		await page.goto(`/composite.html?editorMenu&locale=${locale}`);
+		await page.waitForFunction(() => !!window.ashEditorTitleIntegration);
+		const host = page.locator('#editor-tabs-host');
+		const names = locale === 'zh-CN'
+			? ['显示已打开的编辑器', '全部关闭', '关闭已保存', '启用预览编辑器', '锁定组', '配置编辑器']
+			: ['Show Opened Editors', 'Close All', 'Close Saved', 'Enable Preview Editors', 'Lock Group', 'Configure Editors'];
+		const menu = page.getByRole('menu');
+		const openMenu = async (index = 0) => {
+			await host.locator('.ash-editor-group').nth(index).locator('.ash-editor-title-actions [aria-haspopup="menu"]').click();
+			await expect(menu).toBeVisible();
+		};
+		await page.evaluate(() => window.ashEditorTitleIntegration.open('first', true));
+		await openMenu();
+		await expect(menu.locator('[role^=menuitem]')).toHaveText(names);
+		await page.keyboard.press('Escape');
+		await page.evaluate(() => window.ashEditorTitleIntegration.split());
+		await page.evaluate(() => window.ashEditorTitleIntegration.open('second'));
+		await openMenu(0);
+		await menu.getByRole('menuitemcheckbox', { name: names[4], exact: true }).click();
+		await expect.poll(() => page.evaluate(() => window.ashEditorTitleIntegration.state().groups.map(group => group.locked))).toEqual([true, false]);
+		await openMenu(0);
+		await expect(menu.getByRole('menuitemcheckbox', { name: names[4], exact: true })).toHaveAttribute('aria-checked', 'true');
+		await menu.getByRole('menuitem', { name: names[0], exact: true }).click();
+		await expect(page.locator('.ash-quick-pick-row-label')).toHaveText(['first.ts']);
+		await page.keyboard.press('Escape');
+		await openMenu(0);
+		await menu.getByRole('menuitemcheckbox', { name: names[3], exact: true }).click();
+		await page.evaluate(() => window.ashEditorTitleIntegration.open('kept', true));
+		await expect.poll(() => page.evaluate(() => window.ashEditorTitleIntegration.state().groups[0]!.previews)).toEqual([false, false]);
+		const groups = host.locator('.ash-editor-group');
+		const before = await groups.evaluateAll(elements => elements.map(element => element.getBoundingClientRect().width));
+		await openMenu(0);
+		await menu.getByRole('menuitem', { name: locale === 'zh-CN' ? '最大化组' : 'Maximize Group', exact: true }).click();
+		await expect.poll(() => page.evaluate(() => window.ashEditorTitleIntegration.state().groups.map(group => group.visible))).toEqual([true, false]);
+		const maximized = await groups.nth(0).evaluate(element => ({ width: element.getBoundingClientRect().width, available: element.closest('.ash-grid')!.getBoundingClientRect().width }));
+		// The Workbench frame reserves its border inside the Grid's CSS width.
+		expect(maximized.width).toBeGreaterThan(before[0]! * 1.9);
+		expect(maximized.available - maximized.width).toBeLessThanOrEqual(2);
+		await openMenu(0);
+		await menu.getByRole('menuitem', { name: locale === 'zh-CN' ? '还原组' : 'Unmaximize Group', exact: true }).click();
+		await expect.poll(() => page.evaluate(() => window.ashEditorTitleIntegration.state().groups.map(group => group.visible))).toEqual([true, true]);
+		const after = await groups.evaluateAll(elements => elements.map(element => element.getBoundingClientRect().width));
+		for (let index = 0; index < before.length; index++) expect(after[index]).toBeCloseTo(before[index]!, 0);
+		await openMenu(0);
+		await host.screenshot({ path: testInfo.outputPath(`editor-title-menu-${locale}.png`) });
+		await menu.getByRole('menuitem', { name: names[2], exact: true }).click();
+		await expect.poll(() => page.evaluate(() => window.ashEditorTitleIntegration.state().groups.flatMap(group => group.tabs))).toEqual(['first.ts', 'second.ts']);
+	});
+}

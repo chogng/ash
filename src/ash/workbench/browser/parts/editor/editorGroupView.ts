@@ -59,7 +59,8 @@ import type { IBreadcrumbsService } from './breadcrumbs.js';
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import type { LanguageDocumentSymbol } from '../../../../editor/common/languages.js';
 import type { Range } from '../../../../editor/common/core/range.js';
-import { associatedEditorId, DiffEditorAssociationsConfiguration, EditorAssociationsConfiguration, type EditorAssociations } from './editorConfiguration.js';
+import { associatedEditorId, DiffEditorAssociationsConfiguration, EditorAssociationsConfiguration, EditorEnablePreviewConfiguration, type EditorAssociations } from './editorConfiguration.js';
+import { ActiveEditorGroupLockedContext } from '../../../common/contextkeys.js';
 import { EditorFocusRecentEditorAfterCloseConfiguration } from '../../../services/editor/common/editorConfiguration.js';
 
 /** Construction inputs for one independently navigable EditorGroup. */
@@ -251,6 +252,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			const context = this.scopedContextKeyService;
 			const configuration = this.configurationService;
 			const settings = [
+				EditorEnablePreviewConfiguration,
 				'diffEditor.hideUnchangedRegions.enabled',
 				'diffEditor.renderSideBySide',
 				'diffEditor.useInlineViewWhenSpaceIsLimited',
@@ -260,6 +262,9 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			const update = (): void => context.bufferChangeEvents(() => {
 				for (const setting of settings) {
 					context.setContext(`config.${setting}`, configuration.getValue<boolean>(setting));
+				}
+				if (configuration.getValue<boolean>(EditorEnablePreviewConfiguration) === false) {
+					for (const input of this.inputs) this.pinEditor(input);
 				}
 			});
 			update();
@@ -636,7 +641,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	private commitEditorPane(input: IResourceEditorInput, options: EditorOpenOptions, paneInstance: EditorPaneInstance, existing: EditorGroupEntry | undefined, instanceId?: EditorInstanceId): IEditorPane {
 		const pane = paneInstance.pane;
 		// Completed panes and error pages can commit; cancelled loads retain the previous tab.
-		const pinned = options.pinned !== false || getEditorWorkingCopies(pane).some(copy => copy.isDirty);
+		const pinned = options.pinned !== false || this.configurationService?.getValue<boolean>(EditorEnablePreviewConfiguration) === false || getEditorWorkingCopies(pane).some(copy => copy.isDirty);
 		const replacing = this.model.getEditorToReplace(input, { ...options, pinned });
 		const replacement = replacing ? this.paneEntries.get(replacing.instanceId) : undefined;
 		const closedState = replacement ? this.editorState(replacement) : undefined;
@@ -915,6 +920,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	}
 
 	private renderChrome(): void {
+		this.scopedContextKeyService?.setContext(ActiveEditorGroupLockedContext.key, this.isLocked);
 		if (this.activeInput) { this.domNode.removeAttribute('tabindex'); }
 		else { this.domNode.tabIndex = 0; }
 		let label = localize('workbench.editorGroup.label', 'Editor group');
