@@ -218,6 +218,7 @@ pub enum ExecInterruptionReason {
 #[serde(rename_all = "camelCase")]
 pub enum ExecInteractionKind {
     Approval,
+    Permissions,
     UserInput,
     DynamicTool,
     Capability,
@@ -227,6 +228,7 @@ impl From<AgentInteractionKind> for ExecInteractionKind {
     fn from(kind: AgentInteractionKind) -> Self {
         match kind {
             AgentInteractionKind::Approval => Self::Approval,
+            AgentInteractionKind::Permissions => Self::Permissions,
             AgentInteractionKind::UserInput => Self::UserInput,
             AgentInteractionKind::DynamicTool => Self::DynamicTool,
         }

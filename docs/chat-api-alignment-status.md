@@ -160,6 +160,10 @@ Main/renderer 与 automation 全量类型检查、31 个 TS 格式检查通过�
 Sessions Preferences、Skill 相关调用及 13 项分层检查；4 项 Chromium 场景通过，覆盖 en / zh-CN、
 键盘焦点、展开和搜索状态、保存刷新、编辑失败与取消、迟到工作区读取。Renderer、Main 和完整
 浏览器类型检查通过，定向单测使用仓库同一编译选项及 runner 编译执行；格式和 diff check 通过。
+扩大 Settings 单测的 7 项失败由共享工作区新增的
+`chat.experimental.sessionArchiveActionWording` 尚未进入设置布局引起，未计作通过。
+完整 unit 类型检查另有任务外的 `modelSettingsContent.ts` 与 Terminal fixture 错误；不修改其
+正在进行的模型与会话工作。
 
 ## 已确认的 Ash 归属
 

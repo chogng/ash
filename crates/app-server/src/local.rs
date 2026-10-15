@@ -1987,17 +1987,34 @@ pub fn open_app_server_with_codebase_providers(
     };
     let mut oauth_http_config = ash_http_client::HttpClientConfig::default()
         .with_network_target_policy(oauth_targets)
-        .with_response_body_limit(ash_http_client::ResponseBodyLimit::new(std::num::NonZeroUsize::new(1024 * 1024).expect("nonzero OAuth response limit")).map_err(open_error)?)
+        .with_response_body_limit(
+            ash_http_client::ResponseBodyLimit::new(
+                std::num::NonZeroUsize::new(1024 * 1024).expect("nonzero OAuth response limit"),
+            )
+            .map_err(open_error)?,
+        )
         .with_timeouts(ash_http_client::TransportTimeouts::new(
-            ash_http_client::Timeout::After(Duration::from_secs(15)), ash_http_client::Timeout::After(Duration::from_secs(30)),
-            ash_http_client::Timeout::Disabled, ash_http_client::Timeout::After(Duration::from_secs(45))));
+            ash_http_client::Timeout::After(Duration::from_secs(15)),
+            ash_http_client::Timeout::After(Duration::from_secs(30)),
+            ash_http_client::Timeout::Disabled,
+            ash_http_client::Timeout::After(Duration::from_secs(45)),
+        ));
     if oauth_targets == ash_http_client::NetworkTargetPolicy::PublicInternetOnly {
-        oauth_http_config = oauth_http_config.with_proxy_policy(ash_http_client::ProxyPolicy::Direct);
+        oauth_http_config =
+            oauth_http_config.with_proxy_policy(ash_http_client::ProxyPolicy::Direct);
     }
-    let oauth_network = ash_http_client::OutboundNetworkSnapshot::with_policy(oauth_http_config, network_policy.clone()).map_err(open_error)?;
-    let oauth_http: Arc<dyn ash_http_client::HttpClient> = Arc::new(ash_http_client::ReqwestHttpClient::with_network(oauth_network).map_err(open_error)?);
-    let mcp_oauth = Arc::new(McpOAuthService::new(Arc::clone(&profile_secrets), mcp_oauth_providers)
-        .with_http_provider(oauth_http, options.profile_root.join("mcp-oauth-locks")));
+    let oauth_network = ash_http_client::OutboundNetworkSnapshot::with_policy(
+        oauth_http_config,
+        network_policy.clone(),
+    )
+    .map_err(open_error)?;
+    let oauth_http: Arc<dyn ash_http_client::HttpClient> = Arc::new(
+        ash_http_client::ReqwestHttpClient::with_network(oauth_network).map_err(open_error)?,
+    );
+    let mcp_oauth = Arc::new(
+        McpOAuthService::new(Arc::clone(&profile_secrets), mcp_oauth_providers)
+            .with_http_provider(oauth_http, options.profile_root.join("mcp-oauth-locks")),
+    );
     server = server.with_mcp_oauth_service(Arc::clone(&mcp_oauth));
     let mcp = match &connector_runtime {
         Some(connectors) => compose_mcp_tools_with_connectors_and_runtime_intents_and_updates(
@@ -2005,7 +2022,10 @@ pub fn open_app_server_with_codebase_providers(
             1,
             &mcp_runtime_intent_snapshot,
             connectors.service.authority().clone(),
-            ash_mcp_extension::McpAuthentication { secrets: Arc::clone(&connectors.secrets), oauth: Arc::clone(&mcp_oauth) },
+            ash_mcp_extension::McpAuthentication {
+                secrets: Arc::clone(&connectors.secrets),
+                oauth: Arc::clone(&mcp_oauth),
+            },
             Arc::clone(&connectors.mcp),
             mcp_updates.clone(),
         ),
@@ -2401,7 +2421,10 @@ impl ToolConfigWatcher {
                                 catalog_generation,
                                 &runtime_intents,
                                 connectors.service.authority().clone(),
-                                ash_mcp_extension::McpAuthentication { secrets: Arc::clone(&connectors.secrets), oauth: Arc::clone(&mcp_oauth) },
+                                ash_mcp_extension::McpAuthentication {
+                                    secrets: Arc::clone(&connectors.secrets),
+                                    oauth: Arc::clone(&mcp_oauth),
+                                },
                                 Arc::clone(&connectors.mcp),
                                 mcp_updates.clone(),
                             )

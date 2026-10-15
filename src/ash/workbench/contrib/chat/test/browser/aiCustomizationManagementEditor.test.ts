@@ -67,12 +67,17 @@ function setup(resources: DisposableStore, read: () => Promise<readonly HookSour
 	return { pane, container, workspace, saved };
 }
 
-async function waitForHooks(container: HTMLElement): Promise<void> {
-	for (let attempt = 0; attempt < 20; attempt++) {
-		if (container.querySelector('section')?.getAttribute('aria-busy') === 'false') return;
-		await Promise.resolve();
-	}
-	assert.fail('Hook management did not finish loading');
+async function waitForRefresh(container: HTMLElement): Promise<void> {
+	const surface = container.querySelector('section')!;
+	if (surface.getAttribute('aria-busy') === 'false') return;
+	await new Promise<void>(resolve => {
+		const observer = new browserEnvironment.window.MutationObserver(() => {
+			if (surface.getAttribute('aria-busy') !== 'false') return;
+			observer.disconnect();
+			resolve();
+		});
+		observer.observe(surface, { attributes: true, attributeFilter: ['aria-busy'] });
+	});
 }
 
 test('Hook management renders source-owned event descriptions and status through the Chinese window catalog', async () => {
@@ -82,7 +87,7 @@ test('Hook management renders source-owned event descriptions and status through
 		const localization = resources.add(new WorkbenchLocalizationService());
 		const { pane, container } = setup(resources, async () => [source], localization);
 		pane.setVisible(true);
-		await waitForHooks(container);
+		await waitForRefresh(container);
 		assert.match(container.querySelector('[role="status"]')?.textContent ?? '', /^\d+ 种事件 · 已配置 1 个 Hook$/u);
 		assert.ok(container.querySelector('[data-hook-event="preToolUse"]')?.textContent?.includes('工具执行前。'));
 	} finally { resetNlsResolver(); }
@@ -93,7 +98,7 @@ test('Hook management refreshes a saved configuration through the owning text-fi
 	let reads = 0;
 	const { pane, container, saved } = setup(resources, async () => { reads++; return [source]; });
 	pane.setVisible(true);
-	await waitForHooks(container);
+	await waitForRefresh(container);
 	const row = container.querySelector<HTMLDetailsElement>(`[data-hook-id="${source.hooks[0].id}"]`)!;
 	assert.ok(row);
 	row.open = true;
@@ -107,7 +112,7 @@ test('Hook management refreshes a saved configuration through the owning text-fi
 		assert.equal(reads, 1);
 		saved.fire({ resource: URI.file(source.configPath), content: '', revision: '2' });
 		mock.timers.tick(100);
-		await waitForHooks(container);
+		await waitForRefresh(container);
 		assert.equal(reads, 2);
 		assert.equal(container.querySelector(`[data-hook-id="${source.hooks[0].id}"]`), row);
 		assert.equal(row.open, true);
@@ -127,9 +132,9 @@ test('Hook management rejects a late response after its workspace changes and re
 	const { pane, container, workspace } = setup(resources, () => ++reads === 1 ? pending.p : Promise.reject(new Error('current read failed')));
 	pane.setVisible(true);
 	workspace.updateWorkspace({ id: 'next', folders: [] });
-	await Promise.resolve();
+	await waitForRefresh(container);
 	await pending.complete([source]);
-	await Promise.resolve();
+	await waitForRefresh(container);
 	assert.match(container.querySelector('[role="status"]')!.textContent!, /current read failed/u);
 	assert.equal(container.querySelectorAll('.ash-hooks-declaration').length, 0);
 	assert.equal(container.querySelector('section')!.getAttribute('aria-busy'), 'false');

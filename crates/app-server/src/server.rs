@@ -2964,7 +2964,9 @@ impl AppServer {
             Some(ClientMethod::McpOAuthComplete) => {
                 self.mcp_oauth_complete(connection, std::mem::take(&mut request.params))
             }
-            Some(ClientMethod::McpOAuthCancel) => self.mcp_oauth_cancel(connection, &request.params),
+            Some(ClientMethod::McpOAuthCancel) => {
+                self.mcp_oauth_cancel(connection, &request.params)
+            }
             Some(ClientMethod::McpOAuthLogout) => self.mcp_oauth_logout(&request.params),
             Some(ClientMethod::McpOAuthRefresh) => self.mcp_oauth_refresh(&request.params),
             Some(ClientMethod::McpOAuthRevoke) => self.mcp_oauth_revoke(&request.params),

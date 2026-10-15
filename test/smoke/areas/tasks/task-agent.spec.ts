@@ -196,7 +196,7 @@ async function completedTurn(page: Page, read: () => Promise<Thread>, count: num
 async function revokeCommands(session: TaskSession): Promise<void> {
 	const { revision } = await session.client.request(APP_SERVER_METHODS['session/dirs/list'], { sessionId: session.sessionId });
 	const permissions = ['readFiles', 'browseFiles', 'watchFiles'] as const;
-	await session.client.request(APP_SERVER_METHODS['session/dirs/permissions/set'], { sessionId: session.sessionId, path: session.directory, expectedRevision: revision, permissions: [...permissions] });
+	await session.client.request(APP_SERVER_METHODS['session/directoryGrants/set'], { sessionId: session.sessionId, path: session.directory, expectedRevision: revision, permissions: [...permissions] });
 	const current = await session.client.request(APP_SERVER_METHODS['session/dirs/list'], { sessionId: session.sessionId });
 	expect(current.dirs.find(dir => dir.path === session.directory)?.permissions.slice().sort()).toEqual([...permissions].sort());
 }
