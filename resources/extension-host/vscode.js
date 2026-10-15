@@ -846,7 +846,7 @@ export function createApi(configuration, initialization) {
 		const language = scope instanceof Uri ? undefined : scope?.languageId;
 		const folders = facts.workspaceFolders.map(folder => ({ ...folder, uri: Uri.parse(folder.uri) }));
 		const folder = resource ? workspaceFolder(resource, folders) : undefined;
-		const folderModel = folder ? data.folders.find(([uri]) => Uri.from(uri).toString() === folder.uri.toString())?.[1] : undefined;
+		const folderModel = folder ? data.folders.find(([uri]) => folderKey(Uri.from(uri)) === folderKey(folder.uri))?.[1] : undefined;
 		const models = [data.defaults, data.application, data.userLocal, data.userRemote, data.workspace, folderModel, data.policy].filter(Boolean);
 		const languageContents = model => (model?.overrides ?? []).filter(override => override.identifiers.includes(language)).reduce((result, override) => mergeConfig(result, override.contents), {});
 		let values = copyConfig(facts.configurationValues);

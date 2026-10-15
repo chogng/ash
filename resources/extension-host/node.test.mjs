@@ -409,6 +409,8 @@ exports.activate = context => {
 		assert.equal(reply.status, 'success', h.stderr());
 	}
 	const config = (revision, emit, enabled, count) => ({ type: 'configuration', revision, emit, configurationValues: { sample: { enabled, count } }, configurationData: data, change: { keys: ['sample.enabled', 'sample.count'], overrides: [] } });
+	// Equivalent URI encodings must resolve the same folder configuration model.
+	await event({ type: 'workspace', revision: 1, emit: false, workspaceFolders: [{ uri: folderURI.replace(/extension$/, '%65xtension'), name: 'extension', index: 0 }], workspaceName: 'extension', workspaceFile: null });
 	await event(config(1, false, true, 1));
 	await event(config(2, true, false, 0));
 	await event(config(1, true, true, 99));
@@ -418,16 +420,16 @@ exports.activate = context => {
 	assert.equal(state.count, 17);
 	assert.equal(state.captured, 'missing', 'configuration objects retain their creation snapshot');
 	const workspace = (revision, folders) => ({ type: 'workspace', revision, emit: true, workspaceFolders: folders, workspaceName: folders.length ? 'Changed workspace' : null, workspaceFile: null });
-	await event(workspace(1, [{ uri: `${folderURI}/two`, name: 'Two', index: 0 }, { uri: folderURI, name: 'Renamed', index: 1 }]));
+	await event(workspace(2, [{ uri: `${folderURI}/two`, name: 'Two', index: 0 }, { uri: folderURI, name: 'Renamed', index: 1 }]));
 	state = (await h.invoke('test.node', []).result).body.body.payload;
 	assert.equal(state.retained, true);
 	assert.equal(state.index, 1);
 	assert.equal(state.name, 'Renamed');
 	assert.deepEqual(state.folders[0], { added: [`${folderURI}/two`], removed: [] });
-	await event(workspace(2, [{ uri: `${folderURI}/two`, name: 'Two', index: 0 }]));
+	await event(workspace(3, [{ uri: `${folderURI}/two`, name: 'Two', index: 0 }]));
 	state = (await h.invoke('test.node', []).result).body.body.payload;
 	assert.deepEqual(state.folders[1].removed, [{ uri: folderURI, name: 'Renamed', index: 1 }]);
-	await event(workspace(3, []));
+	await event(workspace(4, []));
 	state = (await h.invoke('test.node', []).result).body.body.payload;
 	assert.equal(state.empty, true);
 	assert.equal(state.workspaceName, null);
