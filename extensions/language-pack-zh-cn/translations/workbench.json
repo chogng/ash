@@ -14,6 +14,7 @@
     "terminal.config.showLinkHover": "指向终端链接时显示包含 URL 的悬浮提示。",
     "auxiliaryWindow.editor": "编辑器",
     "auxiliaryWindow.unsavedChanges": "辅助编辑器窗口中有未保存的更改。",
+    "themeEditor.windowPinHelp": "窗口标题栏右侧的置顶按钮可切换此主题编辑器窗口是否始终位于其他窗口之上。使用 Tab 聚焦按钮，再按 Enter 或空格切换；按钮会报告当前是否已置顶。",
     "color.scmGraph.historyItemRefColor": "历史条目引用的颜色。",
     "color.scmGraph.historyItemRemoteRefColor": "历史条目远程引用的颜色。",
     "color.scmGraph.historyItemHoverLabelForeground": "历史条目悬停标签的前景色。",
@@ -1675,7 +1676,16 @@
     "terminal.chat.previewAccessibility": "已保存的终端输出：{0}\n此预览为只读，保留附加时捕获的输出。按 Escape 或选择“关闭终端预览”返回消息。\n\n{1}",
     "terminal.signal.command": "终端：中断活动命令",
     "terminal.signal.unsupported": "此终端宿主仅支持 SIGINT 信号。",
-    "terminal.accessibility.interrupt": "“终端：中断活动命令”通过执行宿主向前台命令发送 SIGINT，不关闭终端。"
+    "terminal.accessibility.interrupt": "“终端：中断活动命令”通过执行宿主向前台命令发送 SIGINT，不关闭终端。",
+    "command.NewEmptyEditorWindow": "新建空编辑器窗口",
+    "command.MoveEditorGroupToNewWindow": "将编辑器组移入新窗口",
+    "command.CopyEditorGroupToNewWindow": "将编辑器组复制到新窗口",
+    "auxiliaryWindow.returningEditors": "正在将未保存的编辑器移回主窗口。",
+    "workbench.statusBarVisibleTitle": "状态栏可见性",
+    "workbench.statusBarVisibleDescription": "在编辑器窗口中显示状态栏。",
+    "accessibility.editorWindows": "命令面板提供新建空编辑器窗口、将编辑器组移入或复制到新窗口，以及关闭窗口等操作。启用每个窗口独立缩放时，缩放命令仅作用于当前窗口。关闭编辑器窗口时，未保存的编辑器会移回主窗口。标题栏的图钉用于切换窗口置顶。",
+    "workbench.zoomPerWindowTitle": "每个窗口独立缩放",
+    "workbench.zoomPerWindowDescription": "独立调整各个窗口的缩放级别。关闭后，缩放将应用于所有窗口。"
   },
   "ash.menu": {
     "file": "文件",

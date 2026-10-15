@@ -11,7 +11,7 @@ import { IInstantiationService } from '../../platform/instantiation/common/insta
 import { registerWorkbenchContribution, WorkbenchPhase } from '../common/contributions.js';
 import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../platform/registry/common/platform.js';
-import { RESTORE_WINDOWS_SETTING, WINDOW_ZOOM_LEVEL_SETTING, NEW_WINDOW_DIMENSIONS_SETTING, RESTORE_FULLSCREEN_SETTING, parseNewWindowDimensions, parseRestoreFullscreen, parseRestoreWindowsSetting, type RestoreWindowsSetting } from '../../platform/window/common/window.js';
+import { RESTORE_WINDOWS_SETTING, WINDOW_ZOOM_LEVEL_SETTING, WINDOW_ZOOM_PER_WINDOW_SETTING, NEW_WINDOW_DIMENSIONS_SETTING, RESTORE_FULLSCREEN_SETTING, parseNewWindowDimensions, parseRestoreFullscreen, parseRestoreWindowsSetting, type RestoreWindowsSetting } from '../../platform/window/common/window.js';
 import { localize } from '../../nls.js';
 import { NativeWindow } from './window.js';
 import {
@@ -45,6 +45,20 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 		valueType: 'number', minimum: -8, maximum: 8,
 		title: localize({ bundle: 'ash', key: 'workbench.zoomSettingTitle' }, 'Window zoom level'),
 		description: localize({ bundle: 'ash', key: 'workbench.zoomSettingDescription' }, 'Adjust the zoom level of desktop windows.'),
+	},
+});
+
+Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration({
+	key: WINDOW_ZOOM_PER_WINDOW_SETTING,
+	defaultValue: true,
+	parse: value => {
+		if (typeof value !== 'boolean') throw new TypeError('Per-window zoom must be a boolean');
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		title: localize({ bundle: 'ash', key: 'workbench.zoomPerWindowTitle' }, 'Zoom per window'),
+		description: localize({ bundle: 'ash', key: 'workbench.zoomPerWindowDescription' }, 'Adjust zoom independently for each window. Disable to apply zoom to all windows.'),
 	},
 });
 

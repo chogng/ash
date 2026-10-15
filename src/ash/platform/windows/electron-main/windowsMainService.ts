@@ -10,7 +10,7 @@ import { createSshRemoteWorkspaceUri } from '../../remote/common/remote.js';
 import { type IAnyWorkspaceIdentifier, hasWorkspaceFileExtension, isSingleFolderWorkspaceIdentifier, isWorkspaceIdentifier, serializeWorkspace } from '../../workspace/common/workspace.js';
 import { WORKSPACE_CONTEXT_READ_CHANNEL, validateWorkspaceContextRead } from '../../workspace/common/workspaceIpc.js';
 import { createEmptyWorkspaceIdentifier, getSingleFolderWorkspaceIdentifier, getWorkspaceIdentifier, type IWorkspacePathService, WorkspacePathKind } from '../../workspaces/node/workspaces.js';
-import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL, parseRestoreWindowsSetting, validateWindowCloseResponse, validateWindowOperation, type WindowCloseResponse, type WindowOperation, type IWorkbenchWindowInfo, type RestoreWindowsSetting } from '../../window/common/window.js';
+import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL, WINDOW_ALWAYS_ON_TOP_CHANGED_CHANNEL, AUXILIARY_WINDOW_STATE_CHANGED_CHANNEL, type IAuxiliaryWindowState, parseRestoreWindowsSetting, validateWindowCloseResponse, validateWindowOperation, type WindowCloseResponse, type WindowOperation, type IWorkbenchWindowInfo, type RestoreWindowsSetting } from '../../window/common/window.js';
 import { focusWindow, WindowMode, type IFocusableWindow, type WorkspaceContextMainService } from '../../window/electron-main/window.js';
 import type { WindowsStateHandler } from './windowsStateHandler.js';
 import { CodeWindow, type IWindowCreationOptions } from './windowImpl.js';
@@ -272,6 +272,12 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> exten
 		@IAuxiliaryWindowsMainService private readonly auxiliaryWindowsMainService: IAuxiliaryWindowsMainService,
 	) {
 		super();
+		this._register(auxiliaryWindowsMainService.onDidChangeWindowState(({ parentId, event }) => {
+			const parent = [...this.getWindows(), ...this.managedWindowValues()].find(window => window.id === parentId);
+			if (!parent || parent.isDestroyed()) return;
+			parent.webContents.send(AUXILIARY_WINDOW_STATE_CHANGED_CHANNEL, event);
+			parent.webContents.send(WINDOW_ALWAYS_ON_TOP_CHANGED_CHANNEL, { windowName: event.windowName, alwaysOnTop: event.state.alwaysOnTop });
+		}));
 		this._register(toDisposable(() => {
 			for (const readiness of this.rendererReadiness.values()) {
 				void readiness.complete();
@@ -663,9 +669,14 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> exten
 		});
 	}
 
-	public perform(source: TWindow, operation: WindowOperation): void | number | boolean | readonly IWorkbenchWindowInfo[] | Promise<void> {
+	public perform(source: TWindow, operation: WindowOperation): void | number | boolean | readonly IWorkbenchWindowInfo[] | IAuxiliaryWindowState | Promise<void> {
 		const windows = [...this.getWindows(), ...this.managedWindowValues(), ...this.auxiliaryWindowsMainService.getWindows().map(window => window.win)].filter(window => !window.isDestroyed());
 		if (!windows.includes(source)) throw new Error('Workbench window is closed');
+		// Same-renderer editor windows share their owner's IPC route. Resolve only its descendants.
+		const target = 'windowName' in operation && operation.windowName !== undefined
+			? this.auxiliaryWindowsMainService.getWindows().find(window => window.parentId === source.id && window.win.webContents.mainFrame.name === operation.windowName)?.win
+			: source;
+		if (!target) throw new Error('Auxiliary window is closed or belongs to another workbench');
 		switch (operation.kind) {
 			case 'list':
 				return windows.map((window): IWorkbenchWindowInfo => ({ id: window.id, title: window.getTitle(), focused: window.isFocused() }));
@@ -676,32 +687,39 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> exten
 				return;
 			}
 			case 'focusSelf':
-				focusWindow(source);
+				focusWindow(target);
 				return;
 			case 'close':
-				source.close();
+				target.close();
 				return;
 			case 'closeOthers':
-				for (const window of windows) {
+				for (const window of [...this.getWindows(), ...this.managedWindowValues()]) {
 					if (window !== source && !window.isDestroyed()) window.close();
 				}
 				return;
+			case 'getAuxiliaryState':
+				return this.auxiliaryWindowsMainService.getWindowByWebContents(target.webContents as unknown as import('electron').WebContents)!.getState();
 			case 'getZoom':
-				return source.webContents.getZoomLevel();
+				return target.webContents.getZoomLevel();
 			case 'getZoomFactor':
 				return source.webContents.getZoomFactor();
 			case 'getFullscreen':
 				return source.isFullScreen();
 			case 'setZoom':
-				source.webContents.setZoomLevel(operation.level);
-				// Programmatic changes do not emit Electron's wheel-only zoom event.
-				source.webContents.send(WINDOW_ZOOM_CHANGED_CHANNEL, operation.level);
+				for (const window of operation.allWindows ? [source, ...this.auxiliaryWindowsMainService.getWindows().filter(window => window.parentId === source.id).map(window => window.win)] : [target]) {
+					window.webContents.setZoomLevel(operation.level);
+					window.webContents.send(WINDOW_ZOOM_CHANGED_CHANNEL, operation.level);
+					const auxiliary = this.auxiliaryWindowsMainService.getWindows().find(candidate => candidate.id === window.id);
+					if (auxiliary) source.webContents.send(AUXILIARY_WINDOW_STATE_CHANGED_CHANNEL, { windowName: auxiliary.win.webContents.mainFrame.name, state: auxiliary.getState() });
+				}
 				return;
 			case 'getAlwaysOnTop':
-				return source.isAlwaysOnTop();
-			case 'setAlwaysOnTop':
-				source.setAlwaysOnTop(operation.enabled);
+			case 'setAlwaysOnTop': {
+				if (operation.kind === 'getAlwaysOnTop') return target.isAlwaysOnTop();
+				target.setAlwaysOnTop(operation.enabled);
+
 				return;
+			}
 			case 'nativeTab':
 				if (this.platform !== 'darwin') throw new Error('Native window tabs require macOS');
 				switch (operation.action) {

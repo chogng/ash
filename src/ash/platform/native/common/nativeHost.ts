@@ -1,5 +1,5 @@
 import type { ITerminalOutputSnapshot } from '../../terminal/common/terminal.js';
-import type { TitleBarStyleConfiguration, IColorScheme } from '../../window/common/window.js';
+import type { TitleBarStyleConfiguration, IColorScheme, IWindowAlwaysOnTopChangedEvent, IAuxiliaryWindowState, IAuxiliaryWindowStateEvent } from '../../window/common/window.js';
 import { validateJsonValue, type JsonValue } from '../../../base/common/jsonValue.js';
 import type { SessionMode } from '../../agentHost/common/agentService.js';
 import type { DisposableHandle } from "../../ipc/common/ipc.js";
@@ -152,14 +152,18 @@ export interface INativeHostApi {
 	uninstallShellCommand(): Promise<string>;
 	listWindows(): Promise<readonly IWorkbenchWindowInfo[]>;
 	focusWindowById(windowId: number): Promise<void>;
-	focusWindow(): Promise<void>;
-	closeWindow(): Promise<void>;
+	focusWindow(windowName?: string): Promise<void>;
+	closeWindow(windowName?: string): Promise<void>;
 	closeOtherWindows(): Promise<void>;
-	getZoomLevel(): Promise<number>;
+	getZoomLevel(windowName?: string): Promise<number>;
 	onDidChangeZoomLevel(listener: (level: number) => void): DisposableHandle;
-	setZoomLevel(level: number): Promise<void>;
-	isAlwaysOnTop(): Promise<boolean>;
-	setAlwaysOnTop(enabled: boolean): Promise<void>;
+	setZoomLevel(level: number, windowName?: string, allWindows?: boolean): Promise<void>;
+	/** An optional name selects an auxiliary window owned by this workbench. */
+	getAuxiliaryWindowState(windowName: string): Promise<IAuxiliaryWindowState>;
+	onDidChangeAuxiliaryWindowState(listener: (event: IAuxiliaryWindowStateEvent) => void): DisposableHandle;
+	isAlwaysOnTop(windowName?: string): Promise<boolean>;
+	setAlwaysOnTop(enabled: boolean, windowName?: string): Promise<void>;
+	onDidChangeWindowAlwaysOnTop(listener: (event: IWindowAlwaysOnTopChangedEvent) => void): DisposableHandle;
 	performNativeTabAction(action: 'next' | 'previous' | 'newWindow' | 'merge' | 'toggleBar'): Promise<void>;
 	openNewWindowTab(): Promise<void>;
 	pickFolder(): Promise<string | undefined>;

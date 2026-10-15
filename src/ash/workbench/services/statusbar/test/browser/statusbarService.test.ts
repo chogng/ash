@@ -90,3 +90,18 @@ test("status bar entry ids are unique while registered", () => {
 		/already exists/,
 	);
 });
+
+
+test('auxiliary status bars observe shared entries through their owner and retain local editor entries', () => {
+	using main = new StatusbarService();
+	using auxiliary = new StatusbarService(main);
+	using shared = main.addEntry({ text: 'Connected', showInAllWindows: true }, { id: 'remote', alignment: StatusbarAlignment.Left });
+	using mainOnly = main.addEntry({ text: 'Main only' }, { id: 'main', alignment: StatusbarAlignment.Left });
+	using editor = auxiliary.addEntry({ text: 'Ln 2' }, { id: 'editor', alignment: StatusbarAlignment.Right });
+	assert.deepEqual(auxiliary.getEntries(StatusbarAlignment.Left).map(item => item.entry.text), ['Connected']);
+	shared.update({ text: 'Disconnected', showInAllWindows: true });
+	assert.deepEqual(auxiliary.getEntries(StatusbarAlignment.Left).map(item => item.entry.text), ['Disconnected']);
+	shared.dispose();
+	assert.deepEqual(auxiliary.getEntries(StatusbarAlignment.Left), []);
+	assert.deepEqual(auxiliary.getEntries(StatusbarAlignment.Right).map(item => item.entry.text), ['Ln 2']);
+});

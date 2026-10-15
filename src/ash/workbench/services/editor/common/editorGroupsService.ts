@@ -1,3 +1,6 @@
+import type { DisposableStore } from '../../../../base/common/lifecycle.js';
+import type { IAction } from '../../../../base/common/actions.js';
+import type { MenuId } from '../../../../platform/actions/common/actions.js';
 import type { IResourceEditorInput } from '../../../common/editor.js';
 import type { Event } from '../../../../base/common/event.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
@@ -10,9 +13,19 @@ export interface IFindGroupScope {
 	readonly location?: GroupLocation;
 }
 
+/** Actions provided by the active pane and its editor menu, scoped to one group. */
+export interface IActiveEditorActions {
+	readonly actions: {
+		readonly primary: readonly IAction[];
+		readonly secondary: readonly IAction[];
+	};
+	readonly onDidChange: Event<void>;
+}
+
 /** Editor operations and canonical state shared by commands and group hosts. */
 export interface IEditorGroup {
 	readonly id: EditorGroupId;
+	createEditorActions(disposables: DisposableStore, menuId?: MenuId): IActiveEditorActions;
 	readonly onDidChangeEditors: Event<EditorGroupChangeEvent>;
 	readonly inputs: readonly IResourceEditorInput[];
 	readonly selectedInputs: readonly IResourceEditorInput[];

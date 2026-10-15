@@ -1,3 +1,4 @@
+import { IStatusbarService, StatusbarService } from '../../services/statusbar/browser/statusbar.js';
 import { BrowserAuxiliaryWindowService, IAuxiliaryWindowService } from '../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { IMessageHistoryService } from '../../../platform/messageHistory/common/messageHistory.js';
 import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
@@ -165,6 +166,7 @@ export function createTestEditorServices(configuration?: IConfigurationService, 
 	services.registerSingleton(IWorkspaceContextService, () => new WorkspaceContextService({ id: 'test-editor', folders: [] }));
 	if (!services.has(IFilesConfigurationService)) services.registerSingleton(IFilesConfigurationService, () => services.createInstance(FilesConfigurationService));
 	if (!services.has(IResourceIconRenderer)) services.registerInstance(IResourceIconRenderer, { onDidChangeResourceIcons: Event.None, getFileIconTheme: () => noFileIconTheme, renderFileIcon() { } });
+	if (!services.has(IStatusbarService)) services.registerSingleton(IStatusbarService, () => new StatusbarService());
 	if (!services.has(IMessageHistoryService)) services.registerInstance(IMessageHistoryService, undefined);
 	if (!services.has(IQuickInputService)) services.registerSingleton(IQuickInputService, () => new TestQuickInputService({ instantiationService: services, container: document.body, contextKeyService: services.get(IContextKeyService) }));
 	if (!services.has(IRendererHostService)) services.registerInstance(IRendererHostService, createDisconnectedRendererApi());

@@ -129,7 +129,8 @@ export class EditorTitleControl extends Disposable {
 		this.tabs.setEditors(editors, activeInput, selectedIds);
 		this.header.setInput(activeInput, activePane);
 		// Single-content hosts retain their group controls even without an editor.
-		this.domNode.hidden = this.model.editorLimit !== 1 && editors.length === 0;
+		this.domNode.hidden = (this.model.editorLimit !== 1 && editors.length === 0)
+			|| (editors.length === 1 && activePane?.prefersEditorTitleHidden === true);
 		if (this.domNode.hidden !== wasHidden) this.heightEmitter.fire();
 	}
 

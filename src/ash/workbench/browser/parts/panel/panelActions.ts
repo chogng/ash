@@ -1,3 +1,4 @@
+import { IsAuxiliaryWindowContext } from '../../../common/contextkeys.js';
 import { localize2 } from '../../../../nls.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
@@ -25,6 +26,7 @@ export class TogglePanelAction extends Action2 {
 			menu: [
 				{
 					id: MenuId.TitleBar,
+					when: IsAuxiliaryWindowContext.isEqualTo(false),
 					group: 'navigation',
 					order: 9,
 				},

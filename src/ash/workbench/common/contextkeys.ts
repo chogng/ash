@@ -6,6 +6,12 @@ export const AppServerAvailableContext = new RawContextKey<boolean>('appServerAv
 
 export const IsSessionsWindowContext = new RawContextKey<boolean>('isSessionsWindow', false);
 
+/** Whether this title bar belongs to an auxiliary editor window. */
+export const IsAuxiliaryWindowContext = new RawContextKey<boolean>('isAuxiliaryWindow', false);
+
+/** Operating-system always-on-top state for this title bar's window. */
+export const IsWindowAlwaysOnTopContext = new RawContextKey<boolean>('isWindowAlwaysOnTop', false);
+
 /** Kind of workspace currently hosted by the window. */
 export const WorkbenchStateContext = new RawContextKey<WorkbenchStateValue>('workbenchState', 'empty');
 

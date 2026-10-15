@@ -217,8 +217,7 @@ import { ActivitybarPart } from "./parts/activitybar/activitybarPart.js";
 import { GlobalCompositeBar } from './parts/globalCompositeBar.js';
 import { StatusbarPart } from "./parts/statusbar/statusbarPart.js";
 import {
-	BrowserTitleService,
-	type TitlebarPartFactory,
+	type BrowserTitleService,
 } from "./parts/titlebar/titlebarPart.js";
 import { PaneCompositePartService } from "./parts/paneCompositePartService.js";
 import { IPaneCompositePartService } from "../services/panecomposite/browser/panecomposite.js";
@@ -306,7 +305,7 @@ import { IOutputService } from "../services/output/common/output.js";
 import { IWorkbenchHostService } from "../services/host/common/workbenchHostService.js";
 import { BrowserEditorService } from "../services/editor/browser/browserEditorService.js";
 import { IEditorService } from "../services/editor/common/editorService.js";
-import { IEditorGroupsService } from '../services/editor/common/editorGroupsService.js';
+import { IEditorGroupsService, type IEditorGroupsContainer } from '../services/editor/common/editorGroupsService.js';
 import { installWorkbenchServiceContributions } from "./workbenchServiceContributions.js";
 import { setHoverDelegate } from "../../base/browser/ui/hover/hoverDelegate.js";
 import { IMenuService } from "../../platform/actions/common/actions.js";
@@ -370,7 +369,8 @@ export interface IStartWorkbenchOptions {
 	readonly dialogHandler?: IDialogHandler;
 	readonly userThemeService?: IUserThemeServiceContract;
 	readonly createContextMenuService: (services: IInstantiationService) => IContextMenuService & IDisposable;
-	readonly createTitlebarPart: TitlebarPartFactory;
+	readonly createAuxiliaryWindowService?: (ownerWindow: Window, root: HTMLElement, services: IInstantiationService) => IAuxiliaryWindowService;
+	readonly createTitleService: (container: HTMLElement, productName: string, editorGroupsContainer: IEditorGroupsContainer, services: IInstantiationService) => BrowserTitleService;
 }
 
 /** Starts the browser workbench and binds its commands to the initial UI. */
@@ -403,7 +403,8 @@ export async function startWorkbench({
 	dialogHandler,
 	userThemeService,
 	createContextMenuService,
-	createTitlebarPart,
+	createTitleService,
+	createAuxiliaryWindowService,
 }: IStartWorkbenchOptions): Promise<Workbench> {
 	const themes = new ExtensionColorThemeService(api.extensions, api.events);
 	const logger = createLogService();
@@ -439,7 +440,8 @@ export async function startWorkbench({
 			dialogHandler,
 			userThemeService,
 			createContextMenuService,
-			createTitlebarPart,
+			createTitleService,
+			createAuxiliaryWindowService,
 			browserFileSystemProvider,
 			workspaceFileSystemProvider,
 			webWorkspaceClient,
@@ -506,7 +508,8 @@ export class Workbench extends Disposable {
 		dialogHandler: IDialogHandler | undefined,
 		userThemeService: IUserThemeServiceContract | undefined,
 		createContextMenuService: (services: IInstantiationService) => IContextMenuService & IDisposable,
-		createTitlebarPart: TitlebarPartFactory,
+		createTitleService: IStartWorkbenchOptions['createTitleService'],
+		createAuxiliaryWindowService: IStartWorkbenchOptions['createAuxiliaryWindowService'],
 		browserFileSystemProvider: HTMLFileSystemProvider | undefined,
 		workspaceFileSystemProvider: (IFileSystemProvider & IDisposable) | undefined,
 		webWorkspaceClient: IWebWorkspaceClient | undefined,
@@ -815,7 +818,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IThemeService, themeService);
 		services.registerInstance(IWorkbenchThemeService, themeService);
 		themeService.initialize();
-		const auxiliaryWindows = this._register(services.createInstance(BrowserAuxiliaryWindowService, ownerWindow, workbenchRoot));
+		const auxiliaryWindows = this._register(createAuxiliaryWindowService ? createAuxiliaryWindowService(ownerWindow, workbenchRoot, services) : services.createInstance(BrowserAuxiliaryWindowService, ownerWindow, workbenchRoot));
 		services.registerInstance(IAuxiliaryWindowService, auxiliaryWindows);
 		const layoutService = this._register(services.createInstance(WorkbenchLayout, workbenchRoot, {
 			workbenchState,
@@ -962,8 +965,6 @@ export class Workbench extends Disposable {
 		services.registerInstance(IAccessibilityService, accessibilityService);
 		const notificationsCenter = this._register(services.createInstance(NotificationsCenter, workbenchRoot, feedbackHost, notificationActionRunner, statusbarService, () => services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications)));
 		services.registerInstance(INotificationsCenter, notificationsCenter);
-		// Document hosts resolve Chat editing, whose signals use the window accessibility policy.
-		if (createTextDocumentHost) { this._register(createTextDocumentHost(services)); }
 		services.registerInstance(IGitHubConnectionService, this._register(services.createInstance(GitHubConnectionService)));
 		const viewDescriptors = this._register(services.createInstance(ViewDescriptorService, {}));
 		services.registerInstance(IViewDescriptorService, viewDescriptors);
@@ -1113,12 +1114,14 @@ export class Workbench extends Disposable {
 		const editorService = this._register(new BrowserEditorService(editorParts));
 		services.registerInstance(IEditorService, editorService);
 		services.registerInstance(IEditorGroupsService, editorService);
+		// Document hosts resolve Chat editing signals and IDE context from the window's accessibility and editor services.
+		if (createTextDocumentHost) { this._register(createTextDocumentHost(services)); }
 		// Markdown rendering resolves the code editor service, which depends on the registered editor parts.
 		services.get(IMarkdownRendererService).setDefaultCodeBlockRenderer(services.createInstance(EditorMarkdownCodeBlockRenderer));
 		// The URL opener requires the completed editor service graph before the window announces readiness.
 		services.get(IURLService);
 		// Commands follow focus across windows; each window title follows only that window's EditorPart.
-		const titleService = this._register(services.createInstance(BrowserTitleService, workbenchRoot, productName, createTitlebarPart, editor));
+		const titleService = this._register(createTitleService(workbenchRoot, productName, editor, services));
 		services.registerInstance(ITitleService, titleService);
 		const titlebar = titleService.getPart(workbenchRoot);
 		if (initialActivityBarLocation === ActivityBarPosition.TOP || initialActivityBarLocation === ActivityBarPosition.BOTTOM) {

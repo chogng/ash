@@ -13,6 +13,8 @@ import {
 } from "../../../browser/parts/titlebar/menubarControl.js";
 import {
 	BrowserTitlebarPart,
+	BrowserTitleService,
+	AuxiliaryBrowserTitlebarPart,
 	type ITitlebarPartFactoryOptions,
 } from "../../../browser/parts/titlebar/titlebarPart.js";
 import { NativeMenubarControl } from "./menubarControl.js";
@@ -22,6 +24,11 @@ import { dialogBackdropBackground } from '../../../../platform/theme/common/colo
 import { INativeHostService } from "../../../common/services.js";
 import type { INativeHostApi } from "../../../../platform/native/common/nativeHost.js";
 import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
+import type { IEditorGroupsContainer } from '../../../services/editor/common/editorGroupsService.js';
+import { addDisposableListener, getWindow } from '../../../../base/browser/dom.js';
+import { onUnexpectedError } from '../../../../base/common/errors.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { IsWindowAlwaysOnTopContext } from '../../../common/contextkeys.js';
 import "./titlebarpart.css";
 
 /**
@@ -41,6 +48,7 @@ export class NativeTitlebarPart extends BrowserTitlebarPart {
 		@IThemeService themeService: IThemeService,
 		@INativeHostService hostService: INativeHostApi,
 		@IStorageService storageService: IStorageService,
+		@IContextKeyService contextKeyService: IContextKeyService,
 	) {
 		super(
 			container,
@@ -49,11 +57,63 @@ export class NativeTitlebarPart extends BrowserTitlebarPart {
 			instantiationService,
 			menuService,
 			contextMenuService,
-			localizationService, themeService, storageService
+			localizationService, themeService, storageService, contextKeyService
 		);
 		this.domNode.classList.add("ash-electron-titlebar");
 		this._register(bindWindowControlTheme(themeService, hostService));
 	}
+}
+
+/** Selects desktop chrome for auxiliary editor windows as well as the main window. */
+export class ElectronTitleService extends BrowserTitleService {
+	protected override doCreateAuxiliaryTitlebarPart(container: HTMLElement, editorGroupsContainer: IEditorGroupsContainer, instantiationService: IInstantiationService, onDispose: () => void): AuxiliaryBrowserTitlebarPart {
+		return instantiationService.createInstance(AuxiliaryElectronTitlebarPart, container, this.productName, editorGroupsContainer, onDispose);
+	}
+}
+
+/** Retains each editor window's title model while integrating Electron's drag and controls regions. */
+class AuxiliaryElectronTitlebarPart extends AuxiliaryBrowserTitlebarPart {
+
+	constructor(
+		container: HTMLElement,
+		productName: string,
+		editorGroupsContainer: IEditorGroupsContainer,
+		onDispose: () => void,
+		@IInstantiationService instantiationService: IInstantiationService,
+		@IMenuService menuService: IMenuService,
+		@IContextMenuService contextMenuService: IContextMenuService,
+		@ILocalizationService localizationService: ILocalizationService,
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
+		@INativeHostService hostService: INativeHostApi,
+		@IContextKeyService contextKeyService: IContextKeyService,
+	) {
+		super(container, productName, editorGroupsContainer, onDispose, isMacintosh ? 'actions-only' : 'application-menu',
+			instantiationService, menuService, contextMenuService, localizationService, themeService, storageService, contextKeyService);
+		const targetWindow = getWindow(container);
+		const alwaysOnTop = IsWindowAlwaysOnTopContext.bindTo(this.contextKeyService);
+		let revision = 0;
+		const refresh = async (): Promise<void> => {
+			const pendingRevision = ++revision;
+			const pinned = await hostService.isAlwaysOnTop(targetWindow.name);
+			if (!this.isDisposed && pendingRevision === revision) alwaysOnTop.set(pinned);
+		};
+		this._register(addDisposableListener(targetWindow, 'focus', () => { void refresh().catch(onUnexpectedError); }));
+		const stateListener = hostService.onDidChangeWindowAlwaysOnTop(event => {
+			if (event.windowName !== targetWindow.name) return;
+			// An event supersedes any in-flight initial or focus read.
+			revision++;
+			alwaysOnTop.set(event.alwaysOnTop);
+		});
+		this._register(toDisposable(() => stateListener.dispose()));
+		void refresh().catch(onUnexpectedError);
+		void hostService.getTitleBarStyle().then(style => {
+			if (!this.isDisposed) this.domNode.classList.toggle('ash-electron-titlebar', style === 'custom');
+		}).catch(error => console.error('Failed to read auxiliary window titlebar style', error));
+		// The opener's appearance host also updates its registered auxiliary window controls.
+		this._register(bindWindowControlTheme(themeService, hostService));
+	}
+
 }
 
 /** Applies titlebar colors to the operating-system window controls for one renderer. */

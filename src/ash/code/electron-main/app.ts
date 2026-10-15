@@ -22,7 +22,7 @@ import { RendererWorkspaceHost } from "../../platform/workspaces/electron-main/r
 import { AppServerBrowserHost } from "../../platform/agentHost/electron-main/appServerBrowserHost.js";
 import { rendererSystemHostRoutes } from "../../platform/native/electron-main/rendererSystemHostRoutes.js";
 import { nativeImage, nativeTheme, shell } from "electron";
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, screen, Menu, Tray, type Event as ElectronEvent, type MenuItemConstructorOptions } from "electron/main";
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, screen, Menu, Tray, type BrowserWindowConstructorOptions, type Event as ElectronEvent, type MenuItemConstructorOptions } from "electron/main";
 
 import { basename, dirname, isAbsolute, join, parse } from "node:path";
 import { mkdir } from "node:fs/promises";
@@ -86,7 +86,7 @@ import { URI } from "../../base/common/uri.js";
 import { extUriBiasedIgnorePathCase } from '../../base/common/resources.js';
 import { DiskFileSystemProvider } from "../../platform/files/node/diskFileSystemProvider.js";
 import { LOCAL_FILE_SYSTEM_CHANNEL_NAME } from "../../platform/files/common/diskFileSystemProviderClient.js";
-import { IWindowsMainService, WindowControlsOverlay, type IOpenConfiguration } from "../../platform/windows/electron-main/windows.js";
+import { IWindowsMainService, WindowControlsOverlay, resolveWindowTitleBarOptions, type IOpenConfiguration } from "../../platform/windows/electron-main/windows.js";
 import { RESTORE_WINDOWS_SETTING, TitleBarSetting, parseTitleBarStyle, type TitleBarStyleConfiguration } from "../../platform/window/common/window.js";
 import { WindowsStateHandler, WindowSessionStateHandler, type IWindowSessionEntry, type IWindowSessionWindow } from "../../platform/windows/electron-main/windowsStateHandler.js";
 import { WindowsMainService, windowOperationIpcRoute, workspaceContextIpcRoutes, workspaceRecoveryIpcRoute } from "../../platform/windows/electron-main/windowsMainService.js";
@@ -1268,7 +1268,7 @@ export class AshApplication extends Disposable {
 		const rendererEntry = this.resolveRendererEntry("workbench");
 
 		const windowDisposables = resources;
-		this.configureWindowNavigation(window, windowDisposables);
+		this.configureWindowNavigation(window, windowDisposables, titleBarStyle);
 		const workspaceHost = windowDisposables.add(new RendererWorkspaceHost(window.webContents));
 		windowDisposables.add(record.windowStateTracking);
 		const remotePortForwardingService = new SshPortForwardingService({
@@ -1405,7 +1405,7 @@ export class AshApplication extends Disposable {
 			...windowSplashIpcRoutes(this.themeMainService, () => `workbench:${workspaceContext.getWorkspace().id}`, color => window.setBackgroundColor(color)),
 			...nativeHostIpcRoutes({
 				getTitleBarStyle: () => titleBarStyle,
-				...this.windowHostOperations(window, windowControlsOverlay, windowDisposables),
+				...this.windowHostOperations(window, windowControlsOverlay, windowDisposables, titleBarStyle),
 				openWindow: async options => {
 					const workspace = { ...createEmptyWorkspaceIdentifier(), ...(options.remoteAuthority ? { remoteAuthority: options.remoteAuthority } : {}) };
 					if (!options.forceReuseWindow) {
@@ -1460,7 +1460,7 @@ export class AshApplication extends Disposable {
 			});
 	}
 
-	private windowHostOperations(window: BrowserWindow, controls: WindowControlsOverlay, windowDisposables: DisposableStore): Omit<INativeHostMainService, 'getTitleBarStyle' | 'openWorkspace' | 'openWindow' | 'openAgentsWindow' | 'syncSystemWideKeybindings'> {
+	private windowHostOperations(window: BrowserWindow, controls: WindowControlsOverlay, windowDisposables: DisposableStore, titleBarStyle: TitleBarStyleConfiguration): Omit<INativeHostMainService, 'getTitleBarStyle' | 'openWorkspace' | 'openWindow' | 'openAgentsWindow' | 'syncSystemWideKeybindings'> {
 		const invitationContents = window.webContents;
 		const resetInvitation = (): void => this.agentsWindowInvitations.resetWindow(window.id);
 		const onInvitationNavigation = (_event: ElectronEvent, _url: string, inPlace: boolean, mainFrame: boolean): void => { if (mainFrame && !inPlace) resetInvitation(); };
@@ -1504,13 +1504,20 @@ export class AshApplication extends Disposable {
 			isAccessibilitySupportEnabled: () => app.isAccessibilitySupportEnabled(),
 			setWindowTheme: theme => {
 				controls.setTheme(theme);
+				const overlay = resolveWindowTitleBarOptions(titleBarStyle, process.platform, theme.backgroundColor).titleBarOverlay;
+				if (typeof overlay === 'object') {
+					// Share the palette with same-document editors; modal dimming stays with its own window.
+					for (const auxiliary of this.auxiliaryWindowsMainService.getWindows()) {
+						if (auxiliary.parentId === window.id) auxiliary.win.setTitleBarOverlay({ ...overlay, symbolColor: theme.symbolColor });
+					}
+				}
 			},
 			setWindowDimmed: dimmed => controls.setDimmed(dimmed),
 			toggleDeveloperTools: () => window.webContents.toggleDevTools(),
 		};
 	}
 
-	private configureWindowNavigation(window: BrowserWindow, windowDisposables: DisposableStore, openerWindow: BrowserWindow = window): void {
+	private configureWindowNavigation(window: BrowserWindow, windowDisposables: DisposableStore, titleBarStyle: TitleBarStyleConfiguration, openerWindow: BrowserWindow = window): void {
 		const auxiliaryWindows = windowDisposables.add(new DisposableMap<number, IDisposable>());
 		// Apply restored popup bounds before creation; Chromium ignores its position features here.
 		window.webContents.setWindowOpenHandler(details => {
@@ -1520,14 +1527,16 @@ export class AshApplication extends Disposable {
 				catch (error) { console.error('Could not request external link opening', error); }
 				return { action: 'deny' };
 			}
-			return { action: 'allow', overrideBrowserWindowOptions: this.auxiliaryWindowsMainService.createWindow(details) };
+			return { action: 'allow', overrideBrowserWindowOptions: this.auxiliaryWindowsMainService.createWindow(details, titleBarStyle, window.webContents.getZoomLevel()) };
 		});
-		const onDidCreateWindow = (child: BrowserWindow, details: { readonly url: string; }): void => {
+		const onDidCreateWindow = (child: BrowserWindow, details: { readonly url: string; readonly options: BrowserWindowConstructorOptions; }): void => {
 			if (details.url !== 'about:blank') return;
 			const childResources = new DisposableStore();
-			childResources.add(this.auxiliaryWindowsMainService.registerWindow(child.webContents, window.id));
+			// Only restored maximized popups are created with show:false. Visibility can
+			// also be controlled by the host and does not identify the requested mode.
+			childResources.add(this.auxiliaryWindowsMainService.registerWindow(child.webContents, window.id, details.options.show === false));
 			auxiliaryWindows.set(child.id, childResources);
-			this.configureWindowNavigation(child, childResources, openerWindow);
+			this.configureWindowNavigation(child, childResources, titleBarStyle, openerWindow);
 			child.once('closed', () => auxiliaryWindows.deleteAndDispose(child.id));
 		};
 		// BrowserWindow releases its webContents getter on close; cleanup owns the original emitter.
@@ -1637,7 +1646,7 @@ export class AshApplication extends Disposable {
 				state: this.windowsMainService.getNewWindowState(sessionsWindowState, this.windowConfigurationValues(), this.lifecycleMainService.wasRestarted),
 				webPreferences: this.createSandboxWebPreferences(),
 				initialize: async (window, windowDisposables) => {
-					this.configureWindowNavigation(window, windowDisposables);
+					this.configureWindowNavigation(window, windowDisposables, titleBarStyle);
 					const tracking = windowDisposables.add(sessionsWindowState.trackWindow(window));
 					session.windowState = { window, handler: sessionsWindowState, tracking };
 					windowDisposables.add(toDisposable(() => this.globalKeybindings.removeWindow(window.id)));
@@ -1701,7 +1710,7 @@ export class AshApplication extends Disposable {
 						...windowSplashIpcRoutes(this.themeMainService, () => `sessions:${session.workspaceContext.getWorkspace().id}`, color => window.setBackgroundColor(color)),
 						...nativeHostIpcRoutes({
 							getTitleBarStyle: () => titleBarStyle,
-							...this.windowHostOperations(window, windowControlsOverlay, windowDisposables),
+							...this.windowHostOperations(window, windowControlsOverlay, windowDisposables, titleBarStyle),
 							openWindow: async options => {
 								const workspace = { ...createEmptyWorkspaceIdentifier(), ...(options.remoteAuthority ? { remoteAuthority: options.remoteAuthority } : {}) };
 								// An empty Workbench requires its own window kind even when the requesting Agents window asks for reuse.

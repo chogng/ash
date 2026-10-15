@@ -2,23 +2,107 @@ import { readUserSettings, writeUserSettings } from '../../../automation/setting
 import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
+import type { Page } from '@playwright/test';
 
-test('Theme Editor restores one unsaved draft in its auxiliary window after restart', { tag: ['@electron-ui'] }, async ({ workbench, reloadWorkbench }, testInfo) => {
+function handleElectronUnloadDialog(page: Page): void {
+	page.on('dialog', async dialog => {
+		expect(dialog.type()).toBe('beforeunload');
+		// Electron already cancels the unload while the product's save dialog is
+		// pending, but CDP may still report a JavaScript dialog that no longer exists.
+		await dialog.dismiss().catch(error => {
+			if (!(error instanceof Error) || !error.message.includes('No dialog is showing')) throw error;
+		});
+	});
+}
+
+test('Theme Editor window close confirms unsaved changes and allows cancel, save and discard', { tag: ['@electron-ui'] }, async ({ application, workbench }) => {
+	if (!('windows' in application)) throw new Error('Window close regression requires Electron');
+	const opened = workbench.page.context().waitForEvent('page');
+	await workbench.quickaccess.runCommand('workbench.action.openThemeEditor');
+	const popup = await opened;
+	handleElectronUnloadDialog(popup);
+	await popup.getByRole('searchbox', { name: 'Search colors', exact: true }).fill('editor.background');
+	const color = popup.getByRole('textbox', { name: 'Hex color for editor.background', exact: true });
+	await color.fill('#234567');
+	const windowName = await popup.evaluate(() => window.name);
+	const requestClose = () => application.evaluate(({ BrowserWindow }, name) => {
+		BrowserWindow.getAllWindows().find(window => window.webContents.mainFrame.name === name)!.close();
+	}, windowName);
+
+	await workbench.dialogs.confirm(application, 'Save Changes', 'Cancel', requestClose);
+	await expect(color).toHaveValue('#234567');
+	expect(popup.isClosed()).toBe(false);
+
+	// Give the draft a theme file so saving on close exercises the existing file.
+	await color.press('ControlOrMeta+S');
+	const saveAs = popup.getByRole('dialog');
+	await saveAs.getByRole('textbox', { name: 'Theme name', exact: true }).fill('Window close regression');
+	await saveAs.getByRole('button', { name: 'Save', exact: true }).click();
+	await expect(popup.getByRole('status').filter({ hasText: /^Theme saved\.$/ })).toBeVisible();
+	await popup.getByRole('searchbox', { name: 'Search colors', exact: true }).fill('editor.background');
+	await color.fill('#345678');
+	await workbench.dialogs.confirm(application, 'Save Changes', 'Save', requestClose);
+	await expect.poll(() => popup.isClosed()).toBe(true);
+	const home = await application.evaluate(() => process.env.ASH_HOME!);
+	const saved = JSON.parse(await readFile(join(home, 'themes', 'window-close-regression.json'), 'utf8'));
+	expect(saved.colors['editor.background']).toBe('#345678');
+
+	const reopened = workbench.page.context().waitForEvent('page');
+	await workbench.quickaccess.runCommand('workbench.action.openThemeEditor');
+	const draft = await reopened;
+	handleElectronUnloadDialog(draft);
+	await draft.getByRole('searchbox', { name: 'Search colors', exact: true }).fill('editor.background');
+	await draft.getByRole('textbox', { name: 'Hex color for editor.background', exact: true }).fill('#456789');
+	await workbench.dialogs.confirm(application, 'Save Changes', "Don't Save", () => draft.close({ runBeforeUnload: true }));
+	await expect.poll(() => draft.isClosed()).toBe(true);
+});
+
+test('Theme Editor restores one unsaved draft in its auxiliary window after restart', { tag: ['@electron-ui'] }, async ({ application, workbench, reloadWorkbench }, testInfo) => {
 	const mainTabs = workbench.page.getByRole('tablist', { name: 'Open editors', exact: true }).getByRole('tab');
 	const originalTabCount = await mainTabs.count();
 	const opened = workbench.page.context().waitForEvent('page');
 	await workbench.quickaccess.runCommand('workbench.action.openThemeEditor');
 	const popup = await opened;
+	await expect(popup.locator('.ash-editor-title-control')).toBeHidden();
+	await expect(popup.locator('.ash-workbench-statusbar')).toBeHidden();
+	const titlebar = popup.locator('.ash-auxiliary-titlebar');
+	await expect(titlebar.locator('.ash-titlebar-command-center')).toBeHidden();
+	await expect(titlebar.getByRole('button')).toHaveCount(1);
+	const pin = titlebar.getByRole('button', { name: 'Turn On Always on Top', exact: true });
+	await expect(pin).toBeEnabled();
+	await expect(titlebar.locator('.ash-titlebar-actions')).toHaveCSS('-webkit-app-region', 'no-drag');
+	const pinBounds = await pin.boundingBox();
+	const titlebarBounds = await titlebar.boundingBox();
+	expect(pinBounds && titlebarBounds && pinBounds.x > titlebarBounds.x + titlebarBounds.width * 0.75).toBe(true);
+	await pin.click();
+	const unpin = titlebar.getByRole('button', { name: 'Turn Off Always on Top', exact: true });
+	await expect(unpin).toBeVisible();
+	await expect(titlebar.locator('.ash-titlebar-actions [role="toolbar"]')).toBeVisible();
+	if (!('windows' in application)) throw new Error('The pin test requires Electron');
+	const windowName = await popup.evaluate(() => window.name);
+	const readPinState = () => application.evaluate(({ BrowserWindow }, name) => {
+		const windows = BrowserWindow.getAllWindows();
+		return { pinned: windows.find(window => window.webContents.mainFrame.name === name)?.isAlwaysOnTop(), others: windows.filter(window => window.webContents.mainFrame.name !== name).map(window => window.isAlwaysOnTop()) };
+	}, windowName);
+	await expect.poll(readPinState).toEqual({ pinned: true, others: [false] });
+	await unpin.press('Space');
+	await expect(pin).toBeVisible();
+	await expect.poll(readPinState).toEqual({ pinned: false, others: [false] });
 	await popup.getByRole('searchbox', { name: 'Search colors', exact: true }).fill('editor.background');
 	await popup.getByRole('textbox', { name: 'Hex color for editor.background', exact: true }).fill('#234567');
 	await expect(popup.frameLocator('.ash-theme-editor-preview').locator('#app')).toHaveCSS('--ash-editor-background', '#234567');
-	const label = await popup.getByRole('tablist', { name: 'Open editors', exact: true }).locator('.ash-tab-label .ash-icon-label-text').textContent();
+	const title = await popup.title();
 	const { workbench: restored } = await reloadWorkbench();
 	await expect.poll(() => restored.page.context().pages().length).toBe(2);
 	const auxiliary = restored.page.context().pages().find(page => page !== restored.page)!;
 	await expect(auxiliary.locator('.ash-theme-editor')).toHaveCount(1);
-	await expect(auxiliary.getByRole('tablist', { name: 'Open editors', exact: true }).locator('.ash-tab-label .ash-icon-label-text')).toHaveText(label!);
+	await expect(auxiliary.locator('.ash-editor-title-control')).toBeHidden();
+	await expect(auxiliary.locator('.ash-workbench-statusbar')).toBeHidden();
+	await expect(auxiliary.locator('.ash-auxiliary-titlebar').getByRole('button', { name: 'Turn On Always on Top', exact: true })).toBeVisible();
+	await expect.poll(() => auxiliary.locator('.ash-theme-editor').evaluate(element => Math.abs(element.getBoundingClientRect().bottom - window.innerHeight))).toBeLessThanOrEqual(1);
+	await expect(auxiliary).toHaveTitle(title);
 	await expect(auxiliary.frameLocator('.ash-theme-editor-preview').locator('#app')).toHaveCSS('--ash-editor-background', '#234567');
+	await expect(auxiliary.frameLocator('.ash-theme-editor-preview').locator('.ash-workbench-statusbar')).toBeVisible();
 	await expect(restored.page.getByRole('tablist', { name: 'Open editors', exact: true }).getByRole('tab')).toHaveCount(originalTabCount);
 	await auxiliary.screenshot({ path: testInfo.outputPath('restored-theme-draft.png') });
 });
@@ -74,8 +158,6 @@ test('Theme Editor connects its local file preview and isolates draft colors', {
 	await expect(workbench.element).toHaveCSS('--ash-editor-background', original);
 	await popup.getByRole('button', { name: 'Save and Apply', exact: true }).click();
 	await expect(workbench.element).toHaveCSS('--ash-editor-background', '#345678');
-	await popup.getByRole('tablist', { name: 'Open editors', exact: true }).getByRole('button', { name: /^Close /u }).click();
-	await expect(popup.locator('.ash-theme-editor-preview')).toHaveCount(0);
 	await Promise.all([popup.waitForEvent('close'), popup.close({ runBeforeUnload: true })]);
 	const reopened = page.context().waitForEvent('page');
 	await workbench.quickaccess.runCommand('workbench.action.openThemeEditor');

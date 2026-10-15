@@ -12,7 +12,7 @@ import { ConsoleLogSink } from '../../../../platform/log/common/consoleLogSink.j
 import type { ITerminalChildProcess, IProcessReadyEvent } from '../../../../platform/terminal/common/terminal.js';
 import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
 import { startWorkbench } from '../../../browser/workbench.js';
-import { createBrowserTitlebarPart } from '../../../browser/parts/titlebar/titlebarPart.js';
+import { BrowserTitleService, createBrowserTitlebarPart } from '../../../browser/parts/titlebar/titlebarPart.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IWorkbenchThemeService } from '../../../services/themes/common/workbenchThemeService.js';
 import { InMemoryWorkingCopyBackupService } from '../../../services/workingCopy/common/workingCopyBackupService.js';
@@ -53,7 +53,7 @@ const workbench = resources.add(await startWorkbench({
 	createLogService: () => new LogService({ sinks: [new ConsoleLogSink()] }),
 	createLifecycleService: host.createLifecycleService,
 	createContextMenuService: scope => scope.createInstance(BrowserContextMenuService),
-	createTitlebarPart: createBrowserTitlebarPart,
+	createTitleService: (container, productName, groups, scope) => scope.createInstance(BrowserTitleService, container, productName, createBrowserTitlebarPart, groups),
 	createURLService: scope => {
 		host.restrictOpeners(scope);
 		return scope.createInstance(BrowserURLService, undefined);

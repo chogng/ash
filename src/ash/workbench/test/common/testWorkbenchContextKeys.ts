@@ -36,6 +36,7 @@ export function createTestWorkbenchContextKeysHandler(contextKeyService: IContex
 
 const emptyGroupState: EditorGroupState = Object.freeze({ id: 'test-group', editors: Object.freeze([]), activeEditorInstanceId: undefined });
 const emptyGroup: IEditorGroup = Object.freeze({
+	createEditorActions: () => ({ actions: { primary: [], secondary: [] }, onDidChange: Event.None }),
 	...emptyGroupState,
 	onDidChangeEditors: Event.None,
 	inputs: Object.freeze([]),

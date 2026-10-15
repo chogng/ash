@@ -20,6 +20,7 @@ export interface IStatusbarEntrySegment {
 
 /** Declarative content displayed by one status bar entry. */
 export interface IStatusbarEntry {
+	readonly showInAllWindows?: boolean;
 	readonly icon?: Icon;
 	readonly text: string;
 	readonly segments?: readonly IStatusbarEntrySegment[];
@@ -87,8 +88,9 @@ export class StatusbarService extends Disposable
 
 	readonly onDidChangeEntries = this._onDidChangeEntries.event;
 
-	constructor() {
+	constructor(private readonly parent?: IStatusbarService) {
 		super();
+		if (parent) this._register(parent.onDidChangeEntries(() => this._onDidChangeEntries.fire()));
 		this._register(toDisposable(() => {
 			this.entries.clear();
 		}));
@@ -145,7 +147,8 @@ export class StatusbarService extends Disposable
 	getEntries(
 		alignment: StatusbarAlignment,
 	): readonly IStatusbarEntryItem[] {
-		return [...this.entries.values()]
+		const shared = this.parent?.getEntries(alignment).filter(item => item.entry.showInAllWindows) ?? [];
+		const local = [...this.entries.values()]
 			.filter((item) => item.alignment === alignment)
 			.sort(compareEntries)
 			.map(({ id, entry, priority, compactGroup, alignment: itemAlignment }) => ({
@@ -155,6 +158,7 @@ export class StatusbarService extends Disposable
 				compactGroup,
 				alignment: itemAlignment,
 			}));
+		return [...shared, ...local].sort((a, b) => b.priority - a.priority);
 	}
 }
 

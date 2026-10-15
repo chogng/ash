@@ -477,3 +477,35 @@ registerAction2(class NewFileFromTemplateAction extends Action2 {
 		picker.show();
 	}
 });
+
+
+registerAction2(class NewEmptyEditorWindowAction extends Action2 {
+	constructor() {
+		super({ id: 'workbench.action.newEmptyEditorWindow', title: localize2('command.NewEmptyEditorWindow', 'New Empty Editor Window'), f1: true });
+	}
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const part = await accessor.get(IEditorPartsService).createAuxiliaryEditorPart();
+		part.activeGroup.focus();
+	}
+});
+
+for (const mode of ['move', 'copy'] as const) {
+	registerAction2(class EditorGroupToNewWindowAction extends Action2 {
+		constructor() {
+			super({
+				id: mode === 'move' ? 'workbench.action.moveEditorGroupToNewWindow' : 'workbench.action.copyEditorGroupToNewWindow',
+				title: mode === 'move' ? localize2('command.MoveEditorGroupToNewWindow', 'Move Editor Group into New Window') : localize2('command.CopyEditorGroupToNewWindow', 'Copy Editor Group into New Window'),
+				f1: true,
+				menu: { id: MenuId.EditorTitle, group: '2_open', order: mode === 'move' ? 3 : 4 },
+			});
+		}
+		override async run(accessor: ServicesAccessor, ...args: readonly unknown[]): Promise<void> {
+			const parts = accessor.get(IEditorPartsService);
+			const context = resolveCommandsContext(args, accessor.get(IEditorGroupsService));
+			const source = context.groupedEditors[0]?.group ?? parts.activeGroup;
+			const locked = source.isLocked;
+			const target = await parts.openEditorsInNewWindow([...source.editors], mode);
+			target?.activeGroup.setLocked(locked);
+		}
+	});
+}

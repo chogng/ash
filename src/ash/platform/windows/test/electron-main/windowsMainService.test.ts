@@ -8,7 +8,7 @@ import { AuxiliaryWindowsMainService } from '../../../auxiliaryWindow/electron-m
 import { nodeWorkspacePathService } from '../../../workspaces/node/workspaces.js';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
-import { WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL } from '../../../window/common/window.js';
+import { WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL, WINDOW_ALWAYS_ON_TOP_CHANGED_CHANNEL, validateWindowAlwaysOnTopChangedEvent, AUXILIARY_WINDOW_STATE_CHANGED_CHANNEL, validateAuxiliaryWindowStateEvent } from '../../../window/common/window.js';
 import { LifecycleMainService } from '../../../lifecycle/electron-main/lifecycleMainService.js';
 import { WindowMode, type IWindowBounds } from '../../../window/electron-main/window.js';
 import type { IAnyWorkspaceIdentifier } from '../../../workspace/common/workspace.js';
@@ -89,6 +89,7 @@ class TestWindow implements IWorkbenchWindow<TestWindow> {
 	private readonly rendererListeners = new Map<string, Set<() => void>>();
 	private readonly onceListeners = new Map<string, Set<() => void>>();
 	public readonly webContents = {
+		mainFrame: { name: '' },
 		getOwnerBrowserWindow: (): BrowserWindow => this as unknown as BrowserWindow,
 		isDestroyed: (): boolean => this.destroyed,
 		getZoomLevel: (): number => this.zoomLevel,
@@ -138,6 +139,7 @@ class TestWindow implements IWorkbenchWindow<TestWindow> {
 
 	public emitFocus(): void { for (const listener of this.fullscreenListeners.get('focus') ?? []) listener(); }
 	public isDestroyed(): boolean { return this.destroyed; }
+	public isVisible(): boolean { return true; }
 	public isMinimized(): boolean { return this.minimized; }
 	public restore(): void { this.minimized = false; this.calls.push('restore'); }
 	public focus(): void { this.focused = true; this.calls.push('focus'); }
@@ -154,7 +156,7 @@ class TestWindow implements IWorkbenchWindow<TestWindow> {
 	public setFullScreen(fullscreen: boolean): void { this.fullscreen = fullscreen; }
 	public destroy(): void { if (this.destroyed) return; this.destroyed = true; this.emit('closed'); }
 	public isAlwaysOnTop(): boolean { return this.alwaysOnTop; }
-	public setAlwaysOnTop(enabled: boolean): void { this.alwaysOnTop = enabled; }
+	public setAlwaysOnTop(enabled: boolean): void { this.alwaysOnTop = enabled; for (const listener of this.fullscreenListeners.get('always-on-top-changed') ?? []) listener(); }
 	public selectNextTab(): void { this.calls.push('next'); }
 	public selectPreviousTab(): void { this.calls.push('previous'); }
 	public moveTabToNewWindow(): void { this.calls.push('newWindow'); }
@@ -337,20 +339,27 @@ test('WindowsMainService tracks auxiliary windows and releases them with their p
 	const next = new TestWindow(3, 'Editor');
 	using nextRegistration = windowServices.get(IAuxiliaryWindowsMainService).registerWindow(next.webContents as unknown as WebContents, parent.id);
 	service.perform(parent, { kind: 'closeOthers' });
-	assert.deepEqual(next.calls, ['close']);
-	assert.equal(next.isDestroyed(), true);
+	assert.deepEqual(next.calls, []);
+	assert.equal(next.isDestroyed(), false);
 });
 
 test('auxiliary creation validates popup bounds independently of whether a position was restored', () => {
 	const service = windowServices.get(IAuxiliaryWindowsMainService);
 	const request = (features: string): HandlerDetails => ({ url: 'about:blank', features, frameName: '', disposition: 'new-window', referrer: { url: '', policy: 'default' } });
-	assert.deepEqual(service.createWindow(request('popup=yes,width=700,height=530')), { width: 700, height: 530 });
-	assert.deepEqual(service.createWindow(request('width=700,height=530,x=-120,y=90')), { width: 700, height: 530, x: -120, y: 90 });
-	assert.deepEqual(service.createWindow(request('left=120,top=90')), { x: 120, y: 90 });
+	assert.deepEqual(service.createWindow(request('popup=yes,width=700,height=530'), 'system'), { width: 700, height: 530, alwaysOnTop: false, fullscreen: false, webPreferences: { zoomFactor: 1 } });
+	assert.deepEqual(service.createWindow(request('width=700,height=530,x=-120,y=90'), 'system'), { width: 700, height: 530, x: -120, y: 90, alwaysOnTop: false, fullscreen: false, webPreferences: { zoomFactor: 1 } });
+	assert.deepEqual(service.createWindow(request('left=120,top=90'), 'system'), { x: 120, y: 90, alwaysOnTop: false, fullscreen: false, webPreferences: { zoomFactor: 1 } });
+	const custom = service.createWindow(request('width=700,height=530'), 'custom');
+	assert.deepEqual({ width: custom.width, height: custom.height }, { width: 700, height: 530 });
+	assert.equal(custom.titleBarStyle, process.platform === 'darwin' ? 'hiddenInset' : 'hidden');
+	assert.ok(custom.titleBarOverlay);
+	const restored = service.createWindow(request('width=800,height=600,window-maximized=yes,window-always-on-top=yes,window-zoom-level=2'), 'custom');
+	assert.deepEqual({ show: restored.show, pinned: restored.alwaysOnTop, zoom: restored.webPreferences?.zoomFactor }, { show: false, pinned: true, zoom: 1.44 });
+	assert.throws(() => service.createWindow(request('window-zoom-level=Infinity'), 'custom'), /Invalid auxiliary zoom/);
 	for (const features of ['width=0', 'height=-1', 'x=NaN', 'width=', 'height=1.5']) {
-		assert.throws(() => service.createWindow(request(features)), /Invalid auxiliary window/);
+		assert.throws(() => service.createWindow(request(features), 'custom'), /Invalid auxiliary window/);
 	}
-	assert.throws(() => service.createWindow({ ...request(''), url: 'https://example.com' }), /same-origin document/);
+	assert.throws(() => service.createWindow({ ...request(''), url: 'https://example.com' }, 'custom'), /same-origin document/);
 });
 
 test('focused detached editors retain their parent workspace and focus when that workspace is reused', async () => {
@@ -396,6 +405,17 @@ test('auxiliary registration resolves descendant ownership and detaches listener
 	assert.throws(() => auxiliary.registerWindow(child.webContents as unknown as WebContents, 1), /closed before registration/);
 	windowServices.dispose();
 	assert.equal(descendant.isDestroyed(), true);
+});
+
+test('auxiliary registration maximizes only when restoring that window mode', () => {
+	const auxiliary = windowServices.get(IAuxiliaryWindowsMainService);
+	const hidden = new TestWindow(2, 'Hidden editor');
+	hidden.isVisible = () => false;
+	using hiddenRegistration = auxiliary.registerWindow(hidden.webContents as unknown as WebContents, 1);
+	assert.deepEqual({ maximized: hidden.maximized, shown: hidden.shown }, { maximized: 0, shown: 0 });
+	const restored = new TestWindow(3, 'Restored editor');
+	using restoredRegistration = auxiliary.registerWindow(restored.webContents as unknown as WebContents, 1, true);
+	assert.deepEqual({ maximized: restored.maximized, shown: restored.shown }, { maximized: 1, shown: 1 });
 });
 
 test('window service assembly rejects a missing auxiliary window owner', () => {
@@ -614,6 +634,39 @@ test('WindowsMainService applies zoom, always-on-top, and platform tab operation
 	assert.deepEqual(window.calls, ['next', 'previous', 'newWindow', 'merge', 'toggleBar']);
 });
 
+test('window pinning targets only registered auxiliary windows owned by its IPC sender', () => {
+	const parent = new TestWindow(1, 'Workbench');
+	const child = new TestWindow(2, 'Theme Editor');
+	const other = new TestWindow(3, 'Other workbench');
+	const name = 'ash-auxiliary-12345678-1234-1234-1234-123456789abc';
+	child.webContents.mainFrame.name = name;
+	using service = createWindowsService(() => [parent, other], async () => undefined);
+	using registration = windowServices.get(IAuxiliaryWindowsMainService).registerWindow(child.webContents as unknown as WebContents, parent.id);
+	const route = windowOperationIpcRoute(service, parent);
+	const pin = route.validate({ kind: 'setAlwaysOnTop', enabled: true, windowName: name });
+	route.invoke(pin);
+	assert.deepEqual([parent.alwaysOnTop, child.alwaysOnTop, other.alwaysOnTop], [false, true, false]);
+	assert.equal(route.invoke(route.validate({ kind: 'getAlwaysOnTop', windowName: name })), true);
+	assert.throws(() => windowOperationIpcRoute(service, other).invoke(pin), /belongs to another workbench/);
+	for (const invalid of [
+		{ kind: 'getAlwaysOnTop', windowName: '../another-window' },
+		{ kind: 'setAlwaysOnTop', enabled: 'true', windowName: name },
+		{ kind: 'setAlwaysOnTop', enabled: true, windowName: name, windowId: parent.id },
+		{ kind: 'closeOthers', windowName: name },
+	]) assert.throws(() => route.validate(invalid), /Invalid window operation/);
+	route.invoke(route.validate({ kind: 'setAlwaysOnTop', enabled: false, windowName: name }));
+	assert.equal(child.alwaysOnTop, false);
+	assert.deepEqual(parent.messages.filter(message => message.channel === WINDOW_ALWAYS_ON_TOP_CHANGED_CHANNEL), [true, false].map(alwaysOnTop => ({ channel: WINDOW_ALWAYS_ON_TOP_CHANGED_CHANNEL, level: { windowName: name, alwaysOnTop } })));
+	assert.deepEqual(child.messages, []);
+	assert.deepEqual(other.messages, []);
+	assert.deepEqual(validateWindowAlwaysOnTopChangedEvent({ windowName: name, alwaysOnTop: true }), { windowName: name, alwaysOnTop: true });
+	for (const event of [null, { alwaysOnTop: 'true' }, { alwaysOnTop: true, windowName: 'foreign' }, { alwaysOnTop: true, execute: true }]) {
+		assert.throws(() => validateWindowAlwaysOnTopChangedEvent(event), /Invalid window always-on-top change/);
+	}
+	registration.dispose();
+	assert.throws(() => route.invoke(pin), /closed/);
+});
+
 test('WindowsMainService sends zoom changes and releases its window listener', async () => {
 	const window = new TestWindow(1, 'First');
 	using service = createWindowsService(() => [window], async () => undefined);
@@ -811,4 +864,56 @@ test('platform window owner releases a failed opening for an explicit retry', as
 	await assert.rejects(service.openWorkspace(workspace, async () => { throw new Error('startup failed'); }), /startup failed/);
 	const window = new TestWindow(1, 'Retry');
 	assert.equal(await service.openWorkspace(workspace, async () => registerWindow(service, window, workspace)), window);
+});
+
+
+test('auxiliary close, focus and zoom operations stay in their owner and shared zoom reaches every window', () => {
+	const parent = new TestWindow(301, 'Workbench');
+	const child = new TestWindow(302, 'Editor');
+	const other = new TestWindow(303, 'Other');
+	const name = 'ash-auxiliary-12345678-1234-1234-1234-123456789abc';
+	child.webContents.mainFrame.name = name;
+	using service = createWindowsService(() => [parent, other], async () => undefined);
+	using registration = windowServices.get(IAuxiliaryWindowsMainService).registerWindow(child.webContents as unknown as WebContents, parent.id);
+	const route = windowOperationIpcRoute(service, parent);
+	route.invoke(route.validate({ kind: 'focusSelf', windowName: name }));
+	assert.deepEqual(child.calls, ['focus']);
+	assert.deepEqual(parent.calls, []);
+	route.invoke(route.validate({ kind: 'setZoom', level: 2, windowName: name }));
+	assert.equal(route.invoke(route.validate({ kind: 'getZoom', windowName: name })), 2);
+	assert.deepEqual([parent.zoomLevel, child.zoomLevel, other.zoomLevel], [0, 2, 0]);
+	route.invoke(route.validate({ kind: 'setZoom', level: 1, allWindows: true }));
+	assert.deepEqual([parent.zoomLevel, child.zoomLevel, other.zoomLevel], [1, 1, 0]);
+	assert.throws(() => route.validate({ kind: 'setZoom', level: 2, windowName: name, allWindows: true }), /Invalid/);
+	for (const kind of ['close', 'focusSelf', 'getZoom', 'setZoom'] as const) {
+		assert.throws(() => windowOperationIpcRoute(service, other).invoke({ kind, windowName: name, ...(kind === 'setZoom' ? { level: 2 } : {}) }), /belongs to another/);
+	}
+	route.invoke(route.validate({ kind: 'closeOthers' }));
+	assert.equal(other.destroyed, true);
+	assert.equal(child.destroyed, false);
+	route.invoke(route.validate({ kind: 'close', windowName: name }));
+	assert.equal(child.destroyed, true);
+	assert.equal(parent.destroyed, false);
+});
+
+
+test('auxiliary state events report host bounds fullscreen and pin state only to the owner', () => {
+	const parent = new TestWindow(401, 'Workbench');
+	const child = new TestWindow(402, 'Editor');
+	const other = new TestWindow(403, 'Other');
+	const name = 'ash-auxiliary-12345678-1234-1234-1234-123456789abc';
+	child.webContents.mainFrame.name = name;
+	child.bounds = { x: 35, y: 45, width: 850, height: 600 };
+	using service = createWindowsService(() => [parent, other], async () => undefined);
+	using registration = windowServices.get(IAuxiliaryWindowsMainService).registerWindow(child.webContents as unknown as WebContents, parent.id);
+	child.emitFullscreenChanged(true);
+	child.setAlwaysOnTop(true);
+	const states = parent.messages.filter(message => message.channel === AUXILIARY_WINDOW_STATE_CHANGED_CHANNEL).map(message => validateAuxiliaryWindowStateEvent(message.level));
+	assert.equal(states.length, 2);
+	assert.deepEqual(states[1], { windowName: name, state: { width: 850, height: 600, left: 35, top: 45, mode: 'fullscreen', zoomLevel: 0, alwaysOnTop: true } });
+	assert.deepEqual(other.messages, []);
+	assert.deepEqual(service.perform(parent, { kind: 'getAuxiliaryState', windowName: name }), states[1]!.state);
+	assert.throws(() => service.perform(other, { kind: 'getAuxiliaryState', windowName: name }), /belongs to another/);
+	assert.throws(() => validateAuxiliaryWindowStateEvent({ windowName: name, state: { ...states[1]!.state, width: NaN } }), /Invalid auxiliary window state/);
+	assert.throws(() => validateAuxiliaryWindowStateEvent({ ...states[1], windowName: 'foreign' }), /Invalid auxiliary window state event/);
 });

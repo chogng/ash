@@ -1,9 +1,15 @@
+import { Emitter } from '../../../base/common/event.js';
+import type { IAuxiliaryWindowStateEvent } from '../../window/common/window.js';
 import type { BrowserWindow, BrowserWindowConstructorOptions, HandlerDetails, WebContents } from 'electron';
 import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { AuxiliaryWindow, type IAuxiliaryWindow } from './auxiliaryWindow.js';
 import type { IAuxiliaryWindowsMainService } from './auxiliaryWindows.js';
+import type { TitleBarStyleConfiguration } from '../../window/common/window.js';
+import { resolveWindowTitleBarOptions } from '../../windows/electron-main/windows.js';
 
 export class AuxiliaryWindowsMainService extends Disposable implements IAuxiliaryWindowsMainService {
+	private readonly stateChanged = this._register(new Emitter<{ readonly parentId: number; readonly event: IAuxiliaryWindowStateEvent; }>());
+	readonly onDidChangeWindowState = this.stateChanged.event;
 	private readonly windows = this._register(new DisposableMap<number, AuxiliaryWindow>());
 	private readonly listeners = this._register(new DisposableMap<number, DisposableStore>());
 
@@ -11,13 +17,21 @@ export class AuxiliaryWindowsMainService extends Disposable implements IAuxiliar
 		super();
 	}
 
-	public createWindow(details: HandlerDetails): BrowserWindowConstructorOptions {
+	public createWindow(details: HandlerDetails, titleBarStyle: TitleBarStyleConfiguration, zoomLevel = 0): BrowserWindowConstructorOptions {
 		this.assertNotDisposed();
 		if (details.url !== 'about:blank') {
 			throw new TypeError('Auxiliary windows require an empty same-origin document');
 		}
 		const features = new URLSearchParams(details.features.replaceAll(',', '&'));
-		const options: BrowserWindowConstructorOptions = {};
+		const options: BrowserWindowConstructorOptions = { ...resolveWindowTitleBarOptions(titleBarStyle) };
+		const requestedZoom = features.get('window-zoom-level');
+		const inheritedZoom = this.getFocusedWindow()?.win.webContents.getZoomLevel() ?? zoomLevel;
+		const effectiveZoom = requestedZoom === null ? inheritedZoom : Number(requestedZoom);
+		if (!Number.isFinite(effectiveZoom) || effectiveZoom < -8 || effectiveZoom > 8) throw new TypeError('Invalid auxiliary zoom level');
+		options.webPreferences = { zoomFactor: 1.2 ** effectiveZoom };
+		options.alwaysOnTop = features.get('window-always-on-top') === 'yes';
+		options.fullscreen = features.get('window-fullscreen') === 'yes';
+		if (features.get('window-maximized') === 'yes') options.show = false;
 		for (const key of ['x', 'y', 'left', 'top', 'width', 'height'] as const) {
 			const value = features.get(key);
 			if (value === null) {
@@ -38,7 +52,7 @@ export class AuxiliaryWindowsMainService extends Disposable implements IAuxiliar
 		return options;
 	}
 
-	public registerWindow(webContents: WebContents, parentId: number): IDisposable {
+	public registerWindow(webContents: WebContents, parentId: number, restoreMaximized = false): IDisposable {
 		this.assertNotDisposed();
 		const window = this.resolveWindow(webContents);
 		if (!window || window.isDestroyed()) {
@@ -50,6 +64,13 @@ export class AuxiliaryWindowsMainService extends Disposable implements IAuxiliar
 		const parent = this.windows.get(parentId);
 		const auxiliary = this.windows.set(window.id, new AuxiliaryWindow(window, parent?.parentId ?? parentId));
 		const resources = this.listeners.set(window.id, new DisposableStore());
+		resources.add(auxiliary.onDidChangeState(() => {
+			if (!window.isDestroyed()) this.stateChanged.fire({ parentId: auxiliary.parentId, event: { windowName: webContents.mainFrame.name, state: auxiliary.getState() } });
+		}));
+		if (restoreMaximized) {
+			window.maximize();
+			window.show();
+		}
 		const release = (): void => {
 			if (this.windows.get(window.id) !== auxiliary) {
 				return;

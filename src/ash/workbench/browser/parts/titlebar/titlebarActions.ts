@@ -1,3 +1,4 @@
+import { IsAuxiliaryWindowContext } from '../../../common/contextkeys.js';
 import { localize2 } from '../../../../nls.js';
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
@@ -25,6 +26,7 @@ registerAction2(class ToggleSideBarAction extends Action2 {
 			menu: [
 				{
 					id: MenuId.TitleBarLeft,
+					when: IsAuxiliaryWindowContext.isEqualTo(false),
 					group: "navigation",
 					order: 10,
 				},
@@ -70,6 +72,7 @@ registerAction2(class ToggleAuxiliaryBarAction extends Action2 {
 			menu: [
 				{
 					id: MenuId.TitleBar,
+					when: IsAuxiliaryWindowContext.isEqualTo(false),
 					group: "navigation",
 					order: 10,
 				},

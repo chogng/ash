@@ -3,7 +3,7 @@ import { ILocalizationService } from '../../../../../services/localization/commo
 import { TestUriIdentityServices } from '../../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { createTestComponentServices, registerTestComponentServices, createTestEditorServices } from '../../../../../test/common/testEditorServices.js';
 import { SaveReason, type IResourceEditorInput, type ISaveOptions } from '../../../../../common/editor.js';
-import { WorkbenchWindowBarHeight } from '../../../workbenchPartDimensions.js';
+import { WorkbenchWindowBarHeight, StatusbarHeight } from '../../../workbenchPartDimensions.js';
 import { Direction } from '../../../../../../base/browser/ui/grid/grid.js';
 import { EditorInputSerializerRegistry } from '../../../../../services/editor/common/editorInputSerializer.js';
 import { Dimension } from '../../../../../../base/browser/dom.js';
@@ -166,7 +166,7 @@ function createEditorPart(container: HTMLElement, options: IEditorPartOptions, p
 }
 
 /** Editor lifecycle tests use fixed window chrome; title calculation is exercised in the title service suite. */
-function createAuxiliaryPart(container: HTMLElement, registry: EditorPaneRegistry, services?: InstantiationService) {
+function createAuxiliaryPart(container: HTMLElement, registry: EditorPaneRegistry, services?: InstantiationService, options: Omit<IEditorPartOptions, 'registry'> = {}) {
 	const element = container.ownerDocument.createElement('section');
 	container.prepend(element);
 	const titlebar = {
@@ -182,7 +182,7 @@ function createAuxiliaryPart(container: HTMLElement, registry: EditorPaneRegistr
 		dispose() { element.remove(); },
 		[Symbol.dispose]() { this.dispose(); },
 	};
-	return { part: services ? services.createInstance(EditorPart, container, { registry }) : createEditorPart(container, { registry }), titlebar };
+	return { part: services ? services.createInstance(EditorPart, container, { ...options, registry }) : createEditorPart(container, { ...options, registry }), titlebar };
 }
 
 test('inactive editor opens keep the selected tab and its content visible', async () => {
@@ -1367,6 +1367,30 @@ test("EditorPart opens beside the active group without stealing caller focus", a
 
 	editor.dispose();
 	dom.window.close();
+});
+
+test('EditorPart omits a standalone tool header and restores tab navigation for additional editors', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using registry = new EditorPaneRegistry();
+		registry.registerEditorPane(descriptor('test.tool', '.tool', () => Object.assign(new TestEditorPane('test.tool'), { prefersEditorTitleHidden: true })));
+		registry.registerEditorPane(descriptor('test.text', '.ts', () => new TestEditorPane('test.text')));
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		editor.layout({ width: 800, height: 600 });
+		const tool = input('/project/theme.tool');
+		const text = input('/project/main.ts');
+		await editor.openEditor(tool, { pinned: true });
+		const header = editor.activeGroup.domNode.querySelector<HTMLElement>('.ash-editor-title-control')!;
+		assert.equal(header.hidden, true);
+		assert.equal(editor.getTabsHeight(), 0);
+		await editor.openEditor(text, { pinned: true });
+		editor.activeGroup.activateEditor(tool);
+		assert.equal(header.hidden, false);
+		assert.ok(editor.getTabsHeight() > 0);
+		await editor.activeGroup.closeEditor(text);
+		assert.equal(header.hidden, true);
+		assert.equal(editor.getTabsHeight(), 0);
+	} finally { dom.window.close(); }
 });
 
 test('EditorPart closes empty groups after the last tab and transfers focus to the recent group', async () => {
@@ -3219,6 +3243,81 @@ test('slow directory identity cannot replace a newer editor or ordinary content'
 	} finally { dom.window.close(); }
 });
 
+for (const { decision, failSave, label } of [
+	{ decision: ConfirmResult.SAVE, failSave: false, label: 'saving' },
+	{ decision: ConfirmResult.DONT_SAVE, failSave: false, label: 'discarding' },
+	{ decision: ConfirmResult.SAVE, failSave: true, label: 'a failed save' },
+]) {
+	test(`auxiliary window close confirms dirty editors once and retries after ${label}`, async () => {
+		const dom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost' });
+		try {
+			using registry = new EditorPaneRegistry();
+			using copy = new TestWorkingCopy(URI.file('/project/theme.json'));
+			const saveFailure = new Error('Theme write failed');
+			const reported = deferred<unknown>();
+			const previousErrorHandler = errorHandler.getUnexpectedErrorHandler();
+			using restoreErrorHandler = toDisposable(() => errorHandler.setUnexpectedErrorHandler(previousErrorHandler));
+			if (failSave) {
+				errorHandler.setUnexpectedErrorHandler(error => reported.resolve(error));
+				const save = copy.save.bind(copy);
+				let shouldFail = true;
+				copy.save = async () => {
+					if (shouldFail) {
+						shouldFail = false;
+						throw saveFailure;
+					}
+					await save();
+				};
+			}
+			using registration = registry.registerEditorPane(descriptor('test.theme', '.json', () => Object.assign(new TestEditorPane('test.theme', copy), { prefersWindowCloseConfirmation: true })));
+			using main = createEditorPart(dom.window.document.body, { registry });
+			using windows = new TestAuxiliaryWindowService();
+			using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'workspace', flushInterval: 0 });
+			const dialogs = new TestFileDialogService();
+			const result = deferred<ConfirmResult>();
+			dialogs.showSaveConfirm = async resources => {
+				dialogs.prompts.push(resources.map(String));
+				return result.promise;
+			};
+			using parts = createEditorParts(main, windows, container => createAuxiliaryPart(container, registry, undefined, { fileDialogService: dialogs }), {
+				onDidChangeScreenReaderOptimized: Event.None,
+				isScreenReaderOptimized: () => false,
+			} as unknown as IAccessibilityService, storage);
+			const part = await parts.createAuxiliaryEditorPart();
+			await part.openEditor({ resource: copy.resource });
+			copy.markDirty();
+			const auxiliary = windows.lastWindow!;
+			const closed = deferred<void>();
+			using closeListener = auxiliary.onDidClose(() => closed.resolve());
+			let closeRequests = 0;
+			const originalClose = auxiliary.window.close;
+			auxiliary.window.close = () => {
+				closeRequests++;
+				assert.equal(auxiliary.requestBeforeUnload(), undefined);
+				auxiliary.window.close = originalClose;
+				auxiliary.dispose();
+			};
+			assert.match(auxiliary.requestBeforeUnload()!, /unsaved changes/i);
+			assert.match(auxiliary.requestBeforeUnload()!, /unsaved changes/i);
+			assert.deepEqual(dialogs.prompts, [['theme.json']]);
+			assert.equal(closeRequests, 0);
+			result.resolve(decision);
+			if (failSave) {
+				assert.equal(await reported.promise, saveFailure);
+				assert.deepEqual({ closeRequests, dirty: copy.isDirty }, { closeRequests: 0, dirty: true });
+				assert.match(auxiliary.requestBeforeUnload()!, /unsaved changes/i);
+				assert.deepEqual(dialogs.prompts, [['theme.json'], ['theme.json']]);
+			}
+			await closed.promise;
+			assert.deepEqual({ closeRequests, dirty: copy.isDirty, saved: copy.saveCount, reverted: copy.revertCount }, {
+				closeRequests: 1, dirty: false, saved: decision === ConfirmResult.SAVE ? 1 : 0, reverted: decision === ConfirmResult.DONT_SAVE ? 1 : 0,
+			});
+		} finally {
+			dom.window.close();
+		}
+	});
+}
+
 test("EditorParts moves an editor to an auxiliary window without changing its instance identity", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>", { url: 'http://localhost' });
 	const registry = new EditorPaneRegistry();
@@ -3233,7 +3332,8 @@ test("EditorParts moves an editor to an auxiliary window without changing its in
 	} as unknown as IAccessibilityService, storage);
 	using contextKeys = new ContextKeyService();
 	using editorContexts = new EditorContextKeyController(contextKeys, editorParts, registry, undefined);
-	const resourceInput = input("C:\\project\\detached.ts");
+	let allowMove = true;
+	const resourceInput = { ...input("C:\\project\\detached.ts"), canMove: () => allowMove ? true as const : "Cannot move this editor" };
 	await editorParts.openEditor(resourceInput);
 	const instanceId = editorParts.getEditorState().activeEditor?.instanceId;
 	assert.equal(contextKeys.getValue('resource'), resourceInput.resource.toString());
@@ -3248,18 +3348,15 @@ test("EditorParts moves an editor to an auxiliary window without changing its in
 	assert.equal(contextKeys.getValue('activeEditor'), 'stanza.editor.code');
 	assert.equal(contextKeys.getValue('resource'), resourceInput.resource.toString());
 	assert.ok(windows.lastWindow?.container.querySelector(".ash-workbench-statusbar"));
-	assert.match(windows.lastWindow?.requestBeforeUnload() ?? "", /unsaved changes/i);
+	allowMove = false;
+	assert.equal(windows.lastWindow?.requestBeforeUnload(), 'Cannot move this editor');
 	assert.equal(await editorParts.closeAuxiliaryEditorPart(auxiliary), false);
-
-	await workingCopy.save();
-	const secondInput = input("C:\\project\\second.ts");
-	await auxiliary.openEditor(secondInput);
-	auxiliary.activateEditor(resourceInput);
-	windows.lastWindow?.dispose();
-	await nextTask();
+	allowMove = true;
+	assert.equal(await editorParts.closeAuxiliaryEditorPart(auxiliary), true);
+	assert.equal(workingCopy.isDirty, true);
 	assert.equal(editorParts.parts.length, 1);
 	assert.equal(editorParts.activePart, main);
-	assert.equal(main.groups[0]?.inputs.length, 2);
+	assert.equal(main.groups[0]?.inputs.length, 1);
 	assert.equal(main.getEditorState().activeEditor?.instanceId, instanceId);
 	assert.equal(main.activeInput?.resource.fsPath, resourceInput.resource.fsPath);
 	const detachedAgain = await editorParts.openEditorsInNewWindow([editorParts.getEditorState().activeEditor!], 'move');
@@ -3322,6 +3419,37 @@ for (const mode of ['move', 'copy'] as const) {
 		} finally { dom.window.close(); }
 	});
 }
+
+test('auxiliary tools hide the status bar and return its space to the editor', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost' });
+	try {
+		using registry = new EditorPaneRegistry();
+		registry.registerEditorPane(descriptor('test.tool', '.tool', () => Object.assign(new TestEditorPane('test.tool'), { prefersStatusbarHidden: true })));
+		registry.registerEditorPane(descriptor('test.text', '.ts', () => new TestEditorPane('test.text')));
+		using main = createEditorPart(dom.window.document.body, { registry });
+		using windows = new TestAuxiliaryWindowService();
+		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'workspace', flushInterval: 0 });
+		using parts = createEditorParts(main, windows, container => createAuxiliaryPart(container, registry), {
+			onDidChangeScreenReaderOptimized: Event.None,
+			isScreenReaderOptimized: () => false,
+		} as unknown as IAccessibilityService, storage);
+		const auxiliary = await parts.createAuxiliaryEditorPart();
+		const tool = input('/project/theme.tool');
+		const text = input('/project/main.ts');
+		const toolPane = await auxiliary.openEditor(tool, { pinned: true }) as TestEditorPane;
+		const statusbar = windows.lastWindow!.container.querySelector<HTMLElement>('.ash-workbench-statusbar')!;
+		assert.equal(statusbar.hidden, true);
+		const textPane = await auxiliary.openEditor(text, { pinned: true }) as TestEditorPane;
+		assert.equal(statusbar.hidden, false);
+		const textHeight = textPane.dimension!.height;
+		auxiliary.activateEditor(tool);
+		assert.equal(statusbar.hidden, true);
+		assert.equal(toolPane.dimension!.height, textHeight + StatusbarHeight);
+		auxiliary.activateEditor(text);
+		assert.equal(statusbar.hidden, false);
+		assert.equal(textPane.dimension!.height, textHeight);
+	} finally { dom.window.close(); }
+});
 
 test('HistoryService reopens across editor windows in close order into the active part', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost' });

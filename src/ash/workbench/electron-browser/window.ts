@@ -1,7 +1,7 @@
 import { onUnexpectedError } from '../../base/common/errors.js';
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import type { INativeHostApi } from '../../platform/native/common/nativeHost.js';
-import { WINDOW_ZOOM_LEVEL_SETTING } from '../../platform/window/common/window.js';
+import { WINDOW_ZOOM_LEVEL_SETTING, WINDOW_ZOOM_PER_WINDOW_SETTING } from '../../platform/window/common/window.js';
 import { IOpenerService } from '../../platform/opener/common/opener.js';
 import { Disposable, toDisposable } from '../../base/common/lifecycle.js';
 import { URI } from '../../base/common/uri.js';
@@ -109,31 +109,41 @@ export class NativeWindow extends Disposable {
 			void this.opener.open(target, { openExternal: true, allowContributedOpeners: true }).catch(onUnexpectedError);
 		});
 		this._register(toDisposable(() => externalLinks.dispose()));
-		const zoomSubscription = this.host.onDidChangeZoomLevel(level => {
-			if (this.applyingConfiguredZoom) return;
+		const updateZoom = (level: number): void => {
+			if (this.applyingConfiguredZoom || this.configuration.getValue<boolean>(WINDOW_ZOOM_PER_WINDOW_SETTING) !== false) return;
 			this.pendingZoomLevel = Math.round(level);
 			this.zoomWrite = this.zoomWrite.catch(onUnexpectedError).then(async () => {
 				const next = this.pendingZoomLevel;
-				if (next === undefined) return;
+				if (this.isDisposed || next === undefined) return;
 				if (next !== this.configuration.getValue<number>(WINDOW_ZOOM_LEVEL_SETTING)) {
 					await this.configuration.updateValue(WINDOW_ZOOM_LEVEL_SETTING, next);
+					await this.applyConfiguredZoom();
 				}
 				if (this.pendingZoomLevel === next) this.pendingZoomLevel = undefined;
 			});
 			void this.zoomWrite.catch(onUnexpectedError);
-		});
+		};
+		const zoomSubscription = this.host.onDidChangeZoomLevel(updateZoom);
 		this._register(toDisposable(() => zoomSubscription.dispose()));
+		const auxiliaryZoom = this.host.onDidChangeAuxiliaryWindowState(({ state }) => {
+			if (state.zoomLevel !== this.configuration.getValue<number>(WINDOW_ZOOM_LEVEL_SETTING)) updateZoom(state.zoomLevel);
+		});
+		this._register(toDisposable(() => auxiliaryZoom.dispose()));
 		this._register(configuration.onDidChangeConfiguration(event => {
-			if (event.affectsConfiguration(WINDOW_ZOOM_LEVEL_SETTING) && this.pendingZoomLevel === undefined) void this.applyConfiguredZoom().catch(onUnexpectedError);
+			if ((event.affectsConfiguration(WINDOW_ZOOM_LEVEL_SETTING) || event.affectsConfiguration(WINDOW_ZOOM_PER_WINDOW_SETTING)) && this.pendingZoomLevel === undefined) void this.applyConfiguredZoom().catch(onUnexpectedError);
 		}));
 		void this.applyConfiguredZoom().catch(onUnexpectedError);
 	}
 
 	private async applyConfiguredZoom(): Promise<void> {
+		if (this.isDisposed) return;
 		const level = this.configuration.getValue<number>(WINDOW_ZOOM_LEVEL_SETTING);
-		if (await this.host.getZoomLevel() !== level) {
+		const allWindows = this.configuration.getValue<boolean>(WINDOW_ZOOM_PER_WINDOW_SETTING) === false;
+		const current = await this.host.getZoomLevel();
+		if (this.isDisposed) return;
+		if (allWindows || current !== level) {
 			this.applyingConfiguredZoom = true;
-			try { await this.host.setZoomLevel(level); }
+			try { await this.host.setZoomLevel(level, undefined, allWindows); }
 			finally { this.applyingConfiguredZoom = false; }
 		}
 	}

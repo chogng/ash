@@ -12,7 +12,7 @@ import { ICodeEditorService } from '../../../editor/browser/services/codeEditorS
 import { StandaloneCodeEditorService } from '../../../editor/standalone/browser/standaloneCodeEditorService.js';
 import type { INativeHostApi } from '../../../platform/native/common/nativeHost.js';
 import type { IThemeService } from '../../../platform/theme/common/themeService.js';
-import { WINDOW_ZOOM_LEVEL_SETTING } from '../../../platform/window/common/window.js';
+import { WINDOW_ZOOM_LEVEL_SETTING, WINDOW_ZOOM_PER_WINDOW_SETTING } from '../../../platform/window/common/window.js';
 import '../desktop.contribution.js';
 import { NativeWindow } from '../window.js';
 import { bindWindowControlTheme } from '../parts/titlebar/titlebarPart.js';
@@ -121,8 +121,9 @@ test('desktop disposal prevents pending environment reads from updating titles',
 	assert.equal(notifications.getNotifications().length, 0);
 });
 
-test('desktop zoom follows the profile setting and persists a window zoom change', async () => {
+test('desktop zoom follows the profile setting and persists a shared window zoom change', async () => {
 	using configuration = new InMemoryConfigurationService();
+	await configuration.updateValue(WINDOW_ZOOM_PER_WINDOW_SETTING, false);
 	await configuration.updateValue(WINDOW_ZOOM_LEVEL_SETTING, 2);
 	let zoom = 0;
 	let changed: ((level: number) => void) | undefined;
@@ -131,6 +132,7 @@ test('desktop zoom follows the profile setting and persists a window zoom change
 	const host = {
 		getZoomLevel: async () => zoom,
 		setZoomLevel: async (level: number) => { zoom = level; changed?.(level); applied(level); },
+		onDidChangeAuxiliaryWindowState: () => ({ dispose() { } }),
 		onDidChangeZoomLevel: (listener: (level: number) => void) => { changed = listener; return { dispose: () => { changed = undefined; } }; },
 		onDidRequestOpenExternalUri: () => ({ dispose() { } }),
 	} as unknown as INativeHostApi;

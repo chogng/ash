@@ -22,6 +22,7 @@ import {
 } from "../../platform/contextview/browser/contextMenuService.js";
 import {
 	createBrowserTitlebarPart,
+	BrowserTitleService,
 } from "./parts/titlebar/titlebarPart.js";
 import type {
 	IWebWorkbench,
@@ -81,7 +82,7 @@ export async function createWebWorkbench(
 		createLifecycleService: services => services.createInstance(BrowserLifecycleService, { ownerWindow, onError: onUnexpectedError }),
 		workspace: workspaceFromIdentifier(options.workspace ?? (options.browserFileSystemProvider ? getBrowserWorkspaceIdentifier(ownerWindow) : getEmptyWorkspaceIdentifier())),
 		createContextMenuService: services => services.createInstance(BrowserContextMenuService),
-		createTitlebarPart: createBrowserTitlebarPart,
+		createTitleService: (container, productName, groups, services) => services.createInstance(BrowserTitleService, container, productName, createBrowserTitlebarPart, groups),
 	});
 }
 

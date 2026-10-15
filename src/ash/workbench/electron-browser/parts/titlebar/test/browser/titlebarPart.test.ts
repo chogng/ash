@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
-import { Event } from '../../../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { isMacintosh } from '../../../../../../base/common/platform.js';
-import { DisposableTracker, installDisposableTracker } from '../../../../../../base/common/lifecycle.js';
+import { DisposableStore, DisposableTracker, installDisposableTracker } from '../../../../../../base/common/lifecycle.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
 import { IQuickInputService } from '../../../../../../platform/quickinput/common/quickInput.js';
@@ -12,6 +12,11 @@ import { TestThemeService } from '../../../../../../platform/theme/test/common/t
 import { darkColorTheme, lightColorTheme } from '../../../../../../platform/theme/common/colorTheme.js';
 import { INativeHostService } from '../../../../../common/services.js';
 import type { INativeWindowTheme } from '../../../../../../platform/native/common/nativeHost.js';
+import type { IEditorGroup, IEditorGroupsContainer } from '../../../../../services/editor/common/editorGroupsService.js';
+import { readFileSync } from 'node:fs';
+import { setNlsMessages, resetNlsResolver } from '../../../../../../nls.js';
+import type { IWindowAlwaysOnTopChangedEvent } from '../../../../../../platform/window/common/window.js';
+import { DeferredPromise } from '../../../../../../base/common/async.js';
 
 const environment = new JSDOM('<!doctype html><body></body>');
 const previous = new Map<string, PropertyDescriptor | undefined>();
@@ -30,13 +35,16 @@ suiteTeardown(() => {
 const { ILocalizationService } = await import('../../../../../services/localization/common/localizationService.js');
 const { createElectronTitlebarPartFactory } = await import('../../../../../services/title/electron-browser/titleService.js');
 const { MenuService } = await import('../../../../../../platform/actions/common/menuService.js');
-const { IMenuService } = await import('../../../../../../platform/actions/common/actions.js');
+const { IMenuService, registerAction2 } = await import('../../../../../../platform/actions/common/actions.js');
 const { IContextMenuService } = await import('../../../../../../platform/contextview/browser/contextView.js');
-const { ContextKeyService } = await import('../../../../../../platform/contextkey/browser/contextKeyService.js');
+const { ContextKeyService, IContextKeyService } = await import('../../../../../../platform/contextkey/browser/contextKeyService.js');
 const { CommandService } = await import('../../../../../services/commands/common/commandService.js');
-const { registerTestComponentServices } = await import('../../../../../test/common/testEditorServices.js');
+const { registerTestComponentServices, createTestEditorServices } = await import('../../../../../test/common/testEditorServices.js');
+const { ElectronTitleService } = await import('../../titlebarPart.js');
+const { EnableWindowAlwaysOnTopAction, DisableWindowAlwaysOnTopAction } = await import('../../../../actions/windowActions.js');
+const { registerWindow } = await import('../../../../../../base/browser/window.js');
 
-test('Electron titlebar applies the active theme and releases its subscription with the part', () => {
+test('Electron titlebars apply the active theme and release their subscriptions with each part', async () => {
 	const tracker = new DisposableTracker();
 	using tracking = installDisposableTracker(tracker);
 	{
@@ -45,10 +53,23 @@ test('Electron titlebar applies the active theme and releases its subscription w
 		using commands = new CommandService(services);
 		using contextKeys = new ContextKeyService();
 		const menus = new MenuService(commands, contextKeys);
+		services.registerInstance(IContextKeyService, contextKeys);
+		using actionRegistrations = new DisposableStore();
+		const registerPinActions = (): void => {
+			actionRegistrations.clear();
+			actionRegistrations.add(registerAction2(EnableWindowAlwaysOnTopAction));
+			actionRegistrations.add(registerAction2(DisableWindowAlwaysOnTopAction));
+		};
+		registerPinActions();
 		services.registerInstance(IMenuService, menus);
 		services.registerInstance(ICommandService, commands);
 		services.registerInstance(IQuickInputService, { quickAccess: { onDidChangeVisibility: Event.None, show() { } } } as IQuickInputService);
 		const applied: INativeWindowTheme[] = [];
+		let titleBarStyle: 'custom' | 'system' = 'custom';
+		using pinChanges = new Emitter<IWindowAlwaysOnTopChangedEvent>();
+		let pinned = false;
+		let pinRead: Promise<void> | undefined;
+		const pinTargets: (string | undefined)[] = [];
 		services.registerInstance(IThemeService, themes);
 		registerTestComponentServices(services, environment.window.document);
 		services.registerInstance(INativeHostService, {
@@ -58,7 +79,7 @@ test('Electron titlebar applies the active theme and releases its subscription w
 			markAgentsWindowInvitationShown: () => { throw new Error('Unused invitation capability'); },
 			releaseAgentsWindowInvitation: () => { throw new Error('Unused invitation capability'); },
 			onDidChangeAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
-			getTitleBarStyle: async () => 'custom',
+			getTitleBarStyle: async () => titleBarStyle,
 			isAdmin: async () => false,
 			onDidRequestOpenExternalUri: () => ({ dispose() { } }),
 			openExternal: async () => { throw new Error('unused'); },
@@ -73,8 +94,15 @@ test('Electron titlebar applies the active theme and releases its subscription w
 			getZoomLevel: async () => 0,
 			onDidChangeZoomLevel: () => ({ dispose() { } }),
 			setZoomLevel: async () => { },
-			isAlwaysOnTop: async () => false,
-			setAlwaysOnTop: async () => { },
+			getAuxiliaryWindowState: async () => { throw new Error('Unused window state'); },
+			onDidChangeAuxiliaryWindowState: () => ({ dispose() { } }),
+			onDidChangeWindowAlwaysOnTop: pinChanges.event,
+			isAlwaysOnTop: async () => { const snapshot = pinned; await pinRead; return snapshot; },
+			setAlwaysOnTop: async (enabled, windowName) => {
+				pinned = enabled;
+				pinTargets.push(windowName);
+				pinChanges.fire({ windowName, alwaysOnTop: enabled });
+			},
 			performNativeTabAction: async () => { },
 			openNewWindowTab: async () => { },
 			setWindowTheme: async theme => { applied.push(theme); },
@@ -115,6 +143,73 @@ test('Electron titlebar applies the active theme and releases its subscription w
 		themes.setColorTheme(darkColorTheme);
 		assert.equal(applied.length, 2);
 		assert.equal(environment.window.document.querySelector('.ash-electron-titlebar'), null);
+		using editorServices = createTestEditorServices(undefined, services, environment.window.document);
+		const groups: IEditorGroupsContainer = {
+			activeGroup: { createEditorActions: () => ({ actions: { primary: [], secondary: [] }, onDidChange: Event.None }), activeInput: undefined, onDidChangeEditors: Event.None } as unknown as IEditorGroup,
+			onDidChangeActiveGroup: Event.None,
+		};
+		using titleService = editorServices.createInstance(ElectronTitleService, environment.window.document.body, 'Ash Code', factory, groups);
+		const popup = new JSDOM('<!doctype html><body></body>');
+		popup.window.name = 'ash-auxiliary-12345678-1234-1234-1234-123456789abc';
+		using registration = registerWindow(popup.window as unknown as Window);
+		try {
+			const auxiliary = titleService.createAuxiliaryTitlebarPart(popup.window.document.body, groups, editorServices);
+			await Promise.resolve();
+			assert.equal(auxiliary.container.classList.contains('ash-electron-titlebar'), true);
+			assert.equal(auxiliary.container.querySelector('[data-action-id="ash.applicationMenu"]') === null, isMacintosh);
+			assert.equal(titleService.getPart(popup.window.document.body), auxiliary);
+			// Ordinary auxiliary windows and compact tools use the same menu-backed toolbar.
+			const action = (enabled: boolean): HTMLButtonElement | null => auxiliary.container.querySelector(
+				`[data-action-id="workbench.action.${enabled ? 'enable' : 'disable'}WindowAlwaysOnTop"] button`,
+			);
+			assert.equal(titleService.getPart(environment.window.document.body).domNode.querySelector('[data-action-id="workbench.action.enableWindowAlwaysOnTop"]'), null);
+			assert.equal(action(true)?.closest('[role="toolbar"]')?.parentElement?.className, 'ash-titlebar-actions ash-titlebar-interactive-region');
+			assert.equal(action(true)?.getAttribute('aria-label'), 'Turn On Always on Top');
+			const focusedRead = new DeferredPromise<void>();
+			pinRead = focusedRead.p;
+			action(true)!.focus();
+			popup.window.dispatchEvent(new popup.window.Event('focus'));
+			action(true)!.click();
+			await new Promise<void>(resolve => setImmediate(resolve));
+			assert.equal(action(false)?.getAttribute('aria-label'), 'Turn Off Always on Top');
+			assert.deepEqual(pinTargets, [popup.window.name]);
+			pinRead = undefined;
+			await focusedRead.complete();
+			await new Promise<void>(resolve => setImmediate(resolve));
+			assert.ok(action(false), 'A stale focus read must not replace the state received from the host event');
+			pinChanges.fire({ windowName: 'ash-auxiliary-aaaaaaaa-1234-1234-1234-123456789abc', alwaysOnTop: false });
+			assert.ok(action(false), 'Another window must not change this toolbar');
+			pinned = false;
+			pinChanges.fire({ windowName: popup.window.name, alwaysOnTop: false });
+			assert.ok(action(true));
+			auxiliary.updateOptions({ compact: true });
+			assert.ok(action(true)?.closest('[role="toolbar"]'));
+			try {
+				setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')));
+				registerPinActions();
+				assert.equal(action(true)?.getAttribute('aria-label'), '窗口置顶');
+				action(true)!.focus();
+				action(true)!.click();
+				await new Promise<void>(resolve => setImmediate(resolve));
+				assert.equal(action(false)?.getAttribute('aria-label'), '取消窗口置顶');
+			} finally { resetNlsResolver(); }
+
+			const beforeThemeChange = applied.length;
+			themes.setColorTheme(lightColorTheme);
+			assert.equal(applied.length, beforeThemeChange + 2);
+			auxiliary.dispose();
+			themes.setColorTheme(darkColorTheme);
+			assert.equal(applied.length, beforeThemeChange + 3);
+			assert.equal(popup.window.document.querySelector('.ash-electron-titlebar'), null);
+			titleBarStyle = 'system';
+			const systemTitlebar = titleService.createAuxiliaryTitlebarPart(popup.window.document.body, groups, editorServices);
+			await Promise.resolve();
+			assert.equal(systemTitlebar.container.classList.contains('ash-electron-titlebar'), false);
+			systemTitlebar.dispose();
+		} finally {
+			titleService.dispose();
+			popup.window.close();
+		}
 	}
 	tracker.assertNoLeaks();
 });

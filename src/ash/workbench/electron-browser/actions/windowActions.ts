@@ -3,16 +3,37 @@ import './media/actions.css';
 import { Keybinding, logicalKey } from '../../../base/common/keybindings.js';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { isMacintosh } from '../../../base/common/platform.js';
+import { getActiveWindow, getWindow } from '../../../base/browser/dom.js';
+import { mainWindow } from '../../../base/browser/window.js';
+import { ILayoutService } from '../../../platform/layout/browser/layoutService.js';
 
 import { Action2, MenuId } from '../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../platform/quickinput/common/quickInput.js';
 import { INativeHostService } from '../../common/services.js';
-import { WINDOW_ZOOM_LEVEL_SETTING } from '../../../platform/window/common/window.js';
+import { WINDOW_ZOOM_LEVEL_SETTING, WINDOW_ZOOM_PER_WINDOW_SETTING } from '../../../platform/window/common/window.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
+
+import { ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.js';
+import { Lxicon } from '../../../base/common/lxicons.js';
+import { IsAuxiliaryWindowContext, IsWindowAlwaysOnTopContext } from '../../common/contextkeys.js';
 
 interface WindowPickItem extends IQuickPickItem {
 	readonly windowId: number;
+}
+
+function getWindowCommandTarget(accessor: ServicesAccessor): Window {
+	const focused = getActiveWindow();
+	// Same-renderer popups can leave both documents reporting focus. The layout owner
+	// tracks input in each window and disambiguates the main-document fallback.
+	return focused === mainWindow ? getWindow(accessor.get(ILayoutService).activeContainer) : focused;
+}
+
+async function applyWindowZoom(accessor: ServicesAccessor, level: number, windowName?: string): Promise<void> {
+	const configuration = accessor.get(IConfigurationService);
+	const allWindows = configuration.getValue<boolean>(WINDOW_ZOOM_PER_WINDOW_SETTING) === false;
+	if (allWindows) await configuration.updateValue(WINDOW_ZOOM_LEVEL_SETTING, level);
+	await accessor.get(INativeHostService).setZoomLevel(level, allWindows ? undefined : windowName, allWindows);
 }
 
 async function switchWindow(accessor: ServicesAccessor): Promise<void> {
@@ -54,7 +75,8 @@ export class CloseWindowAction extends Action2 {
 	}
 
 	override run(accessor: ServicesAccessor): Promise<void> {
-		return accessor.get(INativeHostService).closeWindow();
+		const target = getWindowCommandTarget(accessor);
+		return accessor.get(INativeHostService).closeWindow(target === mainWindow ? undefined : target.name);
 	}
 }
 
@@ -74,7 +96,8 @@ export class FocusWindowAction extends Action2 {
 	}
 
 	override run(accessor: ServicesAccessor): Promise<void> {
-		return accessor.get(INativeHostService).focusWindow();
+		const target = getWindowCommandTarget(accessor);
+		return accessor.get(INativeHostService).focusWindow(target === mainWindow ? undefined : target.name);
 	}
 }
 
@@ -85,8 +108,10 @@ export class ZoomInAction extends Action2 {
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
 		const host = accessor.get(INativeHostService);
-		const level = Math.round(await host.getZoomLevel());
-		if (level < 8) await host.setZoomLevel(level + 1);
+		const target = getWindowCommandTarget(accessor);
+		const name = target === mainWindow ? undefined : target.name;
+		const level = Math.round(await host.getZoomLevel(name));
+		if (level < 8) await applyWindowZoom(accessor, level + 1, name);
 	}
 }
 
@@ -97,8 +122,10 @@ export class ZoomOutAction extends Action2 {
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
 		const host = accessor.get(INativeHostService);
-		const level = Math.round(await host.getZoomLevel());
-		if (level > -8) await host.setZoomLevel(level - 1);
+		const target = getWindowCommandTarget(accessor);
+		const name = target === mainWindow ? undefined : target.name;
+		const level = Math.round(await host.getZoomLevel(name));
+		if (level > -8) await applyWindowZoom(accessor, level - 1, name);
 	}
 }
 
@@ -108,7 +135,9 @@ export class ZoomResetAction extends Action2 {
 	}
 
 	override run(accessor: ServicesAccessor): Promise<void> {
-		return accessor.get(INativeHostService).setZoomLevel(accessor.get(IConfigurationService).inspect<number>(WINDOW_ZOOM_LEVEL_SETTING).defaultValue ?? 0);
+		const target = getWindowCommandTarget(accessor);
+		const configuration = accessor.get(IConfigurationService);
+		return applyWindowZoom(accessor, configuration.getValue<boolean>(WINDOW_ZOOM_PER_WINDOW_SETTING) === false ? 0 : configuration.getValue<number>(WINDOW_ZOOM_LEVEL_SETTING) ?? 0, target === mainWindow ? undefined : target.name);
 	}
 }
 
@@ -143,27 +172,53 @@ export class ToggleWindowAlwaysOnTopAction extends Action2 {
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
 		const host = accessor.get(INativeHostService);
-		await host.setAlwaysOnTop(!await host.isAlwaysOnTop());
+		const target = getWindowCommandTarget(accessor);
+		const windowName = target === mainWindow ? undefined : target.name;
+		await host.setAlwaysOnTop(!await host.isAlwaysOnTop(windowName), windowName);
 	}
 }
 
 export class EnableWindowAlwaysOnTopAction extends Action2 {
 	constructor() {
-		super({ id: 'workbench.action.enableWindowAlwaysOnTop', title: localize2({ bundle: 'ash', key: 'workbench.enableWindowAlwaysOnTop' }, 'Turn On Always on Top'), f1: true });
+		super({
+			id: 'workbench.action.enableWindowAlwaysOnTop',
+			title: localize2({ bundle: 'ash', key: 'workbench.enableWindowAlwaysOnTop' }, 'Turn On Always on Top'),
+			f1: true,
+			icon: Lxicon.pinned,
+			menu: {
+				id: MenuId.LayoutControlMenu,
+				when: ContextKeyExpr.and(IsAuxiliaryWindowContext.isEqualTo(true), IsWindowAlwaysOnTopContext.isEqualTo(false)),
+				group: 'navigation',
+				order: 1,
+			},
+		});
 	}
 
 	override run(accessor: ServicesAccessor): Promise<void> {
-		return accessor.get(INativeHostService).setAlwaysOnTop(true);
+		const target = getWindowCommandTarget(accessor);
+		return accessor.get(INativeHostService).setAlwaysOnTop(true, target === mainWindow ? undefined : target.name);
 	}
 }
 
 export class DisableWindowAlwaysOnTopAction extends Action2 {
 	constructor() {
-		super({ id: 'workbench.action.disableWindowAlwaysOnTop', title: localize2({ bundle: 'ash', key: 'workbench.disableWindowAlwaysOnTop' }, 'Turn Off Always on Top'), f1: true });
+		super({
+			id: 'workbench.action.disableWindowAlwaysOnTop',
+			title: localize2({ bundle: 'ash', key: 'workbench.disableWindowAlwaysOnTop' }, 'Turn Off Always on Top'),
+			f1: true,
+			icon: Lxicon.unpin,
+			menu: {
+				id: MenuId.LayoutControlMenu,
+				when: ContextKeyExpr.and(IsAuxiliaryWindowContext.isEqualTo(true), IsWindowAlwaysOnTopContext.isEqualTo(true)),
+				group: 'navigation',
+				order: 1,
+			},
+		});
 	}
 
 	override run(accessor: ServicesAccessor): Promise<void> {
-		return accessor.get(INativeHostService).setAlwaysOnTop(false);
+		const target = getWindowCommandTarget(accessor);
+		return accessor.get(INativeHostService).setAlwaysOnTop(false, target === mainWindow ? undefined : target.name);
 	}
 }
 

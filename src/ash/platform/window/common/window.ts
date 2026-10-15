@@ -138,12 +138,62 @@ export const WINDOW_MINIMUM_SIZE = {
 
 export const WINDOW_OPERATION_CHANNEL = 'ash:window:operation';
 export const WINDOW_ZOOM_CHANGED_CHANNEL = 'ash:window:zoom-changed';
+export const WINDOW_ALWAYS_ON_TOP_CHANGED_CHANNEL = 'ash:window:always-on-top-changed';
 export const WINDOW_FULLSCREEN_CHANGED_CHANNEL = 'ash:window:fullscreen-changed';
 export const WINDOW_PREPARE_CLOSE_CHANNEL = 'ash:window:prepare-close';
 export const WINDOW_PREPARE_LOAD_CHANNEL = 'ash:window:prepare-load';
 export const WINDOW_CLOSE_RESPONSE_CHANNEL = 'ash:window:close-response';
 export const WINDOW_OPEN_FILES_CHANNEL = 'ash:window:open-files';
 export const WINDOW_OPEN_FILES_RESPONSE_CHANNEL = 'ash:window:open-files-response';
+
+export const AUXILIARY_WINDOW_STATE_CHANGED_CHANNEL = 'ash:window:auxiliary-state-changed';
+
+/** Host-owned window state retained with the editor layout for the next session. */
+export interface IAuxiliaryWindowState {
+	readonly width: number;
+	readonly height: number;
+	readonly left: number;
+	readonly top: number;
+	readonly zoomLevel: number;
+	readonly alwaysOnTop: boolean;
+	readonly mode: 'normal' | 'maximized' | 'fullscreen';
+}
+
+export interface IAuxiliaryWindowStateEvent {
+	readonly windowName: string;
+	readonly state: IAuxiliaryWindowState;
+}
+
+export function validateAuxiliaryWindowState(value: unknown): IAuxiliaryWindowState {
+	if (!isRecord(value) || Object.keys(value).sort().join(',') !== 'alwaysOnTop,height,left,mode,top,width,zoomLevel'
+		|| !['width', 'height', 'left', 'top', 'zoomLevel'].every(key => typeof value[key] === 'number' && Number.isFinite(value[key]))
+		|| (value.width as number) <= 0 || (value.height as number) <= 0
+		|| (value.zoomLevel as number) < -8 || (value.zoomLevel as number) > 8
+		|| typeof value.alwaysOnTop !== 'boolean' || !['normal', 'maximized', 'fullscreen'].includes(value.mode as string)) {
+		throw new TypeError('Invalid auxiliary window state');
+	}
+	return value as unknown as IAuxiliaryWindowState;
+}
+
+export function validateAuxiliaryWindowStateEvent(value: unknown): IAuxiliaryWindowStateEvent {
+	if (!isRecord(value) || Object.keys(value).sort().join(',') !== 'state,windowName' || typeof value.windowName !== 'string'
+		|| !/^ash-auxiliary-[0-9a-f-]{36}$/.test(value.windowName)) throw new TypeError('Invalid auxiliary window state event');
+	return { windowName: value.windowName, state: validateAuxiliaryWindowState(value.state) };
+}
+
+export interface IWindowAlwaysOnTopChangedEvent {
+	readonly windowName?: string;
+	readonly alwaysOnTop: boolean;
+}
+
+export function validateWindowAlwaysOnTopChangedEvent(value: unknown): IWindowAlwaysOnTopChangedEvent {
+	if (!isRecord(value) || Object.keys(value).some(key => key !== 'windowName' && key !== 'alwaysOnTop')
+		|| typeof value.alwaysOnTop !== 'boolean'
+		|| value.windowName !== undefined && (typeof value.windowName !== 'string' || !/^ash-auxiliary-[0-9a-f-]{36}$/.test(value.windowName))) {
+		throw new TypeError('Invalid window always-on-top change');
+	}
+	return value as unknown as IWindowAlwaysOnTopChangedEvent;
+}
 
 export interface IWindowFileOpen {
 	readonly uri: string;
@@ -207,6 +257,7 @@ export function validateWindowFilesResponse(value: unknown): WindowFilesResponse
 }
 
 export const WINDOW_ZOOM_LEVEL_SETTING = 'window.zoomLevel';
+export const WINDOW_ZOOM_PER_WINDOW_SETTING = 'window.zoomPerWindow';
 
 export type WindowCloseResponse =
 	| { readonly kind: 'ready'; }
@@ -232,15 +283,16 @@ export interface IWorkbenchWindowInfo {
 export type WindowOperation =
 	| { readonly kind: 'list'; }
 	| { readonly kind: 'focus'; readonly windowId: number; }
-	| { readonly kind: 'focusSelf'; }
-	| { readonly kind: 'close'; }
+	| { readonly kind: 'focusSelf'; readonly windowName?: string; }
+	| { readonly kind: 'close'; readonly windowName?: string; }
 	| { readonly kind: 'closeOthers'; }
-	| { readonly kind: 'getZoom'; }
+	| { readonly kind: 'getZoom'; readonly windowName?: string; }
 	| { readonly kind: 'getZoomFactor'; }
-	| { readonly kind: 'setZoom'; readonly level: number; }
+	| { readonly kind: 'setZoom'; readonly level: number; readonly windowName?: string; readonly allWindows?: true; }
 	| { readonly kind: 'getFullscreen'; }
-	| { readonly kind: 'getAlwaysOnTop'; }
-	| { readonly kind: 'setAlwaysOnTop'; readonly enabled: boolean; }
+	| { readonly kind: 'getAuxiliaryState'; readonly windowName: string; }
+	| { readonly kind: 'getAlwaysOnTop'; readonly windowName?: string; }
+	| { readonly kind: 'setAlwaysOnTop'; readonly enabled: boolean; readonly windowName?: string; }
 	| { readonly kind: 'nativeTab'; readonly action: 'next' | 'previous' | 'newWindow' | 'merge' | 'toggleBar'; }
 	| { readonly kind: 'newTab'; };
 
@@ -248,26 +300,32 @@ export function validateWindowOperation(value: unknown): WindowOperation {
 	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Invalid window operation');
 	const operation = value as Record<string, unknown>;
 	const keys = Object.keys(operation).sort().join(',');
+	const hasAuxiliaryWindowName = typeof operation.windowName === 'string' && /^ash-auxiliary-[0-9a-f-]{36}$/.test(operation.windowName);
 	switch (operation.kind) {
 		case 'list':
-		case 'focusSelf':
 		case 'newTab':
-		case 'close':
 		case 'closeOthers':
-		case 'getZoom':
 		case 'getZoomFactor':
 		case 'getFullscreen':
-		case 'getAlwaysOnTop':
 			if (keys === 'kind') return operation as WindowOperation;
+			break;
+		case 'focusSelf':
+		case 'close':
+		case 'getZoom':
+		case 'getAlwaysOnTop':
+			if (keys === 'kind' || keys === 'kind,windowName' && hasAuxiliaryWindowName) return operation as WindowOperation;
+			break;
+		case 'getAuxiliaryState':
+			if (keys === 'kind,windowName' && hasAuxiliaryWindowName) return operation as WindowOperation;
 			break;
 		case 'focus':
 			if (keys === 'kind,windowId' && Number.isSafeInteger(operation.windowId) && (operation.windowId as number) > 0) return operation as WindowOperation;
 			break;
 		case 'setZoom':
-			if (keys === 'kind,level' && Number.isInteger(operation.level) && (operation.level as number) >= -8 && (operation.level as number) <= 8) return operation as WindowOperation;
+			if ((keys === 'kind,level' || keys === 'kind,level,windowName' && hasAuxiliaryWindowName || keys === 'allWindows,kind,level' && operation.allWindows === true) && Number.isInteger(operation.level) && (operation.level as number) >= -8 && (operation.level as number) <= 8) return operation as WindowOperation;
 			break;
 		case 'setAlwaysOnTop':
-			if (keys === 'enabled,kind' && typeof operation.enabled === 'boolean') return operation as WindowOperation;
+			if (typeof operation.enabled === 'boolean' && (keys === 'enabled,kind' || keys === 'enabled,kind,windowName' && hasAuxiliaryWindowName)) return operation as WindowOperation;
 			break;
 		case 'nativeTab':
 			if (keys === 'action,kind' && typeof operation.action === 'string' && ['next', 'previous', 'newWindow', 'merge', 'toggleBar'].includes(operation.action)) return operation as WindowOperation;

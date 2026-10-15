@@ -72,9 +72,11 @@ export class MenuId {
 	static readonly ViewContainerTitleContext = new MenuId('ViewContainerTitleContext');
 	static readonly ActivityBarPositionMenu = new MenuId('ActivityBarPositionMenu');
 	static readonly TitleBar = new MenuId("TitleBar");
+	static readonly LayoutControlMenu = new MenuId("LayoutControlMenu");
 	static readonly TitleBarLeft = new MenuId("TitleBarLeft");
 	static readonly TitleBarAdjacentCenter = new MenuId("TitleBarAdjacentCenter");
 	static readonly EditorTitle = new MenuId("EditorTitle");
+	static readonly CompactWindowEditorTitle = new MenuId("CompactWindowEditorTitle");
 	static readonly DiffEditorViewSubmenu = new MenuId('DiffEditorViewSubmenu');
 	static readonly EditorTitleContext = new MenuId("EditorTitleContext");
 	static readonly EditorSplitMoveSubmenu = new MenuId('EditorSplitMoveSubmenu');

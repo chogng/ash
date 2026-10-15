@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { test, suiteSetup, suiteTeardown } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { registerExternalFocusChecker } from '../../../../base/browser/dom.js';
+import type { BrowserWindow } from '../../../../base/browser/window.js';
+import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { InstantiationService } from '../../../../platform/instantiation/common/instantiationService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../platform/configuration/common/inMemoryConfigurationService.js';
@@ -9,6 +13,15 @@ import { nativeHostIpcRoutes } from '../../../../platform/native/electron-main/n
 import { INativeHostService } from '../../../common/services.js';
 import '../../../electron-browser/desktop.contribution.js';
 import { CommandService } from '../../../services/commands/common/commandService.js';
+
+const environment = new JSDOM('<!doctype html><body></body>');
+const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+suiteSetup(() => Object.defineProperty(globalThis, 'window', { configurable: true, value: environment.window }));
+suiteTeardown(() => {
+	environment.window.close();
+	if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+	else Reflect.deleteProperty(globalThis, 'window');
+});
 
 test('desktop dialog and shell routes reject malformed requests', async () => {
 	const operations: unknown[] = [];
@@ -71,6 +84,7 @@ test('desktop dialog and shell routes reject malformed requests', async () => {
 
 test('desktop window commands reach the window host', async () => {
 	using services = new InstantiationService();
+	services.registerInstance(ILayoutService, { activeContainer: environment.window.document.body } as ILayoutService);
 	using configuration = new InMemoryConfigurationService();
 	services.registerInstance(IConfigurationService, configuration);
 	const calls: string[] = [];
@@ -98,6 +112,9 @@ test('desktop window commands reach the window host', async () => {
 		getZoomLevel: async () => zoom,
 		onDidChangeZoomLevel: () => ({ dispose() { } }),
 		setZoomLevel: async level => { zoom = level; calls.push(`zoom:${level}`); },
+		getAuxiliaryWindowState: async () => { throw new Error('Unused window state'); },
+		onDidChangeAuxiliaryWindowState: () => ({ dispose() { } }),
+		onDidChangeWindowAlwaysOnTop: () => ({ dispose() { } }),
 		isAlwaysOnTop: async () => alwaysOnTop,
 		setAlwaysOnTop: async enabled => { alwaysOnTop = enabled; calls.push(`top:${enabled}`); },
 		performNativeTabAction: async action => { calls.push(`tab:${action}`); },
@@ -140,4 +157,81 @@ test('quick window switching focuses the next registered window', async () => {
 	} as unknown as INativeHostApi);
 	using commands = new CommandService(services);
 	await commands.executeCommand('workbench.action.quickSwitchWindow');
+});
+
+test('always-on-top commands capture the focused editor window before awaiting the host', async () => {
+	using services = new InstantiationService();
+	const popup = new JSDOM('<!doctype html><body></body>');
+	popup.window.name = 'ash-auxiliary-12345678-1234-1234-1234-123456789abc';
+	let focused = true;
+	using focus = registerExternalFocusChecker(() => ({ hasFocus: focused, window: popup.window as unknown as BrowserWindow }));
+	const calls: unknown[] = [];
+	services.registerInstance(INativeHostService, {
+		isAlwaysOnTop: async (name: string | undefined) => { calls.push(['read', name]); focused = false; return false; },
+		setAlwaysOnTop: async (enabled: boolean, name: string | undefined) => { calls.push([enabled, name]); },
+	} as INativeHostApi);
+	using commands = new CommandService(services);
+	try {
+		await commands.executeCommand('workbench.action.toggleWindowAlwaysOnTop');
+		focused = true;
+		await commands.executeCommand('workbench.action.enableWindowAlwaysOnTop');
+		await commands.executeCommand('workbench.action.disableWindowAlwaysOnTop');
+		assert.deepEqual(calls, [['read', popup.window.name], [true, popup.window.name], [true, popup.window.name], [false, popup.window.name]]);
+	} finally { popup.window.close(); }
+});
+
+test('always-on-top commands use the active workbench container when documents both report focus', async () => {
+	using services = new InstantiationService();
+	const popup = new JSDOM('<!doctype html><body></body>');
+	popup.window.name = 'ash-auxiliary-12345678-1234-1234-1234-123456789abc';
+	const calls: unknown[] = [];
+	services.registerInstance(ILayoutService, { activeContainer: popup.window.document.body } as ILayoutService);
+	services.registerInstance(INativeHostService, {
+		isAlwaysOnTop: async () => false,
+		setAlwaysOnTop: async (enabled: boolean, name: string | undefined) => { calls.push([enabled, name]); },
+	} as INativeHostApi);
+	using commands = new CommandService(services);
+	const focused = Object.getOwnPropertyDescriptor(environment.window.document, 'hasFocus');
+	Object.defineProperty(environment.window.document, 'hasFocus', { configurable: true, value: () => true });
+	try {
+		await commands.executeCommand('workbench.action.toggleWindowAlwaysOnTop');
+		await commands.executeCommand('workbench.action.enableWindowAlwaysOnTop');
+		await commands.executeCommand('workbench.action.disableWindowAlwaysOnTop');
+		assert.deepEqual(calls, [[true, popup.window.name], [true, popup.window.name], [false, popup.window.name]]);
+	} finally {
+		if (focused) Object.defineProperty(environment.window.document, 'hasFocus', focused);
+		else Reflect.deleteProperty(environment.window.document, 'hasFocus');
+		popup.window.close();
+	}
+});
+
+
+test('window close, focus and zoom commands use the auxiliary input container', async () => {
+	using services = new InstantiationService();
+	using configuration = new InMemoryConfigurationService();
+	services.registerInstance(IConfigurationService, configuration);
+	const popup = new JSDOM('<!doctype html><body></body>');
+	popup.window.name = 'ash-auxiliary-12345678-1234-1234-1234-123456789abc';
+	services.registerInstance(ILayoutService, { activeContainer: popup.window.document.body } as ILayoutService);
+	const calls: unknown[] = [];
+	services.registerInstance(INativeHostService, {
+		closeWindow: async (name?: string) => { calls.push(['close', name]); },
+		focusWindow: async (name?: string) => { calls.push(['focus', name]); },
+		getZoomLevel: async (name?: string) => { calls.push(['read', name]); return 1; },
+		setZoomLevel: async (level: number, name?: string, all?: boolean) => { calls.push([level, name, all]); },
+	} as INativeHostApi);
+	using commands = new CommandService(services);
+	try {
+		await commands.executeCommand('workbench.action.focusWindow');
+		await commands.executeCommand('workbench.action.zoomIn');
+		await commands.executeCommand('workbench.action.zoomOut');
+		await commands.executeCommand('workbench.action.zoomReset');
+		await commands.executeCommand('workbench.action.closeWindow');
+		assert.deepEqual(calls, [['focus', popup.window.name], ['read', popup.window.name], [2, popup.window.name, false], ['read', popup.window.name], [0, popup.window.name, false], [0, popup.window.name, false], ['close', popup.window.name]]);
+		calls.length = 0;
+		await configuration.updateValue('window.zoomPerWindow', false);
+		await commands.executeCommand('workbench.action.zoomIn');
+		assert.deepEqual(calls, [['read', popup.window.name], [2, undefined, true]]);
+		assert.equal(configuration.getValue('window.zoomLevel'), 2);
+	} finally { popup.window.close(); }
 });

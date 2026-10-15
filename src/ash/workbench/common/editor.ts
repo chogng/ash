@@ -17,6 +17,14 @@ export interface IEditorControl extends ICompositeControl { }
 /** One retained editor implementation; its host owns creation, visibility and disposal. */
 export interface IEditorPane extends IComposite, IDisposable {
 	readonly id: string;
+	/** Tools with their own document controls can omit the group header when they are its only editor. */
+	readonly prefersEditorTitleHidden?: boolean;
+	/** Tools can omit their auxiliary window's status bar while active. */
+	readonly prefersStatusbarHidden?: boolean;
+	/** Dedicated tools can replace auxiliary workbench actions with compact window controls. */
+	readonly prefersCompactTitlebar?: boolean;
+	/** Dedicated tools settle their draft before their window closes instead of returning it to the main editor. */
+	readonly prefersWindowCloseConfirmation?: boolean;
 	readonly workingCopy?: IWorkingCopy;
 	/** File-owned copies retained by an editor that displays multiple resources. */
 	getWorkingCopies?(): readonly IWorkingCopy[];
@@ -98,6 +106,8 @@ export interface IResourceEditorInput {
 	/** Distinguishes an independent custom editor tab from a text tab for the same resource. */
 	readonly editorId?: string;
 	toUntyped?(): IResourceEditorInput;
+	/** A custom editor can veto transfers before its source window is closed. */
+	canMove?(sourceGroup: string, targetGroup: string): true | string;
 	readonly capabilities?: EditorInputCapabilities;
 	readonly resource: URI;
 	readonly contentType?: string;

@@ -235,12 +235,16 @@ export class WorkbenchLayout
 			},
 		);
 		this.gridHandle.value = this.grid;
+		this.grid.setViewVisible(this.view('statusbar'), this.configurationService.getValue<boolean>(WorkbenchConfiguration.statusBarVisible) !== false);
 		this.gridChangeHandle.value = this.grid.onDidChange(() => {
 			this.projectPartFrameInsets();
 			this.publishPartVisibility();
 		});
 		this._register(this.storageService.onWillSaveState(() => this.saveState()));
 		this._register(this.configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(WorkbenchConfiguration.statusBarVisible)) {
+				this.grid.setViewVisible(this.view('statusbar'), this.configurationService.getValue<boolean>(WorkbenchConfiguration.statusBarVisible) !== false);
+			}
 			if (event.affectsConfiguration(WorkbenchConfiguration.activityBarLocation)) {
 				this.setActivityBarLocation(this.configurationService.getValue(WorkbenchConfiguration.activityBarLocation));
 			}
@@ -286,6 +290,7 @@ export class WorkbenchLayout
 			{ sashPresentation: this.layoutStyle === 'modern' ? { type: 'inset', gap: PART_GUTTER_SIZE } : undefined, edgeSnapping: true },
 		);
 		this.gridHandle.value = this.grid;
+		this.grid.setViewVisible(this.view('statusbar'), this.configurationService.getValue<boolean>(WorkbenchConfiguration.statusBarVisible) !== false);
 		this.gridChangeHandle.value = this.grid.onDidChange(() => {
 			this.projectPartFrameInsets();
 			this.publishPartVisibility();

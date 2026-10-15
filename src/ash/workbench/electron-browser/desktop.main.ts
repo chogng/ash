@@ -1,3 +1,4 @@
+import { ElectronAuxiliaryWindowService } from '../services/auxiliaryWindow/electron-browser/auxiliaryWindowService.js';
 import { NativeExtensionService } from '../services/extensions/electron-browser/nativeExtensionService.js';
 import { IPolicyService } from '../../platform/policy/common/policy.js';
 import { PolicyChannelClient } from '../../platform/policy/common/policyIpc.js';
@@ -42,6 +43,7 @@ import { ElectronContextMenuService } from '../services/contextmenu/electron-bro
 import { loadUserThemes } from '../services/themes/browser/workbenchThemeService.js';
 import { ElectronLifecycleService } from '../services/lifecycle/electron-browser/lifecycleService.js';
 import { createElectronTitlebarPartFactory } from '../services/title/electron-browser/titleService.js';
+import { ElectronTitleService } from './parts/titlebar/titlebarPart.js';
 import { NativeDialogHandler } from './parts/dialogs/dialogHandler.js';
 import { DirectoryPermissionDialog } from './parts/dialogs/directoryPermissionDialog.js';
 import { ElectronWindow } from './window.js';
@@ -179,7 +181,8 @@ export class DesktopMain extends Disposable {
 				dialogHandler: new NativeDialogHandler(api.nativeHost, container),
 				userThemeService: userThemes,
 				createContextMenuService: services => services.createInstance(ElectronContextMenuService, api.nativeContextMenu),
-				createTitlebarPart: createElectronTitlebarPartFactory(api.nativeMenubar),
+				createAuxiliaryWindowService: (owner, root, services) => services.createInstance(ElectronAuxiliaryWindowService, owner, root),
+				createTitleService: (container, productName, groups, services) => services.createInstance(ElectronTitleService, container, productName, createElectronTitlebarPartFactory(api.nativeMenubar), groups),
 			}));
 			performance.mark('ash.desktop.workbench-created');
 			const subscription = api.workspace.onDidChange(workspace => {

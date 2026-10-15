@@ -99,24 +99,34 @@ export function resolveBrowserWindowOptions({
 		webPreferences,
 	};
 
-	if (titleBarStyle === 'system') return browserWindowOptions;
+	return { ...browserWindowOptions, ...resolveWindowTitleBarOptions(titleBarStyle, platform, backgroundColor) };
+}
+
+/** Main and auxiliary windows use the same frame and window-controls policy. */
+export function resolveWindowTitleBarOptions(
+	titleBarStyle: TitleBarStyleConfiguration,
+	platform: NodeJS.Platform = process.platform,
+	backgroundColor?: string,
+): Pick<IWindowConstructorOptions, 'frame' | 'titleBarStyle' | 'titleBarOverlay'> {
+	const options: Pick<IWindowConstructorOptions, 'frame' | 'titleBarStyle' | 'titleBarOverlay'> = {};
+	if (titleBarStyle === 'system') return options;
 
 	if (platform === "win32" || platform === "linux") {
 		// Without a supplied startup theme, match Electron's default window background.
 		const controlBackground = backgroundColor ?? Color.Format.CSS.formatHex(Color.white);
-		browserWindowOptions.frame = false;
-		browserWindowOptions.titleBarStyle = "hidden";
-		browserWindowOptions.titleBarOverlay = {
+		options.frame = false;
+		options.titleBarStyle = "hidden";
+		options.titleBarOverlay = {
 			color: controlBackground,
 			symbolColor: Color.fromHex(controlBackground).isDarker() ? "#ffffff" : "#000000",
 			height: 35,
 		};
 	} else if (platform === "darwin") {
-		browserWindowOptions.titleBarStyle = "hiddenInset";
-		browserWindowOptions.titleBarOverlay = true;
+		options.titleBarStyle = "hiddenInset";
+		options.titleBarOverlay = true;
 	}
 
-	return browserWindowOptions;
+	return options;
 }
 
 /** Keeps Electron's window controls in step with the theme and modal backdrop. */

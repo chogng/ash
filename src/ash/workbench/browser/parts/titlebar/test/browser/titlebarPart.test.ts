@@ -155,9 +155,10 @@ test('title service shares the resolved title with its registered part and relea
 	};
 	const groups: IEditorGroupsContainer = {
 		activeGroup: {
+			createEditorActions: () => ({ actions: { primary: [], secondary: [] }, onDidChange: Event.None }),
 			get activeInput() { return activeEditor; },
-			onDidChangeEditors: listener => activeChanged.event(() => listener({ kind: 'activeEditorChanged', editor: undefined })),
-		} as IEditorGroup,
+			onDidChangeEditors: (listener: Parameters<IEditorGroup['onDidChangeEditors']>[0]) => activeChanged.event(() => listener({ kind: 'activeEditorChanged', editor: undefined })),
+		} as unknown as IEditorGroup,
 		onDidChangeActiveGroup: Event.None,
 	};
 	services.registerInstance(ICommandService, commandService);
@@ -192,9 +193,10 @@ test('title service shares the resolved title with its registered part and relea
 	let popupInput = { resource: URI.file('/detached.ts') };
 	const popupGroups: IEditorGroupsContainer = {
 		activeGroup: {
+			createEditorActions: () => ({ actions: { primary: [], secondary: [] }, onDidChange: Event.None }),
 			get activeInput() { return popupInput; },
-			onDidChangeEditors: listener => popupChanged.event(() => listener({ kind: 'activeEditorChanged', editor: undefined })),
-		} as IEditorGroup,
+			onDidChangeEditors: (listener: Parameters<IEditorGroup['onDidChangeEditors']>[0]) => popupChanged.event(() => listener({ kind: 'activeEditorChanged', editor: undefined })),
+		} as unknown as IEditorGroup,
 		onDidChangeActiveGroup: Event.None,
 	};
 	const auxiliary = shared.createAuxiliaryTitlebarPart(popup.window.document.body, popupGroups, services);
@@ -261,7 +263,7 @@ test('title service shares the resolved title with its registered part and relea
 
 test('title service rejects assembly without its required workspace service', () => {
 	using services = new InstantiationService();
-	assert.throws(() => services.createInstance(BrowserTitleService, browserEnvironment.window.document.body, 'Ash Code', createBrowserTitlebarPart, {} as IEditorGroupsContainer), /Unknown service: workspaceContextService/);
+	assert.throws(() => services.createInstance(BrowserTitleService, browserEnvironment.window.document.body, 'Ash Code', createBrowserTitlebarPart, {} as unknown as IEditorGroupsContainer), /Unknown service: workspaceContextService/);
 });
 
 test("titlebar owns a menu-driven actions container", async () => {
@@ -273,6 +275,7 @@ test("titlebar owns a menu-driven actions container", async () => {
 	services.registerInstance(ICommandService, commandService);
 	services.registerInstance(IQuickInputService, { quickAccess: { onDidChangeVisibility: Event.None, show() { } } } as import("../../../../../../platform/quickinput/common/quickInput.js").IQuickInputService);
 	const contextKeyService = disposables.add(new ContextKeyService());
+	services.registerInstance(IContextKeyService, contextKeyService);
 	const menuService = new MenuService(commandService, contextKeyService);
 	services.registerInstance(IMenuService, menuService);
 	services.registerInstance(ContextMenuServiceId, contextMenuService);
@@ -353,6 +356,17 @@ test("titlebar owns a menu-driven actions container", async () => {
 	);
 
 	secondMenuRegistration.dispose();
+	// Compact windows retain layout actions while suppressing global title bar actions.
+	disposables.add(MenusRegistry.appendMenuItem(MenuId.LayoutControlMenu, {
+		command: { id: 'test.titlebar.layout', title: 'Layout action' },
+		group: 'navigation',
+	}));
+	const actionIds = () => [...actionsContainer.querySelectorAll<HTMLElement>('[data-action-id]')].map(element => element.dataset.actionId);
+	assert.deepEqual(actionIds(), ['test.titlebar.layout', commandId]);
+	titlebar.updateOptions({ compact: true });
+	assert.deepEqual(actionIds(), ['test.titlebar.layout']);
+	titlebar.updateOptions({ compact: false });
+	assert.deepEqual(actionIds(), ['test.titlebar.layout', commandId]);
 	titlebar.dispose();
 	assert.equal(titlebar.domNode.isConnected, false);
 	assert.equal(menubarDisposed, true);
@@ -367,6 +381,7 @@ test("titlebar renders its product icon, command center, and application menu", 
 	services.registerInstance(ICommandService, commandService);
 	services.registerInstance(IQuickInputService, { quickAccess: { onDidChangeVisibility: Event.None, show() { } } } as import("../../../../../../platform/quickinput/common/quickInput.js").IQuickInputService);
 	const contextKeyService = disposables.add(new ContextKeyService());
+	services.registerInstance(IContextKeyService, contextKeyService);
 	const menuService = new MenuService(commandService, contextKeyService);
 	services.registerInstance(IMenuService, menuService);
 	services.registerInstance(ContextMenuServiceId, contextMenuService);

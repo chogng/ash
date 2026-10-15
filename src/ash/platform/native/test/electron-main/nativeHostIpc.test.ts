@@ -3,6 +3,7 @@ import { test } from 'mocha';
 import { Emitter } from '../../../../base/common/event.js';
 import { colorSchemeChannel } from '../../electron-main/nativeHostIpc.js';
 import type { IColorScheme } from '../../../window/common/window.js';
+import { WINDOW_ALWAYS_ON_TOP_CHANGED_CHANNEL, type IWindowAlwaysOnTopChangedEvent } from '../../../window/common/window.js';
 import { isAdmin, performShellCommand } from '../../electron-main/nativeHostMainService.js';
 import { nativeHostIpcRoutes, type INativeHostMainService } from '../../electron-main/nativeHostIpc.js';
 import { NATIVE_HOST_IS_ADMIN_CHANNEL, NATIVE_HOST_SHELL_COMMAND_CHANNEL, NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL } from '../../common/nativeHost.js';
@@ -128,6 +129,7 @@ test('the Renderer Host transports shared dialog options, complete results, and 
 		},
 	});
 	let frameStyle: unknown = 'custom';
+	let pinListener: ((value: unknown) => void) | undefined;
 	const routes = nativeHostIpcRoutes({
 		getAgentHostEditorState: () => malformedState ? { ...invitations.getState(), revision: NaN } : invitations.getState(),
 		updateAgentHostEditorState: async update => invitations.update(7, update),
@@ -142,7 +144,11 @@ test('the Renderer Host transports shared dialog options, complete results, and 
 	const globals: ISandboxGlobals = {
 		ipcRenderer: {
 			send: () => { throw new Error('Unexpected send'); },
-			on: () => { throw new Error('Unexpected subscription'); },
+			on: (channel, listener) => {
+				assert.equal(channel, WINDOW_ALWAYS_ON_TOP_CHANGED_CHANNEL);
+				pinListener = listener;
+				return { dispose() { pinListener = undefined; } };
+			},
 			async invoke(channel, value) {
 				const route = routes.find(route => route.channel === channel);
 				assert.ok(route);
@@ -162,6 +168,14 @@ test('the Renderer Host transports shared dialog options, complete results, and 
 			registerChannel: () => { throw new Error('Unexpected channel registration'); },
 		};
 		const host = createNativeHostApi(mainProcess);
+		const pinEvents: IWindowAlwaysOnTopChangedEvent[] = [];
+		const pinSubscription = host.onDidChangeWindowAlwaysOnTop(event => pinEvents.push(event));
+		const pinnedWindow = { windowName: 'ash-auxiliary-12345678-1234-1234-1234-123456789abc', alwaysOnTop: true };
+		pinListener!(pinnedWindow);
+		assert.deepEqual(pinEvents, [pinnedWindow]);
+		assert.throws(() => pinListener!({ alwaysOnTop: 'true' }), /Invalid window always-on-top change/);
+		pinSubscription.dispose();
+		assert.equal(pinListener, undefined);
 		const activityResource = buildOpenSessionLinkUri('s', 't', 'local').toJSON();
 		await host.updateAgentHostEditorState({ kind: 'request', resource: activityResource, isNewSession: true, requestSequence: 1 });
 		await host.updateAgentHostEditorState({ kind: 'sessions', sessions: [{ resource: activityResource, inProgress: true, needsInput: false }] });

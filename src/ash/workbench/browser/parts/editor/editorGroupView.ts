@@ -1,11 +1,13 @@
+import { getActionBarActions } from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
+import type { IActiveEditorActions } from '../../../services/editor/common/editorGroupsService.js';
 import type { IBulkEditOptions } from '../../../../editor/browser/services/bulkEditService.js';
-import type { EditorPane } from './editorPane.js';
+import { EditorPane } from './editorPane.js';
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { Dimension, type IDimension } from "../../../../base/browser/dom.js";
 import { CancellationError, isCancellationError } from "../../../../base/common/errors.js";
-import { Emitter, type Event } from "../../../../base/common/event.js";
+import { Emitter, Event } from "../../../../base/common/event.js";
 import { validateJsonValue } from "../../../../base/common/jsonValue.js";
-import { Disposable, DisposableMap, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, DisposableMap, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { localize } from "../../../../nls.js";
 import { URI } from "../../../../base/common/uri.js";
 import { EditorOpenSource, TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
@@ -377,6 +379,21 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		this.domNode.classList.toggle("ash-editor-group-locked", locked);
 		this.titleControl.setLocked(locked);
 		this.renderChrome();
+	}
+
+	createEditorActions(disposables: DisposableStore, menuId = MenuId.EditorTitle): IActiveEditorActions {
+		const pane = this.activePane;
+		const menu = this.titleActions ? disposables.add(this.titleActions.menuService.createMenu(menuId, this.scopedContextKeyService)) : undefined;
+		return {
+			get actions() {
+				const menuActions = getActionBarActions(menu?.getActions() ?? []);
+				return {
+					primary: [...(pane instanceof EditorPane ? pane.getActions() : []), ...menuActions.primary],
+					secondary: [...(pane instanceof EditorPane ? pane.getSecondaryActions() : []), ...menuActions.secondary],
+				};
+			},
+			onDidChange: Event.any(pane instanceof EditorPane ? pane.onTitleAreaUpdate : Event.None, menu ? Event.map(menu.onDidChange, () => undefined) : Event.None),
+		};
 	}
 
 	get activePane(): IEditorPane | undefined {
@@ -792,6 +809,8 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			return;
 		}
 		const entry = this.requireEntry(input);
+		const veto = input.canMove?.(this.id, target.id);
+		if (typeof veto === 'string') throw new Error(veto);
 		const viewState = this.saveEditorViewState(input);
 		await target.openEditor(input, { index: targetIndex, pinned: !entry.preview, preferredEditorId: entry.paneInstance.pane.id }, entry.instanceId);
 		if (entry.sticky) target.stickEditor(input);

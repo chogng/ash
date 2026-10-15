@@ -21,6 +21,11 @@ const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationE
 /** Typed configuration keys owned by the workbench layer. */
 export const WorkbenchConfiguration = Object.freeze({
 	...AccessibilityConfiguration,
+	statusBarVisible: configurationRegistry.registerConfiguration<boolean>({
+		key: 'workbench.statusBar.visible', defaultValue: true, scope: ConfigurationScope.WINDOW,
+		parse: value => { if (typeof value !== 'boolean') throw new TypeError('Status bar visibility must be a boolean'); return value; },
+		setting: { valueType: 'boolean', title: localize('workbench.statusBarVisibleTitle', 'Status Bar Visibility'), description: localize('workbench.statusBarVisibleDescription', 'Show the status bar in editor windows.') },
+	}),
 	windowTitle: configurationRegistry.registerConfiguration<string>({
 		key: 'window.title',
 		agentsWindow: { default: '${appName}', readOnly: true },

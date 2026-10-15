@@ -31,7 +31,7 @@ export class NotificationsStatus extends Disposable {
 
 	private entry(): IStatusbarEntry {
 		const label = localize('notifications.showCenter', 'Show Notification Center');
-		return { icon: this.model.getNotifications().length ? Lxicon.bellDot : Lxicon.bell, text: '', ariaLabel: label, tooltip: label, run: this.toggle };
+		return { showInAllWindows: true, icon: this.model.getNotifications().length ? Lxicon.bellDot : Lxicon.bell, text: '', ariaLabel: label, tooltip: label, run: this.toggle };
 	}
 
 	private render(): void {

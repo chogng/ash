@@ -53,6 +53,10 @@ export function createThemeEditorInput(input: IResourceEditorInput): IResourceEd
 /** The embedded text pane owns the document, history, working copy and file revision. */
 export class ThemeEditor extends EditorPane {
 	public readonly id = ThemeEditorId;
+	public readonly prefersEditorTitleHidden = true;
+	public readonly prefersStatusbarHidden = true;
+	public readonly prefersCompactTitlebar = true;
+	readonly prefersWindowCloseConfirmation = true;
 	private root: HTMLElement | undefined;
 	private body: HTMLElement | undefined;
 	private list: HTMLElement | undefined;

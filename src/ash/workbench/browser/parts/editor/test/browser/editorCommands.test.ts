@@ -27,7 +27,7 @@ import { IEditorPartsService } from '../../editorParts.js';
 import type { EditorIdentifier } from '../../../../../services/editor/common/editorState.js';
 import { IPreferencesService, type IOpenSettingsOptions } from '../../../../../services/preferences/common/preferences.js';
 import { ConfigureEditorAction } from '../../../../actions/layoutActions.js';
-import { resetNlsResolver, setNlsMessages } from '../../../../../../nls.js';
+import { localize2, resetNlsResolver, setNlsMessages } from '../../../../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../../../services/localization/common/localizationCatalogs.js';
 
 test('Configure Editors menu opens filtered settings and is hidden in the modal editor', async () => {
@@ -60,6 +60,8 @@ test('Configure Editors menu opens filtered settings and is hidden in the modal 
 	try {
 		setNlsMessages('zh-CN', chinese.bundles);
 		assert.deepEqual(new ConfigureEditorAction().desc.title, { original: 'Configure Editors', value: '配置编辑器' });
+		assert.equal(localize2('command.NewEmptyEditorWindow', 'New Empty Editor Window').value, '新建空编辑器窗口');
+		assert.equal(localize2('workbench.zoomPerWindowTitle', 'Zoom per window').value, '每个窗口独立缩放');
 	} finally {
 		resetNlsResolver();
 	}
@@ -341,4 +343,24 @@ test("editor commands close the active tab and reopen it with a chosen editor", 
 		}
 		dom.window.close();
 	}
+});
+
+
+test('empty editor windows and whole-group commands use the shared coordinator and preserve lock state', async () => {
+	using services = new InstantiationService();
+	const inputs = [URI.file('/a.ts'), URI.file('/b.ts')].map(resource => ({ resource }));
+	const editors = inputs.map((input, index) => ({ input, groupId: 'source', instanceId: `group-editor-${index}`, paneId: 'test.editor' }));
+	const source = { id: 'source', inputs, editors, activeInput: inputs[1], selectedInputs: [inputs[1]], isLocked: true } as unknown as IEditorGroup;
+	const calls: unknown[] = [];
+	const target = { activeGroup: { focus: () => calls.push('focus'), setLocked: (locked: boolean) => calls.push(['locked', locked]) } };
+	services.registerInstance(IEditorGroupsService, { groups: [source], activeGroup: source, getGroup: () => source } as unknown as IEditorGroupsService);
+	services.registerInstance(IEditorPartsService, {
+		createAuxiliaryEditorPart: async () => { calls.push('empty'); return target; },
+		openEditorsInNewWindow: async (selected: readonly EditorIdentifier[], mode: string) => { calls.push([mode, selected.map(editor => editor.instanceId)]); return target; },
+	} as unknown as IEditorPartsService);
+	using commands = new CommandService(services);
+	await commands.executeCommand('workbench.action.newEmptyEditorWindow');
+	await commands.executeCommand('workbench.action.moveEditorGroupToNewWindow', { groupId: source.id });
+	await commands.executeCommand('workbench.action.copyEditorGroupToNewWindow', { groupId: source.id });
+	assert.deepEqual(calls, ['empty', 'focus', ['move', editors.map(editor => editor.instanceId)], ['locked', true], ['copy', editors.map(editor => editor.instanceId)], ['locked', true]]);
 });

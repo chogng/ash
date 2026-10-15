@@ -14,8 +14,9 @@ import type { IAccessibilityService } from "../../../../platform/accessibility/c
 import type { EditorOpenOptions, EditorOpenTarget } from "../../../services/editor/common/editorService.js";
 import type { ApplyEditorWorkingSetOptions, EditorWorkingSet, EditorWorkingSetTarget } from "../../../services/editor/common/editorWorkingSet.js";
 import type { EditorGroupId, EditorIdentifier, EditorPartChangeEvent, EditorPartState } from "../../../services/editor/common/editorState.js";
+import { localize } from '../../../../nls.js';
 import { EditorCloseEmptyGroupsConfiguration } from '../../../services/editor/common/editorConfiguration.js';
-import type { IAuxiliaryWindow, IAuxiliaryWindowService } from "../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js";
+import { parseAuxiliaryWindowState, type AuxiliaryWindowOpenOptions, type AuxiliaryWindowState, type IAuxiliaryWindow, type IAuxiliaryWindowService } from "../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js";
 
 import { editorInputKey } from "./editorTabsControl.js";
 import type { EditorCloseAllOptions, IEditorPart } from "./editorPart.js";
@@ -31,6 +32,7 @@ export interface EditorPartsState {
 	readonly version: 1;
 	readonly active: number;
 	readonly parts: readonly EditorWorkingSet[];
+	readonly windows?: readonly (AuxiliaryWindowState | null)[];
 }
 
 /** Multi-window coordinator exposed to commands and editor services. */
@@ -39,7 +41,7 @@ export interface IEditorPartsService extends IEditorPart {
 	readonly parts: readonly IEditorPart[];
 	readonly activePart: IEditorPart;
 	readonly onDidCreateAuxiliaryEditorPart: Event<IEditorPart>;
-	createAuxiliaryEditorPart(): Promise<IEditorPart>;
+	createAuxiliaryEditorPart(options?: AuxiliaryWindowOpenOptions): Promise<IEditorPart>;
 	/** Opens one window for the selected instances; copies share content but receive new instance identities. */
 	openEditorsInNewWindow(editors: readonly EditorIdentifier[], mode: 'move' | 'copy'): Promise<IEditorPart | undefined>;
 	closeAuxiliaryEditorPart(part: IEditorPart): Promise<boolean>;
@@ -57,10 +59,12 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 	private static readonly stateStorageKey = 'editorparts.state';
 	private readonly editorChangeEmitter = this._register(new Emitter<EditorPartChangeEvent>());
 	private readonly auxiliaryCreatedEmitter = this._register(new Emitter<IEditorPart>());
+	private readonly partWindows = new Map<IEditorPart, IAuxiliaryWindow>();
 	private readonly auxiliary = this._register(new DisposableMap<IEditorPart, AuxiliaryEditorPart>());
 	private readonly partListeners = this._register(new DisposableMap<IEditorPart, DisposableStore>());
 	private _activePart: IEditorPart;
 	private hasRestoredState = false;
+	private readonly closingAuxiliary = new Map<IEditorPart, Promise<boolean>>();
 	private statePersistencePauses = 0;
 	readonly onDidChangeEditors = this.editorChangeEmitter.event;
 	readonly onDidCreateAuxiliaryEditorPart = this.auxiliaryCreatedEmitter.event;
@@ -75,6 +79,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 	) {
 		super();
+		this._register(toDisposable(() => this.partWindows.clear()));
 		this._activePart = mainPart;
 		this.registerPart(mainPart);
 		this._register(storage.onWillSaveState(() => {
@@ -105,7 +110,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 
 	savePartsState(): EditorPartsState {
 		const parts = this.parts;
-		return { version: 1, active: parts.indexOf(this._activePart), parts: parts.map(part => part.saveWorkingSet('lastSession', this.getEmptySessionGroups(part).map(group => group.id))) };
+		return { version: 1, active: parts.indexOf(this._activePart), parts: parts.map(part => part.saveWorkingSet('lastSession', this.getEmptySessionGroups(part).map(group => group.id))), windows: parts.map(part => this.partWindows.get(part)?.createState() ?? null) };
 	}
 
 	private getEmptySessionGroups(part: IEditorPart): readonly IEditorGroupView[] {
@@ -143,18 +148,22 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		if (state?.version !== 1 || !Array.isArray(state.parts) || state.parts.length === 0 || !Number.isInteger(state.active) || state.active < 0 || state.active >= state.parts.length) {
 			throw new TypeError('Invalid saved editor parts state');
 		}
+		if (state.windows !== undefined && (!Array.isArray(state.windows) || state.windows.length !== state.parts.length || state.windows.some(window => window !== null && !parseAuxiliaryWindowState(JSON.stringify(window))))) throw new TypeError('Invalid saved auxiliary windows');
 		const options: ApplyEditorWorkingSetOptions = { preserveFocus: true, excludeEmptyGroups: this.configurationService.getValue<boolean>(EditorCloseEmptyGroupsConfiguration) !== false };
 		await this.mainPart.applyWorkingSet(state.parts[0]!, options);
-		for (const workingSet of state.parts.slice(1)) {
-			const part = await this.createAuxiliaryEditorPart();
+		for (const [index, workingSet] of state.parts.slice(1).entries()) {
+			const savedWindow = state.windows?.[index + 1];
+			const windowOptions = savedWindow == null ? undefined : parseAuxiliaryWindowState(JSON.stringify(savedWindow));
+			if (savedWindow != null && !windowOptions) throw new TypeError('Invalid saved auxiliary window state');
+			const part = await this.createAuxiliaryEditorPart(windowOptions);
 			await part.applyWorkingSet(workingSet, options);
 		}
 		this.setActivePart(this.parts[state.active]!);
 	}
 
-	async createAuxiliaryEditorPart(): Promise<IEditorPart> {
+	async createAuxiliaryEditorPart(options?: AuxiliaryWindowOpenOptions): Promise<IEditorPart> {
 		this.assertNotDisposed();
-		const auxiliaryWindow = await this.windows.open();
+		const auxiliaryWindow = await this.windows.open(options);
 		if (this.isDisposed) {
 			auxiliaryWindow.dispose();
 			throw new Error('Editor parts were disposed while opening an auxiliary window');
@@ -177,6 +186,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 			throw error;
 		}
 		this.auxiliary.set(creation.part, handle);
+		this.partWindows.set(creation.part, auxiliaryWindow);
 		this.registerPart(creation.part, auxiliaryWindow);
 		this.setActivePart(creation.part);
 		this.auxiliaryCreatedEmitter.fire(creation.part);
@@ -221,10 +231,43 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		}
 	}
 
-	async closeAuxiliaryEditorPart(part: IEditorPart): Promise<boolean> {
+	closeAuxiliaryEditorPart(part: IEditorPart): Promise<boolean> {
+		const pending = this.closingAuxiliary.get(part);
+		if (pending) return pending;
+		const closing = this.prepareAuxiliaryClose(part).finally(() => this.closingAuxiliary.delete(part));
+		this.closingAuxiliary.set(part, closing);
+		return closing;
+	}
+
+	private getReturnGroup(): IEditorGroupView {
+		const recentGroups = this.mainPart.editorsMru.map(editor => editor.groupId);
+		return recentGroups.map(id => this.mainPart.groups.find(group => group.id === id)).find(group => group && !group.isLocked)
+			?? this.mainPart.groups.find(group => !group.isLocked)
+			?? this.mainPart.addGroup(this.mainPart.activeGroup.id, 'right');
+	}
+
+	private async prepareAuxiliaryClose(part: IEditorPart): Promise<boolean> {
 		if (!this.auxiliary.has(part)) return false;
-		if (!await part.closeAllEditors()) return false;
+		if (part.activePane?.prefersWindowCloseConfirmation && !await part.confirmCloseAllEditors()) return false;
+		const target = this.getReturnGroup();
+		const editors = part.groups.flatMap(group => group.editors.map(editor => ({ group, editor })));
+		for (const { group, editor } of editors) {
+			const veto = editor.input.canMove?.(group.id, target.id);
+			if (typeof veto === 'string') {
+				part.activateEditorIdentifier(editor);
+				return false;
+			}
+		}
+		for (const { group, editor } of editors) {
+			if (this.isDisposed || !this.auxiliary.has(part)) return false;
+			if (editor.isDirty) {
+				await group.moveEditorTo(editor.input, target, target.inputs.length);
+			} else {
+				await group.closeEditor(editor.input, { skipConfirmation: true, reason: 'move' });
+			}
+		}
 		this.removeAuxiliaryPart(part);
+		this.mainPart.focus();
 		return true;
 	}
 
@@ -347,6 +390,16 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 			listeners.add(addDisposableListener(getWindow(part.domNode), event, () => this.setActivePart(part), true));
 		}
 		if (auxiliaryWindow) listeners.add(addDisposableListener(auxiliaryWindow.container, 'focusin', () => this.setActivePart(part)));
+		if (auxiliaryWindow) listeners.add(auxiliaryWindow.onBeforeUnload(event => {
+			if (this.isDisposed || part.activePane?.prefersWindowCloseConfirmation) return;
+			const target = this.getReturnGroup();
+			for (const group of part.groups) for (const editor of group.editors) {
+				const veto = editor.input.canMove?.(group.id, target.id);
+				if (typeof veto === 'string') { event.veto(veto); return; }
+			}
+			event.veto(localize('auxiliaryWindow.returningEditors', 'Returning unsaved editors to the main window.'));
+			void this.closeAuxiliaryEditorPart(part).catch(onUnexpectedError);
+		}));
 		if (auxiliaryWindow) listeners.add(auxiliaryWindow.onDidClose(() => {
 			if (!this.isDisposed) void this.returnEditorsToMainPart(part);
 		}));
@@ -356,7 +409,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 	private async returnEditorsToMainPart(part: IEditorPart): Promise<void> {
 		const activeGroup = part.activeGroup;
 		const activeInput = activeGroup.activeInput;
-		const editors = part.groups.flatMap(group => group.inputs.map(input => ({ group, input })));
+		const editors = part.groups.flatMap(group => group.editors.filter(editor => editor.isDirty).map(editor => ({ group, input: editor.input })));
 		const active = editors.find(editor => editor.group === activeGroup && editor.input === activeInput);
 		try {
 			for (const editor of editors) {
@@ -374,6 +427,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 
 	private removeAuxiliaryPart(part: IEditorPart): void {
 		if (!this.auxiliary.has(part)) return;
+		this.partWindows.delete(part);
 		this.partListeners.deleteAndDispose(part);
 		this.auxiliary.deleteAndDispose(part);
 		if (this._activePart === part) this.setActivePart(this.mainPart);
