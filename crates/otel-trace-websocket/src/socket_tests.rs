@@ -105,7 +105,9 @@ async fn bounded_stream_reports_loss_to_a_slow_viewer() {
         let task = connection(server_stream, TOKEN.parse().unwrap(), frames.clone());
         tokio::pin!(task);
         // The client branch has no yield between ready and publishing the whole batch.
-        tokio::select! { _ = &mut task => panic!("connection ended early"), _ = wait => {} }
+        // Once released, the client may consume the lag notice and close before this
+        // branch is polled again. Observe its release before checking task completion.
+        tokio::select! { biased; _ = wait => {}, _ = &mut task => panic!("connection ended early") }
         task.await;
     };
     tokio::time::timeout(Duration::from_secs(5), async {
