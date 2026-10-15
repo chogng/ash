@@ -983,8 +983,8 @@ platform 的内容搜索服务只执行显式选择的单目录。
 notification union 或生成 DTO。
 
 SCM 的打开操作由 `scmViewPane.ts` 解释：预览保留列表焦点，双击固定文件，修饰键点击或 Enter
-请求侧边分组。打开链中的 [`Git SCM provider`](../extensions/git/browser/gitSCMProvider.ts) 属于
-TS 扩展，解析 Git 版本并通过通用编辑器能力传递打开参数；`IEditorService` 和 Editor Part
+请求侧边分组。打开链中的 [`Git SCM provider`](../extensions/git/src/scm.rs) 属于
+独立 Rust 扩展，解析 Git 版本并通过通用编辑器能力传递打开参数；`IEditorService` 和 Editor Part
 负责目标分组、pane 生命周期与布局。禁用 Git 扩展后，其他 SCM provider 和这些编辑器能力
 继续运行；Agent 和 TUI 使用的共享 Rust Git 也保持可用。
 

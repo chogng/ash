@@ -113,6 +113,8 @@ impl Default for GitExecutionLimits {
 pub struct GitClient {
     executable: ExecutableSource,
     limits: GitExecutionLimits,
+    similarity_threshold: u8,
+    askpass: Option<GitAskPass>,
 }
 
 #[derive(Clone, Debug)]
@@ -146,12 +148,31 @@ impl Drop for CloneDestination {
     }
 }
 
+/// A host-authorized askpass executable and an activation-bound loopback broker.
+#[derive(Clone)]
+pub struct GitAskPass {
+    pub program: PathBuf,
+    pub address: std::net::SocketAddr,
+    pub token: String,
+    pub scope: String,
+}
+impl std::fmt::Debug for GitAskPass {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("GitAskPass")
+            .field("program", &self.program)
+            .finish_non_exhaustive()
+    }
+}
+
 impl GitClient {
     /// Uses conventional installation directories, reporting missing Git when an operation starts.
     pub fn system() -> Self {
         Self {
             executable: ExecutableSource::System(SystemExecutables::current()),
             limits: GitExecutionLimits::default(),
+            similarity_threshold: 50,
+            askpass: None,
         }
     }
 
@@ -173,6 +194,8 @@ impl GitClient {
         Ok(Self {
             executable: ExecutableSource::Explicit(executable),
             limits,
+            similarity_threshold: 50,
+            askpass: None,
         })
     }
 
@@ -184,6 +207,40 @@ impl GitClient {
                 .map_err(|source| GitError::io("locate system Git", source)),
             ExecutableSource::Explicit(path) => Ok(path.clone()),
         }
+    }
+
+    /// Installs interaction only for this invocation's client, without modifying Git config.
+    pub fn with_askpass(mut self, askpass: GitAskPass) -> GitResult<Self> {
+        if !askpass.program.is_absolute()
+            || askpass.address.ip() != std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST)
+            || askpass.address.port() == 0
+            || askpass.token.len() != 64
+            || !askpass.token.bytes().all(|byte| byte.is_ascii_hexdigit())
+            || askpass.scope.is_empty()
+            || askpass.scope.len() > 128
+            || askpass.scope.chars().any(char::is_control)
+        {
+            return Err(GitError::InvalidConfiguration {
+                field: "askpass",
+                requirement: "must identify a bounded loopback broker and an absolute helper",
+            });
+        }
+        self.askpass = Some(askpass);
+        Ok(self)
+    }
+    /// Overrides rename detection only for this client instance.
+    pub fn with_similarity_threshold(mut self, percent: u8) -> GitResult<Self> {
+        if percent > 100 {
+            return Err(GitError::InvalidConfiguration {
+                field: "similarity threshold",
+                requirement: "must be between 0 and 100",
+            });
+        }
+        self.similarity_threshold = percent;
+        Ok(self)
+    }
+    pub(crate) fn rename_argument(&self) -> String {
+        format!("--find-renames={}%", self.similarity_threshold)
     }
 
     pub fn limits(&self) -> GitExecutionLimits {
@@ -494,6 +551,21 @@ impl GitClient {
         self.run(invocation).await
     }
 
+    pub(crate) async fn run_commit_hooks<I, S>(
+        &self,
+        cwd: &Path,
+        args: I,
+        input: Vec<u8>,
+    ) -> GitResult<GitCommandOutput>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>,
+    {
+        let mut invocation = GitInvocation::mutation(cwd, args).with_stdin(input);
+        invocation.hooks = GitHooks::Enabled;
+        self.run(invocation).await
+    }
+
     pub(crate) async fn run_mutation<I, S>(
         &self,
         cwd: &Path,
@@ -594,12 +666,15 @@ impl GitClient {
             .env("GCM_INTERACTIVE", "Never")
             .env("LC_ALL", "C")
             .arg("-c")
-            .arg(format!("core.hooksPath={DISABLED_HOOKS_PATH}"))
-            .arg("-c")
             .arg("color.ui=false")
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
+        if invocation.hooks == GitHooks::Disabled {
+            command
+                .arg("-c")
+                .arg(format!("core.hooksPath={DISABLED_HOOKS_PATH}"));
+        }
         #[cfg(unix)]
         command.process_group(0);
         invocation.profile.configure(&mut command);
@@ -609,6 +684,16 @@ impl GitClient {
                 .iter()
                 .map(|(name, value)| (name, value)),
         );
+        if let Some(broker) = &self.askpass {
+            let path = broker.program.to_string_lossy();
+            let helper = format!("'{}' --askpass", path.replace('\'', "'\\''"));
+            command
+                .env("GIT_ASKPASS", &helper)
+                .env("SSH_ASKPASS", &broker.program)
+                .env("ASH_GIT_BRIDGE_ADDRESS", broker.address.to_string())
+                .env("ASH_GIT_BRIDGE_TOKEN", &broker.token)
+                .env("ASH_GIT_BRIDGE_SCOPE", &broker.scope);
+        }
         command.args(&invocation.args);
         if invocation.stdin.is_some() {
             command.stdin(Stdio::piped());
@@ -755,7 +840,14 @@ impl GitCommandProfile {
     }
 }
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum GitHooks {
+    Disabled,
+    Enabled,
+}
+
 struct GitInvocation {
+    hooks: GitHooks,
     cwd: PathBuf,
     args: Vec<OsString>,
     profile: GitCommandProfile,
@@ -770,6 +862,7 @@ impl GitInvocation {
         S: AsRef<OsStr>,
     {
         Self {
+            hooks: GitHooks::Disabled,
             cwd: cwd.to_path_buf(),
             args: collect_args(args),
             profile: GitCommandProfile::Clone,
@@ -783,6 +876,7 @@ impl GitInvocation {
         S: AsRef<OsStr>,
     {
         Self {
+            hooks: GitHooks::Disabled,
             cwd: cwd.to_path_buf(),
             args: collect_args(args),
             profile: GitCommandProfile::Query { fsmonitor },
@@ -797,6 +891,7 @@ impl GitInvocation {
         S: AsRef<OsStr>,
     {
         Self {
+            hooks: GitHooks::Disabled,
             cwd: cwd.to_path_buf(),
             args: collect_args(args),
             profile: GitCommandProfile::ConfigurationProbe,
@@ -811,6 +906,7 @@ impl GitInvocation {
         S: AsRef<OsStr>,
     {
         Self {
+            hooks: GitHooks::Disabled,
             cwd: cwd.to_path_buf(),
             args: collect_args(args),
             profile: GitCommandProfile::Mutation,
@@ -1067,4 +1163,50 @@ pub(crate) fn validate_argument(value: &str) -> GitResult<()> {
         ));
     }
     Ok(())
+}
+
+/// Parsed installation identity, independent of a repository or editor window.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GitVersion {
+    pub display: String,
+    pub major: u32,
+    pub minor: u32,
+    pub patch: u32,
+}
+impl GitClient {
+    pub async fn version(&self) -> GitResult<GitVersion> {
+        let output = self
+            .run_query(&std::env::temp_dir(), ["--version"])
+            .await?
+            .require_success()?;
+        let display = std::str::from_utf8(&output.stdout)
+            .map_err(|_| GitError::invalid_output(&output.command, "Git version is not UTF-8"))?
+            .trim();
+        let value = display.strip_prefix("git version ").ok_or_else(|| {
+            GitError::invalid_output(&output.command, "Git version header is missing")
+        })?;
+        let mut numbers = value.split('.');
+        let mut component = || {
+            numbers
+                .next()
+                .and_then(|part| {
+                    part.split(|character: char| !character.is_ascii_digit())
+                        .next()
+                })
+                .filter(|part| !part.is_empty())
+                .and_then(|part| part.parse::<u32>().ok())
+                .ok_or_else(|| {
+                    GitError::invalid_output(&output.command, "Git version component is invalid")
+                })
+        };
+        let major = component()?;
+        let minor = component()?;
+        let patch = component()?;
+        Ok(GitVersion {
+            display: display.into(),
+            major,
+            minor,
+            patch,
+        })
+    }
 }

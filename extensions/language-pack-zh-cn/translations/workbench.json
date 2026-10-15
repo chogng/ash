@@ -600,6 +600,7 @@
     "workbench.browserFolderTargetExists": "目标文件已存在",
     "workbench.serverFolderChoose": "选择服务器上的文件夹",
     "workbench.serverFolderSelect": "选择此文件夹",
+    "workbench.newWindowUnavailable": "此宿主不支持打开新窗口",
     "workbench.serverFolderAuthorizeTitle": "授权服务器文件夹",
     "workbench.serverFolderAuthorizeMessage": "允许此浏览器标签页打开和修改 {0} 中的文件吗？",
     "workbench.serverFolderAuthorizeDetail": "如果文件夹超出当前授权范围，还需要在服务器电脑上批准。",

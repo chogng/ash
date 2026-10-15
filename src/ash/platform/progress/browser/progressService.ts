@@ -1,3 +1,4 @@
+import { localize } from "../../../nls.js";
 import { h } from "../../../base/browser/dom.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable } from "../../../base/common/lifecycle.js";
@@ -31,7 +32,7 @@ export class BrowserProgressService extends Disposable implements IProgressServi
 		this.element = h(document, "div");
 		this.element.className = "ash-progress-host";
 		this.element.setAttribute("role", "region");
-		this.element.setAttribute("aria-label", "Progress");
+		this.element.setAttribute("aria-label", localize("progress.region", "Progress"));
 		container.append(this.element);
 		const removeElement = (): void => this.element.remove();
 		this._register({ dispose: removeElement, [Symbol.dispose]: removeElement });
@@ -147,7 +148,7 @@ export class BrowserProgressService extends Disposable implements IProgressServi
 				const cancel = h(document, "button");
 				cancel.type = "button";
 				cancel.className = "ash-progress-cancel";
-				cancel.textContent = "Cancel";
+				cancel.textContent = localize("progress.cancel", "Cancel");
 				cancel.addEventListener("click", () => this.tasks.get(record.snapshot.id) && this.cancel(record.snapshot.id));
 				item.append(cancel);
 			}

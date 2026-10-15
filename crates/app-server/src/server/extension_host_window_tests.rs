@@ -24,11 +24,11 @@ use external_ext_protocol::ExtensionHostInitialization;
 use serde_json::Value;
 use serde_json::json;
 
+use super::super::EditorClientScope;
 use super::super::ExtensionHostInvocationRead;
 use super::super::ExtensionHostInvocationRequest;
 use super::super::ExtensionHostRuntime;
 use super::super::ExtensionHostRuntimeError;
-use super::super::NodeClientScope;
 use super::super::RuntimeEntry;
 use super::super::projection::ExtensionHostExtensionSnapshot;
 use super::super::projection::ExtensionHostLifecycle;
@@ -192,6 +192,8 @@ exports.activate = context => {
             version: "1".into(),
             package_digest: format!("sha256:{}", "a".repeat(64)),
             command,
+            credential_providers: Vec::new(),
+            protocol_limits: None,
             workspace_read: WorkspaceReadAccess::Denied,
             params: ActivateParams {
                 initialization: None,
@@ -279,7 +281,7 @@ fn runtime_with_recipe(
             supervisor: None,
             failure: None,
             pending_activation: deployment.activation.clone(),
-            node_client: NodeClientScope::Pending,
+            client_scope: EditorClientScope::Pending,
             fallback: ExtensionHostExtensionSnapshot {
                 id: deployment.id.clone(),
                 version: deployment.version.clone(),
@@ -294,7 +296,7 @@ fn runtime_with_recipe(
                 output_events: Vec::new(),
                 registrations: Vec::new(),
             },
-            node_deployment: Some(deployment),
+            window_deployment: Some(deployment),
         },
     );
     runtime

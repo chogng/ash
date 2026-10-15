@@ -476,6 +476,20 @@ impl WorktreeManager {
 
     /// Creates a user-owned checkout without binding it to a Thread.
     pub async fn create_unbound(&self, source_directory: &Path, name: &str) -> Result<PathBuf> {
+        self.create_unbound_with_options(
+            source_directory,
+            name,
+            &crate::WorktreePopulationOptions::default(),
+        )
+        .await
+    }
+
+    pub async fn create_unbound_with_options(
+        &self,
+        source_directory: &Path,
+        name: &str,
+        options: &crate::WorktreePopulationOptions,
+    ) -> Result<PathBuf> {
         if name.is_empty()
             || name.len() > 64
             || !name
@@ -485,6 +499,16 @@ impl WorktreeManager {
             bail!("worktree name must use 1–64 letters, numbers, '-' or '_'");
         }
         let source = self.git.open_repository(source_directory).await?;
+        let population = if options.include_files.is_empty() && options.symlink_folders.is_empty() {
+            None
+        } else {
+            let ignored = self.git.ignored_worktree_paths(&source).await?;
+            Some(crate::population::Population::prepare(
+                source.worktree_root(),
+                &ignored,
+                options,
+            )?)
+        };
         let head = self.git.resolve_commit(&source, "HEAD").await?;
         let checkout = self.settings.root.join("manual").join(name);
         if std::fs::symlink_metadata(&checkout).is_ok() {
@@ -497,6 +521,19 @@ impl WorktreeManager {
         )?;
         let request = GitDetachedWorktreeRequest::new(checkout.clone(), head)?;
         self.git.create_detached_checkout(&source, &request).await?;
+        if let Some(population) = population
+            && let Err(error) = population.apply(&checkout)
+        {
+            self.git
+                .remove_linked_worktree(
+                    &source,
+                    &checkout,
+                    GitWorktreeRemovalMode::DiscardVerifiedContents,
+                )
+                .await
+                .context("cannot roll back failed worktree setup")?;
+            return Err(error);
+        }
         Ok(checkout)
     }
 
@@ -1771,13 +1808,13 @@ fn copy_directory_entries(
 }
 
 #[cfg(unix)]
-fn copy_symlink(_: &Path, target: &Path, destination: &Path) -> Result<()> {
+pub(crate) fn copy_symlink(_: &Path, target: &Path, destination: &Path) -> Result<()> {
     std::os::unix::fs::symlink(target, destination)?;
     Ok(())
 }
 
 #[cfg(windows)]
-fn copy_symlink(source: &Path, target: &Path, destination: &Path) -> Result<()> {
+pub(crate) fn copy_symlink(source: &Path, target: &Path, destination: &Path) -> Result<()> {
     if source.is_dir() {
         std::os::windows::fs::symlink_dir(target, destination)?;
     } else {

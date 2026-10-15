@@ -32,6 +32,7 @@ use tokio::runtime::Runtime;
 
 thread_local! {
     static INVOCATION: RefCell<Option<CancellationToken>> = const { RefCell::new(None) };
+    static CLIENT: RefCell<Option<GitClient>> = const { RefCell::new(None) };
 }
 
 pub(crate) fn with_invocation<T>(token: CancellationToken, operation: impl FnOnce() -> T) -> T {
@@ -44,6 +45,23 @@ pub(crate) fn with_invocation<T>(token: CancellationToken, operation: impl FnOnc
     let previous = INVOCATION.with(|current| current.replace(Some(token)));
     let _restore = Restore(previous);
     operation()
+}
+
+pub(crate) fn with_client<T>(client: GitClient, operation: impl FnOnce() -> T) -> T {
+    struct Restore(Option<GitClient>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            CLIENT.with(|current| *current.borrow_mut() = self.0.take());
+        }
+    }
+    let _restore = Restore(CLIENT.with(|current| current.replace(Some(client))));
+    operation()
+}
+
+pub(crate) fn current_client() -> GitClient {
+    CLIENT
+        .with(|current| current.borrow().clone())
+        .unwrap_or_else(GitClient::system)
 }
 
 pub(crate) fn invocation_cancellation() -> Option<CancellationToken> {
@@ -115,6 +133,16 @@ pub(crate) struct GitServiceCommitChanges {
     pub(crate) changes: Vec<GitCommitChange>,
 }
 
+pub(crate) struct GitRemovalReview {
+    pub(crate) head: ash_git::GitHead,
+    pub(crate) entries: Vec<GitRemovalEntry>,
+}
+pub(crate) struct GitRemovalEntry {
+    pub(crate) file: ash_file_system::FileRemoval,
+    pub(crate) committed: bool,
+    pub(crate) changed: bool,
+}
+
 pub(crate) struct GitServiceBranches {
     pub(crate) branches: Vec<GitBranch>,
     pub(crate) checked_out_elsewhere: HashSet<String>,
@@ -126,6 +154,13 @@ pub(crate) enum GitConflictResolution {
     Incoming,
 }
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(crate) enum GitCommitScope {
+    Staged,
+    Tracked,
+    IncludeUntracked,
+}
+
 #[derive(Clone, Copy)]
 enum GitPathMutation {
     Stage,
@@ -134,12 +169,13 @@ enum GitPathMutation {
 }
 
 #[derive(Clone, Copy)]
-enum GitRemoteMutation<'a> {
+pub(crate) enum GitRemoteMutation<'a> {
     FetchDefault,
     Fetch,
     FetchRemote(&'a str),
     Pull(GitPullMode),
     Push,
+    PushReviewed(&'a ash_git::GitPushTarget),
 }
 
 /// Directory-scoped owner of the async Git runtime used by synchronous RPC dispatch.
@@ -178,6 +214,27 @@ impl GitService {
         })
     }
 
+    fn client(&self) -> GitClient {
+        CLIENT
+            .with(|current| current.borrow().clone())
+            .unwrap_or_else(|| self.client.clone())
+    }
+
+    fn canonical_client(&self) -> GitClient {
+        self.client()
+            .with_similarity_threshold(50)
+            .expect("the canonical similarity threshold is valid")
+    }
+
+    pub(crate) fn view_snapshot(
+        &self,
+    ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
+        self.snapshot_using(
+            self.client(),
+            &ash_async_utils::CancellationSource::new().token(),
+        )
+    }
+
     pub(crate) fn snapshot(
         &self,
     ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
@@ -188,6 +245,14 @@ impl GitService {
         &self,
         cancellation: &CancellationToken,
     ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
+        self.snapshot_using(self.canonical_client(), cancellation)
+    }
+
+    fn snapshot_using(
+        &self,
+        client: GitClient,
+        cancellation: &CancellationToken,
+    ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
         self.ensure_readable()?;
         let runtime = lock_for_request(&self.runtime, cancellation)?;
         run(&runtime, async {
@@ -195,8 +260,8 @@ impl GitService {
                 biased;
                 _ = cancellation.cancelled() => Err(GitServiceError::Cancelled),
                 result = async {
-                    let repository = self.client.open_repository(&self.projection_root).await.map_err(GitServiceError::Git)?;
-                    let snapshot = self.client.snapshot(&repository).await.map_err(GitServiceError::Git)?;
+                    let repository = client.open_repository(&self.projection_root).await.map_err(GitServiceError::Git)?;
+                    let snapshot = client.snapshot(&repository).await.map_err(GitServiceError::Git)?;
                     Ok((repository, snapshot))
                 } => result,
             }
@@ -229,11 +294,12 @@ impl GitService {
     ) -> Result<ash_git::GitReferenceState, GitServiceError> {
         self.ensure_readable()?;
         let runtime = lock_for_request(&self.runtime, cancellation)?;
+        let client = self.client();
         run(&runtime, async {
             tokio::select! {
                 biased;
                 _ = cancellation.cancelled() => Err(GitServiceError::Cancelled),
-                result = self.client.reference_state(repository) => result.map_err(GitServiceError::Git),
+                result = client.reference_state(repository) => result.map_err(GitServiceError::Git),
             }
         })
     }
@@ -247,11 +313,12 @@ impl GitService {
     ) -> Result<bool, GitServiceError> {
         self.ensure_readable()?;
         let runtime = lock_for_request(&self.runtime, cancellation)?;
+        let client = self.client();
         run(&runtime, async {
             tokio::select! {
                 biased;
                 _ = cancellation.cancelled() => Err(GitServiceError::Cancelled),
-                result = self.client.same_graph_roots(repository, previous, current) => result.map_err(GitServiceError::Git),
+                result = client.same_graph_roots(repository, previous, current) => result.map_err(GitServiceError::Git),
             }
         })
     }
@@ -268,8 +335,8 @@ impl GitService {
                 biased;
                 _ = cancellation.cancelled() => Err(GitServiceError::Cancelled),
                 result = async {
-                    let repository = self.client.open_repository(&self.projection_root).await?;
-                    self.client.check_ignore(&repository, paths).await
+                    let repository = self.client().open_repository(&self.projection_root).await?;
+                    self.client().check_ignore(&repository, paths).await
                 } => result.map_err(GitServiceError::Git),
             }
         })
@@ -282,11 +349,12 @@ impl GitService {
     ) -> Result<Vec<PathBuf>, GitServiceError> {
         self.ensure_readable()?;
         let runtime = lock_for_request(&self.runtime, cancellation)?;
+        let client = self.client();
         run(&runtime, async {
             tokio::select! {
                 biased;
                 _ = cancellation.cancelled() => Err(GitServiceError::Cancelled),
-                result = self.client.ignore_watch_paths(repository) => result.map_err(GitServiceError::Git),
+                result = client.ignore_watch_paths(repository) => result.map_err(GitServiceError::Git),
             }
         })
     }
@@ -316,13 +384,60 @@ impl GitService {
         self.mutate_paths(GitPathMutation::Stage, paths)
     }
 
+    pub(crate) fn blame(
+        &self,
+        path: &Path,
+        line: usize,
+        ignore_whitespace: bool,
+        contents: Option<&str>,
+    ) -> Result<ash_git::GitBlameLine, GitServiceError> {
+        self.ensure_readable()?;
+        let runtime = lock_current_runtime(&self.runtime)?;
+        run(&runtime, async {
+            let repository = self.open_repository().await?;
+            let path = self.repository_prefix(&repository)?.join(path);
+            self.client()
+                .blame_line(&repository, &path, line, ignore_whitespace, contents)
+                .await
+                .map_err(GitServiceError::Git)
+        })
+    }
+
+    pub(crate) fn file_history(
+        &self,
+        path: &Path,
+    ) -> Result<Vec<ash_git::GitFileHistoryItem>, GitServiceError> {
+        self.ensure_readable()?;
+        let runtime = lock_current_runtime(&self.runtime)?;
+        run(&runtime, async {
+            let repository = self.open_repository().await?;
+            let path = self.repository_prefix(&repository)?.join(path);
+            {
+                let mut items = self
+                    .client()
+                    .file_history(&repository, &path)
+                    .await
+                    .map_err(GitServiceError::Git)?;
+                let prefix = self.repository_prefix(&repository)?;
+                for item in &mut items {
+                    item.path = item
+                        .path
+                        .strip_prefix(&prefix)
+                        .map_err(|_| GitServiceError::Boundary)?
+                        .to_path_buf();
+                }
+                Ok(items)
+            }
+        })
+    }
+
     pub(crate) fn local_branches(&self) -> Result<GitServiceBranches, GitServiceError> {
         self.ensure_readable()?;
         let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
         run(&runtime, async {
             let repository = self.open_repository().await?;
             let worktrees = self
-                .client
+                .client()
                 .worktrees(&repository)
                 .await
                 .map_err(GitServiceError::Git)?;
@@ -332,7 +447,7 @@ impl GitService {
                 .filter_map(|worktree| worktree.branch().map(str::to_owned))
                 .collect();
             let branches = self
-                .client
+                .client()
                 .local_branches(&repository)
                 .await
                 .map_err(GitServiceError::Git)?;
@@ -343,12 +458,24 @@ impl GitService {
         })
     }
 
+    pub(crate) fn pull_upstream_was_rewritten(&self) -> Result<bool, GitServiceError> {
+        self.ensure_readable()?;
+        let runtime = lock_current_runtime(&self.runtime)?;
+        run(&runtime, async {
+            let repository = self.open_repository().await?;
+            self.client()
+                .pull_upstream_was_rewritten(&repository)
+                .await
+                .map_err(GitServiceError::Git)
+        })
+    }
+
     pub(crate) fn catalog(&self) -> Result<ash_git::GitCatalog, GitServiceError> {
         self.ensure_readable()?;
         let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
         run(&runtime, async {
             let repository = self.open_repository().await?;
-            self.client
+            self.client()
                 .catalog(&repository)
                 .await
                 .map_err(GitServiceError::Git)
@@ -374,7 +501,7 @@ impl GitService {
                 {
                     return Err(GitServiceError::Boundary);
                 }
-                self.client
+                self.client()
                     .execute_command(&repository, command)
                     .await
                     .map_err(GitServiceError::Git)
@@ -394,7 +521,7 @@ impl GitService {
         run(&runtime, async {
             let repository = self.open_repository().await?;
             let path = self.repository_prefix(&repository)?.join(path);
-            self.client
+            self.client()
                 .index_diff(&repository, &path, comparison)
                 .await
                 .map_err(GitServiceError::Git)
@@ -416,12 +543,12 @@ impl GitService {
                 expected_modified: request.expected_modified.clone(),
                 selection: request.selection.clone(),
             };
-            self.client
+            self.client()
                 .edit_index(&repository, &scoped)
                 .await
                 .map_err(GitServiceError::Git)?;
             let snapshot = self
-                .client
+                .canonical_client()
                 .snapshot(&repository)
                 .await
                 .map_err(GitServiceError::Git)?;
@@ -434,7 +561,7 @@ impl GitService {
         let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
         run(&runtime, async {
             let repository = self.open_repository().await?;
-            self.client
+            self.client()
                 .create_branch(&repository, name)
                 .await
                 .map_err(GitServiceError::Git)
@@ -446,7 +573,7 @@ impl GitService {
         let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
         run(&runtime, async {
             let repository = self.open_repository().await?;
-            self.client
+            self.client()
                 .delete_merged_branch(&repository, name)
                 .await
                 .map_err(GitServiceError::Git)
@@ -458,7 +585,7 @@ impl GitService {
         let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
         run(&runtime, async {
             let repository = self.open_repository().await?;
-            self.client
+            self.client()
                 .recent_commits(&repository, RECENT_COMMIT_LIMIT)
                 .await
                 .map_err(GitServiceError::Git)
@@ -473,7 +600,7 @@ impl GitService {
         let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
         run(&runtime, async {
             let repository = self.open_repository().await?;
-            self.client
+            self.client()
                 .start_graph_for_refs(&repository, revisions)
                 .await
                 .map_err(GitServiceError::Git)
@@ -499,7 +626,7 @@ impl GitService {
         run(&runtime, async {
             let repository = self.open_repository().await?;
             let (parent_object_id, changes) = self
-                .client
+                .client()
                 .commit_changes(&repository, object_id)
                 .await
                 .map_err(GitServiceError::Git)?;
@@ -522,7 +649,7 @@ impl GitService {
         run(&runtime, async {
             let repository = self.open_repository().await?;
             let (base, changes) = self
-                .client
+                .client()
                 .compare_changes(&repository, object_id, base_reference, mode)
                 .await
                 .map_err(GitServiceError::Git)?;
@@ -539,7 +666,7 @@ impl GitService {
         let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
         run(&runtime, async {
             let repository = self.open_repository().await?;
-            self.client
+            self.client()
                 .commit_message(&repository, object_id)
                 .await
                 .map_err(GitServiceError::Git)
@@ -554,7 +681,7 @@ impl GitService {
         let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
         run(&runtime, async {
             let repository = self.open_repository().await?;
-            self.client
+            self.client()
                 .commit_details(&repository, object_id)
                 .await
                 .map_err(GitServiceError::Git)
@@ -576,7 +703,7 @@ impl GitService {
             let (parent_object_id, changes) = match comparison_base {
                 Some(base) => {
                     let (base, changes) = self
-                        .client
+                        .client()
                         .compare_changes(
                             &repository,
                             object_id,
@@ -588,7 +715,7 @@ impl GitService {
                     (Some(base), changes)
                 }
                 None => self
-                    .client
+                    .client()
                     .commit_changes(&repository, object_id)
                     .await
                     .map_err(GitServiceError::Git)?,
@@ -600,7 +727,7 @@ impl GitService {
             let original_path = change
                 .original_path()
                 .filter(|path| path.strip_prefix(&dir_prefix).is_ok());
-            self.client
+            self.client()
                 .commit_file(
                     &repository,
                     object_id,
@@ -626,7 +753,7 @@ impl GitService {
             let dir_prefix = self.repository_prefix(&repository)?;
             let repository_path = dir_prefix.join(path);
             let snapshot = self
-                .client
+                .canonical_client()
                 .snapshot(&repository)
                 .await
                 .map_err(GitServiceError::Git)?;
@@ -656,7 +783,7 @@ impl GitService {
             {
                 return Err(GitServiceError::Boundary);
             }
-            self.client
+            self.client()
                 .change_file(&repository, change, comparison, MAX_CHANGE_FILE_BYTES)
                 .await
                 .map_err(GitServiceError::Git)
@@ -674,7 +801,7 @@ impl GitService {
         run(&runtime, async {
             let repository = self.open_repository().await?;
             let dir_prefix = self.repository_prefix(&repository)?;
-            self.client
+            self.client()
                 .change_file_at_paths(
                     &repository,
                     &dir_prefix.join(original_path),
@@ -697,7 +824,7 @@ impl GitService {
             let repository = self.open_repository().await?;
             let repository_path = self.repository_prefix(&repository)?.join(path);
             let snapshot = self
-                .client
+                .canonical_client()
                 .snapshot(&repository)
                 .await
                 .map_err(GitServiceError::Git)?;
@@ -706,7 +833,7 @@ impl GitService {
                 .iter()
                 .find(|change| change.path() == repository_path && change.is_conflicted())
                 .ok_or(GitServiceError::ConflictChanged)?;
-            self.client
+            self.client()
                 .conflict_file(&repository, change, MAX_CHANGE_FILE_BYTES)
                 .await
                 .map_err(GitServiceError::Git)
@@ -727,7 +854,7 @@ impl GitService {
             let paths = self.repository_paths(&repository, vec![path.to_path_buf()])?;
             let repository_path = &paths.paths()[0];
             let snapshot = self
-                .client
+                .canonical_client()
                 .snapshot(&repository)
                 .await
                 .map_err(GitServiceError::Git)?;
@@ -737,7 +864,7 @@ impl GitService {
                 .find(|change| change.path() == repository_path && change.is_conflicted())
                 .ok_or(GitServiceError::ConflictChanged)?;
             let file = self
-                .client
+                .client()
                 .conflict_file(&repository, change, MAX_CHANGE_FILE_BYTES)
                 .await
                 .map_err(GitServiceError::Git)?;
@@ -752,7 +879,7 @@ impl GitService {
                     if file.result() != Some(text.as_bytes()) || has_conflict_markers(&text) {
                         return Err(GitServiceError::ConflictChanged);
                     }
-                    self.client
+                    self.client()
                         .complete_conflict(&repository, repository_path)
                         .await
                         .map_err(GitServiceError::Git)?;
@@ -763,7 +890,7 @@ impl GitService {
                     } else {
                         GitConflictChoice::Delete
                     };
-                    self.client
+                    self.client()
                         .choose_conflict_side(&repository, repository_path, choice)
                         .await
                         .map_err(GitServiceError::Git)?;
@@ -774,14 +901,14 @@ impl GitService {
                     } else {
                         GitConflictChoice::Delete
                     };
-                    self.client
+                    self.client()
                         .choose_conflict_side(&repository, repository_path, choice)
                         .await
                         .map_err(GitServiceError::Git)?;
                 }
             }
             let snapshot = self
-                .client
+                .canonical_client()
                 .snapshot(&repository)
                 .await
                 .map_err(GitServiceError::Git)?;
@@ -800,7 +927,7 @@ impl GitService {
             let repository = self.open_repository().await?;
             let dir_prefix = self.repository_prefix(&repository)?;
             let snapshot = self
-                .client
+                .client()
                 .text_diff_snapshot_under(&repository, &dir_prefix, limits)
                 .await
                 .map_err(GitServiceError::Git)?;
@@ -811,13 +938,14 @@ impl GitService {
     pub(crate) fn switch_branch(
         &self,
         name: &str,
+        policy: ash_git::GitCheckoutPolicy,
     ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
         self.ensure_mutable()?;
         let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
         run(&runtime, async {
             let repository = self.open_repository().await?;
             let branches = self
-                .client
+                .client()
                 .local_branches(&repository)
                 .await
                 .map_err(GitServiceError::Git)?;
@@ -825,12 +953,12 @@ impl GitService {
                 .iter()
                 .find(|branch| branch.name() == name)
                 .ok_or(GitServiceError::BranchNotFound)?;
-            self.client
-                .switch_branch(&repository, branch)
+            self.client()
+                .switch_branch_with_policy(&repository, branch, policy)
                 .await
                 .map_err(GitServiceError::Git)?;
             let snapshot = self
-                .client
+                .canonical_client()
                 .snapshot(&repository)
                 .await
                 .map_err(GitServiceError::Git)?;
@@ -852,6 +980,210 @@ impl GitService {
         self.mutate_paths(GitPathMutation::DiscardWorktree, paths)
     }
 
+    pub(crate) fn has_ai_contribution(
+        &self,
+        records: &[git_turn_changes::TurnChangeSet],
+        scope: GitCommitScope,
+        editor_evidence: &[(PathBuf, String)],
+    ) -> Result<bool, GitServiceError> {
+        self.ensure_readable()?;
+        let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
+        run(&runtime, async {
+            let repository = self.open_repository().await?;
+            let status = self
+                .canonical_client()
+                .snapshot(&repository)
+                .await
+                .map_err(GitServiceError::Git)?;
+            let prefix = self.repository_prefix(&repository)?;
+            for change in status.changes() {
+                if !change.path().starts_with(&prefix) {
+                    continue;
+                }
+                if scope == GitCommitScope::Staged
+                    && change.index_status() == ash_git::GitChangeStatus::Unmodified
+                    || scope == GitCommitScope::Tracked
+                        && change.worktree_status() == ash_git::GitChangeStatus::Untracked
+                {
+                    continue;
+                }
+                let comparison = if scope == GitCommitScope::Staged {
+                    GitChangeFileComparison::Staged
+                } else {
+                    GitChangeFileComparison::Unstaged
+                };
+                let candidate = self
+                    .client()
+                    .change_file(&repository, change, comparison, MAX_CHANGE_FILE_BYTES)
+                    .await
+                    .map_err(GitServiceError::Git)?;
+                let head = self
+                    .client()
+                    .read_file_at_revision(
+                        &repository,
+                        change.path(),
+                        ash_git::GitFileRevision::Head,
+                        MAX_CHANGE_FILE_BYTES,
+                    )
+                    .await
+                    .map_err(GitServiceError::Git)?;
+                if candidate.modified() == head.as_deref() {
+                    continue;
+                }
+                if editor_evidence.iter().any(|(path, text)| {
+                    prefix.join(path) == change.path()
+                        && candidate.modified() == Some(text.as_bytes())
+                }) {
+                    return Ok(true);
+                }
+                for record in records.iter().filter(|record| {
+                    record.worktree_root == repository.worktree_root()
+                        && record.capture_state == git_turn_changes::CaptureState::Sealed
+                        && !record.attribution_incomplete
+                }) {
+                    for file in record
+                        .files
+                        .iter()
+                        .filter(|file| file.path == change.path())
+                    {
+                        let after = match file.after_object_id.as_deref() {
+                            Some(id) => Some(
+                                self.client()
+                                    .read_blob(&repository, id, MAX_CHANGE_FILE_BYTES)
+                                    .await
+                                    .map_err(GitServiceError::Git)?
+                                    .0,
+                            ),
+                            None => None,
+                        };
+                        if candidate.modified() == after.as_deref() {
+                            return Ok(true);
+                        }
+                    }
+                }
+            }
+            Ok(false)
+        })
+    }
+    pub(crate) fn review_removal(
+        &self,
+        paths: Vec<PathBuf>,
+    ) -> Result<GitRemovalReview, GitServiceError> {
+        self.ensure_readable()?;
+        let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
+        run(&runtime, async {
+            let repository = self.open_repository().await?;
+            let normalized = self.repository_paths(&repository, paths.clone())?;
+            if normalized.paths().iter().any(|path| {
+                path.components().any(|part| {
+                    part.as_os_str()
+                        .to_str()
+                        .is_some_and(|value| value.eq_ignore_ascii_case(".git"))
+                })
+            }) {
+                return Err(GitServiceError::Boundary);
+            }
+            let snapshot = self
+                .canonical_client()
+                .snapshot(&repository)
+                .await
+                .map_err(GitServiceError::Git)?;
+            let committed = if matches!(snapshot.head(), ash_git::GitHead::Unborn { .. }) {
+                Vec::new()
+            } else {
+                self.client()
+                    .committed_paths(&repository, &normalized)
+                    .await
+                    .map_err(GitServiceError::Git)?
+            };
+            let prefix = self
+                .projection_root
+                .strip_prefix(self.dir().canonical_path())
+                .map_err(|_| GitServiceError::Boundary)?;
+            let files = ash_file_system::review_file_removals(
+                self.dir(),
+                &paths
+                    .iter()
+                    .map(|path| prefix.join(path))
+                    .collect::<Vec<_>>(),
+            )
+            .map_err(removal_error)?;
+            Ok(GitRemovalReview {
+                head: snapshot.head().clone(),
+                entries: files
+                    .into_iter()
+                    .zip(paths)
+                    .zip(normalized.paths())
+                    .map(|((mut file, path), full)| {
+                        file.path = path;
+                        GitRemovalEntry {
+                            file,
+                            committed: committed.contains(full),
+                            changed: snapshot
+                                .changes()
+                                .iter()
+                                .any(|change| change.path() == full),
+                        }
+                    })
+                    .collect(),
+            })
+        })
+    }
+    pub(crate) fn remove_files(
+        &self,
+        entries: Vec<ash_file_system::FileRemoval>,
+        mode: ash_file_system::FileRemovalMode,
+        expected_head: &ash_git::GitHead,
+    ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
+        self.ensure_mutable()?;
+        let review =
+            self.review_removal(entries.iter().map(|entry| entry.path.clone()).collect())?;
+        let same_head = match (&review.head, expected_head) {
+            (
+                ash_git::GitHead::Branch {
+                    name: a,
+                    object_id: b,
+                    ..
+                },
+                ash_git::GitHead::Branch {
+                    name: c,
+                    object_id: d,
+                    ..
+                },
+            ) => a == c && b == d,
+            (
+                ash_git::GitHead::Detached { object_id: a },
+                ash_git::GitHead::Detached { object_id: b },
+            ) => a == b,
+            (ash_git::GitHead::Unborn { name: a }, ash_git::GitHead::Unborn { name: b }) => a == b,
+            _ => false,
+        };
+        if !same_head
+            || !review
+                .entries
+                .iter()
+                .map(|entry| &entry.file)
+                .eq(entries.iter())
+        {
+            return Err(GitServiceError::ConflictChanged);
+        }
+        let prefix = self
+            .projection_root
+            .strip_prefix(self.dir().canonical_path())
+            .map_err(|_| GitServiceError::Boundary)?;
+        let entries = entries
+            .into_iter()
+            .map(|mut entry| {
+                entry.path = prefix.join(entry.path);
+                entry
+            })
+            .collect::<Vec<_>>();
+        self.ensure_mutable()?;
+        ash_file_system::remove_reviewed_files(self.dir(), &entries, mode)
+            .map_err(removal_error)?;
+        self.snapshot()
+    }
+
     pub(crate) fn commit(
         &self,
         request: GitCommitRequest,
@@ -869,12 +1201,12 @@ impl GitService {
                 return Err(GitServiceError::Boundary);
             }
             let committed = self
-                .client
+                .client()
                 .commit(&repository, &request)
                 .await
                 .map_err(GitServiceError::Git)?;
             let snapshot = self
-                .client
+                .canonical_client()
                 .snapshot(&repository)
                 .await
                 .map_err(GitServiceError::Git)?;
@@ -934,15 +1266,15 @@ impl GitService {
             let repository = self.open_repository().await?;
             let paths = self.repository_paths(&repository, paths)?;
             match operation {
-                GitPathMutation::Stage => self.client.stage(&repository, &paths).await,
-                GitPathMutation::Unstage => self.client.unstage(&repository, &paths).await,
+                GitPathMutation::Stage => self.client().stage(&repository, &paths).await,
+                GitPathMutation::Unstage => self.client().unstage(&repository, &paths).await,
                 GitPathMutation::DiscardWorktree => {
-                    self.client.discard_worktree(&repository, &paths).await
+                    self.client().discard_worktree(&repository, &paths).await
                 }
             }
             .map_err(GitServiceError::Git)?;
             let snapshot = self
-                .client
+                .canonical_client()
                 .snapshot(&repository)
                 .await
                 .map_err(GitServiceError::Git)?;
@@ -955,6 +1287,19 @@ impl GitService {
         operation: GitRemoteMutation<'_>,
         cancellation: &CancellationToken,
     ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
+        self.remote_with_options(
+            operation,
+            ash_git::GitTransportOptions::default(),
+            cancellation,
+        )
+    }
+
+    pub(crate) fn remote_with_options(
+        &self,
+        operation: GitRemoteMutation<'_>,
+        options: ash_git::GitTransportOptions,
+        cancellation: &CancellationToken,
+    ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
         self.ensure_mutable()?;
         let runtime = lock_for_request(&self.runtime, cancellation)?;
         run(
@@ -962,17 +1307,38 @@ impl GitService {
             async {
                 let repository = self.open_repository().await?;
                 match operation {
-                    GitRemoteMutation::FetchDefault => self.client.fetch_default(&repository).await,
-                    GitRemoteMutation::Fetch => self.client.fetch(&repository).await,
-                    GitRemoteMutation::FetchRemote(name) => {
-                        self.client.fetch_remote(&repository, name).await
+                    GitRemoteMutation::FetchDefault => {
+                        self.client()
+                            .fetch_with_options(&repository, None, false, options)
+                            .await
                     }
-                    GitRemoteMutation::Pull(mode) => self.client.pull(&repository, mode).await,
-                    GitRemoteMutation::Push => self.client.push(&repository).await,
+                    GitRemoteMutation::Fetch => {
+                        self.client()
+                            .fetch_with_options(&repository, None, true, options)
+                            .await
+                    }
+                    GitRemoteMutation::FetchRemote(name) => {
+                        self.client()
+                            .fetch_with_options(&repository, Some(name), false, options)
+                            .await
+                    }
+                    GitRemoteMutation::Pull(mode) => {
+                        self.client()
+                            .pull_with_options(&repository, mode, options)
+                            .await
+                    }
+                    GitRemoteMutation::Push => {
+                        self.client().push_with_options(&repository, options).await
+                    }
+                    GitRemoteMutation::PushReviewed(target) => {
+                        self.client()
+                            .push_reviewed(&repository, target, options)
+                            .await
+                    }
                 }
                 .map_err(GitServiceError::Git)?;
                 let snapshot = self
-                    .client
+                    .canonical_client()
                     .snapshot(&repository)
                     .await
                     .map_err(GitServiceError::Git)?;
@@ -984,7 +1350,7 @@ impl GitService {
     }
 
     async fn open_repository(&self) -> Result<GitRepository, GitServiceError> {
-        self.client
+        self.client()
             .open_repository(&self.projection_root)
             .await
             .map_err(GitServiceError::Git)
@@ -1082,3 +1448,7 @@ pub(crate) fn lock_for_request<'a, T>(
 #[cfg(all(test, unix))]
 #[path = "git_service_tests.rs"]
 mod tests;
+
+fn removal_error(error: std::io::Error) -> GitServiceError {
+    GitServiceError::Git(GitError::io("remove reviewed files", error))
+}

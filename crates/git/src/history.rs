@@ -88,7 +88,7 @@ impl GitClient {
                     "show",
                     "--first-parent",
                     "--numstat",
-                    "--find-renames",
+                    &self.rename_argument(),
                     "-z",
                     "--format=format:%an%x00%ae%x00%ct%x00%B%x00",
                     object_id,
@@ -141,7 +141,7 @@ impl GitClient {
                 [
                     OsString::from("diff"),
                     OsString::from("--name-status"),
-                    OsString::from("--find-renames"),
+                    OsString::from(self.rename_argument()),
                     OsString::from("-z"),
                     OsString::from(parent),
                     OsString::from(object_id),
@@ -157,7 +157,7 @@ impl GitClient {
                     OsString::from("--root"),
                     OsString::from("--no-commit-id"),
                     OsString::from("--name-status"),
-                    OsString::from("--find-renames"),
+                    OsString::from(self.rename_argument()),
                     OsString::from("-r"),
                     OsString::from("-z"),
                     OsString::from(object_id),
@@ -199,7 +199,7 @@ impl GitClient {
                 [
                     "diff",
                     "--name-status",
-                    "--find-renames",
+                    &self.rename_argument(),
                     "-z",
                     &base,
                     object_id,
@@ -439,3 +439,171 @@ pub use graph::GitReference;
 pub use graph::GitReferenceKind;
 pub use summary::GitCommitSummary;
 mod summary;
+
+/// Authorship of one line in the working tree, including uncommitted content.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GitBlameLine {
+    pub object_id: String,
+    pub author_name: String,
+    pub author_email: String,
+    pub author_time: i64,
+    pub subject: String,
+}
+
+/// One file history record with separate author and commit clocks.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GitFileHistoryItem {
+    pub path: PathBuf,
+    pub object_id: String,
+    pub author_name: String,
+    pub author_time: i64,
+    pub commit_time: i64,
+    pub subject: String,
+}
+
+impl GitClient {
+    pub async fn blame_line(
+        &self,
+        repository: &GitRepository,
+        path: &Path,
+        line: usize,
+        ignore_whitespace: bool,
+        contents: Option<&str>,
+    ) -> GitResult<GitBlameLine> {
+        crate::GitPathspecSet::new(vec![path.to_path_buf()])?;
+        if line == 0
+            || line > 10_000_000
+            || contents.is_some_and(|text| text.len() > 2 * 1024 * 1024)
+        {
+            return Err(crate::error::invalid_command(
+                "invalid blame range or contents",
+            ));
+        }
+        let mut args = vec![
+            OsString::from("blame"),
+            OsString::from("--line-porcelain"),
+            OsString::from(format!("-L{line},{line}")),
+        ];
+        if ignore_whitespace {
+            args.push(OsString::from("-w"));
+        }
+        if contents.is_some() {
+            args.extend([OsString::from("--contents"), OsString::from("-")]);
+        }
+        args.extend([OsString::from("--"), path.as_os_str().to_owned()]);
+        let output = match contents {
+            Some(text) => {
+                self.run_query_with_stdin(
+                    repository.worktree_root(),
+                    args,
+                    text.as_bytes().to_vec(),
+                )
+                .await?
+            }
+            None => self.run_query(repository.worktree_root(), args).await?,
+        }
+        .require_success()?;
+        let text = std::str::from_utf8(&output.stdout)
+            .map_err(|_| GitError::invalid_output(&output.command, "blame output is not UTF-8"))?;
+        let mut lines = text.lines();
+        let object_id = lines
+            .next()
+            .and_then(|line| line.split_whitespace().next())
+            .filter(|id| {
+                matches!(id.len(), 40 | 64) && id.bytes().all(|byte| byte.is_ascii_hexdigit())
+            })
+            .ok_or_else(|| GitError::invalid_output(&output.command, "invalid blame object"))?
+            .to_owned();
+        let mut fields = std::collections::HashMap::new();
+        for line in lines.take_while(|line| !line.starts_with('\t')) {
+            if let Some((key, value)) = line.split_once(' ') {
+                fields.insert(key, value);
+            }
+        }
+        let required = |key| {
+            fields
+                .get(key)
+                .copied()
+                .ok_or_else(|| GitError::invalid_output(&output.command, "missing blame metadata"))
+        };
+        Ok(GitBlameLine {
+            object_id,
+            author_name: required("author")?.to_owned(),
+            author_email: required("author-mail")?.trim_matches(['<', '>']).to_owned(),
+            author_time: required("author-time")?
+                .parse()
+                .map_err(|_| GitError::invalid_output(&output.command, "invalid blame time"))?,
+            subject: required("summary")?.to_owned(),
+        })
+    }
+
+    pub async fn file_history(
+        &self,
+        repository: &GitRepository,
+        path: &Path,
+    ) -> GitResult<Vec<GitFileHistoryItem>> {
+        crate::GitPathspecSet::new(vec![path.to_path_buf()])?;
+        let output = self
+            .run_query(
+                repository.worktree_root(),
+                [
+                    OsString::from("log"),
+                    OsString::from("--follow"),
+                    OsString::from("--max-count=100"),
+                    OsString::from("--format=%H%x00%an%x00%at%x00%ct%x00%s"),
+                    OsString::from("-z"),
+                    OsString::from("--"),
+                    path.as_os_str().to_owned(),
+                ],
+            )
+            .await?;
+        let text = std::str::from_utf8(&output.stdout).map_err(|_| {
+            GitError::invalid_output(&output.command, "history output is not UTF-8")
+        })?;
+        if text.is_empty() {
+            return Ok(vec![]);
+        }
+        let fields = text
+            .strip_suffix('\0')
+            .ok_or_else(|| GitError::invalid_output(&output.command, "unterminated file history"))?
+            .split('\0')
+            .collect::<Vec<_>>();
+        if fields.len() % 5 != 0 {
+            return Err(GitError::invalid_output(
+                &output.command,
+                "incomplete file history",
+            ));
+        }
+        let mut items = fields
+            .chunks_exact(5)
+            .map(|record| {
+                let time = |value: &str| {
+                    value.parse::<i64>().map_err(|_| {
+                        GitError::invalid_output(&output.command, "invalid history time")
+                    })
+                };
+                Ok(GitFileHistoryItem {
+                    path: path.to_path_buf(),
+                    object_id: record[0].to_owned(),
+                    author_name: record[1].to_owned(),
+                    author_time: time(record[2])?,
+                    commit_time: time(record[3])?,
+                    subject: record[4].to_owned(),
+                })
+            })
+            .collect::<GitResult<Vec<_>>>()?;
+        let mut current_path = path.to_path_buf();
+        for item in &mut items {
+            let (_, changes) = self.commit_changes(repository, &item.object_id).await?;
+            item.path = current_path.clone();
+            if let Some(change) = changes.iter().find(|change| change.path() == current_path) {
+                if change.status() == GitChangeStatus::Renamed {
+                    if let Some(original) = change.original_path() {
+                        current_path = original.to_path_buf();
+                    }
+                }
+            }
+        }
+        Ok(items)
+    }
+}

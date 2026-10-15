@@ -1,4 +1,4 @@
-//! Activation-scoped core services. Calls never select a window or backend connection.
+//! Activation-scoped service transport. The host fixes its client or profile binding.
 
 use crate::ExtensionError;
 use crate::HostErrorCode;
@@ -18,7 +18,7 @@ pub use external_ext_protocol::services::CoreHttpMethod;
 pub use external_ext_protocol::services::CoreServiceRequest;
 pub use external_ext_protocol::services::CoreServiceResponse;
 
-type Reply = Result<CoreServiceResponse, ExtensionError>;
+type Reply = Result<ExtensionClientResult, ExtensionError>;
 #[derive(Default)]
 struct State {
     next_id: u64,
@@ -26,7 +26,7 @@ struct State {
     pending: BTreeMap<u64, (HostEventContext, mpsc::SyncSender<Reply>)>,
 }
 
-/// A profile host grants only the closed service contract and its namespace.
+/// Hosts grant only their closed service contracts and namespaces.
 /// Clones share the activation fence and are retired together when the runtime closes.
 #[derive(Clone)]
 pub struct Services {
@@ -51,7 +51,13 @@ impl Services {
             ..self.clone()
         }
     }
-    pub fn call(&self, request: CoreServiceRequest) -> Reply {
+    pub fn call(&self, request: CoreServiceRequest) -> Result<CoreServiceResponse, ExtensionError> {
+        match self.call_operation(ExtensionClientOperation::CoreService { request })? {
+            ExtensionClientResult::CoreService { response } => Ok(response),
+            _ => Err(unavailable()),
+        }
+    }
+    pub(crate) fn call_operation(&self, operation: ExtensionClientOperation) -> Reply {
         let context = self.context.ok_or_else(unavailable)?;
         let (sender, receiver) = mpsc::sync_channel(1);
         let (call_id, written) = {
@@ -69,7 +75,7 @@ impl Services {
                 .write(&ExtensionBackgroundClientRequest {
                     context,
                     call_id: id,
-                    operation: ExtensionClientOperation::CoreService { request },
+                    operation,
                 })
                 .map_err(|_| unavailable());
             (id, written)
@@ -105,11 +111,7 @@ impl Services {
         }
         let outcome = response
             .outcome
-            .map_err(|error| ExtensionError::new(error.code, error.message))
-            .and_then(|result| match result {
-                ExtensionClientResult::CoreService { response } => Ok(response),
-                _ => Err(unavailable()),
-            });
+            .map_err(|error| ExtensionError::new(error.code, error.message));
         let _ = sender.send(outcome);
         Ok(())
     }

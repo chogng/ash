@@ -51,7 +51,6 @@ import { Separator, type IAction } from '../../../../../base/common/actions.js';
 import type { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import type { IContextMenuService as ContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import type { ILocalizationService } from '../../../../services/localization/common/localizationService.js';
-import type { IGitService } from '../../../../../../../extensions/git/browser/types.js';
 import type { IChatService } from '../../../../services/chat/common/chatService.js';
 import type { IAppServerRemoteAgentService } from '../../../../services/remote/common/appServerRemoteAgentService.js';
 import type { RemoteAgentConnection } from '../../../../../platform/remote/common/remoteAgentApi.js';
@@ -125,7 +124,7 @@ const { EditorSelectionConfiguration } = await import('../../../../common/editor
 const { CodeEditorConfiguration } = await import('../../../codeEditor/common/editorConfiguration.js');
 const { EDITOR_FONT_DEFAULTS } = await import('../../../../../editor/common/config/fontInfo.js');
 const { ContentSearchConfiguration } = await import('../../../search/common/searchConfiguration.js');
-const { GitConfiguration } = await import('../../../../../../../extensions/git/browser/configuration.js');
+const GitConfiguration = { autofetch: 'git.autofetch', autofetchPeriod: 'git.autofetchPeriod', rebaseWhenSync: 'git.rebaseWhenSync' };
 await import('../../../scm/browser/scm.contribution.js');
 
 const { IChatService: ChatServiceId } = await import('../../../../services/chat/common/chatService.js');
@@ -400,7 +399,7 @@ test('Built-in Git, Markdown and Media settings localize, persist and reset thro
 	const defaults = new DefaultSettings(registry);
 	const layout = createSettingsLayout(defaults.all);
 	assert.deepEqual(layout.filter(category => category.id.startsWith('extension.')).map(category => [category.id, category.groups.flatMap(group => group.settings).length]), [
-		['extension.ash.git', 23], ['extension.vscode.markdown-language-features', 13], ['extension.ash.media-preview', 2],
+		['extension.ash.git', 105], ['extension.vscode.markdown-language-features', 13], ['extension.ash.media-preview', 2],
 	]);
 	assert.equal(defaults.get('mediaPreview.video.loop').title, '循环播放视频');
 	assert.equal(defaults.get('markdown.validate.enabled').title, '检查链接');
@@ -1365,7 +1364,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		setAutoFetch: async (value: false | true | 'all') => { autoFetch = value; autoFetchChanged.fire(); },
 		setAutoFetchPeriod: async (value: number) => { autoFetchPeriod = value; autoFetchChanged.fire(); },
 		setRebaseWhenSync: async (value: boolean) => { rebaseWhenSync = value; autoFetchChanged.fire(); },
-	} as IGitService;
+	};
 	const model = { provider: 'openai', model: 'gpt-test' };
 	const modelsChanged = disposables.add(new Emitter<void>());
 	let modelVisible = true;

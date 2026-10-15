@@ -54,7 +54,10 @@ impl RuntimeInner {
         }
         source_snapshot
             .deployments
-            .extend(source::built_in_deployments(self.built_in_extensions)?);
+            .extend(source::built_in_deployments(
+                self.built_in_extensions,
+                self.extension_packages_admission.clone(),
+            )?);
         source_snapshot
             .deployments
             .sort_by(|left, right| left.id.cmp(&right.id));
@@ -118,7 +121,12 @@ impl RuntimeInner {
         generation: NonZeroU64,
     ) -> RuntimeEntry {
         let version = deployment.version.clone();
-        let node_deployment = deployment.command.is_vscode().then(|| deployment.clone());
+        let window_scoped = deployment.command.is_vscode()
+            || deployment
+                .params
+                .capabilities
+                .contains(&ash_external_ext::ExtensionCapability::SourceControl);
+        let window_deployment = window_scoped.then(|| deployment.clone());
         let fallback = ExtensionHostExtensionSnapshot {
             id: deployment.id.clone(),
             version: version.clone(),
@@ -146,13 +154,25 @@ impl RuntimeInner {
                     incarnation: None,
                 }),
                 pending_activation: None,
-                node_client: super::NodeClientScope::Unsupported,
-                node_deployment,
+                client_scope: super::EditorClientScope::Unsupported,
+                window_deployment,
             };
         }
         let prepared = prepare_extension(authorization, deployment, generation);
         let supervisor = prepared.and_then(|prepared| {
             let mut limits = self.limits.clone();
+            if let Some(protocol) = deployment.protocol_limits {
+                if deployment.scope != source::EditorExtensionScope::Product
+                    || protocol.maximum_frame_bytes > 32 * 1024 * 1024
+                    || protocol.maximum_payload_bytes > 24 * 1024 * 1024
+                {
+                    return Err(ExtensionHostError::InvalidLimits(
+                        "invalid product protocol grant",
+                    ));
+                }
+                limits.maximum_frame_bytes = protocol.maximum_frame_bytes;
+                limits.maximum_payload_bytes = protocol.maximum_payload_bytes;
+            }
             let mut launcher = Arc::clone(&self.launcher);
             if deployment.scope == source::EditorExtensionScope::Product
                 && !prepared.command.is_javascript()
@@ -206,7 +226,7 @@ impl RuntimeInner {
         match supervisor {
             Ok(supervisor) => {
                 let pending_activation =
-                    if deployment.command.is_vscode() {
+                    if window_scoped {
                         Some(deployment.activation.clone().unwrap_or_else(|| {
                             source::ActivationPlan {
                                 events: Vec::new(),
@@ -235,11 +255,11 @@ impl RuntimeInner {
                     fallback,
                     failure,
                     pending_activation,
-                    node_deployment,
-                    node_client: if deployment.command.is_vscode() {
-                        super::NodeClientScope::Pending
+                    window_deployment,
+                    client_scope: if window_scoped {
+                        super::EditorClientScope::Pending
                     } else {
-                        super::NodeClientScope::Unsupported
+                        super::EditorClientScope::Unsupported
                     },
                 }
             }
@@ -251,8 +271,8 @@ impl RuntimeInner {
                 fallback,
                 failure: Some(runtime_failure(&error, None)),
                 pending_activation: None,
-                node_client: super::NodeClientScope::Unsupported,
-                node_deployment,
+                client_scope: super::EditorClientScope::Unsupported,
+                window_deployment,
             },
         }
     }
@@ -276,7 +296,7 @@ impl RuntimeInner {
             if base.fallback.activation_generation != generation {
                 return Err(ExtensionHostRuntimeError::Stale);
             }
-            let Some(deployment) = &base.node_deployment else {
+            let Some(deployment) = &base.window_deployment else {
                 return Ok(());
             };
             // Connection IDs are assigned by the transport. A retired window cannot resurrect
@@ -307,7 +327,7 @@ impl RuntimeInner {
             &recipe.1,
             NonZeroU64::new(generation).ok_or(ExtensionHostRuntimeError::Stale)?,
         );
-        entry.node_deployment = None;
+        entry.window_deployment = None;
         self.state
             .lock()
             .map_err(|_| ExtensionHostRuntimeError::Internal)?

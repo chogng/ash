@@ -89,6 +89,286 @@ use worktree::WorktreeSelector;
 const MAX_GIT_GRAPH_PAGE_SIZE: usize = 1000;
 
 impl AppServer {
+    pub(super) fn git_ai_contribution(&self, value: &Value) -> Result<Value, RpcError> {
+        use ash_app_server_protocol::protocol::git::GitAIContributionParams;
+        use ash_app_server_protocol::protocol::git::GitAIContributionResult;
+        let params: GitAIContributionParams = decode(value)?;
+        if params.editor_evidence.len() > 100
+            || params
+                .editor_evidence
+                .iter()
+                .map(|entry| entry.text.len())
+                .sum::<usize>()
+                > 256 * 1024
+        {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let evidence = params
+            .editor_evidence
+            .into_iter()
+            .map(|entry| Ok((paths(vec![entry.path])?.remove(0), entry.text)))
+            .collect::<Result<Vec<_>, RpcError>>()?;
+        let scope = match params.scope {
+            GitCommitScopeDto::Staged => crate::git_service::GitCommitScope::Staged,
+            GitCommitScopeDto::Tracked => crate::git_service::GitCommitScope::Tracked,
+            GitCommitScopeDto::IncludeUntracked => {
+                crate::git_service::GitCommitScope::IncludeUntracked
+            }
+        };
+        let (root, present) = self
+            .git_runtime_service()?
+            .ai_contribution_for(
+                params.repository_id.as_deref(),
+                self.git_turn_changes
+                    .as_ref()
+                    .map(|runtime| runtime.store().as_ref()),
+                scope,
+                &evidence,
+            )
+            .map_err(git_error)?;
+        let co_author = if present {
+            self.git_attribution_policy
+                .as_ref()
+                .map(|policy| policy.repository_co_author(&root))
+                .transpose()
+                .map_err(|_| RpcError::new(-32603, AppServerErrorName::InternalError))?
+                .flatten()
+        } else {
+            None
+        };
+        result(&GitAIContributionResult { present, co_author })
+    }
+    pub(super) fn git_review_removal(&self, value: &Value) -> Result<Value, RpcError> {
+        use ash_app_server_protocol::protocol::git::GitRemovalEntryDto;
+        use ash_app_server_protocol::protocol::git::GitRemovalFileDto;
+        use ash_app_server_protocol::protocol::git::GitRemovalReviewResult;
+        let params: GitPathsParams = decode(value)?;
+        let review = self
+            .git_runtime_service()?
+            .review_removal_for(params.repository_id.as_deref(), paths(params.paths)?)
+            .map_err(git_error)?;
+        result(&GitRemovalReviewResult {
+            head: super::git_runtime::head(&review.head),
+            entries: review
+                .entries
+                .into_iter()
+                .map(|entry| {
+                    Ok(GitRemovalEntryDto {
+                        file: GitRemovalFileDto {
+                            path: worktree_path(&entry.file.path)?,
+                            revision: entry.file.revision,
+                        },
+                        committed: entry.committed,
+                        changed: entry.changed,
+                    })
+                })
+                .collect::<Result<Vec<_>, RpcError>>()?,
+        })
+    }
+    pub(super) fn git_remove_files(&self, value: &Value) -> Result<Value, RpcError> {
+        use ash_app_server_protocol::protocol::git::GitRemovalModeDto;
+        use ash_app_server_protocol::protocol::git::GitRemoveFilesParams;
+        let params: GitRemoveFilesParams = decode(value)?;
+        if params.entries.is_empty()
+            || params.entries.len() > 5000
+            || params.entries.iter().any(|entry| {
+                entry.revision.len() != 64
+                    || !entry.revision.bytes().all(|byte| byte.is_ascii_hexdigit())
+            })
+        {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let entries = params
+            .entries
+            .into_iter()
+            .map(|entry| {
+                Ok(ash_file_system::FileRemoval {
+                    path: paths(vec![entry.path])?.remove(0),
+                    revision: entry.revision,
+                })
+            })
+            .collect::<Result<Vec<_>, RpcError>>()?;
+        let head = match params.expected_head {
+            GitHeadDto::Branch {
+                name, object_id, ..
+            } => ash_git::GitHead::Branch {
+                name,
+                object_id,
+                upstream: None,
+            },
+            GitHeadDto::Detached { object_id } => ash_git::GitHead::Detached { object_id },
+            GitHeadDto::Unborn { name } => ash_git::GitHead::Unborn { name },
+        };
+        let mode = match params.mode {
+            GitRemovalModeDto::Trash => ash_file_system::FileRemovalMode::Trash,
+            GitRemovalModeDto::Permanent => ash_file_system::FileRemovalMode::Permanent,
+        };
+        let status = self
+            .git_runtime_service()?
+            .remove_files_for(params.repository_id.as_deref(), entries, mode, &head)
+            .map_err(git_error)?;
+        result(&GitOperationResult { status })
+    }
+    pub(super) fn git_transport(
+        &self,
+        value: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
+        use crate::git_service::GitRemoteMutation;
+        use ash_app_server_protocol::protocol::git::GitTransportOperationDto;
+        use ash_app_server_protocol::protocol::git::GitTransportParams;
+        let params: GitTransportParams = decode(value)?;
+        let target = match &params.operation {
+            GitTransportOperationDto::Push {
+                expected_head:
+                    GitHeadDto::Branch {
+                        name,
+                        object_id,
+                        upstream: Some(upstream),
+                    },
+            } => Some(ash_git::GitPushTarget {
+                branch: name.clone(),
+                object_id: object_id.clone(),
+                upstream: upstream.name.clone(),
+            }),
+            GitTransportOperationDto::Push { .. } => {
+                return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+            }
+            GitTransportOperationDto::Fetch { .. } | GitTransportOperationDto::Pull { .. } => None,
+        };
+        let operation = match &params.operation {
+            GitTransportOperationDto::Fetch { mode } => match mode {
+                GitFetchModeDto::Default => GitRemoteMutation::FetchDefault,
+                GitFetchModeDto::All => GitRemoteMutation::Fetch,
+                GitFetchModeDto::Remote(name) => GitRemoteMutation::FetchRemote(name),
+            },
+            GitTransportOperationDto::Pull { mode } => {
+                GitRemoteMutation::Pull(self.resolve_pull_mode(*mode)?)
+            }
+            GitTransportOperationDto::Push { .. } => {
+                GitRemoteMutation::PushReviewed(target.as_ref().expect("validated push target"))
+            }
+        };
+        let status = self
+            .git_runtime_service()?
+            .transport_for(
+                params.repository_id.as_deref(),
+                operation,
+                transport_options(params.transport),
+                cancellation,
+            )
+            .map_err(git_error)?;
+        result(&GitOperationResult { status })
+    }
+    fn resolve_pull_mode(&self, mode: GitPullModeDto) -> Result<GitPullMode, RpcError> {
+        Ok(match mode {
+            GitPullModeDto::Configured => GitPullMode::Configured,
+            GitPullModeDto::Rebase => GitPullMode::Rebase,
+            GitPullModeDto::Sync => {
+                let snapshot = self
+                    .config
+                    .as_ref()
+                    .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?
+                    .read_snapshot()
+                    .map_err(super::config_operations::config_error)?;
+                if snapshot.values.git.rebase_when_sync {
+                    GitPullMode::Rebase
+                } else {
+                    GitPullMode::Configured
+                }
+            }
+        })
+    }
+
+    pub(super) fn git_version(&self, value: &Value) -> Result<Value, RpcError> {
+        use ash_app_server_protocol::protocol::git::GitInstallationDto;
+        use ash_app_server_protocol::protocol::git::GitVersionResult;
+        let _: GitRepositoryParams = decode(value)?;
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|_| RpcError::new(-32603, AppServerErrorName::InternalError))?;
+        let installation = match runtime.block_on(crate::git_service::current_client().version()) {
+            Ok(version) => GitInstallationDto::Available {
+                version: version.display,
+                major: version.major,
+                minor: version.minor,
+                patch: version.patch,
+            },
+            Err(GitError::Io { source, .. }) if source.kind() == std::io::ErrorKind::NotFound => {
+                GitInstallationDto::Missing
+            }
+            Err(error) => {
+                return Err(git_error(GitRuntimeError::Service(GitServiceError::Git(
+                    error,
+                ))));
+            }
+        };
+        result(&GitVersionResult {
+            installation,
+            windows: cfg!(windows),
+        })
+    }
+    pub(super) fn git_pull_preflight(&self, value: &Value) -> Result<Value, RpcError> {
+        use ash_app_server_protocol::protocol::git::GitPullPreflightResult;
+        let params: GitRepositoryParams = decode(value)?;
+        result(&GitPullPreflightResult {
+            upstream_rewritten: self
+                .git_runtime_service()?
+                .pull_upstream_was_rewritten_for(params.repository_id.as_deref())
+                .map_err(git_error)?,
+        })
+    }
+
+    pub(super) fn git_blame(&self, value: &Value) -> Result<Value, RpcError> {
+        use ash_app_server_protocol::protocol::git::{GitBlameParams, GitBlameResult};
+        let params: GitBlameParams = decode(value)?;
+        let path = paths(vec![params.path])?.remove(0);
+        let line = self
+            .git_runtime_service()?
+            .blame_for(
+                params.repository_id.as_deref(),
+                &path,
+                params.line,
+                params.ignore_whitespace,
+                params.contents.as_deref(),
+            )
+            .map_err(git_error)?;
+        result(&GitBlameResult {
+            object_id: line.object_id,
+            author_name: line.author_name,
+            author_email: line.author_email,
+            author_time: line.author_time,
+            subject: line.subject,
+        })
+    }
+    pub(super) fn git_file_history(&self, value: &Value) -> Result<Value, RpcError> {
+        use ash_app_server_protocol::protocol::git::{
+            GitFileHistoryItemDto, GitFileHistoryParams, GitFileHistoryResult,
+        };
+        let params: GitFileHistoryParams = decode(value)?;
+        let path = paths(vec![params.path])?.remove(0);
+        let items = self
+            .git_runtime_service()?
+            .file_history_for(params.repository_id.as_deref(), &path)
+            .map_err(git_error)?;
+        result(&GitFileHistoryResult {
+            items: items
+                .into_iter()
+                .map(|item| {
+                    Ok(GitFileHistoryItemDto {
+                        path: worktree_path(&item.path)?,
+                        object_id: item.object_id,
+                        author_name: item.author_name,
+                        author_time: item.author_time,
+                        commit_time: item.commit_time,
+                        subject: item.subject,
+                    })
+                })
+                .collect::<Result<Vec<_>, RpcError>>()?,
+        })
+    }
+
     pub(super) fn git_catalog(&self, value: &Value) -> Result<Value, RpcError> {
         let params: GitRepositoryParams = decode(value)?;
         let catalog = self
@@ -217,7 +497,7 @@ impl AppServer {
             .map_err(|_| git_error(GitRuntimeError::Service(GitServiceError::Runtime)))?;
         let path = runtime
             .block_on(
-                ash_git::GitClient::system()
+                crate::git_service::current_client()
                     .clone_repository(&params.url, parent)
                     .with_cancellation(cancellation.clone()),
             )
@@ -250,7 +530,7 @@ impl AppServer {
             .map_err(|_| git_error(GitRuntimeError::Service(GitServiceError::Runtime)))?;
         let path = runtime
             .block_on(
-                ash_git::GitClient::system()
+                crate::git_service::current_client()
                     .clone_repository_to(
                         &params.url,
                         Path::new(&params.target_path),
@@ -286,17 +566,71 @@ impl AppServer {
         result(&GitCloneCancelResult {})
     }
 
-    pub(super) fn git_repositories(&self) -> Result<Value, RpcError> {
-        result(&self.git_runtime_service()?.repositories())
+    pub(super) fn git_repositories(
+        &self,
+        connection: &ConnectionState,
+        value: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: ash_app_server_protocol::protocol::git::GitDiscoveryParams = decode(value)?;
+        let folders = params
+            .folders
+            .map(|folders| {
+                folders
+                    .into_iter()
+                    .map(|folder| {
+                        if !(-1..=64).contains(&folder.max_depth)
+                            || folder.ignored_folders.len() > 256
+                            || folder.scan_repositories.len() > 256
+                            || folder.submodule_limit > 1024
+                            || folder.worktree_limit > 1024
+                            || folder
+                                .scan_repositories
+                                .iter()
+                                .any(|path| path.len() > 32768 || path.contains('\0'))
+                            || folder
+                                .ignored_folders
+                                .iter()
+                                .any(|name| name.len() > 1024 || name.contains(['/', '\\', '\0']))
+                        {
+                            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+                        }
+                        Ok(super::git_runtime::GitDiscoveryOptions {
+                            dir_id: folder.dir_id,
+                            max_depth: folder.max_depth,
+                            ignored_folders: folder.ignored_folders,
+                            scan_repositories: folder.scan_repositories,
+                            detect_submodules: folder.detect_submodules,
+                            submodule_limit: folder.submodule_limit,
+                            detect_worktrees: folder.detect_worktrees,
+                            worktree_limit: folder.worktree_limit,
+                        })
+                    })
+                    .collect::<Result<Vec<_>, RpcError>>()
+            })
+            .transpose()?;
+        result(
+            &self
+                .git_runtime_service()?
+                .discover_for(connection.connection_id, folders)
+                .map_err(git_error)?,
+        )
     }
 
     pub(super) fn git_status(&self, value: &Value) -> Result<Value, RpcError> {
         let params: GitRepositoryParams = decode(value)?;
+        let runtime = self.git_runtime_service()?;
+        let view = params
+            .client
+            .as_ref()
+            .and_then(|client| client.similarity_threshold)
+            .is_some_and(|threshold| threshold != 50);
         result(
-            &self
-                .git_runtime_service()?
-                .status_for(params.repository_id.as_deref())
-                .map_err(git_error)?,
+            &if view {
+                runtime.status_view_for(params.repository_id.as_deref())
+            } else {
+                runtime.status_for(params.repository_id.as_deref())
+            }
+            .map_err(git_error)?,
         )
     }
 
@@ -554,7 +888,15 @@ impl AppServer {
         }
         let status = self
             .git_runtime_service()?
-            .switch_branch_for(params.repository_id.as_deref(), &params.name)
+            .switch_branch_for(
+                params.repository_id.as_deref(),
+                &params.name,
+                if params.pull_before_checkout == Some(true) {
+                    ash_git::GitCheckoutPolicy::FastForward
+                } else {
+                    ash_git::GitCheckoutPolicy::Keep
+                },
+            )
             .map_err(git_error)?;
         result(&GitOperationResult { status })
     }
@@ -603,7 +945,14 @@ impl AppServer {
             .ok_or_else(|| RpcError::new(-32060, AppServerErrorName::GitUnavailable))?;
         let path = dirs
             .runtime
-            .block_on(dirs.worktrees.create_unbound(&source, &params.name))
+            .block_on(dirs.worktrees.create_unbound_with_options(
+                &source,
+                &params.name,
+                &worktree::WorktreePopulationOptions {
+                    include_files: params.include_files,
+                    symlink_folders: params.symlink_folders,
+                },
+            ))
             .map_err(|_| RpcError::new(-32061, AppServerErrorName::GitOperationFailed))?;
         // List results use canonical paths; match that spelling so the new checkout is selected.
         let path = dunce::canonicalize(path)
@@ -822,6 +1171,20 @@ impl AppServer {
             GitEmptyCommitPolicyDto::Reject => request,
             GitEmptyCommitPolicyDto::Allow => request.allow_empty(),
         };
+        let request = match params.hooks {
+            Some(ash_app_server_protocol::protocol::git::GitCommitHooksDto::Run) => {
+                request.run_hooks()
+            }
+            Some(ash_app_server_protocol::protocol::git::GitCommitHooksDto::Skip) | None => request,
+        };
+        let request = match params.identity {
+            Some(ash_app_server_protocol::protocol::git::GitCommitIdentityDto::Configured) => {
+                request.require_configured_identity()
+            }
+            Some(ash_app_server_protocol::protocol::git::GitCommitIdentityDto::Inferred) | None => {
+                request
+            }
+        };
         let request = match params.expected_head {
             Some(head) => {
                 let head = match head {
@@ -857,14 +1220,25 @@ impl AppServer {
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: GitFetchParams = decode(value)?;
-        let status = self
-            .git_runtime_service()?
-            .fetch_for(
+        let runtime = self.git_runtime_service()?;
+        let mode = params.mode.unwrap_or(GitFetchModeDto::All);
+        let status = if let Some(options) = params.transport {
+            use crate::git_service::GitRemoteMutation;
+            let operation = match &mode {
+                GitFetchModeDto::Default => GitRemoteMutation::FetchDefault,
+                GitFetchModeDto::All => GitRemoteMutation::Fetch,
+                GitFetchModeDto::Remote(name) => GitRemoteMutation::FetchRemote(name),
+            };
+            runtime.transport_for(
                 params.repository_id.as_deref(),
-                params.mode.unwrap_or(GitFetchModeDto::All),
+                operation,
+                transport_options(options),
                 cancellation,
             )
-            .map_err(git_error)?;
+        } else {
+            runtime.fetch_for(params.repository_id.as_deref(), mode, cancellation)
+        }
+        .map_err(git_error)?;
         result(&GitOperationResult { status })
     }
 
@@ -874,27 +1248,19 @@ impl AppServer {
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: GitPullParams = decode(value)?;
-        let mode = match params.mode.unwrap_or_default() {
-            GitPullModeDto::Configured => GitPullMode::Configured,
-            GitPullModeDto::Rebase => GitPullMode::Rebase,
-            GitPullModeDto::Sync => {
-                let snapshot = self
-                    .config
-                    .as_ref()
-                    .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?
-                    .read_snapshot()
-                    .map_err(super::config_operations::config_error)?;
-                if snapshot.values.git.rebase_when_sync {
-                    GitPullMode::Rebase
-                } else {
-                    GitPullMode::Configured
-                }
-            }
-        };
-        let status = self
-            .git_runtime_service()?
-            .pull_for(params.repository_id.as_deref(), mode, cancellation)
-            .map_err(git_error)?;
+        let mode = self.resolve_pull_mode(params.mode.unwrap_or_default())?;
+        let runtime = self.git_runtime_service()?;
+        let status = if let Some(options) = params.transport {
+            runtime.transport_for(
+                params.repository_id.as_deref(),
+                crate::git_service::GitRemoteMutation::Pull(mode),
+                transport_options(options),
+                cancellation,
+            )
+        } else {
+            runtime.pull_for(params.repository_id.as_deref(), mode, cancellation)
+        }
+        .map_err(git_error)?;
         result(&GitOperationResult { status })
     }
 
@@ -904,10 +1270,18 @@ impl AppServer {
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: GitRepositoryParams = decode(value)?;
-        let status = self
-            .git_runtime_service()?
-            .push_for(params.repository_id.as_deref(), cancellation)
-            .map_err(git_error)?;
+        let runtime = self.git_runtime_service()?;
+        let status = if let Some(options) = params.transport {
+            runtime.transport_for(
+                params.repository_id.as_deref(),
+                crate::git_service::GitRemoteMutation::Push,
+                transport_options(options),
+                cancellation,
+            )
+        } else {
+            runtime.push_for(params.repository_id.as_deref(), cancellation)
+        }
+        .map_err(git_error)?;
         result(&GitOperationResult { status })
     }
 }
@@ -1099,4 +1473,83 @@ fn command(command: GitCommandDto) -> ash_git::GitCommand {
             ash_git::GitCommand::UndoCommit { expected_head }
         }
     }
+}
+
+fn transport_options(
+    value: ash_app_server_protocol::protocol::git::GitTransportOptionsDto,
+) -> ash_git::GitTransportOptions {
+    use ash_app_server_protocol::protocol::git::GitPushModeDto;
+    ash_git::GitTransportOptions {
+        prune: value.prune,
+        tag_policy: if value.pull_tags {
+            ash_git::GitTagPolicy::Include
+        } else {
+            ash_git::GitTagPolicy::Exclude
+        },
+        replace_tags: value.replace_tags,
+        auto_stash: value.auto_stash,
+        follow_tags: value.follow_tags,
+        push_mode: match value.push_mode {
+            GitPushModeDto::Normal => ash_git::GitPushMode::Normal,
+            GitPushModeDto::Force => ash_git::GitPushMode::Force,
+            GitPushModeDto::Lease => ash_git::GitPushMode::Lease,
+            GitPushModeDto::LeaseIfIncludes => ash_git::GitPushMode::LeaseIfIncludes,
+        },
+    }
+}
+
+pub(super) fn request_client(value: &Value) -> Result<Option<ash_git::GitClient>, RpcError> {
+    let Some(value) = value.get("client").filter(|value| !value.is_null()) else {
+        return Ok(None);
+    };
+    let options: ash_app_server_protocol::protocol::git::GitClientOptionsDto = decode(value)?;
+    if options.paths.len() > 16
+        || options
+            .paths
+            .iter()
+            .any(|path| path.len() > 32768 || path.contains('\0') || !Path::new(path).is_absolute())
+    {
+        return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+    }
+    let client = if options.paths.is_empty() {
+        ash_git::GitClient::system()
+    } else {
+        let path = options
+            .paths
+            .iter()
+            .find(|path| Path::new(path).is_file())
+            .unwrap_or(&options.paths[0]);
+        ash_git::GitClient::with_executable(
+            PathBuf::from(path),
+            ash_git::GitExecutionLimits::default(),
+        )
+        .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?
+    };
+    let client = if let Some(interaction) = options.interaction {
+        let address = interaction
+            .address
+            .parse()
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        let current = std::env::current_exe()
+            .map_err(|_| RpcError::new(-32603, AppServerErrorName::InternalError))?;
+        let helper = current
+            .parent()
+            .ok_or_else(|| RpcError::new(-32603, AppServerErrorName::InternalError))?
+            .join(format!("ash-git-extension{}", std::env::consts::EXE_SUFFIX));
+        client
+            .with_askpass(ash_git::GitAskPass {
+                program: helper,
+                address,
+                token: interaction.token,
+                scope: interaction.scope,
+            })
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?
+    } else {
+        client
+    };
+    Ok(Some(
+        client
+            .with_similarity_threshold(options.similarity_threshold.unwrap_or(50))
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?,
+    ))
 }

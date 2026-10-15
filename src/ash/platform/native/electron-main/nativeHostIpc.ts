@@ -61,7 +61,7 @@ export interface INativeHostMainService {
 	performShellCommand(operation: ShellCommandOperation): Promise<string>;
 	pickFolder(): Promise<string | undefined>;
 	showOpenDialog(options: OpenDialogOptions): Promise<OpenDialogReturnValue>;
-	openWorkspace(root: string): Promise<void>;
+	openWorkspace(root: string, forceNewWindow?: boolean): Promise<void>;
 	openWindow(options: IOpenEmptyWindowOptions): Promise<void>;
 	openAgentsWindow(options?: IOpenAgentsWindowOptions): Promise<void>;
 	getAgentHostEditorState(): IAgentHostEditorState;
@@ -132,7 +132,7 @@ export function nativeHostIpcRoutes(
 		{
 			channel: NATIVE_HOST_OPEN_WORKSPACE_CHANNEL,
 			validate: validateOpenWorkspace,
-			invoke: (root) => service.openWorkspace(root as string),
+			invoke: value => { const request = value as ReturnType<typeof validateOpenWorkspace>; return service.openWorkspace(request.root, request.forceNewWindow); },
 		},
 		{
 			channel: NATIVE_HOST_OPEN_WINDOW_CHANNEL,

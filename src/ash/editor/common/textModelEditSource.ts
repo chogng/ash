@@ -73,6 +73,7 @@ export function isAiEdit(source: TextModelEditSource): boolean {
 		case 'inlineChat.applyEdits':
 		case 'Chat.applyEdits':
 			return true;
+		case 'codeAction': return source.metadata.$isAI === true;
 	}
 	return false;
 }
@@ -194,7 +195,7 @@ export const EditSources = {
 	snippet: () => createEditSource({ source: 'snippet' } as const),
 	suggest: (data: { providerId: ProviderId | undefined; }) => createEditSource({ source: 'suggest', ...toProperties(data.providerId) } as const),
 
-	codeAction: (data: { kind: string | undefined; providerId: ProviderId | undefined; }) => createEditSource({ source: 'codeAction', $kind: data.kind, ...toProperties(data.providerId) } as const)
+	codeAction: (data: { kind: string | undefined; providerId: ProviderId | undefined; isAI?: boolean; }) => createEditSource({ source: 'codeAction', $isAI: data.isAI, $kind: data.kind, ...toProperties(data.providerId) } as const)
 };
 
 function toProperties(version: ProviderId | undefined) {

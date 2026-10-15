@@ -151,6 +151,24 @@ use crate::protocol::extension_packages::ExtensionsSourcesResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::{ExtensionRegistryKindDto, ExtensionsSourceDto};
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitAIContributionParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitAIContributionResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitAIEditorEvidenceDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitInteractionDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitRemovalEntryDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitRemovalFileDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitRemovalModeDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitRemovalReviewResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitRemoveFilesParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::message_history::MessageHistoryAppendParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::message_history::MessageHistoryEntry;
@@ -233,6 +251,8 @@ use external_ext_protocol::ExtensionHostInitialization;
 use external_ext_protocol::ExtensionLocalization;
 #[cfg(any(test, feature = "export"))]
 use external_ext_protocol::ExtensionMessageSeverity;
+#[cfg(any(test, feature = "export"))]
+use external_ext_protocol::ExtensionProgressOptions;
 #[cfg(any(test, feature = "export"))]
 use external_ext_protocol::ExtensionQuickPickItem;
 #[cfg(any(test, feature = "export"))]
@@ -959,6 +979,10 @@ use crate::protocol::fs::FsWriteFileParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsWriteFileResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitBlameParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitBlameResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitBranchCreateParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitBranchDeleteParams;
@@ -988,6 +1012,8 @@ use crate::protocol::git::GitCheckIgnoreCancelStatusDto;
 use crate::protocol::git::GitCheckIgnoreParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCheckIgnoreResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitClientOptionsDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCloneCancelParams;
 #[cfg(any(test, feature = "export"))]
@@ -1020,6 +1046,10 @@ use crate::protocol::git::GitCommitFileContentDto;
 use crate::protocol::git::GitCommitFileParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCommitFileResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitCommitHooksDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitCommitIdentityDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCommitMessageResult;
 #[cfg(any(test, feature = "export"))]
@@ -1055,11 +1085,21 @@ use crate::protocol::git::GitConflictResolutionDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitDiffStatisticsDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitDiscoveryFolderDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitDiscoveryParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitEmptyCommitPolicyDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitFetchModeDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitFetchParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitFileHistoryItemDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitFileHistoryParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitFileHistoryResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitGraphParams;
 #[cfg(any(test, feature = "export"))]
@@ -1082,6 +1122,8 @@ use crate::protocol::git::GitIndexSelectionDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitInitParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitInstallationDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitIntegrationDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitNamedRefDto;
@@ -1093,6 +1135,10 @@ use crate::protocol::git::GitPathsParams;
 use crate::protocol::git::GitPullModeDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitPullParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitPullPreflightResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitPushModeDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitReferenceDto;
 #[cfg(any(test, feature = "export"))]
@@ -1125,7 +1171,15 @@ use crate::protocol::git::GitTextDiffDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitTextDiffResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitTransportOperationDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitTransportOptionsDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitTransportParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitUpstreamDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitVersionResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitWorktreeCreateParams;
 #[cfg(any(test, feature = "export"))]
@@ -4830,9 +4884,9 @@ client_methods! {
     GitIndexDiff => "git/indexDiff" { params: GitChangeFileParams, response: GitIndexDiffResult, serialization: RepositoryExclusive, },
     GitIndexEdit => "git/indexEdit" { params: GitIndexEditParams, response: GitOperationResult, serialization: RepositoryExclusive, },
     GitRepositories => "git/repositories" {
-        params: EmptyParams,
+        params: GitDiscoveryParams,
         response: GitRepositoriesResult,
-        serialization: GlobalSharedRead,
+        serialization: ConnectionExclusive("gitDiscovery"),
     },
     GitClone => "git/clone" {
         params: GitCloneParams,
@@ -4852,6 +4906,12 @@ client_methods! {
     },
     // Reads update status caches and graph cursors and use the Git operation lock too. Admit
     // every repository operation before execution so workers never queue behind another RPC.
+    GitTransport => "git/transport" { params: GitTransportParams, response: GitOperationResult, serialization: RepositoryExclusive, cancellation: "operationId", },
+    GitTransportCancel => "git/transport/cancel" { params: GitCheckIgnoreCancelParams, response: GitCheckIgnoreCancelResult, serialization: None, },
+    GitVersion => "git/version" { params: GitRepositoryParams, response: GitVersionResult, serialization: None, },
+    GitPullPreflight => "git/pullPreflight" { params: GitRepositoryParams, response: GitPullPreflightResult, serialization: RepositoryExclusive, },
+    GitBlame => "git/blame" { params: GitBlameParams, response: GitBlameResult, serialization: RepositoryExclusive, },
+    GitFileHistory => "git/fileHistory" { params: GitFileHistoryParams, response: GitFileHistoryResult, serialization: RepositoryExclusive, },
     GitStatus => "git/status" {
         params: GitRepositoryParams,
         response: GitStatusResult,
@@ -4975,6 +5035,21 @@ client_methods! {
     },
     GitUnstage => "git/unstage" {
         params: GitPathsParams,
+        response: GitOperationResult,
+        serialization: RepositoryExclusive,
+    },
+    GitAIContribution => "git/aiContribution" {
+        params: GitAIContributionParams,
+        response: GitAIContributionResult,
+        serialization: RepositoryExclusive,
+    },
+    GitReviewRemoval => "git/reviewRemoval" {
+        params: GitPathsParams,
+        response: GitRemovalReviewResult,
+        serialization: RepositoryExclusive,
+    },
+    GitRemoveFiles => "git/removeFiles" {
+        params: GitRemoveFilesParams,
         response: GitOperationResult,
         serialization: RepositoryExclusive,
     },
@@ -5859,6 +5934,7 @@ typescript_bindings! {
     TextDocumentsCapability,
     ExtensionClientOperation,
     ExtensionQuickPickItem,
+    ExtensionProgressOptions,
     external_ext_protocol::services::CoreServiceRequest,
     external_ext_protocol::services::CoreServiceResponse,
     external_ext_protocol::services::CoreHttpMethod,
@@ -6847,6 +6923,8 @@ typescript_bindings! {
     GitCommitModeDto,
     GitCommitSignoffDto,
     GitCommitSigningDto,
+    GitCommitHooksDto,
+    GitCommitIdentityDto,
     GitEmptyCommitPolicyDto,
     GitStashModeDto,
     GitCommandDto,
@@ -6865,6 +6943,20 @@ typescript_bindings! {
     GitUpstreamDto,
     GitHeadDto,
     GitSubmoduleStateDto,
+    GitTransportParams,
+    GitTransportOperationDto,
+    GitVersionResult,
+    GitInstallationDto,
+    GitPullPreflightResult,
+    GitBlameParams,
+    GitClientOptionsDto,
+    GitInteractionDto,
+    GitDiscoveryParams,
+    GitDiscoveryFolderDto,
+    GitBlameResult,
+    GitFileHistoryParams,
+    GitFileHistoryResult,
+    GitFileHistoryItemDto,
     GitRepositoryParams,
     GitCloneParams,
     GitCloneResult,
@@ -6873,6 +6965,8 @@ typescript_bindings! {
     GitCloneCancelResult,
     GitFetchModeDto,
     GitFetchParams,
+    GitTransportOptionsDto,
+    GitPushModeDto,
     GitPullModeDto,
     GitPullParams,
     GitRepositoryDto,
@@ -6932,6 +7026,14 @@ typescript_bindings! {
     GitTextDiffDto,
     GitDiffStatisticsDto,
     GitTextDiffResult,
+    GitAIEditorEvidenceDto,
+    GitAIContributionParams,
+    GitAIContributionResult,
+    GitRemovalFileDto,
+    GitRemovalEntryDto,
+    GitRemovalReviewResult,
+    GitRemovalModeDto,
+    GitRemoveFilesParams,
     GitPathsParams,
     GitCommitParams,
     GitOperationResult,

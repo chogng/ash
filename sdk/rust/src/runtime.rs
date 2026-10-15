@@ -250,6 +250,10 @@ impl<E: Extension> Runtime<E> {
                         "activation identity or API version does not match",
                     ))
                 } else {
+                    self.services = crate::services::Services::new(
+                        self.writer.clone(),
+                        self.options.maximum_in_flight_requests,
+                    );
                     let mut context = ExtensionContext {
                         client: self.client.clone(),
                         services: self.services.bound(HostEventContext {
@@ -259,6 +263,8 @@ impl<E: Extension> Runtime<E> {
                         }),
                         data_channels: crate::data_channels::DataChannels::default(),
                         commands: Commands::default(),
+                        scm: crate::scm::SourceControl::default(),
+                        terminal: crate::terminal::Terminal::default(),
                         languages: Languages::default(),
                         workspace: crate::workspace::Workspace::default(),
                         window: Window::new(self.writer.clone(), fence, self.options.protocol),

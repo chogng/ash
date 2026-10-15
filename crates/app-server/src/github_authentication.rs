@@ -704,6 +704,7 @@ fn service(
 ) -> Result<CoreServiceResponse, HostFailure> {
     cancellation.check().map_err(|_| denied())?;
     match request {
+        CoreServiceRequest::CredentialGet { .. } => Err(denied()),
         CoreServiceRequest::SecretLoad { key } => Ok(CoreServiceResponse::SecretLoaded {
             value: secrets
                 .load(&secret_key(key)?)

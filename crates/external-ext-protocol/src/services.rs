@@ -14,6 +14,12 @@ use serde::Serialize;
     deny_unknown_fields
 )]
 pub enum CoreServiceRequest {
+    /// Consumer grants are product-owned and distinct from provider SecretStore access.
+    CredentialGet {
+        provider_id: String,
+        host: String,
+        account_id: Option<String>,
+    },
     SecretLoad {
         key: String,
     },
@@ -56,6 +62,10 @@ pub enum CoreHttpMethod {
     deny_unknown_fields
 )]
 pub enum CoreServiceResponse {
+    Credential {
+        username: String,
+        password: Vec<u8>,
+    },
     SecretLoaded {
         value: Option<Vec<u8>>,
     },

@@ -288,6 +288,7 @@ pub struct AppServer {
     approval_review_model: Option<ash_core::ApprovalReviewerFactory>,
     login: Option<Arc<ash_login::LoginService>>,
     github_accounts: Option<Arc<dyn github::GitHubAccountManager>>,
+    github_credentials: Option<Arc<dyn github::GitHubCredentialProvider>>,
     github_processor: Option<Arc<github_processor::GitHubRequestProcessor>>,
     issue_reporter: Option<github::GitHubIssueReporter>,
     chatgpt: Option<Arc<ash_chatgpt::ChatGptAccount>>,
@@ -318,6 +319,7 @@ pub struct AppServer {
     cloud_codebase_providers: ash_cloud_codebase::CloudCodebaseProviderRegistry,
     pub(super) slash_commands: SlashCommandCatalog,
     agent_extensions: Arc<ExtensionRegistry>,
+    git_attribution_policy: Option<Arc<dyn git_attribution::GitAttributionPolicySource>>,
     notes: Option<Arc<history_notes::NotesStore>>,
     message_board: Option<Arc<dyn agent_message_board::BoardBackend>>,
     workflows: Arc<workflows::Store>,
@@ -728,6 +730,7 @@ impl AppServer {
             approval_review_model: None,
             login: None,
             github_accounts: None,
+            github_credentials: None,
             github_processor: None,
             issue_reporter: None,
             chatgpt: None,
@@ -758,6 +761,7 @@ impl AppServer {
             cloud_codebase_providers: ash_cloud_codebase::CloudCodebaseProviderRegistry::default(),
             slash_commands: SlashCommandCatalog::default(),
             agent_extensions,
+            git_attribution_policy: None,
             notes: None,
             message_board: None,
             workflows: Arc::new(workflows::Store::in_memory().expect("new workflow store")),
@@ -1279,6 +1283,10 @@ impl AppServer {
         http: Arc<dyn ash_http_client::HttpClient>,
     ) -> Result<Self, String> {
         request_dispatch::runtime().map_err(|error| error.to_string())?;
+        self.github_credentials = Some(Arc::clone(&credentials));
+        if let Some(runtime) = &self.extension_hosts {
+            self.bind_extension_credentials(runtime);
+        }
         self.github_processor = Some(Arc::new(github_processor::GitHubRequestProcessor::new(
             credentials,
             http,
@@ -1286,6 +1294,38 @@ impl AppServer {
         Ok(self)
     }
 
+    fn bind_extension_credentials(&self, runtime: &extension_host_runtime::ExtensionHostRuntime) {
+        let Some(credentials) = self.github_credentials.clone() else {
+            return;
+        };
+        runtime.register_credentials(
+            "github".into(),
+            Arc::new(move |host, account, cancellation| {
+                let denied = || external_ext_protocol::HostFailure {
+                    code: external_ext_protocol::HostErrorCode::PermissionDenied,
+                    message: "GitHub credential is unavailable for this host".into(),
+                };
+                cancellation.check().map_err(|_| denied())?;
+                let grant = if let Some(account) = account {
+                    credentials.authorization_for(account)
+                } else {
+                    credentials.authorization()
+                }
+                .map_err(|_| denied())?;
+                if grant.host != host {
+                    return Err(denied());
+                }
+                let password = credentials.token(&grant).map_err(|_| denied())?;
+                cancellation.check().map_err(|_| denied())?;
+                Ok(
+                    external_ext_protocol::services::CoreServiceResponse::Credential {
+                        username: "x-access-token".into(),
+                        password: password.expose().to_vec(),
+                    },
+                )
+            }),
+        );
+    }
     fn github_processor(&self) -> Result<&Arc<github_processor::GitHubRequestProcessor>, RpcError> {
         self.github_processor
             .as_ref()
@@ -1501,6 +1541,7 @@ impl AppServer {
                 .bind_dir(authorization)
                 .map_err(|_| "failed to bind Extension Host directory authority".to_string())?;
         }
+        self.bind_extension_credentials(&runtime);
         self.extension_hosts = Some(runtime);
         Ok(self)
     }
@@ -1628,6 +1669,7 @@ impl AppServer {
                 .clone();
             crate::task_delivery_host::install(&mut builder, service.clone(), dirs);
         }
+        self.git_attribution_policy = Some(Arc::clone(&attribution));
         git_attribution::install(&mut builder, attribution);
         if let Some(backend) = image_backend {
             image_generation::install(
@@ -2406,6 +2448,22 @@ impl AppServer {
     }
 
     fn dispatch(
+        &self,
+        connection: &mut ConnectionState,
+        request: &mut JsonRpcRequest<Value>,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
+        if connection.is_initialized() && request.method.starts_with("git/") {
+            if let Some(client) = git_operations::request_client(&request.params)? {
+                return crate::git_service::with_client(client, || {
+                    self.dispatch_request(connection, request, cancellation)
+                });
+            }
+        }
+        self.dispatch_request(connection, request, cancellation)
+    }
+
+    fn dispatch_request(
         &self,
         connection: &mut ConnectionState,
         request: &mut JsonRpcRequest<Value>,
@@ -3256,7 +3314,9 @@ impl AppServer {
             Some(ClientMethod::GitCommand) => self.git_command(&request.params, cancellation),
             Some(ClientMethod::GitIndexDiff) => self.git_index_diff(&request.params),
             Some(ClientMethod::GitIndexEdit) => self.git_index_edit(&request.params),
-            Some(ClientMethod::GitRepositories) => self.git_repositories(),
+            Some(ClientMethod::GitRepositories) => {
+                self.git_repositories(connection, &request.params)
+            }
             Some(ClientMethod::GitClone) => {
                 self.git_clone(connection, &request.params, cancellation)
             }
@@ -3267,6 +3327,14 @@ impl AppServer {
                 self.git_clone_cancel(connection, &request.params)
             }
             Some(ClientMethod::GitStatus) => self.git_status(&request.params),
+            Some(ClientMethod::GitTransport) => self.git_transport(&request.params, cancellation),
+            Some(ClientMethod::GitTransportCancel) => {
+                self.git_check_ignore_cancel(connection, &request.params)
+            }
+            Some(ClientMethod::GitVersion) => self.git_version(&request.params),
+            Some(ClientMethod::GitPullPreflight) => self.git_pull_preflight(&request.params),
+            Some(ClientMethod::GitBlame) => self.git_blame(&request.params),
+            Some(ClientMethod::GitFileHistory) => self.git_file_history(&request.params),
             Some(ClientMethod::GitCheckIgnore) => {
                 self.git_check_ignore(&request.params, cancellation)
             }
@@ -3297,6 +3365,9 @@ impl AppServer {
             Some(ClientMethod::GitWorktreeResolve) => self.git_worktree_resolve(&request.params),
             Some(ClientMethod::GitStage) => self.git_stage(&request.params),
             Some(ClientMethod::GitUnstage) => self.git_unstage(&request.params),
+            Some(ClientMethod::GitAIContribution) => self.git_ai_contribution(&request.params),
+            Some(ClientMethod::GitReviewRemoval) => self.git_review_removal(&request.params),
+            Some(ClientMethod::GitRemoveFiles) => self.git_remove_files(&request.params),
             Some(ClientMethod::GitDiscardWorktree) => self.git_discard_worktree(&request.params),
             Some(ClientMethod::GitCommit) => self.git_commit(&request.params),
             Some(ClientMethod::GitFetch) => self.git_fetch(&request.params, cancellation),

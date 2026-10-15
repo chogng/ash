@@ -1,4 +1,9 @@
+import { attachRustGit } from './rustGitProcessFixture.js';
 import { expect, test, type Page } from '@playwright/test';
+
+let stopRust: (() => Promise<void>) | undefined;
+test.beforeEach(async ({ page }) => { stopRust = await attachRustGit(page); });
+test.afterEach(async () => { await stopRust?.(); stopRust = undefined; });
 
 function collectErrors(page: Page): string[] {
 	const errors: string[] = [];
@@ -54,7 +59,7 @@ test('Worker queues a large client request batch without retiring its incarnatio
 	}
 });
 
-test('Git presentation settings update the packaged Worker without restarting its repositories', async ({ page }) => {
+test('Git presentation settings update the Rust extension without restarting its repositories', async ({ page }) => {
 	const errors = collectErrors(page);
 	await page.goto('/gitExtension.html');
 	try {
@@ -66,8 +71,9 @@ test('Git presentation settings update the packaged Worker without restarting it
 		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().repositories[0]?.groups)).toEqual(['Staged Changes', 'Untracked Changes']);
 		await page.evaluate(() => window.gitPresentationIntegration.update('git.untrackedChanges', 'hidden'));
 		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().repositories[0]?.paths)).toEqual(['one.ts']);
+		expect(await page.evaluate(() => window.gitPresentationIntegration.actions()?.some(id => id.startsWith('openFile:')))).toBe(true);
 		await page.evaluate(() => window.gitPresentationIntegration.update('git.showInlineOpenFileAction', false));
-		await expect.poll(() => page.evaluate(() => window.gitPresentationIntegration.actions()?.some(id => id.startsWith('scm.change.openFile')))).toBe(false);
+		await expect.poll(() => page.evaluate(() => window.gitPresentationIntegration.actions()?.some(id => id.startsWith('openFile:')))).toBe(false);
 		await page.evaluate(() => window.gitPresentationIntegration.update('git.decorations.enabled', false));
 		await expect.poll(() => page.evaluate(() => window.gitPresentationIntegration.decoration())).toBeUndefined();
 		await page.evaluate(() => window.gitPresentationIntegration.update('git.openDiffOnClick', false));
@@ -81,7 +87,33 @@ test('Git presentation settings update the packaged Worker without restarting it
 	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
 });
 
-test('Git commit policies reach the Rust contract through the packaged Worker', async ({ page }) => {
+test('Git presentation policy crosses the Rust boundary and validates the current commit draft', async ({ page }) => {
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(() => window.gitExtensionIntegration.activate('en'));
+		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().repositories.length)).toBe(1);
+		await page.evaluate(async () => {
+			await window.gitPresentationIntegration.update('git.countBadge', 'off');
+			await window.gitPresentationIntegration.update('git.showCommitInput', false);
+			await window.gitPresentationIntegration.update('git.showActionButton', { commit: false, publish: true, sync: true });
+			await window.gitPresentationIntegration.update('git.enableStatusBarSync', false);
+			await window.gitPresentationIntegration.update('git.alwaysShowStagedChangesResourceGroup', true);
+		});
+		await expect.poll(() => page.evaluate(() => window.gitPresentationIntegration.presentation())).toEqual({ count: 0, inputVisible: false, buttonVisible: false, validation: undefined, statusCommands: ['ash.status.git.branch'] });
+		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().repositories[0]?.groups)).toContain('Staged Changes');
+		await page.evaluate(async () => {
+			await window.gitPresentationIntegration.update('git.showCommitInput', true);
+			await window.gitPresentationIntegration.update('git.inputValidation', true);
+			await window.gitPresentationIntegration.update('git.inputValidationSubjectLength', 5);
+			window.gitPresentationIntegration.draft('long subject');
+		});
+		await expect.poll(() => page.evaluate(() => window.gitPresentationIntegration.presentation().validation)).toContain('limit of 5');
+		await page.evaluate(() => window.gitPresentationIntegration.draft('short'));
+		await expect.poll(() => page.evaluate(() => window.gitPresentationIntegration.presentation().validation)).toBeUndefined();
+	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
+});
+
+test('Git commit policies reach the Rust contract through the Rust extension', async ({ page }) => {
 	await page.goto('/gitExtension.html');
 	try {
 		await page.evaluate(() => window.gitExtensionIntegration.activate('en'));
@@ -93,16 +125,16 @@ test('Git commit policies reach the Rust contract through the packaged Worker', 
 			await window.gitPresentationIntegration.update('git.postCommitCommand', 'push');
 			await window.gitPresentationIntegration.commit('Signed smart commit');
 		});
-		expect(await page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'git/commit' || call.method === 'git/push'))).toEqual([
-			{ method: 'git/commit', params: { repositoryId: 'root', message: 'Signed smart commit', scope: 'tracked', signing: 'required', expectedHead: { type: 'branch', name: 'main', objectId: 'a'.repeat(40), upstream: null } } },
-			{ method: 'git/push', params: { repositoryId: 'root' } },
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'git/commit' || call.method === 'git/push'))).toMatchObject([
+			{ method: 'git/commit', params: { repositoryId: 'root', message: 'Signed smart commit', scope: 'tracked', signing: 'required', hooks: 'run', identity: 'configured', expectedHead: { type: 'branch', name: 'main', objectId: 'a'.repeat(40), upstream: null } } },
+			{ method: 'git/push', params: { repositoryId: 'root', transport: { prune: false, pullTags: true, replaceTags: false, autoStash: false, followTags: false, pushMode: 'normal' } } },
 		]);
 		await page.evaluate(async () => {
 			await window.gitPresentationIntegration.update('git.enableCommitSigning', false);
 			await window.gitPresentationIntegration.update('git.postCommitCommand', 'none');
 			await window.gitPresentationIntegration.commit('Empty commit', 'git.commitEmpty');
 		});
-		expect(await page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'git/commit').at(-1)?.params)).toEqual({ repositoryId: 'root', message: 'Empty commit', scope: 'staged', empty: 'allow', expectedHead: { type: 'branch', name: 'main', objectId: 'a'.repeat(40), upstream: null } });
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'git/commit').at(-1)?.params)).toMatchObject({ repositoryId: 'root', message: 'Empty commit', scope: 'staged', empty: 'allow', hooks: 'run', identity: 'configured', expectedHead: { type: 'branch', name: 'main', objectId: 'a'.repeat(40), upstream: null } });
 		await page.evaluate(async () => {
 			await window.gitPresentationIntegration.update('git.fetchOnPull', true);
 			await window.gitExtensionIntegration.invoke('git.pullRebase', ['root']);
@@ -112,7 +144,7 @@ test('Git commit policies reach the Rust contract through the packaged Worker', 
 	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
 });
 
-test('Git naming, stash, history and repository preferences apply in the packaged Worker', async ({ page }) => {
+test('Git naming, stash, history and repository preferences apply in the Rust extension', async ({ page }) => {
 	await page.goto('/gitExtension.html');
 	try {
 		await page.evaluate(() => window.gitExtensionIntegration.activate('en'));
@@ -207,7 +239,7 @@ for (const language of ['en', 'zh-CN']) test(`SCM commit message action handles 
 		await expect(button).toHaveAttribute('title', language === 'zh-CN' ? '尚未配置提交信息生成器' : 'No commit message generator configured');
 		await expect(button.locator('[data-ash-icon-id="sparkle"]')).toHaveCount(1);
 		const editor = input.locator('.stanza-editor-input');
-		await editor.focus();
+		await input.locator('.ash-scm-input-editor').click({ position: { x: 10, y: 10 } });
 		await page.keyboard.type('Keep my draft');
 		await page.evaluate(() => window.gitScmPaneIntegration.configureGenerator());
 		await expect(button).toBeEnabled();
@@ -274,7 +306,7 @@ for (const language of ['en', 'zh-CN']) test(`SCM commit message action handles 
 	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
 });
 
-for (const language of ['en', 'zh-CN']) test(`distributed Git Worker registers SCM, commands and history in ${language}`, async ({ page }) => {
+for (const language of ['en', 'zh-CN']) test(`distributed Rust Git registers SCM, commands and history in ${language}`, async ({ page }) => {
 	const errors = collectErrors(page);
 	await page.goto('/gitExtension.html');
 	try {
@@ -287,7 +319,7 @@ for (const language of ['en', 'zh-CN']) test(`distributed Git Worker registers S
 		expect(history).toMatchObject([{ id: 'a'.repeat(40), subject: 'First commit' }]);
 		await page.evaluate(() => window.gitExtensionIntegration.invoke('git.switchBranch', ['root']));
 		expect((await page.evaluate(() => window.gitExtensionIntegration.state())).errors).toEqual([]);
-		expect((await page.evaluate(() => window.gitExtensionIntegration.state())).requests).toContainEqual({ operation: 'showQuickPick', placeholder: language === 'zh-CN' ? '选择 Git 分支' : 'Select a Git branch', items: [{ label: 'main', description: language === 'zh-CN' ? '当前分支' : 'Current' }, { label: 'occupied', description: 'origin/occupied', detail: language === 'zh-CN' ? '已在另一个工作树中检出' : 'Checked out in another worktree' }] });
+		expect((await page.evaluate(() => window.gitExtensionIntegration.state())).requests).toContainEqual({ operation: 'showQuickPick', placeholder: language === 'zh-CN' ? '选择 Git 分支' : 'Select a Git branch', items: [{ label: 'main', description: language === 'zh-CN' ? '当前分支' : 'Current', detail: 'a'.repeat(7) }, { label: 'occupied', description: 'origin/occupied', detail: language === 'zh-CN' ? '已在另一个工作树中检出' : 'Checked out in another worktree' }] });
 		await page.evaluate(() => window.gitExtensionIntegration.stage());
 		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().calls.some(call => call.method === 'git/stage'))).toBe(true);
 		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().repositories[0]?.groups)).toContain(language === 'zh-CN' ? '暂存的更改' : 'Staged Changes');
@@ -365,7 +397,7 @@ for (const language of ['en', 'zh-CN']) test(`disabled Git stays inactive after 
 });
 
 
-for (const activation of ['click', 'keyboard'] as const) test(`Git statusbar ${activation} synchronizes through the Worker and disables pending actions`, async ({ page }) => {
+for (const activation of ['click', 'keyboard'] as const) test(`Git statusbar ${activation} synchronizes through the Rust extension and disables pending actions`, async ({ page }) => {
 	const errors = collectErrors(page);
 	await page.goto('/gitExtension.html');
 	try {
@@ -384,7 +416,7 @@ for (const activation of ['click', 'keyboard'] as const) test(`Git statusbar ${a
 		await page.evaluate(() => window.gitStatusbarIntegration.release());
 		await expect(sync).not.toHaveAttribute('aria-disabled');
 		await expect(sync).toHaveText('');
-		expect(await page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'git/pull' || call.method === 'git/push'))).toEqual([
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'git/pull' || call.method === 'git/push'))).toMatchObject([
 			{ method: 'git/pull', params: { repositoryId: 'root', mode: 'sync' } },
 			{ method: 'git/push', params: { repositoryId: 'root' } },
 		]);
@@ -392,7 +424,7 @@ for (const activation of ['click', 'keyboard'] as const) test(`Git statusbar ${a
 	} finally { await page.evaluate(() => { void window.gitStatusbarIntegration.release(); window.gitExtensionIntegration.dispose(); }); }
 });
 
-for (const activation of ['statusbar', 'command'] as const) test(`Git statusbar publishes a branch without upstream through the Worker via ${activation}`, async ({ page }) => {
+for (const activation of ['statusbar', 'command'] as const) test(`Git statusbar publishes a branch without upstream through the Rust extension via ${activation}`, async ({ page }) => {
 	await page.goto('/gitExtension.html');
 	try {
 		await page.evaluate(() => window.gitExtensionIntegration.activate('en'));
@@ -408,7 +440,7 @@ for (const activation of ['statusbar', 'command'] as const) test(`Git statusbar 
 	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
 });
 
-test('Git statusbar does not push after a failed pull through the Worker', async ({ page }) => {
+test('Git statusbar does not push after a failed pull through the Rust extension', async ({ page }) => {
 	await page.goto('/gitExtension.html');
 	try {
 		await page.evaluate(async () => { window.gitStatusbarIntegration.configure(true, true); await window.gitExtensionIntegration.activate('en'); });
@@ -431,7 +463,7 @@ for (const command of ['git.pullRebase', 'git.syncRebase'] as const) test(`Git s
 		await expect(page.locator('[data-statusbar-item-id="ash.status.git.sync"] [role="button"]')).toHaveText('3↓ 2↑');
 		const invocation = page.evaluate(id => window.gitExtensionIntegration.invoke(id, ['root']), command);
 		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'git/pull'))).toEqual([
-			{ method: 'git/pull', params: { repositoryId: 'root', mode: 'rebase' } },
+			{ method: 'git/pull', params: { repositoryId: 'root', mode: 'rebase', transport: { autoStash: false, followTags: false, prune: false, pullTags: true, pushMode: 'normal', replaceTags: false } } },
 		]);
 		await page.evaluate(() => window.gitStatusbarIntegration.release());
 		await invocation;
@@ -500,9 +532,9 @@ test('Git rebase setting command rejects non-boolean input before saving', async
 	await page.goto('/gitExtension.html');
 	try {
 		await page.evaluate(() => window.gitExtensionIntegration.activate('zh-CN'));
-		await page.evaluate(async () => { try { await window.gitExtensionIntegration.invoke('git.updateRebaseWhenSync', ['true']); } catch { } });
+		const error = await page.evaluate(async () => { try { await window.gitExtensionIntegration.invoke('git.updateRebaseWhenSync', ['true']); return ''; } catch (error) { return String(error); } });
 		expect(await page.evaluate(() => window.gitSettingsIntegration.profile().rebaseWhenSync)).toBe(false);
 		expect(await page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'config/update'))).toEqual([]);
-		expect(await page.evaluate(() => window.gitExtensionIntegration.state().errors.some(error => error.includes('布尔值')))).toBe(true);
+		expect(error).toContain('布尔值');
 	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
 });

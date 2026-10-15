@@ -17,5 +17,18 @@
     "clients": [
       "app"
     ]
+  },
+  "contributes": {
+    "configuration": {
+      "title": "%configuration.title%",
+      "properties": {
+        "github.gitAuthentication": {
+          "type": "boolean",
+          "default": true,
+          "title": "%gitAuthentication.title%",
+          "description": "%gitAuthentication.description%"
+        }
+      }
+    }
   }
 }

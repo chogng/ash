@@ -1,5 +1,10 @@
+import { attachRustGit } from './rustGitProcessFixture.js';
 import { expect, test, type Page } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
+
+let stopRust: (() => Promise<void>) | undefined;
+test.beforeEach(async ({ page }) => { stopRust = await attachRustGit(page); });
+test.afterEach(async () => { await stopRust?.(); stopRust = undefined; });
 
 type DiffTestLocale = 'en' | 'zh-CN';
 
@@ -1319,8 +1324,8 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.gitGutterCalls.length)).toBe(2);
 		expect(await page.evaluate(() => window.ashDiffIntegration.gitGutterCalls[1])).toEqual({
 			error: localized(locale,
-				'Git operation failed: Open the current comparison from Source Control before selecting lines.',
-				'Git 操作失败：请从源代码管理打开当前比较，再选中行。')
+				'Open the current comparison from Source Control before selecting lines.',
+				'请从源代码管理打开当前比较，再选中行。')
 		});
 	});
 

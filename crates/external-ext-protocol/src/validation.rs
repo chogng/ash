@@ -82,6 +82,18 @@ pub(super) fn validate_registrations(
             return Err(protocol_error("registration IDs must be unique"));
         }
         let required = match &registration.kind {
+            RegistrationKind::SourceControl {
+                revision,
+                providers,
+            } => {
+                if *revision == 0
+                    || providers.len() > 512
+                    || providers.iter().any(|value| !value.is_object())
+                {
+                    return Err(protocol_error("invalid source control snapshot"));
+                }
+                ExtensionCapability::SourceControl
+            }
             RegistrationKind::WorkspaceEvents {} => continue,
             RegistrationKind::RemoteAuthorityResolver { authority_prefix }
             | RegistrationKind::RemoteConnectionResolver { authority_prefix } => {

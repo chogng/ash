@@ -5,6 +5,7 @@ mod error;
 mod find_up;
 mod local;
 mod path_case_sensitivity;
+mod removal;
 mod service;
 mod text_document;
 mod text_encoding;
@@ -42,3 +43,8 @@ pub use text_encoding::TextEncodingError;
 pub use text_encoding::decode_text;
 pub use text_encoding::decode_text_with_options;
 pub use text_encoding::encode_text;
+
+pub use removal::FileRemoval;
+pub use removal::FileRemovalMode;
+pub use removal::remove_reviewed_files;
+pub use removal::review_file_removals;

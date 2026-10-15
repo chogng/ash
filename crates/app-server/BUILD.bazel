@@ -3,7 +3,9 @@ load("//:defs.bzl", "ash_rust_binary", "ash_rust_crate")
 ash_rust_crate(
     name = "app-server",
     crate_name = "ash_app_server",
-    data = glob(["templates/**"]) + ["//crates/utils/audio:tests/fixtures/tone.wav", "//examples/extensions/inspect:.ash-plugin/plugin.json", "//examples/extensions/inspect:package.json", "//resources/extension-host:host.mjs", "//resources/extension-host:node.mjs", "//resources/extension-host:vscode.js", "//resources/extension-host:scm.js", "//extensions/remote-ssh:package.json", "//extensions/remote-ssh:src/main.rs", "//sdk/rust:src/workspace.rs"],
+    data = glob(["templates/**"]) + ["//crates/utils/audio:tests/fixtures/tone.wav", "//examples/extensions/inspect:.ash-plugin/plugin.json", "//examples/extensions/inspect:package.json", "//resources/extension-host:host.mjs", "//resources/extension-host:node.mjs", "//resources/extension-host:vscode.js", "//resources/extension-host:scm.js", "//extensions/remote-ssh:package.json", "//extensions/remote-ssh:src/main.rs", "//sdk/rust:src/workspace.rs", "//sdk/rust:src/scm.rs",
+        "//sdk/rust:src/terminal.rs", "//extensions/git:package.json", "//extensions/git:src/lib.rs", "//extensions/git:src/api.rs", "//extensions/git:src/blame.rs",
+        "//extensions/git:src/interaction.rs", "//extensions/git:src/model.rs", "//extensions/git:src/commands.rs", "//extensions/git:src/scm.rs", "//extensions/git:src/history.rs", "//extensions/git:src/changes.rs"],
     extra_aliases = {
         "//crates/collaboration-mode-templates": "collaboration_mode_templates",
         "//crates/screen-capture": "screen_capture",

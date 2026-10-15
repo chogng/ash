@@ -1,0 +1,5 @@
+{
+  "configuration.title": "GitHub 身份验证",
+  "gitAuthentication.title": "Git 身份验证",
+  "gitAuthentication.description": "允许 Git 为匹配的 HTTPS 远程仓库使用已连接的 GitHub 账号。凭据保留在后端 Rust 扩展中。"
+}

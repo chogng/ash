@@ -58,8 +58,16 @@ impl AppServer {
         let runtime = self
             .built_in_extension_runtimes
             .iter()
-            .find(|runtime| runtime.id() == params.id)
-            .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+            .find(|runtime| runtime.id() == params.id);
+        let editor_runtime = self.extension_hosts.as_ref().filter(|runtime| {
+            runtime
+                .product_extension_states()
+                .iter()
+                .any(|(id, _)| id == &params.id)
+        });
+        if runtime.is_none() && editor_runtime.is_none() {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
         let policy = self
             .editor_extension_policy
             .as_ref()
@@ -70,7 +78,7 @@ impl AppServer {
             ash_core_plugins::EditorExtensionPolicyAction::Disable
         };
         policy
-            .set_built_in_enablement(runtime.id(), action, params.expected_revision)
+            .set_built_in_enablement(&params.id, action, params.expected_revision)
             .map_err(|error| match error {
                 ash_core_plugins::EditorExtensionPolicyError::RevisionConflict => {
                     RpcError::new(-32041, AppServerErrorName::PluginRevisionConflict)
@@ -82,9 +90,16 @@ impl AppServer {
                     RpcError::new(-32042, AppServerErrorName::PluginOperationFailed)
                 }
             })?;
-        runtime
-            .reconcile_enablement()
-            .map_err(|_| RpcError::new(-32042, AppServerErrorName::PluginOperationFailed))?;
+        if let Some(runtime) = runtime {
+            runtime
+                .reconcile_enablement()
+                .map_err(|_| RpcError::new(-32042, AppServerErrorName::PluginOperationFailed))?;
+        }
+        if let Some(runtime) = editor_runtime {
+            runtime
+                .reconcile(super::extension_host_runtime::ExtensionHostReconcileMode::Refresh)
+                .map_err(|_| RpcError::new(-32042, AppServerErrorName::PluginOperationFailed))?;
+        }
         self.updates.publish_extension_packages_changed();
         result(&self.built_in_providers_snapshot()?)
     }
@@ -111,6 +126,16 @@ impl AppServer {
                     enabled: policy.is_extension_enabled(runtime.id()),
                     running: runtime.is_running(),
                 })
+                .chain(
+                    self.extension_hosts
+                        .iter()
+                        .flat_map(|runtime| runtime.product_extension_states())
+                        .map(|(id, running)| ExtensionsBuiltInProviderDto {
+                            enabled: policy.is_extension_enabled(&id),
+                            id,
+                            running,
+                        }),
+                )
                 .collect(),
         })
     }

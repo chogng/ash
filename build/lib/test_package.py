@@ -115,6 +115,7 @@ class PackageTests(unittest.TestCase):
                 "ash-app-server",
                 "ash-app-server-daemon",
                 "ash-code-mode-host",
+                "ash-git-extension",
                 "ash-github-authentication",
                 "ash-remote-ssh-extension",
                 "ash-dev-container-provider",
@@ -417,6 +418,7 @@ class PackageTests(unittest.TestCase):
                 ripgrep,
                 test_tgrep_resolution(root),
                 node,
+                git_extension_binary=executable_file(root / "git-extension", b"git-extension"),
                 remote_ssh_extension_binary=executable_file(
                     root / "remote-ssh-extension", b"remote-ssh-extension"
                 ),
@@ -521,15 +523,13 @@ class PackageTests(unittest.TestCase):
             )
             git_extension = output / "ash-resources" / "extensions" / "git"
             git_manifest = json.loads((git_extension / "package.json").read_text())
-            self.assertNotIn("ashRuntime", git_manifest)
-            self.assertEqual("./browser/extension.ts", git_manifest["browser"])
+            self.assertEqual("rust", git_manifest["ashRuntime"]["kind"])
+            self.assertEqual("ash-git-extension", git_manifest["ashRuntime"]["entrypoint"])
+            self.assertNotIn("browser", git_manifest)
             self.assertFalse((git_extension / "src").exists())
-            self.assertEqual(
-                "export function activate() {}",
-                (git_extension / "browser/extension.ts").read_text(encoding="utf-8"),
-            )
+            self.assertFalse((git_extension / "browser").exists())
             self.assertFalse((git_extension / "Cargo.toml").exists())
-            self.assertFalse((output / "bin" / "ash-git-extension").exists())
+            self.assertEqual(b"git-extension", (output / "bin" / "ash-git-extension").read_bytes())
             self.assertIn(
                 "仓库",
                 json.loads(
@@ -668,6 +668,7 @@ class PackageTests(unittest.TestCase):
                 test_tgrep_resolution(root),
                 None,
                 protocol_metadata=generated_protocol,
+                git_extension_binary=executable_file(root / "git-extension", b"git-extension"),
                 remote_ssh_extension_binary=executable_file(
                     root / "remote-ssh-extension", b"remote-ssh-extension"
                 ),
@@ -967,6 +968,7 @@ class PackageTests(unittest.TestCase):
                 test_tgrep_resolution(root),
                 node,
                 bubblewrap,
+                git_extension_binary=executable_file(root / "git-extension", b"git-extension"),
                 remote_ssh_extension_binary=executable_file(
                     root / "remote-ssh-extension", b"remote-ssh-extension"
                 ),
@@ -1051,6 +1053,7 @@ class PackageTests(unittest.TestCase):
                 windows_sandbox_service_binary=executable_file(
                     root / "sandbox-service-source.exe", b"sandbox-service"
                 ),
+                git_extension_binary=executable_file(root / "git-extension", b"git-extension"),
                 remote_ssh_extension_binary=executable_file(
                     root / "remote-ssh-extension", b"remote-ssh-extension"
                 ),

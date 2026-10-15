@@ -242,3 +242,70 @@ async fn comparison_uses_selected_base_and_common_ancestor_without_changing_head
             .is_err()
     );
 }
+
+#[tokio::test]
+async fn file_history_follows_renames_and_blame_uses_unsaved_contents() {
+    let repository = TestRepository::init();
+    repository.write("old.txt", "first line\nsecond line\n");
+    repository.write("unrelated.txt", "unrelated\n");
+    repository.commit_all("Initial author record");
+    let initial = repository.git(&["rev-parse", "HEAD"]);
+    repository.git(&["mv", "old.txt", "renamed.txt"]);
+    repository.commit_all("Rename file");
+    let client = GitClient::system();
+    let opened = client.open_repository(repository.root()).await.unwrap();
+    let items = client
+        .file_history(&opened, std::path::Path::new("renamed.txt"))
+        .await
+        .unwrap();
+    assert_eq!(
+        items
+            .iter()
+            .map(|item| item.path.to_str().unwrap())
+            .collect::<Vec<_>>(),
+        ["renamed.txt", "old.txt"]
+    );
+    assert_eq!(items[1].object_id, initial);
+    let line = client
+        .blame_line(&opened, std::path::Path::new("renamed.txt"), 1, false, None)
+        .await
+        .unwrap();
+    assert_eq!(line.object_id, initial);
+    assert_eq!(line.author_email, "ash@example.invalid");
+    let dirty = client
+        .blame_line(
+            &opened,
+            std::path::Path::new("renamed.txt"),
+            1,
+            false,
+            Some("unsaved first line\nsecond line\n"),
+        )
+        .await
+        .unwrap();
+    assert!(dirty.object_id.chars().all(|value| value == '0'));
+    assert_eq!(repository.read("renamed.txt"), "first line\nsecond line\n");
+    repository.write("renamed.txt", "    first line\nsecond line\n");
+    repository.commit_all("Whitespace only");
+    assert_ne!(
+        client
+            .blame_line(&opened, std::path::Path::new("renamed.txt"), 1, false, None)
+            .await
+            .unwrap()
+            .object_id,
+        initial
+    );
+    assert_eq!(
+        client
+            .blame_line(&opened, std::path::Path::new("renamed.txt"), 1, true, None)
+            .await
+            .unwrap()
+            .object_id,
+        initial
+    );
+    assert!(
+        client
+            .blame_line(&opened, std::path::Path::new("../outside"), 1, false, None)
+            .await
+            .is_err()
+    );
+}

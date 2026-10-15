@@ -1,0 +1,5 @@
+{
+  "configuration.title": "GitHub Authentication",
+  "gitAuthentication.title": "Git authentication",
+  "gitAuthentication.description": "Allow Git to use a connected GitHub account for matching HTTPS remotes. Credentials stay in the backend Rust extensions."
+}

@@ -42,6 +42,7 @@ impl RequestLane {
                 | ClientMethod::DictationModelCancel
                 | ClientMethod::GitCheckIgnoreCancel
                 | ClientMethod::GitCloneCancel
+                | ClientMethod::GitTransportCancel
                 | ClientMethod::TestingCancel
                 | ClientMethod::LanguageCancel
                 | ClientMethod::IssueReporterSearchCancel

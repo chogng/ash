@@ -171,7 +171,7 @@ export class CodeActionController extends Disposable {
 			const options: IBulkEditOptions = {
 				editor: this.editor, label: resolved.title, quotableLabel: resolved.title,
 				code: 'undoredo.codeAction', respectAutoSaveConfig: true, showPreview: preview,
-				reason: EditSources.codeAction({ kind: resolved.kind, providerId: undefined }),
+				reason: EditSources.codeAction({ kind: resolved.kind, providerId: undefined, isAI: resolved.isAI }),
 			};
 			if (preview) {
 				// Dismissing the menu hands focus to the preview without cancelling its version-bound request.

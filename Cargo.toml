@@ -51,6 +51,7 @@ members = [
     "crates/github",
     "extensions/github-authentication",
     "extensions/remote-ssh",
+    "extensions/git",
     "extensions/dev-containers",
     "crates/external-agent-migration",
     "crates/agent-roles",
@@ -222,6 +223,7 @@ publish = false
 version = "0.1.0"
 
 [workspace.dependencies]
+trash = { version = "5.2.9", default-features = false, features = ["coinit_multithreaded", "chrono"] }
 mxc-sdk = "=1.0.0"
 testing = { package = "ash-testing", path = "crates/testing" }
 cli = { package = "ash-utils-cli", path = "crates/utils/cli" }

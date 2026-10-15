@@ -62,6 +62,8 @@ pub struct GitCommitRequest {
     signoff: CommitSignoff,
     signing: CommitSigning,
     empty: EmptyCommitPolicy,
+    hooks: CommitHooks,
+    identity: CommitIdentity,
     expected_head: Option<GitHead>,
 }
 
@@ -98,6 +100,19 @@ enum EmptyCommitPolicy {
     Allow,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+enum CommitHooks {
+    #[default]
+    Skip,
+    Run,
+}
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+enum CommitIdentity {
+    #[default]
+    Inferred,
+    Configured,
+}
+
 impl<'de> serde::Deserialize<'de> for GitCommitRequest {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         #[derive(serde::Deserialize)]
@@ -111,6 +126,10 @@ impl<'de> serde::Deserialize<'de> for GitCommitRequest {
             signing: CommitSigning,
             #[serde(default)]
             empty: EmptyCommitPolicy,
+            #[serde(default)]
+            hooks: CommitHooks,
+            #[serde(default)]
+            identity: CommitIdentity,
             expected_head: Option<GitHead>,
         }
         let fields = Fields::deserialize(deserializer)?;
@@ -120,6 +139,8 @@ impl<'de> serde::Deserialize<'de> for GitCommitRequest {
         request.signoff = fields.signoff;
         request.signing = fields.signing;
         request.empty = fields.empty;
+        request.hooks = fields.hooks;
+        request.identity = fields.identity;
         request.expected_head = fields.expected_head;
         Ok(request)
     }
@@ -146,6 +167,8 @@ impl GitCommitRequest {
             signoff: CommitSignoff::None,
             signing: CommitSigning::Configured,
             empty: EmptyCommitPolicy::Reject,
+            hooks: CommitHooks::Skip,
+            identity: CommitIdentity::Inferred,
             expected_head: None,
         })
     }
@@ -183,6 +206,18 @@ impl GitCommitRequest {
     /// Allows an explicit empty commit while still requiring a nonempty message.
     pub fn allow_empty(mut self) -> Self {
         self.empty = EmptyCommitPolicy::Allow;
+        self
+    }
+
+    /// Runs the repository's commit hooks for an interactive host's explicit commit.
+    pub fn run_hooks(mut self) -> Self {
+        self.hooks = CommitHooks::Run;
+        self
+    }
+
+    /// Prevents Git from inferring an author identity from the host environment.
+    pub fn require_configured_identity(mut self) -> Self {
+        self.identity = CommitIdentity::Configured;
         self
     }
 
@@ -273,7 +308,7 @@ impl GitClient {
         Ok(())
     }
 
-    /// Commits the requested scope with hooks disabled by the mutation profile.
+    /// Commits the requested scope, using the request's explicit hook and identity policy.
     pub async fn commit(
         &self,
         repository: &GitRepository,
@@ -379,7 +414,11 @@ impl GitClient {
                     .require_success()?;
             }
         }
-        let mut arguments = vec!["commit", "--file=-"];
+        let mut arguments = vec![];
+        if request.identity == CommitIdentity::Configured {
+            arguments.extend(["-c", "user.useConfigOnly=true"]);
+        }
+        arguments.extend(["commit", "--file=-"]);
         match request.mode {
             CommitMode::Create => {}
             CommitMode::Amend => arguments.push("--amend"),
@@ -396,7 +435,10 @@ impl GitClient {
             EmptyCommitPolicy::Reject => {}
             EmptyCommitPolicy::Allow => arguments.push("--allow-empty"),
         }
-        self.run_mutation_with_stdin(root, arguments, request.message().as_bytes().to_vec())
-            .await
+        let message = request.message().as_bytes().to_vec();
+        match request.hooks {
+            CommitHooks::Skip => self.run_mutation_with_stdin(root, arguments, message).await,
+            CommitHooks::Run => self.run_commit_hooks(root, arguments, message).await,
+        }
     }
 }

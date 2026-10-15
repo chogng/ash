@@ -6,7 +6,7 @@ import type { IColorScheme } from '../../../window/common/window.js';
 import { WINDOW_ALWAYS_ON_TOP_CHANGED_CHANNEL, type IWindowAlwaysOnTopChangedEvent } from '../../../window/common/window.js';
 import { isAdmin, performShellCommand } from '../../electron-main/nativeHostMainService.js';
 import { nativeHostIpcRoutes, type INativeHostMainService } from '../../electron-main/nativeHostIpc.js';
-import { NATIVE_HOST_IS_ADMIN_CHANNEL, NATIVE_HOST_SHELL_COMMAND_CHANNEL, NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL } from '../../common/nativeHost.js';
+import { NATIVE_HOST_IS_ADMIN_CHANNEL, NATIVE_HOST_SHELL_COMMAND_CHANNEL, NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL, NATIVE_HOST_OPEN_WORKSPACE_CHANNEL } from '../../common/nativeHost.js';
 import type { BrowserWindow } from 'electron';
 import type { MessageBoxReturnValue } from '../../../../base/parts/sandbox/common/electronTypes.js';
 import type { ISandboxGlobals } from '../../../../base/parts/sandbox/electron-browser/sandboxTypes.js';
@@ -286,4 +286,17 @@ test('invitation IPC binds ownership to trusted windows and normalizes resources
 	assert.deepEqual(state.getState().lastShown, { timestamp: 86_400_000, editorSessionCount: 1 });
 	firstRegistration.dispose();
 	assert.throws(() => call(first, channels.AGENTS_WINDOW_INVITATION_RELEASE_CHANNEL, claim.id), /Untrusted/);
+});
+
+
+test('workspace IPC preserves the new-window policy and validates legacy and structured requests', async () => {
+	const opened: unknown[] = [];
+	const route = nativeHostIpcRoutes({ openWorkspace: async (root, forceNewWindow) => { opened.push({ root, forceNewWindow }); } } as INativeHostMainService).find(route => route.channel === NATIVE_HOST_OPEN_WORKSPACE_CHANNEL)!;
+	await route.invoke(route.validate('/workspace'));
+	await route.invoke(route.validate({ root: '/clone', forceNewWindow: true }));
+	assert.deepEqual(opened, [{ root: '/workspace', forceNewWindow: false }, { root: '/clone', forceNewWindow: true }]);
+	for (const value of ['', { root: '/clone', forceNewWindow: 'true' }, { root: '/clone', other: true }, { root: '/clone\0' }]) {
+		assert.throws(() => route.validate(value), /Invalid workspace request/);
+	}
+	assert.equal(opened.length, 2);
 });

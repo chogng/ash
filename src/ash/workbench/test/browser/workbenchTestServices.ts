@@ -1,3 +1,5 @@
+import { IProgressService } from '../../../platform/progress/common/progress.js';
+import { BrowserProgressService } from '../../../platform/progress/browser/progressService.js';
 import type { ITextResourceStore } from '../../services/textmodelResolver/common/textResourceStore.js';
 import { TestUriIdentityServices } from '../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { IUriIdentityService } from '../../../platform/uriIdentity/common/uriIdentity.js';
@@ -48,6 +50,7 @@ export function workbenchInstantiationService(owner?: Pick<DisposableStore, 'add
 	const services = new TestWorkbenchServices();
 	owner?.add(services);
 	const resources = services.resources;
+    services.registerSingleton(IProgressService, () => new BrowserProgressService(document.createElement('div')));
 	const uriIdentityServices = resources.add(new TestUriIdentityServices());
 	services.registerInstance(IUriIdentityService, uriIdentityServices.get(IUriIdentityService));
 	const configuration = resources.add(new WorkbenchConfigurationService());

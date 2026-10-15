@@ -40,7 +40,6 @@ import { TextFileBinaryError, TextFileContentSource, type ResolvedTextFileConten
 import { type ITextFileService } from '../../../../services/textfile/common/textfiles.js';
 import { VIEW_ID } from '../../../files/common/files.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
-import type { GitStatus, IGitService } from '../../../../../../../extensions/git/browser/types.js';
 import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService, type IMultiDiffSourceResolver } from '../../browser/multiDiffSourceResolverService.js';
 import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfiguration.js';
 import { EditorLineWrapping, EditorOption } from '../../../../../editor/common/config/editorOptions.js';
@@ -77,18 +76,6 @@ await import('../../../codeEditor/browser/toggleWordWrap.js');
 await import('../../../../../editor/browser/widget/diffEditor/commands.js');
 await import('../../../../../editor/contrib/diffEditorBreadcrumbs/browser/contribution.js');
 const { MultiDiffGoToFileAction } = await import('../../browser/multiDiffEditorActions.js');
-const { createGitMultiDiffEditorInput: resolveGitMultiDiff } = await import('../../../../../../../extensions/git/browser/multiDiff.js');
-async function createGitMultiDiffEditorInput(...args: Parameters<typeof resolveGitMultiDiff>) { const input = await resolveGitMultiDiff(...args); return createMultiDiffEditorInput(input.resource, input.items, input.label!, input.source); }
-
-test('Git multi-diff keeps binary-only changes in every scope', async () => {
-	const status = { repositoryId: 'repo', streamInstanceId: 'stream', historyRevision: 1, revision: 1, workspacePath: '/workspace', head: { type: 'unborn', name: 'main' }, changes: [{ path: 'image.bin', indexStatus: 'modified', worktreeStatus: 'modified', conflicted: false, originalPath: undefined, submodule: { isSubmodule: false, commitChanged: false, trackedChanges: false, untrackedChanges: false } }] } as GitStatus;
-	const git = { status: async () => status, changeFile: async () => ({ original: { kind: 'binary' }, modified: { kind: 'binary' } }) } as unknown as IGitService;
-	for (const scope of ['staged', 'unstaged', 'uncommitted'] as const) {
-		const input = await createGitMultiDiffEditorInput(git, scope);
-		assert.deepEqual(input.items.map(item => ({ label: item.label, binary: item.binary, readOnly: [item.original.readOnly, item.modified.readOnly], file: item.goToFile?.resource.path })), [{ label: 'image.bin', binary: true, readOnly: [true, true], file: '/workspace/image.bin' }]);
-		assert.equal(input.readOnly, true);
-	}
-});
 
 function registerMultiDiffTestServices(services: InstantiationService): InstantiationService {
 	if (!services.has(ICommandService)) services.registerSingleton(ICommandService, () => new CommandService(services));
@@ -118,36 +105,6 @@ function registerDialogs(services: InstantiationService, owner: DisposableStore,
 	if (sourceResolver) owner.add(resolvers.registerResolver(sourceResolver));
 	services.registerInstance(IMultiDiffSourceResolverService, resolvers);
 }
-
-test('Multi-diff source resolves uncommitted Git contents', async () => {
-	const status: GitStatus = {
-		repositoryId: 'repo', streamInstanceId: 'stream', historyRevision: 1, revision: 3, workspacePath: '/workspace',
-		head: { type: 'branch', name: 'main', objectId: 'abc', upstream: undefined },
-		changes: [{
-			path: 'src/file.ts', originalPath: undefined, indexStatus: 'modified', worktreeStatus: 'modified', conflicted: false,
-			submodule: { isSubmodule: false, commitChanged: false, trackedChanges: false, untrackedChanges: false },
-		}],
-	};
-	const git = {
-		status: async () => status,
-		changeFile: async (_path: string, comparison: 'staged' | 'unstaged') => comparison === 'staged'
-			? { original: { kind: 'text', text: 'head' }, modified: { kind: 'text', text: 'index' } }
-			: { original: { kind: 'text', text: 'index' }, modified: { kind: 'text', text: 'worktree' } },
-	} as unknown as IGitService;
-	const gitInput = await createGitMultiDiffEditorInput(git, 'uncommitted');
-	assert.deepEqual({
-		before: gitInput.items[0]?.original.initialText,
-		after: gitInput.items[0]?.modified.initialText,
-		readOnly: gitInput.items[0]?.modified.readOnly,
-		source: gitInput.source,
-	}, {
-		before: 'head',
-		after: 'worktree',
-		readOnly: true,
-		source: { kind: 'external', providerId: 'ash.git', label: 'Uncommitted Changes', repositoryId: 'repo', branchName: 'main' },
-	});
-
-});
 
 test('Stanza multi-diff pane resolves visible comparisons and releases the complete session', async () => {
 	const dom = createTestDom();
@@ -595,7 +552,6 @@ test('Multi-diff configuration and registered file menus work in Chinese', async
 		using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(new BootstrapTextFiles()), {});
 		using pane = registerMultiDiffTestServices(services).createInstance(MultiDiffEditor, {
 			modelService: models, createComputationService: () => new PaneTestDiffComputationService(), editorService: editors,
-			gitService: { stage: async () => { }, discardWorktree: async () => { } } as unknown as IGitService,
 			fileActions: { menuService: menus, contextKeyService: contexts, contextMenuProvider: { showContextMenu() { } } },
 		});
 		const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
@@ -707,8 +663,8 @@ suite('Multi-diff extension source lifecycle', () => {
 	const services = createCodeEditorServices(resources);
 	registerDialogs(services, resources);
 	const models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(new BootstrapTextFiles()), {});
-	const updates = new Emitter<GitStatus>();
-	let liveStatus: GitStatus = {
+	const updates = new Emitter<{ repositoryId: string; revision: number; changes?: { path: string; }[]; }>();
+	let liveStatus = {
 		repositoryId: 'repo', streamInstanceId: 'stream', revision: 1, historyRevision: 1, workspacePath: '/workspace',
 		head: { type: 'unborn', name: 'main' },
 		changes: ['first.ts', 'second.ts'].map(path => ({
@@ -726,7 +682,7 @@ suite('Multi-diff extension source lifecycle', () => {
 			if (revision === 2) await slow;
 			return { original: { kind: 'text', text: 'before' }, modified: { kind: 'text', text: `${path} revision ${revision}` } };
 		},
-	} as unknown as IGitService;
+	};
 	let acquired = 0;
 	let released = 0;
 	const tracked: ITextModelResourceService = {
@@ -752,8 +708,19 @@ suite('Multi-diff extension source lifecycle', () => {
 		},
 		dispose() { }, [Symbol.dispose]() { },
 	};
+	// Generic source lifecycle uses immutable fixture contents, without a Git implementation in the UI process.
+	let resolutions = 0;
+	async function resolveFixtureInput() {
+		const snapshot = liveStatus;
+		const items = await Promise.all(snapshot.changes.map(async change => {
+			const contents = await git.changeFile(change.path);
+			return { id: change.path, label: change.path, original: { resource: URI.parse(`test-before:/${snapshot.revision}/${change.path}`), initialText: contents.original.text, readOnly: true }, modified: { resource: URI.parse(`test-after:/${snapshot.revision}/${change.path}`), initialText: contents.modified.text, readOnly: true } };
+		}));
+		resolutions++;
+		return createMultiDiffEditorInput(URI.parse('ash-scm:/fixture'), items, 'Changes', { kind: 'external', providerId: 'test', repositoryId: 'repo', label: 'Changes' });
+	}
 	const resolvers = services.get(IMultiDiffSourceResolverService);
-	resources.add(resolvers.registerResolver({ canHandleUri: uri => uri.scheme === 'ash-scm', resolveDiffSource: async () => { const input = await createGitMultiDiffEditorInput(git, 'unstaged', liveStatus); return { resource: input.resource, resources: input.items, label: input.label, source: input.source }; }, sourceActions: () => [], primaryRepositoryAction: () => undefined }));
+	resources.add(resolvers.registerResolver({ canHandleUri: uri => uri.scheme === 'ash-scm', resolveDiffSource: async () => { const input = await resolveFixtureInput(); return { resource: input.resource, resources: input.items, label: input.label, source: input.source }; }, sourceActions: () => [], primaryRepositoryAction: () => undefined }));
 	resources.add(updates.event(status => { if (status.repositoryId === 'repo') resolvers.notifyChanged(); }));
 	const pane = registerMultiDiffTestServices(services).createInstance(MultiDiffEditor, {
 		modelService: tracked, createComputationService: () => new PaneTestDiffComputationService(),
@@ -761,7 +728,7 @@ suite('Multi-diff extension source lifecycle', () => {
 	pane.create(parent);
 	pane.layout({ width: 600, height: 400 });
 	suiteSetup(async () => {
-		await pane.setInput(await createGitMultiDiffEditorInput(git, 'unstaged', liveStatus), new AbortController().signal);
+		await pane.setInput(await resolveFixtureInput(), new AbortController().signal);
 	});
 	suiteTeardown(() => {
 		pane.dispose();
@@ -769,6 +736,17 @@ suite('Multi-diff extension source lifecycle', () => {
 		updates.dispose();
 		resources.dispose();
 		dom.window.close();
+	});
+
+	test('retains reviewed models when a source returns the same snapshot', async () => {
+		await waitForPane(() => !!pane.getControl()?.modifiedEditor.getModel());
+		const model = pane.getControl()!.modifiedEditor.getModel();
+		const initialReleased = released;
+		const initialResolutions = resolutions;
+		updates.fire(liveStatus);
+		await waitForPane(() => resolutions > initialResolutions);
+		assert.equal(pane.getControl()!.modifiedEditor.getModel(), model);
+		assert.equal(released, initialReleased);
 	});
 
 	test('replaces revisions in place and releases retired text models', async () => {

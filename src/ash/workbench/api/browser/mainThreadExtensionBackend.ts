@@ -1,3 +1,4 @@
+import { IProgressService, type ProgressOptions } from '../../../platform/progress/common/progress.js';
 import { AppServerRemoteError } from '../../../platform/agentHost/common/appServerError.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { IExtensionApi } from '../../../platform/extensions/common/extensionApi.js';
@@ -24,7 +25,8 @@ export class MainThreadExtensionBackend extends Disposable {
 		@IServerEventApi
 		events: IServerEventApi,
 		@IWorkspaceContextService
-		private readonly workspace: IWorkspaceContextService) {
+		private readonly workspace: IWorkspaceContextService,
+		@IProgressService private readonly progress?: IProgressService) {
 		super();
 		const listener = events.subscribe(event => {
 			this.events.push({ sequence: ++this.sequence, event: normalizeExtensionHostPayload(event), method: event.method });
@@ -34,7 +36,7 @@ export class MainThreadExtensionBackend extends Disposable {
 		});
 		this._register(toDisposable(() => listener.dispose()));
 	}
-	public async handle(source: ExtensionClientSource, capability: string, method: string | undefined, params: JsonValue, after: number, signal: AbortSignal): Promise<JsonValue> {
+	public async handle(source: ExtensionClientSource, capability: string, method: string | undefined, params: JsonValue, after: number, signal: AbortSignal, progressOptions?: ProgressOptions): Promise<JsonValue> {
 		const catalog = await this.extensions.list('cached');
 		signal.throwIfAborted();
 		const descriptor = catalog.extensions.find(extension => extension.id === source.extensionId);
@@ -67,13 +69,32 @@ export class MainThreadExtensionBackend extends Disposable {
 		if (Array.isArray(route.fields) && Object.keys(params).some(key => !route.fields.includes(key))) {
 			throw new TypeError('Extension backend parameters exceed their capability');
 		}
+		const operationId = (params as Record<string, JsonValue>).operationId;
+		const cancellable = typeof route.cancellationRoute === 'string' && typeof operationId === 'string';
+		if (progressOptions && (!this.progress || typeof progressOptions.title !== 'string' || progressOptions.title.length > 2048 || progressOptions.cancellable && !cancellable)) throw new TypeError('Invalid backend progress contract');
+		using progress = progressOptions ? this.progress!.startProgress(progressOptions) : undefined;
+		let cancellation: Promise<unknown> | undefined;
+		const cancel = (): void => {
+			if (!cancellable || cancellation) return;
+			// Cancellation retains the original operation until its terminal response. Only
+			// this admitted operation ID is sent; retirement cannot launch another mutation.
+			cancellation = this.backend.request(route.cancellationRoute, { operationId }, AbortSignal.timeout(5000));
+			void cancellation.catch(() => undefined);
+		};
+		signal.addEventListener('abort', cancel, { once: true });
+		progress?.signal.addEventListener('abort', cancel, { once: true });
+		signal.throwIfAborted();
 		let result: JsonValue;
 		try {
-			result = await this.backend.request(route.route, params, signal);
-		}
-		catch (error) {
+			result = await this.backend.request(route.route, params, cancellable ? new AbortController().signal : signal);
+			signal.throwIfAborted();
+		} catch (error) {
 			signal.throwIfAborted();
 			return { backendError: { name: error instanceof AppServerRemoteError ? error.errorName : 'Unavailable', message: error instanceof Error ? error.message : String(error) } };
+		} finally {
+			signal.removeEventListener('abort', cancel);
+			progress?.signal.removeEventListener('abort', cancel);
+			await cancellation?.catch(() => undefined);
 		}
 		if (!Array.isArray(route.resultFields)) {
 			return result;

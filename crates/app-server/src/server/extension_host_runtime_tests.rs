@@ -436,8 +436,8 @@ fn assert_lazy_activation_fence(event: super::source::ActivationEvent) {
             "lazy".into(),
             super::RuntimeEntry {
                 activation_gate: Arc::new(std::sync::Mutex::new(())),
-                node_client: super::NodeClientScope::Unsupported,
-                node_deployment: None,
+                client_scope: super::EditorClientScope::Unsupported,
+                window_deployment: None,
                 version: "1".into(),
                 workspace_read: super::source::WorkspaceReadAccess::Denied,
                 supervisor: Some(supervisor),
@@ -758,4 +758,99 @@ fn remote_extension_start_is_connection_owned_and_close_retires_only_its_fleet()
             .extensions
             .is_empty()
     );
+}
+
+#[test]
+fn credentials_are_private_to_admitted_consumers_and_never_relayed_to_the_renderer() {
+    use external_ext_protocol::ExtensionClientOperation;
+    use external_ext_protocol::ExtensionClientResult;
+    use external_ext_protocol::HostErrorCode;
+    use external_ext_protocol::HostEventContext;
+    use external_ext_protocol::services::CoreServiceRequest;
+    use external_ext_protocol::services::CoreServiceResponse;
+    use std::collections::BTreeMap;
+    use std::sync::Arc;
+    use std::sync::Mutex;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
+
+    let client = Arc::new(crate::client_host::ClientHost::default());
+    let queue = crate::server::notification_queue::NotificationQueue::default();
+    client.register(7, false, queue.clone());
+    let calls = Arc::new(AtomicUsize::new(0));
+    let count = Arc::clone(&calls);
+    let handler: Arc<super::CredentialHandler> = Arc::new(move |host, account, _| {
+        count.fetch_add(1, Ordering::Relaxed);
+        if host != "github.com" || account.is_some_and(|id| id != "approved") {
+            return Err(ash_external_ext::HostFailure {
+                code: HostErrorCode::PermissionDenied,
+                message: "account not authorized".into(),
+            });
+        }
+        Ok(CoreServiceResponse::Credential {
+            username: "test-user".into(),
+            password: b"test-secret".to_vec(),
+        })
+    });
+    let mut binding = super::EditorClientBinding {
+        credential_providers: Vec::new(),
+        credential_services: Arc::new(Mutex::new(BTreeMap::from([("github".into(), handler)]))),
+        client_host: client,
+        owner: 7,
+        extension_id: "ash.git".into(),
+        workspace_read: super::source::WorkspaceReadAccess::Denied,
+        files: Err(ash_external_ext::HostFailure {
+            code: HostErrorCode::PermissionDenied,
+            message: "no files".into(),
+        }),
+    };
+    let source = ash_async_utils::CancellationSource::new();
+    let request = |host: &str, account: Option<&str>| ExtensionClientOperation::CoreService {
+        request: CoreServiceRequest::CredentialGet {
+            provider_id: "github".into(),
+            host: host.into(),
+            account_id: account.map(str::to_owned),
+        },
+    };
+    let invoke = |binding: &super::EditorClientBinding, operation| {
+        binding.request(
+            HostEventContext::new(1, 1),
+            operation,
+            &source.token(),
+            Duration::from_millis(10),
+        )
+    };
+    assert_eq!(
+        invoke(&binding, request("github.com", None))
+            .unwrap_err()
+            .code,
+        HostErrorCode::PermissionDenied
+    );
+    assert_eq!(calls.load(Ordering::Relaxed), 0);
+    binding.credential_providers.push("github".into());
+    for host in [
+        "github.com/path",
+        "user@github.com",
+        "github.com:443",
+        "GITHUB.COM",
+        "",
+    ] {
+        assert!(invoke(&binding, request(host, None)).is_err());
+    }
+    assert_eq!(calls.load(Ordering::Relaxed), 0);
+    assert!(invoke(&binding, request("example.com", None)).is_err());
+    assert!(invoke(&binding, request("github.com", Some("revoked"))).is_err());
+    let result = invoke(&binding, request("github.com", Some("approved"))).unwrap();
+    assert!(
+        matches!(&result,ExtensionClientResult::CoreService{response:CoreServiceResponse::Credential{username,password}} if username=="test-user" && password==b"test-secret")
+    );
+    assert!(!format!("{result:?}").contains("test-secret"));
+    assert!(queue.drain().is_empty());
+    source.cancel();
+    let calls_before = calls.load(Ordering::Relaxed);
+    assert!(invoke(&binding, request("github.com", None)).is_err());
+    assert_eq!(calls.load(Ordering::Relaxed), calls_before);
+    binding.credential_providers.clear();
+    assert!(invoke(&binding, request("github.com", None)).is_err());
+    assert!(queue.drain().is_empty());
 }

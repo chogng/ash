@@ -59,7 +59,18 @@ impl std::fmt::Debug for ExtensionHostRuntime {
     }
 }
 
+type CredentialHandler = dyn Fn(
+        &str,
+        Option<&str>,
+        &ash_async_utils::CancellationToken,
+    ) -> Result<
+        external_ext_protocol::services::CoreServiceResponse,
+        ash_external_ext::HostFailure,
+    > + Send
+    + Sync;
+
 struct RuntimeInner {
+    credential_services: Arc<Mutex<BTreeMap<String, Arc<CredentialHandler>>>>,
     environment: Option<BTreeMap<String, Option<String>>>,
     built_in_extensions: source::BuiltInEditorExtensions,
     plugin_authority: Option<PluginActivationAuthority>,
@@ -93,7 +104,7 @@ struct FleetState {
 impl FleetState {
     fn entry(&self, owner: u64, id: &str) -> Option<&RuntimeEntry> {
         let entry = self.entries.get(id)?;
-        if entry.node_deployment.is_some() {
+        if entry.window_deployment.is_some() {
             self.windows.get(&owner).and_then(|entries| entries.get(id))
         } else {
             Some(entry)
@@ -101,7 +112,7 @@ impl FleetState {
     }
 
     fn entry_mut(&mut self, owner: u64, id: &str) -> Option<&mut RuntimeEntry> {
-        if self.entries.get(id)?.node_deployment.is_some() {
+        if self.entries.get(id)?.window_deployment.is_some() {
             self.windows
                 .get_mut(&owner)
                 .and_then(|entries| entries.get_mut(id))
@@ -128,7 +139,7 @@ impl FleetState {
     }
 }
 
-enum NodeClientScope {
+enum EditorClientScope {
     Unsupported,
     Pending,
     Bound { owner: u64 },
@@ -142,8 +153,8 @@ struct RuntimeEntry {
     fallback: ExtensionHostExtensionSnapshot,
     failure: Option<ExtensionHostRuntimeFailure>,
     pending_activation: Option<source::ActivationPlan>,
-    node_client: NodeClientScope,
-    node_deployment: Option<source::EditorExtensionDeployment>,
+    client_scope: EditorClientScope,
+    window_deployment: Option<source::EditorExtensionDeployment>,
 }
 
 pub(super) enum ExtensionHostReconcileMode {
@@ -189,6 +200,13 @@ pub(super) enum ExtensionHostRuntimeError {
 }
 
 impl ExtensionHostRuntime {
+    pub(super) fn register_credentials(&self, provider: String, handler: Arc<CredentialHandler>) {
+        self.inner
+            .credential_services
+            .lock()
+            .expect("credential registry lock")
+            .insert(provider, handler);
+    }
     pub(super) fn start(
         built_in_extensions: source::BuiltInEditorExtensions,
         plugin_authority: Option<PluginActivationAuthority>,
@@ -218,6 +236,7 @@ impl ExtensionHostRuntime {
             .and_then(|admission| admission.subscribe());
         let (shutdown, shutdown_receiver) = std::sync::mpsc::channel();
         let inner = Arc::new(RuntimeInner {
+            credential_services: Arc::new(Mutex::new(BTreeMap::new())),
             environment,
             built_in_extensions,
             plugin_authority,
@@ -470,8 +489,8 @@ impl ExtensionHostRuntime {
                 .supervisor
                 .clone()
                 .ok_or_else(|| entry_host_error(entry))?;
-            let handler = match entry.node_client {
-                NodeClientScope::Pending => {
+            let handler = match entry.client_scope {
+                EditorClientScope::Pending => {
                     let client_host = Arc::clone(&self.inner.client_host);
                     let extension_id = extension_id.to_owned();
                     let workspace_read = entry.workspace_read;
@@ -480,17 +499,23 @@ impl ExtensionHostRuntime {
                         owner,
                         extension_id,
                         workspace_read,
+                        credential_providers: entry
+                            .window_deployment
+                            .as_ref()
+                            .map(|deployment| deployment.credential_providers.clone())
+                            .unwrap_or_default(),
+                        credential_services: Arc::clone(&self.inner.credential_services),
                         files,
                     };
                     let handler: Arc<ash_external_ext::ExtensionBackgroundClientHandler> =
                         Arc::new(move |context, operation, token, timeout| {
                             binding.request(context, operation, token, timeout)
                         });
-                    entry.node_client = NodeClientScope::Bound { owner };
+                    entry.client_scope = EditorClientScope::Bound { owner };
                     Some(handler)
                 }
-                NodeClientScope::Unsupported => None,
-                NodeClientScope::Bound { .. } => return Err(ExtensionHostRuntimeError::Stale),
+                EditorClientScope::Unsupported => None,
+                EditorClientScope::Bound { .. } => return Err(ExtensionHostRuntimeError::Stale),
             };
             entry.pending_activation = None;
             (supervisor, handler)
@@ -513,10 +538,10 @@ impl ExtensionHostRuntime {
             .entry(owner, extension_id)
             .is_some_and(|entry| {
                 entry.fallback.activation_generation == generation
-                    && match entry.node_client {
-                        NodeClientScope::Unsupported => true,
-                        NodeClientScope::Pending => false,
-                        NodeClientScope::Bound {
+                    && match entry.client_scope {
+                        EditorClientScope::Unsupported => true,
+                        EditorClientScope::Pending => false,
+                        EditorClientScope::Bound {
                             owner: bound_owner, ..
                         } => owner == bound_owner,
                     }
@@ -548,6 +573,37 @@ impl ExtensionHostRuntime {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .snapshot_for(owner)
+    }
+
+    /// Product runtime identities come from release deployments, never renderer input.
+    pub(super) fn product_extension_states(&self) -> Vec<(String, bool)> {
+        let state = self
+            .inner
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        state
+            .entries
+            .iter()
+            .filter(|(_, entry)| {
+                entry.window_deployment.as_ref().is_some_and(|deployment| {
+                    deployment.scope == source::EditorExtensionScope::Product
+                })
+            })
+            .map(|(id, _)| {
+                let running = state
+                    .windows
+                    .values()
+                    .filter_map(|entries| entries.get(id))
+                    .any(|entry| {
+                        entry.supervisor.as_ref().is_some_and(|supervisor| {
+                            supervisor.snapshot().status
+                                == ash_external_ext::ExtensionHostStatus::Ready
+                        })
+                    });
+                (id.clone(), running)
+            })
+            .collect()
     }
 
     pub(super) fn start_invocation(
@@ -687,6 +743,8 @@ impl ExtensionHostRuntime {
 }
 
 struct EditorClientBinding {
+    credential_providers: Vec<String>,
+    credential_services: Arc<Mutex<BTreeMap<String, Arc<CredentialHandler>>>>,
     client_host: Arc<crate::client_host::ClientHost>,
     owner: u64,
     extension_id: String,
@@ -719,14 +777,47 @@ impl EditorClientBinding {
                 message: "extension has no directory read permission".into(),
             });
         }
-        if matches!(
-            operation,
-            external_ext_protocol::ExtensionClientOperation::CoreService { .. }
-        ) {
-            return Err(external_ext_protocol::HostFailure {
+        if let external_ext_protocol::ExtensionClientOperation::CoreService { request } = &operation
+        {
+            let denied = || external_ext_protocol::HostFailure {
                 code: external_ext_protocol::HostErrorCode::PermissionDenied,
-                message: "profile services are not available to editor extensions".into(),
-            });
+                message: "credential service is not granted to this package".into(),
+            };
+            let external_ext_protocol::services::CoreServiceRequest::CredentialGet {
+                provider_id,
+                host,
+                account_id,
+            } = request
+            else {
+                return Err(denied());
+            };
+            if !self.credential_providers.contains(provider_id)
+                || host.is_empty()
+                || host.len() > 253
+                || host.chars().any(char::is_control)
+                || account_id.as_ref().is_some_and(|id| id.len() > 1024)
+            {
+                return Err(denied());
+            }
+            let parsed = url::Url::parse(&format!("https://{host}/")).map_err(|_| denied())?;
+            if parsed.host_str() != Some(host)
+                || parsed.port().is_some()
+                || !parsed.username().is_empty()
+                || parsed.password().is_some()
+            {
+                return Err(denied());
+            }
+            token.check().map_err(|_| denied())?;
+            let handler = self
+                .credential_services
+                .lock()
+                .map_err(|_| denied())?
+                .get(provider_id)
+                .cloned()
+                .ok_or_else(denied)?;
+            let response = handler(host, account_id.as_deref(), token)?;
+            token.check().map_err(|_| denied())?;
+            return Ok(external_ext_protocol::ExtensionClientResult::CoreService { response });
         }
         self.client_host
             .request_with_timeout(
@@ -769,7 +860,7 @@ impl RuntimeInner {
             .reconcile_gate
             .lock()
             .map_err(|_| ExtensionHostRuntimeError::Internal)?;
-        let (supervisor, workspace_read) = {
+        let (supervisor, workspace_read, credential_providers) = {
             let state = self
                 .state
                 .lock()
@@ -806,7 +897,15 @@ impl RuntimeInner {
                     .ok_or(ExtensionHostRuntimeError::Stale)?;
                 payload.insert("__connectionOwner".into(), Value::String(owner.to_string()));
             }
-            (supervisor, entry.workspace_read)
+            (
+                supervisor,
+                entry.workspace_read,
+                entry
+                    .window_deployment
+                    .as_ref()
+                    .map(|deployment| deployment.credential_providers.clone())
+                    .unwrap_or_default(),
+            )
         };
         let deadline = NonZeroU64::new(request.deadline_unix_millis)
             .ok_or(ExtensionHostRuntimeError::Stale)?;
@@ -854,6 +953,8 @@ impl RuntimeInner {
             owner,
             extension_id,
             workspace_read,
+            credential_providers,
+            credential_services: Arc::clone(&self.credential_services),
             files,
         };
         if std::thread::Builder::new()
@@ -971,6 +1072,7 @@ fn registration_allows_operation(registration: &RegistrationKind, operation: &st
                 | "remoteRelease"
         ),
         RegistrationKind::CustomTextEditor { .. } => operation == "resolveCustomTextEditor",
+        RegistrationKind::SourceControl { .. } => operation == "scm",
         RegistrationKind::StatusBar { .. } => false,
         RegistrationKind::WorkspaceEvents {} => operation == "workspaceEvent",
         RegistrationKind::TextDocumentEvents {} => operation == "documentEvent",

@@ -101,7 +101,7 @@ Workspace edit 的 `entries` 按顺序执行：`kind: textDocument` 带 `resourc
 | 内置 TS/JS `browser` 包                   | 窗口的 `WebWorkerExtensionHost`                 | reconcile 读取启用目录并启动 browser 入口；当前尚未按 manifest `activationEvents` 延迟创建 Worker |
 | 后端标准 JS 包（Node 或 Rust/V8 JS 宿主） | App Server 的 JS 扩展发现、授权与宿主监管       | 启用并授权后可保持 `dormant`，按已支持的命令、语言、启动完成等事件激活；Rust/V8 仍执行 JS         |
 | 独立 Rust capability Provider             | 共享运行时、来源授权与对应 supervisor           | 按 Provider 声明、scope 和能力需求启动/握手，不套用浏览器包的 VS Code activation events           |
-| 共享 Git 后端                             | App Server 的目录级 `GitRuntime` / `GitService` | 由共享后端管理仓库、监听和状态；不依赖 `ash.git` Worker 的启用或激活事件                          |
+| 共享 Git 后端                             | App Server 的目录级 `GitRuntime` / `GitService` | 由共享后端管理仓库、监听和状态；不依赖 `ash.git` Rust 扩展的启用或激活事件                        |
 
 浏览器 reconcile 是增量刷新：包版本、package/manifest digest、来源、执行位置/平台和窗口语言
 不变时保留健康 Worker、激活代次、进行中的调用及 SCM provider。移除、禁用或身份变更先撤销旧
@@ -1012,24 +1012,25 @@ ASH_PLAYWRIGHT_OPEN_VSX=1 pnpm run test:smoke:desktop test/smoke/areas/chat/exte
 
 ## Git 内置能力与构建
 
-[`extensions/git`](../extensions/git/README.md) 是 TS 浏览器扩展，在客户端所属的 Worker 中运行。
-共享 Rust `ash-git` 保留基础 Git 执行与解析，App Server 的 `GitRuntime` / `GitService` 拥有
-目录授权、仓库发现、状态版本、历史游标、监听、忽略规则通知和自动 fetch，并提供现有 `git/*` 契约。
-Agent 的 worktree / Turn 事务和 TUI 不依赖前端扩展的启用状态。TS 扩展拥有 Git 命令、SCM provider、
-历史、quick diff、忽略规则装饰和多文件差异策略；manifest 拥有菜单、子菜单、颜色、欢迎内容、
-设置元数据与中英文 NLS。核心只提供通用 SCM 展示、编辑器模型、文件持久化和能力桥接。
+[`extensions/git`](../extensions/git/README.md) 是独立 Rust 编辑器扩展，发布为
+`ash-git-extension`，每个窗口拥有独立 activation。扩展拥有 Git 命令、SCM provider、历史、
+quick diff、忽略规则装饰、blame、timeline 和差异策略；manifest 拥有菜单、设置元数据与中英文消息。
+105 项 Git 设置均有运行时消费者。共享 `ash-git` 与 App Server `GitRuntime` / `GitService`
+继续拥有基础执行、目录授权、仓库事实、状态版本、历史游标、监听和自动 fetch；Agent、Turn
+事务与 TUI 直接复用这些机制。
 
-公共 `ash` 模块通过 `scm.registerSCMProvider` 注册 provider，`backend.request/state` 使用产品准许的
-后端能力，`editors.request` 使用客户端编辑器能力。客户端依据内置包来源和 manifest grant 限制路由、
-配置字段和通知；扩展不持有客户端的后端连接。调用和 provider 生命周期绑定扩展 incarnation，退役会
-取消回调并释放 SCM、装饰和差异源；输入版本防止异步提交覆盖后续草稿。
+扩展使用公共 Rust SDK 的 SCM、command、terminal 与 Client/Services 契约。通用 TS 桥拥有
+编辑器、working copy、UI 和配置服务，依据内置包来源及能力 grant 路由调用。凭据服务只在后端
+授予内置 Git 消费端，复用已有 Rust GitHub 认证 Provider；令牌不经过 Renderer RPC。GitHub
+PR/Issue 业务尚未拆成新的扩展。`git.getRepositoryContexts` 与 `git.executeRepositoryCommand`
+保留为可选消费者命令，核心不导入 Git 扩展实现。
 
-GitHub 消费端通过可选的 `git.getRepositoryContexts` 与 `git.executeRepositoryCommand` 命令获取
-领域上下文或执行仓库意图，不导入 Git 扩展实现。Git 自动获取仍持久化到共享配置 owner，设置页仅
-使用通用的扩展设置绑定。`ash.scm` 是已接入的 Ash 合约，不表示完整实现 VS Code 的 `vscode.scm` API。
+后台发现和合并后的 SCM 发布不等待 UI 确认；命令重新读取目录级策略。草稿版本、HEAD、
+精确提交对象、编辑器版本与 activation 身份绑定操作，退役会取消回调、辅助进程和贡献。
+Git 自动获取仍持久化到共享配置 owner，旧用户配置经版本检查写入并回读确认后迁移。
+`ash.scm` 是已接入的 Ash 合约，不表示完整实现 `vscode.scm`。
 
-[`build/builtin`](../build/builtin) 统一拥有内置扩展资源打包。manifest、NLS、资源及编译后的
-browser 入口随完整包发布，再由 Rust 目录和资源接口提供；Rust 源码及 Cargo 构建输入不进入
-资源包，可执行文件由共享后端构建、签名和包布局装配。Git manifest 只有浏览器入口；
-共享后端包包含其编译代码与资源，不再构建或装配 Git 扩展可执行组件。禁用 Git 扩展后，通用 SCM、
-差异编辑、撤销与保存仍由核心 owner 提供；共享 Rust Git 与 Agent/TUI 继续可用。
+[`build/builtin`](../build/builtin) 打包 manifest、消息与资源，Cargo/Bazel 构建独立 Git
+可执行文件，后端包布局与签名包含它。Rust 源码、Cargo 输入和旧 TS 实现不进入资源包。
+禁用扩展会撤销该窗口的命令、SCM、终端环境和注释；通用编辑器、其他 SCM Provider、
+共享 Rust Git 与 Agent/TUI 保持各自生命周期。

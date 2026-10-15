@@ -73,7 +73,7 @@ export function createNativeHostApi(mainProcessService: IMainProcessService): IN
 		openNewWindowTab: () => invoke<void>(WINDOW_OPERATION_CHANNEL, { kind: 'newTab' }),
 		pickFolder: () => invoke<string | undefined>(NATIVE_HOST_PICK_FOLDER_CHANNEL),
 		showOpenDialog: async options => validateOpenDialogResult(await invoke<unknown>(NATIVE_HOST_PICK_FILE_CHANNEL, options)),
-		openWorkspace: (root) => invoke<void>(NATIVE_HOST_OPEN_WORKSPACE_CHANNEL, root),
+		openWorkspace: (root, forceNewWindow) => invoke<void>(NATIVE_HOST_OPEN_WORKSPACE_CHANNEL, forceNewWindow ? { root, forceNewWindow } : root),
 		openWindow: options => invoke<void>(NATIVE_HOST_OPEN_WINDOW_CHANNEL, options),
 		openAgentsWindow: options => invoke<void>(NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL, options),
 		getAgentHostEditorState: async () => validateAgentHostEditorState(await invoke<unknown>(AGENT_HOST_EDITOR_STATE_CHANNEL)),

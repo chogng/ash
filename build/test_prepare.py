@@ -332,6 +332,7 @@ class PrepareTests(unittest.TestCase):
                 "ash-exec-server",
                 "ash-app-server-daemon",
                 "ash-code-mode-host",
+                "ash-git-extension",
                 "ash-github-authentication",
                 "ash-remote-ssh-extension",
                 "ash-dev-container-provider",

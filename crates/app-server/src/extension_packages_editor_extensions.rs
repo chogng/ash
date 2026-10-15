@@ -69,6 +69,12 @@ pub trait ExtensionsEditorExtensionAdmissionLease: Send {}
 /// grants to the exact package digest, executable capability, and requested capability ceiling in
 /// `binding`. `acquire` must fail after revocation and return a lease that drains admitted work.
 pub trait ExtensionsEditorExtensionAdmission: Send + Sync {
+    /// Product executables already have release authority; this checks whole-extension
+    /// enablement without granting installed packages execution privileges.
+    fn is_product_extension_enabled(&self, _id: &str) -> bool {
+        true
+    }
+
     /// Returns the current product-local enable/grant generation.
     ///
     /// Implementations must advance this value whenever any binding's authorization can change.
@@ -188,6 +194,8 @@ pub(crate) fn deployments(
             version: source.package().version.clone(),
             package_digest: source.package().digest.clone(),
             command,
+            credential_providers: Vec::new(),
+            protocol_limits: None,
             workspace_read:
                 crate::server::extension_host_runtime::source::WorkspaceReadAccess::Denied,
             params: ActivateParams {
@@ -259,6 +267,8 @@ fn deployment(
         version: source.package().version.clone(),
         package_digest: source.package().digest.clone(),
         // Executable admission currently carries no directory-read ceiling.
+        credential_providers: Vec::new(),
+        protocol_limits: None,
         workspace_read: crate::server::extension_host_runtime::source::WorkspaceReadAccess::Denied,
         command: ExtensionLaunchCommand::new(
             source.host_path(),
@@ -669,6 +679,9 @@ struct ProfileAdmissionLease {
 }
 impl ExtensionsEditorExtensionAdmissionLease for ProfileAdmissionLease {}
 impl ExtensionsEditorExtensionAdmission for ProfileEditorExtensionAdmission {
+    fn is_product_extension_enabled(&self, id: &str) -> bool {
+        self.0.is_extension_enabled(id)
+    }
     fn generation(&self) -> u64 {
         self.0.generation()
     }

@@ -42,6 +42,48 @@ impl SqliteTurnChangeStore {
         &self.path
     }
 
+    /// Retained, complete provenance for one physical checkout, including archived Threads.
+    pub fn list_for_worktree(
+        &self,
+        worktree: &Path,
+    ) -> Result<Vec<TurnChangeSet>, TurnChangeStoreError> {
+        let root = worktree
+            .to_str()
+            .ok_or_else(|| TurnChangeStoreError::Storage("checkout path is not UTF-8".into()))?;
+        let connection = self.connection()?;
+        let mut statement=connection.prepare("SELECT change_set_id, revision, record_json FROM turn_change_sets WHERE json_extract(record_json, '$.worktreeRoot') = ?1 AND json_extract(record_json, '$.captureState') = 'sealed' ORDER BY rowid DESC LIMIT 5001").map_err(storage_error)?;
+        let rows = statement
+            .query_map([root], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            })
+            .map_err(storage_error)?;
+        let mut records = Vec::new();
+        for row in rows {
+            let (id, revision, json) = row.map_err(storage_error)?;
+            let id = ChangeSetId::new(id)
+                .map_err(|error| TurnChangeStoreError::Storage(error.to_string()))?;
+            let record = deserialize_checked(&id, revision, &json)?;
+            if record.worktree_root != worktree {
+                return Err(TurnChangeStoreError::Storage(
+                    "checkout provenance path disagrees".into(),
+                ));
+            }
+            if !record.attribution_incomplete {
+                records.push(record);
+            }
+            if records.len() > 5000 {
+                return Err(TurnChangeStoreError::Storage(
+                    "checkout provenance exceeds the query limit".into(),
+                ));
+            }
+        }
+        Ok(records)
+    }
+
     pub fn replay_command(
         &self,
         command_id: &str,

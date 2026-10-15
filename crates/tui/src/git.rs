@@ -349,6 +349,8 @@ where
         Command::Switch { name } => Ok(Event::SwitchFinished(
             client
                 .switch_git_branch(GitBranchSwitchParams {
+                    client: None,
+                    pull_before_checkout: None,
                     repository_id: None,
                     name,
                 })
@@ -358,6 +360,7 @@ where
         Command::Create { name } => {
             let result = client
                 .create_git_branch(GitBranchCreateParams {
+                    client: None,
                     repository_id: None,
                     name: name.clone(),
                 })
@@ -367,6 +370,7 @@ where
         Command::DeleteBranch { name } => Ok(Event::BranchDeleted(
             client
                 .delete_git_branch(GitBranchDeleteParams {
+                    client: None,
                     repository_id: None,
                     name,
                 })
@@ -379,6 +383,9 @@ where
             .map_err(|error| git_error_message(error, GitAction::ListWorktrees)),
         Command::CreateWorktree { name } => {
             let created = match client.create_git_worktree(GitWorktreeCreateParams {
+                client: None,
+                include_files: Vec::new(),
+                symlink_folders: Vec::new(),
                 repository_id: None,
                 name,
             }) {
@@ -405,6 +412,7 @@ where
         } => Ok(Event::WorktreeDeleted {
             result: client
                 .delete_git_worktree(GitWorktreeDeleteParams {
+                    client: None,
                     command_id: crate::client::new_command_id("delete-worktree"),
                     repository_id: None,
                     checkout_root,
@@ -417,6 +425,7 @@ where
         Command::ResolveWorktree { checkout_root } => Ok(Event::WorktreeResolved(
             client
                 .resolve_git_worktree(GitWorktreeResolveParams {
+                    client: None,
                     repository_id: None,
                     checkout_root,
                 })

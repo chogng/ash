@@ -268,6 +268,7 @@ interface ProviderSnapshot {
 	readonly groups: readonly Record<string, JsonValue>[];
 	readonly input: Record<string, JsonValue>;
 	readonly activeRepositoryName: string | undefined;
+	readonly count: number | undefined;
 	readonly statusMessage: string;
 	readonly isBusy: boolean;
 	readonly statusBarCommands: readonly Record<string, JsonValue>[];
@@ -338,6 +339,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 	public get activeRepositoryName(): string | undefined { return this.snapshot.activeRepositoryName; }
 	public get statusMessage(): string { return this.snapshot.statusMessage; }
 	public get isBusy(): boolean { return this.snapshot.isBusy; }
+	public get count(): number | undefined { return this.snapshot.count; }
 	public get input(): ISCMProvider['input'] {
 		const owner = this;
 		const input = this.snapshot.input;
@@ -346,8 +348,10 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 				if (owner.draft !== value) {
 					owner.draft = value;
 					++owner.draftRevision;
+					void owner.syncInput().catch(owner.reportError);
 				}
 			},
+			visible: input.visible !== false, buttonVisible: input.buttonVisible !== false, validationMessage: optionalString(input.validationMessage),
 			placeholder: string(input.placeholder), enabled: input.enabled === true, canAccept: input.canAccept === true,
 			buttonLabel: string(input.buttonLabel), buttonTooltip: string(input.buttonTooltip),
 			async accept() {
@@ -362,7 +366,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 		};
 	}
 	public get groups(): readonly ISCMResourceGroup[] {
-		// Group identity remains stable until the next snapshot so captured menu contexts stay valid.
+		// Keep resource identities while only input or status presentation changes.
 		return this.resourceGroups ??= this.snapshot.groups.map(group => ({
 			id: string(group.id), label: string(group.label), actions: array(group.actions).map(value => this.action(value)),
 			resources: array(group.resources).map(value => {
@@ -392,7 +396,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 	public async syncInput(): Promise<void> {
 		if (this.syncedDraftRevision === this.draftRevision) {
 			return;
-		} const revision = this.draftRevision; await this.call('setInput', { value: this.draft, inputRevision: revision }); this.syncedDraftRevision = revision;
+		} const revision = this.draftRevision; await this.call('setInput', { value: this.draft, inputRevision: revision }); this.syncedDraftRevision = Math.max(this.syncedDraftRevision, revision);
 	}
 	public async refresh(): Promise<void> {
 		if (this.syncedDraftRevision !== this.draftRevision) await this.syncInput();
@@ -411,8 +415,9 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 		}
 		const historyChanged = value.historyRevision !== this.snapshot.historyRevision;
 		const historyRefsChanged = value.historyRefsRevision !== this.snapshot.historyRefsRevision;
+		const resourcesChanged = !structuralEquals(value.groups, this.snapshot.groups);
 		this.snapshot = value;
-		this.resourceGroups = undefined;
+		if (resourcesChanged) this.resourceGroups = undefined;
 		if (!structuralEquals(this.historyRef.get(), value.historyRef)) { this.historyRef.set(value.historyRef); }
 		if (!structuralEquals(this.historyRemoteRef.get(), value.historyRemoteRef)) { this.historyRemoteRef.set(value.historyRemoteRef); }
 		if (!structuralEquals(this.historyBaseRef.get(), value.historyBaseRef)) { this.historyBaseRef.set(value.historyBaseRef); }
@@ -462,7 +467,12 @@ function parseProvider(value: JsonValue): ProviderSnapshot {
 	for (const key of ['hasHistoryItemRefs', 'hasHistoryMergeBase']) {
 		if (entry[key] != null && typeof entry[key] !== 'boolean') { throw new TypeError('Invalid SCM history capability'); }
 	}
+	if (entry.count != null && (typeof entry.count !== 'number' || !Number.isSafeInteger(entry.count) || entry.count < 0)) throw new TypeError('Invalid SCM count');
 	const input = object(entry.input);
+	for (const key of ['visible', 'buttonVisible']) {
+		if (input[key] != null && typeof input[key] !== 'boolean') throw new TypeError('Invalid SCM input visibility');
+	}
+	if (input.validationMessage != null) string(input.validationMessage);
 	for (const key of ['value', 'placeholder', 'buttonLabel', 'buttonTooltip']) {
 		string(input[key]);
 	}
@@ -499,7 +509,7 @@ function parseProvider(value: JsonValue): ProviderSnapshot {
 	const historyRefsRevision = entry.historyRefsRevision == null ? 0 : number(entry.historyRefsRevision);
 	if (!Number.isSafeInteger(historyRefsRevision) || historyRefsRevision < 0) { throw new TypeError('Invalid SCM history refs revision'); }
 	const historyRefsItems = entry.historyRefsItems == null ? [] : array(entry.historyRefsItems).map(parseHistoryItem);
-	return { id: string(entry.id), providerId: string(entry.providerId), label: string(entry.label), rootUri: optionalString(entry.rootUri), selected: entry.selected === true, selectionRevision, groups, input, activeRepositoryName: optionalString(entry.activeRepositoryName), statusMessage: string(entry.statusMessage), isBusy: entry.isBusy === true, statusBarCommands, historyRef: entry.historyRef == null ? undefined : parseRef(entry.historyRef), historyRemoteRef: entry.historyRemoteRef == null ? undefined : parseRef(entry.historyRemoteRef), historyBaseRef: entry.historyBaseRef == null ? undefined : parseRef(entry.historyBaseRef), hasHistoryItemRefs: entry.hasHistoryItemRefs === true, hasHistoryMergeBase: entry.hasHistoryMergeBase === true, historyRevision: number(entry.historyRevision), historyRefsRevision, historyRefsItems, hasHistory: entry.hasHistory === true, hasMerge: entry.hasMerge === true, inputRevision: number(entry.inputRevision), multiDiff: entry.multiDiff == null ? undefined : object(entry.multiDiff) };
+	return { count: entry.count == null ? undefined : number(entry.count), id: string(entry.id), providerId: string(entry.providerId), label: string(entry.label), rootUri: optionalString(entry.rootUri), selected: entry.selected === true, selectionRevision, groups, input, activeRepositoryName: optionalString(entry.activeRepositoryName), statusMessage: string(entry.statusMessage), isBusy: entry.isBusy === true, statusBarCommands, historyRef: entry.historyRef == null ? undefined : parseRef(entry.historyRef), historyRemoteRef: entry.historyRemoteRef == null ? undefined : parseRef(entry.historyRemoteRef), historyBaseRef: entry.historyBaseRef == null ? undefined : parseRef(entry.historyBaseRef), hasHistoryItemRefs: entry.hasHistoryItemRefs === true, hasHistoryMergeBase: entry.hasHistoryMergeBase === true, historyRevision: number(entry.historyRevision), historyRefsRevision, historyRefsItems, hasHistory: entry.hasHistory === true, hasMerge: entry.hasMerge === true, inputRevision: number(entry.inputRevision), multiDiff: entry.multiDiff == null ? undefined : object(entry.multiDiff) };
 }
 function parseHistoryItem(value: JsonValue): ISCMHistoryItem { const entry = object(value); return { id: string(entry.id), parentIds: array(entry.parentIds).map(value => string(value)), subject: string(entry.subject), message: string(entry.message, 512 * 1024), displayId: optionalString(entry.displayId), timestamp: entry.timestamp == null ? undefined : number(entry.timestamp), references: array(entry.references ?? []).map(parseRef), remoteLinks: array(entry.remoteLinks ?? []).map(value => { const link = object(value); return { name: string(link.name), uri: URI.parse(string(link.uri)) }; }) }; }
 function parseHistoryChange(value: JsonValue): ISCMHistoryItemChange { const entry = object(value); return { uri: URI.parse(string(entry.uri)), originalUri: entry.originalUri == null ? undefined : URI.parse(string(entry.originalUri)), modifiedUri: entry.modifiedUri == null ? undefined : URI.parse(string(entry.modifiedUri)), path: string(entry.path), originalPath: optionalString(entry.originalPath), status: string(entry.status), parentId: optionalString(entry.parentId) }; }

@@ -477,6 +477,13 @@ fn registration_dto(
             RegistrationKind::StatusBar { revision, entries } => {
                 ExtensionHostRegistrationKindDto::StatusBar { revision, entries }
             }
+            RegistrationKind::SourceControl {
+                revision,
+                providers,
+            } => ExtensionHostRegistrationKindDto::SourceControl {
+                revision,
+                providers,
+            },
             RegistrationKind::WorkspaceEvents {} => {
                 ExtensionHostRegistrationKindDto::WorkspaceEvents {}
             }

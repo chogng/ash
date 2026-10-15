@@ -78,20 +78,25 @@ import { IEditorPartsService } from '../../../src/ash/workbench/browser/parts/ed
 import { MultiDiffCollapseAllAction, MultiDiffExpandAllAction, MultiDiffGoToFileAction, MultiDiffToggleCollapseUnchangedRegionsAction } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditorActions.js';
 import { ContextKeyExpr } from '../../../src/ash/platform/contextkey/common/contextkey.js';
 import { EditorOption } from '../../../src/ash/editor/common/config/editorOptions.js';
-import { IGitService, type GitStatus, type GitIndexDiff, type GitIndexSelection } from '../../../extensions/git/browser/types.js';
+import type { ExtensionClientOperation, ExtensionClientResult } from '../../../src/ash/workbench/api/common/extHost.protocol.js';
+import type { JsonValue } from '../../../src/ash/base/common/jsonValue.js';
 import { ITextFileService } from '../../../src/ash/workbench/services/textfile/common/textfiles.js';
 import { TextFileContentSource } from '../../../src/ash/workbench/services/textfile/common/textFileService.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
-import { createGitMultiDiffEditorInput as gitMultiDiffInput } from '../../../extensions/git/browser/multiDiff.js';
-import { runDiffChange } from '../../../extensions/git/browser/diffActions.js';
-import { setLanguage as setGitLanguage, localize as gitLocalize } from '../../../extensions/git/browser/support.js';
+
+
+
 import gitManifest from '../../../extensions/git/package.json' with { type: 'json' };
 import gitEnglish from '../../../extensions/git/package.nls.json' with { type: 'json' };
 import gitChinese from '../../../extensions/git/package.nls.zh-CN.json' with { type: 'json' };
 import { MainThreadEditorChanges } from '../../../src/ash/workbench/api/browser/mainThreadEditorChanges.js';
 import { parseExtensionEditorInput } from '../../../src/ash/workbench/api/browser/mainThreadEditorInput.js';
 import { normalizeExtensionHostPayload } from '../../../src/ash/platform/agentHost/browser/extensionHostProtocol.js';
-async function createGitMultiDiffEditorInput(...args: Parameters<typeof gitMultiDiffInput>) { return parseExtensionEditorInput(normalizeExtensionHostPayload(JSON.parse(JSON.stringify(await gitMultiDiffInput(...args), wireReplacer)))); }
+async function invokeRustGit(registrationId: string, operation: string, payload: unknown) { return window.__rustGitRequest('invoke', { registrationId, operation, payload, deadlineUnixMillis: Date.now() + 10000 }); }
+async function createGitMultiDiffEditorInput(_fixture: typeof titleGit, scope: string) {
+	const value = await invokeRustGit('ash.scm', 'scm', { method: 'multiDiff', providerId: titleGitStatus.repositoryId, resource: `ash-scm://ash.git/${titleGitStatus.repositoryId}?scope=${scope}` });
+	return parseExtensionEditorInput(normalizeExtensionHostPayload(value));
+}
 function wireReplacer(this: Record<string, unknown>, key: string, value: unknown): unknown { return this[key] instanceof URI ? this[key].toString() : value; }
 import { MultiDiffEditor } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditor.js';
 import { SessionChangesEditorInput } from '../../../src/ash/sessions/contrib/changes/browser/sessionChangesEditorInput.js';
@@ -199,8 +204,8 @@ let sessionServices: ReturnType<typeof editorServices.createChild> | undefined;
 let titleEditor: EditorPart | undefined;
 let titleConfiguration: InMemoryConfigurationService | undefined;
 let titleServices: ReturnType<typeof createTestEditorServices> | undefined;
-const titleGitEvents = resources.add(new Emitter<GitStatus>());
-let titleGitStatus: GitStatus;
+const titleGitEvents = resources.add(new Emitter<ReturnType<typeof makeTitleGitStatus>>());
+let titleGitStatus: ReturnType<typeof makeTitleGitStatus>;
 let titleGitDelay = 0;
 let titleGitEncoding: 'utf8' | 'utf8bom' = 'utf8';
 const inspectedFiles: string[] = [];
@@ -222,15 +227,15 @@ const titleGit = {
 		const bom = titleGitEncoding === 'utf8bom' ? '\uFEFF' : '';
 		return { original: `${bom}before\nshared`, modified: `${bom}${path} revision ${titleGitStatus.revision}\nshared`, hunks: [] };
 	},
-	editIndex: async (path: string, comparison: string, reviewed: GitIndexDiff, selection: GitIndexSelection, repositoryId: string) => {
+	editIndex: async (path: string, comparison: string, reviewed: unknown, selection: unknown, repositoryId: string) => {
 		gitGutterCalls.push({ path, comparison, reviewed, selection, repositoryId });
 		return titleGitStatus;
 	},
-} as unknown as IGitService;
-function makeTitleGitStatus(paths: readonly string[], revision: number, repositoryId = 'repo'): GitStatus {
+};
+function makeTitleGitStatus(paths: readonly string[], revision: number, repositoryId = 'repo') {
 	return {
-		repositoryId, streamInstanceId: 'stream', revision, historyRevision: 1, workspacePath: '/workspace',
-		head: { type: 'branch', name: 'main', objectId: 'abc', upstream: undefined },
+		repositoryId, streamInstanceId: 'stream', revision, historyRevision: 1, path: '', workspacePath: '/workspace',
+		head: { type: 'branch' as const, name: 'main', objectId: 'abc', upstream: undefined },
 		changes: paths.map(path => ({
 			path, originalPath: undefined, indexStatus: 'unmodified', worktreeStatus: 'modified', conflicted: false,
 			submodule: { isSubmodule: false, commitChanged: false, trackedChanges: false, untrackedChanges: false }
@@ -420,9 +425,42 @@ const harness = {
 		services.registerInstance(IMultiDiffSourceResolverService, new MultiDiffSourceResolverService());
 		if (kind === 'git') {
 			const locale = new URLSearchParams(location.search).get('locale') === 'zh-CN' ? 'zh-CN' : 'en';
-			setGitLanguage(locale);
 			const labels: Record<string, string> = locale === 'zh-CN' ? gitChinese : gitEnglish;
 			const editorChanges = new MainThreadEditorChanges(services.get(ICodeEditorService), services.get(IWorkingCopyService), services.get(ITextFileService));
+			window.__rustGitClient = async (raw): Promise<ExtensionClientResult> => {
+				const operation = raw as ExtensionClientOperation;
+				switch (operation.operation) {
+					case 'readConfiguration': return { result: 'configuration', value: {} };
+					case 'inspectConfiguration': return { result: 'configuration', value: {} };
+					case 'scmUpdate': return { result: 'done' };
+					case 'backendState': return { result: 'value', value: { connection: 'ready', sequence: 0, generation: titleGitStatus.revision, reset: false, events: [], folders: [{ id: 'workspace', name: 'Workspace', uri: 'file:///workspace' }] } };
+					case 'backendRequest': {
+						const params = operation.params as Record<string, JsonValue>;
+						let value: unknown;
+						switch (operation.method) {
+							case 'version': value = { installation: { kind: 'available', version: 'git version 2.50.0', major: 2, minor: 50, patch: 0 }, windows: false }; break;
+							case 'repositories': value = { repositories: [{ id: titleGitStatus.repositoryId, label: 'Workspace', path: '', dirId: 'workspace' }] }; break;
+							case 'status': value = { ...titleGitStatus, path: '' }; break;
+							case 'changeFile': value = await titleGit.changeFile(String(params.path)); break;
+							case 'indexDiff': value = await titleGit.indexDiff(String(params.path)); break;
+							case 'editIndex': value = { status: await titleGit.editIndex(String(params.path), String(params.comparison), { original: params.expectedOriginal, modified: params.expectedModified, hunks: [] }, params.selection, String(params.repositoryId)) }; break;
+							default: throw new Error(`Unexpected Rust Git backend method ${operation.method}`);
+						}
+						return { result: 'value', value: value as JsonValue };
+					}
+					case 'editorOperation': {
+						const request = operation.payload as Record<string, JsonValue>;
+						if (request.method === 'openEditorResources') return { result: 'value', value: [] };
+						if (request.method === 'activeEditor') return { result: 'value', value: { input: null } };
+						if (request.method === 'output' || request.method === 'setLineAnnotation') return { result: 'value', value: null };
+						if (request.method === 'confirm') return { result: 'value', value: await services.get(IDialogService).confirm({ message: String(request.message), primaryButton: typeof request.primaryButton === 'string' ? request.primaryButton : undefined }) as unknown as JsonValue };
+						if (request.method === 'dirty') return { result: 'value', value: services.get(IWorkingCopyService).get(URI.parse(String(request.uri))).map(copy => ({ resource: copy.resource.toString(), isDirty: copy.isDirty })) };
+						return { result: 'value', value: await editorChanges.handle(operation.payload, new AbortController().signal) as JsonValue };
+					}
+					case 'showMessage': services.get(INotificationService).error(operation.message); return { result: 'done' };
+					default: throw new Error(`Unexpected Rust Git client operation ${operation.operation}`);
+				}
+			};
 			for (const [menuName, entries] of Object.entries(gitManifest.contributes.menus)) {
 				if (menuName !== 'diffEditor/hunkToolbar' && menuName !== 'diffEditor/selectionToolbar') continue;
 				for (const entry of entries) {
@@ -432,8 +470,8 @@ const harness = {
 					const title = labels[definition.title.slice(1, -1)] ?? definition.title;
 					resources.add(CommandsRegistry.register(entry.command, async (_accessor, raw) => {
 						const value = normalizeExtensionHostPayload(JSON.parse(JSON.stringify(raw, wireReplacer)));
-						try { await runDiffChange({ git: titleGit, editors: { request: async <T>(payload: unknown) => await editorChanges.handle(normalizeExtensionHostPayload(payload), new AbortController().signal) as T }, dialogs: services.get(IDialogService) }, value, commandId.includes('unstage') ? 'staged' : 'unstaged', commandId.includes('revert') ? 'revert' : 'index'); }
-						catch (error) { services.get(INotificationService).error(gitLocalize('git.commandFailed', 'Git operation failed: {0}', error instanceof Error ? error.message : String(error))); }
+						try { await invokeRustGit(commandId, 'execute', { arguments: [value] }); }
+						catch (error) { services.get(INotificationService).error(error instanceof Error ? error.message : String(error)); }
 					}));
 					resources.add(MenusRegistry.appendMenuItem(menuName === 'diffEditor/hunkToolbar' ? MenuId.DiffEditorHunkToolbar : MenuId.DiffEditorSelectionToolbar, {
 						command: { id: commandId, title, icon: definition.icon ? Icon.fromId(definition.icon.slice(2, -1)) : undefined },
@@ -449,6 +487,7 @@ const harness = {
 					// Refresh the requested source, or a staged comparison is replaced with unstaged resources.
 					const scope = new URLSearchParams(resource.query).get('scope');
 					if (scope !== 'staged' && scope !== 'unstaged' && scope !== 'uncommitted') throw new Error('Invalid Git source scope');
+					await invokeRustGit('git.refresh', 'execute', { arguments: [] });
 					const input = await createGitMultiDiffEditorInput(titleGit, scope);
 					if (!isMultiDiffEditorInput(input)) throw new Error('Expected multi-diff');
 					return { resource: input.resource, resources: input.items, source: input.source, label: input.label };
@@ -506,6 +545,8 @@ const harness = {
 			if (gitComparison === 'staged') {
 				titleGitStatus = { ...titleGitStatus, changes: titleGitStatus.changes.map(change => ({ ...change, indexStatus: 'modified', worktreeStatus: 'unmodified' })) };
 			}
+			await window.__rustGitRequest('start', { language: new URLSearchParams(location.search).get('locale') ?? 'en', workspaceFolders: [], configurationValues: {}, configurationData: {} });
+			await invokeRustGit('ash.scm', 'scm', { method: 'initialize' });
 			await titleEditor.openEditor(await createGitMultiDiffEditorInput(titleGit, gitComparison), { pinned: true });
 			return;
 		}

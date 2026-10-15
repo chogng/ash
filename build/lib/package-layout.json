@@ -10,6 +10,7 @@
     "execServer": "bin/ash-exec-server{exe}",
     "appServerDaemon": "bin/ash-app-server-daemon{exe}",
     "codeModeHost": "bin/ash-code-mode-host{exe}",
+    "gitExtension": "bin/ash-git-extension{exe}",
     "githubAuthentication": "bin/ash-github-authentication{exe}",
     "remoteSshExtension": "bin/ash-remote-ssh-extension{exe}",
     "voiceHost": "bin/ash-voice-host{exe}",

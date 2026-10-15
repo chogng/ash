@@ -46,12 +46,29 @@ impl GitAttributionPolicy {
 /// Resolves trusted product or organization policy for the current task.
 /// Implementations must refresh account-dependent policy when account authority changes.
 pub trait GitAttributionPolicySource: Send + Sync {
+    /// Optional identity for a user-initiated repository commit outside a model invocation.
+    /// Account-dependent sources opt in only when the repository has sufficient policy context.
+    fn repository_co_author(
+        &self,
+        _repository: &std::path::Path,
+    ) -> Result<Option<String>, ExtensionError> {
+        Ok(None)
+    }
+
     fn policy(
         &self,
         context: &TurnInputContext<'_>,
     ) -> Result<GitAttributionPolicy, ExtensionError>;
 }
 impl GitAttributionPolicySource for GitAttributionPolicy {
+    fn repository_co_author(&self, _: &std::path::Path) -> Result<Option<String>, ExtensionError> {
+        self.validate()?;
+        Ok(match self {
+            Self::Disabled => None,
+            Self::Enabled { co_author, .. } => Some(co_author.clone()),
+        })
+    }
+
     fn policy(&self, _: &TurnInputContext<'_>) -> Result<GitAttributionPolicy, ExtensionError> {
         self.validate()?;
         Ok(self.clone())

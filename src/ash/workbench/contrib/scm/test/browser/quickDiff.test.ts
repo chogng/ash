@@ -21,8 +21,6 @@ import { InMemoryConfigurationService } from '../../../../../platform/configurat
 import { DiffTestPort } from '../../../../../editor/test/browser/services/diffTestPort.js';
 import { DiffService } from '../../../../services/diff/browser/diffService.js';
 import { WorkerBasedDiffProviderFactoryService } from '../../../../../editor/browser/widget/diffEditor/diffProviderFactoryService.js';
-import { type GitStatus, type IGitService } from '../../../../../../../extensions/git/browser/types.js';
-import { GitQuickDiffProvider } from '../../../../../../../extensions/git/browser/gitQuickDiffProvider.js';
 import { QuickDiffDecorator } from '../../browser/quickDiffDecorator.js';
 import { QuickDiffModelService } from '../../browser/quickDiffModel.js';
 import { QuickDiffService } from '../../common/quickDiffService.js';
@@ -51,21 +49,9 @@ test('Quick Diff resolves registered window services and rejects a missing diff 
 	assert.equal(requests, 1);
 });
 
-test('Git Quick Diff supplies the index for a live worktree change', async () => {
-	const fixture = gitFixture();
-	using provider = new GitQuickDiffProvider(fixture.gitService);
-
-	const original = await provider.provideOriginalResource(URI.file('/workspace/src/file.ts'), new AbortController().signal);
-
-	assert.equal(original?.label, 'Index');
-	assert.equal(original?.text, 'same\nold\nremoved\nlast');
-	assert.deepEqual(fixture.requests, [{ path: 'src/file.ts', comparison: 'unstaged' }]);
-	fixture.dispose();
-});
-
 test('Quick Diff shares one resource model and projects configurable editor targets', async () => {
-	const fixture = gitFixture();
-	using provider = new GitQuickDiffProvider(fixture.gitService);
+	const fixture = baselineFixture();
+	const provider = fixture.provider;
 	using quickDiffService = new QuickDiffService();
 	using providerRegistration = quickDiffService.addProvider(provider);
 	using configuration = new InMemoryConfigurationService();
@@ -167,8 +153,8 @@ test('Registered Quick Diff creates after first render and releases decorations 
 		const { createTestCodeEditor } = await import('../../../../../editor/test/browser/testCodeEditor.js');
 		const { QuickDiffEditorController, QuickDiffEditorControllerService } = await import('../../browser/quickDiffWidget.js');
 		await import('../../browser/quickDiff.contribution.js');
-		const fixture = gitFixture();
-		using provider = new GitQuickDiffProvider(fixture.gitService);
+		const fixture = baselineFixture();
+		const provider = fixture.provider;
 		using quickDiffService = new QuickDiffService();
 		using providerRegistration = quickDiffService.addProvider(provider);
 		using configuration = new InMemoryConfigurationService();
@@ -219,58 +205,19 @@ test('Registered Quick Diff creates after first render and releases decorations 
 	}
 });
 
-function gitFixture(): { readonly gitService: IGitService; readonly requests: Array<{ readonly path: string; readonly comparison: string; }>; dispose(): void; } {
-	const statusChanged = new Emitter<GitStatus>();
-	const repositoriesChanged = new Emitter<never>();
-	const becameReady = new Emitter<void>();
-	const requests: Array<{ readonly path: string; readonly comparison: string; }> = [];
-	const status: GitStatus = {
-		repositoryId: 'repo-1',
-		streamInstanceId: 'git-1',
-		historyRevision: 1,
-		revision: 7,
-		workspacePath: '/workspace',
-		head: { type: 'branch', name: 'main', objectId: 'abc', upstream: undefined },
-		changes: [{
-			path: 'src/file.ts',
-			originalPath: undefined,
-			indexStatus: 'unmodified',
-			worktreeStatus: 'modified',
-			conflicted: false,
-			submodule: { isSubmodule: false, commitChanged: false, trackedChanges: false, untrackedChanges: false },
-		}],
-	};
-	const gitService = {
-		onDidChangeStatus: statusChanged.event,
-		onDidChangeRepositoryStatus: statusChanged.event,
-		onDidChangeRepositories: repositoriesChanged.event,
-		onDidBecomeReady: becameReady.event,
-		repositoryForResource: () => ({ id: status.repositoryId, label: 'workspace', path: '', root: URI.file('/workspace') }),
-		listRepositories: async () => [],
-		status: async () => status,
-		changeFile: async (path: string, comparison: string) => {
-			requests.push({ path, comparison });
-			return {
-				original: { kind: 'text' as const, text: 'same\nold\nremoved\nlast' },
-				modified: { kind: 'text' as const, text: 'same\nnew\nlast' },
-			};
-		},
-	} as unknown as IGitService;
-	return {
-		gitService,
-		requests,
-		dispose(): void {
-			statusChanged.dispose();
-			repositoriesChanged.dispose();
-			becameReady.dispose();
-		},
-	};
-}
-
 async function waitFor(condition: () => boolean, timeoutMillis = 1_000): Promise<void> {
 	const deadline = Date.now() + timeoutMillis;
 	while (!condition()) {
 		if (Date.now() >= deadline) throw new Error('Timed out waiting for Quick Diff');
 		await new Promise(resolve => setTimeout(resolve, 0));
 	}
+}
+
+// UI tests consume a provider-neutral baseline. Rust Git baseline selection is tested in the extension host.
+function baselineFixture() {
+ const requests: string[] = [];
+ return { requests, provider: { id: 'test.baseline', label: 'Index', async provideOriginalResource(resource: URI) {
+ requests.push(resource.toString());
+ return { providerId: 'test.baseline', providerLabel: 'Index', label: 'Index', originalResource: resource, revision: 7, text: 'same\nold\nremoved\nlast' };
+ } }, dispose() {} };
 }

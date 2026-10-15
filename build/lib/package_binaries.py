@@ -40,6 +40,7 @@ _BINARIES = {
         "--remote-ssh-extension-bin",
     ),
     "ash-external-js-ext": ("ash-external-js-ext", "--external-js-ext-bin"),
+    "ash-git-extension": ("ash-git-extension", "--git-extension-bin"),
     "ash-github-authentication": (
         "ash-github-authentication",
         "--github-authentication-bin",

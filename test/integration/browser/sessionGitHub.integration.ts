@@ -20,7 +20,7 @@ import { TestThemeService } from '../../../src/ash/platform/theme/test/common/te
 import { darkColorTheme, highContrastDarkColorTheme, lightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import type { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import type { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
-import type { IGitService, GitStatus } from '../../../extensions/git/browser/types.js';
+
 import type { ISessionsService, SessionsViewSelection } from '../../../src/ash/sessions/services/sessions/browser/sessionsService.js';
 import type { ISessionsManagementService } from '../../../src/ash/sessions/services/sessions/common/sessionsManagement.js';
 import type { ISession } from '../../../src/ash/sessions/services/sessions/common/session.js';
@@ -143,18 +143,18 @@ await client.connect();
 const theme = resources.add(new TestThemeService(darkColorTheme));
 resources.add(bindColorTheme(theme, document.body));
 const selected = resources.add(new Emitter<void>());
-const statusChanged = resources.add(new Emitter<GitStatus>());
+const statusChanged = resources.add(new Emitter<ReturnType<typeof gitStatus>>());
 const accountsChanged = resources.add(new Emitter<AccountState>());
 const session: ISession = { sessionId: 'session', title: 'Implement PR integration', status: 'active', workspace: new URL(location.href).searchParams.has('noWorkspace') ? null : { authorityId: 'local', root: '/workspace' }, nextApprovalMode: 'manual', chats: [{ threadId: 'thread', origin: { type: 'root' }, status: 'active' }] };
 let selection: SessionsViewSelection | undefined = { kind: 'session', active: { session, threadId: 'thread' } };
 let branch = 'feature';
-const gitStatus = (id: string): GitStatus => ({ repositoryId: id, streamInstanceId: 'stream', historyRevision: 1, revision: 1, workspacePath: '/workspace', head: { type: 'branch', name: branch, objectId: 'a'.repeat(40), upstream: undefined }, changes: [] });
+const gitStatus = (id: string) => ({ repositoryId: id, streamInstanceId: 'stream', historyRevision: 1, revision: 1, workspacePath: '/workspace', head: { type: 'branch' as const, name: branch, objectId: 'a'.repeat(40), upstream: undefined }, changes: [] });
 const git = {
 	repositories: ['one', 'two'].map(id => ({ id, label: id, path: id, root: URI.file(`/workspace/${id}`) })),
 	onDidChangeRepositories: Event.None, onDidChangeRepositoryStatus: statusChanged.event,
 	status: async (id: string) => gitStatus(id),
 	graph: async (_query: unknown, id: string) => ({ commits: [], references: [], remotes: [{ name: 'origin', identity: { provider: 'github', host: 'github.com', owner: 'team', repository: id } }], hasMore: false, nextCursor: undefined }),
-} as unknown as IGitService;
+};
 const management = { sessions: [session], state: 'ready' } as unknown as ISessionsManagementService;
 const sessions = { get activeSelection() { return selection; }, get visibleSelections() { return selection ? [selection] : []; }, onDidChange: selected.event, openSession: () => { }, openNewSession: () => { } } as unknown as ISessionsService;
 resources.add(CommandsRegistry.register('git.getRepositoryContexts', () => undefined));

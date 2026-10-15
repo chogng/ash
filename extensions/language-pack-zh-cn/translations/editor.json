@@ -799,7 +799,12 @@
     "diffEditor.foldUnchanged": "折叠未修改区域",
     "diffEditor.statusBar.help": "状态栏跟随比较中获得焦点的一侧。激活位置条目可转到指定行或列。在状态栏中用左右方向键选择操作，按 Enter 执行。缩进、编码、行尾和语言操作会打开选择器，Escape 取消。仅可在可写的一侧更改行尾，更改可以撤销。“以编码重新打开”会推荐检测到的编码。默认编码和自动检测可按语言配置。",
     "multiDiffEditor.binary": "二进制文件已更改，无法进行文本比较。",
-    "notifications.agentsWindowInvitationHelp": "智能体窗口邀请提供“在智能体窗口中继续”操作。按 Tab 移动到该操作，按 Enter 或空格打开对话。目标窗口确认收到内容后，才会转移未发送的草稿；交接失败时会保留草稿。"
+    "notifications.agentsWindowInvitationHelp": "智能体窗口邀请提供“在智能体窗口中继续”操作。按 Tab 移动到该操作，按 Enter 或空格打开对话。目标窗口确认收到内容后，才会转移未发送的草稿；交接失败时会保留草稿。",
+    "extension.editor.saveBeforeOperation": "继续前保存 {0} 个已更改文件？",
+    "extension.editor.saveFiles": "保存文件",
+    "extension.editor.commitDiagnostics": "提交前请解决 {0} 个诊断。",
+    "progress.region": "进度",
+    "progress.cancel": "取消"
   },
   "ash.editor.clipboard": {
     "selection.title": "选区剪贴板",

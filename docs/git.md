@@ -13,9 +13,9 @@ Desktop Renderer 和 TUI 不启动 Git 进程，也不解析 Git 输出。App Se
 Workbench 的通用展示与 provider 编排层；Git 是当前注册到 SCM 的版本控制 provider 和后端领域。
 
 ```text
-Desktop SCM History View → Git history provider → TS Git extension service
-Desktop SCM Changes View → SCM repository/provider → TS Git extension service
-  → TS Git API adapter → renderer protocol client
+Desktop SCM History / Changes View → generic SCM bridge
+  ↔ window-owned Rust Git extension → public Rust SDK Client
+  → Desktop capability bridge → renderer protocol client
   ↔ MessagePort relay（Electron）或 Web transport + Git notification
   ↔ App Server GitRuntime / GitService
   → ash-git
@@ -232,9 +232,9 @@ Peek 使用共享 `ZoneWidget`，宽度与锚点按正文区域计算，避免�
 
 ## 所有权
 
-[`extensions/git`](../extensions/git/README.md) 拥有 TS Git 命令和 SCM 界面；共享 Rust 的
+[`extensions/git`](../extensions/git/README.md) 拥有 Rust Git 命令、SCM Provider 和设置策略；共享 Rust 的
 `ash-git`、App Server Git 服务、Turn 文件事务和 worktree 管理各由已有领域 owner 承担。
-禁用前端 Git 扩展只撤销该窗口的命令与 provider，Agent 和 TUI 的基础 Git 能力继续可用。
+禁用 Git 编辑器扩展只撤销该窗口的命令与 provider，Agent 和 TUI 的基础 Git 能力继续可用。
 目录授权、取消和连接所属的历史游标仍由 App Server 管理；不重放失败写入。
 
 | 层级                                       | 当前职责                                                                                                                                                                                    | 不拥有                                                  |
@@ -251,15 +251,15 @@ Git 操作的接入位置：
 
 | 职责                         | 源码                                                                                                                                                                                                                                                                                                |
 | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 前端契约、仓库选择与结果转换 | [`GitService`](../extensions/git/browser/gitService.ts)、[`extension.ts`](../extensions/git/browser/extension.ts)                                                                                                                                                                                   |
-| 命令、输入和确认框           | [`commands.ts`](../extensions/git/browser/commands.ts)、[`package.json`](../extensions/git/package.json)                                                                                                                                                                                            |
-| 协议调用与连接               | [`Git API adapter`](../extensions/git/browser/backend.ts)、[`protocol client`](../src/ash/platform/agentHost/browser/appServerProtocolClient.ts)                                                                                                                                                    |
+| 前端契约、仓库选择与结果转换 | [`GitRuntime`](../extensions/git/src/lib.rs)、[`SCM`](../extensions/git/src/scm.rs)                                                                                                                                                                                                                 |
+| 命令、输入和确认框           | [`commands.rs`](../extensions/git/src/commands.rs)、[`package.json`](../extensions/git/package.json)                                                                                                                                                                                                |
+| 协议调用与连接               | [`Git API adapter`](../extensions/git/src/api.rs)、[`protocol client`](../src/ash/platform/agentHost/browser/appServerProtocolClient.ts)                                                                                                                                                            |
 | Electron 连接启动和透明转发  | [`daemon launcher`](../src/ash/platform/app-server-daemon/electron-main/appServerDaemonLauncher.ts)、[`relay`](../src/ash/platform/agentHost/electron-main/appServerConnectionRelay.ts)、[`MessagePort transport`](../src/ash/platform/agentHost/electron-browser/appServerMessagePortTransport.ts) |
 | 协议定义和生成边界           | [`Git protocol`](../crates/app-server-protocol/src/protocol/git.rs)、[`exporter`](../crates/app-server-protocol/src/export.rs)，生成的 request map 与 decoder 位于 `.build/protocol/typescript/`                                                                                                    |
 | Git 执行与部分 index 编辑    | [`references.rs`](../crates/git/src/references.rs)、[`index_edit.rs`](../crates/git/src/working_copy/index_edit.rs)                                                                                                                                                                                 |
 | Rust 调度与通知              | [`git_operations.rs`](../crates/app-server/src/server/git_operations.rs)、[`GitService`](../crates/app-server/src/git_service.rs)、[`GitRuntime`](../crates/app-server/src/server/git_runtime.rs)                                                                                                   |
 
-这些入口复用已有协议与连接：每个 renderer 一条独立连接，共享 profile 的 app-server daemon；没有新增 Host 或需要退出的旧 Host 注册。生成协议与 decoder 已覆盖这些方法，前端命令只依赖扩展的 `GitService`。命令通过 `getRepository` 先取得目标 ID，后续查询、输入、确认和执行始终使用该 ID。
+这些入口复用已有协议与连接：每个 renderer 一条独立连接，共享 profile 的 app-server daemon。Git 扩展使用公共独立 Rust 宿主，每窗口 activation 绑定 SDK 回调和能力授权。命令先取得目标仓库 ID，后续查询、输入、确认和执行始终使用该 ID；退役取消旧调用。
 
 取消选择器或确认框会释放 UI 资源且不发送修改请求；修改请求发出后沿用后端的有限 Git 操作，不把关闭输入框当作取消执行。连接关闭仍由 protocol client 拒绝该连接的未完成请求，并取消正在处理的服务端请求；监听订阅由前端 service 释放，重新连接时重新发现仓库。脏 worktree 的删除由 Rust 拒绝；打开目录继续走工作区切换服务，编辑器未保存内容继续由 working copy 处理。会话持有的 worktree 仍由会话生命周期管理。
 

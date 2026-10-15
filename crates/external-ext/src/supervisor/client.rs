@@ -132,6 +132,11 @@ impl Drop for BackgroundClientWorker {
 }
 
 enum StatusBarUpdate {
+    SourceControl {
+        registration_id: String,
+        revision: u64,
+        providers: Vec<serde_json::Value>,
+    },
     Unchanged,
     Rejected,
     Replace {
@@ -198,6 +203,31 @@ impl super::SupervisorInner {
             }
         }
         let status_update = match operation {
+            ExtensionClientOperation::ScmUpdate {
+                registration_id,
+                revision,
+                providers,
+            } => {
+                let state = self
+                    .state
+                    .lock()
+                    .map_err(|_| ExtensionHostError::HostExited)?;
+                if state.registrations.iter().any(|registration| {
+                    registration.registration_id == *registration_id
+                        && matches!(
+                            registration.kind,
+                            external_ext_protocol::RegistrationKind::SourceControl { .. }
+                        )
+                }) {
+                    StatusBarUpdate::SourceControl {
+                        registration_id: registration_id.clone(),
+                        revision: *revision,
+                        providers: providers.clone(),
+                    }
+                } else {
+                    StatusBarUpdate::Rejected
+                }
+            }
             external_ext_protocol::ExtensionClientOperation::SetStatusBarEntries {
                 registration_id,
                 revision,
@@ -242,6 +272,34 @@ impl super::SupervisorInner {
         status_update: StatusBarUpdate,
         outcome: &Result<ExtensionClientResult, HostFailure>,
     ) -> Result<(), ExtensionHostError> {
+        if let StatusBarUpdate::SourceControl {
+            registration_id,
+            revision,
+            providers,
+        } = &status_update
+        {
+            if matches!(outcome, Ok(ExtensionClientResult::Done)) {
+                let mut state = self
+                    .state
+                    .lock()
+                    .map_err(|_| ExtensionHostError::HostExited)?;
+                if state.incarnation == incarnation
+                    && let Some(registration) = state
+                        .registrations
+                        .iter_mut()
+                        .find(|registration| registration.registration_id == *registration_id)
+                    && let external_ext_protocol::RegistrationKind::SourceControl {
+                        revision: previous,
+                        providers: current,
+                    } = &mut registration.kind
+                    && revision > previous
+                {
+                    *previous = *revision;
+                    *current = providers.clone();
+                }
+            }
+            return Ok(());
+        }
         // Retain only the latest acknowledged UI value for reconnects. Concurrent older
         // callbacks cannot restore a hidden entry or keep a history of command arguments.
         if matches!(

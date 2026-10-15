@@ -1402,3 +1402,126 @@ fn thread_owner(thread_id: &str) -> ManagedDirOwner {
         thread_id: thread_id.into(),
     }
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn unbound_worktree_includes_only_selected_ignored_files_without_overwriting_head() {
+    let fixture = RepositoryFixture::new();
+    fs::write(fixture.repository.join(".gitignore"), ".env\nconfig/\n").unwrap();
+    run_git(&fixture.repository, &["add", ".gitignore"]);
+    run_git(&fixture.repository, &["commit", "-m", "ignore local setup"]);
+    fs::write(fixture.repository.join(".env"), "LOCAL=1\n").unwrap();
+    fs::create_dir(fixture.repository.join("config")).unwrap();
+    fs::write(fixture.repository.join("config/keep.json"), "selected").unwrap();
+    fs::write(fixture.repository.join("config/skip.json"), "not selected").unwrap();
+    let manager = fixture.manager();
+    let checkout = manager
+        .create_unbound_with_options(
+            &fixture.repository,
+            "setup",
+            &crate::WorktreePopulationOptions {
+                include_files: vec![
+                    ".env".into(),
+                    "config/*.json".into(),
+                    "!config/skip.json".into(),
+                ],
+                symlink_folders: Vec::new(),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        fs::read_to_string(checkout.join(".env")).unwrap(),
+        "LOCAL=1\n"
+    );
+    assert_eq!(
+        fs::read_to_string(checkout.join("config/keep.json")).unwrap(),
+        "selected"
+    );
+    assert!(!checkout.join("config/skip.json").exists());
+    assert!(run_git(&checkout, &["status", "--porcelain"]).is_empty());
+    fs::write(fixture.repository.join("tracked-copy.txt"), "HEAD content").unwrap();
+    run_git(&fixture.repository, &["add", "tracked-copy.txt"]);
+    run_git(
+        &fixture.repository,
+        &["commit", "-m", "tracked destination"],
+    );
+    run_git(&fixture.repository, &["rm", "--cached", "tracked-copy.txt"]);
+    fs::write(
+        fixture.repository.join(".git/info/exclude"),
+        "tracked-copy.txt\n",
+    )
+    .unwrap();
+    assert!(
+        manager
+            .create_unbound_with_options(
+                &fixture.repository,
+                "collision",
+                &crate::WorktreePopulationOptions {
+                    include_files: vec!["tracked-copy.txt".into()],
+                    symlink_folders: Vec::new(),
+                }
+            )
+            .await
+            .is_err()
+    );
+    assert!(!manager.settings().root.join("manual/collision").exists());
+    assert_eq!(
+        fs::read_to_string(fixture.repository.join("tracked-copy.txt")).unwrap(),
+        "HEAD content"
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test(flavor = "current_thread")]
+async fn unbound_worktree_folder_links_share_only_selected_ignored_source_directories() {
+    let fixture = RepositoryFixture::new();
+    fs::write(
+        fixture.repository.join(".gitignore"),
+        "cache/\noutside-link\n",
+    )
+    .unwrap();
+    run_git(&fixture.repository, &["add", ".gitignore"]);
+    run_git(&fixture.repository, &["commit", "-m", "ignore cache"]);
+    fs::create_dir(fixture.repository.join("cache")).unwrap();
+    fs::write(fixture.repository.join("cache/data"), "source").unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    std::os::unix::fs::symlink(outside.path(), fixture.repository.join("outside-link")).unwrap();
+    let manager = fixture.manager();
+    let checkout = manager
+        .create_unbound_with_options(
+            &fixture.repository,
+            "linked-setup",
+            &crate::WorktreePopulationOptions {
+                include_files: Vec::new(),
+                symlink_folders: vec!["cache/".into()],
+            },
+        )
+        .await
+        .unwrap();
+    assert!(
+        fs::symlink_metadata(checkout.join("cache"))
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    fs::write(checkout.join("cache/data"), "shared edit").unwrap();
+    assert_eq!(
+        fs::read_to_string(fixture.repository.join("cache/data")).unwrap(),
+        "shared edit"
+    );
+    assert!(!checkout.join("outside-link").exists());
+    assert!(
+        manager
+            .create_unbound_with_options(
+                &fixture.repository,
+                "escape-setup",
+                &crate::WorktreePopulationOptions {
+                    include_files: vec!["outside-link".into()],
+                    symlink_folders: Vec::new(),
+                }
+            )
+            .await
+            .is_err()
+    );
+    assert!(!manager.settings().root.join("manual/escape-setup").exists());
+}

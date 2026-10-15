@@ -1,3 +1,5 @@
+import { structuralEquals } from '../../../../base/common/equals.js';
+import { EditorInputSerializers } from '../../../services/editor/common/editorInputSerializer.js';
 import { ICommandService } from "../../../../platform/commands/common/commands.js";
 import { Icon } from "../../../../base/common/icon.js";
 import { IMultiDiffSourceResolverService } from "./multiDiffSourceResolverService.js";
@@ -521,6 +523,9 @@ class MultiDiffEditorSession extends Disposable {
 			if (!resolved) return;
 			const next = createMultiDiffEditorInput(resolved.resource, resolved.resources, resolved.label, resolved.source);
 			if (this.isDisposed || this.abortController.signal.aborted || generation !== this.refreshGeneration) return;
+			// An unchanged source snapshot must retain the models used by an in-flight toolbar
+			// action. Replacing them would invalidate its reviewed range during the client RPC.
+			if (structuralEquals(EditorInputSerializers.serialize(this.paneInput), EditorInputSerializers.serialize(next))) return;
 			const state = this.editor?.saveViewState();
 			const resources = new DisposableStore();
 			const items = this.createItems(next, resources);

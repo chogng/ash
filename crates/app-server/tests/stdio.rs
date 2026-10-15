@@ -65,12 +65,15 @@ fn git_foundation_serves_tui_reads_and_mutations_without_editor_extensions() {
     assert_eq!(diff.diffs[0].modified, "after\n");
     client
         .create_git_branch(GitBranchCreateParams {
+            client: None,
             repository_id: None,
             name: "topic".into(),
         })
         .unwrap();
     client
         .switch_git_branch(GitBranchSwitchParams {
+            client: None,
+            pull_before_checkout: None,
             repository_id: None,
             name: "topic".into(),
         })

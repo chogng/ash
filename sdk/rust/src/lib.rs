@@ -20,12 +20,15 @@ pub mod client;
 pub mod data_channels;
 pub mod languages;
 mod runtime;
+pub mod scm;
 pub mod services;
+pub mod terminal;
 pub mod window;
 pub mod workspace;
 
 pub use cancellation::CancellationToken;
 pub use external_ext_protocol::CancelReason;
+pub use external_ext_protocol::ExtensionCommandMenu as CommandMenu;
 pub use external_ext_protocol::HostErrorCode;
 pub use external_ext_protocol::ProtocolLimits;
 pub use runtime::RuntimeError;
@@ -81,6 +84,10 @@ pub trait Extension {
 pub struct Command {
     pub id: String,
     pub title: String,
+    pub category: Option<String>,
+    pub enablement: Option<String>,
+    pub icon: Option<String>,
+    pub menus: Vec<external_ext_protocol::ExtensionCommandMenu>,
 }
 
 impl Command {
@@ -88,6 +95,10 @@ impl Command {
         Self {
             id: id.into(),
             title: title.into(),
+            category: None,
+            enablement: None,
+            icon: None,
+            menus: Vec::new(),
         }
     }
 }
@@ -130,10 +141,10 @@ impl Commands {
             kind: RegistrationKind::Command {
                 command: command.id,
                 title: command.title,
-                category: None,
-                enablement: None,
-                icon: None,
-                menus: Vec::new(),
+                category: command.category,
+                enablement: command.enablement,
+                icon: command.icon,
+                menus: command.menus,
             },
         };
         let handler: Handler = Arc::new(move |payload, token| {
@@ -167,6 +178,8 @@ pub struct ExtensionContext {
     pub services: services::Services,
     pub data_channels: data_channels::DataChannels,
     pub commands: Commands,
+    pub scm: scm::SourceControl,
+    pub terminal: terminal::Terminal,
     pub languages: languages::Languages,
     pub window: window::Window,
     pub workspace: workspace::Workspace,
@@ -175,6 +188,12 @@ pub struct ExtensionContext {
 }
 
 impl ExtensionContext {
+    /// Immutable activation facts supplied by the bound client. Live editor state is read
+    /// through Client; extensions must not treat this snapshot as a document owner.
+    pub fn initialization(&self) -> Option<&external_ext_protocol::ExtensionHostInitialization> {
+        self.activation.initialization.as_ref()
+    }
+
     /// Product configuration delivered after the runtime process has started.
     pub fn environment(&self) -> &BTreeMap<String, Option<String>> {
         &self.environment
@@ -196,6 +215,8 @@ impl ExtensionContext {
             .iter()
             .chain(self.data_channels.registrations.iter())
             .chain(self.workspace.registrations.iter())
+            .chain(self.scm.registrations.iter())
+            .chain(self.terminal.registrations.iter())
         {
             if registrations
                 .insert(id.clone(), registration.clone())

@@ -299,6 +299,7 @@ impl GitClient {
                 repository.worktree_root(),
                 [
                     "status",
+                    &self.rename_argument(),
                     "--porcelain=v2",
                     "--branch",
                     "-z",
@@ -600,5 +601,68 @@ impl GitClient {
         .await?
         .require_success()?;
         Ok(())
+    }
+}
+
+impl GitClient {
+    /// Lists ignored untracked roots without expanding large ignored directories.
+    pub async fn ignored_worktree_paths(
+        &self,
+        repository: &GitRepository,
+    ) -> GitResult<Vec<PathBuf>> {
+        let output = self
+            .run_query(
+                repository.worktree_root(),
+                [
+                    "ls-files",
+                    "--others",
+                    "--ignored",
+                    "--exclude-standard",
+                    "--directory",
+                    "-z",
+                ],
+            )
+            .await?
+            .require_success()?;
+        output
+            .stdout
+            .split(|byte| *byte == 0)
+            .filter(|bytes| !bytes.is_empty())
+            .map(|bytes| {
+                let path = path_from_git_bytes(bytes, &output.command)?;
+                if path.is_absolute()
+                    || path
+                        .components()
+                        .any(|component| !matches!(component, std::path::Component::Normal(_)))
+                {
+                    return Err(GitError::invalid_output(
+                        &output.command,
+                        "ignored path escaped its worktree",
+                    ));
+                }
+                Ok(path.components().collect())
+            })
+            .collect()
+    }
+}
+
+impl GitClient {
+    /// Paths present in HEAD; the caller supplies normalized literal pathspecs.
+    pub async fn committed_paths(
+        &self,
+        repository: &GitRepository,
+        paths: &crate::GitPathspecSet,
+    ) -> GitResult<Vec<PathBuf>> {
+        let args = ["ls-tree", "-r", "--name-only", "-z", "HEAD", "--"]
+            .into_iter()
+            .map(std::ffi::OsString::from)
+            .chain(paths.paths().iter().map(|path| path.as_os_str().to_owned()));
+        let output = self.run_query(repository.worktree_root(), args).await?;
+        output
+            .stdout
+            .split(|byte| *byte == 0)
+            .filter(|path| !path.is_empty())
+            .map(|path| path_from_git_bytes(path, &output.command))
+            .collect()
     }
 }

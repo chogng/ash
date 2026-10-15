@@ -7,6 +7,7 @@ mod binding;
 mod directory_checkpoint;
 mod manager;
 mod metadata;
+mod population;
 mod settings;
 pub use directory_checkpoint::DirectoryRestoration;
 
@@ -24,6 +25,7 @@ pub use manager::WorktreeKind;
 pub use manager::WorktreeManager;
 pub use manager::WorktreeOwner;
 pub use manager::WorktreeSelector;
+pub use population::WorktreePopulationOptions;
 pub use settings::DEFAULT_WORKTREE_KEEP_COUNT;
 pub use settings::WorktreeSettings;
 

@@ -128,3 +128,56 @@ async fn fetching_main_uses_remote_commit_without_touching_local_head() {
     assert_eq!(git.resolve_commit(&opened, "HEAD").await.unwrap(), local);
     assert_eq!(repository.read("file"), "local only");
 }
+
+#[tokio::test]
+async fn checkout_fast_forwards_only_branches_without_local_commits() {
+    let origin = TestBareRepository::init();
+    let producer = TestRepository::init();
+    producer.write("initial.txt", "initial\n");
+    producer.commit_all("Initial");
+    producer.git(&["remote", "add", "origin", origin.root().to_str().unwrap()]);
+    producer.git(&["push", "-u", "origin", "main"]);
+    producer.git(&["switch", "-c", "topic"]);
+    producer.git(&["push", "-u", "origin", "topic"]);
+    let source = TestRepository::clone_from(origin.root());
+    source.git(&["branch", "--track", "topic", "origin/topic"]);
+    producer.write("remote.txt", "remote update\n");
+    producer.commit_all("Remote topic update");
+    producer.git(&["push"]);
+    let client = GitClient::system();
+    let opened = client.open_repository(source.root()).await.unwrap();
+    let branch = client
+        .local_branches(&opened)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|branch| branch.name() == "topic")
+        .unwrap();
+    client
+        .switch_branch_with_policy(&opened, &branch, crate::GitCheckoutPolicy::FastForward)
+        .await
+        .unwrap();
+    assert_eq!(
+        source.git(&["rev-parse", "HEAD"]),
+        producer.git(&["rev-parse", "HEAD"])
+    );
+    source.write("local.txt", "local commit\n");
+    source.commit_all("Local topic update");
+    let local = source.git(&["rev-parse", "HEAD"]);
+    source.git(&["switch", "main"]);
+    producer.write("other-remote.txt", "divergent remote\n");
+    producer.commit_all("Other remote update");
+    producer.git(&["push"]);
+    let branch = client
+        .local_branches(&opened)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|branch| branch.name() == "topic")
+        .unwrap();
+    client
+        .switch_branch_with_policy(&opened, &branch, crate::GitCheckoutPolicy::FastForward)
+        .await
+        .unwrap();
+    assert_eq!(source.git(&["rev-parse", "HEAD"]), local);
+}

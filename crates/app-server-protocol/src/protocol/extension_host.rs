@@ -340,6 +340,11 @@ impl<'de> Deserialize<'de> for ExtensionHostRegistrationDescriptorDto {
     deny_unknown_fields
 )]
 pub enum ExtensionHostRegistrationKindDto {
+    SourceControl {
+        #[ts(type = "number")]
+        revision: u64,
+        providers: Vec<Value>,
+    },
     WorkspaceEvents {},
     RemoteConnectionResolver {
         #[schemars(length(min = 1, max = 64))]

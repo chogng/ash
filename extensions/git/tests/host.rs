@@ -1,0 +1,617 @@
+use ash_external_ext as host;
+use external_ext_protocol::ExtensionClientOperation as Operation;
+use external_ext_protocol::ExtensionClientResult as ResultValue;
+use serde_json::Value;
+use serde_json::json;
+use std::collections::BTreeMap;
+use std::num::NonZeroU64;
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
+
+struct Authority(AtomicBool);
+struct Lease;
+impl host::ActivationLease for Lease {}
+impl host::ActivationAuthority for Authority {
+    fn authorizes(&self) -> bool {
+        self.0.load(Ordering::Acquire)
+    }
+    fn acquire(&self) -> Option<Box<dyn host::ActivationLease>> {
+        self.authorizes()
+            .then(|| Box::new(Lease) as Box<dyn host::ActivationLease>)
+    }
+}
+struct Client {
+    root: PathBuf,
+    editor_requests: Mutex<Vec<Value>>,
+    editor_document: Mutex<Option<String>>,
+    revision: AtomicU64,
+    binary_comparison: AtomicBool,
+    configuration: Mutex<Value>,
+    shared_configuration: Mutex<Value>,
+    snapshots: Mutex<Vec<Value>>,
+    requests: Mutex<Vec<(String, Value)>>,
+}
+impl Client {
+    fn git(&self, args: &[&str]) -> String {
+        let output = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&self.root)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8(output.stdout).unwrap().trim().to_owned()
+    }
+    fn status(&self) -> Value {
+        if self.binary_comparison.load(Ordering::Acquire) {
+            return json!({"repositoryId":"root","streamInstanceId":"11111111-1111-4111-8111-111111111111","revision":self.revision.load(Ordering::Relaxed),"historyRevision":1,"path":"","head":{"type":"branch","name":"main","objectId":self.git(&["rev-parse","HEAD"]),"upstream":null},"changes":[{"path":"image.bin","indexStatus":"modified","worktreeStatus":"modified","conflicted":false,"submodule":{"isSubmodule":false,"commitChanged":false,"trackedChanges":false,"untrackedChanges":false}}]});
+        }
+        let head = self.git(&["rev-parse", "HEAD"]);
+        let staged = !self.git(&["diff", "--cached", "--name-only"]).is_empty();
+        let unstaged = !self.git(&["diff", "--name-only"]).is_empty();
+        json!({"repositoryId":"root","streamInstanceId":"11111111-1111-4111-8111-111111111111","revision":self.revision.load(Ordering::Relaxed),"historyRevision":1,"path":"","head":{"type":"branch","name":"main","objectId":head,"upstream":null},"changes":if staged||unstaged {vec![json!({"path":"file.txt","originalPath":null,"indexStatus":if staged {"modified"} else {"unmodified"},"worktreeStatus":if unstaged {"modified"} else {"unmodified"},"conflicted":false,"submodule":{"isSubmodule":false,"commitChanged":false,"trackedChanges":false,"untrackedChanges":false}})]} else {vec![]}})
+    }
+    fn request(&self, operation: Operation) -> Result<ResultValue, host::HostFailure> {
+        let result = match operation {
+            Operation::BackendState { .. } => ResultValue::Value {
+                value: json!({"connection":"ready","sequence":0,"generation":1,"reset":false,"events":[],"folders":[{"id":"workspace","name":"test","uri":url::Url::from_directory_path(&self.root).unwrap().to_string().trim_end_matches('/')} ]}),
+            },
+            Operation::InspectConfiguration { section, .. } => ResultValue::Configuration {
+                value: json!({"userLocalValue":self.configuration.lock().unwrap()[section.strip_prefix("git.").unwrap_or(&section)]}),
+            },
+            Operation::ResetConfiguration { section, .. } => {
+                self.configuration
+                    .lock()
+                    .unwrap()
+                    .as_object_mut()
+                    .unwrap()
+                    .remove(section.strip_prefix("git.").unwrap_or(&section));
+                ResultValue::Done
+            }
+            Operation::ReadConfiguration { .. } => ResultValue::Configuration {
+                value: self.configuration.lock().unwrap().clone(),
+            },
+            Operation::EditorOperation { payload } => {
+                self.editor_requests.lock().unwrap().push(payload.clone());
+                ResultValue::Value {
+                    value: match payload["method"].as_str() {
+                        Some("openEditorResources") => json!([]),
+                        Some("activeEditor") => {
+                            json!({"input":self.editor_document.lock().unwrap().as_ref().map(|uri|json!({"resource":uri})),"selection":null,"version":null,"contents":null})
+                        }
+                        Some("prepareRepositoryOperation") => json!(true),
+                        Some("input") => json!("fixture password"),
+                        Some("readEditorDocument") => {
+                            json!({"text":"Edited from terminal","dirty":true})
+                        }
+                        Some("openEditorDocument") => {
+                            *self.editor_document.lock().unwrap() =
+                                Some(payload["uri"].as_str().unwrap().into());
+                            Value::Null
+                        }
+                        Some("closeEditorDocument") => {
+                            *self.editor_document.lock().unwrap() = None;
+                            Value::Null
+                        }
+                        Some("confirm") => json!({"confirmed":true}),
+                        _ => panic!("Unexpected editor request {payload}"),
+                    },
+                }
+            }
+            Operation::ShowMessage { .. } => ResultValue::Done,
+            Operation::ScmUpdate { providers, .. } => {
+                self.snapshots.lock().unwrap().push(json!(providers));
+                ResultValue::Done
+            }
+            Operation::BackendRequest { method, params, .. } => {
+                self.requests
+                    .lock()
+                    .unwrap()
+                    .push((method.clone(), params.clone()));
+                let value = match method.as_str() {
+                    "readConfig" => self.shared_configuration.lock().unwrap().clone(),
+                    "updateConfig" => {
+                        let mut shared = self.shared_configuration.lock().unwrap();
+                        assert_eq!(params["expectedRevision"], shared["revision"]);
+                        shared["git"] = params["git"].clone();
+                        shared["gitConfigured"] = json!(true);
+                        shared["revision"] = json!(shared["revision"].as_u64().unwrap() + 1);
+                        json!({"revision":shared["revision"],"disposition":"applied"})
+                    }
+                    "version" => {
+                        json!({"installation":{"kind":"available","version":"git version 2.50.0","major":2,"minor":50,"patch":0},"windows":false})
+                    }
+                    "repositories" => {
+                        json!({"repositories":[{"id":"root","label":"test","path":"","dirId":"workspace"}]})
+                    }
+                    "status" => self.status(),
+                    "historyRefs" => {
+                        json!({"status":self.status(),"references":[{"kind":"localBranch","name":"main","objectId":"abc","current":true},{"kind":"remoteBranch","name":"origin/main","objectId":"abc","current":false},{"kind":"tag","name":"v1","objectId":"abc","current":false}],"branches":[],"remotes":[],"graphRevision":1})
+                    }
+                    "changeFile" => {
+                        assert_eq!(params["path"], "image.bin");
+                        json!({"original":{"kind":"binary","data":"AAEA"},"modified":{"kind":"binary","data":"AAIA"}})
+                    }
+                    "stage" => {
+                        self.revision.fetch_add(1, Ordering::Relaxed);
+                        self.git(&["add", "--", "file.txt"]);
+                        json!({"status":self.status()})
+                    }
+                    "commit" => {
+                        self.revision.fetch_add(1, Ordering::Relaxed);
+                        assert_eq!(params["hooks"], "run");
+                        assert_eq!(params["identity"], "configured");
+                        self.git(&["commit", "-m", params["message"].as_str().unwrap()]);
+                        json!({"objectId":self.git(&["rev-parse","HEAD"]),"status":self.status()})
+                    }
+                    _ => panic!("Unexpected backend method {method}: {params}"),
+                };
+                ResultValue::Value { value }
+            }
+            other => panic!("Unexpected client operation {other:?}"),
+        };
+        Ok(result)
+    }
+}
+fn invocation(registration: &str, operation: &str, payload: Value) -> host::ExtensionInvocation {
+    host::ExtensionInvocation {
+        registration_id: registration.into(),
+        operation: operation.into(),
+        payload,
+        deadline_unix_millis: NonZeroU64::new(
+            (SystemTime::now().duration_since(UNIX_EPOCH).unwrap() + Duration::from_secs(10))
+                .as_millis() as u64,
+        )
+        .unwrap(),
+    }
+}
+fn execute(
+    supervisor: &host::ExtensionHostSupervisor,
+    client: &Client,
+    request: host::ExtensionInvocation,
+) -> Value {
+    supervisor
+        .begin_invoke(request)
+        .unwrap()
+        .wait_with_client(|operation, _, _| client.request(operation))
+        .unwrap()
+        .payload
+}
+fn initialize_git(root: &Path) {
+    let run = |args: &[&str]| {
+        assert!(
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(root)
+                .args(args)
+                .output()
+                .unwrap()
+                .status
+                .success()
+        );
+    };
+    run(&["init", "-b", "main"]);
+    run(&["config", "user.name", "Extension Test"]);
+    run(&["config", "user.email", "extension@example.test"]);
+    std::fs::write(root.join("file.txt"), "initial\n").unwrap();
+    run(&["add", "file.txt"]);
+    run(&["commit", "-m", "initial"]);
+    std::fs::write(root.join("file.txt"), "changed\n").unwrap();
+}
+#[test]
+fn rust_git_registers_scm_and_commits_through_public_client_without_a_js_host() {
+    for language in ["en", "zh-CN"] {
+        let directory = tempfile::tempdir().unwrap();
+        initialize_git(directory.path());
+        let client = Arc::new(Client {
+            root: directory.path().to_path_buf(),
+            editor_requests: Mutex::new(Vec::new()),
+            editor_document: Mutex::new(None),
+            revision: AtomicU64::new(1),
+            binary_comparison: AtomicBool::new(false),
+            configuration: Mutex::new(
+                json!({"useEditorAsCommitInput":false,"enableSmartCommit":false,"suggestSmartCommit":false,"postCommitCommand":"none","autofetch":true,"autofetchPeriod":120}),
+            ),
+            shared_configuration: Mutex::new(
+                json!({"revision":1,"gitConfigured":false,"git":{"autofetch":"off","autofetchPeriod":180,"rebaseWhenSync":false}}),
+            ),
+            snapshots: Mutex::new(Vec::new()),
+            requests: Mutex::new(Vec::new()),
+        });
+        let executable = PathBuf::from(env!("CARGO_BIN_EXE_ash-git-extension"));
+        let authority = Arc::new(Authority(AtomicBool::new(true)));
+        let supervisor = host::ExtensionHostSupervisor::new(
+            Arc::new(host::ProductExecutableLauncher::new(executable.clone()).unwrap()),
+            host::ExtensionLaunchCommand::new(
+                executable,
+                Vec::<String>::new(),
+                directory.path(),
+                BTreeMap::new(),
+            )
+            .unwrap(),
+            host::ExtensionActivationSpec::new(
+                host::ActivateParams {
+                    initialization: None,
+                    extension_id: "ash.git".into(),
+                    package: host::PackageBinding {
+                        package_id: "ash.git@0.1.0".into(),
+                        package_digest: format!("sha256:{}", "a".repeat(64)),
+                        entrypoint: "ash-git-extension".into(),
+                    },
+                    runtime_api_version: 1,
+                    activation_events: vec!["onStartupFinished".into()],
+                    capabilities: vec![
+                        host::ExtensionCapability::Command,
+                        host::ExtensionCapability::SourceControl,
+                        host::ExtensionCapability::TerminalProfileProvider,
+                    ],
+                },
+                NonZeroU64::new(1).unwrap(),
+                authority.clone(),
+            ),
+            host::ExtensionHostLimits {
+                isolation: host::ProcessIsolationPolicy::AuthorizedProduct,
+                ..Default::default()
+            },
+            host::RestartPolicy::default(),
+        )
+        .unwrap();
+        let binding = Arc::clone(&client);
+        let started = supervisor
+            .start_with_client(
+                Some(external_ext_protocol::ExtensionHostInitialization {
+                    language: Some(language.into()),
+                    localization: None,
+                    workspace_folders: vec![],
+                    workspace_name: None,
+                    workspace_file: None,
+                    configuration_values: json!({}),
+                    configuration_data: json!({}),
+                }),
+                Some(Arc::new(move |_, operation, _, _| {
+                    binding.request(operation)
+                })),
+            )
+            .unwrap();
+        assert!(started.registrations.iter().any(|registration| matches!(
+            registration.kind,
+            host::RegistrationKind::SourceControl { .. }
+        )));
+        assert!(started.registrations.iter().any(|registration|matches!(&registration.kind,host::RegistrationKind::Command{command,title,..} if command=="git.commit" && title==if language=="zh-CN" {"提交"} else {"Commit"})));
+        execute(
+            &supervisor,
+            &client,
+            invocation("ash.scm", "scm", json!({"method":"initialize"})),
+        );
+        execute(
+            &supervisor,
+            &client,
+            invocation(
+                "git.stageAll",
+                "execute",
+                json!({"arguments":["root"],"activeEditor":null}),
+            ),
+        );
+        assert_eq!(client.git(&["diff", "--cached", "--name-only"]), "file.txt");
+        assert!(
+            client
+                .configuration
+                .lock()
+                .unwrap()
+                .get("autofetch")
+                .is_none()
+        );
+        assert!(
+            client
+                .configuration
+                .lock()
+                .unwrap()
+                .get("autofetchPeriod")
+                .is_none()
+        );
+        let settings = execute(
+            &supervisor,
+            &client,
+            invocation("git.readSettings", "execute", json!({"arguments":[]})),
+        );
+        assert_eq!(
+            settings,
+            json!({"autoFetch":true,"autoFetchPeriod":120,"rebaseWhenSync":false})
+        );
+        assert_eq!(
+            client.shared_configuration.lock().unwrap()["git"]["autofetch"],
+            "default"
+        );
+
+        execute(
+            &supervisor,
+            &client,
+            invocation(
+                "ash.scm",
+                "scm",
+                json!({"method":"setInput","providerId":"root","value":"Rust extension commit","inputRevision":1}),
+            ),
+        );
+        execute(
+            &supervisor,
+            &client,
+            invocation(
+                "git.commit",
+                "execute",
+                json!({"arguments":["root"],"activeEditor":null}),
+            ),
+        );
+        assert_eq!(
+            client.git(&["log", "-1", "--format=%s"]),
+            "Rust extension commit"
+        );
+        assert!(client.git(&["status", "--porcelain"]).is_empty());
+        // UI publication is coalesced independently of the mutation response. Observe the
+        // public snapshot acknowledgement before asserting the settled input and busy state.
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            let snapshot = supervisor.snapshot();
+            let scm = snapshot
+                .registrations
+                .iter()
+                .find(|registration| registration.registration_id == "ash.scm")
+                .unwrap();
+            let host::RegistrationKind::SourceControl { providers, .. } = &scm.kind else {
+                panic!("SCM registration missing")
+            };
+            if providers[0]["input"]["value"] == "" && providers[0]["isBusy"] == false {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "commit snapshot did not settle: {providers:?}"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        verify_history_references(&supervisor, &client);
+        verify_binary_comparisons(&supervisor, &client);
+        verify_terminal_helpers(&supervisor, &client, directory.path());
+        supervisor.shutdown().unwrap();
+        let reads = client.requests.lock().unwrap().len();
+        std::thread::sleep(Duration::from_millis(600));
+        assert_eq!(client.requests.lock().unwrap().len(), reads);
+        authority.0.store(false, Ordering::Release);
+        assert!(supervisor.start().is_err());
+    }
+}
+
+fn terminal_environment(
+    supervisor: &host::ExtensionHostSupervisor,
+    client: &Client,
+) -> BTreeMap<String, String> {
+    let value = execute(
+        supervisor,
+        client,
+        invocation("git.environment", "getTerminalEnvironment", json!({})),
+    );
+    assert_eq!(value["persistent"], false);
+    value["map"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|entry| {
+            (
+                entry[0].as_str().unwrap().into(),
+                entry[1]["value"].as_str().unwrap().into(),
+            )
+        })
+        .collect()
+}
+fn helper(
+    root: &Path,
+    environment: &BTreeMap<String, String>,
+    mode: &str,
+    argument: &str,
+) -> std::process::Command {
+    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_ash-git-extension"));
+    command
+        .current_dir(root)
+        .envs(environment)
+        .args([mode, argument])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    command
+}
+fn finish_helper(mut child: std::process::Child) -> std::process::Output {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while child.try_wait().unwrap().is_none() {
+        if std::time::Instant::now() > deadline {
+            child.kill().unwrap();
+            let output = child.wait_with_output().unwrap();
+            panic!("helper failed to finish: {:?}", output.status);
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    child.wait_with_output().unwrap()
+}
+fn verify_terminal_helpers(
+    supervisor: &host::ExtensionHostSupervisor,
+    client: &Client,
+    root: &Path,
+) {
+    client.configuration.lock().unwrap()["githubAuthentication"] = json!(false);
+    let environment = terminal_environment(supervisor, client);
+    assert!(environment.contains_key("GIT_ASKPASS"));
+    assert!(!environment.contains_key("GIT_EDITOR"));
+    let result = finish_helper(
+        helper(
+            root,
+            &environment,
+            "--askpass",
+            "Password for 'https://example.test': ",
+        )
+        .spawn()
+        .unwrap(),
+    );
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert_eq!(result.stdout, b"fixture password\n");
+    let mut forged = environment.clone();
+    forged.insert("ASH_GIT_BRIDGE_TOKEN".into(), "0".repeat(64));
+    let requests = client.editor_requests.lock().unwrap().len();
+    assert!(
+        !finish_helper(
+            helper(root, &forged, "--askpass", "Password: ")
+                .spawn()
+                .unwrap()
+        )
+        .status
+        .success()
+    );
+    assert_eq!(client.editor_requests.lock().unwrap().len(), requests);
+    client.configuration.lock().unwrap()["terminalAuthentication"] = json!(false);
+    assert!(!terminal_environment(supervisor, client).contains_key("GIT_ASKPASS"));
+    assert!(
+        !finish_helper(
+            helper(root, &environment, "--askpass", "Password: ")
+                .spawn()
+                .unwrap()
+        )
+        .status
+        .success()
+    );
+    client.configuration.lock().unwrap()["terminalGitEditor"] = json!(true);
+    let environment = terminal_environment(supervisor, client);
+    assert!(environment.contains_key("GIT_EDITOR"));
+    assert!(!environment.contains_key("GIT_ASKPASS"));
+    let message = root.join(".git/COMMIT_EDITMSG");
+    for (command, expected, success) in [
+        ("git.finishTerminalEdit", "Edited from terminal", true),
+        ("git.cancelTerminalEdit", "Original message", false),
+    ] {
+        std::fs::write(&message, "Original message").unwrap();
+        let mut child = helper(root, &environment, "--editor", message.to_str().unwrap())
+            .spawn()
+            .unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while client.editor_document.lock().unwrap().is_none() {
+            if child.try_wait().unwrap().is_some() || std::time::Instant::now() >= deadline {
+                let _ = child.kill();
+                let output = child.wait_with_output().unwrap();
+                panic!(
+                    "terminal editor {command} did not open: {}; extension: {:?}; recent client requests: {:?}",
+                    String::from_utf8_lossy(&output.stderr),
+                    supervisor.snapshot().stderr,
+                    client
+                        .editor_requests
+                        .lock()
+                        .unwrap()
+                        .iter()
+                        .rev()
+                        .take(5)
+                        .collect::<Vec<_>>()
+                );
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        execute(
+            supervisor,
+            client,
+            invocation(command, "execute", json!({"arguments":[]})),
+        );
+        assert_eq!(finish_helper(child).status.success(), success);
+        assert_eq!(std::fs::read_to_string(&message).unwrap(), expected);
+    }
+    client.configuration.lock().unwrap()["enabled"] = json!(false);
+    assert!(terminal_environment(supervisor, client).is_empty());
+}
+
+fn verify_history_references(supervisor: &host::ExtensionHostSupervisor, client: &Client) {
+    let references = execute(
+        supervisor,
+        client,
+        invocation(
+            "ash.scm",
+            "scm",
+            json!({"method":"history","providerId":"root","methodName":"provideHistoryItemRefs","arguments":[]}),
+        ),
+    );
+    let ids: Vec<_> = references
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|reference| reference["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        ids,
+        [
+            "refs/heads/main",
+            "refs/remotes/origin/main",
+            "refs/tags/v1"
+        ]
+    );
+    let filtered = execute(
+        supervisor,
+        client,
+        invocation(
+            "ash.scm",
+            "scm",
+            json!({"method":"history","providerId":"root","methodName":"provideHistoryItemRefs","arguments":[["refs/tags/v1"]]}),
+        ),
+    );
+    assert_eq!(filtered.as_array().unwrap().len(), 1);
+    assert_eq!(filtered[0]["id"], "refs/tags/v1");
+}
+
+fn verify_binary_comparisons(supervisor: &host::ExtensionHostSupervisor, client: &Client) {
+    client.binary_comparison.store(true, Ordering::Release);
+    client.revision.fetch_add(1, Ordering::Relaxed);
+    for scope in ["staged", "unstaged", "uncommitted"] {
+        let comparison = execute(
+            supervisor,
+            client,
+            invocation(
+                "ash.scm",
+                "scm",
+                json!({"method":"multiDiff","providerId":"root","resource":format!("ash-scm://ash.git/root?scope={scope}")}),
+            ),
+        );
+        assert_eq!(comparison["items"].as_array().unwrap().len(), 1);
+        let item = &comparison["items"][0];
+        assert_eq!(item["binary"], true);
+        assert_eq!(item["label"], "image.bin");
+        assert_eq!(item["original"]["readOnly"], true);
+        assert_eq!(item["modified"]["readOnly"], true);
+        assert_eq!(item["original"]["initialBytes"], json!([0, 1, 0]));
+        assert_eq!(item["modified"]["initialBytes"], json!([0, 2, 0]));
+        assert!(
+            item["goToFile"]["resource"]
+                .as_str()
+                .unwrap()
+                .ends_with("/image.bin")
+        );
+    }
+    let baseline = execute(
+        supervisor,
+        client,
+        invocation(
+            "ash.scm",
+            "scm",
+            json!({"method":"quickDiff","providerId":"root","resource":url::Url::from_file_path(client.root.join("image.bin")).unwrap().to_string()}),
+        ),
+    );
+    assert!(baseline.is_null());
+    client.binary_comparison.store(false, Ordering::Release);
+    client.revision.fetch_add(1, Ordering::Relaxed);
+}

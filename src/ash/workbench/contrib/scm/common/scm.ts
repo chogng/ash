@@ -35,6 +35,9 @@ export interface ISCMResourceGroup {
 }
 
 export interface ISCMInput {
+	readonly visible?: boolean;
+	readonly buttonVisible?: boolean;
+	readonly validationMessage?: string;
 	value: string;
 	readonly placeholder: string;
 	readonly enabled: boolean;
@@ -76,6 +79,7 @@ export interface ISCMConflictProvider {
 }
 
 export interface ISCMProvider {
+	readonly count?: number;
 	readonly id: string;
 	readonly providerId: string;
 	readonly label: string;

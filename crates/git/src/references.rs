@@ -6,6 +6,13 @@ use crate::client::validate_argument;
 use crate::error::invalid_command as invalid;
 
 /// Git-owned integration state survives renderer and server restarts.
+/// Whether checkout may first fast-forward an unoccupied branch to its fetched upstream.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum GitCheckoutPolicy {
+    Keep,
+    FastForward,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum GitIntegration {
     Merge,
@@ -353,9 +360,32 @@ impl GitClient {
                 {
                     return Err(invalid("local branch changed before publication"));
                 }
-                let target = format!("refs/heads/{branch}:refs/heads/{name}");
-                self.run_mutation(root, ["push", "--set-upstream", "--", remote, &target])
-                    .await
+                // Bind publication to the reviewed object even if another process moves the branch.
+                let target = format!("{expected_head}:refs/heads/{name}");
+                self.run_mutation(root, ["push", "--", remote, &target])
+                    .await?
+                    .require_success()?;
+                self.run_mutation(
+                    root,
+                    [
+                        "config",
+                        "--local",
+                        &format!("branch.{branch}.remote"),
+                        remote,
+                    ],
+                )
+                .await?
+                .require_success()?;
+                self.run_mutation(
+                    root,
+                    [
+                        "config",
+                        "--local",
+                        &format!("branch.{branch}.merge"),
+                        &format!("refs/heads/{name}"),
+                    ],
+                )
+                .await
             }
             GitCommand::PushBranch {
                 remote,
@@ -623,7 +653,7 @@ mod branch;
 pub use metadata::GitBranch;
 mod metadata;
 
-fn valid_commit_identity(value: &str) -> bool {
+pub(crate) fn valid_commit_identity(value: &str) -> bool {
     matches!(value.len(), 40 | 64)
         && value
             .bytes()

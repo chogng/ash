@@ -14,6 +14,54 @@ pub enum GitPullMode {
     Rebase,
 }
 
+/// Per-invocation transport policy. Hosts do not rewrite repository configuration.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum GitPushMode {
+    #[default]
+    Normal,
+    Force,
+    Lease,
+    LeaseIfIncludes,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum GitTagPolicy {
+    Configured,
+    Include,
+    Exclude,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct GitTransportOptions {
+    pub prune: bool,
+    pub tag_policy: GitTagPolicy,
+    pub replace_tags: bool,
+    pub auto_stash: bool,
+    pub follow_tags: bool,
+    pub push_mode: GitPushMode,
+}
+
+impl Default for GitTransportOptions {
+    fn default() -> Self {
+        Self {
+            prune: true,
+            tag_policy: GitTagPolicy::Configured,
+            replace_tags: false,
+            auto_stash: false,
+            follow_tags: false,
+            push_mode: GitPushMode::Normal,
+        }
+    }
+}
+
+/// The immutable local commit and tracking branch reviewed by an interactive push.
+#[derive(Clone, Debug)]
+pub struct GitPushTarget {
+    pub branch: String,
+    pub object_id: String,
+    pub upstream: String,
+}
+
 /// Fetch and push URLs configured for one named remote.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GitRemote {
@@ -254,32 +302,81 @@ fn remote_host(authority: &str) -> &str {
 impl GitClient {
     /// Fetches the current branch's default remote without interactive credential prompts.
     pub async fn fetch_default(&self, repository: &GitRepository) -> GitResult<()> {
-        self.run_mutation(repository.worktree_root(), ["fetch", "--prune"])
-            .await?
-            .require_success()?;
-        Ok(())
+        self.fetch_with_options(repository, None, false, GitTransportOptions::default())
+            .await
     }
 
     /// Fetches and prunes every configured remote without interactive credential prompts.
     pub async fn fetch(&self, repository: &GitRepository) -> GitResult<()> {
-        self.run_mutation(repository.worktree_root(), ["fetch", "--all", "--prune"])
-            .await?
-            .require_success()?;
-        Ok(())
+        self.fetch_with_options(repository, None, true, GitTransportOptions::default())
+            .await
     }
 
     /// Fetches one still-configured remote without changing the current checkout.
     pub async fn fetch_remote(&self, repository: &GitRepository, name: &str) -> GitResult<()> {
-        self.require_remote(repository, name).await?;
-        self.run_mutation(repository.worktree_root(), ["fetch", "--prune", "--", name])
+        self.fetch_with_options(
+            repository,
+            Some(name),
+            false,
+            GitTransportOptions::default(),
+        )
+        .await
+    }
+
+    /// Pulls the configured upstream, honoring Git settings unless rebase is explicit.
+    pub async fn pull(&self, repository: &GitRepository, mode: GitPullMode) -> GitResult<()> {
+        self.pull_with_options(repository, mode, GitTransportOptions::default())
+            .await
+    }
+
+    pub async fn fetch_with_options(
+        &self,
+        repository: &GitRepository,
+        remote: Option<&str>,
+        all: bool,
+        options: GitTransportOptions,
+    ) -> GitResult<()> {
+        if let Some(name) = remote {
+            self.require_remote(repository, name).await?;
+        }
+        let mut arguments = vec![
+            "fetch",
+            if options.prune {
+                "--prune"
+            } else {
+                "--no-prune"
+            },
+        ];
+        if all {
+            arguments.push("--all");
+        }
+        if let Some(name) = remote {
+            arguments.extend(["--", name]);
+        }
+        self.run_mutation(repository.worktree_root(), arguments)
             .await?
             .require_success()?;
         Ok(())
     }
 
-    /// Pulls the configured upstream, honoring Git settings unless rebase is explicit.
-    pub async fn pull(&self, repository: &GitRepository, mode: GitPullMode) -> GitResult<()> {
+    pub async fn pull_with_options(
+        &self,
+        repository: &GitRepository,
+        mode: GitPullMode,
+        options: GitTransportOptions,
+    ) -> GitResult<()> {
         let mut arguments = vec!["pull", "--no-edit"];
+        match options.tag_policy {
+            GitTagPolicy::Configured => {}
+            GitTagPolicy::Include => arguments.push("--tags"),
+            GitTagPolicy::Exclude => arguments.push("--no-tags"),
+        }
+        if options.replace_tags {
+            arguments.push("--force");
+        }
+        if options.auto_stash {
+            arguments.push("--autostash");
+        }
         match mode {
             GitPullMode::Rebase => arguments.push("--rebase"),
             GitPullMode::Configured => {
@@ -330,9 +427,92 @@ impl GitClient {
 
     /// Pushes the current branch to its configured upstream.
     pub async fn push(&self, repository: &GitRepository) -> GitResult<()> {
-        self.run_mutation(repository.worktree_root(), ["push"])
+        self.push_with_options(repository, GitTransportOptions::default())
+            .await
+    }
+
+    pub async fn push_with_options(
+        &self,
+        repository: &GitRepository,
+        options: GitTransportOptions,
+    ) -> GitResult<()> {
+        let mut arguments = vec!["push"];
+        if options.follow_tags {
+            arguments.push("--follow-tags");
+        }
+        match options.push_mode {
+            GitPushMode::Normal => {}
+            GitPushMode::Force => arguments.push("--force"),
+            GitPushMode::Lease => arguments.push("--force-with-lease"),
+            GitPushMode::LeaseIfIncludes => {
+                arguments.extend(["--force-with-lease", "--force-if-includes"])
+            }
+        }
+        self.run_mutation(repository.worktree_root(), arguments)
             .await?
             .require_success()?;
+        Ok(())
+    }
+    /// Uses an explicit object/ref pair so a concurrent checkout cannot change what is sent.
+    pub async fn push_reviewed(
+        &self,
+        repository: &GitRepository,
+        target: &GitPushTarget,
+        options: GitTransportOptions,
+    ) -> GitResult<()> {
+        let root = repository.worktree_root();
+        if !crate::references::valid_commit_identity(&target.object_id) {
+            return Err(invalid("expected a complete commit identity"));
+        }
+        self.validate_ref(repository, &format!("refs/heads/{}", target.branch))
+            .await?;
+        let output = self
+            .run_query(
+                root,
+                [
+                    "for-each-ref",
+                    "--format=%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream:short)",
+                    &format!("refs/heads/{}", target.branch),
+                ],
+            )
+            .await?
+            .require_success()?;
+        let value = std::str::from_utf8(&output.stdout)
+            .map_err(|_| invalid("invalid upstream encoding"))?
+            .trim_end_matches('\n');
+        let fields: Vec<_> = value.split('\0').collect();
+        if fields.len() != 3
+            || fields[0].is_empty()
+            || !fields[1].starts_with("refs/heads/")
+            || fields[2] != target.upstream
+        {
+            return Err(invalid("tracking branch changed before push"));
+        }
+        self.require_remote(repository, fields[0]).await?;
+        self.validate_ref(repository, fields[1]).await?;
+        let status = self.snapshot(repository).await?;
+        if !matches!(status.head(), crate::GitHead::Branch {name,object_id,..} if name==&target.branch && object_id==&target.object_id)
+        {
+            return Err(invalid("local branch changed before push"));
+        }
+        let mut args = vec!["push".to_owned()];
+        if options.follow_tags {
+            args.push("--follow-tags".into());
+        }
+        match options.push_mode {
+            GitPushMode::Normal => {}
+            GitPushMode::Force => args.push("--force".into()),
+            GitPushMode::Lease => args.push("--force-with-lease".into()),
+            GitPushMode::LeaseIfIncludes => {
+                args.extend(["--force-with-lease".into(), "--force-if-includes".into()])
+            }
+        }
+        args.extend([
+            "--".into(),
+            fields[0].to_owned(),
+            format!("{}:{}", target.object_id, fields[1]),
+        ]);
+        self.run_mutation(root, args).await?.require_success()?;
         Ok(())
     }
     /// Pushes exactly the reviewed commit to a task branch, without force or checkout changes.
@@ -452,5 +632,41 @@ impl GitClient {
             return Err(invalid("remote no longer exists"));
         }
         Ok(())
+    }
+}
+
+impl GitClient {
+    /// A reflog fork point different from the current merge base means upstream history
+    /// was rewritten after this branch forked. Pulling may replay already integrated work.
+    pub async fn pull_upstream_was_rewritten(&self, repository: &GitRepository) -> GitResult<bool> {
+        let status = self.snapshot(repository).await?;
+        let crate::GitHead::Branch {
+            upstream: Some(upstream),
+            ..
+        } = status.head()
+        else {
+            return Ok(false);
+        };
+        let fork = self
+            .run_query_unchecked(
+                repository.worktree_root(),
+                ["merge-base", "--fork-point", upstream.name(), "HEAD"],
+            )
+            .await?;
+        if fork.status.code() == Some(1) {
+            return Ok(false);
+        }
+        let fork = fork.require_success()?;
+        let base = self
+            .run_query_unchecked(
+                repository.worktree_root(),
+                ["merge-base", upstream.name(), "HEAD"],
+            )
+            .await?;
+        if base.status.code() == Some(1) {
+            return Ok(true);
+        }
+        let base = base.require_success()?;
+        Ok(fork.stdout != base.stdout)
     }
 }

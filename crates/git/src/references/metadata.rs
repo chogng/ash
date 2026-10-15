@@ -36,6 +36,7 @@ impl GitClient {
                 repository.worktree_root(),
                 [
                     "for-each-ref",
+                    "--sort=-committerdate",
                     "--format=%(refname:short)%00%(objectname)%00%(upstream:short)%00%(HEAD)",
                     "refs/heads",
                 ],

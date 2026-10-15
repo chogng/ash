@@ -1415,7 +1415,7 @@ export class AshApplication extends Disposable {
 					if (options.remoteAuthority !== getWorkspaceRemoteAuthority(workspaceContext.getWorkspace())) throw new Error('Reusing a window must preserve its Remote authority');
 					await replaceWorkspace(workspace, true);
 				},
-				openWorkspace: (root) => transitionToFolder(root, true),
+				openWorkspace: async (root, forceNewWindow) => { if (forceNewWindow) await this.openWorkspace(await workspaces.resolveFolder(root), workspaces, true); else await transitionToFolder(root, true); },
 				openAgentsWindow: options => this.openSessionsWindow(record.workspaceContext.getWorkspace(), record.workspaceContext.getResolvedWorkspace(), options),
 				syncSystemWideKeybindings: bindings => this.globalKeybindings.updateKeybindings(
 					record.id,
@@ -1716,7 +1716,7 @@ export class AshApplication extends Disposable {
 								// An empty Workbench requires its own window kind even when the requesting Agents window asks for reuse.
 								await this.openWorkspace(workspace, workspaces);
 							},
-							openWorkspace: async root => { await this.openWorkspace(await workspaces.resolveFolder(root), workspaces); },
+							openWorkspace: async (root, forceNewWindow) => { await this.openWorkspace(await workspaces.resolveFolder(root), workspaces, forceNewWindow); },
 							openAgentsWindow: options => this.openSessionsWindow(session.workspaceContext.getWorkspace(), session.workspaceContext.getResolvedWorkspace(), options),
 							syncSystemWideKeybindings: bindings => this.globalKeybindings.updateKeybindings(window.id, bindings.filter(binding => binding.commandId === OPEN_AGENTS_WINDOW_COMMAND_ID)),
 						}),

@@ -216,6 +216,58 @@ impl GitClient {
         repository: &GitRepository,
         branch: &GitBranch,
     ) -> GitResult<()> {
+        self.switch_branch_with_policy(repository, branch, super::GitCheckoutPolicy::Keep)
+            .await
+    }
+
+    pub async fn switch_branch_with_policy(
+        &self,
+        repository: &GitRepository,
+        branch: &GitBranch,
+        policy: super::GitCheckoutPolicy,
+    ) -> GitResult<()> {
+        if policy == super::GitCheckoutPolicy::FastForward && !branch.is_current() {
+            if self.worktrees(repository).await?.iter().any(|worktree| {
+                worktree.branch() == Some(branch.name())
+                    && worktree.checkout_root() != repository.worktree_root()
+            }) {
+                return Err(crate::error::invalid_command(
+                    "branch is checked out in another worktree",
+                ));
+            }
+            if let Some(upstream) = branch.upstream() {
+                let key = format!("branch.{}.remote", branch.name());
+                let remote = self
+                    .run_configuration_probe(repository.worktree_root(), ["config", "--get", &key])
+                    .await?;
+                if remote.status.success() {
+                    let remote = String::from_utf8_lossy(&remote.stdout).trim().to_owned();
+                    if remote != "." {
+                        self.fetch_remote(repository, &remote).await?;
+                    }
+                    let tip = self.resolve_commit(repository, upstream).await?;
+                    let ancestry = self
+                        .run_query_unchecked(
+                            repository.worktree_root(),
+                            ["merge-base", "--is-ancestor", branch.object_id(), &tip],
+                        )
+                        .await?;
+                    if ancestry.status.success() {
+                        let reference = format!("refs/heads/{}", branch.name());
+                        self.run_mutation(
+                            repository.worktree_root(),
+                            ["update-ref", &reference, &tip, branch.object_id()],
+                        )
+                        .await?
+                        .require_success()?;
+                    } else if ancestry.status.code() != Some(1) {
+                        ancestry.require_success()?;
+                    }
+                } else if remote.status.code() != Some(1) {
+                    remote.require_success()?;
+                }
+            }
+        }
         self.run_mutation(
             repository.worktree_root(),
             [

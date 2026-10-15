@@ -306,6 +306,8 @@ export class ScmViewPane extends ViewPane {
 		this.commitForm.hidden = !provider;
 		this.commitForm.classList.toggle('hidden', !provider);
 		this.commitInput.input = provider?.input;
+		this.commitInput.domNode.hidden = provider?.input.visible === false;
+		this.commitButton.domNode.hidden = provider?.input.buttonVisible === false;
 		const buttonLabel = provider?.input.buttonLabel ?? 'Commit';
 		if (this.commitButton.label !== buttonLabel) this.commitButton.label = buttonLabel;
 		const buttonTooltip = provider?.input.buttonTooltip ?? 'Commit';
@@ -316,7 +318,7 @@ export class ScmViewPane extends ViewPane {
 		this.commitButton.enabled = provider?.isBusy !== true && provider?.input.enabled === true && provider.input.canAccept;
 		this.statusElement.classList.toggle('ash-aria-live', !!provider);
 		this.statusElement.hidden = !provider;
-		this.statusElement.textContent = provider?.statusMessage ?? '';
+		this.statusElement.textContent = provider?.input.validationMessage || provider?.statusMessage || '';
 		const groups = provider?.groups;
 		if (provider !== this.renderedProvider || groups !== this.renderedGroups) {
 			this.renderedProvider = provider;

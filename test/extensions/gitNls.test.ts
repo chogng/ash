@@ -5,7 +5,6 @@ import { resolve } from 'node:path';
 import manifest from '../../extensions/git/package.json' with { type: 'json' };
 import english from '../../extensions/git/package.nls.json' with { type: 'json' };
 import chinese from '../../extensions/git/package.nls.zh-CN.json' with { type: 'json' };
-import { localize, setLanguage } from '../../extensions/git/browser/support.js';
 
 test('Git SCM title contributions use compact product icons and the public history menu', () => {
 	const menus = manifest.contributes.menus as Record<string, { command?: string; group?: string; }[]>;
@@ -38,12 +37,22 @@ test('Git manifest localization resolves every contribution in English and Chine
 	}
 });
 
-test('Git extension localizes its own labels and parameterized accessibility text', () => {
-	setLanguage('zh-CN');
-	try {
-		assert.equal(localize('git.ignored', 'Ignored by Git'), '被 Git 忽略');
-		assert.equal(localize('git.autofetch.title', 'Auto Fetch'), '自动获取远端更新');
-		assert.equal(localize('git.rebaseWhenSync.title', 'Rebase When Sync'), '同步时变基');
-		assert.equal(localize('git.status.branch', 'Git branch {0}', 'feature'), 'Git 分支 feature');
-	} finally { setLanguage('en'); }
+test('Git is a Rust capability package and every enum has localized settings choices', () => {
+	assert.equal(manifest.ashRuntime.kind, 'rust');
+	assert.equal(manifest.ashRuntime.entrypoint, 'ash-git-extension');
+	assert.equal('browser' in manifest, false);
+	const sections = Array.isArray(manifest.contributes.configuration) ? manifest.contributes.configuration : [manifest.contributes.configuration];
+	for (const section of sections) {
+		for (const [key, raw] of Object.entries(section.properties)) {
+			const property = raw as { enum?: unknown[]; ashSetting?: { options?: { value: unknown; label: string; }[]; }; };
+			if (!property.enum) continue;
+			assert.deepEqual(property.ashSetting?.options?.map(option => option.value), property.enum, key);
+			for (const option of property.ashSetting!.options!) {
+				assert.match(option.label, /^%[^%]+%$/u, key);
+				const message = option.label.slice(1, -1);
+				assert.equal(typeof (english as Record<string, string>)[message], 'string', message);
+				assert.equal(typeof (chinese as Record<string, string>)[message], 'string', message);
+			}
+		}
+	}
 });

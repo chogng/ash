@@ -2143,3 +2143,186 @@ fn capability_scoped_git_watch_paths_exclude_other_roots_and_revoked_proofs() {
     assert!(runtime.discovery_paths(&proofs).is_empty());
     assert!(runtime.watched_repositories(&proofs).is_empty());
 }
+
+#[test]
+fn caller_rename_threshold_does_not_replace_shared_status_or_publish_view_events() {
+    let repository = TestRepository::init();
+    let original = (0..100)
+        .map(|index| format!("original line {index}\n"))
+        .collect::<String>();
+    repository.write("before.txt", &original);
+    repository.git(&["add", "before.txt"]);
+    repository.git(&["commit", "-m", "initial"]);
+    repository.git(&["mv", "before.txt", "after.txt"]);
+    let modified = original.replace("original line 1", "modified line 1");
+    repository.write("after.txt", &modified);
+    repository.git(&["add", "after.txt"]);
+    let broker = Arc::new(UpdateBroker::default());
+    let notifications = NotificationQueue::default();
+    broker.register(1, false, &notifications);
+    let runtime = GitRuntime::new(mutation_authorization(repository.root()), broker).unwrap();
+    let canonical = runtime.status().unwrap();
+    assert_eq!(canonical.changes.len(), 1);
+    assert_eq!(
+        canonical.changes[0].index_status,
+        ash_app_server_protocol::protocol::git::GitChangeStatusDto::Renamed
+    );
+    notifications.drain();
+    let view = crate::git_service::with_client(
+        ash_git::GitClient::system()
+            .with_similarity_threshold(100)
+            .unwrap(),
+        || runtime.status_view_for(None),
+    )
+    .unwrap();
+    assert_eq!(view.changes.len(), 2);
+    assert_eq!(view.revision, canonical.revision);
+    assert_eq!(view.history_revision, canonical.history_revision);
+    assert!(notifications.drain().is_empty());
+    let reread = runtime.status().unwrap();
+    assert_eq!(reread.changes, canonical.changes);
+    assert_eq!(reread.revision, canonical.revision);
+}
+
+#[test]
+fn reviewed_removal_preserves_replacements_and_rejects_git_metadata_and_stale_heads() {
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "initial");
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "initial"]);
+    repository.write("untracked.txt", "reviewed");
+    let runtime = GitRuntime::new(
+        mutation_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    let reviewed = runtime
+        .review_removal_for(None, vec!["untracked.txt".into()])
+        .unwrap();
+    assert!(!reviewed.entries[0].committed);
+    repository.write("untracked.txt", "replacement");
+    assert!(
+        runtime
+            .remove_files_for(
+                None,
+                reviewed
+                    .entries
+                    .iter()
+                    .map(|entry| entry.file.clone())
+                    .collect(),
+                ash_file_system::FileRemovalMode::Permanent,
+                &reviewed.head
+            )
+            .is_err()
+    );
+    assert_eq!(
+        std::fs::read_to_string(repository.root().join("untracked.txt")).unwrap(),
+        "replacement"
+    );
+    assert!(
+        runtime
+            .review_removal_for(None, vec![".git/config".into()])
+            .is_err()
+    );
+    assert!(
+        runtime
+            .review_removal_for(None, vec!["../outside".into()])
+            .is_err()
+    );
+    let reviewed = runtime
+        .review_removal_for(None, vec!["untracked.txt".into()])
+        .unwrap();
+    repository.git(&["commit", "--allow-empty", "-m", "new head"]);
+    assert!(
+        runtime
+            .remove_files_for(
+                None,
+                reviewed
+                    .entries
+                    .iter()
+                    .map(|entry| entry.file.clone())
+                    .collect(),
+                ash_file_system::FileRemovalMode::Permanent,
+                &reviewed.head
+            )
+            .is_err()
+    );
+    let reviewed = runtime
+        .review_removal_for(None, vec!["untracked.txt".into()])
+        .unwrap();
+    runtime
+        .remove_files_for(
+            None,
+            reviewed
+                .entries
+                .into_iter()
+                .map(|entry| entry.file)
+                .collect(),
+            ash_file_system::FileRemovalMode::Permanent,
+            &reviewed.head,
+        )
+        .unwrap();
+    assert!(!repository.root().join("untracked.txt").exists());
+}
+
+#[test]
+fn ai_editor_evidence_is_bound_to_candidate_bytes_commit_scope_and_directory() {
+    use crate::git_service::GitCommitScope;
+    use crate::git_service::GitService;
+    let repository = TestRepository::init();
+    repository.write("nested/file.txt", "before");
+    repository.write("outside.txt", "before");
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "initial"]);
+    repository.write("nested/file.txt", "generated");
+    repository.write("outside.txt", "outside generated");
+    let authorization = mutation_authorization(repository.root());
+    let nested = authorization.dir().canonical_path().join("nested");
+    let service = GitService::new(authorization, nested).unwrap();
+    let evidence = vec![(PathBuf::from("file.txt"), "generated".into())];
+    assert!(
+        service
+            .has_ai_contribution(&[], GitCommitScope::Tracked, &evidence)
+            .unwrap()
+    );
+    assert!(
+        !service
+            .has_ai_contribution(&[], GitCommitScope::Staged, &evidence)
+            .unwrap()
+    );
+    assert!(
+        !service
+            .has_ai_contribution(
+                &[],
+                GitCommitScope::Tracked,
+                &[(PathBuf::from("file.txt"), "stale".into())]
+            )
+            .unwrap()
+    );
+    assert!(
+        !service
+            .has_ai_contribution(
+                &[],
+                GitCommitScope::Tracked,
+                &[(PathBuf::from("../outside.txt"), "outside generated".into())]
+            )
+            .unwrap()
+    );
+    repository.git(&["add", "nested/file.txt"]);
+    assert!(
+        service
+            .has_ai_contribution(&[], GitCommitScope::Staged, &evidence)
+            .unwrap()
+    );
+    repository.write("nested/file.txt", "manual change");
+    assert!(
+        !service
+            .has_ai_contribution(&[], GitCommitScope::Tracked, &evidence)
+            .unwrap()
+    );
+    assert!(
+        service
+            .has_ai_contribution(&[], GitCommitScope::Staged, &evidence)
+            .unwrap()
+    );
+}

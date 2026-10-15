@@ -28,15 +28,17 @@ function fixture(invoke: IExtensionHostApi['invoke'], providers?: JsonValue[]) {
 	return { lifetime, scm, view, bridge, decorationProviders, errors };
 }
 
-test('SCM resource groups retain identity within a snapshot and retire it on replacement', () => {
-	const snapshot = { ...(provider() as Record<string, JsonValue>), groups: [{ id: 'changes', label: 'Changes', actions: [], resources: [] }] };
+test('SCM resource groups survive input-only snapshots and retire changed resources', () => {
+	const snapshot: Record<string, JsonValue> = { ...(provider() as Record<string, JsonValue>), groups: [{ id: 'changes', label: 'Changes', actions: [], resources: [] }] };
 	const value = fixture(async () => null, [snapshot]);
 	using cleanup = value.lifetime;
 	const repository = value.scm.getRepository('repo')!;
 	const groups = repository.provider.groups;
 	assert.strictEqual(repository.provider.groups, groups);
 	assert.ok(repository.provider.groups.includes(groups[0]!));
-	value.bridge.set(source, 'ash.scm', 2, [snapshot]);
+	value.bridge.set(source, 'ash.scm', 2, [{ ...snapshot, input: { ...(snapshot.input as Record<string, JsonValue>), placeholder: 'Updated placeholder' } }]);
+    assert.strictEqual(repository.provider.groups, groups);
+    value.bridge.set(source, 'ash.scm', 3, [{ ...snapshot, groups: [{ id: 'changes', label: 'Updated changes', actions: [], resources: [] }] }]);
 	assert.notStrictEqual(repository.provider.groups, groups);
 	assert.ok(!repository.provider.groups.includes(groups[0]!));
 });

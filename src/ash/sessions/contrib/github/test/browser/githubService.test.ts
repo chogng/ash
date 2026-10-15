@@ -12,7 +12,16 @@ import type { CancellationToken } from '../../../../../base/common/cancellation.
 import type { IAccountService, AccountState } from '../../../../../platform/accounts/common/accountService.js';
 import { GitHubIssueState, type IGitHubService, type GitHubPullRequest } from '../../../../../platform/github/common/githubService.js';
 import { NullLoggerService } from '../../../../../platform/log/common/log.js';
-import type { IGitService, GitRepository, GitStatus } from '../../../../../../../extensions/git/browser/types.js';
+// Fixtures expose the public repository-context command consumed by GitHub, independently of Git's runtime.
+interface GitRepository { id: string; label: string; path: string; root: URI; }
+interface GitStatus { repositoryId: string; streamInstanceId: string; historyRevision: number; revision: number; workspacePath: string; head: { type: 'branch'; name: string; objectId: string; upstream: undefined; }; changes: readonly unknown[]; }
+interface RepositoryCommandsFixture {
+ repositories: GitRepository[];
+ status(repositoryId?: string): Promise<GitStatus>;
+ graph(query?: unknown, repositoryId?: string): Promise<{ remotes: readonly { name: string; identity: { provider: string; host: string; owner: string; repository: string; }; }[]; }>;
+ onDidChangeRepositories: Event<readonly GitRepository[]>;
+ onDidChangeRepositoryStatus: Event<GitStatus>;
+}
 import type { ISessionsService, SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
 import type { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import type { ISession } from '../../../../services/sessions/common/session.js';
@@ -21,7 +30,7 @@ import { GitHubService } from '../../browser/githubService.js';
 const session: ISession = { sessionId: 'session', title: 'PR work', status: 'active', workspace: { authorityId: 'local', root: '/work' }, nextApprovalMode: 'manual', chats: [{ threadId: 'thread', origin: { type: 'root' }, status: 'active' }] };
 const pullRequest: GitHubPullRequest = { number: 7, title: 'Branch work', body: '', url: 'https://github.com/team/repo/pull/7', state: 'open', draft: false, mergedAt: null, mergeable: null, headCommit: 'a'.repeat(40), headBranch: 'feature', headRepository: 'team/repo', baseBranch: 'main', autoMerge: false };
 
-function fixture(overrides: Partial<IGitHubService> = {}, gitOverrides: Partial<IGitService> = {}) {
+function fixture(overrides: Partial<IGitHubService> = {}, gitOverrides: Partial<RepositoryCommandsFixture> = {}) {
 	const resources = new DisposableStore();
 	const selectionChanged = resources.add(new Emitter<void>());
 	const repositoriesChanged = resources.add(new Emitter<readonly GitRepository[]>());
@@ -44,7 +53,7 @@ function fixture(overrides: Partial<IGitHubService> = {}, gitOverrides: Partial<
 		status: async () => status,
 		graph: async () => ({ commits: [], references: [], remotes: [{ name: 'origin', identity: { provider: 'github', host: 'github.com', owner: 'team', repository: 'repo' } }], hasMore: false, nextCursor: undefined }),
 		...gitOverrides,
-	} as IGitService;
+	} as RepositoryCommandsFixture;
 	resources.add(statusChanged.event(value => Object.assign(status, value)));
 	resources.add(CommandsRegistry.register('git.getRepositoryContexts', () => { }));
 	const commands = { executeCommand: async () => Promise.all(git.repositories.map(async repository => ({ ...repository, root: repository.root.toString(), head: (await git.status(repository.id)).head, remotes: (await git.graph({ limit: 1 }, repository.id)).remotes }))) } as unknown as ICommandService;

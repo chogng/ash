@@ -4,10 +4,52 @@ use ash_protocol::StreamInstanceId;
 use serde::Deserialize;
 use serde::Serialize;
 
+/// Host-selected executable candidates and query policy, scoped to one request.
+#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitClientOptionsDto {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub interaction: Option<GitInteractionDto>,
+    #[serde(default)]
+    pub paths: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub similarity_threshold: Option<u8>,
+}
+
+/// Transport options apply to one request and never change another client's Git policy.
+#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitTransportOptionsDto {
+    pub prune: bool,
+    pub pull_tags: bool,
+    pub replace_tags: bool,
+    pub auto_stash: bool,
+    pub follow_tags: bool,
+    pub push_mode: GitPushModeDto,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum GitPushModeDto {
+    #[default]
+    Normal,
+    Force,
+    Lease,
+    LeaseIfIncludes,
+}
+
 /// Selects one repository discovered inside the active directory.
 #[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitRepositoryParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub transport: Option<GitTransportOptionsDto>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub repository_id: Option<String>,
@@ -29,6 +71,12 @@ pub enum GitPullModeDto {
 pub struct GitPullParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub transport: Option<GitTransportOptionsDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub repository_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
@@ -39,6 +87,9 @@ pub struct GitPullParams {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitCheckIgnoreParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
     #[schemars(length(min = 1, max = 128))]
     pub operation_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -58,6 +109,9 @@ pub struct GitCheckIgnoreResult {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GitCheckIgnoreCancelParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
     #[schemars(length(min = 1, max = 128))]
     pub operation_id: String,
 }
@@ -89,6 +143,9 @@ pub struct GitIgnoreChanged {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitCloneParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
     #[schemars(length(min = 1, max = 4096))]
     pub url: String,
     pub parent_path: String,
@@ -104,6 +161,9 @@ pub struct GitCloneResult {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GitCloneToParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
     #[schemars(length(min = 1, max = 128))]
     pub operation_id: String,
     #[schemars(length(min = 1, max = 4096))]
@@ -116,6 +176,9 @@ pub struct GitCloneToParams {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GitCloneCancelParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
     #[schemars(length(min = 1, max = 128))]
     pub operation_id: String,
 }
@@ -139,6 +202,12 @@ pub enum GitFetchModeDto {
 pub struct GitFetchParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub transport: Option<GitTransportOptionsDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub repository_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
@@ -149,6 +218,9 @@ pub struct GitFetchParams {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitRepositoryDto {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub parent_path: Option<String>,
     pub id: String,
     pub label: String,
     pub path: String,
@@ -356,6 +428,9 @@ pub struct GitReferenceDto {
 pub struct GitGraphParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub repository_id: Option<String>,
     #[schemars(range(min = 1, max = 1000))]
     pub limit: usize,
@@ -411,6 +486,9 @@ pub struct GitHistoryRefsResult {
 pub struct GitCommitChangesParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub repository_id: Option<String>,
     #[schemars(length(min = 40, max = 64))]
     pub object_id: String,
@@ -420,6 +498,9 @@ pub struct GitCommitChangesParams {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitCompareChangesParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub repository_id: Option<String>,
@@ -500,6 +581,9 @@ pub struct GitCompareChangesResult {
 pub struct GitCommitFileParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub repository_id: Option<String>,
     #[schemars(length(min = 40, max = 64))]
     pub object_id: String,
@@ -554,6 +638,9 @@ pub enum GitChangeFileComparisonDto {
 pub struct GitChangeFileParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub repository_id: Option<String>,
     #[schemars(length(min = 1, max = 32768))]
     pub path: String,
@@ -574,6 +661,9 @@ pub struct GitChangeFileResult {
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]
 pub struct GitConflictFileParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub repository_id: Option<String>,
@@ -612,6 +702,9 @@ pub enum GitConflictResolutionDto {
 pub struct GitCompleteConflictParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub repository_id: Option<String>,
     #[schemars(length(min = 1, max = 32768))]
     pub path: String,
@@ -625,6 +718,12 @@ pub struct GitCompleteConflictParams {
 pub struct GitBranchSwitchParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub pull_before_checkout: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub repository_id: Option<String>,
     #[schemars(length(min = 1, max = 1024))]
     pub name: String,
@@ -634,6 +733,9 @@ pub struct GitBranchSwitchParams {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitBranchCreateParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub repository_id: Option<String>,
@@ -647,6 +749,9 @@ pub struct GitBranchCreateParams {
 pub struct GitBranchDeleteParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub repository_id: Option<String>,
     #[schemars(length(min = 1, max = 1024))]
     pub name: String,
@@ -656,6 +761,13 @@ pub struct GitBranchDeleteParams {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitWorktreeCreateParams {
+    #[serde(default)]
+    pub include_files: Vec<String>,
+    #[serde(default)]
+    pub symlink_folders: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub repository_id: Option<String>,
@@ -667,6 +779,9 @@ pub struct GitWorktreeCreateParams {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitWorktreeDeleteParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
     pub command_id: ash_protocol::CommandId,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
@@ -726,6 +841,9 @@ pub struct GitWorktreeListResult {
 pub struct GitWorktreeResolveParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub repository_id: Option<String>,
     pub checkout_root: String,
 }
@@ -769,6 +887,9 @@ pub struct GitTextDiffResult {
 pub struct GitPathsParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub repository_id: Option<String>,
     #[schemars(length(min = 1, max = 5000))]
     pub paths: Vec<String>,
@@ -810,10 +931,32 @@ pub enum GitEmptyCommitPolicyDto {
     Allow,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum GitCommitHooksDto {
+    Skip,
+    Run,
+}
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum GitCommitIdentityDto {
+    Inferred,
+    Configured,
+}
+
 /// Omitted options retain index-only creation without sign-off.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitCommitParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub hooks: Option<GitCommitHooksDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub identity: Option<GitCommitIdentityDto>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub repository_id: Option<String>,
@@ -989,6 +1132,9 @@ pub enum GitStashModeDto {
 pub struct GitCommandParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub repository_id: Option<String>,
     pub command: GitCommandDto,
 }
@@ -1040,6 +1186,9 @@ pub struct GitCatalogResult {
 pub struct GitInitParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub dir_id: Option<String>,
     #[schemars(length(min = 1, max = 1024))]
     pub initial_branch: String,
@@ -1063,6 +1212,9 @@ pub enum GitIndexSelectionDto {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitIndexEditParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub repository_id: Option<String>,
@@ -1092,4 +1244,203 @@ pub struct GitIndexDiffResult {
     pub original: Option<String>,
     pub modified: Option<String>,
     pub hunks: Vec<GitIndexHunkDto>,
+}
+
+/// Queries one authorized file. The optional contents are the client's unsaved text snapshot.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitBlameParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
+    pub repository_id: Option<String>,
+    pub path: String,
+    pub line: usize,
+    pub ignore_whitespace: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub contents: Option<String>,
+}
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitBlameResult {
+    pub object_id: String,
+    pub author_name: String,
+    pub author_email: String,
+    #[ts(type = "number")]
+    pub author_time: i64,
+    pub subject: String,
+}
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitFileHistoryParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
+    pub repository_id: Option<String>,
+    pub path: String,
+}
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitFileHistoryItemDto {
+    pub path: String,
+    pub object_id: String,
+    pub author_name: String,
+    #[ts(type = "number")]
+    pub author_time: i64,
+    #[ts(type = "number")]
+    pub commit_time: i64,
+    pub subject: String,
+}
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitFileHistoryResult {
+    pub items: Vec<GitFileHistoryItemDto>,
+}
+
+/// Directory-scoped discovery preferences, leased for the requesting connection.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitDiscoveryFolderDto {
+    pub dir_id: Option<String>,
+    pub max_depth: i32,
+    pub ignored_folders: Vec<String>,
+    pub scan_repositories: Vec<String>,
+    pub detect_submodules: bool,
+    pub submodule_limit: usize,
+    pub detect_worktrees: bool,
+    pub worktree_limit: usize,
+}
+#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitDiscoveryParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub folders: Option<Vec<GitDiscoveryFolderDto>>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub enum GitInstallationDto {
+    Missing,
+    Available {
+        version: String,
+        major: u32,
+        minor: u32,
+        patch: u32,
+    },
+}
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitVersionResult {
+    pub installation: GitInstallationDto,
+    pub windows: bool,
+}
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitPullPreflightResult {
+    pub upstream_rewritten: bool,
+}
+
+/// Cancellable remote operation; the operation ID is owned by the initiating connection.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitTransportParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
+    pub operation_id: String,
+    pub repository_id: Option<String>,
+    pub transport: GitTransportOptionsDto,
+    pub operation: GitTransportOperationDto,
+}
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "kind",
+    deny_unknown_fields
+)]
+pub enum GitTransportOperationDto {
+    Fetch { mode: GitFetchModeDto },
+    Pull { mode: GitPullModeDto },
+    Push { expected_head: GitHeadDto },
+}
+
+/// A conditional leaf removal. The revision comes from git/reviewRemoval.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitRemovalFileDto {
+    pub path: String,
+    pub revision: String,
+}
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitRemovalEntryDto {
+    pub file: GitRemovalFileDto,
+    pub committed: bool,
+    pub changed: bool,
+}
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitRemovalReviewResult {
+    pub head: GitHeadDto,
+    pub entries: Vec<GitRemovalEntryDto>,
+}
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum GitRemovalModeDto {
+    Trash,
+    Permanent,
+}
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitRemoveFilesParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub repository_id: Option<String>,
+    pub entries: Vec<GitRemovalFileDto>,
+    pub mode: GitRemovalModeDto,
+    pub expected_head: GitHeadDto,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitAIEditorEvidenceDto {
+    pub path: String,
+    pub text: String,
+}
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitAIContributionParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub repository_id: Option<String>,
+    pub scope: GitCommitScopeDto,
+    #[serde(default)]
+    pub editor_evidence: Vec<GitAIEditorEvidenceDto>,
+}
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitAIContributionResult {
+    pub present: bool,
+    pub co_author: Option<String>,
+}
+
+/// Private interaction handles carry no credential material.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitInteractionDto {
+    pub address: String,
+    pub token: String,
+    pub scope: String,
 }

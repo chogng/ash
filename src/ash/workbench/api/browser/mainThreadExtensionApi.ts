@@ -193,9 +193,9 @@ export class MainThreadExtensionApi extends Disposable {
 		throwIfCancelled(signal);
 		switch (operation.operation) {
 			case 'scmUpdate': this.scmApi.set(source, operation.registrationId, operation.revision, operation.providers); return { result: 'done' };
-			case 'backendRequest': return { result: 'value', value: await this.backendApi.handle(source, operation.capability, operation.method, operation.params, 0, signal) };
+			case 'backendRequest': return { result: 'value', value: await this.backendApi.handle(source, operation.capability, operation.method, operation.params, 0, signal, operation.progress) };
 			case 'backendState': return { result: 'value', value: await this.backendApi.handle(source, operation.capability, undefined, {}, operation.after, signal) };
-			case 'editorOperation': return { result: 'value', value: this.handleOutput(source, operation.payload) ? null : await (this.editorsApi ??= this.instantiation.createInstance(MainThreadEditors)).handle(operation.payload, signal) };
+			case 'editorOperation': return { result: 'value', value: this.handleOutput(source, operation.payload) ? null : await (this.editorsApi ??= this._register(this.instantiation.createInstance(MainThreadEditors))).handle(operation.payload, signal, source) };
 			case 'addDebugBreakpoints':
 			case 'removeDebugBreakpoints':
 			case 'getDebugProtocolBreakpoint':
@@ -292,6 +292,13 @@ export class MainThreadExtensionApi extends Disposable {
 				const value = this.configuration.getValue(operation.section, operation.resource === null ? {} : { resource: URI.parse(operation.resource) });
 				return { result: 'configuration', value: value === undefined ? null : normalizeExtensionHostPayload(value) };
 			}
+			case 'inspectConfiguration': {
+				const value = this.configuration.inspect(operation.section, operation.resource === null ? {} : { resource: URI.parse(operation.resource) });
+				return { result: 'configuration', value: normalizeExtensionHostPayload(value) };
+			}
+			case 'resetConfiguration':
+				await this.configuration.updateValue(operation.section, undefined, operation.target === 'user' ? ConfigurationTarget.USER_LOCAL : ConfigurationTarget.WORKSPACE);
+				return { result: 'done' };
 			case 'updateConfiguration':
 				await this.configuration.updateValue(operation.section, operation.value, operation.target === 'user' ? ConfigurationTarget.USER_LOCAL : ConfigurationTarget.WORKSPACE);
 				return { result: 'done' };
@@ -354,6 +361,7 @@ export class MainThreadExtensionApi extends Disposable {
 		this.debugApi.update(snapshot);
 		this.statusbar.update(snapshot);
 		this.scmApi.update(snapshot);
+		this.editorsApi?.updateSources(snapshot);
 		return this.activeContributions?.issues ?? [];
 	}
 
@@ -373,6 +381,7 @@ export class MainThreadExtensionApi extends Disposable {
 		this.debugApi.clear();
 		this.diagnostics.clear();
 		this.statusbar.clear();
+		this.editorsApi?.clearAnnotations();
 		this.scmApi.clear();
 		for (const key of this.namedOutputChannels.keys()) {
 			this.namedOutputChannels.deleteAndDispose(key);

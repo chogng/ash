@@ -106,7 +106,7 @@ async function preparePackages(): Promise<boolean> {
 			for (const entry of (await readdir(resourceDirectory, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
 				if (entry.name.startsWith('.') || ['node_modules', 'test'].includes(entry.name)) { continue; }
 				if (manifest.ashRuntime?.kind === 'rust' && entry.isFile() && entry.name.endsWith('.ts')) { continue; }
-				if (manifest.ashRuntime?.kind === 'rust' && ['src', 'tests', 'Cargo.toml', 'Cargo.lock', 'BUILD.bazel'].includes(entry.name)) { continue; }
+				if (manifest.ashRuntime?.kind === 'rust' && ['src', 'tests', 'browser', 'Cargo.toml', 'Cargo.lock', 'BUILD.bazel'].includes(entry.name)) { continue; }
 				const path = resolve(resourceDirectory, entry.name);
 				if (entry.isDirectory()) { await collect(path); }
 				else if (entry.isFile()) { packageResources[relative(packageRoot, path).replaceAll('\\', '/')] = (await readPackageFile(path)).toString('base64'); }

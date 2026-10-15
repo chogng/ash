@@ -168,7 +168,7 @@ export interface INativeHostApi {
 	openNewWindowTab(): Promise<void>;
 	pickFolder(): Promise<string | undefined>;
 	showOpenDialog(options: OpenDialogOptions): Promise<OpenDialogReturnValue>;
-	openWorkspace(root: string): Promise<void>;
+	openWorkspace(root: string, forceNewWindow?: boolean): Promise<void>;
 	openWindow(options: IOpenEmptyWindowOptions): Promise<void>;
 	openAgentsWindow(options?: IOpenAgentsWindowOptions): Promise<void>;
 	getAgentHostEditorState(): Promise<IAgentHostEditorState>;
@@ -196,11 +196,12 @@ export function validateRevealFilePath(value: unknown): string {
 	return value;
 }
 
-export function validateOpenWorkspace(value: unknown): string {
-	if (typeof value !== "string" || value.trim().length === 0) {
-		throw new Error("workspace root must be a non-empty string");
-	}
-	return value;
+export function validateOpenWorkspace(value: unknown): { root: string; forceNewWindow: boolean; } {
+	const request = typeof value === 'string' ? { root: value } : value;
+	if (!request || typeof request !== 'object' || Array.isArray(request)) throw new TypeError('Invalid workspace request');
+	const options = request as Record<string, unknown>;
+	if (Object.keys(options).some(key => key !== 'root' && key !== 'forceNewWindow') || typeof options.root !== 'string' || !options.root.trim() || options.root.includes('\0') || options.root.length > 32768 || options.forceNewWindow !== undefined && typeof options.forceNewWindow !== 'boolean') throw new TypeError('Invalid workspace request');
+	return { root: options.root, forceNewWindow: options.forceNewWindow === true };
 }
 
 export function validateOpenAgentsWindow(value: unknown): IOpenAgentsWindowOptions | undefined {

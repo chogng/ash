@@ -64,6 +64,8 @@ pub(crate) struct EditorExtensionDeployment {
     pub(crate) package_digest: String,
     pub(crate) command: ExtensionLaunchCommand,
     pub(crate) workspace_read: WorkspaceReadAccess,
+    pub(crate) credential_providers: Vec<String>,
+    pub(crate) protocol_limits: Option<external_ext_protocol::ProtocolLimits>,
     pub(crate) params: ActivateParams,
     pub(crate) authority: Arc<dyn ActivationAuthority>,
     pub(crate) activation: Option<ActivationPlan>,
@@ -72,6 +74,7 @@ pub(crate) struct EditorExtensionDeployment {
 
 pub(super) fn built_in_deployments(
     selection: BuiltInEditorExtensions,
+    admission: Option<Arc<dyn crate::ExtensionsEditorExtensionAdmission>>,
 ) -> Result<Vec<EditorExtensionDeployment>, ExtensionHostRuntimeError> {
     if selection == BuiltInEditorExtensions::Omitted {
         return Ok(Vec::new());
@@ -80,7 +83,20 @@ pub(super) fn built_in_deployments(
     let directory = executable
         .parent()
         .ok_or(ExtensionHostRuntimeError::Internal)?;
-    product_ssh_deployment(directory).map(|deployment| vec![deployment])
+    let mut deployments = vec![product_ssh_deployment(directory)?];
+    let git_manifest: serde_json::Value =
+        serde_json::from_str(include_str!("../../../../../extensions/git/package.json"))
+            .map_err(|_| ExtensionHostRuntimeError::Internal)?;
+    if git_manifest["ashRuntime"]["kind"] == "rust" {
+        deployments.push(product_git_deployment(directory)?);
+    }
+    for deployment in &mut deployments {
+        deployment.authority = Arc::new(ProductPolicyAuthority {
+            id: deployment.id.clone(),
+            admission: admission.clone(),
+        });
+    }
+    Ok(deployments)
 }
 
 fn product_ssh_deployment(
@@ -110,6 +126,8 @@ fn product_ssh_deployment(
         )
         .map_err(ExtensionHostRuntimeError::Host)?,
         workspace_read: WorkspaceReadAccess::Denied,
+        credential_providers: Vec::new(),
+        protocol_limits: None,
         params: ActivateParams {
             initialization: None,
             extension_id: id,
@@ -129,6 +147,100 @@ fn product_ssh_deployment(
         activation: None,
         activation_failure: None,
     })
+}
+
+fn product_git_deployment(
+    directory: &Path,
+) -> Result<EditorExtensionDeployment, ExtensionHostRuntimeError> {
+    let manifest = include_str!("../../../../../extensions/git/package.json");
+    let source = [
+        include_str!("../../../../../extensions/git/src/lib.rs"),
+        include_str!("../../../../../extensions/git/src/api.rs"),
+        include_str!("../../../../../extensions/git/src/blame.rs"),
+        include_str!("../../../../../extensions/git/src/interaction.rs"),
+        include_str!("../../../../../sdk/rust/src/terminal.rs"),
+        include_str!("../../../../../extensions/git/src/model.rs"),
+        include_str!("../../../../../extensions/git/src/commands.rs"),
+        include_str!("../../../../../extensions/git/src/scm.rs"),
+        include_str!("../../../../../extensions/git/src/history.rs"),
+        include_str!("../../../../../extensions/git/src/changes.rs"),
+        include_str!("../../../../../sdk/rust/src/scm.rs"),
+    ]
+    .join("\0");
+    let digest = format!(
+        "sha256:{:x}",
+        Sha256::digest(format!("{manifest}\0{source}"))
+    );
+    let manifest_value: serde_json::Value =
+        serde_json::from_str(manifest).map_err(|_| ExtensionHostRuntimeError::Internal)?;
+    let commands = manifest_value["contributes"]["commands"]
+        .as_array()
+        .ok_or(ExtensionHostRuntimeError::Internal)?
+        .iter()
+        .filter_map(|entry| {
+            entry["command"]
+                .as_str()
+                .map(|command| (command.to_owned(), command.to_owned()))
+        })
+        .collect();
+    Ok(EditorExtensionDeployment {
+        scope: EditorExtensionScope::Product,
+        id: "ash.git".into(),
+        version: "0.1.0".into(),
+        package_digest: digest.clone(),
+        command: ExtensionLaunchCommand::new(
+            directory.join(format!("ash-git-extension{}", std::env::consts::EXE_SUFFIX)),
+            std::iter::empty::<String>(),
+            directory,
+            BTreeMap::new(),
+        )
+        .map_err(ExtensionHostRuntimeError::Host)?,
+        workspace_read: WorkspaceReadAccess::Read,
+        credential_providers: vec!["github".into()],
+        protocol_limits: Some(external_ext_protocol::ProtocolLimits {
+            maximum_frame_bytes: 32 * 1024 * 1024,
+            maximum_payload_bytes: 24 * 1024 * 1024,
+            ..Default::default()
+        }),
+        params: ActivateParams {
+            initialization: None,
+            extension_id: "ash.git".into(),
+            package: PackageBinding {
+                package_id: "ash.git@0.1.0".into(),
+                package_digest: digest,
+                entrypoint: "ash-git-extension".into(),
+            },
+            runtime_api_version: 1,
+            activation_events: vec!["onStartupFinished".into()],
+            capabilities: vec![
+                ExtensionCapability::Command,
+                ExtensionCapability::SourceControl,
+                ExtensionCapability::TerminalProfileProvider,
+            ],
+        },
+        authority: Arc::new(ProductAuthority),
+        activation: Some(ActivationPlan {
+            events: vec!["onStartupFinished".into()],
+            commands,
+        }),
+        activation_failure: None,
+    })
+}
+
+struct ProductPolicyAuthority {
+    id: String,
+    admission: Option<Arc<dyn crate::ExtensionsEditorExtensionAdmission>>,
+}
+impl ActivationAuthority for ProductPolicyAuthority {
+    fn authorizes(&self) -> bool {
+        self.admission
+            .as_ref()
+            .is_none_or(|admission| admission.is_product_extension_enabled(&self.id))
+    }
+    fn acquire(&self) -> Option<Box<dyn ActivationLease>> {
+        self.authorizes()
+            .then(|| Box::new(ProductLease) as Box<dyn ActivationLease>)
+    }
 }
 
 // This authority admits only the extension shipped in the product installation. Fleet retirement
@@ -308,6 +420,8 @@ pub(super) fn plugin_deployments(
                 version: package.manifest().version.to_string(),
                 package_digest: package.package_digest().as_str().to_string(),
                 command,
+                credential_providers: Vec::new(),
+                protocol_limits: None,
                 workspace_read: if package.manifest().permissions.iter().any(|permission| {
                     matches!(
                         permission,

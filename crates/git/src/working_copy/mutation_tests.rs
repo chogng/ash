@@ -744,3 +744,48 @@ fn diverged_pull_repositories(
     let local_head = target.git(&["rev-parse", "HEAD"]);
     (origin, target, remote_head, local_head)
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn interactive_commit_hooks_run_and_can_be_explicitly_skipped() {
+    use std::os::unix::fs::PermissionsExt;
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "initial\n");
+    repository.commit_all("Initial");
+    let initial = repository.git(&["rev-parse", "HEAD"]);
+    let hooks = repository.path(".git/hooks");
+    std::fs::create_dir_all(&hooks).unwrap();
+    let hook = hooks.join("pre-commit");
+    std::fs::write(&hook, "#!/bin/sh\nprintf ran > hook-ran\nexit 1\n").unwrap();
+    std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+    repository.git(&["config", "core.hooksPath", hooks.to_str().unwrap()]);
+    repository.write("tracked.txt", "changed\n");
+    repository.git(&["add", "tracked.txt"]);
+    let client = GitClient::system();
+    let opened = client.open_repository(repository.root()).await.unwrap();
+    let request = GitCommitRequest::new("verified".into())
+        .unwrap()
+        .run_hooks()
+        .require_configured_identity();
+    assert!(client.commit(&opened, &request).await.is_err());
+    assert_eq!(repository.read("hook-ran"), "ran");
+    assert_eq!(repository.git(&["rev-parse", "HEAD"]), initial);
+    assert_eq!(
+        repository.git(&["diff", "--cached", "--name-only"]),
+        "tracked.txt"
+    );
+    client
+        .commit(
+            &opened,
+            &GitCommitRequest::new("explicit skip".into())
+                .unwrap()
+                .sign_off(),
+        )
+        .await
+        .unwrap();
+    assert!(
+        repository
+            .git(&["log", "-1", "--format=%B"])
+            .contains("Signed-off-by: Ash Test <ash@example.invalid>")
+    );
+}

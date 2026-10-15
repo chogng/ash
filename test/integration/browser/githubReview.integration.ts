@@ -26,7 +26,6 @@ import { AppServerGitHubService } from '../../../src/ash/platform/github/browser
 import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
-import type { GitCommand } from '../../../extensions/git/browser/types.js';
 import { IWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/common/workingCopyService.js';
 import { IGitHubService } from '../../../src/ash/platform/github/common/githubService.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';

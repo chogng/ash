@@ -22,7 +22,7 @@ export function createSCMApi(runtime, request, invoke, retain, stateRequest = re
 			entry.resources.clear();
 			const actions = values => values.map(value => { entry.actions.set(value.id, value); return action(value); });
 			return serial({
-				id: value.id, providerId: value.providerId, label: value.label, rootUri: value.rootUri?.toString(), selected: entry.selected, selectionRevision: entry.selectionRevision,
+				id: value.id, providerId: value.providerId, label: value.label, rootUri: value.rootUri?.toString(), count: value.count, selected: entry.selected, selectionRevision: entry.selectionRevision,
 				groups: value.groups.map(group => ({
 					id: group.id, label: group.label, actions: actions(group.actions), resources: group.resources.map(resource => {
 						const id = `${group.id}:${resource.path}`;
@@ -30,7 +30,7 @@ export function createSCMApi(runtime, request, invoke, retain, stateRequest = re
 						return { id, sourceUri: resource.sourceUri.toString(), path: resource.path, originalPath: resource.originalPath, decorations: resource.decorations, openLabel: resource.openLabel, actions: actions(resource.actions) };
 					})
 				})),
-				input: { value: value.input.value, placeholder: value.input.placeholder, enabled: value.input.enabled, canAccept: value.input.canAccept, buttonLabel: value.input.buttonLabel, buttonTooltip: value.input.buttonTooltip },
+				input: { visible: value.input.visible, buttonVisible: value.input.buttonVisible, validationMessage: value.input.validationMessage, value: value.input.value, placeholder: value.input.placeholder, enabled: value.input.enabled, canAccept: value.input.canAccept, buttonLabel: value.input.buttonLabel, buttonTooltip: value.input.buttonTooltip },
 				activeRepositoryName: value.activeRepositoryName, statusMessage: value.statusMessage, isBusy: value.isBusy,
 				statusBarCommands: value.statusBarCommands.map(command => ({
 					id: command.id, text: command.text, ariaLabel: command.ariaLabel, tooltip: command.tooltip,

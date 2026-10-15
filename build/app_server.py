@@ -82,6 +82,7 @@ def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Names
         type=Path,
         help="Prebuilt isolated Code Mode Host executable. If omitted, Cargo builds it.",
     )
+    parser.add_argument("--git-extension-bin", type=Path, help="Prebuilt Rust Git extension.")
     parser.add_argument(
         "--remote-ssh-extension-bin",
         type=Path,
@@ -221,6 +222,7 @@ def build_package(args: argparse.Namespace) -> int:
         "ash-app-server": args.server_bin,
         "ash-app-server-daemon": args.app_server_daemon_bin,
         "ash-code-mode-host": args.code_mode_host_bin,
+        "ash-git-extension": args.git_extension_bin,
         "ash-github-authentication": args.github_authentication_bin,
         "ash-remote-ssh-extension": args.remote_ssh_extension_bin,
         "ash-dev-container-provider": args.dev_container_provider_bin,
@@ -303,6 +305,7 @@ def build_package(args: argparse.Namespace) -> int:
         node,
         bubblewrap,
         livekit=livekit,
+        git_extension_binary=binaries["ash-git-extension"],
         github_authentication_binary=binaries["ash-github-authentication"],
         remote_ssh_extension_binary=binaries["ash-remote-ssh-extension"],
         dev_container_provider_binary=binaries["ash-dev-container-provider"],

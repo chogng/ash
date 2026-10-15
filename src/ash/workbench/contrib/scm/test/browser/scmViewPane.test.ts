@@ -48,18 +48,13 @@ import type { IClipboardService } from '../../../../../platform/clipboard/common
 import type { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import type { HoverSetupOptions, IHoverService, IManagedHover } from "../../../../../platform/hover/browser/hoverService.js";
 import { IResourceLabelService, ResourceLabels, DEFAULT_LABELS_CONTAINER, IResourceIconRenderer } from "../../../../browser/labels.js";
-import { GitWorkspaceError, IGitService, type GitCommitDetails, type GitCommitChanges, type GitRepository, type GraphQuery, type GraphPage, type GitStatus } from "../../../../../../../extensions/git/browser/types.js";
 import { IEditorService, type EditorOpenOptions, type EditorOpenTarget } from "../../../../../workbench/services/editor/common/editorService.js";
 import { IViewsService } from '../../../../../workbench/services/views/common/viewsService.js';
 import { WorkbenchState, IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import type { IWorkingCopyService } from '../../../../../workbench/services/workingCopy/common/workingCopyService.js';
 import { CommandService } from "../../../../../workbench/services/commands/common/commandService.js";
-import { resolveGitChangeInputs } from '../../../../../../../extensions/git/browser/gitChangeEditorInput.js';
 import { isScmMergeEditorInput } from "../../../../../workbench/contrib/scm/browser/scmMergeEditorInput.js";
 import { emptyEditorServiceState } from '../../../../../workbench/test/common/testEditorService.js';
-import { GitHistoryProvider } from '../../../../../../../extensions/git/browser/gitHistoryProvider.js';
-import { GitSCMProvider, type GitSCMProviderServices } from '../../../../../../../extensions/git/browser/gitSCMProvider.js';
-import type { GitCommitOptions } from '../../../../../../../extensions/git/browser/types.js';
 import { SCMService } from '../../common/scmService.js';
 import { SCMViewService } from '../../browser/scmViewService.js';
 import { SCMRepositoriesViewPane } from '../../browser/scmRepositoriesViewPane.js';
@@ -86,24 +81,6 @@ const testDialogs: IDialogService = {
 	input: async () => ({ confirmed: false }),
 };
 
-function createHistoryViewFixture(gitService: IGitService): DisposableStore & { readonly viewService: SCMViewService; readonly scmService: SCMService; } {
-	const resources = new DisposableStore();
-	const scmService = resources.add(new SCMService());
-	const viewService = resources.add(new SCMViewService(scmService));
-	const provider = resources.add(new GitHistoryProvider({
-		...gitService,
-		historyRefs: gitService.historyRefs ?? (async () => {
-			const status = await gitService.status();
-			const references = status.head.type === 'branch' ? [{ name: status.head.name, objectId: status.head.objectId, kind: 'localBranch' as const, remoteName: undefined, current: true }] : [];
-			return { status, graphRevision: 1, references, branches: await gitService.branches(), remotes: [] };
-		}),
-		onDidChangeRepositoryStatus: gitService.onDidChangeRepositoryStatus ?? noEvent,
-		onDidBecomeReady: gitService.onDidBecomeReady ?? noEvent,
-	}, 'repo-1'));
-	resources.add(scmService.registerSCMProvider(testSCMProvider('repo-1', 'workspace', provider)));
-	return Object.assign(resources, { viewService, scmService });
-}
-
 test('SCM history services assemble through their production registrations', async () => {
 	await import('../../browser/scm.service.contribution.js');
 	using services = new InstantiationService();
@@ -114,171 +91,8 @@ test('SCM history services assemble through their production registrations', asy
 	assert.ok(services.has(ISCMViewService));
 	const scmService = services.get(ISCMService);
 	const viewService = services.get(ISCMViewService);
-	using repository = scmService.registerSCMProvider(testSCMProvider('repo', 'repo', {} as GitHistoryProvider));
+	using repository = scmService.registerSCMProvider(testSCMProvider('repo', 'repo', {} as ISCMHistoryProvider));
 	assert.equal(viewService.activeRepository?.id, 'repo');
-});
-
-test("SCM diff inputs open live files and keep deleted files on the readable side", async () => {
-	const status: GitStatus = {
-		repositoryId: "repo-1",
-		streamInstanceId: "git-input-stream",
-		historyRevision: 1,
-		revision: 1,
-		workspacePath: "/workspace",
-		head: { type: "branch", name: "main", objectId: "1234567890", upstream: undefined },
-		changes: [],
-	};
-	const gitService = {
-		changeFile: async (path: string) => path.endsWith("deleted.ts")
-			? { original: { kind: "text" as const, text: "before\n" }, modified: { kind: "missing" as const } }
-			: { original: { kind: "text" as const, text: "before\n" }, modified: { kind: "text" as const, text: "after\n" } },
-	} as unknown as IGitService;
-	const live = await resolveGitChangeInputs(gitService, status, change("src/working.ts", "unmodified", "modified"), "unstaged");
-	const deleted = await resolveGitChangeInputs(gitService, status, change("src/deleted.ts", "unmodified", "deleted"), "unstaged");
-
-	assert.equal(live.goToFile?.resource.toString(), "file:///workspace/src/working.ts");
-	assert.equal(deleted.goToFile, deleted.original);
-	for (const prefix of ['', '\uFEFF', '\uFEFF\uFEFF']) {
-		const snapshots = await resolveGitChangeInputs({
-			changeFile: async () => ({ original: { kind: 'text', text: `${prefix}before` }, modified: { kind: 'text', text: `${prefix}after` } }),
-		} as unknown as IGitService, status, change('src/bom.ts', 'unmodified', 'modified'), 'unstaged');
-		// Only the encoding BOM is removed; a second U+FEFF is document content.
-		assert.deepEqual([snapshots.original?.initialText, snapshots.modified?.initialText, snapshots.original?.encoding, snapshots.modified?.encoding],
-			[prefix.slice(1) + 'before', prefix.slice(1) + 'after', prefix ? 'utf8bom' : undefined, prefix ? 'utf8bom' : undefined]);
-	}
-});
-
-test('Git presentation preferences update existing groups, decorations and file actions', async () => {
-	const status: GitStatus = {
-		repositoryId: 'settings', streamInstanceId: 'settings-stream', historyRevision: 1, revision: 1,
-		workspacePath: '/workspace', head: { type: 'branch', name: 'main', objectId: '1234567890', upstream: undefined },
-		changes: [change('tracked.ts', 'unmodified', 'modified'), change('new.ts', 'unmodified', 'untracked')],
-	};
-	const git = { status: async () => status, onDidChangeRepositoryStatus: Event.None, onDidBecomeReady: Event.None } as unknown as IGitService;
-	using changes = new Emitter<{ affectsConfiguration(section: string): boolean; }>();
-	const values = new Map<string, unknown>();
-	const opened: Array<{ readonly input: IResourceEditorInput; readonly options: EditorOpenOptions | undefined; readonly target?: EditorOpenTarget; }> = [];
-	using provider = new GitSCMProvider(git, { id: 'settings', label: 'Workspace', path: '/workspace', root: URI.file('/workspace') }, {} as GitHistoryProvider, testGitProviderServices({
-		editorService: testEditorService(opened),
-		configuration: { get: <T>(key: string, defaultValue: T): T => values.has(key) ? values.get(key) as T : defaultValue, onDidChange: changes.event },
-	}));
-	await provider.whenReady();
-	assert.deepEqual(provider.groups.map(group => [group.id, group.resources.map(resource => resource.path)]), [['changes', ['tracked.ts', 'new.ts']]]);
-	assert.ok(provider.provideDecorations(URI.file('/workspace/tracked.ts')));
-	values.set('git.untrackedChanges', 'separate');
-	values.set('git.showInlineOpenFileAction', false);
-	values.set('git.decorations.enabled', false);
-	values.set('git.openDiffOnClick', false);
-	changes.fire({ affectsConfiguration: section => section === 'git' });
-	assert.deepEqual(provider.groups.map(group => [group.id, group.resources.map(resource => resource.path)]), [['changes', ['tracked.ts']], ['untracked', ['new.ts']]]);
-	assert.equal(provider.provideDecorations(URI.file('/workspace/tracked.ts')), undefined);
-	const resource = provider.groups[0]!.resources[0]!;
-	assert.equal(resource.openLabel, 'Open File: tracked.ts');
-	assert.equal(resource.actions.some(action => action.id.startsWith('scm.change.openFile')), false);
-	await resource.open({}, false);
-	assert.deepEqual(opened[0]!.input, { resource: URI.file('/workspace/tracked.ts') });
-	values.set('git.untrackedChanges', 'hidden');
-	changes.fire({ affectsConfiguration: () => true });
-	assert.deepEqual(provider.groups.flatMap(group => group.resources.map(resource => resource.path)), ['tracked.ts']);
-	values.clear();
-	changes.fire({ affectsConfiguration: () => true });
-	assert.deepEqual(provider.groups.flatMap(group => group.resources.map(resource => resource.path)), ['tracked.ts', 'new.ts']);
-	assert.ok(provider.provideDecorations(URI.file('/workspace/tracked.ts')));
-	assert.ok(provider.groups[0]!.resources[0]!.actions.some(action => action.id.startsWith('scm.change.openFile')));
-});
-
-test('Git commit settings select scope and signing, run post-commit operations and retain a cancelled draft', async () => {
-	let status: GitStatus = {
-		repositoryId: 'commit-settings', streamInstanceId: 'commit-settings', historyRevision: 1, revision: 1, workspacePath: '/workspace',
-		head: { type: 'branch', name: 'main', objectId: 'a'.repeat(40), upstream: undefined },
-		changes: [change('tracked.ts', 'unmodified', 'modified'), change('new.ts', 'unmodified', 'untracked')],
-	};
-	const values = new Map<string, unknown>([['git.enableSmartCommit', true], ['git.smartCommitChanges', 'tracked'], ['git.enableCommitSigning', true], ['git.postCommitCommand', 'push'], ['git.showPushSuccessNotification', true]]);
-	const commits: { message: string; options: GitCommitOptions; }[] = [];
-	const operations: string[] = [];
-	const notifications: string[] = [];
-	const firstHead = status.head;
-	const git = {
-		onDidChangeRepositoryStatus: Event.None, onDidBecomeReady: Event.None, status: async () => status,
-		commit: async (message: string, _repositoryId: string, options: GitCommitOptions) => {
-			operations.push('commit'); commits.push({ message, options });
-			status = { ...status, revision: status.revision + 1, changes: [], head: { type: 'branch', name: 'main', objectId: 'b'.repeat(40), upstream: undefined } };
-			return { status, objectId: 'b'.repeat(40) };
-		},
-		push: async () => { operations.push('push'); return { ...status, revision: status.revision + 1 }; },
-	} as unknown as IGitService;
-	let confirmed = true;
-	let editDuringConfirmation = false;
-	using provider: GitSCMProvider = new GitSCMProvider(git, { id: status.repositoryId, label: 'Workspace', path: '/workspace', root: URI.file('/workspace') }, {} as GitHistoryProvider, testGitProviderServices({
-		configuration: { get: <T>(key: string, defaultValue: T): T => values.has(key) ? values.get(key) as T : defaultValue, onDidChange: Event.None },
-		notify: message => notifications.push(message),
-		dialogService: { confirm: async () => { if (editDuringConfirmation) provider.input.value = 'New draft'; return { confirmed }; } },
-	}));
-	await provider.whenReady();
-	provider.input.value = 'Smart commit';
-	await provider.commit();
-	assert.deepEqual(commits, [{ message: 'Smart commit', options: { scope: 'tracked', signing: 'required', expectedHead: firstHead } }]);
-	assert.deepEqual(operations, ['commit', 'push']);
-	assert.equal(provider.input.value, '');
-	assert.deepEqual(notifications, ['Successfully pushed repository Workspace.']);
-	values.clear();
-	provider.input.value = 'Empty commit';
-	confirmed = false;
-	await provider.commit({ scope: 'staged', empty: 'allow' });
-	assert.equal(commits.length, 1);
-	assert.equal(provider.input.value, 'Empty commit');
-	confirmed = true;
-	editDuringConfirmation = true;
-	await provider.commit({ scope: 'staged', empty: 'allow' });
-	assert.equal(commits.length, 1);
-	assert.equal(provider.input.value, 'New draft');
-	editDuringConfirmation = false;
-	values.set('git.confirmEmptyCommits', false);
-	await provider.commit({ scope: 'staged', empty: 'allow' });
-	assert.deepEqual(commits[1], { message: 'New draft', options: { scope: 'staged', empty: 'allow', expectedHead: status.head } });
-	assert.deepEqual(operations, ['commit', 'push', 'commit']);
-});
-
-test('SCM Open File actions open editable working files from each group and skip deleted files', async () => {
-	const status: GitStatus = {
-		repositoryId: 'repo-1', streamInstanceId: 'open-file-stream', historyRevision: 1, revision: 1,
-		workspacePath: '/workspace/nested',
-		head: { type: 'branch', name: 'main', objectId: '1234567890', upstream: undefined },
-		changes: [
-			change('staged.ts', 'modified', 'unmodified'),
-			{ ...change('new.ts', 'renamed', 'modified'), originalPath: 'old.ts' },
-			{ ...change('conflict.ts', 'unmerged', 'unmerged'), conflicted: true },
-			change('deleted.ts', 'unmodified', 'deleted'),
-			change('staged-deleted.ts', 'deleted', 'unmodified'),
-			change('both-deleted.ts', 'modified', 'deleted'),
-		],
-	};
-	const repository = { id: status.repositoryId, label: 'nested', path: 'nested', root: URI.file(status.workspacePath) };
-	const gitService = {
-		status: async () => status,
-		onDidChangeRepositoryStatus: Event.None,
-		onDidBecomeReady: Event.None,
-	} as unknown as IGitService;
-	const opened: Array<{ readonly input: IResourceEditorInput; readonly options: EditorOpenOptions | undefined; readonly target?: EditorOpenTarget; }> = [];
-	using provider = new GitSCMProvider(gitService, repository, {} as GitHistoryProvider, testGitProviderServices({ editorService: testEditorService(opened) }));
-	await waitFor(() => provider.groups.length === 3);
-	for (const group of provider.groups) {
-		for (const resource of group.resources) {
-			const action = resource.actions.find(action => action.id === `scm.change.openFile.${resource.path}`);
-			if (resource.path.endsWith('deleted.ts')) {
-				assert.equal(action, undefined);
-				continue;
-			}
-			assert.ok(action);
-			const count = opened.length;
-			action.run();
-			await waitFor(() => !provider.isBusy && opened.length === count + 1);
-			assert.deepEqual(opened.at(-1), {
-				input: { resource: URI.file(`${status.workspacePath}/${resource.path}`) },
-				options: { pinned: false, revealIfOpened: true, preserveFocus: false }, target: undefined,
-			});
-		}
-	}
 });
 
 test("Git contribution registers Repositories before Changes and hides it for a single provider", async () => {
@@ -334,7 +148,7 @@ test('SCM panes follow repository and history availability through the window co
 
 		using repository = scm.registerSCMProvider(testSCMProvider('resources', 'Resources'));
 		assert.deepEqual(visiblePanes(), [VIEW_PANE_ID, SCM_AGENT_REVIEW_VIEW_ID]);
-		using history = new GitHistoryProvider({ onDidChangeRepositoryStatus: Event.None, onDidBecomeReady: Event.None } as unknown as IGitService, 'history');
+		const history = historyProviderFixture();
 		using historyRepository = scm.registerSCMProvider(testSCMProvider('history', 'History', history));
 		assert.deepEqual(visiblePanes(), ['workbench.scm.repositories', VIEW_PANE_ID, SCM_AGENT_REVIEW_VIEW_ID, SCM_HISTORY_VIEW_ID]);
 
@@ -645,7 +459,7 @@ test("SCMHistoryViewPane loads another history page only on demand", async () =>
 		showHover: () => testManagedHover(),
 		hideHover() { },
 	};
-	const status: GitStatus = {
+	const status = {
 		repositoryId: "repo-1",
 		streamInstanceId: "git-graph-stream",
 		historyRevision: 1,
@@ -661,9 +475,9 @@ test("SCMHistoryViewPane loads another history page only on demand", async () =>
 		branches: async () => [],
 		graph: async (query: GraphQuery) => {
 			graphRequests.push(query);
-			if (query.cursor === '100' && failNextPage) { failNextPage = false; throw new Error('Temporary page failure'); }
+			if (query.cursor === '50' && failNextPage) { failNextPage = false; throw new Error('Temporary page failure'); }
 			const start = query.cursor ? Number(query.cursor) : 0;
-			const commits = Array.from({ length: Math.min(50, 101 - start) }, (_, index) => ({
+			const commits = Array.from({ length: Math.min(query.limit, 101 - start) }, (_, index) => ({
 				objectId: `commit-${start + index + 1}`,
 				parentObjectIds: start + index === 100 ? [] : [`commit-${start + index + 2}`],
 				timestampSeconds: 1_753_000_000 - start - index,
@@ -677,7 +491,7 @@ test("SCMHistoryViewPane loads another history page only on demand", async () =>
 				nextCursor: start < 100 ? String(start + 50) : undefined,
 			};
 		},
-	} as unknown as IGitService;
+	} satisfies HistoryFixtureData;
 
 	try {
 		using history = createHistoryViewFixture(gitService);
@@ -696,7 +510,7 @@ test("SCMHistoryViewPane loads another history page only on demand", async () =>
 		await waitFor(() => graph.getAttribute('aria-busy') === 'false');
 		const first = list!.querySelector('.ash-scm-graph-commit');
 		assert.equal(first?.getAttribute('aria-setsize'), '50');
-		assert.deepEqual(graphRequests, [{ limit: 50, revisions: ['commit-1'] }, { limit: 50, cursor: '50', revisions: ['commit-1'] }]);
+		assert.deepEqual(graphRequests, [{ limit: 51, revisions: ['commit-1'] }]);
 		assert.equal(pane.element.querySelector('.ash-scm-graph .ash-list'), list);
 
 		await assert.rejects(historyConfiguration.updateValue('scm.graph.pageSize', 0));
@@ -705,25 +519,25 @@ test("SCMHistoryViewPane loads another history page only on demand", async () =>
 		await historyConfiguration.updateValue('scm.graph.pageOnScroll', false);
 		viewport.scrollTop = 1100;
 		viewport.dispatchEvent(new browser.window.Event('scroll'));
-		assert.equal(graphRequests.length, 2, 'A visible next-page button does not load when automatic paging is disabled');
+		assert.equal(graphRequests.length, 1, 'A visible next-page button does not load when automatic paging is disabled');
 		const loadMore = graph.querySelector<HTMLButtonElement>('.ash-scm-graph-load-more > button')!;
 		assert.ok(loadMore);
 		loadMore.focus();
 		loadMore.click();
-		await waitFor(() => graph.getAttribute('aria-busy') === 'false' && graphRequests.length === 3);
+		await waitFor(() => graph.getAttribute('aria-busy') === 'false' && graphRequests.length === 2);
 		assert.equal(list!.querySelector('.ash-scm-graph-commit')?.getAttribute('aria-setsize'), '50');
 		const retry = graph.querySelector<HTMLButtonElement>('.ash-scm-graph-load-more > button')!;
 		assert.equal(retry.getAttribute('aria-label'), 'Retry loading commit history');
 		assert.equal(browser.window.document.activeElement, retry, 'A failed page returns keyboard focus to its live retry button');
 		await historyConfiguration.updateValue('scm.graph.pageOnScroll', true);
 		viewport.dispatchEvent(new browser.window.Event('scroll'));
-		assert.equal(graphRequests.length, 3, 'A visible failed page waits for explicit retry instead of looping');
+		assert.equal(graphRequests.length, 2, 'A visible failed page waits for explicit retry instead of looping');
 		await historyConfiguration.updateValue('scm.graph.pageOnScroll', false);
 		retry.click();
-		await waitFor(() => graph.getAttribute('aria-busy') === 'false' && graphRequests.length === 4);
+		await waitFor(() => graph.getAttribute('aria-busy') === 'false' && graphRequests.length === 3);
 		assert.equal(browser.window.document.activeElement?.querySelector('.ash-scm-graph-subject')?.textContent, 'History item 51');
 		assert.equal(list!.querySelector('.ash-scm-graph-commit')?.getAttribute('aria-setsize'), '100');
-		assert.deepEqual(graphRequests, [{ limit: 50, revisions: ['commit-1'] }, { limit: 50, cursor: '50', revisions: ['commit-1'] }, { limit: 50, cursor: '100', revisions: ['commit-1'] }, { limit: 50, cursor: '100', revisions: ['commit-1'] }]);
+		assert.deepEqual(graphRequests, [{ limit: 51, revisions: ['commit-1'] }, { limit: 51, cursor: '50', revisions: ['commit-1'] }, { limit: 51, cursor: '50', revisions: ['commit-1'] }]);
 		assert.equal(list!.querySelectorAll('.ash-scm-graph-commit').length < 100, true);
 
 		viewport.scrollTop = 2178;
@@ -867,7 +681,7 @@ test("SCMHistoryViewPane virtualizes loaded history rows", async () => {
 	]);
 	using contextKeyService = new ContextKeyService();
 	const menuService = new MenuService(new CommandService(new InstantiationService()), contextKeyService);
-	const status: GitStatus = {
+	const status = {
 		repositoryId: "repo-1",
 		streamInstanceId: "git-graph-stream",
 		historyRevision: 1,
@@ -889,7 +703,7 @@ test("SCMHistoryViewPane virtualizes loaded history rows", async () => {
 		status: async () => status,
 		branches: async () => [],
 		graph: async (_query: GraphQuery) => ({ commits, references: [], remotes: [], hasMore: false, nextCursor: undefined }),
-	} as unknown as IGitService;
+	} satisfies HistoryFixtureData;
 	const hoverTargets: HTMLElement[] = [];
 	const hoverHandles = new Map<HTMLElement, IManagedHover>();
 	const disposedHoverTargets = new Set<HTMLElement>();
@@ -1011,7 +825,7 @@ test("SCMHistoryViewPane expands commit files and opens a selected change in the
 	const gitService = {
 		onDidBecomeReady: noEvent,
 		onDidChangeActiveRepository: noEvent,
-		status: async (): Promise<GitStatus> => ({
+		status: async (): Promise<{ workspacePath: string; head: { type: string; name: string; objectId: string; upstream: undefined; }; changes: unknown[]; repositoryId: string; streamInstanceId: string; revision: number; historyRevision: number; }> => ({
 			repositoryId: "repo-1",
 			streamInstanceId: "git-graph-stream",
 			historyRevision: 1,
@@ -1036,7 +850,7 @@ test("SCMHistoryViewPane expands commit files and opens a selected change in the
 			fileRequests += 1;
 			return binary ? { original: { kind: 'binary', bytes: new Uint8Array([0, 1]) }, modified: { kind: 'binary', bytes: new Uint8Array([0, 255]) } } : { original: { kind: "text" as const, text: "before\n" }, modified: { kind: "text" as const, text: "after\n" } };
 		},
-	} as unknown as IGitService;
+	} satisfies HistoryFixtureData;
 	const opened: Array<{ readonly input: IResourceEditorInput; readonly options: EditorOpenOptions | undefined; readonly target?: EditorOpenTarget; }> = [];
 	const editorService = testEditorService(opened);
 	commandServices.registerInstance(IEditorService, editorService);
@@ -1248,7 +1062,7 @@ test('SCM history opens a commit multi-diff from its inline action and context m
 				modified: path === 'deleted.ts' ? { kind: 'missing' } : path === 'image.png' ? { kind: 'binary' } : { kind: 'text', text: 'after\n' },
 			};
 		},
-	} as unknown as IGitService;
+	} satisfies HistoryFixtureData;
 	const { SCMHistoryViewPane } = await import('../../browser/scmHistoryViewPane.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
@@ -2042,100 +1856,6 @@ test('SCM input keeps repository drafts, updates help verbosity and releases its
 	}
 });
 
-test("ScmViewPane accepts a restarted Git stream and rejects its retired predecessor", async () => {
-	const browser = new JSDOM("<!doctype html><body></body>");
-	const installedGlobals = installDomGlobals(browser);
-	let statusRequest = 0;
-	let statusListener: ((status: GitStatus) => void) | undefined;
-	let readyListener: (() => void) | undefined;
-	const repositoryStatusChanges = new Emitter<GitStatus>();
-	const readyChanges = new Emitter<void>();
-	statusListener = status => repositoryStatusChanges.fire(status);
-	readyListener = () => readyChanges.fire();
-	const previous: GitStatus = {
-		repositoryId: "repo-1",
-		streamInstanceId: "git-stream-before-restart",
-		historyRevision: 1,
-		revision: 20,
-		workspacePath: "/workspace",
-		head: { type: "branch", name: "before", objectId: "1111111", upstream: undefined },
-		changes: [change("before.ts", "unmodified", "modified")],
-	};
-	const restarted: GitStatus = {
-		repositoryId: "repo-1",
-		streamInstanceId: "git-stream-after-restart",
-		historyRevision: 1,
-		revision: 1,
-		workspacePath: "/workspace",
-		head: { type: "branch", name: "after", objectId: "2222222", upstream: undefined },
-		changes: [],
-	};
-	const latePrevious: GitStatus = {
-		...previous,
-		revision: 21,
-		head: { type: "branch", name: "late-before", objectId: "3333333", upstream: undefined },
-	};
-	const gitService = {
-		repositories: [{ id: 'repo-1', label: 'workspace', path: '/workspace', root: URI.file('/workspace') }],
-		activeRepository: undefined,
-		onDidChangeRepositories: noEvent,
-		onDidChangeActiveRepository: noEvent,
-		status: async () => statusRequest++ === 0 ? previous : restarted,
-		onDidChangeRepositoryStatus: repositoryStatusChanges.event,
-		onDidBecomeReady: readyChanges.event,
-	} as unknown as IGitService;
-
-	try {
-		const { ScmViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmViewPane.js");
-		using scmService = new SCMService();
-		using viewService = new SCMViewService(scmService);
-		using provider = new GitSCMProvider(gitService, gitService.repositories[0], {} as GitHistoryProvider, testGitProviderServices());
-		using repository = scmService.registerSCMProvider(provider);
-		using configuration = new InMemoryConfigurationService();
-		using editorServices = createTestEditorServices(configuration, undefined, browser.window.document);
-		const { registerCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
-		registerCodeEditorServices(editorServices);
-		using titleCommands = new CommandService(editorServices);
-		using pane = new ScmViewPane(browser.window.document.body, {
-			id: "ash.git.restart",
-			title: "Changes",
-		}, scmService, viewService, testResourceLabelService(), testContextMenuProvider, configuration, testFileIconThemeService(), editorServices, new MenuService(titleCommands, editorServices.get(IContextKeyService)), editorServices.get(IContextKeyService), editorServices.get(IStorageService));
-		browser.window.document.body.append(pane.element);
-		await waitFor(() => pane.element.querySelector('[aria-label="Open changes for before.ts"]') !== null);
-		assert.equal(pane.element.querySelector(".ash-scm-branch"), null);
-
-		assert.ok(readyListener);
-		readyListener();
-		await waitFor(() => pane.element.querySelector(".ash-scm-status")?.textContent === "No changes.");
-		assert.equal(statusRequest, 2);
-
-		assert.ok(statusListener);
-		statusListener(latePrevious);
-		await new Promise((resolve) => setTimeout(resolve, 0));
-		assert.equal(pane.element.querySelector(".ash-scm-status")?.textContent, "No changes.");
-		assert.equal(pane.element.querySelector('[aria-label="Open changes for before.ts"]'), null);
-	} finally {
-		browser.window.close();
-		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
-	}
-});
-
-function change(path: string, indexStatus: GitStatus["changes"][number]["indexStatus"], worktreeStatus: GitStatus["changes"][number]["worktreeStatus"]): GitStatus["changes"][number] {
-	return {
-		path,
-		originalPath: undefined,
-		indexStatus,
-		worktreeStatus,
-		conflicted: false,
-		submodule: {
-			isSubmodule: false,
-			commitChanged: false,
-			trackedChanges: false,
-			untrackedChanges: false,
-		},
-	};
-}
-
 function testManagedHover(): IManagedHover {
 	return {
 		visible: false,
@@ -2181,19 +1901,6 @@ function inactiveCommandService(): ICommandService {
 	} as unknown as ICommandService;
 }
 
-function testGitProviderServices(overrides: Partial<GitSCMProviderServices> = {}): GitSCMProviderServices {
-	return {
-		notify: () => { },
-		configuration: { get: (_key, defaultValue) => defaultValue, onDidChange: Event.None },
-		commandService: inactiveCommandService(),
-		dialogService: testDialogs,
-		editorService: testEditorService(),
-		viewsService: { focusView: async () => true } as unknown as IViewsService,
-		workingCopyService: { get: () => [] } as unknown as IWorkingCopyService,
-		...overrides,
-	};
-}
-
 function testWorkspaceContext(): IWorkspaceContextService {
 	return {
 		onDidChangeWorkspace: Event.None,
@@ -2216,7 +1923,7 @@ function testSCMProvider(id: string, label: string, historyProvider?: ISCMHistor
 async function waitFor(condition: () => boolean, timeoutMillis = 1_000): Promise<void> {
 	const deadline = Date.now() + timeoutMillis;
 	while (!condition()) {
-		if (Date.now() >= deadline) throw new Error("Timed out waiting for ScmViewPane");
+		if (Date.now() >= deadline) throw new Error(`Timed out waiting for ScmViewPane: ${condition.toString()}`);
 		await new Promise((resolve) => setTimeout(resolve, 0));
 	}
 }
@@ -2275,22 +1982,56 @@ function installDomGlobals(browser: JSDOM): readonly string[] {
 	}
 	return Object.keys(globals);
 }
-test("SCM distinguishes an empty window, a folder without Git, and unavailable access", async () => {
-	const [{ gitErrorMessage }, { GitWorkspaceError }] = await Promise.all([
-		import("../../../../../../../extensions/git/browser/gitError.js"),
-		import("../../../../../../../extensions/git/browser/types.js"),
-	]);
-	assert.deepEqual([
-		gitErrorMessage(new GitWorkspaceError('noFolder')),
-		gitErrorMessage(new GitWorkspaceError('noRepository')),
-		gitErrorMessage(new Error("Error invoking remote method 'ash:git:status': JsonRpcRemoteError: GitUnavailable")),
-	], [
-		'Open a folder to use Git.',
-		'No Git repository found in the open folder.',
-		'Git is unavailable for this workspace. Check folder access and retry.',
-	]);
-});
 
 suite('SCM badge and decorations', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 });
+
+// These fixtures describe the generic SCM UI contract. Git policy is exercised by the Rust host tests.
+interface GraphQuery { limit: number; cursor?: string; revisions?: readonly string[]; }
+interface HistoryFixtureData {
+	status(): Promise<{ head: { type: string; name?: string; objectId?: string; }; }>;
+	graph(query: GraphQuery): Promise<{ commits: readonly { objectId: string; parentObjectIds: readonly string[]; subject: string; timestampSeconds: number; }[]; references: readonly { name: string; objectId: string; kind: string; }[]; hasMore: boolean; nextCursor?: string; }>;
+	commitChanges?(id: string, repository?: string): Promise<{ parentObjectId: string; changes: readonly { path: string; status: string; }[]; }>;
+	commitFile?(id: string, path: string, repository?: string): Promise<import('../../common/history.js').ISCMHistoryItemChangeContents | { original: import('../../common/history.js').ISCMHistoryItemContent; modified: import('../../common/history.js').ISCMHistoryItemContent; }>;
+	branches(): Promise<readonly unknown[]>;
+	onDidBecomeReady?: typeof noEvent; onDidChangeActiveRepository?: typeof noEvent;
+}
+function historyProviderFixture(overrides: Partial<ISCMHistoryProvider> = {}): ISCMHistoryProvider {
+	return {
+		onDidChange: Event.None, historyItemRef: observableValue<ISCMHistoryItemRef | undefined>('test.head', undefined), refresh() { },
+		provideHistoryItems: async () => [], resolveHistoryItemDetails: async () => { throw new Error('Unexpected details request'); },
+		provideHistoryItemChanges: async () => [], resolveHistoryItemChangeContents: async () => { throw new Error('Unexpected contents request'); },
+		resolveHistoryItemChatContext: async () => undefined, resolveHistoryItemChangeRangeChatContext: async () => undefined, ...overrides
+	};
+}
+function createHistoryViewFixture(data: HistoryFixtureData) {
+	const resources = new DisposableStore();
+	const scmService = resources.add(new SCMService());
+	const viewService = resources.add(new SCMViewService(scmService));
+	const head = observableValue<ISCMHistoryItemRef | undefined>('test.head', undefined);
+	let references: ISCMHistoryItemRef[] = [];
+	const cursors = new Map<number, string>();
+	void data.status().then(status => {
+		const ref = { id: status.head.name ?? 'HEAD', name: status.head.name ?? 'HEAD', revision: status.head.objectId };
+		references = [ref]; head.set(ref);
+	});
+	const provider = historyProviderFixture({
+		historyItemRef: head,
+		provideHistoryItemRefs: async () => references.filter(ref => ref.category !== 'tag'),
+		provideHistoryItems: async options => {
+			const page = await data.graph({ limit: options.limit ?? 50, ...(options.skip ? { cursor: String(options.skip) } : {}), ...(options.historyItemRefs ? { revisions: options.historyItemRefs } : {}) });
+			if (page.nextCursor) cursors.set((options.skip ?? 0) + page.commits.length, page.nextCursor);
+			if (page.references.length) references = page.references.map(ref => ({ id: ref.name, name: ref.name, revision: ref.objectId, category: ref.kind === 'tag' ? 'tag' : 'localBranch' }));
+			const commits = page.commits.length > (options.limit ?? 50) ? page.commits.slice(options.skip ?? 0, (options.skip ?? 0) + (options.limit ?? 50)) : page.commits;
+			return commits.map(commit => ({ id: commit.objectId, parentIds: commit.parentObjectIds, subject: commit.subject, message: commit.subject, displayId: commit.objectId.slice(0, 7), timestamp: commit.timestampSeconds * 1000, references: references.filter(ref => ref.revision === commit.objectId) }));
+		},
+		provideHistoryItemChanges: async id => {
+			const result = await data.commitChanges!(id, "repo-1");
+			return result.changes.map(change => ({ ...change, uri: URI.file('/workspace/' + change.path), originalUri: URI.from({ scheme: 'test-history', path: '/' + result.parentObjectId + '/' + ('originalPath' in change && typeof change.originalPath === 'string' ? change.originalPath : change.path) }), modifiedUri: URI.from({ scheme: 'test-history', path: '/' + id + '/' + change.path }), parentId: result.parentObjectId }));
+		},
+		resolveHistoryItemChangeContents: async (id, change) => ({ ...(await data.commitFile!(id, change.path, "repo-1")), parentId: change.parentId })
+	});
+	resources.add(scmService.registerSCMProvider(testSCMProvider('repo-1', 'workspace', provider)));
+	return Object.assign(resources, { viewService, scmService });
+}

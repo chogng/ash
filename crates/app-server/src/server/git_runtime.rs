@@ -82,7 +82,42 @@ pub(crate) struct GitRuntime {
     dir_order: HashMap<String, usize>,
     updates: Arc<UpdateBroker>,
     discovery: Mutex<()>,
+    discovery_interests: Mutex<HashMap<u64, Vec<GitDiscoveryOptions>>>,
     registry: RwLock<GitRepositoryRegistry>,
+}
+
+/// Ephemeral query preferences; the frontend configuration service owns persisted values.
+#[derive(Clone)]
+pub(super) struct GitDiscoveryOptions {
+    pub dir_id: Option<String>,
+    pub max_depth: i32,
+    pub ignored_folders: Vec<String>,
+    pub scan_repositories: Vec<String>,
+    pub detect_submodules: bool,
+    pub submodule_limit: usize,
+    pub detect_worktrees: bool,
+    pub worktree_limit: usize,
+}
+impl Default for GitDiscoveryOptions {
+    fn default() -> Self {
+        Self {
+            dir_id: None,
+            max_depth: 1,
+            ignored_folders: vec![
+                "node_modules".into(),
+                "target".into(),
+                ".build".into(),
+                "out".into(),
+                "dist".into(),
+                ".cache".into(),
+            ],
+            scan_repositories: vec![],
+            detect_submodules: true,
+            submodule_limit: 10,
+            detect_worktrees: false,
+            worktree_limit: 50,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -186,6 +221,7 @@ impl GitRuntime {
             dir_order,
             updates,
             discovery: Mutex::new(()),
+            discovery_interests: Mutex::new(HashMap::new()),
             registry: RwLock::new(GitRepositoryRegistry::default()),
         });
         runtime.reconcile_with_notification(false, &CancellationSource::new().token())?;
@@ -213,7 +249,7 @@ impl GitRuntime {
         use ash_async_utils::FutureCancellationExt;
         executor
             .block_on(
-                ash_git::GitClient::system()
+                crate::git_service::current_client()
                     .initialize_repository(root, branch)
                     .with_cancellation(cancellation.clone()),
             )
@@ -237,8 +273,24 @@ impl GitRuntime {
         let previous = self.repository_runtimes();
         let mut repositories = Vec::new();
         let mut worktrees = Vec::<PathBuf>::new();
+        let interests = self
+            .discovery_interests
+            .lock()
+            .expect("Git discovery interests")
+            .clone();
         for (dir_id, authorization) in &self.dirs {
-            for root in discover_repository_roots(authorization) {
+            let mut roots =
+                discover_repository_roots(authorization, &GitDiscoveryOptions::default());
+            for options in interests
+                .values()
+                .flatten()
+                .filter(|options| options.dir_id.as_ref() == dir_id.as_ref())
+            {
+                roots.extend(discover_repository_roots(authorization, options));
+            }
+            roots.sort();
+            roots.dedup();
+            for root in roots {
                 cancellation
                     .check()
                     .map_err(|_| GitRuntimeError::Service(GitServiceError::Cancelled))?;
@@ -329,12 +381,88 @@ impl GitRuntime {
             .clone()
     }
 
+    pub(super) fn discover_for(
+        &self,
+        connection_id: u64,
+        folders: Option<Vec<GitDiscoveryOptions>>,
+    ) -> Result<GitRepositoriesResult, GitRuntimeError> {
+        if let Some(folders) = folders {
+            if folders.len() > self.dirs.len()
+                || folders
+                    .iter()
+                    .any(|options| !self.dirs.iter().any(|(id, _)| id == &options.dir_id))
+            {
+                return Err(GitRuntimeError::Boundary);
+            }
+            for options in &folders {
+                let authorization = &self
+                    .dirs
+                    .iter()
+                    .find(|(id, _)| id == &options.dir_id)
+                    .expect("validated discovery directory")
+                    .1;
+                for path in &options.scan_repositories {
+                    let path = Path::new(path);
+                    let path = if path.is_absolute() {
+                        path.to_path_buf()
+                    } else {
+                        authorization.dir().canonical_path().join(path)
+                    };
+                    if let Ok(path) = dunce::canonicalize(path) {
+                        if !path.starts_with(authorization.dir().canonical_path()) {
+                            return Err(GitRuntimeError::Boundary);
+                        }
+                    }
+                }
+            }
+            self.discovery_interests
+                .lock()
+                .expect("Git discovery interests")
+                .insert(connection_id, folders);
+            self.reconcile()?;
+        }
+        let interests = self
+            .discovery_interests
+            .lock()
+            .expect("Git discovery interests")
+            .get(&connection_id)
+            .cloned();
+        let Some(interests) = interests else {
+            return Ok(self.repositories());
+        };
+        let mut roots = Vec::new();
+        for options in interests {
+            if let Some((_, authorization)) = self.dirs.iter().find(|(id, _)| id == &options.dir_id)
+            {
+                roots.extend(discover_repository_roots(authorization, &options));
+            }
+        }
+        let ids = self
+            .repository_runtimes()
+            .iter()
+            .filter(|runtime| roots.iter().any(|root| root == runtime.service.dir_root()))
+            .map(|runtime| runtime.descriptor.id.clone())
+            .collect::<std::collections::HashSet<_>>();
+        let mut result = self.repositories();
+        result
+            .repositories
+            .retain(|repository| ids.contains(&repository.id));
+        Ok(result)
+    }
+
     pub(super) fn repositories(&self) -> GitRepositoriesResult {
         GitRepositoriesResult {
             repositories: self
                 .repository_runtimes()
                 .iter()
-                .map(|runtime| runtime.descriptor.clone())
+                .map(|runtime| {
+                    let mut descriptor = runtime.descriptor.clone();
+                    if runtime.identity.worktree_root() != runtime.service.dir_root() {
+                        descriptor.parent_path =
+                            runtime.identity.worktree_root().to_str().map(str::to_owned);
+                    }
+                    descriptor
+                })
                 .collect(),
         }
     }
@@ -346,9 +474,62 @@ impl GitRuntime {
         self.repository(repository_id)?.status()
     }
 
+    /// Applies a caller's rename classification only to its returned view. Canonical status,
+    /// event revisions and other windows retain their single shared runtime owner.
+    pub(super) fn status_view_for(
+        &self,
+        repository_id: Option<&str>,
+    ) -> Result<GitStatusResult, GitRuntimeError> {
+        let runtime = self.repository(repository_id)?;
+        let _operation = lock_current_operation(&runtime.operation)
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        for _ in 0..2 {
+            let (repository, canonical) = runtime
+                .service
+                .snapshot()
+                .map_err(GitRuntimeError::Service)?;
+            let status = runtime.accept(repository.clone(), canonical.clone())?;
+            let (view_repository, view) = runtime
+                .service
+                .view_snapshot()
+                .map_err(GitRuntimeError::Service)?;
+            let (latest_repository, latest) = runtime
+                .service
+                .snapshot()
+                .map_err(GitRuntimeError::Service)?;
+            if repository != latest_repository
+                || repository != view_repository
+                || canonical != latest
+            {
+                continue;
+            }
+            let mut result = project_status(
+                runtime.descriptor.id.clone(),
+                runtime.stream_instance_id.clone(),
+                runtime.service.dir_root(),
+                &repository,
+                view,
+            )?;
+            result.revision = status.revision;
+            result.history_revision = status.history_revision;
+            return Ok(result);
+        }
+        Err(GitRuntimeError::Service(GitServiceError::ConflictChanged))
+    }
+
     #[cfg(test)]
     pub(super) fn status(&self) -> Result<GitStatusResult, GitRuntimeError> {
         self.status_for(None)
+    }
+
+    pub(super) fn pull_upstream_was_rewritten_for(
+        &self,
+        repository_id: Option<&str>,
+    ) -> Result<bool, GitRuntimeError> {
+        self.repository(repository_id)?
+            .service
+            .pull_upstream_was_rewritten()
+            .map_err(GitRuntimeError::Service)
     }
 
     pub(super) fn check_ignore_for(
@@ -360,6 +541,30 @@ impl GitRuntime {
         self.repository(repository_id)?
             .service
             .check_ignore(paths, cancellation)
+            .map_err(GitRuntimeError::Service)
+    }
+
+    pub(super) fn blame_for(
+        &self,
+        repository_id: Option<&str>,
+        path: &Path,
+        line: usize,
+        ignore_whitespace: bool,
+        contents: Option<&str>,
+    ) -> Result<ash_git::GitBlameLine, GitRuntimeError> {
+        self.repository(repository_id)?
+            .service
+            .blame(path, line, ignore_whitespace, contents)
+            .map_err(GitRuntimeError::Service)
+    }
+    pub(super) fn file_history_for(
+        &self,
+        repository_id: Option<&str>,
+        path: &Path,
+    ) -> Result<Vec<ash_git::GitFileHistoryItem>, GitRuntimeError> {
+        self.repository(repository_id)?
+            .service
+            .file_history(path)
             .map_err(GitRuntimeError::Service)
     }
 
@@ -636,13 +841,14 @@ impl GitRuntime {
         &self,
         repository_id: Option<&str>,
         name: &str,
+        policy: ash_git::GitCheckoutPolicy,
     ) -> Result<GitStatusResult, GitRuntimeError> {
-        self.repository(repository_id)?.switch_branch(name)
+        self.repository(repository_id)?.switch_branch(name, policy)
     }
 
     #[cfg(test)]
     pub(super) fn switch_branch(&self, name: &str) -> Result<GitStatusResult, GitRuntimeError> {
-        self.switch_branch_for(None, name)
+        self.switch_branch_for(None, name, ash_git::GitCheckoutPolicy::Keep)
     }
 
     pub(super) fn stage_for(
@@ -666,6 +872,51 @@ impl GitRuntime {
         self.repository(repository_id)?.unstage(paths)
     }
 
+    pub(super) fn ai_contribution_for(
+        &self,
+        repository_id: Option<&str>,
+        store: Option<&ash_state::SqliteTurnChangeStore>,
+        scope: crate::git_service::GitCommitScope,
+        editor_evidence: &[(PathBuf, String)],
+    ) -> Result<(PathBuf, bool), GitRuntimeError> {
+        let repository = self.repository(repository_id)?;
+        let _operation = lock_current_operation(&repository.operation)
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        let root = repository.identity.worktree_root().to_owned();
+        let records = store
+            .map(|store| store.list_for_worktree(&root))
+            .transpose()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?
+            .unwrap_or_default();
+        let present = repository
+            .service
+            .has_ai_contribution(&records, scope, editor_evidence)
+            .map_err(GitRuntimeError::Service)?;
+        Ok((root, present))
+    }
+    pub(super) fn review_removal_for(
+        &self,
+        repository_id: Option<&str>,
+        paths: Vec<PathBuf>,
+    ) -> Result<crate::git_service::GitRemovalReview, GitRuntimeError> {
+        let repository = self.repository(repository_id)?;
+        let _operation = lock_current_operation(&repository.operation)
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        repository
+            .service
+            .review_removal(paths)
+            .map_err(GitRuntimeError::Service)
+    }
+    pub(super) fn remove_files_for(
+        &self,
+        repository_id: Option<&str>,
+        entries: Vec<ash_file_system::FileRemoval>,
+        mode: ash_file_system::FileRemovalMode,
+        expected_head: &ash_git::GitHead,
+    ) -> Result<GitStatusResult, GitRuntimeError> {
+        self.repository(repository_id)?
+            .mutate_paths(|service| service.remove_files(entries, mode, expected_head))
+    }
     pub(super) fn discard_worktree_for(
         &self,
         repository_id: Option<&str>,
@@ -722,7 +973,29 @@ impl GitRuntime {
         self.repository(repository_id)?.push(cancellation)
     }
 
+    pub(super) fn transport_for(
+        &self,
+        repository_id: Option<&str>,
+        operation: crate::git_service::GitRemoteMutation<'_>,
+        options: ash_git::GitTransportOptions,
+        cancellation: &CancellationToken,
+    ) -> Result<GitStatusResult, GitRuntimeError> {
+        self.repository(repository_id)?.mutate_remote(
+            |service, cancellation| service.remote_with_options(operation, options, cancellation),
+            cancellation,
+        )
+    }
+
     pub(super) fn close_connection(&self, connection_id: u64) {
+        if self
+            .discovery_interests
+            .lock()
+            .expect("Git discovery interests")
+            .remove(&connection_id)
+            .is_some()
+        {
+            let _ = self.reconcile();
+        }
         for repository in self.repository_runtimes() {
             repository.close_connection(connection_id);
         }
@@ -1327,8 +1600,12 @@ impl GitRepositoryRuntime {
         self.accept(repository, snapshot)
     }
 
-    pub(super) fn switch_branch(&self, name: &str) -> Result<GitStatusResult, GitRuntimeError> {
-        self.mutate_paths(|service| service.switch_branch(name))
+    pub(super) fn switch_branch(
+        &self,
+        name: &str,
+        policy: ash_git::GitCheckoutPolicy,
+    ) -> Result<GitStatusResult, GitRuntimeError> {
+        self.mutate_paths(|service| service.switch_branch(name, policy))
     }
 
     pub(super) fn stage(&self, paths: Vec<PathBuf>) -> Result<GitStatusResult, GitRuntimeError> {
@@ -2144,13 +2421,15 @@ fn watch_git(
     });
 }
 
-fn discover_repository_roots(authorization: &Authorization) -> Vec<PathBuf> {
-    const MAX_REPOSITORIES: usize = 128;
+fn discover_repository_roots(
+    authorization: &Authorization,
+    options: &GitDiscoveryOptions,
+) -> Vec<PathBuf> {
+    const MAX_REPOSITORIES: usize = 512;
     let dir_root = authorization.dir().canonical_path();
-    let mut roots = vec![dir_root.to_path_buf()];
+    let mut candidates = vec![dir_root.to_path_buf()];
     let mut builder = WalkBuilder::new(dir_root);
-    // Automatic discovery covers immediate workspace children, matching VS Code's default.
-    // Deeper tool-managed working trees are discovered when opened as a workspace root.
+    let ignored = options.ignored_folders.clone();
     builder
         .hidden(false)
         .follow_links(false)
@@ -2158,32 +2437,124 @@ fn discover_repository_roots(authorization: &Authorization) -> Vec<PathBuf> {
         .git_global(false)
         .git_exclude(false)
         .parents(false)
-        .max_depth(Some(1))
-        .filter_entry(|entry| {
-            let name = entry.file_name().to_string_lossy();
+        .max_depth(if options.max_depth < 0 {
+            None
+        } else {
+            Some(options.max_depth as usize)
+        })
+        .filter_entry(move |entry| {
             entry.depth() == 0
-                || !matches!(
-                    name.as_ref(),
-                    ".git" | "node_modules" | "target" | ".build" | "out" | "dist" | ".cache"
-                )
+                || entry.file_name() != ".git"
+                    && !ignored
+                        .iter()
+                        .any(|name| entry.file_name() == name.as_str())
         });
     for entry in builder.build().filter_map(Result::ok) {
-        if !entry.file_type().is_some_and(|kind| kind.is_dir())
-            || !entry.path().join(".git").exists()
+        if entry.file_type().is_some_and(|kind| kind.is_dir()) && entry.path().join(".git").exists()
         {
-            continue;
+            candidates.push(entry.path().to_path_buf());
         }
-        let Ok(parent) = dunce::canonicalize(entry.path()) else {
-            continue;
+        if candidates.len() >= MAX_REPOSITORIES {
+            break;
+        }
+    }
+    let mut explicit_roots = std::collections::BTreeSet::new();
+    for path in &options.scan_repositories {
+        let path = Path::new(path);
+        let path = if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            dir_root.join(path)
         };
-        if parent.starts_with(dir_root) && !roots.iter().any(|root| root == &parent) {
-            roots.push(parent);
-            if roots.len() >= MAX_REPOSITORIES {
-                break;
+        if let Ok(path) = dunce::canonicalize(path) {
+            if path.starts_with(dir_root) && path.is_dir() {
+                explicit_roots.insert(path.clone());
+                candidates.push(path);
             }
         }
     }
+    let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    else {
+        return vec![];
+    };
+    let client = crate::git_service::current_client();
+    let mut candidates = std::collections::VecDeque::from(candidates);
+    let mut roots = vec![];
+    let mut submodules = 0;
+    let mut worktrees = 0;
+    while let Some(candidate) = candidates.pop_front() {
+        let Ok(repository) = runtime.block_on(client.open_repository(&candidate)) else {
+            continue;
+        };
+        let root = if repository.worktree_root().starts_with(dir_root) {
+            repository.worktree_root().to_path_buf()
+        } else {
+            candidate.clone()
+        };
+        if roots.contains(&root) {
+            continue;
+        }
+        if root != dir_root
+            && !explicit_roots.contains(&root)
+            && repository.kind() == ash_git::GitRepositoryKind::LinkedWorktree
+        {
+            if !options.detect_worktrees || worktrees >= options.worktree_limit {
+                continue;
+            }
+            worktrees += 1;
+        }
+        if root != dir_root
+            && repository.worktree_root().join(".git").is_file()
+            && repository.kind() == ash_git::GitRepositoryKind::Standard
+            && runtime
+                .block_on(client.is_submodule(&repository))
+                .unwrap_or(false)
+        {
+            if !options.detect_submodules || submodules >= options.submodule_limit {
+                continue;
+            }
+            submodules += 1;
+        }
+        roots.push(root);
+        if options.detect_submodules {
+            for path in runtime
+                .block_on(client.submodule_paths(&repository))
+                .unwrap_or_default()
+            {
+                if submodules >= options.submodule_limit {
+                    break;
+                }
+                if let Ok(path) = dunce::canonicalize(repository.worktree_root().join(path)) {
+                    if path.starts_with(dir_root) && path.join(".git").exists() {
+                        candidates.push_back(path);
+                    }
+                }
+            }
+        }
+        if options.detect_worktrees {
+            for worktree in runtime
+                .block_on(client.worktrees(&repository))
+                .unwrap_or_default()
+            {
+                if worktrees >= options.worktree_limit {
+                    break;
+                }
+                if worktree.checkout_root().starts_with(dir_root)
+                    && worktree.checkout_root() != repository.worktree_root()
+                {
+                    candidates.push_back(worktree.checkout_root().to_path_buf());
+                }
+            }
+        }
+        if roots.len() >= MAX_REPOSITORIES {
+            break;
+        }
+    }
     roots.sort();
+    roots.dedup();
+    roots.truncate(MAX_REPOSITORIES);
     roots
 }
 
@@ -2217,6 +2588,7 @@ fn repository_descriptor(
     let digest = Sha256::digest(identity);
     let id = format!("repo_{:x}", digest);
     Ok(GitRepositoryDto {
+        parent_path: None,
         id,
         label,
         path,
@@ -2328,7 +2700,7 @@ fn new_stream_instance_id() -> Result<StreamInstanceId, GitRuntimeError> {
     Ok(StreamInstanceId::new(value).expect("generated Git stream instance ID is non-empty"))
 }
 
-fn head(head: &GitHead) -> GitHeadDto {
+pub(super) fn head(head: &GitHead) -> GitHeadDto {
     match head {
         GitHead::Branch {
             name,

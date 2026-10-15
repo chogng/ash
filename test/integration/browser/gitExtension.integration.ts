@@ -1,3 +1,5 @@
+import { BrowserProgressService } from '../../../src/ash/platform/progress/browser/progressService.js';
+import { RustGitHostFixture } from './rustGitHostFixture.js';
 import '../../../src/ash/workbench/browser/parts/editor/editor.contribution.js';
 import { MenuId, MenusRegistry } from '../../../src/ash/platform/actions/common/actions.js';
 import { ContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
@@ -145,7 +147,7 @@ let startupStateGate: DeferredPromise<void> | undefined;
 let startupDiscoveryGate: DeferredPromise<void> | undefined;
 let startupStatusGate: DeferredPromise<void> | undefined;
 let startupStateReads = 0;
-const status = () => ({ repositoryId: 'root', streamInstanceId: 'stream', revision, historyRevision: 1, path: '', head: { type: 'branch', name: 'main', objectId: 'a'.repeat(40), upstream }, changes: clean ? [] : [{ path: 'one.ts', originalPath: null, indexStatus: revision > 1 ? 'modified' : 'unmodified', worktreeStatus: revision > 1 ? 'unmodified' : 'modified', conflicted: false }, ...(includeUntracked ? [{ path: 'new.ts', originalPath: null, indexStatus: 'unmodified', worktreeStatus: 'untracked', conflicted: false }] : [])] });
+const status = () => ({ repositoryId: 'root', streamInstanceId: 'stream', revision, historyRevision: 1, path: '', head: { type: 'branch', name: 'main', objectId: 'a'.repeat(40), upstream }, changes: clean ? [] : [{ path: 'one.ts', originalPath: null, indexStatus: revision > 1 ? 'modified' : 'unmodified', worktreeStatus: revision > 1 ? 'unmodified' : 'modified', conflicted: false, submodule: { isSubmodule: false, commitChanged: false, trackedChanges: false, untrackedChanges: false } }, ...(includeUntracked ? [{ path: 'new.ts', originalPath: null, indexStatus: 'unmodified', worktreeStatus: 'untracked', conflicted: false, submodule: { isSubmodule: false, commitChanged: false, trackedChanges: false, untrackedChanges: false } }] : [])] });
 const backend = lifetime.add(new MainThreadExtensionBackend(catalog, {
 	request: async (method, params): Promise<JsonValue> => {
 		calls.push({ method, params });
@@ -162,8 +164,20 @@ const backend = lifetime.add(new MainThreadExtensionBackend(catalog, {
 			case 'git/repositories':
 				await startupDiscoveryGate?.p;
 				return { repositories: [{ id: 'root', label: 'workspace', path: '' }] };
+			case 'git/version': return { installation: { kind: 'available', version: 'git version 2.50.0', major: 2, minor: 50, patch: 0 }, windows: false };
+			case 'git/pullPreflight': return { upstreamRewritten: false };
 			case 'git/status': await startupStatusGate?.p; return status();
 			case 'git/catalog': return { tags: [], stashes: [], remotes: ['origin'], upstreamRemote: upstream ? 'origin' : null, operation: null };
+			case 'git/transport': {
+				const transport = params as { operation: { kind: string; mode?: string; }; transport: unknown; };
+				const kind = transport.operation.kind;
+				// Record the stable domain operation as well as the cancellable transport boundary.
+				calls.push({ method: `git/${kind}`, params: { repositoryId: (params as Record<string, JsonValue>).repositoryId, transport: transport.transport, ...(transport.operation.mode ? { mode: transport.operation.mode } : {}) } as JsonValue });
+				if (kind === 'pull') { await pullGate?.p; if (pullFailure) throw new Error('Pull rejected'); if (upstream) upstream = { ...upstream, behind: 0 }; }
+				if (kind === 'push' && upstream) upstream = { ...upstream, ahead: 0 };
+				revision++;
+				return { status: status() };
+			}
 			case 'git/pull':
 				await pullGate?.p;
 				if (pullFailure) throw new Error('Pull rejected');
@@ -190,6 +204,7 @@ const backend = lifetime.add(new MainThreadExtensionBackend(catalog, {
 
 			case 'git/branch/create': return { branches: [] };
 			case 'git/branch/list': return { branches: [{ name: 'main', objectId: 'a'.repeat(40), current: true, upstream: null, checkedOutElsewhere: false }, { name: 'occupied', objectId: 'a'.repeat(40), current: false, upstream: 'origin/occupied', checkedOutElsewhere: true }] };
+			case 'git/history/refs': return { status: status(), graphRevision: 1, references: [{ name: 'main', objectId: 'a'.repeat(40), kind: 'localBranch', current: true }, { name: 'occupied', objectId: 'a'.repeat(40), kind: 'localBranch', current: false }], branches: [{ name: 'main', current: true, upstream: null, checkedOutElsewhere: false }, { name: 'occupied', current: false, upstream: 'origin/occupied', checkedOutElsewhere: true }], remotes: [] };
 			case 'git/graph': return { commits: [{ objectId: 'a'.repeat(40), parentObjectIds: [], timestampSeconds: 1, subject: 'First commit' }], references: [], remotes: [], hasMore: false, nextCursor: null };
 			case 'git/init': return { repositories: [{ id: 'root', label: 'workspace', path: '' }] };
 			case 'git/clone': return { repositoryPath: '/downloads/clone' };
@@ -199,9 +214,11 @@ const backend = lifetime.add(new MainThreadExtensionBackend(catalog, {
 			default: throw new Error(`Unexpected domain request ${method}`);
 		}
 	}
-}, { getConnectionState: async () => 'ready', connectionGeneration: 1 } as IAppServerApi, { subscribe: listener => configurationEvents.event(listener) }, workspace));
+}, { getConnectionState: async () => 'ready', connectionGeneration: 1 } as IAppServerApi, { subscribe: listener => configurationEvents.event(listener) }, workspace, lifetime.add(new BrowserProgressService(document.body))));
 const unavailable = (method: string): never => { throw new Error(`Unexpected remote host request ${method}`); };
-const host = lifetime.add(services.createInstance(BrowserExtensionHostApi, catalog, createDisconnectedExtensionHostApi(unavailable)));
+const workerCatalog = { ...catalog, list: async () => { const snapshot = await catalog.list('cached'); return { ...snapshot, extensions: snapshot.extensions.filter(extension => extension.id !== 'ash.git') }; } };
+const genericHost = lifetime.add(services.createInstance(BrowserExtensionHostApi, workerCatalog, createDisconnectedExtensionHostApi(unavailable)));
+const host = lifetime.add(new RustGitHostFixture(catalog, genericHost, () => createExtensionHostInitialization(workspace, configuration)));
 const scm = lifetime.add(new SCMService());
 const view = lifetime.add(new SCMViewService(scm));
 const quickDiff = lifetime.add(new QuickDiffService());
@@ -218,8 +235,12 @@ let waitingOutputs = 0;
 const clientHandler = host.registerClientHandler(async (raw, signal, source): Promise<ExtensionClientResult> => {
 	const operation = raw as ExtensionClientOperation;
 	switch (operation.operation) {
+		case 'inspectConfiguration': return { result: 'configuration', value: configuration.inspect(operation.section) as unknown as JsonValue };
+		case 'readConfiguration': return { result: 'configuration', value: configuration.getValue(operation.section) as JsonValue ?? null };
+		case 'resetConfiguration': await configuration.updateValue(operation.section, undefined); return { result: 'done' };
+		case 'updateConfiguration': await configuration.updateValue(operation.section, operation.value); return { result: 'done' };
 		case 'readInitialization': return { result: 'initialization', initialization: createExtensionHostInitialization(workspace, configuration) };
-		case 'backendRequest': return { result: 'value', value: await backend.handle(source, operation.capability, operation.method, operation.params, 0, signal) };
+		case 'backendRequest': return { result: 'value', value: await backend.handle(source, operation.capability, operation.method, operation.params, 0, signal, operation.progress) };
 		case 'backendState':
 			startupStateReads++;
 			await startupStateGate?.p;
@@ -227,11 +248,19 @@ const clientHandler = host.registerClientHandler(async (raw, signal, source): Pr
 			return { result: 'value', value: await backend.handle(source, operation.capability, undefined, {}, operation.after, signal) };
 		case 'editorOperation': {
 			requests.push(operation.payload);
-			const request = operation.payload as { method: string; };
+			const request = operation.payload as { method: string; uri?: string; text?: string; };
 			if (request.method === 'hostFacts') return { result: 'value', value: { canClone: true, canOpenWorkspace: true } };
 			if (request.method === 'input') return { result: 'value', value: answers.shift() ?? null };
 			if (request.method === 'pickFolder') return { result: 'value', value: '/downloads' };
 			if (request.method === 'openWorkspace') return { result: 'value', value: null };
+			if (request.method === 'openEditorResources') return { result: 'value', value: [] };
+			if (request.method === 'activeEditor') return { result: 'value', value: { input: null, selection: null, version: null, contents: null } };
+			if (request.method === 'setLineAnnotation') return { result: 'value', value: null };
+			if (request.method === 'readEditorDocument') return { result: 'value', value: commitDocuments.has(request.uri as string) ? { text: commitDocuments.get(request.uri as string)!, dirty: true } : null };
+			if (request.method === 'openEditorDocument') { commitDocuments.set(request.uri as string, request.text!); return { result: 'value', value: null }; }
+			if (request.method === 'closeEditorDocument') { commitDocuments.delete(request.uri as string); return { result: 'value', value: null }; }
+			if (request.method === 'prepareRepositoryOperation') return { result: 'value', value: true };
+			if (request.method === 'closeRelatedDiffs') return { result: 'value', value: null };
 			if (request.method === 'dirty') return { result: 'value', value: [] };
 			if (request.method === 'confirm') return { result: 'value', value: { confirmed: true } };
 			if (request.method === 'output') {
@@ -273,6 +302,7 @@ async function invoke(id: string, args: unknown[] = []) {
 	const payload = await bridge.prepareCommandArguments(runtime.id, args);
 	return host.invoke({ ...source, registrationId: registration.registrationId, operation: 'execute', payload: { arguments: payload }, deadlineUnixMillis: Date.now() + 10_000 }, new AbortController().signal);
 }
+const commitDocuments = new Map<string, string>();
 let retiredGit: Awaited<ReturnType<typeof host.list>>['extensions'][number] | undefined;
 async function disable() { retiredGit = (await host.list()).extensions.find(runtime => runtime.id === 'ash.git'); await enablement.disableExtension({ id: 'ash.git' }); await host.reconcile('restartFailed'); }
 async function enable() { await enablement.enableExtension({ id: 'ash.git' }); await host.reconcile('restartFailed'); }
@@ -289,14 +319,6 @@ let presentationRevision = 0;
 const presentationIntegration = {
 	async update(key: string, value: JsonValue | undefined) {
 		await configuration.updateValue(key, value);
-		const runtime = (await host.list()).extensions.find(value => value.id === 'ash.git')!;
-		const registration = runtime.registrations.find(value => value.registrationId === 'vscode.workspace.events')!;
-		const initialization = createExtensionHostInitialization(workspace, configuration);
-		await host.invoke({
-			extensionId: runtime.id, incarnation: runtime.incarnation!, activationGeneration: runtime.activationGeneration, registrationId: registration.registrationId, operation: 'workspaceEvent', payload: normalizeExtensionHostPayload({
-				type: 'configuration', revision: ++presentationRevision, emit: true, configurationValues: initialization.configurationValues, configurationData: initialization.configurationData, change: { keys: [key], overrides: [] },
-			}), deadlineUnixMillis: Date.now() + 10_000
-		}, new AbortController().signal);
 	},
 	async addUntracked() { includeUntracked = true; revision++; await invoke('git.refresh'); },
 	async commit(message: string, command?: string) {
@@ -305,7 +327,15 @@ const presentationIntegration = {
 		if (command) await invoke(command, [scm.getRepository('root')!]);
 		else await provider.input.accept();
 	},
+	editCommitDocument(message: string) { for (const key of commitDocuments.keys()) commitDocuments.set(key, message); },
 	draft(message: string) { scm.getRepository('root')!.provider.input.value = message; },
+	presentation() {
+		const provider = scm.getRepository('root')!.provider;
+		return {
+			count: provider.count, inputVisible: provider.input.visible, buttonVisible: provider.input.buttonVisible,
+			validation: provider.input.validationMessage, statusCommands: provider.statusBarCommands.map(command => command.id)
+		};
+	},
 	actions: () => scm.getRepository('root')?.provider.groups.flatMap(group => group.resources.flatMap(resource => resource.actions.map(action => action.id))),
 	async decoration() { return [...decorationProviders][0]!.provideDecorations(URI.file('/workspace/one.ts'), CancellationToken.None); },
 	async open() { await scm.getRepository('root')!.provider.groups[0]!.resources[0]!.open({}, false); },

@@ -7,7 +7,6 @@
   "engines": {
     "vscode": "*"
   },
-  "browser": "./browser/extension.ts",
   "ashFrontend": {
     "capabilities": {
       "git.repository": {
@@ -139,8 +138,34 @@
           "historyRefs": {
             "route": "git/history/refs",
             "fields": [
-              "repositoryId"
+              "repositoryId",
+              "client"
             ]
+          },
+          "blame": {
+            "route": "git/blame"
+          },
+          "fileHistory": {
+            "route": "git/fileHistory"
+          },
+          "version": {
+            "route": "git/version"
+          },
+          "pullPreflight": {
+            "route": "git/pullPreflight"
+          },
+          "runTransport": {
+            "route": "git/transport",
+            "cancellationRoute": "git/transport/cancel"
+          },
+          "reviewRemoval": {
+            "route": "git/reviewRemoval"
+          },
+          "removeFiles": {
+            "route": "git/removeFiles"
+          },
+          "aiContribution": {
+            "route": "git/aiContribution"
           }
         },
         "notifications": [
@@ -652,6 +677,48 @@
         "title": "%git.commitEmpty.title%",
         "category": "Git",
         "enablement": "!scmBusy"
+      },
+      {
+        "command": "git.pushForce",
+        "title": "%git.pushForce.title%",
+        "category": "Git",
+        "enablement": "!scmBusy"
+      },
+      {
+        "command": "git.commitNoVerify",
+        "title": "%git.commitNoVerify.title%",
+        "category": "Git",
+        "enablement": "!scmBusy"
+      },
+      {
+        "command": "git.branchForCommit",
+        "title": "%git.protectedCreateBranch%",
+        "category": "Git"
+      },
+      {
+        "command": "git.timeline",
+        "title": "%git.timelineTitle%",
+        "category": "Git"
+      },
+      {
+        "command": "git.showBlame",
+        "title": "%git.blameTitle%",
+        "category": "Git"
+      },
+      {
+        "command": "git.deleteFile",
+        "title": "%git.deleteFile%",
+        "category": "Git"
+      },
+      {
+        "command": "git.finishTerminalEdit",
+        "title": "%git.finishTerminalEdit%",
+        "category": "Git"
+      },
+      {
+        "command": "git.cancelTerminalEdit",
+        "title": "%git.cancelTerminalEdit%",
+        "category": "Git"
       }
     ],
     "colors": [
@@ -970,6 +1037,10 @@
         {
           "command": "git.undoCommit",
           "group": "3"
+        },
+        {
+          "command": "git.commitNoVerify",
+          "group": "4_hooks"
         }
       ],
       "git.changesMenu": [
@@ -1094,6 +1165,10 @@
         {
           "command": "git.push",
           "group": "4"
+        },
+        {
+          "command": "git.pushForce",
+          "group": "3_push"
         }
       ],
       "git.remoteMenu": [
@@ -1194,6 +1269,10 @@
         },
         {
           "command": "git.graph.deleteTag",
+          "when": "false"
+        },
+        {
+          "command": "git.branchForCommit",
           "when": "false"
         }
       ]
@@ -1506,6 +1585,903 @@
           "items": {
             "type": "string"
           }
+        },
+        "git.followTagsWhenSync": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "title": "%git.followTagsWhenSync.title%",
+          "description": "%git.followTagsWhenSync.description%"
+        },
+        "git.replaceTagsWhenPull": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "title": "%git.replaceTagsWhenPull.title%",
+          "description": "%git.replaceTagsWhenPull.description%"
+        },
+        "git.pruneOnFetch": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "title": "%git.pruneOnFetch.title%",
+          "description": "%git.pruneOnFetch.description%"
+        },
+        "git.pullTags": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "title": "%git.pullTags.title%",
+          "description": "%git.pullTags.description%"
+        },
+        "git.autoStash": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "title": "%git.autoStash.title%",
+          "description": "%git.autoStash.description%"
+        },
+        "git.allowForcePush": {
+          "type": "boolean",
+          "default": false,
+          "title": "%git.allowForcePush.title%",
+          "description": "%git.allowForcePush.description%"
+        },
+        "git.useForcePushWithLease": {
+          "type": "boolean",
+          "default": true,
+          "title": "%git.useForcePushWithLease.title%",
+          "description": "%git.useForcePushWithLease.description%"
+        },
+        "git.useForcePushIfIncludes": {
+          "type": "boolean",
+          "default": true,
+          "title": "%git.useForcePushIfIncludes.title%",
+          "description": "%git.useForcePushIfIncludes.description%"
+        },
+        "git.confirmForcePush": {
+          "type": "boolean",
+          "default": true,
+          "title": "%git.confirmForcePush.title%",
+          "description": "%git.confirmForcePush.description%"
+        },
+        "git.countBadge": {
+          "type": "string",
+          "default": "all",
+          "enum": [
+            "all",
+            "tracked",
+            "off"
+          ],
+          "scope": "resource",
+          "title": "%git.countBadge.title%",
+          "description": "%git.countBadge.description%",
+          "ashSetting": {
+            "valueType": "select",
+            "title": "%git.countBadge.title%",
+            "description": "%git.countBadge.description%",
+            "options": [
+              {
+                "value": "all",
+                "label": "%git.countBadge.option.0%"
+              },
+              {
+                "value": "tracked",
+                "label": "%git.countBadge.option.1%"
+              },
+              {
+                "value": "off",
+                "label": "%git.countBadge.option.2%"
+              }
+            ]
+          }
+        },
+        "git.enableStatusBarSync": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "title": "%git.enableStatusBarSync.title%",
+          "description": "%git.enableStatusBarSync.description%"
+        },
+        "git.alwaysShowStagedChangesResourceGroup": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "title": "%git.alwaysShowStagedChangesResourceGroup.title%",
+          "description": "%git.alwaysShowStagedChangesResourceGroup.description%"
+        },
+        "git.showCommitInput": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "title": "%git.showCommitInput.title%",
+          "description": "%git.showCommitInput.description%"
+        },
+        "git.showProgress": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "title": "%git.showProgress.title%",
+          "description": "%git.showProgress.description%"
+        },
+        "git.showActionButton": {
+          "type": "object",
+          "default": {
+            "commit": true,
+            "publish": true,
+            "sync": true
+          },
+          "properties": {
+            "commit": {
+              "type": "boolean"
+            },
+            "publish": {
+              "type": "boolean"
+            },
+            "sync": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "scope": "resource",
+          "title": "%git.showActionButton.title%",
+          "description": "%git.showActionButton.description%"
+        },
+        "git.inputValidation": {
+          "type": "boolean",
+          "default": false,
+          "title": "%git.inputValidation.title%",
+          "description": "%git.inputValidation.description%"
+        },
+        "git.inputValidationLength": {
+          "type": "number",
+          "default": 72,
+          "minimum": 1,
+          "maximum": 10000,
+          "title": "%git.inputValidationLength.title%",
+          "description": "%git.inputValidationLength.description%"
+        },
+        "git.inputValidationSubjectLength": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "default": 50,
+          "minimum": 1,
+          "maximum": 10000,
+          "title": "%git.inputValidationSubjectLength.title%",
+          "description": "%git.inputValidationSubjectLength.description%"
+        },
+        "git.allowNoVerifyCommit": {
+          "type": "boolean",
+          "default": false,
+          "title": "%git.allowNoVerifyCommit.title%",
+          "description": "%git.allowNoVerifyCommit.description%"
+        },
+        "git.confirmNoVerifyCommit": {
+          "type": "boolean",
+          "default": true,
+          "title": "%git.confirmNoVerifyCommit.title%",
+          "description": "%git.confirmNoVerifyCommit.description%"
+        },
+        "git.alwaysSignOff": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "title": "%git.alwaysSignOff.title%",
+          "description": "%git.alwaysSignOff.description%"
+        },
+        "git.requireGitUserConfig": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "title": "%git.requireGitUserConfig.title%",
+          "description": "%git.requireGitUserConfig.description%"
+        },
+        "git.promptToSaveFilesBeforeCommit": {
+          "type": "string",
+          "default": "always",
+          "enum": [
+            "always",
+            "staged",
+            "never"
+          ],
+          "scope": "resource",
+          "title": "%git.promptToSaveFilesBeforeCommit.title%",
+          "description": "%git.promptToSaveFilesBeforeCommit.description%",
+          "ashSetting": {
+            "valueType": "select",
+            "title": "%git.promptToSaveFilesBeforeCommit.title%",
+            "description": "%git.promptToSaveFilesBeforeCommit.description%",
+            "options": [
+              {
+                "value": "always",
+                "label": "%git.promptToSaveFilesBeforeCommit.option.0%"
+              },
+              {
+                "value": "staged",
+                "label": "%git.promptToSaveFilesBeforeCommit.option.1%"
+              },
+              {
+                "value": "never",
+                "label": "%git.promptToSaveFilesBeforeCommit.option.2%"
+              }
+            ]
+          }
+        },
+        "git.promptToSaveFilesBeforeStash": {
+          "type": "string",
+          "default": "always",
+          "enum": [
+            "always",
+            "staged",
+            "never"
+          ],
+          "scope": "resource",
+          "title": "%git.promptToSaveFilesBeforeStash.title%",
+          "description": "%git.promptToSaveFilesBeforeStash.description%",
+          "ashSetting": {
+            "valueType": "select",
+            "title": "%git.promptToSaveFilesBeforeStash.title%",
+            "description": "%git.promptToSaveFilesBeforeStash.description%",
+            "options": [
+              {
+                "value": "always",
+                "label": "%git.promptToSaveFilesBeforeStash.option.0%"
+              },
+              {
+                "value": "staged",
+                "label": "%git.promptToSaveFilesBeforeStash.option.1%"
+              },
+              {
+                "value": "never",
+                "label": "%git.promptToSaveFilesBeforeStash.option.2%"
+              }
+            ]
+          }
+        },
+        "git.diagnosticsCommitHook.enabled": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "title": "%git.diagnosticsCommitHook.enabled.title%",
+          "description": "%git.diagnosticsCommitHook.enabled.description%"
+        },
+        "git.diagnosticsCommitHook.sources": {
+          "type": "object",
+          "default": {
+            "*": "error"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning",
+              "information",
+              "hint",
+              "none"
+            ]
+          },
+          "scope": "resource",
+          "title": "%git.diagnosticsCommitHook.sources.title%",
+          "description": "%git.diagnosticsCommitHook.sources.description%"
+        },
+        "git.closeDiffOnOperation": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "title": "%git.closeDiffOnOperation.title%",
+          "description": "%git.closeDiffOnOperation.description%"
+        },
+        "git.branchProtection": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "scope": "resource",
+          "title": "%git.branchProtection.title%",
+          "description": "%git.branchProtection.description%"
+        },
+        "git.branchProtectionPrompt": {
+          "type": "string",
+          "default": "alwaysPrompt",
+          "enum": [
+            "alwaysCommit",
+            "alwaysCommitToNewBranch",
+            "alwaysPrompt"
+          ],
+          "scope": "resource",
+          "title": "%git.branchProtectionPrompt.title%",
+          "description": "%git.branchProtectionPrompt.description%",
+          "ashSetting": {
+            "valueType": "select",
+            "title": "%git.branchProtectionPrompt.title%",
+            "description": "%git.branchProtectionPrompt.description%",
+            "options": [
+              {
+                "value": "alwaysCommit",
+                "label": "%git.branchProtectionPrompt.option.0%"
+              },
+              {
+                "value": "alwaysCommitToNewBranch",
+                "label": "%git.branchProtectionPrompt.option.1%"
+              },
+              {
+                "value": "alwaysPrompt",
+                "label": "%git.branchProtectionPrompt.option.2%"
+              }
+            ]
+          }
+        },
+        "git.branchRandomName.enable": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "title": "%git.branchRandomName.enable.title%",
+          "description": "%git.branchRandomName.enable.description%"
+        },
+        "git.branchRandomName.dictionary": {
+          "type": "array",
+          "default": [
+            "adjectives",
+            "animals"
+          ],
+          "items": {
+            "type": "string",
+            "enum": [
+              "adjectives",
+              "animals",
+              "colors",
+              "numbers"
+            ]
+          },
+          "minItems": 1,
+          "maxItems": 5,
+          "scope": "resource",
+          "title": "%git.branchRandomName.dictionary.title%",
+          "description": "%git.branchRandomName.dictionary.description%"
+        },
+        "git.checkoutType": {
+          "type": "array",
+          "default": [
+            "local",
+            "remote",
+            "tags"
+          ],
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "local",
+              "remote",
+              "tags"
+            ]
+          },
+          "title": "%git.checkoutType.title%",
+          "description": "%git.checkoutType.description%"
+        },
+        "git.branchSortOrder": {
+          "type": "string",
+          "default": "committerdate",
+          "enum": [
+            "committerdate",
+            "alphabetically"
+          ],
+          "title": "%git.branchSortOrder.title%",
+          "description": "%git.branchSortOrder.description%",
+          "ashSetting": {
+            "valueType": "select",
+            "title": "%git.branchSortOrder.title%",
+            "description": "%git.branchSortOrder.description%",
+            "options": [
+              {
+                "value": "committerdate",
+                "label": "%git.branchSortOrder.option.0%"
+              },
+              {
+                "value": "alphabetically",
+                "label": "%git.branchSortOrder.option.1%"
+              }
+            ]
+          }
+        },
+        "git.showReferenceDetails": {
+          "type": "boolean",
+          "default": true,
+          "title": "%git.showReferenceDetails.title%",
+          "description": "%git.showReferenceDetails.description%"
+        },
+        "git.useEditorAsCommitInput": {
+          "type": "boolean",
+          "default": true,
+          "title": "%git.useEditorAsCommitInput.title%",
+          "description": "%git.useEditorAsCommitInput.description%"
+        },
+        "git.verboseCommit": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "title": "%git.verboseCommit.title%",
+          "description": "%git.verboseCommit.description%"
+        },
+        "git.rememberPostCommitCommand": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "title": "%git.rememberPostCommitCommand.title%",
+          "description": "%git.rememberPostCommitCommand.description%"
+        },
+        "git.mergeEditor": {
+          "type": "boolean",
+          "default": false,
+          "scope": "window",
+          "title": "%git.mergeEditor.title%",
+          "description": "%git.mergeEditor.description%"
+        },
+        "git.optimisticUpdate": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "title": "%git.optimisticUpdate.title%",
+          "description": "%git.optimisticUpdate.description%"
+        },
+        "git.defaultCloneDirectory": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null,
+          "scope": "machine",
+          "title": "%git.defaultCloneDirectory.title%",
+          "description": "%git.defaultCloneDirectory.description%"
+        },
+        "git.openAfterClone": {
+          "type": "string",
+          "default": "prompt",
+          "enum": [
+            "always",
+            "alwaysNewWindow",
+            "whenNoFolderOpen",
+            "prompt"
+          ],
+          "title": "%git.openAfterClone.title%",
+          "description": "%git.openAfterClone.description%",
+          "ashSetting": {
+            "valueType": "select",
+            "title": "%git.openAfterClone.title%",
+            "description": "%git.openAfterClone.description%",
+            "options": [
+              {
+                "value": "always",
+                "label": "%git.openAfterClone.option.0%"
+              },
+              {
+                "value": "alwaysNewWindow",
+                "label": "%git.openAfterClone.option.1%"
+              },
+              {
+                "value": "whenNoFolderOpen",
+                "label": "%git.openAfterClone.option.2%"
+              },
+              {
+                "value": "prompt",
+                "label": "%git.openAfterClone.option.3%"
+              }
+            ]
+          }
+        },
+        "git.pullBeforeCheckout": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "title": "%git.pullBeforeCheckout.title%",
+          "description": "%git.pullBeforeCheckout.description%"
+        },
+        "git.blame.editorDecoration.enabled": {
+          "type": "boolean",
+          "default": false,
+          "title": "%git.blame.editorDecoration.enabled.title%",
+          "description": "%git.blame.editorDecoration.enabled.description%"
+        },
+        "git.blame.editorDecoration.template": {
+          "type": "string",
+          "default": "${subject}, ${authorName} (${authorDateAgo})",
+          "maxLength": 4096,
+          "title": "%git.blame.editorDecoration.template.title%",
+          "description": "%git.blame.editorDecoration.template.description%"
+        },
+        "git.blame.editorDecoration.disableHover": {
+          "type": "boolean",
+          "default": false,
+          "title": "%git.blame.editorDecoration.disableHover.title%",
+          "description": "%git.blame.editorDecoration.disableHover.description%"
+        },
+        "git.blame.statusBarItem.enabled": {
+          "type": "boolean",
+          "default": true,
+          "title": "%git.blame.statusBarItem.enabled.title%",
+          "description": "%git.blame.statusBarItem.enabled.description%"
+        },
+        "git.blame.statusBarItem.template": {
+          "type": "string",
+          "default": "${authorName} (${authorDateAgo})",
+          "maxLength": 4096,
+          "title": "%git.blame.statusBarItem.template.title%",
+          "description": "%git.blame.statusBarItem.template.description%"
+        },
+        "git.blame.ignoreWhitespace": {
+          "type": "boolean",
+          "default": false,
+          "title": "%git.blame.ignoreWhitespace.title%",
+          "description": "%git.blame.ignoreWhitespace.description%"
+        },
+        "git.timeline.date": {
+          "type": "string",
+          "default": "committed",
+          "enum": [
+            "committed",
+            "authored"
+          ],
+          "scope": "window",
+          "title": "%git.timeline.date.title%",
+          "description": "%git.timeline.date.description%",
+          "ashSetting": {
+            "valueType": "select",
+            "title": "%git.timeline.date.title%",
+            "description": "%git.timeline.date.description%",
+            "options": [
+              {
+                "value": "committed",
+                "label": "%git.timeline.date.option.0%"
+              },
+              {
+                "value": "authored",
+                "label": "%git.timeline.date.option.1%"
+              }
+            ]
+          }
+        },
+        "git.timeline.showAuthor": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "title": "%git.timeline.showAuthor.title%",
+          "description": "%git.timeline.showAuthor.description%"
+        },
+        "git.timeline.showUncommitted": {
+          "type": "boolean",
+          "default": false,
+          "scope": "window",
+          "title": "%git.timeline.showUncommitted.title%",
+          "description": "%git.timeline.showUncommitted.description%"
+        },
+        "git.enabled": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "title": "%git.enabled.title%",
+          "description": "%git.enabled.description%"
+        },
+        "git.path": {
+          "type": [
+            "string",
+            "null",
+            "array"
+          ],
+          "default": null,
+          "scope": "machine",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "maxItems": 16,
+          "title": "%git.path.title%",
+          "description": "%git.path.description%"
+        },
+        "git.autorefresh": {
+          "type": "boolean",
+          "default": true,
+          "title": "%git.autorefresh.title%",
+          "description": "%git.autorefresh.description%"
+        },
+        "git.ignoreLimitWarning": {
+          "type": "boolean",
+          "default": false,
+          "title": "%git.ignoreLimitWarning.title%",
+          "description": "%git.ignoreLimitWarning.description%"
+        },
+        "git.ignoreSubmodules": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "title": "%git.ignoreSubmodules.title%",
+          "description": "%git.ignoreSubmodules.description%"
+        },
+        "git.statusLimit": {
+          "type": "number",
+          "default": 10000,
+          "minimum": 0,
+          "maximum": 1000000,
+          "scope": "resource",
+          "title": "%git.statusLimit.title%",
+          "description": "%git.statusLimit.description%"
+        },
+        "git.commandsToLog": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "%git.commandsToLog.title%",
+          "description": "%git.commandsToLog.description%"
+        },
+        "git.similarityThreshold": {
+          "type": "number",
+          "default": 50,
+          "minimum": 0,
+          "maximum": 100,
+          "scope": "resource",
+          "title": "%git.similarityThreshold.title%",
+          "description": "%git.similarityThreshold.description%"
+        },
+        "git.autoRepositoryDetection": {
+          "type": [
+            "boolean",
+            "string"
+          ],
+          "default": true,
+          "enum": [
+            true,
+            false,
+            "subFolders",
+            "openEditors"
+          ],
+          "title": "%git.autoRepositoryDetection.title%",
+          "description": "%git.autoRepositoryDetection.description%",
+          "ashSetting": {
+            "valueType": "select",
+            "title": "%git.autoRepositoryDetection.title%",
+            "description": "%git.autoRepositoryDetection.description%",
+            "options": [
+              {
+                "value": true,
+                "label": "%git.autoRepositoryDetection.option.0%"
+              },
+              {
+                "value": false,
+                "label": "%git.autoRepositoryDetection.option.1%"
+              },
+              {
+                "value": "subFolders",
+                "label": "%git.autoRepositoryDetection.option.2%"
+              },
+              {
+                "value": "openEditors",
+                "label": "%git.autoRepositoryDetection.option.3%"
+              }
+            ]
+          }
+        },
+        "git.detectSubmodules": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "title": "%git.detectSubmodules.title%",
+          "description": "%git.detectSubmodules.description%"
+        },
+        "git.detectSubmodulesLimit": {
+          "type": "integer",
+          "default": 10,
+          "minimum": 0,
+          "maximum": 1024,
+          "scope": "resource",
+          "title": "%git.detectSubmodulesLimit.title%",
+          "description": "%git.detectSubmodulesLimit.description%"
+        },
+        "git.detectWorktrees": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "title": "%git.detectWorktrees.title%",
+          "description": "%git.detectWorktrees.description%"
+        },
+        "git.detectWorktreesLimit": {
+          "type": "integer",
+          "default": 50,
+          "minimum": 0,
+          "maximum": 1024,
+          "scope": "resource",
+          "title": "%git.detectWorktreesLimit.title%",
+          "description": "%git.detectWorktreesLimit.description%"
+        },
+        "git.scanRepositories": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string",
+            "maxLength": 32768
+          },
+          "maxItems": 256,
+          "scope": "resource",
+          "title": "%git.scanRepositories.title%",
+          "description": "%git.scanRepositories.description%"
+        },
+        "git.repositoryScanIgnoredFolders": {
+          "type": "array",
+          "default": [
+            "node_modules"
+          ],
+          "items": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "maxItems": 256,
+          "scope": "resource",
+          "title": "%git.repositoryScanIgnoredFolders.title%",
+          "description": "%git.repositoryScanIgnoredFolders.description%"
+        },
+        "git.repositoryScanMaxDepth": {
+          "type": "integer",
+          "default": 1,
+          "minimum": -1,
+          "maximum": 64,
+          "scope": "resource",
+          "title": "%git.repositoryScanMaxDepth.title%",
+          "description": "%git.repositoryScanMaxDepth.description%"
+        },
+        "git.openRepositoryInParentFolders": {
+          "type": "string",
+          "default": "prompt",
+          "enum": [
+            "always",
+            "never",
+            "prompt"
+          ],
+          "scope": "resource",
+          "title": "%git.openRepositoryInParentFolders.title%",
+          "description": "%git.openRepositoryInParentFolders.description%",
+          "ashSetting": {
+            "valueType": "select",
+            "title": "%git.openRepositoryInParentFolders.title%",
+            "description": "%git.openRepositoryInParentFolders.description%",
+            "options": [
+              {
+                "value": "always",
+                "label": "%git.openRepositoryInParentFolders.option.0%"
+              },
+              {
+                "value": "never",
+                "label": "%git.openRepositoryInParentFolders.option.1%"
+              },
+              {
+                "value": "prompt",
+                "label": "%git.openRepositoryInParentFolders.option.2%"
+              }
+            ]
+          }
+        },
+        "git.ignoreLegacyWarning": {
+          "type": "boolean",
+          "default": false,
+          "title": "%git.ignoreLegacyWarning.title%",
+          "description": "%git.ignoreLegacyWarning.description%"
+        },
+        "git.ignoreMissingGitWarning": {
+          "type": "boolean",
+          "default": false,
+          "title": "%git.ignoreMissingGitWarning.title%",
+          "description": "%git.ignoreMissingGitWarning.description%"
+        },
+        "git.ignoreWindowsGit27Warning": {
+          "type": "boolean",
+          "default": false,
+          "title": "%git.ignoreWindowsGit27Warning.title%",
+          "description": "%git.ignoreWindowsGit27Warning.description%"
+        },
+        "git.ignoreRebaseWarning": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "title": "%git.ignoreRebaseWarning.title%",
+          "description": "%git.ignoreRebaseWarning.description%"
+        },
+        "git.worktreeIncludeFiles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "maxItems": 256,
+          "scope": "resource",
+          "title": "%git.worktreeIncludeFiles.title%",
+          "description": "%git.worktreeIncludeFiles.description%"
+        },
+        "git.worktreeSymlinkFolders": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "maxItems": 256,
+          "scope": "resource",
+          "title": "%git.worktreeSymlinkFolders.title%",
+          "description": "%git.worktreeSymlinkFolders.description%"
+        },
+        "git.supportCancellation": {
+          "type": "boolean",
+          "default": false,
+          "title": "%git.supportCancellation.title%",
+          "description": "%git.supportCancellation.description%"
+        },
+        "git.confirmCommittedDelete": {
+          "type": "boolean",
+          "default": true,
+          "title": "%git.confirmCommittedDelete.title%",
+          "description": "%git.confirmCommittedDelete.description%"
+        },
+        "git.discardUntrackedChangesToTrash": {
+          "type": "boolean",
+          "default": true,
+          "title": "%git.discardUntrackedChangesToTrash.title%",
+          "description": "%git.discardUntrackedChangesToTrash.description%"
+        },
+        "git.addAICoAuthor": {
+          "type": "string",
+          "enum": [
+            "off",
+            "chatAndAgent",
+            "all"
+          ],
+          "scope": "resource",
+          "default": "off",
+          "title": "%git.addAICoAuthor.title%",
+          "description": "%git.addAICoAuthor.description%",
+          "ashSetting": {
+            "valueType": "select",
+            "title": "%git.addAICoAuthor.title%",
+            "description": "%git.addAICoAuthor.description%",
+            "options": [
+              {
+                "value": "off",
+                "label": "%git.addAICoAuthor.option.0%"
+              },
+              {
+                "value": "chatAndAgent",
+                "label": "%git.addAICoAuthor.option.1%"
+              },
+              {
+                "value": "all",
+                "label": "%git.addAICoAuthor.option.2%"
+              }
+            ]
+          }
+        },
+        "git.terminalAuthentication": {
+          "type": "boolean",
+          "default": true,
+          "title": "%git.terminalAuthentication.title%",
+          "description": "%git.terminalAuthentication.description%"
+        },
+        "git.terminalGitEditor": {
+          "type": "boolean",
+          "default": false,
+          "title": "%git.terminalGitEditor.title%",
+          "description": "%git.terminalGitEditor.description%"
+        },
+        "git.useIntegratedAskPass": {
+          "type": "boolean",
+          "default": true,
+          "title": "%git.useIntegratedAskPass.title%",
+          "description": "%git.useIntegratedAskPass.description%"
+        },
+        "git.githubAuthentication": {
+          "type": "boolean",
+          "default": true,
+          "markdownDeprecationMessage": "%git.githubAuthentication.deprecation%",
+          "title": "%git.githubAuthentication.title%",
+          "description": "%git.githubAuthentication.description%"
         }
       }
     },
@@ -1550,10 +2526,31 @@
         "id": "git.tagMenu",
         "label": "%git.menu.tags%"
       }
+    ],
+    "keybindings": [
+      {
+        "command": "git.commit",
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "when": "resourceScheme == untitled && resourceLangId == git-commit"
+      }
     ]
   },
   "activationEvents": [
     "*"
   ],
-  "type": "module"
+  "type": "module",
+  "ashRuntime": {
+    "kind": "rust",
+    "entrypoint": "ash-git-extension",
+    "scope": "window",
+    "capabilities": [
+      "sourceControl",
+      "commands",
+      "terminalEnvironment"
+    ],
+    "clients": [
+      "app"
+    ]
+  }
 }

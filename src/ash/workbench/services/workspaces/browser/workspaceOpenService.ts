@@ -17,8 +17,8 @@ export interface IWorkspaceOpenService {
 	readonly canOpenFolder: boolean;
 	readonly canOpenWorkspace: boolean;
 	openFolder(): Promise<void>;
-	openWorkspace(root: string): Promise<void>;
-	pickFolder(): Promise<string | undefined>;
+	openWorkspace(root: string, forceNewWindow?: boolean): Promise<void>;
+	pickFolder(defaultPath?: string): Promise<string | undefined>;
 }
 
 export const IWorkspaceOpenService =
@@ -53,7 +53,8 @@ export class WebWorkspaceOpenService implements IWorkspaceOpenService {
 		if (path) await this.openWorkspace(path);
 	}
 
-	async openWorkspace(root: string): Promise<void> {
+	async openWorkspace(root: string, forceNewWindow = false): Promise<void> {
+		if (forceNewWindow) throw new Error(localize({ bundle: 'ash', key: 'workbench.newWindowUnavailable' }, 'Opening a new window is unavailable in this host'));
 		const selected = await this.client.list(root);
 		const approved = await this.dialogs().confirm({
 			title: localize({ bundle: 'ash', key: 'workbench.serverFolderAuthorizeTitle' }, 'Authorize Server Folder'),
@@ -66,8 +67,8 @@ export class WebWorkspaceOpenService implements IWorkspaceOpenService {
 		if (await this.prepareSwitch()) activate();
 	}
 
-	async pickFolder(): Promise<string | undefined> {
-		const resource = (await this.fileDialogs.showOpenDialog({ canSelectFiles: false, canSelectFolders: true }))?.[0];
+	async pickFolder(defaultPath?: string): Promise<string | undefined> {
+		const resource = (await this.fileDialogs.showOpenDialog({ canSelectFiles: false, canSelectFolders: true, ...(defaultPath ? { defaultUri: URI.file(defaultPath) } : {}) }))?.[0];
 		if (!resource) return undefined;
 		const path = resource.authority ? `//${resource.authority}${resource.path}` : resource.path;
 		return await this.paths.getOperatingSystem(resource) === OperatingSystem.Windows
@@ -112,20 +113,20 @@ export class WorkspaceOpenService implements IWorkspaceOpenService {
 		}
 	}
 
-	openWorkspace(root: string): Promise<void> {
+	openWorkspace(root: string, forceNewWindow = false): Promise<void> {
 		if (!this.nativeHostApi) {
 			return Promise.reject(
 				new Error("Opening workspaces is unavailable in this Workbench host"),
 			);
 		}
-		return this.nativeHostApi.openWorkspace(root);
+		return this.nativeHostApi.openWorkspace(root, forceNewWindow);
 	}
 
-	async pickFolder(): Promise<string | undefined> {
+	async pickFolder(defaultPath?: string): Promise<string | undefined> {
 		if (!this.fileDialogs) {
 			throw new Error("Picking folders is unavailable in this Workbench host");
 		}
-		return (await this.fileDialogs.showOpenDialog({ canSelectFiles: false, canSelectFolders: true }))?.[0]?.fsPath;
+		return (await this.fileDialogs.showOpenDialog({ canSelectFiles: false, canSelectFolders: true, ...(defaultPath ? { defaultUri: URI.file(defaultPath) } : {}) }))?.[0]?.fsPath;
 	}
 }
 
@@ -145,17 +146,18 @@ export class BrowserWorkspaceOpenService implements IWorkspaceOpenService {
 		if (resource) await this.openResource(resource);
 	}
 
-	public async openWorkspace(root: string): Promise<void> {
+	public async openWorkspace(root: string, forceNewWindow = false): Promise<void> {
+		if (forceNewWindow) throw new Error(localize({ bundle: 'ash', key: 'workbench.newWindowUnavailable' }, 'Opening a new window is unavailable in this host'));
 		const resource = await this.provider.openDirectory(URI.file(root));
 		await this.openResource(resource);
 	}
 
-	public async pickFolder(): Promise<string | undefined> {
-		return (await this.pickFolderResource())?.fsPath;
+	public async pickFolder(defaultPath?: string): Promise<string | undefined> {
+		return (await this.pickFolderResource(defaultPath))?.fsPath;
 	}
 
-	private async pickFolderResource(): Promise<URI | undefined> {
-		return (await this.fileDialogs.showOpenDialog({ canSelectFiles: false, canSelectFolders: true }))?.[0];
+	private async pickFolderResource(defaultPath?: string): Promise<URI | undefined> {
+		return (await this.fileDialogs.showOpenDialog({ canSelectFiles: false, canSelectFolders: true, ...(defaultPath ? { defaultUri: URI.file(defaultPath) } : {}) }))?.[0];
 	}
 
 	private openResource(resource: URI): Promise<void> {

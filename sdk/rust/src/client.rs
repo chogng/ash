@@ -20,6 +20,8 @@ pub use external_ext_protocol::ExtensionConfigurationTarget as ConfigurationTarg
 pub use external_ext_protocol::ExtensionDocumentEdit as DocumentEdit;
 pub use external_ext_protocol::ExtensionDocumentSnapshot as DocumentSnapshot;
 pub use external_ext_protocol::ExtensionMessageSeverity as MessageSeverity;
+pub use external_ext_protocol::ExtensionProgressOptions as ProgressOptions;
+pub use external_ext_protocol::ExtensionQuickPickItem as QuickPickItem;
 pub use external_ext_protocol::ExtensionTextEdit as TextEdit;
 pub use external_ext_protocol::ExtensionTextPosition as TextPosition;
 
@@ -63,6 +65,95 @@ impl Client {
             Ok(response)
         } else {
             Err(unexpected_result())
+        }
+    }
+
+    /// Calls one package-declared capability without exposing the host connection.
+    pub fn request_backend(
+        &self,
+        capability: impl Into<String>,
+        method: impl Into<String>,
+        params: Value,
+        token: &CancellationToken,
+    ) -> Result<Value, ExtensionError> {
+        self.value(
+            ExtensionClientOperation::BackendRequest {
+                capability: capability.into(),
+                method: method.into(),
+                params,
+                progress: None,
+            },
+            token,
+        )
+    }
+
+    pub fn request_backend_with_progress(
+        &self,
+        capability: impl Into<String>,
+        method: impl Into<String>,
+        params: Value,
+        progress: ProgressOptions,
+        token: &CancellationToken,
+    ) -> Result<Value, ExtensionError> {
+        self.value(
+            ExtensionClientOperation::BackendRequest {
+                capability: capability.into(),
+                method: method.into(),
+                params,
+                progress: Some(progress),
+            },
+            token,
+        )
+    }
+
+    pub fn backend_state(
+        &self,
+        capability: impl Into<String>,
+        after: u64,
+        token: &CancellationToken,
+    ) -> Result<Value, ExtensionError> {
+        self.value(
+            ExtensionClientOperation::BackendState {
+                capability: capability.into(),
+                after,
+            },
+            token,
+        )
+    }
+
+    pub fn editor_operation(
+        &self,
+        payload: Value,
+        token: &CancellationToken,
+    ) -> Result<Value, ExtensionError> {
+        self.value(ExtensionClientOperation::EditorOperation { payload }, token)
+    }
+
+    pub fn update_source_control(
+        &self,
+        registration_id: impl Into<String>,
+        revision: u64,
+        providers: Vec<Value>,
+        token: &CancellationToken,
+    ) -> Result<(), ExtensionError> {
+        self.done(
+            ExtensionClientOperation::ScmUpdate {
+                registration_id: registration_id.into(),
+                revision,
+                providers,
+            },
+            token,
+        )
+    }
+
+    fn value(
+        &self,
+        operation: ExtensionClientOperation,
+        token: &CancellationToken,
+    ) -> Result<Value, ExtensionError> {
+        match self.call(operation, token)? {
+            ExtensionClientResult::Value { value } => Ok(value),
+            _ => Err(unexpected_result()),
         }
     }
 
@@ -186,6 +277,37 @@ impl Client {
         }
     }
 
+    pub fn inspect_configuration(
+        &self,
+        section: impl Into<String>,
+        resource: Option<String>,
+        token: &CancellationToken,
+    ) -> Result<Value, ExtensionError> {
+        match self.call(
+            ExtensionClientOperation::InspectConfiguration {
+                section: section.into(),
+                resource,
+            },
+            token,
+        )? {
+            ExtensionClientResult::Configuration { value } => Ok(value),
+            _ => Err(unexpected_result()),
+        }
+    }
+    pub fn reset_configuration(
+        &self,
+        section: impl Into<String>,
+        target: ConfigurationTarget,
+        token: &CancellationToken,
+    ) -> Result<(), ExtensionError> {
+        self.done(
+            ExtensionClientOperation::ResetConfiguration {
+                section: section.into(),
+                target,
+            },
+            token,
+        )
+    }
     pub fn update_configuration(
         &self,
         section: impl Into<String>,
@@ -225,21 +347,42 @@ impl Client {
         placeholder: impl Into<String>,
         token: &CancellationToken,
     ) -> Result<Option<usize>, ExtensionError> {
+        self.show_quick_pick_items(
+            items
+                .into_iter()
+                .map(|label| QuickPickItem {
+                    label,
+                    description: None,
+                    detail: None,
+                })
+                .collect(),
+            placeholder,
+            token,
+        )
+    }
+
+    /// Displays structured items and validates the returned index against this exact request.
+    pub fn show_quick_pick_items(
+        &self,
+        items: Vec<QuickPickItem>,
+        placeholder: impl Into<String>,
+        token: &CancellationToken,
+    ) -> Result<Option<usize>, ExtensionError> {
+        if items.is_empty() {
+            return Ok(None);
+        }
+        let count = items.len();
         match self.call(
             ExtensionClientOperation::ShowQuickPick {
-                items: items
-                    .into_iter()
-                    .map(|label| external_ext_protocol::ExtensionQuickPickItem {
-                        label,
-                        description: None,
-                        detail: None,
-                    })
-                    .collect(),
+                items,
                 placeholder: placeholder.into(),
             },
             token,
         )? {
-            ExtensionClientResult::Selection { index } => Ok(index.map(|index| index as usize)),
+            ExtensionClientResult::Selection { index } => match index.map(|index| index as usize) {
+                Some(index) if index >= count => Err(unexpected_result()),
+                value => Ok(value),
+            },
             _ => Err(unexpected_result()),
         }
     }
@@ -355,4 +498,132 @@ fn unexpected_result() -> ExtensionError {
         HostErrorCode::Internal,
         "client returned a result for a different operation",
     )
+}
+
+/// Client services bound by the host to this activation's window. Unlike invocation calls,
+/// these can publish subscription updates after a foreground callback returns. Retirement
+/// closes all clones and the host cancels outstanding calls on disconnect.
+#[derive(Clone)]
+pub struct BackgroundClient {
+    services: crate::services::Services,
+}
+impl BackgroundClient {
+    /// Retires activation-owned background calls before joining subscription tasks.
+    pub fn close(&self) {
+        self.services.close();
+    }
+    pub fn request_backend(
+        &self,
+        capability: impl Into<String>,
+        method: impl Into<String>,
+        params: Value,
+    ) -> Result<Value, ExtensionError> {
+        self.value(ExtensionClientOperation::BackendRequest {
+            capability: capability.into(),
+            method: method.into(),
+            params,
+            progress: None,
+        })
+    }
+
+    pub fn new(services: crate::services::Services) -> Self {
+        Self { services }
+    }
+    pub fn show_message(
+        &self,
+        severity: MessageSeverity,
+        message: impl Into<String>,
+    ) -> Result<(), ExtensionError> {
+        match self
+            .services
+            .call_operation(ExtensionClientOperation::ShowMessage {
+                message: message.into(),
+                severity,
+                items: Vec::new(),
+            })? {
+            ExtensionClientResult::Done => Ok(()),
+            _ => Err(unexpected_result()),
+        }
+    }
+    pub fn backend_state(
+        &self,
+        capability: impl Into<String>,
+        after: u64,
+    ) -> Result<Value, ExtensionError> {
+        self.value(ExtensionClientOperation::BackendState {
+            capability: capability.into(),
+            after,
+        })
+    }
+    pub fn editor_operation(&self, payload: Value) -> Result<Value, ExtensionError> {
+        self.value(ExtensionClientOperation::EditorOperation { payload })
+    }
+    pub fn inspect_configuration(
+        &self,
+        section: impl Into<String>,
+        resource: Option<String>,
+    ) -> Result<Value, ExtensionError> {
+        match self
+            .services
+            .call_operation(ExtensionClientOperation::InspectConfiguration {
+                section: section.into(),
+                resource,
+            })? {
+            ExtensionClientResult::Configuration { value } => Ok(value),
+            _ => Err(unexpected_result()),
+        }
+    }
+    pub fn reset_configuration(
+        &self,
+        section: impl Into<String>,
+        target: ConfigurationTarget,
+    ) -> Result<(), ExtensionError> {
+        match self
+            .services
+            .call_operation(ExtensionClientOperation::ResetConfiguration {
+                section: section.into(),
+                target,
+            })? {
+            ExtensionClientResult::Done => Ok(()),
+            _ => Err(unexpected_result()),
+        }
+    }
+    pub fn get_configuration(
+        &self,
+        section: impl Into<String>,
+        resource: Option<String>,
+    ) -> Result<Value, ExtensionError> {
+        match self
+            .services
+            .call_operation(ExtensionClientOperation::ReadConfiguration {
+                section: section.into(),
+                resource,
+            })? {
+            ExtensionClientResult::Configuration { value } => Ok(value),
+            _ => Err(unexpected_result()),
+        }
+    }
+    pub fn update_source_control(
+        &self,
+        registration_id: impl Into<String>,
+        revision: u64,
+        providers: Vec<Value>,
+    ) -> Result<(), ExtensionError> {
+        match self
+            .services
+            .call_operation(ExtensionClientOperation::ScmUpdate {
+                registration_id: registration_id.into(),
+                revision,
+                providers,
+            })? {
+            ExtensionClientResult::Done => Ok(()),
+            _ => Err(unexpected_result()),
+        }
+    }
+    fn value(&self, operation: ExtensionClientOperation) -> Result<Value, ExtensionError> {
+        match self.services.call_operation(operation)? {
+            ExtensionClientResult::Value { value } => Ok(value),
+            _ => Err(unexpected_result()),
+        }
+    }
 }

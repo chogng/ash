@@ -22,7 +22,7 @@ export interface ExtensionQuickPickItem {
 /** Window services available during a connection-owned extension invocation. */
 export type ExtensionClientOperation =
 	| { operation: 'scmUpdate'; registrationId: string; revision: number; providers: readonly JsonValue[]; }
-	| { operation: 'backendRequest'; capability: string; method: string; params: JsonValue; }
+	| { operation: 'backendRequest'; capability: string; method: string; params: JsonValue; progress?: { title: string; cancellable: boolean; }; }
 	| { operation: 'editorOperation'; payload: JsonValue; }
 	| { operation: 'backendState'; capability: string; after: number; }
 	| { operation: 'readResourceFile' | 'statResource' | 'readResourceDirectory'; uri: string; }
@@ -46,6 +46,8 @@ export type ExtensionClientOperation =
 	| { operation: 'listDocuments'; }
 	| { operation: 'applyEdit'; documents: ExtensionDocumentEdit[]; }
 	| { operation: 'readConfiguration'; section: string; resource: string | null; }
+	| { operation: 'inspectConfiguration'; section: string; resource: string | null; }
+	| { operation: 'resetConfiguration'; section: string; target: 'user' | 'workspace'; }
 	| { operation: 'updateConfiguration'; section: string; value: JsonValue; target: 'user' | 'workspace'; }
 	| { operation: 'showMessage'; message: string; severity: 'information' | 'warning' | 'error'; items?: readonly string[]; }
 	| { operation: 'showQuickPick'; items: readonly ExtensionQuickPickItem[]; placeholder: string; };

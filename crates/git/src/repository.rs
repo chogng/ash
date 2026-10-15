@@ -158,3 +158,58 @@ impl GitClient {
         Ok(())
     }
 }
+
+impl GitClient {
+    pub async fn submodule_paths(&self, repository: &GitRepository) -> GitResult<Vec<PathBuf>> {
+        let output = self
+            .run_query_unchecked(
+                repository.worktree_root(),
+                [
+                    "config",
+                    "--null",
+                    "--file",
+                    ".gitmodules",
+                    "--get-regexp",
+                    "^submodule\\..*\\.path$",
+                ],
+            )
+            .await?;
+        if output.status.code() == Some(1) {
+            return Ok(vec![]);
+        }
+        let output = output.require_success()?;
+        output
+            .stdout
+            .split(|byte| *byte == 0)
+            .filter(|record| !record.is_empty())
+            .map(|record| {
+                let start = record
+                    .iter()
+                    .position(|byte| *byte == b'\n')
+                    .ok_or_else(|| {
+                        crate::GitError::invalid_output(
+                            &output.command,
+                            "invalid submodule configuration",
+                        )
+                    })?;
+                let path = std::str::from_utf8(&record[start + 1..]).map_err(|_| {
+                    crate::GitError::invalid_output(&output.command, "invalid submodule path")
+                })?;
+                let paths = crate::GitPathspecSet::new(vec![PathBuf::from(path)])?;
+                Ok(paths.paths()[0].clone())
+            })
+            .collect()
+    }
+
+    pub async fn is_submodule(&self, repository: &GitRepository) -> GitResult<bool> {
+        Ok(!self
+            .run_query(
+                repository.worktree_root(),
+                ["rev-parse", "--show-superproject-working-tree"],
+            )
+            .await?
+            .stdout
+            .iter()
+            .all(u8::is_ascii_whitespace))
+    }
+}

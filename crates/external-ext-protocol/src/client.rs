@@ -66,6 +66,84 @@ fn validate_operation(
     limits: &ProtocolLimits,
 ) -> Result<(), ProtocolError> {
     validate_encoded_size(operation, limits.maximum_payload_bytes)?;
+    match operation {
+        ExtensionClientOperation::BackendRequest {
+            capability,
+            method,
+            params,
+            progress,
+        } => {
+            if progress.as_ref().is_some_and(|progress| {
+                progress.title.is_empty()
+                    || progress.title.len() > 2048
+                    || progress.title.contains('\0')
+            }) {
+                return Err(ProtocolError::InvalidProtocol(
+                    "invalid progress title".into(),
+                ));
+            }
+            if capability.is_empty()
+                || capability.len() > 256
+                || method.is_empty()
+                || method.len() > 256
+                || !params.is_object()
+            {
+                return Err(ProtocolError::InvalidProtocol(
+                    "invalid backend capability request".into(),
+                ));
+            }
+        }
+        ExtensionClientOperation::ReadConfiguration { section, resource }
+        | ExtensionClientOperation::InspectConfiguration { section, resource } => {
+            if section.len() > 1024
+                || section.contains('\0')
+                || resource
+                    .as_ref()
+                    .is_some_and(|resource| resource.len() > 8192 || resource.contains('\0'))
+            {
+                return Err(ProtocolError::InvalidProtocol(
+                    "invalid configuration request".into(),
+                ));
+            }
+        }
+        ExtensionClientOperation::ResetConfiguration { section, .. }
+        | ExtensionClientOperation::UpdateConfiguration { section, .. } => {
+            if section.is_empty() || section.len() > 1024 || section.contains('\0') {
+                return Err(ProtocolError::InvalidProtocol(
+                    "invalid configuration key".into(),
+                ));
+            }
+        }
+        ExtensionClientOperation::BackendState { capability, .. } => {
+            if capability.is_empty() || capability.len() > 256 {
+                return Err(ProtocolError::InvalidProtocol(
+                    "invalid backend capability".into(),
+                ));
+            }
+        }
+        ExtensionClientOperation::EditorOperation { payload } if !payload.is_object() => {
+            return Err(ProtocolError::InvalidProtocol(
+                "invalid editor operation".into(),
+            ));
+        }
+        ExtensionClientOperation::ScmUpdate {
+            registration_id,
+            revision,
+            providers,
+        } => {
+            if registration_id.is_empty()
+                || registration_id.len() > 256
+                || *revision == 0
+                || providers.len() > 512
+                || providers.iter().any(|provider| !provider.is_object())
+            {
+                return Err(ProtocolError::InvalidProtocol(
+                    "invalid source control update".into(),
+                ));
+            }
+        }
+        _ => {}
+    }
     if let ExtensionClientOperation::ShowMessage { message, items, .. } = operation {
         if message.trim().is_empty()
             || items.len() > 16
@@ -285,6 +363,16 @@ pub struct ExtensionDebugSessionOptions {
     pub suppress_save_before_start: Option<bool>,
 }
 
+/// Optional foreground progress; its lifetime belongs to the initiating window.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "export", derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExtensionProgressOptions {
+    pub title: String,
+    pub cancellable: bool,
+}
+
 /// Editor operations available to executable extensions. Documents, undo and UI remain client-owned.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
@@ -296,6 +384,30 @@ pub struct ExtensionDebugSessionOptions {
     deny_unknown_fields
 )]
 pub enum ExtensionClientOperation {
+    /// The client authorizes every route against the product package's declared capability.
+    BackendRequest {
+        capability: String,
+        method: String,
+        params: Value,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(feature = "export", ts(optional))]
+        progress: Option<ExtensionProgressOptions>,
+    },
+    BackendState {
+        capability: String,
+        #[cfg_attr(feature = "export", ts(type = "number"))]
+        after: u64,
+    },
+    /// Editor-owned interactions, including dirty buffers, are resolved by the initiating window.
+    EditorOperation {
+        payload: Value,
+    },
+    ScmUpdate {
+        registration_id: String,
+        #[cfg_attr(feature = "export", ts(type = "number"))]
+        revision: u64,
+        providers: Vec<Value>,
+    },
     /// Granted only by profile hosts, never forwarded to a window.
     #[cfg_attr(feature = "json-schema", schemars(skip))]
     #[cfg_attr(feature = "export", ts(skip))]
@@ -389,6 +501,14 @@ pub enum ExtensionClientOperation {
     ReadConfiguration {
         section: String,
         resource: Option<String>,
+    },
+    InspectConfiguration {
+        section: String,
+        resource: Option<String>,
+    },
+    ResetConfiguration {
+        section: String,
+        target: ExtensionConfigurationTarget,
     },
     UpdateConfiguration {
         section: String,
@@ -527,6 +647,9 @@ pub enum ExtensionDiagnosticSeverity {
     deny_unknown_fields
 )]
 pub enum ExtensionClientResult {
+    Value {
+        value: Value,
+    },
     #[cfg_attr(feature = "json-schema", schemars(skip))]
     #[cfg_attr(feature = "export", ts(skip))]
     CoreService {

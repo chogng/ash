@@ -36,6 +36,7 @@ pub use client::ExtensionDocumentEdit;
 pub use client::ExtensionDocumentSnapshot;
 pub use client::ExtensionHostStdinFrame;
 pub use client::ExtensionMessageSeverity;
+pub use client::ExtensionProgressOptions;
 pub use client::ExtensionQuickPickItem;
 pub use client::ExtensionTextEdit;
 pub use client::ExtensionTextPosition;
@@ -272,6 +273,7 @@ pub enum ExtensionCapability {
     /// Product release authority only; installed manifests cannot request the reserved ssh prefix.
     ProductRemoteAuthorityResolver,
     StatusBar,
+    SourceControl,
     Command,
     LanguageProvider,
     CustomTextEditor,
@@ -369,6 +371,11 @@ pub struct ExtensionCommandMenu {
     deny_unknown_fields
 )]
 pub enum RegistrationKind {
+    /// Client-rendered SCM snapshots; callbacks and repository policy belong to the provider.
+    SourceControl {
+        revision: u64,
+        providers: Vec<Value>,
+    },
     /// Window facts are read-only; their configuration/workspace owners remain in the editor.
     WorkspaceEvents {},
     /// Selects an existing saved target; distinct from a transport endpoint resolver.
