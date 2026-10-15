@@ -1,7 +1,7 @@
 import type { CancellationToken } from '../../../../../base/common/cancellation.js';
 import type { IObservable } from '../../../../../base/common/observable.js';
 import { createServiceIdentifier } from '../../../../../platform/instantiation/common/instantiation.js';
-import type { AutomationTarget, IAutomationDescriptor, IAutomationRun, IAutomationSchedule } from './automation.js';
+import type { AutomationTarget, IAutomationDescriptor, IAutomationRun, IAutomationRunResult, IAutomationSchedule } from './automation.js';
 
 export type AutomationCatalogueState = 'loading' | 'ready' | 'unavailable' | 'error';
 
