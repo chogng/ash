@@ -201,7 +201,7 @@ services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageM
 	read: async () => {
 		if (new URLSearchParams(location.search).has('toolFailure')) { throw new Error('Tool catalog failed'); }
 		return {
-			toolSets: [{ id: 'local', source: 'local', sourceId: 'directory', tools: ['read_file', toolsChanged ? 'added_tool' : 'write_file'] }, { id: 'mcp:docs', source: 'mcp', sourceId: 'docs-server', tools: ['connector_search'] }],
+			sourceGroups: [{ id: 'local', source: 'local', sourceId: 'directory', tools: ['read_file', toolsChanged ? 'added_tool' : 'write_file'] }, { id: 'mcp:docs', source: 'mcp', sourceId: 'docs-server', tools: ['connector_search'] }],
 			tools: [
 				{ name: 'read_file', description: 'Read a source document', source: 'local', sourceDetails: ['directory'], exposure: 'direct', authority: 'directoryRead' },
 				{ name: toolsChanged ? 'added_tool' : 'write_file', description: toolsChanged ? 'Added source document' : 'Write a source document', source: 'local', sourceDetails: ['directory'], exposure: 'direct', authority: 'directoryWrite' },
@@ -608,10 +608,16 @@ let state: ChatInputState = {
 	},
 };
 if (new URLSearchParams(location.search).has('permissions')) {
-	state = { ...state, interaction: { requestId: 'permissions', request: { type: 'permissions', request: {
-		environmentId: 'local', duration: 'session', reason: 'Read this project',
-		directories: [{ path: '/workspace/<img src=x>', permissions: ['readFiles', 'writeFiles'] }], networkHosts: ['api.example.test'],
-	} } } };
+	state = {
+		...state, interaction: {
+			requestId: 'permissions', request: {
+				type: 'permissions', request: {
+					environmentId: 'local', duration: 'session', reason: 'Read this project',
+					directories: [{ path: '/workspace/<img src=x>', permissions: ['readFiles', 'writeFiles'] }], networkHosts: ['api.example.test'],
+				}
+			}
+		}
+	};
 }
 function renderModels(): void {
 	state = { ...state, models, selectedModel, isAutomaticModel: automatic, selectedReasoningEffort };

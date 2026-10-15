@@ -142,7 +142,7 @@ services.registerInstance(IDictationService, undefined);
 registerTestDictationOnboarding(services);
 services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 services.registerSingleton(ITerminalLogService, () => services.createInstance(TerminalLogService));
-services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService({ isAvailable: true, read: async () => ({ tools: [{ name: 'read_file', description: 'Read authorized files', source: 'local', sourceDetails: ['Ash'], exposure: 'direct', authority: 'directoryRead' }, { name: 'internal_tool', description: 'Internal', source: 'local', sourceDetails: [], exposure: 'hidden', authority: 'providerDefined' }], toolSets: [] }) }));
+services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService({ isAvailable: true, read: async () => ({ tools: [{ name: 'read_file', description: 'Read authorized files', source: 'local', sourceDetails: ['Ash'], exposure: 'direct', authority: 'directoryRead' }, { name: 'internal_tool', description: 'Internal', source: 'local', sourceDetails: [], exposure: 'hidden', authority: 'providerDefined' }], toolSets: [], sourceGroups: [] }) }));
 registerCodeEditorServices(services);
 const skillResourceRequests: unknown[] = [];
 const prompts = resources.add(new PromptsService({

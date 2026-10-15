@@ -479,7 +479,7 @@ services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageM
 	isAvailable: true,
 	read: async () => {
 		if (mcpToolsFailure) { throw new Error('Tool catalog unavailable'); }
-		return { tools: [{ name: 'fixture_search', description: 'Search fixture records', source: 'mcp' as const, sourceDetails: ['marketplace:example/web:mcp:fixture-server'], exposure: 'direct' as const, authority: 'providerDefined' as const }], toolSets: [{ id: 'fixture-set', source: 'mcp' as const, sourceId: 'marketplace:example/web:mcp:fixture-server', tools: ['fixture_search'] }] };
+		return { sourceGroups: [{ id: 'mcp:fixture-server', source: 'mcp' as const, sourceId: 'marketplace:example/web:mcp:fixture-server', tools: ['fixture_search'] }], tools: [{ name: 'fixture_search', description: 'Search fixture records', source: 'mcp' as const, sourceDetails: ['marketplace:example/web:mcp:fixture-server'], exposure: 'direct' as const, authority: 'providerDefined' as const }], toolSets: [{ id: 'fixture-set', source: 'mcp' as const, sourceId: 'marketplace:example/web:mcp:fixture-server', tools: ['fixture_search'] }] };
 	},
 }));
 const host = document.getElementById('extensions')!;

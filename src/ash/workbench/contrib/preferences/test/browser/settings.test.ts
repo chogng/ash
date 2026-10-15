@@ -371,7 +371,7 @@ test('Built-in Git, Markdown and Media settings localize, persist and reset thro
 	await configuration.updateValue('git.untrackedChanges', 'separate');
 	const document = (await configuration.read()).source;
 	assert.deepEqual(JSON.parse(document), { 'mediaPreview.video.loop': true, 'markdown.validate.enabled': false, 'git.untrackedChanges': 'separate' });
-	using reopened = new WorkbenchConfigurationService({ registry, initialSnapshot: { revision: 1, document: { version: 1, source: document } } });
+	using reopened = new WorkbenchConfigurationService({ registry, source: document });
 	assert.equal(reopened.getValue('git.untrackedChanges'), 'separate');
 	await assert.rejects(reopened.updateValue('git.untrackedChanges', 'unsupported'), TypeError);
 	await reopened.updateValue('mediaPreview.video.loop', undefined);
