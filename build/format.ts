@@ -4,14 +4,13 @@ import { isAbsolute, relative, resolve, sep } from 'node:path';
 import ts from 'typescript';
 
 const repositoryRoot = resolve(import.meta.dirname, '..');
-const settings: ts.FormatCodeSettings = JSON.parse(readFileSync(resolve(repositoryRoot, 'tsfmt.json'), 'utf8'));
 const sourceExtensions = /\.(?:[cm]?[jt]s|[jt]sx)$/;
 const excludedDirectories = /(?:^|\/)(?:node_modules|generated|vendor|dist|out|fixtures|test-data|testData|typings)(?:\/|$)/;
 const sourceRoots = ['src/', 'build/', 'extensions/', 'test/', 'services/', 'crates/external-js-ext/', 'resources/extension-host/'];
 const copiedSourceRoots = ['src/ash/base/browser/dompurify/', 'src/ash/base/common/marked/'];
 const generatedSources = new Set(['src/ash/base/common/productIcons.ts']);
 
-export function format(fileName: string, text: string): string {
+export function format(fileName: string, text: string, options: ts.FormatCodeSettings = JSON.parse(readFileSync(resolve(repositoryRoot, 'tsfmt.json'), 'utf8'))): string {
 	const absolutePath = resolve(fileName);
 	const snapshot = ts.ScriptSnapshot.fromString(text);
 	const service = ts.createLanguageService({
@@ -26,7 +25,7 @@ export function format(fileName: string, text: string): string {
 	});
 	try {
 		// At the same offset, replace whitespace before inserting a semicolon so the replacement cannot erase it.
-		const edits = service.getFormattingEditsForDocument(absolutePath, settings).sort((left, right) => right.span.start - left.span.start || right.span.length - left.span.length);
+		const edits = service.getFormattingEditsForDocument(absolutePath, options).sort((left, right) => right.span.start - left.span.start || right.span.length - left.span.length);
 		for (const edit of edits) {
 			text = text.slice(0, edit.span.start) + edit.newText + text.slice(edit.span.start + edit.span.length);
 		}
@@ -40,7 +39,7 @@ export function verifyFormatting(fileName: string, text: string): boolean {
 	return format(fileName, text) === text;
 }
 
-function sourceFiles(paths: readonly string[]): string[] {
+function sourceFiles(paths: readonly string[], contentRoot: string): string[] {
 	const selections = paths.map(path => {
 		const name = relative(repositoryRoot, resolve(repositoryRoot, path));
 		if (name === '..' || name.startsWith(`..${sep}`) || isAbsolute(name)) {
@@ -54,7 +53,7 @@ function sourceFiles(paths: readonly string[]): string[] {
 	const inventory = execFileSync('git', ['--literal-pathspecs', 'ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', ...scope], { cwd: repositoryRoot, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }).split('\0');
 	const files = [...new Set(inventory)].filter(name => sourceRoots.some(root => name.startsWith(root)) && !copiedSourceRoots.some(root => name.startsWith(root)) && !generatedSources.has(name) && sourceExtensions.test(name) && !/\.d\.[cm]?ts$/.test(name) && !excludedDirectories.test(name)).sort();
 	// Narrow requested paths before touching the filesystem; Git may still list deleted files.
-	const isFile = (name: string): boolean => statSync(resolve(repositoryRoot, name), { throwIfNoEntry: false })?.isFile() === true;
+	const isFile = (name: string): boolean => statSync(resolve(contentRoot, name), { throwIfNoEntry: false })?.isFile() === true;
 	if (paths.length === 0) {
 		return files.filter(isFile);
 	}
@@ -72,25 +71,34 @@ function sourceFiles(paths: readonly string[]): string[] {
 }
 
 function main(args: readonly string[]): number {
-	const [mode, ...paths] = args;
+	const [mode, ...remaining] = args;
+	// The repository orchestrator supplies a sparse snapshot for scoped checks and
+	// writes. Git still owns source selection; only file contents and settings move.
+	const snapshot = remaining[0] === '--content-root';
+	if (snapshot && (!remaining[1] || !isAbsolute(remaining[1]))) {
+		throw new Error('--content-root requires an absolute snapshot directory.');
+	}
+	const contentRoot = snapshot ? remaining[1] : repositoryRoot;
+	const paths = snapshot ? remaining.slice(2) : remaining;
 	if ((mode !== '--check' && mode !== '--write') || paths.some(path => path.startsWith('-'))) {
 		throw new Error('Usage: pnpm format:ts[:fix] [file|directory ...]');
 	}
-	const files = sourceFiles(paths);
-	if (files.length === 0) {
+	const files = sourceFiles(paths, contentRoot);
+	if (files.length === 0 && !snapshot) {
 		throw new Error('No first-party TypeScript or JavaScript sources found.');
 	}
+	const options: ts.FormatCodeSettings = JSON.parse(readFileSync(resolve(contentRoot, 'tsfmt.json'), 'utf8'));
 	let changes = 0;
 	for (const file of files) {
-		const absolutePath = resolve(repositoryRoot, file);
+		const absolutePath = resolve(contentRoot, file);
 		const text = readFileSync(absolutePath, 'utf8');
 		if (mode === '--check') {
-			if (!verifyFormatting(absolutePath, text)) {
+			if (format(absolutePath, text, options) !== text) {
 				changes++;
 				console.error(`File not formatted: ${file}`);
 			}
 		} else {
-			const formatted = format(absolutePath, text);
+			const formatted = format(absolutePath, text, options);
 			if (formatted !== text) {
 				changes++;
 				writeFileSync(absolutePath, formatted, 'utf8');

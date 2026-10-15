@@ -17,6 +17,8 @@ from check_blob_size import changed_paths
 ROOT = Path(__file__).resolve().parents[1]
 POLICY = ROOT / ".github/ci-workflows.json"
 CONTROL_PATHS = {
+    ".just-version",
+    ".github/actions/setup-just/action.yml",
     ".github/ci-workflows.json",
     ".github/workflows/blocking-ci.yml",
     "scripts/ci_workflows.py",

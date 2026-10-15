@@ -36,6 +36,7 @@ RUN curl --fail --silent --show-error --location https://apt.llvm.org/llvm-snaps
 COPY .nvmrc /tmp/ash-node-version
 COPY package.json /tmp/ash-package.json
 COPY rust-toolchain.toml /tmp/ash-rust-toolchain.toml
+COPY .just-version /tmp/ash-just-version
 
 ENV PNPM_HOME=/usr/local/share/pnpm \
     PATH=/usr/local/share/pnpm/bin:${PATH}
@@ -69,7 +70,7 @@ RUN curl --fail --silent --show-error --location https://sh.rustup.rs --output /
     && rm /tmp/ash-rustup-init.sh \
     && rustup toolchain install "$(python3 -c 'import tomllib; print(tomllib.load(open("/tmp/ash-rust-toolchain.toml", "rb"))["toolchain"]["channel"])')" --profile minimal --component clippy --component rustfmt
 
-RUN cargo install --locked --jobs 2 --version 1.46.0 just
+RUN cargo install --locked --jobs 2 --version "$(cat /tmp/ash-just-version)" just
 
 ENV CXX=clang++-21 \
     LIBCLANG_PATH=/usr/lib/llvm-21/lib \

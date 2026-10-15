@@ -21,6 +21,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class CiWorkflowTests(unittest.TestCase):
+    def test_just_version_and_setup_changes_select_all_consumers(self) -> None:
+        policy = ci_workflows.load_policy(ci_workflows.POLICY)
+        for name in (".just-version", ".github/actions/setup-just/action.yml"):
+            with self.subTest(path=name):
+                self.assertTrue(all(ci_workflows.select([name], policy).values()))
+
     def test_main_uses_the_last_successful_ancestor_instead_of_the_previous_push(
         self,
     ) -> None:

@@ -12,6 +12,18 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  just:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: ./.github/actions/setup-just
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.11"
+      - name: Check Just formatting with the repository version
+        run: python3 -B scripts/format.py --language just --check
+
   frontend:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -27,8 +39,20 @@ jobs:
         run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Initialize the pinned Bun runtime
         run: pnpm rebuild bun
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+        with:
+          version-file: scripts/pyproject.toml
+      - name: Sync locked Python formatters for staged checks
+        run: python3 -B scripts/install_python_tools.py
+      - name: Initialize the repository Rust formatter
+        run: rustup show active-toolchain
       - name: Test formatter commands and file boundaries
         run: pnpm test:format
+      - name: Test scoped formatting and staged hook isolation
+        run: scripts/.venv/bin/python -B -m unittest discover -s scripts -p test_format.py
       - name: Check TypeScript and JavaScript formatting
         if: always() && !cancelled()
         run: pnpm format:ts

@@ -42,9 +42,7 @@ jobs:
       - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
         with:
           version-file: scripts/pyproject.toml
-      - uses: taiki-e/install-action@a6b2e2dcd845ddd7f509ce4f3ed3d922b80cc5d9
-        with:
-          tool: just@1.46.0
+      - uses: ./.github/actions/setup-just
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
         with:
           workspaces: ". -> .build/cargo"

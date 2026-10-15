@@ -250,13 +250,22 @@ class JustTests(unittest.TestCase):
             (folder / "scripts/workflow.py").write_text(
                 "import json, sys; print(json.dumps(sys.argv[1:]))", encoding="utf-8"
             )
+            (folder / "scripts/format.py").write_text(
+                "import json, sys; print(json.dumps(sys.argv[1:]))", encoding="utf-8"
+            )
             environment = os.environ.copy()
             environment["PATH"] = (
                 str(Path(sys.executable).parent)
                 + os.pathsep
                 + environment.get("PATH", "")
             )
-            for recipe in ("snapshot", "context", "verify"):
+            for recipe, prefix in (
+                ("snapshot", ["snapshot"]),
+                ("context", ["context"]),
+                ("verify", ["verify"]),
+                ("fmt", []),
+                ("fmt-check", ["--check"]),
+            ):
                 with self.subTest(recipe=recipe):
                     result = subprocess.run(
                         [
@@ -272,7 +281,7 @@ class JustTests(unittest.TestCase):
                         check=False,
                     )
                     self.assertEqual(result.returncode, 0, result.stderr)
-                    self.assertEqual(json.loads(result.stdout), [recipe, *arguments])
+                    self.assertEqual(json.loads(result.stdout), [*prefix, *arguments])
 
     def run_recipe(self, script: str, *args: str) -> subprocess.CompletedProcess[str]:
         environment = os.environ.copy()

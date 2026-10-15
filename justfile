@@ -1,5 +1,5 @@
 set working-directory := "."
-set positional-arguments := true
+set positional-arguments
 set shell := ["sh", "-cu"]
 set windows-shell := ["pwsh", "-NoLogo", "-NoProfile", "-CommandWithArgs"]
 
@@ -17,12 +17,20 @@ tui_profile := "ci-test"
 tui_profile_arg := "--profile " + tui_profile
 
 # Format sources with their owning Just, Rust, Python, and frontend tools.
-fmt:
-    {{ python }} -B scripts/format.py
+fmt *args:
+    {{ python }} -B scripts/format.py {{ recipe_args }}
 
 # Check formatting without modifying files.
-fmt-check:
-    {{ python }} -B scripts/format.py --check
+fmt-check *args:
+    {{ python }} -B scripts/format.py --check {{ recipe_args }}
+
+# Check the index without changing staged or working-tree content.
+fmt-staged:
+    {{ python }} -B scripts/format.py --check --staged
+
+# Enable the versioned pre-commit hook for this repository.
+install-hooks:
+    git config --local core.hooksPath .githooks
 
 # Format Rust independently of frontend dependencies.
 rust-format:
