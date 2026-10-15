@@ -37,7 +37,11 @@ export default defineConfig(({ mode, command }) => {
 	<body>
 		<main id="app"></main>
 		<script type="module">
-			import { IndexedDbConfigurationApi } from '${moduleUrl('platform/configuration/browser/indexedDbConfigurationApi.ts')}';
+			import { IndexedDBFileSystemProvider } from '${moduleUrl('platform/files/browser/indexedDBFileSystemProvider.ts')}';
+			import { FileService } from '${moduleUrl('platform/files/common/fileService.ts')}';
+			import { URI } from '${moduleUrl('base/common/uri.ts')}';
+			import { Schemas } from '${moduleUrl('base/common/network.ts')}';
+			import { migrateLegacyBrowserSettings } from '${moduleUrl('workbench/services/userData/browser/userDataInit.ts')}';
 			import { BrowserLanguagePackStore } from '${moduleUrl('platform/languagePacks/browser/languagePackStore.ts')}';
 			import { initializeBrowserLocalization } from '${moduleUrl('workbench/services/localization/browser/localizationBootstrap.ts')}';
 			import { showStartupError } from '${moduleUrl('workbench/browser/startupError.ts')}';
@@ -45,8 +49,11 @@ export default defineConfig(({ mode, command }) => {
 			try {
 				showPartsSplash(document, readBrowserPartsSplash(window));
 				{
-					using configuration = new IndexedDbConfigurationApi();
-					await initializeBrowserLocalization(configuration, new BrowserLanguagePackStore());
+					using provider = await IndexedDBFileSystemProvider.create(window.indexedDB, Schemas.vscodeUserData);
+					await migrateLegacyBrowserSettings(window.indexedDB, provider, URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' }));
+					using files = new FileService();
+					using registration = files.registerProvider(Schemas.vscodeUserData, provider);
+					await initializeBrowserLocalization(files, new BrowserLanguagePackStore());
 				}
 				const { create } = await import('${moduleUrl('sessions/sessions.web.main.internal.ts')}');
 				create(document.getElementById('app'), import.meta.env.ASH_SESSIONS_PROFILE);
