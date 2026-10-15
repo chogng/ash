@@ -105,9 +105,60 @@ async function chatPage(page: Page, answer = 'Synthetic answer'): Promise<void> 
 	});
 	await page.goto('/chatgpt.html?locale=zh-CN');
 	await expect(page.getByRole('textbox', { name: '询问 ChatGPT' })).toBeEnabled();
+	const toggle = page.getByRole('button', { name: '显示或隐藏会话列表' });
+	if (await toggle.isVisible()) { await toggle.click(); }
 	await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
-	await expect(page.locator('.ash-chatgpt-title')).toHaveText('Synthetic conversation');
+	await expect(page).toHaveTitle('Synthetic conversation — ChatGPT');
 }
+
+test('ChatGPT keeps conversation content clear and secondary actions accessible from the sidebar', async ({ page }, testInfo) => {
+	await chatPage(page);
+	await expect(page.locator('.ash-chatgpt-header')).toHaveCount(0);
+	await expect(page.getByRole('button', { name: '显示或隐藏会话列表' })).toBeHidden();
+	const actions = page.locator('.ash-chatgpt-actions summary');
+	await expect(actions).toHaveText('更多操作');
+	const read = page.getByRole('button', { name: '阅读会话', exact: true });
+	await expect(read).toBeHidden();
+	await testInfo.attach('chatgpt-without-toolbar', { body: await page.screenshot(), contentType: 'image/png' });
+	await actions.focus();
+	await actions.press('Enter');
+	await expect(read).toBeVisible();
+	await read.focus();
+	await read.press('Enter');
+	await expect(page.getByRole('dialog')).toContainText('Synthetic question');
+	await expect(page.getByRole('dialog')).toContainText('Synthetic answer');
+	await page.keyboard.press('Escape');
+	await expect(read).toBeFocused();
+	await read.press('Escape');
+	await expect(actions).toBeFocused();
+	await expect(read).toBeHidden();
+	await actions.press('Enter');
+	await page.getByRole('button', { name: '帮助', exact: true }).click();
+	await expect(page.getByRole('dialog')).toContainText('侧栏底部的“更多操作”');
+});
+
+test('ChatGPT narrow layouts retain sidebar controls and restore desktop navigation on resize', async ({ page }, testInfo) => {
+	await page.setViewportSize({ width: 390, height: 700 });
+	await chatPage(page);
+	const sidebar = page.getByRole('complementary', { name: 'ChatGPT 会话' });
+	const toggle = page.getByRole('button', { name: '显示或隐藏会话列表' });
+	await expect(sidebar).toBeHidden();
+	await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+	await toggle.press('Enter');
+	await expect(sidebar).toBeVisible();
+	await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+	await page.locator('.ash-chatgpt-actions summary').click();
+	await expect(page.getByRole('button', { name: '连接', exact: true })).toBeInViewport();
+	await testInfo.attach('chatgpt-narrow-actions', { body: await page.screenshot(), contentType: 'image/png' });
+	await page.getByRole('button', { name: '连接', exact: true }).press('Escape');
+	await expect(sidebar).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(sidebar).toBeHidden();
+	await expect(toggle).toBeFocused();
+	await page.setViewportSize({ width: 1200, height: 800 });
+	await expect(sidebar).toBeVisible();
+	await expect(toggle).toBeHidden();
+});
 
 test('ChatGPT reply Markdown cannot execute scripts or automatically load remote and local images', async ({ page }) => {
 	const images: string[] = [];

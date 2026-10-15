@@ -55,7 +55,7 @@ class ChatGPTPage extends Disposable {
 	private readonly model = document.createElement('select');
 	private readonly error = this.element('p', 'ash-chatgpt-error');
 	private readonly status = this.element('span', 'ash-chatgpt-status');
-	private readonly title = this.element('span', 'ash-chatgpt-title');
+	private readonly sidebarToggle: HTMLButtonElement;
 	private readonly sendButton: HTMLButtonElement;
 	private readonly newButton: HTMLButtonElement;
 	private readonly moreButton: HTMLButtonElement;
@@ -82,12 +82,19 @@ class ChatGPTPage extends Disposable {
 		this.moreButton = this.button(localize('sessions.chatgpt.loadMore', 'Load more'), () => { void this.loadMore(); });
 		this.sidebar.append(heading, this.newButton, this.search, this.list, this.moreButton);
 		const main = this.element('main', 'ash-chatgpt-main');
-		const header = this.element('header', 'ash-chatgpt-header');
-		const toggle = this.button(localize('sessions.chatgpt.toggleSidebar', 'Toggle conversations'), () => {
-			const hidden = root.classList.toggle('sidebar-hidden');
-			toggle.setAttribute('aria-expanded', String(!hidden));
+		this.sidebar.id = 'ash-chatgpt-sidebar';
+		this.sidebarToggle = this.button(localize('sessions.chatgpt.toggleSidebar', 'Toggle conversations'), () => {
+			this.setSidebarVisible(root.classList.contains('sidebar-hidden'));
 		});
-		toggle.setAttribute('aria-expanded', 'true');
+		this.sidebarToggle.classList.add('ash-chatgpt-sidebar-toggle');
+		this.sidebarToggle.setAttribute('aria-controls', this.sidebar.id);
+		this.listen(this.sidebar, 'keydown', event => {
+			if (event.key === 'Escape' && root.classList.contains('compact')) {
+				event.preventDefault();
+				this.setSidebarVisible(false);
+				this.sidebarToggle.focus();
+			}
+		});
 		this.connectButton = this.button(localize('sessions.chatgpt.connect', 'Connect'), () => { void this.connect(); });
 		this.loginButton = this.button(localize('sessions.chatgpt.openLogin', 'Open ChatGPT'), () => {
 			const state = this.state.get();
@@ -100,7 +107,21 @@ class ChatGPTPage extends Disposable {
 			const id = this.state.get().conversationId;
 			if (id) { void this.select(id); } else { void this.connect(); }
 		});
-		header.append(toggle, this.title, reload, accessible, help, this.loginButton, this.connectButton);
+		const actions = this.element('details', 'ash-chatgpt-actions');
+		const summary = document.createElement('summary');
+		summary.textContent = localize('sessions.chatgpt.moreActions', 'More actions');
+		const actionButtons = this.element('div', 'ash-chatgpt-action-buttons');
+		actionButtons.append(reload, accessible, help, this.loginButton, this.connectButton);
+		actions.append(summary, actionButtons);
+		this.listen(actions, 'keydown', event => {
+			if (event.key === 'Escape' && actions.open) {
+				event.preventDefault();
+				event.stopPropagation();
+				actions.open = false;
+				summary.focus();
+			}
+		});
+		this.sidebar.append(actions);
 		this.scroll.append(this.welcome, this.messages);
 		this.messages.setAttribute('role', 'log');
 		this.messages.setAttribute('aria-label', localize('sessions.chatgpt.conversation', 'Conversation'));
@@ -131,9 +152,20 @@ class ChatGPTPage extends Disposable {
 		this.status.setAttribute('aria-live', 'polite');
 		const footer = this.element('div', 'ash-chatgpt-footer');
 		footer.append(composer, this.error, this.status);
-		main.append(header, this.scroll, this.jumpButton, footer);
+		main.append(this.sidebarToggle, this.scroll, this.jumpButton, footer);
 		root.append(this.sidebar, main);
-		if (window.innerWidth < 720) { root.classList.add('sidebar-hidden'); toggle.setAttribute('aria-expanded', 'false'); }
+		const updateLayout = () => {
+			const compact = root.clientWidth < 720;
+			if (root.classList.contains('compact') !== compact) {
+				root.classList.toggle('compact', compact);
+				this.setSidebarVisible(!compact);
+			}
+		};
+		updateLayout();
+		this.sidebarToggle.setAttribute('aria-expanded', String(!root.classList.contains('sidebar-hidden')));
+		const resizeObserver = new ResizeObserver(updateLayout);
+		resizeObserver.observe(root);
+		this._register(toDisposable(() => resizeObserver.disconnect()));
 		this._register(autorun(reader => this.render(this.state.read(reader))));
 		this._register(toDisposable(() => {
 			this.generation++;
@@ -169,6 +201,10 @@ class ChatGPTPage extends Disposable {
 	private atBottom(): boolean { return this.scroll.scrollHeight - this.scroll.scrollTop - this.scroll.clientHeight < 80; }
 	private resizeInput(): void { this.input.style.height = 'auto'; this.input.style.height = `${Math.min(this.input.scrollHeight, 240)}px`; }
 	private roleLabel(role: ChatGPTMessage['role']): string { return role === 'user' ? localize('sessions.chatgpt.you', 'You') : 'ChatGPT'; }
+	private setSidebarVisible(visible: boolean): void {
+		this.root.classList.toggle('sidebar-hidden', !visible);
+		this.sidebarToggle.setAttribute('aria-expanded', String(visible));
+	}
 
 	private beginOperation(): { signal: AbortSignal; generation: number; } {
 		this.operation?.abort();
@@ -229,7 +265,10 @@ class ChatGPTPage extends Disposable {
 			});
 			window.history.replaceState(null, '', `#${encodeURIComponent(id)}`);
 			this.input.value = this.drafts.get(id) ?? '';
-			if (window.innerWidth < 720) { this.root.classList.add('sidebar-hidden'); }
+			if (this.root.classList.contains('compact')) {
+				this.setSidebarVisible(false);
+				this.sidebarToggle.focus();
+			}
 			this.resizeInput();
 			this.scroll.scrollTop = this.scroll.scrollHeight;
 		} catch (error) { if (generation === this.generation) { this.update({ busy: false, error: this.errorText(error) }); } }
@@ -331,7 +370,6 @@ class ChatGPTPage extends Disposable {
 	private render(state: PageState): void {
 		const follow = this.atBottom();
 		this.root.classList.toggle('empty', !state.messages.length);
-		this.title.textContent = state.title;
 		document.title = `${state.title} — ChatGPT`;
 		this.welcome.textContent = state.name ? localize('sessions.chatgpt.greeting', 'Hi, {0}. Ready to start?', state.name) : localize('sessions.chatgpt.welcome', 'What can I help with?');
 		this.welcome.hidden = state.messages.length > 0;
@@ -431,7 +469,7 @@ class ChatGPTPage extends Disposable {
 	}
 
 	private helpText(): string {
-		return localize('sessions.chatgpt.helpContent', 'Choose a conversation from the sidebar, or select New chat. Use Tab to move between controls. Enter sends a message; Shift+Enter inserts a line break. Select Stop to interrupt a reply. Right-click text, the input, links or images for the browser menu. Read conversation opens a selectable plain-text view. Your existing local Codex login is reused automatically. After updating that login in Codex, select Connect. Your unsent draft is retained while switching conversations.');
+		return localize('sessions.chatgpt.helpContent', 'Choose a conversation from the sidebar, or select New chat. In a narrow window, use Toggle conversations to show or hide the sidebar; Escape closes it. Use Tab to move between controls. Enter sends a message; Shift+Enter inserts a line break. Select Stop to interrupt a reply. Right-click text, the input, links or images for the browser menu. More actions at the bottom of the sidebar contains Reload, Read conversation, Help, Open ChatGPT and Connect. Escape closes More actions and returns focus to its heading. Read conversation opens a selectable plain-text view. Your existing local Codex login is reused automatically. After updating that login in Codex, select Connect in More actions. Your unsent draft is retained while switching conversations.');
 	}
 
 }
