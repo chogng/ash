@@ -214,6 +214,14 @@ crate.annotation(
     repositories = ["crates"],
 )
 
+# Wayland is an OS interface supplied by libwayland-dev in Linux CI. Its pkg-config
+# search path is intentionally host-owned; retain the check for every other crate.
+crate.annotation(
+    crate = "wayland-sys",
+    allow_build_script_to_detect_nonhermetic_paths = True,
+    repositories = ["crates"],
+)
+
 # rules_rust's runfiles crate has its own manifest below the repository root.
 crate.annotation(
     crate = "runfiles",
