@@ -7,6 +7,13 @@ import { suite, test } from 'mocha';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { BrowserPageProtocol } from '../../electron-main/browserPageProtocol.js';
 
+/** Protocol handlers receive this provenance from Chromium, independently of HTTP headers. */
+function pageRequest(url: string, init?: RequestInit): Request {
+	const request = new Request(url, init);
+	Object.defineProperty(request, 'initiatorOrigin', { value: `ash-browser-page://${new URL(url).hostname}` });
+	return request;
+}
+
 suite('Bundled browser pages', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 	test('isolates prepared headers, binds their runtime to credentials, and fails before sending', async () => {
@@ -32,7 +39,7 @@ suite('Bundled browser pages', () => {
 				return { session: isolated, [Symbol.dispose]() { this.dispose(); }, dispose() { disposed++; }, async prepareHeaders(script) { assert.equal(script, 'fixture provider script'); prepared++; if (fail) { throw new Error('Fixture verification failure'); } return { 'X-Verification': 'signed-fixture', Authorization: 'never-expose' }; } };
 			});
 			protocol.attach(original);
-			const request = (path: string, binding?: string): Request => new Request('ash-browser-page://fixture/service' + path, { method: path === '/account' ? 'GET' : 'POST', headers: { 'X-Ash-Browser-Page': 'fixture', ...(binding ? { 'X-Ash-Browser-Account': binding } : {}) } });
+			const request = (path: string, binding?: string): Request => pageRequest('ash-browser-page://fixture/service' + path, { method: path === '/account' ? 'GET' : 'POST', headers: { 'X-Ash-Browser-Page': 'fixture', ...(binding ? { 'X-Ash-Browser-Account': binding } : {}) } });
 			const identity = await respond(request('/account'));
 			const binding = identity.headers.get('X-Ash-Browser-Account')!;
 			const proof = await respond(request('/.headers/messages', binding));
@@ -57,6 +64,40 @@ suite('Bundled browser pages', () => {
 			assert.equal(disposed, 2);
 		} finally { await rm(root, { recursive: true, force: true }); }
 	});
+	test('rechecks account binding after an asynchronous request body before dispatch', async () => {
+		const root = await mkdtemp(join(tmpdir(), 'ash-browser-account-race-'));
+		try {
+			const file = join(root, 'credentials.json');
+			await writeFile(file, JSON.stringify({ token: 'fixture-before' }));
+			let respond!: (request: Request) => Promise<Response>;
+			let calls = 0;
+			const session = {
+				protocol: { handle: (_scheme: string, handler: typeof respond) => { respond = handler; }, unhandle() { } },
+				fetch: async () => { calls++; return Response.json({ id: 'fixture' }); },
+			} as unknown as Session;
+			using protocol = new BrowserPageProtocol('.', undefined, [{
+				host: 'fixture', entry: 'index.html', upstream: 'https://example.test', upstreamPaths: ['/account', '/messages'],
+				credentials: { file, identityRequest: '/account', fields: [{ path: ['token'], header: 'Authorization', prefix: 'Bearer ' }] },
+			}]);
+			protocol.attach(session);
+			const headers = { 'X-Ash-Browser-Page': 'fixture' };
+			const identity = await respond(pageRequest('ash-browser-page://fixture/service/account', { headers }));
+			let finishBody!: () => void;
+			let bodyRead!: () => void;
+			const reading = new Promise<void>(resolve => { bodyRead = resolve; });
+			const body = new ReadableStream<Uint8Array>({
+				pull(controller) { bodyRead(); return new Promise<void>(resolve => { finishBody = () => { controller.enqueue(new TextEncoder().encode('{}')); controller.close(); resolve(); }; }); },
+			}, { highWaterMark: 0 });
+			const pending = respond(pageRequest('ash-browser-page://fixture/service/messages', {
+				method: 'POST', headers: { ...headers, 'X-Ash-Browser-Account': identity.headers.get('X-Ash-Browser-Account')! }, body, duplex: 'half',
+			} as RequestInit));
+			await reading;
+			await writeFile(file, JSON.stringify({ token: 'fixture-after' }));
+			finishBody();
+			assert.equal((await pending).status, 409);
+			assert.equal(calls, 1);
+		} finally { await rm(root, { recursive: true, force: true }); }
+	});
 	test('keeps file credentials in the host, fences account changes and never rewrites the source', async () => {
 		const root = await mkdtemp(join(tmpdir(), 'ash-browser-credentials-'));
 		try {
@@ -79,7 +120,7 @@ suite('Bundled browser pages', () => {
 				},
 			}]);
 			protocol.attach(session);
-			const request = (path: string, binding?: string): Request => new Request('ash-browser-page://fixture/service' + path, {
+			const request = (path: string, binding?: string): Request => pageRequest('ash-browser-page://fixture/service' + path, {
 				method: path === '/account' ? 'GET' : 'POST',
 				headers: { 'X-Ash-Browser-Page': 'fixture', Authorization: 'Bearer untrusted-page-token', ...(binding ? { 'X-Ash-Browser-Account': binding } : {}) },
 			});
@@ -133,21 +174,28 @@ suite('Bundled browser pages', () => {
 			protocol.attach(session);
 			protocol.attach(session);
 			assert.equal(registrations, 1);
-			const entry = await respond(new Request('ash-browser-page://chatgpt/index.html'));
+			const entry = await respond(pageRequest('ash-browser-page://chatgpt/index.html'));
 			assert.equal(await entry.text(), '<title>Bundled page</title>');
 			assert.match(entry.headers.get('content-security-policy')!, /script-src 'self'/u);
-			assert.equal((await respond(new Request('ash-browser-page://chatgpt/assets/shared~chat-123.js'))).status, 200);
-			assert.equal((await respond(new Request('ash-browser-page://chatgpt/assets/browser/chatgpt/chat-123.js'))).status, 200);
-			assert.equal((await respond(new Request('ash-browser-page://chatgpt/private.json'))).status, 404);
-			assert.equal((await respond(new Request('ash-browser-page://unknown/index.html'))).status, 403);
-			assert.equal((await respond(new Request('ash-browser-page://chatgpt/service/api/auth/session', { headers: { Origin: 'https://evil.test' } }))).status, 403);
-			assert.equal((await respond(new Request('ash-browser-page://chatgpt/service//evil.test/backend-api/me', { headers: { 'X-Ash-Browser-Page': 'chatgpt' } }))).status, 403);
-			assert.equal((await respond(new Request('ash-browser-page://chatgpt/service/backend-api/conversation/id%2f..%2fother', { headers: { 'X-Ash-Browser-Page': 'chatgpt' } }))).status, 403);
-			assert.equal((await respond(new Request('ash-browser-page://chatgpt/service/backend-api/conversation/%252e%252e%252fother', { headers: { 'X-Ash-Browser-Page': 'chatgpt' } }))).status, 403);
-			assert.equal((await respond(new Request('ash-browser-page://chatgpt/service/api/auth/session/other'))).status, 403);
-			assert.equal((await respond(new Request('ash-browser-page://chatgpt/service/backend-api/f/conversation', { method: 'POST', body: '{}' }))).status, 403);
+			assert.match(entry.headers.get('content-security-policy')!, /img-src 'self' data: blob:;/u);
+			assert.equal((await respond(pageRequest('ash-browser-page://chatgpt/assets/shared~chat-123.js'))).status, 200);
+			assert.equal((await respond(pageRequest('ash-browser-page://chatgpt/assets/browser/chatgpt/chat-123.js'))).status, 200);
+			assert.equal((await respond(pageRequest('ash-browser-page://chatgpt/private.json'))).status, 404);
+			assert.equal((await respond(pageRequest('ash-browser-page://unknown/index.html'))).status, 403);
+			assert.equal((await respond(pageRequest('ash-browser-page://chatgpt/service/api/auth/session', { headers: { Origin: 'https://evil.test' } }))).status, 403);
+			assert.equal((await respond(pageRequest('ash-browser-page://chatgpt/service//evil.test/backend-api/me', { headers: { 'X-Ash-Browser-Page': 'chatgpt' } }))).status, 403);
+			assert.equal((await respond(pageRequest('ash-browser-page://chatgpt/service/backend-api/conversation/id%2f..%2fother', { headers: { 'X-Ash-Browser-Page': 'chatgpt' } }))).status, 403);
+			assert.equal((await respond(pageRequest('ash-browser-page://chatgpt/service/backend-api/conversation/%252e%252e%252fother', { headers: { 'X-Ash-Browser-Page': 'chatgpt' } }))).status, 403);
+			assert.equal((await respond(pageRequest('ash-browser-page://chatgpt/service/api/auth/session/other'))).status, 403);
+			assert.equal((await respond(pageRequest('ash-browser-page://chatgpt/service/backend-api/f/conversation', { method: 'POST', body: '{}' }))).status, 403);
 			assert.equal(requests.length, 0);
-			const reply = await respond(new Request('ash-browser-page://chatgpt/service/backend-api/f/conversation', {
+			for (const initiatorOrigin of ['https://evil.test', 'null', undefined]) {
+				const foreign = new Request('ash-browser-page://chatgpt/service/backend-api/me', { headers: { Origin: 'ash-browser-page://chatgpt', 'X-Ash-Browser-Page': 'chatgpt' } });
+				if (initiatorOrigin !== undefined) { Object.defineProperty(foreign, 'initiatorOrigin', { value: initiatorOrigin }); }
+				assert.equal((await respond(foreign)).status, 403);
+			}
+			assert.equal(requests.length, 0);
+			const reply = await respond(pageRequest('ash-browser-page://chatgpt/service/backend-api/f/conversation', {
 				method: 'POST', headers: { 'X-Ash-Browser-Page': 'chatgpt', Authorization: 'Bearer synthetic-web-session', 'Content-Type': 'application/json', 'X-Private': 'drop-me' }, body: '{"synthetic":true}',
 			}));
 			assert.equal(await reply.text(), 'data: [DONE]\n\n');
@@ -172,7 +220,7 @@ suite('Bundled browser pages', () => {
 		} as unknown as Session;
 		using protocol = new BrowserPageProtocol('.', undefined, [{ host: 'chatgpt', entry: 'index.html', upstream: 'https://chatgpt.com', upstreamPaths: ['/backend-api/'] }]);
 		protocol.attach(session);
-		const request = (body: string): Request => new Request('ash-browser-page://chatgpt/service/backend-api/f/conversation', { method: 'POST', headers: { 'X-Ash-Browser-Page': 'chatgpt' }, body });
+		const request = (body: string): Request => pageRequest('ash-browser-page://chatgpt/service/backend-api/f/conversation', { method: 'POST', headers: { 'X-Ash-Browser-Page': 'chatgpt' }, body });
 		assert.equal((await respond(request('{}'))).status, 403);
 		assert.equal(calls, 1);
 		assert.equal((await respond(request('x'.repeat(2 * 1024 * 1024 + 1)))).status, 413);

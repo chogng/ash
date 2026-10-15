@@ -40,6 +40,7 @@ class ChatGPTPage extends Disposable {
 	private readonly rendered = new Map<string, { element: HTMLElement; body: HTMLElement; markdown?: IRenderedMarkdown; text: string; }>();
 	private operation: AbortController | undefined;
 	private stream: AbortController | undefined;
+	private stopping: Promise<void> | undefined;
 	private generation = 0;
 	private accountId: string | undefined;
 	private listReference: readonly ChatGPTConversation[] | undefined;
@@ -296,21 +297,31 @@ class ChatGPTPage extends Disposable {
 				});
 			}
 		} finally {
+			// Keep this turn's controls locked until its remote stop settles; a delayed stop
+			// must not overlap a new send in the same conversation.
+			await this.stopping;
 			if (this.stream === controller) { this.stream = undefined; this.update({ sending: false }); }
 		}
 	}
 
 	private async stop(): Promise<void> {
 		const controller = this.stream;
-		if (!controller) { return; }
+		if (!controller || this.stopping) { return; }
 		const state = this.state.get();
-		try {
-			if (state.conversationId) {
-				await this.client.stop(state.conversationId, state.parentId, AbortSignal.timeout(10_000));
-				this.update({ stopped: true });
-			} else { this.update({ uncertain: true, error: localize('sessions.chatgpt.stopUnconfirmed', 'The request was interrupted before ChatGPT confirmed a conversation. Check recent conversations before sending it again.') }); }
-		} catch (error) { this.update({ uncertain: true, error: this.errorText(error) }); }
-		finally { controller.abort(); }
+		const message = state.messages.at(-1);
+		this.stopping = Promise.resolve().then(async () => {
+			try {
+				if (state.conversationId && message?.role === 'assistant') {
+					await this.client.stop(state.conversationId, message.id, AbortSignal.timeout(10_000));
+					this.update({ stopped: true });
+				} else { this.update({ uncertain: true, error: localize('sessions.chatgpt.stopUnconfirmed', 'The request was interrupted before ChatGPT confirmed this reply. Reload the conversation or check recent conversations before sending it again.') }); }
+			} catch (error) { this.update({ uncertain: true, error: this.errorText(error) }); }
+		});
+		// Cancellation must reach preparation and verification before any remote stop I/O.
+		// Otherwise finishing verification while stop is pending could still send the draft.
+		controller.abort();
+		try { await this.stopping; }
+		finally { this.stopping = undefined; }
 	}
 
 	private errorText(error: unknown): string {
@@ -382,7 +393,9 @@ class ChatGPTPage extends Disposable {
 				row.text = message.text;
 				row.markdown?.dispose();
 				row.markdown = renderMarkdown({ value: message.text, isTrusted: false, supportHtml: false }, {
-					actionHandler: href => { if (/^https?:\/\//iu.test(href)) { window.open(href, '_blank', 'noopener'); } },
+					// Reply text must not trigger network or local-file reads through embedded images.
+					transformUri: (href, kind) => kind === 'image' && !/^data:image\//iu.test(href) ? '' : href,
+					actionHandler: href => { if (/^https?:\/\//iu.test(href)) { window.open(href, '_blank', 'noopener,noreferrer'); } },
 				});
 				row.body.replaceChildren(row.markdown.element);
 			}

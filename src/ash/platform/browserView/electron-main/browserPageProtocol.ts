@@ -55,10 +55,17 @@ export class BrowserPageProtocol extends Disposable {
 		const page = this.pages.find(page => page.host === url.hostname);
 		const origin = `${browserPageScheme}://${url.hostname}`;
 		const initiator = request.headers.get('origin');
-		if (!page || url.port || url.username || url.password || (initiator && initiator !== origin)) {
+		const initiatorOrigin: unknown = Reflect.get(request, 'initiatorOrigin');
+		if (!page || url.port || url.username || url.password || (initiator && initiator !== origin) || (initiatorOrigin !== undefined && initiatorOrigin !== origin)) {
 			return new Response(null, { status: 403 });
 		}
-		if (url.pathname.startsWith('/service/')) { return this.relay(session, request, page, url); }
+		if (url.pathname.startsWith('/service/')) {
+			// Electron custom protocols do not provide the HTTP CORS/preflight guarantees
+			// assumed by a header-only check. Use Chromium's non-spoofable initiator instead;
+			// opaque origins and requests without renderer provenance cannot borrow a login.
+			if (initiatorOrigin !== origin) { return new Response(null, { status: 403 }); }
+			return this.relay(session, request, page, url);
+		}
 		if (request.method !== 'GET') { return new Response(null, { status: 405 }); }
 		try {
 			if (this.developmentUrl) {
@@ -82,13 +89,12 @@ export class BrowserPageProtocol extends Disposable {
 			'Content-Type': contentType,
 			'Cache-Control': 'no-store',
 			'X-Content-Type-Options': 'nosniff',
-			'Content-Security-Policy': `default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'${this.developmentUrl ? ' ws://127.0.0.1:*' : ''}; img-src https: data: blob:; font-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'`,
+			'Content-Security-Policy': `default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'${this.developmentUrl ? ' ws://127.0.0.1:*' : ''}; img-src 'self' data: blob:; font-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'`,
 		};
 	}
 
 	private async relay(session: Session, request: Request, page: BrowserPageRegistration, url: URL): Promise<Response> {
-		// Custom-protocol requests can omit Origin. A non-safelisted header requires a CORS
-		// preflight from other origins, and this protocol never grants those preflights.
+		// The trusted initiator was checked before entering the credential-bearing relay.
 		if (request.headers.get(browserPageRequestHeader) !== page.host) {
 			return new Response(null, { status: 403 });
 		}
@@ -182,6 +188,13 @@ export class BrowserPageProtocol extends Disposable {
 			let offset = 0;
 			for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
 			body = bytes.buffer;
+		}
+		if (page.credentials && body !== undefined) {
+			// Reading a streamed body yields to external login changes. Fence the account again
+			// at dispatch, including relays without a separate request-header runtime.
+			try { await this.readCredentialHeaders(page.credentials, headers); }
+			catch { return new Response(null, { status: 401 }); }
+			if (this.credentialBinding(page, headers) !== accountBinding) { return new Response(null, { status: 409 }); }
 		}
 		try {
 			const response = await network.fetch(upstream.href, { method: request.method, headers, body, credentials: page.credentials && !page.remoteHeaders ? 'omit' : 'include', redirect: 'error', signal: request.signal });

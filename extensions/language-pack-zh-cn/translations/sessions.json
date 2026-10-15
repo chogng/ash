@@ -27,7 +27,7 @@
     "sessions.chatgpt.model": "模型",
     "sessions.chatgpt.send": "发送",
     "sessions.chatgpt.you": "你",
-    "sessions.chatgpt.stopUnconfirmed": "请求在 ChatGPT 确认会话之前被中断，请先检查最近的会话，再决定是否重新发送。",
+    "sessions.chatgpt.stopUnconfirmed": "请求在 ChatGPT 确认本次回复之前被中断，请先刷新当前会话或检查最近的会话，再决定是否重新发送。",
     "sessions.chatgpt.connectionFailed": "无法连接到 ChatGPT。",
     "sessions.chatgpt.greeting": "嗨，{0}，准备好开始了吗？",
     "sessions.chatgpt.welcome": "有什么可以帮你的？",

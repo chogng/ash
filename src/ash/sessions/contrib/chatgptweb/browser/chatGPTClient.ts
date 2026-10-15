@@ -218,11 +218,15 @@ function applyDelta(root: Record<string, unknown>, path: string, operation: unkn
 	if (!keys.length || keys.some(key => ['__proto__', 'constructor', 'prototype'].includes(key))) { return; }
 	let target: Record<string, unknown> | unknown[] = root;
 	for (const key of keys.slice(0, -1)) {
+		if (!Object.hasOwn(target, key)) { return; }
 		const next: unknown = Reflect.get(target, key);
 		if (!isRecord(next) && !Array.isArray(next)) { return; }
 		target = next;
 	}
 	const key = keys.at(-1)!;
+	// JSON cannot contain sparse arrays or a forged length. Do not let a delta create
+	// either: readMessage joins parts, so a huge sparse length would stall the renderer.
+	if (Array.isArray(target) && (!/^(?:0|[1-9]\d*)$/u.test(key) || !Number.isSafeInteger(Number(key)) || Number(key) > target.length)) { return; }
 	const previous: unknown = Reflect.get(target, key);
 	if (operation === 'append' && typeof previous === 'string' && typeof value === 'string') { Reflect.set(target, key, previous + value); }
 	else if (operation === 'append' && Array.isArray(previous) && Array.isArray(value)) { previous.push(...value); }

@@ -108,6 +108,19 @@ suite('Bundled ChatGPT client', () => {
 		assert.equal(cancelled, true);
 	});
 
+	test('does not let stream deltas expand sparse arrays or assign array metadata', async () => {
+		const initial = { conversation_id: 'fixture', message: message('reply', 'assistant', 'Safe') };
+		const events = [
+			initial,
+			{ p: '/message/content/parts/100000', o: 'add', v: 'Sparse' },
+			{ p: '/message/content/parts/length', o: 'replace', v: 200000 },
+			{ p: '/message/content/parts/01', o: 'add', v: 'Invalid index' },
+			{ p: '/message/content/parts/1', o: 'add', v: 'Next part' },
+		].map(value => `data: ${JSON.stringify(value)}\n\n`).join('') + 'data: [DONE]\n\n';
+		const stream = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new TextEncoder().encode(events)); controller.close(); } });
+		assert.deepEqual((await collect(decodeChatGPTStream(stream, signal()))).map(update => update.message?.text), ['Safe', 'Safe', 'Safe', 'Safe', 'Safe\nNext part']);
+	});
+
 	test('clears expired credentials and does not replay a rejected send', async () => {
 		let authenticated = false;
 		let sends = 0;
