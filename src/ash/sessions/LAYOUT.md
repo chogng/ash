@@ -220,7 +220,7 @@ visibility and explicit-open focus. The desktop Grid keeps a hidden `customview`
 leaf alongside its normal content. Custom-view visibility is transient and does
 not overwrite the underlying entry's desired visibility or saved dimensions.
 
-A custom view is mutually exclusive with the Sessions Part, grid Editor, Auxiliary Bar, and Panel. The title bar and Sidebar remain available. Covered parts retain desired visibility separately from effective grid visibility so their state can be restored when the custom view closes.
+A custom view is an independent page, mutually exclusive with the Sidebar, Sessions Part, grid Editor, Auxiliary Bar, and Panel. The title bar and Activity Bar remain available. Covered parts retain desired visibility separately from effective grid visibility so their state can be restored when the custom view closes.
 
 Explicit session and chat open actions dismiss the active custom view. Reactive fallback opens driven by session or chat lifecycle changes preserve the custom view while reconciling the hidden Sessions grid. On phone layouts, custom views participate in mobile navigation so platform back navigation dismisses them.
 

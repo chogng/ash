@@ -1,38 +1,310 @@
+.ash-sessions-window .ash-custom-view-page[data-custom-view-id='sessions.customView.automations'] {
+	padding-block: var(--ash-spacing-size320);
+}
+.ash-sessions-window .ash-custom-view-page[data-custom-view-id='sessions.customView.automations'] .ash-custom-view-header {
+	flex-direction: row;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80) var(--ash-spacing-size160);
+	margin-bottom: var(--ash-spacing-size320);
+}
+.ash-sessions-window .ash-custom-view-page[data-custom-view-id='sessions.customView.automations'] .ash-custom-view-header h1 {
+	flex: 1 1 180px;
+	font-size: var(--ash-fontSize-heading2);
+}
+.ash-sessions-window .ash-custom-view-page[data-custom-view-id='sessions.customView.automations'] .ash-custom-view-header > p {
+	order: 3;
+	flex-basis: 100%;
+	line-height: 1.5;
+}
+.ash-sessions-window .ash-custom-view-page[data-custom-view-id='sessions.customView.automations'] .ash-custom-view-actions {
+	gap: var(--ash-spacing-size80);
+}
+.ash-sessions-window .ash-custom-view-page[data-custom-view-id='sessions.customView.automations'] [data-action-id='sessionsView.newAutomation'] {
+	background: var(--ash-button-primaryBackground);
+	color: var(--ash-button-primaryForeground);
+	border-radius: var(--ash-cornerRadius-large);
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
+}
+.ash-sessions-window .ash-custom-view-page[data-custom-view-id='sessions.customView.automations'] [data-action-id='sessionsView.newAutomation']:enabled:hover {
+	background: var(--ash-button-primaryHoverBackground);
+}
 .ash-sessions-window .ash-automations {
 	display: flex;
 	flex-direction: column;
-	gap: 16px;
+	gap: var(--ash-spacing-size320);
 	min-width: 0;
+	line-height: 1.5;
+}
+.ash-sessions-window .ash-automation-plans-section,
+.ash-sessions-window .ash-automation-history-section {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size160);
+	min-width: 0;
+}
+.ash-sessions-window .ash-automation-section-heading {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80) var(--ash-spacing-size160);
+}
+.ash-sessions-window .ash-automations h2 {
+	font-size: var(--ash-fontSize-heading3);
+	font-weight: var(--ash-fontWeight-semiBold);
+	margin: 0;
+}
+.ash-sessions-window .ash-automations p {
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+.ash-sessions-window .ash-automation-summary,
+.ash-sessions-window .ash-automation-section-description,
+.ash-sessions-window .ash-automation-empty-history {
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+}
+.ash-sessions-window .ash-automation-notice {
+	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
+	color: var(--ash-description-foreground);
+	background: var(--ash-list-hoverBackground);
+	border: var(--ash-strokeThickness) solid var(--ash-contrastBorder, transparent);
+	border-radius: var(--ash-cornerRadius-large);
+}
+.ash-sessions-window .ash-automation-controls {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--ash-spacing-size120);
+}
+.ash-sessions-window .ash-automation-filters {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size40);
+}
+.ash-sessions-window .ash-automation-filters .ash-button {
+	color: var(--ash-description-foreground);
+	border-radius: var(--ash-cornerRadius-large);
+}
+.ash-sessions-window .ash-automation-filters .ash-button[aria-pressed='true'] {
+	color: var(--ash-foreground);
+	background: var(--ash-list-inactiveSelectionBackground);
+	border-color: var(--ash-contrastBorder, transparent);
+}
+.ash-sessions-window .ash-automation-search {
+	display: flex;
+	align-items: center;
+	flex: 0 1 260px;
+	min-width: 0;
+	padding: var(--ash-spacing-size60) var(--ash-spacing-size120);
+	gap: var(--ash-spacing-size80);
+	color: var(--ash-description-foreground);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border-radius: var(--ash-cornerRadius-large);
+}
+.ash-sessions-window .ash-automation-search .ash-input-box {
+	flex: 1;
+	min-width: 0;
+}
+.ash-sessions-window .ash-automation-search input {
+	padding: 0;
+	border: 0;
+	outline: none;
+	color: var(--ash-input-foreground);
+	background: transparent;
+	line-height: 1.5;
+}
+.ash-sessions-window .ash-automation-search:focus-within {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+.ash-sessions-window .ash-automation-search input::placeholder {
+	color: var(--ash-input-placeholderForeground);
+}
+.ash-sessions-window .ash-automation-empty {
+	padding: var(--ash-spacing-size320) var(--ash-spacing-size160);
+	text-align: center;
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	border-radius: var(--ash-cornerRadius-large);
+}
+.ash-sessions-window .ash-automation-empty-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	margin: 0 auto var(--ash-spacing-size160);
+	border-radius: var(--ash-cornerRadius-large);
+	background: var(--ash-list-hoverBackground);
+}
+.ash-sessions-window .ash-automation-empty > p {
+	color: var(--ash-description-foreground);
+}
+.ash-sessions-window .ash-automation-empty h3 {
+	margin: 0 0 var(--ash-spacing-size80);
+	font-size: var(--ash-fontSize-heading2);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+.ash-sessions-window .ash-automation-templates {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+	gap: var(--ash-spacing-size120);
+	margin-top: var(--ash-spacing-size240);
+	text-align: start;
+}
+.ash-sessions-window .ash-automation-template {
+	padding: var(--ash-spacing-size120);
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	border-radius: var(--ash-cornerRadius-large);
+}
+.ash-sessions-window .ash-automation-template .ash-button {
+	justify-content: flex-start;
+	width: 100%;
+	padding-inline: 0;
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+.ash-sessions-window .ash-automation-template p {
+	margin-top: var(--ash-spacing-size40);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+}
+.ash-sessions-window .ash-automation-no-matches {
+	padding: var(--ash-spacing-size320) var(--ash-spacing-size160);
+	text-align: center;
+	color: var(--ash-description-foreground);
+}
+.ash-sessions-window .ash-automation-no-matches .ash-button {
+	margin-top: var(--ash-spacing-size80);
 }
 .ash-sessions-window .ash-automation-cards {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
-	gap: 12px;
+	grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
+	gap: var(--ash-spacing-size160);
 }
 .ash-sessions-window .ash-automation-card,
 .ash-sessions-window .ash-automation-run {
-	padding: 16px;
-	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	padding: var(--ash-spacing-size160);
+	border: var(--ash-strokeThickness) solid var(--ash-border);
 	border-radius: var(--ash-cornerRadius-large);
 	min-width: 0;
 }
-.ash-sessions-window .ash-automation-card h3 {
-	margin: 0;
+.ash-sessions-window .ash-automation-card {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size120);
 }
-.ash-sessions-window .ash-automation-card p,
-.ash-sessions-window .ash-automation-run p {
+.ash-sessions-window .ash-automation-card:hover,
+.ash-sessions-window .ash-automation-card:focus-within {
+	border-color: var(--ash-widget-border);
+	box-shadow: 0 2px 8px var(--ash-widget-shadow);
+}
+.ash-sessions-window .ash-automation-card-header,
+.ash-sessions-window .ash-automation-run-header {
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+}
+.ash-sessions-window .ash-automation-card h3,
+.ash-sessions-window .ash-automation-run h3 {
+	flex: 1;
+	min-width: 0;
+	margin: 0;
 	overflow-wrap: anywhere;
+	font-size: var(--ash-fontSize-heading3);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+.ash-sessions-window .ash-automation-card h3 .ash-button {
+	padding-inline: 0;
+	justify-content: flex-start;
+	max-width: 100%;
+	font-size: inherit;
+	font-weight: inherit;
+}
+.ash-sessions-window .ash-automation-state {
+	flex-shrink: 0;
+	padding: var(--ash-spacing-size20) var(--ash-spacing-size60);
+	border: var(--ash-strokeThickness) solid transparent;
+	border-radius: var(--ash-cornerRadius-small);
+	background: var(--ash-list-hoverBackground);
+	font-size: var(--ash-fontSize-body2);
 	color: var(--ash-description-foreground);
+}
+.ash-sessions-window .ash-automation-card[data-enabled='false'] .ash-automation-state {
+	background: transparent;
+	border-color: var(--ash-border);
+}
+.ash-sessions-window .ash-automation-schedule {
+	font-size: var(--ash-fontSize-label1);
+	color: var(--ash-description-foreground);
+}
+.ash-sessions-window .ash-automation-card .ash-automation-prompt {
+	color: var(--ash-foreground);
+	white-space: pre-wrap;
+	min-height: 3em;
+}
+.ash-sessions-window .ash-automation-metadata {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size40);
+	margin-top: auto;
+}
+.ash-sessions-window .ash-automation-directory,
+.ash-sessions-window .ash-automation-next,
+.ash-sessions-window .ash-automation-run time {
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
 }
 .ash-sessions-window .ash-automation-card-actions {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 8px;
+	gap: var(--ash-spacing-size80);
+}
+.ash-sessions-window .ash-automation-card > .ash-automation-card-actions {
+	padding-top: var(--ash-spacing-size80);
+	border-top: var(--ash-strokeThickness) solid var(--ash-border);
+}
+.ash-sessions-window .ash-automation-card-actions .icon-only {
+	margin-inline-start: auto;
 }
 .ash-sessions-window .ash-automation-history {
 	display: flex;
 	flex-direction: column;
-	gap: 8px;
+	gap: 0;
+}
+.ash-sessions-window .ash-automation-run {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size160);
+	padding-inline: 0;
+	border-width: 0 0 var(--ash-strokeThickness);
+	border-radius: 0;
+}
+.ash-sessions-window .ash-automation-run-content {
+	flex: 1 1 240px;
+	min-width: 0;
+}
+.ash-sessions-window .ash-automation-run[data-status='needsInput'] .ash-automation-state {
+	border-color: var(--ash-warning-foreground);
+}
+.ash-sessions-window .ash-automation-run[data-status='failed'] .ash-automation-state {
+	border-color: var(--ash-error-foreground);
+}
+.ash-sessions-window .ash-automation-run[data-status='needsInput'] .ash-automation-state,
+.ash-sessions-window .ash-automation-run[data-status='failed'] .ash-automation-state {
+	font-weight: var(--ash-fontWeight-semiBold);
+	color: var(--ash-foreground);
+}
+.ash-sessions-window .ash-automation-card,
+.ash-sessions-window .ash-automation-run,
+.ash-sessions-window .ash-automation-empty {
+	outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder, transparent);
+}
+.ash-sessions-window[data-color-scheme^='high-contrast'] .ash-automation-card {
+	box-shadow: none;
 }
 .ash-sessions-window .ash-automations [hidden] {
 	display: none;
@@ -40,4 +312,94 @@
 .ash-sessions-window .ash-automations :focus-visible {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
+}
+.ash-sessions-window .ash-automations .ash-automation-search input:focus-visible {
+	outline: none;
+}
+.ash-sessions-window .ash-automation-overview,
+.ash-sessions-window .ash-automation-details {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size240);
+	min-width: 0;
+}
+.ash-sessions-window .ash-automation-details > .ash-button {
+	align-self: flex-start;
+}
+.ash-sessions-window .ash-automation-details h2 {
+	font-size: var(--ash-fontSize-heading2);
+}
+.ash-sessions-window .ash-automation-details h3 {
+	font-size: var(--ash-fontSize-heading3);
+	font-weight: var(--ash-fontWeight-semiBold);
+	margin: 0;
+}
+.ash-sessions-window .ash-automation-facts {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+	gap: var(--ash-spacing-size160);
+	margin: 0;
+	padding-block: var(--ash-spacing-size160);
+	border-block: var(--ash-strokeThickness) solid var(--ash-border);
+}
+.ash-sessions-window .ash-automation-facts dt {
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+}
+.ash-sessions-window .ash-automation-facts dd {
+	margin: var(--ash-spacing-size40) 0 0;
+	overflow-wrap: anywhere;
+}
+.ash-sessions-window .ash-automation-details .ash-automation-prompt,
+.ash-sessions-window .ash-automation-result {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	font: inherit;
+	margin: 0;
+}
+.ash-sessions-window .ash-automation-result:empty {
+	display: none;
+}
+.ash-sessions-window .ash-automation-result-files {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+}
+.ash-sessions-window .ash-automation-result-files li {
+	padding-block: var(--ash-spacing-size80);
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
+	overflow-wrap: anywhere;
+}
+.ash-sessions-window .ash-automation-detail-history {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size80);
+	align-items: flex-start;
+}
+.ash-sessions-window .ash-automation-attention {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--ash-spacing-size80) var(--ash-spacing-size160);
+	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
+	border: var(--ash-strokeThickness) solid var(--ash-contrastBorder, var(--ash-border));
+	border-inline-start: var(--ash-spacing-size20) solid var(--ash-warning-foreground);
+	border-radius: var(--ash-cornerRadius-large);
+}
+.ash-sessions-window .ash-automation-attention .ash-button,
+.ash-sessions-window .ash-automation-detail-history .ash-button {
+	max-width: 100%;
+}
+.ash-sessions-window .ash-automation-run h3 .ash-button {
+	max-width: 100%;
+	justify-content: flex-start;
+	padding-inline: 0;
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+.ash-sessions-window .ash-automation-notification-preference {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
 }

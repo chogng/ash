@@ -3,13 +3,21 @@
 	max-height: calc(100vh - 32px);
 }
 .ash-sessions-window .ash-automation-dialog .ash-dialog-body {
-	overflow: auto;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	overflow: hidden;
 	max-height: calc(100vh - 120px);
+}
+.ash-sessions-window .ash-automation-dialog .ash-dialog-actions {
+	flex-shrink: 0;
 }
 .ash-sessions-window .ash-automation-form {
 	display: flex;
 	flex-direction: column;
 	gap: 12px;
+	min-height: 0;
+	overflow: auto;
 }
 .ash-sessions-window .ash-automation-form label {
 	display: flex;
@@ -44,4 +52,28 @@
 }
 .ash-sessions-window .ash-automation-form [hidden] {
 	display: none;
+}
+.ash-sessions-window .ash-automation-form h3 {
+	font-size: var(--ash-fontSize-heading3);
+	font-weight: var(--ash-fontWeight-semiBold);
+	margin: var(--ash-spacing-size80) 0 0;
+}
+.ash-sessions-window .ash-automation-form summary {
+	cursor: pointer;
+	color: var(--ash-description-foreground);
+}
+.ash-sessions-window .ash-automation-schedule-preview {
+	padding: var(--ash-spacing-size120);
+	border-radius: var(--ash-cornerRadius-large);
+	background: var(--ash-list-hoverBackground);
+	border: var(--ash-strokeThickness) solid var(--ash-contrastBorder, transparent);
+}
+.ash-sessions-window .ash-automation-schedule-preview h3,
+.ash-sessions-window .ash-automation-schedule-preview p {
+	margin: 0;
+}
+.ash-sessions-window .ash-automation-schedule-preview ol {
+	padding-inline-start: var(--ash-spacing-size200);
+	margin: var(--ash-spacing-size80) 0 0;
+	font-size: var(--ash-fontSize-label1);
 }

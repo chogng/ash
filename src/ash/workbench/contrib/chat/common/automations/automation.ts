@@ -29,10 +29,21 @@ export interface IAutomationRun {
 	readonly id: string;
 	readonly automationId: string;
 	readonly providerId: string;
+	readonly revision: number;
+	/** Immutable inputs captured by the host when this run was created. */
+	readonly definition: { readonly name: string; readonly prompt: string; readonly target: AutomationTarget; readonly schedule: IAutomationSchedule; };
 	readonly status: 'pending' | 'running' | 'needsInput' | 'stopping' | 'completed' | 'failed' | 'stopped' | 'skipped';
 	readonly scheduledAt: number;
+	readonly startedAt: number | null;
+	readonly finishedAt: number | null;
 	readonly sessionId: string | null;
 	readonly threadId: string | null;
+	readonly turnId: string | null;
 	readonly sessionResource?: URI;
 	readonly message: string | null;
+}
+
+export interface IAutomationRunResult {
+	readonly output: string;
+	readonly files: readonly { readonly path: string; readonly kind: 'added' | 'modified' | 'deleted' | 'renamed' | 'typeChanged'; readonly additions: number; readonly deletions: number; }[] | undefined;
 }

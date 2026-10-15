@@ -148,7 +148,7 @@ automation 通过窄的执行请求和结果契约与现有 Agent 能力协作�
 | [Renderer 协议客户端](../../src/ash/platform/app-server/browser/appServerProtocolClient.ts)  | 每个窗口独立连接，负责初始化、生成协议解码、请求表、通知和反向请求                   |
 | [Main 连接载体](../../src/ash/platform/app-server/electron-main/appServerConnectionRelay.ts) | 启动连接进程、传递 MessagePort、限制帧大小与队列；不分派后端方法                     |
 
-Agents Window 从会话侧栏的 **Manage Automations** 入口执行 `sessionsView.manageAutomations`，打开独立管理视图；创建和编辑在对话框中进行。UI contribution 由 `automationsView.ts` 持有，`sessions.contribution.ts` 在 `BlockRestore` 阶段注册，自动化 contribution 仅注册服务。启动恢复底层会话和布局时保留 Custom View，用户显式导航时关闭；前进、后退可在两者间访问。后端通过 `contracts.automation.version = 1` 发布能力；没有该能力的宿主不显示管理入口。计划明确保存执行目录和新建或继续对话的目标，不随活动窗口改变。新建表单从当前 Sessions 对话捕获本地执行目录；运行记录通过当前 Agents Window 的会话导航打开。共享产品契约位于 `workbench/contrib/chat/common/automations`，后端领域接口与 App Server adapter 留在 platform；Rust 后台调度、持久化和执行不依赖管理窗口的存活。
+Agents Window 从 Activity Bar 的 **Automations** 入口（`clockface` / `clockfaceFilled`）执行 `sessionsView.manageAutomations`，打开占满内容区域的独立管理视图，隐藏 Chat 侧栏和各面板，退出后恢复原布局。创建和编辑在对话框中进行；任务详情和运行结果留在 Automations 中，只有显式“打开对话”才切换到 Chat。UI contribution 由 `automationsView.ts` 持有，`sessions.contribution.ts` 在 `BlockRestore` 阶段注册，自动化 contribution 仅注册服务。启动恢复底层会话和布局时保留 Custom View，用户显式导航时关闭；前进、后退可在两者间访问。后端通过 `contracts.automation.version = 1` 发布能力；没有该能力的宿主不显示管理入口。计划明确保存执行目录和新建或继续对话的目标，不随活动窗口改变。新建表单从当前 Sessions 对话捕获本地执行目录；运行记录通过当前 Agents Window 的会话导航打开。共享产品契约位于 `workbench/contrib/chat/common/automations`，后端领域接口与 App Server adapter 留在 platform；Rust 后台调度、持久化和执行不依赖管理窗口的存活。
 
 固定间隔最多为 525600 分钟；每个 profile 最多保存 1000 个计划。历史每次最多读取 100 条，界面按计划读取最近 50 条。计划暂停与停止当前运行分开；删除仍有运行的计划会返回冲突。删除的计划身份不可重新使用，已有运行历史仍保留在存储中。
 
@@ -178,3 +178,9 @@ Agents Window 从会话侧栏的 **Manage Automations** 入口执行 `sessionsVi
 运行记录区分计划触发时间、实际开始时间和结束时间，保留跳过、失败和恢复原因。运行期间的延迟与耗时指标使用单调时钟；跨进程只关联持久时间戳与运行身份。通知仅在完成、失败、需要用户输入或其他有意义的变化时发出，状态不变时保持安静。
 
 实现验证从能力所属 package 开始，使用仓库的 `just test <crate>` 和 `just check <crate>`；automation 使用 `just test ash-automation --lib`，执行接入使用 `just test ash-app-server automation_ --lib`。具体检查结果以本次工作记录为准。
+
+任务详情展示当前版本、执行目录、宿主、下次执行时间和该任务的历史。运行详情使用 `AutomationRun.definition` 和 `revision` 的不可变快照，并以 `turnId` 从现有 Thread transcript 和 Turn change ledger 读取本次输出与文件改动；继续对话中的其他 Turn 不归入本次结果。重跑使用当前任务配置，复制任务默认暂停。
+
+创建表单按指令、执行位置、时间组织，提供每天、工作日、每周、间隔和单次预设。`automation/preview` 复用后端 `next_occurrence` 规则返回未来最多三次执行时间，不创建计划或运行；预览明确标注时区，异步旧响应不能覆盖新草稿。
+
+管理页聚合待输入和每项任务最近失败的运行。通知由 Automations contribution 统一处理，同一状态只提醒一次，首次历史加载不弹通知；默认提醒失败或待输入，成功通知由当前 UI 的应用级配置 `sessions.automations.notifyOnSuccess` 控制。通知直接打开独立运行详情。

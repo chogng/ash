@@ -2,8 +2,10 @@ import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Dialog } from '../../../../base/browser/ui/dialog/dialog.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
+import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
-import { localize } from '../../../../nls.js';
+import { getNLSLanguage, localize } from '../../../../nls.js';
+import { IAutomationService } from '../../../../workbench/contrib/chat/common/automations/automationService.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import type { IAutomationSchedule } from '../../../../workbench/contrib/chat/common/automations/automation.js';
 import type { IAutomationProviderDescriptor } from '../../../../workbench/contrib/chat/common/automations/automationService.js';
@@ -28,6 +30,10 @@ export class AutomationDialog extends Disposable {
 	private readonly enabled: HTMLInputElement;
 	private readonly message: HTMLElement;
 	private readonly save: Button;
+	private readonly preview: HTMLElement;
+	private readonly previewMessage: HTMLElement;
+	private readonly previewHeading: HTMLElement;
+	private previewGeneration = 0;
 	private readonly sections = new Map<string, HTMLElement>();
 	private busy = false;
 	private result: IAutomationDialogResult | undefined;
@@ -35,6 +41,7 @@ export class AutomationDialog extends Disposable {
 	constructor(parent: HTMLElement, private readonly options: IShowAutomationDialogOptions,
 		providers: readonly IAutomationProviderDescriptor[], conversations: readonly { sessionId: string; threadId: string; title: string; }[],
 		@IContextKeyService contexts: IContextKeyService,
+		@IAutomationService private readonly automations: IAutomationService,
 	) {
 		super();
 		const document = parent.ownerDocument;
@@ -46,6 +53,8 @@ export class AutomationDialog extends Disposable {
 			enabled: options.existing.enabled,
 		} : options.initialValues;
 		this.form = h(document, 'form', { className: 'ash-automation-form' });
+		this.form.id = generateUuid();
+		this.form.append(h(document, 'h3', {}, localize('automations.taskSection', 'What to do')));
 		this.name = this.input(this.form, localize('automations.name', 'Name'));
 		this.name.maxLength = 200;
 		this.prompt = h(document, 'textarea');
@@ -53,16 +62,23 @@ export class AutomationDialog extends Disposable {
 		this.prompt.maxLength = 100_000;
 		this.prompt.rows = 4;
 		this.field(this.form, localize('automations.instructions', 'Instructions'), this.prompt);
+		this.form.append(h(document, 'h3', {}, localize('automations.environmentSection', 'Where to run')));
 		this.provider = this.select(this.form, localize('automations.provider', 'Run on'), providers.map(item => [item.id, item.label]));
 		this.provider.disabled = !!options.existing;
 		this.directory = this.input(this.form, localize('automations.directory', 'Directory'));
-		this.conversation = this.select(this.form, localize('automations.conversation', 'Conversation'), [
+		const advanced = h(document, 'details');
+		advanced.append(h(document, 'summary', {}, localize('automations.conversation', 'Conversation')));
+		this.form.append(advanced);
+		this.conversation = this.select(advanced, localize('automations.conversation', 'Conversation'), [
 			['new', localize('automations.newConversation', 'New conversation for each run')],
 			...conversations.map(item => [JSON.stringify({ type: 'continue', sessionId: item.sessionId, threadId: item.threadId }), item.title] as const),
 		]);
+		this.form.append(h(document, 'h3', {}, localize('automations.timingSection', 'When to run')));
 		this.schedule = this.select(this.form, localize('automations.schedule', 'Schedule'), [
-			['interval', localize('automations.interval', 'Every N minutes')],
+			['daily', localize('automations.everyDay', 'Every day')],
+			['weekdays', localize('automations.weekdays', 'Weekdays')],
 			['weekly', localize('automations.weekly', 'Days of the week')],
+			['interval', localize('automations.interval', 'Every N minutes')],
 			['once', localize('automations.once', 'Once')],
 		]);
 		const interval = this.section('interval');
@@ -96,35 +112,57 @@ export class AutomationDialog extends Disposable {
 		this.directory.value = initial?.target?.directory ?? '';
 		this.provider.value = initial?.target?.providerId ?? providers[0]?.id ?? '';
 		if (initial?.target?.session.type === 'continue') {
+			advanced.open = true;
 			const value = JSON.stringify(initial.target.session);
 			if (![...this.conversation.options].some(option => option.value === value)) this.conversation.append(this.option(localize('automations.savedConversation', 'Saved conversation'), value));
 			this.conversation.value = value;
 		}
 		const schedule = initial?.schedule;
-		this.schedule.value = schedule?.type ?? 'interval';
+		this.schedule.value = schedule?.type ?? 'daily';
 		if (schedule?.type === 'interval') this.minutes.value = String(schedule.minutes);
 		if (schedule?.type === 'once') this.once.value = new Date(schedule.at - new Date(schedule.at).getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 		if (schedule?.type === 'weekly') {
+			this.schedule.value = schedule.weekdays.length === 7 ? 'daily'
+				: schedule.weekdays.length === 5 && [1, 2, 3, 4, 5].every(day => schedule.weekdays.includes(day)) ? 'weekdays' : 'weekly';
 			this.timezone.value = schedule.timezone;
 			this.time.value = `${String(schedule.hour).padStart(2, '0')}:${String(schedule.minute).padStart(2, '0')}`;
 			for (const day of this.weekdays) day.checked = schedule.weekdays.includes(Number(day.value));
 		}
-		this.message = h(document, 'p', { attributes: { role: 'status' } });
+		const preview = h(document, 'section', { className: 'ash-automation-schedule-preview' });
+		this.previewHeading = h(document, 'h3');
+		this.previewMessage = h(document, 'p', { attributes: { role: 'status' } });
+		this.preview = h(document, 'ol');
+		preview.append(this.previewHeading, this.previewMessage, this.preview);
+		this.form.append(preview);
+		this.message = h(document, 'p', { attributes: { role: 'status', 'aria-label': localize('automations.saveStatus', 'Save status') } });
 		this.form.append(this.message);
-		this.save = this._register(new Button(this.form, { label: localize('automations.save', 'Save automation'), presentation: 'primary', type: 'submit' }));
 		this.dialog = this._register(new Dialog(parent, {
 			title: options.existing ? localize('automations.edit', 'Edit automation') : localize('automations.new', 'New automation'),
 			content: this.form,
 			buttons: [{ label: localize('automations.cancel', 'Cancel'), value: 'cancel' }],
 			cancelValue: 'cancel',
 		}));
+		// Keep commit/cancel reachable while the longer form scrolls, retaining native form submission.
+		const actions = this.dialog.element.querySelector<HTMLElement>('.ash-dialog-actions')!;
+		this.save = this._register(new Button(actions, { label: localize('automations.save', 'Save automation'), presentation: 'primary', type: 'submit' }));
+		this.save.domNode.setAttribute('form', this.form.id);
+		actions.prepend(this.save.domNode);
 		this.dialog.element.classList.add('ash-automation-dialog');
 		this._register(contexts.createScoped(this.dialog.element)).createKey('sessionsAutomationDialogFocused', true);
 		this._register(addDisposableListener(this.form, 'submit', event => {
 			event.preventDefault();
 			void this.commit();
 		}));
-		this._register(addDisposableListener(this.schedule, 'change', () => this.updateSections()));
+		const previewScheduler = this._register(new RunOnceScheduler(() => { void this.updatePreview(); }, 200));
+		const changed = (): void => {
+			this.previewGeneration++;
+			this.preview.replaceChildren();
+			this.previewMessage.textContent = localize('automations.previewLoading', 'Calculating upcoming runs…');
+			this.updateSections();
+			previewScheduler.schedule();
+		};
+		this._register(addDisposableListener(this.form, 'input', changed));
+		this._register(addDisposableListener(this.form, 'change', changed));
 		this._register(addDisposableListener(this.dialog.element, 'cancel', event => {
 			if (this.busy) {
 				event.preventDefault();
@@ -132,6 +170,7 @@ export class AutomationDialog extends Disposable {
 			}
 		}, true));
 		this.updateSections();
+		void this.updatePreview();
 	}
 
 	async show(): Promise<IAutomationDialogResult | undefined> {
@@ -164,18 +203,21 @@ export class AutomationDialog extends Disposable {
 		}
 	}
 
-	private read(): IAutomationDialogResult {
+	private readSchedule(): IAutomationSchedule {
 		let schedule: IAutomationSchedule;
 		if (this.schedule.value === 'once') {
 			const at = new Date(this.once.value).getTime();
 			if (!Number.isFinite(at) || at <= Date.now()) throw new Error(localize('automations.futureDate', 'Choose a future date and time.'));
 			schedule = { type: 'once', at };
-		} else if (this.schedule.value === 'weekly') {
+		} else if (['weekly', 'daily', 'weekdays'].includes(this.schedule.value)) {
 			try { new Intl.DateTimeFormat('en', { timeZone: this.timezone.value }); }
 			catch { throw new Error(localize('automations.invalidTimezone', 'Choose a valid time zone.')); }
-			const weekdays = this.weekdays.filter(day => day.checked).map(day => Number(day.value));
+			const weekdays = this.schedule.value === 'daily' ? [1, 2, 3, 4, 5, 6, 7]
+				: this.schedule.value === 'weekdays' ? [1, 2, 3, 4, 5]
+					: this.weekdays.filter(day => day.checked).map(day => Number(day.value));
 			if (!weekdays.length) throw new Error(localize('automations.chooseDay', 'Select at least one day.'));
 			const [hour, minute] = this.time.value.split(':').map(Number);
+			if (!this.time.value) throw new Error(localize('automations.chooseTime', 'Choose a time.'));
 			schedule = { type: 'weekly', timezone: this.timezone.value, weekdays, hour: hour!, minute: minute! };
 		} else {
 			const minutes = Number(this.minutes.value);
@@ -187,11 +229,32 @@ export class AutomationDialog extends Disposable {
 				anchor: previous?.type === 'interval' && previous.minutes === minutes ? previous.anchor : Date.now() + minutes * 60_000
 			};
 		}
+		return schedule;
+	}
+
+	private async updatePreview(): Promise<void> {
+		const generation = ++this.previewGeneration;
+		this.preview.replaceChildren();
+		try {
+			const schedule = this.readSchedule();
+			const timezone = schedule.type === 'weekly' ? schedule.timezone : Intl.DateTimeFormat().resolvedOptions().timeZone;
+			this.previewHeading.textContent = localize('automations.upcomingRuns', 'Upcoming runs ({0})', timezone);
+			this.previewMessage.textContent = localize('automations.previewLoading', 'Calculating upcoming runs…');
+			const times = await this.automations.previewSchedule(this.provider.value, schedule);
+			if (this.isDisposed || generation !== this.previewGeneration) return;
+			this.previewMessage.textContent = times.length ? '' : localize('automations.previewEmpty', 'There are no future occurrences for this schedule.');
+			for (const time of times) this.preview.append(h(this.form.ownerDocument, 'li', {}, new Date(time).toLocaleString(getNLSLanguage(), { timeZone: timezone })));
+		} catch (error) {
+			if (!this.isDisposed && generation === this.previewGeneration) this.previewMessage.textContent = error instanceof Error ? error.message : localize('automations.previewFailed', 'Could not preview this schedule.');
+		}
+	}
+
+	private read(): IAutomationDialogResult {
 		const value = {
 			name: this.name.value.trim(),
 			prompt: this.prompt.value.trim(),
 			enabled: this.enabled.checked,
-			schedule,
+			schedule: this.readSchedule(),
 			target: {
 				providerId: this.provider.value,
 				directory: this.directory.value.trim(),
@@ -202,10 +265,13 @@ export class AutomationDialog extends Disposable {
 	}
 
 	private updateSections(): void {
+		const selected = ['daily', 'weekdays'].includes(this.schedule.value) ? 'weekly' : this.schedule.value;
 		for (const [type, section] of this.sections) {
-			section.hidden = this.schedule.value !== type;
+			section.hidden = selected !== type;
 			for (const input of section.querySelectorAll('input')) input.disabled = section.hidden;
 		}
+		const days = this.weekdays[0]?.closest('fieldset');
+		if (days) days.hidden = this.schedule.value !== 'weekly';
 	}
 
 	private section(type: string): HTMLElement {

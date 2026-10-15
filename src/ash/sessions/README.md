@@ -109,7 +109,7 @@ Automations load through `sessions.common.main.ts` in Web and Electron.
 `contrib/automations/browser/automations.contribution.ts` registers the provider
 aggregate, editing-dialog service and manual-run coordinator. The UI contribution
 in `contrib/sessions/browser/views/automationsView.ts` is registered by
-`sessions.contribution.ts` at `BlockRestore`. The Sidebar Sessions navigation
+`sessions.contribution.ts` at `BlockRestore`. The Activity Bar navigation
 invokes `sessionsView.manageAutomations` to open its independent Custom View;
 creation and editing use a modal dialog that retains the reviewed revision.
 Startup restores the covered entry and session without closing the Custom View

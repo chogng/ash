@@ -10,6 +10,39 @@ use std::time::Duration;
 use std::time::Instant;
 
 #[test]
+fn automation_preview_validates_rules_without_creating_plans_or_runs() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = Arc::new(AutomationStore::open(&dir.path().join("state.db")).unwrap());
+    let server = server().with_automation_store(Arc::clone(&store));
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let result = call(
+        &server,
+        &mut connection,
+        json!({
+            "jsonrpc":"2.0", "id":2, "method":"automation/preview",
+            "params":{"schedule":{"type":"interval","anchor":0,"minutes":60}}
+        }),
+    );
+    let times = result["result"]["occurrences"].as_array().unwrap();
+    assert_eq!(times.len(), 3);
+    assert_eq!(
+        times[1].as_u64().unwrap() - times[0].as_u64().unwrap(),
+        3_600_000
+    );
+    assert!(store.list().unwrap().is_empty());
+    let invalid = call(
+        &server,
+        &mut connection,
+        json!({
+            "jsonrpc":"2.0", "id":3, "method":"automation/preview",
+            "params":{"schedule":{"type":"weekly","timezone":"Invalid/Zone","weekdays":[1],"hour":9,"minute":0}}
+        }),
+    );
+    assert_eq!(invalid["error"]["message"], "InvalidParams");
+}
+
+#[test]
 fn automation_commands_are_shared_across_connections_and_reject_stale_edits() {
     let dir = tempfile::tempdir().unwrap();
     let store = Arc::new(AutomationStore::open(&dir.path().join("state.db")).unwrap());

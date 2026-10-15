@@ -10,14 +10,14 @@ import { observableValue } from '../../../../../base/common/observable.js';
 import type { Automation, AutomationDefinition, AutomationRun, IAutomationBackendService } from '../../../../../platform/agentHost/common/automation.js';
 import { IRendererHostService, type IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import { INotificationService, NotificationSeverity } from '../../../../../platform/notification/common/notification.js';
 import { IAutomationService } from '../../../../../workbench/contrib/chat/common/automations/automationService.js';
 import { SessionsProvidersService, ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 import type { ISessionsProvider } from '../../../../services/sessions/common/sessionsProvider.js';
 import { AgentHostAutomationStore } from '../../../providers/agentHost/browser/agentHostAutomationStore.js';
 import { ProviderAutomationService } from '../../browser/providerAutomationService.js';
 import { AutomationRunner } from '../../browser/automationRunner.js';
-import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
+import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { CustomViewService, ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
 import { NullLoggerService } from '../../../../../platform/log/common/log.js';
@@ -31,7 +31,7 @@ import { Menus } from '../../../../browser/menus.js';
 import { StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { AUTOMATIONS_CUSTOM_VIEW_ID } from '../../../sessions/browser/automationsConstants.js';
 import '../../../sessions/browser/sessions.contribution.js';
-import { AutomationsCardsWidget } from '../../../sessions/browser/views/automationsView.js';
+import { AutomationsCardsWidget, AutomationsCustomViewContribution } from '../../../sessions/browser/views/automationsView.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { IAutomationDialogService } from '../../../../../workbench/contrib/chat/common/automations/automationDialogService.js';
@@ -42,11 +42,17 @@ function fixture() {
 	const resources = new DisposableStore();
 	const services = resources.add(new InstantiationService());
 	const registry = resources.add(new SessionsProvidersService());
+	services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
 	services.registerInstance(ISessionsProvidersService, registry);
 	const facade = resources.add(services.createInstance(ProviderAutomationService));
 	services.registerInstance(IAutomationService, facade);
 	const errors: string[] = [];
-	services.registerInstance(INotificationService, { error: (message: string) => errors.push(message) } as unknown as INotificationService);
+	services.registerInstance(INotificationService, {
+		error: (message: string) => {
+			errors.push(message);
+			return { item: { id: errors.length, createdAt: Date.now(), severity: NotificationSeverity.Error, message }, close() { } };
+		}
+	} as unknown as INotificationService);
 	function host(id: string) {
 		const changed = resources.add(new Emitter<void>());
 		const connection = observableValue<'connecting' | 'connected' | 'disconnected'>(id, 'connected');
@@ -71,6 +77,8 @@ function fixture() {
 		const stops: string[] = [];
 		const backend: IAutomationBackendService = {
 			onDidChange: changed.event,
+			preview: async () => [],
+			readResult: async () => ({ output: '', files: [] }),
 			list: async () => plans,
 			save: async (id, revision, definition, status) => {
 				saves.push(definition);
@@ -88,6 +96,9 @@ function fixture() {
 				const value = {
 					id: 'run',
 					automationId: id,
+					revision: plans[0]!.revision,
+					definition: plans[0]!.definition,
+					turnId: null,
 					status: 'pending' as const,
 					scheduledAt: 1,
 					startedAt: null,
@@ -245,7 +256,7 @@ test('A failed history read retains cached rows without hiding successfully read
 	try {
 		const host = value.host('one');
 		const original = (await host.backend.list())[0]!;
-		const previous: AutomationRun = { id: 'previous', automationId: original.id, status: 'completed', scheduledAt: 1, startedAt: 1, finishedAt: 2, sessionId: 'session', threadId: 'thread', message: null };
+		const previous: AutomationRun = { id: 'previous', automationId: original.id, revision: original.revision, definition: original.definition, turnId: 'turn', status: 'completed', scheduledAt: 1, startedAt: 1, finishedAt: 2, sessionId: 'session', threadId: 'thread', message: null };
 		host.setHistory([previous]);
 		await host.store.refresh();
 		host.setPlans([{ ...original, revision: 2, definition: { ...original.definition, title: 'Fresh definition' } }]);
@@ -258,7 +269,7 @@ test('A failed history read retains cached rows without hiding successfully read
 	} finally { value.resources.dispose(); }
 });
 
-test('A host failure before session creation is reported once after admission', async () => {
+test('Manual dispatch observes terminal failure without duplicating catalogue notifications', async () => {
 	const value = fixture();
 	try {
 		const host = value.host('one');
@@ -267,12 +278,12 @@ test('A host failure before session creation is reported once after admission', 
 		const operation = runner.runOnce(host.store.automations.get()[0]!);
 		assert.deepEqual(await operation.whenDispatched, { kind: 'accepted' });
 		const pending = host.store.runs.get()[0]!;
-		host.setHistory([{ id: 'run', automationId: 'same-id', status: 'failed', scheduledAt: pending.scheduledAt, startedAt: null, finishedAt: 2, sessionId: null, threadId: null, message: 'Could not create session' }]);
+		host.setHistory([{ ...(await host.backend.runs('same-id'))[0]!, status: 'failed', scheduledAt: pending.scheduledAt, startedAt: null, finishedAt: 2, sessionId: null, threadId: null, message: 'Could not create session' }]);
 		await host.store.refresh();
 		await operation.whenCompleted;
-		assert.deepEqual(value.errors, ['Automation one: Could not create session']);
+		assert.deepEqual(value.errors, []);
 		await host.store.refresh();
-		assert.equal(value.errors.length, 1);
+		assert.equal(value.errors.length, 0);
 	} finally { value.resources.dispose(); }
 });
 
@@ -283,9 +294,8 @@ test('Catalogue and history ordering changes retain card identity and keyboard f
 		await host.store.refresh();
 		const contexts = value.resources.add(new ContextKeyService());
 		value.services.registerInstance(IContextKeyService, contexts);
-		const configuration = value.resources.add(new InMemoryConfigurationService());
+		const configuration = value.services.get(IConfigurationService);
 		await configuration.updateValue('accessibility.verbosity.automations', false);
-		value.services.registerInstance(IConfigurationService, configuration);
 		value.services.registerInstance(IAutomationDialogService, { showAutomationDialog: async () => undefined });
 		value.services.registerInstance(IAutomationRunner, value.services.createInstance(AutomationRunner));
 		value.services.registerInstance(IChatSessionNavigationService, {} as IChatSessionNavigationService);
@@ -300,7 +310,7 @@ test('Catalogue and history ordering changes retain card identity and keyboard f
 		await host.store.refresh();
 		assert.deepEqual([...widget.element.querySelectorAll('h3 button')].map(element => element.textContent), ['Newest', 'one']);
 		assert.equal(browserEnvironment.window.document.activeElement, oldTitle);
-		const row = (id: string, scheduledAt: number): AutomationRun => ({ id, automationId: old.id, status: 'completed', scheduledAt, startedAt: 1, finishedAt: 2, sessionId: null, threadId: null, message: id });
+		const row = (id: string, scheduledAt: number): AutomationRun => ({ id, automationId: old.id, revision: old.revision, definition: old.definition, turnId: null, status: 'completed', scheduledAt, startedAt: 1, finishedAt: 2, sessionId: null, threadId: null, message: id });
 		host.setHistory([row('older-run', 1)]);
 		await host.store.refresh();
 		const oldRow = widget.element.querySelector('[data-run-id]');
@@ -328,6 +338,9 @@ test('Run cancellation after admission stops the host run once; disposing the fr
 		const run: AutomationRun = {
 			id: 'run',
 			automationId: 'same-id',
+			revision: 1,
+			definition: (await host.backend.list())[0]!.definition,
+			turnId: null,
 			status: 'pending',
 			scheduledAt: 1,
 			startedAt: null,
@@ -361,8 +374,9 @@ test('Automations entry opens a Custom View and never registers a Panel in eithe
 		const custom = value.resources.add(new CustomViewService(new NullLoggerService(), storage));
 		value.services.registerInstance(ICustomViewService, custom);
 		using commands = new CommandService(value.services);
+		value.services.registerInstance(ICommandService, commands);
 		const menus = new MenuService(commands, contexts);
-		const navigation = () => menus.getMenuActions(Menus.SidebarSessionsHeader).flatMap(([, actions]) => actions);
+		const navigation = () => menus.getMenuActions(Menus.ActivityBar).flatMap(([, actions]) => actions).filter(action => action.id === 'sessionsView.manageAutomations');
 		const host = value.resources.add(WorkbenchContributionsRegistry.createHost(value.services, error => { throw error; }, ['sessions.contrib.automationsCustomView']));
 		host.advance(WorkbenchPhase.BlockStartup);
 		assert.equal(custom.activeCustomView.get(), undefined);
@@ -373,6 +387,10 @@ test('Automations entry opens a Custom View and never registers a Panel in eithe
 		await value.facade.refresh();
 		assert.equal(custom.activeCustomViewOpen.get()?.source, 'restore');
 		assert.deepEqual(navigation().map(action => ({ id: action.id, checked: action.checked, enabled: action.enabled })), [{ id: 'sessionsView.manageAutomations', checked: true, enabled: true }]);
+		assert.equal(navigation()[0]?.icon?.id, 'clockface-filled');
+		assert.equal(menus.getMenuActions(Menus.SidebarSessionsHeader).flatMap(([, actions]) => actions).some(action => action.id === 'sessionsView.manageAutomations'), false);
+		custom.hideCustomView();
+		assert.equal(navigation()[0]?.icon?.id, 'clockface');
 		provider.connection.set('disconnected', undefined);
 		assert.equal(navigation().length, 1, 'A disconnected provider retains its management entry');
 		await commands.executeCommand('sessionsView.manageAutomations');
@@ -383,5 +401,28 @@ test('Automations entry opens a Custom View and never registers a Panel in eithe
 		assert.equal(custom.activeCustomView.get(), undefined);
 		assert.deepEqual(navigation(), []);
 		assert.equal(CommandsRegistry.getCommand('ash.automation.open'), undefined);
+	} finally { value.resources.dispose(); }
+});
+
+test('An offline automation host does not suppress another host failure or duplicate it on refresh', async () => {
+	const value = fixture();
+	try {
+		value.services.registerInstance(IContextKeyService, value.resources.add(new ContextKeyService()));
+		const storageWindow = new JSDOM('', { url: 'https://automation-notifications.test' });
+		value.resources.add(toDisposable(() => storageWindow.window.close()));
+		const storage = value.resources.add(new BrowserStorageService({ ownerWindow: storageWindow.window as unknown as Window, workspaceId: 'automation-notifications', flushInterval: 0 }));
+		value.services.registerInstance(ICustomViewService, value.resources.add(new CustomViewService(new NullLoggerService(), storage)));
+		value.services.registerInstance(ICommandService, value.resources.add(new CommandService(value.services)));
+		const offline = value.host('offline');
+		const online = value.host('online');
+		await value.facade.refresh();
+		value.resources.add(value.services.createInstance(AutomationsCustomViewContribution));
+		offline.connection.set('disconnected', undefined);
+		const run = await online.backend.run('same-id');
+		online.setHistory([{ ...run, status: 'failed', message: 'Failed on online host' }]);
+		await online.store.refresh();
+		assert.deepEqual(value.errors, ['Automation online: Failed on online host']);
+		await online.store.refresh();
+		assert.equal(value.errors.length, 1);
 	} finally { value.resources.dispose(); }
 });

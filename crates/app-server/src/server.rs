@@ -2816,6 +2816,7 @@ impl AppServer {
             }
             Some(ClientMethod::MessageHistoryClear) => self.message_history_clear(connection),
             Some(ClientMethod::AutomationList) => self.automation_list(),
+            Some(ClientMethod::AutomationPreview) => self.automation_preview(&request.params),
             Some(ClientMethod::AutomationWrite) => self.automation_write(&request.params),
             Some(ClientMethod::AutomationDelete) => self.automation_delete(&request.params),
             Some(ClientMethod::AutomationRun) => self.automation_run(&request.params),

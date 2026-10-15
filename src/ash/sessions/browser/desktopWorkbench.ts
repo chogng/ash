@@ -556,14 +556,14 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 		}
 	}
 
-	/** Custom content borrows the center without changing the saved visibility of its underlying entry. */
+	/** Independent pages cover the entry's content and sidebar while retaining its saved layout. */
 	public setCustomViewVisible(visible: boolean): void {
 		if (visible === this.customViewVisible) return;
 		this.customViewVisible = visible;
 		if (visible) this.applyCustomViewVisibility();
 		else {
 			this.grid.setViewVisible(this.view('customview'), false);
-			for (const id of ['sessions', 'editor', 'auxiliarybar', 'panel'] as const) {
+			for (const id of ['sidebar', 'sessions', 'editor', 'auxiliarybar', 'panel'] as const) {
 				this.grid.setViewVisible(this.view(id), this.desiredVisibility[id] && !this.unavailableParts.has(id));
 			}
 			if (this.isDocked) this.updateDockedVisibility();
@@ -573,7 +573,7 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 	}
 	private applyCustomViewVisibility(): void {
 		this.grid.setViewVisible(this.view('customview'), true);
-		for (const id of ['sessions', 'editor', 'auxiliarybar', 'panel'] as const) this.grid.setViewVisible(this.view(id), false);
+		for (const id of ['sidebar', 'sessions', 'editor', 'auxiliarybar', 'panel'] as const) this.grid.setViewVisible(this.view(id), false);
 	}
 
 	private saveState(): void {

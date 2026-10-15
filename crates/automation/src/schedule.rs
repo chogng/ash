@@ -120,3 +120,24 @@ pub fn next_occurrence(
         }
     }
 }
+
+/// Previews the next three trigger times with the same calendar rules used for execution.
+/// This read does not reserve a run or advance any saved schedule.
+pub fn preview_occurrences(
+    schedule: &AutomationSchedule,
+    from: UnixMillis,
+) -> Result<Vec<UnixMillis>, AutomationError> {
+    let mut occurrences = Vec::with_capacity(3);
+    let mut cursor = from;
+    for _ in 0..3 {
+        let Some(next) = next_occurrence(schedule, cursor)? else {
+            break;
+        };
+        occurrences.push(next);
+        let Ok(after) = UnixMillis::new(next.get().saturating_add(1)) else {
+            break;
+        };
+        cursor = after;
+    }
+    Ok(occurrences)
+}

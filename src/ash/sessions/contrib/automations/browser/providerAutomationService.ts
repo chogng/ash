@@ -2,7 +2,7 @@ import type { CancellationToken } from '../../../../base/common/cancellation.js'
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { derived, observableSignalFromEvent, type IReader } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
-import type { IAutomationDescriptor, IAutomationRun } from '../../../../workbench/contrib/chat/common/automations/automation.js';
+import type { IAutomationDescriptor, IAutomationRun, IAutomationSchedule } from '../../../../workbench/contrib/chat/common/automations/automation.js';
 import type { AutomationCatalogueState, IAutomationService, IAutomationStore, ICreateAutomationOptions, IUpdateAutomationOptions } from '../../../../workbench/contrib/chat/common/automations/automationService.js';
 import { ISessionsProvidersService } from '../../../services/sessions/browser/sessionsProvidersService.js';
 
@@ -54,6 +54,10 @@ export class ProviderAutomationService extends Disposable implements IAutomation
 	runAutomation(id: string, token?: CancellationToken) { return this.storeFor(id).runAutomation(id, token); }
 
 	stopRun(run: IAutomationRun) { return this.requireProvider(run.providerId).stopRun(run); }
+
+	readRunResult(run: IAutomationRun) { return this.requireProvider(run.providerId).readRunResult(run); }
+
+	previewSchedule(providerId: string, schedule: IAutomationSchedule) { return this.requireProvider(providerId).previewSchedule(providerId, schedule); }
 
 	canStopRun(run: IAutomationRun): boolean { return this.providers.getProvider(run.providerId)?.automations?.canStopRun(run) ?? false; }
 

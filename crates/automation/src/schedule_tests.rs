@@ -100,3 +100,42 @@ fn invalid_rules_and_out_of_range_timestamps_are_rejected() {
     assert!(serde_json::from_str::<UnixMillis>("253402300800000").is_err());
     assert_eq!(serde_json::to_string(&zero).unwrap(), "0");
 }
+
+#[test]
+fn previews_share_dst_rules_and_do_not_repeat_once_or_interval_occurrences() {
+    assert_eq!(
+        preview_occurrences(&weekly("America/New_York", 1, 30), at(2024, 11, 3, 0, 0)).unwrap(),
+        vec![
+            at(2024, 11, 3, 5, 30),
+            at(2024, 11, 10, 6, 30),
+            at(2024, 11, 17, 6, 30)
+        ]
+    );
+    let once = AutomationSchedule::Once {
+        at: UnixMillis::new(1000).unwrap(),
+    };
+    assert_eq!(
+        preview_occurrences(&once, UnixMillis::new(0).unwrap()).unwrap(),
+        vec![UnixMillis::new(1000).unwrap()]
+    );
+    assert!(
+        preview_occurrences(&once, UnixMillis::new(1001).unwrap())
+            .unwrap()
+            .is_empty()
+    );
+    let interval = AutomationSchedule::Interval {
+        anchor: UnixMillis::new(1000).unwrap(),
+        minutes: 1,
+    };
+    assert_eq!(
+        preview_occurrences(&interval, UnixMillis::new(1001).unwrap())
+            .unwrap()
+            .iter()
+            .map(|time| time.get())
+            .collect::<Vec<_>>(),
+        vec![61000, 121000, 181000]
+    );
+    assert!(
+        preview_occurrences(&weekly("Invalid/Zone", 9, 0), UnixMillis::new(0).unwrap()).is_err()
+    );
+}

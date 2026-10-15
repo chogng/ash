@@ -44,11 +44,7 @@ export class AutomationRunner implements IAutomationRunner {
 				try {
 					if (token.isCancellationRequested) cancel();
 					await result.whenCompleted;
-					const completed = this.automations.runs.get().find(run => run.id === result.run.id) ?? result.run;
-					if (completed.status === 'failed' && !completed.sessionResource && !token.isCancellationRequested) {
-						this.notifications.error(localize('automations.runFailed', 'Automation {0}: {1}', automation.name,
-							completed.message ?? localize('automations.noSession', 'The host ended the run before creating a conversation.')));
-					}
+					// The catalogue contribution owns terminal-state notifications for both manual and scheduled runs.
 				}
 				finally { listener.dispose(); }
 			} catch (error) {

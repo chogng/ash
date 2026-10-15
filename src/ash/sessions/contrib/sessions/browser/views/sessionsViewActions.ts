@@ -1,4 +1,5 @@
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
 import { Menus } from '../../../../browser/menus.js';
 import { AUTOMATIONS_CUSTOM_VIEW_ID } from '../automationsConstants.js';
@@ -17,10 +18,11 @@ import { ISessionsManagementService } from '../../../../services/sessions/common
 registerAction2(class ManageAutomationsAction extends Action2 {
 	constructor() {
 		super({
-			id: 'sessionsView.manageAutomations', title: localize2('automations.manage', 'Manage Automations'),
+			id: 'sessionsView.manageAutomations', title: localize2('automations.title', 'Automations'),
+			icon: Lxicon.clockface,
 			precondition: ContextKeyExpr.has('sessions.automationsAvailable'),
-			toggled: ContextKeyExpr.has('sessions.activity.automationsSelected'),
-			menu: { id: Menus.SidebarSessionsHeader, group: 'navigation', when: ContextKeyExpr.has('sessions.automationsAvailable') },
+			toggled: { condition: ContextKeyExpr.has('sessions.activity.automationsSelected'), icon: Lxicon.clockfaceFilled },
+			menu: { id: Menus.ActivityBar, group: 'navigation', order: 60, when: ContextKeyExpr.has('sessions.automationsAvailable') },
 		});
 	}
 

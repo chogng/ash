@@ -26,13 +26,22 @@ export interface Automation {
 export interface AutomationRun {
 	readonly id: string;
 	readonly automationId: string;
+	readonly revision: number;
+	readonly definition: AutomationDefinition;
 	readonly status: AutomationRunStatus;
 	readonly scheduledAt: number;
 	readonly startedAt: number | null;
 	readonly finishedAt: number | null;
 	readonly sessionId: string | null;
 	readonly threadId: string | null;
+	readonly turnId: string | null;
 	readonly message: string | null;
+}
+
+export interface AutomationRunResult {
+	readonly output: string;
+	/** Undefined means the change ledger could not be read; an empty list is a confirmed empty result. */
+	readonly files: readonly { readonly path: string; readonly kind: 'added' | 'modified' | 'deleted' | 'renamed' | 'typeChanged'; readonly additions: number; readonly deletions: number; }[] | undefined;
 }
 
 /** Host automation operations; the Rust backend owns schedules and run history. */
@@ -44,4 +53,6 @@ export interface IAutomationBackendService {
 	run(id: string): Promise<AutomationRun>;
 	runs(id: string): Promise<readonly AutomationRun[]>;
 	stop(runId: string): Promise<AutomationRun>;
+	readResult(run: AutomationRun): Promise<AutomationRunResult>;
+	preview(schedule: AutomationSchedule): Promise<readonly number[]>;
 }

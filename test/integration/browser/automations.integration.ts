@@ -19,7 +19,7 @@ import { AccessibleViewType } from '../../../src/ash/platform/accessibility/brow
 import { ILogService, NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
 import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
 import { ILayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
-import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
+import { INotificationService, NotificationSeverity, type NotificationAction, type NotificationHandle } from '../../../src/ash/platform/notification/common/notification.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
 import { lightColorTheme, darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
@@ -27,6 +27,7 @@ import { TestThemeService } from '../../../src/ash/platform/theme/test/common/te
 import { IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
+import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
 import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
 import { IAutomationService } from '../../../src/ash/workbench/contrib/chat/common/automations/automationService.js';
@@ -83,7 +84,13 @@ services.registerInstance(IContextKeyService, contexts);
 services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
 
 const errors: string[] = [];
-services.registerInstance(INotificationService, { error: (message: string) => errors.push(message) } as unknown as INotificationService);
+const notices: { message: string; actions: readonly NotificationAction[]; closed: boolean; }[] = [];
+const notify = (message: string, actions: readonly NotificationAction[] = []): NotificationHandle => {
+	const item = { message, actions, closed: false };
+	notices.push(item);
+	return { item: { id: notices.length, createdAt: Date.now(), severity: NotificationSeverity.Info, message }, close: () => { item.closed = true; } };
+};
+services.registerInstance(INotificationService, { error: (message: string, actions?: readonly NotificationAction[]) => { errors.push(message); return notify(message, actions); }, warning: notify, info: notify } as unknown as INotificationService);
 
 let directory = '/captured';
 
@@ -110,14 +117,36 @@ let plans: Automation[] = [{
 let run: AutomationRun = {
 	id: 'run',
 	automationId: 'plan',
+	revision: 1,
+	definition: plans[0]!.definition,
+	turnId: 'automation-turn',
 	status: 'needsInput',
-	scheduledAt: 1,
-	startedAt: 1,
+	scheduledAt: Date.parse('2026-10-14T16:00:00Z'),
+	startedAt: Date.parse('2026-10-14T16:00:03Z'),
 	finishedAt: null,
 	sessionId: 'background-session',
 	threadId: 'background-thread',
 	message: null
 };
+
+if (parameters.has('empty')) plans = [];
+if (parameters.has('catalogue')) {
+	const initial = plans[0]!;
+	plans = [{
+		...initial,
+		nextRunAt: Date.parse('2026-10-15T16:00:00Z'),
+		definition: { ...initial.definition, prompt: 'Review recent code changes for bugs and missing tests. Summarize actionable findings with file references.' }
+	}, {
+		...initial, id: 'briefing', status: 'paused', createdAt: 2,
+		definition: {
+			...initial.definition, title: 'Daily briefing',
+			prompt: 'Summarize project activity, flag blockers, and suggest the next priorities.',
+			directory: '/projects/workspace',
+			schedule: { type: 'weekly', timezone: 'America/Los_Angeles', weekdays: [1, 2, 3, 4, 5], hour: 9, minute: 0 }
+		}
+	}];
+	run = { ...run, scheduledAt: Date.parse('2026-10-14T16:00:00Z'), message: 'Review complete. Confirm whether to apply the suggested test updates.' };
+}
 
 const saved: AutomationDefinition[] = [];
 
@@ -131,6 +160,8 @@ let stops = 0;
 
 const backend: IAutomationBackendService = {
 	onDidChange: changed.event,
+	preview: async schedule => schedule.type === 'once' ? [schedule.at] : [Date.parse('2026-10-15T16:00:00Z'), Date.parse('2026-10-16T16:00:00Z'), Date.parse('2026-10-19T16:00:00Z')],
+	readResult: async () => ({ output: 'Reviewed the changes. Added regression coverage for the scheduler.', files: [{ path: 'src/scheduler.test.ts', kind: 'added', additions: 24, deletions: 0 }] }),
 	list: async () => plans,
 	save: async (id, revision, definition, status) => {
 		if (rejectSave) {
@@ -228,6 +259,7 @@ services.registerInstance(IChatSessionNavigationService, {
 } as unknown as IChatSessionNavigationService);
 
 const commands = resources.add(new CommandService(services));
+services.registerInstance(ICommandService, commands);
 
 services.registerInstance(IMenuService, new MenuService(commands, contexts));
 
@@ -257,6 +289,7 @@ declare global {
 	interface Window {
 		ashAutomations: {
 			registered: boolean; workbenchRegistered: boolean; saved: AutomationDefinition[]; opened: string[][]; errors: string[];
+			notifications(): { message: string; closed: boolean; }[]; openNotification(): Promise<void>; refresh(): Promise<void>; rename(): Promise<void>;
 			selectDirectory(value: string): void; help(): { help: string; view: string; }; rejectSave(): void;
 			remoteEdit(): Promise<void>; disconnect(): void; reopen(): Promise<unknown>; stops(): number; finish(): Promise<void>;
 			back(): void; forward(): void; openDraft(): void; selectedTitle(): string | undefined;
@@ -271,6 +304,13 @@ window.ashAutomations = {
 	saved,
 	opened,
 	errors,
+	notifications: () => notices.map(({ message, closed }) => ({ message, closed })),
+	async openNotification() { await notices.at(-1)?.actions[0]?.run(); },
+	async refresh() { await services.get(IAutomationService).refresh(); },
+	async rename() {
+		plans = plans.map(plan => ({ ...plan, revision: plan.revision + 1, definition: { ...plan.definition, title: 'Updated review', prompt: 'Updated instructions' } }));
+		await services.get(IAutomationService).refresh();
+	},
 	selectDirectory(value) { directory = value; },
 	rejectSave() { rejectSave = true; },
 	failHistory() { historyUnavailable = true; },
@@ -289,7 +329,7 @@ window.ashAutomations = {
 	reopen() { return commands.executeCommand('sessionsView.manageAutomations'); },
 	stops() { return stops; },
 	async finish() {
-		run = { ...run, status: 'completed' };
+		run = { ...run, status: 'completed', message: null, finishedAt: Date.now() };
 		await services.get(IAutomationService).refresh();
 	},
 	help() {

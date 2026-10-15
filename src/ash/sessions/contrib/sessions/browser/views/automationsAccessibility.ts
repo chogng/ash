@@ -1,6 +1,6 @@
 import { getActiveElement } from '../../../../../base/browser/dom.js';
 import { DisposableStore, type IDisposable } from '../../../../../base/common/lifecycle.js';
-import { localize } from '../../../../../nls.js';
+import { getNLSLanguage, localize } from '../../../../../nls.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { Extensions, type IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
@@ -35,11 +35,11 @@ export function registerAutomationsAccessibility(): IDisposable {
 			const automations = accessor.get(IAutomationService);
 			const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement | undefined;
 			return new AccessibleContentProvider(AccessibleViewProviderId.Automations, { type }, () => type === AccessibleViewType.Help
-				? localize('automations.cardsHelp', 'Open this view with Manage Automations in the Sessions sidebar. Tab and Shift+Tab move between cards and actions. New automation and each automation name open an editing dialog. Run now requests execution on the owning provider. Pause prevents future scheduled runs; Stop run interrupts a current run. Opening a conversation returns to the retained Sessions view. Back and Forward navigate between conversations and Automations. Refresh retries loading run history without repeating saved changes. Closing this view or window leaves enabled schedules running on their host. <keybinding:editor.action.accessibleView> reads plans and run history.')
-				: [
+				? localize('automations.cardsHelp', 'Open Automations from the Activity Bar. This independent page hides the conversation and sidebar until you return to Chat or Code. Search by name, instructions, or directory. All, Enabled, and Paused filter the plans; Clear filters restores all plans. Empty-state templates open editable drafts and create nothing until you save. The overview shows enabled and paused plans and runs that need input. Each card shows instructions, schedule, next run, and working directory. Tab and Shift+Tab move between cards and actions. Each automation name opens its task details. Each run opens its recorded version, times, output, and file changes. Back restores the list and focus. Edit automation opens the form with host-calculated schedule previews. Duplicate opens a paused draft. Needs attention lists waiting runs and the latest failed run. Completion notifications are optional; View result in a notification opens run details. Run now requests execution on the owning provider. Pause prevents future scheduled runs; Stop run interrupts a current run. Opening a conversation returns to the retained Sessions view. Back and Forward navigate between conversations and Automations. Refresh retries loading run history without repeating saved changes. Closing this view or window leaves enabled schedules running on their host. <keybinding:editor.action.accessibleView> reads plans and run history.')
+				: accessor.get(ILayoutService).activeContainer.querySelector<HTMLElement>('.ash-automation-details:not([hidden])')?.innerText ?? [
 					...(automations.historyState?.get() === 'error' ? [localize('automations.historyRefreshFailed', 'Run history could not be refreshed. Showing the last available history. Use Refresh to try again.')] : []),
-					...automations.automations.get().map(plan => localize('automations.planSummary', '{0} · {1} · {2}', plan.name, plan.enabled ? localize('automations.enabled', 'Enabled') : localize('automations.paused', 'Paused'), plan.target.directory)),
-					...automations.runs.get().map(run => `${new Date(run.scheduledAt).toLocaleString()} · ${automationRunStatusLabel(run.status)}${run.message ? ` · ${run.message}` : ''}`),
+					...automations.automations.get().map(plan => localize('automations.planSummary', '{0} · {1} · {2} · {3}', plan.name, plan.enabled ? localize('automations.enabled', 'Enabled') : localize('automations.paused', 'Paused'), plan.target.directory, plan.prompt)),
+					...automations.runs.get().map(run => `${new Date(run.scheduledAt).toLocaleString(getNLSLanguage())} · ${automationRunStatusLabel(run.status)}${run.message ? ` · ${run.message}` : ''}`),
 				].join('\n'), () => focused?.focus(), AccessibilityVerbositySettingId.Automations);
 		},
 	}));

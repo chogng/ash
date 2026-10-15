@@ -4,6 +4,8 @@ use super::decode;
 use super::result;
 use ash_app_server_protocol::protocol::automation::AutomationDeleteParams;
 use ash_app_server_protocol::protocol::automation::AutomationListResult;
+use ash_app_server_protocol::protocol::automation::AutomationPreviewParams;
+use ash_app_server_protocol::protocol::automation::AutomationPreviewResult;
 use ash_app_server_protocol::protocol::automation::AutomationRunParams;
 use ash_app_server_protocol::protocol::automation::AutomationRunsParams;
 use ash_app_server_protocol::protocol::automation::AutomationRunsResult;
@@ -25,6 +27,18 @@ impl AppServer {
     pub(super) fn automation_list(&self) -> Result<Value, RpcError> {
         result(&AutomationListResult {
             automations: self.automation_store()?.list().map_err(error)?,
+        })
+    }
+
+    pub(super) fn automation_preview(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: AutomationPreviewParams = decode(params)?;
+        self.automation_store()?;
+        result(&AutomationPreviewResult {
+            occurrences: ash_automation::preview_occurrences(
+                &params.schedule,
+                ash_automation::now().map_err(error)?,
+            )
+            .map_err(error)?,
         })
     }
 

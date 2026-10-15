@@ -49,6 +49,8 @@ export interface IAutomationStore {
 	deleteAutomation(id: string): Promise<void>;
 	runAutomation(id: string, token?: CancellationToken): Promise<IAutomationRunRequestResult>;
 	stopRun(run: IAutomationRun): Promise<void>;
+	readRunResult(run: IAutomationRun): Promise<IAutomationRunResult>;
+	previewSchedule(providerId: string, schedule: IAutomationSchedule): Promise<readonly number[]>;
 	canStopRun(run: IAutomationRun): boolean;
 	canRunAutomation(id: string): boolean;
 	canUpdateAutomation(id: string): boolean;

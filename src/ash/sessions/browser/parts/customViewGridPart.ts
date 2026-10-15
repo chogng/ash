@@ -48,6 +48,7 @@ export class CustomViewGridPart extends Part implements ICustomViewGridPartServi
 		const scrolling = lifetime.add(new ScrollableElement(this.contentDomNode, { direction: 'vertical', tabIndex: -1 }));
 		scrolling.element.classList.add('ash-custom-view-scroll');
 		const page = h(this.domNode.ownerDocument, 'div', { className: 'ash-custom-view-page' });
+		page.dataset.customViewId = descriptor.id;
 		page.style.maxWidth = `${view.maxWidth ?? 960}px`;
 		const header = h(this.domNode.ownerDocument, 'header', { className: 'ash-custom-view-header' });
 		const title = h(this.domNode.ownerDocument, 'h1');
@@ -68,13 +69,15 @@ export class CustomViewGridPart extends Part implements ICustomViewGridPartServi
 				buttons.value = new DisposableStore();
 				actions.replaceChildren();
 				for (const [, group] of menu.getActions()) for (const action of group) {
-					buttons.value.add(new Button(actions, {
+					const button = buttons.value.add(new Button(actions, {
 						label: action.label,
+						icon: action.icon,
 						enabled: action.enabled,
 						onClick: () => {
 							void Promise.resolve(action.run()).catch(error => this.notifications.error(String(error)));
 						}
 					}));
+					button.domNode.dataset.actionId = action.id;
 				}
 			};
 			lifetime.add(menu.onDidChange(update));

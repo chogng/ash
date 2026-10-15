@@ -21,6 +21,7 @@ if (new URL(location.href).searchParams.has('automations')) {
 		api: {
 			...createDisconnectedRendererApi(), automation: {
 				onDidChange: Event.None, list: async () => [], runs: async () => [],
+				preview: async () => [], readResult: async () => ({ output: '', files: [] }),
 				save: async () => { throw new Error('Unexpected automation save'); },
 				delete: async () => { throw new Error('Unexpected automation delete'); },
 				run: async () => { throw new Error('Window restoration must not run automations'); },

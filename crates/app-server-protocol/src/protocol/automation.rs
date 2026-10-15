@@ -3,7 +3,9 @@ use crate::TS;
 use ash_protocol::Automation;
 use ash_protocol::AutomationDefinition;
 use ash_protocol::AutomationRun;
+use ash_protocol::AutomationSchedule;
 use ash_protocol::AutomationStatus;
+use ash_protocol::UnixMillis;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -56,4 +58,16 @@ pub struct AutomationRunsResult {
 #[serde(rename_all = "camelCase")]
 pub struct AutomationStopParams {
     pub run_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationPreviewParams {
+    pub schedule: AutomationSchedule,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationPreviewResult {
+    pub occurrences: Vec<UnixMillis>,
 }

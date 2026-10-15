@@ -6,7 +6,7 @@ import { URI } from '../../../../../base/common/uri.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
 import { localize } from '../../../../../nls.js';
 import type { Automation, AutomationDefinition, AutomationRun, IAutomationBackendService } from '../../../../../platform/agentHost/common/automation.js';
-import type { IAutomationDescriptor, IAutomationRun } from '../../../../../workbench/contrib/chat/common/automations/automation.js';
+import type { IAutomationDescriptor, IAutomationRun, IAutomationRunResult, IAutomationSchedule } from '../../../../../workbench/contrib/chat/common/automations/automation.js';
 import type { AutomationCatalogueState, ICreateAutomationOptions, IGuardedAutomationUpdateResult, IUpdateAutomationOptions, IAutomationRunRequestResult } from '../../../../../workbench/contrib/chat/common/automations/automationService.js';
 import type { ISessionsProviderAutomations } from '../../../../services/sessions/common/sessionsProvider.js';
 import { IRendererHostService, type IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
@@ -181,6 +181,23 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 		}
 	}
 
+	async readRunResult(run: IAutomationRun): Promise<IAutomationRunResult> {
+		this.assertReady();
+		this.assertTarget(run.providerId);
+		return this.backend.readResult({
+			...run,
+			id: this.backendId(run.id),
+			automationId: this.backendId(run.automationId),
+			definition: definition(run.definition),
+		});
+	}
+
+	previewSchedule(providerId: string, schedule: IAutomationSchedule): Promise<readonly number[]> {
+		this.assertReady();
+		this.assertTarget(providerId);
+		return this.backend.preview(schedule);
+	}
+
 	private acceptAutomation(value: Automation): IAutomationDescriptor {
 		const automation = this.descriptor(value);
 		if (!this.isDisposed) {
@@ -233,6 +250,12 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 	private runDescriptor(value: AutomationRun): IAutomationRun {
 		return {
 			...value,
+			definition: {
+				name: value.definition.title,
+				prompt: value.definition.prompt,
+				schedule: value.definition.schedule,
+				target: { providerId: this.providerId, directory: value.definition.directory, session: value.definition.session },
+			},
 			id: this.identity(value.id),
 			automationId: this.identity(value.automationId),
 			providerId: this.providerId,

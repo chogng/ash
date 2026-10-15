@@ -313,6 +313,10 @@ use crate::protocol::automation::AutomationDeleteParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::automation::AutomationListResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::automation::AutomationPreviewParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::automation::AutomationPreviewResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::automation::AutomationRunParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::automation::AutomationRunsParams;
@@ -3410,6 +3414,9 @@ client_methods! {
     },
     AutomationList => "automation/list" {
         params: EmptyParams, response: AutomationListResult, serialization: None,
+    },
+    AutomationPreview => "automation/preview" {
+        params: AutomationPreviewParams, response: AutomationPreviewResult, serialization: None,
     },
     AutomationWrite => "automation/write" {
         params: AutomationWriteParams, response: Automation, serialization: None,
@@ -6725,6 +6732,8 @@ typescript_bindings! {
     MessageHistoryReadParams,
     MessageHistoryPage,
     AutomationListResult,
+    AutomationPreviewParams,
+    AutomationPreviewResult,
     AutomationWriteParams,
     AutomationDeleteParams,
     AutomationRunParams,

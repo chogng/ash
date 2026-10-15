@@ -4,7 +4,7 @@ import { Emitter } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import type { AppServerProtocolClient } from './appServerProtocolClient.js';
-import type { Automation, AutomationDefinition, AutomationRun, AutomationStatus, IAutomationBackendService } from '../common/automation.js';
+import type { Automation, AutomationDefinition, AutomationRun, AutomationRunResult, AutomationSchedule, AutomationStatus, IAutomationBackendService } from '../common/automation.js';
 
 export class AppServerAutomationService extends Disposable implements IAutomationBackendService {
 	private readonly changed = this._register(new Emitter<void>());
@@ -41,6 +41,34 @@ export class AppServerAutomationService extends Disposable implements IAutomatio
 
 	public stop(runId: string): Promise<AutomationRun> {
 		return this.client.request(APP_SERVER_METHODS['automation/stop'], { runId }).catch(explain);
+	}
+
+	public async preview(schedule: AutomationSchedule): Promise<readonly number[]> {
+		const value = schedule.type === 'weekly' ? { ...schedule, weekdays: [...schedule.weekdays] } : schedule;
+		return (await this.client.request(APP_SERVER_METHODS['automation/preview'], { schedule: value }).catch(explain)).occurrences;
+	}
+
+	public async readResult(run: AutomationRun): Promise<AutomationRunResult> {
+		if (!run.sessionId || !run.threadId || !run.turnId) return { output: '', files: [] };
+		const source = { sessionId: run.sessionId, threadId: run.threadId };
+		const result = await this.client.request(APP_SERVER_METHODS['session/thread/read'], source);
+		const turn = result.thread.turns.find(turn => turn.turnId === run.turnId);
+		const output = turn?.items.flatMap(item => item.type === 'agentMessage' && (item.phase === 'final_answer' || item.phase == null) ? [item.text] : []).join('\n\n') ?? '';
+		// A continued conversation may contain many runs. Never attribute another Turn's output or files to this run.
+		let files: AutomationRunResult['files'];
+		try {
+			const changes = await this.client.request(APP_SERVER_METHODS['turnChanges/list'], source);
+			const collected: NonNullable<AutomationRunResult['files']>[number][] = [];
+			for (const change of changes.changeSets.filter(change => change.turnId === run.turnId)) {
+				const details = await this.client.request(APP_SERVER_METHODS['turnChanges/read'], { ...source, changeSetId: change.changeSetId });
+				collected.push(...details.files.map(file => ({ path: file.path, kind: file.kind, additions: file.additions, deletions: file.deletions })));
+			}
+			files = collected;
+		} catch {
+			// Keep the Agent's result readable when its separate file-change ledger is unavailable.
+			files = undefined;
+		}
+		return { output, files };
 	}
 }
 
