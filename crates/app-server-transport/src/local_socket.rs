@@ -23,14 +23,10 @@ pub struct LocalStream {
 impl LocalStream {
     /// Splits a validated socket into reader and writer with one connection-close signal.
     pub fn pair(stream: UnixStream) -> io::Result<(Self, Self)> {
-        #[cfg(unix)]
+        // A Windows blocking send can time out after accepting bytes. Retrying
+        // that write repeats bytes (including JSONL delimiters) under backpressure.
+        // Nonblocking WouldBlock commits no bytes and is safe to retry.
         stream.set_nonblocking(true)?;
-        #[cfg(windows)]
-        {
-            stream.set_nonblocking(false)?;
-            stream.set_read_timeout(Some(std::time::Duration::from_millis(25)))?;
-            stream.set_write_timeout(Some(std::time::Duration::from_millis(25)))?;
-        }
         let writer = stream.try_clone()?;
         let closed = Arc::new(std::sync::atomic::AtomicBool::new(false));
         Ok((
@@ -90,13 +86,13 @@ impl Read for LocalStream {
                 Err(error)
                     if matches!(
                         error.kind(),
-                        io::ErrorKind::WouldBlock
-                            | io::ErrorKind::TimedOut
-                            | io::ErrorKind::Interrupted
+                        io::ErrorKind::WouldBlock | io::ErrorKind::Interrupted
                     ) =>
                 {
                     #[cfg(unix)]
                     self.wait(rustix::event::PollFlags::IN)?;
+                    #[cfg(windows)]
+                    std::thread::sleep(std::time::Duration::from_millis(25));
                 }
                 Err(error) => {
                     self.close();
@@ -116,13 +112,13 @@ impl std::io::Write for LocalStream {
                 Err(error)
                     if matches!(
                         error.kind(),
-                        io::ErrorKind::WouldBlock
-                            | io::ErrorKind::TimedOut
-                            | io::ErrorKind::Interrupted
+                        io::ErrorKind::WouldBlock | io::ErrorKind::Interrupted
                     ) =>
                 {
                     #[cfg(unix)]
                     self.wait(rustix::event::PollFlags::OUT)?;
+                    #[cfg(windows)]
+                    std::thread::sleep(std::time::Duration::from_millis(25));
                 }
                 Err(error) => {
                     self.close();

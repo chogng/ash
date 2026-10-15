@@ -1,0 +1,16 @@
+load("//:defs.bzl", "ash_rust_binary", "ash_rust_crate")
+
+exports_files(glob(["src/*.rs"]) + ["package.json", "package.nls.json", "package.nls.zh-CN.json"], visibility = ["//crates/app-server:__pkg__"])
+
+ash_rust_crate(
+    name = "markdown-parser",
+    crate_name = "ash_markdown_parser",
+    data = ["package.nls.json", "package.nls.zh-CN.json"],
+)
+
+ash_rust_binary(
+    name = "ash-markdown-parser",
+    crate_name = "ash_markdown_parser",
+    crate_root = "src/main.rs",
+    deps = [":markdown-parser"],
+)

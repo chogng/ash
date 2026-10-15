@@ -107,9 +107,12 @@ class FoldingRangeSource extends Disposable {
 		},
 	) {
 		super();
+		// Tokenization arrives in batches. Recomputing whole-document providers for
+		// every batch can starve other invocations in the same extension Worker.
+		const tokenRefresh = this._register(new RunOnceScheduler(() => this.refresh(), 200));
 		this._register(folding.model.onDidChangeContent(() => this.refresh()));
 		this._register(folding.model.onDidChangeLanguage(() => this.refresh()));
-		this._register(folding.model.onDidChangeTokens(() => this.refresh()));
+		this._register(folding.model.onDidChangeTokens(() => tokenRefresh.schedule()));
 		this._register(options.configurations.onDidChange(() => this.refresh()));
 		this._register(options.languageFeaturesService.foldingRangeProvider.onDidChange(() => this.refresh()));
 		this._register(providerSelectionChanged.event(() => this.refresh()));

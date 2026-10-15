@@ -22,6 +22,8 @@ export default defineConfig({
 		rolldownOptions: {
 			output: rendererOutput,
 			input: {
+				markdownEditor: resolve(import.meta.dirname, 'markdownEditor.html'),
+				markdownEditorHost: resolve(import.meta.dirname, 'markdownEditorHost.html'),
 				themePreview: resolve(import.meta.dirname, 'browser/theme-preview/themePreview.html'),
 				sessionsThemePreview: resolve(import.meta.dirname, 'browser/theme-preview/sessionsThemePreview.html'),
 				changes: resolve(import.meta.dirname, 'changes.html'),

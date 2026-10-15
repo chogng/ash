@@ -11,6 +11,7 @@
     "appServerDaemon": "bin/ash-app-server-daemon{exe}",
     "codeModeHost": "bin/ash-code-mode-host{exe}",
     "gitExtension": "bin/ash-git-extension{exe}",
+    "markdownParser": "bin/ash-markdown-parser{exe}",
     "githubAuthentication": "bin/ash-github-authentication{exe}",
     "githubExtension": "bin/ash-github-extension{exe}",
     "remoteSshExtension": "bin/ash-remote-ssh-extension{exe}",

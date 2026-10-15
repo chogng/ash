@@ -54,6 +54,8 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 	private model: CustomTextEditorModel | undefined;
 	private input: IResourceEditorInput | undefined;
 	private renderedHtml: string | undefined;
+	private renderedUpdate: unknown;
+	private renderedVersion: number | undefined;
 	private editable = false;
 	private applyingEdit = false;
 	private readOnly = false;
@@ -120,12 +122,15 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 				this.renderRequest.value = toDisposable(() => controller.abort());
 				const renderSignal = AbortSignal.any([inputSignal, controller.signal]);
 				try {
-					const content = await this.provider.render({ uri: input.resource.toString(), text: reference.model.getText(), languageId: reference.model.getLanguageId(), version: reference.model.getVersionId(), readOnly: this.readOnly }, renderSignal);
+					const document = { uri: input.resource.toString(), text: reference.model.getText(), languageId: reference.model.getLanguageId(), version: reference.model.getVersionId(), readOnly: this.readOnly };
+					const content = await this.provider.render(document, renderSignal);
 					if (renderSignal.aborted || this.model !== model) {
 						return;
 					}
 					const variables = Object.entries(this.themes.getColorTheme().colors).map(([id, value]) => `${colorCssVariable(id)}:${value}`).join(';');
 					this.editable = content.update !== undefined;
+					this.renderedUpdate = content.update;
+					this.renderedVersion = document.version;
 					const base = asWebviewUri(input.resource).toString().replaceAll('&', '&amp;').replaceAll('"', '&quot;');
 					this.renderedHtml = `<base href="${base}"><style>:root{${variables}}</style>${content.html}`;
 					if (this.webview.value) {
@@ -215,12 +220,17 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 			}
 		}));
 		webview.mountTo(this.container!, getWindow(this.container!));
+		// WebviewElement queues this until its document has installed message handlers.
+		if (this.renderedUpdate !== undefined) webview.postMessage(this.renderedUpdate);
 	}
 
 	private handleEditMessage(message: object & { type: unknown; }, webview: IWebviewElement): void {
 		const model = this.model?.reference.model;
 		if (!model) return;
-		if (message.type === 'ready') { this.refreshView?.(); return; }
+		if (message.type === 'ready') {
+			if (this.renderedVersion !== model.getVersionId()) this.refreshView?.();
+			return;
+		}
 		if (message.type === 'save') {
 			void this.save().catch(error => this.notifications.error(error));
 			return;
@@ -252,6 +262,7 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 				}
 			} finally { this.applyingEdit = false; }
 			webview.postMessage({ type: 'accepted', version: model.getVersionId(), text: model.getText() });
+			this.refreshView?.();
 		} else {
 			if (message.type === 'undo') model.undo(); else model.redo();
 			this.refreshView?.();
@@ -263,6 +274,8 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 		this.model = undefined;
 		this.input = undefined;
 		this.renderedHtml = undefined;
+		this.renderedUpdate = undefined;
+		this.renderedVersion = undefined;
 		this.editable = false;
 		this.refreshView = undefined;
 		this.inputResources.clear();

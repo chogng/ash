@@ -82,6 +82,8 @@ suite('Webview element', () => {
 				assert.equal(documentHtml.includes('https://api.example.com'), messageProtocol === 'mcp');
 				assert.equal(documentHtml.includes('https://cdn.example.com'), messageProtocol === 'mcp');
 				assert.ok(documentHtml.includes("frame-src 'none'"));
+				assert.equal(documentHtml.includes("'wasm-unsafe-eval'"), false);
+				assert.ok(!documentHtml.includes("'unsafe-eval'"));
 				if (messageProtocol === 'mcp') assert.ok(webview.element.getAttribute('allow')!.includes("microphone 'none'"));
 			} finally { target.postMessage = original; }
 		}

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Markdown rich editor integration</title>
+	</head>
+	<body>
+		<script type="module">
+			import english from '../../../extensions/markdown-language-features/package.nls.json';
+			import chinese from '../../../extensions/markdown-language-features/package.nls.zh-CN.json';
+
+			const locale = new URL(location.href).searchParams.get('locale') ?? 'en';
+			document.documentElement.lang = locale;
+			const messages = locale === 'zh-CN' ? { ...english, ...chinese } : english;
+			const initial = document.createElement('script');
+			initial.type = 'application/json';
+			initial.id = 'ash-markdown-initial';
+			initial.textContent = JSON.stringify({
+			  text: '# Markdown audit\n\n中文段落 with **bold** and [a link](https://example.com/).\n\nInline math $E=mc^2$.\n\n$$\n\\frac{a}{b}\n$$\n\n| Header | Value |\n| --- | --- |\n| Cell | 42 |\n\n```typescript\nconst answer = 42;\n```\n\n- [x] Completed task\n',
+			  version: 1,
+			  readOnly: true,
+			  messages: Object.fromEntries(Object.entries(messages).filter(([key]) => key.startsWith('markdown.rich.')).map(([key, value]) => [key.slice('markdown.rich.'.length), value])),
+			});
+			async function parse(snapshot) {
+				const response = await fetch('/__markdown_parse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ protocol_version: 1, uri: 'file:///fixture.md', version: snapshot.version, text: snapshot.text }) });
+				if (!response.ok) return { ...snapshot, parseError: true };
+				return { ...snapshot, blocks: (await response.json()).blocks };
+			}
+			initial.textContent = JSON.stringify(await parse(JSON.parse(initial.textContent)));
+			document.body.append(initial);
+			window.addEventListener('message', event => {
+				if (event.source !== window || event.data?.type !== 'document' || event.data.blocks || event.data.parseError) return;
+				event.stopImmediatePropagation();
+				void parse(event.data).then(snapshot => window.postMessage(snapshot, location.origin));
+			}, true);
+			window.acquireVsCodeApi = () => ({ postMessage() {} });
+			await import('../../../extensions/markdown-language-features/src/richEditor.js');
+		</script>
+	</body>
+</html>

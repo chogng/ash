@@ -746,6 +746,21 @@ test('TextModel rolls back accessor changes when the callback fails', () => {
 	assert.deepEqual(model.getAllDecorations(4).map(decoration => decoration.id), [id]);
 });
 
+test('injected text queries avoid cosmetic bracket work and retain tracked owner ranges', () => {
+	using model = new TextModel('first\nsecond');
+	const [injected] = model.deltaDecorations([], [{ range: new Range(1, 2, 1, 2), options: { description: 'injected', before: { content: '中文' } } }], 7);
+	model.deltaDecorations([], [{ range: new Range(2, 2, 2, 2), options: { description: 'other owner', after: { content: 'other' } } }], 8);
+	model.deltaDecorations([], [{ range: new Range(1, 1, 1, 1), options: { description: 'global', before: { content: 'global' } } }]);
+	model.bracketPairs.getBracketsInRange = () => { throw new Error('Injected text must not query bracket colorization'); };
+	assert.equal(model.getInjectedTextDecorations(7).length, 2);
+	assert.deepEqual(model.getLineInjectedText(1, 7).map(text => text.options.content).sort(), ['global', '中文']);
+	assert.deepEqual(model.getLineInjectedText(2, 7), []);
+	model.applyEdits([{ range: new Range(1, 1, 1, 1), text: '\n' }]);
+	assert.equal(model.getInjectedTextDecorations(7).find(decoration => decoration.id === injected)?.range.startLineNumber, 2);
+	assert.deepEqual(model.getLineInjectedText(1, 7).map(text => text.options.content), ['global']);
+	assert.deepEqual(model.getLineInjectedText(2, 7).map(text => text.options.content), ['中文']);
+});
+
 test('TextModel exposes owner-filtered margin, injected text, and word-prefix queries', () => {
 	using model = new TextModel('alpha beta\n');
 	const [margin, injected, regular] = model.deltaDecorations([], [

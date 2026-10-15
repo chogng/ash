@@ -17,6 +17,56 @@ use std::time::Instant;
 mod windows;
 
 #[test]
+fn markdown_product_registration_is_lazy_snapshot_only_and_obeys_profile_policy() {
+    struct Disabled;
+    impl crate::ExtensionsEditorExtensionAdmission for Disabled {
+        fn generation(&self) -> u64 {
+            1
+        }
+        fn is_product_extension_enabled(&self, _id: &str) -> bool {
+            false
+        }
+        fn authorizes(&self, _binding: &crate::ExtensionsEditorExtensionBinding) -> bool {
+            false
+        }
+        fn acquire(
+            &self,
+            _binding: &crate::ExtensionsEditorExtensionBinding,
+        ) -> Option<Box<dyn crate::ExtensionsEditorExtensionAdmissionLease>> {
+            None
+        }
+    }
+    let deployments = super::source::built_in_deployments(
+        super::source::BuiltInEditorExtensions::Product,
+        Some(std::sync::Arc::new(Disabled)),
+    )
+    .unwrap();
+    let markdown = deployments
+        .iter()
+        .find(|entry| entry.id == "ash.markdown-parser")
+        .unwrap();
+    assert_eq!(
+        markdown.params.capabilities,
+        vec![ash_external_ext::ExtensionCapability::Command]
+    );
+    assert!(matches!(
+        markdown.workspace_read,
+        super::source::WorkspaceReadAccess::Denied
+    ));
+    assert!(markdown.credential_providers.is_empty());
+    assert_eq!(
+        markdown.activation.as_ref().unwrap().events,
+        ["onCommand:_markdown.parse"]
+    );
+    assert_eq!(
+        markdown.activation.as_ref().unwrap().commands,
+        [("_markdown.parse".into(), "_markdown.parse".into())]
+    );
+    assert!(!markdown.authority.authorizes());
+    assert!(markdown.authority.acquire().is_none());
+}
+
+#[test]
 fn stable_id_combines_plugin_and_manifest_local_identity() {
     assert_eq!(
         stable_extension_id("acme/review", "editor-runtime"),

@@ -1,4 +1,8 @@
 {
+  "markdown.rich.source": "编辑全文源码",
+  "markdown.rich.editBlock": "编辑 Markdown 段落",
+  "markdown.rich.task": "已完成任务",
+  "markdown.rich.parseError": "Rust Markdown 解析扩展不可用或解析失败。你仍可继续编辑源码。",
   "markdown.preview.title": "打开预览",
   "markdown.previewSide.title": "打开侧边预览",
   "markdown.reopenAsPreview.title": "重新打开为预览",

@@ -84,6 +84,42 @@ function browser(remote: RemoteHost): WebWorkerExtensionHost {
 
 const request = { extensionId: 'lazy', activationGeneration: 7, event: { type: 'command' as const, command: 'lazy.run' } };
 
+test('invalid client results reject the Worker call instead of stranding its pending request', async () => {
+	const originalWorker = Object.getOwnPropertyDescriptor(globalThis, 'Worker');
+	let worker!: WorkerFixture;
+	const replied = new DeferredPromise<{ success: boolean; error?: string; }>();
+	class WorkerFixture extends EventTarget {
+		constructor() { super(); worker = this; }
+		postMessage(message: BrowserExtensionHostRequest | { type: 'commandResult'; success: boolean; error?: string; }): void {
+			if (message.type === 'commandResult') { void replied.complete(message); return; }
+			queueMicrotask(() => this.dispatchEvent(new MessageEvent('message', { data: { id: message.id, success: true, result: message.type === 'activate' ? [] : null } })));
+		}
+		terminate(): void { }
+	}
+	Object.defineProperty(globalThis, 'Worker', { configurable: true, value: WorkerFixture });
+	try {
+		using remote = new RemoteHost();
+		remote.reconcile = remote.list = async () => ({ generation: 1, extensions: [] });
+		remote.registerClientHandler = () => Disposable.None;
+		using api = new WebWorkerExtensionHost({
+			list: async () => ({ generation: 1, diagnostics: [], extensions: [{ id: 'browser', name: 'browser', publisher: 'test', version: '1', displayName: 'Browser', sourceKind: 'builtIn', manifestJson: '{"browser":"./browser.js"}', manifestSha256: `sha256:${'a'.repeat(64)}`, packageSha256: `sha256:${'a'.repeat(64)}` }] }),
+			resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
+		}, remote, remote.instantiation);
+		const handler = api.registerClientHandler(async operation => (operation as { operation: string; }).operation === 'readInitialization'
+			? { result: 'initialization', initialization: { workspaceFolders: [], workspaceName: null, workspaceFile: null, configurationValues: {}, configurationData: null } }
+			: { result: 'command', hasValue: true, value: NaN });
+		using registration = toDisposable(() => handler.dispose());
+		await api.reconcile('refresh');
+		worker.dispatchEvent(new MessageEvent('message', { data: { type: 'clientRequest', id: 1, request: { operation: 'executeCommand', command: 'test.invalid', arguments: [] } } }));
+		const result = await replied.p;
+		assert.equal(result.success, false);
+		assert.match(result.error!, /non-finite/u);
+	} finally {
+		if (originalWorker) Object.defineProperty(globalThis, 'Worker', originalWorker);
+		else delete (globalThis as { Worker?: unknown; }).Worker;
+	}
+});
+
 test('readable user and registry browser packages do not gain client execution authority', async () => {
 	using remote = new RemoteHost();
 	remote.reconcile = remote.list = async () => ({ generation: 1, extensions: [] });

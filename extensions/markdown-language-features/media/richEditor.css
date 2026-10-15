@@ -38,7 +38,9 @@ body {
 }
 button:focus-visible,
 input:focus-visible,
-.ash-markdown-content:focus-visible {
+.ash-markdown-content:focus-visible,
+.ash-markdown-block:focus-visible,
+.ash-markdown-input textarea:focus-visible {
 	outline: 1px solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
@@ -51,10 +53,7 @@ input:focus-visible,
 	box-sizing: border-box;
 	min-height: 100%;
 	padding: 24px;
-	--md-cursor-background: var(--ash-editorCursor-foreground);
-	--md-block-active-background: var(--ash-editor-lineHighlightBackground);
-	--md-html-comment-foreground: var(--ash-description-foreground);
-	--md-html-comment-hover-foreground: var(--ash-editor-foreground);
+	overflow-wrap: anywhere;
 }
 .ash-markdown-content h1 {
 	font-size: 2em;
@@ -65,11 +64,13 @@ input:focus-visible,
 .ash-markdown-content h3 {
 	font-size: 1.25em;
 }
-.ash-markdown-content .md-paragraph,
-.ash-markdown-content .md-heading {
+.ash-markdown-content p,
+.ash-markdown-content h1,
+.ash-markdown-content h2,
+.ash-markdown-content h3 {
 	margin: 0.5em 0;
 }
-.ash-markdown-content .md-code-block {
+.ash-markdown-content pre {
 	background: var(--ash-text-codeBlockBackground);
 	padding: 12px;
 	border-radius: 4px;
@@ -77,7 +78,7 @@ input:focus-visible,
 .ash-markdown-content code {
 	font-family: ui-monospace, monospace;
 }
-.ash-markdown-content .md-blockquote {
+.ash-markdown-content blockquote {
 	border-left: 3px solid var(--ash-widget-border);
 	padding-left: 16px;
 }
@@ -92,6 +93,37 @@ input:focus-visible,
 .ash-markdown-content th {
 	border: 1px solid var(--ash-widget-border);
 	padding: 4px 8px;
+}
+.ash-markdown-content img {
+	max-width: 100%;
+}
+.ash-markdown-block {
+	min-height: 1.6em;
+}
+.ash-markdown-gap {
+	min-height: 0;
+	height: 0.25em;
+}
+.ash-markdown-raw {
+	white-space: pre-wrap;
+	font-family: ui-monospace, monospace;
+}
+.ash-markdown-input {
+	width: 100%;
+	border: 1px solid var(--ash-contrastBorder, transparent);
+}
+.ash-markdown-input textarea,
+.ash-markdown-input .ash-input-box-measure {
+	font: inherit;
+	line-height: 1.6;
+	padding: 4px;
+	color: var(--ash-editor-foreground);
+	background: var(--ash-editor-lineHighlightBackground, transparent);
+	caret-color: var(--ash-editorCursor-foreground);
+}
+.ash-markdown-input textarea {
+	resize: none;
+	tab-size: 4;
 }
 .ash-markdown-status {
 	padding-inline: 12px;

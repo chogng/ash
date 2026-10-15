@@ -210,6 +210,21 @@ test('Markdown workspace edits use dirty documents and localized validation resp
 	await assert.rejects(invoke('references', request, cancelled.signal), error => error instanceof Error && error.name === 'AbortError');
 });
 
+test('large rich documents are delivered once as updates instead of embedded HTML', async () => {
+	const text = '\uFEFF# Unembedded source\r\n' + '中文😀 **保真**  \r\n'.repeat(50000);
+	const uri = 'file:///synthetic/large.md';
+	const { handlers } = await loadMarkdown('zh-CN', [], {}, [], async request => {
+		if (request.operation !== 'executeCommand' || request.command !== '_markdown.parse') return { result: 'done' };
+		assert.deepEqual(request.arguments, [{ protocol_version: 1, uri, version: 5, text }]);
+		return { result: 'command', hasValue: true, value: { protocol_version: 1, uri, version: 5, blocks: [{ start: 0, end: text.length, content: { kind: 'raw', value: text } }] } };
+	});
+	const result = await handlers.get('vscode.markdown.editor')!('resolveCustomTextEditor', { document: { uri, version: 5, text, languageId: 'markdown' } }, new AbortController().signal) as { html: string; update: { text: string; blocks: unknown[]; }; };
+	assert.ok(result.html.length < 10000);
+	assert.doesNotMatch(result.html, /Unembedded source/u);
+	assert.equal(result.update.text, text);
+	assert.equal(result.update.blocks.length, 1);
+});
+
 
 test('Markdown reads unopened files for definitions, workspace references and rename edits', async () => {
 	const heading = { uri: 'file:///workspace/heading.md', text: '# Current heading', languageId: 'markdown', version: 1 };

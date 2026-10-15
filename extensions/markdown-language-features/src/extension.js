@@ -1,4 +1,5 @@
 import { registerLanguageFeatures } from './languageFeatures.js';
+import { readParseResponse } from './parseResponse.js';
 import * as vscode from 'vscode';
 import { Marked } from 'marked';
 import manifest from '../package.json';
@@ -60,14 +61,24 @@ export async function activate(context) {
 			if (token.isCancellationRequested) return;
 			const resources = { script: panel.webview.asWebviewUri(script).toString(), style: panel.webview.asWebviewUri(style).toString() };
 			const snapshot = { uri: document.uri.toString(), text: document.getText(), version: document.version, languageId: document.languageId };
+			try {
+				const parsed = await vscode.commands.executeCommand('_markdown.parse', { protocol_version: 1, uri: snapshot.uri, version: snapshot.version, text: snapshot.text });
+				if (token.isCancellationRequested) return;
+				snapshot.blocks = readParseResponse(parsed, snapshot);
+			} catch {
+				if (token.isCancellationRequested) return;
+				snapshot.parseError = true;
+			}
 			panel.webview.html = richEditorHtml(snapshot, richMessages) + `<link rel="stylesheet" href="${resources.style}"><script src="${resources.script}"></script>`;
 			await panel.webview.postMessage({ type: 'document', ...snapshot });
 		},
 	}));
 }
 
-/** Library code is immutable package data; only the document snapshot crosses the edit boundary. */
+/** Client assets are immutable package data. Rust receives only the versioned source snapshot. */
 function richEditorHtml(document, messages) {
-	const initial = JSON.stringify({ ...document, messages }).replaceAll('<', '\\u003c');
+	// Documents arrive through the host's queued initial update, once the view is
+	// listening. Embedding them here duplicates source/tree data and the HTML limit.
+	const initial = JSON.stringify({ uri: document.uri, text: '', version: 0, readOnly: true, messages }).replaceAll('<', '\\u003c');
 	return `<script type="application/json" id="ash-markdown-initial">${initial}</script>`;
 }

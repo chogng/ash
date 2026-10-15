@@ -1,0 +1,33 @@
+{
+  "name": "markdown-parser",
+  "publisher": "ash",
+  "version": "0.1.0",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "engines": {
+    "ash": "*"
+  },
+  "ashRuntime": {
+    "kind": "rust",
+    "entrypoint": "ash-markdown-parser"
+  },
+  "activationEvents": [
+    "onCommand:_markdown.parse"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "_markdown.parse",
+        "title": "%parse%"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "_markdown.parse",
+          "when": "false"
+        }
+      ]
+    }
+  }
+}

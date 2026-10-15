@@ -14,6 +14,31 @@ use crate::LocalSocketAccept;
 use crate::PollingLocalListener;
 
 #[test]
+fn slow_reader_receives_large_frames_without_repeated_bytes() -> io::Result<()> {
+    let (server, mut peer) = UnixStream::pair()?;
+    peer.set_read_timeout(Some(Duration::from_secs(5)))?;
+    let (reader, mut writer) = crate::LocalStream::pair(server)?;
+    drop(reader);
+    let payload = vec![b'x'; 8 * 1024 * 1024];
+    let expected = [payload.as_slice(), b"\nnext frame\n"].concat();
+    let sending = thread::spawn(move || -> io::Result<()> {
+        writer.write_all(&payload)?;
+        writer.write_all(b"\n")?;
+        writer.write_all(b"next frame\n")?;
+        writer.flush()
+    });
+    // Desktop pauses its carrier while awaiting Renderer acknowledgements. Hold
+    // the reader beyond the Windows socket timeout to reproduce that backpressure.
+    thread::sleep(Duration::from_millis(200));
+    let mut received = Vec::new();
+    peer.read_to_end(&mut received)?;
+    sending.join().expect("socket writer thread panicked")?;
+    assert_eq!(received.len(), expected.len());
+    assert!(received == expected, "backpressure changed the frame bytes");
+    Ok(())
+}
+
+#[test]
 fn input_eof_wakes_a_writer_when_the_peer_retains_its_read_half() -> io::Result<()> {
     let (mut server, peer) = UnixStream::pair()?;
     server.set_nonblocking(true)?;

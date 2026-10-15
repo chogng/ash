@@ -81,7 +81,16 @@ Workspace edit 的 `entries` 按顺序执行：`kind: textDocument` 带 `resourc
 文档扫描只使用文件服务可访问的工作区目录；后端未连接时，仅扫描本地浏览器已授权的目录。
 补全触发字符属于语言 Provider 注册契约。取消和扩展退出会终止对应请求。
 
-该扩展还提供 Markdown 预览及富文本编辑器，使用 `@vscode/markdown-editor` 以 Markdown 源码驱动排版。
+该扩展还提供 Markdown 预览及富文本编辑器。富编辑通过标准命令调用独立的 `ash.markdown-parser`
+Rust 扩展，由已有 SDK、Host RPC 和产品进程监管承载，按 `_markdown.parse` 请求激活；扩展只接收带版本的
+源码快照，返回渲染节点与 UTF-16 源码范围，不读取磁盘或维护文档副本。客户端丢弃已取消渲染的响应，
+并检查返回的协议、URI、版本及源码范围；标准命令 API 不传调用方取消，后台解析由 deadline、撤权与退出终止。
+桌面端和已连接后端的 Web 共用此能力；不可用时显示本地化错误并保留源码编辑。
+客户端 JSON envelope 上限为 64 MiB、100 万节点、每集合 262144 项及深度 160，允许快照和渲染树一同传输；
+各扩展进程仍按各自已授权额度校验。富编辑 HTML 只保留启动数据，完整文档通过宿主初始消息队列投递，
+避免重复嵌入 HTML；文档、源码视图与富编辑视图继续共用同一个撤销历史。客户端使用现有多行 InputBox
+编辑当前段落，Escape 恢复排版；全文源码输入支持跨段落选区。输入法组合结束后才提交局部源码变化，
+未编辑的换行、空白、转义和引用定义保持原样。原始 HTML 只作为文本显示，不主动加载远程图片。
 工作台通用 `WebviewEditor` 承载这些视图，`CustomTextEditorModel` 引用源码的共享文本模型。
 预览用源文档 URI 作为资源基址；相对图片、样式、字体和模块路径通过隔离 Webview 的资源通道加载。
 允许读取的目录是当前工作区与源文档目录，实际读取还必须满足已有文件服务的授权。
@@ -809,9 +818,9 @@ Renderer 不能把任意 Host RPC method 直接透传给扩展进程。
 
 Language Provider 调用会把当前 immutable editor snapshot 的完整 normalized text、version、language ID、
 可选 resource URI 及本次 position/range/options 交给扩展程序；因此 grant 该 capability 必须被产品明确
-解释为“允许 broker 披露当前参与调用的文档内容”，但不等于任意工作区文件读取。传输仍受 512 KiB
-payload ceiling、Directory/source live authority、activation generation 和 incarnation fence 约束，超限
-请求拒绝。
+解释为“允许 broker 披露当前参与调用的文档内容”，但不等于任意工作区文件读取。独立扩展进程默认受
+512 KiB payload ceiling 约束；产品 Provider 的更大额度须由宿主明确授予，客户端 envelope 另有上限。
+Directory/source live authority、activation generation 和 incarnation fence 始终生效，超限请求拒绝。
 Frontend v1 当前只投影 completion、Parameter Hints、hover、formatting、Inlay Hints 和 Linked Editing；
 Host vocabulary 中虽有 definition、references、rename、code action 等 operation，尚无严格 Workbench
 codec 的 operation 会发布 `unsupportedRegistrationBridge` 并使 aggregate state 降级；同一 registration

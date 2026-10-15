@@ -1,0 +1,5 @@
+{
+  "displayName": "Markdown Parser",
+  "description": "Rust parsing capability for the Ash Markdown editor.",
+  "parse": "Parse Markdown document"
+}

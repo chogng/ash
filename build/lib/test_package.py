@@ -116,6 +116,7 @@ class PackageTests(unittest.TestCase):
                 "ash-app-server-daemon",
                 "ash-code-mode-host",
                 "ash-git-extension",
+                "ash-markdown-parser",
                 "ash-github-authentication",
                 "ash-github-extension",
                 "ash-remote-ssh-extension",
@@ -303,6 +304,7 @@ class PackageTests(unittest.TestCase):
         "language-pack-zh-cn",
         "markdown-basics",
         "markdown-language-features",
+        "markdown-parser",
         "media-preview",
         "python",
         "remote-ssh",
@@ -420,6 +422,9 @@ class PackageTests(unittest.TestCase):
                 ripgrep,
                 test_tgrep_resolution(root),
                 node,
+                markdown_parser_binary=executable_file(
+                    root / "markdown-parser", b"markdown-parser"
+                ),
                 git_extension_binary=executable_file(
                     root / "git-extension", b"git-extension"
                 ),
@@ -566,6 +571,18 @@ class PackageTests(unittest.TestCase):
             self.assertEqual(
                 b"git-extension", (output / "bin" / "ash-git-extension").read_bytes()
             )
+            self.assertEqual(
+                b"markdown-parser",
+                (output / "bin" / "ash-markdown-parser").read_bytes(),
+            )
+            markdown = output / "ash-resources/extensions/markdown-parser"
+            self.assertEqual(
+                "rust",
+                json.loads((markdown / "package.json").read_text())["ashRuntime"][
+                    "kind"
+                ],
+            )
+            self.assertFalse((markdown / "src").exists())
             self.assertIn(
                 "仓库",
                 json.loads(
@@ -704,6 +721,9 @@ class PackageTests(unittest.TestCase):
                 test_tgrep_resolution(root),
                 None,
                 protocol_metadata=generated_protocol,
+                markdown_parser_binary=executable_file(
+                    root / "markdown-parser", b"markdown-parser"
+                ),
                 git_extension_binary=executable_file(
                     root / "git-extension", b"git-extension"
                 ),
@@ -1009,6 +1029,9 @@ class PackageTests(unittest.TestCase):
                 test_tgrep_resolution(root),
                 node,
                 bubblewrap,
+                markdown_parser_binary=executable_file(
+                    root / "markdown-parser", b"markdown-parser"
+                ),
                 git_extension_binary=executable_file(
                     root / "git-extension", b"git-extension"
                 ),
@@ -1098,6 +1121,9 @@ class PackageTests(unittest.TestCase):
                 ),
                 windows_sandbox_service_binary=executable_file(
                     root / "sandbox-service-source.exe", b"sandbox-service"
+                ),
+                markdown_parser_binary=executable_file(
+                    root / "markdown-parser", b"markdown-parser"
                 ),
                 git_extension_binary=executable_file(
                     root / "git-extension", b"git-extension"

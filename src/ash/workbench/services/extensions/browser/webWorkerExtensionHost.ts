@@ -298,10 +298,10 @@ class BrowserExtensionWorker extends Disposable {
 					const { operation } = decodeAppServerServerRequestParams('extensionClient/request', { extensionId, activationGeneration: 1, incarnation: 1, operation: payload });
 					if (operation.operation === 'readWorkspaceFile') throw new TypeError('Workspace file requests belong to the backend');
 					return await clientHandler(operation, AbortSignal.any([lifetime.signal, client.signal])) as unknown as JsonValue;
-				})().then(result => {
+				})().then(normalizeExtensionHostPayload).then(result => {
 					clients.delete(message.id);
 					if (client.signal.aborted) return;
-					if (!this.isDisposed) this.worker.postMessage({ type: 'commandResult', id: message.id, success: true, result: normalizeExtensionHostPayload(result) });
+					if (!this.isDisposed) this.worker.postMessage({ type: 'commandResult', id: message.id, success: true, result });
 				}, error => {
 					clients.delete(message.id);
 					if (client.signal.aborted) return;

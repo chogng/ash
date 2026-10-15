@@ -1299,18 +1299,26 @@ export class TextModel implements ITextModel {
 	getLineInjectedText(lineNumber: number, ownerId = 0): LineInjectedText[] {
 		this.assertNotDisposed();
 		if (lineNumber < 1 || lineNumber > this.getLineCount()) return [];
-		const decorations = this.getDecorationsInRange(
-			new Range(lineNumber, 1, lineNumber, this.getLineMaxColumn(lineNumber)),
-			ownerId,
-		);
+		const range = new Range(lineNumber, 1, lineNumber, this.getLineMaxColumn(lineNumber));
+		const decorations = this.getInjectedTextDecorations(ownerId).filter(decoration => Range.areIntersectingOrTouching(range, decoration.range));
 		return LineInjectedText.fromDecorations(decorations).filter(text => text.lineNumber === lineNumber);
 	}
 
 	getInjectedTextDecorations(ownerId = 0): model.IModelDecoration[] {
-		return this.getAllDecorations(ownerId).filter(decoration =>
-			decoration.options.before !== null && decoration.options.before !== undefined
-			|| decoration.options.after !== null && decoration.options.after !== undefined,
-		);
+		this.assertNotDisposed();
+		const result: model.IModelDecoration[] = [];
+		// Wrapping asks for injected text on every line. Cosmetic bracket colors
+		// cannot inject text; querying their AST here makes model attachment and
+		// history updates repeatedly traverse the document's bracket structure.
+		for (const entry of this.modelDecorations.values()) {
+			if (ownerId !== 0 && entry.ownerId !== 0 && entry.ownerId !== ownerId) continue;
+			if (entry.options.before == null && entry.options.after == null) continue;
+			if (entry.cachedRange?.versionId !== this._version) {
+				entry.cachedRange = { versionId: this._version, range: entry.trackedRange.range };
+			}
+			result.push({ id: entry.id, ownerId: entry.ownerId, range: entry.cachedRange.range, options: entry.options });
+		}
+		return result;
 	}
 
 	getOverviewRulerDecorations(ownerId = 0, filterOutValidation = false, filterFontDecorations = false): model.IModelDecoration[] {

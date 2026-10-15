@@ -83,7 +83,10 @@ pub(super) fn built_in_deployments(
     let directory = executable
         .parent()
         .ok_or(ExtensionHostRuntimeError::Internal)?;
-    let mut deployments = vec![product_ssh_deployment(directory)?];
+    let mut deployments = vec![
+        product_ssh_deployment(directory)?,
+        product_markdown_deployment(directory)?,
+    ];
     let git_manifest: serde_json::Value =
         serde_json::from_str(include_str!("../../../../../extensions/git/package.json"))
             .map_err(|_| ExtensionHostRuntimeError::Internal)?;
@@ -145,6 +148,58 @@ fn product_ssh_deployment(
         },
         authority: Arc::new(ProductAuthority),
         activation: None,
+        activation_failure: None,
+    })
+}
+
+fn product_markdown_deployment(
+    directory: &Path,
+) -> Result<EditorExtensionDeployment, ExtensionHostRuntimeError> {
+    let manifest = include_str!("../../../../../extensions/markdown-parser/package.json");
+    let source = include_str!("../../../../../extensions/markdown-parser/src/lib.rs");
+    let digest = format!(
+        "sha256:{:x}",
+        Sha256::digest(format!("{manifest}\0{source}"))
+    );
+    Ok(EditorExtensionDeployment {
+        scope: EditorExtensionScope::Product,
+        id: "ash.markdown-parser".into(),
+        version: "0.1.0".into(),
+        package_digest: digest.clone(),
+        command: ExtensionLaunchCommand::new(
+            directory.join(format!(
+                "ash-markdown-parser{}",
+                std::env::consts::EXE_SUFFIX
+            )),
+            std::iter::empty::<String>(),
+            directory,
+            BTreeMap::new(),
+        )
+        .map_err(ExtensionHostRuntimeError::Host)?,
+        workspace_read: WorkspaceReadAccess::Denied,
+        credential_providers: Vec::new(),
+        protocol_limits: Some(external_ext_protocol::ProtocolLimits {
+            maximum_frame_bytes: 32 * 1024 * 1024,
+            maximum_payload_bytes: 24 * 1024 * 1024,
+            ..Default::default()
+        }),
+        params: ActivateParams {
+            initialization: None,
+            extension_id: "ash.markdown-parser".into(),
+            package: PackageBinding {
+                package_id: "ash.markdown-parser@0.1.0".into(),
+                package_digest: digest,
+                entrypoint: "ash-markdown-parser".into(),
+            },
+            runtime_api_version: 1,
+            activation_events: vec!["onCommand:_markdown.parse".into()],
+            capabilities: vec![ExtensionCapability::Command],
+        },
+        authority: Arc::new(ProductAuthority),
+        activation: Some(ActivationPlan {
+            events: vec!["onCommand:_markdown.parse".into()],
+            commands: vec![("_markdown.parse".into(), "_markdown.parse".into())],
+        }),
         activation_failure: None,
     })
 }

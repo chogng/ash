@@ -1,0 +1,5 @@
+{
+  "displayName": "Markdown 解析器",
+  "description": "为 Ash Markdown 编辑器提供 Rust 解析能力。",
+  "parse": "解析 Markdown 文档"
+}

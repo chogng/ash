@@ -25,10 +25,14 @@ const LIFECYCLES = ["dormant", "stopped", "starting", "handshaking", "ready", "r
 const LANGUAGE_OPERATIONS = ["diagnostics", "selectionRanges", "documentHighlights", "workspaceSymbols", "completion", "definition", "hover", "references", "rename", "formatting", "codeAction", "codeLens", "documentSymbols", "foldingRanges", "documentLinks", "documentColors", "semanticTokens", "inlayHints", "linkedEditing", "parameterHints"] as const;
 const CANCELLATION_REASONS = ["caller", "deadline", "authorityRevoked", "shutdown"] as const;
 const OUTPUT_SEVERITIES = ["trace", "debug", "information", "warning", "error", "log"] as const;
-const MAX_PAYLOAD_BYTES = 512 * 1024;
+// Renderer envelopes carry both a document snapshot and a provider's render tree.
+// Keep this above their combined bounded sizes; each process still enforces its
+// own admitted Host RPC quota (512 KiB by default, larger for product providers).
+const MAX_PAYLOAD_BYTES = 64 * 1024 * 1024;
 const MAX_OUTPUT_EVENT_BYTES = 1024 * 1024;
-const MAX_PAYLOAD_NODES = 65_536;
-const MAX_PAYLOAD_DEPTH = 64;
+const MAX_PAYLOAD_NODES = 1_000_000;
+const MAX_PAYLOAD_DEPTH = 160;
+const MAX_COLLECTION_ENTRIES = 262_144;
 
 export function normalizeExtensionHostSnapshot(value: unknown): ExtensionHostFleetSnapshot {
 	const snapshot = exactRecord(value, "Extension Host snapshot", ["extensions", "generation"]);
@@ -385,13 +389,13 @@ function normalizeJsonValue(value: unknown, owner: string, depth: number, budget
 	budget.seen.add(value);
 	try {
 		if (Array.isArray(value)) {
-			if (value.length > 8192) throw new RangeError(`${owner} array is too large`);
+			if (value.length > MAX_COLLECTION_ENTRIES) throw new RangeError(`${owner} array is too large`);
 			return Object.freeze(value.map((entry, index) => normalizeJsonValue(entry, `${owner}[${index}]`, depth + 1, budget)));
 		}
 		const prototype = Object.getPrototypeOf(value);
 		if (prototype !== Object.prototype && prototype !== null) throw new TypeError(`${owner} must contain only plain objects`);
 		const entries = Object.entries(value as Record<string, unknown>);
-		if (entries.length > 8192) throw new RangeError(`${owner} object is too large`);
+		if (entries.length > MAX_COLLECTION_ENTRIES) throw new RangeError(`${owner} object is too large`);
 		const normalized: Record<string, JsonValue> = Object.create(null) as Record<string, JsonValue>;
 		for (const [key, entry] of entries) {
 			if (key.length === 0 || key.length > 256 || key.includes("\0")) throw new TypeError(`${owner} contains an invalid key`);

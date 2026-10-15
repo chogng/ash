@@ -54,9 +54,28 @@ test("normalizes one exact isolated Extension Host fleet snapshot", () => {
 test("rejects malformed fleet authority and oversized JSON payloads", () => {
 	assert.throws(() => normalizeExtensionHostSnapshot({ generation: 1, extensions: [{ id: "bad", version: "1", packageDigest: DIGEST, runtimeApiVersion: 1, activationGeneration: 0, incarnation: 1, lifecycle: "ready", failure: null, stderr: "", outputEvents: [], registrations: [] }] }), /activation generation/);
 	assert.throws(() => normalizeExtensionHostSnapshot({ generation: 1, extensions: [{ id: "bad", version: "1", packageDigest: DIGEST, runtimeApiVersion: 1, activationGeneration: 1, incarnation: null, lifecycle: "ready", failure: null, stderr: "", outputEvents: [], registrations: [] }] }), /must have an incarnation/);
-	const maximum = normalizeExtensionHostPayload("x".repeat(512 * 1024 - 2));
-	assert.equal(typeof maximum === "string" ? maximum.length : -1, 512 * 1024 - 2);
-	assert.throws(() => normalizeExtensionHostPayload("x".repeat(512 * 1024 - 1)), /too large/);
+	const maximum = normalizeExtensionHostPayload("x".repeat(64 * 1024 * 1024 - 2));
+	assert.equal(typeof maximum === "string" ? maximum.length : -1, 64 * 1024 * 1024 - 2);
+	assert.throws(() => normalizeExtensionHostPayload("x".repeat(64 * 1024 * 1024 - 1)), /too large/);
+});
+
+test('large document envelopes retain bounded wide/deep trees, Unicode and JSON validation', () => {
+	const text = '\uFEFF中文😀\r\n'.repeat(100000);
+	let nested: unknown = { text };
+	for (let depth = 0; depth < 96; depth++) nested = { children: [nested] };
+	// A depth above 160 remains invalid; rendering trees legitimately exceed the old 64.
+	assert.throws(() => normalizeExtensionHostPayload(nested), /too complex/);
+	nested = { text };
+	for (let depth = 0; depth < 40; depth++) nested = { children: [nested] };
+	const tree = Array.from({ length: 10000 }, (_, index) => ({ start: index, content: { kind: 'text', value: '中文😀' } }));
+	const value = normalizeExtensionHostPayload({ document: { text }, tree, nested }) as { document: { text: string; }; tree: readonly unknown[]; };
+	assert.equal(value.document.text, text);
+	assert.equal(value.tree.length, 10000);
+	assert.equal(Object.isFrozen(value.tree), true);
+	assert.throws(() => normalizeExtensionHostPayload(Array(262145).fill(null)), /array is too large/);
+	assert.throws(() => normalizeExtensionHostPayload({ value: NaN }), /non-finite/);
+	const cycle: { self?: unknown; } = {}; cycle.self = cycle;
+	assert.throws(() => normalizeExtensionHostPayload(cycle), /cycles/);
 });
 
 test("polls a fenced invocation until one strict terminal result", async () => {

@@ -4,11 +4,36 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { TextModel } from '../../../../common/model/textModel.js';
+import { LanguageFeaturesService } from '../../../../common/services/languageFeaturesService.js';
+import { registerTestTokens } from '../../../../test/common/testTokenization.js';
 
 const { FoldingController } = await import('../../browser/folding.js');
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { FoldingDecorationProvider } = await import('../../browser/foldingDecorations.js');
+
+test('tokenization batches coalesce whole-document folding provider requests', async () => {
+	using features = new LanguageFeaturesService();
+	let calls = 0;
+	using registration = features.foldingRangeProvider.register('typescript', {
+		provideFoldingRanges: () => { calls++; return []; },
+	});
+	using tokens = registerTestTokens(new Map());
+	using model = new TextModel('function root() {\n  value\n}', { languageId: 'typescript' });
+	using editor = createTestCodeEditor({ container: document.createElement('main'), model, languageFeaturesService: features });
+	const initial = calls;
+	assert.ok(initial > 0);
+	let changes = 0;
+	using changed = model.onDidChangeTokens(() => changes++);
+	for (let index = 0; index < 32; index++) {
+		model.tokenization.resetTokenization();
+		model.tokenization.forceTokenization(model.getLineCount());
+	}
+	assert.ok(changes >= 32);
+	assert.equal(calls, initial);
+	await new Promise(resolve => setTimeout(resolve, 350));
+	assert.equal(calls, initial + 1);
+});
 
 
 test('FoldingDecorationProvider selects controls, highlights, and editor-owned decoration lifetime', () => {
