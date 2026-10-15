@@ -288,3 +288,35 @@ async fn system_git_uses_an_absolute_installation_path_when_workspace_contains_g
 #[cfg(any(unix, windows))]
 #[path = "process_tests.rs"]
 mod process;
+
+#[tokio::test(flavor = "current_thread")]
+async fn clone_into_reserved_child_selects_the_requested_branch() {
+    let source = TestRepository::init();
+    source.write("file.txt", "first");
+    source.commit_all("first");
+    let first = source.git(&["rev-parse", "HEAD"]);
+    source.git(&["branch", "topic"]);
+    source.write("file.txt", "second");
+    source.commit_all("second");
+    let parent = tempfile::tempdir().unwrap();
+    let target = GitClient::system()
+        .clone_repository_reference(
+            source.root().to_str().unwrap(),
+            parent.path(),
+            Some("topic"),
+        )
+        .await
+        .unwrap();
+    let head = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&target)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .unwrap();
+    assert!(head.status.success());
+    assert_eq!(String::from_utf8(head.stdout).unwrap().trim(), first);
+    assert_eq!(
+        std::fs::read_to_string(target.join("file.txt")).unwrap(),
+        "first"
+    );
+}

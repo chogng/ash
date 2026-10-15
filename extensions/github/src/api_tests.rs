@@ -45,7 +45,7 @@ async fn cancelling_live_http_ends_reads_and_marks_dispatched_writes_uncertain()
                 } else {
                     HttpMethod::Post
                 },
-                &repository.endpoint("issues"),
+                &crate::endpoint(&repository, "issues"),
                 None,
                 operation,
             )
@@ -153,7 +153,7 @@ async fn bounded_response_failures_keep_reads_unavailable_and_dispatched_writes_
                     } else {
                         HttpMethod::Post
                     },
-                    &repository.endpoint("issues"),
+                    &crate::endpoint(&repository, "issues"),
                     None,
                     operation,
                 )

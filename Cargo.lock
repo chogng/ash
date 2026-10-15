@@ -451,6 +451,7 @@ dependencies = [
  "ash-git-attribution",
  "ash-github",
  "ash-github-authentication",
+ "ash-github-extension",
  "ash-glm",
  "ash-goal",
  "ash-grep",
@@ -899,6 +900,7 @@ dependencies = [
  "ash-exec",
  "ash-github",
  "ash-github-authentication",
+ "ash-github-extension",
  "ash-http-client",
  "ash-install-context",
  "ash-package-store",
@@ -1605,10 +1607,8 @@ name = "ash-github"
 version = "0.1.0"
 dependencies = [
  "ash-async-utils",
- "ash-http-client",
  "ash-login",
  "ash-secrets",
- "base64 0.22.1",
  "serde",
  "serde_json",
  "tokio",
@@ -1637,6 +1637,29 @@ dependencies = [
  "tempfile",
  "url",
  "zeroize",
+]
+
+[[package]]
+name = "ash-github-extension"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-core-plugins",
+ "ash-external-ext",
+ "ash-external-ext-protocol",
+ "ash-external-ext-sdk",
+ "ash-github",
+ "ash-http-client",
+ "ash-install-context",
+ "ash-login",
+ "ash-secrets",
+ "base64 0.22.1",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "tokio",
+ "url",
 ]
 
 [[package]]

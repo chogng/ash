@@ -498,7 +498,7 @@ impl AppServer {
         let path = runtime
             .block_on(
                 crate::git_service::current_client()
-                    .clone_repository(&params.url, parent)
+                    .clone_repository_reference(&params.url, parent, params.reference.as_deref())
                     .with_cancellation(cancellation.clone()),
             )
             .map_err(|_| git_error(GitRuntimeError::Service(GitServiceError::Cancelled)))?

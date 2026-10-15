@@ -1156,6 +1156,28 @@ test('extension backend routes validate generated parameters before dispatch', a
 	assert.equal(transport.requests.length, count);
 });
 
+for (const operation of [
+	{ operation: 'editorOperation', payload: { method: 'openEditorResources' } },
+	{ operation: 'backendRequest', capability: 'git.repository', method: 'repositories', params: {} },
+	{ operation: 'backendState', capability: 'git.repository', after: 0 },
+]) {
+	test(`extension ${operation.operation} returns generic JSON over the App Server protocol`, async () => {
+		const transport = new FakeTransport();
+		const connected = await connectWebRendererApi(transport, connectorHostServices);
+		using cleanup = toDisposable(() => connected.dispose());
+		const paths = Object.freeze(['file:///workspace/sample.txt']);
+		const registration = connected.api.extensionHost.registerClientHandler(async request => {
+			assert.deepEqual(request, operation);
+			return { result: 'value', value: Object.freeze({ paths }) };
+		});
+		using handlerCleanup = toDisposable(() => registration.dispose());
+		transport.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: 'extension-json', method: 'extensionClient/request', params: { extensionId: 'test.editor', activationGeneration: 7, incarnation: 3, operation } }) });
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.deepEqual(transport.requests.at(-1), { jsonrpc: '2.0', id: 'extension-json', result: { result: 'value', value: { paths: ['file:///workspace/sample.txt'] } } });
+		assert.equal(await connected.api.extensionHost.getConnectionState(), 'ready');
+	});
+}
+
 test('browser-only extension results are rejected by the App Server adapter', async () => {
 	const transport = new FakeTransport();
 	const connected = await connectWebRendererApi(transport, connectorHostServices);

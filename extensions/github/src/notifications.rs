@@ -4,37 +4,13 @@ use crate::Repository;
 use crate::Result;
 use ash_http_client::HttpHeader;
 use ash_http_client::HttpMethod;
+use github::*;
 use serde::Deserialize;
 use serde_json::Value;
 use serde_json::json;
 
 // Notifications cap pages at 50, unlike repository collections that allow 100.
 const PAGE_SIZE: usize = 50;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum NotificationFilter {
-    Unread,
-    All,
-    Participating,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Notification {
-    pub id: String,
-    pub title: String,
-    pub subject_type: String,
-    pub reason: String,
-    pub unread: bool,
-    pub updated_at: String,
-    pub repository: Repository,
-    pub url: String,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct NotificationPage {
-    pub notifications: Vec<Notification>,
-    pub next_page: Option<u32>,
-}
 
 impl GitHub {
     pub async fn notifications(

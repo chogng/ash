@@ -45,6 +45,10 @@ _BINARIES = {
         "ash-github-authentication",
         "--github-authentication-bin",
     ),
+    "ash-github-extension": (
+        "ash-github-extension",
+        "--github-extension-bin",
+    ),
     "ash-remote-host": ("ash-remote-host", "--remote-host-bin"),
     "ash-remote": ("ash-remote-connections", "--remote-bin"),
     "ash-remote-server": ("ash-remote-server", "--remote-server-bin"),

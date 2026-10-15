@@ -9,12 +9,10 @@ publish.workspace = true
 doctest = false
 
 [dependencies]
-base64.workspace = true
+tokio = { workspace = true, features = ["rt"] }
 url = { workspace = true, features = ["serde"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-tokio = { workspace = true, features = ["rt", "time", "macros"] }
-ash-http-client = { workspace = true }
 ash-async-utils = { workspace = true }
 ash-login = { workspace = true }
 ash-secrets = { workspace = true }

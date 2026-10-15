@@ -48,10 +48,13 @@ impl GitRuntime {
                     token,
                 );
             }
-            "git.clone" => return self.clone_repository(token),
+            "git.clone" => return self.clone_repository(arguments, token),
             "git.init" => return self.initialize_repository(token),
             "git.getRepositoryContexts" => {
+                // Commands can activate Git before the initial SCM callback has discovered folders.
+                self.refresh(Some(token))?;
                 let repositories: Vec<_> = self.lock().repositories.values().cloned().collect();
+
                 let mut values = vec![];
                 for repository in repositories {
                     let status = self.api.status(&repository, Some(token))?;
@@ -209,7 +212,15 @@ impl GitRuntime {
                     .get(1)
                     .filter(|value| value.is_object())
                     .ok_or_else(|| invalid("Missing Git command intent"))?;
-                self.execute(repository, intent.clone(), token)
+                let account = credential_account(arguments.get(2))?;
+                let result = self.api.repository_request(
+                    repository,
+                    "executeCommand",
+                    json!({"command":intent,"credentialAccountId":account}),
+                    token,
+                )?;
+                self.accept_status(decode(result["status"].clone())?);
+                Ok(result)
             }
             "git.undoCommit" => {
                 let status = self.api.status(repository, Some(token))?;
@@ -446,12 +457,44 @@ impl GitRuntime {
         if before.changes.iter().any(|change| change.conflicted) {
             return Err(invalid(&self.api.text("git.resolveConflicts", &[])));
         }
-        if before.head.name().is_some_and(|name| {
+        let locally_protected = before.head.name().is_some_and(|name| {
             config
                 .strings("branchProtection")
                 .iter()
                 .any(|pattern| wildcard(pattern, name))
-        }) && config.text("branchProtectionPrompt", "alwaysPrompt") != "alwaysCommit"
+        });
+        let remotely_protected = if let Some(branch) = before
+            .head
+            .name()
+            .filter(|_| config.text("branchProtectionPrompt", "alwaysPrompt") != "alwaysCommit")
+        {
+            let graph =
+                self.api
+                    .repository_request(repository, "graph", json!({"limit":1}), token)?;
+            let remotes = graph["remotes"].as_array().cloned().unwrap_or_default();
+            if remotes
+                .iter()
+                .any(|remote| remote["identity"]["provider"] == "github")
+            {
+                // The optional provider supplies GitHub rules. Network/permission failures stop this
+                // commit instead of silently treating a protected branch as unprotected.
+                self.api
+                    .client
+                    .execute_command(
+                        "github.isBranchProtected",
+                        vec![json!(branch), json!(remotes)],
+                        token,
+                    )?
+                    .as_bool()
+                    .ok_or_else(|| invalid("Invalid branch protection response"))?
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+        if (locally_protected || remotely_protected)
+            && config.text("branchProtectionPrompt", "alwaysPrompt") != "alwaysCommit"
         {
             let create = if config.text("branchProtectionPrompt", "alwaysPrompt")
                 == "alwaysCommitToNewBranch"
@@ -1479,11 +1522,41 @@ impl GitRuntime {
         };
         self.api.request("updateConfig",json!({"commandId":random_id()?,"expectedRevision":current["revision"],"git":current["git"]}),&config,Some(token))
     }
-    fn clone_repository(&self, token: &CancellationToken) -> Result<Value, ExtensionError> {
+    fn clone_repository(
+        &self,
+        arguments: &[Value],
+        token: &CancellationToken,
+    ) -> Result<Value, ExtensionError> {
         let config = self.api.configuration(None, Some(token))?;
-        let Some(url) = self.api.input("git.cloneUrl", "", token)? else {
-            return Ok(Value::Null);
+        let url = if let Some(value) = arguments.first() {
+            value
+                .as_str()
+                .filter(|value| {
+                    !value.is_empty() && value.len() <= 4096 && !value.chars().any(char::is_control)
+                })
+                .ok_or_else(|| invalid("Invalid clone URL"))?
+                .to_owned()
+        } else {
+            let Some(url) = self.api.input("git.cloneUrl", "", token)? else {
+                return Ok(Value::Null);
+            };
+            url
         };
+        let reference = arguments
+            .get(1)
+            .filter(|value| !value.is_null())
+            .map(|value| {
+                value
+                    .as_str()
+                    .filter(|value| {
+                        !value.is_empty()
+                            && value.len() <= 1024
+                            && !value.chars().any(char::is_control)
+                    })
+                    .ok_or_else(|| invalid("Invalid clone reference"))
+            })
+            .transpose()?;
+        let account = credential_account(arguments.get(2))?;
         let parent = self.api.editor(
             json!({"method":"pickFolder","defaultPath":config.value("defaultCloneDirectory")}),
             Some(token),
@@ -1493,7 +1566,7 @@ impl GitRuntime {
         }
         let result = self.api.request(
             "clone",
-            json!({"url":url.trim(),"parentPath":parent}),
+            json!({"url":url.trim(),"parentPath":parent,"reference":reference,"credentialAccountId":account}),
             &config,
             Some(token),
         )?;
@@ -1671,4 +1744,17 @@ fn wildcard(pattern: &str, text: &str) -> bool {
         previous = current;
     }
     previous[text.len()]
+}
+
+// This is invocation metadata for the askpass broker, never persisted Git configuration.
+fn credential_account(value: Option<&Value>) -> Result<Option<&str>, ExtensionError> {
+    match value {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(value))
+            if !value.is_empty() && value.len() <= 256 && !value.chars().any(char::is_control) =>
+        {
+            Ok(Some(value))
+        }
+        Some(_) => Err(invalid("Invalid credential account selection")),
+    }
 }

@@ -6,58 +6,8 @@ use super::Repository;
 use super::Result;
 use crate::api::Operation;
 use ash_http_client::HttpMethod;
-use serde::Deserialize;
-use serde::Serialize;
+use github::*;
 use serde_json::json;
-
-pub struct CreateIssue<'a> {
-    pub title: &'a str,
-    pub body: &'a str,
-    pub labels: &'a [String],
-    pub assignees: &'a [String],
-}
-
-pub struct UpdateIssue<'a> {
-    pub title: Option<&'a str>,
-    pub body: Option<&'a str>,
-    pub state: Option<super::IssueState>,
-    pub labels: Option<&'a [String]>,
-    pub assignees: Option<&'a [String]>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct IssueLabel {
-    pub name: String,
-    pub color: String,
-    pub node_id: String,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct IssueAssignee {
-    pub login: String,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct IssueMetadata {
-    #[serde(flatten)]
-    pub issue: Issue,
-    pub node_id: String,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct IssueRepositoryInfo {
-    pub node_id: String,
-    pub default_branch: String,
-    pub full_name: String,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LinkedIssueBranch {
-    pub id: String,
-    pub name: String,
-    pub commit: String,
-}
 
 impl GitHub {
     pub async fn comments(
@@ -75,9 +25,10 @@ impl GitHub {
             .api(
                 repository,
                 HttpMethod::Get,
-                &repository.endpoint(&format!(
-                    "issues/{number}/comments?per_page=100&page={page}"
-                )),
+                &crate::endpoint(
+                    repository,
+                    &format!("issues/{number}/comments?per_page=100&page={page}"),
+                ),
                 None,
             )
             .await?;
@@ -92,7 +43,7 @@ impl GitHub {
         validate_text(request.title, 256, "Issue title")?;
         validate_body(request.body)?;
         validate_names(request.labels, request.assignees)?;
-        let issue: Issue = self.api(repository, HttpMethod::Post, &repository.endpoint("issues"),
+        let issue: Issue = self.api(repository, HttpMethod::Post, &crate::endpoint(repository, "issues"),
             Some(json!({"title":request.title.trim(),"body":request.body,"labels":request.labels,"assignees":request.assignees}))).await?;
         validate_created_issue(repository, &issue)?;
         Ok(issue)
@@ -134,7 +85,7 @@ impl GitHub {
             .api(
                 repository,
                 HttpMethod::Patch,
-                &repository.endpoint(&format!("issues/{number}")),
+                &crate::endpoint(repository, &format!("issues/{number}")),
                 Some(body.into()),
             )
             .await?;
@@ -162,7 +113,7 @@ impl GitHub {
             .api(
                 repository,
                 HttpMethod::Post,
-                &repository.endpoint(&format!("issues/{number}/comments")),
+                &crate::endpoint(repository, &format!("issues/{number}/comments")),
                 Some(json!({"body":body})),
             )
             .await?;
@@ -186,7 +137,7 @@ impl GitHub {
             .api(
                 repository,
                 HttpMethod::Patch,
-                &repository.endpoint(&format!("issues/comments/{comment_id}")),
+                &crate::endpoint(repository, &format!("issues/comments/{comment_id}")),
                 Some(json!({"body":body})),
             )
             .await?;
@@ -203,7 +154,7 @@ impl GitHub {
         self.api::<serde_json::Value>(
             repository,
             HttpMethod::Delete,
-            &repository.endpoint(&format!("issues/comments/{comment_id}")),
+            &crate::endpoint(repository, &format!("issues/comments/{comment_id}")),
             None,
         )
         .await?;
@@ -231,7 +182,7 @@ impl GitHub {
         self.api(
             repository,
             HttpMethod::Patch,
-            &repository.endpoint(&format!("labels/{name}")),
+            &crate::endpoint(repository, &format!("labels/{name}")),
             Some(json!({"color":color})),
         )
         .await
@@ -259,7 +210,7 @@ impl GitHub {
                 .api(
                     repository,
                     HttpMethod::Get,
-                    &repository.endpoint(&format!("issues?{query}")),
+                    &crate::endpoint(repository, &format!("issues?{query}")),
                     None,
                 )
                 .await?;
@@ -311,7 +262,7 @@ impl GitHub {
             .api(
                 repository,
                 HttpMethod::Delete,
-                &repository.endpoint(&format!("issues/{number}/assignees")),
+                &crate::endpoint(repository, &format!("issues/{number}/assignees")),
                 Some(json!({"assignees":[owner]})),
             )
             .await?;
@@ -333,7 +284,7 @@ impl GitHub {
             .api(
                 repository,
                 HttpMethod::Patch,
-                &repository.endpoint(&format!("issues/{number}")),
+                &crate::endpoint(repository, &format!("issues/{number}")),
                 Some(json!({"state":"closed","state_reason":"completed"})),
             )
             .await?;
@@ -367,7 +318,7 @@ impl GitHub {
             .api(
                 repository,
                 HttpMethod::Get,
-                &repository.endpoint(&format!("issues/{number}")),
+                &crate::endpoint(repository, &format!("issues/{number}")),
                 None,
             )
             .await?;
@@ -389,7 +340,7 @@ impl GitHub {
                 .api(
                     repository,
                     HttpMethod::Get,
-                    &repository.endpoint(&format!("labels?per_page=100&page={page}")),
+                    &crate::endpoint(repository, &format!("labels?per_page=100&page={page}")),
                     None,
                 )
                 .await?;
@@ -411,7 +362,7 @@ impl GitHub {
                 .api(
                     repository,
                     HttpMethod::Get,
-                    &repository.endpoint(&format!("assignees?per_page=100&page={page}")),
+                    &crate::endpoint(repository, &format!("assignees?per_page=100&page={page}")),
                     None,
                 )
                 .await?;
@@ -445,7 +396,7 @@ impl GitHub {
         self.api(
             repository,
             HttpMethod::Post,
-            &repository.endpoint("labels"),
+            &crate::endpoint(repository, "labels"),
             Some(json!({"name":name,"color":color})),
         )
         .await
@@ -480,7 +431,7 @@ impl GitHub {
             .api(
                 repository,
                 HttpMethod::Post,
-                &repository.endpoint(&format!("issues/{number}/assignees")),
+                &crate::endpoint(repository, &format!("issues/{number}/assignees")),
                 Some(json!({"assignees":[login]})),
             )
             .await?;
@@ -539,7 +490,7 @@ impl GitHub {
                 .api(
                     repository,
                     HttpMethod::Delete,
-                    &repository.endpoint(&format!("issues/{number}/labels/{segment}")),
+                    &crate::endpoint(repository, &format!("issues/{number}/labels/{segment}")),
                     None,
                 )
                 .await?;
@@ -549,7 +500,7 @@ impl GitHub {
                 .api(
                     repository,
                     HttpMethod::Post,
-                    &repository.endpoint(&format!("issues/{number}/labels")),
+                    &crate::endpoint(repository, &format!("issues/{number}/labels")),
                     Some(json!({"labels":[label]})),
                 )
                 .await?;

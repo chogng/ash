@@ -1,4 +1,6 @@
 use super::*;
+use ash_login::LoginError;
+use ash_login::LoginErrorKind;
 
 #[test]
 fn http_refusals_preserve_categories_without_remote_error_text() {

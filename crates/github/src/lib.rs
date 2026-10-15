@@ -1,331 +1,146 @@
-//! GitHub account authorization and repository operations.
-//!
-//! Account credentials belong to Ash's profile secret store. Repository operations
-//! bind shared HTTP requests to one explicit Ash authorization.
-
-mod api;
+//! GitHub consumer models, authorization contracts and capability client.
+//! OAuth and API implementations belong to the independently supervised extensions.
 mod credentials;
 mod error;
-mod forks;
-mod issues;
-mod managed_settings;
-mod notifications;
-mod pull_requests;
+mod models;
+mod provider;
 mod reporter;
-mod reviews;
-pub use credentials::GITHUB_PROVIDER_ID;
-pub use credentials::GitHubAccount;
-pub use credentials::GitHubAccountManager;
-pub use credentials::GitHubAuthorization;
-pub use credentials::GitHubBrowserConfig;
-pub use credentials::GitHubCredentialProvider;
-pub use error::Error;
-pub use forks::CreateFork;
-pub use forks::ForkBranches;
-pub use forks::ForkRepository;
-pub use issues::CreateIssue;
-pub use issues::IssueAssignee;
-pub use issues::IssueLabel;
-pub use issues::IssueMetadata;
-pub use issues::IssueRepositoryInfo;
-pub use issues::LinkedIssueBranch;
-pub use issues::UpdateIssue;
-pub use notifications::Notification;
-pub use notifications::NotificationFilter;
-pub use notifications::NotificationPage;
-pub use pull_requests::CheckRun;
-pub use pull_requests::CheckStatus;
-pub use pull_requests::CommitStatus;
-pub use pull_requests::MergeResult;
-pub use pull_requests::Page;
-pub use pull_requests::PullRequestFile;
-pub use pull_requests::PullRequestFiles;
-pub use pull_requests::PullRequestPage;
-pub use pull_requests::PullRequestReview;
-pub use pull_requests::ReviewEvent;
-pub use pull_requests::UpdatePullRequest;
-pub use reporter::GitHubIssueReporter;
-pub use reporter::ReporterError;
-pub use reporter::ReporterIssue;
-pub use reporter::report_repository;
-pub use reviews::DiffSide;
-pub use reviews::FileContent;
-pub use reviews::RequestedReviewers;
-pub use reviews::ReviewComment;
-pub use reviews::ReviewCommentInput;
-pub use reviews::ReviewDiff;
-pub use reviews::ReviewThread;
-pub use reviews::ReviewThreadPage;
-pub use reviews::ReviewerChange;
-pub use reviews::ThreadComments;
-pub use reviews::ThreadState;
-
 use ash_async_utils::CancellationToken;
-use ash_http_client::HttpClient;
-use ash_http_client::HttpMethod;
-use serde::Deserialize;
-use serde::Serialize;
-use serde_json::json;
+pub use credentials::*;
+pub use error::Error;
+pub use models::*;
+pub use provider::*;
+pub use reporter::GitHubIssueReporter;
+use serde_json::Value;
 use std::sync::Arc;
-
 pub type Result<T> = std::result::Result<T, Error>;
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct Repository {
-    pub host: String,
-    pub owner: String,
-    pub name: String,
-}
-
-impl Repository {
-    pub fn new(host: String, owner: String, name: String) -> Result<Self> {
-        if !valid_component(&host) || !valid_component(&owner) || !valid_component(&name) {
-            return Err(Error::InvalidInput(
-                "Invalid GitHub repository identity".into(),
-            ));
-        }
-        Ok(Self { host, owner, name })
-    }
-
-    fn endpoint(&self, suffix: &str) -> String {
-        format!("repos/{}/{}/{}", self.owner, self.name, suffix)
-    }
-}
-
-fn valid_component(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 255
-        && !value.starts_with(['-', '.'])
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || b"-_.".contains(&byte))
-}
-
-/// Validates an issue-list boundary before cache reads, deletion, or GitHub IO.
-pub fn validate_issue_query(query: &str, page: u32) -> Result<()> {
-    let query = query.trim();
-    if query.len() > 256
-        || query
-            .chars()
-            .any(|c| c.is_control() || c == '"' || c == '\\')
-    {
-        return Err(Error::InvalidInput("Search accepts up to 256 bytes of keywords or #number; quotes and control characters are not supported".into()));
-    }
-    let maximum = if query.is_empty() { 10_000 } else { 10 };
-    if page == 0 || page > maximum {
-        return Err(Error::InvalidInput(format!(
-            "Issue page must be between 1 and {maximum}"
-        )));
-    }
-    if !query.is_empty() {
-        let number = query.strip_prefix('#').unwrap_or(query);
-        if query.starts_with('#') || number.bytes().all(|c| c.is_ascii_digit()) {
-            let number: u64 = number
-                .parse()
-                .map_err(|_| Error::InvalidInput("Use a positive issue number".into()))?;
-            if number == 0 || page != 1 {
-                return Err(Error::InvalidInput(
-                    "Exact issue lookup requires a positive number and page 1".into(),
-                ));
-            }
-        }
-    }
-    Ok(())
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct Issue {
-    #[serde(default)]
-    pub labels: Vec<IssueLabel>,
-    #[serde(default)]
-    pub assignees: Vec<IssueAssignee>,
-    pub number: u64,
-    pub title: String,
-    pub body: Option<String>,
-    pub html_url: String,
-    #[serde(default)]
-    pub created_at: String,
-    pub updated_at: String,
-    pub state: String,
-    /// Preserve GitHub's reason vocabulary, including values added by the server.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub state_reason: Option<String>,
-    #[serde(default)]
-    pub pull_request: Option<serde_json::Value>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct Comment {
-    pub id: u64,
-    pub body: String,
-    pub html_url: String,
-    pub updated_at: String,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct IssueSnapshot {
-    pub issue: Issue,
-    pub comments: Vec<Comment>,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum IssueState {
-    Open,
-    Closed,
-}
-
-impl IssueState {
-    pub(crate) fn as_str(self) -> &'static str {
-        match self {
-            Self::Open => "open",
-            Self::Closed => "closed",
-        }
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct IssuePage {
-    pub issues: Vec<Issue>,
-    pub next_page: Option<u32>,
-    #[serde(default)]
-    pub notice: String,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum MergeMethod {
-    Merge,
-    Squash,
-    Rebase,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct PullRequest {
-    pub number: u64,
-    pub node_id: String,
-    pub title: String,
-    pub body: Option<String>,
-    pub html_url: String,
-    pub state: String,
-    pub draft: bool,
-    pub merged_at: Option<String>,
-    /// GitHub returns null while computing mergeability; it is not a conflict verdict.
-    pub mergeable: Option<bool>,
-    pub head: PullRequestBranch,
-    pub base: PullRequestBranch,
-    #[serde(default)]
-    pub auto_merge: Option<serde_json::Value>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct MergeOptions {
-    pub allow_merge_commit: bool,
-    pub allow_squash_merge: bool,
-    pub allow_rebase_merge: bool,
-    #[serde(default)]
-    pub allow_auto_merge: bool,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct RepositoryInfo {
-    #[serde(flatten)]
-    pub metadata: IssueRepositoryInfo,
-    #[serde(flatten)]
-    pub merge_options: MergeOptions,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct Commit {
-    pub sha: String,
-    pub html_url: String,
-    pub commit: CommitDetails,
-    pub stats: CommitStats,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct CommitDetails {
-    pub message: String,
-    pub author: CommitAuthor,
-    pub committer: CommitAuthor,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct CommitAuthor {
-    pub name: String,
-    pub date: String,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct CommitStats {
-    pub additions: u64,
-    pub deletions: u64,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct PullRequestBranch {
-    pub sha: String,
-    #[serde(rename = "ref")]
-    pub name: String,
-    pub repo: Option<PullRequestRepository>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct PullRequestRepository {
-    pub full_name: String,
-}
-
-pub struct CreatePullRequest<'a> {
-    pub title: &'a str,
-    pub body: &'a str,
-    pub head: &'a str,
-    pub base: &'a str,
-    pub draft: bool,
-}
-
-/// GitHub-specific IO; callers supply a previously authorized repository identity.
+/// A consumer bound to an exact account grant; it owns no GitHub IO or session state.
 pub struct GitHub {
-    http: Arc<dyn HttpClient>,
+    provider: Arc<dyn GitHubProvider>,
     cancellation: CancellationToken,
     credentials: Arc<dyn GitHubCredentialProvider>,
     authorization: GitHubAuthorization,
 }
-
 impl GitHub {
-    /// Reads an immutable commit identity, never a movable branch or tag.
-    pub async fn commit(&self, repository: &Repository, sha: &str) -> Result<Commit> {
-        if !(7..=40).contains(&sha.len()) || !sha.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-            return Err(Error::InvalidInput("Use a hexadecimal commit SHA".into()));
-        }
-        let commit: Commit = self
-            .api(
-                repository,
-                HttpMethod::Get,
-                &repository.endpoint(&format!("commits/{sha}")),
-                None,
-            )
-            .await?;
-        if commit.sha.len() != 40
-            || !commit.sha.bytes().all(|byte| byte.is_ascii_hexdigit())
-            || !commit
-                .sha
-                .to_ascii_lowercase()
-                .starts_with(&sha.to_ascii_lowercase())
+    pub async fn search_repositories(
+        &self,
+        query: &str,
+        page: u32,
+    ) -> Result<Page<RemoteRepository>> {
+        if let GitHubResponse::SearchRepositories(value) = self
+            .invoke(GitHubRequest::SearchRepositories {
+                query: query.into(),
+                page,
+            })
+            .await?
         {
-            return Err(Error::InvalidResponse(
-                "GitHub returned a different commit".into(),
-            ));
+            Ok(value)
+        } else {
+            Err(Error::InvalidResponse(
+                "Unexpected repository search response".into(),
+            ))
         }
-        Ok(commit)
     }
-
+    pub async fn create_repository(
+        &self,
+        name: &str,
+        description: &str,
+        visibility: RepositoryVisibility,
+    ) -> Result<RemoteRepository> {
+        if let GitHubResponse::CreateRepository(value) = self
+            .invoke(GitHubRequest::CreateRepository {
+                name: name.into(),
+                description: description.into(),
+                visibility,
+            })
+            .await?
+        {
+            Ok(value)
+        } else {
+            Err(Error::SubmissionUncertain)
+        }
+    }
+    pub async fn repository_branches(
+        &self,
+        repository: &Repository,
+        page: u32,
+    ) -> Result<Page<RepositoryBranch>> {
+        if let GitHubResponse::RepositoryBranches(value) = self
+            .invoke(GitHubRequest::RepositoryBranches {
+                repository: repository.clone(),
+                page,
+            })
+            .await?
+        {
+            Ok(value)
+        } else {
+            Err(Error::InvalidResponse(
+                "Unexpected repository branches response".into(),
+            ))
+        }
+    }
+    pub async fn branch_protection(&self, repository: &Repository) -> Result<BranchProtection> {
+        if let GitHubResponse::BranchProtection(value) = self
+            .invoke(GitHubRequest::BranchProtection {
+                repository: repository.clone(),
+            })
+            .await?
+        {
+            Ok(value)
+        } else {
+            Err(Error::InvalidResponse(
+                "Unexpected branch protection response".into(),
+            ))
+        }
+    }
+    /// Link generation is anonymous and performs no network operation.
+    pub async fn share_link(
+        provider: Arc<dyn GitHubProvider>,
+        link: ShareLink,
+        cancellation: CancellationToken,
+    ) -> Result<String> {
+        let source = cancellation.child_source();
+        let _guard = source.cancel_on_drop();
+        let result = tokio::task::spawn_blocking(move || {
+            provider.call(None, GitHubRequest::ShareLink(link), &source.token())
+        })
+        .await
+        .map_err(|_| Error::Unavailable("GitHub provider worker failed".into()))??;
+        if let GitHubResponse::ShareLink(value) = result {
+            Ok(value)
+        } else {
+            Err(Error::InvalidResponse(
+                "Unexpected share link response".into(),
+            ))
+        }
+    }
+    async fn invoke(&self, request: GitHubRequest) -> Result<GitHubResponse> {
+        let provider = self.provider.clone();
+        let authorization = self.authorization.clone();
+        let source = self.cancellation.child_source();
+        let _cancel_on_drop = source.cancel_on_drop();
+        let cancellation = source.token();
+        let write = request.is_write();
+        tokio::task::spawn_blocking(move || {
+            provider.call(Some(authorization), request, &cancellation)
+        })
+        .await
+        .map_err(|_| {
+            if write {
+                Error::SubmissionUncertain
+            } else {
+                Error::Unavailable("GitHub provider worker failed".into())
+            }
+        })?
+    }
     pub fn for_account(
         credentials: Arc<dyn GitHubCredentialProvider>,
-        http: Arc<dyn HttpClient>,
+        provider: Arc<dyn GitHubProvider>,
         cancellation: CancellationToken,
     ) -> std::result::Result<Self, ash_login::LoginError> {
         let authorization = credentials.authorization()?;
         Ok(Self {
-            http,
+            provider,
             cancellation,
             credentials,
             authorization,
@@ -334,14 +149,14 @@ impl GitHub {
 
     pub fn for_selected_account(
         credentials: Arc<dyn GitHubCredentialProvider>,
-        http: Arc<dyn HttpClient>,
+        provider: Arc<dyn GitHubProvider>,
         cancellation: CancellationToken,
         account_id: &str,
     ) -> std::result::Result<Self, ash_login::LoginError> {
         let authorization = credentials.authorization_for(account_id)?;
         Ok(Self {
             credentials,
-            http,
+            provider,
             cancellation,
             authorization,
         })
@@ -351,45 +166,51 @@ impl GitHub {
         &self.authorization
     }
 
-    /// Rejects results from a revoked or replaced grant, including cache hits.
+    /// Rejects cache hits after grant revocation or capability disablement.
     pub fn validate_authorization(&self) -> std::result::Result<(), ash_login::LoginError> {
+        self.provider.check_available().map_err(|_| {
+            ash_login::LoginError::new(
+                ash_login::LoginErrorKind::Unavailable,
+                "GitHub API extension unavailable",
+            )
+        })?;
         self.credentials.token(&self.authorization).map(|_| ())
     }
 
+    pub async fn commit(&self, repository: &Repository, sha: &str) -> Result<Commit> {
+        match self
+            .invoke(GitHubRequest::Commit {
+                repository: repository.clone(),
+                sha: sha.to_owned(),
+            })
+            .await?
+        {
+            GitHubResponse::Commit(value) => Ok(value),
+            _ => Err(Error::InvalidResponse(
+                "GitHub provider returned a different operation".into(),
+            )),
+        }
+    }
     pub async fn issues(
         &self,
         repository: &Repository,
         state: IssueState,
         page: u32,
     ) -> Result<IssuePage> {
-        if page == 0 || page > 10_000 {
-            return Err(Error::InvalidInput(
-                "Issue page must be between 1 and 10000".into(),
-            ));
+        match self
+            .invoke(GitHubRequest::Issues {
+                repository: repository.clone(),
+                state,
+                page,
+            })
+            .await?
+        {
+            GitHubResponse::Issues(value) => Ok(value),
+            _ => Err(Error::InvalidResponse(
+                "GitHub provider returned a different operation".into(),
+            )),
         }
-        let rows: Vec<Issue> = self
-            .api(
-                repository,
-                HttpMethod::Get,
-                &repository.endpoint(&format!(
-                    "issues?state={}&sort=updated&direction=desc&per_page=100&page={page}",
-                    state.as_str()
-                )),
-                None,
-            )
-            .await?;
-        let next_page = (rows.len() == 100 && page < 10_000).then_some(page + 1);
-        Ok(IssuePage {
-            issues: rows
-                .into_iter()
-                .filter(|issue| issue.pull_request.is_none())
-                .collect(),
-            next_page,
-            notice: String::new(),
-        })
     }
-
-    /// Searches only the supplied repository and issue state. Numeric input is an exact lookup.
     pub async fn search_issues(
         &self,
         repository: &Repository,
@@ -397,172 +218,857 @@ impl GitHub {
         query: &str,
         page: u32,
     ) -> Result<IssuePage> {
-        let query = query.trim();
-        validate_issue_query(query, page)?;
-        if query.is_empty() {
-            return self.issues(repository, state, page).await;
+        match self
+            .invoke(GitHubRequest::SearchIssues {
+                repository: repository.clone(),
+                state,
+                query: query.to_owned(),
+                page,
+            })
+            .await?
+        {
+            GitHubResponse::SearchIssues(value) => Ok(value),
+            _ => Err(Error::InvalidResponse(
+                "GitHub provider returned a different operation".into(),
+            )),
         }
-        if page == 0 || page > 10 {
-            return Err(Error::InvalidInput(
-                "Search supports pages 1–10; narrow the query beyond 1000 matches".into(),
-            ));
-        }
-        let number = query.strip_prefix('#').unwrap_or(query);
-        if query.starts_with('#') || number.bytes().all(|c| c.is_ascii_digit()) {
-            let number: u64 = number
-                .parse()
-                .map_err(|_| Error::InvalidInput("Use a positive issue number".into()))?;
-            if number == 0 || page != 1 {
-                return Err(Error::InvalidInput(
-                    "Exact issue lookup requires a positive number and page 1".into(),
-                ));
-            }
-            let issue: Issue = self
-                .api(
-                    repository,
-                    HttpMethod::Get,
-                    &repository.endpoint(&format!("issues/{number}")),
-                    None,
-                )
-                .await?;
-            if issue.number != number || issue.pull_request.is_some() {
-                return Err(Error::InvalidResponse(
-                    "Selected item is not the requested issue".into(),
-                ));
-            }
-            return Ok(IssuePage {
-                issues: if issue.state == state.as_str() {
-                    vec![issue]
-                } else {
-                    vec![]
-                },
-                next_page: None,
-                notice: String::new(),
-            });
-        }
-        #[derive(Deserialize)]
-        struct SearchResult {
-            items: Vec<Issue>,
-            total_count: u64,
-            incomplete_results: bool,
-        }
-        let terms = query
-            .split_whitespace()
-            .map(|term| format!("\"{term}\""))
-            .collect::<Vec<_>>()
-            .join(" ");
-        let search = format!(
-            "repo:{}/{} is:issue state:{} in:title,body {terms}",
-            repository.owner,
-            repository.name,
-            state.as_str()
-        );
-        let query = url::form_urlencoded::Serializer::new(String::new())
-            .append_pair("q", &search)
-            .append_pair("sort", "updated")
-            .append_pair("order", "desc")
-            .append_pair("per_page", "100")
-            .append_pair("page", &page.to_string())
-            .finish();
-        let result: SearchResult = self
-            .api(
-                repository,
-                HttpMethod::Get,
-                &format!("search/issues?{query}"),
-                None,
-            )
-            .await?;
-        let prefix = format!(
-            "https://{}/{}/{}/issues/",
-            repository.host, repository.owner, repository.name
-        );
-        if result.items.iter().any(|issue| {
-            !issue
-                .html_url
-                .to_lowercase()
-                .starts_with(&prefix.to_lowercase())
-                || issue.state != state.as_str()
-                || issue.pull_request.is_some()
-        }) {
-            return Err(Error::InvalidResponse(
-                "Search returned items outside the requested repository or state".into(),
-            ));
-        }
-        let notice = match (result.incomplete_results, result.total_count > 1000) {
-            (true, _) => "GitHub returned incomplete search results; refine the query or refresh",
-            (_, true) => "GitHub search exposes the first 1000 matches; refine the query",
-            _ => "",
-        }
-        .into();
-        Ok(IssuePage {
-            next_page: (page < 10 && u64::from(page) * 100 < result.total_count)
-                .then_some(page + 1),
-            issues: result.items,
-            notice,
-        })
     }
-
     pub async fn issue(&self, repository: &Repository, number: u64) -> Result<IssueSnapshot> {
-        self.read_issue(repository, number).await
+        match self
+            .invoke(GitHubRequest::Issue {
+                repository: repository.clone(),
+                number,
+            })
+            .await?
+        {
+            GitHubResponse::Issue(value) => Ok(value),
+            _ => Err(Error::InvalidResponse(
+                "GitHub provider returned a different operation".into(),
+            )),
+        }
     }
-
-    async fn read_issue(&self, repository: &Repository, number: u64) -> Result<IssueSnapshot> {
-        if number == 0 {
-            return Err(Error::InvalidInput("Issue number must be positive".into()));
+    pub async fn comments(
+        &self,
+        repository: &Repository,
+        number: u64,
+        page: u32,
+    ) -> Result<crate::Page<Comment>> {
+        match self
+            .invoke(GitHubRequest::Comments {
+                repository: repository.clone(),
+                number,
+                page,
+            })
+            .await?
+        {
+            GitHubResponse::Comments(value) => Ok(value),
+            _ => Err(Error::InvalidResponse(
+                "GitHub provider returned a different operation".into(),
+            )),
         }
-        let issue: Issue = self
-            .api(
-                repository,
-                HttpMethod::Get,
-                &repository.endpoint(&format!("issues/{number}")),
-                None,
-            )
-            .await?;
-        if issue.number != number || issue.pull_request.is_some() {
-            return Err(Error::InvalidResponse(
-                "Selected item is not the requested issue".into(),
-            ));
+    }
+    pub async fn create_issue(
+        &self,
+        repository: &Repository,
+        request: CreateIssue<'_>,
+    ) -> Result<Issue> {
+        match self
+            .invoke(GitHubRequest::CreateIssue {
+                repository: repository.clone(),
+                request: request.into(),
+            })
+            .await?
+        {
+            GitHubResponse::CreateIssue(value) => Ok(value),
+            _ => Err(Error::SubmissionUncertain),
         }
-        let mut comments = Vec::new();
-        let mut context_bytes = issue.body.as_ref().map_or(0, String::len);
-        for page in 1..=100 {
-            let rows: Vec<Comment> = self
-                .api(
-                    repository,
-                    HttpMethod::Get,
-                    &repository.endpoint(&format!(
-                        "issues/{number}/comments?per_page=100&page={page}"
-                    )),
-                    None,
-                )
-                .await?;
-            let complete = rows.len() < 100;
-            context_bytes += rows
-                .iter()
-                .map(|comment| {
-                    comment.body.len() + comment.html_url.len() + comment.updated_at.len()
-                })
-                .sum::<usize>();
-            if context_bytes > 4 * 1024 * 1024 {
-                return Err(Error::OperationFailed("Issue context exceeds 4 MiB".into()));
-            }
-            comments.extend(rows);
-            if complete {
-                return Ok(IssueSnapshot { issue, comments });
-            }
+    }
+    pub async fn update_issue(
+        &self,
+        repository: &Repository,
+        number: u64,
+        update: UpdateIssue<'_>,
+    ) -> Result<Issue> {
+        match self
+            .invoke(GitHubRequest::UpdateIssue {
+                repository: repository.clone(),
+                number,
+                update: update.into(),
+            })
+            .await?
+        {
+            GitHubResponse::UpdateIssue(value) => Ok(value),
+            _ => Err(Error::SubmissionUncertain),
         }
-        Err(Error::OperationFailed(
-            "Issue exceeds the supported comment limit; no partial context was submitted".into(),
-        ))
+    }
+    pub async fn create_comment(
+        &self,
+        repository: &Repository,
+        number: u64,
+        body: &str,
+    ) -> Result<Comment> {
+        match self
+            .invoke(GitHubRequest::CreateComment {
+                repository: repository.clone(),
+                number,
+                body: body.to_owned(),
+            })
+            .await?
+        {
+            GitHubResponse::CreateComment(value) => Ok(value),
+            _ => Err(Error::SubmissionUncertain),
+        }
+    }
+    pub async fn update_comment(
+        &self,
+        repository: &Repository,
+        comment_id: u64,
+        body: &str,
+    ) -> Result<Comment> {
+        match self
+            .invoke(GitHubRequest::UpdateComment {
+                repository: repository.clone(),
+                comment_id,
+                body: body.to_owned(),
+            })
+            .await?
+        {
+            GitHubResponse::UpdateComment(value) => Ok(value),
+            _ => Err(Error::SubmissionUncertain),
+        }
+    }
+    pub async fn delete_comment(&self, repository: &Repository, comment_id: u64) -> Result<()> {
+        match self
+            .invoke(GitHubRequest::DeleteComment {
+                repository: repository.clone(),
+                comment_id,
+            })
+            .await?
+        {
+            GitHubResponse::DeleteComment(value) => Ok(value),
+            _ => Err(Error::SubmissionUncertain),
+        }
+    }
+    pub async fn update_issue_label_color(
+        &self,
+        repository: &Repository,
+        name: &str,
+        color: &str,
+    ) -> Result<IssueLabel> {
+        match self
+            .invoke(GitHubRequest::UpdateIssueLabelColor {
+                repository: repository.clone(),
+                name: name.to_owned(),
+                color: color.to_owned(),
+            })
+            .await?
+        {
+            GitHubResponse::UpdateIssueLabelColor(value) => Ok(value),
+            _ => Err(Error::SubmissionUncertain),
+        }
+    }
+    pub async fn automatic_issue_candidates(
+        &self,
+        repository: &Repository,
+        labels: &[String],
+        assignee: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<IssueMetadata>> {
+        match self
+            .invoke(GitHubRequest::AutomaticIssueCandidates {
+                repository: repository.clone(),
+                labels: labels.to_vec(),
+                assignee: assignee.map(str::to_owned),
+                limit,
+            })
+            .await?
+        {
+            GitHubResponse::AutomaticIssueCandidates(value) => Ok(value),
+            _ => Err(Error::InvalidResponse(
+                "GitHub provider returned a different operation".into(),
+            )),
+        }
+    }
+    pub async fn unassign_issue(
+        &self,
+        repository: &Repository,
+        number: u64,
+        owner: &str,
+    ) -> Result<()> {
+        match self
+            .invoke(GitHubRequest::UnassignIssue {
+                repository: repository.clone(),
+                number,
+                owner: owner.to_owned(),
+            })
+            .await?
+        {
+            GitHubResponse::UnassignIssue(value) => Ok(value),
+            _ => Err(Error::SubmissionUncertain),
+        }
+    }
+    pub async fn close_completed_issue(&self, repository: &Repository, number: u64) -> Result<()> {
+        match self
+            .invoke(GitHubRequest::CloseCompletedIssue {
+                repository: repository.clone(),
+                number,
+            })
+            .await?
+        {
+            GitHubResponse::CloseCompletedIssue(value) => Ok(value),
+            _ => Err(Error::SubmissionUncertain),
+        }
+    }
+    pub async fn issue_repository(&self, repository: &Repository) -> Result<IssueRepositoryInfo> {
+        match self
+            .invoke(GitHubRequest::IssueRepository {
+                repository: repository.clone(),
+            })
+            .await?
+        {
+            GitHubResponse::IssueRepository(value) => Ok(value),
+            _ => Err(Error::InvalidResponse(
+                "GitHub provider returned a different operation".into(),
+            )),
+        }
+    }
+    pub async fn issue_metadata(
+        &self,
+        repository: &Repository,
+        number: u64,
+    ) -> Result<IssueMetadata> {
+        match self
+            .invoke(GitHubRequest::IssueMetadata {
+                repository: repository.clone(),
+                number,
+            })
+            .await?
+        {
+            GitHubResponse::IssueMetadata(value) => Ok(value),
+            _ => Err(Error::InvalidResponse(
+                "GitHub provider returned a different operation".into(),
+            )),
+        }
+    }
+    pub async fn issue_labels(&self, repository: &Repository) -> Result<Vec<IssueLabel>> {
+        match self
+            .invoke(GitHubRequest::IssueLabels {
+                repository: repository.clone(),
+            })
+            .await?
+        {
+            GitHubResponse::IssueLabels(value) => Ok(value),
+            _ => Err(Error::InvalidResponse(
+                "GitHub provider returned a different operation".into(),
+            )),
+        }
+    }
+    pub async fn issue_assignees(&self, repository: &Repository) -> Result<Vec<IssueAssignee>> {
+        match self
+            .invoke(GitHubRequest::IssueAssignees {
+                repository: repository.clone(),
+            })
+            .await?
+        {
+            GitHubResponse::IssueAssignees(value) => Ok(value),
+            _ => Err(Error::InvalidResponse(
+                "GitHub provider returned a different operation".into(),
+            )),
+        }
+    }
+    pub async fn create_issue_label(
+        &self,
+        repository: &Repository,
+        name: &str,
+        color: &str,
+    ) -> Result<IssueLabel> {
+        match self
+            .invoke(GitHubRequest::CreateIssueLabel {
+                repository: repository.clone(),
+                name: name.to_owned(),
+                color: color.to_owned(),
+            })
+            .await?
+        {
+            GitHubResponse::CreateIssueLabel(value) => Ok(value),
+            _ => Err(Error::SubmissionUncertain),
+        }
+    }
+    pub async fn assign_issue(
+        &self,
+        repository: &Repository,
+        number: u64,
+        login: &str,
+    ) -> Result<()> {
+        match self
+            .invoke(GitHubRequest::AssignIssue {
+                repository: repository.clone(),
+                number,
+                login: login.to_owned(),
+            })
+            .await?
+        {
+            GitHubResponse::AssignIssue(value) => Ok(value),
+            _ => Err(Error::SubmissionUncertain),
+        }
+    }
+    pub async fn sync_issue_labels(
+        &self,
+        repository: &Repository,
+        number: u64,
+        managed: &[String],
+        desired: Option<&str>,
+        expected: &[String],
+    ) -> Result<Vec<String>> {
+        match self
+            .invoke(GitHubRequest::SyncIssueLabels {
+                repository: repository.clone(),
+                number,
+                managed: managed.to_vec(),
+                desired: desired.map(str::to_owned),
+                expected: expected.to_vec(),
+            })
+            .await?
+        {
+            GitHubResponse::SyncIssueLabels(value) => Ok(value),
+            _ => Err(Error::SubmissionUncertain),
+        }
+    }
+    pub async fn linked_issue_branches(
+        &self,
+        repository: &Repository,
+        issue_id: &str,
+    ) -> Result<Vec<LinkedIssueBranch>> {
+        match self
+            .invoke(GitHubRequest::LinkedIssueBranches {
+                repository: repository.clone(),
+                issue_id: issue_id.to_owned(),
+            })
+            .await?
+        {
+            GitHubResponse::LinkedIssueBranches(value) => Ok(value),
+            _ => Err(Error::InvalidResponse(
+                "GitHub provider returned a different operation".into(),
+            )),
+        }
+    }
+    pub async fn create_linked_issue_branch(
+        &self,
+        repository: &Repository,
+        issue_id: &str,
+        name: &str,
+        commit: &str,
+    ) -> Result<LinkedIssueBranch> {
+        match self
+            .invoke(GitHubRequest::CreateLinkedIssueBranch {
+                repository: repository.clone(),
+                issue_id: issue_id.to_owned(),
+                name: name.to_owned(),
+                commit: commit.to_owned(),
+            })
+            .await?
+        {
+            GitHubResponse::CreateLinkedIssueBranch(value) => Ok(value),
+            _ => Err(Error::SubmissionUncertain),
+        }
+    }
+    pub async fn repository(&self, repository: &Repository) -> Result<RepositoryInfo> {
+        match self
+            .invoke(GitHubRequest::Repository {
+                repository: repository.clone(),
+            })
+            .await?
+        {
+            GitHubResponse::Repository(value) => Ok(value),
+            _ => Err(Error::InvalidResponse(
+                "GitHub provider returned a different operation".into(),
+            )),
+        }
+    }
+    pub async fn pull_requests(
+        &self,
+        repository: &Repository,
+        state: IssueState,
+        page: u32,
+        head: Option<&str>,
+    ) -> Result<PullRequestPage> {
+        match self
+            .invoke(GitHubRequest::PullRequests {
+                repository: repository.clone(),
+                state,
+                page,
+                head: head.map(str::to_owned),
+            })
+            .await?
+        {
+            GitHubResponse::PullRequests(value) => Ok(value),
+            _ => Err(Error::InvalidResponse(
+                "GitHub provider returned a different operation".into(),
+            )),
+        }
+    }
+    pub async fn pull_request_files(
+        &self,
+        repository: &Repository,
+        number: u64,
+        page: u32,
+    ) -> Result<PullRequestFiles> {
+        match self
+            .invoke(GitHubRequest::PullRequestFiles {
+                repository: repository.clone(),
+                number,
+                page,
+            })
+            .await?
+        {
+            GitHubResponse::PullRequestFiles(value) => Ok(value),
+            _ => Err(Error::InvalidResponse(
+                "GitHub provider returned a different operation".into(),
+            )),
+        }
+    }
+    pub async fn pull_request_reviews(
+        &self,
+        repository: &Repository,
+        number: u64,
+        page: u32,
+    ) -> Result<Page<PullRequestReview>> {
+        match self
+            .invoke(GitHubRequest::PullRequestReviews {
+                repository: repository.clone(),
+                number,
+                page,
+            })
+            .await?
+        {
+            GitHubResponse::PullRequestReviews(value) => Ok(value),
+            _ => Err(Error::InvalidResponse(
+                "GitHub provider returned a different operation".into(),
+            )),
+        }
+    }
+    pub async fn review_pull_request(
+        &self,
+        repository: &Repository,
+        number: u64,
+        commit: &str,
+        event: ReviewEvent,
+        body: &str,
+        comments: &[ReviewCommentInput],
+    ) -> Result<PullRequestReview> {
+        match self
+            .invoke(GitHubRequest::ReviewPullRequest {
+                repository: repository.clone(),
+                number,
+                commit: commit.to_owned(),
+                event,
+                body: body.to_owned(),
+                comments: comments.to_vec(),
+            })
+            .await?
+        {
+            GitHubResponse::ReviewPullRequest(value) => Ok(value),
+            _ => Err(Error::SubmissionUncertain),
+        }
+    }
+    pub async fn merge_pull_request(
+        &self,
+        repository: &Repository,
+        number: u64,
+        commit: &str,
+        method: MergeMethod,
+    ) -> Result<MergeResult> {
+        match self
+            .invoke(GitHubRequest::MergePullRequest {
+                repository: repository.clone(),
+                number,
+                commit: commit.to_owned(),
+                method,
+            })
+            .await?
+        {
+            GitHubResponse::MergePullRequest(value) => Ok(value),
+            _ => Err(Error::SubmissionUncertain),
+        }
+    }
+    pub async fn enable_auto_merge(
+        &self,
+        repository: &Repository,
+        pull_request: &PullRequest,
+        method: MergeMethod,
+    ) -> Result<()> {
+        match self
+            .invoke(GitHubRequest::EnableAutoMerge {
+                repository: repository.clone(),
+                pull_request: pull_request.clone(),
+                method,
+            })
+            .await?
+        {
+            GitHubResponse::EnableAutoMerge(value) => Ok(value),
+            _ => Err(Error::SubmissionUncertain),
+        }
+    }
+    pub async fn merge_options(&self, repository: &Repository) -> Result<MergeOptions> {
+        match self
+            .invoke(GitHubRequest::MergeOptions {
+                repository: repository.clone(),
+            })
+            .await?
+        {
+            GitHubResponse::MergeOptions(value) => Ok(value),
+            _ => Err(Error::InvalidResponse(
+                "GitHub provider returned a different operation".into(),
+            )),
+        }
+    }
+    pub async fn find_pull_request(
+        &self,
+        repository: &Repository,
+        head: &str,
+        base: &str,
+    ) -> Result<Option<PullRequest>> {
+        match self
+            .invoke(GitHubRequest::FindPullRequest {
+                repository: repository.clone(),
+                head: head.to_owned(),
+                base: base.to_owned(),
+            })
+            .await?
+        {
+            GitHubResponse::FindPullRequest(value) => Ok(value),
+            _ => Err(Error::InvalidResponse(
+                "GitHub provider returned a different operation".into(),
+            )),
+        }
+    }
+    pub async fn checks(
+        &self,
+        repository: &Repository,
+        commit: &str,
+        page: u32,
+    ) -> Result<CheckStatus> {
+        match self
+            .invoke(GitHubRequest::Checks {
+                repository: repository.clone(),
+                commit: commit.to_owned(),
+                page,
+            })
+            .await?
+        {
+            GitHubResponse::Checks(value) => Ok(value),
+            _ => Err(Error::InvalidResponse(
+                "GitHub provider returned a different operation".into(),
+            )),
+        }
+    }
+    pub async fn pull_request(&self, repository: &Repository, number: u64) -> Result<PullRequest> {
+        match self
+            .invoke(GitHubRequest::PullRequest {
+                repository: repository.clone(),
+                number,
+            })
+            .await?
+        {
+            GitHubResponse::PullRequest(value) => Ok(value),
+            _ => Err(Error::InvalidResponse(
+                "GitHub provider returned a different operation".into(),
+            )),
+        }
+    }
+    pub async fn create_pull_request(
+        &self,
+        repository: &Repository,
+        request: CreatePullRequest<'_>,
+    ) -> Result<PullRequest> {
+        match self
+            .invoke(GitHubRequest::CreatePullRequest {
+                repository: repository.clone(),
+                request: request.into(),
+            })
+            .await?
+        {
+            GitHubResponse::CreatePullRequest(value) => Ok(value),
+            _ => Err(Error::SubmissionUncertain),
+        }
+    }
+    pub async fn update_pull_request(
+        &self,
+        repository: &Repository,
+        number: u64,
+        request: UpdatePullRequest<'_>,
+    ) -> Result<PullRequest> {
+        match self
+            .invoke(GitHubRequest::UpdatePullRequest {
+                repository: repository.clone(),
+                number,
+                request: request.into(),
+            })
+            .await?
+        {
+            GitHubResponse::UpdatePullRequest(value) => Ok(value),
+            _ => Err(Error::SubmissionUncertain),
+        }
+    }
+    pub async fn requested_reviewers(
+        &self,
+        repository: &Repository,
+        number: u64,
+    ) -> Result<RequestedReviewers> {
+        match self
+            .invoke(GitHubRequest::RequestedReviewers {
+                repository: repository.clone(),
+                number,
+            })
+            .await?
+        {
+            GitHubResponse::RequestedReviewers(value) => Ok(value),
+            _ => Err(Error::InvalidResponse(
+                "GitHub provider returned a different operation".into(),
+            )),
+        }
+    }
+    pub async fn change_reviewers(
+        &self,
+        repository: &Repository,
+        number: u64,
+        change: ReviewerChange,
+        users: &[String],
+        teams: &[String],
+    ) -> Result<RequestedReviewers> {
+        match self
+            .invoke(GitHubRequest::ChangeReviewers {
+                repository: repository.clone(),
+                number,
+                change,
+                users: users.to_vec(),
+                teams: teams.to_vec(),
+            })
+            .await?
+        {
+            GitHubResponse::ChangeReviewers(value) => Ok(value),
+            _ => Err(Error::SubmissionUncertain),
+        }
+    }
+    pub async fn update_review_comment(
+        &self,
+        repository: &Repository,
+        number: u64,
+        comment: &str,
+        body: &str,
+    ) -> Result<ReviewComment> {
+        match self
+            .invoke(GitHubRequest::UpdateReviewComment {
+                repository: repository.clone(),
+                number,
+                comment: comment.to_owned(),
+                body: body.to_owned(),
+            })
+            .await?
+        {
+            GitHubResponse::UpdateReviewComment(value) => Ok(value),
+            _ => Err(Error::SubmissionUncertain),
+        }
+    }
+    pub async fn delete_review_comment(
+        &self,
+        repository: &Repository,
+        number: u64,
+        comment: &str,
+    ) -> Result<()> {
+        match self
+            .invoke(GitHubRequest::DeleteReviewComment {
+                repository: repository.clone(),
+                number,
+                comment: comment.to_owned(),
+            })
+            .await?
+        {
+            GitHubResponse::DeleteReviewComment(value) => Ok(value),
+            _ => Err(Error::SubmissionUncertain),
+        }
+    }
+    pub async fn review_diff(
+        &self,
+        repository: &Repository,
+        number: u64,
+        commit: &str,
+        page: u32,
+    ) -> Result<ReviewDiff> {
+        match self
+            .invoke(GitHubRequest::ReviewDiff {
+                repository: repository.clone(),
+                number,
+                commit: commit.to_owned(),
+                page,
+            })
+            .await?
+        {
+            GitHubResponse::ReviewDiff(value) => Ok(value),
+            _ => Err(Error::InvalidResponse(
+                "GitHub provider returned a different operation".into(),
+            )),
+        }
+    }
+    pub async fn file_content(
+        &self,
+        repository: &Repository,
+        commit: &str,
+        path: &str,
+    ) -> Result<FileContent> {
+        match self
+            .invoke(GitHubRequest::FileContent {
+                repository: repository.clone(),
+                commit: commit.to_owned(),
+                path: path.to_owned(),
+            })
+            .await?
+        {
+            GitHubResponse::FileContent(value) => Ok(value),
+            _ => Err(Error::InvalidResponse(
+                "GitHub provider returned a different operation".into(),
+            )),
+        }
+    }
+    pub async fn review_threads(
+        &self,
+        repository: &Repository,
+        number: u64,
+        cursor: Option<&str>,
+    ) -> Result<ReviewThreadPage> {
+        match self
+            .invoke(GitHubRequest::ReviewThreads {
+                repository: repository.clone(),
+                number,
+                cursor: cursor.map(str::to_owned),
+            })
+            .await?
+        {
+            GitHubResponse::ReviewThreads(value) => Ok(value),
+            _ => Err(Error::InvalidResponse(
+                "GitHub provider returned a different operation".into(),
+            )),
+        }
+    }
+    pub async fn thread_comments(
+        &self,
+        repository: &Repository,
+        number: u64,
+        thread: &str,
+        cursor: Option<&str>,
+    ) -> Result<ThreadComments> {
+        match self
+            .invoke(GitHubRequest::ThreadComments {
+                repository: repository.clone(),
+                number,
+                thread: thread.to_owned(),
+                cursor: cursor.map(str::to_owned),
+            })
+            .await?
+        {
+            GitHubResponse::ThreadComments(value) => Ok(value),
+            _ => Err(Error::InvalidResponse(
+                "GitHub provider returned a different operation".into(),
+            )),
+        }
+    }
+    pub async fn reply_review_thread(
+        &self,
+        repository: &Repository,
+        number: u64,
+        thread: &str,
+        body: &str,
+    ) -> Result<ReviewComment> {
+        match self
+            .invoke(GitHubRequest::ReplyReviewThread {
+                repository: repository.clone(),
+                number,
+                thread: thread.to_owned(),
+                body: body.to_owned(),
+            })
+            .await?
+        {
+            GitHubResponse::ReplyReviewThread(value) => Ok(value),
+            _ => Err(Error::SubmissionUncertain),
+        }
+    }
+    pub async fn resolve_review_thread(
+        &self,
+        repository: &Repository,
+        number: u64,
+        thread: &str,
+        state: ThreadState,
+    ) -> Result<()> {
+        match self
+            .invoke(GitHubRequest::ResolveReviewThread {
+                repository: repository.clone(),
+                number,
+                thread: thread.to_owned(),
+                state,
+            })
+            .await?
+        {
+            GitHubResponse::ResolveReviewThread(value) => Ok(value),
+            _ => Err(Error::SubmissionUncertain),
+        }
+    }
+    pub async fn create_fork(
+        &self,
+        repository: &Repository,
+        fork: &CreateFork,
+    ) -> Result<ForkRepository> {
+        match self
+            .invoke(GitHubRequest::CreateFork {
+                repository: repository.clone(),
+                fork: fork.clone(),
+            })
+            .await?
+        {
+            GitHubResponse::CreateFork(value) => Ok(value),
+            _ => Err(Error::SubmissionUncertain),
+        }
+    }
+    pub async fn notifications(
+        &self,
+        filter: NotificationFilter,
+        page: u32,
+    ) -> Result<NotificationPage> {
+        match self
+            .invoke(GitHubRequest::Notifications { filter, page })
+            .await?
+        {
+            GitHubResponse::Notifications(value) => Ok(value),
+            _ => Err(Error::InvalidResponse(
+                "GitHub provider returned a different operation".into(),
+            )),
+        }
+    }
+    pub async fn mark_notification_read(&self, thread_id: &str) -> Result<()> {
+        match self
+            .invoke(GitHubRequest::MarkNotificationRead {
+                thread_id: thread_id.to_owned(),
+            })
+            .await?
+        {
+            GitHubResponse::MarkNotificationRead(value) => Ok(value),
+            _ => Err(Error::SubmissionUncertain),
+        }
+    }
+    pub async fn mark_notifications_read(&self) -> Result<()> {
+        match self.invoke(GitHubRequest::MarkNotificationsRead).await? {
+            GitHubResponse::MarkNotificationsRead(value) => Ok(value),
+            _ => Err(Error::SubmissionUncertain),
+        }
+    }
+    pub async fn managed_settings(&self) -> Result<Option<Value>> {
+        match self.invoke(GitHubRequest::ManagedSettings).await? {
+            GitHubResponse::ManagedSettings(value) => Ok(value),
+            _ => Err(Error::InvalidResponse(
+                "GitHub provider returned a different operation".into(),
+            )),
+        }
     }
 }
 
 #[cfg(test)]
-#[path = "github_tests.rs"]
-mod tests;
-
-#[cfg(test)]
-mod managed_settings_tests;
-
-pub use credentials::GitHubAuthenticationRequest;
-pub use credentials::GitHubAuthenticationResponse;
+mod client_tests;

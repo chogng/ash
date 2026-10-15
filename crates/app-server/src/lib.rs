@@ -78,3 +78,4 @@ mod agent_message_board_host;
 mod task_delivery_host;
 
 mod github_authentication;
+mod github_extension;

@@ -2,6 +2,8 @@ use ash_app_server_protocol::protocol::github::GitHubAccount;
 use ash_app_server_protocol::protocol::github::GitHubAccountConnectParams;
 use ash_app_server_protocol::protocol::github::GitHubAccountListParams;
 use ash_app_server_protocol::protocol::github::GitHubAccountsResult;
+use ash_app_server_protocol::protocol::github::GitHubBranchProtectionResult;
+use ash_app_server_protocol::protocol::github::GitHubBranchProtectionRule;
 use ash_app_server_protocol::protocol::github::GitHubDiffSide;
 use ash_app_server_protocol::protocol::github::GitHubFileContent;
 use ash_app_server_protocol::protocol::github::GitHubFileReadParams;
@@ -16,6 +18,14 @@ use ash_app_server_protocol::protocol::github::GitHubNotificationReadParams;
 use ash_app_server_protocol::protocol::github::GitHubNotificationsParams;
 use ash_app_server_protocol::protocol::github::GitHubNotificationsReadParams;
 use ash_app_server_protocol::protocol::github::GitHubNotificationsResult;
+use ash_app_server_protocol::protocol::github::GitHubRemoteRepository;
+use ash_app_server_protocol::protocol::github::GitHubRepositoryBranch;
+use ash_app_server_protocol::protocol::github::GitHubRepositoryBranchesParams;
+use ash_app_server_protocol::protocol::github::GitHubRepositoryBranchesResult;
+use ash_app_server_protocol::protocol::github::GitHubRepositoryCreateParams;
+use ash_app_server_protocol::protocol::github::GitHubRepositorySearchParams;
+use ash_app_server_protocol::protocol::github::GitHubRepositorySearchResult;
+use ash_app_server_protocol::protocol::github::GitHubRepositoryVisibility;
 use ash_app_server_protocol::protocol::github::GitHubRequestedReviewers;
 use ash_app_server_protocol::protocol::github::GitHubReviewComment;
 use ash_app_server_protocol::protocol::github::GitHubReviewCommentDeleteParams;
@@ -32,6 +42,11 @@ use ash_app_server_protocol::protocol::github::GitHubReviewThreadsParams;
 use ash_app_server_protocol::protocol::github::GitHubReviewThreadsResult;
 use ash_app_server_protocol::protocol::github::GitHubReviewerChange;
 use ash_app_server_protocol::protocol::github::GitHubReviewersChangeParams;
+use ash_app_server_protocol::protocol::github::GitHubShareLinkParams;
+use ash_app_server_protocol::protocol::github::GitHubShareLinkResult;
+use ash_app_server_protocol::protocol::github::GitHubSharePathKind;
+use ash_app_server_protocol::protocol::github::GitHubShareReferenceKind;
+use ash_app_server_protocol::protocol::github::GitHubShareTarget;
 
 use super::ConnectionState;
 use super::RpcError;
@@ -84,7 +99,6 @@ use ash_app_server_protocol::protocol::issues::IssueReadResult;
 use ash_app_server_protocol::protocol::issues::IssueState;
 use ash_app_server_protocol::protocol::registry::ClientMethod;
 use ash_async_utils::CancellationToken;
-use ash_http_client::HttpClient;
 use core_api::AgentRuntime;
 
 impl super::AppServer {
@@ -235,15 +249,18 @@ use std::sync::Arc;
 /// supplied by their domain owners; the processor never depends on the application host.
 pub(super) struct GitHubRequestProcessor {
     credentials: Arc<dyn github::GitHubCredentialProvider>,
-    http: Arc<dyn HttpClient>,
+    provider: Arc<dyn github::GitHubProvider>,
 }
 
 impl GitHubRequestProcessor {
     pub(super) fn new(
         credentials: Arc<dyn github::GitHubCredentialProvider>,
-        http: Arc<dyn HttpClient>,
+        provider: Arc<dyn github::GitHubProvider>,
     ) -> Self {
-        Self { credentials, http }
+        Self {
+            credentials,
+            provider,
+        }
     }
 
     pub(super) fn credentials(&self) -> &dyn github::GitHubCredentialProvider {
@@ -256,7 +273,7 @@ impl GitHubRequestProcessor {
     ) -> Result<github::GitHub, RpcError> {
         github::GitHub::for_account(
             Arc::clone(&self.credentials),
-            Arc::clone(&self.http),
+            Arc::clone(&self.provider),
             cancellation.clone(),
         )
         .map_err(github_authentication_error)
@@ -265,7 +282,12 @@ impl GitHubRequestProcessor {
     pub(super) fn handles(method: ClientMethod) -> bool {
         matches!(
             method,
-            ClientMethod::GitHubNotificationsList
+            ClientMethod::GitHubRepositorySearch
+                | ClientMethod::GitHubRepositoryCreate
+                | ClientMethod::GitHubRepositoryBranches
+                | ClientMethod::GitHubBranchProtection
+                | ClientMethod::GitHubShareLink
+                | ClientMethod::GitHubNotificationsList
                 | ClientMethod::GitHubManagedSettings
                 | ClientMethod::GitHubNotificationRead
                 | ClientMethod::GitHubNotificationsRead
@@ -313,6 +335,44 @@ impl GitHubRequestProcessor {
         params: &Value,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
+        if method == ClientMethod::GitHubShareLink {
+            let p: GitHubShareLinkParams = decode(params)?;
+            let repository =
+                github::Repository::new(p.repository.host, p.repository.owner, p.repository.name)
+                    .map_err(github_error)?;
+            let url = github::GitHub::share_link(
+                self.provider.clone(),
+                github::ShareLink {
+                    path_kind: match p.path_kind {
+                        GitHubSharePathKind::File => github::SharePathKind::File,
+                        GitHubSharePathKind::Directory => github::SharePathKind::Directory,
+                    },
+                    repository,
+                    reference: match p.reference_kind {
+                        GitHubShareReferenceKind::Commit => {
+                            github::ShareReference::Commit(p.reference)
+                        }
+                        GitHubShareReferenceKind::Branch => {
+                            github::ShareReference::Branch(p.reference)
+                        }
+                    },
+                    target: match p.target {
+                        GitHubShareTarget::GitHub => github::ShareTarget::GitHub,
+                        GitHubShareTarget::VscodeDev => github::ShareTarget::VscodeDev,
+                    },
+                    path: p.path,
+                    lines: p.lines.map(|lines| github::ShareLineRange {
+                        start: lines.start,
+                        end: lines.end,
+                    }),
+                    notebook_cell: p.notebook_cell,
+                },
+                cancellation.clone(),
+            )
+            .await
+            .map_err(github_error)?;
+            return result(&GitHubShareLinkResult { url });
+        }
         #[derive(serde::Deserialize)]
         #[serde(rename_all = "camelCase")]
         struct AccountSelection {
@@ -322,7 +382,7 @@ impl GitHubRequestProcessor {
         let client = if let Some(account_id) = selection.account_id {
             github::GitHub::for_selected_account(
                 Arc::clone(&self.credentials),
-                Arc::clone(&self.http),
+                Arc::clone(&self.provider),
                 cancellation.clone(),
                 &account_id,
             )
@@ -330,7 +390,7 @@ impl GitHubRequestProcessor {
         } else {
             self.client(cancellation)?
         };
-        // DTOs terminate here. Domain validation and remote effects remain in ash-github.
+        // DTOs terminate here. Domain validation and remote effects belong to the selected GitHub extension.
         macro_rules! operation {
             ($ty:ty, |$p:ident, $repo:ident| $body:expr) => {{
                 let $p: $ty = decode(params)?;
@@ -345,6 +405,62 @@ impl GitHubRequestProcessor {
             }};
         }
         match method {
+            ClientMethod::GitHubRepositorySearch => {
+                let p: GitHubRepositorySearchParams = decode(params)?;
+                let page = client
+                    .search_repositories(&p.query, p.page)
+                    .await
+                    .map_err(github_error)?;
+                result(&GitHubRepositorySearchResult {
+                    repositories: page.items.into_iter().map(remote_repository).collect(),
+                    next_page: page.next_page,
+                })
+            }
+            ClientMethod::GitHubRepositoryCreate => {
+                let p: GitHubRepositoryCreateParams = decode(params)?;
+                let visibility = match p.visibility {
+                    GitHubRepositoryVisibility::Private => github::RepositoryVisibility::Private,
+                    GitHubRepositoryVisibility::Public => github::RepositoryVisibility::Public,
+                };
+                result(&remote_repository(
+                    client
+                        .create_repository(&p.name, &p.description, visibility)
+                        .await
+                        .map_err(github_error)?,
+                ))
+            }
+            ClientMethod::GitHubRepositoryBranches => {
+                operation!(GitHubRepositoryBranchesParams, |p, repository| {
+                    let page = client.repository_branches(&repository, p.page).await?;
+                    Ok::<_, github::Error>(GitHubRepositoryBranchesResult {
+                        branches: page
+                            .items
+                            .into_iter()
+                            .map(|branch| GitHubRepositoryBranch {
+                                name: branch.name,
+                                default: branch.default,
+                            })
+                            .collect(),
+                        next_page: page.next_page,
+                    })
+                })
+            }
+            ClientMethod::GitHubBranchProtection => {
+                operation!(GitHubRepositoryParams, |p, repository| {
+                    let protection = client.branch_protection(&repository).await?;
+                    Ok::<_, github::Error>(GitHubBranchProtectionResult {
+                        default_branch: protection.default_branch,
+                        rules: protection
+                            .rules
+                            .into_iter()
+                            .map(|rule| GitHubBranchProtectionRule {
+                                include: rule.include,
+                                exclude: rule.exclude,
+                            })
+                            .collect(),
+                    })
+                })
+            }
             ClientMethod::GitHubManagedSettings => {
                 let _: GitHubManagedSettingsParams = decode(params)?;
                 result(&GitHubManagedSettingsResult {
@@ -1077,5 +1193,22 @@ fn requested_reviewers(value: github::RequestedReviewers) -> GitHubRequestedRevi
     GitHubRequestedReviewers {
         users: value.users.into_iter().map(|user| user.login).collect(),
         teams: value.teams.into_iter().map(|team| team.slug).collect(),
+    }
+}
+
+fn remote_repository(remote: github::RemoteRepository) -> GitHubRemoteRepository {
+    GitHubRemoteRepository {
+        repository: ash_app_server_protocol::protocol::issues::IssueRepository {
+            host: remote.repository.host,
+            owner: remote.repository.owner,
+            name: remote.repository.name,
+        },
+        description: remote.description,
+        stars: remote.stars,
+        private: remote.private,
+        default_branch: remote.default_branch,
+        html_url: remote.html_url,
+        clone_url: remote.clone_url,
+        ssh_url: remote.ssh_url,
     }
 }

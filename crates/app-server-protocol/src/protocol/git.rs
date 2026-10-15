@@ -149,6 +149,9 @@ pub struct GitCloneParams {
     #[schemars(length(min = 1, max = 4096))]
     pub url: String,
     pub parent_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub reference: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

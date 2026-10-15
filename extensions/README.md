@@ -19,7 +19,8 @@ TS/JS packages use the selected extension runtime and public compatibility API. 
 capabilities use the [`Rust SDK`](../sdk/rust/README.md), the same versioned host transport,
 and granted core services. [`github-authentication`](github-authentication/README.md) is the first
 profile-scoped Rust capability: it owns GitHub sessions for App without becoming a default TUI
-startup dependency. See the [architecture decision](../docs/editor-extensions.md#0-确定的产品方向)
+startup dependency. [`github`](github/README.md) separately owns the REST/GraphQL API capability,
+activated on demand under the same profile. See the [architecture decision](../docs/editor-extensions.md#0-确定的产品方向)
 for the two extension categories and current compatibility paths.
 
 ## Source and distribution boundary

@@ -1,92 +1,6 @@
 use super::*;
+use crate::GitHub;
 use crate::api::Operation;
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct PullRequestPage {
-    pub pull_requests: Vec<PullRequest>,
-    pub next_page: Option<u32>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct Page<T> {
-    pub items: Vec<T>,
-    pub next_page: Option<u32>,
-}
-
-pub struct PullRequestFiles {
-    pub files: Vec<PullRequestFile>,
-    pub next_page: Option<u32>,
-    /// A full final page reaches GitHub's 3000-file cap and cannot prove completeness.
-    pub limit_reached: bool,
-}
-
-pub struct UpdatePullRequest<'a> {
-    pub title: Option<&'a str>,
-    pub body: Option<&'a str>,
-    pub state: Option<IssueState>,
-    pub base: Option<&'a str>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct PullRequestFile {
-    pub filename: String,
-    pub status: String,
-    pub additions: u64,
-    pub deletions: u64,
-    pub changes: u64,
-    pub patch: Option<String>,
-    pub previous_filename: Option<String>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct PullRequestReview {
-    pub id: u64,
-    pub body: String,
-    pub state: String,
-    pub html_url: String,
-    pub commit_id: String,
-    pub submitted_at: Option<String>,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum ReviewEvent {
-    Approve,
-    RequestChanges,
-    Comment,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct MergeResult {
-    pub sha: String,
-    pub merged: bool,
-    pub message: String,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct CommitStatus {
-    pub context: String,
-    pub state: String,
-    pub description: Option<String>,
-    pub target_url: Option<String>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct CheckRun {
-    pub id: u64,
-    pub name: String,
-    pub status: String,
-    pub conclusion: Option<String>,
-    pub details_url: Option<String>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct CheckStatus {
-    pub state: String,
-    pub statuses: Vec<CommitStatus>,
-    pub checks: Vec<CheckRun>,
-    pub next_page: Option<u32>,
-}
 
 #[derive(Deserialize)]
 struct CombinedStatus {
@@ -136,7 +50,7 @@ impl GitHub {
             .api(
                 repository,
                 HttpMethod::Get,
-                &repository.endpoint(&format!("pulls?{query}")),
+                &crate::endpoint(repository, &format!("pulls?{query}")),
                 None,
             )
             .await?;
@@ -163,7 +77,10 @@ impl GitHub {
             .api(
                 repository,
                 HttpMethod::Get,
-                &repository.endpoint(&format!("pulls/{number}/files?per_page=100&page={page}")),
+                &crate::endpoint(
+                    repository,
+                    &format!("pulls/{number}/files?per_page=100&page={page}"),
+                ),
                 None,
             )
             .await?;
@@ -187,7 +104,10 @@ impl GitHub {
             .api(
                 repository,
                 HttpMethod::Get,
-                &repository.endpoint(&format!("pulls/{number}/reviews?per_page=100&page={page}")),
+                &crate::endpoint(
+                    repository,
+                    &format!("pulls/{number}/reviews?per_page=100&page={page}"),
+                ),
                 None,
             )
             .await?;
@@ -223,7 +143,7 @@ impl GitHub {
             .api(
                 repository,
                 HttpMethod::Post,
-                &repository.endpoint(&format!("pulls/{number}/reviews")),
+                &crate::endpoint(repository, &format!("pulls/{number}/reviews")),
                 Some(json!({"commit_id":commit,"event":event,"body":body,"comments":comments})),
             )
             .await?;
@@ -251,7 +171,7 @@ impl GitHub {
         self.api(
             repository,
             HttpMethod::Put,
-            &repository.endpoint(&format!("pulls/{number}/merge")),
+            &crate::endpoint(repository, &format!("pulls/{number}/merge")),
             Some(json!({"sha":commit,"merge_method":method})),
         )
         .await
@@ -325,7 +245,7 @@ impl GitHub {
             .api(
                 repository,
                 HttpMethod::Get,
-                &repository.endpoint(&format!("pulls?{query}")),
+                &crate::endpoint(repository, &format!("pulls?{query}")),
                 None,
             )
             .await?;
@@ -349,7 +269,10 @@ impl GitHub {
             .api(
                 repository,
                 HttpMethod::Get,
-                &repository.endpoint(&format!("commits/{commit}/status?per_page=100&page={page}")),
+                &crate::endpoint(
+                    repository,
+                    &format!("commits/{commit}/status?per_page=100&page={page}"),
+                ),
                 None,
             )
             .await?;
@@ -357,9 +280,10 @@ impl GitHub {
             .api(
                 repository,
                 HttpMethod::Get,
-                &repository.endpoint(&format!(
-                    "commits/{commit}/check-runs?per_page=100&page={page}"
-                )),
+                &crate::endpoint(
+                    repository,
+                    &format!("commits/{commit}/check-runs?per_page=100&page={page}"),
+                ),
                 None,
             )
             .await?;
@@ -381,7 +305,7 @@ impl GitHub {
             .api(
                 repository,
                 HttpMethod::Get,
-                &repository.endpoint(&format!("pulls/{number}")),
+                &crate::endpoint(repository, &format!("pulls/{number}")),
                 None,
             )
             .await?;
@@ -411,7 +335,7 @@ impl GitHub {
             .api(
                 repository,
                 HttpMethod::Post,
-                &repository.endpoint("pulls"),
+                &crate::endpoint(repository, "pulls"),
                 Some(json!({
                     "title": request.title, "body": request.body, "head": request.head,
                     "base": request.base, "draft": request.draft,
@@ -454,7 +378,7 @@ impl GitHub {
             .api(
                 repository,
                 HttpMethod::Patch,
-                &repository.endpoint(&format!("pulls/{number}")),
+                &crate::endpoint(repository, &format!("pulls/{number}")),
                 Some(json!(body)),
             )
             .await?;

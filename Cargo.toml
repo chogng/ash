@@ -50,6 +50,7 @@ members = [
     "crates/agent-graph-store",
     "crates/github",
     "extensions/github-authentication",
+    "extensions/github",
     "extensions/remote-ssh",
     "extensions/git",
     "extensions/dev-containers",

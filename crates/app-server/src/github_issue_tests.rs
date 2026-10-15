@@ -74,7 +74,7 @@ fn issue_rpc_reads_only_the_current_accounts_cache_and_rejects_revoked_credentia
     };
     let credentials = Arc::new(Credentials(Mutex::new(Some(first.clone()))));
     let server = issue_server(directory.path(), "https://github.com/team/repo.git")
-        .with_github_credentials(credentials.clone(), Arc::new(ReporterHttp::new()))
+        .with_github_http(credentials.clone(), Arc::new(ReporterHttp::new()))
         .unwrap();
     let repository =
         github::Repository::new("github.com".into(), "team".into(), "repo".into()).unwrap();
@@ -179,7 +179,7 @@ impl GitHubCredentialProvider for ExpiredCredentials {
 fn issue_rpc_preserves_authentication_failure_during_repository_io() {
     let directory = tempfile::tempdir().unwrap();
     let server = issue_server(directory.path(), "https://github.com/team/repo.git")
-        .with_github_credentials(Arc::new(ExpiredCredentials), Arc::new(ReporterHttp::new()))
+        .with_github_http(Arc::new(ExpiredCredentials), Arc::new(ReporterHttp::new()))
         .unwrap();
     let mut connection = server.connection();
     initialize(&server, &mut connection);
@@ -280,7 +280,7 @@ fn github_account_rpc_connects_without_oauth_selects_host_credentials_and_logs_o
     let server = server()
         .with_login_service(login)
         .with_github_accounts(accounts.clone())
-        .with_github_credentials(accounts, http.clone())
+        .with_github_http(accounts, http.clone())
         .unwrap();
     let mut connection = server.connection();
     initialize(&server, &mut connection);
@@ -394,7 +394,7 @@ fn github_stream_cancellation_keeps_the_domains_final_write_outcome() {
         let (entered, started) = std::sync::mpsc::channel();
         let backend = Arc::new(
             server()
-                .with_github_credentials(
+                .with_github_http(
                     repository_credentials(),
                     Arc::new(CancelledRepositoryHttp { entered, confirmed }),
                 )
@@ -456,7 +456,7 @@ fn github_repository_rpc_supports_issue_and_pr_management_without_a_local_checko
     use serde_json::json;
     let http = Arc::new(RepositoryHttp::default());
     let server = server()
-        .with_github_credentials(repository_credentials(), http.clone())
+        .with_github_http(repository_credentials(), http.clone())
         .unwrap();
     assert!(server.issue_runtime.is_none());
     let mut connection = server.connection();
@@ -716,7 +716,7 @@ fn github_issue_reads_preserve_optional_state_reasons() {
     use serde_json::json;
     let http = Arc::new(RepositoryHttp::default());
     let server = server()
-        .with_github_credentials(repository_credentials(), http.clone())
+        .with_github_http(repository_credentials(), http.clone())
         .unwrap();
     let mut connection = server.connection();
     initialize(&server, &mut connection);
@@ -752,7 +752,7 @@ fn github_rpc_preserves_refusals_and_uncertain_writes_without_retrying() {
     use serde_json::json;
     let http = Arc::new(RepositoryHttp::default());
     let server = server()
-        .with_github_credentials(repository_credentials(), http.clone())
+        .with_github_http(repository_credentials(), http.clone())
         .unwrap();
     let mut connection = server.connection();
     initialize(&server, &mut connection);
@@ -804,7 +804,7 @@ fn github_rpc_cancel_before_execution_stops_io() {
     use serde_json::json;
     let http = Arc::new(RepositoryHttp::default());
     let server = server()
-        .with_github_credentials(repository_credentials(), http.clone())
+        .with_github_http(repository_credentials(), http.clone())
         .unwrap();
     let mut connection = server.connection();
     initialize(&server, &mut connection);
@@ -863,11 +863,17 @@ fn reporter_rpc_searches_anonymously_and_submits_with_ash_authorization_to_the_p
     let http = Arc::new(ReporterHttp::new());
     let credentials = Arc::new(Credentials(Mutex::new(None)));
     let server = server()
-        .with_github_credentials(credentials.clone(), http.clone())
+        .with_github_http(credentials.clone(), http.clone())
         .unwrap()
         .with_issue_reporter(
-            github::GitHubIssueReporter::new("https://github.com/chogng/ash/issues", http.clone())
-                .unwrap(),
+            github::GitHubIssueReporter::new(
+                "https://github.com/chogng/ash/issues",
+                Arc::new(github_extension::ApiProvider::new(
+                    credentials.clone(),
+                    http.clone(),
+                )),
+            )
+            .unwrap(),
         );
     let mut connection = server.connection();
     initialize(&server, &mut connection);
@@ -961,11 +967,17 @@ fn gitlab_workspace_rejects_github_issue_browsing_but_can_report_product_issues(
     let http = Arc::new(ReporterHttp::new());
     let credentials = Arc::new(Credentials(Mutex::new(None)));
     let server = issue_server(directory.path(), "https://gitlab.com/team/repo.git")
-        .with_github_credentials(credentials.clone(), http.clone())
+        .with_github_http(credentials.clone(), http.clone())
         .unwrap()
         .with_issue_reporter(
-            github::GitHubIssueReporter::new("https://github.com/chogng/ash/issues", http.clone())
-                .unwrap(),
+            github::GitHubIssueReporter::new(
+                "https://github.com/chogng/ash/issues",
+                Arc::new(github_extension::ApiProvider::new(
+                    credentials.clone(),
+                    http.clone(),
+                )),
+            )
+            .unwrap(),
         );
     let mut connection = server.connection();
     initialize(&server, &mut connection);
@@ -1027,8 +1039,14 @@ fn gitlab_workspace_rejects_github_issue_browsing_but_can_report_product_issues(
 fn reporter_cancel_before_search_stops_io_and_has_a_terminal_cancelled_response() {
     let http = Arc::new(ReporterHttp::new());
     let server = server().with_issue_reporter(
-        github::GitHubIssueReporter::new("https://github.com/chogng/ash/issues", http.clone())
-            .unwrap(),
+        github::GitHubIssueReporter::new(
+            "https://github.com/chogng/ash/issues",
+            Arc::new(github_extension::ApiProvider::new(
+                repository_credentials(),
+                http.clone(),
+            )),
+        )
+        .unwrap(),
     );
     let mut connection = server.connection();
     initialize(&server, &mut connection);
@@ -1054,7 +1072,7 @@ fn stalled_github_reads_run_concurrently_without_blocking_queries_or_cancellatio
     let (entered, started) = std::sync::mpsc::channel();
     let backend = Arc::new(
         server()
-            .with_github_credentials(
+            .with_github_http(
                 repository_credentials(),
                 Arc::new(CancelledRepositoryHttp {
                     entered,
@@ -1151,7 +1169,7 @@ fn disconnect_drains_all_running_github_reads() {
     let (entered, started) = std::sync::mpsc::channel();
     let backend = Arc::new(
         server()
-            .with_github_credentials(
+            .with_github_http(
                 repository_credentials(),
                 Arc::new(CancelledRepositoryHttp {
                     entered,
@@ -1200,7 +1218,7 @@ fn github_notifications_and_fork_rpc_use_typed_account_and_repository_boundaries
     use serde_json::json;
     let http = Arc::new(RepositoryHttp::default());
     let server = server()
-        .with_github_credentials(repository_credentials(), http.clone())
+        .with_github_http(repository_credentials(), http.clone())
         .unwrap();
     let mut connection = server.connection();
     initialize(&server, &mut connection);
@@ -1277,7 +1295,7 @@ fn github_notifications_rpc_preserves_link_pagination_for_full_and_short_pages()
     use serde_json::json;
     let http = Arc::new(RepositoryHttp::default());
     let server = server()
-        .with_github_credentials(repository_credentials(), http.clone())
+        .with_github_http(repository_credentials(), http.clone())
         .unwrap();
     let mut connection = server.connection();
     initialize(&server, &mut connection);
@@ -1343,4 +1361,100 @@ fn github_notifications_rpc_preserves_link_pagination_for_full_and_short_pages()
             )
         );
     }
+}
+
+trait WithGitHubHttp {
+    fn with_github_http(
+        self,
+        credentials: Arc<dyn GitHubCredentialProvider>,
+        http: Arc<dyn ash_http_client::HttpClient>,
+    ) -> Result<AppServer, String>;
+}
+impl WithGitHubHttp for AppServer {
+    fn with_github_http(
+        self,
+        credentials: Arc<dyn GitHubCredentialProvider>,
+        http: Arc<dyn ash_http_client::HttpClient>,
+    ) -> Result<AppServer, String> {
+        let provider = Arc::new(github_extension::ApiProvider::new(
+            credentials.clone(),
+            http,
+        ));
+        self.with_github_provider(credentials, provider)
+    }
+}
+
+#[test]
+fn github_repository_features_rpc_bind_accounts_and_allow_anonymous_share_links() {
+    use serde_json::json;
+    let http = Arc::new(RepositoryHttp::default());
+    let credentials = Arc::new(Credentials(Mutex::new(None)));
+    let server = server()
+        .with_github_http(credentials.clone(), http.clone())
+        .unwrap();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let link = repository_request(
+        &server,
+        &mut connection,
+        2,
+        "github/share/link",
+        json!({"reference":"a".repeat(40),"referenceKind":"commit","target":"gitHub","pathKind":"file","path":"src/a b.rs","lines":{"start":2,"end":4},"notebookCell":null}),
+    );
+    assert_eq!(
+        link["result"]["url"],
+        format!(
+            "https://github.com/team/repo/blob/{}/src/a%20b.rs#L2-L4",
+            "a".repeat(40)
+        )
+    );
+    assert!(http.requests.lock().unwrap().is_empty());
+    *credentials.0.lock().unwrap() = Some(GitHubAuthorization {
+        host: "github.com".into(),
+        account_id: "42".into(),
+        grant_id: "grant".into(),
+    });
+    let remote = json!({"full_name":"team/repo","description":null,"private":true,"default_branch":"main","html_url":"https://github.com/team/repo","clone_url":"https://github.com/team/repo.git","ssh_url":"git@github.com:team/repo.git"});
+    for (id, method, params, status, body) in [
+        (
+            3,
+            "github/repository/search",
+            json!({"operationId":"search","accountId":"42","query":"","page":1}),
+            200,
+            json!([remote.clone()]),
+        ),
+        (
+            4,
+            "github/repository/create",
+            json!({"operationId":"create","accountId":"42","name":"repo","description":"","visibility":"private"}),
+            201,
+            remote,
+        ),
+        (
+            5,
+            "github/repository/branches",
+            json!({"operationId":"branches","accountId":"42","repository":{"host":"github.com","owner":"team","name":"repo"},"page":1}),
+            200,
+            json!([]),
+        ),
+        (
+            6,
+            "github/repository/branchProtection",
+            json!({"operationId":"rules","accountId":"42","repository":{"host":"github.com","owner":"team","name":"repo"}}),
+            200,
+            json!({"data":{"repository":{"viewerPermission":"READ","defaultBranchRef":{"name":"main"}}}}),
+        ),
+    ] {
+        if id == 5 {
+            http.reply(200,json!({"node_id":"id","full_name":"team/repo","default_branch":"main","allow_merge_commit":true,"allow_rebase_merge":true,"allow_squash_merge":true}));
+        }
+        http.reply(status, body);
+        let reply = call(
+            &server,
+            &mut connection,
+            json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}),
+        );
+        assert!(reply.get("result").is_some(), "{method}: {reply}");
+    }
+    assert_eq!(http.requests.lock().unwrap().len(), 5);
 }

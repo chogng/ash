@@ -212,6 +212,7 @@ def create_runtime_package(
         remote_ssh_extension_binary=executable("ash-remote-ssh-extension"),
         git_extension_binary=executable("ash-git-extension"),
         github_authentication_binary=executable("ash-github-authentication"),
+        github_extension_binary=executable("ash-github-extension"),
         windows_sandbox_binary=executable("ash-windows-sandbox")
         if spec.is_windows
         else None,

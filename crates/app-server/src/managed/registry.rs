@@ -656,6 +656,9 @@ fn open_server_with_profile_runtime(
     if let Some(executable) = crate::github_authentication::product_executable() {
         options = options.with_github_authentication_extension(executable);
     }
+    if let Some(executable) = crate::github_extension::product_executable() {
+        options = options.with_github_extension(executable);
+    }
     if let Some(path) = host.product_services() {
         options = options.with_product_services(
             LocalProductServicesConfig::load(path, host.profile_root())

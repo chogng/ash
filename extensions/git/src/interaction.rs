@@ -38,6 +38,7 @@ pub(crate) struct Scope {
     pub configuration: Configuration,
     pub token: CancellationToken,
     pub hosts: Vec<String>,
+    pub credential_account_id: Option<String>,
 }
 #[derive(Clone)]
 pub(crate) struct Connection {
@@ -196,8 +197,13 @@ impl GitRuntime {
                     .ok_or_else(|| invalid("Git operation was retired"))?,
             )
         };
-        let (configuration, token, hosts) = if let Some(scope) = scope {
-            (scope.configuration, Some(scope.token), scope.hosts)
+        let (configuration, token, hosts, credential_account_id) = if let Some(scope) = scope {
+            (
+                scope.configuration,
+                Some(scope.token),
+                scope.hosts,
+                scope.credential_account_id,
+            )
         } else {
             let cwd = std::fs::canonicalize(&request.cwd)
                 .map_err(|_| invalid("Git terminal directory is unavailable"))?;
@@ -231,7 +237,7 @@ impl GitRuntime {
                 .flatten()
                 .filter_map(|remote| remote["identity"]["host"].as_str().map(str::to_owned))
                 .collect();
-            (config, None, hosts)
+            (config, None, hosts, None)
         };
         if let Some(token) = &token {
             token.check_cancelled()?;
@@ -259,7 +265,7 @@ impl GitRuntime {
                             self.api.services.call(CoreServiceRequest::CredentialGet {
                                 provider_id: "github".into(),
                                 host,
-                                account_id: None,
+                                account_id: credential_account_id.clone(),
                             })
                         {
                             if prompt.starts_with("Username") {

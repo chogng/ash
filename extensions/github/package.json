@@ -1,0 +1,21 @@
+{
+  "name": "github",
+  "publisher": "ash",
+  "version": "1.0.0",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "engines": {
+    "vscode": "*"
+  },
+  "ashRuntime": {
+    "kind": "rust",
+    "entrypoint": "ash-github-extension",
+    "scope": "profile",
+    "capabilities": [
+      "github.api.v1"
+    ],
+    "clients": [
+      "app"
+    ]
+  }
+}

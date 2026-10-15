@@ -250,6 +250,19 @@ impl GitClient {
     /// Clones into a new child of an existing destination directory. Concurrent callers reserve
     /// distinct children before launching Git, including callers using aliases of the parent.
     pub async fn clone_repository(&self, url: &str, parent: &Path) -> GitResult<PathBuf> {
+        self.clone_repository_reference(url, parent, None).await
+    }
+
+    /// Clones into a reserved child folder, selecting a branch or tag when supplied.
+    pub async fn clone_repository_reference(
+        &self,
+        url: &str,
+        parent: &Path,
+        reference: Option<&str>,
+    ) -> GitResult<PathBuf> {
+        if let Some(reference) = reference {
+            validate_argument(reference)?;
+        }
         let url = url.trim();
         if url.is_empty() || url.len() > 4096 || url.chars().any(char::is_control) {
             return Err(GitError::InvalidConfiguration {
@@ -314,7 +327,8 @@ impl GitClient {
                 "no unused repository folder name",
             )
         })?));
-        self.clone_reserved(url, &parent, destination, None).await
+        self.clone_reserved(url, &parent, destination, reference)
+            .await
     }
 
     /// Reserves an exact new checkout. Existing directories are never adopted or overwritten.

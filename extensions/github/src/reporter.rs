@@ -1,0 +1,203 @@
+use crate::GitHubCredentialProvider;
+use crate::Repository;
+use ash_async_utils::CancellationToken;
+use ash_http_client::HttpClient;
+use ash_http_client::HttpHeader;
+use ash_http_client::HttpMethod;
+use ash_http_client::HttpRequest;
+use ash_http_client::HttpResponse;
+use github::ReporterError;
+use github::ReporterIssue;
+use github::report_repository;
+use serde::Deserialize;
+use std::sync::Arc;
+use url::Url;
+
+/// Uses Ash's outbound network policy; credentials never cross the renderer boundary.
+pub(crate) struct GitHubIssueReporter {
+    repository: Repository,
+    http: Arc<dyn HttpClient>,
+}
+
+impl GitHubIssueReporter {
+    pub fn new(target: &str, http: Arc<dyn HttpClient>) -> Result<Self, ReporterError> {
+        Ok(Self {
+            repository: report_repository(target)?,
+            http,
+        })
+    }
+
+    pub fn target(&self) -> String {
+        format!(
+            "https://github.com/{}/{}/issues",
+            self.repository.owner, self.repository.name
+        )
+    }
+
+    pub fn search(
+        &self,
+        title: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<Vec<ReporterIssue>, ReporterError> {
+        let title = title.trim();
+        if title.is_empty() || title.chars().count() > 256 || title.chars().any(char::is_control) {
+            return Err(ReporterError::InvalidInput);
+        }
+        // Only plain words enter the query, so user text cannot escape the product repository.
+        let words = title
+            .split(|character: char| !character.is_alphanumeric())
+            .filter(|word| !word.is_empty())
+            .take(32)
+            .collect::<Vec<_>>();
+        if words.is_empty() {
+            return Err(ReporterError::InvalidInput);
+        }
+        let mut url =
+            Url::parse("https://api.github.com/search/issues").expect("static GitHub API URL");
+        url.query_pairs_mut()
+            .append_pair(
+                "q",
+                &format!(
+                    "repo:{}/{} is:issue {} in:title",
+                    self.repository.owner,
+                    self.repository.name,
+                    words.join(" ")
+                ),
+            )
+            .append_pair("per_page", "5");
+        let request = HttpRequest::new(HttpMethod::Get, url.as_str(), headers(), vec![])
+            .map_err(|_| ReporterError::InvalidInput)?
+            .without_redirects();
+        let response = self
+            .http
+            .execute_with_cancellation(&request, cancellation)
+            .map_err(|_| {
+                if cancellation.is_cancelled() {
+                    ReporterError::Cancelled
+                } else {
+                    ReporterError::OperationFailed
+                }
+            })?;
+        validate_status(&response)?;
+        #[derive(Deserialize)]
+        struct Search {
+            items: Vec<ReporterIssue>,
+        }
+        let search: Search =
+            serde_json::from_slice(response.body()).map_err(|_| ReporterError::OperationFailed)?;
+        for issue in &search.items {
+            self.validate_issue(issue)?;
+        }
+        Ok(search.items.into_iter().take(5).collect())
+    }
+
+    pub fn submit(
+        &self,
+        credentials: &dyn GitHubCredentialProvider,
+        title: &str,
+        body: &str,
+    ) -> Result<ReporterIssue, ReporterError> {
+        if title.trim().is_empty()
+            || title.chars().count() > 256
+            || title.chars().any(char::is_control)
+            || body.trim().is_empty()
+            || body.chars().count() > 65_536
+            || body.contains('\0')
+        {
+            return Err(ReporterError::InvalidInput);
+        }
+        let authorization = credentials.authorization().map_err(login_error)?;
+        if authorization.host != self.repository.host {
+            return Err(ReporterError::AuthenticationRequired);
+        }
+        let token = credentials.token(&authorization).map_err(login_error)?;
+        let token = std::str::from_utf8(token.expose())
+            .map_err(|_| ReporterError::AuthenticationRequired)?;
+        let mut headers = headers();
+        headers.push(HttpHeader::new("Authorization", format!("Bearer {token}")));
+        let body = serde_json::to_vec(&serde_json::json!({"title": title.trim(), "body": body}))
+            .map_err(|_| ReporterError::InvalidInput)?;
+        let request = HttpRequest::post(
+            format!(
+                "https://api.github.com/repos/{}/{}/issues",
+                self.repository.owner, self.repository.name
+            ),
+            headers,
+            body,
+        )
+        .map_err(|_| ReporterError::InvalidInput)?
+        .without_redirects();
+        // Creating an issue is a single attempt. A lost response must never trigger an automatic
+        // retry, and logout after sending cannot turn a successful creation into a false failure.
+        let response = self
+            .http
+            .execute(&request)
+            .map_err(|_| ReporterError::SubmissionUncertain)?;
+        if response.status() >= 500 {
+            return Err(ReporterError::SubmissionUncertain);
+        }
+        validate_status(&response)?;
+        if response.status() != 201 {
+            return Err(ReporterError::SubmissionUncertain);
+        }
+        let issue = serde_json::from_slice(response.body())
+            .map_err(|_| ReporterError::SubmissionUncertain)?;
+        self.validate_issue(&issue)
+            .map_err(|_| ReporterError::SubmissionUncertain)?;
+        Ok(issue)
+    }
+
+    fn validate_issue(&self, issue: &ReporterIssue) -> Result<(), ReporterError> {
+        if issue.number == 0
+            || issue.html_url != format!("{}/{}", self.target(), issue.number)
+            || !matches!(issue.state.as_str(), "open" | "closed")
+        {
+            return Err(ReporterError::OperationFailed);
+        }
+        Ok(())
+    }
+}
+
+fn headers() -> Vec<HttpHeader> {
+    vec![
+        HttpHeader::new("Accept", "application/vnd.github+json"),
+        HttpHeader::new("Content-Type", "application/json"),
+        HttpHeader::new("User-Agent", "Ash-Issue-Reporter"),
+        HttpHeader::new("X-GitHub-Api-Version", "2022-11-28"),
+    ]
+}
+
+fn login_error(error: ash_login::LoginError) -> ReporterError {
+    match error.kind() {
+        ash_login::LoginErrorKind::ExternalLoginRequired => ReporterError::AuthenticationRequired,
+        ash_login::LoginErrorKind::Unavailable => ReporterError::Unavailable,
+        ash_login::LoginErrorKind::InvalidInput
+        | ash_login::LoginErrorKind::NotFound
+        | ash_login::LoginErrorKind::Conflict
+        | ash_login::LoginErrorKind::Driver => ReporterError::OperationFailed,
+    }
+}
+
+fn validate_status(response: &HttpResponse) -> Result<(), ReporterError> {
+    crate::error::validate_status(
+        response.status(),
+        response
+            .headers()
+            .iter()
+            .map(|header| (header.name(), header.value())),
+    )
+    .map_err(|error| match error {
+        crate::Error::AuthenticationRequired => ReporterError::AuthenticationRequired,
+        crate::Error::PermissionDenied => ReporterError::PermissionDenied,
+        crate::Error::RateLimited => ReporterError::RateLimited,
+        crate::Error::InvalidInput(_) => ReporterError::InvalidInput,
+        crate::Error::NotFound
+        | crate::Error::Conflict(_)
+        | crate::Error::Unavailable(_)
+        | crate::Error::TimedOut
+        | crate::Error::Cancelled
+        | crate::Error::SubmissionUncertain
+        | crate::Error::InvalidResponse(_)
+        | crate::Error::OperationFailed(_) => ReporterError::OperationFailed,
+    })
+}

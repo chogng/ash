@@ -5682,3 +5682,47 @@ fn ordinary_local_host_installs_standalone_mcp_oauth_without_provider_injection(
     );
     server.close_connection(connection);
 }
+
+#[test]
+fn shared_profile_owns_one_lazy_github_api_runtime_across_directory_hosts() {
+    let profile = tempfile::tempdir().unwrap();
+    let first_dir = tempfile::tempdir().unwrap();
+    let second_dir = tempfile::tempdir().unwrap();
+    let runtime = Arc::new(LocalProfileRuntime::open(profile.path()).unwrap());
+    let executable = std::env::current_exe().unwrap();
+    let open = |dir: &Path| {
+        open_app_server(
+            AppServerOptions::new(profile.path())
+                .with_profile_runtime(runtime.clone())
+                .with_dir_root(dir)
+                .with_github_extension(&executable)
+                .without_built_in_skills(),
+        )
+        .unwrap()
+    };
+    let first = open(first_dir.path());
+    let first_api = runtime.github_extension.lock().unwrap().clone().unwrap();
+    let second = open(second_dir.path());
+    let second_api = runtime.github_extension.lock().unwrap().clone().unwrap();
+    assert!(Arc::ptr_eq(&first_api, &second_api));
+    let read = |server: &AppServer| {
+        let mut connection = server.product_host_connection();
+        server.handle_json(&mut connection, r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"test","version":"1"},"capabilities":{}}}"#);
+        let result: serde_json::Value = serde_json::from_str(&server.handle_json(
+            &mut connection,
+            r#"{"jsonrpc":"2.0","id":2,"method":"extensions/builtInProviders","params":{}}"#,
+        ))
+        .unwrap();
+        server.close_connection(connection);
+        result["result"].clone()
+    };
+    let first_view = read(&first);
+    assert_eq!(first_view, read(&second));
+    assert!(first_view.to_string().contains("ash.github"));
+    use ash_external_ext::BuiltInExtensionRuntime;
+    assert!(!first_api.is_running());
+    assert!(runtime.github_authentication.lock().unwrap().is_none());
+    let default_options = AppServerOptions::new(profile.path());
+    assert!(default_options.github_extension.is_none());
+    assert!(default_options.github_authentication_extension.is_none());
+}

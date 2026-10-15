@@ -3,6 +3,7 @@ use crate::CodebaseModels;
 use crate::SlashCommandCatalog;
 use crate::github_authentication::GitHubAuthenticationProvider;
 use crate::github_authentication::GitHubAuthenticationRuntime;
+use crate::github_extension::GitHubExtensionRuntime;
 use crate::model_catalog::ModelCatalog;
 use crate::model_provider_error::map_model_provider_error;
 use crate::server::DirGrantPolicy;
@@ -126,6 +127,7 @@ pub struct AppServerOptions {
     language_server_providers: ash_lsp_server_provider::LspServerProviders,
     product_services: Option<crate::LocalProductServicesConfig>,
     github_authentication_extension: Option<PathBuf>,
+    github_extension: Option<PathBuf>,
     profile_runtime: Option<Arc<LocalProfileRuntime>>,
     trace_exporter: Option<otel_trace_websocket::Exporter>,
     pty_helper: Option<std::path::PathBuf>,
@@ -187,6 +189,7 @@ impl AppServerOptions {
             language_server_providers: ash_lsp_server_provider::LspServerProviders::new(),
             product_services: None,
             github_authentication_extension: None,
+            github_extension: None,
             profile_runtime: None,
             trace_exporter: None,
             pty_helper: None,
@@ -391,6 +394,13 @@ impl AppServerOptions {
         self
     }
 
+    /// Selects the optional product GitHub API extension; default embedded/TUI
+    /// composition does not activate a GitHub provider.
+    pub fn with_github_extension(mut self, executable: impl Into<PathBuf>) -> Self {
+        self.github_extension = Some(executable.into());
+        self
+    }
+
     /// Installs distribution-pinned Extensions roots and public OAuth product adapters.
     pub fn with_product_services(mut self, services: crate::LocalProductServicesConfig) -> Self {
         self.product_services = Some(services);
@@ -528,6 +538,7 @@ impl PartialEq for AppServerOptions {
                 .language_server_providers
                 .ptr_eq(&other.language_server_providers)
             && self.github_authentication_extension == other.github_authentication_extension
+            && self.github_extension == other.github_extension
             && self.product_services == other.product_services
             && self.pty_helper == other.pty_helper
     }
@@ -810,6 +821,7 @@ pub struct LocalProfileRuntime {
     update_scopes: Mutex<BTreeMap<ProfileUpdateScopeKey, Arc<UpdateBroker>>>,
     extension_packages: Mutex<Option<ProfileExtensionsAuthority>>,
     github_authentication: Mutex<Option<Arc<GitHubAuthenticationRuntime>>>,
+    github_extension: Mutex<Option<Arc<GitHubExtensionRuntime>>>,
     editor_extension_policy: Arc<ash_core_plugins::EditorExtensionPolicy>,
     pub(crate) session_runtimes: Arc<crate::session_runtime_provider::SessionRuntimeProvider>,
 }
@@ -967,6 +979,7 @@ impl LocalProfileRuntime {
             update_scopes: Mutex::new(BTreeMap::new()),
             extension_packages: Mutex::new(None),
             github_authentication: Mutex::new(None),
+            github_extension: Mutex::new(None),
         })
     }
 
@@ -1692,6 +1705,40 @@ pub fn open_app_server_with_codebase_providers(
     } else {
         None
     };
+    let github_extension = if let Some(executable) = options.github_extension.take() {
+        let runtime = if let Some(profile) = &profile_runtime {
+            let mut shared = profile
+                .github_extension
+                .lock()
+                .map_err(|_| open_error("GitHub API authority unavailable"))?;
+            if let Some(runtime) = shared.as_ref() {
+                if !runtime.matches(&executable) {
+                    return Err(open_error("GitHub API profile configuration conflict"));
+                }
+                runtime.clone()
+            } else {
+                let runtime =
+                    GitHubExtensionRuntime::open(executable, editor_extension_policy.clone())
+                        .map_err(open_error)?;
+                *shared = Some(runtime.clone());
+                runtime
+            }
+        } else {
+            GitHubExtensionRuntime::open(executable, editor_extension_policy.clone())
+                .map_err(open_error)?
+        };
+        Some(runtime)
+    } else {
+        None
+    };
+    let github_api = github_extension.as_ref().map(|runtime| {
+        runtime.provider(
+            github_oauth
+                .clone()
+                .map(|provider| provider as Arc<dyn github::GitHubCredentialProvider>),
+            application_http.clone(),
+        )
+    });
     let mut login_drivers: Vec<Arc<dyn InteractiveLoginDriver>> = vec![
         chatgpt_plan.clone(),
         chatgpt_oauth.clone(),
@@ -1813,17 +1860,23 @@ pub fn open_app_server_with_codebase_providers(
     if let Some(root) = prepared_extension_root {
         server = server.with_prepared_extension_sources(root);
     }
+    if let Some(runtime) = github_extension {
+        server = server.with_built_in_extension_runtime(runtime);
+    }
     if let Some(github) = github_oauth {
         server = server.with_built_in_extension_runtime(github.runtime());
         server = server
             .with_github_accounts(github.clone())
-            .with_github_credentials(github, application_http.clone())
-            .map_err(open_error)?;
+            .with_github_credentials(github.clone());
+        if let Some(provider) = &github_api {
+            server = server
+                .with_github_provider(github, provider.clone())
+                .map_err(open_error)?;
+        }
     }
-    if let Some(target) = report_issue_url {
+    if let (Some(target), Some(provider)) = (report_issue_url, github_api) {
         server = server.with_issue_reporter(
-            github::GitHubIssueReporter::new(&target, application_http.clone())
-                .map_err(open_error)?,
+            github::GitHubIssueReporter::new(&target, provider).map_err(open_error)?,
         );
     }
     if options.session_state_mode == SessionStateMode::Durable {

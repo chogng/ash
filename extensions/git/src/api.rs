@@ -85,6 +85,10 @@ impl Api {
         configuration: &Configuration,
         token: Option<&CancellationToken>,
     ) -> Result<Value, ExtensionError> {
+        let credential_account_id = params
+            .as_object_mut()
+            .and_then(|params| params.remove("credentialAccountId"))
+            .and_then(|value| value.as_str().map(str::to_owned));
         if !matches!(method, "readConfig" | "updateConfig") {
             let paths = match configuration.value("path") {
                 Value::String(path) => vec![path.clone()],
@@ -103,7 +107,7 @@ impl Api {
         if let Some(token) = token.filter(|_| configuration.boolean("useIntegratedAskPass", true)) {
             if matches!(
                 method,
-                "fetch" | "pull" | "push" | "clone" | "commit" | "execute"
+                "fetch" | "pull" | "push" | "clone" | "commit" | "execute" | "executeCommand"
             ) {
                 let connection = self
                     .interaction
@@ -121,8 +125,10 @@ impl Api {
                         {
                             hosts.push(host);
                         }
-                    } else if matches!(method, "fetch" | "pull" | "push" | "execute")
-                        && params["repositoryId"].is_string()
+                    } else if matches!(
+                        method,
+                        "fetch" | "pull" | "push" | "execute" | "executeCommand"
+                    ) && params["repositoryId"].is_string()
                     {
                         if let Ok(refs) = self.request(
                             "historyRefs",
@@ -151,6 +157,7 @@ impl Api {
                                 configuration: configuration.clone(),
                                 token: token.clone(),
                                 hosts,
+                                credential_account_id: credential_account_id.clone(),
                             },
                         );
                     if !params["client"].is_object() {

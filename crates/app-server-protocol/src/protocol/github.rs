@@ -848,3 +848,123 @@ pub enum GitHubForkBranches {
     All,
     Default,
 }
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum GitHubRepositoryVisibility {
+    Private,
+    Public,
+}
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum GitHubShareReferenceKind {
+    Commit,
+    Branch,
+}
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum GitHubShareTarget {
+    GitHub,
+    VscodeDev,
+}
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubRepositorySearchParams {
+    pub operation_id: String,
+    pub account_id: String,
+    pub query: String,
+    pub page: u32,
+}
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubRepositoryCreateParams {
+    pub operation_id: String,
+    pub account_id: String,
+    pub name: String,
+    pub description: String,
+    pub visibility: GitHubRepositoryVisibility,
+}
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubRemoteRepository {
+    pub repository: IssueRepository,
+    pub description: Option<String>,
+    #[ts(type = "number")]
+    pub stars: u64,
+    pub private: bool,
+    pub default_branch: String,
+    pub html_url: String,
+    pub clone_url: String,
+    pub ssh_url: String,
+}
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubRepositorySearchResult {
+    pub repositories: Vec<GitHubRemoteRepository>,
+    pub next_page: Option<u32>,
+}
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubRepositoryBranchesParams {
+    pub operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
+    pub repository: IssueRepository,
+    pub page: u32,
+}
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubRepositoryBranch {
+    pub name: String,
+    pub default: bool,
+}
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubRepositoryBranchesResult {
+    pub branches: Vec<GitHubRepositoryBranch>,
+    pub next_page: Option<u32>,
+}
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubBranchProtectionRule {
+    pub include: Vec<String>,
+    pub exclude: Vec<String>,
+}
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubBranchProtectionResult {
+    pub default_branch: Option<String>,
+    pub rules: Vec<GitHubBranchProtectionRule>,
+}
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubShareLines {
+    pub start: u32,
+    pub end: u32,
+}
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubShareLinkParams {
+    pub path_kind: GitHubSharePathKind,
+    pub operation_id: String,
+    pub repository: IssueRepository,
+    pub reference: String,
+    pub reference_kind: GitHubShareReferenceKind,
+    pub target: GitHubShareTarget,
+    pub path: Option<String>,
+    pub lines: Option<GitHubShareLines>,
+    pub notebook_cell: Option<u32>,
+}
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubShareLinkResult {
+    pub url: String,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum GitHubSharePathKind {
+    File,
+    Directory,
+}

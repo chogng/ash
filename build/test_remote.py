@@ -89,6 +89,7 @@ class RemotePackageTests(unittest.TestCase):
                     "ash-code-mode-host",
                     "ash-git-extension",
                     "ash-github-authentication",
+                    "ash-github-extension",
                     "ash-remote-ssh-extension",
                     "ash-dev-container-provider",
                     "ash-voice-host",

@@ -185,7 +185,10 @@ fn repository_identity_rejects_paths_and_option_injection() {
     for value in ["", "../repo", "-repo", "a/b", "repo?x=y", "a\nb", "a b"] {
         assert!(Repository::new("github.com".into(), "owner".into(), value.into()).is_err());
     }
-    assert_eq!(repository().endpoint("issues"), "repos/team/repo/issues");
+    assert_eq!(
+        crate::endpoint(&repository(), "issues"),
+        "repos/team/repo/issues"
+    );
 }
 
 #[tokio::test(flavor = "current_thread")]

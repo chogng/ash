@@ -1,7 +1,6 @@
 use crate::Error;
 use crate::GitHub;
 use crate::HttpMethod;
-use crate::PullRequestFiles;
 use crate::Repository;
 use crate::Result;
 use crate::api::Operation;
@@ -10,116 +9,9 @@ use crate::pull_requests::validate_commit;
 use crate::pull_requests::validate_number;
 use crate::pull_requests::validate_page;
 use base64::Engine;
+use github::*;
 use serde::Deserialize;
-use serde::Serialize;
 use serde_json::json;
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "UPPERCASE")]
-pub enum DiffSide {
-    Left,
-    Right,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct ReviewCommentInput {
-    pub path: String,
-    pub line: u32,
-    pub side: DiffSide,
-    pub body: String,
-}
-
-pub struct ReviewDiff {
-    pub base_commit: String,
-    pub files: PullRequestFiles,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
-pub enum FileContent {
-    Text { text: String },
-    Binary,
-    TooLarge,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ReviewComment {
-    pub id: String,
-    pub body: String,
-    pub url: String,
-    pub author: Option<ReviewAuthor>,
-    pub viewer_can_update: bool,
-    pub viewer_can_delete: bool,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct ReviewAuthor {
-    pub login: String,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ReviewThread {
-    pub id: String,
-    pub path: String,
-    pub line: Option<u32>,
-    pub diff_side: DiffSide,
-    pub is_resolved: bool,
-    pub is_outdated: bool,
-    pub viewer_can_resolve: bool,
-    pub comments: ThreadComments,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ThreadComments {
-    pub nodes: Vec<ReviewComment>,
-    pub page_info: PageInfo,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PageInfo {
-    pub has_next_page: bool,
-    pub end_cursor: Option<String>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ReviewThreadPage {
-    pub nodes: Vec<ReviewThread>,
-    pub page_info: PageInfo,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum ThreadState {
-    Resolved,
-    Unresolved,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct RequestedReviewers {
-    pub users: Vec<ReviewerUser>,
-    pub teams: Vec<ReviewerTeam>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct ReviewerUser {
-    pub login: String,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct ReviewerTeam {
-    pub slug: String,
-}
-
-#[derive(Clone, Copy, Eq, PartialEq)]
-pub enum ReviewerChange {
-    Request,
-    Remove,
-}
 
 const COMMENT_FIELDS: &str = "id body url author{login} viewerCanUpdate viewerCanDelete";
 const THREAD_FIELDS: &str = "id path line diffSide isResolved isOutdated viewerCanResolve";
@@ -135,7 +27,7 @@ impl GitHub {
         self.api(
             repository,
             HttpMethod::Get,
-            &repository.endpoint(&format!("pulls/{number}/requested_reviewers")),
+            &crate::endpoint(repository, &format!("pulls/{number}/requested_reviewers")),
             None,
         )
         .await
@@ -175,7 +67,7 @@ impl GitHub {
             .api(
                 repository,
                 method,
-                &repository.endpoint(&format!("pulls/{number}/requested_reviewers")),
+                &crate::endpoint(repository, &format!("pulls/{number}/requested_reviewers")),
                 Some(json!({"reviewers":users,"team_reviewers":teams})),
             )
             .await?;
@@ -258,7 +150,10 @@ impl GitHub {
             .api(
                 repository,
                 HttpMethod::Get,
-                &repository.endpoint(&format!("compare/{}...{commit}", current.base.sha)),
+                &crate::endpoint(
+                    repository,
+                    &format!("compare/{}...{commit}", current.base.sha),
+                ),
                 None,
             )
             .await?;
@@ -300,7 +195,7 @@ impl GitHub {
             .api(
                 repository,
                 HttpMethod::Get,
-                &repository.endpoint(&format!("contents/{encoded}?ref={commit}")),
+                &crate::endpoint(repository, &format!("contents/{encoded}?ref={commit}")),
                 None,
             )
             .await?;

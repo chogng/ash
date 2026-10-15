@@ -1264,6 +1264,8 @@ use crate::protocol::github::GitHubAccountListParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubAccountsResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubBranchProtectionResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubCommentCreateParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubCommentDeleteParams;
@@ -1316,7 +1318,19 @@ use crate::protocol::github::GitHubPullRequestListResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubPullRequestUpdateParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubRemoteRepository;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubRepositoryBranchesParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubRepositoryBranchesResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubRepositoryCreateParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubRepositoryParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubRepositorySearchParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubRepositorySearchResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubRequestedReviewers;
 #[cfg(any(test, feature = "export"))]
@@ -1355,6 +1369,10 @@ use crate::protocol::github::GitHubSessionPullRequestParams;
 use crate::protocol::github::GitHubSessionPullRequestsParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubSessionPullRequestsResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubShareLinkParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubShareLinkResult;
 
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubChecksParams;
@@ -4831,6 +4849,11 @@ client_methods! {
     GitHubNotificationsRead => "github/notifications/readAll" { params: GitHubNotificationsReadParams, response: (), serialization: HostedAccountExclusive, cancellation: "operationId" => PreserveOutcome, },
     GitHubForkCreate => "github/repository/fork" { params: GitHubForkCreateParams, response: GitHubForkResult, serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
     GitHubAccountList => "github/account/list" { params: GitHubAccountListParams, response: GitHubAccountsResult, serialization: None, cancellation: "operationId", },
+    GitHubRepositorySearch => "github/repository/search" { params: GitHubRepositorySearchParams, response: GitHubRepositorySearchResult, serialization: HostedAccountSharedRead, cancellation: "operationId", },
+    GitHubRepositoryCreate => "github/repository/create" { params: GitHubRepositoryCreateParams, response: GitHubRemoteRepository, serialization: HostedAccountExclusive, cancellation: "operationId" => PreserveOutcome, },
+    GitHubRepositoryBranches => "github/repository/branches" { params: GitHubRepositoryBranchesParams, response: GitHubRepositoryBranchesResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
+    GitHubBranchProtection => "github/repository/branchProtection" { params: GitHubRepositoryParams, response: GitHubBranchProtectionResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
+    GitHubShareLink => "github/share/link" { params: GitHubShareLinkParams, response: GitHubShareLinkResult, serialization: None, cancellation: "operationId", },
     GitHubManagedSettings => "github/account/managedSettings" { params: GitHubManagedSettingsParams, response: GitHubManagedSettingsResult, serialization: HostedAccountSharedRead, cancellation: "operationId", },
     GitHubSessionPullRequests => "github/session/pullRequests" { params: GitHubSessionPullRequestsParams, response: GitHubSessionPullRequestsResult, serialization: SessionExclusive, },
     GitHubSessionPullRequestAttach => "github/session/pullRequest/attach" { params: GitHubSessionPullRequestParams, response: (), serialization: SessionExclusive, },
@@ -5673,6 +5696,22 @@ typescript_bindings! {
     crate::protocol::github::GitHubAccountsResult,
     crate::protocol::github::GitHubAccountConnectParams,
     crate::protocol::github::GitHubAccountListParams,
+    crate::protocol::github::GitHubRepositoryVisibility,
+    crate::protocol::github::GitHubShareReferenceKind,
+    crate::protocol::github::GitHubShareTarget,
+    crate::protocol::github::GitHubRepositorySearchParams,
+    crate::protocol::github::GitHubRepositoryCreateParams,
+    crate::protocol::github::GitHubRemoteRepository,
+    crate::protocol::github::GitHubRepositorySearchResult,
+    crate::protocol::github::GitHubRepositoryBranchesParams,
+    crate::protocol::github::GitHubRepositoryBranch,
+    crate::protocol::github::GitHubRepositoryBranchesResult,
+    crate::protocol::github::GitHubBranchProtectionRule,
+    crate::protocol::github::GitHubBranchProtectionResult,
+    crate::protocol::github::GitHubSharePathKind,
+    crate::protocol::github::GitHubShareLines,
+    crate::protocol::github::GitHubShareLinkParams,
+    crate::protocol::github::GitHubShareLinkResult,
     crate::protocol::github::GitHubManagedSettingsParams,
     crate::protocol::github::GitHubManagedSettingsResult,
     crate::protocol::github::GitHubPullRequestReference,

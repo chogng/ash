@@ -45,7 +45,9 @@ export function createAppServerExtensionHostApi(connection: AppServerProtocolCli
 									? { ...operation, value: normalizeExtensionHostPayload(operation.value) }
 									: operation;
 			const value = await handler(request, context.signal, source);
-			if (value && typeof value === 'object' && 'result' in value && value.result === 'value') {
+			// These operations use the protocol's generic JSON result in both Rust and browser hosts.
+			if (value && typeof value === 'object' && 'result' in value && value.result === 'value'
+				&& !['editorOperation', 'backendRequest', 'backendState'].includes(operation.operation)) {
 				throw new TypeError('Browser extension results cannot be returned over the App Server protocol');
 			}
 			let response = value;
@@ -55,6 +57,7 @@ export function createAppServerExtensionHostApi(connection: AppServerProtocolCli
 			const result = decodeAppServerServerRequestResult('extensionClient/request', response);
 			// Domain payloads are immutable; the transport owns a separate mutable wire value.
 			switch (result.result) {
+				case 'value': return { ...result, value: protocolJsonValue(normalizeExtensionHostPayload(result.value)) };
 				case 'resourceFile': return { ...result, bytes: [...result.bytes] };
 				case 'resourceDirectory': return { ...result, entries: result.entries.map(([name, type]) => [name, type] as [string, number]) };
 				case 'initialization': return { result: result.result, initialization: { ...result.initialization, workspaceFolders: result.initialization.workspaceFolders.map(folder => ({ ...folder })), configurationValues: protocolJsonValue(normalizeExtensionHostPayload(result.initialization.configurationValues)), configurationData: protocolJsonValue(normalizeExtensionHostPayload(result.initialization.configurationData)) } };

@@ -27,3 +27,14 @@ test('repository count decoding rejects malformed extension data at the command 
 	const commands = { executeCommand: async () => [{ ...repository, head: { ...repository.head, upstream: { name: 'origin/main', ahead: 0, behind: -1 } } }] } as unknown as ICommandService;
 	await assert.rejects(readLocalRepositories(commands), /Invalid repository context count/u);
 });
+
+
+test('window-owned Git contexts are read even without a global command contribution', async () => {
+	assert.equal(CommandsRegistry.hasCommand('git.getRepositoryContexts'), false);
+	const commands = { executeCommand: async () => [repository] } as unknown as ICommandService;
+	assert.equal((await readLocalRepositories(commands))[0]?.id, 'repo');
+	const absent = { executeCommand: async () => { throw new Error('Unknown command: git.getRepositoryContexts'); } } as unknown as ICommandService;
+	assert.deepEqual(await readLocalRepositories(absent), []);
+	const failed = { executeCommand: async () => { throw new Error('Git discovery failed'); } } as unknown as ICommandService;
+	await assert.rejects(readLocalRepositories(failed), /Git discovery failed/);
+});

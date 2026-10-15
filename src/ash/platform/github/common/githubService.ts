@@ -50,6 +50,30 @@ export interface GitHubRequestedReviewers { readonly users: readonly string[]; r
 /** Account selection is captured with a repository operation; omitted selection uses the login default. */
 export interface GitHubRepository { readonly accountId?: string; readonly host: string; readonly owner: string; readonly name: string; }
 export interface GitHubPage<T> { readonly items: readonly T[]; readonly nextPage: number | null; }
+export interface GitHubRemoteRepository {
+	readonly repository: GitHubRepository;
+	readonly description: string | null;
+	readonly stars: number;
+	readonly private: boolean;
+	readonly defaultBranch: string;
+	readonly htmlUrl: string;
+	readonly cloneUrl: string;
+	readonly sshUrl: string;
+}
+export type GitHubRepositoryVisibility = 'private' | 'public';
+export interface GitHubRepositoryBranch { readonly name: string; readonly default: boolean; }
+export interface GitHubBranchProtectionRule { readonly include: readonly string[]; readonly exclude: readonly string[]; }
+export interface GitHubBranchProtection { readonly defaultBranch: string | null; readonly rules: readonly GitHubBranchProtectionRule[]; }
+export interface GitHubShareLink {
+	readonly pathKind?: 'file' | 'directory';
+	readonly repository: GitHubRepository;
+	readonly reference: string;
+	readonly referenceKind: 'commit' | 'branch';
+	readonly target: 'gitHub' | 'vscodeDev';
+	readonly path?: string;
+	readonly lines?: { readonly start: number; readonly end: number; };
+	readonly notebookCell?: number;
+}
 export interface GitHubRepositoryInfo {
 	readonly defaultBranch: string;
 	readonly fullName: string;
@@ -162,6 +186,11 @@ export interface IGitHubService {
 	updateReviewComment(repository: GitHubRepository, number: number, commentId: string, body: string, token?: CancellationToken): Promise<GitHubReviewComment>;
 	deleteReviewComment(repository: GitHubRepository, number: number, commentId: string, token?: CancellationToken): Promise<void>;
 	readCommit(repository: GitHubRepository, sha: string, token?: CancellationToken): Promise<GitHubCommit>;
+	searchRepositories(accountId: string, query: string, page: number, token?: CancellationToken): Promise<GitHubPage<GitHubRemoteRepository>>;
+	createRepository(accountId: string, name: string, description: string, visibility: GitHubRepositoryVisibility, token?: CancellationToken): Promise<GitHubRemoteRepository>;
+	listRepositoryBranches(repository: GitHubRepository, page: number, token?: CancellationToken): Promise<GitHubPage<GitHubRepositoryBranch>>;
+	readBranchProtection(repository: GitHubRepository, token?: CancellationToken): Promise<GitHubBranchProtection>;
+	shareLink(link: GitHubShareLink, token?: CancellationToken): Promise<string>;
 	readRepository(repository: GitHubRepository, token?: CancellationToken): Promise<GitHubRepositoryInfo>;
 	listIssues(repository: GitHubRepository, state: GitHubIssueState, query: string, page: number, token?: CancellationToken): Promise<GitHubIssuePage>;
 	readIssue(repository: GitHubRepository, number: number, token?: CancellationToken): Promise<GitHubIssueDetails>;

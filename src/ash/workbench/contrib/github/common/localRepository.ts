@@ -1,5 +1,6 @@
+import { match } from '../../../../base/common/glob.js';
+import type { GitHubBranchProtection } from '../../../../platform/github/common/githubService.js';
 import type { ICommandService } from '../../../../platform/commands/common/commands.js';
-import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { URI } from '../../../../base/common/uri.js';
 export interface RepositoryIdentity {
 	readonly provider: string;
@@ -27,10 +28,14 @@ export interface LocalRepository {
 }
 /** Optional provider command contract consumed by GitHub, independent of its implementation. */
 export async function readLocalRepositories(commands: ICommandService): Promise<readonly LocalRepository[]> {
-	if (!CommandsRegistry.hasCommand('git.getRepositoryContexts')) {
-		return [];
+	let result: unknown;
+	try {
+		// Extension commands belong to the window's command service, not the global contribution registry.
+		result = await commands.executeCommand('git.getRepositoryContexts');
+	} catch (error) {
+		if (error instanceof Error && error.message === 'Unknown command: git.getRepositoryContexts') return [];
+		throw error;
 	}
-	const result: unknown = await commands.executeCommand('git.getRepositoryContexts');
 	if (!Array.isArray(result) || result.length > 128) {
 		throw new TypeError('Invalid repository contexts');
 	}
@@ -68,4 +73,14 @@ export async function readLocalRepositories(commands: ICommandService): Promise<
 			}) => ({ name: text(remote.name), ...(remote.identity ? { identity: { provider: text(remote.identity.provider), host: text(remote.identity.host), owner: text(remote.identity.owner), repository: text(remote.identity.repository) } } : {}) }))
 		};
 	});
+}
+
+/** Rules in different rulesets are additive; exclusions apply only to their own rule. */
+export function isGitHubBranchProtected(branch: string, protection: GitHubBranchProtection): boolean {
+	return protection.rules.some(rule => rule.include.some(pattern => match(pattern, branch)) && !rule.exclude.some(pattern => match(pattern, branch)));
+}
+/** Prefer the tracked remote to avoid sharing a fork's commit through the upstream repository. */
+export function githubRemotes(repository: LocalRepository): LocalRepository['remotes'] {
+	return repository.remotes.filter(remote => remote.identity?.provider === 'github').sort((a, b) =>
+		Number(repository.head.upstream?.name.startsWith(`${b.name}/`) ?? false) - Number(repository.head.upstream?.name.startsWith(`${a.name}/`) ?? false));
 }

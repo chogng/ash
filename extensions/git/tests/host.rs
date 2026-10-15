@@ -34,6 +34,7 @@ struct Client {
     editor_document: Mutex<Option<String>>,
     revision: AtomicU64,
     binary_comparison: AtomicBool,
+    cancel_protected_commit: AtomicBool,
     configuration: Mutex<Value>,
     shared_configuration: Mutex<Value>,
     snapshots: Mutex<Vec<Value>>,
@@ -110,6 +111,25 @@ impl Client {
                     },
                 }
             }
+            Operation::ExecuteCommand { command, arguments } => {
+                assert_eq!(command, "github.isBranchProtected");
+                assert_eq!(arguments[0], "main");
+                assert_eq!(arguments[1][0]["identity"]["provider"], "github");
+                ResultValue::Command {
+                    value: json!(true),
+                    has_value: true,
+                }
+            }
+            Operation::ShowQuickPick { items, .. } => {
+                assert_eq!(items.len(), 2);
+                ResultValue::Selection {
+                    index: if self.cancel_protected_commit.swap(false, Ordering::AcqRel) {
+                        None
+                    } else {
+                        Some(0)
+                    },
+                }
+            }
             Operation::ShowMessage { .. } => ResultValue::Done,
             Operation::ScmUpdate { providers, .. } => {
                 self.snapshots.lock().unwrap().push(json!(providers));
@@ -137,6 +157,9 @@ impl Client {
                         json!({"repositories":[{"id":"root","label":"test","path":"","dirId":"workspace"}]})
                     }
                     "status" => self.status(),
+                    "graph" => {
+                        json!({"remotes":[{"name":"origin","identity":{"provider":"github","host":"github.com","owner":"synthetic","repository":"fixture"}}]})
+                    }
                     "historyRefs" => {
                         json!({"status":self.status(),"references":[{"kind":"localBranch","name":"main","objectId":"abc","current":true},{"kind":"remoteBranch","name":"origin/main","objectId":"abc","current":false},{"kind":"tag","name":"v1","objectId":"abc","current":false}],"branches":[],"remotes":[],"graphRevision":1})
                     }
@@ -221,6 +244,7 @@ fn rust_git_registers_scm_and_commits_through_public_client_without_a_js_host() 
             editor_document: Mutex::new(None),
             revision: AtomicU64::new(1),
             binary_comparison: AtomicBool::new(false),
+            cancel_protected_commit: AtomicBool::new(true),
             configuration: Mutex::new(
                 json!({"useEditorAsCommitInput":false,"enableSmartCommit":false,"suggestSmartCommit":false,"postCommitCommand":"none","autofetch":true,"autofetchPeriod":120}),
             ),
@@ -290,6 +314,16 @@ fn rust_git_registers_scm_and_commits_through_public_client_without_a_js_host() 
             host::RegistrationKind::SourceControl { .. }
         )));
         assert!(started.registrations.iter().any(|registration|matches!(&registration.kind,host::RegistrationKind::Command{command,title,..} if command=="git.commit" && title==if language=="zh-CN" {"提交"} else {"Commit"})));
+        let cold_contexts = execute(
+            &supervisor,
+            &client,
+            invocation(
+                "git.getRepositoryContexts",
+                "execute",
+                json!({"arguments":[]}),
+            ),
+        );
+        assert_eq!(cold_contexts[0]["id"], "root");
         execute(
             &supervisor,
             &client,
@@ -344,6 +378,18 @@ fn rust_git_registers_scm_and_commits_through_public_client_without_a_js_host() 
                 json!({"method":"setInput","providerId":"root","value":"Rust extension commit","inputRevision":1}),
             ),
         );
+        // Cancelling the remotely protected branch prompt keeps HEAD and the staged files.
+        execute(
+            &supervisor,
+            &client,
+            invocation(
+                "git.commit",
+                "execute",
+                json!({"arguments":["root"],"activeEditor":null}),
+            ),
+        );
+        assert_eq!(client.git(&["log", "-1", "--format=%s"]), "initial");
+        assert!(!client.git(&["diff", "--cached", "--name-only"]).is_empty());
         execute(
             &supervisor,
             &client,
@@ -469,7 +515,13 @@ fn verify_terminal_helpers(
     assert_eq!(result.stdout, b"fixture password\n");
     let mut forged = environment.clone();
     forged.insert("ASH_GIT_BRIDGE_TOKEN".into(), "0".repeat(64));
-    let requests = client.editor_requests.lock().unwrap().len();
+    let inputs = client
+        .editor_requests
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|request| request["method"] == "input")
+        .count();
     assert!(
         !finish_helper(
             helper(root, &forged, "--askpass", "Password: ")
@@ -479,7 +531,19 @@ fn verify_terminal_helpers(
         .status
         .success()
     );
-    assert_eq!(client.editor_requests.lock().unwrap().len(), requests);
+    // Background publication may inspect the active editor while the helper runs. The
+    // security boundary is that a forged token never opens an authentication input.
+    assert_eq!(
+        client
+            .editor_requests
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|request| request["method"] == "input")
+            .count(),
+        inputs
+    );
+
     client.configuration.lock().unwrap()["terminalAuthentication"] = json!(false);
     assert!(!terminal_environment(supervisor, client).contains_key("GIT_ASKPASS"));
     assert!(

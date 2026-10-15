@@ -111,7 +111,10 @@ impl IssueServer {
             )
             .unwrap()
             .with_github_accounts(accounts.clone())
-            .with_github_credentials(accounts, http)
+            .with_github_provider(
+                accounts.clone(),
+                Arc::new(github_extension::ApiProvider::new(accounts, http)),
+            )
             .unwrap(),
         );
 

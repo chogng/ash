@@ -1,3 +1,4 @@
+import type { GitHubRemoteRepository, GitHubRepositoryVisibility, GitHubRepositoryBranch, GitHubBranchProtection, GitHubShareLink } from '../common/githubService.js';
 import { CancellationToken } from '../../../base/common/cancellation.js';
 import { CancellationError, onUnexpectedError } from '../../../base/common/errors.js';
 import { generateUuid } from '../../../base/common/uuid.js';
@@ -53,6 +54,24 @@ export class AppServerGitHubService implements IGitHubService {
 		}
 	}
 
+	public async searchRepositories(accountId: string, query: string, page: number, token?: CancellationToken): Promise<GitHubPage<GitHubRemoteRepository>> {
+		const result = await this.request('github/repository/search', { accountId, query, page }, RequestKind.Read, token);
+		return { items: result.repositories.map(row => ({ ...row, repository: { ...row.repository, accountId } })), nextPage: result.nextPage };
+	}
+	public async createRepository(accountId: string, name: string, description: string, visibility: GitHubRepositoryVisibility, token?: CancellationToken): Promise<GitHubRemoteRepository> {
+		const result = await this.request('github/repository/create', { accountId, name, description, visibility }, RequestKind.Write, token);
+		return { ...result, repository: { ...result.repository, accountId } };
+	}
+	public async listRepositoryBranches(repository: GitHubRepository, page: number, token?: CancellationToken): Promise<GitHubPage<GitHubRepositoryBranch>> {
+		const result = await this.request('github/repository/branches', { repository, page }, RequestKind.Read, token);
+		return { items: result.branches, nextPage: result.nextPage };
+	}
+	public async readBranchProtection(repository: GitHubRepository, token?: CancellationToken): Promise<GitHubBranchProtection> {
+		return this.request('github/repository/branchProtection', { repository }, RequestKind.Read, token);
+	}
+	public async shareLink(link: GitHubShareLink, token?: CancellationToken): Promise<string> {
+		return (await this.request('github/share/link', { ...link, pathKind: link.pathKind ?? 'file', path: link.path ?? null, lines: link.lines ?? null, notebookCell: link.notebookCell ?? null }, RequestKind.Read, token)).url;
+	}
 	public async listAccounts(token?: CancellationToken): Promise<readonly GitHubAccount[]> {
 		return (await this.request('github/account/list', {}, RequestKind.Read, token)).accounts.map(account => ({ ...account, credentialRevision: BigInt(account.credentialRevision) }));
 	}
@@ -203,7 +222,7 @@ export class AppServerGitHubService implements IGitHubService {
 		if (this.connection.state !== 'ready' || this.connection.capabilities?.github !== true || this.connection.capabilities.contracts.github?.version !== 1) { throw new GitHubError(GitHubErrorCode.Unavailable); }
 		const operationId = generateUuid();
 		const bound = 'repository' in params ? params.repository as GitHubRepository : undefined;
-		const wire = bound ? { ...params, accountId: bound.accountId, repository: { host: bound.host, owner: bound.owner, name: bound.name } } : params;
+		const wire = bound ? { ...params, ...(method === 'github/share/link' ? {} : { accountId: bound.accountId }), repository: { host: bound.host, owner: bound.owner, name: bound.name } } : params;
 		const response = appServerRequest(this.connection, method, { ...wire, operationId } as MethodParams<M>);
 		const listener = token.onCancellationRequested(() => {
 			// Cancellation acknowledges intent; the original response owns the remote outcome.
@@ -228,7 +247,7 @@ export function createDisconnectedGitHubService(): IGitHubService {
 		onDidChangeSessionPullRequests: Event.None, listSessionPullRequests: unavailable, attachSessionPullRequest: unavailable, detachSessionPullRequest: unavailable,
 		listAccounts: unavailable, listNotifications: unavailable, markNotificationRead: unavailable, markNotificationsRead: unavailable, createFork: unavailable, connectToken: unavailable, requestedReviewers: unavailable, changeReviewers: unavailable, updateReviewComment: unavailable, deleteReviewComment: unavailable,
 		readManagedSettings: unavailable, readCommit: unavailable,
-		readRepository: unavailable, listIssues: unavailable, readIssue: unavailable, createIssue: unavailable, updateIssue: unavailable,
+		searchRepositories: unavailable, createRepository: unavailable, listRepositoryBranches: unavailable, readBranchProtection: unavailable, shareLink: unavailable, readRepository: unavailable, listIssues: unavailable, readIssue: unavailable, createIssue: unavailable, updateIssue: unavailable,
 		listComments: unavailable, createComment: unavailable, updateComment: unavailable, deleteComment: unavailable,
 		listPullRequests: unavailable, readPullRequest: unavailable, createPullRequest: unavailable, updatePullRequest: unavailable,
 		listPullRequestFiles: unavailable, listPullRequestReviews: unavailable, reviewPullRequest: unavailable, mergePullRequest: unavailable, enableAutoMerge: unavailable,

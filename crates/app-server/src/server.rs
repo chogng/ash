@@ -1277,21 +1277,30 @@ impl AppServer {
         self
     }
 
+    /// Installs GitHub credentials independently of the optional API capability.
     pub fn with_github_credentials(
         mut self,
         credentials: Arc<dyn github::GitHubCredentialProvider>,
-        http: Arc<dyn ash_http_client::HttpClient>,
-    ) -> Result<Self, String> {
-        request_dispatch::runtime().map_err(|error| error.to_string())?;
-        self.github_credentials = Some(Arc::clone(&credentials));
+    ) -> Self {
+        self.github_credentials = Some(credentials);
         if let Some(runtime) = &self.extension_hosts {
             self.bind_extension_credentials(runtime);
         }
-        self.github_processor = Some(Arc::new(github_processor::GitHubRequestProcessor::new(
+        self
+    }
+
+    pub fn with_github_provider(
+        self,
+        credentials: Arc<dyn github::GitHubCredentialProvider>,
+        provider: Arc<dyn github::GitHubProvider>,
+    ) -> Result<Self, String> {
+        request_dispatch::runtime().map_err(|error| error.to_string())?;
+        let mut server = self.with_github_credentials(credentials.clone());
+        server.github_processor = Some(Arc::new(github_processor::GitHubRequestProcessor::new(
             credentials,
-            http,
+            provider,
         )));
-        Ok(self)
+        Ok(server)
     }
 
     fn bind_extension_credentials(&self, runtime: &extension_host_runtime::ExtensionHostRuntime) {
@@ -2575,6 +2584,11 @@ impl AppServer {
                 | ClientMethod::GitHubReviewCommentEdit
                 | ClientMethod::GitHubReviewCommentDelete
                 | ClientMethod::GitHubCommitRead
+                | ClientMethod::GitHubRepositorySearch
+                | ClientMethod::GitHubRepositoryCreate
+                | ClientMethod::GitHubRepositoryBranches
+                | ClientMethod::GitHubBranchProtection
+                | ClientMethod::GitHubShareLink
                 | ClientMethod::GitHubRepositoryRead
                 | ClientMethod::GitHubIssueList
                 | ClientMethod::GitHubIssueRead

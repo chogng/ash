@@ -3,29 +3,8 @@ use crate::GitHub;
 use crate::Repository;
 use crate::Result;
 use ash_http_client::HttpMethod;
-use serde::Deserialize;
+use github::*;
 use serde_json::json;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ForkBranches {
-    All,
-    Default,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct CreateFork {
-    pub organization: Option<String>,
-    pub name: String,
-    pub branches: ForkBranches,
-}
-
-/// GitHub has accepted creation; Git objects may still be copying asynchronously.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct ForkRepository {
-    pub full_name: String,
-    pub html_url: String,
-    pub default_branch: String,
-}
 
 impl GitHub {
     pub async fn create_fork(
@@ -50,7 +29,7 @@ impl GitHub {
             .api(
                 repository,
                 HttpMethod::Post,
-                &repository.endpoint("forks"),
+                &crate::endpoint(repository, "forks"),
                 Some(body),
             )
             .await?;
