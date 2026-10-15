@@ -723,7 +723,9 @@ def system_signing_artifacts(package: Path, spec: TargetSpec) -> Dict[str, Path]
     artifacts = {
         "appServerDaemon": package / "bin" / spec.app_server_daemon_name,
         "codeModeHost": package / "bin" / spec.code_mode_host_name,
-        "gitExtension": package / "bin" / ("ash-git-extension" + spec.executable_suffix),
+        "gitExtension": package
+        / "bin"
+        / ("ash-git-extension" + spec.executable_suffix),
         "githubAuthentication": package
         / "bin"
         / ("ash-github-authentication" + spec.executable_suffix),

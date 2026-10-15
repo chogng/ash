@@ -103,19 +103,19 @@ test('timestamp formatting uses the client locale and rejects invalid batches', 
 
 
 test('AI edit evidence distinguishes chat from completions and expires after a manual edit', async () => {
-    const { TextModel } = await import('../../../../editor/common/model/textModel.js');
-    const { EditSources } = await import('../../../../editor/common/textModelEditSource.js');
-    const { Range } = await import('../../../../editor/common/core/range.js');
-    using model = new TextModel('before', { resource: URI.file('/workspace/file.ts') });
-    const models = { getModels: () => [model], onModelAdded: Event.None, onModelRemoved: Event.None };
-    using api = bridge([], async () => ({ confirmed: true }), [], {}, models);
-    const signal = new AbortController().signal;
-    model.applyEdits([{ range: new Range(1, 1, 1, 7), text: 'AI completion' }], EditSources.inlineCompletionAccept({ nes: false, requestUuid: 'request', languageId: 'typescript', correlationId: undefined }));
-    assert.deepEqual(await api.handle({ method: 'aiEditedResources', root: 'file:///workspace', mode: 'chatAndAgent' }, signal), []);
-    assert.deepEqual(await api.handle({ method: 'aiEditedResources', root: 'file:///workspace', mode: 'all' }, signal), [{ uri: model.uri.toString(), text: 'AI completion' }]);
-    model.applyEdits([{ range: new Range(1, 1, 1, 14), text: 'manual' }], EditSources.unknown({ name: 'user' }));
-    assert.deepEqual(await api.handle({ method: 'aiEditedResources', root: 'file:///workspace', mode: 'all' }, signal), []);
-    model.applyEdits([{ range: new Range(1, 1, 1, 7), text: 'chat' }], EditSources.agentHostChatApplyEdits({ modelId: undefined, sessionId: 'session', requestId: 'request', harness: 'ash' }));
-    assert.deepEqual(await api.handle({ method: 'aiEditedResources', root: 'file:///workspace', mode: 'chatAndAgent' }, signal), [{ uri: model.uri.toString(), text: 'chat' }]);
-    assert.deepEqual(await api.handle({ method: 'aiEditedResources', root: 'file:///other', mode: 'all' }, signal), []);
+	const { TextModel } = await import('../../../../editor/common/model/textModel.js');
+	const { EditSources } = await import('../../../../editor/common/textModelEditSource.js');
+	const { Range } = await import('../../../../editor/common/core/range.js');
+	using model = new TextModel('before', { resource: URI.file('/workspace/file.ts') });
+	const models = { getModels: () => [model], onModelAdded: Event.None, onModelRemoved: Event.None };
+	using api = bridge([], async () => ({ confirmed: true }), [], {}, models);
+	const signal = new AbortController().signal;
+	model.applyEdits([{ range: new Range(1, 1, 1, 7), text: 'AI completion' }], EditSources.inlineCompletionAccept({ nes: false, requestUuid: 'request', languageId: 'typescript', correlationId: undefined }));
+	assert.deepEqual(await api.handle({ method: 'aiEditedResources', root: 'file:///workspace', mode: 'chatAndAgent' }, signal), []);
+	assert.deepEqual(await api.handle({ method: 'aiEditedResources', root: 'file:///workspace', mode: 'all' }, signal), [{ uri: model.uri.toString(), text: 'AI completion' }]);
+	model.applyEdits([{ range: new Range(1, 1, 1, 14), text: 'manual' }], EditSources.unknown({ name: 'user' }));
+	assert.deepEqual(await api.handle({ method: 'aiEditedResources', root: 'file:///workspace', mode: 'all' }, signal), []);
+	model.applyEdits([{ range: new Range(1, 1, 1, 7), text: 'chat' }], EditSources.agentHostChatApplyEdits({ modelId: undefined, sessionId: 'session', requestId: 'request', harness: 'ash' }));
+	assert.deepEqual(await api.handle({ method: 'aiEditedResources', root: 'file:///workspace', mode: 'chatAndAgent' }, signal), [{ uri: model.uri.toString(), text: 'chat' }]);
+	assert.deepEqual(await api.handle({ method: 'aiEditedResources', root: 'file:///other', mode: 'all' }, signal), []);
 });

@@ -100,14 +100,17 @@
 	background: var(--ash-button-primaryBackground);
 }
 
-.ash-titlebar-actions .ash-dropdown-with-primary-action-view-item .ash-button:not(:disabled):hover {
+.ash-titlebar-actions
+	.ash-dropdown-with-primary-action-view-item
+	.ash-button:not(:disabled):hover {
 	background: var(--ash-button-primaryHoverBackground);
 }
 
 .ash-titlebar-actions .ash-dropdown-with-primary-primary.icon > .ash-button {
 	width: auto;
 	padding-inline: var(--ash-spacing-size80);
-	border-radius: var(--ash-cornerRadius-small) 0 0 var(--ash-cornerRadius-small);
+	border-radius: var(--ash-cornerRadius-small) 0 0
+		var(--ash-cornerRadius-small);
 }
 
 .ash-titlebar-actions .ash-dropdown-with-primary-dropdown > .ash-button {

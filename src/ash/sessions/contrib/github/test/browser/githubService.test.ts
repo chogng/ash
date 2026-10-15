@@ -16,11 +16,11 @@ import { NullLoggerService } from '../../../../../platform/log/common/log.js';
 interface GitRepository { id: string; label: string; path: string; root: URI; }
 interface GitStatus { repositoryId: string; streamInstanceId: string; historyRevision: number; revision: number; workspacePath: string; head: { type: 'branch'; name: string; objectId: string; upstream: undefined; }; changes: readonly unknown[]; }
 interface RepositoryCommandsFixture {
- repositories: GitRepository[];
- status(repositoryId?: string): Promise<GitStatus>;
- graph(query?: unknown, repositoryId?: string): Promise<{ remotes: readonly { name: string; identity: { provider: string; host: string; owner: string; repository: string; }; }[]; }>;
- onDidChangeRepositories: Event<readonly GitRepository[]>;
- onDidChangeRepositoryStatus: Event<GitStatus>;
+	repositories: GitRepository[];
+	status(repositoryId?: string): Promise<GitStatus>;
+	graph(query?: unknown, repositoryId?: string): Promise<{ remotes: readonly { name: string; identity: { provider: string; host: string; owner: string; repository: string; }; }[]; }>;
+	onDidChangeRepositories: Event<readonly GitRepository[]>;
+	onDidChangeRepositoryStatus: Event<GitStatus>;
 }
 import type { ISessionsService, SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
 import type { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';

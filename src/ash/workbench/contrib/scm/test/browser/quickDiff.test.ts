@@ -215,9 +215,13 @@ async function waitFor(condition: () => boolean, timeoutMillis = 1_000): Promise
 
 // UI tests consume a provider-neutral baseline. Rust Git baseline selection is tested in the extension host.
 function baselineFixture() {
- const requests: string[] = [];
- return { requests, provider: { id: 'test.baseline', label: 'Index', async provideOriginalResource(resource: URI) {
- requests.push(resource.toString());
- return { providerId: 'test.baseline', providerLabel: 'Index', label: 'Index', originalResource: resource, revision: 7, text: 'same\nold\nremoved\nlast' };
- } }, dispose() {} };
+	const requests: string[] = [];
+	return {
+		requests, provider: {
+			id: 'test.baseline', label: 'Index', async provideOriginalResource(resource: URI) {
+				requests.push(resource.toString());
+				return { providerId: 'test.baseline', providerLabel: 'Index', label: 'Index', originalResource: resource, revision: 7, text: 'same\nold\nremoved\nlast' };
+			}
+		}, dispose() { }
+	};
 }

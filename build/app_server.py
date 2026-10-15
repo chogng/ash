@@ -82,7 +82,9 @@ def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Names
         type=Path,
         help="Prebuilt isolated Code Mode Host executable. If omitted, Cargo builds it.",
     )
-    parser.add_argument("--git-extension-bin", type=Path, help="Prebuilt Rust Git extension.")
+    parser.add_argument(
+        "--git-extension-bin", type=Path, help="Prebuilt Rust Git extension."
+    )
     parser.add_argument(
         "--remote-ssh-extension-bin",
         type=Path,

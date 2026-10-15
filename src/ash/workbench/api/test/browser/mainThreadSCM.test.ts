@@ -37,8 +37,8 @@ test('SCM resource groups survive input-only snapshots and retire changed resour
 	assert.strictEqual(repository.provider.groups, groups);
 	assert.ok(repository.provider.groups.includes(groups[0]!));
 	value.bridge.set(source, 'ash.scm', 2, [{ ...snapshot, input: { ...(snapshot.input as Record<string, JsonValue>), placeholder: 'Updated placeholder' } }]);
-    assert.strictEqual(repository.provider.groups, groups);
-    value.bridge.set(source, 'ash.scm', 3, [{ ...snapshot, groups: [{ id: 'changes', label: 'Updated changes', actions: [], resources: [] }] }]);
+	assert.strictEqual(repository.provider.groups, groups);
+	value.bridge.set(source, 'ash.scm', 3, [{ ...snapshot, groups: [{ id: 'changes', label: 'Updated changes', actions: [], resources: [] }] }]);
 	assert.notStrictEqual(repository.provider.groups, groups);
 	assert.ok(!repository.provider.groups.includes(groups[0]!));
 });
