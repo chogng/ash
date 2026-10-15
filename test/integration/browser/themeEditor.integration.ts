@@ -1,3 +1,8 @@
+import { IWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/common/workingCopyService.js';
+import { InMemoryWorkingCopyBackupService } from '../../../src/ash/workbench/services/workingCopy/common/workingCopyBackupService.js';
+import { WorkingCopyBackupTracker } from '../../../src/ash/workbench/services/workingCopy/browser/workingCopyBackupTracker.js';
+import { AuxiliaryBrowserTitlebarPart } from '../../../src/ash/workbench/browser/parts/titlebar/titlebarPart.js';
+import { ILocalizationService } from '../../../src/ash/workbench/services/localization/common/localizationService.js';
 import '../../../src/ash/sessions/common/configuration.js';
 import '../../../src/ash/editor/editor.code.all.js';
 import '../../../src/ash/workbench/browser/media/style.css';
@@ -43,7 +48,7 @@ import { EditorParts, IEditorPartsService } from '../../../src/ash/workbench/bro
 import { BrowserAuxiliaryWindowService } from '../../../src/ash/workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { CommandsRegistry } from '../../../src/ash/platform/commands/common/commands.js';
 import { ThemeEditor } from '../../../src/ash/workbench/contrib/themeEditor/browser/themeEditor.js';
-import { setNlsMessages } from '../../../src/ash/nls.js';
+import { localize, setNlsMessages } from '../../../src/ash/nls.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { ExtensionColorThemeService } from '../../../src/ash/workbench/services/extensions/browser/extensionColorThemeService.js';
 import { createBuiltinExtensionFixture } from './builtinExtensionsFixture.js';
@@ -105,10 +110,13 @@ services.registerSingleton(IKeybindingService, () => resources.add(services.crea
 })));
 services.registerSingleton(IAccessibleViewService, () => services.createInstance(AccessibleViewService));
 registerCodeEditorServices(services);
+services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, key, fallback) => localize(key, fallback) });
 const store = new BrowserTextResourceStore(textFiles);
 const models = resources.add(services.createInstance(BrowserTextModelService, store, {}));
 services.registerInstance(IFileTextModelService, models);
 services.registerInstance(ITextModelResourceService, models);
+const backups = resources.add(new InMemoryWorkingCopyBackupService('theme-editor-integration'));
+resources.add(new WorkingCopyBackupTracker(services.get(IWorkingCopyService), backups, window));
 const root = document.querySelector<HTMLElement>('#main')!;
 services.registerInstance(ILayoutService, resources.add(new BrowserLayoutService({ root })));
 services.registerInstance(IHostColorSchemeService, resources.add(new BrowserHostColorSchemeService(window)));
@@ -123,17 +131,14 @@ services.registerInstance(IFileDialogService, {
 	pickFileToSave: async () => undefined, showSaveConfirm: async () => ConfirmResult.DONT_SAVE,
 	showSaveDialog: async () => undefined, showOpenDialog: async () => undefined,
 });
-const editorOptions = { fileService: files, textFileService: textFiles, configurationService: configuration, fileDialogService: services.get(IFileDialogService) };
+const editorOptions = { workingCopyService: services.get(IWorkingCopyService), fileService: files, textFileService: textFiles, configurationService: configuration, fileDialogService: services.get(IFileDialogService) };
 const main = resources.add(services.createInstance(EditorPart, document.querySelector<HTMLElement>('#editors')!, editorOptions));
 const windows = resources.add(services.createInstance(BrowserAuxiliaryWindowService, window, root));
 const parts = resources.add(services.createInstance(EditorParts, main, windows, (container: HTMLElement) => {
-	const element = container.ownerDocument.createElement('header'); container.append(element);
-	const titlebar = {
-		container: element, element, height: 28, minimumWidth: 0, maximumWidth: Infinity, minimumHeight: 28, maximumHeight: 28,
-		onDidChange: Event.None, onMenubarVisibilityChange: Event.None,
-		layout() { }, updateOptions() { }, updateProperties() { }, registerVariables() { }, dispose() { element.remove(); }, [Symbol.dispose]() { this.dispose(); },
-	};
-	return { titlebar, part: services.createInstance(EditorPart, container, editorOptions) };
+	const part = services.createInstance(EditorPart, container, editorOptions);
+	const titlebar = services.createInstance(AuxiliaryBrowserTitlebarPart, container, 'Ash Code', part, () => { }, 'actions-only');
+	container.prepend(titlebar.container);
+	return { titlebar, part };
 }, services.get(IAccessibilityService), services.get(IStorageService)));
 services.registerInstance(IEditorPartsService, parts);
 root.style.height = '100vh';
@@ -145,6 +150,7 @@ declare global {
 	interface Window {
 		themeEditorTest: {
 			source(): string;
+			draft(): Promise<string | undefined>;
 			colorMap(): string[];
 			accessibleContent(): string;
 			persisted(file?: string): Promise<string>;
@@ -160,6 +166,7 @@ declare global {
 const pane = (): ThemeEditor => { const editor = parts.activePane; if (!(editor instanceof ThemeEditor)) throw new Error('No Theme Editor'); return editor; };
 window.themeEditorTest = {
 	source: () => pane().getControl()!.getValue(),
+	draft: async () => (await backups.list()).find(backup => backup.resource.toString() === pane().workingCopy?.resource.toString())?.content,
 	colorMap: () => TokenizationRegistry.getColorMap()?.map(color => color.toString()) ?? [],
 	accessibleContent: () => pane().getAccessibleContent(),
 	persisted: async (file = 'aurora.json') => (await files.readFile(URI.file('/themes/' + file))).content,

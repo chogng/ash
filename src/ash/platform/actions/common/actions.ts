@@ -47,6 +47,8 @@ export interface IMenuItem {
 }
 
 export interface ISubmenuItem {
+	/** Render the first submenu action as the primary trigger beside its action menu. */
+	readonly isSplitButton?: boolean;
 	readonly title: CommandActionTitle;
 	readonly submenu: MenuId;
 	readonly when?: ContextKeyExpression;

@@ -1,3 +1,5 @@
+import type { IAction } from '../../../../base/common/actions.js';
+import { MenuId, SubmenuItemAction } from '../../../../platform/actions/common/actions.js';
 import './media/themeEditor.css';
 import { addDisposableListener, getWindow, h, stopEvent } from '../../../../base/browser/dom.js';
 import type { IDimension } from '../../../../base/browser/dom.js';
@@ -150,7 +152,7 @@ export class ThemeEditor extends EditorPane {
 			}
 			if (!event.isComposing && (event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 's') {
 				stopEvent(event);
-				this.runAction(() => event.shiftKey ? this.saveThemeAs() : this.save());
+				void this.runAction(() => event.shiftKey ? this.saveThemeAs() : this.save());
 			}
 		}, { capture: true }));
 		const toolbar = h(doc, 'div');
@@ -158,13 +160,11 @@ export class ThemeEditor extends EditorPane {
 		const title = h(doc, 'h1');
 		title.textContent = localize('themeEditor.title', 'Theme Editor');
 		toolbar.append(title);
-		this._register(new Button(toolbar, { label: localize('themeEditor.save', 'Save'), presentation: 'quiet', onClick: () => this.runAction(() => this.save()) }));
-		this._register(new Button(toolbar, { label: localize('themeEditor.saveAs', 'Save as…'), presentation: 'quiet', onClick: () => this.runAction(() => this.saveThemeAs()) }));
-		this._register(new Button(toolbar, { label: localize('themeEditor.saveApply', 'Save and Apply'), presentation: 'primary', onClick: () => this.runAction(() => this.saveAndApply()) }));
+
 		this.message = h(doc, 'p');
 		this.message.className = 'ash-theme-editor-message';
 		this.message.setAttribute('role', 'status');
-		this.message.textContent = localize('themeEditor.description', 'Changes appear only in the preview. Save writes the theme; Save and Apply also switches the main window.');
+		this.message.textContent = localize('themeEditor.description', 'Draft changes are saved automatically and appear only in the preview. Save and Apply updates the theme and the main window.');
 		this.body = h(doc, 'div');
 		this.body.className = 'ash-theme-editor-body';
 		root.append(toolbar, this.message, this.body);
@@ -239,9 +239,10 @@ export class ThemeEditor extends EditorPane {
 		await this.textEditor.setInput(input, signal);
 		if (signal.aborted || this.input !== input) throw new CancellationError();
 		const control = this.getControl()!;
-		this.inputLifetime.add(control.onDidChangeModelContent(() => { this.valid = false; this.refresh.schedule(); }));
+		this.inputLifetime.add(control.onDidChangeModelContent(() => { this.valid = false; this.updateTitleArea(); this.refresh.schedule(); }));
 		this.inputLifetime.add(control.onDidChangeCursorSelection(() => this.syncSelection()));
 		this.copiesChanged.fire();
+		this.updateTitleArea();
 		await this.updatePreview();
 		this.layout(this.dimension);
 	}
@@ -257,6 +258,7 @@ export class ThemeEditor extends EditorPane {
 		this.valid = false;
 		this.textEditor.clearInput();
 		this.copiesChanged.fire();
+		this.updateTitleArea();
 	}
 
 	public get workingCopy() { return this.textEditor.workingCopy; }
@@ -283,6 +285,39 @@ export class ThemeEditor extends EditorPane {
 		if (this.root?.ownerDocument.activeElement === this.preview?.element) return this.preview?.getAccessibleContent() ?? '';
 		if (this.picker) return this.pickerRow!.accessibleText + '\n' + this.picker.getAccessibleContent();
 		return [this.message?.textContent ?? '', ...[...this.rows.values()].filter(row => !row.element.closest('[hidden]')).map(row => row.accessibleText)].join('\n');
+	}
+
+	public override getActions(): readonly IAction[] {
+		const model = this.getControl()?.getModel();
+		const historyAction = (redo: boolean): IAction => ({
+			id: redo ? 'themeEditor.redo' : 'themeEditor.undo',
+			label: redo ? localize('themeEditor.redo', 'Redo') : localize('themeEditor.undo', 'Undo'),
+			tooltip: redo ? localize('themeEditor.redo', 'Redo') : localize('themeEditor.undo', 'Undo'),
+			icon: redo ? Lxicon.redo : Lxicon.discard,
+			enabled: !this.saving && !this.input?.readOnly && (redo ? model?.canRedo() : model?.canUndo()) === true,
+			run: () => { if (redo) model?.redo(); else model?.undo(); },
+		});
+		const saveAction = (id: string, label: string, run: () => Promise<void>): IAction => ({
+			id,
+			label,
+			tooltip: label,
+			enabled: !!this.input && !this.input.readOnly && !this.saving,
+			icon: id === 'themeEditor.saveAndApply' ? Lxicon.check : undefined,
+			run: () => this.runAction(run),
+		});
+		return [
+			historyAction(false),
+			historyAction(true),
+			new SubmenuItemAction({
+				title: localize('themeEditor.saveActions', 'Theme save actions'),
+				submenu: MenuId.for('ThemeEditorSaveActions'),
+				isSplitButton: true,
+			}, [
+				saveAction('themeEditor.saveAndApply', localize('themeEditor.saveApply', 'Save and Apply'), () => this.saveAndApply()),
+				saveAction('themeEditor.saveAs', localize('themeEditor.saveAs', 'Save as…'), () => this.saveThemeAs()),
+				saveAction('themeEditor.save', localize('themeEditor.save', 'Save'), () => this.save()),
+			]),
+		];
 	}
 
 	public async save(options?: ISaveOptions): Promise<void> {
@@ -385,7 +420,7 @@ export class ThemeEditor extends EditorPane {
 			this.valid = true;
 			this.applyPreview();
 			this.renderRows();
-			this.showMessage(localize('themeEditor.description', 'Changes appear only in the preview. Save writes the theme; Save and Apply also switches the main window.'));
+			this.showMessage(localize('themeEditor.description', 'Draft changes are saved automatically and appear only in the preview. Save and Apply updates the theme and the main window.'));
 		} catch (error) {
 			if (operation !== this.operation || this.textEditor.getValue() !== source) return;
 			this.valid = false;
@@ -560,10 +595,11 @@ export class ThemeEditor extends EditorPane {
 		for (const [id, row] of this.rows) row.element.classList.toggle('selected', id === selected);
 	}
 
-	private runAction(action: () => Promise<void>): void {
+	private async runAction(action: () => Promise<void>): Promise<void> {
 		if (this.saving) return;
 		this.saving = true;
-		void action().catch(error => this.showMessage(localize('themeEditor.saveError', 'Could not save the theme. {0}', error instanceof Error ? error.message : String(error)), true)).finally(() => { this.saving = false; });
+		this.updateTitleArea();
+		await action().catch(error => this.showMessage(localize('themeEditor.saveError', 'Could not save the theme. {0}', error instanceof Error ? error.message : String(error)), true)).finally(() => { this.saving = false; this.updateTitleArea(); });
 	}
 	private showMessage(message: string, error = false): void {
 		if (!this.message) return;

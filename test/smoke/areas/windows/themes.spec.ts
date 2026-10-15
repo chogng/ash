@@ -67,7 +67,10 @@ test('Theme Editor restores one unsaved draft in its auxiliary window after rest
 	await expect(popup.locator('.ash-workbench-statusbar')).toBeHidden();
 	const titlebar = popup.locator('.ash-auxiliary-titlebar');
 	await expect(titlebar.locator('.ash-titlebar-command-center')).toBeHidden();
-	await expect(titlebar.getByRole('button')).toHaveCount(1);
+	await expect(titlebar.getByRole('button')).toHaveCount(5);
+	await expect(titlebar.getByRole('button', { name: 'Save and Apply', exact: true })).toBeVisible();
+	await expect(titlebar.getByRole('button', { name: 'Undo', exact: true })).toBeDisabled();
+	await expect(titlebar.getByRole('button', { name: 'Redo', exact: true })).toBeDisabled();
 	const pin = titlebar.getByRole('button', { name: 'Turn On Always on Top', exact: true });
 	await expect(pin).toBeEnabled();
 	await expect(titlebar.locator('.ash-titlebar-actions')).toHaveCSS('-webkit-app-region', 'no-drag');

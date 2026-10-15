@@ -1,3 +1,4 @@
+import { DropdownWithPrimaryActionViewItem } from './dropdownWithPrimaryActionViewItem.js';
 import { addDisposableListener, ModifierKeyEmitter } from "../../../base/browser/dom.js";
 import { setAriaAttribute } from "../../../base/browser/ui/aria/aria.js";
 import { ActionViewItem, ButtonActionViewItem, type ActionViewItemOptions } from "../../../base/browser/ui/actionbar/actionViewItems.js";
@@ -261,6 +262,10 @@ export function createActionViewItem(
 		return new MenuEntryActionViewItem(action, options);
 	}
 	if (action instanceof SubmenuItemAction) {
+		const primary = action.actions.find(candidate => !(candidate instanceof Separator));
+		if (action.item.isSplitButton && primary) {
+			return new DropdownWithPrimaryActionViewItem(primary, action, () => action.actions, contextMenuProvider, options);
+		}
 		return new SubmenuEntryActionViewItem(action, contextMenuProvider, options);
 	}
 	return undefined;

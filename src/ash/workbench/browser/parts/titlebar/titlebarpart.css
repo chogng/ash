@@ -81,4 +81,35 @@
 
 .ash-auxiliary-titlebar-compact > .ash-workbench-part-content {
 	margin-left: auto;
+	flex: 1;
+	min-width: 0;
+}
+
+.ash-auxiliary-titlebar-compact .ash-titlebar-actions,
+.ash-auxiliary-titlebar-compact .ash-titlebar-actions > .ash-toolbar {
+	flex: 1;
+	min-width: 0;
+}
+
+.ash-titlebar-actions .ash-dropdown-with-primary-action-view-item {
+	margin-left: auto;
+}
+
+.ash-titlebar-actions .ash-dropdown-with-primary-action-view-item .ash-button {
+	color: var(--ash-button-primaryForeground);
+	background: var(--ash-button-primaryBackground);
+}
+
+.ash-titlebar-actions .ash-dropdown-with-primary-action-view-item .ash-button:not(:disabled):hover {
+	background: var(--ash-button-primaryHoverBackground);
+}
+
+.ash-titlebar-actions .ash-dropdown-with-primary-primary.icon > .ash-button {
+	width: auto;
+	padding-inline: var(--ash-spacing-size80);
+	border-radius: var(--ash-cornerRadius-small) 0 0 var(--ash-cornerRadius-small);
+}
+
+.ash-titlebar-actions .ash-dropdown-with-primary-dropdown > .ash-button {
+	border-left: var(--ash-strokeThickness) solid currentColor;
 }

@@ -1,3 +1,4 @@
+import '../../../base/browser/ui/dropdown/dropdown.css';
 import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
 import { addDisposableListener, stopEvent, h } from "../../../base/browser/dom.js";
 import { ActionViewItem, ButtonActionViewItem, type ActionViewItemOptions } from "../../../base/browser/ui/actionbar/actionViewItems.js";

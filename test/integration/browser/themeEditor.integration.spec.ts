@@ -1,5 +1,10 @@
 import { test, expect, type Page } from '@playwright/test';
 
+async function chooseSaveAction(popup: Page, label: string, locale = 'en'): Promise<void> {
+	await popup.locator('.ash-auxiliary-titlebar').getByRole('button', { name: locale === 'zh-CN' ? '主题保存操作' : 'Theme save actions', exact: true }).click();
+	await popup.getByRole('menuitem', { name: label, exact: true }).click();
+}
+
 async function openEditor(page: Page, locale?: string, theme?: string): Promise<Page> {
 	page.on('pageerror', error => console.error('Theme Editor fixture:', error.message));
 	await page.goto('/themeEditor.html' + (locale ? '?locale=' + locale : ''));
@@ -26,6 +31,83 @@ async function openEditor(page: Page, locale?: string, theme?: string): Promise<
 	expect(preview!.x + preview!.width - windowBounds!.x - windowBounds!.width).toBeGreaterThanOrEqual(24);
 	expect(preview!.y + preview!.height - windowBounds!.y - windowBounds!.height).toBeGreaterThanOrEqual(24);
 	return popup;
+}
+
+test('titlebar shares undo and redo history and offers a primary save split button', async ({ page }, testInfo) => {
+	const popup = await openEditor(page);
+	const titlebar = popup.locator('.ash-auxiliary-titlebar');
+	const undo = titlebar.getByRole('button', { name: 'Undo', exact: true });
+	const redo = titlebar.getByRole('button', { name: 'Redo', exact: true });
+	const apply = titlebar.getByRole('button', { name: 'Save and Apply', exact: true });
+	const dropdown = titlebar.getByRole('button', { name: 'Theme save actions', exact: true });
+	await expect(undo).toBeDisabled();
+	await expect(redo).toBeDisabled();
+	await expect(apply).toBeVisible();
+	await expect(dropdown.locator('.ash-button-content')).toBeHidden();
+	expect(await apply.evaluate(element => {
+		const sample = element.ownerDocument.createElement('span');
+		sample.style.color = 'var(--ash-button-primaryBackground)';
+		element.append(sample);
+		const expected = getComputedStyle(sample).color;
+		sample.remove();
+		return getComputedStyle(element).backgroundColor === expected;
+	})).toBe(true);
+	await popup.getByRole('searchbox', { name: 'Search colors' }).fill('editor.background');
+	const hex = popup.getByRole('textbox', { name: 'Hex color for editor.background', exact: true });
+	await hex.fill('#223344');
+	await expect(undo).toBeEnabled();
+	await expect.poll(() => page.evaluate(() => window.themeEditorTest.draft())).toContain('#223344');
+	expect(await page.evaluate(() => window.themeEditorTest.persisted())).toContain('#101525');
+	await undo.click();
+	await expect(hex).toHaveValue('#101525');
+	await expect(redo).toBeEnabled();
+	await redo.press('Space');
+	await expect(hex).toHaveValue('#223344');
+	const undoBounds = await undo.boundingBox();
+	const applyBounds = await apply.boundingBox();
+	const titleBounds = await titlebar.boundingBox();
+	expect(undoBounds!.x).toBeLessThan(titleBounds!.width * 0.25);
+	expect(applyBounds!.x).toBeGreaterThan(titleBounds!.width * 0.5);
+	await apply.focus();
+	await apply.press('ArrowRight');
+	await expect(dropdown).toBeFocused();
+	await dropdown.press('Enter');
+	await expect(dropdown).toHaveAttribute('aria-expanded', 'true');
+	await expect(popup.getByRole('menuitem', { name: 'Save as…', exact: true })).toBeVisible();
+	await popup.keyboard.press('Escape');
+	await expect(dropdown).toBeFocused();
+	await dropdown.press('ArrowLeft');
+	await expect(apply).toBeFocused();
+	await popup.screenshot({ path: testInfo.outputPath('titlebar-save-actions.png') });
+});
+
+for (const theme of ['ash-light', 'ash-high-contrast-dark']) {
+	test(`titlebar save split button uses the theme and localized labels in ${theme}`, async ({ page }, testInfo) => {
+		const popup = await openEditor(page, 'zh-CN', theme);
+		const titlebar = popup.locator('.ash-auxiliary-titlebar');
+		const apply = titlebar.getByRole('button', { name: '保存并应用', exact: true });
+		const dropdown = titlebar.getByRole('button', { name: '主题保存操作', exact: true });
+		await expect(apply).toBeVisible();
+		await expect(dropdown.locator('.ash-button-content')).toBeHidden();
+		expect(await apply.evaluate(element => {
+			const sample = element.ownerDocument.createElement('span');
+			sample.style.color = 'var(--ash-button-primaryBackground)';
+			element.append(sample);
+			const color = getComputedStyle(sample).color;
+			sample.remove();
+			return getComputedStyle(element).backgroundColor === color;
+		})).toBe(true);
+		const arrowBounds = await dropdown.boundingBox();
+		expect(arrowBounds!.width).toBe(await dropdown.evaluate(element => parseFloat(getComputedStyle(element).getPropertyValue('--ash-toolbar-actionSize'))));
+		await apply.focus();
+		await apply.press('ArrowRight');
+		await expect(dropdown).toBeFocused();
+		await dropdown.press('Enter');
+		await expect(popup.getByRole('menuitem', { name: '另存为…', exact: true })).toBeVisible();
+		await popup.keyboard.press('Escape');
+		await expect(dropdown).toBeFocused();
+		await popup.screenshot({ path: testInfo.outputPath('titlebar-save-actions-localized.png') });
+	});
 }
 
 test('design token links navigate across groups, follow changes and restore after reset', async ({ page }, testInfo) => {
@@ -59,7 +141,7 @@ test('design token links navigate across groups, follow changes and restore afte
 	await expect(row.locator('.ash-theme-color-source')).toHaveText('Linked to foreground');
 	await expect(hex).toHaveValue('#447799');
 	await expect(frame.locator('#app')).toHaveCSS('--ash-input-foreground', '#447799');
-	await popup.getByRole('button', { name: 'Save', exact: true }).click();
+	await chooseSaveAction(popup, 'Save');
 	await expect.poll(() => page.evaluate(() => window.themeEditorTest.persisted())).toContain('#447799');
 	expect(await page.evaluate(() => window.themeEditorTest.persisted())).not.toContain('"input.foreground"');
 	await search.fill('input.');
@@ -148,7 +230,7 @@ test('draft edits only the isolated preview and Save and Apply switches the main
 	await hex.fill('#223344');
 	await expect.poll(() => popup.frameLocator('.ash-theme-editor-preview').locator('#app').evaluate(element => element.style.getPropertyValue('--ash-editor-background'))).toBe('#223344');
 	await expect.poll(() => page.locator('#main').evaluate(element => element.style.getPropertyValue('--ash-editor-background'))).toBe('#101525');
-	await popup.getByRole('button', { name: 'Save', exact: true }).click();
+	await chooseSaveAction(popup, 'Save');
 	await expect.poll(() => page.evaluate(() => window.themeEditorTest.persisted())).toContain('#223344');
 	await expect.poll(() => page.locator('#main').evaluate(element => element.style.getPropertyValue('--ash-editor-background'))).toBe('#101525');
 	await popup.getByRole('button', { name: 'Save and Apply', exact: true }).click();
@@ -267,7 +349,7 @@ test('JSON updates colors, rejects invalid saves, retains valid preview and rese
 	await page.evaluate(() => window.themeEditorTest.setSource('{"colors":'));
 	await expect(popup.locator('.ash-theme-editor-message')).toHaveClass(/error/);
 	await expect.poll(() => popup.frameLocator('.ash-theme-editor-preview').locator('#app').evaluate(element => element.style.getPropertyValue('--ash-editor-background'))).toBe('rgba(171, 205, 239, 0.5)');
-	await popup.getByRole('button', { name: 'Save', exact: true }).click();
+	await chooseSaveAction(popup, 'Save');
 	await expect(popup.locator('.ash-theme-editor-message')).toContainText('Could not save');
 	expect(await page.evaluate(() => window.themeEditorTest.persisted())).toContain('#101525');
 	await page.evaluate(text => window.themeEditorTest.setSource(text), candidate);
@@ -280,13 +362,13 @@ test('Save as runs inside the auxiliary window and persists a selectable user th
 	const popup = await openEditor(page);
 	await popup.getByRole('searchbox', { name: 'Search colors' }).fill('editor.background');
 	await popup.getByRole('textbox', { name: 'Hex color for editor.background', exact: true }).fill('#334455');
-	await popup.getByRole('button', { name: 'Save as…', exact: true }).click();
+	await chooseSaveAction(popup, 'Save as…');
 	const dialog = popup.getByRole('dialog', { name: 'Save as…' });
 	await expect(dialog).toBeVisible();
 	await dialog.getByRole('textbox', { name: 'Theme name' }).fill('New Aurora');
 	await dialog.getByRole('button', { name: 'Save', exact: true }).click();
 	await expect.poll(() => page.evaluate(() => window.themeEditorTest.persisted('new-aurora.json'))).toContain('#334455');
-	await expect(popup.getByRole('tab', { name: 'new-aurora.json', exact: true })).toBeVisible();
+	await expect(popup.getByRole('tabpanel', { name: 'new-aurora.json', exact: true })).toBeVisible();
 	expect(await page.evaluate(() => window.themeEditorTest.persisted())).toContain('#101525');
 	await expect(popup.locator('.ash-theme-editor-message')).not.toHaveClass(/error/);
 	await page.evaluate(() => window.themeEditorTest.close());
@@ -315,7 +397,7 @@ test('Chinese labels and keyboard color adjustment work in the auxiliary window'
 	await popup.keyboard.press('Escape');
 	await expect(picker).not.toBeVisible();
 	await expect(swatch).toBeFocused();
-	await popup.getByRole('button', { name: '另存为…', exact: true }).click();
+	await chooseSaveAction(popup, '另存为…', 'zh-CN');
 	await expect(popup.getByRole('dialog', { name: '另存为…' })).toBeVisible();
 	await popup.keyboard.press('Escape');
 	await expect(popup.getByRole('dialog')).not.toBeVisible();
@@ -337,7 +419,7 @@ test('editing a built-in theme creates an unsaved copy and Save writes it to use
 	await expect(popup.locator('.ash-theme-editor-message')).not.toHaveClass(/error/);
 	await popup.getByRole('searchbox', { name: 'Search colors' }).fill('editor.background');
 	await popup.getByRole('textbox', { name: 'Hex color for editor.background', exact: true }).fill('#667788');
-	await popup.getByRole('button', { name: 'Save', exact: true }).click();
+	await chooseSaveAction(popup, 'Save');
 	const dialog = popup.getByRole('dialog', { name: 'Save as…' });
 	await expect(dialog).toBeVisible();
 	await dialog.getByRole('textbox', { name: 'Theme name' }).fill('Custom Dark');
@@ -419,7 +501,7 @@ test('Save and closing the editor retain the applied theme until explicit applic
 	const popup = await openEditor(page);
 	await popup.getByRole('searchbox', { name: 'Search colors' }).fill('editor.background');
 	await popup.getByRole('textbox', { name: 'Hex color for editor.background', exact: true }).fill('#445566');
-	await popup.getByRole('button', { name: 'Save', exact: true }).click();
+	await chooseSaveAction(popup, 'Save');
 	await expect(popup.locator('.ash-theme-editor-message')).toHaveText('Theme saved.');
 	await expect.poll(() => page.evaluate(() => window.themeEditorTest.persisted())).toContain('#445566');
 	await expect(page.locator('#main')).toHaveCSS('background-color', 'rgb(16, 21, 37)');
