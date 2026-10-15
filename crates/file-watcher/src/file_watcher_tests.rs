@@ -263,6 +263,18 @@ async fn live_backend_upgrades_and_downgrades_effective_scope() {
 
 #[tokio::test]
 async fn live_directory_deletion_and_recreation_resume_recursive_notifications() {
+    directory_deletion_and_recreation(FileWatcherBackend::Recommended).await;
+}
+
+#[tokio::test]
+async fn polling_directory_deletion_and_recreation_resume_recursive_notifications() {
+    directory_deletion_and_recreation(FileWatcherBackend::Polling {
+        interval: Duration::from_millis(20),
+    })
+    .await;
+}
+
+async fn directory_deletion_and_recreation(backend: FileWatcherBackend) {
     async fn changed(receiver: &mut crate::channel::Receiver, expected: &Path, phase: &str) {
         let result = timeout(Duration::from_secs(3), async {
             loop {
@@ -290,7 +302,7 @@ async fn live_directory_deletion_and_recreation_resume_recursive_notifications()
     }
     let dir = TestDir::new();
     let root = dir.create_dir("recreated");
-    let watcher = Arc::new(FileWatcher::new().unwrap());
+    let watcher = Arc::new(FileWatcher::new_with_backend(backend).unwrap());
     let (subscriber, mut receiver) = watcher.add_subscriber();
     let _registration = subscriber.register_paths(vec![watch(&root, true)]).unwrap();
     fs::remove_dir(&root).unwrap();
@@ -306,7 +318,13 @@ async fn live_directory_deletion_and_recreation_resume_recursive_notifications()
     // The event loop must also recover when it never observes the root missing.
     fs::rename(&root, dir.path.join("retired-root")).unwrap();
     fs::create_dir(&root).unwrap();
-    changed(&mut receiver, &root, "immediate replacement").await;
+    // Polling also detects a replacement through removal of the old children when the
+    // directory's timestamp has the same second-resolution value in both snapshots.
+    let replacement = match backend {
+        FileWatcherBackend::Recommended => &root,
+        FileWatcherBackend::Polling { .. } => &file,
+    };
+    changed(&mut receiver, replacement, "immediate replacement").await;
     let nested = root.join("replacement-nested");
     fs::create_dir(&nested).unwrap();
     let file = nested.join("after.txt");
@@ -346,6 +364,7 @@ async fn polling_backend_delivers_existing_file_modifications() {
     let root = dir.create_dir("watched");
     let changed = root.join("changed.txt");
     fs::write(&changed, "before").unwrap();
+    let modified = fs::metadata(&changed).unwrap().modified().unwrap();
     let watcher = Arc::new(
         FileWatcher::new_with_backend(FileWatcherBackend::Polling {
             interval: Duration::from_millis(20),
@@ -355,7 +374,13 @@ async fn polling_backend_delivers_existing_file_modifications() {
     let (subscriber, mut receiver) = watcher.add_subscriber();
     let _registration = subscriber.register_paths(vec![watch(&root, true)]).unwrap();
     tokio::time::sleep(Duration::from_millis(40)).await;
-    fs::write(&changed, "after").unwrap();
+    fs::write(&changed, "after!").unwrap();
+    fs::File::options()
+        .write(true)
+        .open(&changed)
+        .unwrap()
+        .set_times(fs::FileTimes::new().set_modified(modified))
+        .unwrap();
 
     assert_eq!(
         timeout(Duration::from_secs(2), receiver.recv())
@@ -365,6 +390,38 @@ async fn polling_backend_delivers_existing_file_modifications() {
             paths: vec![changed],
         })
     );
+}
+
+#[tokio::test]
+async fn polling_ancestors_hash_contents_only_while_explicitly_registered() {
+    let dir = TestDir::new();
+    let root = dir.create_dir("watched");
+    let watcher = Arc::new(
+        FileWatcher::new_with_backend(FileWatcherBackend::Polling {
+            interval: Duration::from_millis(20),
+        })
+        .unwrap(),
+    );
+    let (subscriber, _receiver) = watcher.add_subscriber();
+    let _registration = subscriber.register_paths(vec![watch(&root, true)]).unwrap();
+    assert_eq!(watcher.backend_contents_for_test(&root), Some(true));
+    assert_eq!(watcher.backend_contents_for_test(&dir.path), None);
+
+    let parent = subscriber
+        .register_paths(vec![watch(&dir.path, false)])
+        .unwrap();
+    assert_eq!(watcher.backend_contents_for_test(&dir.path), Some(true));
+    drop(parent);
+    assert_eq!(watcher.backend_contents_for_test(&dir.path), None);
+
+    let missing = root.join("missing/child");
+    let registration = subscriber
+        .register_paths(vec![watch(&missing, true)])
+        .unwrap();
+    drop(_registration);
+    assert_eq!(watcher.backend_contents_for_test(&root), Some(false));
+    drop(registration);
+    assert_eq!(watcher.backend_contents_for_test(&root), None);
 }
 
 #[tokio::test]

@@ -31,26 +31,65 @@ use tokio::sync::mpsc;
 
 struct FileWatcherInner {
     watcher: BackendWatcher,
-    watched_paths: HashMap<PathBuf, RecursiveMode>,
+    watched_paths: HashMap<PathBuf, WatchSettings>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct WatchSettings {
+    mode: RecursiveMode,
+    contents: bool,
+}
+
+impl WatchSettings {
+    fn from_counts(counts: PathWatchCounts) -> Option<Self> {
+        counts.effective_mode().map(|mode| Self {
+            mode,
+            contents: counts.contents > 0,
+        })
+    }
+}
+
+#[derive(PartialEq)]
+struct WatchScope {
+    path: PathBuf,
+    recursive: bool,
+    contents: bool,
 }
 
 enum BackendWatcher {
     Recommended(RecommendedWatcher),
-    Polling(PollWatcher),
+    Polling {
+        contents: PollWatcher,
+        metadata: PollWatcher,
+    },
 }
 
 impl BackendWatcher {
-    fn watch(&mut self, path: &Path, mode: RecursiveMode) -> notify::Result<()> {
+    fn watch(&mut self, path: &Path, settings: WatchSettings) -> notify::Result<()> {
         match self {
-            Self::Recommended(watcher) => watcher.watch(path, mode),
-            Self::Polling(watcher) => watcher.watch(path, mode),
+            Self::Recommended(watcher) => watcher.watch(path, settings.mode),
+            Self::Polling { contents, metadata } => {
+                let watcher = if settings.contents {
+                    contents
+                } else {
+                    metadata
+                };
+                watcher.watch(path, settings.mode)
+            }
         }
     }
 
-    fn unwatch(&mut self, path: &Path) -> notify::Result<()> {
+    fn unwatch(&mut self, path: &Path, settings: WatchSettings) -> notify::Result<()> {
         match self {
             Self::Recommended(watcher) => watcher.unwatch(path),
-            Self::Polling(watcher) => watcher.unwatch(path),
+            Self::Polling { contents, metadata } => {
+                let watcher = if settings.contents {
+                    contents
+                } else {
+                    metadata
+                };
+                watcher.unwatch(path)
+            }
         }
     }
 }
@@ -69,6 +108,7 @@ pub enum FileWatcherBackend {
 pub struct FileWatcher {
     inner: Option<Arc<Mutex<FileWatcherInner>>>,
     state: Arc<RwLock<WatchState>>,
+    watch_parents: bool,
 }
 
 impl FileWatcher {
@@ -90,14 +130,27 @@ impl FileWatcher {
                     let _ = raw_tx.send(result);
                 })?)
             }
-            FileWatcherBackend::Polling { interval } => BackendWatcher::Polling(PollWatcher::new(
-                move |result| {
-                    let _ = raw_tx.send(result);
-                },
-                Config::default()
-                    .with_compare_contents(true)
-                    .with_poll_interval(interval),
-            )?),
+            FileWatcherBackend::Polling { interval } => {
+                let metadata_tx = raw_tx.clone();
+                BackendWatcher::Polling {
+                    contents: PollWatcher::new(
+                        move |result| {
+                            let _ = raw_tx.send(result);
+                        },
+                        Config::default()
+                            .with_compare_contents(true)
+                            .with_poll_interval(interval),
+                    )?,
+                    // Ancestors only detect target removal/recreation. Hashing their children
+                    // reads unrelated sibling files, potentially the whole system temp directory.
+                    metadata: PollWatcher::new(
+                        move |result| {
+                            let _ = metadata_tx.send(result);
+                        },
+                        Config::default().with_poll_interval(interval),
+                    )?,
+                }
+            }
         };
         let file_watcher = Self {
             inner: Some(Arc::new(Mutex::new(FileWatcherInner {
@@ -105,6 +158,9 @@ impl FileWatcher {
                 watched_paths: HashMap::new(),
             }))),
             state: Arc::new(RwLock::new(WatchState::default())),
+            // Polling rescans the target path itself after inode replacement. Only OS
+            // handles need a persistent parent watch to notice removal and recreation.
+            watch_parents: matches!(backend, FileWatcherBackend::Recommended),
         };
         file_watcher.spawn_event_loop(raw_rx);
         Ok(file_watcher)
@@ -115,6 +171,7 @@ impl FileWatcher {
         Self {
             inner: None,
             state: Arc::new(RwLock::new(WatchState::default())),
+            watch_parents: true,
         }
     }
 
@@ -172,7 +229,7 @@ impl FileWatcher {
                     }
                 }
             };
-            let scopes = Self::watch_scopes(&registration.key, &actual);
+            let scopes = Self::watch_scopes(&registration.key, &actual, self.watch_parents);
             // Acquire every physical scope before configuring the backend so rollback
             // cannot consume a parent lease belonging to a different registration.
             for scope in &scopes {
@@ -180,11 +237,11 @@ impl FileWatcher {
                     .path_ref_counts
                     .entry(scope.path.clone())
                     .or_default()
-                    .increment(scope.recursive, 1);
+                    .increment(scope.recursive, scope.contents, 1);
             }
             registered.push(registration.key.clone());
             for scope in scopes {
-                let next_mode = state.path_ref_counts[&scope.path].effective_mode();
+                let next_mode = WatchSettings::from_counts(state.path_ref_counts[&scope.path]);
                 if let Err(error) = self.reconfigure_watch(&scope.path, next_mode, &mut inner_guard)
                 {
                     drop(inner_guard);
@@ -219,7 +276,7 @@ impl FileWatcher {
                 }
                 actual
             };
-            for scope in Self::watch_scopes(key, &actual) {
+            for scope in Self::watch_scopes(key, &actual, self.watch_parents) {
                 Self::decrement_actual_watch(
                     &mut state.path_ref_counts,
                     &scope,
@@ -238,7 +295,7 @@ impl FileWatcher {
         };
         let mut inner_guard = None;
         for (key, watch) in subscriber.watched_paths {
-            for scope in Self::watch_scopes(&key, &watch.actual) {
+            for scope in Self::watch_scopes(&key, &watch.actual, self.watch_parents) {
                 Self::decrement_actual_watch(
                     &mut state.path_ref_counts,
                     &scope,
@@ -250,19 +307,29 @@ impl FileWatcher {
         }
     }
 
-    fn watch_scopes(key: &SubscriberWatchKey, actual: &WatchPath) -> Vec<WatchPath> {
-        let mut scopes = vec![actual.clone()];
+    fn watch_scopes(
+        key: &SubscriberWatchKey,
+        actual: &WatchPath,
+        watch_parents: bool,
+    ) -> Vec<WatchScope> {
+        let mut scopes = vec![WatchScope {
+            path: actual.path.clone(),
+            recursive: actual.recursive,
+            contents: actual.path == key.requested.path,
+        }];
         // An OS directory watch can disappear silently with its inode. Its immediate
         // parent observes removal/recreation; subscriber matching still hides siblings.
-        if let Some(parent) = key
-            .requested
-            .path
-            .parent()
-            .filter(|parent| *parent != actual.path)
+        if watch_parents
+            && let Some(parent) = key
+                .requested
+                .path
+                .parent()
+                .filter(|parent| *parent != actual.path)
         {
-            scopes.push(WatchPath {
+            scopes.push(WatchScope {
                 path: parent.to_path_buf(),
                 recursive: false,
+                contents: false,
             });
         }
         scopes
@@ -270,7 +337,7 @@ impl FileWatcher {
 
     fn decrement_actual_watch<'a>(
         counts_by_path: &mut HashMap<PathBuf, PathWatchCounts>,
-        actual: &WatchPath,
+        actual: &WatchScope,
         amount: usize,
         inner: Option<&'a Arc<Mutex<FileWatcherInner>>>,
         inner_guard: &mut Option<std::sync::MutexGuard<'a, FileWatcherInner>>,
@@ -278,9 +345,9 @@ impl FileWatcher {
         let Some(counts) = counts_by_path.get_mut(&actual.path) else {
             return;
         };
-        let previous_mode = counts.effective_mode();
-        counts.decrement(actual.recursive, amount);
-        let next_mode = counts.effective_mode();
+        let previous_mode = WatchSettings::from_counts(*counts);
+        counts.decrement(actual.recursive, actual.contents, amount);
+        let next_mode = WatchSettings::from_counts(*counts);
         if counts.is_empty() {
             counts_by_path.remove(&actual.path);
         }
@@ -299,7 +366,7 @@ impl FileWatcher {
     fn reconfigure_watch<'a>(
         &'a self,
         path: &Path,
-        next_mode: Option<RecursiveMode>,
+        next_mode: Option<WatchSettings>,
         inner_guard: &mut Option<std::sync::MutexGuard<'a, FileWatcherInner>>,
     ) -> notify::Result<()> {
         Self::reconfigure_watch_inner(self.inner.as_ref(), path, next_mode, false, inner_guard)
@@ -308,7 +375,7 @@ impl FileWatcher {
     fn reconfigure_watch_inner<'a>(
         inner: Option<&'a Arc<Mutex<FileWatcherInner>>>,
         path: &Path,
-        next_mode: Option<RecursiveMode>,
+        next_mode: Option<WatchSettings>,
         force: bool,
         inner_guard: &mut Option<std::sync::MutexGuard<'a, FileWatcherInner>>,
     ) -> notify::Result<()> {
@@ -329,8 +396,8 @@ impl FileWatcher {
         if existing_mode == next_mode && !force {
             return Ok(());
         }
-        if existing_mode.is_some() {
-            if let Err(error) = inner.watcher.unwatch(path) {
+        if let Some(existing_mode) = existing_mode {
+            if let Err(error) = inner.watcher.unwatch(path, existing_mode) {
                 warn!("failed to unwatch {}: {error}", path.display());
             }
             inner.watched_paths.remove(path);
@@ -354,12 +421,13 @@ impl FileWatcher {
         count: usize,
         inner: Option<&'a Arc<Mutex<FileWatcherInner>>>,
         inner_guard: &mut Option<std::sync::MutexGuard<'a, FileWatcherInner>>,
+        watch_parents: bool,
     ) {
         if old_actual == new_actual {
             return;
         }
-        let old_scopes = Self::watch_scopes(key, &old_actual);
-        let new_scopes = Self::watch_scopes(key, &new_actual);
+        let old_scopes = Self::watch_scopes(key, &old_actual, watch_parents);
+        let new_scopes = Self::watch_scopes(key, &new_actual, watch_parents);
         for scope in old_scopes
             .iter()
             .filter(|scope| !new_scopes.contains(scope))
@@ -371,9 +439,9 @@ impl FileWatcher {
                 counts_by_path
                     .entry(scope.path.clone())
                     .or_default()
-                    .increment(scope.recursive, count);
+                    .increment(scope.recursive, scope.contents, count);
             }
-            let next_mode = counts_by_path[&scope.path].effective_mode();
+            let next_mode = WatchSettings::from_counts(counts_by_path[&scope.path]);
             // A counted parent may have been missing when registered. Ensure it is
             // attached now even when its effective mode has not changed.
             if let Err(error) =
@@ -391,6 +459,7 @@ impl FileWatcher {
         };
         let state = Arc::clone(&self.state);
         let inner = self.inner.as_ref().map(Arc::downgrade);
+        let watch_parents = self.watch_parents;
         handle.spawn(async move {
             while let Some(result) = raw_rx.recv().await {
                 match result {
@@ -399,7 +468,13 @@ impl FileWatcher {
                     }
                     Ok(event) if is_mutating_event(&event) && !event.paths.is_empty() => {
                         let inner = inner.as_ref().and_then(std::sync::Weak::upgrade);
-                        Self::notify_subscribers(&state, inner.as_ref(), &event.paths).await;
+                        Self::notify_subscribers(
+                            &state,
+                            inner.as_ref(),
+                            &event.paths,
+                            watch_parents,
+                        )
+                        .await;
                     }
                     Ok(_) => {}
                     Err(error) => {
@@ -415,6 +490,7 @@ impl FileWatcher {
         state: &RwLock<WatchState>,
         inner: Option<&Arc<Mutex<FileWatcherInner>>>,
         event_paths: &[PathBuf],
+        watch_parents: bool,
     ) {
         let subscribers = {
             let mut state = state
@@ -461,13 +537,14 @@ impl FileWatcher {
                     count,
                     inner,
                     &mut inner_guard,
+                    watch_parents,
                 );
             }
             for path in replaced_roots {
                 let next_mode = state
                     .path_ref_counts
                     .get(&path)
-                    .and_then(|counts| counts.effective_mode());
+                    .and_then(|counts| WatchSettings::from_counts(*counts));
                 if let Err(error) =
                     Self::reconfigure_watch_inner(inner, &path, next_mode, true, &mut inner_guard)
                 {
@@ -517,7 +594,8 @@ impl FileWatcher {
 
     #[cfg(test)]
     pub(crate) async fn send_paths_for_test(&self, paths: Vec<PathBuf>) {
-        Self::notify_subscribers(&self.state, self.inner.as_ref(), &paths).await;
+        Self::notify_subscribers(&self.state, self.inner.as_ref(), &paths, self.watch_parents)
+            .await;
     }
 
     #[cfg(test)]
@@ -548,7 +626,19 @@ impl FileWatcher {
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .watched_paths
                 .get(path)
-                .copied()
+                .map(|settings| settings.mode)
+        })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn backend_contents_for_test(&self, path: &Path) -> Option<bool> {
+        self.inner.as_ref().and_then(|inner| {
+            inner
+                .lock()
+                .unwrap()
+                .watched_paths
+                .get(path)
+                .map(|settings| settings.contents)
         })
     }
 }

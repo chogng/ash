@@ -43,10 +43,14 @@ pub(crate) struct SubscriberWatchRegistration {
 pub(crate) struct PathWatchCounts {
     pub(crate) non_recursive: usize,
     pub(crate) recursive: usize,
+    pub(crate) contents: usize,
 }
 
 impl PathWatchCounts {
-    pub(crate) fn increment(&mut self, recursive: bool, amount: usize) {
+    pub(crate) fn increment(&mut self, recursive: bool, contents: bool, amount: usize) {
+        if contents {
+            self.contents += amount;
+        }
         if recursive {
             self.recursive += amount;
         } else {
@@ -54,7 +58,10 @@ impl PathWatchCounts {
         }
     }
 
-    pub(crate) fn decrement(&mut self, recursive: bool, amount: usize) {
+    pub(crate) fn decrement(&mut self, recursive: bool, contents: bool, amount: usize) {
+        if contents {
+            self.contents = self.contents.saturating_sub(amount);
+        }
         if recursive {
             self.recursive = self.recursive.saturating_sub(amount);
         } else {
