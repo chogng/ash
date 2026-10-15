@@ -195,6 +195,39 @@ fn startup_keeps_pending_rooms_unjoinable_until_media_recovers() {
         calls.store.join(&owner, "device"),
         Err(CallError::NotReady)
     ));
-    calls.recover(&updates).ok().unwrap();
+    // Recovery is a background retry loop. A slow or interrupted HTTP attempt must
+    // leave the room pending until a later pass actually completes media creation.
+    let options = crate::CollaborationServerOptions::new(
+        "127.0.0.1:0".parse().unwrap(),
+        path.clone(),
+        "0123456789abcdef0123456789abcdef",
+    );
+    let mut host = HttpRuntime::new(
+        SqliteDocumentCollaborationRooms::open_at(&path).unwrap(),
+        options,
+    );
+    host.calls = Some(calls);
+    let host = Arc::new(host);
+    let recovery = Recovery::start(&host).unwrap();
+    let calls = host.calls.as_ref().unwrap();
+    let started = Instant::now();
+    while calls.store.read(&owner).unwrap().media_state != MediaState::Ready {
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "media recovery did not complete"
+        );
+        let generation = host.updates.current();
+        host.updates
+            .wait_for_change(generation, Duration::from_millis(50));
+    }
     assert!(calls.store.join(&owner, "device").unwrap().microphone);
+    assert!(
+        server
+            .requests
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(method, failed)| method == "CreateRoom" && *failed)
+    );
+    drop(recovery);
 }
