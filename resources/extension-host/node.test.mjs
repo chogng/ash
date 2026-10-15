@@ -8,6 +8,7 @@ import { createInterface } from 'node:readline';
 import { once } from 'node:events';
 import { randomBytes } from 'node:crypto';
 import { createServer } from 'node:net';
+import { pathToFileURL } from 'node:url';
 
 async function host(t, source, entry = 'extension.cjs', capabilities = ['command'], onClient, fixture = {}) {
 	const root = await mkdtemp(join(tmpdir(), 'ash-node-host-'));
@@ -48,6 +49,16 @@ async function host(t, source, entry = 'extension.cjs', capabilities = ['command
 	const clientCalls = [];
 	const readers = createInterface({ input: control });
 	t.after(() => readers.close());
+	let controlFailure;
+	const failRequests = error => {
+		controlFailure = error;
+		for (const waiter of waiters.values()) waiter.reject(error);
+		waiters.clear();
+	};
+	// Windows may reset the socket when the child exits. Outstanding requests still
+	// fail, while shutdown tests observe the child's exit code after its final reply.
+	control.on('error', failRequests);
+	readers.on('error', failRequests);
 	assert.equal((await once(readers, 'line'))[0], token);
 	readers.on('line', line => {
 		const frame = JSON.parse(line);
@@ -68,6 +79,7 @@ async function host(t, source, entry = 'extension.cjs', capabilities = ['command
 	const send = frame => control.write(JSON.stringify(frame) + '\n');
 	function request(method, params) {
 		const requestId = ++id;
+		if (controlFailure) return { requestId, result: Promise.reject(controlFailure) };
 		const result = new Promise((resolve, reject) => waiters.set(requestId, { resolve, reject }));
 		send({ protocolVersion: 1, requestId, incarnation: 2, activationGeneration: 3, method, ...(params === undefined ? {} : { params }) });
 		return { requestId, result };
@@ -81,7 +93,7 @@ async function host(t, source, entry = 'extension.cjs', capabilities = ['command
 	const activated = await request('activate', {
 		extensionId: 'test.node', capabilities, initialization: {
 			language: fixture.language ?? 'en',
-			workspaceFolders: [{ uri: `file://${extension}`, name: 'extension', index: 0 }], workspaceName: 'extension', workspaceFile: null,
+			workspaceFolders: [{ uri: pathToFileURL(extension).href, name: 'extension', index: 0 }], workspaceName: 'extension', workspaceFile: null,
 			configurationValues: {}, configurationData: { defaults: { contents: {}, keys: [], overrides: [] }, folders: [] },
 		}
 	}).result;
@@ -214,7 +226,7 @@ test('window language selects the package translation bundle before CommonJS eva
 	const h = await host(t, `const v = require('vscode');
 const evaluation = v.l10n.t('Target {0}', 'worker');
 exports.activate = context => context.subscriptions.push(v.commands.registerCommand('test.node', () => ({
-    language: v.env.language, evaluation, uri: v.l10n.uri.fsPath.endsWith('/l10n/bundle.l10n.zh-cn.json'),
+    language: v.env.language, evaluation, uri: v.l10n.uri.path.endsWith('/l10n/bundle.l10n.zh-cn.json'),
     contents: v.l10n.bundle['Target {0}'], named: v.l10n.t('Ready {name}: {count}', { name: 'worker', count: 0 }),
     comment: v.l10n.t({ message: 'Paused {0}', args: [false], comment: ['debug', ' state'] }),
     fallback: v.l10n.t('Missing {0} {1}', 'first'), inherited: v.l10n.t('toString'),
@@ -384,13 +396,13 @@ exports.activate = context => {
  context.subscriptions.push(...listeners);
  context.subscriptions.push(v.commands.registerCommand('test.second', () => { for (const listener of listeners) listener.dispose(); }));
  context.subscriptions.push(v.commands.registerCommand('test.node', () => ({changes,folders,current:v.workspace.getConfiguration('sample').get('enabled','missing'),count:v.workspace.getConfiguration('sample').get('count','missing'),captured:captured.get('enabled','missing'),name:original.name,index:original.index,retained:v.workspace.getWorkspaceFolder(v.Uri.joinPath(original.uri,'source.ts'))===original,empty:v.workspace.workspaceFolders===undefined,workspaceName:v.workspace.name??null}))); };`);
-	const folderURI = `file://${h.extension}`;
+	const folderURI = pathToFileURL(h.extension).href;
 	const empty = () => ({ contents: {}, keys: [], overrides: [] });
 	const data = {
 		defaults: { contents: { sample: { enabled: true, count: 1 } }, keys: ['sample.enabled', 'sample.count'], overrides: [{ identifiers: ['typescript'], keys: ['sample.enabled'], contents: { sample: { enabled: false } } }] },
 		policy: { contents: { sample: { count: 17 } }, keys: ['sample.count'], overrides: [] },
 		application: empty(), userLocal: empty(), userRemote: empty(), workspace: empty(),
-		folders: [[{ scheme: 'file', path: h.extension }, { contents: { sample: { enabled: true } }, keys: ['sample.enabled'], overrides: [] }]],
+		folders: [[{ scheme: 'file', path: decodeURIComponent(new URL(folderURI).pathname) }, { contents: { sample: { enabled: true } }, keys: ['sample.enabled'], overrides: [] }]],
 	};
 	async function event(payload) {
 		const reply = await h.request('invoke', { extensionId: 'test.node', registrationId: 'vscode.workspace.events', operation: 'workspaceEvent', payload, deadlineUnixMillis: Date.now() + 30000 }).result;
