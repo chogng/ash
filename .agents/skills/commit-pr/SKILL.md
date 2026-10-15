@@ -17,8 +17,10 @@ If the repository or publication target is unclear, ask before committing or pub
 
 1. Before staging, inspect `git status --short --branch`, `git remote -v`, `git diff`, `git diff --cached`, and relevant untracked files. Check for an existing merge or rebase before starting another operation.
 2. If the index includes unrelated or uncertain work, stop and ask; do not unstage, stash, reset, or overwrite it. If one file mixes task and unrelated edits, stage only the task hunks, or stop when they cannot be separated.
-3. Complete any missing checks required by [Testing Guidelines](../../../.github/instructions/testing.instructions.md) before staging.
-4. Stage explicit paths or reviewed hunks. Do not use `git add -A`, `git add .`, or `git commit -a` to collect a dirty tree. Review `git diff --cached` and `git diff --cached --check` immediately before committing; the entire staged diff must belong to this task.
+3. Format only task-owned files with `just fmt <paths...>` before staging. Never use a repository-wide write or collect all dirty paths for automatic fixes. When a file mixes task and unrelated edits, review formatter output and preserve unrelated hunks.
+4. Complete any missing checks required by [Testing Guidelines](../../../.github/instructions/testing.instructions.md) before staging.
+5. Stage explicit paths or reviewed hunks. Do not use `git add -A`, `git add .`, or `git commit -a` to collect a dirty tree. Review `git diff --cached` immediately before committing; the entire staged diff must belong to this task.
+6. Run the [repository commit gate](../../../AGENTS.md#development-workflow) after staging, using the destination branch as `<base-ref>` (normally `origin/main`). It checks the complete branch and working-tree formatting with `just fmt-check --changed <base-ref>`, followed by `git diff --check` and `git diff --cached --check`. Add `--full` when formatter configuration changes; this also runs `just fmt-check`. Stop on failure, fix only task-owned files, restage the reviewed changes, and rerun the gate. Report failures in unrelated work without modifying it. Any subsequent content or index change invalidates the gate result.
 
 ## Write and verify the commit
 
@@ -32,7 +34,7 @@ After committing, inspect the diff and SHA with `git show` and recheck `git stat
 
 1. Verify the remote and authorized `main` target. Inspect every local commit that would be published; stop if the range contains unrelated or uncertain commits. Do not publish from a detached HEAD or switch branches over unrelated work.
 2. Fetch the selected remote's `main` immediately before publishing. If it advanced, rebase only task-owned, unpublished commits onto that fetched head. Do not rewrite published or unrelated history. If the operation requires cleaning unrelated changes, stop instead of auto-stashing them.
-3. Stop on ambiguous or out-of-scope conflicts. Review the integrated diff and revalidate changes introduced by rebasing or conflict resolution. Capture the final commit SHA after any rewrite.
+3. Stop on ambiguous or out-of-scope conflicts. Review the integrated diff and revalidate changes introduced by rebasing or conflict resolution. Rerun the repository commit gate against the fetched target before pushing, even when publishing existing commits without creating a new commit. Capture the final commit SHA after any rewrite.
 4. Push serially with an explicit non-force target, for example `git push <remote> HEAD:refs/heads/main`. Never force-push `main`. If a concurrent update rejects the push, perform one more fetch, safe rebase, and affected validation, then retry the normal push once. If it is rejected again or integration is unsafe, report the blocker rather than looping or overwriting remote work.
 5. Read the remote ref after pushing. Verify that it equals the final commit SHA, or fetch and prove that SHA is an ancestor of the newer remote head if another commit arrived.
 
@@ -40,7 +42,7 @@ After committing, inspect the diff and SHA with `git show` and recheck `git stat
 
 1. Verify the repository, head branch, remote, and base branch from the request and repository configuration; do not assume a universal base such as `master`. Inspect the complete head-to-base diff and all commits to be published for task ownership.
 2. Check for an existing open PR for that head and base. Report the existing PR instead of creating a duplicate. Do not edit its title, description, draft state, or unrelated content without authorization.
-3. Push the authorized head branch without force and verify the remote commit. Stop on unexpected remote divergence. Fill the shared change template, then create the requested draft PR. Do not merge or enable auto-merge without a request.
+3. Fetch the selected remote's base branch and rerun the repository commit gate against that fetched ref before pushing, including for existing commits. Push the authorized head branch without force and verify the remote commit. Stop on unexpected remote divergence. Fill the shared change template, then create the requested draft PR. Do not merge or enable auto-merge without a request.
 
 ## Report the observed result
 

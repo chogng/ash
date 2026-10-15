@@ -37,5 +37,5 @@ Local Refers: `../mxc`, `../tgrep`, `../vscode`, `../codex`, `../zed`, `../warp`
 
 - Do not generate staged workflow records unless the user explicitly invokes `/develop`.
 - Modify the requested checkout; do not substitute another checkout or only a remote branch. Preserve unrelated changes.
-- Before committing or publishing, run `just fmt-check --changed <base-ref>` for the complete change; use `just fmt <paths...>` to fix selected files. CI checks the full repository. Formatter configuration changes require `just fmt-check`.
+- Before committing or publishing, pass `just commit-check <base-ref>` as defined in the [commit workflow](.agents/skills/commit-pr/SKILL.md#prepare-the-exact-change). CI checks the full repository.
 - A PR is optional for repository-owner changes; use PR review for external contributions or security-sensitive changes.
