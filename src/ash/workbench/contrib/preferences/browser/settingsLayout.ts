@@ -382,6 +382,12 @@ export const SettingsNavigation = [
 						description: localize({ bundle: 'ash.settings', key: 'browser.controls.description' }, 'Control page zoom, address bar search and reload on local file changes.'),
 						settings: ['workbench.browser.searchEngine', 'workbench.browser.pageZoom', 'workbench.browser.autoReloadOnFileChange', 'workbench.browser.dataStorage', 'workbench.browser.openLocalhostLinks'],
 					},
+					{
+						id: 'chatgpt',
+						label: localize({ bundle: 'ash.settings', key: 'browser.chatgpt.label' }, 'ChatGPT'),
+						description: localize({ bundle: 'ash.settings', key: 'browser.chatgpt.description' }, 'Configure the ChatGPT website in this window.'),
+						settings: ['sessions.chatgpt.optimizeScrolling'],
+					},
 				],
 			},
 			{

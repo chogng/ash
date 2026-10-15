@@ -172,6 +172,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				'workbench.contrib.browserView.windowZoomSynchronizer',
 				'workbench.contrib.browserView.autoReload',
 				'workbench.contrib.sessionBrowserViewController',
+				'sessions.chatgpt.web',
 				'workbench.contrib.browserView.restore',
 				'workbench.contrib.chatAccessibilitySignals',
 				'workbench.contrib.speechAccessibilitySignal',

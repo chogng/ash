@@ -1,9 +1,10 @@
-import type { BrowserWindow, WebContentsView, WebContents, WebFrameMain, IpcMainEvent, Event as ElectronEvent } from 'electron/main';
+import type { BrowserWindow, WebContentsView, WebContents, WebFrameMain, IpcMainEvent, ContextMenuParams, Event as ElectronEvent } from 'electron/main';
 import { addAbortListener, type EventEmitter } from 'node:events';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import type { IDisposable } from '../../../base/common/lifecycle.js';
 import { promiseWithResolvers, raceCancellationError } from '../../../base/common/async.js';
 import { browserViewIsolatedWorldId, type BrowserViewEvent, type IBrowserViewBounds, type IBrowserViewState, type IBrowserViewInfo, type IBrowserViewCreateOptions, normalizeBrowserViewUrl } from '../common/browserView.js';
+import { browserPageScheme } from '../common/browserPage.js';
 import type { BrowserSession } from './browserSession.js';
 import { BrowserViewDebugger } from './browserViewDebugger.js';
 import type { IBrowserHistoryItemHandle } from '../common/browserHistory.js';
@@ -25,6 +26,7 @@ export interface BrowserViewOptions {
 	readonly session: BrowserSession;
 	readonly history: IBrowserSessionHistory;
 	readonly emitEvent: (event: BrowserViewEvent) => void;
+	readonly openContextMenu: (view: BrowserView, params: ContextMenuParams) => void;
 }
 
 /** Owns one page, its navigation resources and the ordered Chromium operations using it. */
@@ -61,6 +63,7 @@ export class BrowserView extends Disposable {
 	private laidOut = false;
 	private visible = false;
 	private readonly emitEvent: (event: BrowserViewEvent) => void;
+	private readonly openContextMenu: BrowserViewOptions['openContextMenu'];
 	private networkToken: string | null = null;
 	private readonly history: IBrowserSessionHistory;
 	private historyItem: IBrowserHistoryItemHandle | undefined;
@@ -70,6 +73,16 @@ export class BrowserView extends Disposable {
 	private selectionMode: 'element' | 'area' | undefined;
 	private deviceEmulation: IBrowserDeviceProfile | undefined;
 	private originalUserAgent: string | undefined;
+	private contentVisibilityRule: import('../common/browserView.js').IBrowserContentVisibilityRule | undefined;
+
+	public setContentVisibility(rule: import('../common/browserView.js').IBrowserContentVisibilityRule | undefined): void {
+		if (rule?.origin === this.contentVisibilityRule?.origin && rule?.selector === this.contentVisibilityRule?.selector) { return; }
+		this.contentVisibilityRule = rule;
+		// Only the top-level document receives the rule. The sandbox checks its own origin again.
+		if (this.preloadFrames.has(this.webContents.mainFrame)) {
+			this.sendPreload(this.webContents.mainFrame, 'contentVisibility', rule);
+		}
+	}
 
 	public setBrowserZoomIndex(index: number): void {
 		this.webContents.setZoomFactor(browserZoomFactors[index]!);
@@ -269,6 +282,9 @@ export class BrowserView extends Disposable {
 		}
 		if (message.type === 'ready') {
 			this.preloadFrames.set(frame, message.frameToken);
+			if (frame === this.webContents.mainFrame && this.contentVisibilityRule) {
+				this.sendPreload(frame, 'contentVisibility', this.contentVisibilityRule);
+			}
 			if (this.preloadConfiguration) {
 				this.sendPreload(frame, 'configure', this.preloadConfiguration);
 			}
@@ -391,6 +407,7 @@ export class BrowserView extends Disposable {
 			this.webContents.setWebRTCIPHandlingPolicy('disable_non_proxied_udp');
 		}
 		this.emitEvent = options.emitEvent;
+		this.openContextMenu = options.openContextMenu;
 		this._register(toDisposable(() => { for (const finish of this.fileRequests.values()) { finish(null); } }));
 	}
 
@@ -436,7 +453,7 @@ export class BrowserView extends Disposable {
 	}
 	loadURL(url: string, signal: AbortSignal = this.signal, networkToken?: string | null): Promise<void> {
 		const normalized = normalizeBrowserViewUrl(url);
-		if (this.creation.owner.type === 'agent' && new URL(normalized).protocol === 'file:') { return Promise.reject(new Error('BrowserLocalFileAccessDenied')); }
+		if (this.creation.owner.type === 'agent' && ['file:', `${browserPageScheme}:`].includes(new URL(normalized).protocol)) { return Promise.reject(new Error('BrowserLocalFileAccessDenied')); }
 		return this.runOperation(signal, s => this.navigate(normalized, s), networkToken);
 	}
 	goBack(): Promise<void> { return this.runOperation(this.signal, async () => { const h = this.webContents.navigationHistory; if (h.canGoBack()) { this.errorDescription = undefined; h.goBack(); } }); }
@@ -488,6 +505,9 @@ export class BrowserView extends Disposable {
 
 	private listen(): void {
 		const contents = this.view.webContents;
+		this.on(contents, 'context-menu', (_event: ElectronEvent, params: ContextMenuParams) => {
+			this.openContextMenu(this, params);
+		});
 		this.on(contents, 'console-message', (event: Electron.Event<Electron.WebContentsConsoleMessageEventParams>) => {
 			const line = `${event.level}: ${event.message}`.slice(0, 8192);
 			this.consoleLogs.push(line); this.consoleBytes += Buffer.byteLength(line);
@@ -585,7 +605,7 @@ export class BrowserView extends Disposable {
 	}
 
 	private validateNavigation(event: ElectronEvent, url: string): void {
-		if (this.creation.owner.type === 'agent' && new URL(url).protocol === 'file:') { event.preventDefault(); return; }
+		if (this.creation.owner.type === 'agent' && ['file:', `${browserPageScheme}:`].includes(new URL(url).protocol)) { event.preventDefault(); return; }
 		try { normalizeBrowserViewUrl(url); this.errorDescription = undefined; }
 		catch { event.preventDefault(); }
 	}

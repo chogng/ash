@@ -9,7 +9,7 @@ import { addDisposableListener, h, type IDimension } from '../../../../base/brow
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IBrowserViewService, BrowserViewStorageScope, type IBrowserViewState } from '../../../../platform/browserView/common/browserView.js';
 import { BrowserEditorInput } from '../common/browserEditorInput.js';
-import { BrowserViewEditorId, type IBrowserViewModel } from '../common/browserView.js';
+import { BrowserViewEditorId, IBrowserViewWorkbenchService, type IBrowserViewModel } from '../common/browserView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IDialogService, DialogSeverity } from '../../../../platform/dialogs/common/dialogs.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
@@ -55,6 +55,8 @@ export interface IBrowserUrlSuggestionProvider {
 export class BrowserEditor extends EditorPane implements IEditorPane {
 	readonly id = BrowserViewEditorId;
 	private domNode!: HTMLDivElement;
+	private toolbarDomNode!: HTMLDivElement;
+	private showControls = true;
 	private addressDomNode!: HTMLInputElement;
 	private viewportDomNode!: HTMLDivElement;
 	private statusDomNode!: HTMLDivElement;
@@ -88,6 +90,7 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 		@IBrowserViewService private readonly pageService: IBrowserViewService,
 		@IEditorPart private readonly editorPart: IEditorPart,
 		@ICommandService private readonly commands: ICommandService,
+		@IBrowserViewWorkbenchService private readonly browsers: IBrowserViewWorkbenchService,
 		@IBrowserAutoReloadService private readonly autoReload: IBrowserAutoReloadService,
 		@IThemeService private readonly browserThemes: IThemeService,
 		@IStorageService storageService: IStorageService,
@@ -104,6 +107,9 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 		this._register(browserThemes.onDidColorThemeChange(() => {
 			if (this.model) { void this.configurePreload(this.model).catch(error => this.report(error)); }
 		}));
+		this._register(browsers.onDidChangeBrowserViews(() => {
+			if (this.currentInput) { this.updatePresentation(); }
+		}));
 	}
 
 	public override create(container: HTMLElement): void {
@@ -111,6 +117,7 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 		this.domNode = h(document, 'div');
 		this.domNode.className = 'ash-browser-editor';
 		const toolbar = h(document, 'div');
+		this.toolbarDomNode = toolbar;
 		toolbar.className = 'ash-browser-toolbar';
 		const editor = this;
 		this.navigation = this._register(this.instantiation.createInstance(BrowserNavigationFeatures, {
@@ -183,6 +190,7 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 
 		this.currentInput = input;
 		this.model = model;
+		this.updatePresentation();
 		this.history.setModel(model);
 		this.zoom.setModel(model);
 		this.emulation.setModel(model);
@@ -209,6 +217,9 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 			}
 			if (event.type === 'focusAddress') { this.focus(); }
 			this.pageStatus.accept(event);
+			if (event.type === 'loadFailed' || event.type === 'renderProcessGone') {
+				this.statusDomNode.classList.remove('ash-browser-status-quiet');
+			}
 		}));
 		this.render(model.state);
 		this.pageHost.layout();
@@ -251,6 +262,11 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 		super.setVisible(visibility); this.visible = visibility; this.renderer.setVisible(visibility);
 	}
 	public override focus(): void {
+		if (!this.showControls) {
+			this.viewportDomNode.focus();
+			this.pageHost.tryFocus();
+			return;
+		}
 		this.navigation.focusUrlInput();
 		if (this.configuration.getValue<boolean>('accessibility.verbosity.browser')) {
 			this.statusDomNode.textContent = localize({ bundle: 'ash.workbench', key: 'browser.focusHelp' }, 'Enter a URL and press Enter. Press Alt+F1 for browser help.');
@@ -288,13 +304,33 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 		if (this.actionsUrl !== state.url) { this.setPageActions(); }
 		this.navigation.update(state);
 		this.pageStatus.render(state);
+		this.statusDomNode.classList.toggle('ash-browser-status-quiet', !this.showControls && !state.errorDescription);
 		this.welcome.update(state);
 	}
-	private report(error: unknown): void { if (!this.isDisposed) { this.statusDomNode.textContent = error instanceof Error && error.message === 'BrowserScreenshotTooLarge' ? localize({ bundle: 'ash.workbench', key: 'browser.screenshotTooLarge' }, 'The full page exceeds the screenshot size limit.') : error instanceof Error && error.message === 'BrowserScreenshotUnavailable' ? localize({ bundle: 'ash.workbench', key: 'browser.screenshotUnavailable' }, 'The page could not be captured.') : error instanceof Error ? error.message : String(error); } }
+	private updatePresentation(): void {
+		this.showControls = !this.currentInput || this.browsers.getBrowserViewPresentation(this.currentInput.id)?.showControls !== false;
+		this.toolbarDomNode.hidden = !this.showControls;
+		this.statusDomNode.classList.toggle('ash-browser-status-quiet', !this.showControls && !this.model?.state.errorDescription);
+		this.viewportDomNode.setAttribute('aria-label', this.showControls
+			? localize({ bundle: 'ash.workbench', key: 'browser.webpage' }, 'Webpage. Press F6 to return to the address field.')
+			: localize({ bundle: 'ash.workbench', key: 'browser.webpageContent' }, 'Webpage'));
+		this.pageHost.layout();
+	}
+	private report(error: unknown): void {
+		if (!this.isDisposed) {
+			this.statusDomNode.classList.remove('ash-browser-status-quiet');
+			this.statusDomNode.textContent = error instanceof Error && error.message === 'BrowserScreenshotTooLarge' ? localize({ bundle: 'ash.workbench', key: 'browser.screenshotTooLarge' }, 'The full page exceeds the screenshot size limit.') : error instanceof Error && error.message === 'BrowserScreenshotUnavailable' ? localize({ bundle: 'ash.workbench', key: 'browser.screenshotUnavailable' }, 'The page could not be captured.') : error instanceof Error ? error.message : String(error);
+		}
+	}
 	private configurePreload(model: IBrowserViewModel): Promise<void> {
 		const theme = this.browserThemes.getColorTheme();
 		const configuration: IBrowserViewWindowConfiguration = {
 			theme: {
+				colorScheme: theme.colorScheme === 'light' || theme.colorScheme === 'hcLight' ? 'light' : 'dark',
+				editorBackground: theme.getColorCss('editor.background'), foreground: theme.getColorCss('foreground'),
+				sidebarBackground: theme.getColorCss('sideBar.background'), hoverBackground: theme.getColorCss('list.hoverBackground'),
+				inputBorder: theme.getColorCss('input.border'), codeBackground: theme.getColorCss('text.codeBlockBackground'),
+				linkForeground: theme.getColorCss('accent.foreground'), errorForeground: theme.getColorCss('error.foreground'), shadow: theme.getColorCss('widget.shadow'),
 				focusBorder: theme.getColorCss('focusBorder'), buttonBackground: theme.getColorCss('button.background'), buttonForeground: theme.getColorCss('button.foreground'),
 				widgetBackground: theme.getColorCss('editorWidget.background'), widgetForeground: theme.getColorCss('editorWidget.foreground'), widgetBorder: theme.getColorCss('widget.border'), contrastBorder: theme.getColorCss('contrastBorder'),
 			},
@@ -314,7 +350,11 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 		return this.pageService.updateWindowConfiguration(model.info.host.windowId, configuration);
 	}
 	private helpContent(): string {
-		return localize({ bundle: 'ash.workbench', key: 'browser.accessibilityHelp' }, 'Use Tab to move through browser controls. Enter in the address field navigates and focuses the webpage. Ctrl+Shift+P (Command+Shift+P on macOS) opens the Command Palette from the webpage. Ctrl+L (Command+L on macOS) or F6 in the webpage returns to the address field. Back and Forward navigate page history. Close the editor tab to close its webpage. Set workbench.externalUriOpeners to ash.browser.open for websites you want to open here. Webpages use the browser’s accessibility tree. The More Actions menu contains sharing, website permission reset, download cancellation and History. History lists visits in this storage session; type to search, use Up and Down to choose a page and Enter to open it. Clear browsing history removes this session’s recorded visits. Isolated Agent pages and ephemeral sessions do not record history. Share with Agent allows a chosen conversation to observe this page. Agent input and navigation require an isolated Agent page. Revoke all access ends that grant. Website permission dialogs name the requesting site. Reset all website permissions removes its decisions. Downloads ask for a save location; Cancel downloads stops active transfers. Use Ctrl+F to find the selected text in the page and F3 or Shift+F3 to move between matches. More Actions also offers Select Element for Chat, Comment on Elements and Select Area for Chat. Use Tab and arrow keys to choose an element, Enter to select, and Escape to cancel. Area selection supports arrow keys and Enter. Comments support keyboard editing and removal. Captured selections remain private until you explicitly choose Browser selections in Chat’s Add Context menu.') + '\n' + localize({ bundle: 'ash.workbench', key: 'browser.extendedHelp' }, 'More Actions offers Page zoom, Device emulation, Developer Tools, Favorites and browser storage clearing. Use the keyboard to choose zoom levels and device presets in the picker; Escape cancels. Favorites are added explicitly from user pages. Clearing browser data requires confirmation and applies to all pages sharing the active storage session. Local file pages reload on disk changes by default. Local HTTP previews can opt in to reload on workspace file changes. Auto reload continues in background tabs. Use Browser: Zoom In, Zoom Out and Reset Zoom to change page zoom. Default page zoom can follow window zoom; per-site overrides take precedence. Browser: Quick Open Browser Tab lists pages for the active session. Address bar search is disabled by default; choose a search engine in Settings to enable it.') + '\n' + localize({ bundle: 'ash.workbench', key: 'browser.auditHelp' }, 'Press Down in the address field to choose History or Favorites suggestions. Escape restores the page address. Browser commands provide Back, Forward, Reload, Reload Without Cache, Open File and Close Browser Tabs. Manage Website Permissions changes the current site’s location, camera, microphone, notifications or clipboard decision. Captured console logs and page screenshots stay private until attached from Browser selections in Chat. Browser data storage and localhost link settings apply to new pages and link opening.');
+		const contextMenuHelp = localize({ bundle: 'ash.workbench', key: 'browser.contextHelp' }, 'Right-click the webpage, or focus it and press the Menu key or Shift+F10, to open its context menu. Text, input fields, links and images offer editing, copying, saving, opening in a new tab, navigation and zoom actions. Use arrow keys to choose, Enter to run an action, and Escape to close the menu and return to the webpage.');
+		if (!this.showControls) {
+			return contextMenuHelp + '\n' + localize({ bundle: 'ash.workbench', key: 'browser.embeddedHelp' }, 'This product page displays a website with its own navigation. Use Tab and Shift+Tab to move through webpage controls. Ctrl+Shift+P (Command+Shift+P on macOS) opens the Command Palette. Use Ctrl+F to find text, and F3 or Shift+F3 to move between matches. Web content uses the browser accessibility tree. Select another Activity Bar entry to leave this page.');
+		}
+		return contextMenuHelp + '\n' + localize({ bundle: 'ash.workbench', key: 'browser.accessibilityHelp' }, 'Use Tab to move through browser controls. Enter in the address field navigates and focuses the webpage. Ctrl+Shift+P (Command+Shift+P on macOS) opens the Command Palette from the webpage. Ctrl+L (Command+L on macOS) or F6 in the webpage returns to the address field. Back and Forward navigate page history. Close the editor tab to close its webpage. Set workbench.externalUriOpeners to ash.browser.open for websites you want to open here. Webpages use the browser’s accessibility tree. The More Actions menu contains sharing, website permission reset, download cancellation and History. History lists visits in this storage session; type to search, use Up and Down to choose a page and Enter to open it. Clear browsing history removes this session’s recorded visits. Isolated Agent pages and ephemeral sessions do not record history. Share with Agent allows a chosen conversation to observe this page. Agent input and navigation require an isolated Agent page. Revoke all access ends that grant. Website permission dialogs name the requesting site. Reset all website permissions removes its decisions. Downloads ask for a save location; Cancel downloads stops active transfers. Use Ctrl+F to find the selected text in the page and F3 or Shift+F3 to move between matches. More Actions also offers Select Element for Chat, Comment on Elements and Select Area for Chat. Use Tab and arrow keys to choose an element, Enter to select, and Escape to cancel. Area selection supports arrow keys and Enter. Comments support keyboard editing and removal. Captured selections remain private until you explicitly choose Browser selections in Chat’s Add Context menu.') + '\n' + localize({ bundle: 'ash.workbench', key: 'browser.extendedHelp' }, 'More Actions offers Page zoom, Device emulation, Developer Tools, Favorites and browser storage clearing. Use the keyboard to choose zoom levels and device presets in the picker; Escape cancels. Favorites are added explicitly from user pages. Clearing browser data requires confirmation and applies to all pages sharing the active storage session. Local file pages reload on disk changes by default. Local HTTP previews can opt in to reload on workspace file changes. Auto reload continues in background tabs. Use Browser: Zoom In, Zoom Out and Reset Zoom to change page zoom. Default page zoom can follow window zoom; per-site overrides take precedence. Browser: Quick Open Browser Tab lists pages for the active session. Address bar search is disabled by default; choose a search engine in Settings to enable it.') + '\n' + localize({ bundle: 'ash.workbench', key: 'browser.auditHelp' }, 'Press Down in the address field to choose History or Favorites suggestions. Escape restores the page address. Browser commands provide Back, Forward, Reload, Reload Without Cache, Open File and Close Browser Tabs. Manage Website Permissions changes the current site’s location, camera, microphone, notifications or clipboard decision. Captured console logs and page screenshots stay private until attached from Browser selections in Chat. Browser data storage and localhost link settings apply to new pages and link opening.');
 	}
 
 	private showHelp(): Promise<void> {

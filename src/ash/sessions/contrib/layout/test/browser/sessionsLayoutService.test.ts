@@ -140,6 +140,19 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		assert.equal(fixture.focused, 'conversation');
 	});
 
+	test('a website entry suppresses remembered sidebars and tabs, and leaving it restores normal navigation', async () => {
+		using fixture = new EntryFixture({ website: { sidebar: true, details: false, panel: false, documents: false } });
+		await fixture.service.openEntry({ ...chatEntry, id: 'website', content: 'editor', sidebarContainerId: undefined, showEditorTabs: false, focus: 'editor' });
+		assert.equal(fixture.visible.get('sidebar'), false);
+		assert.equal(fixture.pageTitleVisible, false);
+		assert.deepEqual(fixture.opened, []);
+		assert.equal(fixture.focused, 'editor');
+		await fixture.service.openEntry(chatEntry);
+		assert.equal(fixture.visible.get('sidebar'), true);
+		assert.equal(fixture.pageTitleVisible, true);
+		assert.deepEqual(fixture.opened, [{ id: chatEntry.sidebarContainerId, focus: false }]);
+	});
+
 	test('shutdown joins entry navigation then stops periodic storage callbacks', async () => {
 		using fixture = new EntryFixture();
 		await fixture.service.openEntry(chatEntry);
@@ -173,6 +186,7 @@ class EntryFixture extends Disposable {
 	public readonly visible = new Map<string, boolean>([['sessions', true], ['editor', false], ['auxiliarybar', false], ['sidebar', true], ['panel', false]]);
 	public readonly partChanges: string[] = [];
 	public readonly groupChanges: string[] = [];
+	public pageTitleVisible = true;
 	public readonly opened: { id: string; focus: boolean | undefined; }[] = [];
 	public readonly errors: string[] = [];
 	public focused: string | undefined;
@@ -189,7 +203,7 @@ class EntryFixture extends Disposable {
 		if (savedVisibility) { this.storage.store('sessions.layout.entryVisibility', JSON.stringify(savedVisibility), StorageScope.PROFILE, StorageTarget.MACHINE); }
 		const fixture = this;
 		const documentGroup = { id: 'documents', inputs: [] };
-		const pageGroup = { id: 'pages', inputs: [] };
+		const pageGroup = { id: 'pages', inputs: [], setTitleVisible: (visible: boolean) => { this.pageTitleVisible = visible; } };
 		this.services.registerInstance(IStorageService, this.storage);
 		this.services.registerInstance(IConfigurationService, this._register(new InMemoryConfigurationService()));
 		this.services.registerInstance(ICustomViewService, this.customViews);

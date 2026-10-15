@@ -922,6 +922,8 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		else if (this.isLocked) { label = localize('workbench.editorGroup.lockedLabel', 'Editor group, locked'); }
 		this.domNode.setAttribute('aria-label', label);
 		this.titleControl.setEditors(this.entries, this.activeInput, this.activePane, this.model.selectedEditorIds);
+		// Label and editor-state updates must respect the group's explicit presentation policy.
+		if (!this.titleVisible) { this.titleControl.domNode.hidden = true; }
 		const input = this.activeInput;
 		this.titleControl.setEditorTypes(input ? this.registry.getEditorPanesForInput(input) : [], async id => {
 			if (input && this.inputs.includes(input)) await this.openEditor(input, { preferredEditorId: id, pinned: true });

@@ -1393,6 +1393,26 @@ test('EditorPart omits a standalone tool header and restores tab navigation for 
 	} finally { dom.window.close(); }
 });
 
+test('EditorPart keeps an explicitly hidden title hidden when an input label changes', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(descriptor('test.hiddenTitle', '.ts', () => new TestEditorPane('test.hiddenTitle')));
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		using labelsChanged = new Emitter<void>();
+		const page = { ...input('/project/page.ts'), onDidChangeLabel: labelsChanged.event };
+		await editor.openEditor(page, { pinned: true });
+		const group = editor.activeGroup;
+		const title = group.domNode.querySelector<HTMLElement>('.ash-editor-title-control')!;
+		group.setTitleVisible(false);
+		labelsChanged.fire();
+		assert.equal(title.hidden, true);
+		assert.equal(editor.getTabsHeight(), 0);
+		group.setTitleVisible(true);
+		assert.equal(title.hidden, false);
+	} finally { dom.window.close(); }
+});
+
 test('EditorPart closes empty groups after the last tab and transfers focus to the recent group', async () => {
 	const dom = new JSDOM('<!doctype html><body><button>Explorer</button></body>');
 	try {

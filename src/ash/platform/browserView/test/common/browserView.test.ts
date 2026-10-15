@@ -94,6 +94,7 @@ test("browser view proxies preserve validated commands, subscriptions and backen
 		visible: false,
 	};
 	const service: Parameters<typeof browserViewChannel>[0] = {
+		setContentVisibility: async () => { },
 		setPermissions: async () => { }, respondToFileRequest: async () => { },
 		toggleDevTools: async () => { }, clearStorage: async () => { }, setBrowserZoomIndex: async () => { }, setDeviceEmulation: async () => { },
 		updateWindowConfiguration: async () => { }, getConsoleLogs: async () => '', getSelectedText: async () => '', findInPage: async () => { }, stopFindInPage: async () => { },

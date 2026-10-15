@@ -37,6 +37,7 @@ const { IDesignEditorService } = await import('../../contrib/creator/browser/des
 const { URI } = await import('../../../base/common/uri.js');
 const { DisposableStore } = await import('../../../base/common/lifecycle.js');
 const { Menus } = await import('../../browser/menus.js');
+const { ActivityBarItemContext } = await import('../../common/contextkeys.js');
 const { Lxicon } = await import('../../../base/common/lxicons.js');
 const { IStorageService, StorageScope, StorageTarget } = await import('../../../platform/storage/common/storage.js');
 const { BrowserStorageService } = await import('../../../workbench/services/storage/browser/storageService.js');
@@ -178,6 +179,10 @@ test('Sessions Activity Bar context menu changes its own position and size setti
 	using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'sessions', flushInterval: 0 });
 	services.registerInstance(IStorageService, storage);
 	using menuServices = registerMenus(services);
+	using itemMenu = MenusRegistry.appendMenuItem(Menus.ActivityBarContext, {
+		command: { id: 'test.activity.context', title: 'Code action' },
+		when: ActivityBarItemContext.isEqualTo('sessions.open.code'),
+	});
 	const bar = registerTestComponentServices(services).createInstance(ActivityBarPart, ownerDocument.body, { async showAccountMenu() { } });
 	try {
 		bar.domNode.querySelector('.ash-sessions-activity-content')?.dispatchEvent(new browser.window.MouseEvent('contextmenu', { bubbles: true, button: 2 }));
@@ -197,6 +202,11 @@ test('Sessions Activity Bar context menu changes its own position and size setti
 		assert.equal(configuration.getValue(WorkbenchConfiguration.activityBarCompact), false);
 		bar.domNode.querySelector('button')?.dispatchEvent(new browser.window.KeyboardEvent('keydown', { bubbles: true, key: 'F10', shiftKey: true }));
 		assert.deepEqual(shownActions.map(action => action.label), ['Move earlier', 'Move later', '', 'Activity Bar Position']);
+		bar.domNode.querySelector('[data-action-id="sessions.open.code"] button')?.dispatchEvent(new browser.window.MouseEvent('contextmenu', { bubbles: true, button: 2 }));
+		assert.equal(shownActions[0]!.id, 'test.activity.context');
+		assert.equal(services.get(IContextKeyService).getContext().getValue(ActivityBarItemContext.key), undefined);
+		bar.domNode.querySelector('[data-action-id="sessions.open.chat"] button')?.dispatchEvent(new browser.window.KeyboardEvent('keydown', { bubbles: true, key: 'F10', shiftKey: true }));
+		assert.equal(shownActions.some(action => action.id === 'test.activity.context'), false);
 	} finally {
 		bar.dispose();
 		configuration.dispose();

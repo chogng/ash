@@ -3,6 +3,7 @@ import { createServiceIdentifier } from '../../instantiation/common/instantiatio
 import type { IDisposable } from '../../../base/common/lifecycle.js';
 import type { ISerializedBrowserHistoryEntriesSnapshot } from './browserHistory.js';
 import type { VSBuffer } from '../../../base/common/buffer.js';
+import { browserPageScheme } from './browserPage.js';
 
 /** Stable command IDs shared by browser controls, keybindings and external callers. */
 export enum BrowserViewCommandId {
@@ -68,6 +69,16 @@ export interface IBrowserElementCommentsUpdate {
 	readonly pendingCommentIdsToDiscard?: readonly string[];
 }
 export interface IBrowserViewTheme {
+	readonly colorScheme?: 'light' | 'dark';
+	readonly editorBackground?: string;
+	readonly foreground?: string;
+	readonly sidebarBackground?: string;
+	readonly hoverBackground?: string;
+	readonly inputBorder?: string;
+	readonly codeBackground?: string;
+	readonly linkForeground?: string;
+	readonly errorForeground?: string;
+	readonly shadow?: string;
 	readonly focusBorder?: string;
 	readonly buttonBackground?: string;
 	readonly buttonForeground?: string;
@@ -239,6 +250,8 @@ export interface IBrowserViewInfo {
  * serializable commands and state only.
  */
 export interface IBrowserViewService {
+	/** Defer rendering matching elements on one HTTPS or bundled-page origin; undefined restores page-owned styles. */
+	setContentVisibility(id: string, rule: IBrowserContentVisibilityRule | undefined): Promise<void>;
 	setPermissions(id: string, origin: string, grants: readonly IPermissionCategoryState[]): Promise<void>;
 	respondToFileRequest(id: string, requestId: string, data: string | null): Promise<void>;
 	toggleDevTools(id: string): Promise<void>;
@@ -274,6 +287,11 @@ export interface IBrowserViewService {
 	focus(id: string): Promise<void>;
 	destroyBrowserView(id: string): Promise<void>;
 	onDidEvent(listener: (event: BrowserViewEvent) => void): IDisposable;
+}
+
+export interface IBrowserContentVisibilityRule {
+	readonly origin: string;
+	readonly selector: string;
 }
 
 /** Parameters for observations of the page currently owned by this view. */
@@ -441,6 +459,7 @@ export function normalizeBrowserViewUrl(value: unknown): string {
 		url.protocol !== "https:" &&
 		!(url.protocol === "http:" && localHttpHost) &&
 		!localFile &&
+		!(url.protocol === `${browserPageScheme}:` && /^[a-z][a-z0-9-]*$/u.test(url.hostname) && !url.port) &&
 		url.href !== "about:blank"
 	) {
 		throw new Error(

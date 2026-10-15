@@ -1,5 +1,6 @@
 import type { IPermissionCategoryState } from '../common/browserPermissions.js';
-import type { BrowserWindow, WebContentsView, Session } from 'electron/main';
+import type { BrowserWindow, WebContentsView, Session, ContextMenuParams } from 'electron/main';
+import { addAbortListener } from 'node:events';
 import { createHash, randomUUID } from 'node:crypto';
 import { Disposable, DisposableMap, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { Emitter } from '../../../base/common/event.js';
@@ -12,6 +13,12 @@ import type { ISerializedBrowserHistoryEntriesSnapshot } from '../common/browser
 import { BrowserSessionHistory } from './browserSessionHistory.js';
 import type { IBrowserViewWindowConfiguration, IBrowserElementSelectionOptions, IBrowserElementCommentsUpdate, IBrowserViewCaptureScreenshotOptions, IBrowserViewFindInPageOptions } from '../common/browserView.js';
 import type { IBrowserDeviceProfile } from '../common/browserView.js';
+import type { ElectronContextMenu } from '../../../base/parts/contextmenu/electron-main/contextmenu.js';
+import type { NativeContextMenuItem } from '../../../base/parts/contextmenu/common/contextmenu.js';
+import { IClipboardService } from '../../clipboard/common/clipboardService.js';
+import { ILogService } from '../../log/common/log.js';
+import { localize } from '../../../nls.js';
+import { browserZoomFactors, browserZoomDefaultIndex } from '../common/browserView.js';
 
 export const IBrowserViewMainService = createServiceIdentifier<IBrowserViewMainService>('browserViewMainService');
 export interface IBrowserViewMainService extends IBrowserViewService {
@@ -28,9 +35,14 @@ export interface BrowserViewMainServiceOptions {
 	readonly createSession: (partition: string) => Session;
 	readonly createView: (session: Session) => WebContentsView;
 	readonly getRemoteNetwork: () => { readonly authority: string; readonly tunnels: SshPortForwardingService; } | undefined;
+	readonly contextMenu: ElectronContextMenu;
+	readonly getNlsMessages: () => Readonly<Record<string, string>>;
 }
 /** The window manager is the sole table of live pages; each page owns its own disposal. */
 export class BrowserViewMainService extends Disposable implements IBrowserViewMainService {
+	public async setContentVisibility(id: string, rule: import('../common/browserView.js').IBrowserContentVisibilityRule | undefined): Promise<void> {
+		this.target(id).setContentVisibility(rule);
+	}
 	public async setPermissions(id: string, origin: string, grants: readonly IPermissionCategoryState[]): Promise<void> {
 		const view = this.target(id);
 		view.session.permissions.setPermissions(id, origin, grants);
@@ -57,10 +69,89 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 	private readonly audiences = new Map<string, readonly string[]>();
 	private readonly grants = new Map<string, Map<string, AbortController>>();
 	private readonly histories = new Map<BrowserSession, BrowserSessionHistory>();
+	private contextMenuOwner: BrowserView | undefined;
 	constructor(private readonly options: BrowserViewMainServiceOptions,
-		@IInstantiationService private readonly instantiationService: IInstantiationService) {
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IClipboardService private readonly clipboard: IClipboardService,
+		@ILogService private readonly log: ILogService) {
 		super();
 		this._register(toDisposable(() => this.cancellation.abort(new Error('BrowserCapabilityUnavailable'))));
+	}
+	private async showContextMenu(view: BrowserView, params: ContextMenuParams): Promise<void> {
+		if (this.contextMenuOwner || view.signal.aborted || view.webContents.isDestroyed() || !params.frame || params.frame.detached) { return; }
+		const contents = view.webContents;
+		const items: NativeContextMenuItem[] = [];
+		const actions = new Map<string, () => void | Promise<void>>();
+		// Main follows the client's current language pack, including changes while the window is open.
+		const text = (key: string, fallback: string): string => this.options.getNlsMessages()[key] ?? fallback;
+		const add = (id: string, label: string, run: () => void | Promise<void>, enabled = true, target = items): void => {
+			target.push({ type: 'action', id, label, enabled });
+			if (enabled) { actions.set(id, run); }
+		};
+		const separate = (): void => { if (items.length) { items.push({ type: 'separator' }); } };
+		const flags = params.editFlags;
+		if (params.isEditable) {
+			add('undo', text('browser.context.undo', localize({ bundle: 'ash.workbench', key: 'browser.context.undo' }, 'Undo')), () => contents.undo(), flags.canUndo);
+			add('redo', text('browser.context.redo', localize({ bundle: 'ash.workbench', key: 'browser.context.redo' }, 'Redo')), () => contents.redo(), flags.canRedo);
+			separate();
+			add('cut', text('browser.context.cut', localize({ bundle: 'ash.workbench', key: 'browser.context.cut' }, 'Cut')), () => contents.cut(), flags.canCut);
+		}
+		if (params.isEditable || params.selectionText) {
+			add('copy', text('browser.context.copy', localize({ bundle: 'ash.workbench', key: 'browser.context.copy' }, 'Copy')), () => contents.copy(), flags.canCopy);
+		}
+		if (params.isEditable) {
+			add('paste', text('browser.context.paste', localize({ bundle: 'ash.workbench', key: 'browser.context.paste' }, 'Paste')), () => contents.paste(), flags.canPaste);
+			add('pastePlain', text('browser.context.pastePlain', localize({ bundle: 'ash.workbench', key: 'browser.context.pastePlain' }, 'Paste as plain text')), () => contents.pasteAndMatchStyle(), flags.canPaste);
+		}
+		if (params.linkURL) {
+			separate();
+			let link: string | undefined;
+			try { link = normalizeBrowserViewUrl(params.linkURL); } catch { /* Unsupported schemes remain copyable text. */ }
+			add('openLink', text('browser.context.openLink', localize({ bundle: 'ash.workbench', key: 'browser.context.openLink' }, 'Open link in new tab')), () => {
+				this.events.fire({ type: 'openRequested', targetId: view.id, url: link! });
+			}, link !== undefined && view.getInfo().owner.type === 'user');
+			add('copyLink', text('browser.context.copyLink', localize({ bundle: 'ash.workbench', key: 'browser.context.copyLink' }, 'Copy link address')), () => this.clipboard.writeText(params.linkURL));
+		}
+		if (params.mediaType === 'image' || params.mediaType === 'canvas') {
+			separate();
+			add('copyImage', text('browser.context.copyImage', localize({ bundle: 'ash.workbench', key: 'browser.context.copyImage' }, 'Copy image')), () => contents.copyImageAt(params.x, params.y), params.hasImageContents);
+			let downloadable = false;
+			try {
+				const source = new URL(params.srcURL);
+				downloadable = !source.username && !source.password && (['https:', 'http:', 'blob:'].includes(source.protocol) || (source.protocol === 'data:' && params.srcURL.startsWith('data:image/')));
+			} catch { /* A canvas without an address can still be copied. */ }
+			add('saveImage', text('browser.context.saveImage', localize({ bundle: 'ash.workbench', key: 'browser.context.saveImage' }, 'Save image as…')), () => contents.downloadURL(params.srcURL), downloadable && params.hasImageContents);
+		}
+		separate();
+		add('selectAll', text('browser.context.selectAll', localize({ bundle: 'ash.workbench', key: 'browser.context.selectAll' }, 'Select all')), () => contents.selectAll(), flags.canSelectAll);
+		separate();
+		add('back', text('browser.back', localize({ bundle: 'ash.workbench', key: 'browser.back' }, 'Back')), () => view.goBack(), contents.navigationHistory.canGoBack());
+		add('forward', text('browser.forward', localize({ bundle: 'ash.workbench', key: 'browser.forward' }, 'Forward')), () => view.goForward(), contents.navigationHistory.canGoForward());
+		add('reload', text('browser.reload', localize({ bundle: 'ash.workbench', key: 'browser.reload' }, 'Reload')), () => view.reload());
+		const zoom = view.getState().browserZoomIndex ?? browserZoomDefaultIndex;
+		const zoomItems: NativeContextMenuItem[] = [];
+		add('zoomIn', text('browser.context.zoomIn', localize({ bundle: 'ash.workbench', key: 'browser.context.zoomIn' }, 'Zoom in')), () => view.setBrowserZoomIndex(zoom + 1), zoom < browserZoomFactors.length - 1, zoomItems);
+		add('zoomOut', text('browser.context.zoomOut', localize({ bundle: 'ash.workbench', key: 'browser.context.zoomOut' }, 'Zoom out')), () => view.setBrowserZoomIndex(zoom - 1), zoom > 0, zoomItems);
+		add('resetZoom', text('browser.context.resetZoom', localize({ bundle: 'ash.workbench', key: 'browser.context.resetZoom' }, 'Reset zoom')), () => view.setBrowserZoomIndex(browserZoomDefaultIndex), true, zoomItems);
+		items.push({ type: 'submenu', label: text('browser.zoom', localize({ bundle: 'ash.workbench', key: 'browser.zoom' }, 'Page zoom')), enabled: true, items: zoomItems });
+		const bounds = view.view.getBounds();
+		const windowZoom = this.options.window.webContents.getZoomFactor();
+		let cancelled = false;
+		const cancel = (): void => { cancelled = true; this.options.contextMenu.close(); };
+		this.contextMenuOwner = view;
+		contents.on('did-start-navigation', cancel);
+		using cancellation = addAbortListener(view.signal, cancel);
+		try {
+			// Chromium reports view-local DIP; the shared menu API accepts Workbench CSS coordinates.
+			const { selectedId } = await this.options.contextMenu.popup({ items, x: (bounds.x + params.x) / windowZoom, y: (bounds.y + params.y) / windowZoom });
+			if (!cancelled && !view.signal.aborted && !contents.isDestroyed() && params.frame && !params.frame.detached) {
+				view.focus();
+				if (selectedId) { await actions.get(selectedId)?.(); }
+			}
+		} finally {
+			contents.removeListener('did-start-navigation', cancel);
+			this.contextMenuOwner = undefined;
+		}
 	}
 	tryGetBrowserView(id: string): BrowserView | undefined {
 		const view = this.targets.get(id);
@@ -164,6 +255,9 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 			view = this.instantiationService.createInstance(BrowserView, {
 				remoteAuthority: remoteNetwork?.authority,
 				id, window: this.options.window, view: this.options.createView(electronSession), initialUrl, network, creation: options, session, history,
+				openContextMenu: (target: BrowserView, params: ContextMenuParams) => {
+					void this.showContextMenu(target, params).catch(error => this.log.error('Could not open browser context menu', error));
+				},
 				emitEvent: (event: BrowserViewEvent) => {
 					if (event.type === 'closed') {
 						this.targets.deleteAndLeak(id);

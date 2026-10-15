@@ -7,6 +7,7 @@ import '../workbench/electron-browser/desktop.contribution.js';
 import '../workbench/contrib/browserView/electron-browser/browserView.contribution.js';
 import '../workbench/services/browserView/electron-browser/playwrightWorkbenchService.js';
 import './contrib/browserView/browser/sessionBrowserView.contribution.js';
+import './contrib/chatgptweb/browser/chatGPTWeb.contribution.js';
 import './sessions.common.main.js';
 import '../workbench/contrib/chat/electron-browser/actions/voiceChatActions.js';
 import { AgentsWindowInvitationContribution } from '../workbench/contrib/chat/electron-browser/agentSessions/agentsWindowInvitation.js';

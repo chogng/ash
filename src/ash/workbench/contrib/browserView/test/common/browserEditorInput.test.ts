@@ -152,7 +152,7 @@ function fixture() {
 		info: { id, host: { windowId: 1 }, owner: { type: 'user' }, session: data.session, state: { targetId: id, url: data.url, title: 'Live page', loading: false, visible: false, canGoBack: false, canGoForward: false } } as IBrowserViewInfo,
 	};
 	const service: BrowserService = {
-		setPermissions: async () => { }, respondToFileRequest: async () => { },
+		setContentVisibility: async () => { }, setPermissions: async () => { }, respondToFileRequest: async () => { },
 		toggleDevTools: async () => { }, clearStorage: async () => { }, setBrowserZoomIndex: async () => { }, setDeviceEmulation: async () => { },
 		updateWindowConfiguration: async () => { }, getConsoleLogs: async () => '', getSelectedText: async () => '', findInPage: async () => { }, stopFindInPage: async () => { },
 		toggleElementSelection: async () => { }, setElementComments: async () => { }, toggleAreaSelection: async () => { }, captureScreenshot: async () => { throw new Error('Unexpected screenshot'); },
@@ -169,6 +169,8 @@ function fixture() {
 		onDidChangeBrowserViews: Event.None,
 		initialize: async () => { }, getKnownBrowserViews: () => new Map(), getContextualBrowserViews: () => new Map(),
 		registerContextualFilter: () => Disposable.None, registerOpenHandler: () => Disposable.None,
+		registerWindowBrowserView: () => Disposable.None, isWindowBrowserView: () => false,
+		getBrowserViewPresentation: () => undefined,
 		getOrCreateLazy: input, createBrowserView: async () => { throw new Error('Not used in serializer fixture'); },
 	});
 	return Object.assign(f, { service, instantiation, input });

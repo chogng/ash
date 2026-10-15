@@ -10,7 +10,9 @@ export interface ISessionsEntry {
 	readonly content: 'conversation' | 'documents' | 'editor';
 	/** Starts hidden on entry; user actions may reveal the shared conversation without replacing the editor or side views. */
 	readonly conversation?: 'optional';
-	readonly sidebarContainerId: string;
+	/** Omit when the product page owns its navigation inside its content. */
+	readonly sidebarContainerId?: string;
+	readonly showEditorTabs?: boolean;
 	readonly detailsContainerId?: string;
 	readonly editorInput?: IResourceEditorInput;
 	readonly restoreCommand: string;

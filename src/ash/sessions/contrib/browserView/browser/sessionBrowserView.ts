@@ -74,6 +74,10 @@ export class SessionBrowserViewController extends Disposable implements IWorkben
 	}
 
 	private owner(input: BrowserEditorInput): SessionReference | undefined {
+		if (this.browsers.isWindowBrowserView(input.id)) {
+			this.ownership.delete(input.id);
+			return undefined;
+		}
 		const pageOwner = input.model?.info.owner;
 		const resolved = pageOwner?.type === 'agent' ? this.findSession(pageOwner.sessionId) : undefined;
 		let reference = resolved ?? this.ownership.get(input.id);
@@ -112,6 +116,8 @@ export class SessionBrowserViewController extends Disposable implements IWorkben
 			if (live) { continue; }
 			// Queue the command before invoking Main: its close notification can arrive synchronously.
 			const closing = Promise.resolve().then(() => {
+				// A window contribution may claim a discovered page before queued cleanup runs.
+				if (this.browsers.isWindowBrowserView(input.id)) { return; }
 				if (!this.isDisposed && this.browsers.getKnownBrowserViews().get(input.id) === input) {
 					return this.pages.destroyBrowserView(input.id);
 				}
