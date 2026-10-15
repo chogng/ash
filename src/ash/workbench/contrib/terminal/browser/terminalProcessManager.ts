@@ -6,6 +6,7 @@ import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { ITerminalProcessService, type IProcessDataEvent, type TerminalShellIntegrationEvent, type ITerminalProcessCloseOptions, type ITerminalProcessReadResult } from '../../../../platform/terminal/common/terminal.js';
 import { AhpTerminalCommandSource } from './ahpTerminalCommandSource.js';
+import { localize } from '../../../../nls.js';
 
 const INPUT_BATCH_DELAY_MILLIS = 8;
 const INPUT_BATCH_CHARACTERS = 16_384;
@@ -135,6 +136,13 @@ export class TerminalProcessManager extends Disposable {
 				this.reading.clear();
 			}
 		}
+	}
+
+	public async sendSignal(signal: string): Promise<void> {
+		this.assertNotDisposed();
+		if (!this.acceptingInput) throw new CancellationError();
+		if (signal !== 'SIGINT') throw new Error(localize('terminal.signal.unsupported', 'Only SIGINT is supported by this terminal host.'));
+		await this.processService.sendSignal({ ...this.identity, signal: 'interrupt' });
 	}
 
 	/** Resolves after every UTF-8 batch containing this input is acknowledged by the process. */

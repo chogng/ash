@@ -1672,7 +1672,10 @@
     "terminal.chat.previewLabel": "已保存的终端输出：{0}",
     "terminal.chat.previewInput": "已保存的终端输出（只读）",
     "terminal.chat.previewClose": "关闭终端预览",
-    "terminal.chat.previewAccessibility": "已保存的终端输出：{0}\n此预览为只读，保留附加时捕获的输出。按 Escape 或选择“关闭终端预览”返回消息。\n\n{1}"
+    "terminal.chat.previewAccessibility": "已保存的终端输出：{0}\n此预览为只读，保留附加时捕获的输出。按 Escape 或选择“关闭终端预览”返回消息。\n\n{1}",
+    "terminal.signal.command": "终端：中断活动命令",
+    "terminal.signal.unsupported": "此终端宿主仅支持 SIGINT 信号。",
+    "terminal.accessibility.interrupt": "“终端：中断活动命令”通过执行宿主向前台命令发送 SIGINT，不关闭终端。"
   },
   "ash.menu": {
     "file": "文件",

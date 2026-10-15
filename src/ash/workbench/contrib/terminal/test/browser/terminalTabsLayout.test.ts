@@ -62,7 +62,7 @@ test("Terminal instance list sash resizes the right column within its bounds", (
 		...Disposable.None, id, instanceId: id === 'one' ? 1 : 2, dirId: 'folder', processId: 1, initialCwd: '/folder', title: id,
 		profile: { profileId: 'shell', title: 'Shell', isDefault: true }, state: 'running', exitCode: undefined,
 		onDidWriteData: Event.None, onDidChangeCommandStatus: Event.None, onDidExit: Event.None, onDidChangeState: Event.None,
-		xterm: undefined, xtermReadyPromise: Promise.resolve(undefined), getContribution: () => null, start() { }, attachToElement() { }, detachFromElement() { }, async sendText() { }, processBinary: async () => { }, resize() { }, clearBuffer() { }, reuseTerminal: async () => { throw new Error('Layout fixture does not replace processes'); }, close: async () => { },
+		xterm: undefined, xtermReadyPromise: Promise.resolve(undefined), getContribution: () => null, start() { }, attachToElement() { }, detachFromElement() { }, async sendSignal() { }, async sendText() { }, processBinary: async () => { }, resize() { }, clearBuffer() { }, reuseTerminal: async () => { throw new Error('Layout fixture does not replace processes'); }, close: async () => { },
 	});
 	const instances = [createInstance('one'), createInstance('two')];
 	const terminals: ITerminalService = {

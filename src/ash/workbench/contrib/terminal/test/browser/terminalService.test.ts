@@ -20,6 +20,7 @@ import { URI } from "../../../../../base/common/uri.js";
 import { ITerminalProcessService, type ITerminalProcessCreateOptions, type ITerminalProcessReadResult, type TerminalProcessConnectionState } from "../../../../../platform/terminal/common/terminal.js";
 import { TerminalCapability } from '../../../../../platform/terminal/common/capabilities/capabilities.js';
 import { TerminalService } from "../../browser/terminalService.js";
+import { registerTerminalActions } from '../../browser/terminalActions.js';
 import { TerminalProcessManager } from '../../browser/terminalProcessManager.js';
 import { AgentHostTerminalService } from '../../browser/agentHostTerminalService.js';
 import { BasePty } from '../../common/basePty.js';
@@ -32,6 +33,23 @@ const DEFAULT_PROFILE = {
 	title: "Command Prompt",
 	isDefault: true,
 } as const;
+
+test('the interrupt command reaches the Rust process port and preserves the terminal', async () => {
+	const processes = new TestTerminalProcessService([]);
+	using workspace = new WorkspaceContextService({ id: 'signals', uri: URI.file('/workspace') });
+	using services = terminalServices(processes, workspace);
+	const terminals = services.get(ITerminalService);
+	const instance = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+	await waitFor(() => instance.state === 'running');
+	registerTerminalActions();
+	using commands = new CommandService(services);
+	await commands.executeCommand(TerminalCommandId.SendSignal);
+	assert.deepEqual(processes.signalCalls, [{ terminalId: 'terminal-1', signal: 'interrupt' }]);
+	assert.equal(instance.state, 'running');
+	assert.deepEqual(processes.closeCalls, []);
+	await assert.rejects(instance.sendSignal('SIGTERM'), /Only SIGINT/);
+	assert.equal(processes.signalCalls.length, 1);
+});
 
 test("TerminalService keeps empty windows off the process API and enables a folder after transition", async () => {
 	const processService = new TestTerminalProcessService([]);
@@ -430,6 +448,8 @@ suite('Terminal process identity and raw input', () => {
 });
 
 class TestTerminalProcessService implements ITerminalProcessService {
+	readonly signalCalls: Array<{ terminalId: string; dirId?: string; signal: 'interrupt'; }> = [];
+	async sendSignal(options: { terminalId: string; dirId?: string; signal: 'interrupt'; }): Promise<void> { this.signalCalls.push(options); }
 	async resolveProfile(): Promise<import("../../../../../platform/terminal/common/terminal.js").ITerminalResolvedProfile> { return { profile: DEFAULT_PROFILE, executable: "cmd.exe", args: [] }; }
 	profileListCalls = 0;
 	readonly createCalls: ITerminalProcessCreateOptions[] = [];

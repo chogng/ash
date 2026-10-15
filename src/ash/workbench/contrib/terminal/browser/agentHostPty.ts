@@ -63,6 +63,7 @@ export class AgentHostPty extends BasePty<IProcessDataEvent> {
 	}
 
 	async input(data: string): Promise<void> { this.assertCanWrite(); return this.manager.write(data); }
+	async sendSignal(signal: string): Promise<void> { this.assertCanWrite(); return this.manager.sendSignal(signal); }
 	async processBinary(data: string): Promise<void> { this.assertCanWrite(); return this.manager.processBinary(data); }
 	async resize(cols: number, rows: number): Promise<void> { this.assertCanWrite(); return this.manager.setDimensions(cols, rows); }
 	stop(): void { this.manager.stop(); }

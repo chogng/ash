@@ -27,6 +27,13 @@ import { InstanceContext } from './terminalContextMenu.js';
 
 /** Command definitions use the invoking window's services, never a retained View callback. */
 export function registerTerminalActions(): void {
+	registerAction2(class SendSignalTerminalAction extends Action2 {
+		constructor() { super({ id: TerminalCommandId.SendSignal, title: localize2('terminal.signal.command', 'Terminal: Interrupt Active Command'), f1: true, precondition: TerminalHasActiveInstanceContext.isEqualTo(true) }); }
+		override async run(accessor: ServicesAccessor): Promise<void> {
+			const instance = accessor.get(ITerminalService).activeInstance;
+			if (instance && !instance.isReadOnly && instance.state === 'running') await instance.sendSignal('SIGINT');
+		}
+	});
 	registerAction2(class AttachTerminalToChatAction extends Action2 {
 		constructor() {
 			super({

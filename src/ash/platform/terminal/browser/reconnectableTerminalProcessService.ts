@@ -135,6 +135,11 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 		await this.supervisor.request(APP_SERVER_METHODS["terminal/resize"], params);
 	}
 
+	async sendSignal(params: ITerminalProcessCloseOptions & { readonly signal: 'interrupt'; }): Promise<void> {
+		await this.ensureAttached(params.terminalId);
+		await this.supervisor.request(APP_SERVER_METHODS['terminal/sendSignal'], params);
+	}
+
 	async read(params: ITerminalProcessReadOptions): Promise<ITerminalProcessReadResult> {
 		await this.ensureAttached(params.terminalId);
 		const result = await this.supervisor.request(APP_SERVER_METHODS["terminal/read"], params);

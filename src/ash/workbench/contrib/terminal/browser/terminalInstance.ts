@@ -358,6 +358,12 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		await process.input(data);
 	}
 
+	public async sendSignal(signal: string): Promise<void> {
+		const process: ITerminalChildProcess | undefined = this.customProcess ?? this.shellProcessManager;
+		if (this.isReadOnly || this.closed || this._state !== 'running' || !process?.sendSignal) throw new CancellationError();
+		await process.sendSignal(signal);
+	}
+
 	public processBinary(data: string): Promise<void> {
 		const process: ITerminalChildProcess | undefined = this.customProcess ?? this.shellProcessManager;
 		if (this.isReadOnly || this.closed || this._state !== 'running' || !process?.processBinary) {

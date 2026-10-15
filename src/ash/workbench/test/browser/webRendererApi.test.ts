@@ -350,6 +350,11 @@ test('Terminal host adapts raw bytes and command exit codes at the protocol boun
 	assert.equal(transport.requests.at(-1)?.method, 'terminal/writeBinary');
 	transport.respondAt(-1, null);
 	await binary;
+	const interrupt = terminal.sendSignal({ dirId: 'workspace-folder', terminalId: 'terminal-1', signal: 'interrupt' });
+	assert.equal(transport.requests.at(-1)?.method, 'terminal/sendSignal');
+	assert.deepEqual(transport.requests.at(-1)?.params, { dirId: 'workspace-folder', terminalId: 'terminal-1', signal: 'interrupt' });
+	transport.respondAt(-1, null);
+	await interrupt;
 	const read = terminal.read({ dirId: 'workspace-folder', terminalId: 'terminal-1', afterSequence: 0, afterCommandSequence: 0, maxChunks: 128 });
 	const bytes = Buffer.from([0xe4, 0xb8, 0xad, 0xff, 0x1b]);
 	transport.respondAt(-1, {

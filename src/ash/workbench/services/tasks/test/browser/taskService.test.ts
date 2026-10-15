@@ -373,6 +373,7 @@ class FakeTerminalInstance extends Disposable implements ITerminalInstance {
 	readonly onDidExit = this.exitEmitter.event;
 	readonly onDidChangeState = Event.None;
 	constructor(readonly id: string, readonly dirId: string, public title: string) { super(); }
+	async sendSignal(): Promise<void> { }
 	async sendText(data: string, shouldExecute: boolean): Promise<void> { this.writes.push(data + (shouldExecute ? '\r' : '')); }
 	readonly xterm = undefined;
 	readonly xtermReadyPromise = Promise.resolve(undefined);
@@ -425,7 +426,7 @@ function taskServices(owner: DisposableStore, files: IFileSystemProvider, worksp
 			operatingSystem: os, onConnectionState: Event.None,
 			getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
 			getEnvironment: async () => ({ HOME: '/execution/home' }),
-			listProfiles: () => terminals.getProfiles(), resolveProfile: resolveTaskProfile,
+			listProfiles: () => terminals.getProfiles(), sendSignal: async () => { }, resolveProfile: resolveTaskProfile,
 		}],
 		[ITerminalService, terminals], [ILogService, new NullLoggerService()],
 	), owner);
@@ -459,7 +460,7 @@ suite('Task shell profiles through execution owners', () => {
 			getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
 			getEnvironment: async () => ({ HOME: '/execution/home' }),
 			listProfiles: async () => [{ profileId: 'bash', title: 'Bash', isDefault: true }],
-			resolveProfile: resolveTaskProfile,
+			sendSignal: async () => { }, resolveProfile: resolveTaskProfile,
 			create: async options => {
 				creations.push(options);
 				const terminalId = `task-${creations.length}`;
@@ -990,7 +991,7 @@ suite('TaskService terminal availability', () => {
 			const calls: string[] = [];
 			const processes: ITerminalProcessService = {
 				operatingSystem: OperatingSystem.Linux,
-				resolveProfile: resolveTaskProfile,
+				sendSignal: async () => { }, resolveProfile: resolveTaskProfile,
 				getConnectionState: async () => 'ready', onConnectionState: Event.None,
 				getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
 				getEnvironment: async () => ({}), listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
@@ -1053,7 +1054,7 @@ suite('TaskService terminal availability', () => {
 			const calls: string[] = [];
 			const processes: ITerminalProcessService = {
 				operatingSystem: OperatingSystem.Linux,
-				resolveProfile: resolveTaskProfile,
+				sendSignal: async () => { }, resolveProfile: resolveTaskProfile,
 				getConnectionState: async () => 'crashed',
 				onConnectionState: () => Disposable.None,
 				getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
@@ -1124,7 +1125,7 @@ suite('Task terminal reuse policies', () => {
 		const closing = { wait: async (_id: string): Promise<void> => { } };
 		services.registerInstance(ITerminalProcessService, {
 			operatingSystem: OperatingSystem.Linux,
-			resolveProfile: resolveTaskProfile,
+			sendSignal: async () => { }, resolveProfile: resolveTaskProfile,
 			getConnectionState: async () => 'ready', onConnectionState: Event.None,
 			getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
 			getEnvironment: async () => ({}), listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
@@ -1978,7 +1979,7 @@ for (const placement of ['task', 'taskPlain', 'defaults', 'taskPlatform', 'defau
 		const closed: string[] = [];
 		services.registerInstance(ITerminalProcessService, {
 			operatingSystem: OperatingSystem.Linux,
-			resolveProfile: resolveTaskProfile,
+			sendSignal: async () => { }, resolveProfile: resolveTaskProfile,
 			getConnectionState: async () => 'ready', onConnectionState: Event.None,
 			getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
 			getEnvironment: async () => ({}), listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
@@ -2034,7 +2035,7 @@ suite('Extension task execution lifecycle', () => {
 				const writes: unknown[] = [];
 				const processes: ITerminalProcessService = {
 					operatingSystem: OperatingSystem.Linux,
-					resolveProfile: resolveTaskProfile,
+					sendSignal: async () => { }, resolveProfile: resolveTaskProfile,
 					getConnectionState: async () => 'ready', onConnectionState: Event.None,
 					getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
 					getEnvironment: async () => ({}),
@@ -2215,7 +2216,7 @@ suite('Task rerun variable policy through the execution owners', () => {
 				const launches: unknown[] = [];
 				services.registerInstance(ITerminalProcessService, {
 					operatingSystem: OperatingSystem.Linux,
-					resolveProfile: resolveTaskProfile,
+					sendSignal: async () => { }, resolveProfile: resolveTaskProfile,
 					getConnectionState: async () => 'ready', onConnectionState: Event.None,
 					getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
 					getEnvironment: async () => ({ MODE: `mode-${++environmentReads}`, EXTRA: 'new-variable' }),
@@ -2325,7 +2326,7 @@ suite('Task instance limits through the execution owners', () => {
 				};
 				services.registerInstance(ITerminalProcessService, {
 					operatingSystem: OperatingSystem.Linux,
-					resolveProfile: resolveTaskProfile,
+					sendSignal: async () => { }, resolveProfile: resolveTaskProfile,
 					getConnectionState: async () => 'ready', onConnectionState: Event.None,
 					getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
 					getEnvironment: async () => ({}), listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
@@ -2456,7 +2457,7 @@ suite('Task instance policies through the execution owners', () => {
 		};
 		services.registerInstance(ITerminalProcessService, {
 			operatingSystem: OperatingSystem.Linux,
-			resolveProfile: resolveTaskProfile,
+			sendSignal: async () => { }, resolveProfile: resolveTaskProfile,
 			getConnectionState: async () => 'ready', onConnectionState: Event.None,
 			getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
 			getEnvironment: async () => ({}), listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],

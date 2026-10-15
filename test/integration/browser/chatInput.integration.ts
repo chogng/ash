@@ -395,7 +395,7 @@ const terminalInstance: ITerminalInstance = {
 	profile: { profileId: 'shell', title: 'Shell', isDefault: true }, state: 'running', exitCode: undefined,
 	onDidWriteData: Event.None, onDidExit: Event.None, onDidChangeCommandStatus: Event.None, onDidChangeState: Event.None,
 	start: () => { }, clearBuffer: () => terminalScreen?.clearBuffer(), reuseTerminal: async () => { throw new Error('Screen-only fixture has no process to reuse'); },
-	xterm: undefined, xtermReadyPromise: Promise.resolve(undefined), getContribution: () => null, attachToElement: () => { }, detachFromElement: () => { }, sendText: async () => { }, processBinary: async () => { }, resize: () => { }, close: async () => { },
+	xterm: undefined, xtermReadyPromise: Promise.resolve(undefined), getContribution: () => null, attachToElement: () => { }, detachFromElement: () => { }, sendSignal: async () => { }, sendText: async () => { }, processBinary: async () => { }, resize: () => { }, close: async () => { },
 };
 const root = URI.file('/workspace');
 services.registerInstance(IWorkspaceContextService, resources.add(new WorkspaceContextService({ id: 'workspace', folders: [{ id: 'workspace', index: 0, uri: root, name: 'workspace' }] })));

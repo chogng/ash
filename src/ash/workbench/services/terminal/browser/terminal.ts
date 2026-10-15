@@ -123,6 +123,7 @@ export interface ITerminalInstance extends IDisposable {
 	detachFromElement(): void;
 	/** Sends text to stdin, optionally executing it or applying the child Shell's paste mode. */
 	sendText(text: string, shouldExecute: boolean, bracketedPasteMode?: boolean): Promise<void>;
+	sendSignal(signal: string): Promise<void>;
 	processBinary(data: string): Promise<void>;
 	resize(dimensions: ITerminalDimensions): void;
 	clearBuffer(): void;

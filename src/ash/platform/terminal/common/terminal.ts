@@ -228,6 +228,7 @@ export interface ITerminalProcessService {
 	getProcessInfo(options: ITerminalProcessCloseOptions): Promise<ITerminalProcessInfo>;
 	create(options: ITerminalProcessCreateOptions): Promise<ITerminalProcessCreation>;
 	write(options: ITerminalProcessWriteOptions): Promise<void>;
+	sendSignal(options: ITerminalProcessCloseOptions & { readonly signal: 'interrupt'; }): Promise<void>;
 	resize(options: ITerminalProcessResizeOptions): Promise<void>;
 	read(options: ITerminalProcessReadOptions): Promise<ITerminalProcessReadResult>;
 	close(options: ITerminalProcessCloseOptions): Promise<void>;
@@ -295,6 +296,7 @@ export interface ITerminalChildProcess extends IDisposable {
 	start(): Promise<void>;
 	shutdown(immediate: boolean): void;
 	input?(data: string): void | Promise<void>;
+	sendSignal?(signal: string): Promise<void>;
 	/** Raw single-byte input from xterm; output-only or text-only providers omit this capability. */
 	processBinary?(data: string): Promise<void>;
 	resize?(cols: number, rows: number): void | Promise<void>;

@@ -84,7 +84,7 @@ suite('DAP terminal availability', () => {
 			const calls: string[] = [];
 			const processes: ITerminalProcessService = {
 				operatingSystem: OperatingSystem.Linux,
-				resolveProfile: resolveTerminalProfile,
+				sendSignal: async () => { }, resolveProfile: resolveTerminalProfile,
 				getConnectionState: async () => 'ready', onConnectionState: Event.None,
 				getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
 				getEnvironment: async () => ({}), listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
@@ -120,7 +120,7 @@ suite('DAP terminal availability', () => {
 			const calls: string[] = [];
 			const processes: ITerminalProcessService = {
 				operatingSystem: OperatingSystem.Linux,
-				resolveProfile: resolveTerminalProfile,
+				sendSignal: async () => { }, resolveProfile: resolveTerminalProfile,
 				getConnectionState: async () => 'crashed',
 				onConnectionState: () => Disposable.None,
 				getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
@@ -161,7 +161,7 @@ suite('DAP terminal launch policies through execution owners', () => {
 			getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
 			getEnvironment: async () => ({ HOME: '/execution/home', SOURCE: 'execution value' }),
 			listProfiles: async () => [{ profileId: 'bash', title: 'Bash', isDefault: true }, { profileId: 'powershell', title: 'PowerShell', isDefault: false }],
-			resolveProfile: resolveTerminalProfile,
+			sendSignal: async () => { }, resolveProfile: resolveTerminalProfile,
 			create: async options => {
 				created.push(options);
 				return { ready: { pid: 321, cwd: options.cwd ?? '/workspace' }, terminalId: 'debug-process', profile: (await resolveTerminalProfile(options.profile)).profile, connectionPersistence: 'connectionOwned' };
@@ -298,7 +298,7 @@ async function launchWithTerminalRequest(terminals: ITerminalService, argumentsV
 	const terminalProcesses: ITerminalProcessService = options.terminalProcesses ?? {
 		operatingSystem: OperatingSystem.Linux, onConnectionState: Event.None, getConnectionState: async () => 'ready',
 		getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
-		getEnvironment: async () => ({}), listProfiles: () => terminals.getProfiles(), resolveProfile: resolveTerminalProfile,
+		getEnvironment: async () => ({}), listProfiles: () => terminals.getProfiles(), sendSignal: async () => { }, resolveProfile: resolveTerminalProfile,
 		create: unexpectedProcess, write: unexpectedProcess, resize: unexpectedProcess, read: unexpectedProcess, close: unexpectedProcess,
 	};
 	const services = resources.add(new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, options.configuration ?? new SyncDescriptor(WorkbenchConfigurationService)],

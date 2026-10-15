@@ -42,6 +42,7 @@ export const enum TerminalCommandId {
 	Paste = 'workbench.action.terminal.paste',
 	PasteSelection = 'workbench.action.terminal.pasteSelection',
 	SendSequence = 'workbench.action.terminal.sendSequence',
+	SendSignal = 'workbench.action.terminal.sendSignal',
 	Split = 'workbench.action.terminal.split',
 	Unsplit = 'workbench.action.terminal.unsplit',
 	FocusNextPane = 'workbench.action.terminal.focusNextPane',

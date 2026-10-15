@@ -333,7 +333,7 @@ suite('Terminal context command lifecycle', () => {
 			profile: { profileId: 'shell', title: 'Shell', isDefault: true }, exitCode: 0,
 			onDidWriteData: Event.None, onDidChangeCommandStatus: Event.None, onDidExit: Event.None, onDidChangeState: Event.None,
 			xtermReadyPromise: Promise.resolve(undefined), getContribution: () => null,
-			start() { }, attachToElement() { }, detachFromElement() { }, async sendText() { }, async processBinary() { }, resize() { },
+			start() { }, attachToElement() { }, detachFromElement() { }, async sendSignal() { }, async sendText() { }, async processBinary() { }, resize() { },
 			async reuseTerminal() { }, async close() { }, clearBuffer: () => { effects.push(['clear', instanceId]); },
 		} satisfies ITerminalInstance);
 		const first = create(1);

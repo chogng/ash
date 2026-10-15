@@ -56,6 +56,10 @@ export class AppServerTerminalProcessService implements ITerminalProcessService 
 		return voidResult(appServerRequest(this.connection, "terminal/resize", options));
 	}
 
+	sendSignal(options: ITerminalProcessCloseOptions & { readonly signal: 'interrupt'; }): Promise<void> {
+		return voidResult(appServerRequest(this.connection, 'terminal/sendSignal', options));
+	}
+
 	async read(options: ITerminalProcessReadOptions): Promise<ITerminalProcessReadResult> {
 		const result = await appServerRequest(this.connection, "terminal/read", options);
 		return decodeTerminalProcessReadResult(result);

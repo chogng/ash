@@ -37,6 +37,10 @@ export class DisconnectedTerminalProcessService implements ITerminalProcessServi
 		return this.unavailable("terminal.resize");
 	}
 
+	sendSignal(): Promise<void> {
+		return this.unavailable('terminal.sendSignal');
+	}
+
 	read(_options: ITerminalProcessReadOptions): Promise<ITerminalProcessReadResult> {
 		return this.unavailable("terminal.read");
 	}
