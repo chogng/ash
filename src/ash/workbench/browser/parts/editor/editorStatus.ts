@@ -215,8 +215,7 @@ export class EditorStatusContribution extends Disposable implements IWorkbenchCo
 		} : undefined, 'ash.status.editor.language', 80);
 		const workingCopy = pane?.workingCopy;
 		const stateText = workingCopy?.hasExternalChange ? localize('status.editor.conflict', 'Conflict')
-			: workingCopy?.isDirty ? localize('status.editor.unsaved', 'Unsaved')
-				: workingCopy && (editor ? editor.getOption(EditorOption.readOnly) : input?.readOnly) ? localize('status.editor.readOnly', 'Read-only') : undefined;
+			: workingCopy && (editor ? editor.getOption(EditorOption.readOnly) : input?.readOnly) ? localize('status.editor.readOnly', 'Read-only') : undefined;
 		this.setEntry(this.state, stateText ? {
 			text: stateText, ariaLabel: stateText,
 			...(workingCopy?.hasExternalChange ? { tooltip: localize('status.editor.conflictTooltip', 'The file changed on disk while this editor has unsaved changes.') } : {}),
