@@ -39,7 +39,7 @@ export interface IEditorService {
 	readonly activeEditor: IResourceEditorInput | undefined;
 	readonly visibleEditors: readonly IResourceEditorInput[];
 	readonly visibleEditorPanes: readonly IEditorPane[];
-	/** Resolves after displaying the resource or its error page; ignoreError leaves failures with the caller. */
+	/** Resolves after display, an error page, or expected cancellation; ignoreError leaves failures with the caller. */
 	openEditor(input: IResourceEditorInput, options?: EditorOpenOptions, target?: EditorOpenTarget): Promise<void>;
 	save(editors: IEditorIdentifier | readonly IEditorIdentifier[], options?: ISaveEditorsOptions): Promise<ISaveEditorsResult>;
 	saveAll(options?: ISaveAllEditorsOptions): Promise<ISaveEditorsResult>;
