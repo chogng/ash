@@ -5,6 +5,9 @@ export const rendererOutput: Rolldown.OutputOptions = {
 	strictExecutionOrder: true,
 	codeSplitting: {
 		groups: [{
+			name: id => `localization-messages-${id.replaceAll('\\', '/').split('/').at(-1)!.slice('localizationMessages.'.length, -3)}`,
+			test: id => /\/\.build\/desktop\/localization\/localizationMessages\.[^/]+\.ts$/u.test(id.replaceAll('\\', '/')),
+		}, {
 			name: id => `localization-${id.replaceAll('\\', '/').split('/').at(-1)!.slice('localizationCatalog.'.length, -3)}`,
 			// Languages grow independently; keep each catalog separate from Workbench code and other languages.
 			test: id => /\/\.build\/desktop\/localization\/localizationCatalog\.[^/]+\.ts$/u.test(id.replaceAll('\\', '/')),

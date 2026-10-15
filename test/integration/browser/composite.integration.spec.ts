@@ -443,7 +443,7 @@ test('storage flush captures the live pane size and stops after the panel is dis
 });
 
 
-test('Sessions reuse single-content editor groups, replace in place and keep the sibling draft and outside focus', async ({ page }) => {
+test('Sessions replace conversation views while retaining the sibling draft and outside focus', async ({ page }) => {
 	await page.evaluate(() => window.ashSessionGridIntegration.show(['alpha', 'beta'], 'beta'));
 	const host = page.locator('#session-grid');
 	const alpha = host.getByRole('textbox', { name: 'alpha prompt', exact: true });
@@ -452,50 +452,47 @@ test('Sessions reuse single-content editor groups, replace in place and keep the
 	const before = await alpha.boundingBox();
 	await page.getByRole('button', { name: 'Outside content' }).focus();
 	await page.evaluate(() => window.ashSessionGridIntegration.replace('gamma'));
-	await expect(host.locator('.ash-editor-group')).toHaveCount(2);
-	await expect(host.getByRole('tab')).toHaveCount(2);
+	await expect(host.locator('.ash-editor-group, .ash-editor-title-control')).toHaveCount(0);
+	await expect(host.getByRole('region')).toHaveCount(2);
+	await expect(host.getByRole('tab')).toHaveCount(0);
 	await expect(host.getByRole('textbox', { name: 'beta prompt', exact: true })).toHaveCount(0);
 	await expect(host.getByRole('textbox', { name: 'gamma prompt', exact: true })).toBeVisible();
 	await expect(alpha).toHaveValue('Retained draft');
 	expect(await alpha.boundingBox()).toEqual(before);
 	await expect(page.getByRole('button', { name: 'Outside content' })).toBeFocused();
-	await host.getByRole('tab', { name: 'alpha', exact: true }).press('Enter');
+	await alpha.focus();
 	await expect(alpha).toBeFocused();
 	expect(await page.evaluate(() => window.ashSessionGridIntegration.active())).toBe('alpha');
 });
 
-test('Sessions use editor drag and drop to arrange conversations vertically without recreating the input', async ({ page }) => {
+test('Sessions resize and restore their own grid without replacing the live conversation', async ({ page }) => {
 	await page.setViewportSize({ width: 1200, height: 1200 });
 	await page.evaluate(() => window.ashSessionGridIntegration.show(['alpha', 'beta'], 'beta'));
 	const host = page.locator('#session-grid');
 	const alpha = host.getByRole('textbox', { name: 'alpha prompt', exact: true });
-	const beta = host.getByRole('textbox', { name: 'beta prompt', exact: true });
+	const region = host.getByRole('region', { name: 'alpha', exact: true });
 	await alpha.fill('Keep this draft');
 	const retainedInput = (await alpha.elementHandle())!;
-	const source = host.locator('.ash-tab').filter({ has: page.getByRole('tab', { name: 'alpha', exact: true }) });
-	const target = host.locator('.ash-editor-group').filter({ has: page.getByRole('textbox', { name: 'beta prompt', exact: true }) });
-	const bounds = (await target.boundingBox())!;
-	await source.dragTo(target, { targetPosition: { x: bounds.width / 2, y: bounds.height - 5 } });
-	await expect(host.locator('.ash-editor-group')).toHaveCount(2);
-	await expect.poll(async () => {
-		const a = (await alpha.boundingBox())!;
-		const b = (await beta.boundingBox())!;
-		return { below: a.y > b.y, aligned: Math.abs(a.x - b.x) < 1, a: { x: a.x, y: a.y }, b: { x: b.x, y: b.y } };
-	}).toMatchObject({ below: true, aligned: true });
+	const before = (await region.boundingBox())!.width;
+	const sash = host.locator('.ash-sash').first();
+	const bounds = (await sash.boundingBox())!;
+	await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(bounds.x - 100, bounds.y + bounds.height / 2, { steps: 5 });
+	await page.mouse.up();
+	await expect.poll(async () => (await region.boundingBox())!.width).toBeLessThan(before - 50);
+	const resizedWidth = (await region.boundingBox())!.width;
 	await expect(alpha).toHaveValue('Keep this draft');
 	expect(await retainedInput.evaluate(element => element.isConnected && element === element.ownerDocument.querySelector('[aria-label="alpha prompt"]'))).toBe(true);
 	await expect(alpha).toBeFocused();
 	await page.reload();
 	await page.waitForFunction(() => !!window.ashSessionGridIntegration);
 	await page.evaluate(() => window.ashSessionGridIntegration.show(['alpha', 'beta'], 'beta'));
-	await expect.poll(async () => {
-		const a = (await alpha.boundingBox())!;
-		const b = (await beta.boundingBox())!;
-		return a.y > b.y && Math.abs(a.x - b.x) < 1;
-	}).toBe(true);
+	await expect.poll(async () => (await region.boundingBox())!.width).toBeCloseTo(resizedWidth, 0);
+	await expect(host.locator('.ash-editor-group, .ash-editor-title-control')).toHaveCount(0);
 });
 
-test('Sessions reject a document tab from a host with a different pane registry', async ({ page }) => {
+test('Sessions never become a document drop target', async ({ page }) => {
 	await page.setViewportSize({ width: 1200, height: 1200 });
 	await page.evaluate(() => window.ashSessionGridIntegration.show(['conversation'], 'conversation'));
 	const host = page.locator('#session-grid');
@@ -503,26 +500,28 @@ test('Sessions reject a document tab from a host with a different pane registry'
 	await draft.fill('Keep this conversation');
 	await page.evaluate(() => window.ashCompositeIntegration.openEditor('document'));
 	const source = page.locator('.ash-tab').filter({ has: page.getByRole('tab', { name: 'document.ts', exact: true }) });
-	const target = host.locator('.ash-editor-group');
+	const target = host.getByRole('region', { name: 'conversation', exact: true });
 	const bounds = (await target.boundingBox())!;
 	await source.dragTo(target, { targetPosition: { x: bounds.width / 2, y: bounds.height - 5 } });
-	await expect(host.locator('.ash-editor-group')).toHaveCount(1);
+	await expect(host.locator('.ash-editor-group')).toHaveCount(0);
+	await expect(host.getByRole('region')).toHaveCount(1);
 	await expect(draft).toHaveValue('Keep this conversation');
 	await expect(page.getByRole('tab', { name: 'document.ts', exact: true })).toBeVisible();
 });
 
-test('Sessions preserve Chinese titles when replacing the active group under the Chinese locale', async ({ page }) => {
+test('Sessions expose Chinese conversation names without editor tab semantics', async ({ page }) => {
 	await page.goto('/composite.html?locale=zh-CN');
 	await page.waitForFunction(() => !!window.ashSessionGridIntegration);
 	await page.evaluate(() => window.ashSessionGridIntegration.show(['甲', '乙'], '乙'));
 	const host = page.locator('#session-grid');
-	await expect(host.getByRole('tab', { name: '甲', exact: true })).toBeVisible();
-	await expect(host.getByRole('tab', { name: '乙', exact: true })).toBeVisible();
+	await expect(host.getByRole('region', { name: '甲', exact: true })).toBeVisible();
+	await expect(host.getByRole('region', { name: '乙', exact: true })).toBeVisible();
 	await page.evaluate(() => window.ashSessionGridIntegration.replace('丙'));
-	await expect(host.getByRole('tab', { name: '甲', exact: true })).toBeVisible();
-	await expect(host.getByRole('tab', { name: '丙', exact: true })).toBeVisible();
-	await expect(host.getByRole('tab', { name: '乙', exact: true })).toHaveCount(0);
-	await expect(host.locator('.ash-editor-group')).toHaveCount(2);
+	await expect(host.getByRole('region', { name: '甲', exact: true })).toBeVisible();
+	await expect(host.getByRole('region', { name: '丙', exact: true })).toBeVisible();
+	await expect(host.getByRole('region', { name: '乙', exact: true })).toHaveCount(0);
+	await expect(host.locator('.ash-editor-group, .ash-editor-title-control')).toHaveCount(0);
+	await expect(host.getByRole('region')).toHaveCount(2);
 });
 
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
@@ -725,13 +724,17 @@ for (const locale of ['en', 'zh-CN']) {
 			? ['显示已打开的编辑器', '全部关闭', '关闭已保存', '启用预览编辑器', '锁定组', '配置编辑器']
 			: ['Show Opened Editors', 'Close All', 'Close Saved', 'Enable Preview Editors', 'Lock Group', 'Configure Editors'];
 		const menu = page.getByRole('menu');
+		const primary = await page.evaluate(() => navigator.platform.includes('Mac') ? 'Meta' : 'Control');
+		const primaryLabel = primary === 'Meta' ? '⌘' : 'Ctrl+';
 		const openMenu = async (index = 0) => {
 			await host.locator('.ash-editor-group').nth(index).locator('.ash-editor-title-actions [aria-haspopup="menu"]').click();
 			await expect(menu).toBeVisible();
 		};
 		await page.evaluate(() => window.ashEditorTitleIntegration.open('first', true));
 		await openMenu();
-		await expect(menu.locator('[role^=menuitem]')).toHaveText(names);
+		await expect(menu.locator('[role^=menuitem] .ash-button-label')).toHaveText(names);
+		await expect(menu.getByRole('menuitem', { name: names[1], exact: true }).locator('.ash-menu-keybinding kbd')).toHaveText([`${primaryLabel}K`, 'W']);
+		await expect(menu.getByRole('menuitem', { name: names[2], exact: true }).locator('.ash-menu-keybinding kbd')).toHaveText([`${primaryLabel}K`, 'U']);
 		await page.keyboard.press('Escape');
 		await page.evaluate(() => window.ashEditorTitleIntegration.split());
 		await page.evaluate(() => window.ashEditorTitleIntegration.open('second'));
@@ -750,7 +753,12 @@ for (const locale of ['en', 'zh-CN']) {
 		const groups = host.locator('.ash-editor-group');
 		const before = await groups.evaluateAll(elements => elements.map(element => element.getBoundingClientRect().width));
 		await openMenu(0);
-		await menu.getByRole('menuitem', { name: locale === 'zh-CN' ? '最大化组' : 'Maximize Group', exact: true }).click();
+		const maximize = menu.getByRole('menuitem', { name: locale === 'zh-CN' ? '最大化组' : 'Maximize Group', exact: true });
+		await expect(maximize.locator('.ash-menu-keybinding kbd')).toHaveText([`${primaryLabel}K`, `${primaryLabel}M`]);
+		await page.keyboard.press('Escape');
+		await host.getByRole('textbox', { name: 'kept.ts', exact: true }).focus();
+		await page.keyboard.press(`${primary}+KeyK`);
+		await page.keyboard.press(`${primary}+KeyM`);
 		await expect.poll(() => page.evaluate(() => window.ashEditorTitleIntegration.state().groups.map(group => group.visible))).toEqual([true, false]);
 		const maximized = await groups.nth(0).evaluate(element => ({ width: element.getBoundingClientRect().width, available: element.closest('.ash-grid')!.getBoundingClientRect().width }));
 		// The Workbench frame reserves its border inside the Grid's CSS width.
@@ -763,7 +771,19 @@ for (const locale of ['en', 'zh-CN']) {
 		for (let index = 0; index < before.length; index++) expect(after[index]).toBeCloseTo(before[index]!, 0);
 		await openMenu(0);
 		await host.screenshot({ path: testInfo.outputPath(`editor-title-menu-${locale}.png`) });
-		await menu.getByRole('menuitem', { name: names[2], exact: true }).click();
+		await page.keyboard.press('Escape');
+		await host.getByRole('textbox', { name: 'kept.ts', exact: true }).focus();
+		await page.keyboard.press(`${primary}+KeyK`);
+		await page.keyboard.press('KeyU');
 		await expect.poll(() => page.evaluate(() => window.ashEditorTitleIntegration.state().groups.flatMap(group => group.tabs))).toEqual(['first.ts', 'second.ts']);
+		await page.evaluate(() => window.ashEditorTitleIntegration.split());
+		await page.evaluate(async () => {
+			await window.ashEditorTitleIntegration.open('close-all-a');
+			await window.ashEditorTitleIntegration.open('close-all-b');
+		});
+		await host.getByRole('textbox', { name: 'close-all-b.ts', exact: true }).focus();
+		await page.keyboard.press(`${primary}+KeyK`);
+		await page.keyboard.press('KeyW');
+		await expect.poll(() => page.evaluate(() => window.ashEditorTitleIntegration.state().groups.map(group => group.tabs))).toEqual([['first.ts', 'second.ts']]);
 	});
 }

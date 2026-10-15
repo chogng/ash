@@ -1,0 +1,161 @@
+.ash-prototype-fields {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size120);
+	padding: var(--ash-spacing-size120);
+}
+.ash-prototype-field {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size40);
+	min-width: 0;
+}
+.ash-prototype-properties .ash-prototype-checkbox {
+	flex-direction: row;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--ash-spacing-size80);
+}
+.ash-prototype-field > input,
+.ash-prototype-field > select,
+.ash-prototype-preview-controls > select {
+	box-sizing: border-box;
+	width: 100%;
+	min-width: 0;
+	min-height: 28px;
+	padding: var(--ash-spacing-size40);
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-input-border, var(--ash-contrastBorder));
+	border-radius: var(--ash-cornerRadius-small);
+	font: inherit;
+}
+.ash-prototype-fields > p {
+	margin: 0;
+	color: var(--ash-description-foreground);
+	line-height: 1.5;
+}
+.ash-prototype-connections {
+	fill: none;
+	stroke: var(--ash-focusBorder);
+	stroke-width: 2px;
+	pointer-events: none;
+}
+.ash-prototype-connections > path,
+.ash-prototype-handle {
+	vector-effect: non-scaling-stroke;
+}
+.ash-prototype-connections > text {
+	fill: var(--ash-focusBorder);
+	stroke: none;
+}
+.ash-prototype-handle {
+	fill: var(--ash-editor-background);
+	pointer-events: all;
+	cursor: crosshair;
+}
+.ash-prototype-preview {
+	position: absolute;
+	inset: 0;
+	z-index: 3;
+	display: flex;
+	flex-direction: column;
+	background: var(--ash-editor-background);
+	color: var(--ash-foreground);
+}
+.ash-prototype-preview[hidden] {
+	display: none;
+}
+.ash-prototype-preview-controls {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size120);
+}
+.ash-prototype-preview-controls > select {
+	width: auto;
+	max-width: 200px;
+}
+.ash-prototype-preview-scene {
+	touch-action: none;
+	overscroll-behavior: contain;
+	flex: 1;
+	width: 100%;
+	min-height: 0;
+	overflow: hidden;
+}
+.ash-prototype-hotspot {
+	cursor: pointer;
+}
+.ash-prototype-field > input:focus-visible,
+.ash-prototype-field > select:focus-visible,
+.ash-prototype-checkbox > input:focus-visible,
+.ash-prototype-preview-controls > select:focus-visible,
+.ash-prototype-preview:focus-visible,
+.ash-prototype-hotspot:focus-visible,
+.ash-prototype-preview-scene [role="region"]:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+.ash-prototype-properties .ash-prototype-checkbox > input {
+	width: auto;
+	min-height: 0;
+	flex: 0 0 auto;
+}
+
+.ash-prototype-connections > .ash-prototype-wire {
+	pointer-events: stroke;
+	cursor: pointer;
+}
+
+.ash-prototype-action,
+.ash-prototype-branch {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size80);
+	min-width: 0;
+	margin: 0;
+	padding: var(--ash-spacing-size80);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-widget-border));
+	border-radius: var(--ash-cornerRadius-small);
+}
+.ash-prototype-action > legend,
+.ash-prototype-branch > legend {
+	max-width: 100%;
+	overflow-wrap: anywhere;
+	color: var(--ash-foreground);
+}
+.ash-prototype-action-buttons {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size40);
+}
+.ash-prototype-action-buttons > .ash-button {
+	flex: 1 1 auto;
+}
+.ash-prototype-error {
+	color: var(--ash-error-foreground);
+	overflow-wrap: anywhere;
+}
+.ash-prototype-error:empty {
+	display: none;
+}
+.ash-prototype-field > input[aria-invalid="true"] {
+	border-color: var(--ash-error-foreground);
+}
+.ash-prototype-spring {
+	width: 100%;
+	height: 96px;
+	fill: none;
+	stroke: var(--ash-focusBorder);
+	stroke-width: 1px;
+}
+.ash-prototype-spring-target {
+	stroke: var(--ash-description-foreground);
+	stroke-dasharray: 3 3;
+}

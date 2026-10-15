@@ -1,3 +1,4 @@
+import type { DesignTextStyle } from '../common/model/designText.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import type { Event } from '../../../../base/common/event.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
@@ -17,8 +18,8 @@ export interface DesignScene {
 /** DOM events and pointer capture stay in browser input; drawing receives design coordinates. */
 export interface DesignDrawingParticipant {
 	readonly preview: DesignShape | undefined;
-	begin(point: DesignPoint): boolean;
-	update(point: DesignPoint): void;
+	begin(point: DesignPoint, modifiers?: { shift: boolean; alt: boolean; tolerance: number; }): boolean;
+	update(point: DesignPoint, modifiers?: { shift: boolean; alt: boolean; }): void;
 	end(): void;
 	complete(): boolean;
 	cancel(): void;
@@ -51,9 +52,36 @@ export interface IDesignCodeContribution {
 	getAccessibleContent(): string;
 }
 
+export interface IDesignPrototypeContribution {
+	readonly domNode: HTMLElement;
+	readonly previewDomNode: HTMLElement;
+	update(scale: number, active: boolean): void;
+	showPreview(): void;
+	setVisible(visible: boolean): void;
+	focusPreview(): boolean;
+	getAccessibleContent(): string;
+}
+
+export interface IDesignTextContribution {
+	readonly editingId: string | undefined;
+	readonly typingStyleId: string | undefined;
+	readonly typingStyle: DesignTextStyle | undefined;
+	readonly range: { start: number; end: number; } | undefined;
+	readonly onDidChangeSelection: Event<void>;
+	edit(id: string): void;
+	finish(commit?: boolean): void;
+	update(): void;
+	format(style: DesignTextStyle, styleId?: string): void;
+	selectAll(): void;
+	getAccessibleContent(): string;
+	toggleFormat(format: 'bold' | 'italic' | 'underline'): void;
+}
+
 /** Each editor owns one contribution set; the set releases its feature instances together. */
 export interface IDesignEditorContributions extends IDisposable {
 	readonly drawing: IDesignDrawingContribution;
+	readonly text: IDesignTextContribution;
+	readonly prototype: IDesignPrototypeContribution;
 	readonly motion: IDesignMotionContribution;
 	readonly properties: IDesignPropertiesContribution;
 	readonly code: IDesignCodeContribution;
@@ -61,6 +89,9 @@ export interface IDesignEditorContributions extends IDisposable {
 
 export interface DesignEditorContributionContext {
 	readonly ownerDocument: Document;
+	readonly canvasDomNode: HTMLElement;
+	readonly overlayDomNode: SVGGElement;
+	toDesignPoint(point: { readonly clientX: number; readonly clientY: number; }): DesignPoint;
 	readonly documentController: DesignDocumentController;
 	readonly commands: DocumentCommands;
 	readonly selection: DesignSelection;
@@ -68,6 +99,7 @@ export interface DesignEditorContributionContext {
 	getMode(): DesignMode;
 	selectShape(id: string): void;
 	renderCanvas(): void;
+	focusCanvas(): void;
 	runFileOperation(operation: () => Promise<void>): Promise<void>;
 }
 

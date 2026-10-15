@@ -1,6 +1,7 @@
 import { Menus } from '../../../automation/menus.js';
 import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
+import { QuickAccess } from '../../../automation/quickaccess.js';
 import { readStorageEntries, seedStorageOnNextLoad } from '../../../automation/storage.js';
 import { StorageScope, StorageTarget } from '../../../../src/ash/platform/storage/common/storage.js';
 
@@ -214,11 +215,11 @@ test('Sessions merges legacy pane arrangements and retains shared selections and
 	await page.reload({ waitUntil: 'domcontentloaded' });
 	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
 	await expect(panes).toHaveCount(5);
-	await page.locator('[data-part="sessions"] [role="tab"]').first().click();
+	await new Editor(panes.first()).input.focus();
 	const beforeDrag = (await panes.first().boundingBox())!.width;
 	await drag(-80);
-	// Sessions uses EditorPart's 120px minimum for each group.
-	await expect.poll(async () => Math.round((await panes.first().boundingBox())!.width)).toBe(Math.round(Math.max(120, beforeDrag - 80)));
+	// SessionView keeps enough width for the conversation and composer.
+	await expect.poll(async () => Math.round((await panes.first().boundingBox())!.width)).toBe(Math.round(Math.max(300, beforeDrag - 80)));
 	const shared = await snapshot();
 	expect(shared.map(slot => slot.text)).toEqual(['Chat first draft', 'Chat second draft', 'Chat third draft', 'Code first draft', 'Code second draft']);
 	const identities = shared.map(({ width, ...state }) => state);
@@ -237,7 +238,8 @@ test('Sessions merges legacy pane arrangements and retains shared selections and
 	for (let index = 0; index < shared.length; index++) {
 		await expect.poll(async () => Math.abs((await panes.nth(index).boundingBox())!.width - shared[index]!.width)).toBeLessThanOrEqual(1);
 	}
-	await page.locator('[data-part="sessions"] .ash-tab-close-action button').first().click();
+	await new Editor(panes.first()).input.focus();
+	await new QuickAccess(page).runCommand('sessionsViewPane.closeSession');
 	await expect(panes).toHaveCount(4);
 	await page.reload({ waitUntil: 'domcontentloaded' });
 	await expect(panes).toHaveCount(4);
@@ -265,7 +267,7 @@ test('Sessions merges legacy pane arrangements and retains shared selections and
 	expect(failures).toEqual([]);
 });
 
-test('Sessions restores nested editor geometry, active conversation and drafts after reopening the window', async ({ application, target, workbench }) => {
+test('Sessions migrates nested editor geometry into its conversation grid and restores drafts after reopening', async ({ application, target, workbench }) => {
 	let page = await workbench.openAgentsWindow(target.kind);
 	await page.setViewportSize({ width: 1900, height: 950 });
 	const references: { kind: 'untitled'; session: { untitledSessionId: string; title: string; workspace: { type: 'current'; }; }; }[] = [];
@@ -298,11 +300,12 @@ test('Sessions restores nested editor geometry, active conversation and drafts a
 	await page.reload({ waitUntil: 'domcontentloaded' });
 	const expectRestored = async (): Promise<void> => {
 		const host = page.locator('[data-part="sessions"]');
-		await expect(host.locator('.ash-editor-group')).toHaveCount(3);
+		await expect(host.locator('.ash-sessions-chat-slot')).toHaveCount(3);
+		await expect(host.locator('.ash-editor-group, .ash-editor-title-control')).toHaveCount(0);
 		const expectedIds = references.map(reference => reference.session.untitledSessionId);
 		await expect.poll(() => host.locator('.ash-sessions-chat-slot').evaluateAll((slots, expected) => expected.map(id => {
 			const slot = slots.find(slot => slot.querySelector<HTMLElement>(':is(.ash-chat,.ash-cowork)')?.dataset.untitledSessionId === id)!;
-			const bounds = slot.closest('.ash-editor-group')!.getBoundingClientRect();
+			const bounds = slot.getBoundingClientRect();
 			return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
 		}), expectedIds).then(([left, top, bottom]) => ({
 			leftOf: left.x < top.x, stacked: top.y < bottom.y && Math.abs(top.x - bottom.x) < 1,
@@ -319,7 +322,7 @@ test('Sessions restores nested editor geometry, active conversation and drafts a
 	await page.setViewportSize({ width: 1900, height: 950 });
 	await expectRestored();
 	const saved = JSON.parse((await readStorageEntries(application, page, identity))['sessions.gridState'].value);
-	expect(saved.version).toBe(2);
+	expect(saved.version).toBe(3);
 	expect(saved.layout.children[1].orientation).toBe('vertical');
-	expect(saved.groups.map((group: { id: string; }) => group.id)).toEqual(references.map(reference => `untitled:${reference.session.untitledSessionId}`));
+	expect([saved.layout.children[0].data.id, ...saved.layout.children[1].children.map((leaf: { data: { id: string; }; }) => leaf.data.id)]).toEqual(references.map(reference => `untitled:${reference.session.untitledSessionId}`));
 });

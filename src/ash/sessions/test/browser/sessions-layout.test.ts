@@ -87,14 +87,19 @@ test('Custom Views cover retained content without changing its desired visibilit
 		const previous = layout.state;
 		layout.setCustomViewVisible(true);
 		assert.equal(layout.isPartVisible('customview'), true);
-		for (const id of ['sessions', 'editor', 'auxiliarybar', 'panel'] as const) assert.equal(layout.isPartVisible(id), false);
+		for (const id of ['sidebar', 'sessions', 'editor', 'auxiliarybar', 'panel'] as const) assert.equal(layout.isPartVisible(id), false);
 		assert.deepEqual(layout.state, previous);
 		layout.layout(new Dimension(1800, 1100));
 		assert.equal(layout.state.editor.width, previous.editor.width);
 		assert.equal(layout.state.auxiliarybar.width, previous.auxiliarybar.width);
 		layout.setCustomViewVisible(false);
 		assert.equal(layout.isPartVisible('customview'), false);
-		for (const id of ['sessions', 'editor', 'auxiliarybar', 'panel'] as const) assert.equal(layout.isPartVisible(id), true);
+		for (const id of ['sidebar', 'sessions', 'editor', 'auxiliarybar', 'panel'] as const) assert.equal(layout.isPartVisible(id), true);
+		assert.equal(layout.getPartSize('sidebar').width, previous.sidebar.width);
+		layout.hidePart('sidebar');
+		layout.setCustomViewVisible(true);
+		layout.setCustomViewVisible(false);
+		assert.equal(layout.isPartVisible('sidebar'), false, 'Returning from an independent page preserves a closed sidebar');
 	} finally {
 		for (const part of parts.values()) part.dispose();
 		dom.window.close();

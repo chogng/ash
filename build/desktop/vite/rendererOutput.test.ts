@@ -64,3 +64,28 @@ test('shares each language catalog between renderers without combining languages
 	assert.ok(languages.every(chunk => Object.keys(chunk.modules).length === 1));
 	assert.ok(chunks.every(chunk => Buffer.byteLength(chunk.code) <= 500_000));
 });
+
+test('keeps generated localization message modules separate when a single language exceeds the chunk budget', async () => {
+	const parts = [0, 1, 2].map(index => `fixture/.build/desktop/localization/localizationMessages.zh-CN.${index}.ts`);
+	const catalog = 'fixture/.build/desktop/localization/localizationCatalog.zh-CN.ts';
+	const result = await build({
+		configFile: false, logLevel: 'silent',
+		plugins: [{
+			name: 'fixture',
+			resolveId(id) { return ['entry', catalog, ...parts].includes(id) ? `\0/${id}` : undefined; },
+			load(id) {
+				if (id === '\0/entry') { return `import { catalog } from '${catalog}'; globalThis.fixture = catalog;`; }
+				if (id === `\0/${catalog}`) { return parts.map((part, index) => `import { messages as messages${index} } from '${part}';`).join('\n') + '\nexport const catalog = { ...messages0, ...messages1, ...messages2 };'; }
+				const index = parts.findIndex(part => id === `\0/${part}`);
+				return index >= 0 ? `export const messages = { part${index}: ${JSON.stringify('译'.repeat(80_000))} };` : undefined;
+			},
+		}, buildMetricsPlugin()],
+		build: { write: false, rolldownOptions: { input: 'entry', output: rendererOutput } },
+	});
+	assert.ok(!Array.isArray(result) && 'output' in result);
+	const chunks = result.output.filter(output => output.type === 'chunk');
+	const messages = chunks.filter(chunk => chunk.fileName.startsWith('assets/localization-messages-'));
+	assert.equal(messages.length, parts.length);
+	assert.ok(messages.every(chunk => Object.keys(chunk.modules).length === 1));
+	assert.ok(chunks.every(chunk => Buffer.byteLength(chunk.code) < 500_000));
+});

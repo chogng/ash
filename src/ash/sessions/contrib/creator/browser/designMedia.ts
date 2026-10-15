@@ -6,6 +6,8 @@ import { flattenDesignShapes } from '../common/model/document.js';
 
 export interface DesignImageSource {
 	readonly url: string;
+	/** Embedded image for SVG filter sources, which cannot load blob URLs. */
+	readonly embeddedUrl?: string;
 	readonly width: number;
 	readonly height: number;
 }
@@ -22,10 +24,12 @@ export async function hashDesignMedia(bytes: Uint8Array): Promise<string> {
 
 /** Preview URLs belong to one view; original bytes remain in the document working copy. */
 export class DesignMediaPreview extends Disposable {
+	private readonly embedded = new WeakMap<ImageResource, string>();
 	private readonly urls = this._register(new DisposableMap<string, ImageResource>());
 
 	public getSources(document: DesignDocument, read: (version: DesignAssetVersion) => Uint8Array): ReadonlyMap<string, DesignImageSource> {
 		const sources = new Map<string, DesignImageSource>();
+		const needsEmbedded = flattenDesignShapes(document.shapes).some(shape => shape.blendMode === 'plus-darker' || !!shape.effects);
 		const used = new Set<string>();
 		for (const shape of flattenDesignShapes(document.shapes)) {
 			if (shape.kind !== 'image') { continue; }
@@ -36,7 +40,8 @@ export class DesignMediaPreview extends Disposable {
 				resource = new ImageResource(read(version), version.mediaType);
 				this.urls.set(version.sha256, resource);
 			}
-			sources.set(shape.assetVersionId, { url: resource.url, width: version.width, height: version.height });
+			if (needsEmbedded && !this.embedded.has(resource)) { this.embedded.set(resource, `data:${version.mediaType};base64,${encodeDesignMedia(read(version))}`); }
+			sources.set(shape.assetVersionId, { url: resource.url, ...(needsEmbedded ? { embeddedUrl: this.embedded.get(resource) } : {}), width: version.width, height: version.height });
 		}
 		for (const [key] of this.urls) { if (!used.has(key)) { this.urls.deleteAndDispose(key); } }
 		return sources;

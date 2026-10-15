@@ -147,7 +147,7 @@ See [Automation ownership and lifecycle](../../../crates/docs/automation.md).
 | Shared Chat contract                  | `workbench/services/chat/common/chatService.ts`                                                                                                                                                | owns Thread and Turn operations plus shared Session/Thread IDs, model references, and approval modes used by both renderers                                                                                                                                                                                                                                                                                                                              |
 | Provider and management               | `contrib/providers/agentHost/browser/workbenchSessionsService.contribution.ts`, `services/sessions/common/sessionsManagement.ts`, and `services/sessions/browser/sessionsManagementService.ts` | the App Server provider adapts transport data; management owns catalog, drafts, and operations; the contribution registers and starts it in the regular Workbench                                                                                                                                                                                                                                                                                        |
 | Regular Workbench Chat                | `browser/workbenchChat.contribution.ts`, `browser/chatViewPane.ts`, and `browser/chatWidgetModel.ts`                                                                                           | registers the Session-backed Chat view, actions, and navigation service; one model owns selection, draft materialization, and Thread subscriptions for each shared `ChatWidget`                                                                                                                                                                                                                                                                          |
-| Main conversation                     | `browser/parts/sessions/sessionsChatView.ts` and `sessionsPart.ts`                                                                                                                             | host retained Cowork and Code panes, their grids and focus; switch the active implementation without changing Session selection                                                                                                                                                                                                                                                                                                                          |
+| Main conversation                     | `browser/parts/sessionsPart.ts`, `sessionView.ts`, and `sessionGridLayout.ts`                                                                                                                  | one shared conversation grid and one retained SessionView per visible Session; Chat/Code switch only the renderer inside that view                                                                                                                                                                                                                                                                                                                       |
 | Code composer                         | `contrib/chat/browser/newChatInput.ts`, `newChatContextAttachments.ts`, and `media/chatInput.css`                                                                                              | retain the existing Code welcome input, attachments and permission menu                                                                                                                                                                                                                                                                                                                                                                                  |
 | Cowork                                | `contrib/cowork/browser/cowork.contribution.ts`, `coworkWidgetModel.ts`, `newCoworkInput.ts`, and `widget/`                                                                                    | own Chat and Collaboration conversation rendering, model preferences, welcome layout and draft lifecycle; reuse Workbench Chat input operations, editor, model picker and dictation                                                                                                                                                                                                                                                                      |
 | Composer persistence                  | `contrib/chat/common/newChatDraftState.ts`                                                                                                                                                     | owns workspace-scoped drafts keyed by untitled identity or Thread; migrates older Chat/Code keys without discarding conflicting drafts                                                                                                                                                                                                                                                                                                                   |
@@ -184,11 +184,12 @@ Conversation rendering remains separate from Code; both use the shared model cat
 and platform controls.
 
 `ISessionsService` owns one active selection, visible arrangement and Back/Forward
-history. `SessionsPart` hosts retained Code and Cowork conversation views through
-pane factories. Each implementation retains its own models, editors and pending
-submissions. Switching entries transfers unsent text, mode and resolved attachments
-for every visible conversation. Only the active view is attached to the Part;
-returning to an implementation restores its retained editor DOM. Code reveals editor tools; Collaboration
+history. `SessionsPart` owns one `SessionGridLayout` and one retained `SessionView`
+per visible Session. Each view hosts the Code or Cowork renderer through pane
+factories, retaining its models, composer DOM and pending submissions. Switching
+entries transfers unsent text, mode and resolved attachments into the active
+renderer and clears the inactive composer; the grid and SessionView stay attached.
+Code reveals editor tools; Collaboration
 selects the Teams sidebar. Creator aggregates independently contributed creation tools in its navigation container and retains their workspaces. Library is one classified file and asset repository; its categories and collections are browsing state rather than product entries. Their central EditorPanes and registered side Views use shared hosts. The Sessions layout service accepts entry descriptors from the owning contributions; `DesktopLayoutController` remains responsible for session documents and Editor/Details behavior.
 See [input and conversation state ownership](../../../docs/input-state-ownership.md)
 for the boundary with regular Workbench Chat and SCM.
@@ -286,13 +287,14 @@ joins pending attachment resolution before flushing storage.
    stays with that Chat; existing Threads keep their own model. The last manual
    choice is stored in the TypeScript UI profile state, while
    `chat.defaultModel` is a registered setting.
-6. `SessionsChatView` reconciles every visible selection with a retained
-   `ChatWidget` pane hosted by the shared `EditorPart`. Each editor group holds
-   one conversation; ordinary opens replace the active group content and retain
-   sibling groups. SessionGridLayout binds conversations to the saved editor layout, while
-   EditorPart owns group layout, titles and pane hosts. Focus projects the leaf
-   back to the active selection; closing a leaf does not archive its durable
-   Session, and draft materialization preserves the leaf in place.
+6. `SessionsPart` reconciles every visible selection with a retained `SessionView`.
+   `SessionGridLayout` hosts these views directly in a `SerializableGrid`, without
+   document editor inputs, panes, groups or tab title controls. Ordinary opens
+   replace the active slot and retain sibling views. The grid owns sash sizes and
+   restores Session identities from its saved tree, including migration from the
+   former editor-group layout. Focus updates the window's active selection;
+   closing a view does not archive its durable Session, and draft materialization
+   preserves its view and composer in place.
    The product composition owns the single view-service subscription and
    pushes the window's `(visible, active)` into the passive `SessionsPart`.
 

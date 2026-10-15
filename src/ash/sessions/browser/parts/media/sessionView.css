@@ -1,0 +1,20 @@
+.ash-sessions-chat-slot {
+	display: flex;
+	height: 100%;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+	flex-direction: column;
+	border-right: var(--ash-strokeThickness) solid var(--ash-border);
+	background: var(--ash-editor-background);
+}
+
+.ash-sessions-chat-slot.last-slot {
+	border-right: 0;
+}
+
+.ash-sessions-chat-slot > :is(.ash-chat, .ash-cowork) {
+	min-width: 0;
+	min-height: 0;
+	flex: 1 1 auto;
+}

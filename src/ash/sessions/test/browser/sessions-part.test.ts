@@ -48,7 +48,7 @@ import { ChatTipService, IChatTipService } from '../../../workbench/contrib/chat
 import { ILifecycleService } from '../../../workbench/services/lifecycle/common/lifecycle.js';
 import { BrowserLifecycleService } from '../../../workbench/services/lifecycle/browser/lifecycleService.js';
 import { migrateNewChatDraftState, readNewChatDraftState, writeNewChatDraftState } from '../../contrib/chat/common/newChatDraftState.js';
-import type { SessionsPartOptions } from '../../browser/parts/sessions/sessionsPart.js';
+import type { SessionsPartOptions } from '../../browser/parts/sessionsPart.js';
 import { NewChatContextAttachments } from '../../contrib/chat/browser/newChatContextAttachments.js';
 import { NewChatInputPasteTarget } from '../../contrib/chat/browser/newChatInputPasteTarget.js';
 import { NewChatContextAttachments as CoworkContextAttachments } from '../../contrib/cowork/browser/newChatContextAttachments.js';
@@ -68,7 +68,7 @@ for (const [name, value] of Object.entries({
 })) {
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
-const { SessionsPart } = await import("../../browser/parts/sessions/sessionsPart.js");
+const { SessionsPart } = await import("../../browser/parts/sessionsPart.js");
 await import('../../contrib/creator/browser/creatorEditor.contribution.js');
 const { NewChatInputWidget } = await import('../../contrib/chat/browser/newChatInput.js');
 const { CoworkPaneFactory } = await import('../../contrib/cowork/browser/cowork.contribution.js');
@@ -316,7 +316,6 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		},
 		createCoworkPane: (container, panelId, selection) => cowork.createPane(container, panelId, selection, () => { viewService.openNewSession(); }),
 		activateSelection: selection => viewService.activateSelection(selection),
-		closeSelection: selection => viewService.closeVisibleSelection(selection),
 		createNewSession: () => { viewService.openNewSession(); },
 	} satisfies SessionsPartOptions);
 	const updatePart = (): void => {
@@ -346,10 +345,10 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	assert.equal(part.domNode.querySelectorAll('.ash-chat-input-tip').length, 0);
 	assert.equal(services.get(IChatTipService).getWelcomeTip(), undefined);
 
-	(part.domNode.querySelector("[role=tab]") as HTMLElement).click();
-	assert.ok(part.domNode.querySelector(".ash-editor-group:first-of-type .ash-sessions-chat-slot.active"));
-
-	(part.domNode.querySelector(".ash-tab-close-action button") as HTMLButtonElement).click();
+	(part.domNode.querySelector('.ash-sessions-chat-slot input, .ash-sessions-chat-slot textarea') as HTMLElement).focus();
+	assert.ok(part.domNode.querySelector('.ash-sessions-chat-slot.active'));
+	assert.equal(part.domNode.querySelector('.ash-editor-group, .ash-editor-title-control, [role=tab]'), null);
+	viewService.closeVisibleSelection(viewService.activeSelection!);
 	await part.captureActiveDraft();
 	assert.equal(part.domNode.querySelectorAll(".ash-sessions-chat-slot").length, 1);
 	assert.ok(part.domNode.querySelector('.ash-sessions-chat-view.single-chat'));
@@ -384,7 +383,10 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	assert.ok(coworkView.querySelector('.ash-chat-input-container [data-action-id="ash.chat.input.model"]'));
 	assert.equal(coworkView.querySelector('.ash-chat'), null);
 	assert.deepEqual((await part.captureActiveDraft())?.draft, draft);
-	assert.equal(codeView.isConnected, false);
+	assert.equal(codeView, coworkView);
+	assert.equal(codeView.isConnected, true);
+	assert.equal(part.domNode.querySelectorAll('.ash-sessions-chat-grid').length, 1);
+	assert.equal(part.domNode.querySelectorAll('.ash-sessions-chat-slot').length, 1);
 	const retainedCoworkInput = coworkView.querySelector('.ash-chat-input-part');
 	part.appendToDraft('Continue the presentation in Cowork');
 	const coworkDraft = (await part.captureActiveDraft())!.draft;
@@ -397,6 +399,13 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	assert.equal(coworkView.querySelector('.ash-chat-input-part'), retainedCoworkInput);
 	assert.equal(await part.captureActiveDraft(), undefined);
 	assert.equal(coworkView.querySelectorAll('.ash-cowork-attachment').length, 0);
+	const grid = part.domNode.querySelector('.ash-sessions-chat-grid');
+	part.restoreDraft(draft);
+	await Promise.all([part.setConversationKind('code'), part.setConversationKind('cowork'), part.setConversationKind('code')]);
+	assert.equal(part.domNode.querySelector('.ash-sessions-chat-grid'), grid);
+	assert.equal(part.domNode.querySelector('[data-conversation-kind="code"]'), codeView);
+	assert.equal(part.domNode.querySelector('.ash-chat-input-part'), retainedCodeInput);
+	assert.deepEqual((await part.captureActiveDraft())?.draft, draft);
 
 	partListener.dispose();
 	part.dispose();

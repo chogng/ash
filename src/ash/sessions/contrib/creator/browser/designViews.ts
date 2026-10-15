@@ -1,6 +1,6 @@
 import './designViews.css';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
-import { h } from '../../../../base/browser/dom.js';
+import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { autorunWithStore } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -13,6 +13,16 @@ import { IDesignEditorService } from './designEditorService.js';
 interface DesignLayer { readonly element: DesignShape; readonly children?: readonly DesignLayer[]; }
 
 function shapeLabel(shape: DesignShape): string {
+	const label = layerName(shape);
+	return shape.scrollPosition === 'fixed' ? localize('sessions.design.prototype.fixedLayer', '{0} (Fixed)', label) : shape.scrollPosition === 'sticky' ? localize('sessions.design.prototype.stickyLayer', '{0} (Sticky)', label) : label;
+}
+
+function layerName(shape: DesignShape): string {
+	if (shape.kind === 'frame' && (shape.component || shape.instance)) {
+		const role = shape.instance ? localize('sessions.design.instance', 'Instance') : shape.component?.kind === 'set' ? localize('sessions.design.componentSet', 'Component set') : localize('sessions.design.mainComponent', 'Main component');
+		return shape.name ? localize('sessions.design.componentLayer', '{0}: {1}', role, shape.name) : role;
+	}
+	if (shape.name) { return shape.name; }
 	switch (shape.kind) {
 		case 'rectangle': return localize('sessions.design.rectangle', 'Rectangle');
 		case 'ellipse': return localize('sessions.design.ellipse', 'Ellipse');
@@ -33,6 +43,7 @@ export class DesignLayersView extends ViewPane {
 		options: IViewPaneOptions,
 		@IDesignEditorService editors: IDesignEditorService,
 		@IConfigurationService configuration: IConfigurationService,
+		@IContextKeyService contextKeys: IContextKeyService,
 	) {
 		super(container, options);
 		this.contentElement.classList.add('ash-design-layers');
@@ -40,6 +51,7 @@ export class DesignLayersView extends ViewPane {
 		empty.textContent = localize('sessions.design.layersEmpty', 'Draw an object to add a layer.');
 		const treeContainer = h(container.ownerDocument, 'div', { className: 'ash-design-layers-tree' });
 		this.contentElement.append(empty, treeContainer);
+		this._register(contextKeys.createScoped(treeContainer)).createKey('sessionsDesignLayersFocused', true);
 		this.tree = this._register(new WorkbenchObjectTree(treeContainer, {
 			configurationService: configuration,
 			ariaLabel: localize('sessions.design.layers', 'Layers'),
@@ -47,6 +59,13 @@ export class DesignLayersView extends ViewPane {
 			modelOptions: { identityProvider: { getId: shape => shape.id } },
 			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: shapeLabel },
 			renderElement: shape => h(container.ownerDocument, 'span', { className: 'ash-design-layer-label' }, shapeLabel(shape)),
+		}));
+		this._register(addDisposableListener(treeContainer, 'keydown', event => {
+			const editor = editors.activeEditor.get();
+			if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+				event.preventDefault(); event.stopPropagation();
+				editor?.showContextMenu(treeContainer, () => this.focus());
+			} else if (editor?.handleLayerKeyDown(event)) { this.focus(); }
 		}));
 		this._register(this.tree.onDidChangeSelection(event => {
 			if (event.browserEvent) editors.activeEditor.get()?.selectShapes(event.elements.map(shape => shape.id));
@@ -59,7 +78,7 @@ export class DesignLayersView extends ViewPane {
 				if (shapes !== renderedShapes) {
 					renderedShapes = shapes;
 					// Frontmost objects appear first, without changing the document's paint order.
-					const layers = (items: readonly DesignShape[]): DesignLayer[] => [...items].reverse().map(element => ({ element, ...(element.kind === 'frame' ? { children: layers(element.children) } : {}) }));
+					const layers = (items: readonly DesignShape[]): DesignLayer[] => [...items].reverse().map(element => ({ element, ...(element.kind === 'frame' || element.kind === 'group' ? { children: layers(element.children) } : {}) }));
 					this.tree.setChildren(layers(shapes ?? []));
 				}
 				empty.hidden = !!shapes?.length;

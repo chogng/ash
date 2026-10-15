@@ -1,0 +1,25 @@
+.ash-design-text-properties {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--ash-spacing-size120) var(--ash-spacing-size80);
+	min-width: 0;
+}
+
+.ash-design-text-selection {
+	color: var(--ash-description-foreground);
+	overflow-wrap: anywhere;
+}
+
+.ash-design-text-details > summary {
+	cursor: pointer;
+	margin-bottom: var(--ash-spacing-size120);
+}
+
+.ash-design-text-properties [aria-invalid="true"] {
+	border-color: var(--ash-error-foreground);
+}
+
+.ash-design-text-details > summary:focus-visible {
+	outline: 1px solid var(--ash-focusBorder);
+	outline-offset: 2px;
+}

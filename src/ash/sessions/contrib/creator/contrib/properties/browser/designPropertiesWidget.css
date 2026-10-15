@@ -31,6 +31,8 @@
 
 .ash-design-property-section[hidden],
 .ash-design-frame-properties[hidden],
+.ash-design-layout-fields[hidden],
+.ash-sessions-design-properties label[hidden],
 .ash-design-page-properties[hidden] {
 	display: none;
 }
@@ -85,6 +87,26 @@
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 	gap: var(--ash-spacing-size120) var(--ash-spacing-size80);
 	padding-top: var(--ash-spacing-size120);
+}
+
+.ash-design-layout-fields {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--ash-spacing-size120) var(--ash-spacing-size80);
+}
+
+.ash-design-component-fields {
+	grid-template-columns: minmax(0, 1fr);
+	overflow-wrap: anywhere;
+}
+
+.ash-design-property-fields > .ash-button,
+.ash-design-resource-controls > .ash-button {
+	min-width: 0;
+	white-space: normal;
+	height: auto;
+	min-height: var(--ash-spacing-size320);
+	border-color: var(--ash-contrastBorder);
 }
 
 .ash-sessions-design-properties .ash-design-property-wide {
@@ -252,4 +274,70 @@
 				var(--ash-description-foreground) 0% 50%
 			)
 			0 / 8px 8px;
+}
+
+.ash-sessions-design-properties .ash-design-resource-fields,
+.ash-sessions-design-properties .ash-design-resource-controls {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size80);
+	min-width: 0;
+}
+
+.ash-sessions-design-properties .ash-design-resource-fields {
+	padding: var(--ash-spacing-size80) 0;
+}
+
+.ash-sessions-design-properties .ash-design-resource-controls {
+	padding: var(--ash-spacing-size80) 0;
+}
+
+.ash-sessions-design-properties .ash-design-resource-controls label {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size40);
+	min-width: 0;
+}
+
+.ash-sessions-design-properties .ash-design-resource-controls input,
+.ash-sessions-design-properties .ash-design-resource-controls select {
+	width: 100%;
+	min-width: 0;
+	box-sizing: border-box;
+}
+
+.ash-sessions-design-properties .ash-design-resource-controls p,
+.ash-sessions-design-properties .ash-design-resource-change pre {
+	margin: 0;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.ash-sessions-design-properties .ash-design-resource-name {
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-sessions-design-properties .ash-design-resources summary:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: 2px;
+}
+
+.ash-sessions-design-properties .ash-design-library-previews {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-sessions-design-properties .ash-design-library-previews figure {
+	margin: 0;
+	min-width: 0;
+}
+
+.ash-sessions-design-properties .ash-design-library-previews svg {
+	width: 100%;
+	max-height: 240px;
+}
+
+.ash-design-vector-properties [hidden] {
+	display: none;
 }

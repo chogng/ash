@@ -187,6 +187,7 @@
     "@ash/typescript-compiler": "npm:typescript@7.0.2",
     "@electron/rebuild": "4.2.0",
     "@playwright/test": "1.61.1",
+    "@types/fontkit": "2.0.9",
     "@types/jsdom": "^28.0.3",
     "@types/mocha": "10.0.10",
     "@types/node": "^24.0.0",
@@ -219,7 +220,11 @@
   "description": "Electron client for the Ash app-server protocol",
   "main": ".build/desktop/main/src/main.js",
   "dependencies": {
+    "fontkit": "2.0.4",
+    "harfbuzzjs": "1.6.3",
     "native-keymap": "3.3.9",
+    "paper": "0.12.18",
+    "paperjs-offset": "2.2.1",
     "playwright-core": "1.61.1"
   },
   "optionalDependencies": {

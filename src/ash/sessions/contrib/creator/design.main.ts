@@ -1,6 +1,9 @@
+import { DesignTextEditor } from './contrib/text/browser/designTextEditor.js';
+import { CreatorMode } from './common/creator.js';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { localize } from '../../../nls.js';
 import type { DesignEditorContributionContext, IDesignEditorContributions } from './browser/designEditorBrowser.js';
+import { DesignPrototypeWidget } from './contrib/prototype/browser/designPrototypeWidget.js';
 import { DesignDrawingController } from './contrib/drawing/browser/designDrawingController.js';
 import { DesignPropertiesWidget } from './contrib/properties/browser/designPropertiesWidget.js';
 import { DesignMotionWidget } from './contrib/motion/browser/designMotionWidget.js';
@@ -18,9 +21,12 @@ export function createDesignEditorContributions(context: DesignEditorContributio
 		extension: 'html',
 		content: generateDesignCode(documentController.model.value, documentController.getEmbeddedImageSources()),
 	}));
-	const drawing = resources.add(new DesignDrawingController(context, commands));
-	const properties = resources.add(instantiationService.createInstance(DesignPropertiesWidget, ownerDocument, documentController, commands, selection, () => context.renderCanvas(), exportDesign));
+	const text = resources.add(instantiationService.createInstance(DesignTextEditor, context));
+	const drawing = resources.add(new DesignDrawingController({ ...context, editText: id => text.edit(id) }, commands));
+	const properties = resources.add(instantiationService.createInstance(DesignPropertiesWidget, ownerDocument, documentController, commands, selection, () => context.renderCanvas(), exportDesign, text, () => context.focusCanvas()));
+	const prototype = resources.add(instantiationService.createInstance(DesignPrototypeWidget, context));
+	if (documentController.mode === CreatorMode.Prototype) { properties.domNode.insertBefore(prototype.domNode, properties.domNode.children[1]); } else { properties.domNode.append(prototype.domNode); }
 	const motion = resources.add(new DesignMotionWidget(ownerDocument, documentController.model, commands));
 	const code = resources.add(new DesignCodeWidget(ownerDocument, documentController, () => exportDesign('html')));
-	return Object.assign(resources, { drawing, properties, motion, code });
+	return Object.assign(resources, { drawing, properties, motion, code, prototype, text });
 }

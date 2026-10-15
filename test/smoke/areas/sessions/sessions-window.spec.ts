@@ -111,6 +111,14 @@ async function inspectCanvasMenu(canvas: Locator, application: PlaywrightApplica
 	return items;
 }
 
+async function drawBezierPath(canvas: Locator): Promise<void> {
+	await canvas.press('Escape'); await canvas.press('p');
+	const viewport = canvas.locator('.ash-canvas-viewport'), bounds = await viewport.boundingBox();
+	await viewport.click({ position: { x: bounds!.width * .3, y: bounds!.height * .3 } });
+	await viewport.click({ position: { x: bounds!.width * .5, y: bounds!.height * .5 } });
+	await canvas.press('Enter'); await canvas.press('v'); await canvas.press('Enter');
+}
+
 async function rightClickCanvasShape(shape: Locator): Promise<void> {
 	const bounds = await shape.boundingBox();
 	expect(bounds).not.toBeNull();
@@ -687,7 +695,7 @@ test('Sessions Design macOS canvas menu dispatches editing through Main', { tag:
 	expect(await inspectCanvasMenu(canvas, application, true)).toEqual([
 		{ label: 'Undo', enabled: false }, { label: 'Redo', enabled: false },
 		{ label: 'Delete', enabled: false }, { label: 'Select all', enabled: false },
-		{ label: 'Duplicate image', enabled: false },
+		{ label: 'Duplicate', enabled: false }, { label: 'Bring to front', enabled: false }, { label: 'Send to back', enabled: false }, { label: 'Add auto layout', enabled: false },
 		{ label: 'Group', enabled: false }, { label: 'Ungroup', enabled: false },
 		{ label: 'Add frame (F)', enabled: true }, { label: 'Import image', enabled: true },
 		{ label: 'Export SVG', enabled: false }, { label: 'Open design', enabled: true },
@@ -922,7 +930,7 @@ test('Sessions Design property pane groups fields, collapses with the keyboard a
 	await expect(pane.getByRole('button', { name: 'Export design', exact: true })).toBeDisabled();
 	await canvas.press('r');
 	await expect(pane.getByRole('heading', { name: 'Rectangle', exact: true })).toBeVisible();
-	await expect(pane.locator('details:visible > summary')).toHaveText(['Position', 'Layout', 'Appearance']);
+	await expect(pane.locator('details:visible > summary')).toHaveText(['Layer', 'Arrange', 'Position', 'Layout', 'Appearance']);
 	await expect(pane.getByRole('button', { name: 'Export design', exact: true })).toBeEnabled();
 	const opacity = pane.getByRole('spinbutton', { name: 'Fill opacity (%)', exact: true });
 	await opacity.fill('50'); await opacity.press('Tab');
@@ -943,8 +951,8 @@ test('Sessions Design property pane groups fields, collapses with the keyboard a
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/collapsible sections[\s\S]*Stroke width/u);
 	await page.keyboard.press('Escape');
 	await expect(x).toBeFocused();
-	await canvas.press('p');
-	await expect(pane.locator('details:visible > summary')).toHaveText(['Position', 'Layout', 'Appearance', 'Bézier path']);
+	await drawBezierPath(canvas);
+	await expect(pane.locator('details:visible > summary')).toHaveText(['Layer', 'Arrange', 'Position', 'Layout', 'Appearance', 'Bézier path']);
 	const path = canvas.locator('path[data-shape-id]');
 	const originalWidth = await path.getAttribute('stroke-width');
 	const stroke = pane.getByRole('spinbutton', { name: 'Stroke width', exact: true });
@@ -1067,7 +1075,7 @@ test('Sessions Design imports backend asset versions, crops independently and re
 	await expect(images).toHaveCount(1);
 	const originalId = await images.first().getAttribute('data-shape-id');
 	await expect(images.first().locator('image')).toHaveAttribute('href', /^blob:/u);
-	await clickCanvasMenu(canvas, 'Duplicate image', application);
+	await clickCanvasMenu(canvas, 'Duplicate', application);
 	await expect(images).toHaveCount(2);
 	const crop = page.locator('[data-part="auxiliarybar"]').getByRole('spinbutton', { name: 'Crop width (%)', exact: true });
 	await crop.fill('50'); await crop.press('Tab');
@@ -1259,17 +1267,18 @@ test('Sessions Design edits text and Bézier handles and transforms groups with 
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	await canvas.focus();
 	await page.keyboard.press('t');
+	await canvas.locator('.ash-canvas-viewport').click({ position: { x: 120, y: 80 } }); await page.keyboard.press('Escape');
 	const content = page.locator('[data-part="auxiliarybar"]').getByRole('textbox', { name: 'Text content', exact: true });
 	await content.fill('中文 <script>alert(1)</script>\nSecond line');
 	await content.press('Tab');
 	const fontSize = page.locator('[data-part="auxiliarybar"]').getByRole('spinbutton', { name: 'Font size', exact: true });
 	await fontSize.fill('32');
 	await fontSize.press('Tab');
-	await expect(canvas.locator('text')).toContainText('中文 <script>alert(1)</script>');
-	await expect(canvas.locator('text')).toHaveAttribute('font-size', '32');
+	await expect(canvas.locator('[data-design-text]')).toContainText('中文 <script>alert(1)</script>');
+	await expect(canvas.locator('[data-design-text]')).toHaveCSS('font-size', '32px');
 	await expect(canvas.locator('script')).toHaveCount(0);
 	await canvas.focus();
-	await page.keyboard.press('p');
+	await drawBezierPath(canvas);
 	const path = canvas.locator('path[data-shape-id]');
 	const initial = await path.getAttribute('d');
 	const outgoing = page.locator('[data-part="auxiliarybar"]').getByRole('spinbutton', { name: 'Outgoing handle X', exact: true });
@@ -1310,10 +1319,10 @@ test('Sessions Design edits text and Bézier handles and transforms groups with 
 	await canvas.focus();
 	await page.keyboard.press('u');
 	await expect(canvas.locator('.ash-sessions-design-shapes > [data-shape-id]')).toHaveCount(2);
-	await expect(canvas.locator('text')).toHaveAttribute('font-size', '48');
+	await expect(canvas.locator('[data-design-text]')).toHaveCSS('font-size', '48px');
 	await page.keyboard.press('ControlOrMeta+z');
 	await expect(group).toHaveCount(1);
-	await page.keyboard.press('Tab');
+	await canvas.focus();
 	await page.keyboard.press('Alt+F2');
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Group[\s\S]*Text[\s\S]*中文[\s\S]*Bézier path/u);
 	await page.keyboard.press('Escape');
@@ -1324,7 +1333,7 @@ test('Sessions Design edits text and Bézier handles and transforms groups with 
 		await application.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows().find(window => window.getTitle().includes('Sessions'))!.setBounds({ width: 600, height: 600 }); });
 	}
 	await canvas.focus();
-	await page.keyboard.press('p');
+	await drawBezierPath(canvas);
 	await expect(page.locator('[data-part="auxiliarybar"]').getByRole('spinbutton', { name: 'Outgoing handle Y', exact: true })).toBeVisible();
 	await expect.poll(async () => (await canvas.locator('.ash-canvas-viewport').boundingBox())!.height).toBeGreaterThan(100);
 });
@@ -1356,11 +1365,12 @@ test('Sessions Design exports SVG and HTML and reopens grouped text and paths th
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	await canvas.focus();
 	await page.keyboard.press('t');
+	await canvas.locator('.ash-canvas-viewport').click({ position: { x: 120, y: 80 } }); await page.keyboard.press('Escape');
 	const text = page.locator('[data-part="auxiliarybar"]').getByRole('textbox', { name: 'Text content', exact: true });
 	await text.fill('中文 <script>');
 	await text.press('Tab');
 	await canvas.focus();
-	await page.keyboard.press('p');
+	await drawBezierPath(canvas); await canvas.press('Escape');
 	await clickCanvasMenu(canvas, 'Select all', application);
 	await clickCanvasMenu(canvas, 'Group', application);
 	await canvas.focus();
@@ -1395,7 +1405,7 @@ test('Sessions Design exports SVG and HTML and reopens grouped text and paths th
 	expect(saved.shapes[0]).toMatchObject({ kind: 'group', children: [{ kind: 'text', text: '中文 <script>' }, { kind: 'path' }] });
 	const parsed = await page.evaluate(content => {
 		const svg = new DOMParser().parseFromString(content, 'image/svg+xml');
-		return { text: svg.querySelector('text')?.textContent, path: svg.querySelector('path')?.getAttribute('d'), selection: svg.querySelector('.ash-sessions-design-selection') !== null, script: svg.querySelector('script') !== null, error: svg.querySelector('parsererror') !== null };
+		return { text: svg.querySelector('[data-design-text]')?.textContent, path: svg.querySelector('path')?.getAttribute('d'), selection: svg.querySelector('.ash-sessions-design-selection') !== null, script: svg.querySelector('script') !== null, error: svg.querySelector('parsererror') !== null };
 	}, svg);
 	expect(parsed).toMatchObject({ text: '中文 <script>', selection: false, script: false, error: false });
 	expect(parsed.path).toContain(' C ');
@@ -1420,7 +1430,7 @@ test('Sessions Design exports SVG and HTML and reopens grouped text and paths th
 	if (target.kind === 'browser') { await page.locator('.ash-quick-pick-row-label').filter({ hasText: /^design\.ash-design$/u }).click(); }
 	await expect(canvas.locator('.ash-sessions-design-message')).toHaveText('Opened design.ash-design');
 	await expect(canvas.locator('.ash-sessions-design-shapes > svg[data-shape-id]')).toHaveCount(1);
-	await expect(canvas.locator('text')).toContainText('中文 <script>');
+	await expect(canvas.locator('[data-design-text]')).toContainText('中文 <script>');
 	await expect(canvas.locator('path[data-shape-id]')).toHaveCount(1);
 });
 
@@ -2484,7 +2494,7 @@ test('Open in Agents selects the same session thread in the Agents Window', { ta
 	const targetChat = sessionsPage.locator('.ash-sessions-chat-slot.active:visible :is(.ash-chat,.ash-cowork)');
 	await expect(targetChat).toHaveAttribute('data-session-id', sessionId!);
 	await expect(targetChat).toHaveAttribute('data-thread-id', threadId!);
-	const sessionTitle = (await sessionsPage.locator('.ash-sessions-chat-slot.active:visible').evaluate(element => element.closest('.ash-editor-group')!.querySelector('[role="tab"]')!.getAttribute('aria-label')))!;
+	const sessionTitle = (await targetChat.getAttribute('aria-label'))!;
 	const navigation = sessionsPage.locator('.ash-sessions-activity-content');
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
 	await sessionsPage.locator('.ash-sessions-list-item').filter({ hasText: sessionTitle }).click();
@@ -3168,26 +3178,26 @@ test('Sessions Activity Bar tooltips follow side, top and bottom placement witho
 	await closed;
 });
 
-test('Sessions reuse one editor group when replacing a conversation and restore its draft through history', async ({ target, workbench }) => {
+test('Sessions replace a conversation in their own grid and restore its draft through history', async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	const host = page.locator('[data-part="sessions"]');
 	const editor = new Editor(host.locator('.ash-sessions-chat-slot.active:visible'));
 	await replaceChatInput(editor, 'Keep the replaced conversation draft');
-	const group = await host.locator('.ash-editor-group').elementHandle();
+	const grid = await host.locator('.ash-sessions-chat-grid').elementHandle();
 	const chat = host.locator('.ash-sessions-chat-slot.active :is(.ash-chat,.ash-cowork)');
 	const identity = await chat.getAttribute('data-untitled-session-id');
 	expect(identity).toBeTruthy();
 	await page.locator('.ash-sessions-list-add').click();
 	await editor.waitForEditorContents(text => text === '');
-	await expect(host.locator('.ash-editor-group')).toHaveCount(1);
-	await expect(host.locator('.ash-editor-title-control')).toBeHidden();
-	expect(await host.locator('.ash-editor-group').evaluate((element, previous) => element === previous, group)).toBe(true);
+	await expect(host.locator('.ash-sessions-chat-slot')).toHaveCount(1);
+	await expect(host.locator('.ash-editor-group, .ash-editor-title-control')).toHaveCount(0);
+	expect(await host.locator('.ash-sessions-chat-grid').evaluate((element, previous) => element === previous, grid)).toBe(true);
 	await expect(chat).not.toHaveAttribute('data-untitled-session-id', identity!);
 	await page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Back', exact: true }).click();
 	await editor.waitForEditorContents(text => text === 'Keep the replaced conversation draft');
 	await expect(chat).toHaveAttribute('data-untitled-session-id', identity!);
-	await expect(host.locator('.ash-editor-group')).toHaveCount(1);
-	await group!.dispose();
+	await expect(host.locator('.ash-sessions-chat-slot')).toHaveCount(1);
+	await grid!.dispose();
 });
 
 test('Sessions Activity Bar changes layout while retaining the same session, draft, attachments and history', async ({ application, target, workbench }) => {

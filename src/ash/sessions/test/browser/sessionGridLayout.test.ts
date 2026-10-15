@@ -6,8 +6,7 @@ import type { IView } from '../../../base/browser/ui/grid/grid.js';
 import { getWindowById } from '../../../base/browser/window.js';
 import { installEditorTestDom } from '../../../editor/test/browser/editorTestGlobals.js';
 import { createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
-import { WorkbenchWindowBarHeight } from '../../../workbench/browser/parts/workbenchPartDimensions.js';
-import { SessionGridLayout } from '../../browser/parts/sessions/sessionGridLayout.js';
+import { SessionGridLayout } from '../../browser/parts/sessionGridLayout.js';
 import { StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../base/test/common/utils.js';
@@ -32,6 +31,36 @@ class TestView implements IView {
 	}
 }
 
+test('Sessions host live views without creating editor groups or title controls', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	using globals = installEditorTestDom(browser, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent']);
+	const document = browser.window.document;
+	try {
+		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'test', flushInterval: 0 });
+		using services = createTestEditorServices(undefined, undefined, document, storage);
+		const first = new TestView(document);
+		const second = new TestView(document);
+		using layout = services.createInstance(SessionGridLayout, document.body, first);
+		layout.layout(1200, 800);
+		const firstInput = first.element.querySelector('input')!;
+		for (const entries of [
+			[{ id: 'draft', view: first }],
+			[{ id: 'first', view: first }],
+			[{ id: 'first', view: first }, { id: 'second', view: second }],
+			[{ id: 'first', view: first }],
+		]) {
+			layout.reconcile(entries, entries[0]!.id);
+
+			assert.equal(layout.element.querySelector('.ash-editor-group, .ash-editor-title-control, [role=tab]'), null);
+			assert.equal(first.bounds!.height, 800);
+			assert.equal(first.element.querySelector('input'), firstInput);
+		}
+	} finally {
+		getWindowById(1)?.disposables.dispose();
+		browser.window.close();
+	}
+});
+
 test('Sessions split insertion preserves an unrelated pane and retained input focus', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	using globals = installEditorTestDom(browser, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent']);
@@ -44,17 +73,17 @@ test('Sessions split insertion preserves an unrelated pane and retained input fo
 		using services = createTestEditorServices(undefined, undefined, browser.window.document, storage);
 		using layout = services.createInstance(SessionGridLayout, document.body, first);
 		layout.reconcile([{ id: 'first', view: first }, { id: 'second', view: second }], 'first');
-		await layout.whenReady();
+
 		layout.layout(1_200, 800);
 		const firstBounds = first.bounds;
 		first.element.querySelector('input')!.focus();
 		layout.reconcile([{ id: 'first', view: first }, { id: 'second', view: second }, { id: 'third', view: third }], 'first');
-		await layout.whenReady();
+
 		layout.layout(1_200, 800);
 		assert.deepEqual({ bounds: first.bounds, focused: document.activeElement }, { bounds: firstBounds, focused: first.element.querySelector('input') });
 		const beforeMaterialization = [first.bounds, second.bounds, third.bounds];
 		layout.reconcile([{ id: 'durable-first', view: first }, { id: 'second', view: second }, { id: 'third', view: third }], 'durable-first');
-		await layout.whenReady();
+
 		assert.deepEqual([first.bounds, second.bounds, third.bounds], beforeMaterialization);
 	} finally {
 		getWindowById(1)?.disposables.dispose();
@@ -73,16 +102,16 @@ test('Sessions rearrangement keeps live inputs and does not steal focus from ano
 		using services = createTestEditorServices(undefined, undefined, browser.window.document, storage);
 		using layout = services.createInstance(SessionGridLayout, document.body, first);
 		layout.reconcile([{ id: 'first', view: first }, { id: 'second', view: second }], 'first');
-		await layout.whenReady();
+
 		layout.layout(1_200, 800);
 		first.element.querySelector('input')!.value = 'Unsent text';
 		const sidebar = document.querySelector('button')!;
 		sidebar.focus();
 		layout.reconcile([{ id: 'second', view: second }, { id: 'first', view: first }], 'first');
-		await layout.whenReady();
+
 		assert.deepEqual({ focused: document.activeElement, input: first.element.querySelector('input')!.value }, { focused: sidebar, input: 'Unsent text' });
 		layout.reconcile([{ id: 'first', view: first }], 'first');
-		await layout.whenReady();
+
 		assert.equal(second.element.isConnected, false);
 		assert.equal(first.element.isConnected, true);
 	} finally {
@@ -104,7 +133,7 @@ test('Sessions restores and immediately saves widths from both legacy layouts wi
 		using layout = services.createInstance(SessionGridLayout, browser.window.document.body, first);
 		layout.layout(0, 0);
 		layout.reconcile([{ id: 'first', view: first }, { id: 'second', view: second }], 'second');
-		await layout.whenReady();
+
 		const input = second.element.querySelector('input')!;
 		input.value = 'Unsent text';
 		browser.window.document.querySelector('button')!.focus();
@@ -117,8 +146,8 @@ test('Sessions restores and immediately saves widths from both legacy layouts wi
 		layout.layout(1_200, 800);
 		await new Promise(resolve => browser.window.requestAnimationFrame(resolve));
 		const stored = JSON.parse(storage.get('sessions.gridState', StorageScope.WORKSPACE)!);
-		assert.deepEqual({ widths: [first.bounds!.width, second.bounds!.width], draft: input.value, focus: browser.window.document.activeElement?.tagName, stored: { version: stored.version, ids: stored.groups.map((group: { id: string; }) => group.id), orientation: stored.layout.orientation, sizes: stored.layout.children.map((child: { size: number; }) => child.size) }, code: storage.get('sessions.gridState.code', StorageScope.WORKSPACE), chat: storage.get('sessions.gridState.chat', StorageScope.WORKSPACE) }, {
-			widths: [400, 800], draft: 'Unsent text', focus: 'BUTTON', stored: { version: 2, ids: ['first', 'second'], orientation: 'horizontal', sizes: [400, 800] }, code: undefined, chat: undefined,
+		assert.deepEqual({ widths: [first.bounds!.width, second.bounds!.width], draft: input.value, focus: browser.window.document.activeElement?.tagName, stored: { version: stored.version, ids: storedIds(stored.layout), orientation: stored.layout.orientation, sizes: stored.layout.children.map((child: { size: number; }) => child.size) }, code: storage.get('sessions.gridState.code', StorageScope.WORKSPACE), chat: storage.get('sessions.gridState.chat', StorageScope.WORKSPACE) }, {
+			widths: [400, 800], draft: 'Unsent text', focus: 'BUTTON', stored: { version: 3, ids: ['first', 'second'], orientation: 'horizontal', sizes: [400, 800] }, code: undefined, chat: undefined,
 		});
 		layout.layout(150, 800);
 		await new Promise(resolve => browser.window.requestAnimationFrame(resolve));
@@ -141,12 +170,12 @@ test('Sessions ignores saved widths when every pane has been replaced before its
 		const view = new TestView(browser.window.document);
 		using layout = services.createInstance(SessionGridLayout, browser.window.document.body, view);
 		layout.reconcile([{ id: 'new', view }], 'new');
-		await layout.whenReady();
+
 		layout.layout(1_200, 800);
 		await new Promise(resolve => browser.window.requestAnimationFrame(resolve));
 		assert.equal(view.bounds!.width, 1_200);
 		const stored = JSON.parse(storage.get('sessions.gridState', StorageScope.WORKSPACE)!);
-		assert.deepEqual({ version: stored.version, ids: stored.groups.map((group: { id: string; }) => group.id) }, { version: 2, ids: ['new'] });
+		assert.deepEqual({ version: stored.version, ids: storedIds(stored.layout) }, { version: 3, ids: ['new'] });
 	} finally {
 		getWindowById(1)?.disposables.dispose();
 		browser.window.close();
@@ -179,31 +208,31 @@ test('Sessions restores a nested split as providers arrive and retains the compl
 		const third = new TestView(browser.window.document);
 		using layout = services.createInstance(SessionGridLayout, browser.window.document.body, empty);
 		layout.layout(1200, 600);
-		await layout.whenReady();
+
 		await new Promise(resolve => browser.window.requestAnimationFrame(resolve));
 		assert.deepEqual(JSON.parse(storage.get('sessions.gridState', StorageScope.WORKSPACE)!), saved);
 		layout.reconcile([{ id: 'first', view: first }, { id: 'third', view: third }], 'third');
-		await layout.whenReady();
+
 		await new Promise(resolve => browser.window.requestAnimationFrame(resolve));
 		const input = third.element.querySelector('input')!;
 		input.value = 'Keep the live draft';
 		input.focus();
 		assert.deepEqual(JSON.parse(storage.get('sessions.gridState', StorageScope.WORKSPACE)!), saved);
 		layout.reconcile([{ id: 'first', view: first }, { id: 'second', view: second }, { id: 'third', view: third }], 'third');
-		await layout.whenReady();
+
 		await new Promise(resolve => browser.window.requestAnimationFrame(resolve));
 		assert.deepEqual({ sizes: [first, second, third].map(view => ({ width: view.bounds!.width, height: view.bounds!.height })), focused: browser.window.document.activeElement === input, retained: third.element.querySelector('input') === input, text: input.value }, {
-			sizes: [{ width: 400, height: 600 - WorkbenchWindowBarHeight }, { width: 800, height: 200 - WorkbenchWindowBarHeight }, { width: 800, height: 400 - WorkbenchWindowBarHeight }], focused: true, retained: true, text: 'Keep the live draft',
+			sizes: [{ width: 400, height: 600 }, { width: 800, height: 200 }, { width: 800, height: 400 }], focused: true, retained: true, text: 'Keep the live draft',
 		});
 		layout.layout(600, 300);
 		await new Promise(resolve => browser.window.requestAnimationFrame(resolve));
 		layout.layout(1200, 600);
 		await new Promise(resolve => browser.window.requestAnimationFrame(resolve));
-		assert.deepEqual([second.bounds!.height, third.bounds!.height], [200 - WorkbenchWindowBarHeight, 400 - WorkbenchWindowBarHeight]);
+		assert.deepEqual([second.bounds!.height, third.bounds!.height], [200, 400]);
 		layout.reconcile([{ id: 'first', view: first }, { id: 'replacement', view: second }, { id: 'third', view: third }], 'replacement');
-		await layout.whenReady();
+
 		const updated = JSON.parse(storage.get('sessions.gridState', StorageScope.WORKSPACE)!);
-		assert.deepEqual(updated.groups.map((group: { id: string; }) => group.id), ['first', 'replacement', 'third']);
+		assert.deepEqual(storedIds(updated.layout), ['first', 'replacement', 'third']);
 		assert.equal(updated.layout.children[1].orientation, 'vertical');
 	} finally {
 		getWindowById(1)?.disposables.dispose();
@@ -224,14 +253,18 @@ test('invalid stored geometry falls back to a usable conversation without mounti
 		const view = new TestView(browser.window.document);
 		using layout = services.createInstance(SessionGridLayout, browser.window.document.body, view);
 		layout.reconcile([{ id: 'first', view }], 'first');
-		await layout.whenReady();
+
 		layout.layout(1000, 600);
 		assert.equal(view.bounds!.width, 1000);
 		assert.equal(warnings.length, 1);
-		assert.equal(JSON.parse(storage.get('sessions.gridState', StorageScope.WORKSPACE)!).groups[0].id, 'first');
+		assert.equal(storedIds(JSON.parse(storage.get('sessions.gridState', StorageScope.WORKSPACE)!).layout)[0], 'first');
 	} finally {
 		console.warn = warn;
 		getWindowById(1)?.disposables.dispose();
 		browser.window.close();
 	}
 });
+
+function storedIds(node: { type: string; data?: { id: string; }; children?: readonly Parameters<typeof storedIds>[0][]; }): string[] {
+	return node.type === 'leaf' ? [node.data!.id] : node.children!.flatMap(storedIds);
+}

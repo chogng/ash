@@ -4,7 +4,7 @@ import { ICommandService } from '../../../../platform/commands/common/commands.j
 import { IChatService } from '../../../../workbench/services/chat/common/chatService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import type { SessionsViewSelection } from '../../../services/sessions/browser/sessionsService.js';
-import type { ISessionsConversationPane } from '../../../browser/parts/sessions/sessionsChatView.js';
+import type { ISessionsConversationPane } from '../../../browser/parts/sessionView.js';
 import { CoworkWidget } from './widget/coworkWidget.js';
 import { CoworkWidgetModel } from './coworkWidgetModel.js';
 import { NewCoworkInputWidget } from './newCoworkInput.js';

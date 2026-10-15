@@ -133,38 +133,46 @@ test('Sessions can directly dispose and recreate a restored window without captu
 });
 
 for (const locale of ['en', 'zh-CN']) test(`Automations management stays selected through window restoration and yields to explicit navigation (${locale})`, async ({ page }) => {
-	await expect(page.getByRole('button', { name: 'Manage Automations', exact: true })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Automations', exact: true })).toHaveCount(0);
 	await page.goto(`/sessions.html?automations=1&locale=${locale}`);
 	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 	const chinese = locale === 'zh-CN';
 	if (chinese) await page.evaluate(() => window.ashSessionsIntegration.setTheme('ash-high-contrast-dark'));
 	const activity = page.locator('.ash-sessions-activity-content');
-	const manage = page.getByRole('navigation', { name: chinese ? '会话导航' : 'Sessions navigation' }).getByRole('button', { name: chinese ? '管理自动化' : 'Manage Automations', exact: true });
+	const manage = activity.getByRole('button', { name: chinese ? '自动化' : 'Automations', exact: true });
 	const custom = page.locator('[data-part="customview"]');
 	const code = activity.getByRole('button', { name: chinese ? '代码' : 'Code', exact: true });
 	await code.click();
+	await expect(manage.locator('svg')).toHaveAttribute('data-ash-icon-id', 'clockface');
+	await expect(page.locator('[data-part="sidebar"]').getByRole('button', { name: chinese ? '自动化' : 'Automations', exact: true })).toHaveCount(0);
 	await manage.focus();
 	await manage.press('Enter');
 	await expect(custom).toBeVisible();
 	await expect(manage).toHaveAttribute('aria-current', 'page');
+	await expect(manage.locator('svg')).toHaveAttribute('data-ash-icon-id', 'clockface-filled');
+	for (const part of ['sidebar', 'sessions', 'editor', 'auxiliarybar', 'panel']) await expect(page.locator(`[data-part="${part}"]:visible`)).toHaveCount(0);
+	await page.screenshot({ path: test.info().outputPath('automations-independent-page.png') });
 	await expect(code).not.toHaveAttribute('aria-current', 'page');
 	await expect(page.locator('.ash-sessions-list-item.selected')).toHaveCount(0);
-	await expect(activity.getByRole('button', { name: /Automations/ })).toHaveCount(0);
 	for (let attempt = 0; attempt < 2; attempt++) {
 		await page.evaluate(() => window.ashSessionsIntegration.remountAfterDirectDispose());
 		await expect(custom).toBeVisible();
+		await expect(page.locator('[data-part="sidebar"]')).toBeHidden();
 		await expect(manage).toHaveAttribute('aria-current', 'page');
 		await expect(code).not.toHaveAttribute('aria-current', 'page');
 		await expect(page.locator('[data-part="auxiliarybar"]')).toBeHidden();
 		await code.click();
 		await expect(custom).toBeHidden();
 		await expect(code).toHaveAttribute('aria-current', 'page');
+		await expect(manage.locator('svg')).toHaveAttribute('data-ash-icon-id', 'clockface');
+		await expect(page.locator('[data-part="sidebar"]')).toBeVisible();
 		await expect(page.locator('[data-part="editor"] .ash-editor-title-control').getByRole('tab', { name: chinese ? '更改' : 'Changes', exact: true })).toBeVisible();
 		await manage.click();
 	}
-	await page.locator('.ash-sessions-list-item').first().click();
+	await activity.getByRole('button', { name: chinese ? '聊天' : 'Chat', exact: true }).click();
 	await expect(custom).toBeHidden();
 	await expect(manage).not.toHaveAttribute('aria-current', 'page');
+	await page.locator('.ash-sessions-list-item').first().click();
 	await expect(page.locator('.ash-sessions-list-item.selected')).toHaveCount(1);
 });
 
@@ -180,6 +188,59 @@ test('Code defaults stay in document groups after visiting a retained Trace page
 	await navigation.getByRole('button', { name: 'Trace', exact: true }).click();
 	await expect(page.locator('.ash-agent-trace')).toBeVisible();
 	await expect(page.locator('.ash-agent-trace').locator('.ash-editor-title-control')).toHaveCount(0);
+});
+
+for (const locale of ['en', 'zh-CN']) test(`Chat and Code show sidebar conversations without editor tabs (${locale})`, async ({ page }, testInfo) => {
+	await page.goto(`/sessions.html?locale=${locale}`);
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	const chinese = locale === 'zh-CN';
+	const navigation = page.locator('.ash-sessions-activity-content');
+	const conversations = page.locator('.ash-sessions-chat-view:visible');
+	const pane = conversations.locator('.ash-sessions-chat-slot > [role="region"]');
+	const input = pane.locator('.ash-chat-input-editor').getByRole('textbox');
+	const draft = 'Synthetic retained conversation draft';
+	const retainedGrid = await conversations.locator('.ash-sessions-chat-grid').elementHandle();
+	const retainedSession = await conversations.locator('.ash-sessions-chat-slot').elementHandle();
+	await expect(pane).toHaveCount(1);
+	await input.focus();
+	await page.keyboard.type(draft);
+
+	for (const entry of [chinese ? '代码' : 'Code', chinese ? '聊天' : 'Chat']) {
+		await navigation.getByRole('button', { name: entry, exact: true }).press('Enter');
+		await expect(pane).toHaveCount(1);
+		await expect(conversations.getByRole('tab')).toHaveCount(0);
+		await expect(conversations.locator('.ash-editor-group, .ash-editor-title-control')).toHaveCount(0);
+		await expect(pane).not.toHaveAttribute('aria-labelledby');
+		expect(await retainedGrid!.evaluate(element => element.isConnected && element === document.querySelector('.ash-sessions-chat-grid'))).toBe(true);
+		expect(await retainedSession!.evaluate(element => element.isConnected && element === document.querySelector('.ash-sessions-chat-slot'))).toBe(true);
+		const selectedTitle = await page.locator('.ash-sessions-list-item.selected .ash-sessions-list-label').textContent();
+		await expect(pane).toHaveAttribute('aria-label', selectedTitle!);
+		await expect(pane.locator('.ash-chat-input-editor')).toContainText(draft);
+		await input.focus();
+		await expect(input).toBeFocused();
+		const bounds = await conversations.evaluate(element => {
+			const group = element.querySelector('.ash-sessions-chat-grid')!.getBoundingClientRect();
+			const chat = element.querySelector('.ash-sessions-chat-slot')!.getBoundingClientRect();
+			return { topInset: chat.top - group.top, heightDifference: group.height - chat.height };
+		});
+		expect(bounds).toEqual({ topInset: 0, heightDifference: 0 });
+		await page.screenshot({ path: testInfo.outputPath(`conversation-${entry}-${locale}.png`) });
+	}
+	await page.evaluate(() => window.ashSessionsIntegration.setTheme('ash-high-contrast-dark'));
+	await page.setViewportSize({ width: 900, height: 700 });
+	await expect(conversations.getByRole('tab')).toHaveCount(0);
+	await expect(input).toBeVisible();
+	await page.screenshot({ path: testInfo.outputPath(`conversation-without-tabs-${locale}.png`) });
+	const closedIdentity = await pane.getAttribute('data-untitled-session-id');
+	const quickAccess = new QuickAccess(page);
+	await quickAccess.open('>sessionsViewPane.closeSession');
+	await quickAccess.select(chinese ? '关闭会话' : 'Close Session');
+	await expect(pane).not.toHaveAttribute('data-untitled-session-id', closedIdentity!);
+	await expect(pane.locator('.ash-chat-input-editor')).not.toContainText(draft);
+	await expect.poll(() => page.evaluate(identity => {
+		const state = JSON.parse(localStorage.getItem('ash.storage.workspace.sessions')!);
+		return state.entries[`sessions.inputDraft:untitled:${identity}`];
+	}, closedIdentity)).toBeUndefined();
 });
 
 test('a corrupt legacy draft reports its failure while other drafts and startup survive', async ({ page }) => {

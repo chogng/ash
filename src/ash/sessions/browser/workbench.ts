@@ -275,7 +275,7 @@ import { ActivityBarPart } from './parts/activitybar/activityBarPart.js';
 import type { PaneCompositePart } from '../../workbench/browser/parts/paneCompositePart.js';
 import { PaneCompositePartService } from '../../workbench/browser/parts/paneCompositePartService.js';
 import { IPaneCompositePartService } from '../../workbench/services/panecomposite/browser/panecomposite.js';
-import { SessionsPart, type SessionsPartOptions } from "./parts/sessions/sessionsPart.js";
+import { SessionsPart, type SessionsPartOptions } from "./parts/sessionsPart.js";
 import { CreatorMode } from '../contrib/creator/common/creator.js';
 import { SidebarPart, registerSessionsNavigation } from "./parts/sidebar/sidebarPart.js";
 import type { TitlebarPart } from "./parts/titlebar/titlebarPart.js";
@@ -713,12 +713,6 @@ export abstract class Workbench extends Disposable {
 			createInputPart: (container, delegate, model) => services.createInstance(NewChatInputWidget, container, delegate, model),
 			createCoworkPane: (container, panelId, selection) => cowork.createPane(container, panelId, selection, () => { view.openNewSession(); }),
 			activateSelection: selection => view.activateSelection(selection),
-			closeSelection: selection => {
-				view.closeVisibleSelection(selection);
-				if (selection.kind === 'untitled') {
-					writeNewChatDraftState(storage, undefined, `untitled:${selection.session.untitledSessionId}`);
-				}
-			},
 			createNewSession: () => { view.openNewSession(); },
 		} satisfies SessionsPartOptions));
 		services.registerInstance(ISessionsConversationService, sessionsPart);

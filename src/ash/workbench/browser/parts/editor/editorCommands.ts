@@ -246,6 +246,11 @@ for (const definition of [
 				f1: true,
 				precondition: definition.precondition,
 				menu: { id: MenuId.EditorTitleContext, group: '1_close', order: definition.order },
+				keybinding: definition.id === CLOSE_EDITORS_IN_GROUP_COMMAND_ID
+					? { primary: Keybinding.chord(logicalKey('k', { primaryKey: true }), logicalKey('w')) }
+					: definition.id === CLOSE_SAVED_EDITORS_COMMAND_ID
+						? { primary: Keybinding.chord(logicalKey('k', { primaryKey: true }), logicalKey('u')) }
+						: undefined,
 			});
 		}
 

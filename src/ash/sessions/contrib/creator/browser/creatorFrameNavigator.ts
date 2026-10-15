@@ -7,7 +7,7 @@ import { renderDesignShape } from './svgRenderer.js';
 import type { DesignDocumentController } from './designDocumentController.js';
 import type { DesignShape } from '../common/model/document.js';
 
-/** Slides, website pages and prototype screens share frame selection and read-only scene playback. */
+/** Slides and website pages share frame selection and read-only scene playback. */
 export class CreatorFrameNavigator extends Disposable {
 	public readonly domNode: HTMLElement;
 	public readonly previewDomNode: HTMLElement;

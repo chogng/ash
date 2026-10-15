@@ -16,10 +16,18 @@ const { SessionsBrowserMain } = await import('../../../src/ash/sessions/browser/
 
 // Mount the renderer's real Parts, settings and canvas without a product process or backend.
 // A disconnected host that advertises automation still owns its saved management entry.
+const disconnectedApi = createDisconnectedRendererApi();
+globalThis.ashWebWorkbenchHost = {
+	api: {
+		...disconnectedApi,
+		// Policy startup reads account order even when no account is signed in.
+		github: { ...disconnectedApi.github, listAccounts: async () => [] },
+	}
+};
 if (new URL(location.href).searchParams.has('automations')) {
 	globalThis.ashWebWorkbenchHost = {
 		api: {
-			...createDisconnectedRendererApi(), automation: {
+			...globalThis.ashWebWorkbenchHost.api, automation: {
 				onDidChange: Event.None, list: async () => [], runs: async () => [],
 				preview: async () => [], readResult: async () => ({ output: '', files: [] }),
 				save: async () => { throw new Error('Unexpected automation save'); },

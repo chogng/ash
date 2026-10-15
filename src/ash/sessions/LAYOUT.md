@@ -71,13 +71,14 @@ Entry switching reuses the existing Parts, container instances and editor lifecy
 
 ### Implementation decisions
 
-SessionsPart hosts two independently maintained conversation implementations.
-Code uses Chat; Chat, Collaboration and conversations beside product editors use
-Cowork. Entry navigation selects the implementation through
-`ISessionsConversationService` before revealing or focusing the Part. Each keeps
-its panes and editor DOM; only the active view is attached. Entry changes transfer
-unsent text, mode and attachments for every visible conversation without replacing
-the window's Session selection or navigation history.
+SessionsPart owns one conversation grid and one retained SessionView per visible
+Session. Code uses the Chat widget; Chat, Collaboration and conversations beside
+product editors use Cowork. Entry navigation selects the renderer through
+`ISessionsConversationService` before revealing or focusing the Part. SessionView
+retains both renderers' DOM and attaches the active renderer inside the same slot.
+Entry changes transfer unsent text, mode and attachments, then clear the inactive
+composer. They preserve the grid, Session views, window selection and navigation
+history.
 
 Feature commands own entry selection. The shared layout service stores the active entry's layout descriptor and applies its contributed Activity Bar context key. It has no enum or switch over product names. Focusing SessionsPart keeps the composing entry selected, including Code and Creator; focusing a View or changing a Library category does not select a different window entry.
 
@@ -173,7 +174,9 @@ Each visible session has one Sessions-owned view. The view presents the active c
 
 The Code Auxiliary Bar shows one current conversation title and a history switcher instead of conversation tabs. History includes untitled drafts and active session threads. Switching retains their live widgets and composers; Session services own selection and lifetime. Document tabs continue to use WorkbenchTabsControl. Both surfaces consume the shared theme and Part geometry.
 
-Chat-tab presentation is a property of the session view, not of the action that opened a chat. The view observes its configuration directly and consistently applies either tabbed or session-view presentation to every chat, including restored chats and chats opened through navigation or external entry points.
+SessionsPart consistently hosts conversations in SessionView, including restored chats and chats opened through navigation or external entry points. The sidebar selects the session; the conversation has no document editor group, EditorInput, EditorPane or tab title control.
+
+The Close Session command closes the active visible session through ISessionsService. Closing an untitled session also clears its saved input draft; closing a durable session does not archive it. The command is available from the Sessions window's Command Palette without a tab close control.
 
 In the side-by-side presentation, ordinary opens replace the active group's conversation and retain its siblings. Explicit side-by-side opens add a group. Ash intentionally uses this policy instead of VS Code Agents' transient and pinned slot search.
 
@@ -186,15 +189,16 @@ In the side-by-side presentation, ordinary opens replace the active group's conv
 
 The Sessions Part renders that model. It does not create a second active-session store. Stable slot identities belong to the visible-session model; ordinary replacement transfers the slot to the new session. Retained sessions keep their views and live chat widgets across movement, reordering, and arrangement changes.
 
-Opening, closing, and directional insertion or movement operate through `ISessionsService`. The Sessions host binds its visible selections to a shared EditorPart configured with one content item per group. Ordinary opens replace the active group content; opening an already visible Session focuses its existing group. EditorPart owns split geometry, user sash sizes, titles, and pane-host lifetimes. SessionGridLayout binds the persisted editor-group identities to live conversations without owning another grid. Unlike VS Code's separate Agents grid and transient/pinned slot policy, this host does not search for an unpinned group or add one during replacement. Maximization and phone presentation project a single live view without changing that geometry. Ordinary structural edits preserve unaffected branches and sizes. Balanced tiling is an explicit arrangement operation over this grid, not a persistent mode or a comparison-specific layout.
+Opening and closing operate through `ISessionsService`. SessionsPart reconciles its visible selections into SessionViews, while SessionGridLayout owns a SerializableGrid of those live views, split geometry and user sash sizes. This follows the VS Code Agents separation between session views and document editors. Ordinary opens replace the active slot; opening an already visible Session focuses its existing view. Ash retains its replacement policy rather than introducing VS Code's transient and pinned slot search. Structural edits preserve unaffected branches, live inputs and focus. Explicit reordering lays out the requested order horizontally. Document tabs and document drops remain owned by the separate EditorPart.
 
 Ash persists Session bindings, all untitled identities and the active selection in
-`sessions.viewState` version 2. `SessionGridLayout` stores the shared EditorPart's
-complete split tree and its group-to-conversation bindings in `sessions.gridState`
-version 2. The old horizontal-width records migrate once. Restoration reuses live
-panes and keeps the complete saved tree while providers resolve pending Sessions;
-explicit navigation can supersede that restoration. Maximization remains an intended extension described
-by this specification; current implementation limits are listed in the README.
+`sessions.viewState` version 2. `SessionGridLayout` stores its split tree with
+Session identities directly in `sessions.gridState` version 3. It migrates older
+horizontal-width records and version 2 editor-group bindings into this tree.
+Restoration reuses live views and keeps the complete saved tree while providers
+resolve pending Sessions; explicit navigation can supersede that restoration.
+Maximization remains an intended extension described by this specification;
+current implementation limits are listed in the README.
 
 Session geometry does not determine Editor, Details, or other side-pane visibility policy. That policy remains with the layout controllers.
 

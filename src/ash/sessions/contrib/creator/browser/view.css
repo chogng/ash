@@ -28,3 +28,17 @@
 	pointer-events: all;
 	cursor: move;
 }
+
+.ash-sessions-design-path-handle.selected {
+	fill: var(--ash-focusBorder);
+}
+
+.ash-sessions-design-selection line[data-gradient-axis] {
+	pointer-events: stroke;
+	cursor: crosshair;
+}
+
+.ash-sessions-design-selection line[data-blur-handle] {
+	pointer-events: stroke;
+	cursor: move;
+}

@@ -1,0 +1,11 @@
+.ash-sessions-design-text-editor {
+	overflow: visible;
+	pointer-events: auto;
+}
+
+.ash-sessions-design-text-editor [contenteditable] {
+	cursor: text;
+	outline: 1px solid var(--ash-focusBorder);
+	outline-offset: 2px;
+	user-select: text;
+}

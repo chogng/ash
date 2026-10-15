@@ -277,6 +277,21 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 		} while (Date.now() < updatedBy);
 		assert.match(catalog, /After edit/, 'unimported declarations update the language resource');
 	} finally { await server.close(); }
+	// Large CJK catalogs remain byte-bounded modules while preserving the same runtime contract.
+	const largeMessages = Object.fromEntries(Array.from({ length: 120 }, (_, index) => [`large.${index}`, '翻译'.repeat(1000)]));
+	await writeFile(join(root, 'src/ash/large.ts'), `import { localize } from './nls.js';\n` + Object.keys(largeMessages).map(key => `localize(${JSON.stringify(key)}, ${JSON.stringify('English '.repeat(400))});`).join('\n'));
+	await writeFile(join(root, 'extensions/language-pack-zh-cn/translations/large.json'), JSON.stringify({ ash: largeMessages }));
+	run(['build/resources/localization.ts']);
+	const parts = (await readdir(generated)).filter(file => file.startsWith('localizationMessages.zh-CN.'));
+	assert.ok(parts.length >= 5);
+	for (const file of parts) { assert.ok((await stat(join(generated, file))).size < 170_000); }
+	run([join(repository, 'node_modules/@ash/typescript-compiler/bin/tsc'), '--module', 'NodeNext', '--target', 'ES2022', '--rootDir', '.', '--outDir', '.build/desktop/large', '--types', 'node', '--skipLibCheck', entry]);
+	const restored = JSON.parse(run(['--input-type=module', '--eval', `import { productLanguagePackCatalogs } from './.build/desktop/large/${entry.replace(/\.ts$/u, '.js')}'; console.log(JSON.stringify(productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN').bundles.ash));`]));
+	for (const [key, value] of Object.entries(largeMessages)) { assert.equal(restored[key], value); }
+	await writeFile(join(root, 'src/ash/large.ts'), '');
+	await writeFile(join(root, 'extensions/language-pack-zh-cn/translations/large.json'), '{}');
+	run(['build/resources/localization.ts']);
+	assert.equal((await readdir(generated)).filter(file => file.startsWith('localizationMessages.')).length, 0);
 	await writeFile(join(root, 'localization/en/messages.json'), JSON.stringify({ ash: { hello: 'Hello again' } }));
 	const duplicate = spawnSync(process.execPath, ['build/resources/localization.ts', '--check'], { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 30_000 });
 	assert.equal(duplicate.error, undefined);

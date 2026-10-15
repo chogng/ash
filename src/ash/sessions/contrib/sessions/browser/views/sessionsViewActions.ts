@@ -14,6 +14,29 @@ import type { ServicesAccessor } from '../../../../../platform/instantiation/com
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IChatSessionNavigationService } from '../../../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
+import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
+import { IsSessionsWindowContext } from '../../../../../workbench/common/contextkeys.js';
+import { IStorageService } from '../../../../../platform/storage/common/storage.js';
+import { writeNewChatDraftState } from '../../../chat/common/newChatDraftState.js';
+
+registerAction2(class CloseSessionAction extends Action2 {
+	constructor() {
+		super({
+			id: 'sessionsViewPane.closeSession', title: localize2('sessions.closeSession', 'Close Session'),
+			f1: true, precondition: IsSessionsWindowContext.isEqualTo(true),
+		});
+	}
+
+	override run(accessor: ServicesAccessor): void {
+		const sessions = accessor.get(ISessionsService);
+		const selection = sessions.activeSelection;
+		if (!selection) return;
+		sessions.closeVisibleSelection(selection);
+		if (selection.kind === 'untitled') {
+			writeNewChatDraftState(accessor.get(IStorageService), undefined, `untitled:${selection.session.untitledSessionId}`);
+		}
+	}
+});
 
 registerAction2(class ManageAutomationsAction extends Action2 {
 	constructor() {

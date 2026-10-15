@@ -1,5 +1,5 @@
 import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
-import { h } from '../../../src/ash/base/browser/dom.js';
+import { addDisposableListener, h } from '../../../src/ash/base/browser/dom.js';
 import { Lxicon } from '../../../src/ash/base/common/lxicons.js';
 import { AuxiliarybarPart } from '../../../src/ash/workbench/browser/parts/auxiliarybar/auxiliarybarPart.js';
 import { Grid } from '../../../src/ash/base/browser/ui/grid/grid.js';
@@ -65,6 +65,12 @@ import { EditorPaneMatch } from '../../../src/ash/workbench/browser/parts/editor
 import { EditorPart, IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
 import { BrowserEditorService } from '../../../src/ash/workbench/services/editor/browser/browserEditorService.js';
 import { IEditorGroupsService } from '../../../src/ash/workbench/services/editor/common/editorGroupsService.js';
+import { WorkbenchEditorContextKeysHandler } from '../../../src/ash/workbench/browser/contextkeys.js';
+import { WorkbenchKeybindingService } from '../../../src/ash/workbench/services/keybinding/browser/keybindingService.js';
+import { BrowserKeyboardLayoutService } from '../../../src/ash/workbench/services/keybinding/browser/keyboardLayoutService.js';
+import { IUserDataProfileService } from '../../../src/ash/workbench/services/userDataProfile/common/userDataProfile.js';
+import { UserDataProfileService } from '../../../src/ash/workbench/services/userDataProfile/browser/userDataProfileService.js';
+import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { Direction } from '../../../src/ash/base/browser/ui/grid/grid.js';
 import { CODE_EDITOR_ID, TextResourceEditor, type EditorPaneOptions } from '../../../src/ash/workbench/browser/parts/editor/textResourceEditor.js';
 import { IFileTextModelService, ITextModelResourceService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
@@ -72,7 +78,8 @@ import { BrowserTextModelService } from '../../../src/ash/workbench/services/tex
 import type { ITextResourceStore } from '../../../src/ash/workbench/services/textmodelResolver/common/textResourceStore.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import type { IEditorPane } from '../../../src/ash/workbench/common/editor.js';
-import { SessionGridLayout } from '../../../src/ash/sessions/browser/parts/sessions/sessionGridLayout.js';
+import '../../../src/ash/sessions/browser/parts/media/sessionsPart.css';
+import { SessionGridLayout } from '../../../src/ash/sessions/browser/parts/sessionGridLayout.js';
 import type { IView } from '../../../src/ash/base/browser/ui/grid/grid.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { IUriIdentityService } from '../../../src/ash/platform/uriIdentity/common/uriIdentity.js';
@@ -434,13 +441,21 @@ if (editorMenu) {
 	const menus = new MenuService(commands, editorServices.get(IContextKeyService));
 	const views = resources.add(new BrowserContextViewService(document.body));
 	const notifications = resources.add(new NotificationService());
-	const keybindings = { onDidUpdateKeybindings: Event.None, lookupKeybinding: () => undefined } as unknown as IKeybindingService;
+	editorServices.registerInstance(INotificationService, notifications);
+	editorServices.registerInstance(IUserDataProfileService, new UserDataProfileService());
+	const layouts = resources.add(new BrowserKeyboardLayoutService({ navigator }));
+	const keybindings = resources.add(editorServices.createInstance(WorkbenchKeybindingService, {
+		ownerDocument: document, commandService: commands, contextKeyService: editorServices.get(IContextKeyService), keyboardLayoutService: layouts,
+	}));
+	editorServices.registerInstance(IKeybindingService, keybindings);
 	editorTitleActions = { menuService: menus, contextMenuProvider: resources.add(new BrowserContextMenuService(menus, editorServices.get(IContextKeyService), keybindings, views, notifications)) };
 }
 const editor = resources.add(editorServices.createInstance(EditorPart, editorHost, { registry: editorRegistry, configurationService: editorServices.get(IConfigurationService), keybindingService: watermarkKeybindings, ...(editorMenu ? { contextKeyService: editorServices.get(IContextKeyService), titleActions: editorTitleActions } : {}) }));
 if (editorMenu) {
 	editorServices.registerInstance(IEditorPart, editor);
-	editorServices.registerInstance(IEditorGroupsService, resources.add(new BrowserEditorService(editor)));
+	const editors = resources.add(new BrowserEditorService(editor));
+	editorServices.registerInstance(IEditorGroupsService, editors);
+	resources.add(new WorkbenchEditorContextKeysHandler(editorServices.get(IContextKeyService), editors, editors));
 	window.ashEditorTitleIntegration = {
 		async split() { await editor.splitActiveGroup(Direction.Right); },
 		async open(name, preview = false) { await editor.activeGroup.openEditor({ resource: URI.file(`/menu/${name}.ts`), label: `${name}.ts`, initialText: name }, { pinned: !preview }); },
@@ -567,7 +582,7 @@ window.ashCompositeIntegration = {
 	},
 };
 
-// Exercise the same Sessions view-to-editor binding without an agent backend.
+// Exercise the conversation grid independently of editor groups and agent backends.
 const sessionHost = h(document, 'section');
 sessionHost.id = 'session-grid';
 sessionHost.style.cssText = 'position:relative;display:flex;width:1000px;height:400px';
@@ -592,19 +607,16 @@ async function showSessions(ids: readonly string[], active: string): Promise<voi
 		if (!view) {
 			const element = h(document, 'div');
 			const input = h(document, 'input');
+			element.setAttribute('role', 'region');
+			element.setAttribute('aria-label', id);
+			resources.add(addDisposableListener(element, 'focusin', () => { activeSessionId = id; }));
 			input.setAttribute('aria-label', `${id} prompt`);
 			element.append(input);
 			view = { element, minimumWidth: 100, maximumWidth: Infinity, minimumHeight: 100, maximumHeight: Infinity, layout() { } };
 			sessionViews.set(id, view);
 		}
-		return {
-			id, view, label: id,
-			activate: () => { activeSessionId = id; },
-			close: () => { void showSessions(sessionIds.filter(candidate => candidate !== id), sessionIds.find(candidate => candidate !== id)!); },
-			focus: () => view.element.querySelector('input')!.focus(),
-		};
+		return { id, view };
 	}), active);
-	await sessionGrid.whenReady();
 }
 window.ashSessionGridIntegration = {
 	show: showSessions,

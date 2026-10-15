@@ -132,15 +132,17 @@ JSON 编辑和快捷键编辑如何共享对应数据，并分别管理页面与
 ## Sessions 当前实现：调用与生命周期
 
 Sessions 窗口只有一份当前会话、可见会话和前进后退记录。
-Chat、Code 和协作入口调整周围面板，保留相同的会话与输入实例。
+Chat、Code 和协作入口调整周围面板，保留相同的会话容器及各渲染器的输入实例。
 Library、Design 通过 `IEditorService` 打开，暂时隐藏会话面板。
 
 `ISessionsManagementService` 管理会话目录、未创建会话的身份和后端操作。
 `ISessionsService` 管理窗口的选择、可见集合和导航；目录更新不会自行
-切换前台会话。`SessionsPart` 保留一个 `SessionsChatView`，每个可见会话
-各自创建 `ChatWidget`、`ChatWidgetModel` 和 `NewChatInputWidget`。
-文字、附件和本次输入操作由输入实例管理；模式、模型、思考强度与权限选择
-由该面板的 `ChatWidgetModel` 管理。
+切换前台会话。`SessionsPart` 保留一个独立的 `SessionGridLayout`，每个可见
+会话对应一个 `SessionView`，不进入文档 EditorPart 或标签生命周期。
+SessionView 按需创建并保留 Code 的 ChatWidget 或 Chat 的 CoworkWidget；
+每次只挂载当前渲染器。切换时转移未发送文字、模式和附件，并清空旧输入，
+防止切回时恢复过期草稿。输入实例管理文字、附件和本次输入操作；各自的
+WidgetModel 管理模式、模型、思考强度与权限选择。
 
 新建、选择、关闭和前进后退作用于窗口的共同选择。关闭已创建会话的面板
 不会归档后端会话；关闭未创建会话会清理其身份和草稿。
@@ -149,7 +151,8 @@ Library、Design 通过 `IEditorService` 打开，暂时隐藏会话面板。
 原来的输入，不能自动占据前台。
 
 不同使用者明确打开同一个 Thread 时，`ChatService` 按使用者保留订阅。
-最后一个使用者释放后才取消后端订阅。Chat / Code 切换保留同一个使用者。
+最后一个使用者释放后才取消后端订阅。Chat / Code 切换保留已经创建的
+WidgetModel 及其订阅，关闭 SessionView 时一起释放。
 普通 Workbench 的交接进入窗口的共同会话选择，原有独立会话草稿仍可在
 会话列表中重新打开。面板、输入实例和事件监听随窗口释放。
 

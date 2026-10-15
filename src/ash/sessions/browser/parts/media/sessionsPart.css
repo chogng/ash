@@ -1,13 +1,26 @@
+.ash-workbench-sessions {
+	min-width: 0;
+	min-height: 0;
+	background: var(--ash-editor-background);
+}
+
+.ash-workbench-sessions > .ash-workbench-part-content {
+	gap: 0;
+}
+
+.ash-workbench-sessions
+	> .ash-workbench-part-content
+	> .ash-sessions-chat-view {
+	min-height: 0;
+	flex: 1 1 auto;
+}
+
 .ash-sessions-chat-view {
 	display: flex;
 	min-width: 0;
 	min-height: 0;
 	flex: 1 1 auto;
 	overflow: hidden;
-}
-
-.ash-sessions-chat-view.hidden {
-	display: none;
 }
 
 .ash-sessions-chat-grid {
@@ -17,28 +30,9 @@
 	--ash-sash-hoverBackground: var(--ash-focusBorder);
 }
 
-.ash-sessions-chat-slot {
+.ash-sessions-chat-grid > .ash-grid {
+	width: 100%;
 	height: 100%;
-}
-
-.ash-sessions-chat-slot {
-	display: flex;
-	min-width: 0;
-	min-height: 0;
-	overflow: hidden;
-	flex-direction: column;
-	border-right: var(--ash-strokeThickness) solid var(--ash-border);
-	background: var(--ash-editor-background);
-}
-
-.ash-sessions-chat-slot.last-slot {
-	border-right: 0;
-}
-
-.ash-sessions-chat-slot > :is(.ash-chat, .ash-cowork) {
-	min-width: 0;
-	min-height: 0;
-	flex: 1 1 auto;
 }
 
 .ash-sessions-chat-view-empty {

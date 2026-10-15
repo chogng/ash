@@ -62,7 +62,7 @@ export interface ICoworkWidgetModel extends IDisposable {
 	retryFailedTurn(turnId: string): Promise<void>;
 }
 
-/** Owns the content and interaction state for one local or durable Chat tab. */
+/** Owns the content and interaction state for one local or durable conversation. */
 export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel> extends Disposable {
 	readonly element: HTMLElement;
 	readonly model: TModel;
@@ -93,7 +93,6 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 		this.element = h(ownerDocument, "div");
 		this.element.id = panelId;
 		this.element.className = "ash-cowork";
-		this.element.setAttribute("role", "tabpanel");
 		this.element.hidden = true;
 		container.append(this.element);
 		this.model = this._register(model);
@@ -215,16 +214,6 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 
 	get threadId(): ThreadId | undefined {
 		return this.model.threadId;
-	}
-
-	setTabId(tabId: string | undefined): void {
-		if (tabId) {
-			this.element.setAttribute("aria-labelledby", tabId);
-			this.element.removeAttribute("aria-label");
-		} else {
-			this.element.removeAttribute("aria-labelledby");
-			this.element.setAttribute("aria-label", "Chat");
-		}
 	}
 
 	setVisible(visible: boolean): void {
