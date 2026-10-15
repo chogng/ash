@@ -45,6 +45,8 @@ import { AdvisorSettingsContent } from '../../chat/browser/advisorSettingsConten
 import { ModelSettingsContent } from '../../chat/browser/modelSettingsContent.js';
 import { DictationSettingsContent } from '../../chat/browser/speechToText/dictationSettingsContent.js';
 import { AgentCapabilitiesSettings } from './agentCapabilitiesSettings.js';
+import { SandboxSettingsModel } from './sandboxSettingsModel.js';
+import { IAgentExecutionSettingsService } from '../../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { SettingsSearchQuery } from './settingsSearch.js';
 import { SettingsSearchWidget } from './settingsWidgets.js';
 import { createSettingsLayout, settingsRootNodes, SettingsCategories, SettingsNavigation, type SettingsLayoutCategory, type SettingsNavigationDescriptor, type SettingsCategoryDescriptor, type SettingsCategoryGroupDescriptor } from './settingsLayout.js';
@@ -95,6 +97,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		@ILanguagePackService private readonly languagePackService: ILanguagePackService,
 		@IAgentCapabilitiesService private readonly agentCapabilitiesService: IAgentCapabilitiesService,
 		@IAppServerRemoteAgentService private readonly remoteAgentService: IAppServerRemoteAgentService,
+		@IAgentExecutionSettingsService private readonly executionSettings: IAgentExecutionSettingsService,
 		@IWorkspaceTrustApi private readonly workspaceTrust: IWorkspaceTrustApi,
 		@IPreferencesService private readonly preferencesService: IPreferencesService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
@@ -205,7 +208,9 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		this.activeCategory = initialCategory;
 		const githubSettings = this._register(this.instantiationService.createInstance(GitHubSettingsModel, async () => { await this.instantiationService.invokeFunction(accessor => accessor.get(ICommandService).executeCommand(CLOSE_EDITOR_COMMAND_ID)); }));
 		const traceSettings = this._register(this.instantiationService.createInstance(TraceSettingsModel));
+		const sandboxSettings = this._register(this.instantiationService.createInstance(SandboxSettingsModel));
 		this.contents.push(
+			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, sandboxSettings, AccessibleViewProviderId.SandboxSettings, AccessibilityVerbositySettingId.SandboxSettings)),
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, traceSettings, AccessibleViewProviderId.TraceSettings, AccessibilityVerbositySettingId.TraceSettings)),
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, githubSettings, AccessibleViewProviderId.GitHubSettings, AccessibilityVerbositySettingId.GitHubSettings)),
 			this._register(this.instantiationService.createInstance(NetworkSettingsContent, settingsContent)),
@@ -247,7 +252,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 			updateItem: item => { if (!('domNode' in item.value)) settingsRenderer.update(item.value); },
 			disposeItem: item => { if (!('domNode' in item.value)) settingsRenderer.disposeSetting(item.id); },
 		}));
-		this.agentCapabilitiesSettings = this._register(new AgentCapabilitiesSettings(settingsContent, this.agentCapabilitiesService, this.remoteAgentService, this.workspaceTrust, this.localizationService));
+		this.agentCapabilitiesSettings = this._register(new AgentCapabilitiesSettings(settingsContent, this.agentCapabilitiesService, this.remoteAgentService, this.workspaceTrust, this.localizationService, this.executionSettings));
 		this.renderCategory(initialCategory);
 		this._register(configurationRegistry.onDidUpdateConfiguration(({ properties }) => {
 			// Remove changed schemas first so keyed controls release their old value bindings.

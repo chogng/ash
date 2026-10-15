@@ -5,6 +5,8 @@ import type { AgentCapabilitiesSnapshot, IAgentCapabilitiesService } from '../..
 import { workspaceTrustPermissionNames, type WorkspaceTrustEntry, type IWorkspaceTrustApi } from '../../../../platform/workspace/common/workspaceTrust.js';
 import type { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import type { IAppServerRemoteAgentService } from '../../../services/remote/common/appServerRemoteAgentService.js';
+import type { IAgentExecutionSettingsService } from '../../../../platform/agentHost/common/agentExecutionSettingsService.js';
+import type { LocalizationParameters } from '../../../../nls.js';
 
 type View = 'sandbox';
 
@@ -24,6 +26,7 @@ export class AgentCapabilitiesSettings extends Disposable {
 		remoteAgentService: IAppServerRemoteAgentService,
 		private readonly workspaceTrust: IWorkspaceTrustApi,
 		private readonly localization: ILocalizationService,
+		execution?: IAgentExecutionSettingsService,
 	) {
 		super();
 		const document = container.ownerDocument;
@@ -46,6 +49,10 @@ export class AgentCapabilitiesSettings extends Disposable {
 		this._register(this.workspaceTrust.onDidChangeTrust(() => {
 			if (this.view === 'sandbox') void this.refresh();
 		}));
+		this._register(this.capabilities.onDidChange(() => {
+			if (this.view === 'sandbox') void this.refresh();
+		}));
+		if (execution) this._register(execution.onDidChange(() => { if (this.view === 'sandbox') void this.refresh(); }));
 		this._register(remoteAgentService.onDidChangeConnectionState(state => {
 			if (state === 'connected' && this.view) void this.refresh();
 			if (state !== 'connected') {
@@ -90,12 +97,21 @@ export class AgentCapabilitiesSettings extends Disposable {
 	}
 
 	private renderSandbox(catalog: AgentCapabilitiesSnapshot): void {
+		const policy = catalog.sandboxPolicy;
+		if (policy) {
+			const files = policy.fileSystem === 'readOnly' ? this.label('sandbox.files.readOnly', 'Read only') : policy.fileSystem === 'directoryWrite' ? this.label('sandbox.files.directoryWrite', 'Write in authorized directories') : this.label('sandbox.files.fullAccess', 'Full access');
+			const network = this.label(`capabilities.sandbox.network.${policy.network}`, policy.network === 'denied' ? 'Network denied' : policy.network === 'managed' ? 'Managed network' : 'Network allowed');
+			this.addNote(this.label('sandbox.effective', 'Current backend command policy: {0}; files: {1}; network: {2}.', { 0: policy.profile, 1: files, 2: network }));
+			this.addNote(policy.hostRead === 'host' ? this.label('sandbox.hostRead.host', 'Host files are readable, subject to path restrictions.') : this.label('sandbox.hostRead.grantedRoots', 'Host reads are limited to granted roots and required tooling.'));
+			if (policy.managedConstraints) this.addNote(this.label('sandbox.managed', 'Managed host constraints are applied to this policy.'));
+			if (policy.pathRuleCount) this.addNote(this.label('sandbox.pathRules', 'Resolved path rules: {0}.', { 0: policy.pathRuleCount }));
+		}
 		this.addNote(this.label('capabilities.sandbox.note', 'The process sandbox is selected for each command. Its policy controls filesystem writes, visible directories, and network access; the backend can reject a request before launch.'));
 		this.addNote(catalog.localProcessSandboxConfigured
 			? `${this.label('capabilities.sandbox.backends', 'Configured backend candidates:')} ${catalog.sandboxBackends.join(', ')}`
 			: this.label('capabilities.sandbox.unavailable', 'Local process execution is not configured in this environment.'));
 		if (catalog.sandboxDiagnostics.length) {
-			this.addNote(this.label('capabilities.sandbox.preflight', 'Read-only process preparation checks for the current directory. Each command and terminal is checked again before launch.'));
+			this.addNote(this.label('sandbox.preflight', 'Process preparation checks use the current file policy and isolation model, with each network mode checked separately. No command is launched. Workbench terminals use a separate execution path.'));
 			const networkLabels = {
 				denied: this.label('capabilities.sandbox.network.denied', 'Network denied'),
 				allowed: this.label('capabilities.sandbox.network.allowed', 'Network allowed'),
@@ -148,7 +164,7 @@ export class AgentCapabilitiesSettings extends Disposable {
 		this.content.append(note);
 	}
 
-	private label(key: string, fallback: string): string {
-		return this.localization.translate('ash.settings', key, fallback);
+	private label(key: string, fallback: string, parameters?: LocalizationParameters): string {
+		return this.localization.translate('ash.settings', key, fallback, parameters);
 	}
 }

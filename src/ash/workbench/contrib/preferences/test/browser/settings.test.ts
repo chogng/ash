@@ -190,20 +190,62 @@ test('Sandbox diagnostics render Chinese readiness and preserve backend reasons 
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	const root = h(browserEnvironment.window.document, 'div');
 	using panel = new AgentCapabilitiesSettings(root, {
-		isAvailable: true,
+		isAvailable: true, onDidChange: Event.None,
 		read: async () => ({
 			localProcessSandboxConfigured: true, sandboxBackends: ['mxc'], directoryGrantsReadable: false,
+			sandboxPolicy: { profile: '<profile>', fileSystem: 'readOnly', network: 'managed', hostRead: 'grantedRoots', managedConstraints: true, pathRuleCount: 2 },
 			sandboxDiagnostics: [{ backend: 'mxc', network: 'managed', readiness: { type: 'unsupported', reason: '<script>diagnostic</script>' } }]
 		}),
 	}, { onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService,
 		{ onDidChangeTrust: Event.None } as IWorkspaceTrustApi, {
-		whenReady: Promise.resolve(), translate: (bundle, key, fallback) => chinese.bundles[bundle]?.[key] ?? fallback,
+		whenReady: Promise.resolve(), translate: (bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
 	});
 	panel.setView('sandbox');
 	await nextTurn();
 	assert.match(root.textContent ?? '', /mxc · 受管网络 · 不支持此策略: <script>diagnostic<\/script>/);
-	assert.match(root.textContent ?? '', /只读进程准备检查/);
+	assert.match(root.textContent ?? '', /当前文件策略和隔离模型/);
+	assert.match(root.textContent ?? '', /当前后端命令策略：<profile>；文件：只读/);
+	assert.match(root.textContent ?? '', /管理员宿主约束/);
 	assert.equal(root.querySelector('script'), null);
+});
+
+test('Sandbox diagnostics refresh after runtime installation and stop reading when hidden or disposed', async () => {
+	const { AgentCapabilitiesSettings } = await import('../../browser/agentCapabilitiesSettings.js');
+	using changed = new Emitter<void>();
+	let installed = false;
+	let reads = 0;
+	const root = h(browserEnvironment.window.document, 'div');
+	const panel = new AgentCapabilitiesSettings(root, {
+		isAvailable: true, onDidChange: changed.event,
+		read: async () => {
+			reads++;
+			return {
+				localProcessSandboxConfigured: true, sandboxBackends: [], directoryGrantsReadable: false, sandboxDiagnostics: [],
+				sandboxPolicy: { profile: 'command-defaults', fileSystem: installed ? 'readOnly' : 'directoryWrite', network: 'denied', hostRead: 'host', managedConstraints: false, pathRuleCount: 0 },
+			};
+		},
+	}, { onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService,
+		{ onDidChangeTrust: Event.None } as IWorkspaceTrustApi, {
+		whenReady: Promise.resolve(), translate: (_bundle, _key, fallback, parameters) => formatNlsMessage(fallback, parameters),
+	});
+	try {
+		panel.setView('sandbox');
+		await nextTurn();
+		assert.match(root.textContent ?? '', /files: Write in authorized directories/);
+		installed = true;
+		changed.fire();
+		await nextTurn();
+		assert.match(root.textContent ?? '', /files: Read only/);
+		panel.setView(undefined);
+		const before = reads;
+		changed.fire();
+		await nextTurn();
+		assert.equal(reads, before);
+		panel.dispose();
+		changed.fire();
+		await nextTurn();
+		assert.equal(reads, before);
+	} finally { panel.dispose(); }
 });
 
 test('developer command opens a grouped read-only tool snapshot outside ordinary settings', async () => {
@@ -1429,7 +1471,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.throws(() => descriptor.create({ instantiationService: services }), /Unknown service: agentCapabilitiesService/);
 	let capabilityReads = 0;
 	services.registerInstance(IAgentCapabilitiesService, {
-		isAvailable: true,
+		isAvailable: true, onDidChange: Event.None,
 		read: async () => {
 			capabilityReads++;
 			return {

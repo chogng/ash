@@ -68,6 +68,91 @@ struct RecordingExecutor {
     content: Vec<ToolContent>,
 }
 
+/// Exercises the production reviewer and executor adapter without launching a host process.
+pub(crate) fn assert_managed_sandbox_execution(
+    definition: ToolDefinition,
+    reviewer: Arc<dyn ToolExecutorReviewer>,
+) {
+    struct CeilingExecutor(ToolDefinition, Arc<AtomicBool>);
+    impl ToolExecutor for CeilingExecutor {
+        fn definition(&self) -> ToolDefinition {
+            self.0.clone()
+        }
+
+        fn execute(&self, invocation: ash_tools::ToolInvocation) -> ToolExecutionFuture<'_> {
+            let context = invocation.context();
+            let ash_tools::ToolRuntimeAuthority::Sandboxed(policy) = context.authority() else {
+                panic!("administrator ceiling was bypassed at the executor boundary");
+            };
+            assert_eq!(
+                policy.file_system(),
+                ash_sandboxing::FileSystemAccess::ReadOnly
+            );
+            assert_eq!(policy.network(), ash_sandboxing::NetworkAccess::Denied);
+            let scope = context.sandbox_scope().unwrap();
+            assert!(scope.policy_ceiling().is_some());
+            assert_eq!(scope.host_read(), ash_sandboxing::HostReadScope::Minimal);
+            assert!(
+                scope
+                    .grants()
+                    .iter()
+                    .all(|grant| grant.access() == ash_sandboxing::SandboxDirAccess::ReadOnly)
+            );
+            self.1.store(true, Ordering::SeqCst);
+            Box::pin(future::ready(ToolExecutionOutcome::Returned(
+                ToolOutput::success(vec![]),
+            )))
+        }
+    }
+    let binding = ToolBinding::new(
+        ToolRegistryGeneration::new(1),
+        ToolBindingId::new("managed-shell").unwrap(),
+        definition.name().clone(),
+        definition.digest(),
+        ToolRuntimeKey::new("managed-shell").unwrap(),
+    );
+    let observed = Arc::new(AtomicBool::new(false));
+    let runtime = ToolExecutorRuntime::new(
+        Arc::new(CeilingExecutor(definition.clone(), observed.clone())),
+        EnvId::local(),
+        reviewer,
+    );
+    for (index, authorization) in [
+        ToolAuthorization::Sandboxed(ash_sandboxing::SandboxPolicy::new(
+            ash_sandboxing::FileSystemAccess::FullAccess,
+            ash_sandboxing::NetworkAccess::Allowed,
+        )),
+        ToolAuthorization::UnsandboxedGrant {
+            grant_id: GrantId::new("approved-shell"),
+        },
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        observed.store(false, Ordering::SeqCst);
+        let call = ToolCall {
+            id: ToolCallId::new(format!("managed-shell-{index}")).unwrap(),
+            name: definition.name().clone(),
+            arguments: serde_json::json!({"program":std::env::current_exe().unwrap(), "arguments":[], "working_directory":"."}),
+        };
+        runtime.prepare(&call).unwrap();
+        runtime
+            .execute_for_turn(
+                &binding,
+                &call,
+                &authorization,
+                &CancellationSource::new().token(),
+                &ash_protocol::SessionId::new("managed-session").unwrap(),
+                &ash_protocol::ThreadId::new("managed-thread").unwrap(),
+                &TurnId::new("managed-turn").unwrap(),
+                None,
+                &mut RecordingSink::default(),
+            )
+            .unwrap();
+        assert!(observed.load(Ordering::SeqCst));
+    }
+}
+
 impl ToolExecutor for RecordingExecutor {
     fn definition(&self) -> ToolDefinition {
         self.definition.clone()

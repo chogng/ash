@@ -114,10 +114,32 @@ pub struct AgentCapabilitiesReadResult {
     pub local_process_sandbox_configured: bool,
     pub sandbox_backends: Vec<String>,
     pub sandbox_diagnostics: Vec<SandboxDiagnosticDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub sandbox_policy: Option<SandboxPolicyDto>,
     pub directory_grants_readable: bool,
 }
 
-/// Current read-only preparation checks. Every real command is still checked before launch.
+/// Resolved command policy after profile selection and mandatory host constraints.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SandboxPolicyDto {
+    pub profile: String,
+    pub file_system: ash_protocol::SandboxMode,
+    pub network: SandboxNetworkModeDto,
+    pub host_read: SandboxHostReadDto,
+    pub managed_constraints: bool,
+    pub path_rule_count: u32,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum SandboxHostReadDto {
+    Host,
+    GrantedRoots,
+}
+
+/// Preparation under the current filesystem policy. Every command is checked again before launch.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SandboxDiagnosticDto {

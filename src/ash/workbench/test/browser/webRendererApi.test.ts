@@ -131,15 +131,20 @@ test('Renderer host separates the tool transport from sandbox and connection dia
 	const connected = await connectWebRendererApi(transport, connectorHostServices);
 	using cleanup = toDisposable(() => connected.dispose());
 	let changes = 0;
+	let diagnosticChanges = 0;
 	using subscriptions = new DisposableStore();
 	connected.api.agentTools.onDidChangeTools(() => changes++, undefined, subscriptions);
+	connected.api.agentCapabilities.onDidChange(() => diagnosticChanges++, undefined, subscriptions);
 	transport.emitNotification({ method: 'config/changed', params: { revision: 2, generation: 2 } });
 	assert.equal(changes, 0, 'Configuration events precede catalog reconciliation');
+	assert.equal(diagnosticChanges, 0);
 	transport.emitNotification({ method: 'agent/tools/changed', params: {} });
 	assert.equal(changes, 1);
+	assert.equal(diagnosticChanges, 1);
 	subscriptions.dispose();
 	transport.emitNotification({ method: 'agent/tools/changed', params: {} });
 	assert.equal(changes, 1);
+	assert.equal(diagnosticChanges, 1);
 	const tools = [{ name: 'read_file', description: 'Read a file', source: 'local', sourceChain: [{ type: 'product', component: 'directory' }], exposure: 'direct', authority: 'directoryRead', category: undefined }];
 	const toolSets = [{ id: 'directory', source: 'local', sourceId: 'directory', tools: ['read_file'] }];
 	const environment = {

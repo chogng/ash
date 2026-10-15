@@ -184,6 +184,52 @@ impl LocalToolConfig {
         self.permissions.active(self.execution)
     }
 
+    /// Resolves the same profile, managed ceilings and process authority used by local tools.
+    pub(crate) fn sandbox_configuration(
+        &self,
+    ) -> Result<(ash_config::ResolvedPermissionProfile, SandboxPolicy), LocalToolError> {
+        let requirements = self
+            .requirements
+            .as_ref()
+            .map_err(|error| LocalToolError::policy(error.clone()))?;
+        let profile = requirements
+            .values
+            .constrain(
+                self.permissions
+                    .active(self.execution)
+                    .map_err(LocalToolError::policy)?,
+            )
+            .map_err(LocalToolError::policy)?;
+        let exec_policy = self.snapshot()?;
+        let mut execution = self.execution;
+        execution.command_file_access = match profile.file_system {
+            ash_protocol::SandboxMode::ReadOnly => ash_config::CommandFileAccess::ReadOnly,
+            ash_protocol::SandboxMode::DirectoryWrite | ash_protocol::SandboxMode::FullAccess => {
+                ash_config::CommandFileAccess::DirectoryWrite
+            }
+        };
+        execution.command_network_access = profile.network;
+        let configured = configured_shell_policy(&exec_policy, execution);
+        let shell_policy = SandboxPolicy::new(
+            match profile.file_system {
+                ash_protocol::SandboxMode::ReadOnly => FileSystemAccess::ReadOnly,
+                ash_protocol::SandboxMode::DirectoryWrite => FileSystemAccess::DirectoryWrite,
+                ash_protocol::SandboxMode::FullAccess => FileSystemAccess::FullAccess,
+            },
+            if (profile.scope == ash_config::PermissionProfileScope::AllOperations
+                || requirements.values.maximum_network.is_some())
+                && profile.network == ash_config::CommandNetworkAccess::Denied
+            {
+                NetworkAccess::Denied
+            } else {
+                configured.network()
+            },
+        )
+        .with_host_acl_changes(local_acl_changes())
+        .with_file_system_isolation(local_isolation());
+        Ok((profile, shell_policy))
+    }
+
     pub(crate) fn common_policy_snapshot(
         &self,
         user: Option<&UserExecPolicyConfig>,
@@ -241,15 +287,7 @@ pub(crate) fn compose_local_tools_with_config(
         .requirements
         .as_ref()
         .map_err(|error| LocalToolError::policy(error.clone()))?;
-    let profile = requirements
-        .values
-        .constrain(
-            config
-                .permissions
-                .active(config.execution)
-                .map_err(LocalToolError::policy)?,
-        )
-        .map_err(LocalToolError::policy)?;
+    let (profile, shell_policy) = config.sandbox_configuration()?;
     let mut path_policy = profile.path_policy().map_err(LocalToolError::policy)?;
     if requirements.values.maximum_file_system == Some(ash_protocol::SandboxMode::ReadOnly) {
         path_policy = path_policy.intersect(
@@ -272,32 +310,6 @@ pub(crate) fn compose_local_tools_with_config(
     let ripgrep = resolve_ripgrep(&install_context).map_err(LocalToolError::ripgrep)?;
     let environment_id = ash_tools::EnvId::local();
     let exec_policy = config.snapshot()?;
-    let mut execution = config.execution;
-    execution.command_file_access = match profile.file_system {
-        ash_protocol::SandboxMode::ReadOnly => ash_config::CommandFileAccess::ReadOnly,
-        ash_protocol::SandboxMode::DirectoryWrite | ash_protocol::SandboxMode::FullAccess => {
-            ash_config::CommandFileAccess::DirectoryWrite
-        }
-    };
-    execution.command_network_access = profile.network;
-    let configured = configured_shell_policy(&exec_policy, execution);
-    let shell_policy = SandboxPolicy::new(
-        match profile.file_system {
-            ash_protocol::SandboxMode::ReadOnly => FileSystemAccess::ReadOnly,
-            ash_protocol::SandboxMode::DirectoryWrite => FileSystemAccess::DirectoryWrite,
-            ash_protocol::SandboxMode::FullAccess => FileSystemAccess::FullAccess,
-        },
-        if (profile.scope == ash_config::PermissionProfileScope::AllOperations
-            || requirements.values.maximum_network.is_some())
-            && profile.network == ash_config::CommandNetworkAccess::Denied
-        {
-            NetworkAccess::Denied
-        } else {
-            configured.network()
-        },
-    )
-    .with_host_acl_changes(local_acl_changes())
-    .with_file_system_isolation(local_isolation());
     let profile_policy = (config.permissions.default_profile.is_some()
         || requirements.values.has_execution_ceiling())
     .then_some(shell_policy);
@@ -1835,7 +1847,7 @@ fn local_isolation() -> ash_sandboxing::FileSystemIsolation {
 const LOCAL_DENIED_NAME: &str = ".env";
 const LOCAL_DENIED_GLOBS: &[&str] = &["**/.env"];
 
-fn local_sandbox_scope(
+pub(crate) fn local_sandbox_scope(
     authorization: &Authorization,
     ceiling: Option<SandboxPolicy>,
 ) -> Result<SandboxScope, CoreError> {

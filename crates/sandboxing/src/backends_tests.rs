@@ -29,6 +29,7 @@ struct Candidate {
     only: Option<&'static str>,
     prepares: Arc<AtomicUsize>,
     starts: Arc<AtomicUsize>,
+    policies: Arc<std::sync::Mutex<Vec<SandboxPolicy>>>,
 }
 
 impl Candidate {
@@ -39,6 +40,7 @@ impl Candidate {
             only: None,
             prepares: Arc::new(AtomicUsize::new(0)),
             starts: Arc::new(AtomicUsize::new(0)),
+            policies: Arc::new(std::sync::Mutex::new(Vec::new())),
         }
     }
 }
@@ -50,10 +52,11 @@ impl SandboxBackend for Candidate {
     fn prepare(
         &self,
         command: &SandboxCommand,
-        _: SandboxPolicy,
+        policy: SandboxPolicy,
         _: &Dir,
     ) -> Result<PreparedCommand, SandboxError> {
         self.prepares.fetch_add(1, Ordering::SeqCst);
+        self.policies.lock().unwrap().push(policy);
         assert!(command.working_directory().is_absolute());
         if self
             .only
@@ -130,6 +133,10 @@ fn policy() -> SandboxPolicy {
 fn diagnostics_report_each_policy_and_candidate_without_starting_a_child() {
     let ready = Candidate::new("ready", Behavior::Ready);
     let starts = Arc::clone(&ready.starts);
+    let policies = Arc::clone(&ready.policies);
+    let policy = SandboxPolicy::new(FileSystemAccess::DirectoryWrite, NetworkAccess::Denied)
+        .with_file_system_isolation(crate::FileSystemIsolation::WindowsAccount)
+        .with_host_acl_changes(crate::HostAclChanges::ScopedWithTraversal);
     let backends = SandboxBackends::new(vec![
         ("ready", Arc::new(ready)),
         (
@@ -144,6 +151,7 @@ fn diagnostics_report_each_policy_and_candidate_without_starting_a_child() {
     let dir = Dir::open_local(".").unwrap();
     let diagnostics = backends.diagnostics(
         &SandboxCommand::new("command", Vec::<String>::new(), dir.canonical_path()),
+        policy,
         &SandboxScope::single(dir),
     );
     assert_eq!(diagnostics.len(), 9);
@@ -162,6 +170,16 @@ fn diagnostics_report_each_policy_and_candidate_without_starting_a_child() {
     assert!(diagnostics[3..6].iter().all(|check| matches!(&check.readiness, SandboxReadiness::Unsupported(reason) if reason == "unsupported")));
     assert!(diagnostics[6..].iter().all(|check| matches!(&check.readiness, SandboxReadiness::Unavailable(reason) if reason.contains("integrity"))));
     assert_eq!(starts.load(Ordering::SeqCst), 0);
+    let policies = policies.lock().unwrap();
+    assert_eq!(policies.len(), 3);
+    for actual in policies.iter() {
+        assert_eq!(actual.file_system(), policy.file_system());
+        assert_eq!(
+            actual.file_system_isolation(),
+            policy.file_system_isolation()
+        );
+        assert_eq!(actual.host_acl_changes(), policy.host_acl_changes());
+    }
 }
 fn manager(candidates: Vec<Candidate>) -> SandboxManager<SandboxBackends> {
     SandboxManager::new(
@@ -178,6 +196,29 @@ fn manager(candidates: Vec<Candidate>) -> SandboxManager<SandboxBackends> {
                 .collect(),
         ),
     )
+}
+
+#[test]
+fn diagnostics_accept_unrestricted_preparation_only_for_full_access_and_allowed_network() {
+    let backends = SandboxBackends::new(vec![(
+        "plain",
+        Arc::new(Candidate::new("plain", Behavior::Unrestricted)),
+    )]);
+    let dir = Dir::open_local(".").unwrap();
+    let diagnostics = backends.diagnostics(
+        &SandboxCommand::new("command", Vec::<String>::new(), dir.canonical_path()),
+        SandboxPolicy::new(FileSystemAccess::FullAccess, NetworkAccess::Allowed),
+        &SandboxScope::single(dir),
+    );
+    assert!(matches!(
+        diagnostics[0].readiness,
+        SandboxReadiness::Unavailable(_)
+    ));
+    assert_eq!(diagnostics[1].readiness, SandboxReadiness::Ready);
+    assert!(matches!(
+        diagnostics[2].readiness,
+        SandboxReadiness::Unavailable(_)
+    ));
 }
 
 #[test]

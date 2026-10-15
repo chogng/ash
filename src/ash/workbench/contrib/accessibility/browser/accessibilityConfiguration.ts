@@ -7,6 +7,19 @@ import { RawContextKey } from '../../../../platform/contextkey/common/contextkey
 import { AccessibilitySignal } from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.SandboxSettings, defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError(localize({ bundle: 'ash.settings', key: 'sandbox.verbosityInvalid' }, 'Sandbox accessibility verbosity must be boolean.'));
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize({ bundle: 'ash.settings', key: 'sandbox.verbosityTitle' }, 'Sandbox settings accessibility help'); },
+		get description() { return localize({ bundle: 'ash.settings', key: 'sandbox.verbosityDescription' }, 'Announce how to open accessibility help for sandbox settings.'); },
+	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.Terminal,
 	defaultValue: true,
 	parse(value: unknown): boolean {

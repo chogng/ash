@@ -247,7 +247,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	using githubReview = services.createInstance(GitHubReviewModel);
 	services.registerInstance(IGitHubReviewModel, githubReview);
 	services.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
-	services.registerInstance(IAgentCapabilitiesService, { isAvailable: true, read: async () => ({ localProcessSandboxConfigured: false, sandboxBackends: [], directoryGrantsReadable: false, sandboxDiagnostics: [] }) });
+	services.registerInstance(IAgentCapabilitiesService, { isAvailable: true, onDidChange: Event.None, read: async () => ({ localProcessSandboxConfigured: false, sandboxBackends: [], directoryGrantsReadable: false, sandboxDiagnostics: [] }) });
 	services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService({ isAvailable: true, read: async () => ({ sourceGroups: [], tools: [{ name: 'read_file', description: 'Read authorized files', source: 'local', sourceDetails: ['Ash'], exposure: 'direct', authority: 'directoryRead' }] }) }));
 	services.registerInstance(IWorkspaceTrustApi, { onDidChangeTrust: Event.None } as import('../../../platform/workspace/common/workspaceTrust.js').IWorkspaceTrustApi);
 	let editorReveals = 0;

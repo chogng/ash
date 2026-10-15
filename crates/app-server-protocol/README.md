@@ -7,7 +7,8 @@
   `environmentId` 指明所属环境，`dirId` 指明目录身份。URI 本身不提供文件访问权限。
 - Rust DTO 与方法注册表是唯一协议来源；修改后从仓库根运行 `just generate-protocol`；JSON Schema、TypeScript 方法映射、运行时解码器和 metadata 写入 Git 忽略的 `.build/protocol/`，只提交 Rust 定义及消费方改动。
 
-`agent/capabilities/read.sandboxDiagnostics` 返回当前目录只读进程的后端准备状态，分别检查 denied、allowed、managed 网络策略；
+`agent/capabilities/read.sandboxPolicy` 返回已安装的命令权限配置档、文件和网络策略、宿主读取范围、管理员约束标记及路径规则数，不代表某次执行已获授权。`config/changed` 表示配置已保存；工具或有效权限策略安装后通过 `agent/tools/changed` 使能力诊断失效，即使工具列表没有变化，客户端也应重新读取。
+`sandboxDiagnostics` 复用本地工具的策略解析与目录范围，保留文件隔离模型及 ACL 授权，分别检查 denied、allowed、managed 网络策略；
 `ready` 只表示准备通过，`unsupported` 和 `unavailable` 携带原因，不保证命令或 PTY 启动成功。
 浏览器宿主能力版本 3 的 `browser/create`、`browser/observe`、`browser/perform` 可携带工具调用的 `networkToken`。
 宿主通过 `browser/network/authorize` 提交 token、URL 和 HTTP 方法，结果为 `allowed`；token 绑定发起连接，在工具结束、取消或断线后失效。

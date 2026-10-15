@@ -490,7 +490,7 @@ export const SettingsNavigation = [
 			{
 				id: 'sandbox',
 				label: localize({ bundle: 'ash.settings', key: 'categories.sandbox.label' }, 'Sandbox'),
-				description: localize({ bundle: 'ash.settings', key: 'categories.sandbox.description' }, 'Inspect process isolation and configured directory grants.'),
+				description: localize({ bundle: 'ash.settings', key: 'categories.sandbox.description' }, 'Configure Agent command access and inspect effective isolation and directory grants.'),
 				keywords: ['isolation', 'directory grants', 'permissions'],
 				presentation: 'general',
 				groups: [],

@@ -356,6 +356,9 @@ impl ToolExecutorRuntime {
 #[path = "tool_executor_adapter_tests.rs"]
 mod tests;
 
+#[cfg(test)]
+pub(crate) use tests::assert_managed_sandbox_execution;
+
 #[cfg(all(test, unix))]
 pub(crate) use tests::prepared_shell_parts;
 

@@ -265,6 +265,12 @@ impl EnvRuntimeControl {
             .lock()
             .map_err(|_| EnvRuntimeError::Failed("Environment runtime gate poisoned".into()))?;
         let env_config = EnvRuntimeConfig::from_resolved(config);
+        let tool_policy_changed = self
+            .env_config
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .tools
+            != env_config.tools;
         let (
             authorization,
             codebase,
@@ -358,6 +364,12 @@ impl EnvRuntimeControl {
             .env_config
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = env_config;
+        // Permission changes can leave the catalog identical. Publish after both the
+        // executors and their effective configuration are installed, so diagnostics
+        // do not remain on a snapshot read before asynchronous reconciliation.
+        if tool_policy_changed {
+            self.tools.updates.publish_agent_tools_changed();
+        }
         Ok(())
     }
 

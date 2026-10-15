@@ -529,17 +529,48 @@ impl AppServer {
         #[cfg(not(windows))]
         let candidates = vec!["mxc".to_owned()];
         let sandbox_backends = if configured { candidates } else { Vec::new() };
-        let dir = self
+        let configuration = if configured {
+            let config = self
+                .env_config
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let (profile, policy) = config
+                .tools
+                .sandbox_configuration()
+                .map_err(|error| core_error(core_api::CoreError::Policy(error.to_string())))?;
+            let managed = config
+                .tools
+                .requirements
+                .as_ref()
+                .map_err(|error| core_error(core_api::CoreError::Policy(error.to_string())))?
+                .values
+                .has_execution_ceiling();
+            Some((profile, policy, managed))
+        } else {
+            None
+        };
+        let grant = self
             .env_runtime
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .selected_grant
-            .as_ref()
-            .map(|grant| grant.dir().clone());
-        let sandbox_diagnostics = if let Some(dir) = dir.filter(|_| configured) {
+            .clone();
+        let sandbox_diagnostics = if let Some((grant, (profile, policy, _))) =
+            grant.zip(configuration.as_ref())
+        {
             use ash_app_server_protocol::protocol::agent::SandboxDiagnosticDto;
             use ash_app_server_protocol::protocol::agent::SandboxNetworkModeDto;
             use ash_app_server_protocol::protocol::agent::SandboxReadinessDto;
+            let grant = grant.with_path_policy(
+                profile
+                    .path_policy()
+                    .map_err(|error| core_error(core_api::CoreError::Policy(error.to_string())))?,
+            );
+            let authorization = grant
+                .authorize(ash_file_access::Permission::ExecuteCommands)
+                .map_err(|error| core_error(core_api::CoreError::Policy(error.to_string())))?;
+            let scope = crate::local_tools::local_sandbox_scope(&authorization, None)
+                .map_err(core_error)?;
             let executable = std::env::current_exe()
                 .map_err(|_| RpcError::new(-32603, AppServerErrorName::InternalError))?;
             let mut sandbox =
@@ -550,11 +581,11 @@ impl AppServer {
             let command = ash_sandboxing::SandboxCommand::new(
                 executable,
                 Vec::<String>::new(),
-                dir.canonical_path(),
+                authorization.dir().canonical_path(),
             );
             sandbox
                 .build()
-                .diagnostics(&command, &ash_sandboxing::SandboxScope::single(dir))
+                .diagnostics(&command, *policy, &scope)
                 .into_iter()
                 .map(|diagnostic| SandboxDiagnosticDto {
                     backend: diagnostic.backend,
@@ -622,6 +653,27 @@ impl AppServer {
             local_process_sandbox_configured: configured,
             sandbox_backends,
             sandbox_diagnostics,
+            sandbox_policy: configuration.map(|(profile, policy, managed)| {
+                use ash_app_server_protocol::protocol::agent::SandboxHostReadDto;
+                use ash_app_server_protocol::protocol::agent::SandboxNetworkModeDto;
+                ash_app_server_protocol::protocol::agent::SandboxPolicyDto {
+                    profile: profile.name,
+                    file_system: profile.file_system,
+                    network: match policy.network() {
+                        ash_sandboxing::NetworkAccess::Denied => SandboxNetworkModeDto::Denied,
+                        ash_sandboxing::NetworkAccess::Allowed => SandboxNetworkModeDto::Allowed,
+                        ash_sandboxing::NetworkAccess::Managed => SandboxNetworkModeDto::Managed,
+                    },
+                    host_read: match profile.host_read {
+                        ash_config::HostReadAccess::Host => SandboxHostReadDto::Host,
+                        ash_config::HostReadAccess::GrantedRoots => {
+                            SandboxHostReadDto::GrantedRoots
+                        }
+                    },
+                    managed_constraints: managed,
+                    path_rule_count: profile.paths.len() as u32,
+                }
+            }),
             directory_grants_readable: connection.supports_directory_grants_host(),
         })
     }

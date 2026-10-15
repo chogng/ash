@@ -35,7 +35,7 @@ test('execution settings preserve an unsaved default while saving an aliased dir
 		setDirectoryPermissions: async (_path, granted, revision) => { assert.equal(revision, 1); permissions = granted; return { revision: 2, generation: 2, disposition: 'updated' }; },
 		forgetDirectory: async dir => { assert.equal(dir, 'same-directory'); forgotten = true; return { revision: 3, generation: 3, disposition: 'updated' }; },
 	};
-	const capabilities: IAgentCapabilitiesService = { isAvailable: true, read: async () => ({ directoryGrantsReadable: true, sandboxBackends: [], sandboxDiagnostics: [], localProcessSandboxConfigured: true }) };
+	const capabilities: IAgentCapabilitiesService = { isAvailable: true, onDidChange: Event.None, read: async () => ({ directoryGrantsReadable: true, sandboxBackends: [], sandboxDiagnostics: [], localProcessSandboxConfigured: true }) };
 	const remote = { connectionState: 'connected', onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService;
 	using model = new ExecutionSettingsModel(execution, directories, capabilities, remote, {} as IDialogService, { translate: (_bundle, _key, fallback) => fallback } as ILocalizationService);
 	const initialized = ready(model); model.setVisible(true); await initialized;
@@ -80,7 +80,7 @@ test('a directory revision conflict preserves the draft and never silently retri
 	using model = new ExecutionSettingsModel(
 		{ onDidChange: Event.None, read: async () => ({ revision: 3, settings: manualDefaults }), configure: async () => { } },
 		trust,
-		{ isAvailable: true, read: async () => ({ directoryGrantsReadable: true, tools: [], sourceGroups: [], sandboxBackends: [], sandboxDiagnostics: [], localProcessSandboxConfigured: true }) },
+		{ isAvailable: true, onDidChange: Event.None, read: async () => ({ directoryGrantsReadable: true, tools: [], sourceGroups: [], sandboxBackends: [], sandboxDiagnostics: [], localProcessSandboxConfigured: true }) },
 		{ connectionState: 'connected', onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService,
 		{} as IDialogService, { translate: (_bundle, _key, fallback) => fallback } as ILocalizationService,
 	);

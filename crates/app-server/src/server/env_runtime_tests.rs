@@ -1089,6 +1089,10 @@ fn sandbox_capabilities_report_each_configured_backend_and_network_policy() {
     assert_eq!(response["result"]["localProcessSandboxConfigured"], true);
     let result = &response["result"];
     let diagnostics = result["sandboxDiagnostics"].as_array().unwrap();
+    assert_eq!(result["sandboxPolicy"]["profile"], "command-defaults");
+    assert!(result["sandboxPolicy"]["fileSystem"].is_string());
+    assert!(result["sandboxPolicy"]["network"].is_string());
+    assert_eq!(result["sandboxPolicy"]["pathRuleCount"], 0);
     assert_eq!(
         diagnostics.len(),
         result["sandboxBackends"].as_array().unwrap().len() * 3
@@ -1109,6 +1113,261 @@ fn sandbox_capabilities_report_each_configured_backend_and_network_policy() {
                 ),
                 state => panic!("unknown readiness: {state}"),
             }
+        }
+    }
+}
+
+#[test]
+fn sandbox_settings_save_reconciles_command_policy_and_preserves_selected_profile() {
+    use ash_sandboxing::FileSystemAccess;
+    use ash_sandboxing::NetworkAccess;
+
+    for selected_profile in [false, true] {
+        let profile = tempfile::tempdir().unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let config_path = profile.path().join("config.toml");
+        std::fs::write(
+            &config_path,
+            format!(
+                "schemaVersion = {}\n{}",
+                ash_config::CONFIG_FILE_SCHEMA_VERSION,
+                if selected_profile {
+                    "[permissions]\ndefaultProfile = 'restricted'\n[permissions.profiles.restricted]\nextends = ':fullAccess'\nfileSystem = 'readOnly'\nnetwork = 'denied'\n"
+                } else {
+                    ""
+                }
+            ),
+        )
+        .unwrap();
+        let server = crate::open_app_server(
+            crate::AppServerOptions::new(profile.path())
+                .without_built_in_skills()
+                .with_dir_root(directory.path()),
+        )
+        .unwrap();
+        let store = server.config.as_ref().unwrap();
+        let registry = &server.local_env_host.as_ref().unwrap().tools.reloadable;
+        let token = ash_async_utils::CancellationSource::new().token();
+        let mut connection = server.connection();
+        let initialized = server.handle_json(&mut connection, r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"sandbox-settings-test","version":"1"},"capabilities":{}}}"#);
+        assert!(initialized.contains("\"result\""));
+        for (index, files, network, expected_files, expected_network) in [
+            (
+                0,
+                "readOnly",
+                "denied",
+                FileSystemAccess::ReadOnly,
+                NetworkAccess::Denied,
+            ),
+            (
+                1,
+                "directoryWrite",
+                "allowed",
+                FileSystemAccess::DirectoryWrite,
+                NetworkAccess::Allowed,
+            ),
+        ] {
+            // Hold the actual runtime gate so the save/recomposition gap is deterministic.
+            let gate = server.env_runtime_gate.lock().unwrap();
+            let before = store.committed_snapshot();
+            let saved: serde_json::Value = serde_json::from_str(
+                &server.handle_json(
+                    &mut connection,
+                    &serde_json::json!({
+                        "jsonrpc":"2.0", "id":index + 2, "method":"config/update",
+                        "params":{
+                            "commandId":format!("save-sandbox-{index}"),
+                            "expectedRevision":before.revision.get(),
+                            "execution":{
+                                "approvalMode":before.values.execution.approval_mode,
+                                "commandFileAccess":files, "commandNetworkAccess":network
+                            }
+                        }
+                    })
+                    .to_string(),
+                ),
+            )
+            .unwrap();
+            assert!(saved.get("error").is_none(), "{saved}");
+            let committed = store.committed_snapshot();
+            assert_eq!(
+                serde_json::to_value(committed.values.execution.command_file_access).unwrap(),
+                files
+            );
+            assert_eq!(
+                serde_json::to_value(committed.values.execution.command_network_access).unwrap(),
+                network
+            );
+            assert_eq!(committed.values.permissions, before.values.permissions);
+            let call = ash_protocol::ToolCall {
+                id: ash_protocol::ToolCallId::new(format!("sandbox-save-pending-{index}")).unwrap(),
+                name: ash_protocol::ToolName::new("shell-command").unwrap(),
+                arguments: serde_json::json!({"program":std::env::current_exe().unwrap(), "arguments":[], "working_directory":"."}),
+            };
+            let review = registry.tools().prepare(&call).unwrap();
+            let policy = server.shared_action_policy(registry.policy());
+            let pending = !server
+                .env_config
+                .read()
+                .unwrap()
+                .tools
+                .matches_runtime_permissions(&committed.values);
+            assert_eq!(pending, !selected_profile);
+            if pending {
+                assert!(matches!(
+                    policy.validate_execution(&review, ash_protocol::ToolExecutionAuthority::Sandboxed, &token),
+                    Err(CoreError::Policy(reason)) if reason.contains("pending runtime reconciliation")
+                ));
+            }
+            drop(gate);
+            let deadline = Instant::now() + Duration::from_secs(10);
+            while !server
+                .env_config
+                .read()
+                .unwrap()
+                .tools
+                .matches_runtime_permissions(&committed.values)
+            {
+                assert!(
+                    Instant::now() < deadline,
+                    "saved sandbox configuration was not installed: {:?}",
+                    registry.diagnostic()
+                );
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            let call = ash_protocol::ToolCall {
+                id: ash_protocol::ToolCallId::new(format!("sandbox-save-installed-{index}"))
+                    .unwrap(),
+                ..call
+            };
+            // Probe the installed executor reviewer and policy, rather than a configuration DTO.
+            let review = registry.tools().prepare(&call).unwrap();
+            let expected = if selected_profile {
+                (FileSystemAccess::ReadOnly, NetworkAccess::Denied)
+            } else {
+                (expected_files, expected_network)
+            };
+            match registry.policy().decide(&review, &token).unwrap() {
+                ExecutionDecision::RunSandboxed(policy) => {
+                    assert_eq!((policy.file_system(), policy.network()), expected);
+                }
+                decision => panic!("expected sandboxed execution, got {decision:?}"),
+            }
+            policy
+                .validate_execution(
+                    &review,
+                    ash_protocol::ToolExecutionAuthority::Sandboxed,
+                    &token,
+                )
+                .unwrap();
+        }
+        // A fresh reader sees the saved artifact, independent of the in-memory ConfigStore.
+        let persisted =
+            ConfigStore::open_with_paths(profile.path().join("reopen.sqlite3"), config_path)
+                .unwrap();
+        let persisted = persisted.read_snapshot().unwrap();
+        assert_eq!(
+            persisted.values.execution,
+            store.committed_snapshot().values.execution
+        );
+        assert_eq!(
+            persisted.values.permissions,
+            store.committed_snapshot().values.permissions
+        );
+    }
+}
+
+#[test]
+fn sandbox_policy_installation_invalidates_diagnostics_with_an_unchanged_catalog() {
+    let directory = TestDir::new("policy-invalidation", "file.txt");
+    let server = server().with_local_env_host(None, host_policy()).unwrap();
+    server
+        .activate_host_configured_dir_root(directory.path.clone())
+        .unwrap();
+    let tools = &server.local_env_host.as_ref().unwrap().tools;
+    let catalog = tools.capabilities_snapshot().0;
+    let queue = crate::server::notification_queue::NotificationQueue::default();
+    server.updates.register(1, false, &queue);
+    let mut config = ash_config::ResolvedConfig::default();
+    config.execution.command_file_access = ash_config::CommandFileAccess::ReadOnly;
+    server
+        .env_runtime_control()
+        .unwrap()
+        .reconcile_env_config(&config)
+        .unwrap();
+    assert_eq!(tools.capabilities_snapshot().0, catalog);
+    assert!(
+        server
+            .env_config
+            .read()
+            .unwrap()
+            .tools
+            .matches_runtime_permissions(&config)
+    );
+    assert!(
+        queue
+            .drain()
+            .iter()
+            .any(|event| event["method"] == "agent/tools/changed")
+    );
+    server
+        .env_runtime_control()
+        .unwrap()
+        .reconcile_env_config(&config)
+        .unwrap();
+    assert!(
+        queue.drain().is_empty(),
+        "unchanged policy must not repeatedly invalidate diagnostics"
+    );
+}
+
+#[test]
+fn sandbox_managed_ceilings_reach_installed_executor_for_defaults_and_profiles() {
+    use ash_sandboxing::FileSystemAccess;
+    use ash_sandboxing::NetworkAccess;
+
+    for selected_profile in [None, Some(":fullAccess")] {
+        let dir = TestDir::new("managed-command-policy", "readable.txt");
+        let mut config = ash_config::ResolvedConfig::default();
+        config.execution.command_file_access = ash_config::CommandFileAccess::DirectoryWrite;
+        config.execution.command_network_access = ash_config::CommandNetworkAccess::Allowed;
+        config.permissions.default_profile = selected_profile.map(str::to_owned);
+        let server = server()
+            .with_env_config(&config)
+            .with_local_env_host(None, host_policy())
+            .unwrap();
+        // Supply an already-validated administrator document at its owning boundary; tests
+        // must never replace the machine-wide administrator-owned requirements file.
+        server.env_config.write().unwrap().tools.requirements =
+            Ok(ash_config::ManagedPermissions {
+                source: PathBuf::from("managed-permissions-fixture"),
+                values: ash_config::PermissionRequirements {
+                    maximum_file_system: Some(ash_protocol::SandboxMode::ReadOnly),
+                    maximum_network: Some(ash_config::CommandNetworkAccess::Denied),
+                    host_read: Some(ash_config::HostReadAccess::GrantedRoots),
+                    ..Default::default()
+                },
+            });
+        server
+            .activate_host_configured_dir_root(dir.path.clone())
+            .unwrap();
+        let registry = &server.local_env_host.as_ref().unwrap().tools.reloadable;
+        let call = ash_protocol::ToolCall {
+            id: ash_protocol::ToolCallId::new("managed-sandbox-probe").unwrap(),
+            name: ash_protocol::ToolName::new("shell-command").unwrap(),
+            arguments: serde_json::json!({"program":std::env::current_exe().unwrap(), "arguments":[], "working_directory":"."}),
+        };
+        let review = registry.tools().prepare(&call).unwrap();
+        match registry
+            .policy()
+            .decide(&review, &ash_async_utils::CancellationSource::new().token())
+            .unwrap()
+        {
+            ExecutionDecision::RunSandboxed(policy) => {
+                assert_eq!(policy.file_system(), FileSystemAccess::ReadOnly);
+                assert_eq!(policy.network(), NetworkAccess::Denied);
+            }
+            decision => panic!("managed ceiling was not enforced: {decision:?}"),
         }
     }
 }

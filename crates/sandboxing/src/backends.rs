@@ -40,6 +40,7 @@ impl SandboxBackends {
     pub fn diagnostics(
         &self,
         command: &SandboxCommand,
+        policy: SandboxPolicy,
         scope: &SandboxScope,
     ) -> Vec<SandboxDiagnostic> {
         self.backends
@@ -63,9 +64,16 @@ impl SandboxBackends {
                     } else {
                         command.clone()
                     };
-                    let policy = SandboxPolicy::new(crate::FileSystemAccess::ReadOnly, network);
+                    // Probe network alternatives under the caller's actual filesystem authority.
+                    let policy = SandboxPolicy::new(policy.file_system(), network)
+                        .with_file_system_isolation(policy.file_system_isolation())
+                        .with_host_acl_changes(policy.host_acl_changes());
                     let readiness = match backend.prepare_scoped(&command, policy, scope) {
-                        Ok(prepared) if prepared.kind() == SandboxKind::Restricted => {
+                        Ok(prepared)
+                            if prepared.kind() == SandboxKind::Restricted
+                                || (!policy.requires_platform_sandbox()
+                                    && scope.is_single_unhidden()) =>
+                        {
                             SandboxReadiness::Ready
                         }
                         Ok(_) => SandboxReadiness::Unavailable(

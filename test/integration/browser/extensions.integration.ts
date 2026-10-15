@@ -106,6 +106,13 @@ import { PaneView } from '../../../src/ash/base/browser/ui/splitview/paneview.js
 import { registerSkillActions } from '../../../src/ash/workbench/contrib/chat/browser/promptSyntax/skillActions.js';
 import { LanguageServerSettingsContent } from '../../../src/ash/workbench/contrib/language/browser/languageServerSettingsContent.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
+import { IAgentExecutionSettingsService, type ExecutionSettings } from '../../../src/ash/platform/agentHost/common/agentExecutionSettingsService.js';
+import { SandboxSettingsModel } from '../../../src/ash/workbench/contrib/preferences/browser/sandboxSettingsModel.js';
+import { SettingsSectionRenderer } from '../../../src/ash/workbench/contrib/preferences/browser/settingsSectionRenderer.js';
+import { AccessibleViewProviderId, AccessibilityVerbositySettingId } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
+import { AgentCapabilitiesSettings } from '../../../src/ash/workbench/contrib/preferences/browser/agentCapabilitiesSettings.js';
+import { SettingsNavigation } from '../../../src/ash/workbench/contrib/preferences/browser/settingsLayout.js';
+import type { IWorkspaceTrustApi } from '../../../src/ash/platform/workspace/common/workspaceTrust.js';
 import chineseMessages from '../../../extensions/language-pack-zh-cn/translations/extensions.json' with { type: 'json' };
 import chineseWorkbenchMessages from '../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 
@@ -639,5 +646,41 @@ declare global {
 	interface Window {
 
 		ashExtensionsIntegration: { enableMcpOAuth(): void; completeMcpLogin(): void; mcpLoginWaiting(): boolean; holdDiscoverySearch(): void; discoverySearchStarted(): boolean; setDiscoveryEnabled(value: boolean): void; changeMcpRevision(): void; setMcpConnectFailure(): void; deferMcpConnection(): void; configureMcp(server: McpServerConfiguration): void; setMcpServers(servers: readonly McpServerStatus[]): void; failMcpStatus(): void; failMcpTools(): void; setMcpSupported(supported: boolean): void; refreshMcp(): Promise<void>; holdMcpStatus(): void; mcpStatusStarted(): boolean; completeMcpStatus(): void; prepareSettings(): void; readSetting(key: string): unknown; openEditorExtension(): Promise<void>; holdReadme(): void; readmeStarted(): boolean; completeReadme(): void; setRecommendations(content: string): Promise<void>; leaveWorkspace(): void; holdInstructions(): void; instructionsStarted(): boolean; instructionsAborted(): boolean; completeInstructions(): void; setSession(id: string): void; addMcpPackage(): void; addSkillOnlyPlugin(): void; requests: unknown[]; startCommand(id: string): void; waitCommand(): Promise<void>; changePluginRevision(): void; removeEditorEntrypoint(): void; localPackages(): PluginPackageDto[]; open(options: ExtensionsOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void; };
+	}
+}
+
+let sandboxDefaults: ExecutionSettings = { approvalMode: 'auto', commandFileAccess: 'readOnly', commandNetworkAccess: 'denied' };
+let sandboxRevision = 1;
+const sandboxChanged = disposables.add(new Emitter<void>());
+window.ashSandboxIntegration = {
+	open() {
+		for (const element of document.querySelectorAll('body > main')) (element as HTMLElement).hidden = true;
+		const host = document.createElement('section'); host.id = 'sandbox-settings'; document.body.append(host);
+		const child = disposables.add(services.createChild());
+		child.registerInstance(IAgentExecutionSettingsService, {
+			onDidChange: sandboxChanged.event,
+			read: async () => ({ revision: sandboxRevision, settings: { ...sandboxDefaults } }),
+			configure: async (settings, revision) => {
+				if (revision !== sandboxRevision) throw new Error('revision conflict');
+				sandboxDefaults = { ...settings }; sandboxRevision++; sandboxChanged.fire();
+			},
+		});
+		child.registerInstance(IAppServerRemoteAgentService, { connectionState: 'connected', onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService);
+		const model = disposables.add(child.createInstance(SandboxSettingsModel));
+		const renderer = disposables.add(child.createInstance(SettingsSectionRenderer, host, model, AccessibleViewProviderId.SandboxSettings, AccessibilityVerbositySettingId.SandboxSettings));
+		for (const group of renderer.getNodes()) for (const node of group.children ?? []) {
+			if (node.element.kind === 'item' && 'domNode' in node.element.value) host.append(node.element.value.domNode);
+		}
+		renderer.setVisible(true);
+		const diagnostics = disposables.add(new AgentCapabilitiesSettings(host, { isAvailable: true, onDidChange: Event.None, read: async () => ({ localProcessSandboxConfigured: true, sandboxBackends: ['windows'], directoryGrantsReadable: false, sandboxDiagnostics: [], sandboxPolicy: { profile: ':readOnly', fileSystem: 'readOnly', network: 'denied', hostRead: 'grantedRoots', managedConstraints: true, pathRuleCount: 1 } }) }, child.get(IAppServerRemoteAgentService), { onDidChangeTrust: Event.None } as IWorkspaceTrustApi, { whenReady: Promise.resolve(), translate: (bundle, key, fallback, parameters) => localize({ bundle, key }, fallback, ...Object.values(parameters ?? {})) }, child.get(IAgentExecutionSettingsService)));
+		diagnostics.setView('sandbox');
+	},
+	snapshot: () => ({ revision: sandboxRevision, settings: { ...sandboxDefaults } }),
+	location: () => SettingsNavigation.filter(group => 'categories' in group && group.categories.some(category => category.id === 'sandbox')).map(group => group.id),
+};
+
+declare global {
+	interface Window {
+		ashSandboxIntegration: { open(): void; snapshot(): { revision: number; settings: ExecutionSettings; }; location(): readonly string[]; };
 	}
 }
