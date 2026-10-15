@@ -207,6 +207,13 @@ crate.from_cargo(
 )
 use_repo(crate, "crates")
 
+# Keep liblzma inside the build action instead of discovering a host installation.
+crate.annotation(
+    crate = "lzma-sys",
+    build_script_env = {"LZMA_API_STATIC": "1"},
+    repositories = ["crates"],
+)
+
 # rules_rust's runfiles crate has its own manifest below the repository root.
 crate.annotation(
     crate = "runfiles",
