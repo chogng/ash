@@ -11,9 +11,10 @@ import type { ExtensionFileTemplateDefinition } from "../../../services/extensio
 import { IExtensionService } from "../../../services/extensions/common/extensionService.js";
 import { IUntitledTextEditorService } from "../../../services/untitled/common/untitledTextEditorService.js";
 import { UntitledTextEditorInput } from "../../../services/untitled/common/untitledTextEditorInput.js";
-import { ActiveEditorFirstInGroupContext, EditorsVisibleContext, MultipleEditorsSelectedInGroupContext } from "../../../common/contextkeys.js";
+import { ActiveEditorFirstInGroupContext, EditorPartMaximizedEditorGroupContext, EditorPartMultipleEditorGroupsContext, EditorsVisibleContext, MultipleEditorGroupsContext, MultipleEditorsSelectedInGroupContext } from "../../../common/contextkeys.js";
 import { IEditorPartsService } from "./editorParts.js";
-import { AllEditorsByMostRecentlyUsedQuickAccess } from "./editorQuickAccess.js";
+import { ActiveGroupEditorsByMostRecentlyUsedQuickAccess, AllEditorsByMostRecentlyUsedQuickAccess } from "./editorQuickAccess.js";
+import { EditorEnablePreviewConfiguration } from './editorConfiguration.js';
 import { IBreadcrumbsService } from "./breadcrumbs.js";
 import { GoFilter, IHistoryService } from '../../../services/history/common/history.js';
 import { Direction } from '../../../../base/browser/ui/grid/grid.js';
@@ -66,8 +67,45 @@ registerAction2(class ToggleEditorGroupLockAction extends Action2 {
 		});
 	}
 
-	override run(accessor: ServicesAccessor): void {
-		accessor.get(IEditorPart).toggleActiveGroupLock();
+	override run(accessor: ServicesAccessor, ...args: readonly unknown[]): void {
+		const group = resolveCommandsContext(args, accessor.get(IEditorGroupsService)).groupedEditors[0]?.group;
+		group?.setLocked(!group.isLocked);
+	}
+});
+
+registerAction2(class ShowEditorsInGroupAction extends Action2 {
+	constructor() {
+		super({ id: 'workbench.action.showEditorsInGroup', title: localize2('workbench.showOpenedEditors', 'Show Opened Editors'), f1: true });
+	}
+	override run(accessor: ServicesAccessor, ...args: readonly unknown[]): void {
+		const group = resolveCommandsContext(args, accessor.get(IEditorGroupsService)).groupedEditors[0]?.group;
+		if (!group) return;
+		accessor.get(IEditorPart).activateGroup(group.id);
+		accessor.get(IQuickInputService).quickAccess.show(ActiveGroupEditorsByMostRecentlyUsedQuickAccess.PREFIX);
+	}
+});
+
+registerAction2(class ToggleKeepEditorsAction extends Action2 {
+	constructor() {
+		super({ id: 'workbench.action.toggleKeepEditors', title: localize2('workbench.enablePreviewEditors', 'Enable Preview Editors') });
+	}
+	override run(accessor: ServicesAccessor): Promise<void> {
+		const configuration = accessor.get(IConfigurationService);
+		return configuration.updateValue(EditorEnablePreviewConfiguration, configuration.getValue<boolean>(EditorEnablePreviewConfiguration) !== true);
+	}
+});
+
+registerAction2(class ToggleMaximizeEditorGroupAction extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.action.toggleMaximizeEditorGroup', title: localize2('workbench.toggleMaximizeEditorGroup', 'Toggle Maximize Editor Group'), f1: true,
+			precondition: ContextKeyExpr.or(MultipleEditorGroupsContext.isEqualTo(true), EditorPartMultipleEditorGroupsContext.isEqualTo(true), EditorPartMaximizedEditorGroupContext.isEqualTo(true)),
+			keybinding: { primary: Keybinding.chord(logicalKey('k', { primaryKey: true }), logicalKey('m', { primaryKey: true })) },
+		});
+	}
+	override run(accessor: ServicesAccessor, ...args: readonly unknown[]): void {
+		const group = resolveCommandsContext(args, accessor.get(IEditorGroupsService)).groupedEditors[0]?.group;
+		if (group) accessor.get(IEditorPart).toggleMaximizeGroup(group);
 	}
 });
 
@@ -399,11 +437,6 @@ registerAction2(class MoveEditorToNewWindowAction extends Action2 {
 			id: MoveEditorToNewWindowCommandId,
 			title: localize2({ bundle: 'ash.workbench', key: 'command.MoveEditorToNewWindowAction' }, "Move to New Window"),
 			f1: true,
-			menu: {
-				id: MenuId.EditorTitle,
-				group: "2_open",
-				order: 1,
-			},
 		});
 	}
 
@@ -418,7 +451,6 @@ registerAction2(class CopyEditorToNewWindowAction extends Action2 {
 			id: CopyEditorToNewWindowCommandId,
 			title: localize2({ bundle: 'ash.workbench', key: 'command.CopyEditorToNewWindowAction' }, "Copy to New Window"),
 			f1: true,
-			menu: { id: MenuId.EditorTitle, group: "2_open", order: 2 },
 		});
 	}
 
@@ -496,7 +528,6 @@ for (const mode of ['move', 'copy'] as const) {
 				id: mode === 'move' ? 'workbench.action.moveEditorGroupToNewWindow' : 'workbench.action.copyEditorGroupToNewWindow',
 				title: mode === 'move' ? localize2('command.MoveEditorGroupToNewWindow', 'Move Editor Group into New Window') : localize2('command.CopyEditorGroupToNewWindow', 'Copy Editor Group into New Window'),
 				f1: true,
-				menu: { id: MenuId.EditorTitle, group: '2_open', order: mode === 'move' ? 3 : 4 },
 			});
 		}
 		override async run(accessor: ServicesAccessor, ...args: readonly unknown[]): Promise<void> {

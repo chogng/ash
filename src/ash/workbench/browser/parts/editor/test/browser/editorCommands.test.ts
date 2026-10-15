@@ -51,8 +51,15 @@ test('Configure Editors menu opens filtered settings and is hidden in the modal 
 	assert.equal(editorActions().some(action => action.id === 'workbench.action.openSettings'), false);
 	await configure.run({ groupId: 'source' });
 	assert.deepEqual(opened, [{ query: 'workbench.editor' }]);
+	context.setContext('isAuxiliaryWindow', true);
+	assert.equal(editorActions().some(action => action.id === 'workbench.action.toggleEditorGroupLock'), false);
 	context.setContext('editorPartModalVisible', true);
 	assert.equal(editorActions().some(action => action.id === ConfigureEditorAction.ID), false);
+	assert.deepEqual(editorActions().filter(action => [
+		'workbench.action.showEditorsInGroup', 'workbench.action.closeEditorsInGroup',
+		'workbench.action.closeUnmodifiedEditors', 'workbench.action.toggleKeepEditors',
+		'workbench.action.toggleEditorGroupLock',
+	].includes(action.id)), []);
 	await commands.executeCommand('workbench.action.openSettings');
 	assert.deepEqual(opened, [{ query: 'workbench.editor' }, undefined]);
 
@@ -62,6 +69,8 @@ test('Configure Editors menu opens filtered settings and is hidden in the modal 
 		assert.deepEqual(new ConfigureEditorAction().desc.title, { original: 'Configure Editors', value: '配置编辑器' });
 		assert.equal(localize2('command.NewEmptyEditorWindow', 'New Empty Editor Window').value, '新建空编辑器窗口');
 		assert.equal(localize2('workbench.zoomPerWindowTitle', 'Zoom per window').value, '每个窗口独立缩放');
+		assert.equal(localize2({ bundle: 'ash.workbench', key: 'editor.moveIntoNewWindow' }, 'Move into New Window').value, '移至新窗口');
+		assert.equal(localize2({ bundle: 'ash.workbench', key: 'editor.copyIntoNewWindow' }, 'Copy into New Window').value, '复制到新窗口');
 	} finally {
 		resetNlsResolver();
 	}
@@ -86,6 +95,20 @@ test('new window tab menus resolve the clicked tab, multiselection and invalid t
 	context.setContext(EditorsVisibleContext.key, true);
 	const menus = new MenuService(commands, context);
 	const argument = { groupId: group.id, editorIndex: 1 };
+	const windowCommands = [MoveEditorToNewWindowCommandId, CopyEditorToNewWindowCommandId, 'workbench.action.moveEditorGroupToNewWindow', 'workbench.action.copyEditorGroupToNewWindow'];
+	for (const visible of [true, false]) {
+		context.setContext(EditorsVisibleContext.key, visible);
+		const titleActions = menus.getMenuActions(MenuId.EditorTitle, { arg: { groupId: group.id } })
+			.flatMap(([, actions]) => actions).filter(action => windowCommands.includes(action.id));
+		assert.deepEqual(titleActions, []);
+	}
+	context.setContext(EditorsVisibleContext.key, true);
+	const paletteActions = menus.getMenuActions(MenuId.CommandPalette).flatMap(([, actions]) => actions)
+		.filter(action => windowCommands.includes(action.id));
+	assert.deepEqual(paletteActions.map(action => action.label).sort(), [
+		'Copy Editor Group into New Window', 'Copy to New Window',
+		'Move Editor Group into New Window', 'Move to New Window',
+	]);
 	const groups = menus.getMenuActions(MenuId.EditorTitleContext, { arg: argument });
 	assert.ok(groups.findIndex(([name]) => name === '7_new_window') > groups.findIndex(([name]) => name === '5_split'));
 	const actions = groups.find(([name]) => name === '7_new_window')![1];

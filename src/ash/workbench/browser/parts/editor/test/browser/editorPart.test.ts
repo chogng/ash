@@ -4481,3 +4481,55 @@ test('editor service keeps real failures and explicitly requested cancellation f
 		assert.equal(editor.activeGroup.inputs.length, 0);
 	} finally { dom.window.close(); }
 });
+
+test('maximizing a group preserves hidden groups, saved layout and activation recovery', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using browserOwner = toDisposable(() => dom.window.close());
+	using registry = new EditorPaneRegistry();
+	using context = new ContextKeyService();
+	using editor = createEditorPart(dom.window.document.body, { registry, contextKeyService: context });
+	editor.layout({ width: 900, height: 500 });
+	const first = editor.activeGroup;
+	const second = editor.addGroup(first.id, Direction.Right);
+	const hidden = editor.addGroup(second.id, Direction.Down);
+	editor.setGroupVisible(hidden.id, false);
+	const layout = editor.saveWorkingSet('before').layout;
+	editor.toggleMaximizeGroup(second);
+	assert.equal(editor.hasMaximizedGroup(), true);
+	assert.deepEqual(editor.groups.map(group => editor.isGroupVisible(group.id)), [false, true, false]);
+	assert.equal(context.getContext(second.domNode).getValue('editorPartMaximizedEditorGroup'), true);
+	assert.deepEqual(editor.saveWorkingSet('maximized').layout, layout);
+	editor.toggleMaximizeGroup(second);
+	assert.equal(editor.hasMaximizedGroup(), false);
+	assert.deepEqual(editor.groups.map(group => editor.isGroupVisible(group.id)), [true, true, false]);
+	editor.toggleMaximizeGroup(second);
+	editor.activateGroup(first.id);
+	assert.equal(editor.hasMaximizedGroup(), false);
+	assert.equal(editor.isGroupVisible(first.id), true);
+	editor.toggleMaximizeGroup(first);
+	const created = editor.addGroup(first.id, Direction.Right);
+	assert.equal(editor.hasMaximizedGroup(), false);
+	assert.equal(editor.isGroupVisible(created.id), true);
+});
+
+test('disabling preview pins existing previews and keeps subsequent preview opens', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using browserOwner = toDisposable(() => dom.window.close());
+	using registry = new EditorPaneRegistry();
+	using registration = registry.registerEditorPane(descriptor('ash.test.previewToggle', '.ts', () => new TestEditorPane('ash.test.previewToggle')));
+	using configuration = new InMemoryConfigurationService();
+	using context = new ContextKeyService();
+	using editor = createEditorPart(dom.window.document.body, { registry, configurationService: configuration, contextKeyService: context });
+	const first = input('C:/project/preview-first.ts');
+	await editor.openEditor(first, { pinned: false });
+	assert.equal(editor.activeGroup.isPreview(first), true);
+	await configuration.updateValue('workbench.editor.enablePreview', false);
+	assert.equal(editor.activeGroup.isPreview(first), false);
+	await editor.openEditor(input('C:/project/preview-second.ts'), { pinned: false });
+	assert.equal(editor.activeGroup.inputs.length, 2);
+	assert.equal(context.getContext(editor.activeGroup.domNode).getValue('config.workbench.editor.enablePreview'), false);
+	await configuration.updateValue('workbench.editor.enablePreview', true);
+	const third = input('C:/project/preview-third.ts');
+	await editor.openEditor(third, { pinned: false });
+	assert.equal(editor.activeGroup.isPreview(third), true);
+});

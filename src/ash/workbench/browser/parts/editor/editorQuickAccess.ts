@@ -12,16 +12,18 @@ interface EditorQuickPickItem extends IPickerQuickAccessItem {
 
 /** Searches open editors in the order they were last used. */
 export class AllEditorsByMostRecentlyUsedQuickAccess extends PickerQuickAccessProvider<EditorQuickPickItem> {
-	static readonly PREFIX = "edt mru ";
+	static readonly PREFIX: string = "edt mru ";
 
-	constructor(@IEditorPart private readonly editorPart: IEditorPart) {
-		super(AllEditorsByMostRecentlyUsedQuickAccess.PREFIX);
+	constructor(@IEditorPart protected readonly editorPart: IEditorPart, prefix = AllEditorsByMostRecentlyUsedQuickAccess.PREFIX) {
+		super(prefix);
 		this._register(editorPart.onDidChangeEditors(() => this.refresh()));
 	}
 
+	protected getEditors(): readonly EditorIdentifier[] { return this.editorPart.editorsMru; }
+
 	protected override _getPicks(filter: string): Picks<EditorQuickPickItem> {
 		const editorState = new Map(this.editorPart.groups.flatMap(group => group.editors.map(editor => [editor.instanceId, editor] as const)));
-		return filterQuickPickItems(this.editorPart.editorsMru.map(editor => ({
+		return filterQuickPickItems(this.getEditors().map(editor => ({
 			editor,
 			accept: () => { this.editorPart.activateEditorIdentifier(editor); this.editorPart.focus(); },
 			trigger: async () => {
@@ -43,6 +45,19 @@ export class AllEditorsByMostRecentlyUsedQuickAccess extends PickerQuickAccessPr
 		})), filter);
 	}
 
+}
+
+/** Lists only the active group's editors, while retaining the shared picker actions. */
+export class ActiveGroupEditorsByMostRecentlyUsedQuickAccess extends AllEditorsByMostRecentlyUsedQuickAccess {
+	static override readonly PREFIX = 'edt active ';
+
+	constructor(@IEditorPart editorPart: IEditorPart) {
+		super(editorPart, ActiveGroupEditorsByMostRecentlyUsedQuickAccess.PREFIX);
+	}
+
+	protected override getEditors(): readonly EditorIdentifier[] {
+		return this.editorPart.editorsMru.filter(editor => editor.groupId === this.editorPart.activeGroup.id);
+	}
 }
 
 function editorInputLabel(input: EditorIdentifier["input"]): string {
