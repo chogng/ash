@@ -22,6 +22,7 @@ import { IMenuService } from '../../../../platform/actions/common/actions.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { Menus } from '../../menus.js';
+import { ActivityBarItemContext } from '../../../common/contextkeys.js';
 
 export interface ActivityBarPartDelegate {
 	showAccountMenu(anchor: HTMLElement): void;
@@ -50,8 +51,8 @@ export class ActivityBarPart extends Part {
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@IContextMenuService private readonly contextMenuService: IContextMenuService,
 		@IHoverService private readonly hoverService: IHoverService,
-		@IMenuService menus: IMenuService,
-		@IContextKeyService contextKeys: IContextKeyService,
+		@IMenuService private readonly menus: IMenuService,
+		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@IStorageService private readonly storage: IStorageService,
 		@IThemeService themeService: IThemeService,
 	) {
@@ -166,9 +167,18 @@ export class ActivityBarPart extends Part {
 			getAnchor: () => event.type === 'contextmenu'
 				? { x: (event as MouseEvent).clientX, y: (event as MouseEvent).clientY, targetWindow: this.domNode.ownerDocument.defaultView ?? undefined }
 				: event.target as HTMLElement,
-			getActions: () => Separator.join([...this.getOrderActions(event.target as Element)], [...this.getContextMenuActions()]),
+			getActions: () => Separator.join([...this.getItemContextMenuActions(event.target as Element)], [...this.getOrderActions(event.target as Element)], [...this.getContextMenuActions()]),
 			getCheckedActionsRepresentation: () => 'radio',
 		});
+	}
+
+	private getItemContextMenuActions(target: Element): readonly IAction[] {
+		const id = target.closest<HTMLElement>('[data-action-id]')?.dataset.actionId;
+		if (!id) { return []; }
+		// Menu actions snapshot their conditions; a detached scope keeps the target out of window state.
+		using context = this.contextKeys.createScoped(h(this.domNode.ownerDocument, 'div'));
+		ActivityBarItemContext.bindTo(context).set(id);
+		return Separator.join(...this.menus.getMenuActions(Menus.ActivityBarContext, { renderShortTitle: true }, context).map(([, actions]) => [...actions]));
 	}
 
 	private getContextMenuActions(): readonly IAction[] {

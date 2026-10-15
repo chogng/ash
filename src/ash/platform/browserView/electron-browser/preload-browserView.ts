@@ -24,6 +24,92 @@
 	let markerItems: readonly { elementId: string; body: string; }[] = [];
 	const markers: HTMLButtonElement[] = [];
 	const send = (type: string, data?: unknown): void => ipcRenderer.send(channel, { frameToken, type, data });
+	let clearContentVisibility = (): void => { };
+
+	function configureContentVisibility(rule: import('../common/browserView.js').IBrowserContentVisibilityRule | undefined): void {
+		clearContentVisibility();
+		clearContentVisibility = () => { };
+		if (!rule || window !== window.top || location.origin !== rule.origin || !CSS.supports('content-visibility', 'auto')) { return; }
+		// The rule comes from the trusted host; a changed website or invalid selector must fail closed.
+		try { document.querySelector(rule.selector); } catch { return; }
+		const abort = new AbortController();
+		const properties = ['content-visibility', 'contain-intrinsic-height'] as const;
+		const originals = new Map<HTMLElement, { values: readonly { value: string; priority: string; }[]; applied: boolean; }>();
+		const restore = (element: HTMLElement): void => {
+			const saved = originals.get(element);
+			if (!saved) { return; }
+			properties.forEach((property, index) => {
+				const previous = saved.values[index]!;
+				if (previous.value) { element.style.setProperty(property, previous.value, previous.priority); }
+				else { element.style.removeProperty(property); }
+			});
+			originals.delete(element);
+		};
+		const sizes = new ResizeObserver(entries => {
+			for (const entry of entries) {
+				const element = entry.target as HTMLElement;
+				const saved = originals.get(element);
+				if (!saved || saved.applied || entry.contentRect.height <= 0 || !element.matches(rule.selector)) { continue; }
+				// Measure the natural content box before containment. Chromium then remembers subsequent rendered sizes.
+				saved.applied = true;
+				element.style.setProperty('contain-intrinsic-height', `auto ${entry.contentRect.height}px`);
+				element.style.setProperty('content-visibility', 'auto');
+			}
+		});
+		const consider = (element: Element): void => {
+			if (!(element instanceof HTMLElement)) { return; }
+			if (!element.matches(rule.selector)) {
+				if (originals.has(element)) { sizes.unobserve(element); restore(element); }
+				return;
+			}
+			if (originals.has(element)) { return; }
+			originals.set(element, { values: properties.map(property => ({ value: element.style.getPropertyValue(property), priority: element.style.getPropertyPriority(property) })), applied: false });
+			sizes.observe(element);
+		};
+		const scan = (root: Element): void => {
+			consider(root);
+			root.querySelectorAll(rule.selector).forEach(consider);
+		};
+		const changes = new MutationObserver(records => {
+			let removed = false;
+			for (const record of records) {
+				if (record.type === 'attributes') {
+					// Our inline style writes must not create an observer feedback loop.
+					if (record.attributeName !== 'style') { consider(record.target as Element); }
+				} else {
+					removed ||= record.removedNodes.length > 0;
+					for (const added of record.addedNodes) { if (added instanceof Element) { scan(added); } }
+				}
+			}
+			if (removed) {
+				for (const element of originals.keys()) { if (!element.isConnected) { sizes.unobserve(element); restore(element); } }
+			}
+		});
+		const start = (): void => {
+			if (!document.documentElement || abort.signal.aborted) { return; }
+			scan(document.documentElement);
+			changes.observe(document.documentElement, { childList: true, subtree: true, attributes: true });
+		};
+		if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', start, { once: true, signal: abort.signal }); }
+		else { start(); }
+		let width = window.innerWidth;
+		window.addEventListener('resize', () => {
+			if (window.innerWidth !== width) {
+				width = window.innerWidth;
+				// Reflow at the new width before measuring again; never retain stale line wrapping heights.
+				for (const element of [...originals.keys()]) { sizes.unobserve(element); restore(element); consider(element); }
+			}
+		}, { signal: abort.signal });
+		window.addEventListener('beforeprint', () => {
+			sizes.disconnect(); changes.disconnect();
+			for (const element of originals.keys()) { restore(element); }
+		}, { signal: abort.signal });
+		window.addEventListener('afterprint', start, { signal: abort.signal });
+		clearContentVisibility = () => {
+			abort.abort(); sizes.disconnect(); changes.disconnect();
+			for (const element of originals.keys()) { restore(element); }
+		};
+	}
 
 	function getSelectedText(): string {
 		const active = document.activeElement;
@@ -126,10 +212,26 @@
 		applyTheme();
 	}
 	function applyTheme(): void {
-		if (!host || !configuration) {
+		if (!configuration) {
 			return;
 		}
 		const theme = configuration.theme;
+		// Product pages use the host theme; ordinary websites keep their own styles.
+		if (location.protocol === 'ash-browser-page:' && document.documentElement) {
+			for (const [property, value] of Object.entries({
+				'editor-background': theme.editorBackground ?? theme.widgetBackground, foreground: theme.foreground ?? theme.widgetForeground,
+				'sideBar-background': theme.sidebarBackground, 'list-hoverBackground': theme.hoverBackground,
+				'input-border': theme.inputBorder, 'text-codeBlockBackground': theme.codeBackground,
+				'link-foreground': theme.linkForeground, 'error-foreground': theme.errorForeground, 'widget-shadow': theme.shadow,
+				'widget-border': theme.contrastBorder || theme.widgetBorder, contrastBorder: theme.contrastBorder,
+				focusBorder: theme.focusBorder, 'button-background': theme.buttonBackground, 'button-foreground': theme.buttonForeground,
+			})) {
+				if (value) { document.documentElement.style.setProperty('--ash-' + property, value); }
+				else { document.documentElement.style.removeProperty('--ash-' + property); }
+			}
+			if (theme.colorScheme) { document.documentElement.style.colorScheme = theme.colorScheme; }
+		}
+		if (!host) { return; }
 		for (const [property, value] of Object.entries({
 			focus: theme.focusBorder,
 			foreground: theme.widgetForeground,
@@ -525,6 +627,9 @@
 	});
 	ipcRenderer.on(channel, (_event, message: { command: string; data?: any; }) => {
 		switch (message.command) {
+			case 'contentVisibility':
+				configureContentVisibility(message.data);
+				break;
 			case 'hideUI':
 				if (host) {
 					host.style.visibility = 'hidden';

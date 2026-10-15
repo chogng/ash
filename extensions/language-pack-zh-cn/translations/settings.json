@@ -330,6 +330,8 @@
     "categories.browser.label": "浏览器",
     "categories.browser.description": "配置网站链接和集成浏览器页面。",
     "browser.controls.description": "设置页面缩放、地址栏搜索和本地文件变化时的自动重载。",
+    "browser.chatgpt.label": "ChatGPT",
+    "browser.chatgpt.description": "配置此窗口中的 ChatGPT 网页。",
     "categories.voice-input.label": "语音输入",
     "categories.voice-input.description": "选择本地或云端转写，并管理听写模型。",
     "hooks.managementLink": "在 Agent 自定义中管理 Hooks。",

@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import type { BrowserWindow, WebContentsView } from 'electron/main';
 import { suite, test } from 'mocha';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -17,6 +19,10 @@ import { IApplicationStorageMainService } from '../../../storage/electron-main/s
 import { ILogService, NullLoggerService } from '../../../log/common/log.js';
 import type { IStorageSnapshot } from '../../../storage/common/storageIpc.js';
 import { StorageScope } from '../../../storage/common/storage.js';
+import type { ContextMenuParams } from 'electron/main';
+import type { ElectronContextMenu } from '../../../../base/parts/contextmenu/electron-main/contextmenu.js';
+import type { INativeContextMenuRequest, INativeContextMenuResult } from '../../../../base/parts/contextmenu/common/contextmenu.js';
+import { IClipboardService } from '../../../clipboard/common/clipboardService.js';
 
 const id = 'browser_target_123e4567-e89b-12d3-a456-426614174000';
 const observation = { includeAccessibilityTree: false, includeDomSnapshot: false, includeScreenshot: false };
@@ -25,6 +31,29 @@ const signal = () => new AbortController().signal;
 
 suite('Browser view ownership and operations', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('rendering rules cross validated IPC, reach only the main frame and survive document replacement', async () => {
+		using f = fixture(); await f.create();
+		const sent: unknown[] = [];
+		const frame = { detached: false, framesInSubtree: [] as unknown[], send: (_channel: string, message: unknown) => sent.push(message) };
+		const child = { detached: false, send: () => { throw new Error('A rule must not enter a subframe'); } };
+		frame.framesInSubtree.push(frame, child);
+		Object.assign(f.contents, { mainFrame: frame });
+		const channel = browserViewChannel(f.manager, { call: async () => null, listen: () => Event.None } as unknown as import('../../../../base/parts/ipc/common/ipc.js').IChannel);
+		const rule = { origin: 'https://chatgpt.com', selector: '[data-talvt-turn-state="complete"]' };
+		await channel.call('window:1', 'setContentVisibility', [id, rule]);
+		for (const senderFrame of [child, frame]) {
+			f.contents.emit('ipc-message', { senderFrame }, 'ash:browserView:preload', { type: 'ready', frameToken: 'frame-one' });
+		}
+		assert.deepEqual(sent, [{ command: 'contentVisibility', data: rule }]);
+		f.contents.emit('did-start-navigation', {}, 'https://chatgpt.com/c/next', false, true);
+		f.contents.emit('ipc-message', { senderFrame: frame }, 'ash:browserView:preload', { type: 'ready', frameToken: 'frame-two' });
+		await channel.call('window:1', 'setContentVisibility', [id, null]);
+		assert.deepEqual(sent, [{ command: 'contentVisibility', data: rule }, { command: 'contentVisibility', data: rule }, { command: 'contentVisibility', data: undefined }]);
+		for (const invalid of [{ ...rule, origin: 'https://chatgpt.com/path' }, { ...rule, origin: 'http://chatgpt.com' }, { ...rule, selector: '' }, { ...rule, extra: true }]) {
+			await assert.rejects(channel.call('window:1', 'setContentVisibility', [id, invalid]), /rendering rule/);
+		}
+	});
 
 	test('console capture is bounded, isolated to one page and reset at a document navigation', async () => {
 		using f = fixture(); await f.create();
@@ -429,6 +458,14 @@ export function fixture(storageOverride?: IApplicationStorageMainService) {
 		load: async (url: string): Promise<void> => { f.url = url; },
 		capture: async () => ({ toPNG: () => Buffer.from('png') }),
 		remote: false,
+		menuRequests: [] as INativeContextMenuRequest[],
+		popupMenu: async (_request: INativeContextMenuRequest): Promise<INativeContextMenuResult> => ({}),
+		menuCloses: 0,
+		messages: {} as Readonly<Record<string, string>>,
+		clipboardWrites: [] as string[],
+		editing: [] as string[],
+		imageCopies: [] as { x: number; y: number; }[],
+		downloads: [] as string[],
 		proxy: async () => ({ localPort: 1234, signal: signal(), ...toDisposable(() => { f.networkReleases++; }) }),
 	};
 	const window = { id: 1, contentView: { addChildView: (view: WebContentsView) => children.add(view), removeChildView: (view: WebContentsView) => children.delete(view) }, webContents: { getZoomFactor: () => 2, focus: () => { f.workbenchFocused++; }, sendInputEvent: (input: Electron.KeyboardInputEvent) => { f.workbenchInput.push(input); } }, isDestroyed: () => false } as unknown as BrowserWindow;
@@ -456,8 +493,14 @@ export function fixture(storageOverride?: IApplicationStorageMainService) {
 	};
 	instantiation.registerInstance(IApplicationStorageMainService, storage);
 	instantiation.registerInstance(ILogService, new NullLoggerService());
+	instantiation.registerInstance(IClipboardService, { writeText: async (text: string) => { f.clipboardWrites.push(text); } } as unknown as IClipboardService);
 	const manager = store.add(instantiation.createInstance(BrowserViewMainService, {
 		window, getWorkspaceId: () => 'workspace-one',
+		contextMenu: {
+			popup: (request: INativeContextMenuRequest) => { f.menuRequests.push(request); return f.popupMenu(request); },
+			close: () => { f.menuCloses++; },
+		} as unknown as ElectronContextMenu,
+		getNlsMessages: () => f.messages,
 		getRemoteNetwork() { return f.remote ? { authority: 'ssh-remote+test', tunnels: { openProxy: () => f.proxy() } as unknown as import('../../../remote/electron-main/sshPortForwardingService.js').SshPortForwardingService } : undefined; }, createSession: (partition: string) => {
 			let session = partitions.get(partition);
 			if (!session) {
@@ -480,6 +523,10 @@ export function fixture(storageOverride?: IApplicationStorageMainService) {
 				getURL: () => f.url, getTitle: () => f.title, focus: () => { }, stop: () => { f.loading = false; }, reload: () => { }, reloadIgnoringCache: () => { },
 				navigationHistory: { canGoBack: () => false, canGoForward: () => false, goBack: () => { }, goForward: () => { } },
 				loadURL: (url: string) => f.load(url), capturePage: () => f.capture(),
+				undo: () => f.editing.push('undo'), redo: () => f.editing.push('redo'),
+				cut: () => f.editing.push('cut'), copy: () => f.editing.push('copy'),
+				paste: () => f.editing.push('paste'), pasteAndMatchStyle: () => f.editing.push('pastePlain'), selectAll: () => f.editing.push('selectAll'),
+				copyImageAt: (x: number, y: number) => { f.imageCopies.push({ x, y }); }, downloadURL: (url: string) => { f.downloads.push(url); },
 				close: () => { destroyed = true; pageContents.emit('destroyed'); },
 				debugger: Object.assign(new EventEmitter(), { isAttached: () => f.attached, attach: () => { f.attached = true; }, detach: () => { f.attached = false; }, sendCommand: (method: string, params?: unknown) => { f.commands.push({ method, params }); return method === 'Target.getTargetInfo' ? Promise.resolve({ targetInfo: { targetId: chromiumId } }) : f.command(method, params); } }),
 			});
@@ -498,3 +545,75 @@ export function fixture(storageOverride?: IApplicationStorageMainService) {
 }
 
 import { browserViewChannel } from '../../electron-main/browserViewIpc.js';
+
+suite('Browser webpage context menu', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+	const context = (overrides: Partial<ContextMenuParams> = {}): ContextMenuParams => ({
+		x: 12, y: 18, frame: { detached: false }, linkURL: '', srcURL: '', mediaType: 'none',
+		selectionText: '', isEditable: false, hasImageContents: false, menuSourceType: 'mouse',
+		editFlags: { canUndo: false, canRedo: false, canCut: false, canCopy: true, canPaste: true, canDelete: false, canSelectAll: true },
+		...overrides,
+	} as ContextMenuParams);
+
+	test('keyboard editing menus target the page, retain disabled actions and follow client language and zoom', async () => {
+		using f = fixture();
+		await f.create();
+		f.messages = JSON.parse(await readFile(join(process.cwd(), 'extensions/language-pack-zh-cn/translations/workbench.json'), 'utf8'))['ash.workbench'];
+		await f.manager.layout(id, { x: 20, y: 30, width: 400, height: 300 });
+		f.popupMenu = async () => ({ selectedId: 'paste' });
+		f.contents.emit('context-menu', {}, context({ isEditable: true, menuSourceType: 'keyboard' }));
+		await Promise.resolve();
+		assert.deepEqual(f.editing, ['paste']);
+		const request = f.menuRequests.at(-1)!;
+		assert.deepEqual({ x: request.x, y: request.y }, { x: 26, y: 39 });
+		assert.ok(request.items.some(item => item.type === 'action' && item.id === 'cut' && !item.enabled));
+		assert.ok(request.items.some(item => item.type === 'action' && item.id === 'paste' && item.label === '粘贴'));
+		f.popupMenu = async () => ({ selectedId: 'cut' });
+		await Promise.resolve();
+		f.contents.emit('context-menu', {}, context({ isEditable: true }));
+		await Promise.resolve();
+		assert.deepEqual(f.editing, ['paste']);
+	});
+
+	test('link and image actions reuse page opening, clipboard and download owners', async () => {
+		using f = fixture();
+		await f.manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test/', owner: { type: 'user' }, session: { scope: BrowserViewStorageScope.Global } });
+		f.popupMenu = async () => ({ selectedId: 'openLink' });
+		f.contents.emit('context-menu', {}, context({ linkURL: 'https://example.test/next' }));
+		await Promise.resolve();
+		assert.ok(f.events.some(event => event.type === 'openRequested' && event.targetId === id && event.url === 'https://example.test/next'));
+		await Promise.resolve();
+		f.popupMenu = async () => ({ selectedId: 'copyLink' });
+		f.contents.emit('context-menu', {}, context({ linkURL: 'javascript:alert(1)' }));
+		await Promise.resolve();
+		assert.ok(f.menuRequests.at(-1)!.items.some(item => item.type === 'action' && item.id === 'openLink' && !item.enabled));
+		assert.deepEqual(f.clipboardWrites, ['javascript:alert(1)']);
+		await Promise.resolve();
+		f.popupMenu = async () => ({ selectedId: 'copyImage' });
+		f.contents.emit('context-menu', {}, context({ mediaType: 'image', hasImageContents: true, srcURL: 'https://example.test/image.png' }));
+		await Promise.resolve();
+		assert.deepEqual(f.imageCopies, [{ x: 12, y: 18 }]);
+		await Promise.resolve();
+		f.popupMenu = async () => ({ selectedId: 'saveImage' });
+		f.contents.emit('context-menu', {}, context({ mediaType: 'image', hasImageContents: true, srcURL: 'blob:https://example.test/image-id' }));
+		await Promise.resolve();
+		assert.deepEqual(f.downloads, ['blob:https://example.test/image-id']);
+	});
+
+	test('navigation and page disposal revoke pending menu actions and release event listeners', async () => {
+		using f = fixture();
+		await f.create();
+		const pending = promiseWithResolvers<INativeContextMenuResult>();
+		f.popupMenu = () => pending.promise;
+		f.contents.emit('context-menu', {}, context({ linkURL: 'https://example.test/next' }));
+		assert.ok(f.menuRequests.at(-1)!.items.some(item => item.type === 'action' && item.id === 'openLink' && !item.enabled));
+		f.contents.emit('did-start-navigation', {}, 'https://example.test/other', false, true);
+		assert.equal(f.menuCloses, 1);
+		pending.resolve({ selectedId: 'copyLink' });
+		await Promise.resolve();
+		assert.deepEqual(f.clipboardWrites, []);
+		assert.equal(f.contents.listenerCount('context-menu'), 1);
+		await f.manager.destroyBrowserView(id);
+		assert.equal(f.contents.listenerCount('context-menu'), 0);
+	});
+});

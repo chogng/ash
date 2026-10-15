@@ -25,6 +25,7 @@ import { nativeImage, nativeTheme, shell } from "electron";
 import { app, BrowserWindow, dialog, globalShortcut, ipcMain, screen, Menu, Tray, type BrowserWindowConstructorOptions, type Event as ElectronEvent, type MenuItemConstructorOptions } from "electron/main";
 
 import { basename, dirname, isAbsolute, join, parse } from "node:path";
+import { homedir } from 'node:os';
 import { mkdir } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { pathToFileURL, fileURLToPath } from "node:url";
@@ -34,6 +35,8 @@ import { Disposable, DisposableMap, DisposableStore, DisposableTracker, MutableD
 import { assertDefined } from "../../base/common/types.js";
 import { AshApplicationId, AshApplicationName } from '../common/application.js';
 import { ElectronContextMenu } from "../../base/parts/contextmenu/electron-main/contextmenu.js";
+import { ElectronMainClipboardService } from '../../platform/clipboard/electron-main/electronMainClipboardService.js';
+import { IClipboardService } from '../../platform/clipboard/common/clipboardService.js';
 import { AppServerConnectionRelay } from "../../platform/agentHost/electron-main/appServerConnectionRelay.js";
 import { DevelopmentAppServerReloader } from "../../platform/app-server-daemon/electron-main/developmentAppServerReloader.js";
 import { AppServerDaemonLauncher, createAppServerDaemonLauncher } from "../../platform/app-server-daemon/electron-main/appServerDaemonLauncher.js";
@@ -42,6 +45,8 @@ import { normalizeEntryUrl, TrustedIpcRouter, type IpcRoute } from "../../platfo
 import { ipcBrowserViewChannelName } from "../../platform/browserView/common/browserView.js";
 import { browserViewChannel } from "../../platform/browserView/electron-main/browserViewIpc.js";
 import { BrowserViewMainService, IBrowserViewMainService } from "../../platform/browserView/electron-main/browserViewMainService.js";
+import { BrowserPageProtocol } from '../../platform/browserView/electron-main/browserPageProtocol.js';
+import { BrowserPageRemoteRuntime } from '../../platform/browserView/electron-main/browserPageRemoteRuntime.js';
 import { Client as MessagePortClient } from '../../base/parts/ipc/common/ipc.mp.js';
 import { ProxyChannel, type IServerChannel } from '../../base/parts/ipc/common/ipc.js';
 import { UtilityProcess } from '../../platform/utilityProcess/electron-main/utilityProcess.js';
@@ -201,6 +206,7 @@ const AGENTS_WINDOW_KEY = 'agents';
 /** Owns the Electron application's persistent services, Workbench windows, IPC, and shutdown. */
 export class AshApplication extends Disposable {
 	private readonly rendererRoot: string;
+	private readonly browserPages: BrowserPageProtocol;
 	private readonly appServerStartupMode: AppServerStartupMode;
 	private readonly disposableTracker: DisposableTracker | undefined;
 	private readonly tracking: globalThis.Disposable | undefined;
@@ -322,6 +328,23 @@ export class AshApplication extends Disposable {
 			this.logService.warn('gpu', 'GPU process exited', { reason });
 		}));
 		this.rendererRoot = options.rendererRoot;
+		this.browserPages = this._register(new BrowserPageProtocol(this.rendererRoot, process.env.ASH_RENDERER_URL, [{
+			host: 'chatgpt', entry: 'browser/chatgpt/chatgpt.html', upstream: 'https://chatgpt.com',
+			upstreamPaths: ['/backend-api/me', '/backend-api/models', '/backend-api/conversations', '/backend-api/conversation/', '/backend-api/f/conversation/prepare', '/backend-api/f/conversation', '/backend-api/stop_conversation'],
+			requestHeaders: ['x-conduit-token', 'OpenAI-Sentinel-Chat-Requirements-Token', 'OpenAI-Sentinel-Proof-Token', 'OpenAI-Sentinel-Turnstile-Token'],
+			remoteHeaders: {
+				url: 'https://chatgpt.com/', script: 'browser/chatgpt/verification.js', paths: ['/backend-api/f/conversation'], credentialPaths: ['/backend-api/sentinel/'],
+				headers: ['OpenAI-Sentinel-Chat-Requirements-Token', 'OpenAI-Sentinel-Proof-Token', 'OpenAI-Sentinel-Turnstile-Token'],
+			},
+			credentials: {
+				file: join(process.env.CODEX_HOME || join(homedir(), '.codex'), 'auth.json'), identityRequest: '/backend-api/me',
+				requirements: [{ path: ['auth_mode'], value: 'chatgpt', allowMissing: true }],
+				fields: [
+					{ path: ['tokens', 'access_token'], header: 'Authorization', prefix: 'Bearer ' },
+					{ path: ['tokens', 'account_id'], header: 'ChatGPT-Account-Id', optional: true, identity: true },
+				],
+			},
+		}], (url, authorize) => new BrowserPageRemoteRuntime(url, authorize)));
 		this.appServerStartupMode = options.appServerStartupMode;
 		this.disposableTracker = disposableTracker;
 		this.tracking = tracking;
@@ -1276,7 +1299,8 @@ export class AshApplication extends Disposable {
 			sshExecutable: process.env.ASH_SSH_PATH ?? "ssh",
 			localEnvironment: process.env,
 		});
-		const browserServices = this.createBrowserServices(window, workspaceContext, remotePortForwardingService, windowDisposables, supervisor);
+		const systemContextMenu = windowDisposables.add(new ElectronContextMenu(window));
+		const browserServices = this.createBrowserServices(window, workspaceContext, remotePortForwardingService, windowDisposables, supervisor, systemContextMenu);
 		windowDisposables.add(workspaceContext.onDidChangeWorkspace(({ workspace: nextWorkspace, resolvedWorkspace }) => {
 			if (window.isDestroyed()) return;
 			record.windowStateTracking.dispose();
@@ -1425,7 +1449,6 @@ export class AshApplication extends Disposable {
 			...workspaceContextIpcRoutes(workspaceContext),
 			workspaceRecoveryIpcRoute(identifiers => this.windowsMainService.restoreWorkspaces(identifiers, async identifier => (await this.openWorkspace(identifier, workspaces))?.window)),
 		];
-		const systemContextMenu = windowDisposables.add(new ElectronContextMenu(window));
 		ipcRoutes.push(...this.contextMenuIpcRoutes(systemContextMenu));
 		if (this.nativeMenubar) {
 			windowDisposables.add(this.nativeMenubar.registerWindow(window));
@@ -1557,7 +1580,7 @@ export class AshApplication extends Disposable {
 		return channel;
 	}
 
-	private createBrowserServices(window: BrowserWindow, workspaceContext: WorkspaceContextMainService, remotePortForwardingService: SshPortForwardingService, windowDisposables: DisposableStore, supervisor: AppServerConnectionRelay): InstantiationService {
+	private createBrowserServices(window: BrowserWindow, workspaceContext: WorkspaceContextMainService, remotePortForwardingService: SshPortForwardingService, windowDisposables: DisposableStore, supervisor: AppServerConnectionRelay, contextMenu: ElectronContextMenu): InstantiationService {
 		const context = `window:${window.id}`;
 		this.windowPortForwarding.set(context, remotePortForwardingService);
 		windowDisposables.add(toDisposable(() => {
@@ -1566,14 +1589,21 @@ export class AshApplication extends Disposable {
 			}
 		}));
 		const browserServices = windowDisposables.add(this.windowServices.createChild(new ServiceCollection()));
+		browserServices.registerInstance(IClipboardService, new ElectronMainClipboardService(window));
 		const browserViewMainService = windowDisposables.add(browserServices.createInstance(BrowserViewMainService, {
 			window,
+			contextMenu,
+			getNlsMessages: () => this.activeLanguagePack.bundles['ash.workbench'] ?? {},
 			getWorkspaceId: () => workspaceContext.getWorkspace().id,
 			getRemoteNetwork: () => {
 				const authority = getWorkspaceRemoteAuthority(workspaceContext.getWorkspace());
 				return authority ? { authority, tunnels: remotePortForwardingService } : undefined;
 			},
-			createSession: (partition: string) => electronSession.fromPartition(partition),
+			createSession: (partition: string) => {
+				const session = electronSession.fromPartition(partition);
+				if (partition.startsWith('persist:')) { this.browserPages.attach(session); }
+				return session;
+			},
 			createView: (session: Electron.Session) => new WebContentsView({
 				webPreferences: {
 					preload: app.isPackaged
@@ -1691,7 +1721,8 @@ export class AshApplication extends Disposable {
 						sshExecutable: process.env.ASH_SSH_PATH ?? "ssh",
 						localEnvironment: process.env,
 					});
-					const browserServices = this.createBrowserServices(window, session.workspaceContext, remotePortForwardingService, windowDisposables, sessionsRelay);
+					const systemContextMenu = windowDisposables.add(new ElectronContextMenu(window));
+					const browserServices = this.createBrowserServices(window, session.workspaceContext, remotePortForwardingService, windowDisposables, sessionsRelay, systemContextMenu);
 					const remoteWindowContext = windowDisposables.add(new RemoteWindowMainContext({
 						supervisor: sessionsRelay,
 						workspaceContext: session.workspaceContext,
@@ -1743,7 +1774,6 @@ export class AshApplication extends Disposable {
 						},
 						windowCloseResponseIpcRoute(this.lifecycleMainService, window),
 					];
-					const systemContextMenu = windowDisposables.add(new ElectronContextMenu(window));
 					ipcRoutes.push(...this.contextMenuIpcRoutes(systemContextMenu));
 					if (this.nativeMenubar) {
 						windowDisposables.add(this.nativeMenubar.registerWindow(window));

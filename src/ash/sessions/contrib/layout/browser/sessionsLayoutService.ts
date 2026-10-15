@@ -161,10 +161,11 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				const productEditor = entry.content === 'editor';
 				const documents = entry.content === 'documents';
 				const state = this.visibility.get(entry.id) ?? {
-					sidebar: true, details: documents || entry.detailsContainerId !== undefined,
+					sidebar: entry.sidebarContainerId !== undefined, details: documents || entry.detailsContainerId !== undefined,
 					panel: false, documents: documents && this.controller.hasDocumentEditors,
 				};
 				for (const group of this.editor.groups) { this.editor.setGroupVisible(group.id, (group.id === this.pageGroupId) === productEditor); }
+				this.editor.groups.find(group => group.id === this.pageGroupId)!.setTitleVisible(entry.showEditorTabs !== false);
 				if (!productEditor) { this.editor.activateGroup(this.editor.groups.find(group => group.id !== this.pageGroupId)!.id); }
 				this.layout.updateParts(() => {
 					// Hide an outgoing conversation before separating editor details so transient minimum widths cannot shrink navigation.
@@ -172,15 +173,18 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 					this.layout.setPartAvailable('panel', documents);
 					// Optional conversations require a new user action on each entry, including window restoration.
 					this.layout.setPartAvailable('sessions', !productEditor);
+					this.layout.setPartAvailable('sidebar', entry.sidebarContainerId !== undefined);
 					if (productEditor) { this.layout.setPrimaryPart('editor'); }
 					this.setVisible('editor', productEditor || (documents && state.documents));
-					this.setVisible('sidebar', state.sidebar);
+					this.setVisible('sidebar', entry.sidebarContainerId !== undefined && state.sidebar);
 					this.setVisible('auxiliarybar', state.details);
 					this.setVisible('panel', documents && state.panel);
 				});
-				await this.views.openViewContainer(entry.sidebarContainerId, entry.focus === 'sidebar' && state.sidebar && !this.customViews.activeCustomView.get());
+				if (entry.sidebarContainerId) {
+					await this.views.openViewContainer(entry.sidebarContainerId, entry.focus === 'sidebar' && state.sidebar && !this.customViews.activeCustomView.get());
+				}
 				if (this.isDisposed) { return; }
-				this.setVisible('sidebar', state.sidebar);
+				this.setVisible('sidebar', entry.sidebarContainerId !== undefined && state.sidebar);
 				if (entry.detailsContainerId) { await this.views.openViewContainer(entry.detailsContainerId); }
 				if (this.isDisposed) { return; }
 				if (documents && !this.customViews.activeCustomView.get()) { await this.controller.activate(state.details); }

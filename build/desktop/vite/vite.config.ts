@@ -1,6 +1,6 @@
 import { localizationPlugin } from "../../resources/localization.ts";
 import { resolve } from "node:path";
-import { defineConfig, normalizePath } from "vite";
+import { defineConfig, normalizePath, type Plugin } from "vite";
 import { AshRendererDirectory } from "../../../src/ash/code/common/application.js";
 import { codeSessionsProfile } from '../../../src/ash/code/common/codeSessionsProfile.js';
 import { desktopBuildPath } from "../paths.ts";
@@ -13,6 +13,7 @@ import { webAppServerVitePlugin } from "./webAppServerPlugin.ts";
 import { workbenchEntryPlugin } from "./workbenchEntryPlugin.ts";
 import { browserExtensionsPlugin } from './extensionsPlugin.ts';
 import { CSSDevelopmentService } from '../../../src/ash/platform/cssDev/node/cssDevService.ts';
+import { installChatGPTVerification } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTVerification.ts';
 
 export default defineConfig(({ mode, command }) => {
 	const desktopRoot = resolve(import.meta.dirname, "../../..");
@@ -80,11 +81,14 @@ export default defineConfig(({ mode, command }) => {
 	const remoteRuntimeInstallInput = {
 		"electron-browser/remote-runtime-install/remoteRuntimeInstall": resolve(sourceRoot, "electron-browser/remote-runtime-install/remoteRuntimeInstall.html"),
 	};
+	const chatGPTInput = { 'browser/chatgpt/chatgpt': resolve(sourceRoot, 'browser/chatgpt/chatgpt.html') };
+	const verificationScript = `(${installChatGPTVerification.toString()})();`;
 	const inputs = webOnly ? browserInputs : {
 		...browserInputs,
 		[electronEntry]: resolve(sourceRoot, `${electronEntry}.html`),
 		...sessionsInputs,
 		...remoteRuntimeInstallInput,
+		...chatGPTInput,
 	};
 
 	return {
@@ -96,6 +100,18 @@ export default defineConfig(({ mode, command }) => {
 			'import.meta.env.ASH_SESSIONS_PROFILE': JSON.stringify(codeSessionsProfile),
 		},
 		plugins: [
+			...(webOnly ? [] : [{
+				name: 'ash-browser-page-verification',
+				generateBundle() { this.emitFile({ type: 'asset' as const, fileName: 'browser/chatgpt/verification.js', source: verificationScript }); },
+				configureServer(server) {
+					server.middlewares.use('/browser/chatgpt/verification.js', (request, response, next) => {
+						if (request.method !== 'GET') { next(); return; }
+						response.setHeader('Content-Type', 'text/javascript');
+						response.setHeader('Cache-Control', 'no-store');
+						response.end(verificationScript);
+					});
+				},
+			} satisfies Plugin]),
 			buildMetricsPlugin(),
 			// Extension preparation consumes language packs; one watcher publishes both before reloading.
 			localizationPlugin({ watch: false }),
@@ -113,6 +129,10 @@ export default defineConfig(({ mode, command }) => {
 				inputFile: browserInputs['browser/theme-preview/sessionsThemePreview'],
 				sourceFile: resolve(repositoryRoot, 'src/ash/sessions/contrib/themeEditor/browser/sessionsThemePreview.html'),
 			}, ...(webOnly ? [] : [{
+				url: '/browser/chatgpt/chatgpt.html',
+				sourceFile: resolve(repositoryRoot, 'src/ash/sessions/contrib/chatgptweb/browser/chatGPTPage.html'),
+				inputFile: chatGPTInput['browser/chatgpt/chatgpt'],
+			}, {
 				url: '/sessions/electron-browser/sessions.html',
 				sourceFile: resolve(sourceRoot, '../sessions/electron-browser/sessions.html'),
 				inputFile: sessionsInputs['sessions/electron-browser/sessions'],

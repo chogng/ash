@@ -21,6 +21,7 @@ import type { IBrowserViewService } from '../common/browserView.js';
 import { isRecord } from '../../../base/common/types.js';
 import type { IBrowserViewWindowConfiguration, IBrowserElementSelectionOptions, IBrowserElementCommentsUpdate, IBrowserViewCaptureScreenshotOptions, IBrowserViewFindInPageOptions } from '../common/browserView.js';
 import { browserZoomFactors, type IBrowserDeviceProfile } from '../common/browserView.js';
+import { browserPageScheme } from '../common/browserPage.js';
 
 /** The page owner stays in Main; sharing is authorized by the window's app-server adapter. */
 export function browserViewChannel(service: IBrowserViewService, sharing: IChannel): IServerChannel<string> {
@@ -40,6 +41,18 @@ export function browserViewChannel(service: IBrowserViewService, sharing: IChann
 	]);
 	return {
 		call: async <T>(_context: string, command: string, arg: unknown): Promise<T> => {
+			if (command === 'setContentVisibility') {
+				if (!Array.isArray(arg) || arg.length !== 2) { throw new TypeError('Invalid browser rendering rule'); }
+				const { targetId } = validateBrowserViewTargetRequest({ targetId: arg[0] });
+				const rule = arg[1] ?? undefined;
+				if (rule !== undefined && (!isRecord(rule) || Object.keys(rule).some(key => !['origin', 'selector'].includes(key))
+					|| typeof rule.origin !== 'string' || rule.origin.length > 2048
+					|| !(rule.origin.startsWith('https://') && toOriginKey(rule.origin) === rule.origin || new RegExp(`^${browserPageScheme}://[a-z][a-z0-9-]*$`, 'u').test(rule.origin))
+					|| typeof rule.selector !== 'string' || !rule.selector || rule.selector.length > 1024)) {
+					throw new TypeError('Invalid browser rendering rule');
+				}
+				return await service.setContentVisibility(targetId, rule as import('../common/browserView.js').IBrowserContentVisibilityRule | undefined) as T;
+			}
 			if (command === 'setPermissions') {
 				if (!Array.isArray(arg) || arg.length !== 3 || typeof arg[1] !== 'string' || arg[1].length > 8192 || toOriginKey(arg[1]) !== arg[1] || !arg[1] || !Array.isArray(arg[2]) || arg[2].length > 7 || arg[2].some(value => !isRecord(value) || Object.keys(value).some(key => !['category', 'state'].includes(key)) || !['location', 'camera', 'microphone', 'notifications', 'sensors', 'clipboard', 'devices'].includes(value.category as string) || !['allow', 'deny', null].includes(value.state as string | null))) { throw new TypeError('Invalid browser site permissions'); }
 				const { targetId } = validateBrowserViewTargetRequest({ targetId: arg[0] });

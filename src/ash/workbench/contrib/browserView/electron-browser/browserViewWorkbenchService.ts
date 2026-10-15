@@ -6,7 +6,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { IEditorService, type EditorOpenOptions } from '../../../services/editor/common/editorService.js';
 import { BrowserEditorInput, type IBrowserEditorInputData } from '../common/browserEditorInput.js';
-import { BrowserViewModel, type IBrowserViewContextualFilter, type IBrowserViewFilterContext, type IBrowserViewOpenHandler, type IBrowserViewWorkbenchService, type IBrowserViewWorkbenchCreateOptions } from '../common/browserView.js';
+import { BrowserViewModel, type IBrowserViewContextualFilter, type IBrowserViewFilterContext, type IBrowserViewOpenHandler, type IBrowserViewPresentationOptions, type IBrowserViewWorkbenchService, type IBrowserViewWorkbenchCreateOptions } from '../common/browserView.js';
 import { IDialogsModel, type IDialogHandle } from '../../../common/dialogs.js';
 import { DialogResult } from '../../../../platform/dialogs/common/dialogs.js';
 import { localize } from '../../../../nls.js';
@@ -29,6 +29,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 	public readonly onDidChangeBrowserViews = this.changes.event;
 	private readonly filters = new Set<IBrowserViewContextualFilter>();
 	private readonly openHandlers = new Set<IBrowserViewOpenHandler>();
+	private readonly windowBrowserViews = new Map<string, IBrowserViewPresentationOptions>();
 	private readonly retiringInputs = this._register(new DisposableStore());
 	private readonly closingInputs = new Map<string, Promise<void>>();
 	private readonly initialEvents: BrowserViewEvent[] = [];
@@ -60,6 +61,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 			if (!(input instanceof BrowserEditorInput)) { return; }
 			const id = BrowserViewUri.getId(input.resource)!;
 			if (this.inputs.get(id) !== input) { return; }
+			if (this.isWindowBrowserView(id)) { return; }
 			if (editorPart.groups.some(group => group.inputs.some(candidate => extUri.isEqual(candidate.resource, input.resource)))) { return; }
 			void service.destroyBrowserView(id).catch(error => console.error('Failed to close browser page', error));
 		}));
@@ -92,6 +94,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 
 	public getContextualBrowserViews(context: IBrowserViewFilterContext = {}): Map<string, BrowserEditorInput> {
 		return new Map([...this.inputs].filter(([, input]) => {
+			if (this.isWindowBrowserView(input.id)) { return false; }
 			const owner = input.model?.info.owner;
 			if (context.sandboxSessionId !== undefined && (owner?.type !== 'agent' || owner.sessionId !== context.sandboxSessionId)) { return false; }
 			return [...this.filters].every(filter => filter.include(input, context));
@@ -113,6 +116,28 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 		this.assertNotDisposed();
 		this.openHandlers.add(handler);
 		return toDisposable(() => { this.openHandlers.delete(handler); });
+	}
+
+	public registerWindowBrowserView(id: string, presentation: IBrowserViewPresentationOptions = {}): IDisposable {
+		this.assertNotDisposed();
+		if (this.windowBrowserViews.has(id)) {
+			throw new Error(`Browser page already has a window owner: ${id}`);
+		}
+		this.windowBrowserViews.set(id, presentation);
+		this.changes.fire();
+		return toDisposable(() => {
+			if (this.windowBrowserViews.delete(id) && !this.isDisposed) {
+				this.changes.fire();
+			}
+		});
+	}
+
+	public isWindowBrowserView(id: string): boolean {
+		return this.windowBrowserViews.has(id);
+	}
+
+	public getBrowserViewPresentation(id: string): IBrowserViewPresentationOptions | undefined {
+		return this.windowBrowserViews.get(id);
 	}
 
 	public getOrCreateLazy(data: IBrowserEditorInputData): BrowserEditorInput {
@@ -177,6 +202,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 		const id = BrowserViewUri.getId(input.resource)!;
 		await this.closingInputs.get(id);
 		if (this.isDisposed || this.inputs.get(id) !== input) { return; }
+		if (this.isWindowBrowserView(id)) { return; }
 		const owner = input.model?.info.owner ?? { type: 'user' as const };
 		if (![...this.openHandlers].every(handler => handler.shouldOpenEditor(input, owner, options))) { return; }
 		await this.editors.openEditor(input, { pinned: true, ...options });
@@ -251,6 +277,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 		this.permissionDialogs.clear();
 		this.filters.clear();
 		this.openHandlers.clear();
+		this.windowBrowserViews.clear();
 		super.disposeCore();
 	}
 }
