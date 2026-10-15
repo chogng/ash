@@ -13,7 +13,7 @@ import "./editorCommands.js";
 import "./diffEditor.workbench.contribution.js";
 import '../../../../editor/browser/widget/diffEditor/diffEditor.contribution.js';
 import { ToggleCollapseUnchangedRegions } from '../../../../editor/browser/widget/diffEditor/commands.js';
-import { DIFF_OPEN_SIDE, GOTO_NEXT_CHANGE, GOTO_PREVIOUS_CHANGE, registerDiffEditorCommands } from "./diffEditorCommands.js";
+import { GOTO_NEXT_CHANGE, GOTO_PREVIOUS_CHANGE, registerDiffEditorCommands } from "./diffEditorCommands.js";
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { MenuId, MenusRegistry } from '../../../../platform/actions/common/actions.js';
 import { ActiveEditorContext, EditorPartModalVisibleContext, EditorsVisibleContext } from '../../../common/contextkeys.js';
@@ -66,7 +66,6 @@ MenusRegistry.appendMenuItem(MenuId.EditorTitle, {
 for (const [id, key, title, icon, order] of [
 	[GOTO_PREVIOUS_CHANGE, 'command.PreviousChangeAction', 'Go to Previous Change', Lxicon.arrowUp, 10],
 	[GOTO_NEXT_CHANGE, 'command.NextChangeAction', 'Go to Next Change', Lxicon.arrowDown, 11],
-	[DIFF_OPEN_SIDE, 'compare.openSide', 'Open Active Diff Side', Lxicon.goToFile, 22],
 ] as const) {
 	MenusRegistry.appendMenuItem(MenuId.EditorTitle, {
 		command: { id, title: localize({ bundle: 'ash.workbench', key }, title), icon },

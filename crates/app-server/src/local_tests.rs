@@ -75,6 +75,130 @@ selector = { kind = "any" }
 effect = { kind = "deny", reason = "directory restriction" }
 "#;
 
+#[test]
+fn local_extension_sources_refresh_development_manifests_without_restarting() {
+    fn write_extension(root: &Path, name: &str, group: &str) {
+        std::fs::create_dir_all(root).unwrap();
+        let manifest = serde_json::json!({
+            "publisher": "test", "name": name, "version": "1.0.0",
+            "contributes": {
+                "commands": [{"command": "test.open", "title": "Open File"}],
+                "menus": {"editor/title": [{"command": "test.open", "group": group}]}
+            }
+        });
+        std::fs::write(root.join("package.json"), manifest.to_string()).unwrap();
+    }
+
+    fn publish(root: &Path, snapshot: &str) {
+        let publication = serde_json::json!({
+            "schemaVersion": 1, "builtIn": [snapshot], "user": []
+        });
+        let pending = root.join("pending.json");
+        std::fs::write(&pending, publication.to_string()).unwrap();
+        std::fs::rename(pending, root.join("current.json")).unwrap();
+    }
+
+    let fixture = tempfile::tempdir().unwrap();
+    let profile = fixture.path().join("profile");
+    let bundled = fixture.path().join("ash-resources/extensions");
+    let prepared = fixture.path().join("prepared");
+    let first = "a".repeat(64);
+    let second = "b".repeat(64);
+    write_extension(&bundled.join("browser"), "browser", "navigation@99");
+    write_extension(&profile.join("extensions/user"), "user", "navigation@20");
+    write_extension(
+        &prepared.join("packages").join(&first),
+        "browser",
+        "navigation@10",
+    );
+    write_extension(
+        &prepared.join("packages").join(&second),
+        "browser",
+        "navigation",
+    );
+
+    for installation in [
+        InstallMethod::Development,
+        InstallMethod::Other,
+        InstallMethod::Package,
+    ] {
+        publish(&prepared, &first);
+        let (roots, publication) = resolve_extension_sources(
+            &profile,
+            installation,
+            Some(bundled.clone()),
+            prepared.clone(),
+        );
+        let mut server = AppServer::new(
+            Arc::new(ThreadController::with_store(Arc::new(
+                InMemoryThreadStore::default(),
+            ))),
+            Arc::new(ProviderModelService::new(Arc::new(
+                ash_model_provider::EchoModel,
+            ))),
+        )
+        .with_extension_roots(roots);
+        if let Some(root) = publication {
+            server = server.with_prepared_extension_sources(root);
+        }
+        let mut connection = server.connection();
+        let initialized: serde_json::Value = serde_json::from_str(
+            &server.handle_json(
+                &mut connection,
+                &serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{
+                    "clientInfo":{"name":"test","version":"1"},"capabilities":{}
+                }})
+                .to_string(),
+            ),
+        )
+        .unwrap();
+        assert!(initialized.get("error").is_none(), "{initialized}");
+        let mut request_id = 1;
+        let mut read_catalog = |connection: &mut ConnectionState| {
+            request_id += 1;
+            let response = local_call(
+                &server,
+                connection,
+                serde_json::json!({
+                    "jsonrpc": "2.0", "id": request_id, "method": "extensions/list",
+                    "params": {"reload": "cached"}
+                }),
+            );
+            assert!(response.get("error").is_none(), "{response}");
+            response["result"].clone()
+        };
+        let before = read_catalog(&mut connection);
+        publish(&prepared, &second);
+        let after = read_catalog(&mut connection);
+        let group = |catalog: &serde_json::Value| {
+            let extensions = catalog["extensions"].as_array().unwrap();
+            assert_eq!(extensions.len(), 2);
+            assert_eq!(catalog["diagnostics"], serde_json::json!([]));
+            let browser = extensions
+                .iter()
+                .find(|entry| entry["id"] == "test.browser")
+                .unwrap();
+            assert_eq!(browser["sourceKind"], "builtIn");
+            let manifest: serde_json::Value =
+                serde_json::from_str(browser["manifestJson"].as_str().unwrap()).unwrap();
+            manifest["contributes"]["menus"]["editor/title"][0]["group"].clone()
+        };
+        match installation {
+            InstallMethod::Development | InstallMethod::Other => {
+                assert_eq!(group(&before), "navigation@10");
+                assert_eq!(group(&after), "navigation");
+                assert!(
+                    after["generation"].as_u64().unwrap() > before["generation"].as_u64().unwrap()
+                );
+            }
+            InstallMethod::Package => {
+                assert_eq!(group(&before), "navigation@99");
+                assert_eq!(after, before);
+            }
+        }
+    }
+}
+
 fn config_path(label: &str) -> PathBuf {
     std::env::temp_dir().join(format!(
         "ash-app-server-{label}-{}-{}.authority.json",

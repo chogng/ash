@@ -354,7 +354,7 @@ for (const language of ['en', 'zh-CN']) test(`disabled Git leaves another SCM Wo
 		const remaining = await page.evaluate(() => window.gitExtensionIsolation.runtimes());
 		expect(remaining).toEqual([before.find(runtime => runtime.id === 'test.snapshots')]);
 		expect(await page.evaluate(() => window.gitExtensionIsolation.retiredRequest())).toEqual({ invocationError: expect.stringContaining('retired activation'), backendError: expect.stringContaining('not authorized'), backendCalls: 0 });
-		expect(await page.evaluate(() => ['file', 'git-change', 'snapshot'].map(scheme => window.gitExtensionIsolation.openSideVisible(scheme)))).toEqual([true, true, true]);
+		expect(await page.evaluate(() => ['file', 'git-change', 'snapshot'].map(scheme => window.gitExtensionIsolation.openSideVisible(scheme)))).toEqual([false, false, false]);
 		expect(await page.evaluate(() => window.gitExtensionIsolation.providerState())).toEqual({ draft: 'retained draft', quickDiff: ['test.snapshots:snapshots'], decorations: 1 });
 		expect(await page.evaluate(() => window.gitExtensionIsolation.exerciseProvider())).toEqual({ originals: ['test.snapshots:snapshots'], multi: ['one.ts'] });
 		expect(await page.evaluate(() => window.gitExtensionIsolation.accept())).toBe('recorded');

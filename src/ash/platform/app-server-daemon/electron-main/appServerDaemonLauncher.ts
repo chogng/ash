@@ -21,7 +21,8 @@ interface AppServerDaemonConnectionOptions {
 /** Creates a connection carrier; stopping it leaves the profile's shared backend running. */
 export function createAppServerDaemonLauncher(options: AppServerDaemonConnectionOptions): { readonly launcher: AppServerDaemonLauncher; readonly generationFile: string | undefined; } {
 	const { packageLocation, sourceEnvironment } = options;
-	const generationFile = !packageLocation.isPackaged && sourceEnvironment.ASH_DEV_APP_SERVER_RELOAD === '1'
+	const reloadBackend = sourceEnvironment.ASH_DEV_APP_SERVER_RELOAD === '1';
+	const generationFile = !packageLocation.isPackaged && (reloadBackend || sourceEnvironment.ASH_RENDERER_URL !== undefined)
 		? sourceEnvironment.ASH_DEV_APP_SERVER_GENERATION ?? developmentAppServerGenerationPath(packageLocation.appPath)
 		: undefined;
 	if (generationFile && !isAbsolute(generationFile)) throw new Error('Development generation path must be absolute');
@@ -68,7 +69,9 @@ export function createAppServerDaemonLauncher(options: AppServerDaemonConnection
 			args: [packageLocation.isPackaged ? 'connect' : 'connect-selected'],
 			environment: buildAppServerEnvironment(sourceEnvironment, hostPlatform, productEnvironment, 'desktop'),
 		}),
-		generationFile,
+		// Frontend-only development still selects live extension sources, while the
+		// profile reloader is installed only when Rust rebuilds are being watched.
+		generationFile: reloadBackend ? generationFile : undefined,
 	};
 }
 

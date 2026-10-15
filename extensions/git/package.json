@@ -963,7 +963,7 @@
       "editor/title": [
         {
           "command": "git.openFile",
-          "group": "navigation@10",
+          "group": "navigation",
           "when": "resourceScheme == git-change"
         }
       ],

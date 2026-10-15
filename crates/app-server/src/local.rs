@@ -39,6 +39,7 @@ use ash_glm::GlmProvider;
 use ash_http_client::NetworkAccess;
 use ash_http_client::OutboundNetworkPolicy;
 use ash_install_context::InstallContext;
+use ash_install_context::InstallMethod;
 use ash_kimi::KimiCli;
 use ash_kimi::KimiDesktop;
 use ash_kimi::KimiOAuth;
@@ -1638,7 +1639,13 @@ pub fn open_app_server_with_codebase_providers(
         config: Arc::clone(&config),
     });
     let built_in_skill_root = resolve_built_in_skill_root(options.built_in_skills);
-    let extension_roots = resolve_extension_roots(&options.profile_root);
+    let installation = InstallContext::current();
+    let (extension_roots, prepared_extension_root) = resolve_extension_sources(
+        &options.profile_root,
+        installation.method(),
+        installation.bundled_resource_directory("extensions"),
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.build/builtin"),
+    );
     if let Some(config) = github_account {
         github_browser_configurations.push(github::GitHubBrowserConfig {
             host: "github.com".into(),
@@ -1803,13 +1810,8 @@ pub fn open_app_server_with_codebase_providers(
     .with_cloud_codebase_storage_root(cloud_codebase_root)
     .with_cloud_codebase_providers(providers.cloud)
     .with_extension_roots(extension_roots);
-    if InstallContext::current()
-        .bundled_resource_directory("extensions")
-        .is_none()
-    {
-        server = server.with_prepared_extension_sources(
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.build/builtin"),
-        );
+    if let Some(root) = prepared_extension_root {
+        server = server.with_prepared_extension_sources(root);
     }
     if let Some(github) = github_oauth {
         server = server.with_built_in_extension_runtime(github.runtime());
@@ -2506,15 +2508,26 @@ fn resolve_built_in_skill_root(selection: BuiltInSkillRoot) -> BuiltInSkillSourc
     }
 }
 
-fn resolve_extension_roots(profile_root: &std::path::Path) -> Vec<ExtensionRoot> {
+fn resolve_extension_sources(
+    profile_root: &std::path::Path,
+    installation: InstallMethod,
+    bundled_extensions: Option<PathBuf>,
+    prepared_extensions: PathBuf,
+) -> (Vec<ExtensionRoot>, Option<PathBuf>) {
     let mut roots = Vec::new();
-    // Development artifacts use the live publication source; installed products have fixed roots.
-    let built_in = InstallContext::current().bundled_resource_directory("extensions");
-    if let Some(root) = built_in {
-        roots.push(ExtensionRoot::built_in(root));
-    }
+    let prepared = match installation {
+        InstallMethod::Package => {
+            if let Some(root) = bundled_extensions {
+                roots.push(ExtensionRoot::built_in(root));
+            }
+            None
+        }
+        // Development runtimes also bundle resources, but those immutable copies do not
+        // follow Vite's package publication. Binding both would let stale built-ins win.
+        InstallMethod::Development | InstallMethod::Other => Some(prepared_extensions),
+    };
     roots.push(ExtensionRoot::user(profile_root.join("extensions")));
-    roots
+    (roots, prepared)
 }
 
 fn development_built_in_skill_root() -> Option<PathBuf> {

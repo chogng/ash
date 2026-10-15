@@ -44,6 +44,22 @@ test("development and production resolve the same canonical package entrypoint",
 			}),
 			join(developmentRoot, "packages", "0.1.0", build, "bin", "ash-remote"),
 		);
+		const generationDirectory = join(workspace, '.build/desktop/dev/app-server');
+		const generationFile = join(generationDirectory, 'current.json');
+		const generation = `generations/${'c'.repeat(64)}`;
+		mkdirSync(generationDirectory, { recursive: true });
+		writeFileSync(generationFile, JSON.stringify({ version: 3, runtime: generation }));
+		for (const reloadBackend of [false, true]) {
+			const development = createAppServerDaemonLauncher({
+				packageLocation: { appPath, isPackaged: false, platform: 'linux', resourcesPath: '' },
+				sourceEnvironment: { ASH_RENDERER_URL: 'http://127.0.0.1:5173', ASH_DEV_APP_SERVER_RELOAD: reloadBackend ? '1' : '0' },
+				profileRoot: '/profile', electronExecutable: '/electron', role: 'workbench',
+			});
+			using launcher = development.launcher;
+			assert.equal(launcher.environment.ASH_DEV_RUNTIME_ROOT, join(generationDirectory, generation));
+			assert.equal(launcher.options.generationFile, generationFile);
+			assert.equal(development.generationFile, reloadBackend ? generationFile : undefined);
+		}
 	} finally {
 		rmSync(workspace, { recursive: true, force: true });
 	}
