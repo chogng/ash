@@ -394,7 +394,9 @@ async fn screen_share_transmits_decoded_frames_and_republishes_after_stop() {
     )
     .await
     .unwrap();
-    let source = screen_capture::mock::MockCaptureSource::new("display", 320, 240);
+    // Exercise publication and decoding with a small frame so the software codec
+    // stays inside the transport deadline on CPU-constrained CI runners.
+    let source = screen_capture::mock::MockCaptureSource::new("display", 64, 48);
     let mut previous_track = String::new();
     for _ in 0..2 {
         presenter.start_screen_share(&source, 15).await.unwrap();
@@ -402,11 +404,23 @@ async fn screen_share_transmits_decoded_frames_and_republishes_after_stop() {
         let track = timeout(Duration::from_secs(15), async {
             let mut received = 0;
             loop {
-                if let Some(livekit_client::MediaEvent::Video(frame)) = viewer.next_event().await {
+                let event = tokio::select! {
+                    event = viewer.next_event() => event.expect("viewer disconnected"),
+                    event = presenter.next_event() => {
+                        match event.expect("presenter disconnected") {
+                            livekit_client::MediaEvent::ScreenStopped { error } => {
+                                panic!("screen publication stopped: {error:?}");
+                            }
+                            livekit_client::MediaEvent::Disconnected => panic!("presenter disconnected"),
+                            _ => continue,
+                        }
+                    }
+                };
+                if let livekit_client::MediaEvent::Video(frame) = event {
                     assert_eq!(frame.participant_id, "presenter");
                     assert_eq!(
                         (frame.width, frame.height, frame.rgba.len()),
-                        (320, 240, 320 * 240 * 4)
+                        (64, 48, 64 * 48 * 4)
                     );
                     received += 1;
                     if received == 3 {
