@@ -30,46 +30,6 @@ const info: IBrowserViewInfo = {
 suite('Browser Workbench page lifecycle', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
-	test('window pages survive editor closure and stay out of contextual restoration after discovery', async () => {
-		using f = fixture();
-		using registration = f.views.registerWindowBrowserView(id);
-		await f.views.initialize();
-		const input = f.views.getKnownBrowserViews().get(id)!;
-		assert.ok(input);
-		assert.deepEqual(input.model!.info.owner, info.owner);
-		assert.equal(f.views.getContextualBrowserViews().has(id), false);
-		const closeEditor = (): void => f.editorEvents.fire({
-			kind: 'groupChanged', groupId: 'documents', event: {
-				kind: 'editorClosed', reason: 'close', editor: {
-					input, groupId: 'documents', instanceId: 'browser', paneId: 'browser', index: 0,
-					isActive: true, isPreview: false, isSticky: false, isDirty: false, canRevert: false, hasExternalChange: false,
-				},
-			},
-		});
-		closeEditor();
-		assert.deepEqual(f.destroyed, []);
-		assert.equal(await input.resolve(), input.model);
-
-		registration.dispose();
-		assert.equal(f.views.getContextualBrowserViews().get(id), input);
-		assert.deepEqual(f.destroyed, []);
-		closeEditor();
-		assert.deepEqual(f.destroyed, [id]);
-	});
-
-	test('Main-created window pages wait for their contribution while ordinary pages still open', async () => {
-		using f = fixture();
-		await f.views.initialize();
-		const targetId = 'browser_target_123e4567-e89b-12d3-a456-426614174001';
-		using registration = f.views.registerWindowBrowserView(targetId);
-		f.events.fire({ type: 'created', info: { ...info, id: targetId, state: { ...info.state, targetId } } });
-		const ordinary = await f.views.createBrowserView({ initialUrl: 'about:blank', owner: { type: 'user' }, session: info.session });
-		assert.deepEqual(f.opened, [ordinary]);
-		assert.deepEqual(f.destroyed, []);
-		assert.ok(f.views.getKnownBrowserViews().get(targetId)?.model);
-		assert.equal(f.views.getContextualBrowserViews().has(targetId), false);
-	});
-
 	test('new user pages resolve storage preferences, remote isolation and live backend trust', async () => {
 		using f = fixture();
 		const create = () => f.views.createBrowserView({ initialUrl: 'https://example.test/', owner: { type: 'user' } });

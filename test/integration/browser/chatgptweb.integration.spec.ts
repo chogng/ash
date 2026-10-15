@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript';
-
 const preload = transpileModule(readFileSync(new URL('../../../src/ash/platform/browserView/electron-browser/preload-browserView.ts', import.meta.url), 'utf8'), {
 	compilerOptions: { target: ScriptTarget.ES2022, module: ModuleKind.None },
 }).outputText;
@@ -76,12 +75,12 @@ test('ChatGPT rendering rules reset on print and SPA replacement', async ({ page
 });
 
 /** Exercise the actual page and client with synthetic HTTP boundaries, without a real account. */
-async function chatPage(page: Page, answer = 'Synthetic answer'): Promise<void> {
+async function mockChatGPTRequests(page: Page, answer = 'Synthetic answer'): Promise<void> {
 	await page.route('**/service/**', async route => {
 		const path = new URL(route.request().url()).pathname;
 		const message = (id: string, role: string, text: string): object => ({ id, author: { role }, content: { content_type: 'text', parts: [text] } });
 		if (path.endsWith('/me')) {
-			await route.fulfill({ json: { id: 'fixture-user', name: 'Fixture' }, headers: { 'X-Ash-Browser-Account': 'fixture-binding', 'X-Ash-Browser-Account-Scope': 'fixture-scope' } });
+			await route.fulfill({ json: { id: 'fixture-user', name: 'Fixture' }, headers: { 'X-Ash-ChatGPT-Account': 'fixture-binding', 'X-Ash-ChatGPT-Account-Scope': 'fixture-scope' } });
 		} else if (path.endsWith('/models')) {
 			await route.fulfill({ json: { models: [{ slug: 'fixture', title: 'Fixture model' }], default_model_slug: 'fixture' } });
 		} else if (path.endsWith('/conversations')) {
@@ -103,61 +102,65 @@ async function chatPage(page: Page, answer = 'Synthetic answer'): Promise<void> 
 			await route.fulfill({ status: 500, json: {} });
 		}
 	});
-	await page.goto('/chatgpt.html?locale=zh-CN');
-	await expect(page.getByRole('textbox', { name: '询问 ChatGPT' })).toBeEnabled();
-	const toggle = page.getByRole('button', { name: '显示或隐藏会话列表' });
-	if (await toggle.isVisible()) { await toggle.click(); }
-	await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
-	await expect(page).toHaveTitle('Synthetic conversation — ChatGPT');
 }
 
-test('ChatGPT keeps conversation content clear and secondary actions accessible from the sidebar', async ({ page }, testInfo) => {
-	await chatPage(page);
-	await expect(page.locator('.ash-chatgpt-header')).toHaveCount(0);
-	await expect(page.getByRole('button', { name: '显示或隐藏会话列表' })).toBeHidden();
-	const actions = page.locator('.ash-chatgpt-actions summary');
-	await expect(actions).toHaveText('更多操作');
-	const read = page.getByRole('button', { name: '阅读会话', exact: true });
-	await expect(read).toBeHidden();
-	await testInfo.attach('chatgpt-without-toolbar', { body: await page.screenshot(), contentType: 'image/png' });
-	await actions.focus();
-	await actions.press('Enter');
-	await expect(read).toBeVisible();
-	await read.focus();
-	await read.press('Enter');
-	await expect(page.getByRole('dialog')).toContainText('Synthetic question');
-	await expect(page.getByRole('dialog')).toContainText('Synthetic answer');
-	await page.keyboard.press('Escape');
-	await expect(read).toBeFocused();
-	await read.press('Escape');
-	await expect(actions).toBeFocused();
-	await expect(read).toBeHidden();
-	await actions.press('Enter');
-	await page.getByRole('button', { name: '帮助', exact: true }).click();
-	await expect(page.getByRole('dialog')).toContainText('侧栏底部的“更多操作”');
-});
+async function chatPage(page: Page, answer = 'Synthetic answer'): Promise<void> {
+	await mockChatGPTRequests(page, answer);
+	await page.goto('/chatgptNavigation.html');
+	await expect(page.getByRole('textbox', { name: '询问 ChatGPT' })).toBeEnabled();
+	await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
+	await expect(page.locator('.ash-chatgpt-turn.assistant')).toHaveCount(1);
+}
 
-test('ChatGPT narrow layouts retain sidebar controls and restore desktop navigation on resize', async ({ page }, testInfo) => {
-	await page.setViewportSize({ width: 390, height: 700 });
-	await chatPage(page);
-	const sidebar = page.getByRole('complementary', { name: 'ChatGPT 会话' });
-	const toggle = page.getByRole('button', { name: '显示或隐藏会话列表' });
-	await expect(sidebar).toBeHidden();
-	await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-	await toggle.press('Enter');
-	await expect(sidebar).toBeVisible();
-	await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-	await page.locator('.ash-chatgpt-actions summary').click();
-	await expect(page.getByRole('button', { name: '连接', exact: true })).toBeInViewport();
-	await testInfo.attach('chatgpt-narrow-actions', { body: await page.screenshot(), contentType: 'image/png' });
-	await page.getByRole('button', { name: '连接', exact: true }).press('Escape');
-	await expect(sidebar).toBeVisible();
+test('ChatGPT sidebar and editor share drafts and selection with keyboard navigation and independent sizing', async ({ page }, testInfo) => {
+	await mockChatGPTRequests(page);
+	await page.route('**/service/backend-api/conversations?**', route => route.fulfill({
+		json: {
+			items: [{ id: 'fixture-chat', title: 'Synthetic conversation' }, ...Array.from({ length: 30 }, (_, index) => ({ id: `recent-${index}`, title: `Recent conversation ${index + 1} with a long title that stays inside the sidebar` }))],
+			total: 32,
+		}
+	}));
+	await page.goto('/chatgptNavigation.html');
+	const sidebar = page.locator('.ash-chatgpt-navigation');
+	const list = sidebar.getByRole('navigation', { name: '最近的会话' });
+	const conversation = sidebar.getByRole('button', { name: 'Synthetic conversation', exact: true });
+	await expect(conversation).toBeEnabled();
+	await expect.poll(() => list.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
+	await expect(sidebar.getByRole('button', { name: '加载更多', exact: true })).toBeInViewport();
+	await conversation.focus();
+	await conversation.press('Home');
+	await expect(conversation).toBeFocused();
+	await conversation.press('Enter');
+	await expect(page.locator('.ash-chatgpt-messages')).toContainText('Synthetic answer');
+	await expect(conversation).toHaveAttribute('aria-current', 'page');
+	const input = page.getByRole('textbox', { name: '询问 ChatGPT' });
+	await input.fill('Sidebar switch keeps this draft');
+	await sidebar.getByRole('button', { name: '新聊天', exact: true }).click();
+	await expect(input).toHaveValue('');
+	await conversation.click();
+	await expect(input).toHaveValue('Sidebar switch keeps this draft');
+	await sidebar.getByRole('searchbox').fill('no match');
+	await expect(conversation).toBeHidden();
+	await sidebar.getByRole('searchbox').fill('Synthetic');
+	await expect(conversation).toBeVisible();
+	await sidebar.locator('summary').click();
+	await expect(sidebar.getByRole('button', { name: '连接', exact: true })).toBeInViewport();
+	await sidebar.getByRole('button', { name: '阅读会话', exact: true }).click();
+	await sidebar.getByRole('button', { name: '连接', exact: true }).focus();
 	await page.keyboard.press('Escape');
-	await expect(sidebar).toBeHidden();
-	await expect(toggle).toBeFocused();
-	await page.setViewportSize({ width: 1200, height: 800 });
-	await expect(sidebar).toBeVisible();
-	await expect(toggle).toBeHidden();
+	await expect(sidebar.locator('summary')).toBeFocused();
+	await expect(sidebar.getByRole('button', { name: '连接', exact: true })).toBeHidden();
+	await sidebar.getByRole('searchbox').fill('');
+	await list.evaluate(element => { element.scrollTop = element.scrollHeight; });
+	await expect(sidebar.getByRole('button', { name: '加载更多', exact: true })).toBeInViewport();
+	await expect(sidebar.locator('summary')).toBeInViewport();
+	await list.evaluate(element => { element.scrollTop = 0; });
+	await testInfo.attach('chatgpt-restored-web-ui', { body: await page.screenshot(), contentType: 'image/png' });
+	const before = await page.locator('#editor').boundingBox();
+	await page.locator('#navigation').evaluate(element => { element.style.width = '400px'; });
+	await expect.poll(async () => (await page.locator('#editor').boundingBox())!.width).toBe(before!.width - 100);
+	await expect(input).toHaveValue('Sidebar switch keeps this draft');
+	await testInfo.attach('chatgpt-sidebar-and-editor', { body: await page.screenshot(), contentType: 'image/png' });
 });
 
 test('ChatGPT reply Markdown cannot execute scripts or automatically load remote and local images', async ({ page }) => {

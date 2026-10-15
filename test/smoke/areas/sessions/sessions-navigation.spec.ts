@@ -3,68 +3,50 @@ import { Menus } from '../../../automation/menus.js';
 import { Editor } from '../../../automation/editor.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 
-test('Sessions ChatGPT sidebar opens and retains its Desktop browser page', { tag: ['@electron-app-server'] }, async ({ application, target, workbench }) => {
-	if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
-	await application.evaluate(({ session }) => {
-		// Exercise the bundled page without contacting the service or modifying local login files.
-		const prototype = Object.getPrototypeOf(session.defaultSession) as Electron.Session;
-		const original = prototype.fetch;
-		Object.assign(globalThis, { __ashChatGPTSmokeFetch: original });
-		prototype.fetch = function (input, init) {
-			const url = new URL(typeof input === 'string' ? input : input.url);
-			return url.origin === 'https://chatgpt.com'
-				? Promise.resolve(Response.json({}, { status: 401 }))
-				: original.call(this, input, init);
-		};
-	});
-	try {
-		const page = await workbench.openAgentsWindow(target.kind);
-		const navigation = page.locator('.ash-sessions-activity-content');
-		const chatgpt = navigation.getByRole('button', { name: 'ChatGPT', exact: true });
-		await chatgpt.click();
-		const editor = page.locator('.ash-browser-editor');
-		await expect(editor).toBeVisible();
-		await expect(chatgpt).toHaveAttribute('aria-current', 'page');
-		await expect(page.locator('[data-part="sidebar"]')).toBeHidden();
-		await expect(editor.locator('.ash-browser-toolbar')).toBeHidden();
-		await expect(page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid) .ash-editor-title-control:visible')).toHaveCount(0);
-		const readPage = () => application.evaluate(({ BrowserWindow }) => Promise.all(BrowserWindow.getAllWindows().flatMap(window => window.contentView.children)
-			.filter((view): view is Electron.WebContentsView => 'webContents' in view)
-			.filter(view => view.webContents.getURL().startsWith('ash-browser-page://chatgpt/browser/chatgpt/chatgpt.html'))
-			.map(async view => ({ id: view.webContents.id, visible: view.getVisible(), title: view.webContents.getTitle(), document: await view.webContents.executeJavaScript('performance.timeOrigin') as number }))));
-		await expect.poll(readPage).toEqual([{ id: expect.any(Number), visible: true, title: 'ChatGPT — ChatGPT', document: expect.any(Number) }]);
-		const first = (await readPage())[0]!;
-		const retainedId = first.id;
-		const menus = new Menus(page);
-		await menus.select(application, () => chatgpt.click({ button: 'right' }), ['Reload']);
-		await expect.poll(async () => (await readPage())[0]!.document).toBeGreaterThan(first.document);
-		const reloaded = (await readPage())[0]!;
-		expect(reloaded).toMatchObject({ id: retainedId, visible: true, title: 'ChatGPT — ChatGPT' });
-		await expect(editor.locator('.ash-browser-toolbar')).toBeHidden();
-		await navigation.getByRole('button', { name: 'Chat', exact: true }).click();
-		await expect(editor).toBeHidden();
-		await expect(page.locator('[data-part="sidebar"]')).toBeVisible();
-		await chatgpt.focus();
-		await menus.select(application, () => chatgpt.press('Shift+F10'), ['Reload']);
-		await expect.poll(async () => (await readPage())[0]!.document).toBeGreaterThan(reloaded.document);
-		const background = (await readPage())[0]!;
-		expect(background).toMatchObject({ id: retainedId, visible: false, title: 'ChatGPT — ChatGPT' });
-		await expect(navigation.getByRole('button', { name: 'Chat', exact: true })).toHaveAttribute('aria-current', 'page');
-		await chatgpt.press('Enter');
-		await expect(editor).toBeVisible();
-		await expect(page.locator('[data-part="sidebar"]')).toBeHidden();
-		await expect(editor.locator('.ash-browser-toolbar')).toBeHidden();
-		await expect.poll(readPage).toEqual([{ ...background, visible: true }]);
-		await navigation.getByRole('button', { name: 'Library', exact: true }).click();
-		await expect(page.locator('[data-part="sidebar"]')).toBeVisible();
-		await expect(page.getByRole('tab', { name: 'Library', exact: true })).toBeVisible();
-	} finally {
-		await application.evaluate(({ session }) => {
-			const state = globalThis as typeof globalThis & { __ashChatGPTSmokeFetch?: Electron.Session['fetch']; };
-			Object.getPrototypeOf(session.defaultSession).fetch = state.__ashChatGPTSmokeFetch;
-			delete state.__ashChatGPTSmokeFetch;
-		});
-	}
+test('Sessions ChatGPT sidebar opens and shares its retained EditorPane', { tag: ['@electron-app-server'] }, async ({ application, target, workbench }, testInfo) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	const navigation = page.locator('.ash-sessions-activity-content');
+	const chatgpt = navigation.getByRole('button', { name: 'ChatGPT', exact: true });
+	await chatgpt.click();
+	const editor = page.locator('[data-part="editor"] .ash-chatgpt-widget');
+	const sidebar = page.locator('[data-part="sidebar"] [data-view-id="sessions.chatgpt.navigation.view"]');
+	await expect(editor).toBeVisible();
+	await expect(sidebar).toBeVisible();
+	await expect(chatgpt).toHaveAttribute('aria-current', 'page');
+	await expect(page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid) .ash-editor-title-control:visible')).toHaveCount(0);
+	await expect(sidebar.getByRole('searchbox', { name: 'Search conversations' })).toBeVisible();
+	const retained = await editor.elementHandle();
+	const summary = sidebar.locator('summary');
+	await summary.click();
+	const help = sidebar.getByRole('button', { name: 'Help', exact: true });
+	await help.click();
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/ChatGPT conversations are in the window sidebar/);
+	await page.keyboard.press('Escape');
+	await expect(help).toBeFocused();
+	await help.press('Escape');
+	await expect(summary).toBeFocused();
+	await testInfo.attach('chatgpt-parts', { body: await page.screenshot(), contentType: 'image/png' });
+	await page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+	await expect(sidebar).toBeHidden();
+	await expect(editor).toBeVisible();
+	await page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Show sidebar', exact: true }).click();
+	await expect(sidebar).toBeVisible();
+	await navigation.getByRole('button', { name: 'Chat', exact: true }).click();
+	await expect(editor).toBeHidden();
+	const menus = new Menus(page);
+	await menus.select(application, () => chatgpt.click({ button: 'right' }), ['Reload']);
+	await expect(navigation.getByRole('button', { name: 'Chat', exact: true })).toHaveAttribute('aria-current', 'page');
+	await chatgpt.click();
+	await expect(editor).toBeVisible();
+	await expect(sidebar).toBeVisible();
+	expect(await editor.evaluate((element, previous) => element === previous, retained)).toBe(true);
+	await summary.click();
+	await sidebar.getByRole('button', { name: 'Read conversation', exact: true }).click();
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/ChatGPT/);
+	await page.keyboard.press('Escape');
+	await expect(sidebar.getByRole('button', { name: 'Read conversation', exact: true })).toBeFocused();
+	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
+	await expect(page.getByRole('tab', { name: 'Library', exact: true })).toBeVisible();
 });
 
 test('Sessions restores the Library repository and its registered containers through entry startup', async ({ application, target, workbench }) => {

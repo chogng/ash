@@ -7,10 +7,6 @@ export default defineConfig({
 	define: { __ASH_WEB_APP_SERVER__: 'false' },
 	root: resolve(import.meta.dirname),
 	plugins: [workbenchEntryPlugin('/themeEditor.html', [{
-		url: '/chatgpt.html',
-		inputFile: resolve(import.meta.dirname, 'chatgpt.html'),
-		sourceFile: resolve(import.meta.dirname, '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTPage.html'),
-	}, {
 		url: '/browser/theme-preview/themePreview.html',
 		inputFile: resolve(import.meta.dirname, 'browser/theme-preview/themePreview.html'),
 		sourceFile: resolve(import.meta.dirname, '../../../src/ash/workbench/contrib/themeEditor/browser/themePreview.html'),
@@ -28,7 +24,7 @@ export default defineConfig({
 			input: {
 				markdownEditor: resolve(import.meta.dirname, 'markdownEditor.html'),
 				markdownEditorHost: resolve(import.meta.dirname, 'markdownEditorHost.html'),
-				chatgpt: resolve(import.meta.dirname, 'chatgpt.html'),
+				chatgptNavigation: resolve(import.meta.dirname, 'chatgptNavigation.html'),
 				themePreview: resolve(import.meta.dirname, 'browser/theme-preview/themePreview.html'),
 				sessionsThemePreview: resolve(import.meta.dirname, 'browser/theme-preview/sessionsThemePreview.html'),
 				changes: resolve(import.meta.dirname, 'changes.html'),

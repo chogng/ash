@@ -4,7 +4,6 @@ import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import type { IDisposable } from '../../../base/common/lifecycle.js';
 import { promiseWithResolvers, raceCancellationError } from '../../../base/common/async.js';
 import { browserViewIsolatedWorldId, type BrowserViewEvent, type IBrowserViewBounds, type IBrowserViewState, type IBrowserViewInfo, type IBrowserViewCreateOptions, normalizeBrowserViewUrl } from '../common/browserView.js';
-import { browserPageScheme } from '../common/browserPage.js';
 import type { BrowserSession } from './browserSession.js';
 import { BrowserViewDebugger } from './browserViewDebugger.js';
 import type { IBrowserHistoryItemHandle } from '../common/browserHistory.js';
@@ -453,7 +452,7 @@ export class BrowserView extends Disposable {
 	}
 	loadURL(url: string, signal: AbortSignal = this.signal, networkToken?: string | null): Promise<void> {
 		const normalized = normalizeBrowserViewUrl(url);
-		if (this.creation.owner.type === 'agent' && ['file:', `${browserPageScheme}:`].includes(new URL(normalized).protocol)) { return Promise.reject(new Error('BrowserLocalFileAccessDenied')); }
+		if (this.creation.owner.type === 'agent' && new URL(normalized).protocol === 'file:') { return Promise.reject(new Error('BrowserLocalFileAccessDenied')); }
 		return this.runOperation(signal, s => this.navigate(normalized, s), networkToken);
 	}
 	goBack(): Promise<void> { return this.runOperation(this.signal, async () => { const h = this.webContents.navigationHistory; if (h.canGoBack()) { this.errorDescription = undefined; h.goBack(); } }); }
@@ -605,7 +604,7 @@ export class BrowserView extends Disposable {
 	}
 
 	private validateNavigation(event: ElectronEvent, url: string): void {
-		if (this.creation.owner.type === 'agent' && ['file:', `${browserPageScheme}:`].includes(new URL(url).protocol)) { event.preventDefault(); return; }
+		if (this.creation.owner.type === 'agent' && new URL(url).protocol === 'file:') { event.preventDefault(); return; }
 		try { normalizeBrowserViewUrl(url); this.errorDescription = undefined; }
 		catch { event.preventDefault(); }
 	}

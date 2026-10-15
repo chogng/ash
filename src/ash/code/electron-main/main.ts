@@ -2,7 +2,6 @@ import { AshApplication, type AppServerStartupMode } from "./app.js";
 import { isCancellationError } from '../../base/common/errors.js';
 import { app, protocol } from 'electron/main';
 import { Schemas } from '../../base/common/network.js';
-import { browserPageScheme } from '../../platform/browserView/common/browserPage.js';
 import { basename, dirname, join } from 'node:path';
 import { AshApplicationId, AshApplicationName, AshRendererDirectory, AshUserDataFolderName } from '../common/application.js';
 import { developmentArtifactsPath } from '../../platform/environment/node/developmentArtifacts.js';
@@ -32,7 +31,6 @@ export async function startElectronApplication(): Promise<void> {
 		mainServices.get(IGPUProcessMainService);
 		protocol.registerSchemesAsPrivileged([
 			{ scheme: Schemas.vscodeWebview, privileges: { standard: true, secure: true, supportFetchAPI: true, allowServiceWorkers: true } },
-			{ scheme: browserPageScheme, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
 		]);
 		const profileRoot = resolveHome();
 		const migrationConflict = await migrateLegacyLocalProfile({ legacyUserDataRoot: app.getPath('userData'), profileRoot });

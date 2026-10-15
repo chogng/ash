@@ -169,8 +169,6 @@ function fixture() {
 		onDidChangeBrowserViews: Event.None,
 		initialize: async () => { }, getKnownBrowserViews: () => new Map(), getContextualBrowserViews: () => new Map(),
 		registerContextualFilter: () => Disposable.None, registerOpenHandler: () => Disposable.None,
-		registerWindowBrowserView: () => Disposable.None, isWindowBrowserView: () => false,
-		getBrowserViewPresentation: () => undefined,
 		getOrCreateLazy: input, createBrowserView: async () => { throw new Error('Not used in serializer fixture'); },
 	});
 	return Object.assign(f, { service, instantiation, input });

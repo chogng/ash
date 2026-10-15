@@ -41,16 +41,7 @@
 	font-size: var(--ash-fontSize-body2);
 	color: var(--ash-description-foreground);
 }
-.ash-browser-toolbar[hidden] {
-	display: none;
-}
-/* Keep loading announcements available without taking space from a product webpage. */
-.ash-browser-status.ash-browser-status-quiet {
-	position: absolute;
-	width: 1px;
-	height: 1px;
-	clip-path: inset(50%);
-}
+
 .ash-browser-viewport {
 	flex: 1;
 	min-width: 0;

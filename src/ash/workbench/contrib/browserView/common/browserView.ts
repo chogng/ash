@@ -31,11 +31,6 @@ export interface IBrowserViewWorkbenchCreateOptions extends Omit<IBrowserViewCre
 	readonly session?: IBrowserViewCreateOptions['session'];
 }
 
-export interface IBrowserViewPresentationOptions {
-	/** Product pages can present the website without browser navigation and page toolbars. */
-	readonly showControls?: boolean;
-}
-
 export interface IBrowserViewWorkbenchService {
 	readonly onDidChangeBrowserViews: Event<void>;
 	initialize(): Promise<void>;
@@ -43,15 +38,6 @@ export interface IBrowserViewWorkbenchService {
 	getContextualBrowserViews(context?: IBrowserViewFilterContext): Map<string, BrowserEditorInput>;
 	registerContextualFilter(filter: IBrowserViewContextualFilter): IDisposable;
 	registerOpenHandler(handler: IBrowserViewOpenHandler): IDisposable;
-	/**
-	 * Reserve a page for a window contribution before discovery or creation. The contribution
-	 * owns its presentation: it is excluded from contextual tabs and automatic editor restoration,
-	 * and closing an editor or archiving a Session does not destroy it. This does not change
-	 * Main's page owner, storage or access grants. Disposal releases the reservation only.
-	 */
-	registerWindowBrowserView(id: string, presentation?: IBrowserViewPresentationOptions): IDisposable;
-	isWindowBrowserView(id: string): boolean;
-	getBrowserViewPresentation(id: string): IBrowserViewPresentationOptions | undefined;
 	getOrCreateLazy(data: IBrowserEditorInputData): BrowserEditorInput;
 	createBrowserView(options: IBrowserViewWorkbenchCreateOptions, source?: IntegratedBrowserOpenSource): Promise<BrowserEditorInput>;
 }

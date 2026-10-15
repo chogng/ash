@@ -1,45 +1,35 @@
-.ash-chatgpt-document {
-	color-scheme: light dark;
+.ash-chatgpt-widget {
 	height: 100%;
 	background: var(--ash-editor-background, Canvas);
 	color: var(--ash-foreground, CanvasText);
 	font:
 		var(--ash-fontSize-body1, 13px)/1.5 system-ui,
 		sans-serif;
-}
-
-.ash-chatgpt-document body,
-.ash-chatgpt-document #app {
-	height: 100%;
-	margin: 0;
-}
-
-.ash-chatgpt-page {
 	display: flex;
 	min-width: 0;
 	min-height: 0;
 	position: relative;
 }
 
-.ash-chatgpt-page *,
-.ash-chatgpt-page *::before,
-.ash-chatgpt-page *::after {
+.ash-chatgpt-widget *,
+.ash-chatgpt-widget *::before,
+.ash-chatgpt-widget *::after {
 	box-sizing: border-box;
 }
 
-.ash-chatgpt-page [hidden] {
+.ash-chatgpt-widget [hidden] {
 	display: none;
 }
 
-.ash-chatgpt-page button,
-.ash-chatgpt-page input,
-.ash-chatgpt-page textarea,
-.ash-chatgpt-page select {
+.ash-chatgpt-widget button,
+.ash-chatgpt-widget input,
+.ash-chatgpt-widget textarea,
+.ash-chatgpt-widget select {
 	font: inherit;
 	color: inherit;
 }
 
-.ash-chatgpt-page button {
+.ash-chatgpt-widget button {
 	min-height: 36px;
 	padding: 6px 12px;
 	border: var(--ash-strokeThickness, 1px) solid transparent;
@@ -48,90 +38,22 @@
 	cursor: pointer;
 }
 
-.ash-chatgpt-page button:hover,
-.ash-chatgpt-page button[aria-current] {
+.ash-chatgpt-widget button:hover,
+.ash-chatgpt-widget button[aria-current] {
 	background: var(--ash-list-hoverBackground, ButtonFace);
 }
 
-.ash-chatgpt-page :is(button, input, textarea, select, summary):focus-visible {
+.ash-chatgpt-widget :is(button, input, textarea, select):focus-visible {
 	outline: var(--ash-strokeThickness, 1px) solid
 		var(--ash-focusBorder, Highlight);
 	outline-offset: -1px;
 }
 
-.ash-chatgpt-page button:disabled {
+.ash-chatgpt-widget button:disabled {
 	opacity: 0.5;
 	cursor: default;
 }
 
-.ash-chatgpt-sidebar {
-	display: flex;
-	flex-direction: column;
-	gap: 12px;
-	width: 260px;
-	flex-shrink: 0;
-	padding: 20px 12px;
-	background: var(--ash-sideBar-background, ButtonFace);
-	border-right: var(--ash-strokeThickness, 1px) solid
-		var(--ash-widget-border, GrayText);
-}
-
-.ash-chatgpt-brand {
-	font-size: var(--ash-fontSize-heading2, 18px);
-	font-weight: var(--ash-fontWeight-semiBold, 600);
-	margin: 0 12px;
-}
-.ash-chatgpt-actions {
-	flex-shrink: 0;
-}
-.ash-chatgpt-actions summary {
-	min-height: 36px;
-	padding: 6px 12px;
-	border-radius: var(--ash-cornerRadius-small, 4px);
-	cursor: pointer;
-}
-.ash-chatgpt-actions summary:hover {
-	background: var(--ash-list-hoverBackground, ButtonFace);
-}
-.ash-chatgpt-action-buttons {
-	display: flex;
-	flex-direction: column;
-}
-.ash-chatgpt-action-buttons button {
-	text-align: left;
-}
-.ash-chatgpt-sidebar > button {
-	text-align: left;
-}
-.ash-chatgpt-sidebar input {
-	width: 100%;
-	min-height: 36px;
-	padding: 8px 12px;
-	border: var(--ash-strokeThickness, 1px) solid
-		var(--ash-widget-border, GrayText);
-	border-radius: var(--ash-cornerRadius-large, 8px);
-	background: transparent;
-}
-.ash-chatgpt-conversations {
-	display: flex;
-	flex-direction: column;
-	flex: 1;
-	min-height: 0;
-	overflow: auto;
-	gap: 4px;
-}
-.ash-chatgpt-conversations button {
-	flex-shrink: 0;
-	min-height: 48px;
-	text-align: left;
-	overflow: hidden;
-	white-space: nowrap;
-	text-overflow: ellipsis;
-}
-.ash-chatgpt-conversations button[aria-current] {
-	border-color: var(--ash-contrastBorder, transparent);
-	font-weight: var(--ash-fontWeight-semiBold, 600);
-}
 .ash-chatgpt-main {
 	display: flex;
 	flex-direction: column;
@@ -139,9 +61,6 @@
 	min-height: 0;
 	min-width: 0;
 	position: relative;
-}
-.ash-chatgpt-sidebar-toggle {
-	display: none;
 }
 .ash-chatgpt-scroll {
 	flex: 1;
@@ -157,16 +76,16 @@
 	font-size: var(--ash-fontSize-heading1, 26px);
 	font-weight: var(--ash-fontWeight-semiBold, 600);
 }
-.ash-chatgpt-page.empty .ash-chatgpt-scroll {
+.ash-chatgpt-widget.empty .ash-chatgpt-scroll {
 	display: flex;
 	align-items: flex-end;
 	justify-content: center;
 	flex: 1;
 }
-.ash-chatgpt-page.empty .ash-chatgpt-footer {
+.ash-chatgpt-widget.empty .ash-chatgpt-footer {
 	flex: 1;
 }
-.ash-chatgpt-page.empty .ash-chatgpt-messages {
+.ash-chatgpt-widget.empty .ash-chatgpt-messages {
 	display: none;
 }
 .ash-chatgpt-messages {
@@ -215,7 +134,7 @@
 	height: auto;
 }
 .ash-chatgpt-message-body a {
-	color: var(--ash-link-foreground, LinkText);
+	color: var(--ash-accent-foreground, LinkText);
 }
 .ash-chatgpt-footer {
 	width: 100%;
@@ -261,7 +180,7 @@
 	border-radius: var(--ash-cornerRadius-large, 8px);
 	background: var(--ash-editor-background, Canvas);
 }
-.ash-chatgpt-page .ash-chatgpt-send {
+.ash-chatgpt-widget .ash-chatgpt-send {
 	background: var(--ash-button-background, ButtonFace);
 	color: var(--ash-button-foreground, ButtonText);
 	min-width: 64px;
@@ -284,52 +203,13 @@
 	background: var(--ash-editor-background, Canvas);
 	border-color: var(--ash-widget-border, GrayText);
 }
-.ash-chatgpt-dialog {
-	width: min(760px, 90vw);
-	max-height: 80vh;
-	padding: 24px;
-	border: var(--ash-strokeThickness, 1px) solid
-		var(--ash-contrastBorder, GrayText);
-	border-radius: var(--ash-cornerRadius-xLarge, 12px);
-	color: inherit;
-	background: var(--ash-editor-background, Canvas);
+.ash-chatgpt-widget.optimize-scrolling .ash-chatgpt-turn.complete {
+	content-visibility: auto;
+	contain-intrinsic-size: auto 160px;
 }
-.ash-chatgpt-dialog pre {
-	font: inherit;
-	white-space: pre-wrap;
-	overflow-wrap: anywhere;
-	max-height: 55vh;
-	overflow: auto;
-}
-.ash-chatgpt-page.sidebar-hidden .ash-chatgpt-sidebar {
-	display: none;
-}
-
-.ash-chatgpt-page.compact .ash-chatgpt-sidebar {
-	position: absolute;
-	z-index: 2;
-	top: 48px;
-	bottom: 0;
-	width: min(260px, 80%);
-	box-shadow: 2px 0 12px var(--ash-widget-shadow, transparent);
-}
-.ash-chatgpt-page.compact .ash-chatgpt-sidebar-toggle {
-	display: block;
-	align-self: flex-start;
-	flex-shrink: 0;
-	margin: 8px 12px 4px;
-}
-.ash-chatgpt-page.compact .ash-chatgpt-scroll,
-.ash-chatgpt-page.compact .ash-chatgpt-footer {
-	padding: 12px;
-}
-
 @media (forced-colors: active) {
-	.ash-chatgpt-page
-		:is(button, summary, .ash-chatgpt-composer, .ash-chatgpt-turn.user) {
+	.ash-chatgpt-widget
+		:is(button, .ash-chatgpt-composer, .ash-chatgpt-turn.user) {
 		border: var(--ash-strokeThickness, 1px) solid CanvasText;
-	}
-	.ash-chatgpt-conversations button[aria-current] {
-		border: 2px solid Highlight;
 	}
 }

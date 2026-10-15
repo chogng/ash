@@ -216,21 +216,7 @@
 			return;
 		}
 		const theme = configuration.theme;
-		// Product pages use the host theme; ordinary websites keep their own styles.
-		if (location.protocol === 'ash-browser-page:' && document.documentElement) {
-			for (const [property, value] of Object.entries({
-				'editor-background': theme.editorBackground ?? theme.widgetBackground, foreground: theme.foreground ?? theme.widgetForeground,
-				'sideBar-background': theme.sidebarBackground, 'list-hoverBackground': theme.hoverBackground,
-				'input-border': theme.inputBorder, 'text-codeBlockBackground': theme.codeBackground,
-				'link-foreground': theme.linkForeground, 'error-foreground': theme.errorForeground, 'widget-shadow': theme.shadow,
-				'widget-border': theme.contrastBorder || theme.widgetBorder, contrastBorder: theme.contrastBorder,
-				focusBorder: theme.focusBorder, 'button-background': theme.buttonBackground, 'button-foreground': theme.buttonForeground,
-			})) {
-				if (value) { document.documentElement.style.setProperty('--ash-' + property, value); }
-				else { document.documentElement.style.removeProperty('--ash-' + property); }
-			}
-			if (theme.colorScheme) { document.documentElement.style.colorScheme = theme.colorScheme; }
-		}
+
 		if (!host) { return; }
 		for (const [property, value] of Object.entries({
 			focus: theme.focusBorder,

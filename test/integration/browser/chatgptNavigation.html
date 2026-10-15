@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>ChatGPT navigation fixture</title>
+		<style>
+			html, body { height: 100%; margin: 0; font: 13px system-ui; }
+			body { display: flex; }
+			#navigation { width: 300px; height: 100%; flex-shrink: 0; }
+			#editor { flex: 1; min-width: 0; height: 100%; border: 0; }
+		</style>
+	</head>
+	<body>
+		<div id="navigation"></div>
+		<div id="editor"></div>
+		<script type="module" src="./chatgptNavigation.ts"></script>
+	</body>
+</html>

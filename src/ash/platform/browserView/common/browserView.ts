@@ -3,7 +3,6 @@ import { createServiceIdentifier } from '../../instantiation/common/instantiatio
 import type { IDisposable } from '../../../base/common/lifecycle.js';
 import type { ISerializedBrowserHistoryEntriesSnapshot } from './browserHistory.js';
 import type { VSBuffer } from '../../../base/common/buffer.js';
-import { browserPageScheme } from './browserPage.js';
 
 /** Stable command IDs shared by browser controls, keybindings and external callers. */
 export enum BrowserViewCommandId {
@@ -69,16 +68,6 @@ export interface IBrowserElementCommentsUpdate {
 	readonly pendingCommentIdsToDiscard?: readonly string[];
 }
 export interface IBrowserViewTheme {
-	readonly colorScheme?: 'light' | 'dark';
-	readonly editorBackground?: string;
-	readonly foreground?: string;
-	readonly sidebarBackground?: string;
-	readonly hoverBackground?: string;
-	readonly inputBorder?: string;
-	readonly codeBackground?: string;
-	readonly linkForeground?: string;
-	readonly errorForeground?: string;
-	readonly shadow?: string;
 	readonly focusBorder?: string;
 	readonly buttonBackground?: string;
 	readonly buttonForeground?: string;
@@ -459,7 +448,6 @@ export function normalizeBrowserViewUrl(value: unknown): string {
 		url.protocol !== "https:" &&
 		!(url.protocol === "http:" && localHttpHost) &&
 		!localFile &&
-		!(url.protocol === `${browserPageScheme}:` && /^[a-z][a-z0-9-]*$/u.test(url.hostname) && !url.port) &&
 		url.href !== "about:blank"
 	) {
 		throw new Error(

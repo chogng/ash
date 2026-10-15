@@ -13,8 +13,8 @@ export function installChatGPTVerification(): void {
 		}
 		return originalFetch(input, init);
 	};
-	const target = globalThis as typeof globalThis & { __ashPrepareBrowserPageHeaders?: () => Promise<Record<string, string>>; };
-	target.__ashPrepareBrowserPageHeaders = async () => {
+	const target = globalThis as typeof globalThis & { __ashPrepareChatGPTHeaders?: () => Promise<Record<string, string>>; };
+	target.__ashPrepareChatGPTHeaders = async () => {
 		const signal = AbortSignal.timeout(25_000);
 		let moduleUrl: string | undefined;
 		// Discover the resource loaded by the current official page, rather than pinning a

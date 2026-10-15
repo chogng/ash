@@ -21,7 +21,6 @@ import type { IBrowserViewService } from '../common/browserView.js';
 import { isRecord } from '../../../base/common/types.js';
 import type { IBrowserViewWindowConfiguration, IBrowserElementSelectionOptions, IBrowserElementCommentsUpdate, IBrowserViewCaptureScreenshotOptions, IBrowserViewFindInPageOptions } from '../common/browserView.js';
 import { browserZoomFactors, type IBrowserDeviceProfile } from '../common/browserView.js';
-import { browserPageScheme } from '../common/browserPage.js';
 
 /** The page owner stays in Main; sharing is authorized by the window's app-server adapter. */
 export function browserViewChannel(service: IBrowserViewService, sharing: IChannel): IServerChannel<string> {
@@ -47,7 +46,7 @@ export function browserViewChannel(service: IBrowserViewService, sharing: IChann
 				const rule = arg[1] ?? undefined;
 				if (rule !== undefined && (!isRecord(rule) || Object.keys(rule).some(key => !['origin', 'selector'].includes(key))
 					|| typeof rule.origin !== 'string' || rule.origin.length > 2048
-					|| !(rule.origin.startsWith('https://') && toOriginKey(rule.origin) === rule.origin || new RegExp(`^${browserPageScheme}://[a-z][a-z0-9-]*$`, 'u').test(rule.origin))
+					|| !(rule.origin.startsWith('https://') && toOriginKey(rule.origin) === rule.origin)
 					|| typeof rule.selector !== 'string' || !rule.selector || rule.selector.length > 1024)) {
 					throw new TypeError('Invalid browser rendering rule');
 				}

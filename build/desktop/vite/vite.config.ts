@@ -81,14 +81,12 @@ export default defineConfig(({ mode, command }) => {
 	const remoteRuntimeInstallInput = {
 		"electron-browser/remote-runtime-install/remoteRuntimeInstall": resolve(sourceRoot, "electron-browser/remote-runtime-install/remoteRuntimeInstall.html"),
 	};
-	const chatGPTInput = { 'browser/chatgpt/chatgpt': resolve(sourceRoot, 'browser/chatgpt/chatgpt.html') };
 	const verificationScript = `(${installChatGPTVerification.toString()})();`;
 	const inputs = webOnly ? browserInputs : {
 		...browserInputs,
 		[electronEntry]: resolve(sourceRoot, `${electronEntry}.html`),
 		...sessionsInputs,
 		...remoteRuntimeInstallInput,
-		...chatGPTInput,
 	};
 
 	return {
@@ -101,7 +99,7 @@ export default defineConfig(({ mode, command }) => {
 		},
 		plugins: [
 			...(webOnly ? [] : [{
-				name: 'ash-browser-page-verification',
+				name: 'ash-chatgpt-verification',
 				generateBundle() { this.emitFile({ type: 'asset' as const, fileName: 'browser/chatgpt/verification.js', source: verificationScript }); },
 				configureServer(server) {
 					server.middlewares.use('/browser/chatgpt/verification.js', (request, response, next) => {
@@ -129,10 +127,6 @@ export default defineConfig(({ mode, command }) => {
 				inputFile: browserInputs['browser/theme-preview/sessionsThemePreview'],
 				sourceFile: resolve(repositoryRoot, 'src/ash/sessions/contrib/themeEditor/browser/sessionsThemePreview.html'),
 			}, ...(webOnly ? [] : [{
-				url: '/browser/chatgpt/chatgpt.html',
-				sourceFile: resolve(repositoryRoot, 'src/ash/sessions/contrib/chatgptweb/browser/chatGPTPage.html'),
-				inputFile: chatGPTInput['browser/chatgpt/chatgpt'],
-			}, {
 				url: '/sessions/electron-browser/sessions.html',
 				sourceFile: resolve(sourceRoot, '../sessions/electron-browser/sessions.html'),
 				inputFile: sessionsInputs['sessions/electron-browser/sessions'],

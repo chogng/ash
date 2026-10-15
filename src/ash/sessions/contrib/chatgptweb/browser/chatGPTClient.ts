@@ -1,9 +1,9 @@
 import { localize } from '../../../../nls.js';
 import { isRecord } from '../../../../base/common/types.js';
-import { browserPageRequestHeader, browserPageAccountHeader, browserPageAccountScopeHeader } from '../../../../platform/browserView/common/browserPage.js';
+import { chatGPTAccountHeader, chatGPTAccountScopeHeader } from '../common/chatGPTTransport.js';
+export interface ChatGPTConversation { readonly id: string; readonly title: string; }
 
 export interface ChatGPTModel { readonly id: string; readonly title: string; }
-export interface ChatGPTConversation { readonly id: string; readonly title: string; }
 export interface ChatGPTMessage { readonly id: string; readonly role: 'user' | 'assistant'; readonly text: string; }
 export interface ChatGPTHistory {
 	readonly id: string;
@@ -19,7 +19,7 @@ export class ChatGPTRequestError extends Error {
 	constructor(readonly status: number, message: string) { super(message); }
 }
 
-/** Credentials stay in the host. The page holds only an opaque connection binding. */
+/** Credentials stay in the host. The client holds only an opaque connection binding. */
 export class ChatGPTClient {
 	private accountBinding: string | undefined;
 	private generation = 0;
@@ -28,12 +28,12 @@ export class ChatGPTClient {
 	async connect(signal: AbortSignal): Promise<{ readonly id?: string; readonly name: string; }> {
 		this.clear();
 		const generation = this.generation;
-		const response = await this.fetcher('/service/backend-api/me', { signal, cache: 'no-store', headers: { [browserPageRequestHeader]: 'chatgpt' } });
+		const response = await this.fetcher('/service/backend-api/me', { signal, cache: 'no-store' });
 		const value: unknown = response.ok ? await response.json() : undefined;
 		signal.throwIfAborted();
 		if (generation !== this.generation) { throw new DOMException('Connection superseded', 'AbortError'); }
-		const binding = response.headers.get(browserPageAccountHeader);
-		const scope = response.headers.get(browserPageAccountScopeHeader);
+		const binding = response.headers.get(chatGPTAccountHeader);
+		const scope = response.headers.get(chatGPTAccountScopeHeader);
 		if (!isRecord(value) || typeof value.id !== 'string' || !binding || !scope) {
 			if (!response.ok && response.status !== 401) { throw this.requestError(response.status); }
 			throw this.signInRequired();
@@ -96,7 +96,7 @@ export class ChatGPTClient {
 		})).json() as unknown;
 		if (!isRecord(preparation) || typeof preparation.conduit_token !== 'string') { throw this.invalidResponse(); }
 		// Verification has its own request. If the user cancels while it runs, no message
-		// POST can be dispatched later by a still-running custom-protocol handler.
+		// POST can be dispatched later by a still-running verification task.
 		const verification: unknown = await (await this.request('/f/conversation', signal, { method: 'POST' }, true)).json();
 		if (!isRecord(verification) || typeof verification['OpenAI-Sentinel-Chat-Requirements-Token'] !== 'string') { throw this.invalidResponse(); }
 		const verificationHeaders: Record<string, string> = {};
@@ -125,8 +125,7 @@ export class ChatGPTClient {
 		if (!this.accountBinding) { throw this.signInRequired(); }
 		const generation = this.generation;
 		const headers = new Headers(init.headers);
-		headers.set(browserPageRequestHeader, 'chatgpt');
-		headers.set(browserPageAccountHeader, this.accountBinding);
+		headers.set(chatGPTAccountHeader, this.accountBinding);
 		const response = await this.fetcher(`/service${headersOnly ? '/.headers' : ''}/backend-api` + path, { ...init, headers, signal, cache: 'no-store' });
 		signal.throwIfAborted();
 		if (generation !== this.generation) { await response.body?.cancel(); throw new DOMException('Connection superseded', 'AbortError'); }

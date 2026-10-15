@@ -28,34 +28,6 @@ const second = session('session-two', 'thread-two');
 suite('Session browser page policy', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
-	test('a window page survives session switching and archival without entering the document group', async () => {
-		using f = fixture();
-		const id = 'browser_target_123e4567-e89b-12d3-a456-426614174000';
-		using registration = f.views.registerWindowBrowserView(id);
-		await f.views.initialize();
-		const input = f.views.getOrCreateLazy({ id, url: 'https://example.test/', title: 'Window page', session: { scope: BrowserViewStorageScope.Global } });
-		await input.resolve();
-		f.selection.set(selected(second));
-		f.catalog = [];
-		f.catalogChanged.fire();
-		await f.controller.onWorkspaceRestored();
-		assert.deepEqual(f.destroyed, []);
-		assert.deepEqual(f.opened, []);
-		assert.equal(f.views.getKnownBrowserViews().get(id), input);
-		assert.equal(f.views.getContextualBrowserViews().has(id), false);
-	});
-
-	test('registering a discovered window page cancels queued Session archive cleanup', async () => {
-		using f = fixture();
-		const input = await f.create();
-		f.catalog = [{ ...first, status: 'archived' }, second];
-		f.catalogChanged.fire();
-		using registration = f.views.registerWindowBrowserView(input.id);
-		await f.controller.onWorkspaceRestored();
-		assert.deepEqual(f.destroyed, []);
-		assert.equal(f.views.getKnownBrowserViews().get(input.id), input);
-	});
-
 	test('a Main close supersedes queued archive cleanup instead of destroying the page twice', async () => {
 		using f = fixture();
 		const input = await f.create();

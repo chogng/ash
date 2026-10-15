@@ -4,7 +4,7 @@ import { ChatGPTClient, decodeChatGPTStream } from '../../browser/chatGPTClient.
 
 const signal = (): AbortSignal => new AbortController().signal;
 const json = (value: unknown): Response => Response.json(value);
-const account = (): Response => Response.json({ id: 'fixture-user', name: 'Fixture' }, { headers: { 'X-Ash-Browser-Account': 'synthetic-binding', 'X-Ash-Browser-Account-Scope': 'fixture-scope' } });
+const account = (): Response => Response.json({ id: 'fixture-user', name: 'Fixture' }, { headers: { 'X-Ash-ChatGPT-Account': 'synthetic-binding', 'X-Ash-ChatGPT-Account-Scope': 'fixture-scope' } });
 const message = (id: string, role: string, text: string): object => ({ id, author: { role }, content: { content_type: 'text', parts: [text] } });
 async function collect<T>(values: AsyncIterable<T>): Promise<T[]> {
 	const result: T[] = [];
@@ -40,7 +40,7 @@ suite('Bundled ChatGPT client', () => {
 		const sent = calls.at(-1)!;
 		assert.equal(sent.path, '/service/backend-api/f/conversation');
 		assert.equal(new Headers(sent.init.headers).get('Authorization'), null);
-		assert.equal(new Headers(sent.init.headers).get('X-Ash-Browser-Account'), 'synthetic-binding');
+		assert.equal(new Headers(sent.init.headers).get('X-Ash-ChatGPT-Account'), 'synthetic-binding');
 		assert.equal(new Headers(sent.init.headers).get('OpenAI-Sentinel-Chat-Requirements-Token'), 'fixture-requirements');
 		assert.equal(new Headers(sent.init.headers).get('OpenAI-Sentinel-Proof-Token'), 'fixture-proof');
 		assert.equal(new Headers(sent.init.headers).get('OpenAI-Sentinel-Turnstile-Token'), 'fixture-vm');

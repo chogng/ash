@@ -45,8 +45,10 @@ import { normalizeEntryUrl, TrustedIpcRouter, type IpcRoute } from "../../platfo
 import { ipcBrowserViewChannelName } from "../../platform/browserView/common/browserView.js";
 import { browserViewChannel } from "../../platform/browserView/electron-main/browserViewIpc.js";
 import { BrowserViewMainService, IBrowserViewMainService } from "../../platform/browserView/electron-main/browserViewMainService.js";
-import { BrowserPageProtocol } from '../../platform/browserView/electron-main/browserPageProtocol.js';
-import { BrowserPageRemoteRuntime } from '../../platform/browserView/electron-main/browserPageRemoteRuntime.js';
+import { ChatGPTTransport } from '../../sessions/contrib/chatgptweb/electron-main/chatGPTTransport.js';
+import { ChatGPTVerificationRuntime } from '../../sessions/contrib/chatgptweb/electron-main/chatGPTVerificationRuntime.js';
+import { chatGPTTransportChannel } from '../../sessions/contrib/chatgptweb/common/chatGPTTransport.js';
+import { readFile } from 'node:fs/promises';
 import { Client as MessagePortClient } from '../../base/parts/ipc/common/ipc.mp.js';
 import { ProxyChannel, type IServerChannel } from '../../base/parts/ipc/common/ipc.js';
 import { UtilityProcess } from '../../platform/utilityProcess/electron-main/utilityProcess.js';
@@ -206,7 +208,7 @@ const AGENTS_WINDOW_KEY = 'agents';
 /** Owns the Electron application's persistent services, Workbench windows, IPC, and shutdown. */
 export class AshApplication extends Disposable {
 	private readonly rendererRoot: string;
-	private readonly browserPages: BrowserPageProtocol;
+	private readonly chatGPTChannels = new Map<string, IServerChannel<string>>();
 	private readonly appServerStartupMode: AppServerStartupMode;
 	private readonly disposableTracker: DisposableTracker | undefined;
 	private readonly tracking: globalThis.Disposable | undefined;
@@ -328,23 +330,6 @@ export class AshApplication extends Disposable {
 			this.logService.warn('gpu', 'GPU process exited', { reason });
 		}));
 		this.rendererRoot = options.rendererRoot;
-		this.browserPages = this._register(new BrowserPageProtocol(this.rendererRoot, process.env.ASH_RENDERER_URL, [{
-			host: 'chatgpt', entry: 'browser/chatgpt/chatgpt.html', upstream: 'https://chatgpt.com',
-			upstreamPaths: ['/backend-api/me', '/backend-api/models', '/backend-api/conversations', '/backend-api/conversation/', '/backend-api/f/conversation/prepare', '/backend-api/f/conversation', '/backend-api/stop_conversation'],
-			requestHeaders: ['x-conduit-token', 'OpenAI-Sentinel-Chat-Requirements-Token', 'OpenAI-Sentinel-Proof-Token', 'OpenAI-Sentinel-Turnstile-Token'],
-			remoteHeaders: {
-				url: 'https://chatgpt.com/', script: 'browser/chatgpt/verification.js', paths: ['/backend-api/f/conversation'], credentialPaths: ['/backend-api/sentinel/'],
-				headers: ['OpenAI-Sentinel-Chat-Requirements-Token', 'OpenAI-Sentinel-Proof-Token', 'OpenAI-Sentinel-Turnstile-Token'],
-			},
-			credentials: {
-				file: join(process.env.CODEX_HOME || join(homedir(), '.codex'), 'auth.json'), identityRequest: '/backend-api/me',
-				requirements: [{ path: ['auth_mode'], value: 'chatgpt', allowMissing: true }],
-				fields: [
-					{ path: ['tokens', 'access_token'], header: 'Authorization', prefix: 'Bearer ' },
-					{ path: ['tokens', 'account_id'], header: 'ChatGPT-Account-Id', optional: true, identity: true },
-				],
-			},
-		}], (url, authorize) => new BrowserPageRemoteRuntime(url, authorize)));
 		this.appServerStartupMode = options.appServerStartupMode;
 		this.disposableTracker = disposableTracker;
 		this.tracking = tracking;
@@ -446,6 +431,14 @@ export class AshApplication extends Disposable {
 		await this.loggerService.initialize();
 		throwIfCancelled(token);
 		this.mainProcessIpcServer.registerChannel('logger', new LoggerChannel(this.loggerService));
+		this.mainProcessIpcServer.registerChannel(chatGPTTransportChannel, {
+			call: <T>(context: string, command: string, arg: unknown) => {
+				const channel = this.chatGPTChannels.get(context);
+				if (!channel) { throw new Error('ChatGPT is unavailable in this window'); }
+				return channel.call<T>(context, command, arg);
+			},
+			listen: () => { throw new Error('ChatGPT transport has no events'); },
+		});
 		this.mainProcessIpcServer.registerChannel('browserHost', {
 			call: <T>(context: string, command: string, arg: unknown) => this.getBrowserHostChannel(context).call<T>(context, command, arg),
 			listen: <T>(context: string, event: string, arg: unknown) => this.getBrowserHostChannel(context).listen<T>(context, event, arg),
@@ -1601,7 +1594,6 @@ export class AshApplication extends Disposable {
 			},
 			createSession: (partition: string) => {
 				const session = electronSession.fromPartition(partition);
-				if (partition.startsWith('persist:')) { this.browserPages.attach(session); }
 				return session;
 			},
 			createView: (session: Electron.Session) => new WebContentsView({
@@ -1723,6 +1715,23 @@ export class AshApplication extends Disposable {
 					});
 					const systemContextMenu = windowDisposables.add(new ElectronContextMenu(window));
 					const browserServices = this.createBrowserServices(window, session.workspaceContext, remotePortForwardingService, windowDisposables, sessionsRelay, systemContextMenu);
+					const chatGPT = windowDisposables.add(new ChatGPTTransport({
+						credentialFile: join(process.env.CODEX_HOME || join(homedir(), '.codex'), 'auth.json'),
+						readVerificationScript: async signal => {
+							const devURL = process.env.ASH_RENDERER_URL;
+							if (devURL) {
+								const response = await electronSession.defaultSession.fetch(new URL('browser/chatgpt/verification.js', devURL).href, { signal });
+								if (!response.ok) { throw new Error('ChatGPT verification script is unavailable'); }
+								return response.text();
+							}
+							return readFile(join(this.rendererRoot, 'browser/chatgpt/verification.js'), { encoding: 'utf8', signal });
+						},
+						createRuntime: authorize => new ChatGPTVerificationRuntime(authorize),
+					}));
+					const chatGPTContext = `window:${window.id}`;
+					this.chatGPTChannels.set(chatGPTContext, chatGPT.getChannel());
+					windowDisposables.add(toDisposable(() => this.chatGPTChannels.delete(chatGPTContext)));
+
 					const remoteWindowContext = windowDisposables.add(new RemoteWindowMainContext({
 						supervisor: sessionsRelay,
 						workspaceContext: session.workspaceContext,
