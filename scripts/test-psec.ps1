@@ -36,10 +36,11 @@ try {
     $report.os = Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, OSArchitecture
     $report.build = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' |
         Select-Object DisplayVersion, CurrentBuild, UBR
-    $metadata = & cargo metadata --locked --format-version 1 | ConvertFrom-Json
+    # Cargo feature names are case-sensitive (for example USB and usb).
+    $metadata = & cargo metadata --locked --format-version 1 | ConvertFrom-Json -AsHashtable
     if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve the locked MXC SDK' }
     $report.mxc = $metadata.packages | Where-Object { $_.name -eq 'mxc-sdk' } |
-        Select-Object name, version, source
+        ForEach-Object { [ordered]@{ name = $_.name; version = $_.version; source = $_.source } }
     $report.toolchain = (& rustc -Vv | Out-String).Trim()
     if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain unavailable' }
     $report.python = (& python --version | Out-String).Trim()
