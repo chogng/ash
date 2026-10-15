@@ -11,6 +11,7 @@ from build import app_server, remote
 from build.lib.executable import ExecutableResolution
 from build.lib.node import NodeResolution
 from build.lib.package import validate_package_directory
+from build.lib.package_test_support import create_package_sources
 from build.lib.targets import TARGETS
 
 
@@ -59,6 +60,7 @@ class RemotePackageTests(unittest.TestCase):
     ) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
+            sources = create_package_sources(root / "sources")
 
             def executable(name):
                 path = root / name
@@ -98,6 +100,13 @@ class RemotePackageTests(unittest.TestCase):
             output = root / "package"
             target = "aarch64-apple-darwin"
             with (
+                patch.object(app_server, "REPOSITORY_ROOT", sources),
+                patch.object(app_server, "generate_protocol", return_value=False),
+                patch.object(app_server, "_prepare_builtin_extensions"),
+                patch(
+                    "build.lib.package_binaries.cargo_command_packages",
+                    return_value=set(),
+                ),
                 patch.object(app_server, "build_binaries", return_value=binaries),
                 patch.object(app_server, "resolve_ripgrep", return_value=tool("rg")),
                 patch.object(app_server, "resolve_tgrep", return_value=tool("tgrep")),

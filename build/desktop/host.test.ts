@@ -31,11 +31,15 @@ test('packaging publishes final desktop assets without hashing metadata or user 
 
 for (const mode of ['build', 'watch'] as const) {
 	test(`Host ${mode} regenerates deleted outputs when incremental metadata remains`, { timeout: 30_000 }, async t => {
-		const root = await mkdtemp(join(tmpdir(), 'ash-host-'));
+		const temporary = await mkdtemp(join(tmpdir(), 'ash-host-'));
+		// TS7 ignores shallow Linux watch roots (microsoft/TypeScript#64425).
+		// Match a real checkout's directory depth while retaining isolated temporary sources.
+		const root = join(temporary, 'workspace', 'project', 'desktop');
+		await mkdir(root, { recursive: true });
 		let watcher: Awaited<ReturnType<typeof import('./host.ts').watchHost>> | undefined;
 		t.after(async () => {
 			await watcher?.close();
-			await rm(root, { recursive: true, force: true });
+			await rm(temporary, { recursive: true, force: true });
 		});
 		const desktop = join(root, '.');
 		const output = join(root, '.build/desktop');
