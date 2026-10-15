@@ -278,7 +278,6 @@ fn directory_add_feedback_is_visible_below_the_input() {
 #[test]
 #[cfg(feature = "in-process-tests")]
 fn panel_add_uses_server_paths_preserves_permissions_and_reports_missing_directories() {
-    use ash_app_server_client::InProcessClientOptions;
     use ash_app_server_client::start_in_process_client;
     use ash_app_server_protocol::protocol::common::ClientInfo;
     use ash_app_server_protocol::protocol::environment::SessionDirectoryGrantSetParams;
@@ -298,7 +297,7 @@ fn panel_add_uses_server_paths_preserves_permissions_and_reports_missing_directo
     std::fs::create_dir(&primary).unwrap();
     std::fs::create_dir(&extra).unwrap();
     let mut client = start_in_process_client(
-        InProcessClientOptions::new(
+        crate::test_support::in_process_options(
             root.path().join("state"),
             ClientInfo {
                 name: "directory-panel-test".into(),
@@ -482,7 +481,6 @@ fn dir_view_maps_exact_paths_to_remove_actions() {
 #[test]
 #[cfg(feature = "in-process-tests")]
 fn move_session_adds_directory_and_selects_its_cwd() {
-    use ash_app_server_client::InProcessClientOptions;
     use ash_app_server_client::start_in_process_client;
     use ash_app_server_protocol::protocol::common::ClientInfo;
     use std::sync::Arc;
@@ -502,7 +500,7 @@ fn move_session_adds_directory_and_selects_its_cwd() {
     std::fs::create_dir_all(&primary).unwrap();
     std::fs::create_dir_all(&target).unwrap();
     let mut client = start_in_process_client(
-        InProcessClientOptions::new(
+        crate::test_support::in_process_options(
             root.path().join("state"),
             ClientInfo {
                 name: "dir-move-test".into(),

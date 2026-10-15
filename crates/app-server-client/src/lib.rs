@@ -181,6 +181,8 @@ use zeroize::Zeroize;
 use zeroize::Zeroizing;
 
 #[cfg(any(test, feature = "in-process"))]
+pub use ash_app_server::LocalConnectorRuntime;
+#[cfg(any(test, feature = "in-process"))]
 pub use ash_app_server::SessionStateMode;
 #[cfg(any(test, feature = "in-process"))]
 pub use in_process::{

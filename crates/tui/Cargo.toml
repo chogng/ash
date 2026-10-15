@@ -79,6 +79,8 @@ arboard = { workspace = true }
 image = { workspace = true, features = ["gif", "jpeg", "png", "webp"] }
 
 [dev-dependencies]
+ash-core-plugins = { workspace = true }
+ash-secrets = { workspace = true }
 insta = { workspace = true }
 tempfile = { workspace = true }
 

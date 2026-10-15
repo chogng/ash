@@ -261,7 +261,7 @@ fn worktree_picker_keeps_directory_names_visible_for_long_paths() {
 #[test]
 #[cfg(feature = "in-process-tests")]
 fn creating_a_worktree_through_app_server_leaves_session_catalog_unchanged() {
-    use ash_app_server_client::{AppServerSession, InProcessClientOptions};
+    use ash_app_server_client::AppServerSession;
     use ash_app_server_protocol::protocol::common::ClientInfo;
     let _guard = crate::test_support::in_process_test_guard();
     let root = tempfile::tempdir().unwrap();
@@ -291,7 +291,7 @@ fn creating_a_worktree_through_app_server_leaves_session_catalog_unchanged() {
     let mut capabilities = crate::client_capabilities();
     capabilities.directory_grants_host = None;
     let session = AppServerSession::start_embedded(
-        InProcessClientOptions::new(
+        crate::test_support::in_process_options(
             root.path().join("state"),
             ClientInfo {
                 name: "worktree-only-test".into(),
@@ -529,7 +529,6 @@ fn branch(name: &str, current: bool) -> GitBranchDto {
 #[test]
 #[cfg(feature = "in-process-tests")]
 fn branch_commands_list_and_switch_the_real_workspace_repository() {
-    use ash_app_server_client::InProcessClientOptions;
     use ash_app_server_client::start_in_process_client;
     use ash_app_server_protocol::protocol::common::ClientInfo;
     use ash_app_server_protocol::protocol::git::GitHeadDto;
@@ -554,7 +553,7 @@ fn branch_commands_list_and_switch_the_real_workspace_repository() {
     run_git(&repo, &["commit", "-m", "initial"]);
     run_git(&repo, &["branch", "topic"]);
     let mut client = start_in_process_client(
-        InProcessClientOptions::new(
+        crate::test_support::in_process_options(
             root.path().join("state"),
             ClientInfo {
                 name: "branch-picker-test".into(),

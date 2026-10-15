@@ -5,6 +5,7 @@ use ash_app_server::AppServer;
 use ash_app_server::AppServerOptions;
 use ash_app_server::BuiltInSkillRoot;
 use ash_app_server::ConnectionState;
+use ash_app_server::LocalConnectorRuntime;
 use ash_app_server::LocalProductServicesConfig;
 use ash_app_server::SessionStateMode;
 use ash_app_server::SlashCommandCatalog;
@@ -32,6 +33,7 @@ pub struct InProcessClientOptions {
     model_operation_client: Option<Arc<dyn OperationClient>>,
     host_grok_auth: bool,
     product_services: Option<LocalProductServicesConfig>,
+    connector_runtime: Option<Arc<LocalConnectorRuntime>>,
 }
 
 impl InProcessClientOptions {
@@ -48,6 +50,7 @@ impl InProcessClientOptions {
             model_operation_client: None,
             host_grok_auth: false,
             product_services: None,
+            connector_runtime: None,
         }
     }
 
@@ -106,6 +109,12 @@ impl InProcessClientOptions {
         self
     }
 
+    /// Supplies the Connector authority and its shared credential storage to this composition.
+    pub fn with_connector_runtime(mut self, runtime: LocalConnectorRuntime) -> Self {
+        self.connector_runtime = Some(Arc::new(runtime));
+        self
+    }
+
     /// Loads the distribution-owned product services document selected for this process.
     ///
     /// Product hosts call this explicitly while composing an embedded App Server so Extensions
@@ -141,6 +150,10 @@ impl fmt::Debug for InProcessClientOptions {
                 "product_services_injected",
                 &self.product_services.is_some(),
             )
+            .field(
+                "connector_runtime_injected",
+                &self.connector_runtime.is_some(),
+            )
             .finish()
     }
 }
@@ -161,6 +174,11 @@ impl PartialEq for InProcessClientOptions {
                 _ => false,
             }
             && self.product_services == other.product_services
+            && match (&self.connector_runtime, &other.connector_runtime) {
+                (Some(left), Some(right)) => Arc::ptr_eq(left, right),
+                (None, None) => true,
+                _ => false,
+            }
     }
 }
 
@@ -296,6 +314,9 @@ pub fn open_in_process_app_server(
     }
     if let Some(services) = options.product_services {
         server_options = server_options.with_product_services(services);
+    }
+    if let Some(runtime) = options.connector_runtime {
+        server_options = server_options.with_connector_runtime((*runtime).clone());
     }
     let server = open_app_server(server_options)
         .map_err(|error| ClientError::Transport(error.to_string()))?;

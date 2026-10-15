@@ -188,7 +188,6 @@ fn key(code: KeyCode) -> KeyEvent {
 #[test]
 #[cfg(feature = "in-process-tests")]
 fn network_config_runs_through_the_local_product_composition_and_real_http() {
-    use ash_app_server_client::InProcessClientOptions;
     use ash_app_server_client::start_in_process_client;
     use ash_app_server_protocol::protocol::common::ClientInfo;
     use ash_app_server_protocol::protocol::config::ProviderConfigureParams;
@@ -216,7 +215,7 @@ fn network_config_runs_through_the_local_product_composition_and_real_http() {
             .unwrap();
     });
     let mut client = start_in_process_client(
-        InProcessClientOptions::new(
+        crate::test_support::in_process_options(
             profile.path(),
             ClientInfo {
                 name: "network-test".into(),

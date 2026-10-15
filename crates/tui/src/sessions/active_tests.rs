@@ -7,7 +7,6 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use ash_app_server_client::AppServerClient;
-use ash_app_server_client::InProcessClientOptions;
 use ash_app_server_client::InProcessTransport;
 use ash_app_server_client::start_in_process_client;
 use ash_app_server_protocol::protocol::common::ClientInfo;
@@ -157,7 +156,7 @@ fn client() -> (AppServerClient<InProcessTransport>, PathBuf) {
         NEXT_STATE_ROOT.fetch_add(1, Ordering::Relaxed)
     ));
     let client = start_in_process_client(
-        InProcessClientOptions::new(
+        crate::test_support::in_process_options(
             &state_root,
             ClientInfo {
                 name: "ash-tui-recovery-test".into(),

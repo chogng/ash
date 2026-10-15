@@ -79,6 +79,7 @@ fn builtins_follow_enum_presentation_order() {
                 "archive",
                 "connectors",
                 "ide",
+                "desktop",
                 "rewind",
                 "config",
                 "home",
@@ -112,7 +113,7 @@ fn builtins_follow_enum_presentation_order() {
             names
         }
     );
-    assert_eq!(definitions.len(), 38 + usize::from(cfg!(debug_assertions)));
+    assert_eq!(definitions.len(), 39 + usize::from(cfg!(debug_assertions)));
 }
 
 #[test]

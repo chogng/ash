@@ -56,8 +56,6 @@ use crate::thread::composer::built_in_catalog_command;
 #[cfg(feature = "in-process-tests")]
 use ash_app_server_client::AppServerSession;
 #[cfg(feature = "in-process-tests")]
-use ash_app_server_client::InProcessClientOptions;
-#[cfg(feature = "in-process-tests")]
 use ash_app_server_protocol::protocol::common::ClientInfo;
 #[cfg(feature = "in-process-tests")]
 use ash_slash_commands::SlashCommandOrigin;
@@ -74,7 +72,7 @@ use std::sync::Arc;
 fn repeated_model_command_opens_the_fixed_catalog_without_loading() {
     let _guard = crate::test_support::in_process_test_guard();
     let root = tempfile::tempdir().unwrap();
-    let session = AppServerSession::start_embedded(InProcessClientOptions::new(
+    let session = AppServerSession::start_embedded(crate::test_support::in_process_options(
         root.path(),
         ClientInfo {
             name: "ash-tui-model-picker-test".into(),
@@ -160,7 +158,7 @@ fn repeated_model_command_opens_the_fixed_catalog_without_loading() {
 fn effort_command_opens_the_supported_selector_without_loading() {
     let _guard = crate::test_support::in_process_test_guard();
     let root = tempfile::tempdir().unwrap();
-    let session = AppServerSession::start_embedded(InProcessClientOptions::new(
+    let session = AppServerSession::start_embedded(crate::test_support::in_process_options(
         root.path(),
         ClientInfo {
             name: "ash-tui-effort-selector-test".into(),
@@ -444,7 +442,7 @@ fn switch_mode_updates_the_composer_without_overwriting_the_next_message_choice(
 
     let _guard = crate::test_support::in_process_test_guard();
     let root = tempfile::tempdir().unwrap();
-    let session = AppServerSession::start_embedded(InProcessClientOptions::new(
+    let session = AppServerSession::start_embedded(crate::test_support::in_process_options(
         root.path(),
         ClientInfo {
             name: "ash-tui-switch-mode-test".into(),
@@ -519,7 +517,7 @@ fn dashboard_grouping_saves_and_restores_at_driver_startup_independently_of_serv
         "[tui]\nsessionGrouping = \"model\"\nshowTips = false\n",
     )
     .unwrap();
-    let session = AppServerSession::start_embedded(InProcessClientOptions::new(
+    let session = AppServerSession::start_embedded(crate::test_support::in_process_options(
         server_root.path(),
         ClientInfo {
             name: "ash-tui-grouping-test".into(),
@@ -687,7 +685,7 @@ fn english_punctuation_driver_uses_local_profile_and_applies_external_changes() 
         "[tui]\nenglishPunctuation = false\nshowTips = false\n",
     )
     .unwrap();
-    let session = AppServerSession::start_embedded(InProcessClientOptions::new(
+    let session = AppServerSession::start_embedded(crate::test_support::in_process_options(
         server_root.path(),
         ClientInfo {
             name: "ash-tui-punctuation-test".into(),
@@ -777,7 +775,7 @@ fn english_punctuation_driver_uses_local_profile_and_applies_external_changes() 
 fn ide_desktop_handoff_exits_only_after_acknowledgement_and_preserves_new_terminal_work() {
     let _guard = crate::test_support::in_process_test_guard();
     let root = tempfile::tempdir().unwrap();
-    let session = AppServerSession::start_embedded(InProcessClientOptions::new(
+    let session = AppServerSession::start_embedded(crate::test_support::in_process_options(
         root.path(),
         ClientInfo {
             name: "ash-desktop-handoff-test".into(),

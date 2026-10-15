@@ -1924,7 +1924,6 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "没有匹配的命令",
         "Aucune commande correspondante",
     ),
-    translation("Extensions", "拡張機能", "扩展", "Extensions"),
     translation("Installed", "インストール済み", "已安装", "Installés"),
     translation("Not installed", "未インストール", "未安装", "Non installés"),
     translation("installed", "インストール済み", "已安装", "installé"),
@@ -3165,18 +3164,6 @@ const UI_TRANSLATIONS: &[Translation] = &[
     ),
     translation("Enter code", "コードを入力", "输入代码", "Saisir le code"),
     translation("Error", "エラー", "错误", "Erreur"),
-    translation(
-        "File read",
-        "ファイル読み取り",
-        "读取文件",
-        "Lecture de fichier",
-    ),
-    translation(
-        "File write",
-        "ファイル書き込み",
-        "写入文件",
-        "Écriture de fichier",
-    ),
     translation("Fork", "フォーク", "派生", "Fork"),
     translation("Help", "ヘルプ", "帮助", "Aide"),
     translation(
@@ -4593,12 +4580,6 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "切换项目文件夹",
         "Changer de dossier de projet",
     ),
-    translation(
-        "System configuration",
-        "システム設定",
-        "系统配置",
-        "Configuration système",
-    ),
     translation("Test", "テスト", "测试", "Tester"),
     translation("Testing…", "テスト中…", "正在测试…", "Test…"),
     translation(
@@ -4620,12 +4601,6 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Saisir des mots-clés ou un n°",
     ),
     translation("User", "ユーザー", "用户", "Utilisateur"),
-    translation(
-        "User interface",
-        "ユーザーインターフェース",
-        "用户界面",
-        "Interface utilisateur",
-    ),
     translation(
         "Waiting for the request result",
         "リクエスト結果を待っています",

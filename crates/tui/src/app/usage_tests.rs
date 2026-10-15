@@ -457,7 +457,7 @@ fn live_usage_command_through_local_app_server() {
     );
     let profile = tempfile::tempdir().unwrap();
     let mut client = ash_app_server_client::start_in_process_client(
-        ash_app_server_client::InProcessClientOptions::new(
+        crate::test_support::in_process_options(
             profile.path(),
             ash_app_server_protocol::protocol::common::ClientInfo {
                 name: "ash-usage-test".into(),

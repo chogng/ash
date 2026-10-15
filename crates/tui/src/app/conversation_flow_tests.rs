@@ -11,7 +11,6 @@ use crate::thread::Event as ThreadEvent;
 use crate::thread::ThreadRequestScope;
 use crate::thread::submit_prompt;
 use ash_app_server_client::AppServerClient;
-use ash_app_server_client::InProcessClientOptions;
 use ash_app_server_client::InProcessTransport;
 use ash_app_server_client::ProviderApiKeySetRequest;
 use ash_app_server_client::start_in_process_client;
@@ -60,7 +59,7 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
     let state_root = tempdir().unwrap();
     let model = Arc::new(ScriptedModel::default());
     let mut client = start_in_process_client(
-        InProcessClientOptions::new(
+        crate::test_support::in_process_options(
             state_root.path(),
             ClientInfo {
                 name: "ash-tui-conversation-test".into(),

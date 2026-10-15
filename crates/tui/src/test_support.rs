@@ -65,6 +65,27 @@ pub(crate) fn in_process_test_guard() -> MutexGuard<'static, ()> {
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
+/// Contract tests share one isolated credential owner across providers and Connectors.
+/// They must never access the host keyring or require an interactive unlock.
+#[cfg(feature = "in-process-tests")]
+pub(crate) fn in_process_options(
+    profile_root: impl Into<PathBuf>,
+    client_info: ash_app_server_protocol::protocol::common::ClientInfo,
+) -> ash_app_server_client::InProcessClientOptions {
+    let profile_root = profile_root.into();
+    let state = state::StateRuntime::open(&profile_root).unwrap();
+    let authority =
+        ash_core_plugins::PluginActivationAuthority::open(profile_root.join("plugins")).unwrap();
+    let runtime = ash_app_server_client::LocalConnectorRuntime::from_plugin_authority(
+        &state,
+        authority,
+        std::sync::Arc::new(ash_secrets::MemorySecretStore::default()),
+    )
+    .unwrap();
+    ash_app_server_client::InProcessClientOptions::new(profile_root, client_info)
+        .with_connector_runtime(runtime)
+}
+
 pub(crate) fn hook_catalog(
     hooks: Vec<ash_app_server_protocol::protocol::config::HookConfigDto>,
 ) -> ash_app_server_protocol::protocol::config::HookListResult {

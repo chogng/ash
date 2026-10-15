@@ -93,7 +93,7 @@ fn fork_command_preserves_selection_and_starts_only_when_prompted() {
     use crate::app::App;
     use crate::app::AppCommand;
     use crate::keymap::KeyEvent;
-    use ash_app_server_client::{AppServerSession, InProcessClientOptions};
+    use ash_app_server_client::AppServerSession;
     use ash_app_server_protocol::protocol::common::ClientInfo;
     use ash_app_server_protocol::protocol::session::SessionThreadReadParams;
     use crossterm::event::KeyCode;
@@ -101,7 +101,7 @@ fn fork_command_preserves_selection_and_starts_only_when_prompted() {
     let _guard = crate::test_support::in_process_test_guard();
     let root = tempfile::tempdir().unwrap();
     let session = AppServerSession::start_embedded(
-        InProcessClientOptions::new(
+        crate::test_support::in_process_options(
             root.path(),
             ClientInfo {
                 name: "fork-flow-test".into(),

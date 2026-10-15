@@ -18,9 +18,7 @@ use crate::thread::read_thread;
 use crate::thread::transcript::MessageRole;
 use crate::thread::{ThreadRequestScope, submit_prompt};
 use ash_app_server_client::JsonRpcTransport;
-use ash_app_server_client::{
-    AppServerClient, InProcessClientOptions, InProcessTransport, start_in_process_client,
-};
+use ash_app_server_client::{AppServerClient, InProcessTransport, start_in_process_client};
 use ash_app_server_protocol::protocol::common::ClientInfo;
 use ash_app_server_protocol::protocol::config::HookActionDto;
 use ash_app_server_protocol::protocol::config::HookConfigDto;
@@ -272,7 +270,7 @@ fn branch_then_new_preserves_execution_target_and_resume_restores_original_sessi
     fs::create_dir(&workspace).unwrap();
     let model = Arc::new(OfflineOperationClient::default());
     let mut client = start_in_process_client(
-        InProcessClientOptions::new(
+        crate::test_support::in_process_options(
             state_root.path(),
             ClientInfo {
                 name: "ash-tui-new-test".into(),
@@ -593,7 +591,7 @@ args = ["--check"]
     )
     .unwrap();
     let mut client = start_in_process_client(
-        InProcessClientOptions::new(
+        crate::test_support::in_process_options(
             root.path().join("profile"),
             ClientInfo {
                 name: "ash-tui-test".into(),
@@ -778,7 +776,7 @@ fn skills_enablement_uses_the_same_session_scope_as_selection() {
     )
     .unwrap();
     let mut client = start_in_process_client(
-        InProcessClientOptions::new(
+        crate::test_support::in_process_options(
             root.path().join("profile"),
             ClientInfo {
                 name: "ash-tui-skills-test".into(),
@@ -917,10 +915,17 @@ fn model_command_updates_and_clears_model_with_config_revision() {
             config: ProviderConfigDto {
                 model_acceleration: Default::default(),
                 disabled_acceleration_options: Default::default(),
-                connection: "test".into(),
-                custom: None,
-                provider: "test".into(),
-                base_url: None,
+                connection: "custom-test".into(),
+                custom: Some(ash_app_server_protocol::protocol::config::CustomProviderConfigDto {
+                    model_aliases: None,
+                    context_window: 272_000,
+                    order: 0,
+                    name: "Test".into(),
+                    model: Some("model-one".into()),
+                    protocol: ash_app_server_protocol::protocol::config::CustomProviderProtocolDto::Responses,
+                }),
+                provider: "custom-test".into(),
+                base_url: Some("https://example.invalid/v1".into()),
                 max_output_tokens: None,
                 model_context: Default::default(),
             },
@@ -931,7 +936,7 @@ fn model_command_updates_and_clears_model_with_config_revision() {
     let update = crate::models::execute(
         &mut *client,
         ModelCommand::SetModel {
-            preference: "test/model-one".into(),
+            preference: "custom-test/model-one".into(),
         },
         &catalog,
     )
@@ -940,7 +945,7 @@ fn model_command_updates_and_clears_model_with_config_revision() {
 
     let configured = client.read_config().unwrap();
     let selected = configured.model.unwrap();
-    assert_eq!(selected.provider, "test");
+    assert_eq!(selected.provider, "custom-test");
     assert_eq!(selected.model, "model-one");
     assert_eq!(
         app.status_line()
@@ -1227,7 +1232,7 @@ fn add_dir_adds_lists_and_removes_the_exact_session_directory() {
     fs::create_dir_all(&dir).unwrap();
     fs::create_dir_all(&additional).unwrap();
     let mut client = start_in_process_client(
-        InProcessClientOptions::new(
+        crate::test_support::in_process_options(
             &state_root,
             ClientInfo {
                 name: "ash-tui-add-dir-test".into(),
@@ -1405,7 +1410,7 @@ fn client_with_model_probe() -> (DispatchTestClient, PathBuf, Arc<OfflineOperati
     ));
     let model = Arc::new(OfflineOperationClient::default());
     let client = start_in_process_client(
-        InProcessClientOptions::new(
+        crate::test_support::in_process_options(
             &state_root,
             ClientInfo {
                 name: "ash-tui-test".into(),
@@ -1788,7 +1793,7 @@ fn cd_moves_the_active_session_to_a_new_working_directory() {
     fs::create_dir_all(&dir).unwrap();
     fs::create_dir_all(&next_dir).unwrap();
     let mut client = start_in_process_client(
-        InProcessClientOptions::new(
+        crate::test_support::in_process_options(
             &state_root,
             ClientInfo {
                 name: "ash-tui-cd-test".into(),

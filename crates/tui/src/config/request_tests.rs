@@ -844,7 +844,7 @@ fn git_settings_update_only_the_shared_git_section() {
     assert_eq!(requests[0]["params"]["expectedRevision"], 7);
     assert_eq!(
         requests[0]["params"]["git"],
-        serde_json::json!({"autofetch":"all","autofetchPeriod":300})
+        serde_json::json!({"autofetch":"all","autofetchPeriod":300,"rebaseWhenSync":false})
     );
     assert!(requests[0]["params"].get("tui").is_none());
 }
