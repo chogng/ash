@@ -139,7 +139,7 @@ export const SettingsNavigation = [
 					id: 'layout',
 					label: localize('settings.workbench.layout.group.label', 'Workbench layout'),
 					description: localize('settings.workbench.layout.description', 'Configure the Workbench layout and window zoom.'),
-					settings: ['workbench.layoutStyle', 'workbench.activityBar.location', 'workbench.activityBar.badges', 'workbench.activityBar.compact', 'workbench.sideBar.location', 'chat.viewSessions.orientation', 'chat.experimental.sessionArchiveActionWording', 'window.title', 'window.titleSeparator', 'window.titleBarStyle', 'window.menuStyle', 'window.zoomLevel', 'workbench.tree.*', 'workbench.list.smoothScrolling'],
+					settings: ['workbench.layoutStyle', 'workbench.activityBar.location', 'workbench.activityBar.badges', 'workbench.activityBar.compact', 'workbench.sideBar.location', 'workbench.statusBar.visible', 'chat.viewSessions.orientation', 'chat.experimental.sessionArchiveActionWording', 'window.title', 'window.titleSeparator', 'window.titleBarStyle', 'window.menuStyle', 'window.zoomLevel', 'window.zoomPerWindow', 'workbench.tree.*', 'workbench.list.smoothScrolling'],
 				}],
 			},
 			{
@@ -158,6 +158,32 @@ export const SettingsNavigation = [
 					description: localize('settings.workbench.startup.group.description', 'Choose what appears when no editor is restored.'),
 					settings: ['workbench.startupEditor', 'workbench.editor.restoreEditors'],
 				}],
+			},
+			{
+				id: 'browser',
+				label: localize({ bundle: 'ash.settings', key: 'categories.browser.label' }, 'Browser'),
+				description: localize({ bundle: 'ash.settings', key: 'categories.browser.description' }, 'Configure website links and integrated browser pages.'),
+				presentation: 'general',
+				groups: [
+					{
+						id: 'url-opening',
+						label: localize('externalUriOpener.settings.group', 'Links'),
+						description: localize('externalUriOpener.settings.groupDescription', 'Choose where website links open.'),
+						settings: ['workbench.externalUriOpeners'],
+					},
+					{
+						id: 'browser-controls',
+						label: localize({ bundle: 'ash.settings', key: 'categories.browser.label' }, 'Browser'),
+						description: localize({ bundle: 'ash.settings', key: 'browser.controls.description' }, 'Control page zoom, address bar search and reload on local file changes.'),
+						settings: ['workbench.browser.searchEngine', 'workbench.browser.pageZoom', 'workbench.browser.autoReloadOnFileChange', 'workbench.browser.dataStorage', 'workbench.browser.openLocalhostLinks'],
+					},
+					{
+						id: 'chatgpt',
+						label: localize({ bundle: 'ash.settings', key: 'browser.chatgpt.label' }, 'ChatGPT'),
+						description: localize({ bundle: 'ash.settings', key: 'browser.chatgpt.description' }, 'Configure the ChatGPT website in this window.'),
+						settings: ['sessions.chatgpt.optimizeScrolling'],
+					},
+				],
 			},
 		],
 	},
@@ -363,32 +389,6 @@ export const SettingsNavigation = [
 					description: localize({ bundle: 'ash.settings', key: 'categories.terminal.description' }, 'Configure terminal fonts, cursor appearance, contrast, and scrollback.'),
 					settings: ['terminal.integrated.*'],
 				}],
-			},
-			{
-				id: 'browser',
-				label: localize({ bundle: 'ash.settings', key: 'categories.browser.label' }, 'Browser'),
-				description: localize({ bundle: 'ash.settings', key: 'categories.browser.description' }, 'Configure website links and integrated browser pages.'),
-				presentation: 'general',
-				groups: [
-					{
-						id: 'url-opening',
-						label: localize('externalUriOpener.settings.group', 'Links'),
-						description: localize('externalUriOpener.settings.groupDescription', 'Choose where website links open.'),
-						settings: ['workbench.externalUriOpeners'],
-					},
-					{
-						id: 'browser-controls',
-						label: localize({ bundle: 'ash.settings', key: 'categories.browser.label' }, 'Browser'),
-						description: localize({ bundle: 'ash.settings', key: 'browser.controls.description' }, 'Control page zoom, address bar search and reload on local file changes.'),
-						settings: ['workbench.browser.searchEngine', 'workbench.browser.pageZoom', 'workbench.browser.autoReloadOnFileChange', 'workbench.browser.dataStorage', 'workbench.browser.openLocalhostLinks'],
-					},
-					{
-						id: 'chatgpt',
-						label: localize({ bundle: 'ash.settings', key: 'browser.chatgpt.label' }, 'ChatGPT'),
-						description: localize({ bundle: 'ash.settings', key: 'browser.chatgpt.description' }, 'Configure the ChatGPT website in this window.'),
-						settings: ['sessions.chatgpt.optimizeScrolling'],
-					},
-				],
 			},
 			{
 				id: 'voice-input',

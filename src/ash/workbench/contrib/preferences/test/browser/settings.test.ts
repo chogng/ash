@@ -821,6 +821,7 @@ test('settingsLayout is the single projection from registered settings to catego
 		'appearance',
 		'layout',
 		'startup',
+		'browser',
 		'editor-fonts',
 		'editor-display',
 		'editor-editing',
@@ -834,7 +835,6 @@ test('settingsLayout is the single projection from registered settings to catego
 		'search',
 		'source-control',
 		'terminal',
-		'browser',
 		'voice-input',
 		'chat-input',
 		'chat-code-blocks',
@@ -1572,7 +1572,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	workbenchGroup.closest<HTMLElement>('.ash-tree-row')?.click();
 	assert.deepEqual(
 		[...root.querySelectorAll<HTMLElement>('[data-settings-category-id]')].map(element => element.dataset.settingsCategoryId),
-		['general', 'github', 'network', 'appearance', 'layout', 'startup'],
+		['general', 'github', 'network', 'appearance', 'layout', 'startup', 'browser'],
 	);
 	assert.equal(root.querySelector('[data-settings-category-id="general"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
 	assert.equal(root.querySelector('[data-settings-category-id="appearance"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
