@@ -24,14 +24,6 @@ fmt *args:
 fmt-check *args:
     {{ python }} -B scripts/format.py --check {{ recipe_args }}
 
-# Check the index without changing staged or working-tree content.
-fmt-staged:
-    {{ python }} -B scripts/format.py --check --staged
-
-# Enable the versioned pre-commit hook for this repository.
-install-hooks:
-    git config --local core.hooksPath .githooks
-
 # Format Rust independently of frontend dependencies.
 rust-format:
     {{ python }} -B scripts/format.py --language rust

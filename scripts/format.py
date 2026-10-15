@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import difflib
 from fnmatch import fnmatchcase
-import io
 import json
 import os
 import shlex
@@ -126,28 +125,17 @@ def check_just_version(root: Path) -> None:
         raise ValueError(f"Install Just {expected} from .just-version; found {actual}.")
 
 
-def git(*args: str, data: bytes | None = None) -> bytes:
-    return subprocess.check_output(["git", *args], cwd=REPOSITORY_ROOT, input=data)
+def git(*args: str) -> bytes:
+    return subprocess.check_output(["git", *args], cwd=REPOSITORY_ROOT)
 
 
 def names(data: bytes) -> set[str]:
     return {path.decode("utf-8") for path in data.split(b"\0") if path}
 
 
-def select_files(paths: list[str], changed: str | None, staged: bool) -> set[str]:
+def select_files(paths: list[str], changed: str | None) -> set[str]:
     if git("ls-files", "--unmerged", "-z"):
         raise ValueError("Resolve index conflicts before checking formatting.")
-    if staged:
-        return names(
-            git(
-                "diff",
-                "--cached",
-                "--no-renames",
-                "--name-only",
-                "--diff-filter=ACMT",
-                "-z",
-            )
-        )
     inventory = names(
         git("ls-files", "--cached", "--others", "--exclude-standard", "-z")
     )
@@ -193,42 +181,13 @@ def select_files(paths: list[str], changed: str | None, staged: bool) -> set[str
     }
 
 
-def snapshot_files(snapshot: Path, selected: set[str], staged: bool) -> set[str]:
-    if staged:
-        regular = {}
-        for entry in git("ls-files", "--stage", "-z").split(b"\0"):
-            if entry:
-                metadata, path = entry.split(b"\t", 1)
-                if metadata.split()[0] in (b"100644", b"100755"):
-                    regular[path.decode("utf-8")] = metadata.split()[1]
-        selected &= regular.keys()
-        copied = sorted((selected | set(CONFIGURATION)) & regular.keys())
-        # Read raw blobs, including staged configuration. Checkout filters and
-        # unstaged attributes must not change the candidate commit's contents.
-        if copied:
-            stream = io.BytesIO(
-                git(
-                    "cat-file",
-                    "--batch",
-                    data=b"".join(regular[name] + b"\n" for name in copied),
-                )
-            )
-            for name in copied:
-                header = stream.readline().split()
-                if len(header) != 3 or header[1] != b"blob":
-                    raise ValueError(f"Cannot read staged blob: {name}")
-                target = snapshot / name
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_bytes(stream.read(int(header[2])))
-                stream.read(1)
-    else:
-        for name in selected | set(CONFIGURATION):
-            source = REPOSITORY_ROOT / name
-            if source.is_file() and not source.is_symlink():
-                target = snapshot / name
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_bytes(source.read_bytes())
-    return selected
+def snapshot_files(snapshot: Path, selected: set[str]) -> None:
+    for name in selected | set(CONFIGURATION):
+        source = REPOSITORY_ROOT / name
+        if source.is_file() and not source.is_symlink():
+            target = snapshot / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(source.read_bytes())
 
 
 def chunks(paths: list[str]):
@@ -370,7 +329,7 @@ def scoped_rust(check: bool, root: Path, files: set[str]) -> bool:
         path = root / name
         original = path.read_bytes()
         # stdin formats this file alone: an out-of-line `mod` must not pull in
-        # another file's unstaged contents or expand the incremental scope.
+        # another file's contents or expand the incremental scope.
         result = subprocess.run(
             [
                 "rustup",
@@ -429,16 +388,15 @@ def scoped(
     check: bool,
     paths: list[str],
     changed: str | None,
-    staged: bool,
     language: str | None,
 ) -> int:
-    selected = select_files(paths, changed, staged)
+    selected = select_files(paths, changed)
     if not selected:
         print("No selected files need formatting checks.")
         return 0
     with tempfile.TemporaryDirectory(prefix="ash-format-") as directory:
         root = Path(directory)
-        selected = snapshot_files(root, selected, staged)
+        snapshot_files(root, selected)
         originals = {name: (root / name).read_bytes() for name in selected}
         success = execute(scoped_commands(check, root, selected, language))
         if language in (None, "rust"):
@@ -493,26 +451,16 @@ def main(arguments: list[str] | None = None) -> int:
         choices=LANGUAGES,
         help="run only the selected language's formatter",
     )
-    scope = parser.add_mutually_exclusive_group()
-    scope.add_argument(
-        "--staged",
-        action="store_true",
-        help="check index contents without modifying the worktree or index",
-    )
-    scope.add_argument(
+    parser.add_argument(
         "--changed",
         metavar="REF",
         help="select branch and working-tree changes since the merge base with REF",
     )
     parser.add_argument("paths", nargs="*", help="repository files or directories")
     args = parser.parse_args(arguments)
-    if args.staged and (not args.check or args.paths):
-        parser.error("--staged requires --check and cannot be combined with paths")
     try:
-        if args.paths or args.changed is not None or args.staged:
-            return scoped(
-                args.check, args.paths, args.changed, args.staged, args.language
-            )
+        if args.paths or args.changed is not None:
+            return scoped(args.check, args.paths, args.changed, args.language)
         return int(not execute(commands(args.check, args.language)))
     except (OSError, ValueError, KeyError, subprocess.CalledProcessError) as error:
         print(f"Formatting failed: {error}", file=sys.stderr)
