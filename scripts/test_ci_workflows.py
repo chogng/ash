@@ -21,6 +21,43 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class CiWorkflowTests(unittest.TestCase):
+    def test_formatter_changes_select_their_behavior_test_owners(self) -> None:
+        for path in (
+            "build/format.ts",
+            "tsfmt.json",
+            ".prettierignore",
+            ".prettierrc.toml",
+            ".editorconfig",
+            "package.json",
+            "pnpm-lock.yaml",
+            "pnpm-workspace.yaml",
+        ):
+            with self.subTest(path=path):
+                selected = ci_workflows.select([path], self.policy)
+                self.assertTrue(selected["frontend"])
+        for path in (
+            "scripts/format.py",
+            "scripts/test_format.py",
+            ".github/workflows/format.yml",
+        ):
+            with self.subTest(path=path):
+                selected = ci_workflows.select([path], self.policy)
+                self.assertTrue(selected["frontend"])
+                if path.startswith("scripts/"):
+                    self.assertTrue(selected["tooling"])
+
+    def test_formatter_behavior_tests_do_not_block_the_source_format_gate(self) -> None:
+        formatting = (ROOT / ".github/workflows/format.yml").read_text()
+        self.assertNotIn("pnpm test:format", formatting)
+        self.assertNotIn("test_format", formatting)
+        frontend = (ROOT / ".github/workflows/frontend.yml").read_text()
+        contracts = frontend.split("\n  contracts:\n")[1].split(
+            "\n  desktop-runtime:\n"
+        )[0]
+        self.assertIn("test_format.ScopedFormattingTests", contracts)
+        self.assertIn("pnpm install --frozen-lockfile", contracts)
+        self.assertIn("scripts/install_python_tools.py", contracts)
+
     def test_just_version_and_setup_changes_select_all_consumers(self) -> None:
         policy = ci_workflows.load_policy(ci_workflows.POLICY)
         for name in (".just-version", ".github/actions/setup-just/action.yml"):

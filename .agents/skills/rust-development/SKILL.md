@@ -37,7 +37,7 @@ Add the checks required by the change:
 | Change | Additional validation |
 | --- | --- |
 | Dependencies, features, or lockfile | Run `just dependencies`; check features and affected build/runtime manifests. |
-| App Server protocol | Run `just generate-protocol`, protocol tests, `pnpm typecheck:protocol`, and affected client builds or typechecks. |
+| App Server protocol | Run `just generate-protocol`, protocol tests, `./node_modules/bun/bin/bun.exe check -p tsconfig.protocol.json --all`, and affected client builds or typechecks. |
 | Tests | Run the warning check; test-only code must not create production warnings. |
 | Platform conditions | Compile affected test targets on every affected platform. |
 | Dependency or build-measurement tools | Run `just test-python scripts` and the changed command against the real workspace. |

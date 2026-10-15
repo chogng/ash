@@ -128,9 +128,9 @@ function runTypecheck() {
 		return false;
 	}
 	process.stdout.write(`repository script: ${command}\n`);
-	const result = process.platform === 'win32'
-		? run(process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', 'pnpm run typecheck:stanza'])
-		: run('pnpm', ['--dir', '.', 'run', 'typecheck:stanza']);
+	const bun = resolve(repositoryRoot, 'node_modules/bun/bin/bun.exe');
+	// Keep preparation and checks at the script owner as that lifecycle evolves.
+	const result = run(bun, ['run', 'typecheck:stanza']);
 	if (result.stdout) process.stdout.write(result.stdout);
 	if (result.stderr) process.stderr.write(result.stderr);
 	if (result.status !== 0) process.stderr.write(`[typecheck:stanza] FAILED with exit code ${result.status}\n`);

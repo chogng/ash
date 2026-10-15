@@ -18,7 +18,7 @@ Read versions on every run; do not maintain another version list in this skill o
 | Input | Authority and use |
 | --- | --- |
 | Git and ripgrep | [Build prerequisites](../../../docs/build.md#构建入口): check `git --version` and `rg --version` for checkout and repository tooling. Product-packaged search executables are separate locked resources. |
-| Just | [justfile](../../../justfile) owns the recipes; [tooling CI](../../../.github/workflows/tooling.yml) and the Dev Container declare reference installation versions. Check `just --version` and that `just --list` parses the current file; do not impose pnpm's exact-version rule on Just. |
+| Just | [.just-version](../../../.just-version) pins the formatter version; [justfile](../../../justfile) owns the recipes and [setup-just](../../../.github/actions/setup-just/action.yml) installs the CI version. Check `just --version` matches the pin and `just --list` parses the current file. |
 | Rust | [rust-toolchain.toml](../../../rust-toolchain.toml): channel, profile, and components. Inspect `rustup toolchain list` before running a command that might implicitly install a toolchain. |
 | Node | [.nvmrc](../../../.nvmrc) for direct Node execution; `engines` and `devEngines.runtime` in root `package.json` for package-script execution. Compare them and stop on contradictions. |
 | pnpm | Root `package.json` → `packageManager`; confirm the actual executable version. Ash's preinstall rejects a different package manager/version. |
@@ -58,7 +58,15 @@ Install JavaScript workspace dependencies with `pnpm install --frozen-lockfile`.
 
 Node-gyp and `electron-rebuild` do not use `build/python.ts` to discover Python. If their discovery fails, pass the verified interpreter through process-local `PYTHON` for the install/rebuild command; on initialized Windows checkouts, use the absolute path to `scripts/.venv/Scripts/python.exe` instead of an App Execution Alias.
 
-After installation, verify `pnpm exec bun --version` against the declared dependency. Use the workspace Bun through package scripts or `pnpm exec bun`; do not install a separate global Bun. If its executable is missing, inspect pnpm's install output and the existing `allowBuilds.bun` rule before retrying installation.
+After installation, verify `./node_modules/bun/bin/bun.exe --version` against the declared dependency. Use this pinned executable directly (the package uses `bun.exe` on every platform); do not install a separate global Bun. If its executable is missing, inspect pnpm's install output and the existing `allowBuilds.bun` rule before retrying installation.
+
+## TypeScript checks
+
+For single-run type checking, invoke the pinned Bun directly: `./node_modules/bun/bin/bun.exe check -p <tsconfig> --all`. Run the owning preparation command first when generated inputs are missing or stale; reuse preparation for unchanged inputs. Use `pnpm typecheck:*` only when its full lifecycle is needed, not as a forwarding layer for an already prepared check. Keep emit/watch on their owning compiler entrypoints.
+
+When the selected build or test already prepares and checks the same inputs, let that lifecycle run once instead of preceding it with a standalone typecheck. Use direct checks for validation that no selected build or test covers.
+
+Within one CI job, prepare generated inputs once before the dependent checks. For build-tool tests after `node build/prepare.ts`, compile the scenario runner with `pnpm --dir test/scenario compile`, then run `pnpm --dir build run test:prepared`; the normal build test entrypoint retains preparation for standalone use. Reuse only artifacts available in that job; another runner needs its own preparation or a verified artifact transfer.
 
 ## Select and verify the scope
 
@@ -66,10 +74,10 @@ If no target is specified for a headless worker, use the Frontend/Web tier. On a
 
 | Tier | Preparation and acceptance |
 | --- | --- |
-| Frontend/Web without backend | `pnpm typecheck:renderer`; `pnpm build:web`; `pnpm test:smoke:browser:no-compile` after checking `test/automation/tsconfig.json` through `pnpm exec bun check -p test/automation/tsconfig.json --all`, or use `pnpm test:smoke:browser` to perform its preparation automatically. Launch with `pnpm dev:web` only if requested. |
+| Frontend/Web without backend | `pnpm test:smoke:browser` builds Web and checks Renderer and automation types. To reuse an existing build, check `test/automation/tsconfig.json` through `./node_modules/bun/bin/bun.exe check -p test/automation/tsconfig.json --all` if needed, then use `pnpm test:smoke:browser:no-compile`. Launch with `pnpm dev:web` only if requested. |
 | Backend/CLI | Run `just verify <package>` and the owning build (for Code, `just build-code`). Complete backend package preparation uses `just ash-package`. |
-| Full Web | `pnpm typecheck:renderer` and `pnpm test:smoke:browser:full` (its hooks build Web and prepare the packaged-Node backend). Launch with `pnpm dev:web:full` only if requested. |
-| Desktop | `pnpm typecheck:renderer` and `pnpm test:smoke:desktop` (its hooks prepare the backend, build Electron, and check automation types). Launch with `pnpm dev` only if requested. `pnpm test:smoke:ui` selects UI acceptance but still prepares the backend runtime package for startup metadata. |
+| Full Web | `pnpm test:smoke:browser:full` checks frontend types, builds Web and prepares the packaged-Node backend. Launch with `pnpm dev:web:full` only if requested. |
+| Desktop | `pnpm test:smoke:desktop` prepares the backend, builds Electron and checks Renderer and automation types. Launch with `pnpm dev` only if requested. `pnpm test:smoke:ui` selects UI acceptance but still prepares the backend runtime package for startup metadata. |
 
 For a setup smoke check, select scenarios under [test/smoke/areas](../../../test/smoke/areas) using the package script's file/filter arguments. Confirm at least one applicable test ran and inspect skips. For accompanying TypeScript changes, use [TypeScript validation](../../../.github/instructions/typescript-testing.instructions.md).
 

@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test \"**/*.test.ts\"",
+    "test:prepared": "node --test \"**/*.test.ts\"",
     "typecheck": "bun check -p tsconfig.json --all",
     "pretest": "node protocol/generate.ts && pnpm --dir ../test/scenario compile",
     "pretypecheck": "node protocol/generate.ts"

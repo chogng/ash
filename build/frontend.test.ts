@@ -29,8 +29,13 @@ test('Frontend acceptance waits for shared contracts and unit tests', () => {
 		assert.match(definition, /^    needs: contracts$/m);
 	}
 	const contracts = workflow.split('\n  contracts:\n')[1].split(/\n  [a-z-]+:\n/u)[0];
-	assert.match(contracts, /pnpm exec bun check -p tsconfig.renderer.json --all/u);
-	assert.match(contracts, /pnpm test:build/u);
+	assert.match(contracts, /\.\/node_modules\/bun\/bin\/bun\.exe check -p tsconfig.renderer.json --all/u);
+	assert.match(contracts, /pnpm --dir test\/scenario compile/u);
+	assert.match(contracts, /pnpm --dir build run test:prepared/u);
+	assert.doesNotMatch(contracts, /node build\/protocol\/generate.ts|pnpm test:build\b/u);
+	const buildScripts = JSON.parse(readFileSync(resolve(repositoryRoot, 'build/package.json'), 'utf8')).scripts;
+	assert.equal(buildScripts['test:prepared'], buildScripts.test, 'Prepared build tests must run the full standalone test suite');
+	assert.equal(buildScripts['pretest:prepared'], undefined, 'Prepared build tests must reuse generated inputs');
 	assert.match(contracts, /pnpm run test:unit:prepared/u);
 	assert.match(contracts, /pnpm run test:unit:runner/u);
 });

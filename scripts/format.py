@@ -264,11 +264,8 @@ def scoped_commands(
         in {".json", ".jsonc", ".yml", ".yaml", ".md", ".css", ".html"}
     ]
     if ("typescript" in enabled and frontend) or ("config" in enabled and config):
-        bun = subprocess.check_output(
-            [package_manager(), "exec", "bun", "--print", "process.execPath"],
-            cwd=REPOSITORY_ROOT,
-            encoding="utf-8",
-        ).strip()
+        # The pinned package uses this executable name on every supported host.
+        bun = str(REPOSITORY_ROOT / "node_modules/bun/bin/bun.exe")
         if "typescript" in enabled and frontend:
             configured.append(
                 Command(

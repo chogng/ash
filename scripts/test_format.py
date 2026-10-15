@@ -162,7 +162,7 @@ class SelectionTests(unittest.TestCase):
 
     def test_changed_scope_covers_commits_worktree_and_untracked_files(self) -> None:
         with tempfile.TemporaryDirectory(prefix="ash format selection ") as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
 
             def git(*args: str) -> str:
                 return subprocess.check_output(
@@ -211,7 +211,7 @@ class SelectionTests(unittest.TestCase):
 
 @unittest.skipUnless(
     (formatting.REPOSITORY_ROOT / "node_modules/bun/package.json").is_file(),
-    "Scoped integration tests run in Formatting CI after installing frontend tools",
+    "Scoped integration tests run in Frontend CI after installing frontend tools",
 )
 class ScopedFormattingTests(unittest.TestCase):
     """Exercise scoped commands with real formatters and isolated source files."""
@@ -238,6 +238,20 @@ class ScopedFormattingTests(unittest.TestCase):
             capture_output=True,
             check=False,
         )
+
+    def test_frontend_checks_do_not_need_package_manager_discovery(self) -> None:
+        source = self.write("example.ts", "const value = 1;\n")
+        config = self.write("example.json", "[1, 2]\n")
+        with patch.object(
+            formatting,
+            "package_manager",
+            side_effect=AssertionError("Prepared checks must not start pnpm"),
+        ):
+            self.assertEqual(
+                formatting.scoped(True, [str(self.directory)], None, None), 0
+            )
+        self.assertEqual(source.read_text(), "const value = 1;\n")
+        self.assertEqual(config.read_text(), "[1, 2]\n")
 
     def test_scoped_checks_are_read_only_and_fix_each_selected_language(self) -> None:
         cases = {

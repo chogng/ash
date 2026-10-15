@@ -46,13 +46,19 @@ jobs:
           pnpm run prepare:generated
           pnpm exec bun build/resources/localization.ts --check
           pnpm stylelint
-          pnpm exec bun check -p tsconfig.protocol.json --all
-          pnpm exec bun check -p tsconfig.renderer.json --all
+          ./node_modules/bun/bin/bun.exe check -p tsconfig.protocol.json --all
+          ./node_modules/bun/bin/bun.exe check -p tsconfig.renderer.json --all
       - name: Check and test build tools
         run: |
-          pnpm typecheck:build
-          pnpm test:build
+          ./node_modules/bun/bin/bun.exe check -p build/tsconfig.json --all
+          pnpm --dir test/scenario compile
+          pnpm --dir build run test:prepared
           pnpm run build:stanza:prepared
+      # Reuse this job's frontend, Python and Rust tools instead of installing
+      # them again in the source-format gate. Unit-only tooling jobs lack Bun.
+      - name: Test scoped formatting with real tools
+        working-directory: scripts
+        run: .venv/bin/python -B -m unittest test_format.ScopedFormattingTests
       - name: Install Chromium for browser service unit tests
         run: pnpm exec playwright install --with-deps chromium
       - name: Test frontend units
@@ -131,8 +137,9 @@ jobs:
         # Each runner checks its own platform declarations once. The Desktop
         # and both Web bundles reuse these inputs without lifecycle rechecks.
         run: |
-          pnpm run typecheck:renderer
-          pnpm exec bun check -p test/automation/tsconfig.json --all
+          node build/prepare.ts
+          ./node_modules/bun/bin/bun.exe check -p tsconfig.renderer.json --all
+          ./node_modules/bun/bin/bun.exe check -p test/automation/tsconfig.json --all
           pnpm run rebuild:native
           pnpm run build:prepared
           pnpm run bundle:web

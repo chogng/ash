@@ -82,7 +82,7 @@ jobs:
           fi
           node --input-type=module -e "import {appendFileSync,readFileSync} from 'node:fs'; import {resolve,join} from 'node:path'; const mac=process.platform==='darwin'; const bundle=resolve('.build/desktop-runtime-ci', mac ? 'Ash-darwin-'+process.arch+'/Ash.app' : 'Ash-win32-x64'); const electron=mac ? join(bundle,'Contents/MacOS/Ash') : join(bundle,'Ash.exe'); const version=JSON.parse(readFileSync('node_modules/electron/package.json','utf8')).version; appendFileSync(process.env.GITHUB_ENV, 'ASH_PACKAGED_BUNDLE='+bundle+'\nASH_TEST_ELECTRON_PATH='+electron+'\nASH_TEST_ELECTRON_VERSION='+version+'\n');"
       - name: Check packaged automation types
-        run: pnpm exec bun check -p test/automation/tsconfig.json --all
+        run: ./node_modules/bun/bin/bun.exe check -p test/automation/tsconfig.json --all
       - name: Verify real Desktop startup, quit, file and terminal operations
         run: pnpm run test:smoke:ui:no-compile test/smoke/areas/windows/packaged-app.spec.ts
       - name: Verify background, TUI restart, crash recovery, binding upgrade and rollback

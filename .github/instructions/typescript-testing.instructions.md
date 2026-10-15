@@ -7,7 +7,7 @@ applyTo: "**/*.ts,**/*.tsx,**/*.cts,**/*.mts,**/package.json,**/tsconfig*.json"
 
 ## Commands and builds
 
-- Use repository package scripts through `pnpm`; do not add a parallel compiler or test entrypoint when an owning script exists.
+- For single-run type checks and their preparation, follow [the environment skill](../../.agents/skills/setup-environment/SKILL.md#typescript-checks). Use owning repository scripts for builds and tests; do not add parallel entrypoints.
 - When unrelated failures block full test compilation, compile and run the affected test with the same compiler options; report both the targeted result and the compilation blocker.
 - Loading baselines must use production artifacts and identify cache conditions, readiness criteria, resource bytes, and measurement boundaries. Measure entry totals and first-use costs before choosing split boundaries; individual chunk size does not prove startup speed.
 

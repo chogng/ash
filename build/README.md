@@ -29,7 +29,12 @@ validation. `pnpm test:unit:prepared`, `pnpm build:stanza:prepared` and
 `pnpm test:browser:integration:prepared` also require current generated inputs and
 the common check from `pnpm prepare:generated`. CI uses these entries after
 explicit preparation to avoid repeated lifecycle checks; standalone build and
-test commands retain their complete preparation. For repeated unit runs with unchanged
+test commands retain their complete preparation. Build-tool CI compiles the scenario
+runner once with `pnpm --dir test/scenario compile`, then uses
+`pnpm --dir build run test:prepared` to run the same build tests without repeating
+protocol generation. Formatter behavior tests belong to this build suite;
+scoped formatter integration reuses that job's dependencies so the
+format gate contains only source checks. For repeated unit runs with unchanged
 sources and generated inputs, `pnpm test:unit:no-compile` and
 `pnpm test:editor:unit:no-compile` run the existing test artifacts with the usual
 filters, skipping preparation and compilation. The runner regression suite uses
@@ -54,7 +59,7 @@ Renderer, Common, Protocol, Extensions, Memories, Stanza, build tools, unit-runn
 tools, browser integration, smoke automation and scenario sources. Existing pnpm
 entrypoints retain their generated-input prehooks. Checks run sequentially;
 each Bun process uses all CPU cores by default. To limit contention on a shared
-machine, a direct check can use `pnpm exec bun check -p <config> --threads 4 --all`.
+machine, a direct check can use `./node_modules/bun/bin/bun.exe check -p <config> --threads 4 --all`.
 Bun does not write JavaScript or `.tsbuildinfo` files. TS7 7.0.2 retains
 Main/Preload and unit/extension-test JavaScript compilation, host watch and
 `typecheck:web:watch` (Bun 1.4.3 has no standalone check watch mode). Vite/Rolldown
