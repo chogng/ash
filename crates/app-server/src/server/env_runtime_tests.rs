@@ -3413,3 +3413,236 @@ fn capability_scoped_directory_startup_keeps_repository_watching_and_indexing_op
     assert!(runtime.workspace.codebase.is_none());
     assert!(runtime.workspace.symbol_index.is_none());
 }
+
+fn start_directory_approval(server: &AppServer) -> ash_protocol::ThreadId {
+    let thread = server
+        .start_thread(StartThreadRequest {
+            execution_target: None,
+            branch_name: None,
+            agent_id: None,
+            agent: None,
+            command_id: CommandId::new("directory-reopen-thread").unwrap(),
+            title: "pending directory".into(),
+        })
+        .unwrap();
+    let turn = server
+        .threads
+        .start_turn(
+            &thread.thread_id,
+            StartTurnRequest {
+                context_policy: Default::default(),
+                mode: Default::default(),
+                advisor: None,
+                kind: ash_protocol::TurnKind::Coding,
+                instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
+                command_id: CommandId::new("directory-reopen-turn").unwrap(),
+                expected_sequence: SequenceExpectation::Exact(1),
+                model: None,
+                reasoning_effort: None,
+                policy_revision: "directory-policy".into(),
+                approval_mode: ash_protocol::ApprovalMode::Manual,
+                tool_mode: ash_protocol::ToolMode::Direct,
+                tool_profile: None,
+                activated_skills: Vec::new(),
+                input: vec![UserInput::Text {
+                    text: "keep the pending approval".into(),
+                }],
+            },
+        )
+        .unwrap();
+    server
+        .threads
+        .request_turn_interaction(
+            &thread.thread_id,
+            &turn.turn_id,
+            ash_core::RequestTurnInteraction {
+                request_id: ash_protocol::RequestId::new("directory-reopen-approval").unwrap(),
+                item_id: None,
+                request: ash_protocol::AgentRequest::Approval {
+                    request: ash_protocol::ActionApprovalRequest {
+                        action_digest: "a".repeat(64),
+                        policy_revision: "directory-policy".into(),
+                        capabilities: vec![ash_protocol::ActionApprovalCapability {
+                            kind: ash_protocol::ActionApprovalCapabilityKind::Network,
+                            scope: "example.test".into(),
+                        }],
+                        reason: "directory reopen regression".into(),
+                        sandbox_denial: None,
+                        allowed_decisions: vec![
+                            ash_protocol::ActionApprovalDecision::ApproveOnce,
+                            ash_protocol::ActionApprovalDecision::Decline,
+                        ],
+                        command: None,
+                    },
+                },
+                deadline: None,
+            },
+        )
+        .unwrap();
+    thread.thread_id
+}
+
+#[test]
+fn env_dirs_set_is_idempotent_while_approval_pending() {
+    let first = TestDir::new("directory-reopen", "first.txt");
+    let other = TestDir::new("directory-change", "other.txt");
+    let server = server().with_local_env_host(None, host_policy()).unwrap();
+    let mut connection = server.product_host_connection();
+    server.handle_json(
+        &mut connection,
+        &serde_json::json!({
+            "jsonrpc":"2.0", "id":1, "method":"initialize", "params": {
+                "clientInfo":{"name":"directory-reopen-test","version":"1"},
+                "capabilities":{"directoryGrantsHost":{"version":1}}
+            }
+        })
+        .to_string(),
+    );
+    let mut request = serde_json::json!({
+        "jsonrpc":"2.0", "id":2, "method":"env/dirs/set", "params":{"dirs":[{
+            "id":"folder", "path":first.path, "grant":{"type":"host","permissions":[
+                "readFiles","writeFiles","executeCommands","watchFiles","browseFiles","searchFiles",
+                "loadInstructions","loadConfig","discoverSkills","discoverMcp","useLanguageServices",
+                "discoverHooks","discoverPlugins","inspectRepository","mutateRepository"
+            ]}
+        }]}
+    });
+    let initial: serde_json::Value =
+        serde_json::from_str(&server.handle_json(&mut connection, &request.to_string())).unwrap();
+    assert!(initial.get("error").is_none(), "{initial}");
+    let files = server.file_system_service_for(Some("folder")).unwrap();
+    let git = server
+        .env_runtime
+        .read()
+        .unwrap()
+        .workspace
+        .git
+        .clone()
+        .unwrap();
+    let thread_id = start_directory_approval(&server);
+    let before = server.threads.read_thread(&thread_id).unwrap();
+    assert_eq!(
+        before.turns.last().unwrap().status,
+        TurnStatus::WaitingForApproval
+    );
+
+    request["id"] = serde_json::json!(3);
+    let repeated: serde_json::Value =
+        serde_json::from_str(&server.handle_json(&mut connection, &request.to_string())).unwrap();
+    assert!(
+        repeated.get("error").is_none(),
+        "same authorized directory must reopen while approval is pending: {repeated}"
+    );
+    assert_eq!(repeated["result"], initial["result"]);
+    assert!(Arc::ptr_eq(
+        &files,
+        &server.file_system_service_for(Some("folder")).unwrap()
+    ));
+    assert!(Arc::ptr_eq(
+        &git,
+        server
+            .env_runtime
+            .read()
+            .unwrap()
+            .workspace
+            .git
+            .as_ref()
+            .unwrap()
+    ));
+
+    let revoked = first.authorization();
+    revoked.revoke();
+    for changed in [
+        Vec::new(),
+        vec![("folder".into(), revoked)],
+        vec![("folder".into(), other.authorization())],
+        vec![(
+            "folder".into(),
+            Grant::for_environment(
+                first.root(),
+                GrantSource::HostConfiguration,
+                Permissions::new([Permission::ReadFiles]),
+            ),
+        )],
+        vec![(
+            "folder".into(),
+            Grant::for_environment(
+                first.root(),
+                GrantSource::ExplicitUser,
+                host_directory_capabilities(),
+            ),
+        )],
+    ] {
+        assert_eq!(
+            server.activate_local_dirs(changed),
+            Err(EnvRuntimeError::Busy)
+        );
+    }
+    let after = server.threads.read_thread(&thread_id).unwrap();
+    assert_eq!(after.sequence, before.sequence);
+    assert_eq!(
+        after.turns.last().unwrap().pending_interaction,
+        before.turns.last().unwrap().pending_interaction
+    );
+    assert_eq!(
+        after.turns.last().unwrap().status,
+        TurnStatus::WaitingForApproval
+    );
+    assert!(Arc::ptr_eq(
+        &files,
+        &server.file_system_service_for(Some("folder")).unwrap()
+    ));
+}
+
+#[test]
+fn env_dirs_set_retains_existing_aliases_without_switching_pending_primary() {
+    let first = TestDir::new("directory-alias-first", "first.txt");
+    let second = TestDir::new("directory-alias-second", "second.txt");
+    let server = server().with_local_env_host(None, host_policy()).unwrap();
+    server
+        .activate_local_dirs(vec![
+            ("workbench".into(), first.authorization()),
+            ("second".into(), second.authorization()),
+        ])
+        .unwrap();
+    let initial = server
+        .activate_local_dirs(vec![
+            ("sessions".into(), first.authorization()),
+            ("second".into(), second.authorization()),
+        ])
+        .unwrap();
+    let workbench_files = server.file_system_service_for(Some("workbench")).unwrap();
+    let sessions_files = server.file_system_service_for(Some("sessions")).unwrap();
+    let thread_id = start_directory_approval(&server);
+    let repeated = server.activate_local_dirs(vec![
+        ("sessions".into(), first.authorization()),
+        ("second".into(), second.authorization()),
+    ]);
+    assert_eq!(repeated, Ok(initial));
+    assert!(Arc::ptr_eq(
+        &workbench_files,
+        &server.file_system_service_for(Some("workbench")).unwrap()
+    ));
+    assert!(Arc::ptr_eq(
+        &sessions_files,
+        &server.file_system_service_for(Some("sessions")).unwrap()
+    ));
+    assert_eq!(
+        server.activate_local_dirs(vec![
+            ("second".into(), second.authorization()),
+            ("sessions".into(), first.authorization())
+        ]),
+        Err(EnvRuntimeError::Busy)
+    );
+    assert_eq!(
+        server
+            .threads
+            .read_thread(&thread_id)
+            .unwrap()
+            .turns
+            .last()
+            .unwrap()
+            .status,
+        TurnStatus::WaitingForApproval
+    );
+}

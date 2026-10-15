@@ -6,6 +6,7 @@ import { Range } from '../../../src/ash/editor/common/core/range.js';
 import { IBulkEditService } from '../../../src/ash/editor/browser/services/bulkEditService.js';
 import { ICodeEditorService } from '../../../src/ash/editor/browser/services/codeEditorService.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
+import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { IAccessibilitySignalService } from '../../../src/ash/platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
@@ -14,23 +15,28 @@ import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs
 import { FileService } from '../../../src/ash/platform/files/common/fileService.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
+import { BrowserLayoutService, ILayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
 import { ILogService } from '../../../src/ash/platform/log/common/log.js';
 import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
 import { highContrastDarkColorTheme, lightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
+import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { IUriIdentityService } from '../../../src/ash/platform/uriIdentity/common/uriIdentity.js';
 import { UriIdentityService } from '../../../src/ash/platform/uriIdentity/common/uriIdentityService.js';
 import { IEditorPartsService } from '../../../src/ash/workbench/browser/parts/editor/editorParts.js';
 import { BulkEditService } from '../../../src/ash/workbench/contrib/bulkEdit/browser/bulkEditService.js';
+import { createBrowserEditorPart } from '../../../src/ash/workbench/contrib/codeEditor/browser/browserEditorPart.js';
 import { BrowserTextResourceStore } from '../../../src/ash/workbench/contrib/codeEditor/browser/browserTextResourceStore.js';
+import { ChatEditingEditorOverlay } from '../../../src/ash/workbench/contrib/chat/browser/chatEditing/chatEditingEditorOverlay.js';
 import { ChatEditingService } from '../../../src/ash/workbench/contrib/chat/browser/chatEditing/chatEditingServiceImpl.js';
 import { IChatEditingService } from '../../../src/ash/workbench/contrib/chat/common/editing/chatEditingService.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { CodeEditorService } from '../../../src/ash/workbench/services/editor/browser/codeEditorService.js';
 import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
+import { AccessibleViewService } from '../../../src/ash/workbench/contrib/accessibility/browser/accessibleView.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
 import { TestQuickInputService } from '../../../src/ash/platform/quickinput/test/browser/testQuickInputService.js';
@@ -41,6 +47,7 @@ import { BrowserWorkingCopyService } from '../../../src/ash/workbench/services/w
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
 import { ILifecycleService } from '../../../src/ash/workbench/services/lifecycle/common/lifecycle.js';
 import { BrowserLifecycleService } from '../../../src/ash/workbench/services/lifecycle/browser/lifecycleService.js';
+import { createTestEditorServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { MemoryTextFiles } from './memoryTextFiles.js';
 import { Event } from '../../../src/ash/base/common/event.js';
 import { DeferredPromise } from '../../../src/ash/base/common/async.js';
@@ -169,6 +176,25 @@ for (const [selector, command] of [['#reject', 'chatEditing.rejectAll'], ['#revi
 		});
 	}));
 }
+if (parameters.has('editor')) {
+	const editorServices = resources.add(createTestEditorServices(undefined, services));
+	registerCodeEditorServices(editorServices);
+	editorServices.registerInstance(ILayoutService, resources.add(new BrowserLayoutService({ root: document.body })));
+	editorServices.registerSingleton(IAccessibleViewService, () => editorServices.createInstance(AccessibleViewService));
+	resources.add(editorServices.createInstance(ChatEditingEditorOverlay));
+	const reference = resources.add(await models.acquire({ resource: first }, new AbortController().signal));
+	const container = document.createElement('div');
+	container.id = 'review-editor';
+	container.style.width = '240px';
+	container.style.height = '260px';
+	document.body.append(container);
+	resources.add(toDisposable(() => container.remove()));
+	resources.add(createBrowserEditorPart(editorServices, {
+		container, model: reference.model, ariaLabel: first.path, automaticLayout: true,
+		minimap: { enabled: false }, lineNumbers: 'off', glyphMargin: false,
+	}));
+}
+
 window.ashChatEditingIntegration = {
 	historyState: () => ({ requests: historyRequests, opened }),
 	setSaveFailure: fail => { saveFailure = fail; },

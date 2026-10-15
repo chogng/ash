@@ -21,6 +21,8 @@ import type {
 	ThreadUpdateEnvelope as ThreadUpdateEnvelopeDto
 } from '../../../../../.build/protocol/typescript/index.js';
 import type {
+	AgentInteractionOffer,
+	TurnInteraction,
 	AgentResponse,
 	AgentMcpAppTool,
 	ChatContentPart,
@@ -75,6 +77,7 @@ export function createDisconnectedAgentSessionService(unavailable: UnavailableOp
 
 export function createDisconnectedAgentThreadService(unavailable: UnavailableOperation): IAgentThreadService {
 	return {
+		onDidOfferInteraction: Event.None,
 		onDidChangeConnection: Event.None,
 		onDidUpdateThread: Event.None,
 		onDidUpdateThreadTranscript: Event.None,
@@ -218,6 +221,15 @@ async function readToolResource(connection: AppServerProtocolClient, source: Par
 
 export function createAppServerAgentThreadService(connection: AppServerProtocolClient): IAgentThreadService {
 	return {
+		onDidOfferInteraction: Event.any<AgentInteractionOffer>((listener, thisArgs) => connection.onNotification(event => {
+			if (event.method === 'agent/request') listener.call(thisArgs, {
+				connectionGeneration: connection.generation,
+				sessionId: event.params.sessionId,
+				threadId: event.params.threadId,
+				turnId: event.params.turnId,
+				interaction: toTurnInteraction(event.params.interaction),
+			});
+		})),
 		onDidChangeConnection: Event.any<void>((listener, thisArgs) => connection.onStateChange(() => listener.call(thisArgs))),
 		onDidUpdateThread: Event.any<ThreadUpdateEnvelope>((listener, thisArgs) => connection.onNotification(event => {
 			if (event.method === 'session/thread/update') listener.call(thisArgs, toThreadUpdate(event.params));
@@ -537,6 +549,23 @@ function toThread(thread: ThreadDto): Thread {
 	};
 }
 
+/** Strip transport-only approval fields and detach nested request payloads from the wire frame. */
+function toTurnInteraction(interaction: import('../../../../../.build/protocol/typescript/index.js').TurnInteraction): TurnInteraction {
+	const request = interaction.request;
+	return {
+		requestId: interaction.requestId,
+		itemId: interaction.itemId,
+		deadline: interaction.deadline ? { ...interaction.deadline } : interaction.deadline,
+		request: request.type === 'approval'
+			? { type: 'approval', request: { reason: request.request.reason, allowedDecisions: request.request.allowedDecisions ? [...request.request.allowedDecisions] : undefined, command: request.request.command ? { ...request.request.command, arguments: [...request.request.command.arguments] } : request.request.command, capabilities: request.request.capabilities.map(capability => ({ ...capability })) } }
+			: request.type === 'permissions'
+				? { type: 'permissions', request: structuredClone(request.request) }
+				: request.type === 'userInput'
+					? { type: 'userInput', request: { questions: request.request.questions.map(question => ({ ...question, options: question.options?.map(option => ({ ...option })) })) } }
+					: { type: 'dynamicTool', call: { ...request.call, arguments: structuredClone(request.call.arguments) } },
+	};
+}
+
 function toThreadUpdate(update: ThreadUpdateEnvelopeDto): ThreadUpdateEnvelope {
 	return {
 		sessionId: update.sessionId,
@@ -552,12 +581,16 @@ function toThreadUpdateValue(update: ThreadUpdateEnvelopeDto['update']): ThreadU
 		case 'committed': {
 			const event = update.event;
 			if (event.type === 'interactionRequested')
-				return { type: 'committed', event: { type: event.type, interaction: { ...event.interaction } } };
+				return { type: 'committed', event: { type: event.type, interaction: toTurnInteraction(event.interaction) } };
 			if (event.type === 'turnModeChanged')
 				return {
 					type: 'committed',
 					event: { type: event.type, turnId: event.turnId, fromMode: event.fromMode, mode: event.mode }
 				};
+			if (event.type === 'interactionResolved' || event.type === 'interactionCancelled')
+				return { type: 'committed', event: { type: event.type, turnId: event.turnId, requestId: event.requestId } };
+			if (event.type === 'turnCompleted' || event.type === 'turnFailed' || event.type === 'turnInterrupted')
+				return { type: 'committed', event: { type: event.type, turnId: event.turnId } };
 			return { type: 'committed', event: { type: event.type } };
 		}
 		case 'itemStarted':
@@ -691,11 +724,13 @@ function toAgentResponse(response: AgentResponse): AgentResponseDto {
 		case 'approval':
 			return { type: 'approval', response: { ...response.response } };
 		case 'permissions':
-			return { type: 'permissions', response: {
-				duration: response.response.duration,
-				directories: response.response.directories.map(entry => ({ path: entry.path, permissions: [...entry.permissions] })),
-				networkHosts: [...response.response.networkHosts],
-			} };
+			return {
+				type: 'permissions', response: {
+					duration: response.response.duration,
+					directories: response.response.directories.map(entry => ({ path: entry.path, permissions: [...entry.permissions] })),
+					networkHosts: [...response.response.networkHosts],
+				}
+			};
 		case 'userInput':
 			return { type: 'userInput', response: { answers: { ...response.response.answers } } };
 		case 'dynamicTool':

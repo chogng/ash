@@ -576,7 +576,18 @@ export interface TurnInteraction {
 	readonly deadline?: { readonly expiresAtUnixMs: number; } | null;
 }
 
+/** An actionable interaction offered exclusively to this renderer connection. */
+export interface AgentInteractionOffer {
+	readonly connectionGeneration: number;
+	readonly sessionId: SessionId;
+	readonly threadId: ThreadId;
+	readonly turnId: string;
+	readonly interaction: TurnInteraction;
+}
+
 export type ThreadCommittedEvent =
+	| { readonly type: 'interactionResolved' | 'interactionCancelled'; readonly turnId: string; readonly requestId: string; }
+	| { readonly type: 'turnCompleted' | 'turnFailed' | 'turnInterrupted'; readonly turnId: string; }
 	| { readonly type: 'interactionRequested'; readonly interaction: TurnInteraction; }
 	| {
 		readonly type: 'turnModeChanged';
@@ -618,14 +629,9 @@ export type ThreadCommittedEvent =
 		| 'itemCompleted'
 		| 'planUpdated'
 		| 'hookRunUpdated'
-		| 'interactionResolved'
 		| 'toolExecutionStarted'
 		| 'toolExecutionEscalated'
-		| 'interactionCancelled'
-		| 'turnCompleted'
-		| 'turnFailed'
 		| 'turnCancelling'
-		| 'turnInterrupted'
 		| 'delegationRequested'
 		| 'delegationStarted'
 		| 'delegationCancellationRequested'
@@ -821,6 +827,8 @@ export interface AgentMcpAppTool extends Readonly<Record<string, unknown>> {
 }
 
 export interface IAgentThreadService {
+	/** Delivery grants are independent of historical committed events. */
+	readonly onDidOfferInteraction: Event<AgentInteractionOffer>;
 	readonly onDidChangeConnection: Event<void>;
 	/** Domain notifications from this renderer's connection; disposing the listener releases it. */
 	readonly onDidUpdateThread: Event<ThreadUpdateEnvelope>;

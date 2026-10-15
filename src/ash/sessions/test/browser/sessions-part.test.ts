@@ -160,7 +160,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		saveAdvisorDefault: async () => { },
 		onDidSubmitRequest: () => toDisposable(() => { }),
 		onDidChangeSession: Event.None,
-		onDidUpdateThread: threadUpdates.event,
+		getInteractionOffer: () => undefined, onDidChangeInteractionOffer: Event.None, onDidUpdateThread: threadUpdates.event,
 		onDidUpdateThreadTranscript: transcriptUpdates.event,
 		onDidUpdateGoal: () => toDisposable(() => { }),
 		onDidBecomeReady: ready.event,

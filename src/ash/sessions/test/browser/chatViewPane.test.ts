@@ -3400,7 +3400,7 @@ function fakeApi(options: FakeOptions = {}): {
 			list: async (_reload: string, sessionId?: string) => { skillListRequests.push(sessionId); return { generation: 1, skills: options.skills ?? [] }; },
 		},
 		thread: {
-			...createAppServerAgentThreadService({ onNotification: (listener: (event: ServerNotification) => void) => { listeners.add(listener); return toDisposable(() => listeners.delete(listener)); } } as AppServerProtocolClient),
+			...createAppServerAgentThreadService({ get generation() { return connectionGeneration; }, onNotification: (listener: (event: ServerNotification) => void) => { listeners.add(listener); return toDisposable(() => listeners.delete(listener)); } } as AppServerProtocolClient),
 			readContext: async () => ({
 				context: {
 					estimatedTokens: 200, estimatorRevision: 'test', model: { provider: 'test', model: 'test-model' },
@@ -3925,16 +3925,19 @@ test('stream updates preserve message order and survive an older refresh snapsho
 	assert.deepEqual(model.items.map(item => item.text), ['Recovered']);
 });
 
-test('approval capabilities reach the composer through committed backend notifications', async () => {
+test('approval capabilities reach the composer only through owner-directed backend offers', async () => {
 	const activeSession = session('session-1', 'thread-1');
-	const fake = fakeApi({ sessions: [activeSession] });
+	const pendingThread = thread('Pending approval');
+	const fake = fakeApi({ sessions: [activeSession], thread: () => ({ ...pendingThread, sequence: 2, turns: pendingThread.turns.map(turn => ({ ...turn, status: 'waitingForApproval' })) }) });
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
 	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	const interaction = { requestId: 'approval-1', request: { type: 'approval' as const, request: { actionDigest: 'action', policyRevision: 'policy', reason: 'Review this write', allowedDecisions: ['approveOnce' as const, 'decline' as const], capabilities: [{ kind: 'fileWrite' as const, scope: String.raw`C:\Users\name\file.txt` }] } } };
 	fake.emit({ method: 'session/thread/update', params: { sessionId: 'session-1', threadId: 'thread-1', durableSequence: 2, update: { type: 'committed', event: { type: 'interactionRequested', threadId: 'thread-1', turnId: 'turn-1', interaction } } } });
-	assert.deepEqual(model.inputState.interaction?.request, interaction.request);
+	assert.equal(model.interaction, undefined);
+	fake.emit({ method: 'agent/request', params: { sessionId: 'session-1', threadId: 'thread-1', turnId: 'turn-1', interaction } });
+	assert.deepEqual(model.inputState.interaction?.request, { type: 'approval', request: { reason: interaction.request.request.reason, allowedDecisions: interaction.request.request.allowedDecisions, command: undefined, capabilities: interaction.request.request.capabilities } });
 	await nextTask();
 });
 
@@ -4357,7 +4360,8 @@ test('Chat live-update recovery reloads retained content and keeps repeated fail
 			...fake.api.thread,
 			read: async () => {
 				if (++reads < 3) throw new Error('Synthetic refresh failure');
-				return navigationThreadSnapshot('thread-1');
+				const snapshot = navigationThreadSnapshot('thread-1');
+				return { ...snapshot, thread: { ...snapshot.thread, sequence: 2 }, transcript: { ...snapshot.transcript, durableSequence: 2 } };
 			},
 		}
 	});

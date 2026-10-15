@@ -18,6 +18,7 @@ use std::collections::BTreeSet;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 use worktree::ManagedDirKind;
+use worktree::ManagedDirOwner;
 
 #[derive(Clone)]
 struct ExecutionRootBinding {
@@ -430,13 +431,33 @@ impl GitTurnChangesRuntime {
         &self,
         thread_id: &ash_protocol::ThreadId,
     ) -> Result<Vec<ExecutionRootBinding>, String> {
-        self.binding(thread_id)
-            .map(|binding| {
-                ash_file_access::Dir::open_local(binding.source_directory())
-                    .map(|source| vec![ExecutionRootBinding { binding, source }])
-                    .map_err(|error| error.to_string())
-            })
-            .unwrap_or_else(|| Err(format!("Thread {thread_id} has no dir binding")))
+        let binding = match self.binding(thread_id) {
+            Some(binding) => binding,
+            None => {
+                // Another Directory runtime can create a Thread after this runtime opened.
+                // Recover its exact durable owner; never provision a new checkout or baseline.
+                let owner = ManagedDirOwner::Thread {
+                    thread_id: thread_id.to_string(),
+                };
+                let binding = self
+                    .dirs
+                    .runtime
+                    .block_on(self.dirs.worktrees.recover_owner(&owner))
+                    .map_err(|error| format!("cannot recover Thread {thread_id} dir: {error}"))?;
+                // Profile history is shared across Directory runtimes; filesystem authority is not.
+                if binding.source_dir_id() != self.dirs.id.as_str() {
+                    return Err(format!(
+                        "Thread {thread_id} dir belongs to a different source directory"
+                    ));
+                }
+                self.bind_prepared_directory(thread_id, binding.clone())
+                    .map_err(|error| error.to_string())?;
+                binding
+            }
+        };
+        let source = ash_file_access::Dir::open_local(binding.source_directory())
+            .map_err(|error| error.to_string())?;
+        Ok(vec![ExecutionRootBinding { binding, source }])
     }
 
     fn begin_write_lifecycle(

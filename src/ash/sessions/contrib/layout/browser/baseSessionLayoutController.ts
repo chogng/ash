@@ -37,6 +37,7 @@ export abstract class BaseLayoutController extends Disposable {
 	public readonly onDidEndSessionLayoutRestore = this.restored.event;
 	private editorSession: string | undefined;
 	private requestedSession: string | undefined;
+	private requestedThread: string | undefined;
 	private requestedLayout: IChatLayoutSnapshot | undefined;
 	private revision = 0;
 	private scheduledRevision = -1;
@@ -159,8 +160,10 @@ export abstract class BaseLayoutController extends Disposable {
 			const layoutSnapshot = this.chatLayoutContext.state.read(reader);
 			const selection = selected.activeSelection;
 			const key = selection ? this.sessionKey(selection) : undefined;
-			if (key !== this.requestedSession || layoutSnapshot.presentation !== this.requestedLayout?.presentation) {
-				this.captureEditors();
+			const threadId = selection?.kind === 'session' ? selection.active.threadId : undefined;
+			// A pending directory restore follows the Thread; working sets remain Session-owned.
+			if (key !== this.requestedSession || threadId !== this.requestedThread || layoutSnapshot.presentation !== this.requestedLayout?.presentation) {
+				if (key !== this.requestedSession || layoutSnapshot.presentation !== this.requestedLayout?.presentation) this.captureEditors();
 				if (key && this.editorSession && this.requestedLayout && layoutSnapshot.presentation.mode !== this.requestedLayout.presentation.mode
 					&& chatLayoutOwnersEqual(layoutSnapshot.owner, this.requestedLayout.owner) && !this.workingSets.has(key)) {
 					// A newly selected scope adopts the current documents. A setting change must
@@ -170,6 +173,7 @@ export abstract class BaseLayoutController extends Disposable {
 					if (panel) { this.panelViews.set(key, panel); }
 				}
 				this.requestedSession = key;
+				this.requestedThread = threadId;
 				this.requestedLayout = layoutSnapshot;
 				this.directoryRestore.abort();
 				this.directoryRestore = new AbortController();

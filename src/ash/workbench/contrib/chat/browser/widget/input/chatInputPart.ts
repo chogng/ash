@@ -715,7 +715,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				return;
 			}
 			if (input.kind === "command" && input.binding.origin === "server") {
-				await this.submit(draft, textRevision, lifecycle, () => this.delegate.executeServerCommand({ name: input.command.name, argumentsText: input.argumentsText }));
+				await this.submit(draft, textRevision, lifecycle, () => this.delegate.executeServerCommand({ name: input.command.name, argumentsText: input.argumentsText }, lifecycle));
 				return;
 			}
 			if (!this.supportsImages() && contexts.some(attachment => attachment.kind === 'image')) {
@@ -1209,11 +1209,13 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				}).catch(() => undefined)));
 				this.interactionListeners.add(addDisposableListener(form, 'submit', event => {
 					event.preventDefault();
-					void this.delegate.resolveInteraction({ type: 'permissions', response: {
-						duration: duration.value === 'session' ? 'session' : 'turn',
-						directories: directories.map(entry => ({ path: entry.path, permissions: entry.permissions.filter(value => value.input.checked).map(value => value.permission) })).filter(entry => entry.permissions.length > 0),
-						networkHosts: hosts.filter(value => value.input.checked).map(value => value.host),
-					} }).catch(() => undefined);
+					void this.delegate.resolveInteraction({
+						type: 'permissions', response: {
+							duration: duration.value === 'session' ? 'session' : 'turn',
+							directories: directories.map(entry => ({ path: entry.path, permissions: entry.permissions.filter(value => value.input.checked).map(value => value.permission) })).filter(entry => entry.permissions.length > 0),
+							networkHosts: hosts.filter(value => value.input.checked).map(value => value.host),
+						}
+					}).catch(() => undefined);
 				}));
 				break;
 			}

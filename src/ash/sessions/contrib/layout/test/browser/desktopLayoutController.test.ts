@@ -183,6 +183,43 @@ suite('DesktopLayoutController', () => {
 		await directory.complete();
 	});
 
+	test('switching threads in one session during directory hydration restores the latest selection', async () => {
+		const saved = workingSet('session:b', 'retained.ts');
+		using fixture = await createFixture([{ sessionResource: 'session:b', editorWorkingSet: saved }]);
+		fixture.editor.set(workingSet('a', 'unsaved-source.ts'));
+		fixture.followWorkspace = false;
+		fixture.catalog.sessions = fixture.catalog.sessions.map(session => session.sessionId === 'b' ? {
+			...session,
+			chats: [
+				{ ...session.chats[0]!, workspace: { authorityId: 'local', root: '/managed/b/first' } },
+				{ threadId: 'b-second', status: 'active', origin: { type: 'root' }, workspace: { authorityId: 'local', root: '/managed/b/second' } },
+			],
+		} : session);
+		const directory = new DeferredPromise<void>();
+		const started = new DeferredPromise<void>();
+		fixture.catalog.directoryReady = directory.p;
+		const ready = fixture.catalog.whenDirectoriesReady.bind(fixture.catalog);
+		fixture.catalog.whenDirectoriesReady = async signal => {
+			if (!started.isSettled) { await started.complete(); }
+			await ready(signal);
+		};
+		fixture.sessions.openSession('b', 'b-thread');
+		fixture.workspace.updateWorkspace({ id: 'b', folders: [{ id: 'first', index: 0, name: 'first', uri: URI.file('/managed/b/first') }] });
+		await started.p;
+		assert.equal(fixture.editor.applied.length, 0);
+		fixture.sessions.openSession('b', 'b-second');
+		fixture.workspace.updateWorkspace({ id: 'b', folders: [{ id: 'second', index: 0, name: 'second', uri: URI.file('/managed/b/second') }] });
+		await directory.complete();
+		await fixture.controller.whenSettled();
+		assert.deepEqual(fixture.editor.applied, [saved]);
+		const selection = fixture.sessions.activeSelection;
+		assert.equal(selection?.kind === 'session' ? selection.active.threadId : undefined, 'b-second');
+		assert.deepEqual(fixture.errors, []);
+		await fixture.storage.flush();
+		const persisted = JSON.parse(fixture.storage.get(storageKey, StorageScope.WORKSPACE)!) as { sessionResource: string; editorWorkingSet: EditorWorkingSet; }[];
+		assert.deepEqual(persisted.find(entry => entry.sessionResource === 'session:a')?.editorWorkingSet, workingSet('session:a', 'unsaved-source.ts'));
+	});
+
 	test('serializes rapid switches without attributing partially restored editors to the next session', async () => {
 		using fixture = await createFixture();
 		fixture.editor.set(workingSet('a', 'a.ts'));

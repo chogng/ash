@@ -63,6 +63,38 @@ for (const reconnect of [false, true]) {
 	});
 }
 
+for (const terminal of ['stopped', 'replaced', 'ready', 'unknown'] as const) {
+	test(`provider teardown reports release failures only on its live connection (${terminal})`, async () => {
+		const fake = sessionHost([session('session-1', 'thread-1')]);
+		const rejectReleases: ((error: Error) => void)[] = [];
+		fake.host.session.unsubscribeCatalog = () => new Promise<void>((_, reject) => { rejectReleases.push(reject); });
+		fake.host.session.unsubscribe = () => new Promise<void>((_, reject) => { rejectReleases.push(reject); });
+		const provider = createProvider(fake);
+		await provider.subscribe((await provider.list())[0]!);
+		const reports: unknown[][] = [];
+		const original = console.error;
+		console.error = (...args: unknown[]) => { reports.push(args); };
+		try {
+			provider.dispose();
+			assert.equal(fake.connectionListeners.size, 0);
+			assert.equal(rejectReleases.length, 2);
+			// The provider has removed its state listener before its parent closes/replaces the client.
+			if (terminal === 'stopped' || terminal === 'replaced') fake.setConnectionState(terminal === 'replaced' ? 'ready' : 'stopped');
+			if (terminal === 'unknown') fake.appServer.getConnectionState = async () => { throw new Error('State lookup failed'); };
+			const failure = new Error('App Server client disposed');
+			for (const reject of rejectReleases) reject(failure);
+			await new Promise<void>(resolve => setImmediate(resolve));
+			assert.deepEqual(reports, terminal === 'ready' || terminal === 'unknown' ? [
+				['Failed to unsubscribe Session catalog', failure],
+				["Failed to unsubscribe Session 'session-1'", failure],
+			] : []);
+		} finally {
+			console.error = original;
+			provider.dispose();
+		}
+	});
+}
+
 test('catalog discovery does not depend on reading the global default model', async () => {
 	const fake = sessionHost([]);
 	let modelReads = 0;

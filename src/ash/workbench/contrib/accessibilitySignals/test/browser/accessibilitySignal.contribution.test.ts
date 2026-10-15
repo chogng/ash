@@ -67,11 +67,11 @@ suite('Accessibility signal production contributions', () => {
 		send(1, { type: 'committed', event: { type: 'turnAccepted' } });
 		send(2, { type: 'itemDelta', itemId: 'message', delta: { type: 'agentMessage', text: 'streaming response' } });
 		send(3, { type: 'committed', event: { type: 'interactionRequested', interaction: { requestId: 'question', request: { type: 'userInput', request: { questions: [] } } } } });
-		send(4, { type: 'committed', event: { type: 'turnCompleted' } });
-		send(5, { type: 'committed', event: { type: 'turnInterrupted' } });
+		send(4, { type: 'committed', event: { type: 'turnCompleted', turnId: 'turn' } });
+		send(5, { type: 'committed', event: { type: 'turnInterrupted', turnId: 'turn' } });
 		assert.deepEqual(fixture.cues, ['accessibility.signals.chatRequestSent', 'accessibility.signals.chatUserActionRequired', 'accessibility.signals.chatResponseReceived']);
 		host.dispose();
-		send(6, { type: 'committed', event: { type: 'turnFailed' } });
+		send(6, { type: 'committed', event: { type: 'turnFailed', turnId: 'turn' } });
 		assert.equal(fixture.cues.length, 3);
 	});
 

@@ -89,12 +89,25 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		});
 		this._register(toDisposable(() => subscription.dispose()));
 		this._register(toDisposable(() => {
-			if (this.catalogSubscribed) { void this.sessionApi.unsubscribeCatalog().catch(error => console.error("Failed to unsubscribe Session catalog", error)); }
+			if (this.catalogSubscribed) { void this.releaseOnDispose(() => this.sessionApi.unsubscribeCatalog(), "Failed to unsubscribe Session catalog"); }
 			for (const sessionId of this.subscribed) {
-				void this.sessionApi.unsubscribe({ sessionId }).catch(error => console.error(`Failed to unsubscribe Session '${sessionId}'`, error));
+				void this.releaseOnDispose(() => this.sessionApi.unsubscribe({ sessionId }), `Failed to unsubscribe Session '${sessionId}'`);
 			}
 			this.subscribed.clear();
 		}));
+	}
+
+	private async releaseOnDispose(release: () => Promise<void>, message: string): Promise<void> {
+		const generation = this.appServer.connectionGeneration;
+		try {
+			await release();
+		} catch (error) {
+			// Our listener has already been removed when the parent closes the client.
+			// A closed carrier releases its own leases; an unknown state still needs reporting.
+			const state = await this.appServer.getConnectionState().catch(() => undefined);
+			if (generation !== this.appServer.connectionGeneration || state !== undefined && state !== 'ready') return;
+			console.error(message, error);
+		}
 	}
 
 	list(): Promise<readonly ISession[]> {

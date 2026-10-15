@@ -118,7 +118,7 @@ export class NativeEditContext extends AbstractEditContext {
 		const imeTextArea = h(ownerDocument, "textarea");
 		this.imeTextArea = imeTextArea;
 		element.className = "stanza-editor-input stanza-native-edit-context";
-		element.tabIndex = -1;
+		element.tabIndex = this._context.configuration.options.get(EditorOption.tabIndex);
 		element.dir = options.textDirection;
 		element.setAttribute("role", "textbox");
 		element.setAttribute("aria-label", options.ariaLabel ?? "Stanza editor input");
@@ -401,8 +401,11 @@ export class NativeEditContext extends AbstractEditContext {
 		if (event.hasChanged(EditorOption.ariaLabel)) {
 			this.domNode.setAttribute('aria-label', this._context.configuration.options.get(EditorOption.ariaLabel));
 		}
+		if (event.hasChanged(EditorOption.tabIndex)) {
+			this.domNode.domNode.tabIndex = this._context.configuration.options.get(EditorOption.tabIndex);
+		}
 		this.screenReaderSupport.onConfigurationChanged(event);
-		return event.hasChanged(EditorOption.readOnly) || event.hasChanged(EditorOption.ariaLabel);
+		return event.hasChanged(EditorOption.readOnly) || event.hasChanged(EditorOption.ariaLabel) || event.hasChanged(EditorOption.tabIndex);
 	}
 
 	public override onCursorStateChanged(event: viewEvents.ViewCursorStateChangedEvent): boolean {

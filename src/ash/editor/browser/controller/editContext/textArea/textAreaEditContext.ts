@@ -55,7 +55,7 @@ export class TextAreaEditContext extends AbstractEditContext implements ITextAre
 		const ownerDocument = container.ownerDocument;
 		this.textArea = new FastDomNode(h(ownerDocument, "textarea"));
 		this.textArea.setClassName("stanza-editor-input");
-		this.textArea.domNode.tabIndex = -1;
+		this.textArea.domNode.tabIndex = this._context.configuration.options.get(EditorOption.tabIndex);
 		this.textArea.domNode.spellcheck = false;
 		this.textArea.domNode.readOnly = options.readOnly;
 		this.textArea.domNode.wrap = "off";
@@ -213,7 +213,10 @@ export class TextAreaEditContext extends AbstractEditContext implements ITextAre
 		if (event.hasChanged(EditorOption.ariaLabel)) {
 			this.textArea.setAttribute('aria-label', this._context.configuration.options.get(EditorOption.ariaLabel));
 		}
-		return event.hasChanged(EditorOption.readOnly) || event.hasChanged(EditorOption.ariaLabel);
+		if (event.hasChanged(EditorOption.tabIndex)) {
+			this.textArea.domNode.tabIndex = this._context.configuration.options.get(EditorOption.tabIndex);
+		}
+		return event.hasChanged(EditorOption.readOnly) || event.hasChanged(EditorOption.ariaLabel) || event.hasChanged(EditorOption.tabIndex);
 	}
 
 	public override onCursorStateChanged(_event: viewEvents.ViewCursorStateChangedEvent): boolean {

@@ -92,17 +92,25 @@ export class PriorityTaskQueue extends TaskQueue {
 	}
 }
 
-class IdleTaskQueueInternal extends TaskQueue {
-	protected _requestCallback(callback: IdleRequestCallback): number {
-		return getActiveWindow().requestIdleCallback(callback);
+export class IdleTaskQueue extends PriorityTaskQueue {
+	private readonly useIdleCallback: boolean;
+
+	constructor(logService: ILogService) {
+		// Editor modules can load before browser bootstrap; a queue still needs a window when constructed.
+		const useIdleCallback = 'requestIdleCallback' in getActiveWindow();
+		super(logService);
+		this.useIdleCallback = useIdleCallback;
 	}
 
-	protected _cancelCallback(identifier: number): void {
-		getActiveWindow().cancelIdleCallback(identifier);
+	protected override _requestCallback(callback: CallbackWithDeadline): number {
+		return this.useIdleCallback ? getActiveWindow().requestIdleCallback(callback) : super._requestCallback(callback);
+	}
+
+	protected override _cancelCallback(identifier: number): void {
+		if (this.useIdleCallback) getActiveWindow().cancelIdleCallback(identifier);
+		else super._cancelCallback(identifier);
 	}
 }
-
-export const IdleTaskQueue = ('requestIdleCallback' in getActiveWindow()) ? IdleTaskQueueInternal : PriorityTaskQueue;
 
 /** Creates an idle queue bound to the editor view's own window. */
 export function createIdleTaskQueue(ownerWindow: Window): ITaskQueue {

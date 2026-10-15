@@ -50,7 +50,7 @@ export interface ChatInputDelegate {
 	/** Carries the original composer lifetime through the host’s asynchronous context resolution. */
 	send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts?: readonly ChatContextAttachment[], submissionSignal?: AbortSignal): Promise<void>;
 	executeCommand(invocation: ChatInputCommandInvocation): Promise<void>;
-	executeServerCommand(invocation: ChatInputServerCommandInvocation): Promise<void>;
+	executeServerCommand(invocation: ChatInputServerCommandInvocation, submissionSignal?: AbortSignal): Promise<void>;
 	interrupt(): Promise<void>;
 	openChanges?(): Promise<void>;
 	selectModel(model: ModelRef): Promise<void>;

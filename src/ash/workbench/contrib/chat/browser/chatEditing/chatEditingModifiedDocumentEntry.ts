@@ -30,7 +30,11 @@ export class ChatEditingModifiedDocumentEntry extends Disposable implements IMod
 	private agentEditing = false;
 	private expectedAgentText: string | undefined;
 	private rejectionSource: string | undefined;
-	public isBusy = false;
+	// Agent attribution ends at the model event, but its operation owns busy until endAgentEdit.
+	private agentEditInProgress = false;
+	private reviewSaving = false;
+	private agentEditRevision = 0;
+	public get isBusy(): boolean { return this.agentEditInProgress || this.reviewSaving; }
 	private readonly computer = new DefaultLinesDiffComputer();
 
 	constructor(public readonly modifiedURI: URI, private readonly reference: TextModelReference, private readonly complete: () => void, notify: () => void, snapshot?: ISnapshotEntry) {
@@ -83,28 +87,34 @@ export class ChatEditingModifiedDocumentEntry extends Disposable implements IMod
 	public beginAgentEdit(edits: readonly LanguageTextEdit[]): void {
 		const eol = this.reference.model.getEOL();
 		this.expectedAgentText = TextEdit.fromParallelReplacementsUnsorted(edits.map(edit => new TextReplacement(Range.lift(edit.range), normalizeTextLineEndings(edit.text).replaceAll('\n', eol)))).applyToString(this.reference.model.getText());
-		this.agentEditing = true;
-		this.isBusy = true;
+		this.agentEditing = this.agentEditInProgress = true;
+		this.agentEditRevision++;
 		this.changed.fire();
 	}
 
 	public endAgentEdit(): void {
 		this.agentEditing = false;
 		this.expectedAgentText = undefined;
-		this.isBusy = false;
+		this.agentEditInProgress = false;
 		this.updateDiff();
-		if (this.changes.length === 0 && !this.hasPendingSave) { this.complete(); }
+		if (!this.isBusy && this.changes.length === 0 && !this.hasPendingSave) { this.complete(); }
 	}
 
 	public beginRestore(): void {
-		this.agentEditing = this.isBusy = true;
+		this.agentEditing = this.agentEditInProgress = true;
+		this.agentEditRevision++;
 		this.expectedAgentText = undefined;
 	}
 
 	public async accept(hunk?: IModifiedFileEntryChangeHunk): Promise<void> {
 		this.assertNotDisposed();
 		if (this.isBusy) { return; }
-		if (this.hasPendingSave) { await this.saveRejectedChanges(); }
+		const version = this.reference.model.version;
+		const agentEditRevision = this.agentEditRevision;
+		// Saving acknowledges a captured text, not later edits or a new Agent operation.
+		// The user's decision must not retire a review that changed while the write awaited.
+		if (this.hasPendingSave || this.reference.isDirty) { await this.saveReviewedChanges(); }
+		if (this.isDisposed || this.isBusy || this.reference.isDirty || this.reference.model.version !== version || this.agentEditRevision !== agentEditRevision) { return; }
 		if (hunk) {
 			const current = this.requireHunk(hunk);
 			this.originalText = this.originalText.slice(0, current.originalStart) + current.modifiedText + this.originalText.slice(current.originalEnd);
@@ -119,37 +129,38 @@ export class ChatEditingModifiedDocumentEntry extends Disposable implements IMod
 		const changes = hunk ? [this.requireHunk(hunk)] : this.changes;
 		this.rejectionSource ??= this.reference.model.getText();
 		this.expectedAgentText = undefined;
-		this.agentEditing = this.isBusy = true;
+		this.agentEditing = this.reviewSaving = true;
 		this.changed.fire();
 		try {
-			this.reference.model.pushStackElement();
-			this.reference.model.applyOperations(changes.map(change => ({ range: change.range, text: change.originalText })));
-			this.reference.model.pushStackElement();
-			this.agentEditing = false;
+			try {
+				this.reference.model.pushStackElement();
+				this.reference.model.applyOperations(changes.map(change => ({ range: change.range, text: change.originalText })));
+				this.reference.model.pushStackElement();
+			} finally { this.agentEditing = false; }
 			// A rejected tool edit must also disappear from the file read by subsequent commands.
 			await this.reference.save(new AbortController().signal);
-			this.rejectionSource = undefined;
+			if (!this.reference.isDirty) { this.rejectionSource = undefined; }
 		} finally {
-			this.agentEditing = this.isBusy = false;
+			this.reviewSaving = false;
 			this.updateDiff();
 		}
-		if (this.changes.length === 0) { this.complete(); }
+		if (!this.isBusy && !this.reference.isDirty && this.changes.length === 0) { this.complete(); }
 	}
 
 	public async retrySave(): Promise<void> {
 		this.assertNotDisposed();
 		if (this.isBusy || !this.hasPendingSave) { return; }
-		await this.saveRejectedChanges();
-		if (this.changes.length === 0) { this.complete(); }
+		await this.saveReviewedChanges();
+		if (!this.isBusy && !this.reference.isDirty && this.changes.length === 0) { this.complete(); }
 	}
 
-	private async saveRejectedChanges(): Promise<void> {
-		this.isBusy = true;
+	private async saveReviewedChanges(): Promise<void> {
+		this.reviewSaving = true;
 		this.changed.fire();
 		try {
 			await this.reference.save(new AbortController().signal);
-			this.rejectionSource = undefined;
-		} finally { this.isBusy = false; this.changed.fire(); }
+			if (!this.reference.isDirty) { this.rejectionSource = undefined; }
+		} finally { this.reviewSaving = false; this.changed.fire(); }
 	}
 
 	public getAccessibleContent(): string {

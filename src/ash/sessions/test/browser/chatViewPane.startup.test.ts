@@ -202,7 +202,7 @@ function unavailableChatService(): IChatService & ILanguageModelsService {
 		saveAdvisorDefault: async () => { },
 		onDidSubmitRequest: () => toDisposable(() => { }),
 		onDidChangeSession: neverEvent<{ sessionId: string; agentTreeChanged: boolean; }>(),
-		onDidUpdateThread: neverEvent<ThreadUpdateEnvelope>(),
+		getInteractionOffer: () => undefined, onDidChangeInteractionOffer: Event.None, onDidUpdateThread: neverEvent<ThreadUpdateEnvelope>(),
 		onDidUpdateThreadTranscript: neverEvent<ThreadTranscriptUpdateEnvelope>(),
 		onDidUpdateGoal: neverEvent<import("../../../workbench/services/chat/common/chatService.js").ThreadGoalUpdate>(),
 		onDidBecomeReady: neverEvent<void>(),

@@ -1132,3 +1132,6 @@ fn rpc_turn_executes_browser_tool_only_on_its_originating_window() {
     server.close_connection(second);
     server.close_connection(web);
 }
+
+#[path = "directory_runtime_binding_tests.rs"]
+mod directory_runtime_binding;

@@ -1532,6 +1532,64 @@ impl AppServer {
             .env_runtime_gate
             .lock()
             .map_err(|_| EnvRuntimeError::Failed("Environment runtime gate poisoned".into()))?;
+        // Existing windows retain their identifiers while another window binds
+        // the same authorized directory under its own workspace identifier.
+        // A removed directory or changed permission set never retains an alias.
+        {
+            let runtime = self
+                .env_runtime
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let aliases = runtime
+                .dirs
+                .iter()
+                .filter(|(id, grant)| {
+                    !dirs.iter().any(|(next_id, _)| next_id == *id)
+                        && dirs.iter().any(|(_, next)| {
+                            next.dir().id() == grant.dir().id()
+                                && next.permissions() == grant.permissions()
+                        })
+                })
+                .map(|(id, grant)| (id.clone(), grant.clone()))
+                .collect::<Vec<_>>();
+            dirs.extend(aliases);
+        }
+        // Opening another renderer repeats its workspace binding. Identical active
+        // authorization is not a transition: preserve the executor, grants and watchers
+        // even while a Turn waits for that renderer's approval. Compare the selected
+        // root as well as the normalized mapping so reordering roots cannot switch it.
+        let same_primary = dirs
+            .first()
+            .is_some_and(|(_, grant)| grant.is_active() && self.selected_grant_is_current(grant));
+        if same_primary {
+            let runtime = self
+                .env_runtime
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let unchanged = runtime.dirs.len() == dirs.len()
+                && dirs.iter().all(|(id, next)| {
+                    runtime.dirs.get(id).is_some_and(|current| {
+                        current.dir() == next.dir()
+                            && current.source() == next.source()
+                            && current.permissions() == next.permissions()
+                            && current.is_active()
+                            && next.is_active()
+                    })
+                });
+            if unchanged {
+                return Ok(runtime
+                    .dirs
+                    .iter()
+                    .map(|(id, grant)| {
+                        (
+                            id.clone(),
+                            grant.dir().canonical_path().to_path_buf(),
+                            grant.permissions().clone(),
+                        )
+                    })
+                    .collect());
+            }
+        }
         self.ensure_directory_transition_is_idle()?;
         if dirs.is_empty() {
             host.hooks.unbind_dir();
@@ -1565,28 +1623,6 @@ impl AppServer {
             retire_env_runtime(previous, None, None, None);
             self.reset_language_env_runtimes();
             return Ok(Vec::new());
-        }
-        // Existing windows retain their identifiers while another window binds
-        // the same authorized directory under its own workspace identifier.
-        // A removed directory or changed permission set never retains an alias.
-        {
-            let runtime = self
-                .env_runtime
-                .read()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let aliases = runtime
-                .dirs
-                .iter()
-                .filter(|(id, grant)| {
-                    !dirs.iter().any(|(next_id, _)| next_id == *id)
-                        && dirs.iter().any(|(_, next)| {
-                            next.dir().id() == grant.dir().id()
-                                && next.permissions() == grant.permissions()
-                        })
-                })
-                .map(|(id, grant)| (id.clone(), grant.clone()))
-                .collect::<Vec<_>>();
-            dirs.extend(aliases);
         }
         let Some((_, primary)) = dirs.first() else {
             unreachable!("empty directory sets are handled above");

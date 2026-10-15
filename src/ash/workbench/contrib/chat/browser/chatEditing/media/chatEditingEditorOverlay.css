@@ -2,6 +2,8 @@
 	/* Review actions must receive pointer input above the minimap raster. */
 	z-index: 10;
 	display: flex;
+	/* Keep controls within the editor when review text or the action row is wider. */
+	flex-wrap: wrap;
 	align-items: center;
 	gap: var(--ash-spacing-size80);
 	max-width: 100%;
@@ -20,8 +22,19 @@
 
 .ash-chat-editing-count,
 .ash-chat-editing-auto-accept {
-	flex-shrink: 0;
+	min-width: 0;
+	max-width: 100%;
+	overflow-wrap: anywhere;
 	font-variant-numeric: tabular-nums;
+}
+
+.ash-chat-editing-overlay .ash-toolbar {
+	min-width: 0;
+	max-width: 100%;
+}
+
+.ash-chat-editing-overlay .ash-action-bar {
+	flex-wrap: wrap;
 }
 
 .ash-chat-editing-added {

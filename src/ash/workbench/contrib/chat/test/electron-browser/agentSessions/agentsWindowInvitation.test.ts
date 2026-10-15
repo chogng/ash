@@ -136,7 +136,7 @@ suite('Desktop Agents invitation', () => {
 			await setImmediate();
 			assert.equal(fixture.reads, 1);
 			fixture.status = 'completed';
-			for (let index = 0; index < 20; index++) fixture.updates.fire({ sessionId: 'session', threadId: 'thread', durableSequence: 2, update: { type: 'committed', event: { type: 'turnCompleted' } } });
+			for (let index = 0; index < 20; index++) fixture.updates.fire({ sessionId: 'session', threadId: 'thread', durableSequence: 2, update: { type: 'committed', event: { type: 'turnCompleted', turnId: 'turn' } } });
 			await setImmediate();
 			assert.equal(fixture.reads, 2);
 			assert.equal(fixture.state.getState().sessions[0]?.inProgress, false);

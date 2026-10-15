@@ -242,7 +242,8 @@ export class View extends ViewEventHandler {
 		this.domNode.domNode.style.setProperty("--stanza-editor-padding-right", `${this.padding.right}px`);
 		this.domNode.domNode.dir = this.textDirection;
 		this.domNode.domNode.classList.toggle("word-wrapped", this.softWrapping);
-		this.domNode.domNode.tabIndex = 0;
+		// The text input owns the Tab stop; region focus still delegates to that input.
+		this.domNode.domNode.tabIndex = -1;
 		this.domNode.domNode.setAttribute("role", "region");
 		this.domNode.domNode.setAttribute("aria-label", options.ariaLabel ?? "Stanza editor");
 		this.contentNode.setClassName("stanza-editor-content");

@@ -1,4 +1,4 @@
-import type { ChatHookRun, SessionMode, Turn, Thread, ThreadGoalUpdate, AgentResponse, ThreadUpdateEnvelope, ThreadTranscriptUpdateEnvelope, ThreadRead, ThreadSubscription } from '../../../../platform/agentHost/common/agentService.js';
+import type { AgentInteractionOffer, ChatHookRun, SessionMode, Turn, Thread, ThreadGoalUpdate, AgentResponse, ThreadUpdateEnvelope, ThreadTranscriptUpdateEnvelope, ThreadRead, ThreadSubscription } from '../../../../platform/agentHost/common/agentService.js';
 export type {
 	ChatImageAttachment,
 	ChatAudioAttachment,
@@ -125,18 +125,16 @@ export interface IChatHookPart {
 	readonly run: ChatHookRun;
 }
 
-/** Correlation and identity for a producer already bound to one Chat; normal composer sends omit it. */
+/** Captured origin, cancellation and idempotency of one composer submission. */
 export interface ChatSubmissionOptions {
-	readonly commandId?: string;
-	readonly source?: { readonly sessionId: string; readonly threadId: string; };
 	readonly signal?: AbortSignal;
+	readonly source?: { readonly sessionId: SessionId; readonly threadId: ThreadId; };
+	readonly commandId?: string;
 }
 
-export interface StartTurnOptions {
-	/** Supplied by the owning composer from its loaded Thread, before the first accepted Turn. */
+export interface StartTurnOptions extends ChatSubmissionOptions {
+	/** Supplied by the owning composer from its loaded Thread. */
 	readonly isNewSession?: boolean;
-	/** An existing external request correlation uses the normal Core receipt and replay rules. */
-	readonly commandId?: string;
 	readonly sessionId: SessionId;
 	readonly threadId: ThreadId;
 	readonly expectedSequence: number;
@@ -154,7 +152,7 @@ export type ChatMode = SessionMode;
 export interface ConfigureAdvisorOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly selection: AdvisorSelection; }
 export interface ConsultAdvisorOptions { readonly isNewSession?: boolean; readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly question: string; }
 export interface CompactContextOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly retentionPrompt?: string; }
-export interface SteerTurnOptions { readonly commandId?: string; readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number; readonly text: string; readonly contexts?: readonly ResolvedChatContext[]; }
+export interface SteerTurnOptions extends ChatSubmissionOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number; readonly text: string; readonly contexts?: readonly ResolvedChatContext[]; }
 export interface InterruptTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number; }
 export interface ResolveInteractionOptions extends InterruptTurnOptions { readonly requestId: string; readonly response: AgentResponse; }
 
@@ -239,9 +237,18 @@ export interface IChatRequestSubmittedEvent {
 }
 
 /** Frontend Chat operations, catalogs, and Thread update lifecycle. */
+export interface ChatInteractionOfferChange {
+	readonly sessionId: SessionId;
+	readonly threadId: ThreadId;
+	readonly offer?: AgentInteractionOffer;
+}
+
 export interface IChatService {
 	/** Only accepted local submissions establish window activity; broadcasts never establish ownership. */
 	readonly onDidSubmitRequest: Event<IChatRequestSubmittedEvent>;
+	/** Current connection delivery authority; committed history does not grant this lease. */
+	getInteractionOffer(sessionId: SessionId, threadId: ThreadId): AgentInteractionOffer | undefined;
+	readonly onDidChangeInteractionOffer: Event<ChatInteractionOfferChange>;
 	readHistoryState(sessionId: SessionId, threadId: ThreadId): Promise<AgentThreadHistoryState>;
 	moveHistory(options: { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly direction: 'undo' | 'redo'; }): Promise<void>;
 	readCheckpoints(sessionId: SessionId, threadId: ThreadId): Promise<readonly ChatCheckpoint[]>;

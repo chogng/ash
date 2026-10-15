@@ -161,7 +161,6 @@ test('checkpoint selection cannot restore the source after switching to another 
 	expect(await page.evaluate(() => window.ashChatEditingIntegration.checkpointState())).toEqual({ requests: [], opened: [] });
 });
 
-
 for (const locale of ['en', 'zh-CN']) {
 	test(`a failed rejection survives reload and its keyboard retry reaches the file (${locale})`, async ({ page }) => {
 		await page.goto(`/chatEditing.html?locale=${locale}&saveFailure`);
@@ -189,6 +188,43 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(retry).toBeFocused();
 		await page.keyboard.press('Enter');
 		await expect(page.getByRole('combobox')).toHaveCount(0);
+		await expect.poll(() => page.evaluate(() => window.ashChatEditingIntegration.diskTexts())).toEqual(['original', 'second change']);
+		await expect.poll(() => page.evaluate(() => window.ashChatEditingIntegration.reviewState())).toEqual([{ resource: '/workspace/second.txt', pendingSave: false, hunks: 1 }]);
+	});
+}
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`pending review actions remain inside a narrow editor and accept through normal pointer input (${locale})`, async ({ page }, testInfo) => {
+		await page.goto(`/chatEditing.html?locale=${locale}&editor&saveFailure`);
+		await page.waitForFunction(() => !!window.ashChatEditingIntegration);
+		const container = page.locator('#review-editor');
+		const editor = container.locator('.stanza-editor');
+		const overlay = editor.locator('.ash-chat-editing-overlay');
+		const accept = overlay.getByRole('button', { name: locale === 'en' ? 'Accept file changes' : '接受文件修改', exact: true });
+		const reject = overlay.getByRole('button', { name: locale === 'en' ? 'Reject file changes' : '拒绝文件修改', exact: true });
+		await expect(overlay).toBeVisible();
+		await reject.click();
+		await expect.poll(() => page.evaluate(() => window.ashChatEditingIntegration.reviewState()[0])).toEqual({ resource: '/workspace/first.txt', pendingSave: true, hunks: 0 });
+		const retry = overlay.getByRole('button', { name: locale === 'en' ? 'Retry saving reviewed changes' : '重试保存已审阅的更改', exact: true });
+		await expect(retry).toBeEnabled();
+		for (const width of [240, 180, 360]) {
+			await container.evaluate((element, width) => { element.style.width = `${width}px`; }, width);
+			await expect(async () => {
+				const root = await editor.boundingBox();
+				if (!root) throw new Error('Missing editor bounds');
+				for (const button of [accept, retry]) {
+					const bounds = await button.boundingBox();
+					if (!bounds) throw new Error('Missing review control bounds');
+					expect(bounds.x).toBeGreaterThanOrEqual(root.x);
+					expect(bounds.x + bounds.width).toBeLessThanOrEqual(root.x + root.width);
+				}
+			}).toPass();
+			await testInfo.attach(`review-${width}px`, { body: await container.screenshot(), contentType: 'image/png' });
+		}
+		await container.evaluate(element => { element.style.width = '240px'; });
+		await page.evaluate(() => window.ashChatEditingIntegration.setSaveFailure(false));
+		await accept.click();
+		await expect(overlay).toBeHidden();
 		await expect.poll(() => page.evaluate(() => window.ashChatEditingIntegration.diskTexts())).toEqual(['original', 'second change']);
 		await expect.poll(() => page.evaluate(() => window.ashChatEditingIntegration.reviewState())).toEqual([{ resource: '/workspace/second.txt', pendingSave: false, hunks: 1 }]);
 	});

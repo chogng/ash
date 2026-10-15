@@ -1,29 +1,38 @@
-import { $, getActiveDocument, getActiveWindow } from '../../../../base/browser/dom.js';
+import { getActiveDocument, getActiveWindow } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import './media/decorationCssRuleExtractor.css';
 
 export class DecorationCssRuleExtractor extends Disposable {
-	private _container: HTMLElement;
-	private _dummyElement: HTMLSpanElement;
+	private _dom: { readonly container: HTMLElement; readonly dummyElement: HTMLSpanElement; } | undefined;
 	private _ruleCache: Map</* className */string, CSSStyleRule[]> = new Map();
 	private _cssVariableCache: Map</* variableName */string, /* value */string> = new Map();
 
 	constructor() {
 		super();
-		this._container = $('div.stanza-decoration-style-probe');
-		this._dummyElement = $('span');
-		this._container.appendChild(this._dummyElement);
-		this._register(toDisposable(() => this._container.remove()));
+		this._register(toDisposable(() => this._dom?.container.remove()));
+	}
+
+	private _getDom(canvas: HTMLElement) {
+		if (!this._dom) {
+			// The shared extractor can load before browser bootstrap. Its probe belongs to the first canvas that uses it.
+			const container = canvas.ownerDocument.createElement('div');
+			container.className = 'stanza-decoration-style-probe';
+			const dummyElement = canvas.ownerDocument.createElement('span');
+			container.appendChild(dummyElement);
+			this._dom = { container, dummyElement };
+		}
+		return this._dom;
 	}
 
 	getStyleRules(canvas: HTMLElement, decorationClassName: string): CSSStyleRule[] {
 		const existing = this._ruleCache.get(decorationClassName);
 		if (existing) return existing;
-		this._dummyElement.className = decorationClassName;
-		canvas.appendChild(this._container);
+		const { container, dummyElement } = this._getDom(canvas);
+		dummyElement.className = decorationClassName;
+		canvas.appendChild(container);
 		const rules = this._getStyleRules(decorationClassName);
 		this._ruleCache.set(decorationClassName, rules);
-		canvas.removeChild(this._container);
+		canvas.removeChild(container);
 		return rules;
 	}
 
@@ -61,9 +70,10 @@ export class DecorationCssRuleExtractor extends Disposable {
 	resolveCssVariable(canvas: HTMLCanvasElement, variableName: string): string {
 		let result = this._cssVariableCache.get(variableName);
 		if (result === undefined) {
-			canvas.appendChild(this._container);
-			result = getActiveWindow().getComputedStyle(this._container).getPropertyValue(variableName).trim();
-			canvas.removeChild(this._container);
+			const { container } = this._getDom(canvas);
+			canvas.appendChild(container);
+			result = getActiveWindow().getComputedStyle(container).getPropertyValue(variableName).trim();
+			canvas.removeChild(container);
 			this._cssVariableCache.set(variableName, result);
 		}
 		return result;

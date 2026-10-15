@@ -2105,6 +2105,55 @@ async function openEditor(page: Page): Promise<void> {
 	await page.waitForFunction(() => window.ashTextModelIntegration !== undefined);
 }
 
+
+for (const editContext of [true, false]) {
+	test(`editor Tab navigation has one input stop with ${editContext ? 'NativeEditContext' : 'textarea'}`, async ({ page }) => {
+		if (!editContext) { await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); }); }
+		await openEditor(page);
+		await page.evaluate(() => {
+			const editor = window.ashTextModelIntegration.getControl();
+			editor.updateOptions({ tabFocusMode: true, tabIndex: 0, minimap: { enabled: false }, scrollbar: { vertical: 'hidden', horizontal: 'hidden' } });
+			const before = document.createElement('button');
+			before.textContent = 'Before editor';
+			const after = document.createElement('button');
+			after.textContent = 'After editor';
+			const root = document.getElementById('editor-root')!;
+			root.before(before);
+			root.after(after);
+			editor.focus();
+		});
+		const input = page.locator('.stanza-editor-input');
+		const before = page.getByRole('button', { name: 'Before editor', exact: true });
+		const after = page.getByRole('button', { name: 'After editor', exact: true });
+		await expect(input).toBeFocused();
+		await expect(input).toHaveJSProperty('tagName', editContext ? 'DIV' : 'TEXTAREA');
+		await input.press('Shift+Tab');
+		await expect(before).toBeFocused();
+		await before.press('Tab');
+		await expect(input).toBeFocused();
+		await input.press('Tab');
+		await expect(after).toBeFocused();
+		await after.press('Shift+Tab');
+		await expect(input).toBeFocused();
+		await expect(page.locator('.stanza-editor')).toHaveAttribute('tabindex', '-1');
+		await expect(input).toHaveAttribute('tabindex', '0');
+		await expect(input).toHaveAttribute('aria-multiline', 'true');
+		await input.press('Shift+Tab');
+		await expect(before).toBeFocused();
+		await page.evaluate(() => window.ashTextModelIntegration.getControl().updateOptions({ tabIndex: -1 }));
+		await before.press('Tab');
+		await expect(after).toBeFocused();
+		await after.press('Shift+Tab');
+		await expect(before).toBeFocused();
+		await page.evaluate(() => window.ashTextModelIntegration.getControl().updateOptions({ tabIndex: 0, readOnly: true }));
+		await before.press('Tab');
+		await expect(input).toBeFocused();
+		await expect(input).toHaveAttribute('aria-readonly', 'true');
+		await input.press('Tab');
+		await expect(after).toBeFocused();
+	});
+}
+
 test('extension snippet completions accept, navigate placeholders and undo in the workbench editor', async ({ page }) => {
 	await openEditor(page);
 	await page.evaluate(() => {

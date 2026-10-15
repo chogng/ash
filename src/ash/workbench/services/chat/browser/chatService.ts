@@ -2,7 +2,7 @@ import { IAgentExecutionSettingsService } from '../../../../platform/agentHost/c
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
 import type { ChatContextUsage, IChatRequestSubmittedEvent } from '../common/chatService.js';
-import type { AgentInput } from '../../../../platform/agentHost/common/agentService.js';
+import type { AgentInteractionOffer, AgentInput } from '../../../../platform/agentHost/common/agentService.js';
 import { localize } from '../../../../nls.js';
 import type { TurnChangeSetSummary as TurnChangeSetSummaryDto, TurnChangesReadResult as TurnChangesReadResultDto } from '../../../../../../.build/protocol/typescript/index.js';
 import { Emitter } from "../../../../base/common/event.js";
@@ -14,7 +14,7 @@ import { IAgentThreadService, IAgentTurnService } from "../../../../platform/age
 import { IAgentModelsService } from "../../../../platform/agentHost/common/agentModels.js";
 import { ITurnChangesApi } from "../../../../platform/turnChanges/common/turnChangesApi.js";
 import type { ModelRef, SessionId, ThreadId } from "../common/chatService.js";
-import type { AdvisorConfig, ConfigureAdvisorOptions, ConsultAdvisorOptions, CompactContextOptions, IChatService, InterruptTurnOptions, ResolveInteractionOptions, SlashCommandDefinition, StartTurnOptions, SteerTurnOptions, Thread, ThreadGoalUpdate, ThreadItem, ThreadSubscription, ThreadTranscriptEntry, ThreadTranscriptSnapshot, ThreadTranscriptUpdateEnvelope, ThreadUpdate, ThreadUpdateEnvelope, TurnChangeDetails, TurnChangeSetSummary, TurnCommitSelection, TurnCommitPreview, TurnChangesUpdate } from "../common/chatService.js";
+import type { AdvisorConfig, ChatSubmissionOptions, ChatInteractionOfferChange, ConfigureAdvisorOptions, ConsultAdvisorOptions, CompactContextOptions, IChatService, InterruptTurnOptions, ResolveInteractionOptions, SlashCommandDefinition, StartTurnOptions, SteerTurnOptions, Thread, ThreadGoalUpdate, ThreadItem, ThreadSubscription, ThreadTranscriptEntry, ThreadTranscriptSnapshot, ThreadTranscriptUpdateEnvelope, ThreadUpdate, ThreadUpdateEnvelope, TurnChangeDetails, TurnChangeSetSummary, TurnCommitSelection, TurnCommitPreview, TurnChangesUpdate } from "../common/chatService.js";
 import type { ResolvedChatContext } from '../common/chatContextService.js';
 import type { ChatCheckpoint, RestoreChatCheckpointOptions } from '../common/chatService.js';
 
@@ -24,11 +24,15 @@ interface SharedThreadSubscription {
 	readonly threadId: ThreadId;
 	readonly owners: Set<object>;
 	readonly pending: Set<Promise<ThreadSubscription>>;
+	offer?: AgentInteractionOffer;
+	offerExpiry?: ReturnType<typeof setTimeout>;
 }
 /** App Server-backed implementation of the frontend Chat service. */
 export class ChatService extends Disposable implements IChatService {
 	private readonly submitted = this._register(new Emitter<IChatRequestSubmittedEvent>());
 	readonly onDidSubmitRequest = this.submitted.event;
+	private readonly _onDidChangeInteractionOffer = this._register(new Emitter<ChatInteractionOfferChange>());
+	readonly onDidChangeInteractionOffer = this._onDidChangeInteractionOffer.event;
 	private readonly _onDidChangeSession = this._register(new Emitter<{ readonly sessionId: SessionId; readonly agentTreeChanged: boolean; }>());
 	private readonly _onDidUpdateThread = this._register(new Emitter<ThreadUpdateEnvelope>());
 	private readonly _onDidUpdateThreadTranscript = this._register(new Emitter<ThreadTranscriptUpdateEnvelope>());
@@ -59,7 +63,11 @@ export class ChatService extends Disposable implements IChatService {
 		@IConfigurationService private readonly configuration: IConfigurationService,
 	) {
 		super();
-		this._register(threadApi.onDidUpdateThread(event => this._onDidUpdateThread.fire(event)));
+		this._register(threadApi.onDidOfferInteraction(offer => this.acceptInteractionOffer(offer)));
+		this._register(threadApi.onDidUpdateThread(event => {
+			this.retireCommittedInteraction(event);
+			this._onDidUpdateThread.fire(event);
+		}));
 		this._register(threadApi.onDidUpdateThreadTranscript(event => this._onDidUpdateThreadTranscript.fire(event)));
 		const events = eventApi.subscribe((event) => {
 			if (event.method === 'session/changed') this._onDidChangeSession.fire({ ...event.params });
@@ -77,21 +85,81 @@ export class ChatService extends Disposable implements IChatService {
 			this.connectionEpoch++;
 			if (state !== "ready") {
 				// Backend subscriptions belong to the connection that created them.
+				const subscriptions = [...this.threadSubscriptions.values()];
 				this.threadSubscriptions.clear();
+				for (const subscription of subscriptions) this.retireInteractionOffer(subscription);
 				return;
 			}
 			for (const [key, subscription] of this.threadSubscriptions) {
-				if (subscription.generation !== appServerApi.connectionGeneration) this.threadSubscriptions.delete(key);
+				if (subscription.generation !== appServerApi.connectionGeneration) {
+					this.threadSubscriptions.delete(key);
+					this.retireInteractionOffer(subscription);
+				}
 			}
 			this._onDidBecomeReady.fire();
 		});
 		this._register(toDisposable(() => connection.dispose()));
 		this._register(toDisposable(() => {
 			for (const [key, subscription] of this.threadSubscriptions) {
+				this.retireInteractionOffer(subscription);
 				subscription.owners.clear();
 				void this.releaseThreadSubscription(key, subscription).catch(onUnexpectedError);
 			}
 		}));
+	}
+
+	getInteractionOffer(sessionId: SessionId, threadId: ThreadId): AgentInteractionOffer | undefined {
+		const subscription = this.threadSubscriptions.get(JSON.stringify([sessionId, threadId]));
+		if (!subscription || subscription.owners.size === 0 || subscription.generation !== this.appServerApi.connectionGeneration) return undefined;
+		if (subscription.offer?.interaction.deadline && subscription.offer.interaction.deadline.expiresAtUnixMs <= Date.now()) this.retireInteractionOffer(subscription);
+		return subscription.offer;
+	}
+
+	private acceptInteractionOffer(offer: AgentInteractionOffer): void {
+		const subscription = this.threadSubscriptions.get(JSON.stringify([offer.sessionId, offer.threadId]));
+		if (this.isDisposed || !subscription || subscription.owners.size === 0 || subscription.generation !== offer.connectionGeneration || offer.connectionGeneration !== this.appServerApi.connectionGeneration) return;
+		if (offer.interaction.deadline && offer.interaction.deadline.expiresAtUnixMs <= Date.now()) return;
+		clearTimeout(subscription.offerExpiry);
+		subscription.offer = offer;
+		this.scheduleInteractionExpiry(subscription);
+		this._onDidChangeInteractionOffer.fire({ sessionId: offer.sessionId, threadId: offer.threadId, offer });
+	}
+
+	private scheduleInteractionExpiry(subscription: SharedThreadSubscription): void {
+		const expires = subscription.offer?.interaction.deadline?.expiresAtUnixMs;
+		if (expires === undefined) return;
+		// Long deadlines exceed the carrier timer range; recheck the absolute deadline each time.
+		subscription.offerExpiry = setTimeout(() => {
+			if (expires <= Date.now()) this.retireInteractionOffer(subscription);
+			else this.scheduleInteractionExpiry(subscription);
+		}, Math.min(2_147_483_647, Math.max(0, expires - Date.now())));
+	}
+
+	private retireInteractionOffer(subscription: SharedThreadSubscription): void {
+		if (!subscription.offer) return;
+		subscription.offer = undefined;
+		clearTimeout(subscription.offerExpiry);
+		subscription.offerExpiry = undefined;
+		if (subscription.owners.size > 0) this._onDidChangeInteractionOffer.fire({ sessionId: subscription.sessionId, threadId: subscription.threadId });
+	}
+
+	private retireCommittedInteraction(update: ThreadUpdateEnvelope): void {
+		if (update.update.type !== 'committed') return;
+		const subscription = this.threadSubscriptions.get(JSON.stringify([update.sessionId, update.threadId]));
+		const offer = subscription?.offer;
+		if (!subscription || !offer) return;
+		const event = update.update.event;
+		switch (event.type) {
+			case 'interactionResolved':
+			case 'interactionCancelled':
+				if (event.turnId === offer.turnId && event.requestId === offer.interaction.requestId) this.retireInteractionOffer(subscription);
+				break;
+			case 'turnCompleted':
+			case 'turnFailed':
+			case 'turnInterrupted':
+				if (event.turnId === offer.turnId) this.retireInteractionOffer(subscription);
+				break;
+		}
 	}
 
 	async listSlashCommands(): Promise<readonly SlashCommandDefinition[]> {
@@ -140,11 +208,18 @@ export class ChatService extends Disposable implements IChatService {
 			this.threadSubscriptions.set(key, subscription);
 		}
 		subscription.owners.add(owner);
+		const offeredBeforeSubscribe = subscription.offer;
 		const pending = this.threadApi.subscribe({ sessionId, threadId, afterSequence });
 		subscription.pending.add(pending);
 		try {
 			const result = await pending;
 			if (this.isDisposed || subscription.generation !== this.appServerApi.connectionGeneration || this.threadSubscriptions.get(key) !== subscription) { throw canceled(); }
+			// A notification arriving during this RPC can describe newer state than its snapshot.
+			// Only an offer that predates the RPC can be retired by that snapshot.
+			if (subscription.offer && subscription.offer === offeredBeforeSubscribe) {
+				const turn = result.thread.turns.find(turn => turn.turnId === subscription.offer?.turnId);
+				if (!turn || !['waitingForApproval', 'waitingForUserInput', 'waitingForCapability'].includes(turn.status)) this.retireInteractionOffer(subscription);
+			}
 			return result;
 		} finally {
 			subscription.pending.delete(pending);
@@ -155,6 +230,9 @@ export class ChatService extends Disposable implements IChatService {
 		const key = JSON.stringify([sessionId, threadId]);
 		const subscription = this.threadSubscriptions.get(key);
 		if (!subscription || !subscription.owners.delete(owner) || subscription.owners.size > 0) return;
+		// Hide authority immediately. Retain the still-open connection lease until release
+		// settles so a same-connection reacquisition does not require a duplicate server offer.
+		if (subscription.offer) this._onDidChangeInteractionOffer.fire({ sessionId, threadId });
 		await this.releaseThreadSubscription(key, subscription);
 	}
 
@@ -164,6 +242,7 @@ export class ChatService extends Disposable implements IChatService {
 		const state = await this.appServerApi.getConnectionState();
 		if (subscription.owners.size > 0 || this.threadSubscriptions.get(key) !== subscription) return;
 		this.threadSubscriptions.delete(key);
+		this.retireInteractionOffer(subscription);
 		if (state !== 'ready' || subscription.generation !== this.appServerApi.connectionGeneration) return;
 		try {
 			await this.threadApi.unsubscribe({ sessionId: subscription.sessionId, threadId: subscription.threadId });
@@ -174,8 +253,14 @@ export class ChatService extends Disposable implements IChatService {
 		}
 	}
 
+
+	private requireSubmissionOwner(options: ChatSubmissionOptions & { readonly sessionId: SessionId; readonly threadId: ThreadId; }): void {
+		if (options.signal?.aborted || options.source && (options.source.sessionId !== options.sessionId || options.source.threadId !== options.threadId)) throw canceled();
+	}
+
 	async startTurn(options: StartTurnOptions): Promise<void> {
 		this.assertAIEnabled();
+		this.requireSubmissionOwner(options);
 		const epoch = this.connectionEpoch;
 		const input = turnInput(options);
 		await this.turnApi.start({ commandId: options.commandId ?? commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, mode: options.mode, approvalMode: options.approvalMode, model: options.model, reasoningEffort: options.reasoningEffort, input });
@@ -184,11 +269,13 @@ export class ChatService extends Disposable implements IChatService {
 
 	async queueTurn(options: StartTurnOptions): Promise<void> {
 		this.assertAIEnabled();
+		this.requireSubmissionOwner(options);
 		const epoch = this.connectionEpoch;
 		const generation = this.appServerApi.connectionGeneration;
 		const approvalMode = options.approvalMode ?? (await this.execution.read()).settings.approvalMode;
 		if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServerApi.connectionGeneration) throw canceled();
 		this.assertAIEnabled();
+		this.requireSubmissionOwner(options);
 		await this.turnApi.enqueue({ commandId: options.commandId ?? commandId("queued-turn"), sessionId: options.sessionId, threadId: options.threadId, mode: options.mode, model: options.model, reasoningEffort: options.reasoningEffort, input: turnInput(options), approvalMode });
 		if (!this.isDisposed && epoch === this.connectionEpoch) this.submitted.fire({ sessionId: options.sessionId, threadId: options.threadId, isNewSession: false, requestSequence: options.expectedSequence });
 	}
@@ -231,6 +318,7 @@ export class ChatService extends Disposable implements IChatService {
 
 	async steerTurn(options: SteerTurnOptions): Promise<void> {
 		this.assertAIEnabled();
+		this.requireSubmissionOwner(options);
 		const epoch = this.connectionEpoch;
 		await this.turnApi.steer({
 			commandId: options.commandId ?? commandId("steer"),

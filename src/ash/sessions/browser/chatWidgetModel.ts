@@ -1,4 +1,4 @@
-import type { ChatSubmissionOptions } from '../../workbench/services/chat/common/chatService.js';
+import { raceCancellationError } from '../../base/common/async.js';
 import type { ChatContextUsage } from '../../workbench/services/chat/common/chatService.js';
 import { IAgentExecutionSettingsService } from '../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { CancellationToken } from '../../base/common/cancellation.js';
@@ -8,7 +8,7 @@ import { ILanguageModelsService } from '../../workbench/contrib/chat/common/lang
 import { Emitter, type Event } from "../../base/common/event.js";
 import { canceled, isCancellationError } from "../../base/common/errors.js";
 import { Disposable, toDisposable } from "../../base/common/lifecycle.js";
-import type { AgentResponse, ChatAgent, ChatMode, IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnChangeDetails, TurnChangeSetSummary, TurnInteraction } from "../../workbench/services/chat/common/chatService.js";
+import type { AgentResponse, ChatAgent, ChatMode, ChatSubmissionOptions, IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnChangeDetails, TurnChangeSetSummary, TurnInteraction } from "../../workbench/services/chat/common/chatService.js";
 import { localize } from "../../nls.js";
 import type { SkillReference } from "../../platform/agentHost/common/appServerApi.js";
 import type { ResolvedChatContext } from "../../workbench/services/chat/common/chatContextService.js";
@@ -54,12 +54,16 @@ export class ChatWidgetModel extends Disposable {
 	private _thread: Thread | undefined;
 	private contextUsage: ChatContextUsage | undefined;
 	private contextUsageRequest = 0;
-	private _interaction: TurnInteraction | undefined;
 	private _state: ChatWidgetState = "loading";
+	// A late local completion cannot release a newer operation's busy state.
+	private stateRequest = 0;
 	private _error: string | undefined;
 	private readonly _historyStatus = observableValue<IChatSessionHistoryStatus | undefined>(this, undefined);
 	private generation = 0;
 	private readPending = false;
+	private readRequest = 0;
+	private durableSequence = 0;
+	private snapshotRequest = 0;
 	private initializePromise: Promise<void> | undefined;
 	private subscriptionThreadId: ThreadId | undefined;
 	private subscriptionPromise: Promise<void> | undefined;
@@ -112,6 +116,9 @@ export class ChatWidgetModel extends Disposable {
 			this._thread = { ...this._thread, goal: update.goal ?? null };
 			this._onDidChange.fire();
 		}));
+		this._register(chatService.onDidChangeInteractionOffer(change => {
+			if (change.sessionId === this.sessionId && change.threadId === this.threadId) this._onDidChange.fire();
+		}));
 		this._register(chatService.onDidBecomeReady(() => void this.reconnect()));
 		this._register(execution.onDidChange(() => void this.loadDefaultApprovalMode()));
 		this._register(this.languageModels.onDidChangeModels(() => void this.loadModels()));
@@ -159,7 +166,7 @@ export class ChatWidgetModel extends Disposable {
 			selectedAgent: this.selection.kind === 'untitled' ? this.selection.session.agent : undefined,
 			agentName: this.selection.kind === 'session' ? this.selection.active.session.agentTree?.find(node => node.threadId === this.threadId)?.role?.name : undefined,
 			canSelectAgent: this.selection.kind === 'untitled',
-			interaction: this._interaction,
+			interaction: this.interaction,
 		};
 	}
 
@@ -254,7 +261,10 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	get interaction(): TurnInteraction | undefined {
-		return this._interaction;
+		const active = this.activeSession;
+		if (!active) return undefined;
+		const offer = this.chatService.getInteractionOffer(active.session.sessionId, active.threadId);
+		return offer && offer.turnId === activeTurn(this._thread)?.turnId ? offer.interaction : undefined;
 	}
 
 	get changeSets(): readonly TurnChangeSetSummary[] {
@@ -267,19 +277,28 @@ export class ChatWidgetModel extends Disposable {
 
 	async generateChangeMessage(changeSet: TurnChangeSetSummary): Promise<void> {
 		const owner = this.requireChangeOwner();
-		this.acceptChangeSets(await this.chatService.generateTurnChangeMessage(owner.sessionId, owner.threadId, changeSet.changeSetId, changeSet.revision));
+		const operation = this.captureOperation();
+		const changes = await this.chatService.generateTurnChangeMessage(owner.sessionId, owner.threadId, changeSet.changeSetId, changeSet.revision);
+		this.requireCurrentOperation(operation);
+		this.acceptChangeSets(changes);
 	}
 
 	async updateChangeDraft(changeSet: TurnChangeSetSummary, message: string): Promise<void> {
 		const owner = this.requireChangeOwner();
-		this.acceptChangeSets(await this.chatService.updateTurnChangeDraft(owner.sessionId, owner.threadId, changeSet.changeSetId, changeSet.revision, message));
+		const operation = this.captureOperation();
+		const changes = await this.chatService.updateTurnChangeDraft(owner.sessionId, owner.threadId, changeSet.changeSetId, changeSet.revision, message);
+		this.requireCurrentOperation(operation);
+		this.acceptChangeSets(changes);
 		await this.loadChangeDetails(changeSet.changeSetId, this.changesGeneration);
 	}
 
 	async discardChanges(): Promise<void> {
 		const owner = this.requireChangeOwner();
+		const operation = this.captureOperation();
 		const expectedRevision = Math.max(0, ...this._changeSets.map((changeSet) => changeSet.revision));
-		this.acceptChangeSets(await this.chatService.discardThreadChanges(owner.sessionId, owner.threadId, expectedRevision));
+		const changes = await this.chatService.discardThreadChanges(owner.sessionId, owner.threadId, expectedRevision);
+		this.requireCurrentOperation(operation);
+		this.acceptChangeSets(changes);
 	}
 
 	get canInterrupt(): boolean {
@@ -302,6 +321,8 @@ export class ChatWidgetModel extends Disposable {
 		const previousModel = current.session.model;
 		if (previousThreadId !== active.threadId) {
 			this._historyStatus.set(undefined);
+			this.durableSequence = 0;
+			this.snapshotRequest = 0;
 			this._composerGeneration++;
 			this._onDidChangeComposer.fire();
 		}
@@ -395,50 +416,38 @@ export class ChatWidgetModel extends Disposable {
 		this._onDidChange.fire();
 	}
 
-	/** Materializes the existing Untitled owner without submitting an empty model Turn. */
-	async prepareConversation(): Promise<{ readonly sessionId: string; readonly threadId: string; }> {
-		this.assertAIEnabled();
-		const identity = this.threadId ?? this.untitledSessionId;
-		await this.initialize();
-		if (this.isDisposed || identity !== (this.threadId ?? this.untitledSessionId)) throw canceled();
-		this.assertAIEnabled();
-		const active = await this.ensureActiveSession();
-		if (this.isDisposed || this.sessionId !== active.session.sessionId || this.threadId !== active.threadId) throw canceled();
-		return { sessionId: active.session.sessionId, threadId: active.threadId };
-	}
-
-	async send(text: string, mode: ChatMode = this.mode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], submissionOptions?: ChatSubmissionOptions): Promise<void> {
+	async send(text: string, mode: ChatMode = this.mode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], options?: ChatSubmissionOptions): Promise<void> {
 		const input = text.trim();
 		if (!input && !contexts?.length) return;
 		this.assertAIEnabled();
-		const generation = this.composerGeneration;
-		let identity = this.composerIdentity;
+		const operation = this.captureOperation(options);
+		const stateRequest = ++this.stateRequest;
 		try {
-			if (submissionOptions?.signal?.aborted) throw canceled();
-			await this.pendingModelSelection;
-			if (this.isDisposed || generation !== this.composerGeneration || identity !== this.composerIdentity) throw canceled();
+			this.requireCurrentOperation(operation);
+			await this.waitForModelSelection(operation);
+			this.requireCurrentOperation(operation);
 			await this.initialize();
-			if (this.isDisposed || generation !== this.composerGeneration || identity !== this.composerIdentity) throw canceled();
+			this.requireCurrentOperation(operation);
 			if (this.historyStatus) throw new Error(this.historyStatus.message);
 			this.assertAIEnabled();
 			this.setState("submitting");
+			this.requireCurrentOperation(operation);
 			const active = await this.ensureActiveSession();
-			if (this.isDisposed || generation !== this.composerGeneration || active.session.sessionId !== this.sessionId || active.threadId !== this.threadId) throw canceled();
+			if (this.isDisposed || operation.signal?.aborted || operation.generation !== this.composerGeneration || active.session.sessionId !== this.sessionId || active.threadId !== this.threadId) throw canceled();
 			// Materializing this composer changes its identity from draft to durable Thread.
-			identity = active.threadId;
+			operation.identity = active.threadId;
 			if (this._thread?.threadId !== active.threadId) {
 				await this.subscribe(active);
 			}
-			if (this.isDisposed || generation !== this.composerGeneration || identity !== this.composerIdentity) throw canceled();
+			this.requireCurrentOperation(operation);
 			const thread = this._thread;
 			if (!thread || thread.threadId !== active.threadId) {
 				throw new Error("Chat Thread is not available");
 			}
-			if (submissionOptions?.signal?.aborted || submissionOptions?.source && (active.session.sessionId !== submissionOptions.source.sessionId || active.threadId !== submissionOptions.source.threadId)) throw canceled();
+			if (options?.signal?.aborted || options?.source && (active.session.sessionId !== options.source.sessionId || active.threadId !== options.source.threadId)) throw canceled();
 			const turn = activeTurn(thread);
 			const submission = {
 				isNewSession: thread.turns.length === 0,
-				...(submissionOptions?.commandId ? { commandId: submissionOptions.commandId } : {}),
 				sessionId: active.session.sessionId,
 				threadId: active.threadId,
 				expectedSequence: thread.sequence,
@@ -449,12 +458,15 @@ export class ChatWidgetModel extends Disposable {
 				model: this.isAutomaticModel ? undefined : this.selectedModel,
 				reasoningEffort: this.selectedReasoningEffort,
 				contexts,
+				signal: operation.signal,
+				commandId: options?.commandId,
+				source: options?.source,
 				skills,
 			};
 			if (turn && (turn.kind !== undefined && turn.kind !== 'coding' && turn.kind !== 'review' || turn.mode !== mode || skills?.length)) {
 				// A frozen Turn keeps its approach. A new approach gets its own durable submission.
 				await this.chatService.queueTurn(submission);
-				if (this.isDisposed || generation !== this.composerGeneration) return;
+				if (!this.isCurrentOperation(operation)) { this.recoverCancelledSubmission(operation, stateRequest); return; }
 				await this.loadQueue();
 			} else if (turn) {
 				if (!isSteerableTurn(turn)) throw new Error(`The active ${turn.status} Turn cannot accept steering`);
@@ -462,13 +474,13 @@ export class ChatWidgetModel extends Disposable {
 			} else {
 				await this.chatService.startTurn(submission);
 			}
-			if (this.isDisposed || generation !== this.composerGeneration || identity !== this.composerIdentity) return;
+			if (!this.isCurrentOperation(operation)) { this.recoverCancelledSubmission(operation, stateRequest); return; }
 			await this.refreshThread();
-			if (!this.isDisposed && generation === this.composerGeneration && identity === this.composerIdentity) this.setState("ready");
+
 		} catch (error) {
-			if (this.isDisposed || generation !== this.composerGeneration || identity !== this.composerIdentity) throw error;
-			if (isCancellationError(error)) {
-				this.setState('ready');
+			if (!this.isCurrentTarget(operation) || stateRequest !== this.stateRequest) throw error;
+			if (operation.signal?.aborted || isCancellationError(error)) {
+				if (this._state === 'submitting') this.setState('ready');
 				throw error;
 			}
 			if (this.configuration.getValue<boolean>(ChatAIDisabledSettingId)) {
@@ -480,6 +492,19 @@ export class ChatWidgetModel extends Disposable {
 		}
 	}
 
+
+	/** Voice obtains a durable owner through the same draft materialization as typed input. */
+	async prepareConversation(signal?: AbortSignal): Promise<{ readonly sessionId: SessionId; readonly threadId: ThreadId; }> {
+		this.assertAIEnabled();
+		const operation = this.captureOperation({ signal });
+		await this.waitForModelSelection(operation);
+		await this.awaitOperationPreparation(this.initialize(), operation);
+		this.requireCurrentOperation(operation);
+		const active = await this.ensureActiveSession();
+		if (this.isDisposed || signal?.aborted || operation.generation !== this.composerGeneration || active.threadId !== this.threadId || active.session.sessionId !== this.sessionId) throw canceled();
+		return { sessionId: active.session.sessionId, threadId: active.threadId };
+	}
+
 	selectApprovalMode(mode: ApprovalMode): void {
 		this.selectedApprovalModes.set(new Map(this.selectedApprovalModes.get()).set(this.composerIdentity, mode));
 		this._onDidChange.fire();
@@ -489,43 +514,55 @@ export class ChatWidgetModel extends Disposable {
 		return this.selection.kind === 'untitled' ? this.selection.session.untitledSessionId : this.selection.active.threadId;
 	}
 
-	async executeServerCommand(name: string, argumentsText: string): Promise<void> {
+	async executeServerCommand(name: string, argumentsText: string, submissionSignal?: AbortSignal): Promise<void> {
 		this.assertAIEnabled();
 		if (name !== "compact" && name !== "advisor") {
-			await this.send(`/${name}${argumentsText ? ` ${argumentsText}` : ""}`);
+			await this.send(`/${name}${argumentsText ? ` ${argumentsText}` : ""}`, this.mode, undefined, undefined, { signal: submissionSignal });
 			return;
 		}
+		const operation = this.captureOperation({ signal: submissionSignal });
+		const stateRequest = ++this.stateRequest;
 		try {
 			this.setState("submitting");
+			this.requireCurrentOperation(operation);
 			const argument = argumentsText.trim();
 			const isModelSelection = /^[^/\s]+\/\S+$/.test(argument);
 			const isAdvisorConfigArgument = argument === "off" || argument === "clear" || isModelSelection;
 			if (name === "advisor" && isAdvisorConfigArgument) {
-				const current = await this.chatService.readAdvisorDefault();
+				const current = await this.awaitOperationPreparation(this.chatService.readAdvisorDefault(), operation);
+				this.requireCurrentOperation(operation);
 				if (argument === "clear") {
 					await this.chatService.saveAdvisorDefault(null);
+					this.requireCurrentOperation(operation);
 				} else if (argument === "off") {
 					if (current) await this.chatService.saveAdvisorDefault({ ...current, enabled: false });
+					this.requireCurrentOperation(operation);
 				} else {
-					const models = await this.languageModels.listAdvisorModels();
+					const models = await this.awaitOperationPreparation(this.languageModels.listAdvisorModels(), operation);
+					this.requireCurrentOperation(operation);
 					const chosen = models.find(entry => `${entry.model.provider}/${entry.model.model}` === argument);
 					if (!chosen) throw new Error(localize('chat.advisor.modelUnavailable', 'Advisor model is unavailable: {0}', argument));
 					const config = current?.model.provider === chosen.model.provider && current.model.model === chosen.model.model
 						? { ...current, enabled: true }
 						: { model: chosen.model, enabled: true, maxCalls: 3, maxOutputTokens: 2048 };
 					await this.chatService.saveAdvisorDefault(config);
+					this.requireCurrentOperation(operation);
 				}
-				this.setState("ready");
+				if (stateRequest === this.stateRequest) this.setState("ready");
 				return;
 			}
-			const advisorDefault = name === "advisor" ? await this.chatService.readAdvisorDefault() : null;
+			const advisorDefault = name === "advisor" ? await this.awaitOperationPreparation(this.chatService.readAdvisorDefault(), operation) : null;
+			this.requireCurrentOperation(operation);
 			if (name === "advisor" && !argument) throw new Error(localize('chat.advisor.questionRequired', 'Enter a question after /advisor'));
 			if (name === "advisor" && this.selection.kind === "untitled" && (!advisorDefault || !advisorDefault.enabled)) {
 				throw new Error(localize('chat.advisor.configure', 'Configure an advisor model in Chat Settings before asking for a second opinion'));
 			}
 			const active = await this.ensureActiveSession();
+			if (this.isDisposed || operation.generation !== this.composerGeneration || active.session.sessionId !== this.sessionId || active.threadId !== this.threadId) throw canceled();
+			operation.identity = active.threadId;
 			if (this._thread?.threadId !== active.threadId) {
-				await this.subscribe(active);
+				await this.awaitOperationPreparation(this.subscribe(active), operation);
+				this.requireCurrentOperation(operation);
 			}
 			const thread = this._thread;
 			if (!thread || thread.threadId !== active.threadId) {
@@ -536,8 +573,9 @@ export class ChatWidgetModel extends Disposable {
 				if (activeTurn(thread)) throw new Error(localize('chat.advisor.turnActive', 'Wait for the active Turn to finish before starting a consultation'));
 				if (!advisorDefault || !advisorDefault.enabled) throw new Error(localize('chat.advisor.configure', 'Configure an advisor model in Chat Settings before asking for a second opinion'));
 				await this.chatService.consultAdvisor({ ...options, question: argument });
+				this.requireCurrentOperation(operation);
 				await this.refreshThread();
-				this.setState("ready");
+				this.requireCurrentOperation(operation);
 				return;
 			}
 			if (activeTurn(thread)) {
@@ -549,9 +587,12 @@ export class ChatWidgetModel extends Disposable {
 				expectedSequence: thread.sequence,
 				...(argumentsText.trim() ? { retentionPrompt: argumentsText.trim() } : {}),
 			});
+			this.requireCurrentOperation(operation);
 			await this.refreshThread();
-			this.setState("ready");
+			this.requireCurrentOperation(operation);
 		} catch (error) {
+			if (!this.isCurrentTarget(operation) || stateRequest !== this.stateRequest) throw error;
+			if (operation.signal?.aborted || isCancellationError(error)) { this.recoverCancelledSubmission(operation, stateRequest); throw error; }
 			this.setError(error);
 			throw error;
 		}
@@ -576,31 +617,42 @@ export class ChatWidgetModel extends Disposable {
 		const thread = this._thread;
 		const turn = activeTurn(thread);
 		if (!thread || !turn) return;
+		const operation = this.captureOperation();
+		const stateRequest = ++this.stateRequest;
+		const isCurrent = () => stateRequest === this.stateRequest && this.isCurrentOperation(operation) && activeTurn(this._thread)?.turnId === turn.turnId;
 		try {
 			this.setState("submitting");
+			this.requireCurrentOperation(operation);
 			await this.chatService.interruptTurn({
 				sessionId: thread.sessionId,
 				threadId: thread.threadId,
 				turnId: turn.turnId,
 				expectedSequence: thread.sequence,
 			});
+			if (!isCurrent()) return;
 			await this.refreshThread();
-			this.setState("ready");
+
 		} catch (error) {
-			this.setError(error);
+			if (isCurrent()) this.setError(error);
 		}
 	}
 
 	async resolveInteraction(response: AgentResponse): Promise<void> {
 		const thread = this._thread;
-		const interaction = this._interaction;
+		const offer = thread ? this.chatService.getInteractionOffer(thread.sessionId, thread.threadId) : undefined;
+		const interaction = offer?.interaction;
 		const turn = activeTurn(thread);
-		if (!thread || !turn || !interaction) return;
+		if (!thread || !turn || !offer || !interaction || offer.turnId !== turn.turnId) return;
 		if (response.type !== interaction.request.type) {
 			throw new Error("Interaction response kind does not match request");
 		}
+		const operation = this.captureOperation();
+		const stateRequest = ++this.stateRequest;
+		const isCurrent = () => stateRequest === this.stateRequest && this.isCurrentOperation(operation) && this.chatService.getInteractionOffer(thread.sessionId, thread.threadId) === offer;
 		try {
 			this.setState("submitting");
+			this.requireCurrentOperation(operation);
+			if (this.chatService.getInteractionOffer(thread.sessionId, thread.threadId) !== offer) throw canceled();
 			await this.chatService.resolveInteraction({
 				sessionId: thread.sessionId,
 				threadId: thread.threadId,
@@ -609,11 +661,12 @@ export class ChatWidgetModel extends Disposable {
 				expectedSequence: thread.sequence,
 				response,
 			});
-			this._interaction = undefined;
+			const currentOffer = this.chatService.getInteractionOffer(thread.sessionId, thread.threadId);
+			if (!this.isCurrentOperation(operation) || stateRequest !== this.stateRequest || currentOffer && currentOffer !== offer) return;
 			await this.refreshThread();
-			this.setState("ready");
+
 		} catch (error) {
-			this.setError(error);
+			if (isCurrent()) this.setError(error);
 			throw error;
 		}
 	}
@@ -734,10 +787,10 @@ export class ChatWidgetModel extends Disposable {
 	private async performSubscribe(active: IActiveSessionThread): Promise<void> {
 		const generation = ++this.generation;
 		const oldThreadId = this._thread?.threadId;
+		const request = ++this.readRequest;
 		this._thread = undefined;
 		this.contextUsage = undefined;
 		this.contextUsageRequest++;
-		this._interaction = undefined;
 		this.transcriptEntries = [];
 		this.transcriptRevision = 0;
 		this._changeSets = [];
@@ -752,26 +805,23 @@ export class ChatWidgetModel extends Disposable {
 		try {
 			const result = await this.chatService.subscribeThread(active.session.sessionId, active.threadId, 0, this);
 			if (this.isDisposed || generation !== this.generation) return;
-			this._thread = result.thread;
+			const snapshot = this.acceptThreadSnapshot(result, request);
+			const currentThread = this.thread;
 			void this.loadContextUsage(generation);
-			if (!this.selectedModes.has(active.threadId)) {
-				this.selectedModes.set(active.threadId, result.thread.turns.at(-1)?.mode ?? 'agent');
-			}
-			if (result.transcript.revision >= this.transcriptRevision) {
-				this.transcriptEntries = result.transcript.entries.map((entry) => cloneTranscriptEntry(entry));
-				this.transcriptRevision = result.transcript.revision;
+			if (currentThread && !this.selectedModes.has(active.threadId)) {
+				this.selectedModes.set(active.threadId, currentThread.turns.at(-1)?.mode ?? 'agent');
 			}
 			for (const update of result.updates) {
-				if (update.durableSequence > result.thread.sequence) {
+				if (update.durableSequence > (currentThread?.sequence ?? this.durableSequence)) {
 					this.acceptUpdate(update);
 				}
 			}
-			this._historyStatus.set(undefined);
-			this.setState("ready");
+			if (snapshot.thread) { this._historyStatus.set(undefined); this.setState("ready"); }
+			else if (snapshot.transcript) this._onDidChange.fire();
 			void this.loadTurnChanges(generation);
 			void this.loadQueue();
 		} catch (error) {
-			if (this.isDisposed || generation !== this.generation) return;
+			if (this.isDisposed || generation !== this.generation || request !== this.readRequest) return;
 			this.setHistoryError(error, 'history');
 		}
 	}
@@ -781,6 +831,7 @@ export class ChatWidgetModel extends Disposable {
 		if (!selectedThreadId) return;
 		if (update.threadId !== selectedThreadId || update.sessionId !== this.sessionId) return;
 		if (update.update.type !== "committed") return;
+		this.durableSequence = Math.max(this.durableSequence, update.durableSequence);
 		if (update.update.event.type === 'voiceTranscriptRecorded' && this._thread && update.durableSequence === this._thread.sequence + 1) {
 			// Speech changes the journal boundary, never execution state or model inputs.
 			this._thread = { ...this._thread, sequence: update.durableSequence };
@@ -878,18 +929,6 @@ export class ChatWidgetModel extends Disposable {
 					this._onDidChange.fire();
 				}
 				break;
-			case "interactionRequested":
-				this._interaction = event.interaction;
-				this._onDidChange.fire();
-				break;
-			case "interactionResolved":
-			case "interactionCancelled":
-			case "turnCompleted":
-			case "turnFailed":
-			case "turnInterrupted":
-				this._interaction = undefined;
-				this._onDidChange.fire();
-				break;
 			default:
 				break;
 		}
@@ -942,26 +981,24 @@ export class ChatWidgetModel extends Disposable {
 		if (!active) return;
 		const threadId = active.threadId;
 		const generation = this.generation;
+		const request = ++this.readRequest;
 		try {
 			const result = await this.chatService.readThread(active.session.sessionId, threadId);
 			if (
 				this.isDisposed ||
 				generation !== this.generation ||
+				(request !== this.readRequest && result.thread.sequence <= (this._thread?.sequence ?? 0) && result.transcript.revision <= this.transcriptRevision) ||
 				result.thread.threadId !== this.threadId
 			) return;
-			if (this._thread?.threadId === result.thread.threadId && this._thread.sequence > result.thread.sequence) return;
-			this._thread = result.thread;
+			const snapshot = this.acceptThreadSnapshot(result, request);
+			if (!snapshot.thread) { if (snapshot.transcript) this._onDidChange.fire(); return; }
 			void this.loadContextUsage(generation);
-			if (result.transcript.revision >= this.transcriptRevision) {
-				this.transcriptEntries = result.transcript.entries.map((entry) => cloneTranscriptEntry(entry));
-				this.transcriptRevision = result.transcript.revision;
-			}
 			this._error = undefined;
 			this._historyStatus.set(undefined);
 			this._state = "ready";
 			this._onDidChange.fire();
 		} catch (error) {
-			if (!this.isDisposed && generation === this.generation) {
+			if (!this.isDisposed && generation === this.generation && request === this.readRequest) {
 				this.setHistoryError(error, 'live');
 			}
 		}
@@ -993,6 +1030,23 @@ export class ChatWidgetModel extends Disposable {
 		this.setState('error');
 	}
 
+	/** Hydration and refresh obey the same sequence floor; streaming revisions advance independently. */
+	private acceptThreadSnapshot(result: Awaited<ReturnType<IChatService['readThread']>>, request: number): { readonly thread: boolean; readonly transcript: boolean; } {
+		const sequence = this._thread?.sequence ?? 0;
+		const thread = result.thread.sequence >= this.durableSequence && (result.thread.sequence > sequence || result.thread.sequence === sequence && request >= this.snapshotRequest);
+		if (thread) {
+			this._thread = result.thread;
+			this.durableSequence = Math.max(this.durableSequence, result.thread.sequence);
+			this.snapshotRequest = Math.max(this.snapshotRequest, request);
+		}
+		const transcript = result.transcript.revision >= this.transcriptRevision;
+		if (transcript) {
+			this.transcriptEntries = result.transcript.entries.map(entry => cloneTranscriptEntry(entry));
+			this.transcriptRevision = result.transcript.revision;
+		}
+		return { thread, transcript };
+	}
+
 	private setState(state: ChatWidgetState, error?: string): void {
 		this._state = state;
 		this._error = error;
@@ -1018,6 +1072,45 @@ export class ChatWidgetModel extends Disposable {
 		const active = this.activeSession;
 		if (!active) throw new Error("Turn changes require a durable Session and Thread");
 		return { sessionId: active.session.sessionId, threadId: active.threadId };
+	}
+
+
+	private captureOperation(options?: ChatSubmissionOptions): { readonly generation: number; identity: string; readonly signal?: AbortSignal; } {
+		if (options?.source && (options.source.sessionId !== this.sessionId || options.source.threadId !== this.threadId)) throw canceled();
+		return { generation: this.composerGeneration, identity: this.composerIdentity, signal: options?.signal };
+	}
+
+
+	private async waitForModelSelection(operation: ReturnType<ChatWidgetModel['captureOperation']>): Promise<void> {
+		// A draft must retain the chosen model when preparation gives it a durable owner.
+		while (this.pendingModelSelection) {
+			await this.awaitOperationPreparation(this.pendingModelSelection, operation);
+			this.requireCurrentOperation(operation);
+		}
+	}
+
+
+	private async awaitOperationPreparation<T>(pending: Promise<T>, operation: ReturnType<ChatWidgetModel['captureOperation']>): Promise<T> {
+		const result = operation.signal ? await raceCancellationError(pending, operation.signal) : await pending;
+		this.requireCurrentOperation(operation);
+		return result;
+	}
+
+	private isCurrentTarget(operation: ReturnType<ChatWidgetModel['captureOperation']>): boolean {
+		return !this.isDisposed && operation.generation === this.composerGeneration && operation.identity === this.composerIdentity;
+	}
+
+	private isCurrentOperation(operation: ReturnType<ChatWidgetModel['captureOperation']>): boolean {
+		return !operation.signal?.aborted && this.isCurrentTarget(operation);
+	}
+
+	private recoverCancelledSubmission(operation: ReturnType<ChatWidgetModel['captureOperation']>, stateRequest: number): void {
+		if (operation.signal?.aborted && stateRequest === this.stateRequest && this.isCurrentTarget(operation) && this._state === 'submitting') this.setState('ready');
+	}
+
+	private requireCurrentOperation(operation: ReturnType<ChatWidgetModel['captureOperation']>): void {
+		this.assertAIEnabled();
+		if (!this.isCurrentOperation(operation)) throw canceled();
 	}
 
 	private async ensureActiveSession(): Promise<IActiveSessionThread> {
