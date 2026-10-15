@@ -1,6 +1,6 @@
 import { Emitter } from "../../../../base/common/event.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
+import { extUriBiasedIgnorePathCase, extUriIgnorePathCase } from '../../../../base/common/resources.js';
 import type { URI } from '../../../../base/common/uri.js';
 import type {
 	IAnyWorkspaceIdentifier,
@@ -45,8 +45,12 @@ export class WorkspaceContextService extends Disposable implements IWorkspaceCon
 		const candidate = resource.with({ query: null, fragment: null });
 		let match: IWorkspaceFolder | null = null;
 		for (const folder of this.workspace.folders) {
+			// Explicit drive and UNC roots belong to Windows even when the renderer runs
+			// on another OS. POSIX and remote roots retain their own casing semantics.
+			const comparison = folder.uri.scheme === 'file' && (folder.uri.authority || /^\/[a-z]:($|\/)/i.test(folder.uri.path))
+				? extUriIgnorePathCase : extUriBiasedIgnorePathCase;
 			if (
-				extUriBiasedIgnorePathCase.isEqualOrParent(candidate, folder.uri)
+				comparison.isEqualOrParent(candidate, folder.uri)
 				&& (!match || folder.uri.toEncodedComponents().path.length > match.uri.toEncodedComponents().path.length)
 			) {
 				match = folder;

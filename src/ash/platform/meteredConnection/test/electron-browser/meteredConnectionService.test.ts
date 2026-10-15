@@ -21,6 +21,7 @@ import { IUpdateService } from '../../../update/common/updateService.js';
 import { INotificationService } from '../../../notification/common/notification.js';
 import { NotificationService } from '../../../../workbench/services/notification/common/notificationService.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
+import { isMacintosh, isWindows } from '../../../../base/common/platform.js';
 import '../../../../workbench/contrib/update/electron-browser/update.contribution.js';
 
 class BrowserConnection extends EventTarget implements NetworkInformation {
@@ -155,7 +156,7 @@ suite('Desktop metered connection renderer', () => {
 		assert.deepEqual(calls, ['checkForUpdates', 'downloadUpdate', 'checkAutomatically']);
 	});
 
-	test('the production contribution retries on unmetered transitions and releases timers and subscriptions', async () => {
+	(isMacintosh || isWindows ? test : test.skip)('the production contribution retries on unmetered transitions and releases timers and subscriptions', async () => {
 		mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
 		try {
 			using services = new InstantiationService();

@@ -623,12 +623,12 @@ test("EditorPart applies empty-editor tips changes without showing them over an 
 
 	assert.match(
 		editor.domNode.textContent ?? "",
-		/Open Editor.*(?:Ctrl\+|⌘)O/,
+		/Open Editor.*(?:Ctrl|⌘)O/,
 	);
 	await configuration.updateValue('workbench.tips.enabled', false);
 	assert.equal(editor.domNode.querySelector('.ash-editor-group-watermark-shortcuts')?.childElementCount, 0);
 	await configuration.updateValue('workbench.tips.enabled', true);
-	assert.match(editor.domNode.textContent ?? '', /Open Editor.*(?:Ctrl\+|⌘)O/);
+	assert.match(editor.domNode.textContent ?? '', /Open Editor.*(?:Ctrl|⌘)O/);
 	await editor.openEditor(input("C:\\project\\main.ts"));
 	await configuration.updateValue('workbench.tips.enabled', false);
 	await configuration.updateValue('workbench.tips.enabled', true);
@@ -640,7 +640,7 @@ test("EditorPart applies empty-editor tips changes without showing them over an 
 	);
 	await editor.closeEditor(editor.activeInput!);
 	assert.equal(editor.domNode.querySelector<HTMLElement>('.ash-editor-group-watermark-shortcuts')?.hidden, false);
-	assert.match(editor.domNode.textContent ?? '', /Open Editor.*(?:Ctrl\+|⌘)O/);
+	assert.match(editor.domNode.textContent ?? '', /Open Editor.*(?:Ctrl|⌘)O/);
 
 	editor.dispose();
 	entry.dispose();

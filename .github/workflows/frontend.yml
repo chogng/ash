@@ -53,6 +53,8 @@ jobs:
           pnpm typecheck:build
           pnpm test:build
           pnpm run build:stanza:prepared
+      - name: Install Chromium for browser service unit tests
+        run: pnpm exec playwright install --with-deps chromium
       - name: Test frontend units
         run: |
           pnpm run prepare:output

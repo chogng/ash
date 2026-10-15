@@ -140,7 +140,7 @@ test('Renderer host separates the tool transport from sandbox and connection dia
 	subscriptions.dispose();
 	transport.emitNotification({ method: 'agent/tools/changed', params: {} });
 	assert.equal(changes, 1);
-	const tools = [{ name: 'read_file', description: 'Read a file', source: 'local', sourceChain: [{ type: 'product', component: 'directory' }], exposure: 'direct', authority: 'directoryRead' }];
+	const tools = [{ name: 'read_file', description: 'Read a file', source: 'local', sourceChain: [{ type: 'product', component: 'directory' }], exposure: 'direct', authority: 'directoryRead', category: undefined }];
 	const toolSets = [{ id: 'directory', source: 'local', sourceId: 'directory', tools: ['read_file'] }];
 	const environment = {
 		localProcessSandboxConfigured: true, sandboxBackends: ['mxc'], directoryGrantsReadable: false,
@@ -148,10 +148,10 @@ test('Renderer host separates the tool transport from sandbox and connection dia
 	};
 	const toolRead = connected.api.agentTools.read();
 	assert.deepEqual({ method: transport.requests.at(-1)?.method, params: transport.requests.at(-1)?.params }, { method: 'agent/capabilities/read', params: {} });
-	transport.respondAt(-1, { tools, toolSets, ...environment });
-	assert.deepEqual(await toolRead, { tools, toolSets });
+	transport.respondAt(-1, { tools, toolSets, sourceGroups: [], profiles: [], ...environment });
+	assert.deepEqual(await toolRead, { tools, toolSets, sourceGroups: [], profiles: [] });
 	const environmentRead = connected.api.agentCapabilities.read();
-	transport.respondAt(-1, { tools, toolSets, ...environment });
+	transport.respondAt(-1, { tools, toolSets, sourceGroups: [], profiles: [], ...environment });
 	assert.deepEqual(await environmentRead, environment);
 });
 
