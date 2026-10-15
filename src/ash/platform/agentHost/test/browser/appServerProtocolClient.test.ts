@@ -62,6 +62,23 @@ test('closing a connection withdraws its negotiated capabilities before observer
 	assert.deepEqual(client.slashCommands, []);
 });
 
+test('unexpected closure delivers its cause to recovery observers while deliberate disconnect has no failure', async () => {
+	const transport = new ProtocolTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	const failures: { state: string; error: Error; }[] = [];
+	using observer = client.onStateChange((state, error) => { if (error) failures.push({ state, error }); });
+	await client.connect();
+	client.disconnect();
+	assert.equal(failures.length, 0);
+	await client.connect();
+	transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'Carrier exited with code 23' });
+	assert.equal(client.state, 'crashed');
+	assert.equal(failures.length, 1);
+	assert.equal(failures[0]?.state, 'crashed');
+	assert.match(failures[0]!.error.message, /Carrier exited with code 23/);
+});
+
 test('a retired host result is discarded before decoding and cannot crash its replacement', async () => {
 	const transport = new ProtocolTransport();
 	const client = new AppServerProtocolClient(transport);

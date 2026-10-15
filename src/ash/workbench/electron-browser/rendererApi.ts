@@ -47,7 +47,8 @@ import { URI } from "../../base/common/uri.js";
 import { createWorkspaceContextApi } from "../../platform/workspace/electron-browser/workspaceContextApi.js";
 import type { AshElectronRendererApi } from "../../platform/native/common/rendererApi.js";
 import { createNativeHostApi } from "../../platform/native/electron-browser/nativeHostApi.js";
-import type { IMainProcessService } from '../../platform/ipc/common/mainProcessService.js';
+import { IMainProcessService } from '../../platform/ipc/common/mainProcessService.js';
+import { LoggerChannelClient } from '../../platform/log/common/logIpc.js';
 import type { IAppServerApi } from "../../platform/agentHost/common/appServerApi.js";
 import type { RendererHostCapabilities } from "../../platform/renderer/common/rendererHost.js";
 import { createRemoteAgentApi } from "../../platform/remote/electron-browser/remoteAgentApi.js";
@@ -72,6 +73,8 @@ export async function createElectronRendererApi(contributions: readonly Electron
 		void connecting.catch(error => console.error('App Server reconnect failed', error));
 	}));
 	const connectionServices = resources.add(new InstantiationService());
+	connectionServices.registerInstance(IMainProcessService, mainProcessService);
+	const connectionLogger = resources.add(connectionServices.createInstance(LoggerChannelClient).createLogger('app-server'));
 	connectionServices.registerSingleton(IRemoteSocketFactoryService, () => connectionServices.createInstance(RemoteSocketFactoryService));
 	const factories = connectionServices.get(IRemoteSocketFactoryService);
 	const factoryRegistration = resources.add(new MutableDisposable<IDisposable>());
@@ -184,7 +187,12 @@ export async function createElectronRendererApi(contributions: readonly Electron
 				await client.connect();
 				windowExtensions = await initializeRemoteExtensions(createAppServerExtensionHostApi(client), remoteConnection.authority);
 			}
-			resources.add(client.onStateChange(state => { if (state === 'crashed') { scheduleRecovery(); } }));
+			resources.add(client.onStateChange((state, error) => {
+				if (state === 'crashed') {
+					connectionLogger.error('app-server', 'Renderer connection failed', error);
+					scheduleRecovery();
+				}
+			}));
 			if (hostCapabilities.browser) { resources.add(registerAppServerBrowserHost(client, playwrightService!, mainProcessService)); }
 			backend = createRendererHost(client, {
 				externalOpener: { openExternal: target => invoke<boolean>('ash:host:openExternal', target) },

@@ -105,6 +105,27 @@ test("bounds and redacts stderr diagnostics", async () => {
 	await jsonl.close();
 });
 
+test('failure diagnostics retain the carrier exit cause without stderr', () => {
+	const child = new FakeChildProcess();
+	const jsonl = transport(child);
+	child.exitCode = 23;
+	child.emit('exit', 23, null);
+	assert.match(jsonl.diagnostics(), /exited with code 23/);
+	jsonl.dispose();
+	assert.match(jsonl.diagnostics(), /exited with code 23/);
+});
+
+test('failure diagnostics retain the stream cause alongside redacted stderr', async () => {
+	const child = new FakeChildProcess();
+	const jsonl = transport(child, { maxFrameBytes: 4 });
+	child.stderr.write('Authorization: Bearer secret-token\n');
+	child.stdout.write('12345');
+	assert.match(jsonl.diagnostics(), /exceeds 4 bytes/);
+	assert.match(jsonl.diagnostics(), /\[REDACTED\]/);
+	assert.doesNotMatch(jsonl.diagnostics(), /secret-token/);
+	await jsonl.close();
+});
+
 test('queued byte capacity includes the active write and recovers after draining in order', async () => {
 	const child = new FakeChildProcess();
 	const started = new DeferredPromise<void>();

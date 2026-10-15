@@ -137,6 +137,20 @@ suite('App Server MessagePort transport', () => {
 	});
 
 
+	test('releasing the renderer lease tells Main that the closure is intentional', async () => {
+		using transport = new Transport(() => { });
+		const ready = transport.acquire();
+		const channel = new MessageChannel();
+		try {
+			requests[0].resolve({ enabled: true, byteStream: true });
+			dom.window.dispatchEvent(new dom.window.MessageEvent('message', { source: dom.window as unknown as Window, data: { nonce: requests[0].nonce }, ports: [channel.port1 as unknown as MessagePort] }));
+			await ready;
+			const released = new Promise<unknown>(resolve => channel.port2.once('message', resolve));
+			transport.dispose();
+			assert.deepEqual(await released, { intentional: true });
+		} finally { channel.port1.close(); channel.port2.close(); }
+	});
+
 	test('exceeding the write queue closes the carrier and rejects drain instead of dropping bytes', async () => {
 		using transport = new Transport(() => { });
 		const ready = transport.acquire();

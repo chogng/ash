@@ -151,7 +151,7 @@ export class ChildProcessJsonlTransport implements IDisposable {
 	}
 
 	diagnostics(): string {
-		return redactSecrets(this.stderr.toString("utf8"));
+		return redactSecrets([this.terminalError?.message, this.stderr.toString("utf8")].filter(Boolean).join('\n'));
 	}
 
 	close(): Promise<void> {

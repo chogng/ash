@@ -3,7 +3,10 @@ import { createEmptyTestLanguagePacks } from '../../../localization/test/common/
 import { JSDOM } from 'jsdom';
 import { GlobalExtensionEnablementService } from '../../../../../platform/extensionManagement/common/extensionEnablementService.js';
 import { BrowserStorageService } from '../../../storage/browser/storageService.js';
-import { withEnabledBuiltInExtensions } from '../../../../../platform/extensions/browser/extensionApi.js';
+import { createAppServerExtensionApi, withEnabledBuiltInExtensions } from '../../../../../platform/extensions/browser/extensionApi.js';
+import { Emitter } from '../../../../../base/common/event.js';
+import type { AppServerProtocolClient } from '../../../../../platform/agentHost/browser/appServerProtocolClient.js';
+import type { AppServerConnectionState, IResourceApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { ViewsRegistry } from '../../../../common/views.js';
 import { normalizeExtensionCatalog } from '../../../../../platform/extensions/common/extensionApi.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
@@ -602,6 +605,70 @@ test('loads icon manifests and fonts through generation-bound resources and revo
 	assert.equal(service.currentCatalog.generation, 1);
 	service.dispose();
 	assert.equal(WorkbenchFileIconThemesRegistry.getThemes().find(theme => theme.id === 'vs-seti'), undefined);
+});
+
+test('reconnection restores file icons after interrupted activation and releases its state listener', async () => {
+	const manifest = JSON.parse(await readFile('extensions/theme-seti/package.json', 'utf8'));
+	const entry = descriptorWithManifest({ ...manifest, name: 'demo' });
+	using states = new Emitter<AppServerConnectionState>();
+	let incarnation = 1;
+	let interruptFont = true;
+	let listRequests = 0;
+	let releasedResources = 0;
+	const resources = new Map<string, Buffer>();
+	const connection = {
+		onStateChange: states.event,
+		request: async ({ method }: { method: string; }, params: { path: string; }) => {
+			if (method === 'extensions/list') {
+				listRequests++;
+				return { generation: 17, extensions: [entry], diagnostics: [] };
+			}
+			assert.equal(method, 'extensions/resource/open');
+			if (interruptFont && params.path.endsWith('.woff')) {
+				interruptFont = false;
+				states.fire('crashed');
+				throw new Error('App Server connection interrupted');
+			}
+			const bytes = await readFile('extensions/theme-seti/' + params.path);
+			const resourceId = `resource_${resources.size}`;
+			resources.set(resourceId, bytes);
+			return { resource: { resourceId, size: bytes.length, mimeType: 'application/octet-stream', sha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}` } };
+		},
+	} as unknown as AppServerProtocolClient;
+	const resourceApi: IResourceApi = {
+		get connectionGeneration() { return incarnation; },
+		metadata: async () => { throw new Error('Unexpected metadata request'); },
+		read: async request => {
+			const bytes = resources.get(request.resourceId)!;
+			const chunk = bytes.subarray(request.offset, request.offset + request.maxBytes);
+			return { resourceId: request.resourceId, offset: request.offset, decodedLength: chunk.length, dataBase64: chunk.toString('base64'), eof: request.offset + chunk.length === bytes.length };
+		},
+		release: async () => { releasedResources++; },
+	};
+	const api = createAppServerExtensionApi(connection, resourceApi);
+	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() }, createEmptyTestLanguagePacks());
+	await assert.rejects(service.start(), /connection interrupted/);
+	assert.equal(WorkbenchFileIconThemesRegistry.getThemes().find(theme => theme.id === 'vs-seti'), undefined);
+	assert.equal(listRequests, 1);
+	assert.equal(states.hasListeners(), true);
+	states.fire('starting');
+	states.fire('initializing');
+	assert.equal(listRequests, 1);
+	incarnation++;
+	let restored!: () => void;
+	const activation = new Promise<void>(resolve => { restored = resolve; });
+	using activationListener = service.onDidChange(() => restored());
+	states.fire('ready');
+	await activation;
+	const theme = WorkbenchFileIconThemesRegistry.getThemes().find(theme => theme.id === 'vs-seti');
+	assert.ok(theme?.resolveFileIcon(['file-icon', 'typescript-lang-file-icon'], ColorScheme.Light)?.character);
+	assert.equal(listRequests, 2);
+	assert.equal(service.currentCatalog.generation, 2);
+	assert.equal(releasedResources, 3);
+	service.dispose();
+	assert.equal(states.hasListeners(), false);
+	states.fire('ready');
+	assert.equal(listRequests, 2);
 });
 
 function descriptorWithManifest(manifest: unknown): ExtensionDescriptor {

@@ -199,18 +199,22 @@ export class AppServerConnectionRelay extends Disposable {
 		let writes = 0;
 		let writeBytes = 0;
 		let closed = false;
+		let intentionalClose = false;
 		const close = (): void => {
 			if (closed) { return; }
 			closed = true;
 			data.dispose();
 			ended.dispose();
-			const intentional = this.state === 'stopping' || this.isDisposed;
+			const intentional = intentionalClose || this.state === 'stopping' || this.isDisposed;
 			// Delayed port/process events own only this attachment, never its replacement.
 			if (this.transport.value === transport && this.nonce === nonce) {
 				this.transport.clearAndLeak();
 				this.nonce = undefined;
 				this.diagnostic = transport.diagnostics();
-				if (!intentional) {
+				if (intentionalClose) {
+					this.generation++;
+					this.setState('stopped');
+				} else if (!intentional) {
 					this.generation++;
 					this.setState('crashed');
 				}
@@ -229,13 +233,18 @@ export class AppServerConnectionRelay extends Disposable {
 		});
 		const ended = transport.onClose(error => {
 			if (closed) { return; }
-			port1.postMessage({ closed: [error.message, transport.diagnostics()].filter(Boolean).join('\n') });
+			port1.postMessage({ closed: transport.diagnostics() || error.message });
 			close();
 		});
 		port1.on('message', event => {
 			if (closed) { return; }
 			const value: unknown = event.data;
 			if (!isRecord(value)) { close(); return; }
+			if (value.intentional === true) {
+				intentionalClose = true;
+				close();
+				return;
+			}
 			if (value.ack === true) {
 				const size = sent.shift();
 				if (size === undefined) { close(); return; }

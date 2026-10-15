@@ -48,7 +48,7 @@ interface PendingRequest {
 export class AppServerProtocolClient {
 	private readonly transport: AppServerTransport;
 	private readonly options: Required<AppServerProtocolClientOptions>;
-	private readonly stateListeners = new Set<(state: AppServerConnectionState) => void>();
+	private readonly stateListeners = new Set<(state: AppServerConnectionState, error?: Error) => void>();
 	private readonly notificationListeners = new Set<(notification: ServerNotification) => void>();
 	private readonly pending = new Map<number, PendingRequest>();
 	private readonly handlers = new Map<AppServerServerRequestMethod, (params: never, context: AppServerRequestContext) => unknown | Promise<unknown>>();
@@ -169,7 +169,7 @@ export class AppServerProtocolClient {
 		return this.requestRaw(definition, params, options ? positiveInteger(options.timeoutMs, this.options.requestTimeoutMs, "timeoutMs") : this.options.requestTimeoutMs);
 	}
 
-	onStateChange(listener: (state: AppServerConnectionState) => void): IDisposable {
+	onStateChange(listener: (state: AppServerConnectionState, error?: Error) => void): IDisposable {
 		this.stateListeners.add(listener);
 		return disposable(() => this.stateListeners.delete(listener));
 	}
@@ -422,7 +422,7 @@ export class AppServerProtocolClient {
 			this.isClosing = false;
 			// Recovery observers may immediately connect again. Publish only after
 			// the old transport has closed so cleanup cannot tear down their new lease.
-			this.setState(this.disposed ? 'stopped' : state);
+			this.setState(this.disposed ? 'stopped' : state, state === 'crashed' ? error : undefined);
 		}
 	}
 
@@ -431,12 +431,12 @@ export class AppServerProtocolClient {
 		this.connectTimeout = undefined;
 	}
 
-	private setState(state: AppServerConnectionState): void {
+	private setState(state: AppServerConnectionState, error?: Error): void {
 		if (this._state === state) return;
 		this._state = state;
 		for (const listener of this.stateListeners) {
 			try {
-				listener(state);
+				listener(state, error);
 			} catch {
 				// State observers are isolated from the connection lifecycle.
 			}

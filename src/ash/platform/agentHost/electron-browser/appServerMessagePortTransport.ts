@@ -199,6 +199,11 @@ class MessagePortSocket extends Disposable implements ISocket {
 		}
 		this.closed = true;
 		this.failure = error;
+		if (!error) {
+			// A renderer releasing its lease must not look like a failed carrier in Main.
+			try { this.port.postMessage({ intentional: true }); }
+			catch { /* The peer may already have closed its port. */ }
+		}
 		this.port.onmessage = null;
 		this.port.onmessageerror = null;
 		this.port.close();

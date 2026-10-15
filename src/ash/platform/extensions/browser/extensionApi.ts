@@ -44,6 +44,10 @@ export function createAppServerExtensionApi(connection: AppServerProtocolClient,
 	let pending: Promise<unknown> = Promise.resolve();
 	const retired = () => new Error(localize('extensions.resources.retired', 'Extension resource generation has retired.'));
 	return {
+		// An interrupted activation must retry against the newly initialized catalog.
+		onDidChange: (listener, thisArgs) => connection.onStateChange(state => {
+			if (state === 'ready') { listener.call(thisArgs); }
+		}),
 		list(reload) {
 			const next = pending.then(async () => {
 				const incarnation = resourceApi.connectionGeneration;
