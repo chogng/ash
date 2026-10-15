@@ -179,6 +179,24 @@ startElectronApplication();
 	}
 });
 
+test('Agents automatically restores its connection after the carrier exits', async ({ connectionHarness: { application, page } }) => {
+	// Main's handshake completes before the renderer finishes startup. Inject
+	// failure only after the window is usable, so this exercises recovery.
+	await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeEditable();
+	const before = await application.evaluate(() => {
+		const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
+		return { acquisitions: scenario.acquisitions, readyCount: scenario.readyCount };
+	});
+	await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.killConnection());
+	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.acquisitions)).toBeGreaterThan(before.acquisitions);
+	await expect.poll(() => application.evaluate(() => {
+		const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
+		return { state: scenario.state, readyCount: scenario.readyCount };
+	})).toEqual({ state: 'ready', readyCount: before.readyCount + 1 });
+	await expect(page.locator('.ash-sessions-window')).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Unable to start Ash' })).toHaveCount(0);
+});
+
 test('Agents reload waits for a connection restart to finish closing its previous carrier', async ({ connectionHarness: { application, page, backend } }) => {
 	const beforeBackend = await backend();
 	const before = await application.evaluate(() => {

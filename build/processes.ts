@@ -7,6 +7,16 @@ import { promisify } from 'node:util';
 
 const execute = promisify(execFile);
 
+/** Checks OS liveness; an exited Windows process can retain a CIM entry while handles remain open. */
+export function isProcessRunning(pid: number): boolean {
+	try { process.kill(pid, 0); return true; }
+	catch (error) {
+		if ((error as NodeJS.ErrnoException).code === 'ESRCH') return false;
+		if ((error as NodeJS.ErrnoException).code === 'EPERM') return true;
+		throw error;
+	}
+}
+
 interface ProcessIdentity {
 	readonly pid: number;
 	readonly parent: number;
@@ -204,7 +214,7 @@ async function processes(): Promise<Map<number, ProcessIdentity>> {
 		query.child.stdin?.end();
 		const { stdout } = await query;
 		const entries = JSON.parse(stdout) as { ProcessId: number; ParentProcessId: number; Started: string; }[];
-		return new Map(entries.map(entry => [entry.ProcessId, { pid: entry.ProcessId, parent: entry.ParentProcessId, started: entry.Started }]));
+		return new Map(entries.filter(entry => isProcessRunning(entry.ProcessId)).map(entry => [entry.ProcessId, { pid: entry.ProcessId, parent: entry.ParentProcessId, started: entry.Started }]));
 	}
 	const { stdout } = await execute('ps', ['-axo', 'pid=,ppid=,pgid=,stat=,lstart='], { timeout: 5_000, maxBuffer: 8 * 1024 * 1024 });
 	const entries = new Map<number, ProcessIdentity>();

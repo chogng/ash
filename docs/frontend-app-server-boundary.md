@@ -17,7 +17,11 @@ Workbench / 编辑器调用方
 
 例如 [Workbench 装配](../src/ash/workbench/browser/workbench.ts)把 `api.git` 交给 Git Service；[Git API](../src/ash/platform/git/browser/gitApi.ts)将 `status()` 映射为 `git/status` 请求；[Renderer API 装配](../src/ash/workbench/browser/webRendererApi.ts)让 Git、账户、会话等领域 API 共用协议客户端。普通 UI 不需要知道请求 ID、JSON-RPC 消息或连接端口。
 
-Workbench 拥有跨领域的 Renderer 服务装配：`browser/webRendererApi.ts` 组合连接后的领域 adapter 并管理 Web 接入，`browser/rendererApi.ts` 组合断连能力集合，`electron-browser/rendererApi.ts` 装配桌面宿主并管理窗口连接资源。三处装配由 Workbench 和 Sessions 的启动入口使用；领域 adapter 与 Electron 平台能力仍留在各自的 `platform` owner，不能反向导入 Workbench。`platform/agentHost` 不再拥有整套 Renderer 服务的装配入口，已有 Agent 领域 adapter 与协议实现保持各自职责。
+Workbench 拥有跨领域的 Renderer 服务装配：`browser/webRendererApi.ts` 组合连接后的领域 adapter 并管理 Web 接入，`browser/rendererApi.ts` 组合断连能力集合，`electron-browser/rendererApi.ts` 装配桌面宿主并持有窗口连接服务的生命周期。三处装配由 Workbench 和 Sessions 的启动入口使用；领域 adapter 与 Electron 平台能力仍留在各自的 `platform` owner，不能反向导入 Workbench。`platform/agentHost` 不再拥有整套 Renderer 服务的装配入口，已有 Agent 领域 adapter 与协议实现保持各自职责。
+
+桌面连接职责落在 VS Code 已有的对应路径：`platform/agentHost/electron-browser/localAgentHostService.ts` 取得本地 MessagePort、注册单次 socket lease，并在协议不兼容时请求宿主修复运行包；`platform/agentHost/browser/remoteAgentHostServiceImpl.ts` 连接扩展解析的远端端点，并在本地连接恢复后重新初始化远端扩展。每个服务拥有自己的协议客户端，领域消费者在重连后继续使用同一对象。Workbench 只传入窗口能力、远端解析与扩展初始化回调，不持有重试定时器或连接错误处理。
+
+`appServerProtocolClient.ts` 中的 `AppServerConnectionRecovery` 统一串行化连接操作、按 100/500/2000 ms 最多重试三次，并将关闭原因与恢复失败交给连接服务注入的 `ILogService` 记录。协议状态及代次仍由 `AppServerProtocolClient` 唯一拥有；恢复调度器只拥有当前任务、定时器和重试次数。初次启动失败返回调用方；成功连接后的失败才自动重试，释放服务会取消定时器和状态订阅。这些连接接口与原有 App Server 传输保留 Ash 协议语义，不实现 VS Code 的 AHP 服务契约。
 
 ## 目录按职责选择
 
@@ -25,8 +29,8 @@ Workbench 拥有跨领域的 Renderer 服务装配：`browser/webRendererApi.ts`
 | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------ |
 | `platform/<领域>/common/`、`workbench/services/<领域>/common/` 或 `workbench/contrib/<功能>/common/`    | 前端领域接口和类型                                                   | 传输消息、生成协议类型                                 |
 | `platform/<领域>/browser/`、`workbench/services/<领域>/browser/` 或 `workbench/contrib/<功能>/browser/` | 领域 API 适配层、Service 实现                                        | 进程启动、通用连接状态                                 |
-| `platform/agentHost/browser/`                                                                           | 协议客户端、请求配对、初始化和通知                                   | 具体领域的业务状态                                     |
-| `platform/agentHost/electron-browser/`                                                                  | Renderer 的 MessagePort 传输                                         | Rust 进程管理                                          |
+| `platform/agentHost/browser/`                                                                           | 协议客户端、请求配对、初始化、通知、恢复调度及远端连接服务              | 具体领域的业务状态                                     |
+| `platform/agentHost/electron-browser/`                                                                  | Renderer 的 MessagePort 传输及本地连接服务                            | Rust 进程管理                                          |
 | `platform/agentHost/electron-main/`                                                                     | 窗口连接、端口取得和透明转发，以及本地与远程启动器共用的连接载体契约 | daemon 包选择、业务方法路由、领域 Service              |
 | `platform/app-server-daemon/`                                                                           | 本地 daemon 连接程序、包路径与摘要校验、环境变量和开发构建重启       | JSON-RPC 请求配对、领域状态、Rust 进程管理的第二份实现 |
 | `workbench/browser/`、`workbench/electron-browser/`                                                     | Web、断连与桌面 Renderer 的领域服务装配和宿主生命周期                | 领域协议转换、共享后端持久状态                         |

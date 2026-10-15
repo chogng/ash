@@ -10,7 +10,7 @@ import type { DisposableHandle } from "../../ipc/common/ipc.js";
 import { validateAppServerInitializeResult } from "../common/appServerProtocolCompatibility.js";
 import type { AppServerServerRequestDefinition, AppServerServerRequestMethod, ClientCapabilities, JsonRpcId, ServerRequestParams, ServerRequestResult } from '../../../../../.build/protocol/typescript/index.js';
 import { decodeAppServerServerRequestResult } from '../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
-import { type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { OperatingSystem } from '../../../base/common/platform.js';
 
 
@@ -440,6 +440,88 @@ export class AppServerProtocolClient {
 			} catch {
 				// State observers are isolated from the connection lifecycle.
 			}
+		}
+	}
+}
+
+/** Serializes connection replacement and owns the retry budget, never protocol state. */
+export class AppServerConnectionRecovery extends Disposable {
+	private task: Promise<void> | undefined;
+	private latest: Promise<void> = Promise.resolve();
+	private timer: ReturnType<typeof setTimeout> | undefined;
+	private attempts = 0;
+	private isActive = false;
+	private static readonly retryDelays = [100, 500, 2000];
+
+	constructor(
+		private readonly client: AppServerProtocolClient,
+		private readonly open: () => Promise<void>,
+		private readonly onFailure: (message: string, error: unknown) => void,
+	) {
+		super();
+		this._register(client.onStateChange((state, error) => {
+			if (state === 'crashed') {
+				this.onFailure('Renderer connection failed', error);
+				this.schedule();
+			}
+		}));
+	}
+
+	public connect(): Promise<void> {
+		this.assertNotDisposed();
+		if (this.task) { return this.task; }
+		this.attempts = 0;
+		return this.run();
+	}
+
+	public whenConnected(): Promise<void> {
+		return this.latest;
+	}
+
+	protected override disposeCore(): void {
+		this.clearTimer();
+		super.disposeCore();
+	}
+
+	private run(): Promise<void> {
+		this.clearTimer();
+		// Defer entry until the task is published: synchronous state events and
+		// restart notifications must join this attempt rather than start another.
+		const operation = Promise.resolve().then(() => {
+			this.assertNotDisposed();
+			return this.open();
+		});
+		this.task = this.latest = operation;
+		void operation.then(() => {
+			this.task = undefined;
+			this.isActive = true;
+			this.attempts = 0;
+			if (this.client.state === 'crashed') { this.schedule(); }
+		}, error => {
+			this.task = undefined;
+			if (this.isDisposed) { return; }
+			this.onFailure('App Server connection recovery failed', error);
+			// Acquisition or extension initialization may fail with a stopped or
+			// ready client. Retry the failed operation, not just crashed clients.
+			this.schedule();
+		});
+		return operation;
+	}
+
+	private schedule(): void {
+		if (this.isDisposed || !this.isActive || this.task || this.timer !== undefined
+			|| this.attempts >= AppServerConnectionRecovery.retryDelays.length) { return; }
+		this.timer = setTimeout(() => {
+			this.timer = undefined;
+			this.attempts++;
+			void this.run().catch(() => { });
+		}, AppServerConnectionRecovery.retryDelays[this.attempts]);
+	}
+
+	private clearTimer(): void {
+		if (this.timer !== undefined) {
+			clearTimeout(this.timer);
+			this.timer = undefined;
 		}
 	}
 }

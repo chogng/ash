@@ -1,12 +1,39 @@
 import assert from 'node:assert/strict';
-import { execFile, spawn } from 'node:child_process';
+import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { once } from 'node:events';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
 import { promisify } from 'node:util';
-import { ProcessRun } from './processes.ts';
+import { isProcessRunning, ProcessRun } from './processes.ts';
 
 const repository = resolve(import.meta.dirname, '..');
+
+test('Windows cleanup ignores an exited process retained by another process handle', { skip: process.platform !== 'win32', timeout: 60_000 }, async t => {
+	const child = spawn(process.execPath, ['-e', 'process.on("message", () => process.exit(0)); setInterval(() => {}, 1000);'], { windowsHide: true, stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
+	const run = new ProcessRun(repository, undefined, 100);
+	let holder: ChildProcessWithoutNullStreams | undefined;
+	t.after(async () => {
+		if (holder) {
+			holder.stdin.end('release\n');
+			if (holder.exitCode === null) await once(holder, 'exit');
+		}
+		if (child.exitCode === null) child.kill();
+		await run.close();
+	});
+	await run.own(child);
+	holder = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `$held = [System.Diagnostics.Process]::GetProcessById(${child.pid}); $handle = $held.Handle; [Console]::WriteLine('ready'); [Console]::ReadLine() | Out-Null; $held.Dispose()`], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+	await new Promise<void>((resolveReady, reject) => {
+		holder!.stdout.once('data', () => resolveReady());
+		holder!.once('error', reject);
+		holder!.once('exit', code => { if (code !== 0) reject(new Error(`Handle holder exited with ${code}`)); });
+	});
+	const exited = once(child, 'exit');
+	child.send('exit');
+	await exited;
+	assert.equal(isProcessRunning(child.pid!), false);
+	await run.close();
+});
 
 test('Windows process ownership tracks and cleans a live parent and child', { skip: process.platform !== 'win32', timeout: 60_000 }, async t => {
 	const child = spawn(process.execPath, ['-e', `

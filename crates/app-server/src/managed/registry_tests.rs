@@ -4,6 +4,48 @@ use std::thread;
 use std::time::Duration;
 
 #[test]
+fn omitted_product_services_reuses_the_profile_configuration_and_directory_runtime() {
+    let root = tempfile::tempdir().unwrap();
+    let product_services = root.path().join("product-services.json");
+    fs::write(
+        &product_services,
+        r#"{"schemaVersion":3,"githubAccount":{"clientId":"Ov23publicclient","brokerBaseUrl":"https://broker.example/"}}"#,
+    )
+    .unwrap();
+    let host = ConnectionOptions::new(
+        root.path(),
+        None,
+        GrantSource::HostConfiguration,
+        Some(product_services.clone()),
+    );
+    let servers = Mutex::new(BTreeMap::new());
+    let implicit = ConnectionOptions::new(root.path(), None, GrantSource::HostConfiguration, None);
+    let (inherited, options) = resolve_directory(&host, &servers, implicit).unwrap();
+    let (explicit, _) = resolve_directory(&host, &servers, host.clone()).unwrap();
+    assert_eq!(options.product_services(), Some(product_services.as_path()));
+    assert!(Arc::ptr_eq(&inherited, &explicit));
+
+    let override_services = root.path().join("override-services.json");
+    fs::write(
+        &override_services,
+        r#"{"schemaVersion":3,"githubAccount":{"clientId":"Ov23otherclient","brokerBaseUrl":"https://broker.example/"}}"#,
+    )
+    .unwrap();
+    let configured = ConnectionOptions::new(
+        root.path(),
+        None,
+        GrantSource::HostConfiguration,
+        Some(override_services.clone()),
+    );
+    let (separate, options) = resolve_directory(&host, &servers, configured).unwrap();
+    assert_eq!(
+        options.product_services(),
+        Some(override_services.as_path())
+    );
+    assert!(!Arc::ptr_eq(&inherited, &separate));
+}
+
+#[test]
 fn open_rejects_invalid_product_services_before_managed_endpoint_startup() {
     let root = tempfile::tempdir().unwrap();
     let product_services = root.path().join("product-services.json");

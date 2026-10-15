@@ -1,9 +1,7 @@
 import type { IExtensionHostApi } from '../../platform/agentHost/common/extensionHostApi.js';
 import { createAppServerExtensionHostApi } from '../../platform/agentHost/browser/extensionHostApi.js';
 import type { IAddress } from '../../platform/remote/common/remoteAgentConnection.js';
-import { AppServerSocketTransport } from '../../platform/agentHost/browser/appServerSocketTransport.js';
 import { IRemoteSocketFactoryService, RemoteSocketFactoryService } from '../../platform/remote/common/remoteSocketFactoryService.js';
-import { ManagedRemoteConnection, RemoteConnectionType } from '../../platform/remote/common/remoteAuthorityResolver.js';
 import { AppServerSymphonyService } from '../../platform/symphony/browser/appServerSymphonyService.js';
 import { EDIT_USER_CONFIGURATION_CHANNEL } from '../../platform/native/common/nativeHost.js';
 import { AppServerBackupService } from '../../platform/backup/browser/appServerBackupService.js';
@@ -13,16 +11,15 @@ import { AppServerDictationService } from '../../platform/dictation/browser/appS
 import { AppServerMemoriesService } from '../../platform/memories/browser/appServerMemoriesService.js';
 import { AppServerMemoryDiagnosticsService } from '../../platform/memory/browser/appServerMemoryDiagnosticsService.js';
 import type { MemoryObservation } from '../../platform/memory/common/memoryDiagnosticsService.js';
-import { AppServerProtocolIncompatibleError } from '../../platform/agentHost/common/appServerProtocolCompatibility.js';
-import { AppServerProtocolClient } from '../../platform/agentHost/browser/appServerProtocolClient.js';
-import { AppServerMessagePortTransport } from '../../platform/agentHost/electron-browser/appServerMessagePortTransport.js';
+import { LocalAgentHostServiceClient } from '../../platform/agentHost/electron-browser/localAgentHostService.js';
+import { RemoteAgentHostService } from '../../platform/agentHost/browser/remoteAgentHostServiceImpl.js';
 import { createRendererHost, type RendererCapabilityContribution } from '../browser/webRendererApi.js';
 import { ElectronRendererClipboardService } from '../../platform/clipboard/electron-browser/electronRendererClipboardService.js';
 import { createDisconnectedRendererApi } from '../browser/rendererApi.js';
 import { AppServerAutomationService } from '../../platform/agentHost/browser/appServerAutomationService.js';
 import { registerAppServerBrowserHost } from '../../platform/agentHost/electron-browser/appServerBrowserHost.js';
 import { registerAppServerWorkspaceHost, initializeWorkspace } from '../../platform/workspaces/electron-browser/appServerWorkspaceHost.js';
-import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
+import { DisposableStore, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
 import type { IRendererHost } from '../../platform/renderer/common/rendererHost.js';
 import { invoke } from '../../platform/ipc/electron-browser/rendererIpc.js';
 import { subscribe } from '../../platform/ipc/electron-browser/rendererIpc.js';
@@ -67,92 +64,29 @@ export async function createElectronRendererApi(contributions: readonly Electron
 	const resources = new DisposableStore();
 	const workspaceApi = createWorkspaceContextApi();
 	const remoteConnection = await createRemoteAgentApi().getConnection();
-	let connecting: Promise<void> = Promise.resolve();
-	const carrier = resources.add(new AppServerMessagePortTransport(() => {
-		connecting = reconnect();
-		void connecting.catch(error => console.error('App Server reconnect failed', error));
-	}));
 	const connectionServices = resources.add(new InstantiationService());
 	connectionServices.registerInstance(IMainProcessService, mainProcessService);
 	const connectionLogger = resources.add(connectionServices.createInstance(LoggerChannelClient).createLogger('app-server'));
+	connectionServices.registerInstance(ILogService, connectionLogger);
 	connectionServices.registerSingleton(IRemoteSocketFactoryService, () => connectionServices.createInstance(RemoteSocketFactoryService));
 	const factories = connectionServices.get(IRemoteSocketFactoryService);
-	const factoryRegistration = resources.add(new MutableDisposable<IDisposable>());
-	let connectionId = 0;
-	const acquire = async (): Promise<boolean> => {
-		factoryRegistration.clear();
-		const enabled = await carrier.acquire();
-		if (enabled) {
-			const id = ++connectionId;
-			const socket = carrier.socket;
-			let leased = false;
-			factoryRegistration.value = factories.register(RemoteConnectionType.Managed, {
-				supports: connection => connection.id === id,
-				connect: async (_connection, path, query) => {
-					if (leased || path || query || carrier.socket !== socket) { throw new Error('App Server connection endpoint was superseded'); }
-					// One acquired port backs one protocol client; another lease needs a new acquisition.
-					leased = true;
-					return socket;
-				},
-			});
-		}
-		return enabled;
-	};
-	const transport = resources.add(connectionServices.createInstance(AppServerSocketTransport, {
-		getAddress: async () => ({ connectTo: new ManagedRemoteConnection(connectionId), connectionToken: undefined }), getMetadata: () => carrier.connectionMetadata,
-	}));
 	// Initialization includes the local daemon's cold start, which can take 15 seconds.
-	const localClient = new AppServerProtocolClient(transport, { clientName: 'ash-desktop', initializeTimeoutMs: 30_000, capabilities: { agentInteractions: { version: 1, kinds: ['approval', 'permissions', 'userInput'] }, ...(hostCapabilities.browser ? { browser: { version: 3, observe: true, input: true } } : {}), ...(hostCapabilities.textDocuments ? { textDocuments: { version: 2 } } : {}), ...(hostCapabilities.appTools ? { appTools: { version: 1, agents: true, desktop: true } } : {}), directoryGrantsHost: { version: 1 } } });
-	resources.add(toDisposable(() => localClient.dispose()));
+	const localConnection = resources.add(connectionServices.createInstance(LocalAgentHostServiceClient, {
+		clientName: 'ash-desktop',
+		initializeTimeoutMs: 30_000,
+		capabilities: {
+			agentInteractions: { version: 1, kinds: ['approval', 'permissions', 'userInput'] },
+			...(hostCapabilities.browser ? { browser: { version: 3, observe: true, input: true } } : {}),
+			...(hostCapabilities.textDocuments ? { textDocuments: { version: 2 } } : {}),
+			...(hostCapabilities.appTools ? { appTools: { version: 1, agents: true, desktop: true } } : {}),
+			directoryGrantsHost: { version: 1 },
+		},
+	} satisfies ConstructorParameters<typeof LocalAgentHostServiceClient>[0]));
+	const localClient = localConnection.client;
 	let client = localClient;
+	let connection: LocalAgentHostServiceClient | RemoteAgentHostService = localConnection;
 	let localExtensions: IExtensionHostApi | undefined;
 	let windowExtensions: IExtensionHostApi | undefined;
-	const initialize = async (): Promise<void> => {
-		try { await localClient.connect(); }
-		catch (error) {
-			if (!(error instanceof AppServerProtocolIncompatibleError) || await invoke('ash:app-server:recover-runtime', error.incompatibility) !== true) { throw error; }
-			await acquire();
-			await localClient.connect();
-		}
-		await carrier.initialized();
-	};
-	let reconnectTask: Promise<void> | undefined;
-	let attempts = 0;
-	let recovering = false;
-	let retryTimer: ReturnType<typeof setTimeout> | undefined;
-	let started = false;
-	resources.add(toDisposable(() => { started = false; if (retryTimer !== undefined) { clearTimeout(retryTimer); } }));
-	const reconnect = (): Promise<void> => {
-		if (reconnectTask) { return reconnectTask; }
-		if (retryTimer !== undefined) { clearTimeout(retryTimer); retryTimer = undefined; }
-		const operation = (async () => {
-			client.disconnect();
-			if (client === localClient || localClient.state !== 'ready') {
-				localClient.disconnect();
-				await acquire();
-				await initialize();
-			}
-			if (client !== localClient) {
-				await client.connect();
-				if (remoteConnection.kind === 'remote') { windowExtensions = await initializeRemoteExtensions!(createAppServerExtensionHostApi(client), remoteConnection.authority); }
-			}
-		})();
-		reconnectTask = operation.finally(() => { reconnectTask = undefined; });
-		return reconnectTask;
-	};
-	const scheduleRecovery = (): void => {
-		if (!started || recovering || retryTimer !== undefined || attempts >= 3) { return; }
-		retryTimer = setTimeout(() => {
-			retryTimer = undefined;
-			recovering = true;
-			attempts++;
-			connecting = reconnect();
-			void connecting.then(() => { attempts = 0; }, error => console.error('App Server connection recovery failed', error)).finally(() => {
-				recovering = false;
-				if (client.state === 'crashed') { scheduleRecovery(); }
-			});
-		}, [100, 500, 2000][attempts]);
-	};
 
 	try {
 		const localFiles = resources.add(new DiskFileSystemProviderClient(mainProcessService.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME)));
@@ -166,33 +100,40 @@ export async function createElectronRendererApi(contributions: readonly Electron
 		configurationServices.registerInstance(IPolicyService, resources.add(new PolicyChannelClient(mainProcessService.getChannel('policy'))));
 		const configuration = resources.add(configurationServices.createInstance(ConfigurationService, URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' })));
 		await configuration.initialize();
-		performance.mark('ash.rendererApi.acquire-start');
-		const enabled = await acquire();
-		performance.mark('ash.rendererApi.acquired');
+		performance.mark('ash.rendererApi.connect-start');
+		const enabled = await localConnection.connect();
 		let backend: IRendererHost;
 		if (enabled) {
-			await initialize();
 			performance.mark('ash.rendererApi.initialized');
 			if (remoteConnection.kind === 'remote') {
 				if (!resolveRemoteAuthority || !initializeRemoteExtensions) { throw new Error('This window does not provide a local Remote resolver'); }
 				localExtensions = createAppServerExtensionHostApi(localClient);
 				let attempt = 0;
-				const remoteTransport = resources.add(connectionServices.createInstance(AppServerSocketTransport, {
-					getAddress: () => resolveRemoteAuthority(localExtensions!, factories, remoteConnection.authority, ++attempt),
-					getMetadata: () => carrier.connectionMetadata,
-				}));
 				// An extension endpoint does not inherit the local stdio host's directory-grant authority.
-				client = new AppServerProtocolClient(remoteTransport, { clientName: 'ash-desktop-remote', initializeTimeoutMs: 30_000, capabilities: { agentInteractions: { version: 1, kinds: ['approval', 'permissions', 'userInput'] }, ...(hostCapabilities.browser ? { browser: { version: 3, observe: true, input: true } } : {}), ...(hostCapabilities.textDocuments ? { textDocuments: { version: 2 } } : {}) } });
-				resources.add(toDisposable(() => client.dispose()));
-				await client.connect();
-				windowExtensions = await initializeRemoteExtensions(createAppServerExtensionHostApi(client), remoteConnection.authority);
+				const remote = resources.add(connectionServices.createInstance(RemoteAgentHostService, {
+					protocol: {
+						clientName: 'ash-desktop-remote',
+						initializeTimeoutMs: 30_000,
+						capabilities: {
+							agentInteractions: { version: 1, kinds: ['approval', 'permissions', 'userInput'] },
+							...(hostCapabilities.browser ? { browser: { version: 3, observe: true, input: true } } : {}),
+							...(hostCapabilities.textDocuments ? { textDocuments: { version: 2 } } : {}),
+						},
+					},
+					getAddress: async () => {
+						await localConnection.whenConnected();
+						return resolveRemoteAuthority(localExtensions!, factories, remoteConnection.authority, ++attempt);
+					},
+					getMetadata: () => localConnection.connectionMetadata,
+					onDidReconnectLocal: localConnection.onDidReconnect,
+					initialize: async remoteClient => {
+						windowExtensions = await initializeRemoteExtensions(createAppServerExtensionHostApi(remoteClient), remoteConnection.authority);
+					},
+				} satisfies ConstructorParameters<typeof RemoteAgentHostService>[0]));
+				connection = remote;
+				client = remote.client;
+				await remote.connect();
 			}
-			resources.add(client.onStateChange((state, error) => {
-				if (state === 'crashed') {
-					connectionLogger.error('app-server', 'Renderer connection failed', error);
-					scheduleRecovery();
-				}
-			}));
 			if (hostCapabilities.browser) { resources.add(registerAppServerBrowserHost(client, playwrightService!, mainProcessService)); }
 			backend = createRendererHost(client, {
 				externalOpener: { openExternal: target => invoke<boolean>('ash:host:openExternal', target) },
@@ -204,7 +145,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 				clipboardService: new ElectronRendererClipboardService(),
 			}, contributions);
 			resources.add(backend.mcpServerManagement);
-			resources.add(registerAppServerWorkspaceHost(client, () => connecting, workspaceTrust, backend.workspaceTrust));
+			resources.add(registerAppServerWorkspaceHost(client, () => connection.whenConnected(), workspaceTrust, backend.workspaceTrust));
 			backend = { ...backend, backup: new AppServerBackupService(localExtensions ? localClient : client, 'ash-editor'), ...(windowExtensions ? { extensionHost: windowExtensions } : {}) };
 			if (client.capabilities?.memories) { backend = { ...backend, memories: resources.add(new AppServerMemoriesService(client)) }; }
 			if (client.capabilities?.contracts.memoryDiagnostics?.version === 1) { backend = { ...backend, memoryDiagnostics: resources.add(new AppServerMemoryDiagnosticsService(client, 'electron', () => invoke<MemoryObservation[]>('ash:memory:collect'))) }; }
@@ -229,7 +170,6 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			}
 			await initializeWorkspace(client, workspaceTrust, backend.workspaceTrust, workspaceApi);
 			performance.mark('ash.rendererApi.workspace-initialized');
-			started = true;
 		} else {
 			backend = createDisconnectedRendererApi();
 		}

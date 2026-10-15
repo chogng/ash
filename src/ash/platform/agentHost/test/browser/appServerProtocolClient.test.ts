@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
+import { mock } from 'node:test';
 import { test } from 'mocha';
 import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS } from '../../../../../../.build/protocol/typescript/index.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
-import { AppServerProtocolClient } from '../../browser/appServerProtocolClient.js';
+import { AppServerConnectionRecovery, AppServerProtocolClient } from '../../browser/appServerProtocolClient.js';
+import type { LogEntry } from '../../../log/common/log.js';
+import { LogService } from '../../../log/common/logServiceImpl.js';
 import { AppServerProtocolIncompatibleError } from '../../common/appServerProtocolCompatibility.js';
 import { appServerRequest } from '../../browser/appServerRequest.js';
 import { type AppServerTransport, WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION } from '../../common/appServerTransport.js';
@@ -47,6 +50,118 @@ class ProtocolTransport implements AppServerTransport {
 }
 
 const flushHandlers = (): Promise<void> => new Promise<void>(resolve => setImmediate(resolve));
+
+test('connection recovery coalesces replacement, preserves the cause and reuses the protocol client', async () => {
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		const transport = new ProtocolTransport();
+		const client = new AppServerProtocolClient(transport);
+		using cleanup = toDisposable(() => client.dispose());
+		const entries: LogEntry[] = [];
+		using logger = new LogService({ sinks: [{ log: entry => entries.push(entry) }] });
+		let opens = 0;
+		using recovery = new AppServerConnectionRecovery(client, async () => {
+			opens++;
+			client.disconnect();
+			await client.connect();
+		}, (message, error) => logger.error('app-server', message, error));
+		const first = recovery.connect();
+		assert.equal(recovery.connect(), first);
+		await first;
+		client.disconnect();
+		mock.timers.tick(5000);
+		assert.equal(opens, 1, 'intentional closure must not retry');
+		await recovery.connect();
+		transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'Carrier exited with code 23' });
+		assert.equal(client.state, 'crashed');
+		mock.timers.tick(99);
+		assert.equal(opens, 2);
+		mock.timers.tick(1);
+		await recovery.whenConnected();
+		assert.equal(client.state, 'ready');
+		assert.equal(opens, 3);
+		assert.equal(client.generation, 3);
+		assert.equal(entries.length, 1);
+		assert.match((entries[0].error as Error).message, /Carrier exited with code 23/);
+	} finally { mock.timers.reset(); }
+});
+
+test('connection recovery bounds failed acquisition attempts and a manual request can recover afterward', async () => {
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		const transport = new ProtocolTransport();
+		const client = new AppServerProtocolClient(transport);
+		using cleanup = toDisposable(() => client.dispose());
+		const entries: LogEntry[] = [];
+		using logger = new LogService({ sinks: [{ log: entry => entries.push(entry) }] });
+		let opens = 0;
+		let unavailable = false;
+		const failure = new Error('port acquisition failed');
+		using recovery = new AppServerConnectionRecovery(client, async () => {
+			opens++;
+			client.disconnect();
+			if (unavailable) { throw failure; }
+			await client.connect();
+		}, (message, error) => logger.error('app-server', message, error));
+		await recovery.connect();
+		unavailable = true;
+		transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'carrier lost' });
+		for (const delay of [100, 500, 2000]) {
+			mock.timers.tick(delay);
+			await assert.rejects(recovery.whenConnected(), error => error === failure);
+		}
+		mock.timers.tick(10000);
+		assert.equal(opens, 4);
+		assert.equal(client.state, 'stopped');
+		assert.equal(entries.filter(entry => entry.error === failure).length, 3);
+		unavailable = false;
+		await recovery.connect();
+		assert.equal(client.state, 'ready');
+		assert.equal(opens, 5);
+	} finally { mock.timers.reset(); }
+});
+
+test('connection recovery stops timers and releases its state listener on disposal', async () => {
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		const transport = new ProtocolTransport();
+		const client = new AppServerProtocolClient(transport);
+		using cleanup = toDisposable(() => client.dispose());
+		const entries: LogEntry[] = [];
+		using logger = new LogService({ sinks: [{ log: entry => entries.push(entry) }] });
+		let opens = 0;
+		using recovery = new AppServerConnectionRecovery(client, async () => {
+			opens++;
+			client.disconnect();
+			await client.connect();
+		}, (message, error) => logger.error('app-server', message, error));
+		await recovery.connect();
+		transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'carrier lost' });
+		recovery.dispose();
+		mock.timers.tick(10000);
+		assert.equal(opens, 1);
+		await client.connect();
+		transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'after disposal' });
+		assert.equal(entries.length, 1, 'disposed recovery must release its state listener');
+	} finally { mock.timers.reset(); }
+});
+
+test('connection recovery reports initial failure without starting background retries', async () => {
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		const client = new AppServerProtocolClient(new ProtocolTransport());
+		using cleanup = toDisposable(() => client.dispose());
+		using logger = new LogService({ sinks: [] });
+		let opens = 0;
+		using recovery = new AppServerConnectionRecovery(client, async () => {
+			opens++;
+			throw new Error('initial acquisition failed');
+		}, (message, error) => logger.error('app-server', message, error));
+		await assert.rejects(recovery.connect(), /initial acquisition failed/);
+		mock.timers.tick(10000);
+		assert.equal(opens, 1);
+	} finally { mock.timers.reset(); }
+});
 
 test('closing a connection withdraws its negotiated capabilities before observers run', async () => {
 	const transport = new ProtocolTransport();

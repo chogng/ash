@@ -7,7 +7,7 @@ import { _electron, type ElectronApplication, type Request } from "@playwright/t
 import { ElectronPlaywrightDriver } from "./electronDriver.js";
 import { WorkbenchDiagnostics } from './playwrightDriver.js';
 import { resolveElectronConfiguration, type ElectronLaunchOptions } from "./electron.js";
-import { registerRunResource } from '../../build/processes.ts';
+import { isProcessRunning, registerRunResource } from '../../build/processes.ts';
 import { prepareTestKeychain } from './macKeychain.js';
 
 export interface ElectronApplicationLaunchResult {
@@ -58,15 +58,19 @@ export async function launchElectronApplication(options: ElectronLaunchOptions):
 				// End the renderer before stopping its daemon, so it cannot reconnect.
 				if (kind === 'destroy' && electronProcess.exitCode === null && electronProcess.signalCode === null) {
 					try {
-						await application.evaluate(({ BrowserWindow }) => {
+						await application.evaluate(({ BrowserWindow, app }) => {
 							for (const window of BrowserWindow.getAllWindows()) window.destroy();
+							// Fixture destruction must also bypass app-level quit vetoes and
+							// state-save participants. quit() exercises that product handshake.
+							app.exit(0);
 						});
 					} catch (error) {
 						// Closing the last window can exit Main before its inspector sends the reply.
-						// Only a confirmed clean process exit acknowledges that lost shutdown reply.
+						// Accept a confirmed clean exit or the fixture's deliberate force
+						// termination, never an unrelated process crash.
 						if (!(error instanceof Error) || !error.message.includes('Target page, context or browser has been closed')) throw error;
 						await exited;
-						if (electronProcess.exitCode !== 0) throw error;
+						if (electronProcess.exitCode !== 0 && !termination) throw error;
 					}
 				}
 			} finally {
@@ -85,13 +89,13 @@ export async function launchElectronApplication(options: ElectronLaunchOptions):
 				})]);
 			}
 		} catch (error) {
-			if (termination) throw new Error('Electron shutdown exceeded 10000ms; its process tree was terminated', { cause: error });
+			if (termination && kind === 'quit') throw new Error('Electron shutdown exceeded 10000ms; its process tree was terminated', { cause: error });
 			throw error;
 		} finally {
-			try { await exited; await termination; }
+			try { await Promise.all([exited, termination]); }
 			finally { clearTimeout(shutdownTimer); }
 		}
-		if (termination) throw new Error('Electron shutdown exceeded 10000ms; its process tree was terminated');
+		if (termination && kind === 'quit') throw new Error('Electron shutdown exceeded 10000ms; its process tree was terminated');
 		await resource.dispose();
 	})();
 	return { application, diagnostics, quit: () => shutdown('quit'), close: () => shutdown('destroy') };
@@ -190,10 +194,17 @@ async function beforeDeadline<T>(operation: Promise<T>, deadline: number, messag
 async function terminateElectronProcess(child: ChildProcess): Promise<void> {
 	if (child.exitCode !== null || child.signalCode !== null) return;
 	if (!child.pid) throw new Error('Electron process has no PID');
+	if (!isProcessRunning(child.pid)) return;
 	// Playwright owns a separate POSIX process group; on Windows its command shell
 	// owns the Electron tree. Terminate that owned tree, including helper processes.
 	if (process.platform === 'win32') {
-		await promisify(execFile)('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, timeout: 5_000 });
+		try {
+			await promisify(execFile)('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, timeout: 5_000 });
+		} catch (error) {
+			// A tree can finish exiting between taskkill's enumeration and termination.
+			// Keep permission failures and genuine survivors observable.
+			if (isProcessRunning(child.pid)) throw error;
+		}
 	} else {
 		process.kill(-child.pid, 'SIGKILL');
 	}

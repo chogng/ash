@@ -420,8 +420,13 @@ fn resolve_directory(
         .map(dunce::canonicalize)
         .transpose()
         .map_err(io_error)?;
+    // A health probe or CLI client may omit distribution configuration. It shares
+    // the running profile's provider authority rather than opening an empty one.
+    let product_services = prelude
+        .product_services()
+        .or_else(|| host.product_services());
     let product_services_identity =
-        product_services_identity(prelude.product_services(), host.profile_root())?;
+        product_services_identity(product_services, host.profile_root())?;
     let key = DirRuntimeKey {
         dir_root: dir_root.clone(),
         dir_grant_source: prelude.dir_grant_source(),
@@ -440,7 +445,7 @@ fn resolve_directory(
         host.profile_root(),
         dir_root,
         prelude.dir_grant_source(),
-        prelude.product_services().map(Path::to_path_buf),
+        product_services.map(Path::to_path_buf),
     );
     Ok((runtime, options))
 }
