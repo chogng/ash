@@ -992,6 +992,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "redo",
+      "file": "redo.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "refresh",
       "file": "refresh.svg",
       "rendering": "symbolic"
