@@ -1464,6 +1464,9 @@ impl TurnExecutor {
                     )));
                 }
             }
+            // Make parent calls observable before a long-running control tool can request
+            // nested approval. Its own publisher must not advance past an unseen parent.
+            self.publish_committed_after(thread_id, snapshot.sequence);
             match self
                 .tool_scheduler()
                 .run_pending(thread_id, turn_id, cancellation)

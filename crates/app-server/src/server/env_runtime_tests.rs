@@ -1282,7 +1282,10 @@ fn sandbox_policy_installation_invalidates_diagnostics_with_an_unchanged_catalog
     let directory = TestDir::new("policy-invalidation", "file.txt");
     let server = server().with_local_env_host(None, host_policy()).unwrap();
     server
-        .activate_host_configured_dir_root(directory.path.clone())
+        .initialize_local_dir_root(
+            directory.path.clone(),
+            crate::local::InitialDirGrantPolicy::HostConfiguration,
+        )
         .unwrap();
     let tools = &server.local_env_host.as_ref().unwrap().tools;
     let catalog = tools.capabilities_snapshot().0;
@@ -1349,7 +1352,10 @@ fn sandbox_managed_ceilings_reach_installed_executor_for_defaults_and_profiles()
                 },
             });
         server
-            .activate_host_configured_dir_root(dir.path.clone())
+            .initialize_local_dir_root(
+                dir.path.clone(),
+                crate::local::InitialDirGrantPolicy::HostConfiguration,
+            )
             .unwrap();
         let registry = &server.local_env_host.as_ref().unwrap().tools.reloadable;
         let call = ash_protocol::ToolCall {
@@ -2384,7 +2390,10 @@ fn disabling_grep_index_preserves_directory_execution_policy_on_noop_and_replay(
         .with_local_env_host(None, host_policy())
         .unwrap();
     server
-        .activate_host_configured_dir_root(dir.path.clone())
+        .initialize_local_dir_root(
+            dir.path.clone(),
+            crate::local::InitialDirGrantPolicy::HostConfiguration,
+        )
         .unwrap();
     let original_revision = server.turn_executor_snapshot().policy_revision();
     let assert_denied = |id: &str| {
@@ -2479,7 +2488,10 @@ fn failed_semantic_rebuild_preserves_tools_watcher_and_indexing_job() {
         .with_local_env_host(None, host_policy())
         .unwrap();
     server
-        .activate_host_configured_dir_root(dir.path.clone())
+        .initialize_local_dir_root(
+            dir.path.clone(),
+            crate::local::InitialDirGrantPolicy::HostConfiguration,
+        )
         .unwrap();
     let semantic = server.codebase_semantic_service().unwrap();
     let job = server.codebase_semantic_job().unwrap();

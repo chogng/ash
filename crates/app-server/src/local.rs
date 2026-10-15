@@ -131,7 +131,7 @@ pub struct AppServerOptions {
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-enum InitialDirGrantPolicy {
+pub(crate) enum InitialDirGrantPolicy {
     #[default]
     HostConfiguration,
     UserConfig,
@@ -2112,14 +2112,9 @@ pub fn open_app_server_with_codebase_providers(
         .map_err(open_error)?,
     );
     if let Some(dir_root) = options.dir_root {
-        match options.initial_dir_grant_policy {
-            InitialDirGrantPolicy::HostConfiguration => server
-                .activate_host_configured_dir_root(dir_root)
-                .map_err(|error| OpenAppServerError(error.to_string()))?,
-            InitialDirGrantPolicy::UserConfig => server
-                .switch_local_dir_root(dir_root)
-                .map_err(|error| OpenAppServerError(error.to_string()))?,
-        };
+        server
+            .initialize_local_dir_root(dir_root, options.initial_dir_grant_policy)
+            .map_err(|error| OpenAppServerError(error.to_string()))?;
     }
     if let Some(dir_root) = local_dir_root {
         server = server

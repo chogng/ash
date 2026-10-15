@@ -37,6 +37,9 @@ impl ContextAssembler {
 
         for item in plan.selected_items() {
             if previous_turn.as_ref() != Some(item.turn_id()) {
+                // A stopped historical Turn can retain calls with unknown outcomes. Close
+                // their model-facing protocol pairs without inventing durable Tool results.
+                append_unresolved_tool_results(&mut input, &mut tool_names);
                 if let Some(ending) = previous_turn.as_ref().and_then(|id| plan.turn_ending(id)) {
                     append_turn_ending(&mut input, *ending);
                     active_user_turn = None;
@@ -163,7 +166,7 @@ impl ContextAssembler {
                     ..
                 } => {
                     active_user_turn = None;
-                    let name = tool_names.get(tool_call_id).cloned().ok_or_else(|| {
+                    let name = tool_names.remove(tool_call_id).ok_or_else(|| {
                         CoreError::Context(format!(
                             "Tool Result references an unavailable Tool Call: {tool_call_id}"
                         ))
@@ -185,6 +188,12 @@ impl ContextAssembler {
                     active_user_turn = None;
                 }
             }
+        }
+        if previous_turn
+            .as_ref()
+            .is_some_and(|id| id != plan.current_turn_id())
+        {
+            append_unresolved_tool_results(&mut input, &mut tool_names);
         }
         if let Some(ending) = previous_turn.as_ref().and_then(|id| plan.turn_ending(id)) {
             append_turn_ending(&mut input, *ending);
@@ -241,6 +250,22 @@ impl ContextAssembler {
             prompt_cache_key: None,
             prompt_cache_prefix_end,
         })
+    }
+}
+
+fn append_unresolved_tool_results(
+    input: &mut Vec<InputItem>,
+    tool_names: &mut BTreeMap<ash_protocol::ToolCallId, ash_protocol::ToolName>,
+) {
+    for (call_id, name) in std::mem::take(tool_names) {
+        input.push(InputItem::ToolResult(ToolResult {
+            call_id,
+            name,
+            content: vec![ContentPart::Text(
+                "Tool execution ended without a recorded result. The outcome is unknown; inspect current state before retrying an action that may have partially executed.".into(),
+            )],
+            is_error: true,
+        }));
     }
 }
 

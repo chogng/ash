@@ -16,6 +16,40 @@ fn control_catalog_exposes_exec_and_wait_with_stable_names() {
         vec![EXEC_TOOL_NAME, WAIT_TOOL_NAME]
     );
     assert!(definitions.iter().all(|definition| definition.strict));
+    for definition in definitions {
+        let properties = definition.parameters["properties"].as_object().unwrap();
+        let required = definition.parameters["required"].as_array().unwrap();
+        assert_eq!(required.len(), properties.len(), "{}", definition.name);
+        for property in properties.keys() {
+            assert!(required.iter().any(|value| value == property));
+        }
+        assert_eq!(definition.parameters["additionalProperties"], false);
+    }
+}
+
+#[test]
+fn strict_control_nulls_preserve_defaults_and_the_code_alias() {
+    let arguments = serde_json::json!({
+        "source": null,
+        "code": "text(42)",
+        "yieldTimeMs": null,
+        "maxOutputTokens": null
+    });
+    assert_eq!(
+        super::catalog::required_string(&arguments, &["source", "code"], "source").unwrap(),
+        "text(42)"
+    );
+    for key in ["yieldTimeMs", "maxOutputTokens"] {
+        assert_eq!(
+            super::catalog::optional_u64(&arguments, &[key]).unwrap(),
+            None
+        );
+        assert_eq!(
+            super::catalog::optional_u64(&serde_json::json!({key: 17}), &[key]).unwrap(),
+            Some(17)
+        );
+        assert!(super::catalog::optional_u64(&serde_json::json!({key: "17"}), &[key]).is_err());
+    }
 }
 
 #[test]

@@ -1626,6 +1626,12 @@ fn terminal_profiles_are_server_owned_and_reject_unknown_ids() {
 
 #[test]
 fn terminal_rpc_drives_a_dir_rooted_pty_to_exit() {
+    // Exercise the PTY contract without running the developer's interactive shell startup files.
+    #[cfg(unix)]
+    let profile =
+        serde_json::json!({"type":"custom","name":"Test shell","path":["/bin/sh"],"args":[]});
+    #[cfg(windows)]
+    let profile = serde_json::json!({"type":"default"});
     let root = std::env::temp_dir().join(format!(
         "ash-app-server-terminal-{}-{}",
         std::process::id(),
@@ -1647,7 +1653,7 @@ fn terminal_rpc_drives_a_dir_rooted_pty_to_exit() {
             "jsonrpc":"2.0",
             "id":2,
             "method":"terminal/create",
-            "params":{"rows":24,"cols":80,"profile":{"type":"default"},"lifecycle":{"type":"connectionOwned"}}
+            "params":{"rows":24,"cols":80,"profile":profile,"lifecycle":{"type":"connectionOwned"}}
         }),
     );
     let terminal_id = created["result"]["terminalId"].as_str().unwrap();

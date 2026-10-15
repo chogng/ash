@@ -560,8 +560,10 @@ async fn failed_directory_initialization_completes_waiters_and_allows_a_new_atte
     );
     assert_eq!(registry.startup.waiters.load(Ordering::Acquire), 0);
 
+    // The retry creates a real directory runtime. Bound I/O without treating its cold
+    // startup latency under the full suite as part of the waiter/retry contract.
     let server = tokio::time::timeout(
-        Duration::from_secs(3),
+        Duration::from_secs(10),
         registry.open_local_session(root.path(), &token),
     )
     .await

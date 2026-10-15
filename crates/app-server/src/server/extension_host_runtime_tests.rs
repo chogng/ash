@@ -270,7 +270,31 @@ fn product_ssh_is_available_without_a_directory_and_is_rebound_after_unbind() {
     use ash_file_access::Permissions;
     use std::sync::Arc;
     use std::sync::atomic::Ordering;
-    let launcher = Arc::new(CountingLauncher(std::sync::atomic::AtomicUsize::new(0)));
+    struct SshLauncher(CountingLauncher);
+    impl ash_external_ext::ExtensionHostLauncher for SshLauncher {
+        fn spawn(
+            &self,
+            command: &ash_external_ext::ExtensionLaunchCommand,
+            limits: &ExtensionHostLimits,
+        ) -> Result<Arc<dyn ash_external_ext::ExtensionHostProcess>, ExtensionHostError> {
+            // Other product extensions may also activate; count only this test's SSH host.
+            if command
+                .executable()
+                .and_then(|path| path.file_name())
+                .is_some_and(|name| {
+                    name == format!("ash-remote-ssh-extension{}", std::env::consts::EXE_SUFFIX)
+                        .as_str()
+                })
+            {
+                self.0.spawn(command, limits)
+            } else {
+                Err(ExtensionHostError::SpawnFailed)
+            }
+        }
+    }
+    let launcher = Arc::new(SshLauncher(CountingLauncher(
+        std::sync::atomic::AtomicUsize::new(0),
+    )));
     let mut limits = ExtensionHostLimits::default();
     limits.isolation = ash_external_ext::ProcessIsolationPolicy::TrustedDevelopment;
     let runtime = super::ExtensionHostRuntime::start(
@@ -287,13 +311,17 @@ fn product_ssh_is_available_without_a_directory_and_is_rebound_after_unbind() {
     )
     .unwrap();
     let initial = runtime.inner.snapshot();
-    assert_eq!(initial.extensions[0].id, "ash.remote-ssh");
+    let initial_ssh = initial
+        .extensions
+        .iter()
+        .find(|extension| extension.id == "ash.remote-ssh")
+        .unwrap();
     assert_eq!(
-        initial.extensions[0].failure.as_ref().unwrap().code,
+        initial_ssh.failure.as_ref().unwrap().code,
         ExtensionHostFailureKind::CrashLoop
     );
     let attempts = RestartPolicy::default().maximum_restarts + 1;
-    assert_eq!(launcher.0.load(Ordering::SeqCst), attempts);
+    assert_eq!(launcher.0.0.load(Ordering::SeqCst), attempts);
     let directory = tempfile::tempdir().unwrap();
     let grant = Grant::for_environment(
         Dir::open_local(directory.path()).unwrap(),
@@ -305,12 +333,13 @@ fn product_ssh_is_available_without_a_directory_and_is_rebound_after_unbind() {
         .unwrap();
     runtime.unbind_dir();
     let after = runtime.inner.snapshot();
-    assert_eq!(after.extensions.len(), 1);
-    assert_eq!(after.extensions[0].id, "ash.remote-ssh");
-    assert!(
-        after.extensions[0].activation_generation > initial.extensions[0].activation_generation
-    );
-    assert_eq!(launcher.0.load(Ordering::SeqCst), 3 * attempts);
+    let after_ssh = after
+        .extensions
+        .iter()
+        .find(|extension| extension.id == "ash.remote-ssh")
+        .unwrap();
+    assert!(after_ssh.activation_generation > initial_ssh.activation_generation);
+    assert_eq!(launcher.0.0.load(Ordering::SeqCst), 3 * attempts);
 }
 
 #[test]

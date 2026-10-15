@@ -51,6 +51,7 @@ impl CodeModeBrokerInner {
             ));
         }
         let snapshot = self.threads.read_thread(&thread_id)?;
+        let mut published_sequence = snapshot.sequence;
         let parent_tool_call_id = ToolCallId::new(call.parent_tool_call_id.clone())
             .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
         let cell_call = self
@@ -155,7 +156,7 @@ impl CodeModeBrokerInner {
         )?;
         let item_id = recorded.item.item_id().clone();
         let scheduler = ToolScheduler::new(Arc::clone(&self.threads), tools, policy)
-            .with_thread_updates(updates)
+            .with_thread_updates(Arc::clone(&updates))
             .with_hooks(hooks);
 
         loop {
@@ -163,7 +164,17 @@ impl CodeModeBrokerInner {
                 .check()
                 .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
             let progress =
-                scheduler.run_pending_for_call(&thread_id, &turn_id, &nested_id, cancellation)?;
+                scheduler.run_pending_for_call(&thread_id, &turn_id, &nested_id, cancellation);
+            // A nested call waits inside the parent exec/wait. Publish its approval before
+            // waiting, so the host can assign an interaction owner and answer it.
+            for update in self
+                .threads
+                .thread_updates_after(&thread_id, published_sequence)?
+            {
+                published_sequence = update.durable_sequence;
+                updates.publish(update);
+            }
+            let progress = progress?;
             let snapshot = self.threads.read_thread(&thread_id)?;
             if let Some(result) = find_tool_result(&snapshot.items, &nested_id) {
                 return result_to_value(result);

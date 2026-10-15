@@ -4473,6 +4473,119 @@ fn a_read_in_the_same_model_batch_does_not_satisfy_instruction_preflight() {
 
 #[cfg(feature = "code-mode")]
 #[test]
+fn code_mode_publishes_nested_approval_while_the_parent_cell_is_waiting() {
+    struct ApprovalPolicy;
+    impl ActionPolicyService for ApprovalPolicy {
+        fn revision(&self) -> String {
+            "test-policy-v1".into()
+        }
+        fn decide(
+            &self,
+            request: &ActionReviewRequest,
+            cancellation: &CancellationToken,
+        ) -> Result<ExecutionDecision, CoreError> {
+            if request.action().kind() == &ActionKind::NetworkRequest {
+                Ok(ExecutionDecision::AskUser(
+                    ash_action_policy::ApprovalRequest::new(
+                        request.action().digest().clone(),
+                        request.action().required_capabilities().clone(),
+                        "approve nested weather",
+                    ),
+                ))
+            } else {
+                CodeModeControlPolicy.decide(request, cancellation)
+            }
+        }
+    }
+    struct ApprovedWeather;
+    impl ToolService for ApprovedWeather {
+        fn definitions(&self) -> Vec<ToolDefinition> {
+            WeatherTool.definitions()
+        }
+        fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
+            WeatherTool.prepare(call)
+        }
+        fn execute(
+            &self,
+            _: &ToolCall,
+            _: &ToolAuthorization,
+            _: &CancellationToken,
+        ) -> Result<ToolExecutionOutput, CoreError> {
+            Ok(ToolExecutionOutput::Success("approved weather".into()))
+        }
+    }
+    let (threads, thread_id, turn_id) =
+        started_turn_with_tool_mode(ash_protocol::ToolMode::CodeModeOnly);
+    let updates = Arc::new(RecordingUpdates::default());
+    let model = Arc::new(ScriptedModel::new([
+        Ok(ModelResponse {
+            output: vec![ResponseItem::ToolCall(ToolCall {
+                id: ToolCallId::new("approval-cell").unwrap(),
+                name: ToolName::new("exec").unwrap(),
+                arguments: json!({"source":"text(await tools.weather({city:'Paris'}))", "yieldTimeMs":5000}),
+            })],
+            usage: None,
+            billing: None,
+            stop_reason: StopReason::ToolUse,
+        }),
+        Ok(text_response("approved")),
+    ]));
+    let executor = TurnExecutor::new(
+        threads.clone(),
+        model,
+        Arc::new(ApprovedWeather),
+        Arc::new(ApprovalPolicy),
+    )
+    .with_thread_updates(updates.clone());
+    executor.start(&thread_id, &turn_id).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(3);
+    let interaction = loop {
+        let published = updates.updates();
+        if let Some(interaction) = published.iter().find_map(|update| match &update.update {
+            ThreadUpdate::Committed {
+                event: ash_protocol::ThreadEvent::InteractionRequested { interaction, .. },
+            } => Some(interaction.clone()),
+            _ => None,
+        }) {
+            break interaction;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "nested approval must be delivered before exec returns"
+        );
+        thread::sleep(Duration::from_millis(10));
+    };
+    threads
+        .resolve_turn_interaction(
+            &thread_id,
+            crate::ResolveTurnInteractionRequest {
+                command_id: CommandId::new("approve-nested").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                turn_id: turn_id.clone(),
+                request_id: interaction.request_id,
+                response: AgentResponse::Approval {
+                    response: ash_protocol::ActionApprovalResponse {
+                        decision: ash_protocol::ActionApprovalDecision::ApproveOnce,
+                    },
+                },
+            },
+        )
+        .unwrap();
+    wait_for_turn_status(&threads, &thread_id, &turn_id, TurnStatus::Completed);
+    assert!(
+        threads
+            .read_thread(&thread_id)
+            .unwrap()
+            .items
+            .iter()
+            .any(|item| matches!(item,
+                ThreadItem::ToolResult { text, is_error: false, .. } if text == "approved weather"
+            ))
+    );
+}
+
+#[cfg(feature = "code-mode")]
+#[test]
 fn code_mode_search_activates_tools_for_the_next_cell_without_replaying_nested_results() {
     let (threads, thread_id, turn_id) =
         started_turn_with_tool_mode(ash_protocol::ToolMode::CodeModeOnly);

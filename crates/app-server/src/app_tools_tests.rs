@@ -565,17 +565,32 @@ fn development_task_approval_accepts_or_declines_the_reviewed_recipe_before_exec
             "commands":[{"command":"prepare","cwd":dependency_directory},{"command":"compiler","cwd":directory}]});
         harness.reply(&describe, recipe.clone());
         let deadline = Instant::now() + Duration::from_secs(5);
+        let mut offered_approvals = Vec::new();
         let (sequence, request_id) = loop {
-            assert!(
-                harness.requests().is_empty(),
-                "execution must wait for approval"
-            );
+            for frame in harness
+                .server
+                .connection_notifications(&harness.owner)
+                .drain()
+            {
+                let frame: Value = serde_json::from_str(&frame).unwrap();
+                assert_ne!(
+                    frame["method"], "app/request",
+                    "execution must wait for approval"
+                );
+                if frame["method"] == "agent/request" {
+                    offered_approvals.push(frame["params"]["interaction"]["requestId"].clone());
+                }
+            }
             let snapshot = harness
                 .server
                 .threads()
                 .read_thread(&harness.thread_id)
                 .unwrap();
-            if let Some(interaction) = snapshot.turns[0].pending_interaction.as_ref() {
+            if let Some(interaction) = snapshot.turns[0].pending_interaction.as_ref()
+                && offered_approvals
+                    .iter()
+                    .any(|id| id == interaction.request_id.as_str())
+            {
                 let review = serde_json::to_string(&interaction.request).unwrap();
                 assert!(
                     review.contains("compiler")

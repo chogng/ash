@@ -735,6 +735,33 @@ fn executor_writes_explicit_bytes_to_child_stdin() {
 
 #[cfg(unix)]
 #[test]
+fn executor_preserves_early_exit_status_when_child_closes_stdin() {
+    let dir = TestDir::new();
+    let executor = CommandExecutor::new(dir.root(), PassThroughBackend, AllowAll, test_limits());
+    let outcome = executor
+        .execute(
+            CommandRequest {
+                program: "/bin/sh".into(),
+                arguments: vec![
+                    "-c".into(),
+                    "exec 0<&-; printf hook-error >&2; exit 7".into(),
+                ],
+                working_directory: ".".into(),
+                input: CommandInput::Bytes(vec![b'x'; 1024 * 1024]),
+            },
+            CommandExecutionAuthority::Unrestricted,
+            &CancellationSource::new().token(),
+        )
+        .unwrap();
+    let CommandExecutionOutcome::Completed(output) = outcome else {
+        panic!("early exit must retain its actual process outcome");
+    };
+    assert_eq!(output.exit_code, Some(7));
+    assert_eq!(output.stderr, "hook-error");
+}
+
+#[cfg(unix)]
+#[test]
 fn executor_terminates_a_running_process_when_cancelled() {
     let dir = TestDir::new();
     let executor = CommandExecutor::new(dir.root(), PassThroughBackend, AllowAll, test_limits());

@@ -528,6 +528,81 @@ fn interrupted_history_keeps_partial_output_and_marks_the_reusable_prefix() {
     ));
 }
 
+#[test]
+fn stopped_history_closes_only_unresolved_calls_before_the_next_user_turn() {
+    for status in [TurnStatus::Interrupted, TurnStatus::Failed] {
+        let stopped = id::<TurnId>("stopped");
+        let current = id::<TurnId>("next");
+        let mut snapshot = snapshot(
+            current.clone(),
+            vec![
+                ThreadItem::ToolCall {
+                    item_id: id("unfinished"),
+                    turn_id: stopped.clone(),
+                    tool_call_id: id("unfinished-call"),
+                    name: ToolName::new("shell-command").unwrap(),
+                    arguments_json: "{}".into(),
+                    binding: None,
+                },
+                ThreadItem::ToolCall {
+                    item_id: id("finished"),
+                    turn_id: stopped.clone(),
+                    tool_call_id: id("finished-call"),
+                    name: ToolName::new("read_file").unwrap(),
+                    arguments_json: "{}".into(),
+                    binding: None,
+                },
+                ThreadItem::ToolResult {
+                    item_id: id("finished-result"),
+                    turn_id: stopped.clone(),
+                    tool_call_id: id("finished-call"),
+                    text: "actual output".into(),
+                    content: None,
+                    is_error: false,
+                },
+                ThreadItem::UserMessage {
+                    client_id: None,
+                    item_id: id("next-user"),
+                    turn_id: current,
+                    text: "continue".into(),
+                },
+            ],
+        );
+        let mut previous = snapshot.turns[0].clone();
+        previous.turn_id = stopped;
+        previous.status = status;
+        snapshot.turns.insert(0, previous);
+        let durable_items = snapshot.items.clone();
+
+        let request = assemble(&snapshot, Vec::new(), &HarnessContext::default()).unwrap();
+
+        let results = request
+            .input
+            .iter()
+            .filter_map(|item| match item {
+                InputItem::ToolResult(result) => Some(result),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].call_id.as_str(), "finished-call");
+        assert!(!results[0].is_error);
+        assert_eq!(
+            results[0].content,
+            vec![ContentPart::Text("actual output".into())]
+        );
+        assert_eq!(results[1].call_id.as_str(), "unfinished-call");
+        assert!(results[1].is_error);
+        assert!(
+            matches!(&results[1].content[..], [ContentPart::Text(text)] if text.contains("outcome is unknown"))
+        );
+        let result_index = request.input.iter().position(|item| matches!(item, InputItem::ToolResult(result) if result.call_id.as_str() == "unfinished-call")).unwrap();
+        let user_index = request.input.iter().position(|item| matches!(item, InputItem::Message(message) if message.content == vec![ContentPart::Text("continue".into())])).unwrap();
+        assert!(result_index < user_index);
+        assert_eq!(snapshot.items, durable_items);
+    }
+}
+
 fn assemble(
     snapshot: &ThreadSnapshot,
     tools: Vec<ToolDefinition>,

@@ -9,6 +9,8 @@ use super::broker::EXEC_TOOL_NAME;
 use super::broker::WAIT_TOOL_NAME;
 
 pub fn control_definitions() -> Vec<ToolDefinition> {
+    // Strict providers require every object property. Nullable values retain optional
+    // controls and the source/code alias without forcing callers to choose defaults.
     vec![
         ToolDefinition {
             name: tool_name(EXEC_TOOL_NAME),
@@ -16,15 +18,12 @@ pub fn control_definitions() -> Vec<ToolDefinition> {
             parameters: serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "source": { "type": "string" },
-                    "code": { "type": "string" },
-                    "yieldTimeMs": { "type": "integer", "minimum": 0 },
-                    "maxOutputTokens": { "type": "integer", "minimum": 1 }
+                    "source": { "type": ["string", "null"], "description": "JavaScript source. Supply source or its code alias." },
+                    "code": { "type": ["string", "null"], "description": "Alias for source; use null when supplying source." },
+                    "yieldTimeMs": { "type": ["integer", "null"], "minimum": 0 },
+                    "maxOutputTokens": { "type": ["integer", "null"], "minimum": 1 }
                 },
-                "anyOf": [
-                    { "required": ["source"] },
-                    { "required": ["code"] }
-                ],
+                "required": ["source", "code", "yieldTimeMs", "maxOutputTokens"],
                 "additionalProperties": false
             }),
             strict: true,
@@ -36,11 +35,11 @@ pub fn control_definitions() -> Vec<ToolDefinition> {
                 "type": "object",
                 "properties": {
                     "cellId": { "type": "string" },
-                    "yieldTimeMs": { "type": "integer", "minimum": 0 },
-                    "maxOutputTokens": { "type": "integer", "minimum": 1 },
-                    "terminate": { "type": "boolean" }
+                    "yieldTimeMs": { "type": ["integer", "null"], "minimum": 0 },
+                    "maxOutputTokens": { "type": ["integer", "null"], "minimum": 1 },
+                    "terminate": { "type": ["boolean", "null"] }
                 },
-                "required": ["cellId"],
+                "required": ["cellId", "yieldTimeMs", "maxOutputTokens", "terminate"],
                 "additionalProperties": false
             }),
             strict: true,
@@ -210,7 +209,7 @@ pub(super) fn optional_u64(
         ));
     };
     for key in keys {
-        if let Some(value) = object.get(*key) {
+        if let Some(value) = object.get(*key).filter(|value| !value.is_null()) {
             return value.as_u64().map(Some).ok_or_else(|| {
                 CoreError::InvalidInput(format!(
                     "Code Mode control argument `{key}` must be an integer"

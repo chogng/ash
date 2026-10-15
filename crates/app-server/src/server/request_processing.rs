@@ -57,6 +57,7 @@ impl RequestLane {
                 | ClientMethod::DebugAdapterClose
                 | ClientMethod::AttachmentUploadCancel
                 | ClientMethod::DictationStop
+                | ClientMethod::McpOAuthCancel
                 | ClientMethod::ConnectorOAuthCancel
                 | ClientMethod::ConnectorDeviceOAuthCancel,
             ) => Self::Control,

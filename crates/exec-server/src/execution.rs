@@ -204,7 +204,12 @@ impl<B: SandboxBackend> ProcessExecutor<B> {
             CommandInput::Bytes(bytes) => {
                 let mut stdin = child.take_stdin().expect("stdin was piped");
                 Some(thread::spawn(move || {
-                    stdin.write_all(&bytes).map_err(|error| error.to_string())
+                    match stdin.write_all(&bytes) {
+                        // A child may deliberately exit without consuming its input. Preserve
+                        // its actual status and captured output instead of reporting spawn failure.
+                        Err(error) if error.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
+                        result => result.map_err(|error| error.to_string()),
+                    }
                 }))
             }
             CommandInput::Open => unreachable!("open input was rejected before process start"),

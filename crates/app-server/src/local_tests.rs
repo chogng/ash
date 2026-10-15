@@ -5,6 +5,9 @@ mod chatgpt_login;
 
 #[path = "local_mcp_catalog_tests.rs"]
 mod mcp_catalog;
+
+#[path = "local_recovery_tests.rs"]
+mod recovery;
 use crate::ConnectionState;
 use ash_async_utils::CancellationSource;
 use ash_client::ClientError;
@@ -2113,7 +2116,10 @@ fn encrypted_storage_shared_profile_runtime_reuses_one_store_across_env_hosts() 
         &mut second_connection,
         serde_json::json!({"jsonrpc":"2.0","id":3,"method":"secrets/status","params":{}}),
     );
-    assert_eq!(listed["result"], serde_json::json!({"status":"available"}));
+    assert_eq!(
+        listed["result"],
+        serde_json::json!({"status":"available","mode":"encrypted"})
+    );
     let key_name = ash_secrets::SecretKey::new("storage/file-encryption-key/v1").unwrap();
     let master = keyring.load(&key_name).unwrap().unwrap();
     keyring.delete(&key_name).unwrap();
@@ -2122,14 +2128,30 @@ fn encrypted_storage_shared_profile_runtime_reuses_one_store_across_env_hosts() 
         &mut first_connection,
         serde_json::json!({"jsonrpc":"2.0","id":4,"method":"secrets/status","params":{}}),
     );
-    assert_eq!(listed["result"], serde_json::json!({"status":"keyMissing"}));
+    // Both hosts share one unlocked profile store. Removing the keyring entry is
+    // observed by a new store, while the current runtime retains its cached key.
+    assert_eq!(
+        listed["result"],
+        serde_json::json!({"status":"available","mode":"encrypted"})
+    );
+    let unopened =
+        ash_secrets::ProfileSecretStore::open(profile.path().join("secrets"), keyring.clone())
+            .unwrap();
+    assert_eq!(
+        unopened.check_availability().unwrap_err().kind(),
+        ash_secrets::SecretStoreErrorKind::KeyMissing
+    );
+    assert!(keyring.load(&key_name).unwrap().is_none());
     keyring.store(&key_name, &master).unwrap();
     let listed = local_call(
         &first,
         &mut first_connection,
         serde_json::json!({"jsonrpc":"2.0","id":5,"method":"secrets/status","params":{}}),
     );
-    assert_eq!(listed["result"], serde_json::json!({"status":"available"}));
+    assert_eq!(
+        listed["result"],
+        serde_json::json!({"status":"available","mode":"encrypted"})
+    );
 }
 
 #[test]
@@ -2163,7 +2185,7 @@ fn encrypted_storage_unavailable_keyring_keeps_local_composition_running() {
     );
     assert_eq!(
         response["result"],
-        serde_json::json!({"status":"unavailable"})
+        serde_json::json!({"status":"unavailable","mode":"encrypted"})
     );
 }
 
@@ -3695,7 +3717,10 @@ fn directory_edit_before_watcher_start_is_applied_without_another_event() {
     )
     .unwrap();
     server
-        .activate_host_configured_dir_root(root.path().to_path_buf())
+        .initialize_local_dir_root(
+            root.path().to_path_buf(),
+            crate::local::InitialDirGrantPolicy::HostConfiguration,
+        )
         .unwrap();
     assert!(matches!(
         server.test_local_shell_policy_decision().unwrap(),

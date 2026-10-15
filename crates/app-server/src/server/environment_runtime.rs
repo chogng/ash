@@ -21,6 +21,7 @@ use crate::codebase_retrieval_tool::CodebaseRetrievalTool;
 use crate::dir_grants::DirGrants;
 use crate::dynamic_tools::DynamicToolCompositionError;
 use crate::dynamic_tools::compose_dynamic_tools;
+use crate::local::InitialDirGrantPolicy;
 use crate::local_tools::LocalToolConfig;
 use crate::local_tools::append_local_tool;
 use crate::local_tools::compose_local_tools_with_config;
@@ -1418,6 +1419,7 @@ impl AppServer {
         })
     }
 
+    #[cfg(test)]
     pub(crate) fn switch_local_dir_root(&self, root: PathBuf) -> Result<PathBuf, EnvRuntimeError> {
         let host = self
             .local_env_host
@@ -1434,9 +1436,12 @@ impl AppServer {
         self.activate_dir_runtime(authorization, host)
     }
 
-    pub(crate) fn activate_host_configured_dir_root(
+    /// Installs the first Directory before recovered execution is resumed. Durable active
+    /// Turns are not live work yet, and need these services to reconcile their tools.
+    pub(crate) fn initialize_local_dir_root(
         &self,
         root: PathBuf,
+        policy: InitialDirGrantPolicy,
     ) -> Result<PathBuf, EnvRuntimeError> {
         let host = self
             .local_env_host
@@ -1446,14 +1451,16 @@ impl AppServer {
             .env_runtime_gate
             .lock()
             .map_err(|_| EnvRuntimeError::Failed("Environment runtime gate poisoned".into()))?;
-        self.ensure_directory_transition_is_idle()?;
         let dir =
             Dir::open_local(root).map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
-        let authorization = Grant::for_environment(
-            dir,
-            GrantSource::HostConfiguration,
-            host_directory_capabilities(),
-        );
+        let authorization = match policy {
+            InitialDirGrantPolicy::HostConfiguration => Grant::for_environment(
+                dir,
+                GrantSource::HostConfiguration,
+                host_directory_capabilities(),
+            ),
+            InitialDirGrantPolicy::UserConfig => host.grants.grant(dir)?,
+        };
         self.activate_dir_runtime(authorization, host)
     }
 

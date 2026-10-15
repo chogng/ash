@@ -120,9 +120,20 @@ fn run_environment_turn(
         .expect("turn starts");
     let protocol_thread_id = ash_protocol::ThreadId::new(thread_id).unwrap();
     let deadline = Instant::now() + Duration::from_secs(10);
+    let mut offered_approvals = Vec::new();
     let (sequence, request_id) = loop {
+        for frame in server.connection_notifications(&connection).drain() {
+            let frame: serde_json::Value = serde_json::from_str(&frame).unwrap();
+            if frame["method"] == "agent/request" {
+                offered_approvals.push(frame["params"]["interaction"]["requestId"].clone());
+            }
+        }
         let snapshot = server.threads().read_thread(&protocol_thread_id).unwrap();
-        if let Some(interaction) = snapshot.turns[0].pending_interaction.as_ref() {
+        if let Some(interaction) = snapshot.turns[0].pending_interaction.as_ref()
+            && offered_approvals
+                .iter()
+                .any(|id| id == interaction.request_id.as_str())
+        {
             break (snapshot.sequence, interaction.request_id.to_string());
         }
         assert!(
@@ -235,21 +246,27 @@ fn recover_command_response(lost: LostResponse) {
                 if !matches!(message.request, Request::EnvironmentInfo) {
                     assert_eq!(message.incarnation.as_deref(), Some(incarnation.as_str()));
                 }
+                // Constrained requests retain their execution ceiling when dispatched, but
+                // fault injection must identify the enclosed operation before replying.
+                let mut operation = &message.request;
+                while let Request::Constrained { request, .. } = operation {
+                    operation = request;
+                }
                 if matches!(
-                    message.request,
+                    operation,
                     Request::ProcessStart(_) | Request::FileWriteCommit { .. }
                 ) {
                     starts += 1;
                 }
                 let lose = connection == 0
                     && match lost {
-                        LostResponse::Start => matches!(message.request, Request::ProcessStart(_)),
-                        LostResponse::Read => matches!(message.request, Request::ProcessRead(_)),
+                        LostResponse::Start => matches!(operation, Request::ProcessStart(_)),
+                        LostResponse::Read => matches!(operation, Request::ProcessRead(_)),
                         LostResponse::FileCommit => {
-                            matches!(message.request, Request::FileWriteCommit { .. })
+                            matches!(operation, Request::FileWriteCommit { .. })
                         }
                         LostResponse::FileChunk => {
-                            matches!(message.request, Request::FileWriteChunk { .. })
+                            matches!(operation, Request::FileWriteChunk { .. })
                         }
                     };
                 let response = environment.request(message.request);
