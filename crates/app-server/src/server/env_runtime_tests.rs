@@ -2861,9 +2861,11 @@ fn permission_requests_follow_core_interaction_enforce_subset_and_expire_on_comp
     }
 }
 
+#[cfg(unix)]
 struct ReusableApprovalModel {
     step: Mutex<usize>,
 }
+#[cfg(unix)]
 impl core_api::ModelService for ReusableApprovalModel {
     fn invoke(
         &self,
