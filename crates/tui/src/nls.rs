@@ -915,7 +915,7 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Open this project in Ash IDE and connect with /ide, then run /desktop. Desktop handoff requires a local active conversation.",
         "このプロジェクトを Ash IDE で開き、/ide で接続してから /desktop を実行します。引き継ぎにはローカルの有効な会話が必要です。",
         "在 Ash IDE 打开当前项目并用 /ide 连接，再输入 /desktop。桌面接续需要本机未归档的会话。",
-        "Ouvrez ce projet dans Ash IDE et connectez-le avec /ide, puis saisissez /desktop. Le transfert nécessite une conversation locale active.",
+        "Ouvrez ce projet dans Ash IDE et connectez-le avec /ide, puis saisissez /desktop. Le transfert nécessite une conversation locale active.", // codespell:ignore transfert
     ),
     translation(
         "Conversation opened in Ash desktop. The terminal remains open to preserve your new input.",
@@ -1477,7 +1477,7 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "External mutation",
         "外部リソースを変更",
         "更改外部资源",
-        "Modifier une ressource externe",
+        "Modifier une ressource externe", // codespell:ignore ressource
     ),
     translation(
         "System configuration",
@@ -1512,7 +1512,7 @@ const UI_TRANSLATIONS: &[Translation] = &[
     translation("This turn", "このターン", "本轮", "Ce tour"),
     translation("This session", "このセッション", "本会话", "Cette session"),
     translation("Allow", "許可", "允许", "Autoriser"),
-    translation("Environment", "環境", "环境", "Environnement"),
+    translation("Environment", "環境", "环境", "Environnement"), // codespell:ignore environnement
     translation(
         "Access network",
         "ネットワークにアクセス",

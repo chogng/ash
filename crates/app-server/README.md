@@ -160,7 +160,6 @@ App Server 按 profile 的 `messageBoard` 配置选择本地存储或外部消�
 和隔离工作目录创建独立 Session；状态和报告通过同一 SSH route 查询。包和回执归
 [`task-delivery`](../task-delivery/README.md)，App Server 只组合领域流程、目录权限、协议和传输。
 
-
 ## Ash IDE 通道与会话接续
 
 Ash 编辑器窗口通过 `ide/request` 注册窗口标题、工作区根目录和窗口生命周期内稳定的 `windowKey`。桌面装配层通过现有终端环境集合注册非持久的窗口键；编辑器 adapter 只提供已注册窗口的键和生命周期状态。窗口的集成终端继承 `ASH_IDE_WINDOW`，`ash code` 在初始化后按此键自动关联确切窗口。`/ide` 切换上下文共享；关闭共享仍保留发起窗口身份。profile 级注册表拥有窗口发现和失效租约；同一物理产品连接经过网关进入多个本机目录运行时，所有 peer 共享一个连接级 IDE 关联，其他产品连接保持独立。

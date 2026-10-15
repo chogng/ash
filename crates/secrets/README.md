@@ -7,18 +7,18 @@ request signing 和 Provider header materialization 均属于消费它的 domain
 
 ## 公共契约
 
-| Symbol                     | 职责                                       | 安全语义                                                                                  |
-| -------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------- |
-| `SecretKey`                | 非 secret 的 stable lookup identity        | 非空、最多 512 bytes、禁止 control character                                              |
-| `SecretValue`              | opaque secret bytes                        | 不实现 Clone/Display/Serialize；Debug 固定 redacted；Drop zeroize                         |
-| `SecretStore`              | availability、`load / store / delete` port | namespace isolation、sanitized error、完整三操作                                          |
-| `DeleteSecretOutcome`      | exact delete result                        | 区分 `Deleted` 与 `NotFound`                                                              |
-| `MemorySecretStore`        | process-local ephemeral backend            | replacement、delete、drop 时 zeroize stored bytes                                         |
-| `UnavailableSecretStore`   | explicit fail-closed backend               | 所有操作返回 `BackendUnavailable`                                                         |
-| `FileSecretStore`          | profile-scoped durable backend             | hashed filenames、私有权限、有界读取、同步 staging 与 replace；所有值路径逐级拒绝 symlink |
-| `ProfileSecretStore` | profile 持久存储 backend                   | 默认加密文件、显式 file 选择、跨进程锁、可恢复迁移，无 fallback                       |
-| `SecretStoreError`         | sanitized error                            | message 不能包含 secret/header/raw backend response                                       |
-| `SecretStoreErrorKind`     | stable caller classification               | unavailable、access denied、backend failure、key missing、invalid data、migration failed  |
+| Symbol                   | 职责                                       | 安全语义                                                                                  |
+| ------------------------ | ------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| `SecretKey`              | 非 secret 的 stable lookup identity        | 非空、最多 512 bytes、禁止 control character                                              |
+| `SecretValue`            | opaque secret bytes                        | 不实现 Clone/Display/Serialize；Debug 固定 redacted；Drop zeroize                         |
+| `SecretStore`            | availability、`load / store / delete` port | namespace isolation、sanitized error、完整三操作                                          |
+| `DeleteSecretOutcome`    | exact delete result                        | 区分 `Deleted` 与 `NotFound`                                                              |
+| `MemorySecretStore`      | process-local ephemeral backend            | replacement、delete、drop 时 zeroize stored bytes                                         |
+| `UnavailableSecretStore` | explicit fail-closed backend               | 所有操作返回 `BackendUnavailable`                                                         |
+| `FileSecretStore`        | profile-scoped durable backend             | hashed filenames、私有权限、有界读取、同步 staging 与 replace；所有值路径逐级拒绝 symlink |
+| `ProfileSecretStore`     | profile 持久存储 backend                   | 默认加密文件、显式 file 选择、跨进程锁、可恢复迁移，无 fallback                           |
+| `SecretStoreError`       | sanitized error                            | message 不能包含 secret/header/raw backend response                                       |
+| `SecretStoreErrorKind`   | stable caller classification               | unavailable、access denied、backend failure、key missing、invalid data、migration failed  |
 
 `SecretKey` 的内容会出现在 `Debug`，因此 key schema 不能包含 token、email 或其他敏感 identifier。
 Key schema 由调用 domain 拥有，本 crate 只验证基本安全 shape。

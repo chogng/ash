@@ -112,13 +112,13 @@ fixture。没有 UI、NLS、配置或协议变化，因此不启动 UI 场景或
 `platform/chat/common/agentsWindowInvitation.ts` 与 desktop invitation contribution
 均落在缺失的上游同路径。实现沿 Ash 的真实窗口、对话和存储 owner 编写，不复制上游私有实现。
 
-| 调用链 | 唯一 owner 与实际行为 |
-| --- | --- |
-| Chat / Cowork send、queue、steer、advisor → `ChatService.onDidSubmitRequest` | 仅在后端接受本窗口请求后报告对话坐标；失败、已释放对象和退休连接不登记。模型从已加载 Thread 判断首个请求，UI 元数据不进入后端请求。 |
+| 调用链                                                                               | 唯一 owner 与实际行为                                                                                                                                                                    |
+| ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Chat / Cowork send、queue、steer、advisor → `ChatService.onDidSubmitRequest`         | 仅在后端接受本窗口请求后报告对话坐标；失败、已释放对象和退休连接不登记。模型从已加载 Thread 判断首个请求，UI 元数据不进入后端请求。                                                      |
 | contribution → native host → `TrustedIpcRouter` → Main `AgentsWindowInvitationState` | IPC 绑定真实 sender/main frame/入口 URL；窗口 ID 由 Main 闭包提供。校验 URI 的组件与 `external` 一致，按提交时的 Thread revision 隔离迟到回复。后台 catalog 更新不能建立或抢回窗口归属。 |
-| Main 状态 → `StorageMainService` Application/Machine scope | 只持久化首次成功使用的对话计数和曝光冷却；Session/Thread/Turn 及执行状态仍由 Rust 拥有。Main 不读取领域 RPC、不建立业务会话目录。 |
-| 状态广播 → focused/current conversation → existing `NotificationsList` | 单窗口活动等待 30 秒，并行活动等待 15 秒；只有一个跨窗口 claim。UI 真正建立可见通知行后记录曝光，保留既有通知键盘、焦点、Accessible View/Help 和主题机制。 |
-| 邀请 action → existing `openAgentsWindow` → `windowsMainService` handoff/ack | 目标坐标固定；选择改变或 claim 失效不交接。目标确认后才清理捕获的草稿；失败保留草稿和重试操作。标题栏 action 在 await 前解析服务，遵守 accessor 生命周期。 |
+| Main 状态 → `StorageMainService` Application/Machine scope                           | 只持久化首次成功使用的对话计数和曝光冷却；Session/Thread/Turn 及执行状态仍由 Rust 拥有。Main 不读取领域 RPC、不建立业务会话目录。                                                        |
+| 状态广播 → focused/current conversation → existing `NotificationsList`               | 单窗口活动等待 30 秒，并行活动等待 15 秒；只有一个跨窗口 claim。UI 真正建立可见通知行后记录曝光，保留既有通知键盘、焦点、Accessible View/Help 和主题机制。                               |
+| 邀请 action → existing `openAgentsWindow` → `windowsMainService` handoff/ack         | 目标坐标固定；选择改变或 claim 失效不交接。目标确认后才清理捕获的草稿；失败保留草稿和重试操作。标题栏 action 在 await 前解析服务，遵守 accessor 生命周期。                               |
 
 窗口文档重载、崩溃或关闭撤销该文档的活动与 claim；后台执行继续由原业务 owner 管理。
 Agents 窗口的实际请求撤销编辑器归属，旧 catalog 和较旧 revision 的成功回复不能恢复它。

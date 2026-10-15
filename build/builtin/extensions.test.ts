@@ -159,10 +159,10 @@ for (const resource of ['manifest', 'file'] as const) {
 			// language packs or other resources in the developer's checkout.
 			await mkdir(join(directory, 'build/builtin'), { recursive: true });
 			await copyFile(resolve(import.meta.dirname, 'extensions.ts'), join(directory, 'build/builtin/extensions.ts'));
-		await mkdir(join(directory, 'build/resources'), { recursive: true });
-		await copyFile(resolve(import.meta.dirname, '../resources/languagePacks.ts'), join(directory, 'build/resources/languagePacks.ts'));
-		await mkdir(join(directory, 'localization'), { recursive: true });
-		await writeFile(join(directory, 'localization/preinstalled.json'), JSON.stringify(['test/language-pack']));
+			await mkdir(join(directory, 'build/resources'), { recursive: true });
+			await copyFile(resolve(import.meta.dirname, '../resources/languagePacks.ts'), join(directory, 'build/resources/languagePacks.ts'));
+			await mkdir(join(directory, 'localization'), { recursive: true });
+			await writeFile(join(directory, 'localization/preinstalled.json'), JSON.stringify(['test/language-pack']));
 			await mkdir(join(directory, 'build/lib'), { recursive: true });
 			await copyFile(resolve(import.meta.dirname, '../lib/preparedInputs.ts'), join(directory, 'build/lib/preparedInputs.ts'));
 			await symlink(resolve(import.meta.dirname, '../../node_modules'), join(directory, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');

@@ -46,22 +46,22 @@ flowchart TD
 
 以下为实现归属。crate 用于隔离能力和依赖，不按每个内部步骤拆分 crate。
 
-| 位置                                                                                                            | 职责                                                             | 边界                                                   |
-| --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------ |
-| `crates/automation`                                                                                             | 计划校验、下次执行时间计算、调度、运行记录和恢复；拥有持久化规则 | 日期、时区、调度依赖留在这里；不实现模型调用或工具执行 |
-| `crates/protocol`                                                                                               | automation 跨模块共享的稳定身份、时间戳和领域值对象              | 不引入日期时间库，不保存进程内计时器                   |
-| `crates/app-server-protocol`                                                                                    | automation 请求、响应、通知和生成类型                            | 协议不暴露日期库类型或内部调度器                       |
-| `crates/app-server`                                                                                             | 请求分派、订阅、协调 automation 与 Agent 执行                    | 不保存第二份计划状态，不自行计算日历规则               |
-| `crates/core`                                                                                                   | 执行 Thread、Turn、模型调用和工具操作                            | 不计算“下一次周一几点运行”                             |
-| `crates/app-server-daemon`                                                                                      | 每个 profile 的后台进程生命周期与保活                            | 不解释计划规则；不得因窗口连接清空而丢失调度能力       |
-| `crates/app-server`                                                                                             | 产品无关的后端命令入口和进程装配                                 | 不依赖 `ash-code` 的产品入口                           |
-| `src/ash/sessions/contrib/automations/` | Provider 聚合、编辑对话框、立即运行与取消协调 | 不持久化权威计划，不持有调度计时器 |
-| `src/ash/sessions/contrib/sessions/browser/views/automationsView.ts` | 独立 Custom View 中的计划卡片和运行历史 | 不内嵌编辑表单，不创建执行 Session |
-| `src/ash/sessions/contrib/providers/agentHost/browser/agentHostAutomationStore.ts` | 单个 provider 的可观察目录、历史和操作路由 | 断连和移除不回退到其他 provider |
-| `src/ash/workbench/contrib/chat/common/automations/` | 前端产品领域契约 | 不依赖 Sessions 实现或线上 DTO |
-| `src/ash/platform/agentHost/common/automation.ts` | Host 自动化领域契约 | 不依赖 Workbench、Sessions 或线上 DTO |
-| `src/ash/platform/agentHost/browser/appServerAutomationService.ts` | 订阅通知和 App Server adapter | 生成协议类型止于 adapter，不传入普通界面代码 |
-| `app`、`ash-code` 的对应产品界面                                                                                | 消费同一后端能力并呈现产品交互                                   | 不另建调度器或计划存储                                 |
+| 位置                                                                               | 职责                                                             | 边界                                                   |
+| ---------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------ |
+| `crates/automation`                                                                | 计划校验、下次执行时间计算、调度、运行记录和恢复；拥有持久化规则 | 日期、时区、调度依赖留在这里；不实现模型调用或工具执行 |
+| `crates/protocol`                                                                  | automation 跨模块共享的稳定身份、时间戳和领域值对象              | 不引入日期时间库，不保存进程内计时器                   |
+| `crates/app-server-protocol`                                                       | automation 请求、响应、通知和生成类型                            | 协议不暴露日期库类型或内部调度器                       |
+| `crates/app-server`                                                                | 请求分派、订阅、协调 automation 与 Agent 执行                    | 不保存第二份计划状态，不自行计算日历规则               |
+| `crates/core`                                                                      | 执行 Thread、Turn、模型调用和工具操作                            | 不计算“下一次周一几点运行”                             |
+| `crates/app-server-daemon`                                                         | 每个 profile 的后台进程生命周期与保活                            | 不解释计划规则；不得因窗口连接清空而丢失调度能力       |
+| `crates/app-server`                                                                | 产品无关的后端命令入口和进程装配                                 | 不依赖 `ash-code` 的产品入口                           |
+| `src/ash/sessions/contrib/automations/`                                            | Provider 聚合、编辑对话框、立即运行与取消协调                    | 不持久化权威计划，不持有调度计时器                     |
+| `src/ash/sessions/contrib/sessions/browser/views/automationsView.ts`               | 独立 Custom View 中的计划卡片和运行历史                          | 不内嵌编辑表单，不创建执行 Session                     |
+| `src/ash/sessions/contrib/providers/agentHost/browser/agentHostAutomationStore.ts` | 单个 provider 的可观察目录、历史和操作路由                       | 断连和移除不回退到其他 provider                        |
+| `src/ash/workbench/contrib/chat/common/automations/`                               | 前端产品领域契约                                                 | 不依赖 Sessions 实现或线上 DTO                         |
+| `src/ash/platform/agentHost/common/automation.ts`                                  | Host 自动化领域契约                                              | 不依赖 Workbench、Sessions 或线上 DTO                  |
+| `src/ash/platform/agentHost/browser/appServerAutomationService.ts`                 | 订阅通知和 App Server adapter                                    | 生成协议类型止于 adapter，不传入普通界面代码           |
+| `app`、`ash-code` 的对应产品界面                                                   | 消费同一后端能力并呈现产品交互                                   | 不另建调度器或计划存储                                 |
 
 automation 通过窄的执行请求和结果契约与现有 Agent 能力协作，App Server 完成装配。core 不反向依赖 automation；automation 不导入 App Server 传输实现。没有独立消费者前，不另建通用 scheduler、calendar 或 clock crate。
 

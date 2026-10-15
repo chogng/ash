@@ -347,7 +347,9 @@ impl AppServer {
                         modified,
                     } => vec![original, modified],
                     ash_app_server_protocol::protocol::ide::IdeHostRequest::Context { .. }
-                    | ash_app_server_protocol::protocol::ide::IdeHostRequest::OpenConversation { .. } => {
+                    | ash_app_server_protocol::protocol::ide::IdeHostRequest::OpenConversation {
+                        ..
+                    } => {
                         unreachable!()
                     }
                 };

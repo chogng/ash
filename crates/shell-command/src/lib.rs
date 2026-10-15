@@ -6,7 +6,9 @@
 
 mod ripgrep;
 
-pub use ripgrep::{BuiltInRipgrepPolicy, RipgrepDiscoveryError, RipgrepExecutable, RipgrepRequestError};
+pub use ripgrep::{
+    BuiltInRipgrepPolicy, RipgrepDiscoveryError, RipgrepExecutable, RipgrepRequestError,
+};
 
 use ash_async_utils::CancellationToken;
 use ash_file_access::Dir;

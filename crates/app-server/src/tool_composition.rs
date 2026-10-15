@@ -61,8 +61,8 @@ use crate::tool_search_embedding::ToolSearchEmbeddingRuntime;
 
 mod mcp_exposure;
 
-use mcp_exposure::MCP_SEARCH_TOOLS_NAME;
 use mcp_exposure::MCP_CALL_TOOL_NAME;
+use mcp_exposure::MCP_SEARCH_TOOLS_NAME;
 use mcp_exposure::decide_mcp_catalog_search;
 use mcp_exposure::project_mcp_service;
 

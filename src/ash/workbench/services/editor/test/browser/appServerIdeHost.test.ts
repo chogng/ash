@@ -79,9 +79,11 @@ async function fixture() {
 		services.registerInstance(IEditorService, { onDidActiveEditorChange: Event.None, openEditor: async (input, options) => { opened.push({ input, options }); await open(); } } as IEditorService);
 		const conversations: IOpenAgentsWindowOptions[] = [];
 		let openConversation: () => Promise<void> = async () => { };
-		services.registerInstance(INativeHostService, { openAgentsWindow: async options => {
-			conversations.push(options!); await openConversation();
-		} } as INativeHostApi);
+		services.registerInstance(INativeHostService, {
+			openAgentsWindow: async options => {
+				conversations.push(options!); await openConversation();
+			}
+		} as INativeHostApi);
 		const transport = new IdeTransport();
 		const client = new AppServerProtocolClient(transport);
 		lifetime.add(toDisposable(() => client.dispose()));

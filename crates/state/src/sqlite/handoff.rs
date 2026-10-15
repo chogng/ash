@@ -562,7 +562,11 @@ impl SqliteThreadStore {
                             | SessionExecutionTarget::Provider { .. },
                         ),
                     ..
-                } => return Err(error("remote history cannot contain another execution authority")),
+                } => {
+                    return Err(error(
+                        "remote history cannot contain another execution authority",
+                    ));
+                }
                 _ => return Err(error("imported Thread has no creation event")),
             };
             transaction

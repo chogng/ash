@@ -139,18 +139,18 @@ operation。[官方架构](https://modelcontextprotocol.io/specification/2025-11
 
 支持矩阵明确区分低层代码与产品可用性：
 
-| MCP surface             | Low-level client                            | Product runtime 策略                                                                                                     |
-| ----------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Base JSON-RPC lifecycle | Current                                     | Current 多 session startup/shutdown；reconnect/health Proposed                                                           |
-| stdio                   | Current direct-local + injectable transport | Current absolute executable startup；sandboxed launcher Proposed                                                         |
+| MCP surface             | Low-level client                            | Product runtime 策略                                                                                                      |
+| ----------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Base JSON-RPC lifecycle | Current                                     | Current 多 session startup/shutdown；reconnect/health Proposed                                                            |
+| stdio                   | Current direct-local + injectable transport | Current absolute executable startup；sandboxed launcher Proposed                                                          |
 | Streamable HTTP         | Current unauthenticated/bearer transport    | Current unauthenticated/SecretStore bearer；标准 OAuth lifecycle Current；自动 discovery/刷新 Current；reconnect Proposed |
-| Tools                   | Current 原始 list/call                      | Current catalog/binding/Core approval/durable result；Config/Connector hot rebuild Current                               |
-| Resources               | 尚未暴露                                    | 首发只做 list/read，显式进入 context                                                                                     |
-| Prompts                 | 尚未暴露                                    | 首发只做 list/get，不当作 Skill                                                                                          |
-| Roots                   | 尚未暴露                                    | 只暴露已授权目录，不能替代 OS sandbox                                                                                    |
-| Sampling                | 尚未暴露                                    | 默认不声明；需独立预算、隐私和审批                                                                                       |
-| Elicitation             | Current host callback                       | Current form → durable Core interaction；URL/array/multiselect/跨重启 remote recovery 不支持                             |
-| Tasks                   | 尚未暴露                                    | experimental，不等同 Ash Turn/Task                                                                                       |
+| Tools                   | Current 原始 list/call                      | Current catalog/binding/Core approval/durable result；Config/Connector hot rebuild Current                                |
+| Resources               | 尚未暴露                                    | 首发只做 list/read，显式进入 context                                                                                      |
+| Prompts                 | 尚未暴露                                    | 首发只做 list/get，不当作 Skill                                                                                           |
+| Roots                   | 尚未暴露                                    | 只暴露已授权目录，不能替代 OS sandbox                                                                                     |
+| Sampling                | 尚未暴露                                    | 默认不声明；需独立预算、隐私和审批                                                                                        |
+| Elicitation             | Current host callback                       | Current form → durable Core interaction；URL/array/multiselect/跨重启 remote recovery 不支持                              |
+| Tasks                   | 尚未暴露                                    | experimental，不等同 Ash Turn/Task                                                                                        |
 
 MCP 标准 transport 是
 [stdio 与 Streamable HTTP](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports)。
@@ -608,13 +608,13 @@ OAuth coordinator；complete/refresh 强制 reconcile 为 connect，revoke 先�
 
 当前与计划中的 App Server 接口面为：
 
-| 类别        | 方法示例                                                                         | 语义                                                                |
-| ----------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| Config      | `mcp/server/upsert`、`mcp/server/remove`、`mcp/server/enablement/set`            | Current typed command 管理定义和 enablement；读取并入 `config/read` |
-| Runtime     | `mcp/server/connect`、`mcp/server/disconnect`                                    | process-local lifecycle intent，已接入 reconcile                    |
-| Catalog     | `mcp/tool/list`、`mcp/resource/list`、`mcp/prompt/list`                          | Proposed 读取 snapshot                                              |
+| 类别        | 方法示例                                                                                                                 | 语义                                                                |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
+| Config      | `mcp/server/upsert`、`mcp/server/remove`、`mcp/server/enablement/set`                                                    | Current typed command 管理定义和 enablement；读取并入 `config/read` |
+| Runtime     | `mcp/server/connect`、`mcp/server/disconnect`                                                                            | process-local lifecycle intent，已接入 reconcile                    |
+| Catalog     | `mcp/tool/list`、`mcp/resource/list`、`mcp/prompt/list`                                                                  | Proposed 读取 snapshot                                              |
 | Auth        | `mcp/oauth/start`、`mcp/oauth/complete`、`mcp/oauth/cancel`、`mcp/oauth/logout`、`mcp/oauth/refresh`、`mcp/oauth/revoke` | Current process-local one-shot OAuth flow 与 credential lifecycle   |
-| Diagnostics | `mcp/server/status`、`mcp/server/log/read`                                       | status 已实现；log/read 尚未实现                                    |
+| Diagnostics | `mcp/server/status`、`mcp/server/log/read`                                                                               | status 已实现；log/read 尚未实现                                    |
 
 命名只是目标语义，实施时必须与 `ash-app-server-protocol` 同步生成 schema/TypeScript。配置修改
 继续使用 `CommandId` 和 exact typed payload replay；connect/disconnect 是 runtime intent，不占用

@@ -22,7 +22,7 @@ export interface McpServerConfigurationSnapshot {
 
 /** Config is persistent user intent; connect/disconnect affect only the running backend process. */
 /** The server requires client registration details before a browser flow can start. */
-export class McpOAuthClientRequiredError extends Error {}
+export class McpOAuthClientRequiredError extends Error { }
 
 export interface McpOAuthLoginOptions {
 	readonly clientId?: string;

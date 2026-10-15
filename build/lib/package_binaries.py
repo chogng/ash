@@ -20,7 +20,10 @@ from build.protocol.generate import generate_protocol
 
 
 _BINARIES = {
-    "ash-dev-container-provider": ("ash-dev-container-provider", "--dev-container-provider-bin"),
+    "ash-dev-container-provider": (
+        "ash-dev-container-provider",
+        "--dev-container-provider-bin",
+    ),
     "ash-update-host": ("ash-product-update", "--update-host-bin"),
     "ash-package-store": ("ash-package-store", "--package-store-bin"),
     "bwrap": ("ash-bwrap", "--bwrap-bin"),

@@ -1031,11 +1031,9 @@ use crate::protocol::git::GitCommitResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCommitScopeDto;
 #[cfg(any(test, feature = "export"))]
-use crate::protocol::git::GitCommitSignoffDto;
-#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCommitSigningDto;
 #[cfg(any(test, feature = "export"))]
-use crate::protocol::git::GitEmptyCommitPolicyDto;
+use crate::protocol::git::GitCommitSignoffDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCommitStatisticsDto;
 #[cfg(any(test, feature = "export"))]
@@ -1056,6 +1054,8 @@ use crate::protocol::git::GitConflictFileResult;
 use crate::protocol::git::GitConflictResolutionDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitDiffStatisticsDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitEmptyCommitPolicyDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitFetchModeDto;
 #[cfg(any(test, feature = "export"))]
@@ -2645,6 +2645,8 @@ use ash_protocol::ToolCallBinding;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ToolCallCaller;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::ToolCategory;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::ToolExecutionAuthority;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ToolMode;
@@ -2657,19 +2659,17 @@ use ash_protocol::ToolOutputArtifactSource;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ToolOutputStream;
 #[cfg(any(test, feature = "export"))]
-use ash_protocol::ToolCategory;
-#[cfg(any(test, feature = "export"))]
-use ash_protocol::ToolProfileSnapshot;
-#[cfg(any(test, feature = "export"))]
-use ash_protocol::ToolScope;
-#[cfg(any(test, feature = "export"))]
-use ash_protocol::ToolSetDefinition;
-#[cfg(any(test, feature = "export"))]
 use ash_protocol::ToolProductProfile;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ToolProductStatus;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::ToolProfileSnapshot;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::ToolReplaySafety;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ToolScope;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ToolSetDefinition;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ToolSourceProvenance;
 #[cfg(any(test, feature = "export"))]

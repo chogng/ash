@@ -17,7 +17,9 @@ use crate::parser::PatchOperation;
 use ash_file_access::Dir;
 use ash_file_system::FileTextDocuments;
 use ash_file_system::TextFileFormat;
-use ash_tools::{TextDocumentChange, TextDocumentEditor, TextDocumentEditorProvider, TextDocumentError};
+use ash_tools::{
+    TextDocumentChange, TextDocumentEditor, TextDocumentEditorProvider, TextDocumentError,
+};
 use ash_tools::{
     ToolConcurrency, ToolConflictClass, ToolDefinition, ToolExecutionFuture, ToolExecutionOutcome,
     ToolExecutor, ToolInputSchema, ToolInvocation, ToolLoading, ToolName, ToolOutput,

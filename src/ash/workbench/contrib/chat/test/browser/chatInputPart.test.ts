@@ -1020,10 +1020,14 @@ test('permission requests approve only selected capabilities and can shorten the
 	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async response => { responses.push(response); } });
 	const state: ChatInputState = {
 		mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
-		interaction: { requestId: 'permissions-1', request: { type: 'permissions', request: {
-			environmentId: 'local', reason: 'Read the requested files', duration: 'session',
-			directories: [{ path: '/workspace/<img src=x>', permissions: ['readFiles', 'writeFiles'] }], networkHosts: ['api.example.test'],
-		} } },
+		interaction: {
+			requestId: 'permissions-1', request: {
+				type: 'permissions', request: {
+					environmentId: 'local', reason: 'Read the requested files', duration: 'session',
+					directories: [{ path: '/workspace/<img src=x>', permissions: ['readFiles', 'writeFiles'] }], networkHosts: ['api.example.test'],
+				}
+			}
+		},
 	};
 	part.render(state);
 	const interaction = part.element.querySelector('.ash-chat-interaction')!;
@@ -1041,17 +1045,24 @@ test('permission requests approve only selected capabilities and can shorten the
 
 
 test('approval exposes only offered reusable decisions and renders exact argv as text', async () => {
-    const responses: unknown[] = [];
-    using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async response => { responses.push(response); } });
-    part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
-        interaction: { requestId: 'reusable', request: { type: 'approval', request: { reason: 'Exact action', capabilities: [{ kind: 'processSpawn', scope: '/workspace' }],
-            command: { program: '/bin/echo', arguments: ['<img src=x>', 'a b'] }, allowedDecisions: ['decline', 'approveOnce', 'approveForSession', 'approveAndSaveRule'] } } },
-    });
-    const interaction = part.element.querySelector('.ash-chat-interaction')!;
-    assert.equal(interaction.querySelector('pre')?.textContent, '/bin/echo ["<img src=x>","a b"]');
-    assert.equal(interaction.querySelector('img'), null);
-    for (const label of ['Approve same action this session', 'Save approval for this exact action']) {
-        [...interaction.querySelectorAll('button')].find(button => button.textContent === label)!.click();
-    }
-    assert.deepEqual(responses, [{ type: 'approval', response: { decision: 'approveForSession' } }, { type: 'approval', response: { decision: 'approveAndSaveRule' } }]);
+	const responses: unknown[] = [];
+	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async response => { responses.push(response); } });
+	part.render({
+		mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+		interaction: {
+			requestId: 'reusable', request: {
+				type: 'approval', request: {
+					reason: 'Exact action', capabilities: [{ kind: 'processSpawn', scope: '/workspace' }],
+					command: { program: '/bin/echo', arguments: ['<img src=x>', 'a b'] }, allowedDecisions: ['decline', 'approveOnce', 'approveForSession', 'approveAndSaveRule']
+				}
+			}
+		},
+	});
+	const interaction = part.element.querySelector('.ash-chat-interaction')!;
+	assert.equal(interaction.querySelector('pre')?.textContent, '/bin/echo ["<img src=x>","a b"]');
+	assert.equal(interaction.querySelector('img'), null);
+	for (const label of ['Approve same action this session', 'Save approval for this exact action']) {
+		[...interaction.querySelectorAll('button')].find(button => button.textContent === label)!.click();
+	}
+	assert.deepEqual(responses, [{ type: 'approval', response: { decision: 'approveForSession' } }, { type: 'approval', response: { decision: 'approveAndSaveRule' } }]);
 });

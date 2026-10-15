@@ -265,7 +265,7 @@ BuiltInDefaults
 | 模型与 Tool Mode                    | 下一次模型请求或 Turn 创建                                   |
 | MCP / Skill / Plugin / Hook catalog | 各管理器完成协调后，由新 generation 发布                     |
 | 目录权限                            | 新 Grant 发布后；撤销会使旧 Authorization 失效并停止依赖资源 |
-| execution policy                    | 每次动作评估与 IO 前重查；策略改变后停止旧授权继续执行      |
+| execution policy                    | 每次动作评估与 IO 前重查；策略改变后停止旧授权继续执行       |
 | TUI/Electron device preference      | 对应 Renderer 服务自己的更新周期                             |
 
 Turn 的模型与执行快照在创建时冻结。权限 owner 在动作评估及 IO 前检查当前硬约束；策略版本改变

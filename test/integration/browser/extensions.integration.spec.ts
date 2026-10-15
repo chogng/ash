@@ -987,35 +987,35 @@ for (const theme of ['light', 'dark', 'hc']) {
 }
 
 for (const labels of [
-    { locale: 'en', signIn: 'Sign in', signOut: 'Sign out', cancel: 'Cancel sign-in', waiting: 'Complete sign-in in your browser.', connected: 'Connected', disconnected: 'Disconnected' },
-    { locale: 'zh-CN', signIn: '登录', signOut: '退出登录', cancel: '取消登录', waiting: '请在浏览器中完成登录。', connected: '已连接', disconnected: '已断开' },
+	{ locale: 'en', signIn: 'Sign in', signOut: 'Sign out', cancel: 'Cancel sign-in', waiting: 'Complete sign-in in your browser.', connected: 'Connected', disconnected: 'Disconnected' },
+	{ locale: 'zh-CN', signIn: '登录', signOut: '退出登录', cancel: '取消登录', waiting: '请在浏览器中完成登录。', connected: '已连接', disconnected: '已断开' },
 ]) {
-    test(`MCP OAuth sign-in, cancellation and local logout in ${labels.locale}`, async ({ page }) => {
-        await page.goto(`/extensions.html?locale=${labels.locale}`);
-        await page.evaluate(() => {
-            window.ashExtensionsIntegration.enableMcpOAuth();
-            window.ashExtensionsIntegration.configureMcp({ id: 'user:mcp:oauth', displayName: 'OAuth fixture', transport: { type: 'streamableHttp', url: 'https://mcp.test/rpc' }, credential: { type: 'unauthenticated' }, enablement: 'enabled' });
-        });
-        const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
-        await mcp.getByRole('button', { name: /^(Connections|连接)$/u }).click();
-        await mcp.getByRole('option').filter({ hasText: 'OAuth fixture' }).click();
-        const details = page.locator('.ash-extension-editor');
-        await details.getByRole('button', { name: labels.signIn, exact: true }).focus();
-        await page.keyboard.press('Enter');
-        await expect(details).toContainText(labels.waiting);
-        await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.mcpLoginWaiting())).toBe(true);
-        await details.getByRole('button', { name: labels.cancel, exact: true }).click();
-        await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'mcp/oauth/cancel').length)).toBe(1);
-        await expect(details).toHaveAttribute('aria-busy', 'false');
-        await details.getByRole('button', { name: labels.signIn, exact: true }).click();
-        await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.mcpLoginWaiting())).toBe(true);
-        await page.evaluate(() => window.ashExtensionsIntegration.completeMcpLogin());
-        await expect(details).toHaveAttribute('aria-busy', 'false');
-        await expect(mcp.getByRole('option').filter({ hasText: 'OAuth fixture' })).toContainText(labels.connected);
-        await details.getByRole('button', { name: labels.signOut, exact: true }).click();
-        await expect(mcp.getByRole('option').filter({ hasText: 'OAuth fixture' })).toContainText(labels.disconnected);
-        expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'mcp/oauth/complete'))).toEqual([
-            ['mcp/oauth/complete', { flowId: 'synthetic-flow', state: 'synthetic-state', authorizationCode: 'synthetic-code', issuer: 'https://issuer.test' }],
-        ]);
-    });
+	test(`MCP OAuth sign-in, cancellation and local logout in ${labels.locale}`, async ({ page }) => {
+		await page.goto(`/extensions.html?locale=${labels.locale}`);
+		await page.evaluate(() => {
+			window.ashExtensionsIntegration.enableMcpOAuth();
+			window.ashExtensionsIntegration.configureMcp({ id: 'user:mcp:oauth', displayName: 'OAuth fixture', transport: { type: 'streamableHttp', url: 'https://mcp.test/rpc' }, credential: { type: 'unauthenticated' }, enablement: 'enabled' });
+		});
+		const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
+		await mcp.getByRole('button', { name: /^(Connections|连接)$/u }).click();
+		await mcp.getByRole('option').filter({ hasText: 'OAuth fixture' }).click();
+		const details = page.locator('.ash-extension-editor');
+		await details.getByRole('button', { name: labels.signIn, exact: true }).focus();
+		await page.keyboard.press('Enter');
+		await expect(details).toContainText(labels.waiting);
+		await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.mcpLoginWaiting())).toBe(true);
+		await details.getByRole('button', { name: labels.cancel, exact: true }).click();
+		await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'mcp/oauth/cancel').length)).toBe(1);
+		await expect(details).toHaveAttribute('aria-busy', 'false');
+		await details.getByRole('button', { name: labels.signIn, exact: true }).click();
+		await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.mcpLoginWaiting())).toBe(true);
+		await page.evaluate(() => window.ashExtensionsIntegration.completeMcpLogin());
+		await expect(details).toHaveAttribute('aria-busy', 'false');
+		await expect(mcp.getByRole('option').filter({ hasText: 'OAuth fixture' })).toContainText(labels.connected);
+		await details.getByRole('button', { name: labels.signOut, exact: true }).click();
+		await expect(mcp.getByRole('option').filter({ hasText: 'OAuth fixture' })).toContainText(labels.disconnected);
+		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'mcp/oauth/complete'))).toEqual([
+			['mcp/oauth/complete', { flowId: 'synthetic-flow', state: 'synthetic-state', authorizationCode: 'synthetic-code', issuer: 'https://issuer.test' }],
+		]);
+	});
 }
