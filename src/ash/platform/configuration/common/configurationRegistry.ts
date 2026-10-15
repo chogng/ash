@@ -234,7 +234,7 @@ export class ConfigurationRegistry implements IConfigurationRegistry {
 Registry.add(Extensions.Configuration, new ConfigurationRegistry());
 
 function isConfigurationKey(value: string): boolean {
-	return /^[A-Za-z][A-Za-z0-9.-]{0,127}$/.test(value);
+	return /^[A-Za-z][A-Za-z0-9./-]{0,127}$/.test(value);
 }
 
 function registeredPolicy(value: unknown, defaultValue: unknown, existing: Iterable<IRegisteredConfiguration>): IRegisteredConfiguration['policy'] {

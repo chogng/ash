@@ -51,7 +51,7 @@ export class ConfigurationModelParser {
 			}
 			const properties: IStringDictionary<unknown> = {};
 			for (const [setting, entry] of Object.entries(values)) {
-				if (!/^[A-Za-z][A-Za-z0-9.-]{0,127}$/u.test(setting)) throw new TypeError(`invalid configuration key: ${setting}`);
+				if (!/^[A-Za-z][A-Za-z0-9./-]{0,127}$/u.test(setting)) throw new TypeError(`invalid configuration key: ${setting}`);
 				properties[setting] = validateJsonValue(entry, { path: `${this.name}.${key}.${setting}` });
 			}
 			validated[key] = identifiers.length ? properties : properties[key];

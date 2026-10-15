@@ -117,6 +117,40 @@ test('configuration parser validates persisted JSONC independently of transport'
 	assert.ok(parser.errors.length > 0);
 });
 
+test('configuration parser preserves slash-containing keys in settings and language overrides', () => {
+	const parser = new ConfigurationModelParser('settings', new NullLoggerService());
+	parser.parse('{ "js/ts.tsdk.path": "./node_modules/typescript/lib", "[typescript]": { "js/ts.tsdk.path": "./custom/typescript/lib" } }');
+	assert.deepEqual(parser.errors, []);
+	assert.equal(parser.configurationModel.getValue('js/ts.tsdk.path'), './node_modules/typescript/lib');
+	assert.equal(parser.configurationModel.override('typescript').getValue('js/ts.tsdk.path'), './custom/typescript/lib');
+	assert.deepEqual(parser.configurationModel.getValue('js/ts'), { tsdk: { path: './node_modules/typescript/lib' } });
+});
+
+test('configuration registry accepts slash-containing typed keys', () => {
+	const registry = new ConfigurationRegistry();
+	const key = registry.registerConfiguration({ key: 'js/ts.tsdk.path', defaultValue: '', parse: value => String(value) });
+	assert.equal(registry.getConfiguration(key)?.defaultValue, '');
+	assert.throws(() => registry.registerConfiguration({ key: '__proto__.unsafe', defaultValue: true, parse: value => Boolean(value) }), /Invalid configuration key/);
+});
+
+test('workbench configuration reloads and edits slash-containing contributed settings', async () => {
+	const key = 'js/ts.tsdk.path';
+	const registry = new ConfigurationRegistry();
+	registry.updateConfigurations({ add: [{ properties: { [key]: { type: 'string', default: '' } } }], remove: [] });
+	const source = '// Keep the SDK explanation.\n{ "js/ts.tsdk.path": "./node_modules/typescript/lib", "editor.fontSize": 16, }\n';
+	using files = new TestConfigurationFiles(source);
+	using service = new WorkbenchConfigurationService({ files, registry });
+	await service.reloadConfiguration();
+	assert.equal(service.getValue(key), './node_modules/typescript/lib');
+	await service.updateValue(key, './custom/typescript/lib');
+	await service.reloadConfiguration();
+	assert.equal(service.getValue(key), './custom/typescript/lib');
+	const saved = (await service.read()).source;
+	assert.match(saved, /Keep the SDK explanation/u);
+	assert.match(saved, /"editor\.fontSize": 16/u);
+	assert.match(saved, /"js\/ts\.tsdk\.path": "\.\/custom\/typescript\/lib"/u);
+});
+
 test("workbench configuration resolves typed defaults and live snapshots", async () => {
 	const registry = new ConfigurationRegistry();
 	const fontSize = registry.registerConfiguration({
