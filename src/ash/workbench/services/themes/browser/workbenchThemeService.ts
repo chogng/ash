@@ -239,15 +239,16 @@ class UserThemeResources extends Disposable implements IUserThemeService {
 	private sources = new Map<string, ThemeSource>();
 	private loadIssues: readonly IUserThemeLoadIssue[] = [];
 	private reloadQueue: Promise<void> = Promise.resolve();
+	private readonly refresh: RunOnceScheduler;
 
 	constructor(private readonly resource: URI, @IFileService private readonly files: IFileService) {
 		super();
-		const refresh = this._register(new RunOnceScheduler(() => {
+		this.refresh = this._register(new RunOnceScheduler(() => {
 			void this.reload().catch(error => console.error('Failed to reload user themes', error));
 		}, 75));
 		this._register(files.onDidChangeFiles(event => {
 			if (event.resources === undefined || event.resources.some(resource => extUriBiasedIgnorePathCase.isEqualOrParent(resource, this.resource))) {
-				refresh.schedule();
+				this.refresh.schedule();
 			}
 		}));
 	}
@@ -262,6 +263,9 @@ class UserThemeResources extends Disposable implements IUserThemeService {
 	}
 
 	public reload(): Promise<void> {
+		// An explicit save refresh consumes the same invalidation as the pending
+		// file watcher. Events arriving during this read can still schedule another.
+		this.refresh.cancel();
 		const operation = this.reloadQueue.then(() => this.reloadResources());
 		this.reloadQueue = operation.then(() => { }, () => { });
 		return operation;

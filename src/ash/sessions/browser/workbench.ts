@@ -464,6 +464,7 @@ export abstract class Workbench extends Disposable {
 		services.registerSingleton(IUntitledTextEditorService, () => services.createInstance(UntitledTextEditorService));
 		if (!services.has(IClipboardService)) services.registerSingleton(IClipboardService, () => services.createInstance(BrowserClipboardService), { instantiation: InstantiationType.Delayed });
 		const textFiles = this._register(services.createInstance(TextFileService));
+		themes.watchSourceSaves(textFiles);
 		services.registerInstance(ITextFileService, textFiles);
 		const workingCopies = this._register(services.createInstance(BrowserWorkingCopyService));
 		services.registerInstance(IWorkingCopyService, workingCopies);

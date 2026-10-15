@@ -40,16 +40,37 @@ import { IEditorPartsService } from '../../../browser/parts/editor/editorParts.j
 import { TextResourceEditor } from '../../../browser/parts/editor/textResourceEditor.js';
 import type { IResourceEditorInput, ISaveOptions } from '../../../common/editor.js';
 import { IUserThemeService } from '../../../common/userThemes.js';
-import { parseColorThemeDocument, userThemeId } from '../../../services/themes/common/colorThemeData.js';
+import { parseColorThemeDocument, serializeUserColorThemeDraft, userThemeId } from '../../../services/themes/common/colorThemeData.js';
 import { IWorkbenchThemeService } from '../../../services/themes/common/workbenchThemeService.js';
 import { IFileTextModelService } from '../../../services/textmodelResolver/common/textModelResourceService.js';
 import { parseJsonc } from '../../../../base/common/jsonc.js';
+import { IExtensionService, type ExtensionThemeContribution } from '../../../services/extensions/common/extensionService.js';
+import { createExtensionWorkbenchColorTheme, extensionWorkbenchThemeId, loadExtensionTheme, parseExtensionTheme } from '../../../services/extensions/common/extensionTheme.js';
+import { IExtensionResourceLoaderService, toExtensionResourceURI } from '../../../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
 
 export const ThemeEditorId = 'workbench.editor.themeEditor';
 export const ThemeEditorFocused = new RawContextKey<boolean>('themeEditorFocused', false);
 
 export function createThemeEditorInput(input: IResourceEditorInput): IResourceEditorInput {
 	return { ...input, editorId: ThemeEditorId, languageId: 'jsonc' };
+}
+
+/** Resolve the original contribution, including its include boundary and package generation. */
+export function getThemeEditorSource(extensions: IExtensionService, target: string | URI) {
+	for (const entry of extensions.getExtensionPointContributions<readonly ExtensionThemeContribution[]>('themes')) {
+		for (const [index, contribution] of entry.value.entries()) {
+			const id = extensionWorkbenchThemeId(entry.description.id, contribution.id, index);
+			const request = { generation: extensions.currentCatalog.generation, extensionId: entry.description.id, path: contribution.path };
+			const resource = entry.description.extensionLocation
+				? URI.joinPath(entry.description.extensionLocation, contribution.path)
+				: toExtensionResourceURI(request);
+			// Package generations select read capabilities, not a second editor identity.
+			if (typeof target === 'string' ? target === id : target.with({ query: '' }).toString() === resource.with({ query: '' }).toString()) {
+				return { resource, request, contribution, index, id };
+			}
+		}
+	}
+	return undefined;
 }
 
 /** The embedded text pane owns the document, history, working copy and file revision. */
@@ -84,6 +105,9 @@ export class ThemeEditor extends EditorPane {
 	public readonly onDidChangeWorkingCopies = this.copiesChanged.event;
 	private input: IResourceEditorInput | undefined;
 	private compiled: IColorTheme | undefined;
+	private compiledSource: string | undefined;
+	/** Only shared within an in-flight save; the next save rechecks included files. */
+	private saveValidation: { input: IResourceEditorInput; source: string; theme: IColorTheme; } | undefined;
 	private valid = false;
 	private operation = 0;
 	private saving = false;
@@ -103,18 +127,19 @@ export class ThemeEditor extends EditorPane {
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
+		@IExtensionService private readonly extensions: IExtensionService,
+		@IExtensionResourceLoaderService private readonly extensionResources: IExtensionResourceLoaderService,
 	) {
 		super(ThemeEditorId, themeService, storageService);
 		this._register(toDisposable(() => this.clearInput()));
 		this._register(textEditor);
 		this._register(toDisposable(() => { for (const row of this.rows.values()) row.dispose(); this.rows.clear(); }));
-		// Validate every save path, including Save All and another JSON view of this file.
+		// Validation and applied-version retention belong to the shared save path,
+		// including close confirmation, Save All and another JSON view of this file.
 		this._register(models.addSaveParticipant({
-			participate: async model => {
+			participate: async (model, _reason, signal) => {
 				if (model !== this.getControl()?.getModel()) return;
-				const input = this.input;
-				let source: string;
-				do { source = model.getText(); await this.compile(source, input); } while (model.getText() !== source);
+				await this.validateSave(signal);
 			}
 		}));
 		this._register(Colors.onDidChange(() => this.renderRows()));
@@ -239,7 +264,13 @@ export class ThemeEditor extends EditorPane {
 		await this.textEditor.setInput(input, signal);
 		if (signal.aborted || this.input !== input) throw new CancellationError();
 		const control = this.getControl()!;
-		this.inputLifetime.add(control.onDidChangeModelContent(() => { this.valid = false; this.updateTitleArea(); this.refresh.schedule(); }));
+		this.inputLifetime.add(control.onDidChangeModelContent(() => {
+			this.valid = false;
+			this.updateTitleArea();
+			// Continuous picker input must update the preview before the gesture
+			// ends. Keep the current deadline and compile the latest document.
+			if (!this.refresh.isScheduled()) this.refresh.schedule();
+		}));
 		this.inputLifetime.add(control.onDidChangeCursorSelection(() => this.syncSelection()));
 		this.copiesChanged.fire();
 		this.updateTitleArea();
@@ -254,6 +285,8 @@ export class ThemeEditor extends EditorPane {
 		this.inputLifetime.clear();
 		this.nameDialog.clear();
 		this.compiled = undefined;
+		this.compiledSource = undefined;
+		this.saveValidation = undefined;
 		this.input = undefined;
 		this.valid = false;
 		this.textEditor.clearInput();
@@ -301,7 +334,7 @@ export class ThemeEditor extends EditorPane {
 			id,
 			label,
 			tooltip: label,
-			enabled: !!this.input && !this.input.readOnly && !this.saving,
+			enabled: !!this.input && (!this.input.readOnly || id === 'themeEditor.saveAs') && !this.saving,
 			icon: id === 'themeEditor.saveAndApply' ? Lxicon.check : undefined,
 			run: () => this.runAction(run),
 		});
@@ -322,19 +355,45 @@ export class ThemeEditor extends EditorPane {
 
 	public async save(options?: ISaveOptions): Promise<void> {
 		const input = this.input;
-		if (!input) return;
+		if (!input || input.readOnly) return;
 		if (input.resource.scheme === 'untitled') return this.saveThemeAs();
-		await this.compile(this.textEditor.getValue());
+		// Keep theme validation errors in this editor, before generic file-error dialogs.
+		const validation = await this.validateSave(new AbortController().signal, true);
 		if (this.input !== input) throw new CancellationError();
+		this.saveValidation = validation;
+		try {
+			await this.textEditor.save(options);
+			// Extension source saves are already observed by their theme registration owner.
+			if (!getThemeEditorSource(this.extensions, input.resource)) await this.userThemes.reload();
+			if (this.input !== input) return;
+			// Finish a pending color edit before publishing the save result.
+			this.refresh.cancel();
+			await this.updatePreview();
+			this.showMessage(localize('themeEditor.saved', 'Theme saved.'));
+		} finally {
+			if (this.saveValidation === validation) this.saveValidation = undefined;
+		}
+	}
+
+	private async validateSave(signal: AbortSignal, fresh = false): Promise<{ input: IResourceEditorInput; source: string; theme: IColorTheme; }> {
+		const input = this.input;
+		const model = this.getControl()?.getModel();
+		if (!input || !model) throw new CancellationError();
+		let source: string;
+		let theme: IColorTheme;
+		do {
+			source = model.getText();
+			const prepared = fresh ? undefined : this.saveValidation;
+			theme = prepared?.input === input && prepared.source === source ? prepared.theme : await this.compile(source, input);
+			if (signal.aborted) throw new CancellationError();
+		} while (model.getText() !== source);
 		const id = this.themeIdForResource(input.resource);
 		if (id) this.themes.deferColorThemeApplication(id);
-		await this.textEditor.save(options);
-		await this.userThemes.reload();
-		if (this.input !== input) return;
-		// Finish a pending color edit before publishing the save result.
-		this.refresh.cancel();
-		await this.updatePreview();
-		this.showMessage(localize('themeEditor.saved', 'Theme saved.'));
+		if (this.input === input && model === this.getControl()?.getModel()) {
+			this.refresh.cancel();
+			await this.updatePreview(theme);
+		}
+		return { input, source, theme };
 	}
 
 	public async saveAs(resource: URI): Promise<void> {
@@ -354,11 +413,26 @@ export class ThemeEditor extends EditorPane {
 		const name = await this.promptName();
 		if (name === undefined || this.input !== input) return;
 		const source = model.getText();
-		const candidate = applyEdits(source, setProperty(source, ['name'], name.trim(), { insertSpaces: true, tabSize: 2 }));
+		// Exporting an extension theme is explicit. Resolve its package-relative
+		// includes here; the original source editor keeps the original document.
+		const candidate = getThemeEditorSource(this.extensions, input.resource)
+			? serializeUserColorThemeDraft(await this.compile(source, input), name.trim())
+			: applyEdits(source, setProperty(source, ['name'], name.trim(), { insertSpaces: true, tabSize: 2 }));
 		await this.compile(candidate);
 		const saved = await this.userThemes.saveAs(candidate);
 		// A slow write must not replace a document that acquired newer edits meanwhile.
-		if (this.input !== input || model.getText() !== source) {
+		if (this.input !== input || model.isDisposed() || model.getText() !== source) {
+			this.showMessage(localize('themeEditor.copySaved', 'Saved {0}. Newer edits remain in this editor.', saved.file));
+			return;
+		}
+		if (this.workingCopy?.isDirty) {
+			// Revert the shared source only after its captured edits are durable in the copy.
+			// Cancel the read if another view edits the source while the revert is pending.
+			const cancellation = new AbortController();
+			using edits = Event.once(model.onDidChangeContent)(() => cancellation.abort());
+			await this.workingCopy.revert(cancellation.signal);
+		}
+		if (this.input !== input || model.isDisposed() || this.workingCopy?.isDirty) {
 			this.showMessage(localize('themeEditor.copySaved', 'Saved {0}. Newer edits remain in this editor.', saved.file));
 			return;
 		}
@@ -397,11 +471,20 @@ export class ThemeEditor extends EditorPane {
 		finally { if (this.nameDialog.value === lifetime) this.nameDialog.clear(); }
 	}
 
-	private compile(source: string, input = this.input): Promise<IColorTheme> {
+	private async compile(source: string, input = this.input): Promise<IColorTheme> {
+		const extension = input && getThemeEditorSource(this.extensions, input.resource);
+		if (extension) {
+			const definition = await loadExtensionTheme(path => path === extension.contribution.path
+				? Promise.resolve(new TextEncoder().encode(source))
+				: this.extensionResources.readExtensionResourceBytes({ ...extension.request, path }), extension.request.extensionId, extension.contribution, extension.index);
+			return createExtensionWorkbenchColorTheme(definition);
+		}
 		return this.userThemes.resolve(source, this.themeIdForResource(input?.resource));
 	}
 
 	private themeIdForResource(resource: URI | undefined): string | undefined {
+		const extension = resource && getThemeEditorSource(this.extensions, resource);
+		if (extension) return extension.id;
 		if (!resource || !this.userThemes.directory) return undefined;
 		const id = userThemeId(resource.path.split('/').at(-1)!.replace(/\.json$/iu, ''));
 		const existing = this.userThemes.sourceFor(id);
@@ -409,18 +492,23 @@ export class ThemeEditor extends EditorPane {
 		return existing && URI.joinPath(this.userThemes.directory, existing.file).toString() === resource.toString() ? id : undefined;
 	}
 
-	private async updatePreview(): Promise<void> {
+	private async updatePreview(validatedTheme?: IColorTheme): Promise<void> {
 		const operation = ++this.operation;
 		const source = this.textEditor.getValue();
 		if (!this.input) return;
 		try {
-			const theme = await this.compile(source);
+			// A successful save participant already compiled this unchanged model.
+			// Reuse that result instead of loading its includes again after publication.
+			const theme = validatedTheme ?? (this.compiledSource === source && this.compiled ? this.compiled : await this.compile(source));
 			if (operation !== this.operation || this.textEditor.getValue() !== source) return;
 			this.compiled = theme;
+			this.compiledSource = source;
 			this.valid = true;
 			this.applyPreview();
 			this.renderRows();
-			this.showMessage(localize('themeEditor.description', 'Draft changes are saved automatically and appear only in the preview. Save and Apply updates the theme and the main window.'));
+			this.showMessage(this.input.readOnly
+				? localize('themeEditor.readOnlySource', 'This theme source is read-only. Use Save as to create an editable user theme.')
+				: localize('themeEditor.description', 'Draft changes are saved automatically and appear only in the preview. Save and Apply updates the theme and the main window.'));
 		} catch (error) {
 			if (operation !== this.operation || this.textEditor.getValue() !== source) return;
 			this.valid = false;
@@ -430,7 +518,16 @@ export class ThemeEditor extends EditorPane {
 	}
 
 	private applyPreview(): void {
-		if (this.compiled && this.valid) this.preview?.update(this.compiled, parseColorThemeDocument(parseJsonc(this.textEditor.getValue(), 'Color theme')).colors ?? {});
+		if (this.compiled && this.valid) this.preview?.update(this.compiled, this.authoredColors());
+	}
+
+	private authoredColors(): Readonly<Record<string, string>> {
+		const source = parseJsonc(this.textEditor.getValue(), 'Color theme');
+		const extension = this.input && getThemeEditorSource(this.extensions, this.input.resource);
+		// Use the format owner for publisher metadata and TextMate style normalization.
+		return extension
+			? parseExtensionTheme(source, extension.id, extension.request.extensionId, extension.contribution.label, extension.contribution.uiTheme, extension.contribution.path).colors
+			: parseColorThemeDocument(source).colors ?? {};
 	}
 
 	private selectSettings(value: 'colors' | 'json'): void {
@@ -451,9 +548,10 @@ export class ThemeEditor extends EditorPane {
 		if (!id) {
 			return this.saveThemeAs(true);
 		}
-		const source = this.textEditor.getValue();
 		await this.save();
-		if (this.input !== input || this.textEditor.getValue() !== source) return;
+		// Save participants can change the document. Only edits not acknowledged by
+		// the shared working copy should prevent applying the newly saved theme.
+		if (this.input !== input || this.workingCopy?.isDirty) return;
 		await this.themes.setColorTheme(id);
 		this.showMessage(localize('themeEditor.applied', 'Theme saved and applied.'));
 	}
@@ -461,7 +559,7 @@ export class ThemeEditor extends EditorPane {
 	private renderRows(): void {
 		if (!this.list) return;
 		let colors: Readonly<Record<string, string>> = {};
-		try { colors = parseColorThemeDocument(parseJsonc(this.textEditor.getValue(), 'Color theme')).colors ?? {}; } catch { }
+		try { colors = this.authoredColors(); } catch { }
 		const previewColors = new Map(this.preview?.colors.map(entry => [entry.id, entry]));
 		const registeredColors = Colors.getColors();
 		const registeredIds = new Set(registeredColors.map(entry => entry.id));
@@ -483,7 +581,8 @@ export class ThemeEditor extends EditorPane {
 				this.rows.set(entry.id, row);
 				group.body.append(row.element);
 			}
-			row.element.hidden = !!query && !`${entry.id} ${entry.description} ${group.label}`.toLowerCase().includes(query);
+			const hidden = !!query && !`${entry.id} ${entry.description} ${group.label}`.toLowerCase().includes(query);
+			if (row.element.hidden !== hidden) row.element.hidden = hidden;
 			if (!row.element.hidden) counts.set(group, (counts.get(group) ?? 0) + 1);
 			const references = 'defaults' in entry ? current && getThemeColorReferences(current, entry) : entry.references;
 			row.update(colors[entry.id], previewColors.get(entry.id)?.value ?? current?.getColor(entry.id), this.valid && !this.input?.readOnly, references);
@@ -529,7 +628,8 @@ export class ThemeEditor extends EditorPane {
 		// The synchronous document edit is complete; a second color gesture can proceed.
 		this.valid = true;
 		// Picker gestures must read the edited color even while preview compilation is pending.
-		this.renderRows();
+		const row = this.rows.get(id);
+		if (row) row.update(value, row.color, true, undefined);
 		this.revealColor(id, false);
 	}
 
@@ -603,6 +703,7 @@ export class ThemeEditor extends EditorPane {
 	}
 	private showMessage(message: string, error = false): void {
 		if (!this.message) return;
+		if (this.message.textContent === message && this.message.classList.contains('error') === error) return;
 		this.message.textContent = message;
 		this.message.classList.toggle('error', error);
 		this.layout(this.dimension);
@@ -638,8 +739,8 @@ class ThemeColorGroup extends Disposable {
 	}
 
 	public setCount(count: number): void {
-		this.count.textContent = String(count);
-		this.element.hidden = count === 0;
+		if (this.count.textContent !== String(count)) this.count.textContent = String(count);
+		if (this.element.hidden !== (count === 0)) this.element.hidden = count === 0;
 	}
 
 	public setFiltering(filtering: boolean): void {
@@ -666,6 +767,7 @@ class ThemeColorRow extends Disposable {
 	private sourceKey: string | undefined;
 	private currentColor: Color | undefined;
 	private documentValue: string | undefined;
+	private renderedState: string | undefined;
 	public get accessibleText(): string { return `${this.id}: ${this.hex.value}. ${this.source.textContent ?? ''}`; }
 	public get color(): Color | undefined { return this.currentColor; }
 
@@ -699,8 +801,11 @@ class ThemeColorRow extends Disposable {
 	public focus(): void { (this.hex.disabled ? this.name : this.hex).focus({ preventScroll: true }); }
 
 	public update(authored: string | undefined, effective: Color | undefined, enabled: boolean, references: ThemeColorReferences | undefined): void {
-		this.currentColor = authored ? Color.fromHex(authored) : effective;
 		const value = authored ?? (effective ? Color.Format.CSS.formatHexA(effective, true) : '');
+		const state = JSON.stringify([authored, effective ? Color.Format.CSS.formatHexA(effective, true) : undefined, enabled, references]);
+		if (state === this.renderedState && (this.hex.value === value || this.element.ownerDocument.activeElement === this.hex)) return;
+		this.renderedState = state;
+		this.currentColor = authored ? Color.fromHex(authored) : effective;
 		// Document changes (including Undo in JSON) win over the focused control.
 		// An incomplete hex input survives unrelated preview/catalog refreshes.
 		if (this.documentValue !== value || this.element.ownerDocument.activeElement !== this.hex) {

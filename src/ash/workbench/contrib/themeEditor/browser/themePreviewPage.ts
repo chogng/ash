@@ -43,6 +43,27 @@ const workbench = resources.add(await startWorkbench({
 	workspace: { id: 'theme-preview', folders: [{ id: 'theme-preview', name: 'theme-preview', uri: workspaceRoot, index: 0 }] },
 	workspaceFileSystemProvider: workspaceFiles,
 	defaultLayout: { parts: { sidebar: true, panel: false, auxiliarybar: false, agentSidebar: false } },
+	// Keep the production Parts and editor/terminal behavior without starting
+	// backend observers, history, account, update or extension contributions.
+	contributionIds: [
+		'workbench.contrib.layoutActionsContext',
+		'workbench.contrib.modernUI',
+		'workbench.contrib.sash',
+		'workbench.contrib.dynamicEditorConfigurations',
+		'workbench.contrib.editorStatus',
+		'workbench.contrib.documentSymbolsOutline',
+		'workbench.contrib.dirtyFilesIndicator',
+		'workbench.contrib.textFileEditorTracker',
+		'workbench.contrib.snippets',
+		'workbench.contrib.folding',
+		'workbench.contrib.output',
+		'editorAccessibilityHelpContribution',
+		'workbench.contrib.accessibilityStatus',
+		'workbench.contrib.unfocusedViewDimming',
+		'workbench.contrib.terminalAccessibilitySignals',
+		'workbench.contrib.saveAccessibilitySignals',
+		'workbench.contrib.editorTextPropertySignals',
+	],
 	initialConfiguration: { "contents": { "workbench": { "startupEditor": "none" } }, "keys": ["workbench.startupEditor"], "overrides": [] },
 	// Webviews are not part of the sample. The disconnected host supplies no remote resources.
 	environmentService: { webviewExternalEndpoint: 'https://{{uuid}}.invalid' },

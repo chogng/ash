@@ -1,4 +1,6 @@
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { URI } from '../../../../base/common/uri.js';
+import type { ITextFileService } from '../../textfile/common/textfiles.js';
 import type { IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
 import type { IExtensionApi } from '../../../../platform/extensions/common/extensionApi.js';
 import type { IColorTheme } from '../../../../platform/theme/common/themeService.js';
@@ -11,6 +13,8 @@ export class ExtensionColorThemeService extends Disposable {
 	private readonly registration = this._register(WorkbenchThemesRegistry.registerColorThemes([]));
 	private loading: Promise<void> | undefined;
 	private reloadQueued = false;
+	private sourceFiles = new Set<string>();
+	private readonly sourceListener = this._register(new MutableDisposable());
 
 	constructor(private readonly api: IExtensionApi, events: IServerEventApi) {
 		super();
@@ -33,6 +37,15 @@ export class ExtensionColorThemeService extends Disposable {
 
 	start(): Promise<void> {
 		return this.reload();
+	}
+
+	/** Source saves refresh the existing registration owner, including included syntax files. */
+	watchSourceSaves(files: ITextFileService): void {
+		this.sourceListener.value = files.onDidSave(event => {
+			if (this.sourceFiles.has(event.resource.toString())) {
+				void this.reload().catch(error => console.error('Extension color theme source refresh failed', error));
+			}
+		});
 	}
 
 	reload(): Promise<void> {
@@ -62,11 +75,13 @@ export class ExtensionColorThemeService extends Disposable {
 		const catalog = await this.api.list('refresh');
 		const themes: IColorTheme[] = [];
 		const resources = new Map<string, Promise<Uint8Array>>();
+		const sourceFiles = new Set<string>();
 		for (const extension of catalog.extensions) {
 			await verifyExtensionManifestDigest(extension);
 			const manifest = parseExtensionManifest(extension.manifestJson, extension);
 			for (const [index, contribution] of manifest.contributes.themes.entries()) {
 				const read = (path: string): Promise<Uint8Array> => {
+					if (extension.extensionLocation) sourceFiles.add(URI.joinPath(URI.parse(extension.extensionLocation), path).toString());
 					const key = `${extension.id}\0${path}`;
 					let bytes = resources.get(key);
 					if (!bytes) {
@@ -79,6 +94,9 @@ export class ExtensionColorThemeService extends Disposable {
 				themes.push(createExtensionWorkbenchColorTheme(definition));
 			}
 		}
-		if (!this.isDisposed) this.registration.replace(themes);
+		if (!this.isDisposed) {
+			this.sourceFiles = sourceFiles;
+			this.registration.replace(themes);
+		}
 	}
 }

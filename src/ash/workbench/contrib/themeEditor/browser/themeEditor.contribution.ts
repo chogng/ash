@@ -4,15 +4,20 @@ import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../pla
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IUserThemeService } from '../../../common/userThemes.js';
-import { serializeUserColorThemeDraft } from '../../../services/themes/common/colorThemeData.js';
+import { getWindow } from '../../../../base/browser/dom.js';
+import { IExtensionService } from '../../../services/extensions/common/extensionService.js';
+import { IExtensionResourceLoaderService } from '../../../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
 import { EditorPanes, registerEditorPane } from '../../../browser/editor.js';
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import { CODE_EDITOR_ID, TextResourceEditor } from '../../../browser/parts/editor/textResourceEditor.js';
 import { IEditorPartsService } from '../../../browser/parts/editor/editorParts.js';
-import { createThemeEditorInput, ThemeEditor, ThemeEditorId } from './themeEditor.js';
+import { createThemeEditorInput, getThemeEditorSource, ThemeEditor, ThemeEditorId } from './themeEditor.js';
 import './themeEditorAccessibility.js';
 
 const themesMenu = MenuId.for('ThemesSubMenu');
+// A popup opens asynchronously. Repeated invocations share that operation,
+// while the editor parts remain the only owner of open documents and windows.
+const opening = new WeakMap<IEditorPartsService, Map<string, Promise<void>>>();
 
 registerEditorPane({
 	id: ThemeEditorId,
@@ -39,13 +44,39 @@ registerAction2(class OpenThemeEditorAction extends Action2 {
 		if (!users.available) throw new Error(localize('themeEditor.unavailable', 'User theme files are unavailable in this window.'));
 		const theme = accessor.get(IWorkbenchThemeService).getColorTheme();
 		const source = users.sourceFor(theme.id);
-		const input = createThemeEditorInput(source
-			? { resource: URI.joinPath(users.directory!, source.file), label: source.file }
-			: { resource: URI.parse('untitled:/theme-' + crypto.randomUUID() + '.json'), label: localize('themeEditor.copyName', '{0} Copy', theme.label), initialText: serializeUserColorThemeDraft(theme, localize('themeEditor.copyName', '{0} Copy', theme.label)) });
+		const extension = source ? undefined : getThemeEditorSource(accessor.get(IExtensionService), theme.id);
+		if (!source && !extension) throw new Error(localize('themeEditor.sourceUnavailable', 'The source file for theme {0} is unavailable.', theme.label));
+		const resource = source ? URI.joinPath(users.directory!, source.file) : extension!.resource;
 		const parts = accessor.get(IEditorPartsService);
-		const existing = parts.parts.find(part => part.editorsMru.some(({ input: editor }) => editor.editorId === ThemeEditorId && editor.resource.toString() === input.resource.toString()));
-		const target = existing ?? await parts.createAuxiliaryEditorPart();
-		await target.openEditor(input, { preferredEditorId: ThemeEditorId, pinned: true });
+		let pending = opening.get(parts);
+		if (!pending) opening.set(parts, pending = new Map());
+		const key = resource.with({ query: '' }).toString();
+		const current = pending.get(key);
+		if (current) return current;
+		const resources = accessor.get(IExtensionResourceLoaderService);
+		const operation = (async () => {
+			const existing = parts.parts.find(part => part.editorsMru.some(({ input }) => input.editorId === ThemeEditorId && input.resource.with({ query: '' }).toString() === key));
+			if (existing) {
+				const editor = existing.editorsMru.find(({ input }) => input.editorId === ThemeEditorId && input.resource.with({ query: '' }).toString() === key)!;
+				const target = existing === parts.mainPart ? await parts.openEditorsInNewWindow([editor], 'move') : existing;
+				if (target) {
+					await target.openEditor(editor.input, { preferredEditorId: ThemeEditorId, pinned: true, revealIfOpened: true });
+					getWindow(target.domNode).focus();
+				}
+				return;
+			}
+			const packaged = resource.scheme === 'ash-extension-resource';
+			const input = createThemeEditorInput({
+				resource, label: source?.file ?? resource.path.split('/').at(-1),
+				...(packaged ? { initialText: await resources.readExtensionResource(resource), readOnly: true } : {}),
+			});
+			const target = await parts.createAuxiliaryEditorPart();
+			try { await target.openEditor(input, { preferredEditorId: ThemeEditorId, pinned: true }); }
+			catch (error) { await parts.closeAuxiliaryEditorPart(target); throw error; }
+		})();
+		pending.set(key, operation);
+		try { await operation; }
+		finally { if (pending.get(key) === operation) pending.delete(key); }
 	}
 });
 MenusRegistry.appendMenuItem(themesMenu, {

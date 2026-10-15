@@ -1,5 +1,5 @@
 import './media/themePreview.css';
-import { addDisposableListener, stopEvent } from '../../../../base/browser/dom.js';
+import { addDisposableListener, scheduleAtNextAnimationFrame, stopEvent } from '../../../../base/browser/dom.js';
 import { installBaseUiStyles } from '../../../../base/browser/ui/styles.js';
 import { DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Color } from '../../../../base/common/color.js';
@@ -126,6 +126,8 @@ console.log(describeTheme(palette));
 	const disconnected = createDisconnectedRendererApi();
 	const api = {
 		...disconnected,
+		// The fixed preview has no accounts or account-managed settings.
+		github: { ...disconnected.github, listAccounts: async () => [] },
 		language: { ...disconnected.language, servers: async () => ({ servers: [] }) },
 		// Editor overlays have no backend consumer in this host.
 		codebaseSymbols: {
@@ -193,38 +195,82 @@ export function connectThemePreview(
 	let port: MessagePort | undefined;
 	const channelToken = new URLSearchParams(location.search).get('channel');
 	const localFile = location.protocol === 'file:';
-	const publishContent = (): void => {
-		port?.postMessage({ kind: 'ash-theme-preview-content', text: readContent() });
+	const contentFrame = resources.add(new MutableDisposable<ReturnType<typeof scheduleAtNextAnimationFrame>>());
+	let lastContent: string | undefined;
+	const sendContent = (): void => {
+		if (!port || resources.isDisposed) return;
+		const text = readContent();
+		if (text === lastContent) return;
+		lastContent = text;
+		port.postMessage({ kind: 'ash-theme-preview-content', text });
 	};
-	let updateQueue = Promise.resolve();
-	async function updateTheme(data: unknown): Promise<void> {
-		if (!data || typeof data !== 'object' || !('kind' in data) || data.kind !== 'ash-theme-preview-theme' || !('source' in data) || typeof data.source !== 'string' || data.source.length > 1_048_576) return;
-		const parsed = parseUserColorTheme(data.source, 'theme-preview');
-		if (theme.value) theme.value.update(parsed);
-		else theme.value = themeService.previewColorTheme(parsed);
-		if ('configuration' in data && data.configuration && typeof data.configuration === 'object' && !Array.isArray(data.configuration)) {
+	const publishContent = (): void => {
+		if (!contentFrame.value && !resources.isDisposed) {
+			contentFrame.value = scheduleAtNextAnimationFrame(window, () => {
+				contentFrame.clear();
+				sendContent();
+			});
+		}
+	};
+	let lastSource: string | undefined;
+	let lastTheme: ReturnType<IWorkbenchThemeService['getColorTheme']> | undefined;
+	const reportedColors = new Map<string, string>();
+	async function updateTheme(data: { source?: string; configuration?: Record<string, unknown>; }): Promise<void> {
+		if (data.configuration) {
 			for (const key of configurationKeys) {
 				if (registeredKeys.has(key) && Object.hasOwn(data.configuration, key)) {
-					const value = (data.configuration as Record<string, unknown>)[key];
+					if (resources.isDisposed) return;
+					const value = data.configuration[key];
 					if (JSON.stringify(configuration.getValue(key)) !== JSON.stringify(value)) await configuration.updateValue(key, value);
 				}
 			}
+			publishContent();
+		}
+		if (resources.isDisposed) return;
+		if (data.source !== undefined && data.source !== lastSource) {
+			const parsed = parseUserColorTheme(data.source, 'theme-preview');
+			if (theme.value) theme.value.update(parsed);
+			else theme.value = themeService.previewColorTheme(parsed);
+			lastSource = data.source;
 		}
 		document.body.dataset.ready = 'true';
-		publishContent();
 		const activeTheme = themeService.getColorTheme();
-		port?.postMessage({
-			kind: 'ash-theme-preview-colors',
-			colors: Colors.getColors().map(entry => {
-				const value = activeTheme.getColor(entry.id);
-				return {
-					id: entry.id, description: entry.description,
-					value: value ? Color.Format.CSS.formatHexA(value, true) : null,
-					references: getThemeColorReferences(activeTheme, entry),
-				};
-			}),
+		if (activeTheme === lastTheme) return;
+		// Presentation changes do not recolor the workbench. A color edit only
+		// returns tokens whose effective value or dependency actually changed.
+		const replace = lastTheme === undefined;
+		lastTheme = activeTheme;
+		const colors = Colors.getColors().flatMap(entry => {
+			const value = activeTheme.getColor(entry.id);
+			const color = {
+				id: entry.id, description: entry.description,
+				value: value ? Color.Format.CSS.formatHexA(value, true) : null,
+				references: getThemeColorReferences(activeTheme, entry),
+			};
+			const serialized = JSON.stringify(color);
+			if (reportedColors.get(entry.id) === serialized) return [];
+			reportedColors.set(entry.id, serialized);
+			return [color];
 		});
+		if (replace || colors.length) port?.postMessage({ kind: 'ash-theme-preview-colors', replace, colors });
 	}
+	const updateFrame = resources.add(new MutableDisposable<ReturnType<typeof scheduleAtNextAnimationFrame>>());
+	let pending: { source?: string; configuration?: Record<string, unknown>; } | undefined;
+	let updating = false;
+	const scheduleUpdate = (): void => {
+		if (updating || updateFrame.value || resources.isDisposed) return;
+		updateFrame.value = scheduleAtNextAnimationFrame(window, () => {
+			updateFrame.clear();
+			const data = pending;
+			pending = undefined;
+			if (!data) return;
+			updating = true;
+			void updateTheme(data).catch(error => console.error('Theme preview rejected invalid data', error)).finally(() => {
+				updating = false;
+				if (pending) scheduleUpdate();
+			});
+		});
+	};
 	resources.add(addDisposableListener(window, 'message', (event: MessageEvent<unknown>) => {
 		const data = event.data;
 		// Auxiliary editors borrow the main window's realm and clear window.opener.
@@ -235,7 +281,18 @@ export function connectThemePreview(
 		const connection = port = event.ports[0]!;
 		resources.add(toDisposable(() => connection.close()));
 		resources.add(addDisposableListener(connection, 'message', (message: MessageEvent<unknown>) => {
-			updateQueue = updateQueue.then(() => updateTheme(message.data)).catch(error => console.error('Theme preview rejected invalid data', error));
+			const data = message.data;
+			if (!data || typeof data !== 'object' || !('kind' in data) || data.kind !== 'ash-theme-preview-theme') return;
+			if ('source' in data && (typeof data.source !== 'string' || data.source.length > 1_048_576)) return;
+			if ('configuration' in data && (!data.configuration || typeof data.configuration !== 'object' || Array.isArray(data.configuration))) return;
+			// Keep the newest pending state while an async configuration write is
+			// running. Replaying every intermediate picker value creates a backlog.
+			pending = {
+				...pending,
+				...('source' in data ? { source: data.source as string } : {}),
+				...('configuration' in data ? { configuration: data.configuration as Record<string, unknown> } : {}),
+			};
+			scheduleUpdate();
 		}));
 		connection.start();
 		publishContent();
@@ -243,6 +300,7 @@ export function connectThemePreview(
 	resources.add(addDisposableListener(window, 'keydown', event => {
 		if (event.altKey && !event.ctrlKey && !event.metaKey && (event.key === 'F1' || event.key === 'F2')) {
 			stopEvent(event);
+			sendContent();
 			port?.postMessage({ kind: 'ash-theme-preview-accessibility', help: event.key === 'F1' });
 		}
 	}, { capture: true }));

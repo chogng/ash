@@ -342,6 +342,8 @@ export interface IStartWorkbenchOptions {
 	readonly productName: string;
 	readonly environmentService: IWorkbenchEnvironmentService;
 	readonly defaultLayout?: WorkbenchDefaultLayout;
+	/** An embedded host may initialize only the contributions used by its UI. */
+	readonly contributionIds?: readonly string[];
 	readonly api: IRendererHost;
 	/** Optional host-owned execution boundary; declarative extension assets remain available. */
 	readonly extensionHost?: IExtensionHostApi;
@@ -379,6 +381,7 @@ export async function startWorkbench({
 	productName,
 	environmentService,
 	defaultLayout,
+	contributionIds,
 	api,
 	extensionHost,
 	browserFileSystemProvider,
@@ -454,6 +457,7 @@ export async function startWorkbench({
 			createURLService,
 			environmentService,
 			serviceCollection,
+			contributionIds,
 		);
 	} catch (error) {
 		userDataFiles?.dispose();
@@ -522,6 +526,7 @@ export class Workbench extends Disposable {
 		createURLService: IStartWorkbenchOptions['createURLService'],
 		environmentService: IWorkbenchEnvironmentService,
 		serviceCollection = new ServiceCollection(),
+		contributionIds?: readonly string[],
 	) {
 		super();
 		performance.mark('ash.workbench.constructor-start');
@@ -685,6 +690,7 @@ export class Workbench extends Disposable {
 		const languagePackService = this._register(services.createInstance(WebLanguagePacksService, builtinLanguagePackCatalogs, preinstalledLanguagePacks));
 		services.registerInstance(ILanguagePackService, languagePackService);
 		const textFileService = this._register(services.createInstance(TextFileService));
+		themes.watchSourceSaves(textFileService);
 		services.registerInstance(ITextFileService, textFileService);
 		const workingCopyService = this._register(services.createInstance(BrowserWorkingCopyService));
 		this.workingCopies = workingCopyService;
@@ -969,7 +975,7 @@ export class Workbench extends Disposable {
 		const viewDescriptors = this._register(services.createInstance(ViewDescriptorService, {}));
 		services.registerInstance(IViewDescriptorService, viewDescriptors);
 		const contributions = this._register(
-			WorkbenchContributionsRegistry.createHost(services),
+			WorkbenchContributionsRegistry.createHost(services, undefined, contributionIds),
 		);
 		this.contributions = contributions;
 
