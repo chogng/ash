@@ -634,6 +634,12 @@ impl AgentRuntime for Runtime<'_> {
     fn tool_profile(&self) -> Result<ToolProfileSnapshot, CoreError> {
         self.executor.tool_profile_snapshot()
     }
+    fn resolve_tool_scope(
+        &self,
+        scope: &ash_protocol::ToolScope,
+    ) -> Result<Vec<ToolName>, CoreError> {
+        self.executor.resolve_tool_scope(scope)
+    }
     fn cancel_interaction(
         &self,
         thread_id: &ThreadId,

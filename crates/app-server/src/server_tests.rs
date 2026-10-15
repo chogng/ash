@@ -9311,7 +9311,7 @@ fn typed_tool_selection_freezes_the_model_surface_and_replays_through_rpc() {
         "jsonrpc":"2.0", "id":4, "method":"session/request",
         "params":{"commandId":"tools-turn", "sessionId":session_id,
           "request":{"type":"startTurn", "expectedSequence":1, "threadId":thread_id, "toolMode":"direct",
-            "input":[{"type":"text", "text":"hello"},{"type":"toolSelection", "disabled":["shell-command"]}]}}
+            "input":[{"type":"text", "text":"hello"},{"type":"toolSelection", "disabled":["shell-command"], "scope":{"tools":["shell-command"]}}]}}
     });
     let started = call(&server, &mut connection, request.clone());
     assert!(started.get("error").is_none(), "{started}");
@@ -9345,6 +9345,10 @@ fn typed_tool_selection_freezes_the_model_surface_and_replays_through_rpc() {
         (
             7,
             serde_json::json!([{"type":"toolSelection", "disabled":[]}]),
+        ),
+        (
+            8,
+            serde_json::json!([{"type":"text", "text":"hello"}, {"type":"toolSelection", "disabled":[], "scope":{"tools":["unknown-tool"]}}]),
         ),
     ] {
         request["id"] = serde_json::json!(id);

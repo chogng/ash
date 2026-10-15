@@ -2308,9 +2308,7 @@ impl AppServer {
                             disabled,
                             allowed: scope
                                 .as_ref()
-                                .map(|scope| {
-                                    self.turn_executor_snapshot().resolve_tool_scope(scope)
-                                })
+                                .map(|scope| self.agent_runtime().resolve_tool_scope(scope))
                                 .transpose()
                                 .map_err(core_error)?,
                         }

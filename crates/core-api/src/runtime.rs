@@ -29,7 +29,9 @@ use ash_protocol::ThreadId;
 use ash_protocol::ThreadUpdateEnvelope;
 use ash_protocol::ToolDefinition;
 use ash_protocol::ToolMode;
+use ash_protocol::ToolName;
 use ash_protocol::ToolProfileSnapshot;
+use ash_protocol::ToolScope;
 use ash_protocol::TurnId;
 use ash_protocol::TurnInstructions;
 use ash_protocol::TurnKind;
@@ -295,6 +297,8 @@ pub trait AgentRuntime {
         reason: InteractionCancelReason,
     ) -> Result<(), CoreError>;
     fn tool_profile(&self) -> Result<ToolProfileSnapshot, CoreError>;
+    /// Resolves a product selection against this environment's complete tool catalog.
+    fn resolve_tool_scope(&self, scope: &ToolScope) -> Result<Vec<ToolName>, CoreError>;
     fn recover_agents(&self) -> Result<usize, CoreError>;
     fn recover_tools(&self) -> Result<usize, CoreError>;
     fn recover_extensions(&self) -> Result<usize, CoreError>;
