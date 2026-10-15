@@ -3,4 +3,5 @@ load("//:defs.bzl", "ash_rust_crate")
 ash_rust_crate(
     name = "file-system",
     crate_name = "ash_file_system",
+    data = glob(["src/text_encoding_*.bin"]),
 )
