@@ -622,7 +622,6 @@ export abstract class Workbench extends Disposable {
 		const hoverService = this._register(new HoverService(configurationService, contextViews, contextMenus));
 		services.registerInstance(IHoverService, hoverService);
 		this._register(setHoverDelegate(hoverService));
-		void configurationService.reloadConfiguration().catch((error: unknown) => console.error("Failed to initialize configuration", error));
 		const accessibleViewService = this._register(services.createInstance(AccessibleViewService));
 		services.registerInstance(IAccessibleViewService, accessibleViewService);
 		this._register(registerExtensionManagementActions());
@@ -853,7 +852,9 @@ export abstract class Workbench extends Disposable {
 		// Stop layout persistence before Parts are released; the service scope otherwise outlives their editor grids.
 		this._register(toDisposable(() => entryLayout.dispose()));
 		this.lifecycleService.phase = LifecyclePhase.Ready;
-		this.whenRestored = Promise.all([keybindingsReady, extensionReady, ...serviceContributionReady]).then(() => this.initialize(view, configurationService, ownerWindow, entryLayout, contributions, storage, recoveredDrafts));
+		// Configuration initialization above owns its first load and reports unavailable workspace settings.
+		// Re-reading all workspace files here would turn a disconnected backend into a fatal startup error.
+		this.whenRestored = Promise.all([keybindingsReady, extensionReady, ...serviceContributionReady]).then(() => this.initialize(view, ownerWindow, entryLayout, contributions, storage, recoveredDrafts));
 	}
 
 	async acceptHandoff(options: IOpenAgentsWindowOptions): Promise<void> {
@@ -876,9 +877,7 @@ export abstract class Workbench extends Disposable {
 		return this.lifecycleService.shutdown(reason);
 	}
 
-	private async initialize(view: SessionsService, configurationService: ConfigurationService, ownerWindow: Window, entryLayout: ISessionsLayoutService, contributions: WorkbenchContributionHost, storage: IStorageService, recoveredDrafts: ReturnType<typeof migrateNewChatDraftState>): Promise<void> {
-		if (this.isDisposed) return;
-		await configurationService.reloadConfiguration();
+	private async initialize(view: SessionsService, ownerWindow: Window, entryLayout: ISessionsLayoutService, contributions: WorkbenchContributionHost, storage: IStorageService, recoveredDrafts: ReturnType<typeof migrateNewChatDraftState>): Promise<void> {
 		if (this.isDisposed) return;
 		await view.initialize();
 		if (this.isDisposed) return;
