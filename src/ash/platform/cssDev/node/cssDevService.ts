@@ -12,7 +12,7 @@ interface CSSDevelopmentOptions {
 	readonly isBuilt: boolean;
 }
 
-/** Discovers source-relative CSS modules once for a development host's lifetime. */
+/** Discovers current source-relative CSS modules for development pages. */
 export class CSSDevelopmentService implements ICSSDevelopmentService {
 	declare readonly _serviceBrand: undefined;
 	public readonly isEnabled: boolean;
@@ -25,8 +25,9 @@ export class CSSDevelopmentService implements ICSSDevelopmentService {
 	}
 
 	public getCssModules(): Promise<string[]> {
-		this.modules ??= this.isEnabled ? this.scan() : Promise.resolve([]);
-		return this.modules;
+		if (!this.isEnabled) { return Promise.resolve([]); }
+		// Share concurrent scans, but refresh for the next page load after source files change.
+		return this.modules ??= this.scan().finally(() => { this.modules = undefined; });
 	}
 
 	private async scan(): Promise<string[]> {
