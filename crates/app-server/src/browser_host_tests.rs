@@ -20,7 +20,7 @@ fn browser_cdp_requires_a_grant_and_registers_and_releases_created_pages() {
     host.register(
         7,
         ClientBrowserCapability {
-            version: 3,
+            version: 4,
             observe: true,
             input: true,
         },
@@ -550,6 +550,7 @@ fn browser_host(resources: Arc<Mutex<ResourceStore>>) -> BrowserHost {
     let mut host = BrowserHost::new(
         resources,
         Arc::new(crate::client_host::ClientHost::default()),
+        Arc::new(|_, _, _, _| Err(core_api::BrowserError::CapabilityUnavailable)),
     );
     host.thread_id = Some(ash_protocol::ThreadId::new("browser-thread").unwrap());
     host
@@ -753,5 +754,80 @@ impl ash_core::ToolInteractionService for BrowserNetworkInteractions {
         _: ash_protocol::RequestUserInput,
     ) -> Result<ash_core::ToolUserInputOutcome, core_api::CoreError> {
         Err(core_api::CoreError::Policy("unexpected user input".into()))
+    }
+}
+
+#[test]
+fn legacy_browser_host_cannot_enable_advanced_cdp_even_when_the_client_opts_in() {
+    let mut host = browser_host(Arc::new(Mutex::new(ResourceStore::default())));
+    host.owner = Some(7);
+    let outbound = NotificationQueue::default();
+    host.register(
+        7,
+        ClientBrowserCapability {
+            version: 3,
+            observe: true,
+            input: true,
+        },
+        outbound.clone(),
+    );
+    let anchor = BrowserTargetId("browser_target_anchor".into());
+    host.state.lock().unwrap().target_owners.insert(
+        anchor.0.clone(),
+        BrowserTargetOwner {
+            connection_id: 7,
+            thread_id: host.thread_id().unwrap().clone(),
+        },
+    );
+    let settings = ash_app_server_protocol::protocol::browser::BrowserConfigureParams {
+        enabled: true,
+        cdp_enabled: true,
+    };
+    assert!(host.configure(8, &settings).is_err());
+    for cdp_enabled in [false, true, false, true] {
+        host.configure(
+            7,
+            &ash_app_server_protocol::protocol::browser::BrowserConfigureParams {
+                enabled: true,
+                cdp_enabled,
+            },
+        )
+        .unwrap();
+        for operation in [
+            BrowserCdpOperation::Command {
+                method: "DOM.setFileInputFiles".into(),
+                params: json!({"files":["/unapproved/secret.txt"], "backendNodeId":1})
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+                session_id: None,
+            },
+            BrowserCdpOperation::Command {
+                method: "Runtime.evaluate".into(),
+                params: serde_json::Map::new(),
+                session_id: Some("cached-child-session".into()),
+            },
+            BrowserCdpOperation::ReadEvents,
+            BrowserCdpOperation::Close,
+        ] {
+            assert!(matches!(
+                host.perform(
+                    BrowserAction::Cdp {
+                        target_id: anchor.clone(),
+                        operation,
+                    },
+                    &CancellationSource::new().token(),
+                ),
+                Err(BrowserError::CapabilityUnavailable)
+            ));
+        }
+        assert!(outbound.listener().drain().is_empty());
+        // Ordinary browser authority remains usable with advanced CDP disabled.
+        assert!(host.owner_availability().1);
+        assert_eq!(
+            host.target_owner(&anchor, BrowserHostOperation::Input)
+                .unwrap(),
+            7
+        );
     }
 }

@@ -76,6 +76,7 @@ mod attachment_operations_tests;
 mod automation_execution;
 mod automation_operations;
 mod backup_operations;
+mod browser_file_access;
 mod call_adapters;
 mod call_operations;
 mod call_runtime;
@@ -607,14 +608,6 @@ impl AppServer {
         let text_document_host = Arc::new(crate::text_document_host::TextDocumentHost::new(
             Arc::clone(&client_host),
         ));
-        let browser_host = Arc::new(BrowserHost::new(
-            Arc::clone(&resources),
-            Arc::clone(&client_host),
-        ));
-        let browser_tool_port = crate::tool_composition::ToolPort::host(
-            Arc::new(BrowserToolService::new(Arc::clone(&browser_host))),
-            Arc::new(BrowserToolPolicy),
-        );
         let app_tools_host = Arc::new(crate::app_tools_host::AppToolsHost::default());
         let app_tool_port = crate::tool_composition::ToolPort::application(
             Arc::new(app_tools::AppToolService::new(app_tools_host.clone())),
@@ -659,6 +652,39 @@ impl AppServer {
         let mut initial_runtime = EnvRuntime::empty(turn_executor);
         initial_runtime.dir_grants = directory_grants;
         let env_runtime = Arc::new(RwLock::new(initial_runtime));
+        let env_config = Arc::new(RwLock::new(environment_runtime::EnvRuntimeConfig::default()));
+        let browser_config = Arc::downgrade(&env_config);
+        let browser_files = Arc::downgrade(&env_runtime);
+        let browser_threads = Arc::downgrade(&threads);
+        let browser_host = Arc::new(BrowserHost::new(
+            Arc::clone(&resources),
+            Arc::clone(&client_host),
+            Arc::new(move |thread, turn, paths, cancellation| {
+                // Runtime tool composition owns this host; weak references avoid retaining it.
+                let browser_files = browser_files
+                    .upgrade()
+                    .ok_or(core_api::BrowserError::CapabilityUnavailable)?;
+                let browser_config = browser_config
+                    .upgrade()
+                    .ok_or(core_api::BrowserError::CapabilityUnavailable)?;
+                let browser_threads = browser_threads
+                    .upgrade()
+                    .ok_or(core_api::BrowserError::CapabilityUnavailable)?;
+                browser_file_access::read(
+                    &browser_files,
+                    &browser_config,
+                    &browser_threads,
+                    thread,
+                    turn,
+                    paths,
+                    cancellation,
+                )
+            }),
+        ));
+        let browser_tool_port = crate::tool_composition::ToolPort::host(
+            Arc::new(BrowserToolService::new(Arc::clone(&browser_host))),
+            Arc::new(BrowserToolPolicy),
+        );
         let diagnostics = diagnostics::Diagnostics::default();
         let telemetry = ash_otel::Telemetry::new(diagnostics.clone());
         Self {
@@ -698,7 +724,7 @@ impl AppServer {
             provider_credentials: None,
             secret_store: None,
             file_search: Arc::new(file_search::Service),
-            env_config: Arc::new(RwLock::new(environment_runtime::EnvRuntimeConfig::default())),
+            env_config,
             connectors: None,
             connector_oauth: None,
             connector_device_oauth: None,

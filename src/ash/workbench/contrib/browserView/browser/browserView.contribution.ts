@@ -36,7 +36,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	setting: {
 		valueType: 'boolean',
 		get title() { return localize({ bundle: 'ash.workbench', key: 'browser.cdpSetting' }, 'Allow advanced browser control (CDP)'); },
-		get description() { return localize({ bundle: 'ash.workbench', key: 'browser.cdpDescription' }, 'Allow agents to send Chrome DevTools Protocol commands and read events from their isolated browser pages, including DOM, JavaScript, network and debugging. Requires Agent browser tools. Turning this off releases CDP connections and their temporary contexts.'); },
+		get description() { return localize({ bundle: 'ash.workbench', key: 'browser.cdpDescription' }, 'Allow agents to send reviewed Chrome DevTools Protocol commands to isolated Agent pages. File uploads require the task’s file permissions; direct host filesystem access is blocked. Turning this off releases CDP connections and temporary contexts.'); },
 	},
 });
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({

@@ -11,6 +11,43 @@ import type { BrowserCdpOperationDto } from '../../../../../../.build/protocol/t
 suite('Browser view groups', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('Main rejects file commands, local URL reads and drag paths on both page and child sessions', async () => {
+		using f = fixture();
+		const page = await f.manager.createTarget('about:blank', 'one', new AbortController().signal);
+		const groups = f.store.add(f.instantiation.createInstance(BrowserViewGroupMainService));
+		const group = await groups.createGroup({ sandboxSessionId: 'one', agentOnly: true });
+		const messages: Array<CDPEvent | CDPResponse> = [];
+		f.store.add(groups.onDynamicCDPMessage(group)(message => messages.push(message)));
+		let id = 0;
+		await groups.sendCDPMessage(group, { id: ++id, method: 'Target.attachToTarget', params: { targetId: page.id, flatten: true } });
+		const parent = ((messages.at(-1) as CDPResponse).result as { sessionId: string; }).sessionId;
+		await groups.sendCDPMessage(group, { id: ++id, method: 'Target.setAutoAttach', params: { autoAttach: true, flatten: true }, sessionId: parent });
+		page.webContents.debugger.emit('message', {}, 'Target.attachedToTarget', { sessionId: 'chromium-child', targetInfo: { targetId: 'child', type: 'iframe', title: '', url: 'about:blank', attached: true, browserContextId: page.session.id }, waitingForDebugger: false }, f.debugSessions[0]);
+		const child = ((messages.at(-1) as CDPEvent).params as { sessionId: string; }).sessionId;
+		assert.ok(child);
+		const before = f.commands.length;
+		for (const sessionId of [parent, child]) {
+			for (const [method, params] of [
+				['DOM.setFileInputFiles', { files: ['/unapproved/secret.txt'], backendNodeId: 1 }],
+				['DOM.getFileInfo', { objectId: 'file' }],
+				['FileSystem.getDirectory', { bucketFileSystemLocator: { storageKey: 'local' } }],
+				['Network.loadNetworkResource', { url: 'file:///unapproved/secret.txt', options: {} }],
+				['Page.navigate', { url: 'FILE:///unapproved/secret.txt' }],
+				['Page.getResourceContent', { url: 'file:///unapproved/secret.txt', frameId: 'frame' }],
+				['Fetch.continueRequest', { url: 'file:///unapproved/secret.txt', requestId: 'request' }],
+				['Input.dispatchDragEvent', { type: 'drop', x: 0, y: 0, data: { items: [], dragOperationsMask: 1, files: ['/unapproved/secret.txt'] } }],
+				['Future.readLocalFile', { path: '/unapproved/secret.txt' }],
+			] as const) {
+				await groups.sendCDPMessage(group, { id: ++id, method, params, sessionId });
+				assert.match((messages.at(-1) as CDPResponse).error!.message, /Browser(FileAccessDenied|CDPMethodDenied)/);
+			}
+		}
+		assert.equal(f.commands.length, before);
+		await groups.sendCDPMessage(group, { id: ++id, method: 'Runtime.evaluate', params: { expression: '1 + 1' }, sessionId: child });
+		assert.equal(f.commands.at(-1)!.method, 'Runtime.evaluate');
+		assert.equal((messages.at(-1) as CDPResponse).error, undefined);
+	});
+
 	test('advanced CDP scopes contexts and event buffers to a Thread and closes them on revocation', async () => {
 		using f = fixture();
 		using host = f.createHost();

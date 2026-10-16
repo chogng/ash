@@ -73,7 +73,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 		initializeTimeoutMs: 30_000,
 		capabilities: {
 			agentInteractions: { version: 1, kinds: ['approval', 'permissions', 'userInput'] },
-			...(hostCapabilities.browser ? { browser: { version: 3, observe: true, input: true } } : {}),
+			...(hostCapabilities.browser ? { browser: { version: 4, observe: true, input: true } } : {}),
 			...(hostCapabilities.textDocuments ? { textDocuments: { version: 2 } } : {}),
 			...(hostCapabilities.appTools ? { appTools: { version: 1, agents: true, desktop: true } } : {}),
 			directoryGrantsHost: { version: 1 },
@@ -113,7 +113,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 						initializeTimeoutMs: 30_000,
 						capabilities: {
 							agentInteractions: { version: 1, kinds: ['approval', 'permissions', 'userInput'] },
-							...(hostCapabilities.browser ? { browser: { version: 3, observe: true, input: true } } : {}),
+							...(hostCapabilities.browser ? { browser: { version: 4, observe: true, input: true } } : {}),
 							...(hostCapabilities.textDocuments ? { textDocuments: { version: 2 } } : {}),
 						},
 					},

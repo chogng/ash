@@ -203,7 +203,21 @@ pub struct BrowserPerformParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub network_token: Option<String>,
+    /// Authorized file bytes, never paths for Chromium to open. Only used for DOM.setFileInputFiles.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    #[schemars(length(max = 16))]
+    pub uploads: Option<Vec<BrowserUploadFile>>,
     pub action: BrowserPerformActionDto,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BrowserUploadFile {
+    #[schemars(length(min = 1, max = 255))]
+    pub name: String,
+    #[schemars(length(max = 5592408))]
+    pub data_base64: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

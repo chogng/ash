@@ -3,15 +3,52 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { isRecord } from '../../../base/common/types.js';
+import { getMediaOrTextMime } from '../../../base/common/mime.js';
 import { raceCancellationError } from '../../../base/common/async.js';
-import type { IBrowserViewInfo } from '../common/browserView.js';
+import type { IBrowserViewInfo, IBrowserUploadFile } from '../common/browserView.js';
 import type { IBrowserViewGroup, IBrowserViewGroupFilter } from '../common/browserViewGroup.js';
 import type { CDPRequest, CDPTargetEvent, CDPTargetInfo } from '../common/cdp/types.js';
 import { CDPBrowserProxy } from '../common/cdp/proxy.js';
 import type { BrowserView } from './browserView.js';
 import { IBrowserViewMainService } from './browserViewMainService.js';
 
-interface CommandAuthority { readonly signal: AbortSignal; readonly networkToken: string | null; }
+interface CommandAuthority { readonly signal: AbortSignal; readonly networkToken: string | null; readonly uploads?: readonly IBrowserUploadFile[]; }
+
+// Only reviewed page commands reach Chromium. New protocol methods must be reviewed here;
+// browser/target commands are implemented by the logical proxy instead of forwarded.
+const pageCommands = new Set(Object.entries({
+	Accessibility: 'enable disable getAXNodeAndAncestors getChildAXNodes getFullAXTree getPartialAXTree getRootAXNode queryAXTree',
+	CSS: 'enable disable addRule collectClassNames createStyleSheet forcePseudoState getBackgroundColors getComputedStyleForNode getInlineStylesForNode getMatchedStylesForNode getMediaQueries getPlatformFontsForNode getStyleSheetText setEffectivePropertyValueForNode setMediaText setRuleSelector setStyleSheetText setStyleTexts startRuleUsageTracking stopRuleUsageTracking takeCoverageDelta',
+	DOM: 'enable disable describeNode focus getAttributes getBoxModel getContentQuads getDocument getFlattenedDocument getNodeForLocation getOuterHTML getRelayoutBoundary getSearchResults markUndoableState performSearch pushNodeByPathToFrontend pushNodesByBackendIdsToFrontend querySelector querySelectorAll removeAttribute removeNode requestChildNodes requestNode resolveNode scrollIntoViewIfNeeded setAttributeValue setAttributesAsText setNodeName setNodeValue setOuterHTML undo redo discardSearchResults setFileInputFiles',
+	DOMSnapshot: 'captureSnapshot getSnapshot enable disable',
+	Debugger: 'enable disable pause resume stepInto stepOut stepOver continueToLocation evaluateOnCallFrame getPossibleBreakpoints getScriptSource getStackTrace setAsyncCallStackDepth setBlackboxPatterns setBlackboxedRanges setBreakpoint setBreakpointByUrl setBreakpointsActive setPauseOnExceptions setScriptSource setSkipAllPauses removeBreakpoint searchInContent',
+	Emulation: 'canEmulate clearDeviceMetricsOverride clearGeolocationOverride resetPageScaleFactor setCPUThrottlingRate setDefaultBackgroundColorOverride setDeviceMetricsOverride setEmulatedMedia setEmitTouchEventsForMouse setFocusEmulationEnabled setGeolocationOverride setLocaleOverride setPageScaleFactor setScriptExecutionDisabled setTimezoneOverride setTouchEmulationEnabled setUserAgentOverride setVirtualTimePolicy',
+	Fetch: 'enable disable continueRequest continueResponse failRequest fulfillRequest continueWithAuth getResponseBody',
+	HeapProfiler: 'enable disable collectGarbage getHeapObjectId getObjectByHeapObjectId startSampling stopSampling startTrackingHeapObjects stopTrackingHeapObjects takeHeapSnapshot',
+	Input: 'cancelDragging dispatchDragEvent dispatchKeyEvent dispatchMouseEvent dispatchTouchEvent emulateTouchFromMouseEvent insertText setIgnoreInputEvents setInterceptDrags synthesizePinchGesture synthesizeScrollGesture synthesizeTapGesture',
+	Log: 'enable disable clear startViolationsReport stopViolationsReport',
+	Network: 'enable disable clearBrowserCache clearBrowserCookies deleteCookies emulateNetworkConditions getAllCookies getCookies getRequestPostData getResponseBody getSecurityIsolationStatus replayXHR searchInResponseBody setBlockedURLs setBypassServiceWorker setCacheDisabled setCookie setCookies setExtraHTTPHeaders setRequestInterception setUserAgentOverride continueInterceptedRequest getResponseBodyForInterception',
+	Overlay: 'enable disable hideHighlight highlightFrame highlightNode highlightQuad highlightRect setInspectMode setShowDebugBorders setShowFPSCounter setShowPaintRects setShowScrollBottleneckRects',
+	Page: 'enable disable addScriptToEvaluateOnNewDocument bringToFront captureScreenshot captureSnapshot close createIsolatedWorld getAppManifest getFrameTree getLayoutMetrics getNavigationHistory getResourceContent getResourceTree handleJavaScriptDialog navigate navigateToHistoryEntry printToPDF reload removeScriptToEvaluateOnNewDocument resetNavigationHistory screencastFrameAck searchInResource setBypassCSP setDocumentContent setInterceptFileChooserDialog setLifecycleEventsEnabled setWebLifecycleState startScreencast stopLoading stopScreencast',
+	Performance: 'enable disable getMetrics',
+	Profiler: 'enable disable start stop startPreciseCoverage stopPreciseCoverage takePreciseCoverage getBestEffortCoverage setSamplingInterval',
+	Runtime: 'enable disable addBinding removeBinding awaitPromise callFunctionOn compileScript discardConsoleEntries evaluate getHeapUsage getIsolateId getProperties globalLexicalScopeNames queryObjects releaseObject releaseObjectGroup runIfWaitingForDebugger runScript setAsyncCallStackDepth setCustomObjectFormatterEnabled terminateExecution',
+	Security: 'enable disable',
+	Target: 'setAutoAttach',
+}).flatMap(([domain, methods]) => methods.split(' ').map(method => `${domain}.${method}`)));
+
+function validatePageCommand(method: string, params: Record<string, unknown>): void {
+	if (!pageCommands.has(method)) { throw new Error('BrowserCDPMethodDenied: ' + method); }
+	// These CDP entrypoints can bypass normal page navigation or smuggle paths in drag data.
+	if (method === 'Input.dispatchDragEvent' && isRecord(params.data) && params.data.files !== undefined
+		&& (!Array.isArray(params.data.files) || params.data.files.length !== 0)) { throw new Error('BrowserFileAccessDenied'); }
+	if (['Page.navigate', 'Page.getResourceContent', 'Page.searchInResource', 'Fetch.continueRequest', 'Network.continueInterceptedRequest'].includes(method) && params.url !== undefined) {
+		if (typeof params.url !== 'string') { throw new Error('BrowserFileAccessDenied'); }
+		const url = new URL(params.url);
+		if (!['http:', 'https:', 'about:', 'data:', 'blob:'].includes(url.protocol)) { throw new Error('BrowserFileAccessDenied'); }
+	}
+	if (method === 'Page.createIsolatedWorld' && params.grantUniveralAccess === true) { throw new Error('BrowserFileAccessDenied'); }
+}
 
 /** A logical CDP browser borrows Main's pages and owns its protocol sessions and newly created contexts. */
 export class BrowserViewGroup extends Disposable implements IBrowserViewGroup {
@@ -79,12 +116,16 @@ export class BrowserViewGroup extends Disposable implements IBrowserViewGroup {
 			activateTarget: id => this.page(id).focus(),
 			closeTarget: id => this.views.destroyBrowserView(this.page(id).id),
 			sendCommand: (id, method, params, sessionId) => {
+				validatePageCommand(method, params);
 				const page = this.page(id);
 				const authority = this.authority.getStore();
 				// Replies and debugger controls must pass an operation that is waiting for them.
 				const unblocks = ['Page.handleJavaScriptDialog', 'Debugger.resume', 'Debugger.stepInto', 'Debugger.stepOut', 'Debugger.stepOver', 'Runtime.terminateExecution', 'Fetch.continueRequest', 'Fetch.continueResponse', 'Fetch.fulfillRequest', 'Fetch.failRequest'].includes(method);
 				const send = async () => {
-					const result = await page.debugger.sendCommand(method, params, sessionId ?? this.rootSessions.get(page.id));
+					const actual = sessionId ?? this.rootSessions.get(page.id);
+					const result = method === 'DOM.setFileInputFiles'
+						? await this.setFileInputFiles(page, params, actual, authority?.uploads ?? [], AbortSignal.any([this.cancellation.signal, this.views.agentAccessSignal(page.id, this.filter.sandboxSessionId), ...(authority ? [authority.signal] : [])]))
+						: await page.debugger.sendCommand(method, params, actual);
 					if (authority && method === 'Page.navigate') { await page.waitForLoad(authority.signal); }
 					return result;
 				};
@@ -106,6 +147,55 @@ export class BrowserViewGroup extends Disposable implements IBrowserViewGroup {
 				this.targetEvents.fire({ type: 'changed', targetInfo: this.info(event.state.targetId) });
 			}
 		}));
+	}
+
+	private async setFileInputFiles(page: BrowserView, params: Record<string, unknown>, sessionId: string | undefined, uploads: readonly IBrowserUploadFile[], signal: AbortSignal): Promise<unknown> {
+		signal.throwIfAborted();
+		if (Object.keys(params).some(key => !['files', 'nodeId', 'backendNodeId', 'objectId'].includes(key))
+			|| !Array.isArray(params.files) || params.files.length > 16 || !params.files.every(path => typeof path === 'string')
+			|| params.files.length !== uploads.length) { throw new Error('BrowserFileAccessDenied'); }
+		const selectors = ['nodeId', 'backendNodeId', 'objectId'].filter(key => params[key] !== undefined);
+		if (selectors.length !== 1 || (selectors[0] === 'objectId'
+			? typeof params.objectId !== 'string' || !params.objectId || params.objectId.length > 256
+			: !Number.isSafeInteger(params[selectors[0]!]) || (params[selectors[0]!] as number) <= 0)) { throw new Error('BrowserInvalidFileInput'); }
+		let bytes = 0;
+		for (const file of uploads) {
+			if (!file.name || file.name.length > 255 || /[/\\\0]/u.test(file.name)
+				|| typeof file.dataBase64 !== 'string' || file.dataBase64.length > 5592408 || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(file.dataBase64)) { throw new Error('BrowserInvalidUpload'); }
+			bytes += Buffer.from(file.dataBase64, 'base64').length;
+			if (bytes > 4 * 1024 * 1024) { throw new Error('BrowserUploadTooLarge'); }
+		}
+		const send = (method: string, parameters: Record<string, unknown>) => page.debugger.sendCommand(method, parameters, sessionId);
+		let objectId = params.objectId as string | undefined;
+		if (!objectId) {
+			const node = await send('DOM.resolveNode', { [selectors[0]!]: params[selectors[0]!] });
+			if (!isRecord(node) || !isRecord(node.object) || typeof node.object.objectId !== 'string') { throw new Error('BrowserInvalidFileInput'); }
+			objectId = node.object.objectId;
+		}
+		try {
+			signal.throwIfAborted();
+			// This code consumes already-authorized bytes. No filesystem path reaches Chromium.
+			const result = await send('Runtime.callFunctionOn', {
+				objectId, returnByValue: true,
+				functionDeclaration: `function(files) {
+					if (!(this instanceof HTMLInputElement) || this.type !== 'file' || this.webkitdirectory || (!this.multiple && files.length > 1)) { throw new Error('BrowserInvalidFileInput'); }
+					const transfer = new DataTransfer();
+					for (const file of files) {
+						const bytes = Uint8Array.from(atob(file.dataBase64), c => c.charCodeAt(0));
+						transfer.items.add(new File([bytes], file.name, { type: file.mimeType }));
+					}
+					this.files = transfer.files;
+					this.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+					this.dispatchEvent(new Event('change', { bubbles: true }));
+				}`,
+				arguments: [{ value: uploads.map(file => ({ ...file, mimeType: getMediaOrTextMime(file.name) ?? 'application/octet-stream' })) }],
+			});
+			if (!isRecord(result) || result.exceptionDetails) { throw new Error('BrowserFileUploadFailed'); }
+			signal.throwIfAborted();
+			return {};
+		} finally {
+			if (params.objectId === undefined) { await send('Runtime.releaseObject', { objectId }).catch(() => { }); }
+		}
 	}
 	public async initialize(): Promise<void> {
 		await Promise.all((await this.views.getBrowserViews()).map(info => this.accept(info)));

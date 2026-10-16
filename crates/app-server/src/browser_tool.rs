@@ -35,7 +35,7 @@ use serde_json::json;
 use std::sync::Arc;
 use url::Url;
 
-const BROWSER_POLICY_REVISION: &str = "browser-host-user-approval-v1";
+const BROWSER_POLICY_REVISION: &str = "browser-host-user-approval-v2";
 const MAX_URL_LENGTH: usize = 8192;
 
 const OPEN_SCHEMA: &str = r#"{"type":"object","properties":{"url":{"type":"string","description":"HTTPS, loopback HTTP, or about:blank URL to open."}},"required":["url"],"additionalProperties":false}"#;
@@ -65,7 +65,7 @@ impl BrowserToolService {
             definitions: vec![
                 definition(
                     "browser_cdp",
-                    "Send a Chrome DevTools Protocol command. Requires the user's advanced CDP setting. Access is limited to this task's isolated Agent pages and contexts; Ash workbench targets and user pages are excluded. Page domains select target_id automatically; use session_id for child targets. Events are buffered for browser_cdp_events. New targets also return browserViewId for the semantic browser tools. Network requests retain the task's network policy.",
+                    "Send a Chrome DevTools Protocol command. Requires the user's advanced CDP setting. Access is limited to this task's isolated Agent pages and contexts; Ash workbench targets and user pages are excluded. Page domains select target_id automatically; use session_id for child targets. Events are buffered for browser_cdp_events. New targets also return browserViewId for the semantic browser tools. Network requests retain the task's network policy. File uploads read each path through the task's file permissions; direct host filesystem methods are restricted.",
                     CDP_SCHEMA,
                 ),
                 definition(
@@ -335,15 +335,33 @@ impl BrowserToolService {
             "arguments": call.arguments,
         }))
         .map_err(|error| CoreError::Policy(error.to_string()))?;
+        let mut capabilities = vec![Capability::new(
+            CapabilityKind::UserInterface,
+            request.capability_scope(),
+        )];
+        if let BrowserToolRequest::Interaction(BrowserAction::Cdp {
+            operation: BrowserCdpOperation::Command { method, params, .. },
+            ..
+        }) = request
+            && method == "DOM.setFileInputFiles"
+        {
+            let paths: Vec<String> =
+                serde_json::from_value(params.get("files").cloned().unwrap_or(Value::Null))
+                    .map_err(|_| {
+                        CoreError::Policy("file upload requires an array of paths".into())
+                    })?;
+            capabilities.extend(
+                paths
+                    .into_iter()
+                    .map(|path| Capability::new(CapabilityKind::FileRead, path)),
+            );
+        }
         Ok(ActionReviewRequest::new(
             ResolvedAction::new(
                 ActionDigest::from_canonical_bytes(canonical),
                 ActionKind::BrowserInteraction,
                 request.summary(),
-                CapabilitySet::new([Capability::new(
-                    CapabilityKind::UserInterface,
-                    request.capability_scope(),
-                )]),
+                CapabilitySet::new(capabilities),
             ),
             ActionProvenance::new(ActionSource::BuiltInTool, call.name.to_string()),
             SandboxCompatibility::NotApplicable {
@@ -591,7 +609,20 @@ impl ActionPolicyService for BrowserToolPolicy {
                 request.sandbox(),
                 SandboxCompatibility::NotApplicable { .. }
             )
-            || request.action().required_capabilities().iter().count() != 1
+            || request
+                .action()
+                .required_capabilities()
+                .iter()
+                .filter(|capability| {
+                    capability.kind()
+                        == if request.action().kind() == &ActionKind::NetworkRequest {
+                            &CapabilityKind::Network
+                        } else {
+                            &CapabilityKind::UserInterface
+                        }
+                })
+                .count()
+                != 1
             || request
                 .action()
                 .required_capabilities()
@@ -603,6 +634,9 @@ impl ActionPolicyService for BrowserToolPolicy {
                         } else {
                             &CapabilityKind::UserInterface
                         }
+                        && !(request.action().kind() == &ActionKind::BrowserInteraction
+                            && request.provenance().source_id() == "browser_cdp"
+                            && capability.kind() == &CapabilityKind::FileRead)
                         || capability.scope().trim().is_empty()
                 })
         {

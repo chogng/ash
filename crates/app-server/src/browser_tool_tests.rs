@@ -144,5 +144,23 @@ fn browser_host(resources: Arc<Mutex<ResourceStore>>) -> BrowserHost {
     BrowserHost::new(
         resources,
         Arc::new(crate::client_host::ClientHost::default()),
+        Arc::new(|_, _, _, _| Err(core_api::BrowserError::CapabilityUnavailable)),
     )
+}
+
+#[test]
+fn browser_file_upload_review_includes_each_path_without_granting_file_access() {
+    let service = BrowserToolService::new(Arc::new(browser_host(Arc::new(Mutex::new(
+        ResourceStore::default(),
+    )))));
+    let review = service.prepare(&call("browser_cdp", json!({
+        "target_id":"page", "method":"DOM.setFileInputFiles",
+        "params_json":r#"{"files":["/project/allowed.txt","/private/secret.txt"],"backendNodeId":1}"#,
+        "session_id":null,
+    }))).unwrap();
+    assert_eq!(review.action().required_capabilities().iter().count(), 3);
+    assert!(matches!(
+        BrowserToolPolicy.decide(&review, &CancellationSource::new().token()),
+        Ok(ExecutionDecision::AskUser(_))
+    ));
 }

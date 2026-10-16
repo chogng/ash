@@ -10,7 +10,7 @@ import { Event } from '../../../../base/common/event.js';
 import { promiseWithResolvers } from '../../../../base/common/async.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
-import type { BrowserCDPOperation } from '../../common/browserView.js';
+import type { BrowserCDPOperation, IBrowserUploadFile } from '../../common/browserView.js';
 import { BrowserViewDebugger } from '../../electron-main/browserViewDebugger.js';
 import { BrowserViewCDPService } from '../../electron-main/browserViewCDPService.js';
 import { IBrowserViewMainService } from '../../electron-main/browserViewMainService.js';
@@ -82,12 +82,19 @@ suite('Live browser CDP connection', () => {
 				agentAccessSignal: () => signal,
 			} as unknown as IBrowserViewMainService);
 			using cdp = services.createInstance(BrowserViewCDPService);
-			const perform = (operation: BrowserCDPOperation, requestSignal = signal) => cdp.perform('thread', view, operation, requestSignal, null);
+			const perform = (operation: BrowserCDPOperation, requestSignal = signal, uploads: readonly IBrowserUploadFile[] = []) => cdp.perform('thread', view, operation, requestSignal, null, uploads);
 			await perform({ type: 'command', method: 'Runtime.enable', params: {} });
 			const evaluated = await perform({ type: 'command', method: 'Runtime.evaluate', params: { expression: 'console.log("cdp event"); 6 * 7', returnByValue: true } });
 			assert.equal(JSON.parse(evaluated.output).result.result.value, 42);
 			const events = JSON.parse((await perform({ type: 'readEvents' })).output).events;
 			assert.ok(events.some((event: { method: string; }) => event.method === 'Runtime.consoleAPICalled'));
+			// Browser approval alone cannot upload paths, including when targeting an existing object.
+			const input = JSON.parse((await perform({ type: 'command', method: 'Runtime.evaluate', params: { expression: 'document.body.appendChild(Object.assign(document.createElement("input"), { type: "file", id: "upload" }))' } })).output).result.result.objectId;
+			const upload = { type: 'command' as const, method: 'DOM.setFileInputFiles', params: { objectId: input, files: ['/not-granted/secret.txt'] } };
+			assert.match(JSON.parse((await perform(upload)).output).error.message, /BrowserFileAccessDenied/);
+			assert.deepEqual(JSON.parse((await perform(upload, signal, [{ name: 'allowed.txt', dataBase64: Buffer.from('authorized content').toString('base64') }])).output).result, {});
+			assert.deepEqual(await page.locator('#upload').evaluate(async (element: HTMLInputElement) => ({ name: element.files![0]!.name, type: element.files![0]!.type, content: await element.files![0]!.text() })), { name: 'allowed.txt', type: 'text/plain', content: 'authorized content' });
+			await page.locator('#upload').evaluate(element => element.remove());
 			const cancellation = new AbortController();
 			const waiting = perform({ type: 'command', method: 'Runtime.evaluate', params: { expression: 'console.log("waiting for cancellation"); new Promise(() => {})', awaitPromise: true } }, cancellation.signal);
 			const cancelled = assert.rejects(waiting, /BrowserRequestCancelled/);

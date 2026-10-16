@@ -120,6 +120,27 @@ impl Default for LocalToolConfig {
 }
 
 impl LocalToolConfig {
+    /// Shares file-tool profile and managed ceilings with browser upload reads.
+    pub(crate) fn file_access_policy(
+        &self,
+    ) -> Result<ash_file_access::PathAccessPolicy, LocalToolError> {
+        let requirements = self
+            .requirements
+            .as_ref()
+            .map_err(|error| LocalToolError::policy(error.clone()))?;
+        let (profile, _) = self.sandbox_configuration()?;
+        let mut policy = profile.path_policy().map_err(LocalToolError::policy)?;
+        if requirements.values.maximum_file_system == Some(ash_protocol::SandboxMode::ReadOnly) {
+            policy = policy.intersect(
+                &ash_file_access::PathAccessPolicy::new(
+                    ash_file_access::PathAccess::ReadOnly,
+                    vec![],
+                )
+                .map_err(LocalToolError::policy)?,
+            );
+        }
+        Ok(policy)
+    }
     /// The store owns execution rules; remote operation snapshots must not wait for local tool recomposition.
     pub(crate) fn with_current_user_policy(mut self, user: UserExecPolicyConfig) -> Self {
         self.user = user;
@@ -288,13 +309,7 @@ pub(crate) fn compose_local_tools_with_config(
         .as_ref()
         .map_err(|error| LocalToolError::policy(error.clone()))?;
     let (profile, shell_policy) = config.sandbox_configuration()?;
-    let mut path_policy = profile.path_policy().map_err(LocalToolError::policy)?;
-    if requirements.values.maximum_file_system == Some(ash_protocol::SandboxMode::ReadOnly) {
-        path_policy = path_policy.intersect(
-            &ash_file_access::PathAccessPolicy::new(ash_file_access::PathAccess::ReadOnly, vec![])
-                .map_err(LocalToolError::policy)?,
-        );
-    }
+    let path_policy = config.file_access_policy()?;
     let grant = grant.with_path_policy(path_policy);
     let authorization = grant
         .authorize(DirPermission::ExecuteCommands)
@@ -1974,7 +1989,7 @@ fn local_command_authority(
     Ok(CommandExecutionAuthority::Unrestricted)
 }
 
-fn ensure_local_file_access(dir: &Dir, path: &Path) -> Result<(), CoreError> {
+pub(crate) fn ensure_local_file_access(dir: &Dir, path: &Path) -> Result<(), CoreError> {
     let relative = path.strip_prefix(dir.canonical_path()).map_err(|_| {
         CoreError::Policy(format!(
             "path is outside the authorized directory: {}",

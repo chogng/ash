@@ -3,7 +3,7 @@ import { Disposable, DisposableMap } from '../../../base/common/lifecycle.js';
 import { promiseWithResolvers, raceCancellationError } from '../../../base/common/async.js';
 import { isRecord } from '../../../base/common/types.js';
 import { IInstantiationService } from '../../instantiation/common/instantiation.js';
-import type { BrowserCDPOperation } from '../common/browserView.js';
+import type { BrowserCDPOperation, IBrowserUploadFile } from '../common/browserView.js';
 import type { CDPEvent, CDPResponse } from '../common/cdp/types.js';
 import type { BrowserView } from './browserView.js';
 import { BrowserViewGroup } from './browserViewGroup.js';
@@ -15,7 +15,7 @@ export class BrowserViewCDPService extends Disposable {
 	private readonly connections = this._register(new DisposableMap<string, BrowserCDPConnection>());
 	constructor(@IInstantiationService private readonly instantiation: IInstantiationService) { super(); }
 
-	public async perform(threadId: string, page: BrowserView, operation: BrowserCDPOperation, signal: AbortSignal, networkToken: string | null): Promise<{ output: string; createdTargetId?: string; }> {
+	public async perform(threadId: string, page: BrowserView, operation: BrowserCDPOperation, signal: AbortSignal, networkToken: string | null, uploads: readonly IBrowserUploadFile[] = []): Promise<{ output: string; createdTargetId?: string; }> {
 		this.assertNotDisposed();
 		signal.throwIfAborted();
 		if (operation.type === 'close') {
@@ -33,7 +33,7 @@ export class BrowserViewCDPService extends Disposable {
 			connection = this.instantiation.createInstance(BrowserCDPConnection, threadId);
 			this.connections.set(threadId, connection);
 		}
-		return connection.command(page, operation, signal, networkToken);
+		return connection.command(page, operation, signal, networkToken, uploads);
 	}
 
 	public async disposeSession(threadId: string): Promise<void> { await this.connections.deleteAndLeak(threadId)?.close(); }
@@ -76,7 +76,7 @@ class BrowserCDPConnection extends Disposable {
 		void this.ready.catch(() => this.dispose());
 	}
 
-	public async command(page: BrowserView, operation: Extract<BrowserCDPOperation, { type: 'command'; }>, requestSignal: AbortSignal, networkToken: string | null): Promise<{ output: string; createdTargetId?: string; }> {
+	public async command(page: BrowserView, operation: Extract<BrowserCDPOperation, { type: 'command'; }>, requestSignal: AbortSignal, networkToken: string | null, uploads: readonly IBrowserUploadFile[]): Promise<{ output: string; createdTargetId?: string; }> {
 		const signal = AbortSignal.any([requestSignal, this.cancellation.signal]);
 		await raceCancellationError(this.ready, signal, 'BrowserRequestCancelled');
 		signal.throwIfAborted();
@@ -91,7 +91,7 @@ class BrowserCDPConnection extends Disposable {
 				void this.group.sendCDPMessage({ id: ++this.sequence, method, sessionId }).catch(() => { });
 			}
 		});
-		const response = await this.request(operation.method, operation.params, sessionId, signal, networkToken);
+		const response = await this.request(operation.method, operation.params, sessionId, signal, networkToken, uploads);
 		const output = JSON.stringify(response);
 		if (Buffer.byteLength(output) > 1024 * 1024) { throw new Error('BrowserCDPResultTooLarge'); }
 		return {
@@ -118,14 +118,14 @@ class BrowserCDPConnection extends Disposable {
 		return raceCancellationError(pending, signal, 'BrowserRequestCancelled');
 	}
 
-	private async request(method: string, params: Record<string, unknown>, sessionId: string | undefined, signal: AbortSignal, networkToken: string | null): Promise<CDPResponse> {
+	private async request(method: string, params: Record<string, unknown>, sessionId: string | undefined, signal: AbortSignal, networkToken: string | null, uploads: readonly IBrowserUploadFile[] = []): Promise<CDPResponse> {
 		this.assertNotDisposed();
 		if (this.pending.size >= 128) { throw new Error('BrowserCDPCapacityExceeded'); }
 		const id = ++this.sequence;
 		const response = promiseWithResolvers<CDPResponse>();
 		this.pending.set(id, response);
 		try {
-			void this.group.sendCDPMessage({ id, method, params, sessionId }, { signal, networkToken }).catch(response.reject);
+			void this.group.sendCDPMessage({ id, method, params, sessionId }, { signal, networkToken, uploads }).catch(response.reject);
 			return await raceCancellationError(response.promise, signal, 'BrowserRequestCancelled');
 		} finally { this.pending.delete(id); }
 	}

@@ -103,7 +103,7 @@ export class AppServerBrowserHost extends Disposable {
 			this.sessions.add(params.threadId);
 			const targets = (await this.views.getBrowserViews()).filter(info => info.owner.type === 'agent' && info.owner.sessionId === params.threadId);
 			const result = await this.cdp.perform(params.threadId, view, params.action.operation,
-				AbortSignal.any([context.signal, this.cancellation.signal]), params.networkToken ?? null);
+				AbortSignal.any([context.signal, this.cancellation.signal]), params.networkToken ?? null, params.uploads ?? []);
 			const closedTargetIds = targets.filter(info => !this.views.tryGetBrowserView(info.id)).map(info => info.id);
 			return { targetId: view.id, ...result, ...(closedTargetIds.length ? { closedTargetIds } : {}) };
 		}

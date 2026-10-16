@@ -38,6 +38,17 @@ use std::time::Duration;
 
 const PNG_SIGNATURE: &[u8; 8] = b"\x89PNG\r\n\x1a\n";
 
+/// Reads file content through the execution environment's live, path-scoped authority.
+pub(crate) type BrowserFileReader = dyn Fn(
+        &ash_protocol::ThreadId,
+        &ash_protocol::TurnId,
+        &[String],
+        &CancellationToken,
+    )
+        -> Result<Vec<ash_app_server_protocol::protocol::browser::BrowserUploadFile>, BrowserError>
+    + Send
+    + Sync;
+
 #[derive(Default)]
 struct BrowserHostState {
     owners: BTreeMap<u64, BrowserHostOwner>,
@@ -93,12 +104,15 @@ pub(crate) struct BrowserHost {
     owner: Option<u64>,
     thread_id: Option<ash_protocol::ThreadId>,
     network_token: Option<String>,
+    turn_id: Option<ash_protocol::TurnId>,
+    file_reader: Arc<BrowserFileReader>,
 }
 
 impl BrowserHost {
     pub(crate) fn new(
         resources: Arc<Mutex<ResourceStore>>,
         clients: Arc<crate::client_host::ClientHost>,
+        file_reader: Arc<BrowserFileReader>,
     ) -> Self {
         Self {
             state: Arc::new(Mutex::new(BrowserHostState::default())),
@@ -107,6 +121,8 @@ impl BrowserHost {
             owner: None,
             thread_id: None,
             network_token: None,
+            turn_id: None,
+            file_reader,
         }
     }
 
@@ -128,6 +144,8 @@ impl BrowserHost {
             owner: Some(owner),
             thread_id: Some(thread.clone()),
             network_token: None,
+            turn_id: Some(turn.clone()),
+            file_reader: Arc::clone(&self.file_reader),
         };
         scoped.create_owner()?;
         Ok(scoped)
@@ -274,7 +292,8 @@ impl BrowserHost {
             .get_mut(&connection_id)
             .ok_or(BrowserError::CapabilityUnavailable)?;
         owner.enabled = params.enabled;
-        owner.cdp_enabled = params.enabled && params.cdp_enabled;
+        // Older hosts may reopen raw paths instead of consuming authorized upload bytes.
+        owner.cdp_enabled = params.enabled && params.cdp_enabled && owner.capability.version == 4;
         state.owner_revision = state.owner_revision.wrapping_add(1);
         if !params.enabled {
             state
@@ -388,7 +407,7 @@ impl BrowserHost {
             .get(&selected)
             .filter(|owner| {
                 owner.enabled
-                    && owner.capability.version == 3
+                    && matches!(owner.capability.version, 3 | 4)
                     && owner.capability.observe
                     && owner.capability.input
             })
@@ -618,12 +637,40 @@ impl BrowserCapability for BrowserHost {
         {
             return Err(BrowserError::CapabilityUnavailable);
         }
+        // Read every path under the existing file authority before handing any bytes to the host.
+        // Never give Chromium these paths: checking a path then letting Chromium reopen it races
+        // symlink replacement and directory-grant revocation.
+        let uploads = if let BrowserAction::Cdp {
+            operation: BrowserCdpOperation::Command { method, params, .. },
+            ..
+        } = &action
+            && method == "DOM.setFileInputFiles"
+        {
+            let paths: Vec<String> = serde_json::from_value(
+                params
+                    .get("files")
+                    .cloned()
+                    .unwrap_or(serde_json::Value::Null),
+            )
+            .map_err(|_| BrowserError::Failed("invalid browser upload paths".into()))?;
+            Some((self.file_reader)(
+                self.thread_id()?,
+                self.turn_id
+                    .as_ref()
+                    .ok_or(BrowserError::CapabilityUnavailable)?,
+                &paths,
+                cancellation,
+            )?)
+        } else {
+            None
+        };
         let result: BrowserPerformResult = self.request(
             owner,
             HostMethod::BrowserPerform,
             &BrowserPerformParams {
                 thread_id: self.thread_id()?.to_string(),
                 network_token: self.network_token.clone(),
+                uploads,
                 action: browser_action_dto(action),
             },
             cancellation,

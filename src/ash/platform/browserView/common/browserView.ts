@@ -316,6 +316,9 @@ export type BrowserCDPOperation =
 	| { readonly type: 'readEvents'; }
 	| { readonly type: 'close'; };
 
+/** File bytes read by the backend under the originating task's path permissions. */
+export interface IBrowserUploadFile { readonly name: string; readonly dataBase64: string; }
+
 export const BrowserChatToolsSettingId = 'workbench.browser.enableChatTools';
 export const BrowserCDPSettingId = 'workbench.browser.enableCDP';
 

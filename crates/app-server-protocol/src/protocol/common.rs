@@ -79,7 +79,8 @@ pub struct AgentInteractionCapability {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct BrowserCapability {
-    /// Version 3 enforces backend authorization for every network request from an isolated agent page.
+    /// Version 3 enforces per-request network authorization; version 4 also consumes authorized
+    /// upload bytes and restricts CDP file access. Advanced CDP requires version 4.
     pub version: u32,
     pub observe: bool,
     pub input: bool,

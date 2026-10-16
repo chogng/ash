@@ -15,6 +15,9 @@
 该请求不占用浏览器动作的串行作用域，否则等待网络授权的导航无法完成。HTTP(S) 逐请求评审，WebSocket 当前拒绝；共享用户页面只允许观察。
 当前宿主的检查范围是 HTTP(S)，不能作为完整网络沙箱；WebTransport 绕过 Electron 请求拦截，完整隔离仍需可撤销的后端代理，见 [桌面架构](../../docs/ash-desktop-architecture.md#71-当前实现)。
 
+浏览器宿主能力版本 4 才可启用高级 CDP。`DOM.setFileInputFiles` 的每个路径在 Rust 中按当前 Thread/Turn 的 `ReadFiles` 授权、路径规则和撤销状态读取；`browser/perform.uploads` 仅携带文件名与 base64 内容，单次最多 16 个文件、合计 4 MiB。Main 用这些内容设置文件输入框，不把路径交给 Chromium 重新打开。整批任一路径失败则不发布任何文件。SSH/Provider 执行目标不能借用桌面宿主的本地文件权限。
+Main 对转发的页面方法使用审查清单，拒绝直接文件系统、磁盘路径拖拽、本地 URL 读取及未知方法，子会话同样受限。旧版 3 宿主仍可使用普通浏览器工具，高级 CDP 不可启用。
+
 `model/list` 的 `ModelCatalogEntry.settings` 返回当前连接和目录生效后的模型请求配置，来源类型为共享 protocol 的 `ModelSettings`。列表不暴露基础提示词正文。新执行使用同一批目录资料绑定模型默认参数和预算，目录刷新只影响后续执行。
 
 `model/list.catalog_scopes` 随缓存行返回当前外部连接的无秘密身份；`identity: null` 表示当前凭证不可用。读取不发起网络发现。`provider/models/updated` 的 authority 必须是订阅的 `accountId` / `organization` / `plan`，或外部连接的 `catalogScope`；外部来源不创建账户，缺少这两类身份的通知解码失败。外部身份变化先发出 `empty` 退役通知，远程刷新结果仅在同一身份仍有效时发布。消费者注册通知后再读取快照，并以请求代次拒绝被通知取代的迟到结果。

@@ -365,6 +365,8 @@ use crate::protocol::browser::BrowserSharingSetParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::browser::BrowserTextInputTargetDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserUploadFile;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::call::CallControlParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::call::CallDeployment;
@@ -6017,6 +6019,7 @@ typescript_bindings! {
     BrowserObserveResult,
     BrowserPerformActionDto,
     BrowserPerformParams,
+    BrowserUploadFile,
     BrowserPerformResult,
     BrowserTextInputTargetDto,
     ClientCapabilities,
