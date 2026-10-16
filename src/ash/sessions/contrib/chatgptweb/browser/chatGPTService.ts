@@ -33,6 +33,7 @@ export interface ChatGPTState {
 	readonly hasMore: boolean;
 	readonly models: readonly ChatGPTModel[];
 	readonly model: string;
+	readonly modelPreset?: string;
 	readonly conversationId?: string;
 	readonly title: string;
 	readonly parentId: string;
@@ -52,6 +53,7 @@ export interface IChatGPTService {
 	loadMore(): Promise<void>;
 	setDraft(value: string): void;
 	setModel(value: string): void;
+	setModelPreset(value: string): void;
 	attachFiles(files: readonly File[]): Promise<void>;
 	removeAttachment(id: string): void;
 	retryAttachment(id: string): Promise<void>;
@@ -99,7 +101,22 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		if (this.model.get().connected && id) { await this.select(id); } else { await this.loadCatalog(); }
 	}
 	public setDraft(draft: string): void { this.drafts.set(this.draftKey(), { text: draft, attachments: this.model.get().attachments }); this.update({ draft }); }
-	public setModel(model: string): void { this.update({ model }); }
+	public setModel(model: string): void {
+		const state = this.model.get();
+		const selected = state.models.find(entry => entry.id === model);
+		if (!selected || state.busy || state.sending || state.voice !== 'idle') { return; }
+		this.update({ model, modelPreset: this.resolveModelPreset(selected, state.modelPreset) });
+	}
+	public setModelPreset(modelPreset: string): void {
+		const state = this.model.get();
+		const selected = state.models.find(entry => entry.id === state.model);
+		if (state.busy || state.sending || state.voice !== 'idle' || !selected?.presets.some(preset => preset.id === modelPreset)) { return; }
+		this.update({ modelPreset });
+	}
+
+	private resolveModelPreset(model: ChatGPTModel | undefined, preferred: string | undefined): string | undefined {
+		return model?.presets.find(preset => preset.id === preferred)?.id ?? model?.defaultPreset;
+	}
 
 	public async startVoice(window: Window & typeof globalThis): Promise<void> {
 		const state = this.model.get();
@@ -237,9 +254,10 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			const [catalog, conversations] = await Promise.all([this.client.models(signal), this.client.conversations(0, signal)]);
 			if (generation !== this.generation) { return; }
 			const state = this.model.get();
+			const selected = catalog.models.find(model => model.id === state.model) ?? catalog.models.find(model => model.id === catalog.defaultModel)!;
 			this.update({
 				connected: true, busy: false, models: catalog.models,
-				model: catalog.models.some(model => model.id === state.model) ? state.model : catalog.defaultModel,
+				model: selected.id, modelPreset: this.resolveModelPreset(selected, state.modelPreset),
 				uncertain: false, stopped: false, conversations: conversations.items, hasMore: conversations.hasMore,
 			});
 			const retained = state.conversationId ?? this.storage.get('sessions.chatgpt.conversation', StorageScope.PROFILE);
@@ -266,10 +284,15 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		try {
 			const history = await this.client.history(id, signal);
 			if (generation !== this.generation) { return; }
-			const available = this.model.get().models.some(model => model.id === history.model);
+			const state = this.model.get();
+			const selected = state.models.find(model => history.model !== undefined && model.modelIds.includes(history.model)) ?? state.models.find(model => model.id === state.model);
+			const preset = selected?.presets.find(preset => preset.model === history.model && preset.thinkingEffort === history.thinkingEffort)
+				?? selected?.presets.find(preset => preset.model === history.model && preset.thinkingEffort === undefined)
+				?? selected?.presets.find(preset => preset.model === history.model);
 			this.update({
 				draft: this.drafts.get(id)?.text ?? '', attachments: this.drafts.get(id)?.attachments ?? [], conversationId: id, title: history.title, messages: history.messages, parentId: history.parentId,
-				model: available ? history.model! : this.model.get().model, busy: false, uncertain: false, stopped: false
+				model: selected?.id ?? state.model, modelPreset: preset?.id ?? this.resolveModelPreset(selected, state.modelPreset),
+				busy: false, uncertain: false, stopped: false
 			});
 			this.rememberConversation(id);
 		} catch (error) { if (generation === this.generation) { this.update({ busy: false, error: this.errorText(error) }); } }
@@ -291,7 +314,8 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	public async send(): Promise<void> {
 		const state = this.model.get();
 		const text = state.draft.trim();
-		if (!state.connected || state.busy || state.sending || state.voice !== 'idle' || state.uncertain || (!text && !state.attachments.length) || state.attachments.some(attachment => attachment.status !== 'ready') || !state.model) { return; }
+		const preset = state.models.find(model => model.id === state.model)?.presets.find(preset => preset.id === state.modelPreset);
+		if (!preset || !state.connected || state.busy || state.sending || state.voice !== 'idle' || state.uncertain || (!text && !state.attachments.length) || state.attachments.some(attachment => attachment.status !== 'ready') || !state.model) { return; }
 		const controller = this.stream = new AbortController();
 		const messageId = crypto.randomUUID();
 		const draftKey = this.draftKey();
@@ -299,7 +323,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		let acknowledged = false;
 		this.update({ sending: true, stopped: false, error: '', messages: [...state.messages, { id: messageId, role: 'user', text, resources: files.map(file => ({ uri: `file-service://${file.id}`, name: file.name, kind: file.mimeType.startsWith('image/') ? 'image' : 'document', mimeType: file.mimeType })) }] });
 		try {
-			for await (const event of this.client.send({ text, model: state.model, parentId: state.parentId, conversationId: state.conversationId, messageId, files }, controller.signal)) {
+			for await (const event of this.client.send({ text, model: preset.model, thinkingEffort: preset.thinkingEffort, parentId: state.parentId, conversationId: state.conversationId, messageId, files }, controller.signal)) {
 				if (this.isDisposed || this.stream !== controller) { return; }
 				if (!acknowledged) {
 					acknowledged = true;

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
+import { chatGPTModelCatalog } from '../../../../../../../test/fixtures/chatGPTModels.js';
 import { ChatGPTClient, decodeChatGPTStream } from '../../browser/chatGPTClient.js';
 
 const signal = (): AbortSignal => new AbortController().signal;
@@ -12,6 +13,74 @@ async function collect<T>(values: AsyncIterable<T>): Promise<T[]> {
 }
 
 suite('Bundled ChatGPT client', () => {
+	test('shows only version families and preserves the five product presets and their request targets', async () => {
+		const client = new ChatGPTClient((async () => json(chatGPTModelCatalog())) as typeof fetch);
+		const catalog = await client.models(signal());
+		assert.equal(catalog.defaultModel, 'latest');
+		assert.deepEqual(catalog.models.map(model => [model.id, model.title]), [['latest', 'GPT-6'], ['5.6', 'GPT-5.6 Sol']]);
+		assert.deepEqual(catalog.models[0]!.presets, [
+			{ id: '0', label: 'Instant', model: 'gpt-6-instant', thinkingEffort: undefined, isPro: false },
+			{ id: '1', label: 'Medium', model: 'gpt-6-thinking', thinkingEffort: 'standard', isPro: false },
+			{ id: '2', label: 'High', model: 'gpt-6-thinking', thinkingEffort: 'extended', isPro: false },
+			{ id: '6', label: 'Extra High', model: 'gpt-6-thinking', thinkingEffort: 'max', isPro: false },
+			{ id: '3', label: 'Pro', model: 'gpt-6-pro', thinkingEffort: undefined, isPro: true },
+		]);
+		assert.equal(catalog.models[0]!.defaultPreset, '0');
+	});
+
+	test('identifies Pro by its advertised lane rather than its label or slider position', async () => {
+		const source = chatGPTModelCatalog();
+		const presets = source.versions[0]!.intelligence_presets;
+		source.versions[0]!.intelligence_presets = [
+			{ ...presets[4]!, title: 'Maximum compute', selected_display_title: 'Maximum compute' },
+			...presets.slice(0, 3),
+			{ ...presets[3]!, title: 'Pro', selected_display_title: 'Pro' },
+		];
+		const client = new ChatGPTClient((async () => json(source)) as typeof fetch);
+		const catalog = await client.models(signal());
+		assert.deepEqual(catalog.models[0]!.presets.map(preset => [preset.label, preset.isPro]), [
+			['Maximum compute', true], ['Instant', false], ['Medium', false], ['High', false], ['Pro', false],
+		]);
+	});
+
+	test('rejects unavailable or invalid presets without exposing extra raw models as picker entries', async () => {
+		const source = chatGPTModelCatalog();
+		const version = source.versions[0]!;
+		let value: unknown = {
+			...source, versions: [{
+				...version, intelligence_presets: [
+					...version.intelligence_presets,
+					{ id: 4, title: 'Hidden', model_slug: 'gpt-6-thinking', thinking_effort: 'min', preset_type: 'unavailable' },
+					{ id: 5, title: 'Unknown target', model_slug: 'missing', preset_type: 'available' },
+					{ id: 7, title: 'Unsupported effort', model_slug: 'gpt-6-thinking', thinking_effort: 'xhigh', preset_type: 'available' },
+					{ id: 8, title: '', model_slug: 'gpt-6-instant' },
+					{ id: 6, title: 'Duplicate', model_slug: 'gpt-6-pro' }, null,
+				]
+			}, { ...source.versions[1], enabled: false }],
+		};
+		const client = new ChatGPTClient((async () => json(value)) as typeof fetch);
+		const catalog = await client.models(signal());
+		assert.deepEqual(catalog.models.map(model => model.id), ['latest']);
+		assert.deepEqual(catalog.models[0]!.presets.map(preset => preset.id), ['0', '1', '2', '6', '3']);
+		for (const versions of [undefined, []]) {
+			value = { ...source, versions };
+			await assert.rejects(client.models(signal()), /unsupported response/u);
+		}
+	});
+
+	test('restores the newest assistant thinking effort only from the selected history branch', async () => {
+		const client = new ChatGPTClient((async () => json({
+			default_model_slug: 'thinking', current_node: 'new', mapping: {
+				old: { parent: null, message: { ...message('old', 'assistant', 'Old reply'), metadata: { thinking_effort: 'standard' } } },
+				new: { parent: 'old', message: { ...message('new', 'assistant', 'New reply'), metadata: { thinking_effort: 'max' } } },
+				other: { parent: 'old', message: { ...message('other', 'assistant', 'Other branch'), metadata: { thinking_effort: 'extended' } } },
+			},
+		})) as typeof fetch);
+		const history = await client.history('chat', signal());
+		assert.equal(history.thinkingEffort, 'max');
+		assert.deepEqual(history.messages.map(message => message.text), ['Old reply', 'New reply']);
+	});
+
 	test('accepts bounded encrypted room tickets and rejects non-LiveKit, insecure or malformed tickets', async () => {
 		const ticket = { url: 'wss://chatgpt.livekit.cloud', token: 'fixture-room-token', e2ee_key: 'fixture-media-key', conversation_id: 'chat-one' };
 		let value: object = ticket;

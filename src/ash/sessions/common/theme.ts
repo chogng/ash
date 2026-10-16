@@ -1,6 +1,8 @@
 import { registerColor, transparent } from "../../platform/theme/common/colorUtils.js";
 import { primaryButtonBackground } from "../../platform/theme/common/colors/inputColors.js";
 import { hoverBorder } from '../../platform/theme/common/colors/componentColors.js';
+import { accentForeground } from '../../platform/theme/common/colors/baseColors.js';
+import { localize } from '../../nls.js';
 
 // Sessions-only colors stay here; Agent colors shared by both windows belong in workbench/common/agentsColors.ts.
 // Sessions keeps black tooltips in every theme; the shared hover defaults belong to Workbench.
@@ -63,3 +65,15 @@ registerColor('sessions.inputShadow', {
 	hcDark: null,
 	hcLight: null,
 }, { description: 'Shadow around the Sessions input card.', owner: 'sessions.chat' });
+
+registerColor('sessions.modelPicker.maximumForeground', {
+	dark: '#bf9aff', light: '#8242e3', hcDark: accentForeground, hcLight: accentForeground,
+}, { description: localize('sessions.modelPicker.maximumForeground', 'Text color of an emphasized model preset.'), owner: 'sessions.chat' });
+
+registerColor('sessions.modelPicker.maximumBackground', {
+	dark: '#a660ff', light: '#924ff7', hcDark: primaryButtonBackground, hcLight: primaryButtonBackground,
+}, { description: localize('sessions.modelPicker.maximumBackground', 'Main fill color of an emphasized model preset.'), owner: 'sessions.chat' });
+
+registerColor('sessions.modelPicker.maximumBackgroundAccent', {
+	dark: '#7777ff', light: '#6670f7', hcDark: primaryButtonBackground, hcLight: primaryButtonBackground,
+}, { description: localize('sessions.modelPicker.maximumBackgroundAccent', 'Gradient accent color of an emphasized model preset.'), owner: 'sessions.chat' });

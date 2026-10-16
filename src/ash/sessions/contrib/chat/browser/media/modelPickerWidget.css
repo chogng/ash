@@ -1,0 +1,411 @@
+.ash-sessions-model-picker {
+	display: inline-flex;
+	flex: 0 1 auto;
+	align-items: center;
+	justify-content: center;
+	gap: var(--ash-spacing-size80);
+	min-width: 0;
+	max-width: 30%;
+	height: 32px;
+	min-height: 32px;
+	padding: 0 var(--ash-spacing-size120);
+	border: 0;
+	border-radius: var(--ash-cornerRadius-circle);
+	background: var(--ash-button-secondaryBackground);
+	color: var(--ash-description-foreground);
+	font-family: inherit;
+	font-size: var(--ash-fontSize-label1);
+	cursor: pointer;
+}
+
+.ash-sessions-model-picker:hover,
+.ash-sessions-model-picker[aria-expanded="true"] {
+	background: var(--ash-toolbar-hoverBackground);
+	color: var(--ash-foreground);
+}
+
+.ash-sessions-model-picker:disabled {
+	color: var(--ash-description-foreground);
+	opacity: 0.5;
+	cursor: default;
+}
+
+.ash-sessions-model-picker-label {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-sessions-model-picker .ash-icon,
+.ash-sessions-model-picker-popup .ash-icon {
+	flex: 0 0 auto;
+	width: var(--ash-lxiconFontSize);
+	height: var(--ash-lxiconFontSize);
+}
+
+.ash-sessions-model-picker-popup {
+	box-sizing: border-box;
+	width: 256px;
+	max-width: calc(100vw - 16px);
+	outline: none;
+	font-family: inherit;
+	font-size: var(--ash-fontSize-body1);
+}
+
+.ash-sessions-model-picker-surface {
+	box-sizing: border-box;
+	padding: var(--ash-spacing-size40);
+	overflow: hidden;
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-xLarge);
+	background: var(--ash-menu-background);
+	color: var(--ash-foreground);
+	box-shadow: 0 4px 16px var(--ash-widget-shadow);
+	transform-origin: bottom right;
+	animation: ash-model-picker-enter var(--ash-animation-durationSlow)
+		cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+.ash-context-view-below .ash-sessions-model-picker-surface {
+	transform-origin: top right;
+}
+
+.ash-sessions-model-picker-pages {
+	position: relative;
+	max-height: calc(100vh - 26px);
+	overflow: hidden;
+	transition: height var(--ash-animation-durationSlow)
+		cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+.ash-sessions-model-picker-page {
+	box-sizing: border-box;
+	width: 100%;
+	max-height: calc(100vh - 26px);
+	overflow: hidden auto;
+	transition:
+		opacity var(--ash-animation-durationNormal)
+			cubic-bezier(0.23, 1, 0.32, 1),
+		translate var(--ash-animation-durationSlow)
+			cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+.ash-sessions-model-picker-page[data-active="false"] {
+	position: absolute;
+	top: 0;
+	left: 0;
+	opacity: 0;
+	translate: 0 -10px;
+	pointer-events: none;
+}
+
+.ash-sessions-model-picker-page:first-child[data-active="false"] {
+	translate: 0 10px;
+}
+
+.ash-sessions-model-picker-page[data-active="true"] {
+	position: relative;
+	opacity: 1;
+	translate: 0 0;
+}
+
+@keyframes ash-model-picker-enter {
+	from {
+		opacity: 0;
+		transform: scale(0.96);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1);
+	}
+}
+
+.ash-sessions-model-picker-item,
+.ash-sessions-model-picker-heading {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	box-sizing: border-box;
+	width: 100%;
+	min-height: 36px;
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
+	border: 0;
+	border-radius: var(--ash-cornerRadius-large);
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+}
+
+.ash-sessions-model-picker-item {
+	justify-content: space-between;
+	text-align: start;
+}
+
+.ash-sessions-model-picker-heading {
+	justify-content: center;
+}
+
+.ash-sessions-model-picker-heading[data-emphasized="true"]
+	.ash-sessions-model-picker-label {
+	color: var(--ash-sessions-modelPicker-maximumForeground);
+}
+
+.ash-sessions-model-picker-item[aria-checked="true"] {
+	background: var(--ash-list-inactiveSelectionBackground);
+}
+
+.ash-sessions-model-picker-item:hover,
+.ash-sessions-model-picker-heading:hover {
+	background: var(--ash-list-hoverBackground);
+}
+
+.ash-sessions-model-picker:focus-visible,
+.ash-sessions-model-picker-popup button:focus-visible,
+.ash-sessions-model-picker-track:has(input:focus-visible) {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+.ash-sessions-model-picker-track {
+	--ash-model-picker-position: 0;
+	position: relative;
+	height: 32px;
+	margin: 0 var(--ash-spacing-size80) var(--ash-spacing-size80);
+	border-radius: var(--ash-cornerRadius-circle);
+	touch-action: none;
+}
+
+.ash-sessions-model-picker-fill {
+	position: absolute;
+	top: 4px;
+	right: 0;
+	left: 0;
+	box-sizing: border-box;
+	height: 24px;
+	overflow: hidden;
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-circle);
+	background: var(--ash-button-secondaryBackground);
+}
+
+.ash-sessions-model-picker-fill::before {
+	position: absolute;
+	inset: 0;
+	content: "";
+	background: var(--ash-button-background);
+	translate: calc(
+			(var(--ash-model-picker-position) - 1) * (100% - 28px) - 14px
+		)
+		0;
+	transition: translate var(--ash-animation-durationSlow)
+		cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ash-sessions-model-picker-maximum-effects {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	background: linear-gradient(
+		90deg,
+		var(--ash-sessions-modelPicker-maximumBackgroundAccent),
+		var(--ash-sessions-modelPicker-maximumBackground) 55%,
+		var(--ash-sessions-modelPicker-maximumBackgroundAccent)
+	);
+	background-size: 200% 100%;
+	opacity: 0;
+	translate: calc(
+			(var(--ash-model-picker-position) - 1) * (100% - 28px) - 14px
+		)
+		0;
+	transition:
+		opacity var(--ash-animation-durationNormal) ease,
+		translate var(--ash-animation-durationSlow)
+			cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ash-sessions-model-picker-track[data-emphasized="true"]
+	.ash-sessions-model-picker-maximum-effects {
+	opacity: 1;
+}
+
+.ash-sessions-model-picker-maximum-effects::before {
+	position: absolute;
+	inset: -50% 0;
+	content: "";
+	background: radial-gradient(
+		ellipse at 30% 50%,
+		var(--ash-button-primaryForeground),
+		transparent 60%
+	);
+	opacity: 0.16;
+	filter: blur(6px);
+}
+
+.ash-sessions-model-picker-maximum-effects span {
+	position: absolute;
+	width: 2px;
+	height: 2px;
+	border-radius: var(--ash-cornerRadius-circle);
+	background: var(--ash-button-primaryForeground);
+	box-shadow: 0 0 4px var(--ash-button-primaryForeground);
+	opacity: 0.65;
+}
+
+/* Only the visible, emphasized mode runs effects. Hidden pages and ordinary
+   levels have no continuing animations; removing the popup releases them all. */
+.ash-sessions-model-picker-popup[data-reduced-motion="false"]
+	.ash-sessions-model-picker-page[data-active="true"]
+	.ash-sessions-model-picker-track[data-emphasized="true"]
+	.ash-sessions-model-picker-maximum-effects {
+	animation: ash-model-picker-maximum-flow 4s ease-in-out infinite alternate;
+}
+
+.ash-sessions-model-picker-popup[data-reduced-motion="false"]
+	.ash-sessions-model-picker-page[data-active="true"]
+	.ash-sessions-model-picker-track[data-emphasized="true"]
+	.ash-sessions-model-picker-maximum-effects
+	span {
+	animation-name: ash-model-picker-maximum-particle;
+	animation-timing-function: ease-in-out;
+	animation-iteration-count: infinite;
+	animation-direction: alternate;
+}
+
+@keyframes ash-model-picker-maximum-flow {
+	from {
+		background-position: 0% 50%;
+	}
+	to {
+		background-position: 100% 50%;
+	}
+}
+
+@keyframes ash-model-picker-maximum-particle {
+	from {
+		opacity: 0.25;
+		transform: translate(-4px, 2px) scale(0.65);
+	}
+	to {
+		opacity: 0.9;
+		transform: translate(8px, -4px) scale(1.1);
+	}
+}
+
+.ash-sessions-model-picker-thumb-rail,
+.ash-sessions-model-picker-ticks {
+	position: absolute;
+	inset: 0 14px;
+	pointer-events: none;
+}
+
+.ash-sessions-model-picker-thumb {
+	position: absolute;
+	top: 50%;
+	left: calc(var(--ash-model-picker-position) * 100%);
+	box-sizing: border-box;
+	width: 28px;
+	height: 28px;
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-circle);
+	background: var(--ash-input-background);
+	box-shadow: 0 2px 4px var(--ash-widget-shadow);
+	translate: -50% -50%;
+	transition:
+		left var(--ash-animation-durationSlow) cubic-bezier(0.16, 1, 0.3, 1),
+		scale var(--ash-animation-durationFast) ease;
+}
+
+.ash-sessions-model-picker-track:not([data-disabled="true"]):hover
+	.ash-sessions-model-picker-thumb {
+	scale: 1.08;
+}
+
+.ash-sessions-model-picker-track[data-dragging="true"]
+	.ash-sessions-model-picker-thumb,
+.ash-sessions-model-picker-track[data-dragging="true"]
+	.ash-sessions-model-picker-fill::before,
+.ash-sessions-model-picker-track[data-dragging="true"]
+	.ash-sessions-model-picker-maximum-effects {
+	transition: none;
+}
+
+.ash-sessions-model-picker-track input {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	margin: 0;
+	opacity: 0;
+	cursor: pointer;
+	touch-action: none;
+}
+
+.ash-sessions-model-picker-track input:disabled {
+	cursor: default;
+}
+
+.ash-sessions-model-picker-ticks {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.ash-sessions-model-picker-ticks span {
+	width: 4px;
+	height: 4px;
+	border-radius: var(--ash-cornerRadius-circle);
+	background: var(--ash-description-foreground);
+}
+
+.ash-sessions-model-picker-ticks span[data-selected="true"] {
+	background: var(--ash-button-primaryForeground);
+	opacity: 0.5;
+}
+
+.ash-sessions-model-picker-popup[data-reduced-motion="true"]
+	:is(
+		.ash-sessions-model-picker-surface,
+		.ash-sessions-model-picker-pages,
+		.ash-sessions-model-picker-page,
+		.ash-sessions-model-picker-thumb,
+		.ash-sessions-model-picker-maximum-effects
+	),
+.ash-sessions-model-picker-popup[data-reduced-motion="true"]
+	.ash-sessions-model-picker-fill::before {
+	animation: none;
+	transition: none;
+}
+
+:is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
+	:is(.ash-sessions-model-picker-surface, .ash-sessions-model-picker-thumb) {
+	border-color: var(--ash-contrastBorder);
+	box-shadow: none;
+}
+
+:is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
+	.ash-sessions-model-picker {
+	border: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
+}
+
+:is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
+	.ash-sessions-model-picker-maximum-effects {
+	background: var(--ash-button-primaryBackground);
+}
+
+:is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
+	.ash-sessions-model-picker-maximum-effects::before,
+:is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
+	.ash-sessions-model-picker-maximum-effects
+	span {
+	display: none;
+}
+
+:is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
+	.ash-sessions-model-picker-popup[data-reduced-motion="false"]
+	.ash-sessions-model-picker-page[data-active="true"]
+	.ash-sessions-model-picker-track[data-emphasized="true"]
+	.ash-sessions-model-picker-maximum-effects {
+	animation: none;
+}

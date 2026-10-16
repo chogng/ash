@@ -27,19 +27,6 @@
 	align-self: center;
 }
 
-.ash-chatgpt-widget .ash-chatgpt-input-model {
-	flex: 0 1 auto;
-	min-width: 0;
-	max-width: 30%;
-	height: 32px;
-	padding: 0 var(--ash-spacing-size40);
-	border: 0;
-	border-radius: var(--ash-cornerRadius-small);
-	background: transparent;
-	font-size: var(--ash-fontSize-label1);
-	text-overflow: ellipsis;
-}
-
 .ash-chatgpt-widget .ash-chatgpt-round-button {
 	flex: 0 0 auto;
 	display: grid;

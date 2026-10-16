@@ -4,7 +4,21 @@ import { escapeMarkdownSyntaxTokens } from '../../../../base/common/htmlContent.
 import { getMediaOrTextMime } from '../../../../base/common/mime.js';
 export interface ChatGPTConversation { readonly id: string; readonly title: string; }
 
-export interface ChatGPTModel { readonly id: string; readonly title: string; }
+/** A product model family and its selectable presets from the web model picker. */
+export interface ChatGPTModel {
+	readonly id: string;
+	readonly title: string;
+	readonly modelIds: readonly string[];
+	readonly presets: readonly {
+		readonly id: string;
+		readonly label: string;
+		readonly model: string;
+		readonly thinkingEffort?: string;
+		/** Whether the web preset advertises the Pro lane. */
+		readonly isPro: boolean;
+	}[];
+	readonly defaultPreset: string;
+}
 /** A confirmed ChatGPT file reference; signed upload URLs never enter conversation state. */
 export interface ChatGPTFile {
 	readonly id: string;
@@ -40,6 +54,7 @@ export interface ChatGPTHistory {
 	readonly title: string;
 	readonly parentId: string;
 	readonly model?: string;
+	readonly thinkingEffort?: string;
 	readonly messages: readonly ChatGPTMessage[];
 }
 export interface ChatGPTStreamUpdate { readonly conversationId?: string; readonly message?: ChatGPTMessage; }
@@ -55,11 +70,48 @@ export class ChatGPTClient {
 
 	async models(signal: AbortSignal): Promise<{ models: readonly ChatGPTModel[]; defaultModel: string; }> {
 		const value = await this.json('/models?iim=false&include_icons=false&is_gizmo=false', signal);
-		if (!isRecord(value) || !Array.isArray(value.models)) { throw this.invalidResponse(); }
-		const models = value.models.flatMap(model => isRecord(model) && typeof model.slug === 'string' && typeof model.title === 'string'
-			? [{ id: model.slug, title: model.title }] : []);
+		if (!isRecord(value) || !Array.isArray(value.models) || !Array.isArray(value.versions)) { throw this.invalidResponse(); }
+		const defaultModelSlug = typeof value.default_model_slug === 'string' ? value.default_model_slug : undefined;
+		const requestModels = new Map(value.models.flatMap(model => isRecord(model) && typeof model.slug === 'string' ? [[model.slug, model] as const] : []));
+		const models: ChatGPTModel[] = [];
+		// versions defines the product menu. models contains internal routing variants,
+		// including Work models that must not become extra ChatGPT picker entries.
+		for (const version of value.versions) {
+			if (!isRecord(version) || typeof version.id !== 'string' || !version.id.trim() || version.enabled === false || version.disabled === true
+				|| !Array.isArray(version.intelligence_presets) || models.some(model => model.id === version.id)) { continue; }
+			const title = [version.display_text_for_intelligence, version.display_text, version.display_text_full].find(text => typeof text === 'string' && text.trim());
+			if (typeof title !== 'string') { continue; }
+			const presets: ChatGPTModel['presets'][number][] = [];
+			for (const preset of version.intelligence_presets) {
+				if (!isRecord(preset) || (preset.preset_type !== undefined && preset.preset_type !== 'available') || preset.disabled === true) { continue; }
+				const id = typeof preset.id === 'number' && Number.isSafeInteger(preset.id) ? String(preset.id)
+					: typeof preset.id === 'string' && preset.id.trim() ? preset.id : undefined;
+				if (id === undefined || typeof preset.model_slug !== 'string' || presets.some(option => option.id === id)) { continue; }
+				const requestModel = requestModels.get(preset.model_slug);
+				if (!requestModel) { continue; }
+				const label = [preset.selected_display_title, preset.title].find(text => typeof text === 'string' && text.trim());
+				if (typeof label !== 'string') { continue; }
+				let thinkingEffort: string | undefined;
+				if (preset.thinking_effort != null) {
+					if (typeof preset.thinking_effort !== 'string' || !/^[a-z][a-z0-9_-]{0,63}$/u.test(preset.thinking_effort)
+						|| requestModel.configurable_thinking_effort !== true || !Array.isArray(requestModel.thinking_efforts)
+						|| !requestModel.thinking_efforts.some(effort => isRecord(effort) && effort.thinking_effort === preset.thinking_effort)) { continue; }
+					thinkingEffort = preset.thinking_effort;
+				}
+				presets.push({ id, label, model: preset.model_slug, thinkingEffort, isPro: preset.lane === 'pro' });
+			}
+			if (!presets.length) { continue; }
+			const modelIds = [...new Set([
+				...(Array.isArray(version.slugs) ? version.slugs.filter((slug): slug is string => typeof slug === 'string' && requestModels.has(slug)) : []),
+				...presets.map(preset => preset.model),
+			])];
+			models.push({
+				id: version.id, title, modelIds, presets,
+				defaultPreset: presets.find(preset => preset.model === defaultModelSlug)?.id ?? presets[0]!.id,
+			});
+		}
 		if (!models.length) { throw this.invalidResponse(); }
-		return { models, defaultModel: typeof value.default_model_slug === 'string' && models.some(model => model.id === value.default_model_slug) ? value.default_model_slug : models[0]!.id };
+		return { models, defaultModel: models.find(model => defaultModelSlug !== undefined && model.modelIds.includes(defaultModelSlug))?.id ?? models[0]!.id };
 	}
 
 	async conversations(offset: number, signal: AbortSignal): Promise<{ items: readonly ChatGPTConversation[]; hasMore: boolean; }> {
@@ -74,18 +126,23 @@ export class ChatGPTClient {
 		if (!isRecord(value) || !isRecord(value.mapping) || typeof value.current_node !== 'string') { throw this.invalidResponse(); }
 		const messages: ChatGPTMessage[] = [];
 		const visited = new Set<string>();
+		let thinkingEffort: string | undefined;
 		let nodeId: string | undefined = value.current_node;
 		while (nodeId && !visited.has(nodeId)) {
 			visited.add(nodeId);
 			const node: unknown = value.mapping[nodeId];
 			if (!isRecord(node)) { break; }
 			const message = readMessage(node.message, id);
+			if (thinkingEffort === undefined && isRecord(node.message) && isRecord(node.message.author) && node.message.author.role === 'assistant'
+				&& isRecord(node.message.metadata) && typeof node.message.metadata.thinking_effort === 'string') {
+				thinkingEffort = node.message.metadata.thinking_effort;
+			}
 			if (message && (message.text.trim() || message.resources?.length)) { messages.push(message); }
 			nodeId = typeof node.parent === 'string' ? node.parent : undefined;
 		}
 		return {
 			id, title: typeof value.title === 'string' ? value.title : 'ChatGPT', parentId: value.current_node,
-			model: typeof value.default_model_slug === 'string' ? value.default_model_slug : undefined, messages: messages.reverse(),
+			model: typeof value.default_model_slug === 'string' ? value.default_model_slug : undefined, thinkingEffort, messages: messages.reverse(),
 		};
 	}
 
@@ -142,7 +199,7 @@ export class ChatGPTClient {
 		return { url: url.href, token: value.token, encryptionKey: value.e2ee_key, conversationId: value.conversation_id as string | undefined ?? input.conversationId };
 	}
 
-	async *send(input: { text: string; model: string; parentId: string; conversationId?: string; messageId: string; files?: readonly ChatGPTFile[]; }, signal: AbortSignal): AsyncGenerator<ChatGPTStreamUpdate> {
+	async *send(input: { text: string; model: string; thinkingEffort?: string; parentId: string; conversationId?: string; messageId: string; files?: readonly ChatGPTFile[]; }, signal: AbortSignal): AsyncGenerator<ChatGPTStreamUpdate> {
 		const images = input.files?.filter(file => file.width !== undefined && file.height !== undefined) ?? [];
 		const content = images.length ? {
 			content_type: 'multimodal_text', parts: [
@@ -152,6 +209,8 @@ export class ChatGPTClient {
 		} : { content_type: 'text', parts: [input.text] };
 		const body = {
 			action: 'next', model: input.model, parent_message_id: input.parentId,
+			// ChatGPT Web uses its catalog's values, not the public API's reasoning.effort enum.
+			...(input.thinkingEffort !== undefined ? { thinking_effort: input.thinkingEffort } : {}),
 			...(input.conversationId ? { conversation_id: input.conversationId } : {}),
 			messages: [{
 				id: input.messageId, author: { role: 'user' }, content, create_time: Date.now() / 1000,

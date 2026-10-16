@@ -1,4 +1,5 @@
 import { startMarkdownMathExtension, startMarkdownExtension } from '../../fixtures/markdownExtension.js';
+import { chatGPTModelCatalog, simpleChatGPTModelCatalog } from '../../fixtures/chatGPTModels.js';
 import { readFileSync } from 'node:fs';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { createHmac } from 'node:crypto';
@@ -104,7 +105,7 @@ async function mockChatGPTRequests(page: Page, answer = 'Synthetic answer'): Pro
 		const path = new URL(route.request().url()).pathname;
 		const message = (id: string, role: string, text: string): object => ({ id, author: { role }, content: { content_type: 'text', parts: [text] } });
 		if (path.endsWith('/models')) {
-			await route.fulfill({ json: { models: [{ slug: 'fixture', title: 'Fixture model' }], default_model_slug: 'fixture' } });
+			await route.fulfill({ json: simpleChatGPTModelCatalog([{ slug: 'fixture', title: 'Fixture model' }]) });
 		} else if (path.endsWith('/conversations')) {
 			await route.fulfill({ json: { items: [{ id: 'fixture-chat', title: 'Synthetic conversation' }], total: 1 } });
 		} else if (path.endsWith('/conversation/fixture-chat')) {
@@ -164,17 +165,114 @@ async function chatPage(page: Page, answer = 'Synthetic answer'): Promise<void> 
 }
 
 for (const locale of ['en', 'zh-CN']) {
+	test(`ChatGPT model picker matches the two families and five product presets in ${locale}`, async ({ page }, testInfo) => {
+		await mockChatGPTRequests(page);
+		const catalog = chatGPTModelCatalog(locale);
+		const labels = locale === 'en' ? ['Instant', 'Medium', 'High', 'Extra High', 'Pro'] : ['即时', '中', '高', '极高', 'Pro'];
+		await page.route('**/service/backend-api/models?*', route => route.fulfill({ json: catalog }));
+		const submitted: { model: string; thinking_effort?: string; }[] = [];
+		await page.route('**/service/backend-api/f/conversation/prepare', async route => {
+			submitted.push(route.request().postDataJSON());
+			await route.fulfill({ json: { conduit_token: 'fixture' } });
+		});
+		await page.route('**/service/backend-api/f/conversation', async route => {
+			submitted.push(route.request().postDataJSON());
+			await route.fulfill({ contentType: 'text/event-stream', body: 'data: {"message":{"id":"reply","author":{"role":"assistant"},"content":{"parts":["Reply"]}}}\n\ndata: [DONE]\n\n' });
+		});
+		await page.goto(`/chatgptNavigation.html?locale=${locale}&theme=light`);
+		const picker = page.locator('.ash-sessions-model-picker');
+		const openModels = async (): Promise<void> => {
+			await picker.click();
+			await page.getByRole('button', { name: locale === 'en' ? 'Choose model' : '选择模型', exact: true }).click();
+		};
+		await expect(picker).toHaveText(labels[0]!);
+		await openModels();
+		await expect(page.getByRole('menuitemradio')).toHaveText(['GPT-6', 'GPT-5.6 Sol']);
+		await testInfo.attach('chatgpt-model-families', { body: await page.getByRole('menu').screenshot(), contentType: 'image/png' });
+		const popupId = await page.getByRole('menu').getAttribute('id');
+		await page.getByRole('menuitemradio', { name: 'GPT-6', exact: true }).click();
+		await expect(page.getByRole('dialog')).toHaveAttribute('id', popupId!);
+		await page.keyboard.press('Escape');
+		const expected = [
+			['gpt-6-instant', undefined], ['gpt-6-thinking', 'standard'], ['gpt-6-thinking', 'extended'],
+			['gpt-6-thinking', 'max'], ['gpt-6-pro', undefined],
+		] as const;
+		for (let index = 0; index < labels.length; index++) {
+			await picker.click();
+			const slider = page.getByRole('slider');
+			await expect(slider).toHaveAttribute('max', '4');
+			await slider.press('Home');
+			for (let step = 0; step < index; step++) { await slider.press('ArrowRight'); }
+			await expect(slider).toHaveAttribute('aria-valuetext', labels[index]!);
+			await expect(picker).toHaveText(labels[index]!);
+			await expect(page.locator('.ash-sessions-model-picker-track')).toHaveAttribute('data-emphasized', String(index === 4));
+			if (index === 4) {
+				await expect(page.locator('.ash-sessions-model-picker-maximum-effects')).toHaveCSS('opacity', '1');
+				await expect.poll(() => page.locator('.ash-sessions-model-picker-maximum-effects').evaluate(element => element.getAnimations({ subtree: true }).filter(animation => animation.playState === 'running').length)).toBeGreaterThan(1);
+				await testInfo.attach('chatgpt-pro', { body: await page.getByRole('dialog').screenshot(), contentType: 'image/png' });
+			}
+			if (index === 3) { await testInfo.attach('chatgpt-extra-high', { body: await page.getByRole('dialog').screenshot(), contentType: 'image/png' }); }
+			await page.keyboard.press('Escape');
+			await fillMessage(page, `Use ${labels[index]}`);
+			await page.getByRole('button', { name: locale === 'en' ? 'Send' : '发送', exact: true }).click();
+			await expect.poll(() => submitted.length).toBe((index + 1) * 2);
+			expect(submitted.slice(-2).map(body => [body.model, body.thinking_effort])).toEqual([expected[index], expected[index]]);
+			if (expected[index]![1] === undefined) { expect(submitted.slice(-2).every(body => !('thinking_effort' in body))).toBe(true); }
+			await expect(picker).toBeEnabled();
+		}
+		await openModels();
+		await page.getByRole('menuitemradio', { name: 'GPT-5.6 Sol', exact: true }).click();
+		await expect(picker).toHaveText('Pro');
+		await expect(page.getByRole('dialog')).toBeVisible();
+		await page.getByRole('slider').press('ArrowLeft');
+		await expect(picker).toHaveText(labels[3]!);
+		await page.keyboard.press('Escape');
+		await fillMessage(page, 'Use GPT-5.6 Sol Extra High');
+		await page.getByRole('button', { name: locale === 'en' ? 'Send' : '发送', exact: true }).click();
+		await expect.poll(() => submitted.length).toBe(12);
+		expect(submitted.slice(-2).map(body => [body.model, body.thinking_effort])).toEqual([['gpt-5-6-thinking', 'max'], ['gpt-5-6-thinking', 'max']]);
+	});
+
+	test(`ChatGPT model picker submits the selected catalog model and hides unknown thinking capabilities in ${locale}`, async ({ page }) => {
+		await mockChatGPTRequests(page);
+		await page.route('**/service/backend-api/models?*', route => route.fulfill({
+			json: simpleChatGPTModelCatalog([{ slug: 'fixture', title: 'Fixture model' }, { slug: 'second', title: 'Second model' }])
+		}));
+		let submitted: string | undefined;
+		await page.route('**/service/backend-api/f/conversation/prepare', async route => {
+			submitted = route.request().postDataJSON().model;
+			await route.fulfill({ status: 500, json: {} });
+		});
+		await page.goto(`/chatgptNavigation.html?locale=${locale}&theme=light`);
+		const picker = page.locator('.ash-sessions-model-picker');
+		await expect(picker).toBeEnabled();
+		await picker.click();
+		await expect(page.getByRole('slider')).toHaveCount(0);
+		await expect(page.getByRole('menuitemradio', { name: 'Fixture model' })).toHaveAttribute('aria-checked', 'true');
+		await expect(page.getByRole('menu')).toBeFocused();
+		await page.keyboard.press('End');
+		await page.keyboard.press('Enter');
+		await expect(picker).toHaveText('Second model');
+		await expect(picker).toBeFocused();
+		await picker.click();
+		await expect(page.getByRole('menuitemradio', { name: 'Second model' })).toHaveAttribute('aria-checked', 'true');
+		await page.keyboard.press('Escape');
+		await fillMessage(page, 'Use the selected model');
+		await page.getByRole('button', { name: locale === 'en' ? 'Send' : '发送', exact: true }).click();
+		await expect.poll(() => submitted).toBe('second');
+	});
+
 	for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
 		test(`ChatGPT startup focus stays in the editor through loading in ${locale} ${theme}`, async ({ page }, testInfo) => {
 			await mockChatGPTRequests(page);
 			let releaseCatalog!: () => Promise<void>;
 			await page.route('**/service/backend-api/models?*', route => {
-				releaseCatalog = () => route.fulfill({ json: { models: [{ slug: 'fixture', title: 'Fixture model' }], default_model_slug: 'fixture' } });
+				releaseCatalog = () => route.fulfill({ json: simpleChatGPTModelCatalog([{ slug: 'fixture', title: 'Fixture model' }]) });
 			});
 			await page.goto(`/chatgptNavigation.html?focus=1&locale=${locale}&theme=${theme}`);
 			const composer = page.locator('.ash-chatgpt-composer');
 			const input = composer.getByRole('textbox', { name: locale === 'en' ? 'Ask ChatGPT' : '询问 ChatGPT' });
-			const model = composer.getByRole('combobox');
+			const model = composer.locator('.ash-sessions-model-picker');
 			await expect(input).toBeFocused();
 			await expect(input).toBeDisabled();
 			await expect(composer).toHaveCSS('outline-style', 'none');
@@ -204,11 +302,12 @@ for (const locale of ['en', 'zh-CN']) {
 			const composer = page.locator('.ash-chatgpt-composer');
 			const input = composer.getByRole('textbox', { name: locale === 'en' ? 'Ask ChatGPT' : '询问 ChatGPT' });
 			const editor = composer.locator('.ash-chat-input-editor');
-			const model = composer.getByRole('combobox', { name: locale === 'en' ? 'Model' : '模型' });
+			const model = composer.getByRole('button', { name: locale === 'en' ? 'Choose model: Fixture model' : '选择模型：Fixture model' });
 			const send = composer.locator('.ash-chatgpt-send');
 			await expect(input).toBeEnabled();
 			await expect(editor).toHaveCSS('height', '20px');
 			await expect(composer).toHaveCSS('border-radius', '9999px');
+			await expect(model).toHaveCSS('border-radius', '9999px');
 			await expect(send).toHaveCSS('border-radius', '9999px');
 			await expect(send.locator('svg')).toHaveAttribute('data-ash-icon-id', 'voice-mode');
 			const bounds = await composer.boundingBox();

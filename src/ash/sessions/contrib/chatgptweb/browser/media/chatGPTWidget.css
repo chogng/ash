@@ -25,15 +25,15 @@
 	display: none;
 }
 
-.ash-chatgpt-widget button,
-.ash-chatgpt-widget input,
-.ash-chatgpt-widget textarea,
-.ash-chatgpt-widget select {
+:where(.ash-chatgpt-widget) button,
+:where(.ash-chatgpt-widget) input,
+:where(.ash-chatgpt-widget) textarea,
+:where(.ash-chatgpt-widget) select {
 	font: inherit;
 	color: inherit;
 }
 
-.ash-chatgpt-widget button {
+:where(.ash-chatgpt-widget) button {
 	min-height: 36px;
 	padding: 6px 12px;
 	border: var(--ash-strokeThickness, 1px) solid transparent;

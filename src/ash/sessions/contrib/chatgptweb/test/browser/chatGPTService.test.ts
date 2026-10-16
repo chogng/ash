@@ -1,19 +1,20 @@
 import '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
+import { chatGPTModelCatalog, simpleChatGPTModelCatalog } from '../../../../../../../test/fixtures/chatGPTModels.js';
 import { VSBuffer } from '../../../../../base/common/buffer.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import type { IStorageService } from '../../../../../platform/storage/common/storage.js';
-import type { IChatGPTTransport } from '../../common/chatGPTTransport.js';
+import type { ChatGPTRequest, IChatGPTTransport } from '../../common/chatGPTTransport.js';
 import { ChatGPTService } from '../../browser/chatGPTService.js';
 
-function fixture(respond: (path: string, signal: AbortSignal) => Promise<Response>) {
+function fixture(respond: (path: string, signal: AbortSignal, request: ChatGPTRequest) => Promise<Response>) {
 	const requests = new Map<string, { controller: AbortController; reader?: ReadableStreamDefaultReader<Uint8Array>; }>();
 	const transport: IChatGPTTransport = {
 		async request(id, request) {
 			const pending = { controller: new AbortController(), reader: undefined as ReadableStreamDefaultReader<Uint8Array> | undefined };
 			requests.set(id, pending);
-			const response = await respond(request.path, pending.controller.signal);
+			const response = await respond(request.path, pending.controller.signal, request);
 			pending.reader = response.body?.getReader();
 			return { status: response.status, headers: Object.fromEntries(response.headers) };
 		},
@@ -25,13 +26,84 @@ function fixture(respond: (path: string, signal: AbortSignal) => Promise<Respons
 }
 function response(path: string): Response {
 	assert.ok(!path.endsWith('/me'), 'The chat must not request an account identity');
-	if (path.includes('/models?')) { return Response.json({ models: [{ slug: 'model', title: 'Model' }], default_model_slug: 'model' }); }
+	if (path.includes('/models?')) { return Response.json(simpleChatGPTModelCatalog([{ slug: 'model', title: 'Model' }])); }
 	if (path.includes('/conversations?')) { return Response.json({ items: [{ id: 'one', title: 'One' }, { id: 'two', title: 'Two' }], total: 2 }); }
 	const id = path.split('/').at(-1)!;
 	return Response.json({ title: id, current_node: 'reply', mapping: { reply: { parent: null, message: { id: 'reply', author: { role: 'assistant' }, content: { parts: [id + ' reply'] } } } } });
 }
 suite('ChatGPT shared service', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+	test('all five presets send their mapped targets and family changes preserve the product level', async () => {
+		const sent: Record<string, unknown>[] = [];
+		let catalog = chatGPTModelCatalog();
+		using chat = fixture(async (path, _signal, request) => {
+			if (path.includes('/models?')) { return Response.json(catalog); }
+			if (path.includes('/.headers/')) { return Response.json({ 'OpenAI-Sentinel-Chat-Requirements-Token': 'fixture' }); }
+			if (path.endsWith('/prepare')) {
+				sent.push(JSON.parse(String(request.body)));
+				return Response.json({ conduit_token: 'fixture' });
+			}
+			if (path.endsWith('/f/conversation')) {
+				sent.push(JSON.parse(String(request.body)));
+				return new Response('data: {"message":{"id":"reply","author":{"role":"assistant"},"content":{"parts":["Reply"]}}}\n\ndata: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
+			}
+			return response(path);
+		});
+		await chat.reload();
+		assert.equal(chat.state.get().model, 'latest');
+		assert.equal(chat.state.get().modelPreset, '0');
+		for (const [preset, model, effort] of [
+			['0', 'gpt-6-instant', undefined], ['1', 'gpt-6-thinking', 'standard'], ['2', 'gpt-6-thinking', 'extended'],
+			['6', 'gpt-6-thinking', 'max'], ['3', 'gpt-6-pro', undefined],
+		] as const) {
+			chat.setModelPreset(preset);
+			chat.setModelPreset('unknown');
+			assert.equal(chat.state.get().modelPreset, preset);
+			chat.setDraft('Use selected preset');
+			await chat.send();
+			assert.ok(sent.slice(-2).every(body => body.model === model && body.thinking_effort === effort));
+			if (effort === undefined) { assert.ok(sent.slice(-2).every(body => !('thinking_effort' in body))); }
+		}
+		assert.equal(sent.length, 10);
+		chat.setModel('5.6');
+		assert.equal(chat.state.get().modelPreset, '3');
+		chat.setModelPreset('6');
+		chat.setDraft('Use other family');
+		await chat.send();
+		assert.ok(sent.slice(-2).every(body => body.model === 'gpt-5-6-thinking' && body.thinking_effort === 'max'));
+		catalog = chatGPTModelCatalog();
+		catalog.versions[1]!.intelligence_presets = catalog.versions[1]!.intelligence_presets.filter(preset => preset.id !== 6);
+		await chat.reload();
+		assert.equal(chat.state.get().modelPreset, '0');
+	});
+
+	test('history routing models and effort restore the matching family and product preset', async () => {
+		using chat = fixture(async path => {
+			if (path.includes('/models?')) { return Response.json(chatGPTModelCatalog()); }
+			if (path.includes('/conversation/')) {
+				return Response.json({
+					default_model_slug: path.endsWith('/three') ? 'gpt-5-6-pro' : 'gpt-6-thinking', current_node: 'reply', mapping: {
+						reply: {
+							parent: null, message: {
+								id: 'reply', author: { role: 'assistant' }, content: { parts: ['Reply'] }, metadata: { thinking_effort: path.endsWith('/one') ? 'max' : 'unsupported' },
+							}
+						}
+					},
+				});
+			}
+			return response(path);
+		});
+		await chat.reload();
+		await chat.select('one');
+		assert.equal(chat.state.get().model, 'latest');
+		assert.equal(chat.state.get().modelPreset, '6');
+		await chat.select('two');
+		assert.equal(chat.state.get().modelPreset, '1');
+		await chat.select('three');
+		assert.equal(chat.state.get().model, '5.6');
+		assert.equal(chat.state.get().modelPreset, '3');
+	});
+
 	test('selection, catalog, messages and drafts have one owner across view lifetimes', async () => {
 		using chat = fixture(async path => response(path));
 		await chat.reload();

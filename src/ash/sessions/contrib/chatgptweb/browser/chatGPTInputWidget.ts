@@ -14,7 +14,7 @@ import { SlashCommandCatalog } from '../../../../workbench/contrib/chat/common/s
 import { IChatSpeechToTextService } from '../../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { IPreferencesService } from '../../../../workbench/services/preferences/common/preferences.js';
 import { IChatGPTService, type ChatGPTAttachment } from './chatGPTService.js';
-import type { ChatGPTModel } from './chatGPTClient.js';
+import { ModelPickerWidget } from '../../chat/browser/modelPickerWidget.js';
 import '../../../common/theme.js';
 import './media/chatGPTInputWidget.css';
 
@@ -22,7 +22,7 @@ import './media/chatGPTInputWidget.css';
 export class ChatGPTInputWidget extends Disposable {
 	private readonly element: HTMLFormElement;
 	private readonly editor: ChatInputEditor;
-	private readonly model: HTMLSelectElement;
+	private readonly modelPicker: ModelPickerWidget;
 	private readonly sendButton: HTMLButtonElement;
 	private readonly dictationButton: HTMLButtonElement;
 	private readonly dictation: DictationSession;
@@ -31,7 +31,6 @@ export class ChatGPTInputWidget extends Disposable {
 	private readonly attachmentRows = new Map<string, { element: HTMLElement; name: HTMLElement; status: HTMLElement; error: HTMLElement; retry: HTMLButtonElement; remove: HTMLButtonElement; }>();
 	private readonly voiceStatus: HTMLElement;
 	private readonly voiceTranscript: HTMLElement;
-	private modelReference: readonly ChatGPTModel[] | undefined;
 	private visible = true;
 	private inputIdentity: string | undefined;
 	private inputGeneration = 0;
@@ -110,10 +109,7 @@ export class ChatGPTInputWidget extends Disposable {
 			height: { minimum: 20, maximum: 240 },
 			tabFocusMode: true,
 		}));
-		this.model = h(container.ownerDocument, 'select');
-		this.model.className = 'ash-chatgpt-input-model';
-		this.model.setAttribute('aria-label', localize('sessions.chatgpt.model', 'Model'));
-		this._register(addDisposableListener(this.model, 'change', () => this.chat.setModel(this.model.value)));
+		this.modelPicker = this._register(instantiation.createInstance(ModelPickerWidget, this.element, (model: string) => this.chat.setModel(model)));
 		const preview = h(container.ownerDocument, 'div');
 		preview.className = 'ash-chatgpt-dictation-preview';
 		preview.setAttribute('aria-hidden', 'true');
@@ -143,7 +139,7 @@ export class ChatGPTInputWidget extends Disposable {
 		this.sendButton = h(container.ownerDocument, 'button');
 		this.sendButton.className = 'ash-chatgpt-send ash-chatgpt-round-button';
 		this.sendButton.type = 'button';
-		this.element.append(this.model, this.dictationButton, this.sendButton);
+		this.element.append(this.dictationButton, this.sendButton);
 		this._register(addDisposableListener(this.sendButton, 'click', () => {
 			const state = this.chat.state.get();
 			if (state.sending) { void this.chat.stop(); }
@@ -168,19 +164,16 @@ export class ChatGPTInputWidget extends Disposable {
 			this.inputIdentity = identity;
 			const voiceActive = state.voice !== 'idle';
 			this.editor.setReadOnly(!state.connected || state.busy || state.sending || voiceActive);
-			this.model.disabled = this.attachButton.disabled = !state.connected || state.busy || state.sending || voiceActive;
-
-			if (this.modelReference !== state.models) {
-				this.modelReference = state.models;
-				this.model.replaceChildren(...state.models.map(model => {
-					const option = h(container.ownerDocument, 'option');
-					option.value = model.id;
-					option.textContent = model.title;
-					return option;
-				}));
-			}
-			this.model.value = state.model;
-			this.model.title = this.model.selectedOptions[0]?.textContent ?? '';
+			this.attachButton.disabled = !state.connected || state.busy || state.sending || voiceActive;
+			const selectedModel = state.models.find(model => model.id === state.model);
+			this.modelPicker.update({
+				models: state.models, selectedModel: state.model, disabled: this.attachButton.disabled,
+				thinking: selectedModel && selectedModel.presets.length > 1 && state.modelPreset !== undefined ? {
+					levels: selectedModel.presets, selectedLevel: state.modelPreset,
+					emphasized: selectedModel.presets.find(preset => preset.id === state.modelPreset)?.isPro,
+					select: value => this.chat.setModelPreset(value),
+				} : undefined,
+			});
 			this.editor.value = state.draft;
 			this.renderAttachments(state.attachments, state.busy || state.sending);
 			this.voiceStatus.hidden = !voiceActive;
@@ -271,6 +264,7 @@ export class ChatGPTInputWidget extends Disposable {
 		this.visible = visible;
 		if (visible) { this.editor.layout(); }
 		else {
+			this.modelPicker.hide();
 			this.inputGeneration++;
 			void this.cancelDictation();
 			void this.chat.stopVoice();
