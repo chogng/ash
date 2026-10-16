@@ -1,3 +1,5 @@
+import '../../../src/ash/workbench/contrib/chat/browser/chat.shared.contribution.js';
+import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import '../../../src/ash/workbench/contrib/terminal/browser/terminal.web.contribution.js';
 import { writeP } from '../../../src/ash/workbench/contrib/terminal/browser/terminalTestHelpers.js';
 import { IHoverService, HoverService } from '../../../src/ash/platform/hover/browser/hoverService.js';
@@ -53,7 +55,7 @@ import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { ITerminalService, type ITerminalDimensions, type ITerminalInstance } from '../../../src/ash/workbench/services/terminal/browser/terminal.js';
 import { GeneralShellType, ITerminalLogService, PosixShellType } from '../../../src/ash/platform/terminal/common/terminal.js';
-import { IDictationService } from '../../../src/ash/platform/dictation/common/dictationService.js';
+import { IDictationBackendService } from '../../../src/ash/platform/renderer/common/rendererHost.js';
 import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
 import { registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
@@ -334,14 +336,14 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		services.registerInstance(ITerminalService, terminals);
 		let transcript!: (text: string, isFinal: boolean) => void;
 		let stops = 0;
-		services.registerInstance(IDictationService, { onDidChangePreparation: Event.None, getPreparation: async () => undefined, getOptions: async () => ({ inputDevices: [], languages: [] }), prepareModel: async () => { }, cancelPreparation: async () => { }, start: async (callback) => { transcript = callback; return { stop: async () => { stops++; }, cancel: async () => { stops++; } }; } });
+		services.registerInstance(IDictationBackendService, { onDidChangeAvailability: Event.None, getOptions: async () => ({ inputDevices: [], languages: [] }), start: async (_options, callback) => { transcript = callback; return { stop: async () => { stops++; }, cancel: async () => { stops++; } }; } });
 		services.registerInstance(IContextKeyService, context);
 		services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 		services.registerInstance(IViewsService, { openView: () => pane, getViewWithId: () => pane, focusView: () => { pane.focus(); return true; } } as unknown as IViewsService);
 		services.registerInstance(IPreferencesService, { openSettings: async () => { } } as unknown as IPreferencesService);
 		services.registerInstance(INotificationService, lifetime.add(new NotificationService()));
 		services.registerInstance(IWorkspaceContextService, { onDidChangeWorkspace: workspaceChanged.event, getWorkspace: () => workspace, getWorkbenchState: () => 2, getWorkspaceFolder: resource => workspace.folders.find(folder => extUri.isEqualOrParent(resource, folder.uri)) ?? null });
-		if (new URLSearchParams(location.search).has('profiles')) services.registerInstance(IConfigurationService, lifetime.add(new WorkbenchConfigurationService()));
+		services.registerInstance(IConfigurationService, lifetime.add(new WorkbenchConfigurationService({ source: '{"dictation.backend":"cloud"}' })));
 		services.registerInstance(ITerminalProcessService, {
 			operatingSystem: new URLSearchParams(location.search).get('os') === 'windows' ? OperatingSystem.Windows : OperatingSystem.Linux, onConnectionState: Event.None,
 			getEnvironment: async () => ({ HOME: '/home/test', PROFILE_ARG: 'literal;$HOME' }),
@@ -349,6 +351,7 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		} as unknown as ITerminalProcessService);
 		setupTerminalFixtureServices(services, lifetime);
 		services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
+		services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 		registerTestDictationOnboarding(services);
 		const profileService = lifetime.add(services.createInstance(TerminalProfileService));
 		services.registerInstance(ITerminalProfileService, profileService);
@@ -889,9 +892,11 @@ if (new URLSearchParams(location.search).has('input')) {
 			const root = document.querySelector<HTMLElement>('#terminal')!;
 			root.style.display = 'flex'; root.style.flexDirection = 'column';
 			services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
+			services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 			registerTestDictationOnboarding(services);
+			await services.get(IConfigurationService).updateValue('dictation.backend', 'cloud');
 			services.registerInstance(IPreferencesService, { openSettings: async () => { } } as unknown as IPreferencesService);
-			services.registerInstance(IDictationService, { onDidChangePreparation: Event.None, getPreparation: async () => undefined, getOptions: async () => ({ inputDevices: [], languages: [] }), prepareModel: async () => { }, cancelPreparation: async () => { }, start: async () => ({ stop: async () => { }, cancel: async () => { } }) });
+			services.registerInstance(IDictationBackendService, { onDidChangeAvailability: Event.None, getOptions: async () => ({ inputDevices: [], languages: [] }), start: async () => ({ stop: async () => { }, cancel: async () => { } }) });
 			services.registerInstance(IMenuService, new MenuService(commands, services.get(IContextKeyService)));
 			const layout = Object.assign(store.add(new BrowserLayoutService({ root })), {
 				onDidChangePartVisibility: Event.None, isPartVisible: () => true, hidePart: () => { }, hasFocus: () => false,

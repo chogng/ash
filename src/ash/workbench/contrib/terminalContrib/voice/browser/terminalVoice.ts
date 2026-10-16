@@ -6,7 +6,7 @@ import { IInstantiationService } from '../../../../../platform/instantiation/com
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
 import { ITerminalService, type ITerminalInstance } from '../../../../services/terminal/browser/terminal.js';
-import { ISpeechService, SpeechToTextState } from '../../../speech/common/speechService.js';
+import { IChatSpeechToTextService, ChatSpeechToTextState } from '../../../chat/browser/speechToText/chatSpeechToTextService.js';
 import { IDictationOnboardingService } from '../../../chat/browser/speechToText/dictationOnboarding.js';
 import { DictationSession, DictationAccessibilityHelp } from '../../../chat/browser/speechToText/dictationSession.js';
 import { localize } from '../../../../../nls.js';
@@ -29,7 +29,7 @@ export class TerminalVoiceSession extends Disposable {
 		private readonly focus: () => void,
 		@IInstantiationService instantiation: IInstantiationService,
 		@ITerminalService private readonly terminals: ITerminalService,
-		@ISpeechService speech: ISpeechService,
+		@IChatSpeechToTextService speech: IChatSpeechToTextService,
 		@IDictationOnboardingService private readonly onboarding: IDictationOnboardingService,
 		@IPreferencesService preferences: IPreferencesService,
 		@INotificationService private readonly notifications: INotificationService,
@@ -56,6 +56,7 @@ export class TerminalVoiceSession extends Disposable {
 			preview,
 			() => isVisible() && this.target === terminals.activeInstance && this.target?.state === 'running',
 			async () => { await preferences.openSettings({ section: 'dictation' }); },
+			'terminal',
 		));
 		this._register(instantiation.createInstance(DictationAccessibilityHelp, this.session, container, controls));
 		this._register(onboarding.registerHost({ container: this.element, focusTarget: container, isVisible }));
@@ -67,7 +68,7 @@ export class TerminalVoiceSession extends Disposable {
 		controls.hidden = true;
 		this._register(speech.onDidChangeState(() => {
 			controls.hidden = !this.session.isActive;
-			stop.enabled = !speech.isStarting && speech.state !== SpeechToTextState.Transcribing;
+			stop.enabled = !speech.isStarting && speech.state !== ChatSpeechToTextState.Transcribing;
 		}));
 		this._register(terminals.onDidChangeActiveInstance(() => this.hide()));
 		this._register(terminals.onDidDisposeInstance(instance => { if (instance === this.target) { this.hide(); } }));

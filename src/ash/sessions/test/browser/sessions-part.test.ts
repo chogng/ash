@@ -1,3 +1,4 @@
+import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
 import { IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
 import { IRendererHostService } from '../../../platform/renderer/common/rendererHost.js';
@@ -23,7 +24,7 @@ import { DialogService } from '../../../workbench/services/dialogs/common/dialog
 import { FileDialogService } from '../../../workbench/services/dialogs/browser/fileDialogService.js';
 import type { IWebWorkspaceClient } from '../../../workbench/services/workspaces/browser/workspaceOpenService.js';
 import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
-import { IDictationService } from '../../../platform/dictation/common/dictationService.js';
+import { IDictationBackendService } from '../../../platform/renderer/common/rendererHost.js';
 import { ISpeechService } from '../../../workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../workbench/contrib/speech/browser/speechService.js';
 import { observableValue } from '../../../base/common/observable.js';
@@ -253,8 +254,9 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { assert.fail('Unexpected editor navigation'); }, focusActiveEditor: () => { } });
 	services.registerInstance(IAppServerSkillApi, { onDidChangeSkills: ready.event, readTextResource: async () => { throw new Error("No Skill body in this test fixture"); }, list: async () => ({ generation: 0, skills: [] }), read: async () => ({ revision: 0, catalog: { generation: 0, skills: [] }, diagnostics: [] }), setEnabled: async () => { } });
 	services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { throw new Error('Unexpected conversation navigation'); } } as unknown as IChatSessionNavigationService);
-	services.registerInstance(IDictationService, undefined);
+	services.registerInstance(IDictationBackendService, undefined);
 	services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
+	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 	using notifications = new NotificationService();
 	services.registerInstance(IContextMenuService, contextMenuService);
 	services.registerInstance(IContextViewService, contextViewService);

@@ -1,3 +1,5 @@
+import { DEFAULT_LOCAL_TRANSCRIPTION_MODEL } from '../../../src/ash/platform/localTranscription/common/localTranscription.js';
+import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import '../../../src/ash/workbench/contrib/accessibility/browser/accessibilityConfiguration.js';
 import { IExtensionService } from '../../../src/ash/workbench/services/extensions/common/extensionService.js';
 import { TestExtensionService } from '../../../src/ash/workbench/test/common/testExtensionServices.js';
@@ -21,7 +23,7 @@ import { IStorageService, StorageScope } from '../../../src/ash/platform/storage
 import { IContextViewService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
-import { IDictationService } from '../../../src/ash/platform/dictation/common/dictationService.js';
+import { IDictationBackendService } from '../../../src/ash/platform/renderer/common/rendererHost.js';
 import { ISpeechService, SPEECH_LANGUAGE_CONFIG } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import '../../../src/ash/base/browser/ui/button/button.css';
 import '../../../src/ash/base/browser/ui/inputbox/inputbox.css';
@@ -30,7 +32,7 @@ import '../../../src/ash/base/browser/ui/sash/sash.css';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
-import { DEFAULT_LOCAL_DICTATION_MODEL, DictationConfiguration } from '../../../src/ash/platform/dictation/common/dictationConfiguration.js';
+import { DictationConfiguration } from '../../../src/ash/workbench/contrib/chat/common/constants.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { ILocalTranscriptionService, LocalTranscriptionModelState, type ILocalTranscriptionModelSnapshot, type ILocalTranscriptionModelStatus } from '../../../src/ash/platform/localTranscription/common/localTranscription.js';
 import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
@@ -110,7 +112,7 @@ if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
 }
 
 const resources = new DisposableStore();
-const configuration = resources.add(new WorkbenchConfigurationService());
+const configuration = resources.add(new WorkbenchConfigurationService({ source: '{"dictation.backend":"cloud"}' }));
 const services = resources.add(new InstantiationService());
 const modelChanges = resources.add(new Emitter<void>());
 let credentialStorage: SecretStorageStatus = 'available';
@@ -141,13 +143,13 @@ services.registerInstance(ILanguageModelsService, {
 });
 const changed = resources.add(new Emitter<void>());
 let models: ILocalTranscriptionModelSnapshot[] = [
-	{ model: DEFAULT_LOCAL_DICTATION_MODEL, available: false, sizeBytes: 0 },
+	{ model: DEFAULT_LOCAL_TRANSCRIPTION_MODEL, available: false, sizeBytes: 0 },
 	{ model: 'imported-model', available: true, sizeBytes: 1024 * 1024 },
 ];
 const operations: string[] = [];
 let finish: ((state: LocalTranscriptionModelState.Ready | LocalTranscriptionModelState.Cancelled) => void) | undefined;
 function publish(status: ILocalTranscriptionModelStatus): void {
-	models = models.map(model => model.model === DEFAULT_LOCAL_DICTATION_MODEL ? { ...model, status } : model);
+	models = models.map(model => model.model === DEFAULT_LOCAL_TRANSCRIPTION_MODEL ? { ...model, status } : model);
 	changed.fire();
 }
 const backend: ILocalTranscriptionService = {
@@ -212,11 +214,11 @@ const speechExtensions = resources.add(new TestExtensionService({
 	resources: new ExtensionResourceLoaderService(async () => { throw new Error('Speech metadata must not read resources'); }),
 }));
 services.registerInstance(IExtensionService, speechExtensions);
-services.registerInstance(IDictationService, new URLSearchParams(location.search).has('extensionOnly') ? undefined : {
-	onDidChangePreparation: Event.None, getOptions: async () => ({ inputDevices: [{ id: 'microphone-1', label: 'Test microphone', isDefault: true }], languages: ['en', 'zh'] }), getPreparation: async () => undefined, prepareModel: async () => { }, cancelPreparation: async () => { },
-	start: async (onTranscript: (text: string, isFinal: boolean) => void) => { starts++; transcript = onTranscript; await captureReady; return { stop: async () => { stops++; }, cancel: async () => { stops++; } }; },
+services.registerInstance(IDictationBackendService, new URLSearchParams(location.search).has('extensionOnly') ? undefined : {
+	onDidChangeAvailability: Event.None, getOptions: async () => ({ inputDevices: [{ id: 'microphone-1', label: 'Test microphone', isDefault: true }], languages: ['en', 'zh'] }), start: async (_options, onTranscript: (text: string, isFinal: boolean) => void) => { starts++; transcript = onTranscript; await captureReady; return { stop: async () => { stops++; }, cancel: async () => { stops++; } }; },
 });
 services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
+if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 registerTestDictationOnboarding(services);
 services.registerInstance(IPreferencesService, { openSettings: async () => { } } as unknown as IPreferencesService);
 services.registerInstance(IEditorService, { onDidVisibleEditorsChange: Event.None, onDidActiveEditorChange: Event.None } as unknown as IEditorService);
@@ -230,7 +232,7 @@ codeEditor.setModel(codeModel);
 codeEditor.layout({ width: 600, height: 220 });
 services.get(IKeybindingService);
 
-const dictationSession = resources.add(services.createInstance(DictationSession, editor, preview, () => true, async () => { }));
+const dictationSession = resources.add(services.createInstance(DictationSession, editor, preview, () => true, async () => { }, 'chat'));
 const contextViews = services.get(IContextViewService);
 const notifications = resources.add(new NotificationService());
 const secondInput = resources.add(services.createInstance(ChatInputPart, document.body, {} as ChatInputDelegate, {} as IContextMenuService, contextViews, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, {
@@ -325,13 +327,13 @@ window.ashTableIntegration = {
 	secondDraft: async () => (await secondInput.captureDraft())?.draft.text ?? '',
 	operations,
 	startDictation: async () => { await dictationSession.action.run(); },
-	stopDictation: () => services.get(ISpeechService).stopAndTranscribe(),
+	stopDictation: () => services.get(IChatSpeechToTextService).stopAndTranscribe(),
 	hideSecondInput: () => { secondInput.setVisible(false); secondInput.element.hidden = true; },
 	transcript: (text, final) => { if (extensionEmit) extensionEmit(text, final); else transcript?.(text, final); },
 	get draft() { return editor.value; },
 	progress: () => publish({ state: LocalTranscriptionModelState.Downloading, file: 'encoder.onnx', downloadedBytes: 1024 * 1024 }),
 	finish: () => {
-		models = models.map(model => model.model === DEFAULT_LOCAL_DICTATION_MODEL ? { ...model, available: true, sizeBytes: 2 * 1024 * 1024, status: { state: LocalTranscriptionModelState.Ready } } : model);
+		models = models.map(model => model.model === DEFAULT_LOCAL_TRANSCRIPTION_MODEL ? { ...model, available: true, sizeBytes: 2 * 1024 * 1024, status: { state: LocalTranscriptionModelState.Ready } } : model);
 		changed.fire();
 		finish?.(LocalTranscriptionModelState.Ready);
 	},

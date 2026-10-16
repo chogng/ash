@@ -169,6 +169,25 @@ Sessions Preferences、Skill 相关调用及 13 项分层检查；4 项 Chromium
 
 用户已确认：按职责迁移，保留 Ash 后端领域语义和 Stanza 输入编辑器实现；有上游对应职责的实现回到准确 owner。此确认覆盖首次审计的 23 个仅 Ash 文件及其现有公开契约，不要求把前端领域值改成生成 transport DTO。
 
+听写的生产调用链已完成职责迁移：
+
+- `browser/chat.shared.contribution.ts` 注册产品设置与窗口共享服务；
+- `common/constants.ts` 解析设置与后端选择，`browser/speechToText/chatSpeechToTextService.ts` 拥有会话编排与累计转写；
+- 扩展识别由 `contrib/speech` 的公开会话提供；本地模型准备、录音和推理直接使用 `ILocalTranscriptionService`；
+- Ash 专属宿主契约收敛到 `src/ash/platform/renderer/common/rendererHost.ts` 的 `IDictationBackendService`；云端／订阅 RPC 实现在 `src/ash/workbench/services/dictation/browser/appServerDictationService.ts`，不读取配置或代理模型准备；
+- Cowork 旧组件引用共享工作台听写服务，不再引用其旧副本。
+
+用户已按准确路径清单确认删除以下五个旧文件；现已删除，`src/ash/platform/dictation` 完成退场：
+
+- `src/ash/platform/dictation/common/dictationService.ts`
+- `src/ash/platform/dictation/common/dictationConfiguration.ts`
+- `src/ash/platform/dictation/browser/appServerDictationService.ts`
+- `src/ash/platform/dictation/test/browser/appServerDictationService.test.ts`
+- `src/ash/sessions/contrib/cowork/browser/speechToText/chatSpeechToTextService.ts`
+
+这些文件均为仅 Ash 文件，删除前已无在用的生产调用方，没有需要留在原路径的 VS Code 对应职责，Git 可恢复。
+Ash 的 Rust 采音、识别与 App Server 协议保留；没有兼容别名或第二个听写状态 owner。
+
 模型选择器样式已迁至上游对应路径 `browser/widget/input/modelPicker/media/modelPicker.css`，两个生产 import 同批迁入。用户单独确认删除原 `browser/widget/input/modelPicker/modelPicker.css`；旧路径生产引用为零，新旧样式迁移时逐字节一致，Git 可恢复。
 
 下列路径前缀为 `src/ash/workbench/contrib/chat/`。现有职责可继续使用；将职责迁回其他 owner 时仍需检查真实调用链，文件删除需按准确路径单独确认。

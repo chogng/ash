@@ -1,3 +1,6 @@
+import { DEFAULT_LOCAL_TRANSCRIPTION_MODEL } from '../../../../platform/localTranscription/common/localTranscription.js';
+import { parseBackend, parseLocalModel, parseCloudProvider, parseInputDevice, parseLanguage } from '../common/constants.js';
+import { IChatSpeechToTextService, ChatSpeechToTextService } from './speechToText/chatSpeechToTextService.js';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
@@ -13,6 +16,8 @@ import { LanguageModelToolsService } from './tools/languageModelToolsService.js'
 
 import { ChatSessionArchiveActionWording, ChatSessionArchiveActionWordingSettingId } from '../../../../platform/chat/common/sessionArchiveActions.js';
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
+
+registerSingleton(IChatSpeechToTextService, ChatSpeechToTextService, InstantiationType.Delayed);
 
 registerSingleton(ILanguageModelToolsService, LanguageModelToolsService, InstantiationType.Delayed);
 
@@ -189,5 +194,56 @@ configurationRegistry.registerConfiguration<number>({
 		valueType: 'number', minimum: 0, maximum: 100,
 		get title() { return localize('chatEditing.autoAcceptTitle', 'Automatically accept Agent changes'); },
 		get description() { return localize('chatEditing.autoAcceptDescription', 'Seconds to wait before accepting edits after the reply completes. Set to 0 to review changes manually. You can cancel the countdown to keep reviewing.'); },
+	},
+});
+
+configurationRegistry.registerConfiguration<string>({
+	key: 'dictation.inputDevice', defaultValue: '', parse: parseInputDevice,
+});
+
+configurationRegistry.registerConfiguration<string>({
+	key: 'dictation.language', defaultValue: 'auto', parse: parseLanguage,
+});
+
+configurationRegistry.registerConfiguration<'local' | 'cloud' | 'codex'>({
+	key: 'dictation.backend',
+	defaultValue: 'local',
+	parse: parseBackend,
+	setting: {
+		valueType: 'select',
+		title: localize({ bundle: 'ash', key: 'dictation.backend.title' }, 'Dictation service'),
+		description: localize({ bundle: 'ash', key: 'dictation.backend.description' }, 'Choose local transcription, a cloud API, or your Codex subscription for voice input.'),
+		options: [
+			{ value: 'local', label: localize({ bundle: 'ash', key: 'dictation.backend.local' }, 'Local') },
+			{ value: 'cloud', label: localize({ bundle: 'ash', key: 'dictation.backend.cloud' }, 'Cloud') },
+			{ value: 'codex', label: localize({ bundle: 'ash', key: 'dictation.backend.codex' }, 'Codex subscription') },
+		],
+	},
+});
+
+configurationRegistry.registerConfiguration<'openAi' | 'xai'>({
+	key: 'dictation.cloudProvider',
+	defaultValue: 'openAi',
+	parse: parseCloudProvider,
+	setting: {
+		valueType: 'select',
+		title: localize({ bundle: 'ash', key: 'dictation.cloudProvider.title' }, 'Cloud dictation provider'),
+		description: localize({ bundle: 'ash', key: 'dictation.cloudProvider.description' }, 'Choose the cloud transcription provider. Its API key is required.'),
+		options: [
+			{ value: 'openAi', label: 'OpenAI' },
+			{ value: 'xai', label: 'xAI' },
+		],
+	},
+});
+
+configurationRegistry.registerConfiguration<string>({
+	key: 'dictation.localModel',
+	defaultValue: DEFAULT_LOCAL_TRANSCRIPTION_MODEL,
+	parse: parseLocalModel,
+	setting: {
+		valueType: 'text',
+		title: localize({ bundle: 'ash', key: 'dictation.localModel.title' }, 'Local dictation model'),
+		description: localize({ bundle: 'ash', key: 'dictation.localModel.description' }, 'Model package ID in the Ash dictation-models directory.'),
+		placeholder: DEFAULT_LOCAL_TRANSCRIPTION_MODEL,
 	},
 });

@@ -6,10 +6,8 @@ import { CancellationToken, CancellationTokenSource } from '../../../../base/com
 import { canceled, isCancellationError } from '../../../../base/common/errors.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
-import { IDictationService, type IDictationSession, type IDictationOptions } from '../../../../platform/dictation/common/dictationService.js';
-import type { ILocalTranscriptionModelSnapshot } from '../../../../platform/localTranscription/common/localTranscription.js';
 import { localize } from '../../../../nls.js';
-import { ISpeechService, SpeechToTextState, SpeechToTextStatus, type ISpeechToTextEvent, type ISpeechToTextSession, type ISpeechProvider, type ITextToSpeechSession, KeywordRecognitionStatus, SPEECH_LANGUAGE_CONFIG, speechLanguageConfigToLanguage, HasSpeechProvider, SpeechToTextInProgress, TextToSpeechInProgress } from '../common/speechService.js';
+import { ISpeechService, SpeechToTextStatus, type ISpeechToTextEvent, type ISpeechToTextSession, type ISpeechProvider, type ITextToSpeechSession, KeywordRecognitionStatus, SPEECH_LANGUAGE_CONFIG, speechLanguageConfigToLanguage, HasSpeechProvider, SpeechToTextInProgress, TextToSpeechInProgress } from '../common/speechService.js';
 
 export interface ISpeechProviderDescriptor {
 	readonly name: string;
@@ -43,24 +41,20 @@ interface Recording {
 	pendingInterim?: ISpeechToTextEvent;
 	pendingError?: ISpeechToTextEvent;
 	starting?: Promise<void>;
-	handle?: IDictationSession;
-	stopping?: Promise<string | undefined>;
+	handle?: { stop(): Promise<void>; cancel(): Promise<void>; };
+	stopping?: Promise<void>;
 	cancelling?: Promise<void>;
-	finalizedText: string;
 	cancelled: boolean;
 }
 
-/** One window owns capture orchestration; the host owns audio and backend execution. */
+/** Owns extension speech providers and their cancellation-scoped sessions. */
 export class SpeechService extends Disposable implements ISpeechService {
 	public readonly _serviceBrand = undefined;
-	private readonly stateChanged = this._register(new Emitter<SpeechToTextState>());
-	public readonly onDidChangeState = this.stateChanged.event;
+	private readonly stateChanged = this._register(new Emitter<void>());
 	private readonly started = this._register(new Emitter<void>());
 	public readonly onDidStartSpeechToTextSession = this.started.event;
 	private readonly ended = this._register(new Emitter<void>());
 	public readonly onDidEndSpeechToTextSession = this.ended.event;
-	private readonly preparationChanged = this._register(new Emitter<void>());
-	public readonly onDidChangePreparation = this.preparationChanged.event;
 	private readonly activations = new Map<AbortController, 'speechToText' | 'textToSpeech' | 'keywordRecognition'>();
 	private readonly providers = new Map<string, ProviderEntry>();
 	private readonly providerChanged = this._register(new Emitter<void>());
@@ -79,15 +73,11 @@ export class SpeechService extends Disposable implements ISpeechService {
 	public get hasActiveTextToSpeechSession(): boolean { return this.ttsCount > 0; }
 	public get hasActiveKeywordRecognition(): boolean { return this.keywordCount > 0; }
 	private recording: Recording | undefined;
-	private currentState = SpeechToTextState.Idle;
-	public get state(): SpeechToTextState { return this.currentState; }
-	public get hasActiveSpeechToTextSession(): boolean { return this.state !== SpeechToTextState.Idle; }
-	public get isStarting(): boolean { return [...this.activations.values()].includes('speechToText') || !!this.recording && !this.recording.started; }
+	public get hasActiveSpeechToTextSession(): boolean { return !!this.recording; }
 	public get hasSpeechProvider(): boolean { return this.providers.size > 0 || this.hasDeclaredProvider; }
 	private get hasDeclaredProvider(): boolean { return this.extensions?.getExtensionPointContributions<readonly ISpeechProviderDescriptor[]>('speechProviders').some(contribution => contribution.value.length > 0) === true; }
 
 	constructor(
-		@IDictationService private readonly backend: IDictationService | undefined,
 		@IExtensionService private readonly extensions: IExtensionService | undefined = undefined,
 		@IConfigurationService private readonly configuration: IConfigurationService | undefined = undefined,
 		@IContextKeyService contextKeys: IContextKeyService | undefined = undefined,
@@ -103,16 +93,13 @@ export class SpeechService extends Disposable implements ISpeechService {
 				synthesis.set(this.hasActiveTextToSpeechSession);
 			});
 			this._register(this.onDidChangeHasSpeechProvider(update));
-			this._register(this.onDidChangeState(update));
+			this._register(this.stateChanged.event(update));
 			this._register(this.onDidStartTextToSpeechSession(update));
 			this._register(this.onDidEndTextToSpeechSession(update));
 			this._register(toDisposable(() => { provider.reset(); recognition.reset(); synthesis.reset(); }));
 			update();
 		}
-		if (extensions) this._register(extensions.onDidChange(() => { this.providerChanged.fire(); this.preparationChanged.fire(); }));
-		if (backend) {
-			this._register(backend.onDidChangePreparation(() => this.preparationChanged.fire()));
-		}
+		if (extensions) this._register(extensions.onDidChange(() => { this.providerChanged.fire(); }));
 	}
 
 	public registerSpeechProvider(identifier: string, provider: ISpeechProvider): IDisposable {
@@ -197,25 +184,9 @@ export class SpeechService extends Disposable implements ISpeechService {
 		}
 	}
 
-	public getPreparation(): Promise<ILocalTranscriptionModelSnapshot | undefined> {
-		return this.providers.size || this.hasDeclaredProvider || !this.backend ? Promise.resolve(undefined) : this.backend.getPreparation();
-	}
-
-	public prepareModel(): Promise<void> {
-		return this.backend!.prepareModel();
-	}
-
-	public cancelPreparation(): Promise<void> {
-		return this.backend!.cancelPreparation();
-	}
-
-	public getOptions(): Promise<IDictationOptions | undefined> {
-		return this.providers.size || this.hasDeclaredProvider || !this.backend ? Promise.resolve(undefined) : this.backend.getOptions();
-	}
-
 	public async createSpeechToTextSession(token: CancellationToken, _context?: string): Promise<ISpeechToTextSession> {
 		this.assertNotDisposed();
-		if (!this.hasSpeechProvider && !this.backend) { throw new Error(localize('chat.input.dictationUnavailable', 'Dictation is unavailable')); }
+		if (!this.hasSpeechProvider) throw new Error(localize('speech.providerMissing', 'No speech extension provider is available.'));
 		if (this.hasActiveSpeechToTextSession) { throw new Error(localize('dictation.alreadyActive', 'Dictation is already active')); }
 		if (token.isCancellationRequested) throw canceled();
 		// Admit before binding the token: a rejected caller must never acquire the current owner.
@@ -252,7 +223,7 @@ export class SpeechService extends Disposable implements ISpeechService {
 		const controller = new AbortController();
 		using cancellation = token.onCancellationRequested(() => controller.abort());
 		this.activations.set(controller, kind);
-		this.stateChanged.fire(this.state);
+		this.stateChanged.fire();
 		try {
 			await this.extensions!.activateByEvent('onSpeech', controller.signal);
 			if (controller.signal.aborted || this.isDisposed) throw canceled();
@@ -262,7 +233,7 @@ export class SpeechService extends Disposable implements ISpeechService {
 			throw error;
 		} finally {
 			this.activations.delete(controller);
-			if (!this.isDisposed) this.stateChanged.fire(this.state);
+			if (!this.isDisposed) this.stateChanged.fire();
 		}
 	}
 
@@ -281,12 +252,12 @@ export class SpeechService extends Disposable implements ISpeechService {
 				if (recording.stopped) emitter.fire({ status: SpeechToTextStatus.Stopped });
 			}
 		}));
-		const recording: Recording = { lifetime, events, subscribed: false, started: false, stopped: false, pendingFinal: [], finalizedText: '', cancelled: false };
+		const recording: Recording = { lifetime, events, subscribed: false, started: false, stopped: false, pendingFinal: [], cancelled: false };
 		this.recording = recording;
-		this.setState(SpeechToTextState.Recording);
+		this.stateChanged.fire();
 		recording.starting = this.startRecording(recording).finally(() => {
 			recording.starting = undefined;
-			if (!this.isDisposed) { this.stateChanged.fire(this.state); }
+			if (!this.isDisposed) { this.stateChanged.fire(); }
 		});
 		return recording;
 	}
@@ -310,7 +281,7 @@ export class SpeechService extends Disposable implements ISpeechService {
 				const listener = session.onDidChange(event => {
 					if (this.recording !== recording || recording.cancelled || this.isDisposed) return;
 					if (event.status === SpeechToTextStatus.Started) {
-						if (!recording.started) { recording.started = true; this.started.fire(); this.stateChanged.fire(this.state); }
+						if (!recording.started) { recording.started = true; this.started.fire(); this.stateChanged.fire(); }
 					} else if (event.status === SpeechToTextStatus.Recognizing || event.status === SpeechToTextStatus.Recognized) {
 						this.receiveTranscript(recording, event.text ?? '', event.status === SpeechToTextStatus.Recognized);
 						return;
@@ -318,50 +289,24 @@ export class SpeechService extends Disposable implements ISpeechService {
 					if (recording.subscribed && event.status !== SpeechToTextStatus.Stopped) recording.events.fire(event);
 					else if (event.status === SpeechToTextStatus.Error) recording.pendingError = event;
 					if (event.status === SpeechToTextStatus.Stopped || event.status === SpeechToTextStatus.Error) {
-						if (!recording.stopping) { this.recording = undefined; this.endRecording(recording); this.setState(SpeechToTextState.Idle); }
+						if (!recording.stopping) { this.recording = undefined; this.endRecording(recording); this.stateChanged.fire(); }
 					}
 				});
 				if (recording.lifetime.isDisposed) listener.dispose();
 				else recording.lifetime.add(listener);
 				return;
 			}
-			const handle = await this.backend!.start((text, isFinal) => {
-				if (this.recording !== recording || recording.cancelled || this.isDisposed) { return; }
-				this.receiveTranscript(recording, text, isFinal);
-			}, error => {
-				if (this.recording !== recording || this.isDisposed) { return; }
-				// During stop the handle still owns flushing its last phrase. Idle must follow that flush.
-				if (error) {
-					const event = { status: SpeechToTextStatus.Error, text: error };
-					if (recording.subscribed) recording.events.fire(event);
-					else recording.pendingError = event;
-				}
-				if (!recording.stopping) {
-					this.recording = undefined;
-					this.endRecording(recording);
-					this.setState(SpeechToTextState.Idle);
-				}
-			});
-			if (this.recording !== recording || this.isDisposed) { await handle.cancel(); }
-			else {
-				recording.handle = handle;
-				if (!recording.cancelled) { recording.started = true; this.started.fire(); }
-			}
 		} catch (error) {
 			if (this.recording === recording) {
 				this.recording = undefined;
 				this.endRecording(recording);
-				this.setState(SpeechToTextState.Idle);
+				this.stateChanged.fire();
 			}
 			throw error;
 		}
 	}
 
 	private receiveTranscript(recording: Recording, text: string, isFinal: boolean): void {
-		const separator = /[A-Za-z0-9]$/u.test(recording.finalizedText) && /^[A-Za-z0-9]/u.test(text) ? ' ' : '';
-		const transcript = recording.finalizedText + separator + text;
-		if (isFinal) recording.finalizedText = transcript;
-		// Both provider paths deliver the standard phrase event, not a private cumulative event shape.
 		const event = { status: isFinal ? SpeechToTextStatus.Recognized : SpeechToTextStatus.Recognizing, text };
 		if (recording.subscribed) recording.events.fire(event);
 		else if (isFinal) {
@@ -371,29 +316,28 @@ export class SpeechService extends Disposable implements ISpeechService {
 		else recording.pendingInterim = event;
 	}
 
-	public stopAndTranscribe(): Promise<string | undefined> {
+	private stopRecognition(): Promise<void> {
 		for (const [controller, kind] of this.activations) if (kind === 'speechToText') controller.abort();
 		const recording = this.recording;
 		if (!recording) return Promise.resolve(undefined);
 		if (recording.stopping) { return recording.stopping; }
-		this.setState(SpeechToTextState.Transcribing);
+		this.stateChanged.fire();
 		recording.stopping = this.stopRecording(recording);
 		return recording.stopping;
 	}
 
-	public async cancel(): Promise<void> {
+	private async cancel(): Promise<void> {
 		const recording = this.recording;
 		if (recording) { recording.cancelled = true; }
 		if (recording?.handle) { recording.cancelling ??= recording.handle.cancel(); }
-		await Promise.all([recording?.cancelling, this.stopAndTranscribe()]);
+		await Promise.all([recording?.cancelling, this.stopRecognition()]);
 	}
 
-	private async stopRecording(recording: Recording): Promise<string | undefined> {
+	private async stopRecording(recording: Recording): Promise<void> {
 		try {
 			await recording.starting;
 			if (recording.cancelled && recording.handle) { await (recording.cancelling ??= recording.handle.cancel()); }
 			else { await recording.handle?.stop(); }
-			return recording.cancelled ? undefined : recording.finalizedText || undefined;
 		} catch (error) {
 			if (recording.cancelled || isCancellationError(error)) return undefined;
 			throw error;
@@ -401,7 +345,7 @@ export class SpeechService extends Disposable implements ISpeechService {
 			if (this.recording === recording) {
 				this.recording = undefined;
 				this.endRecording(recording);
-				this.setState(SpeechToTextState.Idle);
+				this.stateChanged.fire();
 			}
 		}
 	}
@@ -412,12 +356,6 @@ export class SpeechService extends Disposable implements ISpeechService {
 		if (recording.started) this.ended.fire();
 		recording.events.fire({ status: SpeechToTextStatus.Stopped });
 		recording.lifetime.dispose();
-	}
-
-	private setState(state: SpeechToTextState): void {
-		if (this.currentState === state) { return; }
-		this.currentState = state;
-		if (!this.isDisposed) { this.stateChanged.fire(state); }
 	}
 
 	protected override disposeCore(): void {

@@ -7,7 +7,7 @@ import { EDIT_USER_CONFIGURATION_CHANNEL } from '../../platform/native/common/na
 import { AppServerBackupService } from '../../platform/backup/browser/appServerBackupService.js';
 import { AppServerCallService } from '../../platform/call/browser/appServerCallService.js';
 import { AppServerAgentVoiceService } from '../../platform/agentHost/browser/appServerAgentService.js';
-import { AppServerDictationService } from '../../platform/dictation/browser/appServerDictationService.js';
+import { AppServerDictationService } from '../services/dictation/browser/appServerDictationService.js';
 import { AppServerMemoriesService } from '../../platform/memories/browser/appServerMemoriesService.js';
 import { AppServerMemoryDiagnosticsService } from '../../platform/memory/browser/appServerMemoryDiagnosticsService.js';
 import type { MemoryObservation } from '../../platform/memory/common/memoryDiagnosticsService.js';
@@ -50,7 +50,6 @@ import type { RendererHostCapabilities } from "../../platform/renderer/common/re
 import { createRemoteAgentApi } from "../../platform/remote/electron-browser/remoteAgentApi.js";
 import { createRemoteConnectionApi } from "../../platform/remote/electron-browser/remoteConnectionApi.js";
 import type { IWorkspaceTrustRequestService } from '../../platform/workspace/common/workspaceTrust.js';
-import { ILocalTranscriptionService } from '../../platform/localTranscription/common/localTranscription.js';
 import { InstantiationService } from '../../platform/instantiation/common/instantiationService.js';
 
 export type ElectronRendererCapabilityContribution = RendererCapabilityContribution;
@@ -148,11 +147,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			if (client.capabilities?.contracts.calls?.version === 1) { backend = { ...backend, calls: resources.add(new AppServerCallService(client)) }; }
 			if (remoteConnection.kind === 'local' && client.capabilities?.contracts.voiceConversation?.version === 1) { backend = { ...backend, agentVoice: resources.add(new AppServerAgentVoiceService(client)) }; }
 			if (remoteConnection.kind === 'local') {
-				const services = resources.add(new InstantiationService());
-				if (!backend.localTranscription) { throw new Error('Local transcription service was not contributed by the renderer entry'); }
-				services.registerInstance(ILocalTranscriptionService, backend.localTranscription);
-				services.registerInstance(IConfigurationService, configuration);
-				backend = { ...backend, dictation: resources.add(services.createInstance(AppServerDictationService, client)) };
+				backend = { ...backend, dictation: resources.add(new AppServerDictationService(client)) };
 			} else {
 				backend = { ...backend, localTranscription: undefined };
 			}

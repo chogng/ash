@@ -1,3 +1,5 @@
+import { ILocalTranscriptionService } from '../../../platform/localTranscription/common/localTranscription.js';
+import { NullLocalTranscriptionService } from '../../services/localTranscription/browser/localTranscriptionService.js';
 import { IExtensionService } from '../../services/extensions/common/extensionService.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
@@ -11,6 +13,7 @@ import { DictationOnboardingService, IDictationOnboardingService } from '../../c
 
 /** Test profile storage is isolated from the browser's persistent user profile. */
 export function registerTestDictationOnboarding(services: InstantiationService, seen = true): void {
+	if (!services.has(ILocalTranscriptionService)) services.registerSingleton(ILocalTranscriptionService, () => new NullLocalTranscriptionService());
 	if (!services.has(IConfigurationService)) services.registerSingleton(IConfigurationService, () => new InMemoryConfigurationService());
 	if (!services.has(IContextKeyService)) services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 	if (!services.has(IExtensionService)) services.registerSingleton(IExtensionService, () => new TestExtensionService());

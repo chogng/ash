@@ -10,7 +10,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
-import { ISpeechService } from '../../../../workbench/contrib/speech/common/speechService.js';
+import { IChatSpeechToTextService } from '../../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { IDictationOnboardingService } from '../../../../workbench/contrib/chat/browser/speechToText/dictationOnboarding.js';
 import type { ICoworkWidgetModel } from './widget/coworkWidget.js';
 import type { ChatInputDelegate, ChatInputState } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
@@ -47,7 +47,7 @@ export class NewCoworkInputWidget extends ChatInputPart {
 		container: HTMLElement,
 		delegate: ChatInputDelegate,
 		private readonly model: ICoworkWidgetModel,
-		@ISpeechService speechToText: ISpeechService,
+		@IChatSpeechToTextService speechToText: IChatSpeechToTextService,
 		@IDictationOnboardingService onboarding: IDictationOnboardingService,
 		@IContextMenuService contextMenus: IContextMenuService,
 		@IContextViewService contextViews: IContextViewService,

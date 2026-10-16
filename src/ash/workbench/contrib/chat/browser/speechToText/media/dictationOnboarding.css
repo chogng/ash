@@ -16,6 +16,10 @@
 .ash-dictation-onboarding p {
 	overflow-wrap: anywhere;
 }
+/* The dropdown's display rule must not expose host controls to extension speech sessions. */
+.ash-dictation-onboarding .ash-select-box[hidden] {
+	display: none;
+}
 .ash-dictation-onboarding-actions {
 	display: flex;
 	flex-wrap: wrap;

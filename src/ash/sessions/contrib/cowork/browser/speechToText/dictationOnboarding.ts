@@ -5,14 +5,14 @@ import { SelectBox } from '../../../../../base/browser/ui/selectbox/selectbox.js
 import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { createDecorator, IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import { DictationConfiguration } from '../../../../../platform/dictation/common/dictationConfiguration.js';
+import { DictationConfiguration } from '../../../../../workbench/contrib/chat/common/constants.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { IPreferencesService } from '../../../../../workbench/services/preferences/common/preferences.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import { IChatSpeechToTextService, ChatSpeechToTextState } from './chatSpeechToTextService.js';
+import { IChatSpeechToTextService, ChatSpeechToTextState } from '../../../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { localize } from '../../../../../nls.js';
 import { isModelPreparing } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
@@ -181,7 +181,7 @@ class DictationOnboardingBanner extends Disposable {
 			}
 			this.recording = true;
 			this.transcript.textContent = localize({ bundle: 'ash', key: 'dictation.listening' }, 'Listening…');
-			await this.speech.start();
+			await this.speech.start(this.domNode.ownerDocument.defaultView as Window & typeof globalThis);
 		} catch (error) { this.recording = false; if (!this.isDisposed) { this.transcript.textContent = String(error); } }
 		finally {
 			this.preparing = false;

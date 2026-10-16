@@ -1,3 +1,4 @@
+import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../chat/browser/speechToText/chatSpeechToTextService.js';
 import { TestConfigurationFiles } from '../../../../services/configuration/test/common/testServices.js';
 import { ISecretStorageStatusService } from '../../../../../platform/secrets/common/secrets.js';
 import { createTestLanguageModelToolsService } from '../../../chat/test/common/tools/testLanguageModelToolsService.js';
@@ -30,7 +31,7 @@ import type { SettingsContentItem } from '../../browser/settingsTreeModels.js';
 import { IFileTextModelService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { IPreferencesService, type ISetting } from '../../../../services/preferences/common/preferences.js';
 import type { IRegisteredConfiguration } from '../../../../../platform/configuration/common/configurationRegistry.js';
-import { IDictationService } from '../../../../../platform/dictation/common/dictationService.js';
+import { IDictationBackendService } from '../../../../../platform/renderer/common/rendererHost.js';
 import { ISpeechService } from '../../../speech/common/speechService.js';
 import { SpeechService } from '../../../speech/browser/speechService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
@@ -116,7 +117,7 @@ const { darkColorTheme } = await import('../../../../../platform/theme/common/co
 const { AccessibilityConfiguration } = await import('../../../../../platform/accessibility/common/accessibility.js');
 const { HoverConfiguration } = await import('../../../../../platform/hover/common/hoverService.js');
 const { SashConfiguration } = await import('../../../sash/common/sash.js');
-const { DictationConfiguration } = await import('../../../../../platform/dictation/common/dictationConfiguration.js');
+const { DictationConfiguration } = await import('../../../chat/common/constants.js');
 const { WorkbenchConfiguration } = await import('../../../../common/configuration.js');
 const { SessionsConfiguration } = await import('../../../../../sessions/common/configuration.js');
 const { WorkbenchThemesRegistry } = await import('../../../../common/theme.js');
@@ -1479,11 +1480,12 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, hooksBackend);
 	services.registerInstance(INotificationService, disposables.add(new NotificationService()));
-	services.registerInstance(IDictationService, undefined);
+	services.registerInstance(IDictationBackendService, undefined);
 	services.registerInstance(ConfigurationServiceId, configuration);
 	services.registerInstance(IContextKeyService, disposables.add(new ContextKeyService()));
 	services.registerInstance(IExtensionService, disposables.add(new TestExtensionService()));
 	services.registerInstance(ISpeechService, disposables.add(services.createInstance(SpeechService)));
+	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 	const skillsChanged = disposables.add(new Emitter<void>());
 	let skillEnabled = true;
 	const skillScopes: (string | undefined)[] = [];

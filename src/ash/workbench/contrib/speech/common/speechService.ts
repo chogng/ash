@@ -5,19 +5,11 @@ import type { ExtensionIdentifier } from '../../../../platform/extensions/common
 import type { CancellationToken } from '../../../../base/common/cancellation.js';
 import type { Event } from '../../../../base/common/event.js';
 import { createDecorator } from '../../../../platform/instantiation/common/instantiation.js';
-import type { IDictationOptions } from '../../../../platform/dictation/common/dictationService.js';
-import type { ILocalTranscriptionModelSnapshot } from '../../../../platform/localTranscription/common/localTranscription.js';
 
 export const ISpeechService = createDecorator<ISpeechService>('speechService');
 export const HasSpeechProvider = new RawContextKey<boolean>('hasSpeechProvider', false);
 export const SpeechToTextInProgress = new RawContextKey<boolean>('speechToTextInProgress', false);
 export const TextToSpeechInProgress = new RawContextKey<boolean>('textToSpeechInProgress', false);
-
-export enum SpeechToTextState {
-	Idle = 'idle',
-	Recording = 'recording',
-	Transcribing = 'transcribing',
-}
 
 export enum SpeechToTextStatus {
 	Started = 1,
@@ -71,21 +63,11 @@ export interface ISpeechService {
 	readonly onDidEndKeywordRecognition: Event<void>;
 	readonly hasActiveKeywordRecognition: boolean;
 	recognizeKeyword(token: CancellationToken): Promise<KeywordRecognitionStatus>;
-	readonly onDidChangeState: Event<SpeechToTextState>;
 	readonly onDidStartSpeechToTextSession: Event<void>;
 	readonly onDidEndSpeechToTextSession: Event<void>;
-	readonly onDidChangePreparation: Event<void>;
-	readonly state: SpeechToTextState;
 	readonly hasActiveSpeechToTextSession: boolean;
-	readonly isStarting: boolean;
 	readonly hasSpeechProvider: boolean;
-	getPreparation(): Promise<ILocalTranscriptionModelSnapshot | undefined>;
-	prepareModel(): Promise<void>;
-	cancelPreparation(): Promise<void>;
-	getOptions(): Promise<IDictationOptions | undefined>;
 	createSpeechToTextSession(token: CancellationToken, context?: string): Promise<ISpeechToTextSession>;
-	stopAndTranscribe(): Promise<string | undefined>;
-	cancel(): Promise<void>;
 }
 
 

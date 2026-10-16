@@ -11,7 +11,7 @@ import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { isModelPreparing, type ILocalTranscriptionModelSnapshot } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { localize } from '../../../../../nls.js';
 import { IDictationOnboardingService } from './dictationOnboarding.js';
-import { IChatSpeechToTextService, ChatSpeechToTextState } from './chatSpeechToTextService.js';
+import { IChatSpeechToTextService, ChatSpeechToTextState } from '../../../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 
 /** The target editor owns text and undo history; interim recognition stays outside its model. */
 interface DictationTarget { insertText(text: string): void; focus(): void; }
@@ -96,7 +96,7 @@ export class DictationSession extends Disposable {
 		this.active = true;
 		this.committedText = '';
 		try {
-			await this.service.start();
+			await this.service.start(this.preview.ownerDocument.defaultView as Window & typeof globalThis);
 		} catch (error) {
 			this.active = false;
 			throw error;

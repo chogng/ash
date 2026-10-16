@@ -46,7 +46,7 @@ import { ILanguageModelsService, LanguageModelsService } from '../contrib/chat/c
 import { ILanguageModelsConfigurationService } from '../contrib/chat/common/languageModelsConfiguration.js';
 import { ChatModelPreferences, LanguageModelsConfigurationService } from '../contrib/chat/browser/languageModelsConfigurationService.js';
 import { IAgentVoiceService } from '../../platform/agentHost/common/agentService.js';
-import { IDictationService } from '../../platform/dictation/common/dictationService.js';
+import { IDictationBackendService } from '../../platform/renderer/common/rendererHost.js';
 import { ExtensionColorThemeService } from '../services/extensions/browser/extensionColorThemeService.js';
 import { IWorkbenchThemeService } from '../services/themes/common/workbenchThemeService.js';
 import { IHostColorSchemeService, type IHostColorSchemeService as HostColorSchemeService } from '../services/themes/common/hostColorSchemeService.js';
@@ -580,7 +580,7 @@ export class Workbench extends Disposable {
 		this.workspaceContext = workspaceContext;
 		services.registerInstance(IWorkspaceContextService, workspaceContext);
 		AppServerAvailableContext.bindTo(contextKeys).set(api.hasAppServer);
-		services.registerInstance(IDictationService, api.dictation);
+		services.registerInstance(IDictationBackendService, api.dictation);
 		services.registerInstance(IAgentVoiceService, api.agentVoice);
 		services.registerInstance(ILocalTranscriptionService, api.localTranscription ?? this._register(new NullLocalTranscriptionService()));
 		services.registerInstance(IAgentCapabilitiesService, api.agentCapabilities);

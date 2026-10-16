@@ -11,7 +11,7 @@ import { DictationSession } from '../../../../workbench/contrib/chat/browser/spe
 import { IDictationOnboardingService } from '../../../../workbench/contrib/chat/browser/speechToText/dictationOnboarding.js';
 import { SkillSelectorCatalog } from '../../../../workbench/contrib/chat/common/skillSelectors.js';
 import { SlashCommandCatalog } from '../../../../workbench/contrib/chat/common/slashCommands.js';
-import { ISpeechService } from '../../../../workbench/contrib/speech/common/speechService.js';
+import { IChatSpeechToTextService } from '../../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { IPreferencesService } from '../../../../workbench/services/preferences/common/preferences.js';
 import { IChatGPTService, type ChatGPTAttachment } from './chatGPTService.js';
 import type { ChatGPTModel } from './chatGPTClient.js';
@@ -40,7 +40,7 @@ export class ChatGPTInputWidget extends Disposable {
 		private readonly container: HTMLElement,
 		@IChatGPTService private readonly chat: IChatGPTService,
 		@IInstantiationService instantiation: IInstantiationService,
-		@ISpeechService speech: ISpeechService,
+		@IChatSpeechToTextService speech: IChatSpeechToTextService,
 		@IDictationOnboardingService private readonly onboarding: IDictationOnboardingService,
 		@IPreferencesService preferences: IPreferencesService,
 		@INotificationService private readonly notifications: INotificationService,
@@ -120,7 +120,7 @@ export class ChatGPTInputWidget extends Disposable {
 		preview.hidden = true;
 		input.append(preview);
 		this.dictation = this._register(instantiation.createInstance(DictationSession, this.editor, preview, () => this.visible,
-			async () => { await preferences.openSettings({ section: 'dictation' }); }));
+			async () => { await preferences.openSettings({ section: 'dictation' }); }, 'chat'));
 		this._register(onboarding.registerHost({ container, focusTarget: this.element, isVisible: () => this.visible }));
 		this.dictationButton = h(container.ownerDocument, 'button');
 		this.dictationButton.className = 'ash-chatgpt-dictation ash-chatgpt-round-button';
@@ -128,7 +128,7 @@ export class ChatGPTInputWidget extends Disposable {
 		appendIcon(Lxicon.mic, this.dictationButton);
 		this._register(addDisposableListener(this.dictationButton, 'click', () => { void this.dictation.action.run(); }));
 		this._register(speech.onDidChangeState(() => this.renderDictation()));
-		this._register(speech.onDidChangeHasSpeechProvider(() => this.renderDictation()));
+		this._register(speech.onDidChangePreparation(() => this.renderDictation()));
 		this._register(this.dictation.onDidEnd(error => {
 			this.renderDictation();
 			if (error) { this.reportDictationError(error); }

@@ -2,6 +2,9 @@ import type { Event } from '../../../base/common/event.js';
 import type { IDisposable } from '../../../base/common/lifecycle.js';
 import { createDecorator } from '../../instantiation/common/instantiation.js';
 
+/** Default on-device model package supplied by Ash. */
+export const DEFAULT_LOCAL_TRANSCRIPTION_MODEL = 'paraformer-large-online-ec6a3c64';
+
 export const ILocalTranscriptionService = createDecorator<ILocalTranscriptionService>('localTranscriptionService');
 export const ILocalTranscriptionBackendService = createDecorator<ILocalTranscriptionBackendService>('localTranscriptionBackendService');
 

@@ -1,3 +1,4 @@
+import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../../contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { ISpeechService } from '../../../../contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../../contrib/speech/browser/speechService.js';
 import '../../../../contrib/terminal/common/terminalExtensionPoints.contribution.js';
@@ -980,6 +981,7 @@ function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesServ
 		},
 	});
 	services.registerSingleton(ISpeechService, () => new SpeechService(undefined));
+	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 	services.registerInstance(ILanguagePackService, createEmptyTestLanguagePacks());
 	services.registerInstance(IFileService, services.resources.add(new FileService()));
 	services.registerSingleton(IExtensionService, () => new TestExtensionService(extensionApi));

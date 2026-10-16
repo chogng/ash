@@ -1,3 +1,4 @@
+import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { UserDataProfileService } from '../../../workbench/services/userDataProfile/browser/userDataProfileService.js';
 import { TestConfigurationFiles } from '../../../workbench/services/configuration/test/common/testServices.js';
 import { IAgentExecutionSettingsService } from '../../../platform/agentHost/common/agentExecutionSettingsService.js';
@@ -35,7 +36,7 @@ import type { ApprovalMode, IActiveSessionThread, ISession, IUntitledChatSession
 import type { ISessionsManagementService, SessionsManagementState } from "../../services/sessions/common/sessionsManagement.js";
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
-import { IDictationService } from '../../../platform/dictation/common/dictationService.js';
+import { IDictationBackendService } from '../../../platform/renderer/common/rendererHost.js';
 import { ISpeechService } from '../../../workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../workbench/contrib/speech/browser/speechService.js';
 
@@ -75,10 +76,11 @@ test("opens a local Chat conversation before the backend session request settles
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	services.registerSingleton(IActionWidgetService, () => services.createInstance(ActionWidgetService));
-	services.registerInstance(IDictationService, undefined);
+	services.registerInstance(IDictationBackendService, undefined);
 	services.registerInstance(IAgentVoiceService, undefined);
 	services.registerInstance(IDialogService, { confirm: async () => ({ confirmed: false }) } as unknown as IDialogService);
 	services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
+	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 	registerTestDictationOnboarding(services);
 	const chat = unavailableChatService();
 	services.registerInstance(IChatSessionNavigationService, {

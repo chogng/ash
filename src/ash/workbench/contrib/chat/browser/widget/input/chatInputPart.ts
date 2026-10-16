@@ -9,7 +9,7 @@ import type { MessageHistoryEntry } from '../../../../../../platform/messageHist
 import { IQuickInputService, type IQuickPickItem } from '../../../../../../platform/quickinput/common/quickInput.js';
 import type { ChatInputEditorSelection } from './chatInputEditorRegistry.js';
 import '../media/chat.css';
-import { ISpeechService, SpeechToTextState } from '../../../../speech/common/speechService.js';
+import { IChatSpeechToTextService, ChatSpeechToTextState } from '../../speechToText/chatSpeechToTextService.js';
 import { DictationActionViewItem } from '../../speechToText/dictationActionViewItem.js';
 import { DictationSession } from '../../speechToText/dictationSession.js';
 import { IDictationOnboardingService } from '../../speechToText/dictationOnboarding.js';
@@ -203,7 +203,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		private readonly additionalActions: readonly IAction[] = [],
 		private readonly options: ChatInputPartOptions,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
-		@ISpeechService private readonly speechToText: ISpeechService,
+		@IChatSpeechToTextService private readonly speechToText: IChatSpeechToTextService,
 		@IDictationOnboardingService private readonly onboarding: IDictationOnboardingService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@IMenuService menuService: IMenuService,
@@ -277,9 +277,9 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			}));
 		}
 
-		this.dictationSession = this._register(instantiationService.createInstance(DictationSession, this.input, this.dictationPreview, () => this.visible, () => this.delegate.openModelSettings('dictation')));
+		this.dictationSession = this._register(instantiationService.createInstance(DictationSession, this.input, this.dictationPreview, () => this.visible, () => this.delegate.openModelSettings('dictation'), 'chat'));
 		this._register(this.speechToText.onDidChangeState(() => { this.renderStatus(); this.renderToolbarActions(); }));
-		this._register(this.speechToText.onDidChangeHasSpeechProvider(() => this.renderToolbarActions()));
+		this._register(this.speechToText.onDidChangePreparation(() => this.renderToolbarActions()));
 		this._register(this.dictationSession.onDidEnd(error => {
 			// The speech service can become idle before the input session releases its active state.
 			this.renderStatus();
@@ -1278,7 +1278,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		if (state.inputBlocked && state.phase !== 'loading') return '';
 		if (state.error) return state.error;
 		if (this.dictationSession.isActive && this.speechToText.isStarting) return localize('chat.input.dictationStarting', 'Starting dictation…');
-		if (this.dictationSession.isActive && this.speechToText.state === SpeechToTextState.Transcribing) return localize('chat.input.dictationTranscribing', 'Transcribing…');
+		if (this.dictationSession.isActive && this.speechToText.state === ChatSpeechToTextState.Transcribing) return localize('chat.input.dictationTranscribing', 'Transcribing…');
 		if (this.dictationSession.isActive) return localize('chat.input.dictationListening', 'Listening…');
 		switch (state.phase) {
 			case "loading":

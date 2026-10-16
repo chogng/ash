@@ -14,7 +14,7 @@ import { MenuId, registerAction2 } from '../../../../../platform/actions/common/
 import { IInstantiationService, type ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
-import { ISpeechService, SpeechToTextState } from '../../../speech/common/speechService.js';
+import { IChatSpeechToTextService, ChatSpeechToTextState } from '../../../chat/browser/speechToText/chatSpeechToTextService.js';
 import { DictationSession, DictationAccessibilityHelp } from '../../../chat/browser/speechToText/dictationSession.js';
 import { IDictationOnboardingService } from '../../../chat/browser/speechToText/dictationOnboarding.js';
 
@@ -27,7 +27,7 @@ export class EditorDictation extends Disposable {
 	constructor(
 		private readonly editor: ICodeEditor,
 		@IInstantiationService instantiation: IInstantiationService,
-		@ISpeechService speech: ISpeechService,
+		@IChatSpeechToTextService speech: IChatSpeechToTextService,
 		@IDictationOnboardingService private readonly onboarding: IDictationOnboardingService,
 		@IEditorService editorService: IEditorService,
 		@IPreferencesService preferences: IPreferencesService,
@@ -58,6 +58,7 @@ export class EditorDictation extends Disposable {
 			preview,
 			() => !this.isDisposed && !editor.getContainerDomNode().closest('[hidden]') && !editor.getOption(EditorOption.readOnly),
 			async () => { await preferences.openSettings({ section: 'dictation' }); },
+			'editor',
 		));
 		this._register(instantiation.createInstance(DictationAccessibilityHelp, this.session, editor.getContainerDomNode(), controls));
 		this._register(onboarding.registerHost({
@@ -69,10 +70,10 @@ export class EditorDictation extends Disposable {
 		const cancel = this._register(new Button(controls, { label: localize({ bundle: 'ash', key: 'dictation.cancel' }, 'Cancel dictation'), presentation: 'quiet' }));
 		this._register(stop.onDidClick(() => { void this.session.stop().catch(error => notifications.error(String(error))); }));
 		this._register(cancel.onDidClick(() => { void this.session.cancel().catch(error => notifications.error(String(error))); }));
-		this._register(this.session.onDidEnd(error => { if (error) notifications.error(error); controls.hidden = !this.session.isActive; stop.enabled = !speech.isStarting && speech.state !== SpeechToTextState.Transcribing; }));
+		this._register(this.session.onDidEnd(error => { if (error) notifications.error(error); controls.hidden = !this.session.isActive; stop.enabled = !speech.isStarting && speech.state !== ChatSpeechToTextState.Transcribing; }));
 		this._register(speech.onDidChangeState(() => {
 			controls.hidden = !this.session.isActive;
-			stop.enabled = !speech.isStarting && speech.state !== SpeechToTextState.Transcribing;
+			stop.enabled = !speech.isStarting && speech.state !== ChatSpeechToTextState.Transcribing;
 		}));
 		controls.hidden = true;
 		this.widget = {

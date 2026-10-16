@@ -86,7 +86,7 @@ import { ISessionsProvidersService } from '../services/sessions/browser/sessions
 import { IChatSessionNavigationService } from '../../workbench/services/chat/common/chatSessionNavigationService.js';
 import '../../workbench/contrib/chat/browser/actions/chatSpeechToTextActions.js';
 import '../../workbench/contrib/quickaccess/browser/quickAccess.contribution.js';
-import { IDictationService } from '../../platform/dictation/common/dictationService.js';
+import { IDictationBackendService } from '../../platform/renderer/common/rendererHost.js';
 import "../../workbench/browser/style.js";
 import "./media/workbench.css";
 import "./actions/sessionsChatActions.js";
@@ -371,7 +371,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IExtensionHostApi, options.extensionHost ?? this._register(services.createInstance(WebWorkerExtensionHost, enabledExtensions, options.api.extensionHost)));
 		if (!serviceCollection.has(ITelemetryService)) { services.registerInstance(ITelemetryService, NullTelemetryService); }
 		if (options.api.approvalEnvironment) { services.registerInstance(IApprovalEnvironmentService, options.api.approvalEnvironment); }
-		services.registerInstance(IDictationService, options.api.dictation);
+		services.registerInstance(IDictationBackendService, options.api.dictation);
 		services.registerInstance(IAgentVoiceService, options.api.agentVoice);
 		services.registerInstance(ILocalTranscriptionService, options.api.localTranscription ?? this._register(new NullLocalTranscriptionService()));
 		services.registerInstance(IConfigurationService, configurationService);

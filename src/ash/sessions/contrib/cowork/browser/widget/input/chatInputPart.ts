@@ -1,4 +1,4 @@
-import { IChatSpeechToTextService, ChatSpeechToTextState } from '../../speechToText/chatSpeechToTextService.js';
+import { IChatSpeechToTextService, ChatSpeechToTextState } from '../../../../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { DictationActionViewItem } from '../../speechToText/dictationActionViewItem.js';
 import { DictationSession } from '../../speechToText/dictationSession.js';
 import { IDictationOnboardingService } from '../../speechToText/dictationOnboarding.js';

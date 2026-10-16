@@ -1,4 +1,3 @@
-import { IDictationService } from '../../../../../platform/dictation/common/dictationService.js';
 import { ILanguageModelsService } from '../../common/languageModels.js';
 import './media/dictationSettingsContent.css';
 import { h } from '../../../../../base/browser/dom.js';
@@ -6,7 +5,7 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../nls.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import { DictationConfiguration, dictationBackend } from '../../../../../platform/dictation/common/dictationConfiguration.js';
+import { DictationConfiguration, dictationBackend } from '../../common/constants.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
 import { DefaultSettings } from '../../../../services/preferences/common/settingsModels.js';
@@ -22,7 +21,7 @@ import {
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import { SelectBox } from '../../../../../base/browser/ui/selectbox/selectbox.js';
-import { ISpeechService } from '../../../speech/common/speechService.js';
+import { IChatSpeechToTextService } from './chatSpeechToTextService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
@@ -68,8 +67,7 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 		@IInstantiationService instantiation: IInstantiationService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IAccessibleViewService accessibleView: IAccessibleViewService,
-		@ISpeechService private readonly speech: ISpeechService,
-		@IDictationService private readonly backend: IDictationService | undefined,
+		@IChatSpeechToTextService private readonly speech: IChatSpeechToTextService,
 		@INotificationService private readonly notifications: INotificationService,
 	) {
 		super();
@@ -115,7 +113,7 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 			}
 			if (event.affectsConfiguration(DictationConfiguration.inputDevice) || event.affectsConfiguration(DictationConfiguration.language)) { this.updateVisibility(); }
 		}));
-		this._register(speech.onDidChangeHasSpeechProvider(() => this.updateVisibility()));
+		this._register(speech.onDidChangePreparation(() => this.updateVisibility()));
 		this._register(chat.onDidChangeModels(() => this.updateVisibility()));
 		const scoped = this._register(contextKeys.createScoped(this.controls.domNode));
 		scoped.createKey('dictationModelsFocused', true);
@@ -220,14 +218,14 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 	private async configure(key: string, value: string): Promise<void> {
 		try {
 			// Capture belongs to the selected device. Release it before persisting a new selection.
-			if (this.speech.hasActiveSpeechToTextSession) { await this.speech.stopAndTranscribe(); }
+			if (this.speech.isBusy) { await this.speech.stopAndTranscribe(); }
 			await this.configuration.updateValue(key, value);
 		} catch (error) { this.notifications.error(String(error)); }
 	}
 
 	private async readInputOptions(version: number): Promise<void> {
 		this.microphone.enabled = this.language.enabled = false;
-		if (!this.speech.hasSpeechProvider && !this.backend) { return; }
+		if (!this.speech.isConfigured) { return; }
 		try {
 			const options = await this.speech.getOptions();
 			if (this.isDisposed || version !== this.requestVersion) { return; }

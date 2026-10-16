@@ -1,3 +1,4 @@
+import { DEFAULT_LOCAL_TRANSCRIPTION_MODEL } from '../../../../platform/localTranscription/common/localTranscription.js';
 import './media/localTranscriptionModelControls.css';
 import { h } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -8,7 +9,7 @@ import { Disposable, DisposableStore, toDisposable } from '../../../../base/comm
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { DEFAULT_LOCAL_DICTATION_MODEL, DictationConfiguration } from '../../../../platform/dictation/common/dictationConfiguration.js';
+import { DictationConfiguration } from '../../chat/common/constants.js';
 import { ILocalTranscriptionService, isModelPreparing, LocalTranscriptionModelState, type ILocalTranscriptionModelSnapshot } from '../../../../platform/localTranscription/common/localTranscription.js';
 import { LocalTranscriptionModelStatus, modelProgressText } from './localTranscriptionModelStatus.js';
 
@@ -213,7 +214,7 @@ export class LocalTranscriptionModelControls extends Disposable {
 		template.uninstall.hidden = cell.column !== 'actions' || !model.available;
 		template.use.label = selected ? localize('dictation.model.current', 'Current') : localize('dictation.model.use', 'Use model');
 		template.use.enabled = enabled && !selected && !preparing;
-		template.install.enabled = enabled && model.model === DEFAULT_LOCAL_DICTATION_MODEL;
+		template.install.enabled = enabled && model.model === DEFAULT_LOCAL_TRANSCRIPTION_MODEL;
 		template.cancel.enabled = this.localTranscription.isSupported;
 		template.uninstall.enabled = enabled && !preparing;
 		template.uninstall.label = this.confirmingRemoval.has(model.model) ? localize('dictation.model.confirmUninstall', 'Confirm uninstall') : localize('dictation.model.uninstall', 'Uninstall');

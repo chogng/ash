@@ -1,3 +1,4 @@
+import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { IRendererHostService } from '../../../platform/renderer/common/rendererHost.js';
 import { setARIAContainer } from '../../../base/browser/ui/aria/aria.js';
 import { ChatResponseResourceFileSystemProvider, IChatResponseResourceFileSystemProvider } from '../../../workbench/contrib/chat/common/widget/chatResponseResourceFileSystemProvider.js';
@@ -43,7 +44,7 @@ import { ChatAIDisabledSettingId } from '../../../platform/chat/common/chatSetti
 import { ChatContextKeys } from '../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../workbench/common/contributions.js';
 import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
-import { IDictationService } from '../../../platform/dictation/common/dictationService.js';
+import { IDictationBackendService } from '../../../platform/renderer/common/rendererHost.js';
 import { ISpeechService } from '../../../workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../workbench/contrib/speech/browser/speechService.js';
 import { createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
@@ -135,9 +136,10 @@ function createInputServices(contextView: IContextViewService, chat: IChatServic
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IAppServerSkillApi, skillServices.get(chat)!);
 	services.registerInstance(IAccessibleViewService, unavailableAccessibleViewService);
-	services.registerInstance(IDictationService, undefined);
+	services.registerInstance(IDictationBackendService, undefined);
 	services.registerInstance(IAgentVoiceService, undefined);
 	services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
+	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 	registerTestDictationOnboarding(services);
 	return services;
 }
@@ -1038,9 +1040,10 @@ test('sending from one session preserves a later draft during first-session crea
 		attachPullRequest: async () => { throw new Error('Unexpected PR attachment'); },
 		detachPullRequest: async () => { throw new Error('Unexpected PR removal'); },
 	});
-	editorServices.registerInstance(IDictationService, undefined);
+	editorServices.registerInstance(IDictationBackendService, undefined);
 	editorServices.registerInstance(IAgentVoiceService, undefined);
 	editorServices.registerSingleton(ISpeechService, () => editorServices.createInstance(SpeechService));
+	editorServices.registerSingleton(IChatSpeechToTextService, () => editorServices.createInstance(ChatSpeechToTextService));
 	using contextViewService = new BrowserContextViewService(dom.window.document.body);
 	editorServices.registerInstance(IAccessibleViewService, unavailableAccessibleViewService);
 	editorServices.registerInstance(INotificationService, notifications);

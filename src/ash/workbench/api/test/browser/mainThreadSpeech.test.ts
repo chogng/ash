@@ -14,7 +14,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/c
 import { normalizeExtensionHostSnapshot } from '../../../../platform/agentHost/browser/extensionHostProtocol.js';
 import type { IExtensionHostApi, ExtensionHostFleetSnapshot, ExtensionHostInvocationRequest, JsonValue } from '../../../../platform/agentHost/common/extensionHostApi.js';
 import { SpeechService } from '../../../contrib/speech/browser/speechService.js';
-import { KeywordRecognitionStatus, SpeechToTextStatus, TextToSpeechStatus, type ISpeechToTextEvent, type ISpeechProvider } from '../../../contrib/speech/common/speechService.js';
+import { KeywordRecognitionStatus, SpeechToTextStatus, TextToSpeechStatus, type ISpeechToTextEvent, type ISpeechToTextSession, type ISpeechProvider } from '../../../contrib/speech/common/speechService.js';
 import { MainThreadSpeech } from '../../browser/mainThreadSpeech.js';
 
 interface Read { readonly request: ExtensionHostInvocationRequest; readonly signal: AbortSignal; readonly result: DeferredPromise<JsonValue>; }
@@ -81,7 +81,7 @@ suite('MainThreadSpeech admitted provider lifecycle', () => {
 		await read.result.complete({ events: [{ status: 1 }, { status: 3, text: 'first' }], closed: false });
 		await recognized;
 		assert.deepEqual(events, [{ status: SpeechToTextStatus.Started }, { status: SpeechToTextStatus.Recognized, text: 'first' }]);
-		assert.equal(await speech.stopAndTranscribe(), 'first'); await host.closed();
+		await cancelRecognition(owner, session, token); await host.closed();
 		assert.deepEqual(events.at(-1), { status: SpeechToTextStatus.Stopped });
 		const ttsToken = owner.add(new CancellationTokenSource());
 		const tts = await speech.createTextToSpeechSession(ttsToken.token, 'chat');
@@ -113,13 +113,13 @@ suite('MainThreadSpeech admitted provider lifecycle', () => {
 		bridge.update(snapshot(2)); await ended;
 		assert.equal(read.signal.aborted, true);
 		await read.result.complete({ events: [{ status: 3, text: 'stale' }], closed: false });
-		const current = owner.add(new CancellationTokenSource()); await speech.createSpeechToTextSession(current.token);
+		const current = owner.add(new CancellationTokenSource()); const currentSession = await speech.createSpeechToTextSession(current.token);
 		const currentRead = await host.nextRead(); old.cancel();
 		assert.equal(speech.hasActiveSpeechToTextSession, true);
 		assert.equal(currentRead.signal.aborted, false);
 		assert.equal(currentRead.request.incarnation, 2);
 		assert.deepEqual(events, [{ status: SpeechToTextStatus.Stopped }]);
-		current.cancel(); await speech.cancel(); await currentRead.result.complete({ events: [], closed: true });
+		await cancelRecognition(owner, currentSession, current); await currentRead.result.complete({ events: [], closed: true });
 	});
 	test('invalid provider event rejects the session and closes its exact transport lease', async () => {
 		using owner = new DisposableStore(); const host = owner.add(new Host()); const speech = owner.add(new SpeechService(undefined));
@@ -134,8 +134,8 @@ suite('MainThreadSpeech admitted provider lifecycle', () => {
 		using owner = new DisposableStore(); const host = owner.add(new Host()); const speech = owner.add(new SpeechService(undefined));
 		const bridge = owner.add(new MainThreadSpeech(1000, host, speech)); bridge.update(snapshot(1));
 		const receipt = new DeferredPromise<JsonValue>(); host.creation = receipt.p;
-		const token = owner.add(new CancellationTokenSource()); await speech.createSpeechToTextSession(token.token); token.cancel();
-		await speech.cancel(); await receipt.complete({});
+		const token = owner.add(new CancellationTokenSource()); const session = await speech.createSpeechToTextSession(token.token);
+		await cancelRecognition(owner, session, token); await receipt.complete({});
 		await host.closed();
 		// Even an invocation implementation which resolves after cancellation cannot publish a session.
 		assert.equal(host.requests.some(value => value.operation === 'readSpeechSession'), false);
@@ -154,14 +154,14 @@ suite('MainThreadSpeech admitted provider lifecycle', () => {
 		let metadata: ISpeechProvider['metadata'] | undefined;
 		const speech = owner.add(new class extends SpeechService {
 			public override registerSpeechProvider(identifier: string, provider: ISpeechProvider) { metadata = provider.metadata; return super.registerSpeechProvider(identifier, provider); }
-		}(undefined, extensions));
+		}(extensions));
 		const bridge = owner.add(new MainThreadSpeech(1000, host, speech, extensions));
 		const original = snapshot(1); bridge.update({ ...original, extensions: original.extensions.map(runtime => ({ ...runtime, id: 'marketplace:public.recognition:vscode' })) });
 		assert.equal(metadata?.extension.value, 'public.recognition'); assert.equal(metadata?.displayName, 'Public recognition');
-		const token = owner.add(new CancellationTokenSource()); await speech.createSpeechToTextSession(token.token);
+		const token = owner.add(new CancellationTokenSource()); const session = await speech.createSpeechToTextSession(token.token);
 		const read = await host.nextRead();
 		assert.equal(read.request.extensionId, 'marketplace:public.recognition:vscode');
-		token.cancel(); await speech.cancel(); await read.result.complete({ events: [], closed: true });
+		await cancelRecognition(owner, session, token); await read.result.complete({ events: [], closed: true });
 	});
 
 	test('synthesis waits for Stopped and reuses the session only after that chunk completes', async () => {
@@ -228,10 +228,10 @@ suite('MainThreadSpeech admitted provider lifecycle', () => {
 		const close = host.requests.find(request => request.operation === 'closeSpeechSession')!;
 		assert.equal(close.incarnation, 1); assert.equal(close.activationGeneration, 1);
 		assert.deepEqual(close.payload, { sessionId: (read.request.payload as { sessionId: string; }).sessionId });
-		bridge.update(snapshot(2)); const current = owner.add(new CancellationTokenSource()); await speech.createSpeechToTextSession(current.token);
+		bridge.update(snapshot(2)); const current = owner.add(new CancellationTokenSource()); const currentSession = await speech.createSpeechToTextSession(current.token);
 		const currentRead = await host.nextRead(); old.cancel(); assert.equal(currentRead.signal.aborted, false);
 		await read.result.complete({ events: [{ status: 2 }], closed: true });
-		current.cancel(); await speech.cancel(); await currentRead.result.complete({ events: [], closed: true });
+		await cancelRecognition(owner, currentSession, current); await currentRead.result.complete({ events: [], closed: true });
 	});
 
 });
@@ -243,4 +243,12 @@ function waitFor<T>(owner: DisposableStore, event: Event<T>, accept: (value: T) 
 			if (accept(value)) { listeners.dispose(); resolve(value); }
 		}));
 	});
+}
+
+async function cancelRecognition(owner: DisposableStore, session: ISpeechToTextSession, source: CancellationTokenSource): Promise<void> {
+	const stopped = new Promise<void>(resolve => {
+		owner.add(session.onDidChange(event => { if (event.status === SpeechToTextStatus.Stopped) resolve(); }));
+	});
+	source.cancel();
+	await stopped;
 }

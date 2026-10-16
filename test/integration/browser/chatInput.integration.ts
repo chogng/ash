@@ -1,3 +1,4 @@
+import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { createTestLanguageModelToolsService } from '../../../src/ash/workbench/contrib/chat/test/common/tools/testLanguageModelToolsService.js';
 import { createDiffEditorInput } from '../../../src/ash/workbench/common/editor/diffEditorInput.js';
 import { IPathService } from '../../../src/ash/platform/path/common/pathService.js';
@@ -84,7 +85,7 @@ import { NotificationService } from '../../../src/ash/workbench/services/notific
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
 import { ILanguageModelsService } from '../../../src/ash/workbench/contrib/chat/common/languageModels.js';
-import { IDictationService } from '../../../src/ash/platform/dictation/common/dictationService.js';
+import { IDictationBackendService } from '../../../src/ash/platform/renderer/common/rendererHost.js';
 import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
 import { registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
@@ -338,8 +339,9 @@ services.registerInstance(ILanguageModelsService, {
 	discoverProviderModels: async () => [],
 } satisfies ILanguageModelsService);
 services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
-services.registerInstance(IDictationService, undefined);
+services.registerInstance(IDictationBackendService, undefined);
 services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
+if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 registerTestDictationOnboarding(services);
 const notifications = resources.add(new NotificationService());
 services.registerInstance(INotificationService, notifications);

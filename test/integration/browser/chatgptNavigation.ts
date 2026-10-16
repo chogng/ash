@@ -1,3 +1,4 @@
+import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { VSBuffer } from '../../../src/ash/base/common/buffer.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
@@ -30,7 +31,7 @@ import { IContextViewService } from '../../../src/ash/platform/contextview/brows
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { Event } from '../../../src/ash/base/common/event.js';
-import { IDictationService, type IDictationService as DictationService } from '../../../src/ash/platform/dictation/common/dictationService.js';
+import { IDictationBackendService, type IDictationBackendService as DictationService } from '../../../src/ash/platform/renderer/common/rendererHost.js';
 import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
 import { registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
@@ -53,11 +54,8 @@ let widget: ChatGPTWidget;
 let transcript: ((text: string, final: boolean) => void) | undefined;
 let dictationStops = 0;
 const dictation: DictationService | undefined = parameters.has('dictation') ? {
-	onDidChangePreparation: Event.None,
-	getPreparation: async () => undefined,
-	prepareModel: async () => { }, cancelPreparation: async () => { },
-	getOptions: async () => ({ inputDevices: [], languages: [] }),
-	start: async (onTranscript, onEnded) => {
+	onDidChangeAvailability: Event.None, getOptions: async () => ({ inputDevices: [], languages: [] }),
+	start: async (_options, onTranscript, onEnded) => {
 		transcript = onTranscript;
 		return { stop: async () => { dictationStops++; onTranscript('final words', true); onEnded(); }, cancel: async () => { dictationStops++; onEnded(); } };
 	},
@@ -65,6 +63,8 @@ const dictation: DictationService | undefined = parameters.has('dictation') ? {
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 configurationRegistry.registerConfiguration({ key: 'markdown.math.enabled', defaultValue: true, parse: value => Boolean(value) });
 configurationRegistry.registerConfiguration({ key: 'markdown.math.macros', defaultValue: {}, parse: value => value });
+const configuration = resources.add(new InMemoryConfigurationService());
+if (dictation) await configuration.updateValue('dictation.backend', 'cloud');
 const services = resources.add(new InstantiationService(new ServiceCollection(
 	[IChatGPTTransport, {
 		async request(id, request) {
@@ -97,17 +97,18 @@ const services = resources.add(new InstantiationService(new ServiceCollection(
 			return response.json();
 		},
 	} satisfies IExtensionHostApi],
-	[IConfigurationService, resources.add(new InMemoryConfigurationService())],
+	[IConfigurationService, configuration],
 	[IContextKeyService, resources.add(new ContextKeyService())],
 	[IOpenerService, { open: async () => true } as unknown as IOpenerService],
 	[IEditorService, { focusActiveEditor: () => widget.focus() } as unknown as IEditorService],
 	[IAgentThreadService, {} as IAgentThreadService],
 	[IThemeService, theme],
 	[IContextViewService, resources.add(new BrowserContextViewService(document.body))],
-	[IDictationService, dictation],
+	[IDictationBackendService, dictation],
 	[IPreferencesService, { openSettings: async () => undefined } as unknown as IPreferencesService],
 )));
 services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
+if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 registerTestDictationOnboarding(services);
 registerTestComponentServices(services);
 registerCodeEditorServices(services);

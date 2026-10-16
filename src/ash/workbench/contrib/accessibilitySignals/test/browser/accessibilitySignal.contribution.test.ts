@@ -1,3 +1,4 @@
+import { IChatSpeechToTextService } from '../../../chat/browser/speechToText/chatSpeechToTextService.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import '../../browser/accessibilitySignal.contribution.js';
 import '../../../speech/browser/speech.contribution.js';
@@ -80,7 +81,8 @@ suite('Accessibility signal production contributions', () => {
 		const fixture = services(owner);
 		const started = owner.add(new Emitter<void>());
 		const ended = owner.add(new Emitter<void>());
-		fixture.services.registerInstance(ISpeechService, { hasActiveSpeechToTextSession: false, isStarting: false, onDidStartSpeechToTextSession: started.event, onDidEndSpeechToTextSession: ended.event } as ISpeechService);
+		fixture.services.registerInstance(IChatSpeechToTextService, { isBusy: false, isStarting: false, onDidChangeState: Event.None } as IChatSpeechToTextService);
+		fixture.services.registerInstance(ISpeechService, { hasActiveSpeechToTextSession: false, onDidStartSpeechToTextSession: started.event, onDidEndSpeechToTextSession: ended.event } as ISpeechService);
 		using host = WorkbenchContributionsRegistry.createHost(fixture.services, error => { throw error; }, ['workbench.contrib.speechAccessibilitySignal']);
 		host.advance(WorkbenchPhase.AfterRestored);
 		ended.fire();
