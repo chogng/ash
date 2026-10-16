@@ -29,6 +29,7 @@ use tokio::sync::oneshot;
 use websocket_client::WebSocketConnector;
 
 pub use model_package::DEFAULT_MODEL_ID;
+pub use model_package::MODEL_PACKAGE_FORMAT_VERSION;
 pub use models::DictationModelManager;
 pub use models::ModelOperation;
 pub use models::ModelProgress;

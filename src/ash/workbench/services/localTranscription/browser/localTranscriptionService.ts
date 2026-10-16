@@ -1,18 +1,20 @@
 import { Event } from '../../../../base/common/event.js';
 import { AbstractDisposable } from '../../../../base/common/lifecycle.js';
-import type { ILocalTranscriptionService } from '../../../../platform/localTranscription/common/localTranscription.js';
+import type { ILocalTranscriptionService, ILocalTranscriptionModelService } from '../../../../platform/localTranscription/common/localTranscription.js';
 import { localize } from '../../../../nls.js';
 
 /** A browser host has no device-local Rust capture capability. */
-export class NullLocalTranscriptionService extends AbstractDisposable implements ILocalTranscriptionService {
+export class NullLocalTranscriptionService extends AbstractDisposable implements ILocalTranscriptionService, ILocalTranscriptionModelService {
 	public async pushAudio(): Promise<never> { throw unavailable(); }
 	public readonly _serviceBrand = undefined;
 	public readonly isSupported = false;
 	public readonly onDidTranscribe = Event.None;
-	public readonly onDidEnd = Event.None;
 	public readonly onDidChangeModelStatus = Event.None;
 	public readonly onDidChangeModels = Event.None;
 	public async getModelStatus(): Promise<never> { throw unavailable(); }
+	public async getCacheDirectory(): Promise<never> { throw unavailable(); }
+	public async getModel(): Promise<never> { throw unavailable(); }
+	public importPackage(): never { throw unavailable(); }
 	public async listModels(): Promise<never> { throw unavailable(); }
 	public async cancelModel(): Promise<never> { throw unavailable(); }
 	public async deleteModel(): Promise<never> { throw unavailable(); }

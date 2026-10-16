@@ -1,4 +1,4 @@
-import { ILocalTranscriptionService } from '../../../../../platform/localTranscription/common/localTranscription.js';
+import { ILocalTranscriptionModelService } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { ISpeechService } from '../../../speech/common/speechService.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../../../../platform/renderer/common/dictation.js';
 import { readDictationOptions } from './dictationInput.js';
@@ -71,7 +71,7 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 		@IInstantiationService instantiation: IInstantiationService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IAccessibleViewService accessibleView: IAccessibleViewService,
-		@ILocalTranscriptionService private readonly localTranscription: ILocalTranscriptionService,
+		@ILocalTranscriptionModelService private readonly localTranscription: ILocalTranscriptionModelService,
 		@ISpeechService private readonly speechProviders: ISpeechService,
 		@IVoiceCodeTranscriptionBackendService private readonly backend: IVoiceCodeTranscriptionBackendService | undefined,
 		@IChatSpeechToTextService private readonly speech: IChatSpeechToTextService,
@@ -182,7 +182,7 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 		} else if (backend.type === 'local') {
 			children.push({
 				element: {
-					kind: 'item', id: DictationConfiguration.localModel,
+					kind: 'item', id: DictationConfiguration.model,
 					title: localize('dictation.model.table', 'Local dictation models'),
 					description: localize('dictation.model.tableDescription', 'Install a model, select it for dictation, or uninstall it.'),
 					keywords: ['model', 'install', 'import', 'uninstall'],

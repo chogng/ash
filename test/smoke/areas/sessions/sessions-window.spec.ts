@@ -140,7 +140,7 @@ test('Sessions dictation introduction preserves the draft and restores focus aft
 	const chat = page.locator('.ash-sessions-chat-slot :is(.ash-chat,.ash-cowork):visible').first();
 	const editor = new Editor(chat);
 	await replaceChatInput(editor, 'Keep the Sessions draft');
-	await new QuickAccess(page).runCommand('workbench.action.cowork.dictation.showIntroduction');
+	await new QuickAccess(page).runCommand('workbench.action.chat.showSpeechToTextIntroduction');
 	const introduction = page.getByRole('region', { name: 'Dictation introduction', exact: true });
 	await expect(introduction).toBeVisible();
 	const done = introduction.getByRole('button', { name: 'Done', exact: true });

@@ -1,3 +1,4 @@
+import { Event } from '../../../../../base/common/event.js';
 import '../../../terminal/browser/media/terminalVoice.css';
 import { h, addDisposableListener } from '../../../../../base/browser/dom.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
@@ -8,7 +9,7 @@ import { IPreferencesService } from '../../../../services/preferences/common/pre
 import { ITerminalService, type ITerminalInstance } from '../../../../services/terminal/browser/terminal.js';
 import { IChatSpeechToTextService, ChatSpeechToTextState } from '../../../chat/browser/speechToText/chatSpeechToTextService.js';
 import { IDictationOnboardingService } from '../../../chat/browser/speechToText/dictationOnboarding.js';
-import { DictationSession, DictationAccessibilityHelp } from '../../../chat/browser/speechToText/dictationSession.js';
+import { DictationInput, DictationAccessibilityHelp } from '../../../chat/browser/speechToText/dictationInputController.js';
 import { localize } from '../../../../../nls.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 
@@ -19,10 +20,11 @@ export function postProcessTerminalDictation(text: string): string {
 
 /** Capture remains bound to the instance selected at start; switching or hiding discards it. */
 export class TerminalVoiceSession extends Disposable {
-	private readonly session: DictationSession;
+	private readonly session: DictationInput;
 	private readonly targetState = this._register(new MutableDisposable<DisposableStore>());
 	private target: ITerminalInstance | undefined;
 	private readonly element: HTMLElement;
+	private readonly dictationHost = this._register(new MutableDisposable());
 	constructor(
 		container: HTMLElement,
 		private readonly isVisible: () => boolean,
@@ -44,7 +46,7 @@ export class TerminalVoiceSession extends Disposable {
 		preview.setAttribute('role', 'status');
 		this.element.append(controls, preview);
 		this.session = this._register(instantiation.createInstance(
-			DictationSession,
+			DictationInput,
 			{
 				insertText: (text: string) => {
 					void this.target!.sendText(postProcessTerminalDictation(text), false).catch(error => {
@@ -59,14 +61,13 @@ export class TerminalVoiceSession extends Disposable {
 			'terminal',
 		));
 		this._register(instantiation.createInstance(DictationAccessibilityHelp, this.session, container, controls));
-		this._register(onboarding.registerHost({ container: this.element, focusTarget: container, isVisible }));
 		const stop = this._register(new Button(controls, { label: localize({ bundle: 'ash', key: 'dictation.stop' }, 'Stop dictation') }));
 		const cancel = this._register(new Button(controls, { label: localize({ bundle: 'ash', key: 'dictation.cancel' }, 'Cancel dictation'), presentation: 'quiet' }));
 		this._register(stop.onDidClick(() => { void this.stop().catch(error => notifications.error(String(error))); }));
 		this._register(cancel.onDidClick(() => this.hide()));
 		this._register(this.session.onDidEnd(error => { if (error) { notifications.error(error); } }));
 		controls.hidden = true;
-		this._register(speech.onDidChangeState(() => {
+		this._register(Event.any(speech.onDidChangeState, Event.map(this.session.onDidChange, () => speech.state))(() => {
 			controls.hidden = !this.session.isActive;
 			stop.enabled = !this.session.isStarting && speech.state !== ChatSpeechToTextState.Transcribing;
 		}));
@@ -83,6 +84,7 @@ export class TerminalVoiceSession extends Disposable {
 	}
 	public async start(): Promise<void> {
 		if (!this.isVisible() || this.terminals.activeInstance?.state !== 'running' || this.terminals.activeInstance.isReadOnly) { return; }
+		if (!this.dictationHost.value) this.dictationHost.value = this.onboarding.registerHost({ container: this.element, focusRoot: this.element.parentElement!, focus: this.focus });
 		this.focus();
 		this.target = this.terminals.activeInstance;
 		const lifetime = new DisposableStore();
@@ -94,7 +96,7 @@ export class TerminalVoiceSession extends Disposable {
 	public stop(): Promise<void> { return this.session.stop(); }
 	public hide(): void {
 		this.targetState.clear();
-		this.onboarding.hide(this.element);
+		this.dictationHost.clear();
 		void this.session.cancel().catch(error => this.notifications.error(String(error)));
 	}
 	protected override disposeCore(): void {

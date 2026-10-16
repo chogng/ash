@@ -18,6 +18,22 @@ export type SideBarLocation = 'left' | 'right';
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 
+export const Extensions = { ConfigurationMigration: 'base.contributions.configuration.migration' };
+type ConfigurationValue = { value: unknown | undefined; };
+export type ConfigurationKeyValuePairs = [string, ConfigurationValue][];
+export type ConfigurationMigrationFn = (value: any, valueAccessor: (key: string) => any) => ConfigurationValue | ConfigurationKeyValuePairs | Promise<ConfigurationValue | ConfigurationKeyValuePairs>;
+export type ConfigurationMigration = { key: string; migrateFn: ConfigurationMigrationFn; includeApplication?: boolean; };
+export interface IConfigurationMigrationRegistry {
+	registerConfigurationMigrations(configurationMigrations: ConfigurationMigration[]): void;
+}
+const migrations: ConfigurationMigration[] = [];
+Registry.add(Extensions.ConfigurationMigration, {
+	registerConfigurationMigrations(entries: ConfigurationMigration[]): void { migrations.push(...entries); },
+} satisfies IConfigurationMigrationRegistry);
+
+/** Settings-file owners run these before publishing their restored configuration. */
+export function getConfigurationMigrations(): readonly ConfigurationMigration[] { return migrations; }
+
 /** Typed configuration keys owned by the workbench layer. */
 export const WorkbenchConfiguration = Object.freeze({
 	...AccessibilityConfiguration,

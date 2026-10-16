@@ -1,4 +1,4 @@
-import { ILocalTranscriptionService } from '../../../../../platform/localTranscription/common/localTranscription.js';
+import { ILocalTranscriptionModelService } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { ISpeechService } from '../../../speech/common/speechService.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../../../../platform/renderer/common/dictation.js';
 import { readDictationPreparation, readDictationOptions } from './dictationInput.js';
@@ -22,32 +22,42 @@ import { IChatSpeechToTextService, ChatSpeechToTextState } from './chatSpeechToT
 import { localize } from '../../../../../nls.js';
 import { isModelPreparing } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
+import type { IChatInputOnboardingHostOptions } from '../widget/input/chatInputOnboarding.js';
+
+export const SHOW_DICTATION_ONBOARDING_COMMAND = 'workbench.action.chat.showSpeechToTextIntroduction';
+export const RESET_DICTATION_ONBOARDING_COMMAND = 'workbench.action.chat.resetSpeechToTextIntroduction';
+type SwitchMicrophone = (deviceId: string) => Promise<AnalyserNode | undefined>;
 
 export const IDictationOnboardingService = createDecorator<IDictationOnboardingService>('dictationOnboardingService');
 const introductionSeen = 'dictation.introductionSeen';
-interface OnboardingHost { readonly container: HTMLElement; readonly focusTarget: HTMLElement; readonly isVisible: () => boolean; }
 
 export interface IDictationOnboardingService {
-	registerHost(host: OnboardingHost): IDisposable;
+	readonly _serviceBrand: undefined;
+	readonly isVisible: boolean;
+	registerHost(options: IChatInputOnboardingHostOptions): IDisposable;
 	showIfNeeded(): boolean;
 	show(): boolean;
-	hide(container: HTMLElement): void;
+	refreshMicrophones(analyserNode?: AnalyserNode, switchMicrophone?: SwitchMicrophone): void;
+	reset(): void;
 }
 
 /** Introduction state belongs to the profile; the focused visible surface owns its card. */
 export class DictationOnboardingService extends Disposable implements IDictationOnboardingService {
-	private readonly hosts = new Set<OnboardingHost>();
-	private focused: OnboardingHost | undefined;
+	readonly _serviceBrand = undefined;
+	private readonly hosts = new Set<IChatInputOnboardingHostOptions>();
+	private focused: IChatInputOnboardingHostOptions | undefined;
 	private readonly banner = this._register(new MutableDisposable<DictationOnboardingBanner>());
+	private readonly claim = this._register(new MutableDisposable());
+	public get isVisible(): boolean { return !!this.banner.value?.isVisible; }
 	constructor(@IStorageService private readonly storage: IStorageService, @IInstantiationService private readonly instantiation: IInstantiationService) { super(); }
-	public registerHost(host: OnboardingHost): IDisposable {
+	public registerHost(host: IChatInputOnboardingHostOptions): IDisposable {
 		this.hosts.add(host);
-		const focus = addDisposableListener(host.focusTarget, 'focusin', () => { this.focused = host; });
+		const focus = addDisposableListener(host.focusRoot, 'focusin', () => { this.focused = host; });
 		return toDisposable(() => {
 			focus.dispose();
 			this.hosts.delete(host);
 			if (this.focused === host) { this.focused = undefined; }
-			if (this.banner.value?.host === host) { this.banner.clear(); }
+			if (this.banner.value?.host === host) { this.close(); }
 		});
 	}
 	public showIfNeeded(): boolean {
@@ -55,14 +65,25 @@ export class DictationOnboardingService extends Disposable implements IDictation
 		return this.storage.getBoolean(introductionSeen, StorageScope.PROFILE, false) ? false : this.show();
 	}
 	public show(): boolean {
-		const host = this.focused?.isVisible() ? this.focused : [...this.hosts].find(candidate => candidate.isVisible());
+		const eligible = (host: IChatInputOnboardingHostOptions) => host.focusRoot.isConnected && !host.focusRoot.closest('[hidden]');
+		const host = this.focused && eligible(this.focused) ? this.focused : [...this.hosts].find(eligible);
 		if (!host) { return false; }
-		this.banner.value = this.instantiation.createInstance(DictationOnboardingBanner, host, () => this.banner.clear());
+		this.close();
+		const banner = this.instantiation.createInstance(DictationOnboardingBanner, host, () => this.close(), () => this.refreshMicrophones());
+		this.banner.value = banner;
+		if (host.claimNotice) {
+			banner.setVisible(false);
+			this.claim.value = host.claimNotice({ focusTarget: { hasFocus: () => banner.hasFocus(), focus: () => banner.focus(), canFocus: () => banner.isVisible }, onDidChangeLeading: leading => banner.setVisible(leading) });
+		}
 		this.storage.store(introductionSeen, true, StorageScope.PROFILE, StorageTarget.USER);
 		void this.banner.value.initialize();
 		return true;
 	}
-	public hide(container: HTMLElement): void { if (this.banner.value?.host.container === container) { this.banner.clear(); } }
+	public refreshMicrophones(analyserNode?: AnalyserNode, switchMicrophone?: SwitchMicrophone): void {
+		this.banner.value?.refreshMicrophones(analyserNode, switchMicrophone);
+	}
+	public reset(): void { this.close(); this.storage.remove(introductionSeen, StorageScope.PROFILE); }
+	private close(): void { this.claim.clear(); this.banner.clear(); }
 }
 
 /** A trial owns the shared recording only while its own start is accepted. */
@@ -79,15 +100,28 @@ class DictationOnboardingBanner extends Disposable {
 	private readonly recordingEvents = this._register(new MutableDisposable());
 	private preparing = false;
 	private optionsRequest = 0;
+	private switchMicrophone: SwitchMicrophone | undefined;
+	public get isVisible(): boolean { return !this.domNode.hidden; }
+	public hasFocus(): boolean { return this.domNode.contains(this.domNode.ownerDocument.activeElement); }
+	public focus(): void { this.test.domNode.focus(); }
+	public setVisible(visible: boolean): void {
+		this.domNode.hidden = !visible;
+		if (!visible && this.recording) { this.recording = false; this.recordingToken.value?.cancel(); }
+	}
+	public refreshMicrophones(_analyserNode?: AnalyserNode, switchMicrophone?: SwitchMicrophone): void {
+		if (switchMicrophone) this.switchMicrophone = switchMicrophone;
+		void this.initialize();
+	}
 	constructor(
-		public readonly host: OnboardingHost,
+		public readonly host: IChatInputOnboardingHostOptions,
 		close: () => void,
+		refreshMicrophones: () => void,
 		@IChatSpeechToTextService private readonly speech: IChatSpeechToTextService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IPreferencesService preferences: IPreferencesService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IAccessibleViewService accessibleView: IAccessibleViewService,
-		@ILocalTranscriptionService private readonly localTranscription: ILocalTranscriptionService,
+		@ILocalTranscriptionModelService private readonly localTranscription: ILocalTranscriptionModelService,
 		@ISpeechService private readonly speechProviders: ISpeechService,
 		@IVoiceCodeTranscriptionBackendService private readonly backend: IVoiceCodeTranscriptionBackendService | undefined,
 	) {
@@ -120,7 +154,8 @@ class DictationOnboardingBanner extends Disposable {
 		this._register(addDisposableListener(this.domNode, 'keydown', event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); } }));
 		this._register(this.microphone.onDidSelect(({ value }) => { void this.configure(DictationConfiguration.inputDevice, value); }));
 		this._register(this.language.onDidSelect(({ value }) => { void this.configure(DictationConfiguration.language, value); }));
-		this._register(speech.onDidChangeState(() => { this.updateTest(); void this.initialize(); }));
+		if (document.defaultView?.navigator.mediaDevices) this._register(addDisposableListener(document.defaultView.navigator.mediaDevices, 'devicechange', () => { void this.initialize(); }));
+		this._register(speech.onDidChangeState(() => { this.updateTest(); refreshMicrophones(); }));
 		this._register(speech.onDidChangeState(() => { if (!speech.isBusy) { this.recording = false; } this.updateTest(); }));
 		const keys = this._register(contextKeys.createScoped(this.domNode));
 		keys.createKey('dictationIntroductionFocused', true);
@@ -178,8 +213,8 @@ class DictationOnboardingBanner extends Disposable {
 	}
 	private async configure(key: string, value: string): Promise<void> {
 		try {
-			if (this.recording) {
-				if (key === DictationConfiguration.inputDevice && this.speech.analyserNode) await this.speech.switchMicrophone(this.domNode.ownerDocument.defaultView as Window & typeof globalThis, value);
+			if (this.speech.isBusy) {
+				if (key === DictationConfiguration.inputDevice && this.speech.analyserNode) await (this.switchMicrophone ? this.switchMicrophone(value) : this.speech.switchMicrophone(this.domNode.ownerDocument.defaultView as Window & typeof globalThis, value));
 				else { this.recording = false; this.recordingToken.value?.cancel(); await this.speech.stopAndTranscribe(); }
 			}
 			await this.configuration.updateValue(key, value);
@@ -192,7 +227,7 @@ class DictationOnboardingBanner extends Disposable {
 			this.preparing = true;
 			this.updateTest();
 			const preparation = await readDictationPreparation(this.configuration, this.localTranscription, this.speechProviders);
-			if (this.isDisposed || !this.host.isVisible() || this.speech.isBusy) { return; }
+			if (this.isDisposed || !this.isVisible || this.speech.isBusy) { return; }
 			if (preparation && (!preparation.available || isModelPreparing(preparation.status))) {
 				this.transcript.textContent = localize({ bundle: 'ash', key: 'dictation.prepare' }, 'Install or select a local model in Dictation settings before testing.');
 				return;
@@ -224,6 +259,7 @@ class DictationOnboardingBanner extends Disposable {
 		if (this.recording) { this.recording = false; this.recordingToken.value?.cancel(); void this.speech.stopAndTranscribe().catch(() => undefined); }
 		this.domNode.remove();
 		this.previousFocus?.focus();
+		this.host.focus?.();
 		super.disposeCore();
 	}
 }

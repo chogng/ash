@@ -140,7 +140,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	using contextKeys = new ContextKeyService();
 	const { InstantiationService } = await import('../../../platform/instantiation/common/instantiationService.js');
 	const { IConfigurationService } = await import('../../../platform/configuration/common/configuration.js');
-	const { ILocalTranscriptionService } = await import('../../../platform/localTranscription/common/localTranscription.js');
+	const { ILocalTranscriptionService, ILocalTranscriptionModelService } = await import('../../../platform/localTranscription/common/localTranscription.js');
 	const { NullLocalTranscriptionService } = await import('../../../workbench/services/localTranscription/browser/localTranscriptionService.js');
 	using services = new InstantiationService();
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
@@ -151,6 +151,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	services.registerInstance(ISecretStorageStatusService, { readState: async () => ({ status: 'available' }), authorizeAccess: async () => ({ status: 'available' }), setStorageMode: async mode => ({ status: 'available', mode }) });
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IConfigurationService, configuration);
+	services.registerInstance(ILocalTranscriptionModelService, transcription);
 	services.registerInstance(ILocalTranscriptionService, transcription);
 	const { IVoiceCodeTranscriptionBackendService } = await import('../../../platform/renderer/common/dictation.js');
 	const { ISpeechService } = await import('../../../workbench/contrib/speech/common/speechService.js');
@@ -361,7 +362,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	const voiceButton = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === 'General');
 	assert.ok(voiceButton);
 	voiceButton.click();
-	assert.equal(window.document.querySelector('[data-configuration-key="dictation.localModel"]'), null);
+	assert.equal(window.document.querySelector('[data-configuration-key="dictation.model"]'), null);
 	assert.ok(window.document.querySelector('[role="grid"][aria-label="Local dictation models"]'));
 	assert.ok(window.document.querySelector('.ash-local-transcription-model-controls'));
 	assert.equal(window.document.querySelector('[data-configuration-key="dictation.cloudProvider"]'), null);

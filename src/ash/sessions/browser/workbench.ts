@@ -114,7 +114,7 @@ import { IConfigurationService } from "../../platform/configuration/common/confi
 import { ContextKeyExpr } from '../../platform/contextkey/common/contextkey.js';
 import { refineServiceDecorator, type IInstantiationService } from "../../platform/instantiation/common/instantiation.js";
 import { InstantiationService } from "../../platform/instantiation/common/instantiationService.js";
-import { ILocalTranscriptionService } from '../../platform/localTranscription/common/localTranscription.js';
+import { ILocalTranscriptionService, ILocalTranscriptionModelService } from '../../platform/localTranscription/common/localTranscription.js';
 import { NullLocalTranscriptionService } from '../../workbench/services/localTranscription/browser/localTranscriptionService.js';
 import { ICodeEditorService } from '../../editor/browser/services/codeEditorService.js';
 import { StandaloneCodeEditorService } from '../../editor/standalone/browser/standaloneCodeEditorService.js';
@@ -371,7 +371,9 @@ export abstract class Workbench extends Disposable {
 		if (options.api.approvalEnvironment) { services.registerInstance(IApprovalEnvironmentService, options.api.approvalEnvironment); }
 		services.registerInstance(IVoiceCodeTranscriptionBackendService, options.api.dictation);
 		services.registerInstance(IAgentVoiceService, options.api.agentVoice);
-		services.registerInstance(ILocalTranscriptionService, options.api.localTranscription ?? this._register(new NullLocalTranscriptionService()));
+		const localTranscription = options.api.localTranscription ?? this._register(new NullLocalTranscriptionService());
+		services.registerInstance(ILocalTranscriptionService, localTranscription);
+		services.registerInstance(ILocalTranscriptionModelService, options.api.localTranscriptionModels ?? (localTranscription instanceof NullLocalTranscriptionService ? localTranscription : this._register(new NullLocalTranscriptionService())));
 		services.registerInstance(IConfigurationService, configurationService);
 		const languagePacks = this._register(services.createInstance(WebLanguagePacksService, builtinLanguagePackCatalogs, preinstalledLanguagePacks));
 		services.registerInstance(ILanguagePackService, languagePacks);

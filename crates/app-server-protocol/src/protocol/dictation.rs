@@ -137,6 +137,10 @@ pub struct DictationModelStatus {
 #[serde(rename_all = "camelCase")]
 pub struct DictationModelList {
     pub models: Vec<DictationModelStatus>,
+    /// Authoritative model cache root for product-host transcription clients.
+    pub cache_directory: String,
+    /// Revision of the prepared package format accepted by local imports.
+    pub package_version: u32,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

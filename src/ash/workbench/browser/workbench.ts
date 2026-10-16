@@ -96,7 +96,7 @@ import { ITelemetryService } from '../../platform/telemetry/common/telemetry.js'
 import { NullTelemetryService } from '../../platform/telemetry/common/telemetryUtils.js';
 import { ISyntaxApi } from "../../platform/syntax/common/syntaxApi.js";
 import { IRendererHostService, type IRendererHost } from "../../platform/renderer/common/rendererHost.js";
-import { ILocalTranscriptionService } from '../../platform/localTranscription/common/localTranscription.js';
+import { ILocalTranscriptionService, ILocalTranscriptionModelService } from '../../platform/localTranscription/common/localTranscription.js';
 import { NullLocalTranscriptionService } from '../services/localTranscription/browser/localTranscriptionService.js';
 import { IAgentCapabilitiesService } from '../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { IAgentToolsApi } from '../../platform/agentHost/common/agentToolsApi.js';
@@ -594,7 +594,9 @@ export class Workbench extends Disposable {
 		AppServerAvailableContext.bindTo(contextKeys).set(api.hasAppServer);
 		services.registerInstance(IVoiceCodeTranscriptionBackendService, api.dictation);
 		services.registerInstance(IAgentVoiceService, api.agentVoice);
-		services.registerInstance(ILocalTranscriptionService, api.localTranscription ?? this._register(new NullLocalTranscriptionService()));
+		const localTranscription = api.localTranscription ?? this._register(new NullLocalTranscriptionService());
+		services.registerInstance(ILocalTranscriptionService, localTranscription);
+		services.registerInstance(ILocalTranscriptionModelService, api.localTranscriptionModels ?? (localTranscription instanceof NullLocalTranscriptionService ? localTranscription : this._register(new NullLocalTranscriptionService())));
 		services.registerInstance(IAgentCapabilitiesService, api.agentCapabilities);
 		services.registerInstance(IAgentToolsApi, api.agentTools);
 		services.registerInstance(IMcpServerStatusService, api.mcpServerStatus);

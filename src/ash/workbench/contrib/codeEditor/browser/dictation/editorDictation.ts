@@ -1,3 +1,4 @@
+import { Event } from '../../../../../base/common/event.js';
 import { Selection } from '../../../../../editor/common/core/selection.js';
 import { localize2, localize } from '../../../../../nls.js';
 import { Keybinding, logicalKey } from '../../../../../base/common/keybindings.js';
@@ -6,7 +7,7 @@ import { IEditorService } from '../../../../services/editor/common/editorService
 import './editorDictation.css';
 import { h, addDisposableListener } from '../../../../../base/browser/dom.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
-import { Disposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable } from '../../../../../base/common/lifecycle.js';
 import { ICodeEditor, OverlayWidgetPositionPreference, type IOverlayWidget } from '../../../../../editor/browser/editorBrowser.js';
 import { EditorAction2, EditorContributionInstantiation, registerEditorContribution } from '../../../../../editor/browser/editorExtensions.js';
 import { EditorOption } from '../../../../../editor/common/config/editorOptions.js';
@@ -15,15 +16,16 @@ import { IInstantiationService, type ServicesAccessor } from '../../../../../pla
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
 import { IChatSpeechToTextService, ChatSpeechToTextState } from '../../../chat/browser/speechToText/chatSpeechToTextService.js';
-import { DictationSession, DictationAccessibilityHelp } from '../../../chat/browser/speechToText/dictationSession.js';
+import { DictationInput, DictationAccessibilityHelp } from '../../../chat/browser/speechToText/dictationInputController.js';
 import { IDictationOnboardingService } from '../../../chat/browser/speechToText/dictationOnboarding.js';
 
 
 /** Editing and undo remain with the target code editor, including asynchronous finalization. */
 export class EditorDictation extends Disposable {
 	public static readonly ID = 'editorDictation';
-	private readonly session: DictationSession;
+	private readonly session: DictationInput;
 	private readonly widget: IOverlayWidget;
+	private readonly dictationHost = this._register(new MutableDisposable());
 	constructor(
 		private readonly editor: ICodeEditor,
 		@IInstantiationService instantiation: IInstantiationService,
@@ -42,6 +44,7 @@ export class EditorDictation extends Disposable {
 		preview.setAttribute('role', 'status');
 		domNode.append(controls, preview);
 		const target = {
+			codeEditor: editor,
 			insertText: (text: string): void => {
 				const selection = editor.getSelection();
 				if (!selection || editor.getOption(EditorOption.readOnly)) { return; }
@@ -53,7 +56,7 @@ export class EditorDictation extends Disposable {
 			focus: (): void => editor.focus(),
 		};
 		this.session = this._register(instantiation.createInstance(
-			DictationSession,
+			DictationInput,
 			target,
 			preview,
 			() => !this.isDisposed && !editor.getContainerDomNode().closest('[hidden]') && !editor.getOption(EditorOption.readOnly),
@@ -61,17 +64,12 @@ export class EditorDictation extends Disposable {
 			'editor',
 		));
 		this._register(instantiation.createInstance(DictationAccessibilityHelp, this.session, editor.getContainerDomNode(), controls));
-		this._register(onboarding.registerHost({
-			container: domNode,
-			focusTarget: editor.getContainerDomNode(),
-			isVisible: () => !this.isDisposed && !editor.getContainerDomNode().closest('[hidden]') && !editor.isSimpleWidget,
-		}));
 		const stop = this._register(new Button(controls, { label: localize({ bundle: 'ash', key: 'dictation.stop' }, 'Stop dictation') }));
 		const cancel = this._register(new Button(controls, { label: localize({ bundle: 'ash', key: 'dictation.cancel' }, 'Cancel dictation'), presentation: 'quiet' }));
 		this._register(stop.onDidClick(() => { void this.session.stop().catch(error => notifications.error(String(error))); }));
 		this._register(cancel.onDidClick(() => { void this.session.cancel().catch(error => notifications.error(String(error))); }));
 		this._register(this.session.onDidEnd(error => { if (error) notifications.error(error); controls.hidden = !this.session.isActive; stop.enabled = !this.session.isStarting && speech.state !== ChatSpeechToTextState.Transcribing; }));
-		this._register(speech.onDidChangeState(() => {
+		this._register(Event.any(speech.onDidChangeState, Event.map(this.session.onDidChange, () => speech.state))(() => {
 			controls.hidden = !this.session.isActive;
 			stop.enabled = !this.session.isStarting && speech.state !== ChatSpeechToTextState.Transcribing;
 		}));
@@ -91,21 +89,24 @@ export class EditorDictation extends Disposable {
 		}, true));
 		this._register(editorService.onDidVisibleEditorsChange(() => {
 			if (editor.getContainerDomNode().closest('[hidden]')) {
-				onboarding.hide(domNode);
+				this.dictationHost.clear();
 				void this.session.cancel().catch(error => notifications.error(String(error)));
 			}
 		}));
 		this._register(editor.onWillChangeModel(() => {
-			onboarding.hide(domNode);
+			this.dictationHost.clear();
 			void this.session.cancel().catch(error => notifications.error(String(error)));
 		}));
 	}
 	public async start(): Promise<void> {
-		if (!this.editor.isSimpleWidget && !this.editor.getOption(EditorOption.readOnly)) { this.editor.focus(); await this.session.action.run(); }
+		if (!this.editor.isSimpleWidget && !this.editor.getOption(EditorOption.readOnly)) {
+			if (!this.dictationHost.value) this.dictationHost.value = this.onboarding.registerHost({ container: this.widget.getDomNode(), focusRoot: this.editor.getContainerDomNode(), focus: () => this.editor.focus() });
+			this.editor.focus(); await this.session.action.run();
+		}
 	}
 	public stop(): Promise<void> { return this.session.stop(); }
 	protected override disposeCore(): void {
-		this.onboarding.hide(this.widget.getDomNode());
+		this.dictationHost.clear();
 		this.editor.removeOverlayWidget(this.widget);
 		super.disposeCore();
 	}

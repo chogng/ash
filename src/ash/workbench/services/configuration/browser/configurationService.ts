@@ -16,7 +16,7 @@ import { IUserDataProfileService } from '../../userDataProfile/common/userDataPr
 import { dirname } from '../../../../base/common/resources.js';
 import { NullPolicyService, type IPolicyService } from '../../../../platform/policy/common/policy.js';
 import { PolicyConfiguration } from '../../../../platform/configuration/common/configurations.js';
-import { FolderConfiguration, WorkspaceConfiguration } from './configuration.js';
+import { FolderConfiguration, WorkspaceConfiguration, migrateSettings } from './configuration.js';
 import type { IWorkingCopyService } from '../../workingCopy/common/workingCopyService.js';
 
 const configurationModelLog = new NullLoggerService();
@@ -86,8 +86,7 @@ export class WorkbenchConfigurationService extends Disposable implements IConfig
 			this.changeEmitter.fire(configurationChangeEvent({ keys: [...event.properties], overrides: [] }, previous, this.state(), ConfigurationTarget.DEFAULT));
 		}));
 		this._register(this.userSettings.onDidChange(() => {
-			try { this.applyConfiguration(this.userSettings.reparse()); }
-			catch (error) { this.onError(error); }
+			void this.reloadUserConfiguration().catch(error => { if (!this.stopped) this.onError(error); });
 		}));
 	}
 
@@ -274,6 +273,20 @@ export class WorkbenchConfigurationService extends Disposable implements IConfig
 	}
 
 	private async reloadUserConfiguration(): Promise<void> {
+		if (this.stopped) return;
+		try {
+			const file = await this.userFiles.readFile(this.settingsResource);
+			const output = await migrateSettings(file.content, this.onError);
+			if (this.stopped) return;
+			if (output !== file.content) {
+				if (this.workingCopies?.get(this.settingsResource).some(copy => copy.isDirty)) throw new Error(localize('configuration.dirtyResource', 'Save or revert unsaved changes in {0} before updating settings.', this.settingsResource.toString()));
+				this.parseResourceSource(output);
+				await this.userFiles.writeFile({ resource: this.settingsResource, content: output, expectedRevision: file.revision }, { create: true, overwrite: true });
+			}
+		} catch (error) {
+			if (toFileSystemProviderErrorCode(error as Error) !== FileSystemProviderErrorCode.FileNotFound) throw error;
+		}
+		if (this.stopped) return;
 		this.applyConfiguration(await this.userSettings.loadConfiguration());
 	}
 

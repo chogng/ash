@@ -3,6 +3,7 @@ import { Emitter, type Event } from "../../../../../../base/common/event.js";
 import { Disposable, type IDisposable, toDisposable } from "../../../../../../base/common/lifecycle.js";
 import { RunOnceScheduler } from '../../../../../../base/common/async.js';
 import type { ITextModel } from '../../../../../../editor/common/model.js';
+import type { ICodeEditor } from '../../../../../../editor/browser/editorBrowser.js';
 import type { SlashCommandCatalog } from "../../../common/slashCommands.js";
 import type { SkillSelectorCatalog } from '../../../common/skillSelectors.js';
 import type { ChatContextAttachment } from '../../../../../services/chat/common/chatContextService.js';
@@ -26,6 +27,7 @@ export interface ChatInputEditorSelection {
 
 /** Text editing contract consumed by the Chat composer. */
 export interface IChatInputEditor extends IDisposable {
+	readonly codeEditor?: ICodeEditor;
 	readonly element: HTMLElement;
 	readonly onDidChange: Event<string>;
 	readonly onDidSubmit: Event<void>;

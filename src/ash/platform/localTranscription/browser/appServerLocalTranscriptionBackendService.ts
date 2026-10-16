@@ -1,7 +1,7 @@
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { encodeBase64 } from '../../../base/common/buffer.js';
 import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
-import { LocalTranscriptionModelState, type ILocalTranscriptionBackendService, type ILocalTranscriptionModelStatus } from '../common/localTranscription.js';
+import { DictationModelState, type ILocalTranscriptionBackendService, type IDictationModelStatus } from '../common/localTranscription.js';
 import type { DictationModelStage, DictationModelStatus } from '../../../../../.build/protocol/typescript/index.js';
 
 /** Converts only this domain's messages on the renderer's existing connection. */
@@ -32,6 +32,10 @@ export function createAppServerLocalTranscriptionBackendService(client: AppServe
 			return modelSnapshot(status);
 		},
 		listModels: async () => (await client.request(APP_SERVER_METHODS['dictation/model/list'], null)).models.map(modelSnapshot),
+		getModelCacheInfo: async () => {
+			const cache = await client.request(APP_SERVER_METHODS['dictation/model/list'], null);
+			return { directory: cache.cacheDirectory, version: cache.packageVersion };
+		},
 		cancelModel: async model => { await client.request(APP_SERVER_METHODS['dictation/model/cancel'], { modelId: model }); },
 		deleteModel: async model => { await client.request(APP_SERVER_METHODS['dictation/model/delete'], { modelId: model }); },
 		startModelOperation: async (resourceId, model, operation) => {
@@ -50,13 +54,13 @@ function modelSnapshot(status: DictationModelStatus) {
 	return { model: status.modelId, available: status.available, sizeBytes: status.sizeBytes, status: status.stage ? modelStatus(status.stage) : undefined };
 }
 
-function modelStatus(stage: DictationModelStage): ILocalTranscriptionModelStatus {
+function modelStatus(stage: DictationModelStage): IDictationModelStatus {
 	switch (stage.type) {
-		case 'checking': return { state: LocalTranscriptionModelState.Checking };
-		case 'downloading': return { state: LocalTranscriptionModelState.Downloading, file: stage.file, downloadedBytes: stage.downloadedBytes };
-		case 'loading': return { state: LocalTranscriptionModelState.Loading };
-		case 'ready': return { state: LocalTranscriptionModelState.Ready };
-		case 'cancelled': return { state: LocalTranscriptionModelState.Cancelled };
-		case 'failed': return { state: LocalTranscriptionModelState.Error, error: stage.error };
+		case 'checking': return { state: DictationModelState.Checking };
+		case 'downloading': return { state: DictationModelState.Downloading, file: stage.file, downloadedBytes: stage.downloadedBytes };
+		case 'loading': return { state: DictationModelState.Loading };
+		case 'ready': return { state: DictationModelState.Ready };
+		case 'cancelled': return { state: DictationModelState.Cancelled };
+		case 'failed': return { state: DictationModelState.Error, error: stage.error };
 	}
 }

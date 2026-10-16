@@ -10,7 +10,6 @@ import { CoworkWidgetModel } from './coworkWidgetModel.js';
 import { NewCoworkInputWidget } from './newCoworkInput.js';
 import type { ChatInputDelegate } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { ChatTipService, IChatTipService } from './chatTipService.js';
-import './actions/coworkSpeechToTextActions.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import type { InstantiationService } from '../../../../platform/instantiation/common/instantiationService.js';
 import { CoworkModelPreferences } from '../common/languageModels.js';

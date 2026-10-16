@@ -1,3 +1,5 @@
+import { Event } from '../../../../../../base/common/event.js';
+import { MenuItemAction } from '../../../../../../platform/actions/common/actions.js';
 import { ScreenshotContextValuePick } from '../../actions/chatContext.js';
 import { getScreenshotAccessibilityHelp } from '../../../../screenshot/common/screenshot.js';
 import { workspaceTrustPermissionNames } from '../../../../../../platform/workspace/common/workspaceTrust.js';
@@ -13,7 +15,8 @@ import type { ChatInputEditorSelection } from './chatInputEditorRegistry.js';
 import '../media/chat.css';
 import { IChatSpeechToTextService, ChatSpeechToTextState } from '../../speechToText/chatSpeechToTextService.js';
 import { DictationActionViewItem } from '../../speechToText/dictationActionViewItem.js';
-import { DictationSession } from '../../speechToText/dictationSession.js';
+import { DictationInput } from '../../speechToText/dictationInputController.js';
+import { notifyDictationSubmitted } from '../../speechToText/dictationSession.js';
 import { IDictationOnboardingService } from '../../speechToText/dictationOnboarding.js';
 import { addDisposableListener, h, stopEvent } from "../../../../../../base/browser/dom.js";
 import { ActionViewItem, ButtonActionViewItem } from "../../../../../../base/browser/ui/actionbar/actionViewItems.js";
@@ -186,7 +189,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private skillSelectors: ChatInputState["skillSelectors"] = [];
 	private get mode(): ChatInputMode { return this.state.mode; }
 	private pendingAgentSelection: { readonly agent: ChatAgent | undefined; } | undefined;
-	private readonly dictationSession: DictationSession;
+	private readonly dictationSession: DictationInput;
+	private readonly dictationHost = this._register(new MutableDisposable());
 	private dictationSample: { text: string; backend: string; } | undefined;
 	private measuringDictation = false;
 	private measureWholeDraft = false;
@@ -283,11 +287,11 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			}));
 		}
 
-		this.dictationSession = this._register(instantiationService.createInstance(DictationSession, this.input, this.dictationPreview, () => this.visible, () => this.delegate.openModelSettings('dictation'), 'chat'));
-		this._register(this.speechToText.onDidChangeState(() => {
+		this.dictationSession = this._register(instantiationService.createInstance(DictationInput, this.input, this.dictationPreview, () => this.visible, () => this.delegate.openModelSettings('dictation'), 'chat'));
+		this._register(Event.any(this.speechToText.onDidChangeState, Event.map(this.dictationSession.onDidChange, () => this.speechToText.state))(() => {
 			if (this.dictationSession.isActive && this.speechToText.state === ChatSpeechToTextState.Recording && !this.measuringDictation) {
 				this.measuringDictation = true;
-				this.measureWholeDraft = this.input.value.length === 0;
+				this.measureWholeDraft = !this.input.codeEditor && this.input.value.length === 0;
 				this.dictationSample = undefined;
 			}
 			if (!this.speechToText.isBusy) this.measuringDictation = false;
@@ -306,7 +310,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		if (!this.secondaryToolbarContainer) this.element.append(this.status);
 		this.element.append(this.dictationPreview, this.interaction, this.changesPill.domNode, this.inputContainer);
 		if (this.secondaryToolbarContainer) this.element.append(this.secondaryToolbarContainer);
-		this._register(onboarding.registerHost({ container: this.element, focusTarget: this.element, isVisible: () => this.visible }));
+		this.updateDictationHost();
 		this._register(addDisposableListener(this.inputContainer, "focusin", event => {
 			this.inputContainer.classList.add("focused");
 			if (this.input.element.contains(event.target as Node)) {
@@ -497,6 +501,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	private async submit(draft: InputHistoryDraft, textRevision: number, lifecycle: AbortSignal, operation: () => Promise<void>): Promise<void> {
+		if (this.input.codeEditor) notifyDictationSubmitted(this.input.codeEditor);
 		this.logDictationSample(true, draft.text);
 		void this.history.record(draft.text, parseSlashCommandInput(this.commandText(draft.text, draft.attachments), this.slashCommands).kind === 'command' ? 'command' : 'agent').catch(error => {
 			if (!this.isDisposed && !lifecycle.aborted) this.notifications.error(localize('chat.history.saveFailed', 'Could not save input history: {0}', String(error)));
@@ -797,6 +802,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 	setVisible(visible: boolean): void {
 		this.visible = visible;
+		this.updateDictationHost();
 		if (visible) {
 			this.input.layout();
 			this.contextUsageWidget?.update(this.state.contextUsage);
@@ -805,8 +811,12 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			this.invalidatePendingInput();
 			this.contextUsageWidget?.hide();
 			this.permissionWidget?.hide();
-			this.onboarding.hide(this.element);
 		}
+	}
+
+	private updateDictationHost(): void {
+		if (!this.visible) this.dictationHost.clear();
+		else if (!this.dictationHost.value) this.dictationHost.value = this.onboarding.registerHost({ container: this.element, focusRoot: this.element, focus: () => this.input.focus() });
 	}
 
 	render(state: ChatInputState): void {
@@ -935,7 +945,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 					return agentOptions.length > 0 ? [...options, new Separator(), ...agentOptions] : options;
 				},
 			);
-		const micAction = { ...this.dictationSession.action };
+		const micAction = this.dictationSession.action;
 		let sendAction: ChatInputAction;
 		if (this.toolbarState.hasInput) {
 			const tooltip = this.toolbarState.inputKind === "command" ? "Run command" : "Send message";
@@ -959,7 +969,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		const additionalActions = this.additionalActions.filter(action => action.id !== 'ash.chat.input.attach').map(action => ({ ...action, run: (...args: readonly unknown[]) => action.run(...args) }));
 		if (!this.secondaryToolbarContainer) additionalActions.unshift(this.attachAction);
 		const modeActions = modeAction ? [modeAction] : [];
-		const inputActions = this.toolbarState.inputKind === "command" ? modeActions : [...additionalActions, ...modeActions, this.modelAction, micAction];
+		const inputActions = this.toolbarState.inputKind === "command" ? modeActions : [...additionalActions, ...modeActions, this.modelAction, ...(this.dictationSession.showButton ? [micAction] : [])];
 		this.inputToolbar.setActions([...inputActions, ...trailingActions]);
 		this.modelPickerPresentationChanged.fire();
 		this.pickerResponsiveLayout.layout();
@@ -1087,7 +1097,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 	private createToolbarViewItem(action: IAction, contextViewService: IContextViewService): ActionViewItem | undefined {
 		if (action.id === this.attachAction.id) return new ChatAttachContextActionViewItem(action);
-		if (action.id === this.dictationSession.action.id) { return new DictationActionViewItem(action); }
+		if (action instanceof MenuItemAction && action.id === this.dictationSession.action.id) { return this.instantiationService.createInstance(DictationActionViewItem, action, undefined, this.dictationSession.activeState); }
 		if (!(action instanceof ChatInputAction)) return undefined;
 		if (action.presentation === 'model') {
 			return this.modelPickerActionItem = this.instantiationService.createInstance(ModelPickerActionItem, action, {

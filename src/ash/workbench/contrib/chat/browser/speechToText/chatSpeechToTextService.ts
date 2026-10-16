@@ -11,7 +11,7 @@ import { generateUuid } from '../../../../../base/common/uuid.js';
 import { IVoiceCodeTranscriptionClient } from './voiceCodeTranscriptionClient.js';
 import { createPcmCaptureNode, type IPcmCaptureNode } from '../pcmCaptureWorklet.js';
 import { createDecorator } from '../../../../../platform/instantiation/common/instantiation.js';
-import { ILocalTranscriptionService, LocalTranscriptionModelState } from '../../../../../platform/localTranscription/common/localTranscription.js';
+import { ILocalTranscriptionService, ILocalTranscriptionModelService, LocalTranscriptionModelState } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
@@ -21,6 +21,11 @@ import { localize } from '../../../../../nls.js';
 
 export const IChatSpeechToTextService = createDecorator<IChatSpeechToTextService>('chatSpeechToTextService');
 export const ChatSpeechToTextInProgress = new RawContextKey<boolean>('chatSpeechToTextInProgress', false);
+export const DICTATION_MODEL_SETTING = 'dictation.model';
+export const enum DictationSettingId {
+	ShowTranscript = 'dictation.showTranscript',
+	ShowButton = 'dictation.showButton',
+}
 
 export const enum ChatSpeechToTextState {
 	Idle = 'idle',
@@ -128,9 +133,10 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 	public get isBusy(): boolean { return !!this.recording; }
 	public currentSurface: ChatDictationSurface = 'chat';
 	public get isConfigured(): boolean {
+		if (this.configuration.getValue<boolean>(DictationConfiguration.enabled) === false) return false;
 		if (this.speech.hasSpeechProvider) return true;
 		try {
-			return dictationBackend(this.configuration).type === 'local' ? this.localTranscription.isSupported : !!this.backend;
+			return dictationBackend(this.configuration).type === 'local' ? this.localTranscription.isSupported && this.localModels.isSupported : !!this.backend;
 		} catch { return false; }
 	}
 
@@ -143,18 +149,20 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 		@IVoiceCodeTranscriptionClient private readonly transcription: IVoiceCodeTranscriptionClient,
 		@INotificationService private readonly notifications: INotificationService,
 		@ITelemetryService private readonly telemetry: ITelemetryService,
+		@ILocalTranscriptionModelService private readonly localModels: ILocalTranscriptionModelService,
 	) {
 		super();
 		if (backend) this._register(backend.onDidChangeConnection(() => this.stateChanged.fire(this.state)));
-		this._register(localTranscription.onDidChangeModels(() => this.stateChanged.fire(this.state)));
+		this._register(localModels.onDidChangeModels(() => this.stateChanged.fire(this.state)));
 		this._register(configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(DictationConfiguration.enabled) && !this.isConfigured) void this.cancel().catch(() => undefined);
 			if (Object.values(DictationConfiguration).some(key => event.affectsConfiguration(key)) || event.affectsConfiguration('dictation.showTranscript')) this.stateChanged.fire(this.state);
 		}));
 		this._register(speech.onDidChangeHasSpeechProvider(() => this.stateChanged.fire(this.state)));
-		this._register(localTranscription.onDidChangeModelStatus(({ status }) => {
+		this._register(localTranscription.onDidChangeModelStatus(status => {
 			if (!this.recording || this.currentBackend !== 'local') return;
 			const downloading = status.state === LocalTranscriptionModelState.Downloading;
-			const preparing = downloading || status.state === LocalTranscriptionModelState.Loading || status.state === LocalTranscriptionModelState.Checking;
+			const preparing = downloading || status.state === LocalTranscriptionModelState.Loading;
 			if (this.isDownloadingModel !== downloading) { this.isDownloadingModel = downloading; this.downloading.fire(downloading); }
 			if (this.isPreparingModel !== preparing) { this.isPreparingModel = preparing; this.preparing.fire(preparing); }
 			this.progress.fire();
@@ -216,12 +224,13 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 				if (backend.type === 'local') {
 					// Workbench owns microphone capture; the local service owns model preparation and inference.
 					recording.lifetime.add(this.localTranscription.onDidTranscribe(result => this.receiveTranscript(recording, result.text, result.isFinal)));
-					recording.lifetime.add(this.localTranscription.onDidEnd(result => {
+					recording.lifetime.add(this.localTranscription.onDidChangeModelStatus(result => {
 						if (this.recording !== recording) return;
+						if (result.state !== LocalTranscriptionModelState.Idle && result.state !== LocalTranscriptionModelState.Error) return;
 						recording.error = result.error;
 						if (!recording.stopping) this.finish(recording);
 					}));
-					await this.localTranscription.start({ model: backend.modelId });
+					await this.localTranscription.start({ cacheDir: await this.localModels.getCacheDirectory(), model: backend.modelId });
 					const handle: RecordingHandle = {
 						stop: async () => { if (recording.capture) { await recording.capture.pcm.flush(); await this.closeCapture(recording.capture); } await this.localTranscription.stop(); },
 						cancel: async () => { if (recording.capture) await this.closeCapture(recording.capture); await this.localTranscription.cancel(); },

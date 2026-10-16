@@ -1,4 +1,6 @@
-import { ILocalTranscriptionService } from '../../../platform/localTranscription/common/localTranscription.js';
+import { ICommandService } from '../../../platform/commands/common/commands.js';
+import { CommandService } from '../../services/commands/common/commandService.js';
+import { ILocalTranscriptionService, ILocalTranscriptionModelService } from '../../../platform/localTranscription/common/localTranscription.js';
 import { NullLocalTranscriptionService } from '../../services/localTranscription/browser/localTranscriptionService.js';
 import { IExtensionService } from '../../services/extensions/common/extensionService.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
@@ -19,6 +21,7 @@ import { Emitter, Event } from '../../../base/common/event.js';
 import { PCM_FLUSH_ACK } from '../../contrib/chat/browser/pcmCaptureWorklet.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
 import { NotificationService } from '../../services/notification/common/notificationService.js';
+import { ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
 
 export interface TestDictationSession { stop(): Promise<void>; cancel(): Promise<void>; }
 export interface TestDictationCapture {
@@ -95,7 +98,7 @@ export function installTestDictationAudio(target: Window & typeof globalThis): I
 	replace(target, 'AudioWorkletNode', Worklet);
 	replace(target.URL, 'createObjectURL', () => 'blob:dictation-test');
 	replace(target.URL, 'revokeObjectURL', () => { });
-	replace(target.navigator, 'mediaDevices', {
+	replace(target.navigator, 'mediaDevices', Object.assign(new (target.EventTarget ?? EventTarget)(), {
 		enumerateDevices: async () => [{ deviceId: 'mic-2', kind: 'audioinput', label: 'USB microphone' }, { deviceId: 'microphone-1', kind: 'audioinput', label: 'Test microphone' }],
 		getUserMedia: async (constraints: MediaStreamConstraints) => {
 			requests.push(constraints);
@@ -103,7 +106,7 @@ export function installTestDictationAudio(target: Window & typeof globalThis): I
 			tracks.push(track);
 			return { getTracks: () => [track] };
 		},
-	});
+	}));
 	return {
 		requests, tracks, contexts,
 		emit: samples => { for (const port of ports) port.onmessage?.call(port as unknown as MessagePort, { data: samples } as MessageEvent); },
@@ -114,10 +117,13 @@ export function installTestDictationAudio(target: Window & typeof globalThis): I
 
 /** Test profile storage is isolated from the browser's persistent user profile. */
 export function registerTestDictationOnboarding(services: InstantiationService, seen = true): void {
+	if (!services.has(ICommandService)) services.registerSingleton(ICommandService, () => services.invokeFunction(accessor => new CommandService(accessor)));
+	if (!services.has(ILogService)) services.registerInstance(ILogService, new NullLoggerService());
 	if (!services.has(IVoiceCodeTranscriptionBackendService)) services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
 	if (!services.has(IVoiceCodeTranscriptionClient)) services.registerSingleton(IVoiceCodeTranscriptionClient, () => services.createInstance(VoiceCodeTranscriptionClient));
 	if (!services.has(ITelemetryService)) services.registerInstance(ITelemetryService, NullTelemetryService);
 	if (!services.has(INotificationService)) services.registerSingleton(INotificationService, () => new NotificationService());
+	if (!services.has(ILocalTranscriptionModelService)) services.registerSingleton(ILocalTranscriptionModelService, () => new NullLocalTranscriptionService());
 	if (!services.has(ILocalTranscriptionService)) services.registerSingleton(ILocalTranscriptionService, () => new NullLocalTranscriptionService());
 	if (!services.has(IConfigurationService)) services.registerSingleton(IConfigurationService, () => new InMemoryConfigurationService());
 	if (!services.has(IContextKeyService)) services.registerSingleton(IContextKeyService, () => new ContextKeyService());

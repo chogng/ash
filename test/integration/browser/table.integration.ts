@@ -34,7 +34,7 @@ import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { DictationConfiguration } from '../../../src/ash/workbench/contrib/chat/common/constants.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
-import { ILocalTranscriptionService, LocalTranscriptionModelState, type ILocalTranscriptionModelSnapshot, type ILocalTranscriptionModelStatus } from '../../../src/ash/platform/localTranscription/common/localTranscription.js';
+import { ILocalTranscriptionModelService, DictationModelState, type ILocalTranscriptionModelSnapshot, type IDictationModelStatus } from '../../../src/ash/platform/localTranscription/common/localTranscription.js';
 import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
 import { lightColorTheme, darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
@@ -47,7 +47,7 @@ import { ChatInputEditor } from '../../../src/ash/workbench/contrib/chat/browser
 import { SlashCommandCatalog } from '../../../src/ash/workbench/contrib/chat/common/slashCommands.js';
 import { SkillSelectorCatalog } from '../../../src/ash/workbench/contrib/chat/common/skillSelectors.js';
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
-import { DictationSession } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/dictationSession.js';
+import { DictationInput } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/dictationInputController.js';
 import { setARIAContainer } from '../../../src/ash/base/browser/ui/aria/aria.js';
 import '../../../src/ash/workbench/contrib/chat/browser/widget/media/chat.css';
 import { ChatInputPart } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputPart.js';
@@ -87,10 +87,13 @@ declare global {
 			setSpeechLanguage(language: string): Promise<void>;
 			readonly speechFlags: readonly boolean[];
 			cancelSpeechCommand(): Promise<void>;
+			toggleDictationCommand(): Promise<void>;
+			setDictationButton(visible: boolean): Promise<void>;
 			startDictation(): Promise<void>;
 			codeDictation(): Promise<void>;
 			readonly codeText: string;
 			freshIntroduction(): void;
+			showIntroduction(): Promise<void>;
 			readonly microphone: string;
 			readonly language: string;
 			readonly starts: number;
@@ -150,39 +153,36 @@ let models: ILocalTranscriptionModelSnapshot[] = [
 	{ model: 'imported-model', available: true, sizeBytes: 1024 * 1024 },
 ];
 const operations: string[] = [];
-let finish: ((state: LocalTranscriptionModelState.Ready | LocalTranscriptionModelState.Cancelled) => void) | undefined;
-function publish(status: ILocalTranscriptionModelStatus): void {
+let finish: ((state: DictationModelState.Ready | DictationModelState.Cancelled) => void) | undefined;
+function publish(status: IDictationModelStatus): void {
 	models = models.map(model => model.model === DEFAULT_LOCAL_TRANSCRIPTION_MODEL ? { ...model, status } : model);
 	changed.fire();
 }
-const backend: ILocalTranscriptionService = {
+const backend: ILocalTranscriptionModelService = {
+	getCacheDirectory: async () => "C:/models",
 	_serviceBrand: undefined,
 	isSupported: true,
 	onDidChangeModels: changed.event,
-	onDidChangeModelStatus: Event.None,
-	onDidTranscribe: Event.None,
-	onDidEnd: Event.None,
-	getModelStatus: async model => models.find(value => value.model === model) ?? { model, available: false, sizeBytes: 0 },
+	getModel: async model => models.find(value => value.model === model) ?? { model, available: false, sizeBytes: 0 },
 	listModels: async () => models,
 	prepareModel: model => {
 		operations.push(`install:${model}`);
-		publish({ state: LocalTranscriptionModelState.Checking });
+		publish({ state: DictationModelState.Checking });
 		return { completed: new Promise(resolve => { finish = resolve; }), cancel: async () => backend.cancelModel(model), dispose() { }, [Symbol.dispose]() { } };
 	},
-	importModel: () => { throw new Error('Unused in this scenario'); },
+	importPackage: () => { throw new Error('Unused in this scenario'); },
 	cancelModel: async model => {
 		operations.push(`cancel:${model}`);
-		publish({ state: LocalTranscriptionModelState.Cancelled });
-		finish?.(LocalTranscriptionModelState.Cancelled);
+		publish({ state: DictationModelState.Cancelled });
+		finish?.(DictationModelState.Cancelled);
 	},
 	deleteModel: async model => {
 		operations.push(`uninstall:${model}`);
 		models = models.filter(value => value.model !== model);
 		changed.fire();
 	},
-	pushAudio: async () => { }, start: async () => { }, stop: async () => '', cancel: async () => { }, dispose() { }, [Symbol.dispose]() { },
 };
-services.registerInstance(ILocalTranscriptionService, backend);
+services.registerInstance(ILocalTranscriptionModelService, backend);
 const root = document.getElementById('models')!;
 root.style.width = '760px';
 const theme = resources.add(new TestThemeService(lightColorTheme));
@@ -241,7 +241,7 @@ codeEditor.setModel(codeModel);
 codeEditor.layout({ width: 600, height: 220 });
 services.get(IKeybindingService);
 
-const dictationSession = resources.add(services.createInstance(DictationSession, editor, preview, () => true, async () => { }, 'chat'));
+const dictationSession = resources.add(services.createInstance(DictationInput, editor, preview, () => true, async () => { }, 'chat'));
 const contextViews = services.get(IContextViewService);
 const notifications = resources.add(new NotificationService());
 const secondInput = resources.add(services.createInstance(ChatInputPart, document.body, {} as ChatInputDelegate, {} as IContextMenuService, contextViews, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, {
@@ -323,10 +323,13 @@ window.ashTableIntegration = {
 		const context = services.get(IContextKeyService).getContext();
 		return ['hasSpeechProvider', 'speechToTextInProgress', 'textToSpeechInProgress'].map(key => context.getValue(key) === true);
 	},
-	cancelSpeechCommand: () => services.get(ICommandService).executeCommand('workbench.action.chat.dictation.cancel'),
+	cancelSpeechCommand: () => services.get(ICommandService).executeCommand('workbench.action.chat.cancelSpeechToText'),
+	toggleDictationCommand: () => services.get(ICommandService).executeCommand('workbench.action.chat.toggleSpeechToText'),
+	setDictationButton: visible => configuration.updateValue('dictation.showButton', visible),
 	codeDictation: async () => { codeEditor.focus(); await services.get(ICommandService).executeCommand('workbench.action.editorDictation.start'); },
 	get codeText() { return codeModel.getValue(); },
 	freshIntroduction: () => services.get(IStorageService).remove('dictation.introductionSeen', StorageScope.PROFILE),
+	showIntroduction: () => services.get(ICommandService).executeCommand('workbench.action.chat.showSpeechToTextIntroduction'),
 	get microphone() { return configuration.getValue<string>(DictationConfiguration.inputDevice); },
 	get language() { return configuration.getValue<string>(DictationConfiguration.language); },
 	get starts() { return starts; },
@@ -342,11 +345,11 @@ window.ashTableIntegration = {
 	hideSecondInput: () => { secondInput.setVisible(false); secondInput.element.hidden = true; },
 	transcript: (text, final) => { if (extensionEmit) extensionEmit(text, final); else transcript?.(text, final); },
 	get draft() { return editor.value; },
-	progress: () => publish({ state: LocalTranscriptionModelState.Downloading, file: 'encoder.onnx', downloadedBytes: 1024 * 1024 }),
+	progress: () => publish({ state: DictationModelState.Downloading, file: 'encoder.onnx', downloadedBytes: 1024 * 1024 }),
 	finish: () => {
-		models = models.map(model => model.model === DEFAULT_LOCAL_TRANSCRIPTION_MODEL ? { ...model, available: true, sizeBytes: 2 * 1024 * 1024, status: { state: LocalTranscriptionModelState.Ready } } : model);
+		models = models.map(model => model.model === DEFAULT_LOCAL_TRANSCRIPTION_MODEL ? { ...model, available: true, sizeBytes: 2 * 1024 * 1024, status: { state: DictationModelState.Ready } } : model);
 		changed.fire();
-		finish?.(LocalTranscriptionModelState.Ready);
+		finish?.(DictationModelState.Ready);
 	},
 	theme: name => theme.setColorTheme(({ dark: darkColorTheme, light: lightColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme })[name]!),
 	dispose: () => resources.dispose(),

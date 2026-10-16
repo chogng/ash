@@ -1,192 +1,144 @@
-import { ILocalTranscriptionService } from '../../../../../platform/localTranscription/common/localTranscription.js';
-import { ISpeechService } from '../../../speech/common/speechService.js';
-import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import { readDictationPreparation } from './dictationInput.js';
-import { isCancellationError } from '../../../../../base/common/errors.js';
-import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
-import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
-import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
-import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
-import { generateUuid } from '../../../../../base/common/uuid.js';
-import { status } from '../../../../../base/browser/ui/aria/aria.js';
-import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../../base/common/event.js';
-import type { IAction } from '../../../../../base/common/actions.js';
-import { Lxicon } from '../../../../../base/common/lxicons.js';
-import { isModelPreparing, type ILocalTranscriptionModelSnapshot } from '../../../../../platform/localTranscription/common/localTranscription.js';
-import { localize } from '../../../../../nls.js';
-import { IDictationOnboardingService } from './dictationOnboarding.js';
-import { IChatSpeechToTextService, ChatSpeechToTextState, isDictationActiveOnSurface, type ChatDictationSurface } from './chatSpeechToTextService.js';
+import { DisposableStore, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
+import { canceled } from '../../../../../base/common/errors.js';
+import type { ICodeEditor } from '../../../../../editor/browser/editorBrowser.js';
+import { EditorOption } from '../../../../../editor/common/config/editorOptions.js';
+import { Selection } from '../../../../../editor/common/core/selection.js';
+import type { ILogService } from '../../../../../platform/log/common/log.js';
+import { ChatSpeechToTextState, type ChatDictationSurface, type IChatSpeechToTextService } from './chatSpeechToTextService.js';
 
-/** The target editor owns text and undo history; interim recognition stays outside its model. */
-interface DictationTarget { insertText(text: string): void; focus(): void; }
-
-export class DictationSession extends Disposable {
-	private active = false;
-	private readonly recordingToken = this._register(new MutableDisposable<CancellationTokenSource>());
-	private readonly recordingEvents = this._register(new MutableDisposable());
-	private preparing = false;
-	private committedText = '';
-	private readonly ended = this._register(new Emitter<string | undefined>());
-	public readonly onDidEnd = this.ended.event;
-	public getAccessibleContent(): string { return this.committedText + this.preview.textContent; }
-	public get isActive(): boolean { return this.active && isDictationActiveOnSurface(this.service, this.surface); }
-	public get isStarting(): boolean { return this.active && this.service.isBusy && this.service.state === ChatSpeechToTextState.Idle; }
-	private get isAvailable(): boolean { return this.service.isConfigured; }
-	public readonly action: IAction;
-
-	constructor(
-		private readonly editor: DictationTarget,
-		private readonly preview: HTMLElement,
-		private readonly isVisible: () => boolean,
-		private readonly showPreparation: (snapshot: ILocalTranscriptionModelSnapshot) => Promise<void>,
-		private readonly surface: ChatDictationSurface,
-		@IChatSpeechToTextService private readonly service: IChatSpeechToTextService,
-		@IDictationOnboardingService private readonly onboarding: IDictationOnboardingService,
-		@ILocalTranscriptionService private readonly localTranscription: ILocalTranscriptionService,
-		@ISpeechService private readonly speechProviders: ISpeechService,
-		@IConfigurationService private readonly configuration: IConfigurationService,
-	) {
-		super();
-		const session = this;
-		this.action = {
-			id: 'ash.chat.input.mic',
-			get label() { return localize('chat.input.dictate', 'Dictate message'); },
-			get tooltip() {
-				if (session.active) { return localize('chat.input.dictationStop', 'Stop dictation'); }
-				return session.isAvailable ? localize('chat.input.dictate', 'Dictate message') : localize('chat.input.dictationUnavailable', 'Dictation is unavailable');
-			},
-			icon: Lxicon.mic,
-			get enabled() { return session.isAvailable && (!service.isBusy || session.active) && !session.isStarting && service.state !== ChatSpeechToTextState.Transcribing; },
-			get checked() { return session.active && service.state === ChatSpeechToTextState.Recording; },
-			run: () => this.toggle(),
-		};
-		const clearPreview = (): void => { preview.textContent = ''; preview.hidden = true; };
-		this._register(service.onDidChangeState(state => {
-			if (state === ChatSpeechToTextState.Idle && !service.isBusy) {
-				this.finish();
-				clearPreview();
-			}
-		}));
-	}
-
-	private async toggle(): Promise<void> {
-		if (this.preparing) { return; }
-		try {
-			if (this.active) { await this.stop(); return; }
-			if (!this.isAvailable) { throw new Error(localize('chat.input.dictationUnavailable', 'Dictation is unavailable')); }
-			if (this.service.isBusy) { return; }
-			this.preparing = true;
-			const preparation = await readDictationPreparation(this.configuration, this.localTranscription, this.speechProviders);
-			if (this.isDisposed || !this.isVisible() || this.service.isBusy) { return; }
-			if (preparation && (!preparation.available || isModelPreparing(preparation.status))) {
-				await this.showPreparation(preparation);
-				return;
-			}
-			if (!this.onboarding.showIfNeeded()) { await this.start(); }
-		} catch (error) {
-			if (!this.isDisposed && !isCancellationError(error)) { this.ended.fire(String(error)); }
-		} finally {
-			this.preparing = false;
-		}
-	}
-
-	public async start(): Promise<void> {
-		if (this.service.isBusy) { return; }
-		this.active = true;
-		this.committedText = '';
-		this.recordingEvents.clear();
-		const owner = new CancellationTokenSource();
-		this.recordingToken.value = owner;
-		try {
-			const events = new DisposableStore();
-			this.recordingEvents.value = events;
-			events.add(owner.token.onCancellationRequested(() => {
-				if (this.recordingToken.value === owner) void this.service.cancel().catch(() => undefined);
-			}));
-			events.add(this.service.onDidUpdateTranscript(event => {
-				if (!this.active || this.recordingToken.value !== owner || !this.isVisible()) return;
-				const phrase = event.finalizedText.slice(this.committedText.length);
-				this.committedText = event.finalizedText;
-				this.preview.textContent = this.service.showTranscriptWhileDictating ? event.text.slice(event.finalizedText.length) : '';
-				this.preview.hidden = !this.preview.textContent;
-				if (phrase) { this.editor.insertText(phrase); this.editor.focus(); status(localize('chat.input.dictationInserted', 'Dictation added to message')); }
-			}));
-			await this.service.start(this.preview.ownerDocument.defaultView as Window & typeof globalThis, this.surface);
-		} catch (error) {
-			this.active = false;
-			throw error;
-		}
-	}
-
-	private finish(error?: string): void {
-		if (!this.active) return;
-		this.active = false;
-		this.preview.textContent = '';
-		this.preview.hidden = true;
-		this.recordingEvents.clear();
-		this.ended.fire(error);
-	}
-
-	public async stop(): Promise<void> {
-		if (this.active) { await this.service.stopAndTranscribe(); }
-	}
-
-	public async cancel(): Promise<void> {
-		if (!this.active) { return; }
-		this.active = false;
-		this.preview.textContent = '';
-		this.preview.hidden = true;
-		this.recordingToken.value?.cancel();
-		await this.service.cancel();
-		this.recordingEvents.clear(); this.recordingToken.clear();
-	}
-
-	protected override disposeCore(): void {
-		void this.cancel().catch(() => undefined);
-		super.disposeCore();
-	}
+interface EditorRecording {
+	readonly service: IChatSpeechToTextService;
+	readonly editor: ICodeEditor;
+	readonly lifetime: DisposableStore;
+	readonly surface: ChatDictationSurface;
+	readonly wholeDraft: boolean;
+	starting: Promise<void>;
+	committed: string;
+	cancelled: boolean;
+	stopping?: Promise<void>;
 }
 
-/** Shared help follows the focused capture target, while its binding remains the transcript owner. */
-export class DictationAccessibilityHelp extends Disposable {
-	constructor(
-		session: DictationSession,
-		target: HTMLElement,
-		surface: HTMLElement,
-		@IContextKeyService contextKeys: IContextKeyService,
-		@IAccessibleViewService accessibleView: IAccessibleViewService,
-	) {
-		super();
-		const focused = contextKeys.createKey<boolean>('dictationTargetFocused', false);
-		focused.set(true);
-		this._register(toDisposable(() => focused.reset()));
-		const id = generateUuid();
-		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
-			this._register(AccessibleViewRegistry.register({
-				type,
-				priority: 115,
-				name: `dictation-target-${id}-${type}`,
-				when: ContextKeyExpr.has('dictationTargetFocused'),
-				getProvider: () => {
-					const focused = target.ownerDocument.activeElement as HTMLElement;
-					if (!session.isActive || !target.contains(focused)) { return undefined; }
-					return new AccessibleContentProvider(
-						AccessibleViewProviderId.Dictation,
-						{ type },
-						() => type === AccessibleViewType.Help
-							? localize('dictation.targetHelp', 'Dictation is active. Completed phrases are inserted at the current editor selection or into terminal input. Terminal dictation never presses Enter. Use Tab to reach Stop and Cancel. Escape cancels recording and discards unfinished text. Use <keybinding:editor.action.accessibleView> to read the transcript.')
-							: session.getAccessibleContent(),
-						() => focused.focus(),
-						AccessibilityVerbositySettingId.Dictation,
-					);
-				},
-			}));
+interface AccuracySample { service: IChatSpeechToTextService; text: string; backend: string; surface: ChatDictationSurface; disposal: IDisposable; }
+const samples = new WeakMap<ICodeEditor, AccuracySample>();
+const editorChanged = new Emitter<void>();
+export const onDidChangeDictationEditor = editorChanged.event;
+let recording: EditorRecording | undefined;
+let releasing = Promise.resolve();
+let generation = 0;
+let pending: { editor: ICodeEditor; promise: Promise<void>; } | undefined;
+let publishedEditor: ICodeEditor | undefined;
+
+function publishEditor(): void {
+	const editor = activeDictationEditor();
+	if (editor === publishedEditor) return;
+	publishedEditor = editor;
+	editorChanged.fire();
+}
+
+export function isDictating(): boolean { return !!recording || !!pending; }
+export function activeDictationEditor(): ICodeEditor | undefined { return recording?.editor ?? pending?.editor; }
+export function isDictationActiveForEditor(editor: ICodeEditor): boolean { return activeDictationEditor() === editor; }
+
+/** A replacement waits for the old inference resource before binding a different editor. */
+export function startDictation(service: IChatSpeechToTextService, editor: ICodeEditor, window: Window & typeof globalThis, logService: ILogService, surface: ChatDictationSurface = 'chat'): Promise<void> {
+	if (pending?.editor === editor) return pending.promise;
+	const promise = bindEditor(service, editor, window, logService, surface);
+	const request = { editor, promise };
+	pending = request;
+	publishEditor();
+	const settled = (): void => { if (pending === request) { pending = undefined; publishEditor(); } };
+	void promise.then(settled, settled);
+	return promise;
+}
+
+async function bindEditor(service: IChatSpeechToTextService, editor: ICodeEditor, window: Window & typeof globalThis, logService: ILogService, surface: ChatDictationSurface): Promise<void> {
+	if (recording?.editor === editor) return recording.starting;
+	const model = editor.getModel();
+	cancelDictation();
+	const request = ++generation;
+	await releasing;
+	if (request !== generation) throw canceled();
+	if (!model || editor.getModel() !== model) throw canceled();
+	if (editor.getOption(EditorOption.readOnly)) return;
+	settleSample(editor, false);
+	const lifetime = new DisposableStore();
+	const current: EditorRecording = { service, editor, lifetime, surface, wholeDraft: editor.getModel()!.getValue().length === 0, starting: Promise.resolve(), committed: '', cancelled: false };
+	recording = current;
+	const clear = (): void => {
+		if (recording !== current) return;
+		recording = undefined;
+		lifetime.dispose();
+		if (!current.cancelled && current.wholeDraft && current.committed) {
+			samples.set(editor, { service, text: current.committed, backend: service.currentBackend, surface, disposal: editor.onDidDispose(() => settleSample(editor, false)) });
 		}
-		const hint = accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.Dictation);
-		surface.setAttribute('role', 'region');
-		surface.setAttribute('aria-label', localize('dictation.controls', 'Dictation controls'));
-		if (hint) { surface.setAttribute('aria-description', hint); }
-	}
+		publishEditor();
+	};
+	lifetime.add(service.onDidUpdateTranscript(event => {
+		if (recording !== current || current.cancelled || !event.finalizedText.startsWith(current.committed)) return;
+		const text = event.finalizedText.slice(current.committed.length);
+		current.committed = event.finalizedText;
+		const selection = editor.getSelection();
+		if (!text || !selection || editor.getOption(EditorOption.readOnly)) return;
+		const model = editor.getModel();
+		if (!model) return;
+		const before = model.getValue().slice(0, model.getOffsetAt(selection.getStartPosition()));
+		const separator = /[A-Za-z0-9]$/u.test(before) && /^[A-Za-z0-9]/u.test(text) ? ' ' : '';
+		editor.pushUndoStop();
+		editor.executeEdits('dictation', [{ range: selection, text: separator + text }], inverse => inverse.map(edit => Selection.fromPositions(edit.range.getEndPosition())));
+		editor.pushUndoStop();
+		editor.focus();
+	}));
+	lifetime.add(editor.onWillChangeModel(() => cancelDictation()));
+	lifetime.add(editor.onDidDispose(() => cancelDictation()));
+	lifetime.add(service.onDidChangeState(() => { if (!service.isBusy) clear(); }));
+	const timeout = window.setTimeout(() => { if (recording === current) void stopDictation().catch(error => logService.error(error)); }, 20 * 60 * 1000);
+	lifetime.add(toDisposable(() => window.clearTimeout(timeout)));
+	current.starting = service.start(window, surface);
+	publishEditor();
+	try {
+		await current.starting;
+		if (current.cancelled) throw canceled();
+		if (!service.isBusy || service.state === ChatSpeechToTextState.Idle) clear();
+	} catch (error) { clear(); throw error; }
+}
+
+export async function stopDictation(): Promise<void> {
+	const current = recording;
+	if (!current && pending) { await pending.promise; return stopDictation(); }
+	if (!current) return releasing;
+	current.stopping ??= (async () => {
+		await current.starting;
+		if (!current.cancelled) await current.service.stopAndTranscribe();
+	})();
+	return current.stopping;
+}
+
+export async function stopDictationForEditor(editor: ICodeEditor): Promise<void> {
+	if (pending?.editor === editor) await pending.promise;
+	if (recording?.editor === editor) await stopDictation();
+	else await releasing;
+}
+
+/** Retire listeners before cancelling so a late result cannot edit a replacement model. */
+export function cancelDictation(): void {
+	generation++;
+	pending = undefined;
+	const current = recording;
+	if (!current) { publishEditor(); return; }
+	current.cancelled = true;
+	recording = undefined;
+	current.lifetime.dispose();
+	releasing = Promise.allSettled([current.starting, current.service.cancel()]).then(() => undefined);
+	publishEditor();
+}
+
+export function notifyDictationSubmitted(editor: ICodeEditor): void { settleSample(editor, true); }
+
+function settleSample(editor: ICodeEditor, submitted: boolean): void {
+	const sample = samples.get(editor);
+	if (!sample) return;
+	samples.delete(editor);
+	sample.disposal.dispose();
+	sample.service.logDictationAccuracy({ dictatedText: sample.text, submittedText: editor.getModel()?.getValue() ?? '', backend: sample.backend, surface: sample.surface, submitted });
 }

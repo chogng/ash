@@ -1,13 +1,15 @@
+import { Event } from '../../../../base/common/event.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { ChatInputEditor } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputEditor.js';
-import { DictationSession } from '../../../../workbench/contrib/chat/browser/speechToText/dictationSession.js';
+import { DictationInput } from '../../../../workbench/contrib/chat/browser/speechToText/dictationInputController.js';
+import { notifyDictationSubmitted } from '../../../../workbench/contrib/chat/browser/speechToText/dictationSession.js';
 import { IDictationOnboardingService } from '../../../../workbench/contrib/chat/browser/speechToText/dictationOnboarding.js';
 import { SkillSelectorCatalog } from '../../../../workbench/contrib/chat/common/skillSelectors.js';
 import { SlashCommandCatalog } from '../../../../workbench/contrib/chat/common/slashCommands.js';
@@ -25,7 +27,8 @@ export class ChatGPTInputWidget extends Disposable {
 	private readonly modelPicker: ModelPickerWidget;
 	private readonly sendButton: HTMLButtonElement;
 	private readonly dictationButton: HTMLButtonElement;
-	private readonly dictation: DictationSession;
+	private readonly dictation: DictationInput;
+	private readonly dictationHost = this._register(new MutableDisposable());
 	private readonly attachButton: HTMLButtonElement;
 	private readonly attachmentList: HTMLElement;
 	private readonly attachmentRows = new Map<string, { element: HTMLElement; name: HTMLElement; status: HTMLElement; error: HTMLElement; retry: HTMLButtonElement; remove: HTMLButtonElement; }>();
@@ -115,15 +118,15 @@ export class ChatGPTInputWidget extends Disposable {
 		preview.setAttribute('aria-hidden', 'true');
 		preview.hidden = true;
 		input.append(preview);
-		this.dictation = this._register(instantiation.createInstance(DictationSession, this.editor, preview, () => this.visible,
+		this.dictation = this._register(instantiation.createInstance(DictationInput, this.editor, preview, () => this.visible,
 			async () => { await preferences.openSettings({ section: 'dictation' }); }, 'chat'));
-		this._register(onboarding.registerHost({ container, focusTarget: this.element, isVisible: () => this.visible }));
+		this.updateDictationHost();
 		this.dictationButton = h(container.ownerDocument, 'button');
 		this.dictationButton.className = 'ash-chatgpt-dictation ash-chatgpt-round-button';
 		this.dictationButton.type = 'button';
 		appendIcon(Lxicon.mic, this.dictationButton);
 		this._register(addDisposableListener(this.dictationButton, 'click', () => { void this.dictation.action.run(); }));
-		this._register(speech.onDidChangeState(() => this.renderDictation()));
+		this._register(Event.any(speech.onDidChangeState, Event.map(this.dictation.onDidChange, () => speech.state))(() => this.renderDictation()));
 		this._register(speech.onDidChangePreparingModel(() => this.renderDictation()));
 		this._register(this.dictation.onDidEnd(error => {
 			this.renderDictation();
@@ -229,6 +232,7 @@ export class ChatGPTInputWidget extends Disposable {
 
 	private renderDictation(): void {
 		const state = this.chat.state.get();
+		this.dictationButton.hidden = !this.dictation.showButton;
 		this.dictationButton.disabled = !state.connected || state.busy || state.sending || state.voice !== 'idle' || !this.dictation.action.enabled;
 		const label = this.dictation.action.tooltip ?? this.dictation.action.label;
 		this.dictationButton.setAttribute('aria-label', label);
@@ -256,20 +260,26 @@ export class ChatGPTInputWidget extends Disposable {
 		try {
 			// Stop commits the final transcript before sending; navigation retires this submission.
 			await this.dictation.stop();
+			notifyDictationSubmitted(this.editor.codeEditor);
 			if (!this.isDisposed && this.visible && generation === this.inputGeneration) { await this.chat.send(); }
 		} catch (error) { this.reportDictationError(error); }
 	}
 
 	setVisible(visible: boolean): void {
 		this.visible = visible;
+		this.updateDictationHost();
 		if (visible) { this.editor.layout(); }
 		else {
 			this.modelPicker.hide();
 			this.inputGeneration++;
 			void this.cancelDictation();
 			void this.chat.stopVoice();
-			this.onboarding.hide(this.container);
 		}
+	}
+
+	private updateDictationHost(): void {
+		if (!this.visible) this.dictationHost.clear();
+		else if (!this.dictationHost.value) this.dictationHost.value = this.onboarding.registerHost({ container: this.container, focusRoot: this.element, focus: () => this.editor.focus() });
 	}
 
 	protected override disposeCore(): void {

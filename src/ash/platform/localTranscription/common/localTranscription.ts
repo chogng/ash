@@ -12,9 +12,10 @@ export const ILocalTranscriptionBackendService = createDecorator<ILocalTranscrip
 export interface ILocalTranscriptionResult {
 	readonly text: string;
 	readonly isFinal: boolean;
+	readonly finalizedText?: string;
 }
 
-export enum LocalTranscriptionModelState {
+export enum DictationModelState {
 	Checking = 'checking',
 	Downloading = 'downloading',
 	Loading = 'loading',
@@ -23,51 +24,66 @@ export enum LocalTranscriptionModelState {
 	Error = 'error',
 }
 
-export type ILocalTranscriptionModelStatus =
-	| { readonly state: LocalTranscriptionModelState.Checking | LocalTranscriptionModelState.Loading | LocalTranscriptionModelState.Ready | LocalTranscriptionModelState.Cancelled; }
-	| { readonly state: LocalTranscriptionModelState.Downloading; readonly file: string; readonly downloadedBytes: number; }
-	| { readonly state: LocalTranscriptionModelState.Error; readonly error: string; };
+export type IDictationModelStatus =
+	| { readonly state: DictationModelState.Checking | DictationModelState.Loading | DictationModelState.Ready | DictationModelState.Cancelled; }
+	| { readonly state: DictationModelState.Downloading; readonly file: string; readonly downloadedBytes: number; }
+	| { readonly state: DictationModelState.Error; readonly error: string; };
 
 export interface ILocalTranscriptionModelSnapshot {
 	readonly model: string;
 	readonly available: boolean;
 	readonly sizeBytes: number;
-	readonly status?: ILocalTranscriptionModelStatus;
+	readonly status?: IDictationModelStatus;
 }
 
-export function isModelPreparing(status: ILocalTranscriptionModelStatus | undefined): boolean {
-	return status?.state === LocalTranscriptionModelState.Checking || status?.state === LocalTranscriptionModelState.Downloading || status?.state === LocalTranscriptionModelState.Loading;
+export function isModelPreparing(status: IDictationModelStatus | undefined): boolean {
+	return status?.state === DictationModelState.Checking || status?.state === DictationModelState.Downloading || status?.state === DictationModelState.Loading;
 }
 
 /** Disposing detaches delivery. Only cancel explicitly stops the process-owned preparation. */
 export interface ILocalTranscriptionModelOperation extends IDisposable {
-	readonly completed: Promise<LocalTranscriptionModelState.Ready | LocalTranscriptionModelState.Cancelled>;
+	readonly completed: Promise<DictationModelState.Ready | DictationModelState.Cancelled>;
 	cancel(): Promise<void>;
 }
 
 export type LocalTranscriptionModelOperation = { readonly type: 'prepare'; } | { readonly type: 'import'; readonly sourceDirectory: string; };
 
-/** Renderer audio feeds the shared Rust backend, which owns model preparation and inference. */
-export interface ILocalTranscriptionService extends IDisposable {
+/** Ash model inventory and preparation; inference uses the standard transcription contract below. */
+export const ILocalTranscriptionModelService = createDecorator<ILocalTranscriptionModelService>('localTranscriptionModelService');
+export interface ILocalTranscriptionModelService {
 	readonly _serviceBrand: undefined;
 	readonly isSupported: boolean;
-	readonly onDidTranscribe: Event<ILocalTranscriptionResult>;
-	readonly onDidEnd: Event<{ readonly error?: string; }>;
-	readonly onDidChangeModelStatus: Event<{ readonly model: string; readonly status: ILocalTranscriptionModelStatus; }>;
 	readonly onDidChangeModels: Event<void>;
-	/** Checks installed files without loading the model or starting capture. */
-	getModelStatus(model: string): Promise<ILocalTranscriptionModelSnapshot>;
+	getCacheDirectory(): Promise<string>;
+	getModel(model: string): Promise<ILocalTranscriptionModelSnapshot>;
 	listModels(): Promise<readonly ILocalTranscriptionModelSnapshot[]>;
 	cancelModel(model: string): Promise<void>;
 	deleteModel(model: string): Promise<void>;
-	prepareModel(model: string, onProgress: (status: ILocalTranscriptionModelStatus) => void): ILocalTranscriptionModelOperation;
-	importModel(options: { readonly model: string; readonly sourcePath: string; }, onProgress: (status: ILocalTranscriptionModelStatus) => void): ILocalTranscriptionModelOperation;
-	start(options: { readonly model: string; }): Promise<void>;
-	/** Append renderer-captured PCM16 mono 16 kHz audio. */
+	prepareModel(model: string, onProgress: (status: IDictationModelStatus) => void): ILocalTranscriptionModelOperation;
+	importPackage(options: { readonly model: string; readonly sourcePath: string; }, onProgress: (status: IDictationModelStatus) => void): ILocalTranscriptionModelOperation;
+}
+export interface ILocalTranscriptionModelImportResult { readonly model: string; readonly version: number; }
+export const enum LocalTranscriptionModelState {
+	Idle = 'idle', Downloading = 'downloading', Loading = 'loading', Ready = 'ready', Error = 'error',
+}
+export interface ILocalTranscriptionModelStatus {
+	readonly state: LocalTranscriptionModelState;
+	readonly progress?: number;
+	readonly downloaded?: boolean;
+	readonly error?: string;
+	readonly errorCode?: string;
+}
+/** Renderer PCM is transcribed by Ash's Rust backend. Foundry-specific runtime options are unsupported. */
+export interface ILocalTranscriptionService {
+	readonly _serviceBrand: undefined;
+	readonly isSupported: boolean;
+	readonly onDidChangeModelStatus: Event<ILocalTranscriptionModelStatus>;
+	readonly onDidTranscribe: Event<ILocalTranscriptionResult>;
+	getModelStatus(): Promise<ILocalTranscriptionModelStatus>;
+	importModel(options: { readonly sourcePath: string; readonly cacheDir: string; }): Promise<ILocalTranscriptionModelImportResult>;
+	start(options: { readonly cacheDir: string; readonly model?: string; readonly language?: string; readonly proxyUrl?: string; readonly noProxy?: string; readonly proxyStrictSSL?: boolean; readonly proxyAuthorization?: string; readonly runtimeUrlTemplate?: string; readonly runtimeVersion?: string; }): Promise<void>;
 	pushAudio(chunk: VSBuffer): Promise<void>;
-	/** Waits for capture to stop and returns the final transcript. */
 	stop(): Promise<string>;
-	/** Stops backend work and discards subsequent transcript delivery. */
 	cancel(): Promise<void>;
 }
 
@@ -77,9 +93,10 @@ export interface ILocalTranscriptionBackendService {
 	readonly onDidDisconnect: Event<void>;
 	readonly onDidTranscribe: Event<ILocalTranscriptionResult & { readonly resourceId: string; }>;
 	readonly onDidEnd: Event<{ readonly resourceId: string; readonly error?: string; }>;
-	readonly onDidChangeModelStatus: Event<{ readonly resourceId: string; readonly model: string; readonly status: ILocalTranscriptionModelStatus; }>;
+	readonly onDidChangeModelStatus: Event<{ readonly resourceId: string; readonly model: string; readonly status: IDictationModelStatus; }>;
 	readonly onDidChangeModels: Event<void>;
 	getModelStatus(model: string): Promise<ILocalTranscriptionModelSnapshot>;
+	getModelCacheInfo(): Promise<{ readonly directory: string; readonly version: number; }>;
 	listModels(): Promise<readonly ILocalTranscriptionModelSnapshot[]>;
 	cancelModel(model: string): Promise<void>;
 	deleteModel(model: string): Promise<void>;

@@ -22,7 +22,7 @@ test('Cowork shares Chat input operations with model settings on the right and n
 			const card = element.querySelector('.ash-chat-input-container')!.getBoundingClientRect();
 			const model = element.querySelector('[data-action-id="ash.chat.input.model"]')!.getBoundingClientRect();
 			const attach = element.querySelector('[data-action-id="ash.chat.input.attach"]')!.getBoundingClientRect();
-			const mic = element.querySelector('[data-action-id="ash.chat.input.mic"]')!.getBoundingClientRect();
+			const mic = element.querySelector('[data-action-id="workbench.action.chat.toggleSpeechToText"]')!.getBoundingClientRect();
 			const voice = element.querySelector('[data-action-id="ash.chat.input.voice"]')!.getBoundingClientRect();
 			return {
 				modelInsideCard: model.top >= card.top && model.bottom <= card.bottom,

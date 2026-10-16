@@ -3,7 +3,7 @@ import { h } from '../../../../base/browser/dom.js';
 import { ProgressBar } from '../../../../base/browser/ui/progressbar/progressbar.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import { isModelPreparing, LocalTranscriptionModelState, type ILocalTranscriptionModelSnapshot, type ILocalTranscriptionModelStatus } from '../../../../platform/localTranscription/common/localTranscription.js';
+import { isModelPreparing, DictationModelState, type ILocalTranscriptionModelSnapshot, type IDictationModelStatus } from '../../../../platform/localTranscription/common/localTranscription.js';
 
 /** The same backend snapshot is presented by settings and the composer. No view owns the task. */
 export class LocalTranscriptionModelStatus extends Disposable {
@@ -36,13 +36,13 @@ export class LocalTranscriptionModelStatus extends Disposable {
 	}
 }
 
-export function modelProgressText(status: ILocalTranscriptionModelStatus): string {
+export function modelProgressText(status: IDictationModelStatus): string {
 	switch (status.state) {
-		case LocalTranscriptionModelState.Checking: return localize('dictation.model.checking', 'Checking model files…');
-		case LocalTranscriptionModelState.Downloading: return localize('dictation.model.downloading', 'Downloading {0}: {1} MiB', status.file, (status.downloadedBytes / (1024 * 1024)).toFixed(1));
-		case LocalTranscriptionModelState.Loading: return localize('dictation.model.loading', 'Loading model…');
-		case LocalTranscriptionModelState.Ready: return localize('dictation.model.ready', 'Model verified and ready to use.');
-		case LocalTranscriptionModelState.Cancelled: return localize('dictation.model.cancelled', 'Model preparation cancelled.');
-		case LocalTranscriptionModelState.Error: return localize('dictation.model.failed', 'Model preparation failed: {0}', status.error);
+		case DictationModelState.Checking: return localize('dictation.model.checking', 'Checking model files…');
+		case DictationModelState.Downloading: return localize('dictation.model.downloading', 'Downloading {0}: {1} MiB', status.file, (status.downloadedBytes / (1024 * 1024)).toFixed(1));
+		case DictationModelState.Loading: return localize('dictation.model.loading', 'Loading model…');
+		case DictationModelState.Ready: return localize('dictation.model.ready', 'Model verified and ready to use.');
+		case DictationModelState.Cancelled: return localize('dictation.model.cancelled', 'Model preparation cancelled.');
+		case DictationModelState.Error: return localize('dictation.model.failed', 'Model preparation failed: {0}', status.error);
 	}
 }

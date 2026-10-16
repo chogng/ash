@@ -1,5 +1,6 @@
 {
   "ash": {
+    "dictation.resetIntroduction": "听写：重置入门引导",
     "dictation.cloudModel.title": "转写模型",
     "dictation.cloudModel.description": "转写模型随所选服务切换。语音输入独立于聊天模型。",
     "dictation.subscription.title": "Codex 订阅听写",
@@ -91,14 +92,28 @@
     "dictation.backend.cloud": "云端",
     "dictation.cloudProvider.title": "云端听写供应商",
     "dictation.cloudProvider.description": "选择云端语音转写供应商，并配置对应的 API 密钥。",
-    "dictation.localModel.title": "本地听写模型",
-    "dictation.localModel.description": "Ash dictation-models 目录中的模型包 ID。",
     "dictation.invalidTurn": "语音转写轮次标识无效",
     "dictation.sessionUnavailable": "语音转写会话尚未初始化",
     "dictation.turnStopping": "正在结束语音转写轮次",
     "dictation.audioBackpressure": "音频为空或转写处理速度不足，请重新录音",
     "dictation.turnInactive": "语音转写轮次未在进行中",
     "dictation.showTranscript.title": "显示听写临时文本",
-    "dictation.showTranscript.description": "在语音识别过程中显示实时转写文本。"
+    "dictation.showTranscript.description": "在语音识别过程中显示实时转写文本。",
+    "dictation.enabled.title": "启用听写",
+    "dictation.enabled.description": "通过语音在消息、编辑器和终端中输入文字。",
+    "dictation.showButton.title": "显示麦克风按钮",
+    "dictation.showButton.description": "在消息输入框中显示听写按钮。隐藏后仍可使用听写命令。",
+    "dictation.configureShortcut": "配置快捷键{0}",
+    "dictation.disable": "禁用听写",
+    "dictation.selectMicrophone": "选择麦克风",
+    "dictation.openSettings": "听写设置",
+    "dictation.hold": "听写：按住录音",
+    "dictation.defaultMicrophone": "系统默认",
+    "dictation.managedCache": "本地转写使用受管理的缓存目录：{0}",
+    "dictation.importCancelled": "模型导入已取消",
+    "dictation.unsupportedLocalOptions": "此本地转写后端不支持以下选项：{0}",
+    "dictation.modelMigrationConflict": "听写模型设置存在冲突。请将需要的值保留在 dictation.model 中，并移除 dictation.localModel。",
+    "dictation.model.title": "本地听写模型",
+    "dictation.model.description": "Ash dictation-models 目录中的模型包 ID。"
   }
 }

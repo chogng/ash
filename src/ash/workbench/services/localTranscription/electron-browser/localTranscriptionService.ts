@@ -1,11 +1,12 @@
 import { Emitter } from '../../../../base/common/event.js';
 import { DeferredPromise } from '../../../../base/common/async.js';
+import { canceled } from '../../../../base/common/errors.js';
 import { Disposable, DisposableMap } from '../../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import type { VSBuffer } from '../../../../base/common/buffer.js';
 import type { AppServerProtocolClient } from '../../../../platform/agentHost/browser/appServerProtocolClient.js';
 import { createAppServerLocalTranscriptionBackendService } from '../../../../platform/localTranscription/browser/appServerLocalTranscriptionBackendService.js';
-import { ILocalTranscriptionBackendService, ILocalTranscriptionService, LocalTranscriptionModelState, type ILocalTranscriptionResult, type ILocalTranscriptionModelStatus, type ILocalTranscriptionModelOperation, type LocalTranscriptionModelOperation } from '../../../../platform/localTranscription/common/localTranscription.js';
+import { ILocalTranscriptionBackendService, ILocalTranscriptionService, ILocalTranscriptionModelService, DEFAULT_LOCAL_TRANSCRIPTION_MODEL, LocalTranscriptionModelState, DictationModelState, type ILocalTranscriptionModelStatus, type ILocalTranscriptionResult, type IDictationModelStatus, type ILocalTranscriptionModelOperation, type LocalTranscriptionModelOperation } from '../../../../platform/localTranscription/common/localTranscription.js';
 import type { InstantiationService } from '../../../../platform/instantiation/common/instantiationService.js';
 import type { RendererHostCapabilities } from '../../../../platform/renderer/common/rendererHost.js';
 import { localize } from '../../../../nls.js';
@@ -22,23 +23,23 @@ interface ActiveTranscription {
 	stopping?: Promise<string>;
 }
 
-export class LocalTranscriptionService extends Disposable implements ILocalTranscriptionService {
+export class LocalTranscriptionService extends Disposable implements ILocalTranscriptionService, ILocalTranscriptionModelService {
 	public readonly _serviceBrand = undefined;
 	public readonly isSupported = true;
 	private readonly transcribed = this._register(new Emitter<ILocalTranscriptionResult>());
 	public readonly onDidTranscribe = this.transcribed.event;
-	private readonly ended = this._register(new Emitter<{ readonly error?: string; }>());
-	public readonly onDidEnd = this.ended.event;
 	private active: ActiveTranscription | undefined;
-	private readonly modelStatus = this._register(new Emitter<{ readonly model: string; readonly status: ILocalTranscriptionModelStatus; }>());
+	private readonly modelStatus = this._register(new Emitter<ILocalTranscriptionModelStatus>());
 	public readonly onDidChangeModelStatus = this.modelStatus.event;
+	private status: ILocalTranscriptionModelStatus = { state: LocalTranscriptionModelState.Idle };
 	private readonly models = this._register(new DisposableMap<string, ModelOperation>());
 
 	constructor(@ILocalTranscriptionBackendService private readonly backend: ILocalTranscriptionBackendService) {
 		super();
 		this._register(backend.onDidChangeModelStatus(result => {
 			if (result.resourceId === this.active?.resourceId && !this.active.discard && !this.active.hasEnded) {
-				this.modelStatus.fire({ model: result.model, status: result.status });
+				const stage = result.status;
+				this.setStatus(transcriptionStatus(stage));
 			}
 		}));
 		this._register(backend.onDidTranscribe(result => {
@@ -60,7 +61,7 @@ export class LocalTranscriptionService extends Disposable implements ILocalTrans
 		this._register(backend.onDidDisconnect(() => {
 			if (!this.active) { return; }
 			this.active = undefined;
-			this.ended.fire({ error: localize('dictation.connectionLost', 'Dictation connection lost') });
+			this.setStatus({ state: LocalTranscriptionModelState.Error, error: localize('dictation.connectionLost', 'Dictation connection lost') });
 		}));
 	}
 
@@ -68,20 +69,20 @@ export class LocalTranscriptionService extends Disposable implements ILocalTrans
 	public listModels() { this.assertNotDisposed(); return this.backend.listModels(); }
 	public cancelModel(model: string) { this.assertNotDisposed(); return this.backend.cancelModel(model); }
 	public deleteModel(model: string) { this.assertNotDisposed(); return this.backend.deleteModel(model); }
-	public getModelStatus(model: string) {
+	public getModel(model: string) {
 		this.assertNotDisposed();
 		return this.backend.getModelStatus(model);
 	}
 
-	public prepareModel(model: string, onProgress: (status: ILocalTranscriptionModelStatus) => void): ILocalTranscriptionModelOperation {
+	public prepareModel(model: string, onProgress: (status: IDictationModelStatus) => void): ILocalTranscriptionModelOperation {
 		return this.startModelOperation(model, { type: 'prepare' }, onProgress);
 	}
 
-	public importModel(options: { readonly model: string; readonly sourcePath: string; }, onProgress: (status: ILocalTranscriptionModelStatus) => void): ILocalTranscriptionModelOperation {
+	public importPackage(options: { readonly model: string; readonly sourcePath: string; }, onProgress: (status: IDictationModelStatus) => void): ILocalTranscriptionModelOperation {
 		return this.startModelOperation(options.model, { type: 'import', sourceDirectory: options.sourcePath }, onProgress);
 	}
 
-	private startModelOperation(model: string, operation: LocalTranscriptionModelOperation, onProgress: (status: ILocalTranscriptionModelStatus) => void): ILocalTranscriptionModelOperation {
+	private startModelOperation(model: string, operation: LocalTranscriptionModelOperation, onProgress: (status: IDictationModelStatus) => void): ILocalTranscriptionModelOperation {
 		this.assertNotDisposed();
 		if (!this.backend.isConnected) { throw new Error(localize('dictation.connectionUnavailable', 'Dictation connection is unavailable')); }
 		const resourceId = generateUuid();
@@ -91,18 +92,43 @@ export class LocalTranscriptionService extends Disposable implements ILocalTrans
 		return handle;
 	}
 
-	public async start(options: { readonly model: string; }): Promise<void> {
+	public async getModelStatus(): Promise<ILocalTranscriptionModelStatus> { this.assertNotDisposed(); return this.status; }
+	public async getCacheDirectory(): Promise<string> { this.assertNotDisposed(); return (await this.backend.getModelCacheInfo()).directory; }
+	private setStatus(status: ILocalTranscriptionModelStatus): void { this.status = status; this.modelStatus.fire(status); }
+
+	/** Cache location and package format are backend-owned; foreign cache roots cannot be silently ignored. */
+	public async importModel(options: Parameters<ILocalTranscriptionService['importModel']>[0]) {
+		this.assertNotDisposed();
+		const cache = await this.backend.getModelCacheInfo();
+		if (options.cacheDir !== cache.directory) throw new Error(localize('dictation.managedCache', 'Local transcription uses the managed cache directory: {0}', cache.directory));
+		const operation = this.importPackage({ model: DEFAULT_LOCAL_TRANSCRIPTION_MODEL, sourcePath: options.sourcePath }, () => { });
+		try {
+			if (await operation.completed !== DictationModelState.Ready) throw new Error(localize('dictation.importCancelled', 'Model import was cancelled'));
+			return { model: DEFAULT_LOCAL_TRANSCRIPTION_MODEL, version: cache.version };
+		} finally { operation.dispose(); }
+	}
+
+	public async start(options: Parameters<ILocalTranscriptionService['start']>[0]): Promise<void> {
 		this.assertNotDisposed();
 		if (!this.backend.isConnected) { throw new Error(localize('dictation.connectionUnavailable', 'Dictation connection is unavailable')); }
 		if (this.active) { throw new Error(localize('dictation.alreadyActive', 'Dictation is already active')); }
 		const resourceId = generateUuid();
-		const started = Promise.resolve().then(() => this.backend.start(resourceId, options.model));
+		const started = Promise.resolve().then(async () => {
+			const unsupported = (['language', 'proxyUrl', 'noProxy', 'proxyStrictSSL', 'proxyAuthorization', 'runtimeUrlTemplate', 'runtimeVersion'] as const).filter(key => options[key] !== undefined);
+			if (unsupported.length) throw new Error(localize('dictation.unsupportedLocalOptions', 'This local transcription backend does not support: {0}', unsupported.join(', ')));
+			const cacheDirectory = await this.getCacheDirectory();
+			if (options.cacheDir !== cacheDirectory) throw new Error(localize('dictation.managedCache', 'Local transcription uses the managed cache directory: {0}', cacheDirectory));
+			if (active.discard) throw canceled();
+			await this.backend.start(resourceId, options.model ?? DEFAULT_LOCAL_TRANSCRIPTION_MODEL);
+		});
 		const active: ActiveTranscription = { resourceId, started, audio: started, text: '', finalDelivered: false, discard: false, hasEnded: false };
 		this.active = active;
+		this.setStatus({ state: LocalTranscriptionModelState.Loading });
 		try {
 			await started;
 		} catch (error) {
 			if (this.active === active) { this.active = undefined; }
+			this.setStatus({ state: LocalTranscriptionModelState.Error, error: String(error) });
 			throw error;
 		}
 	}
@@ -154,11 +180,12 @@ export class LocalTranscriptionService extends Disposable implements ILocalTrans
 			return active.discard ? '' : active.text;
 		} catch (error) {
 			active.endedError ??= String(error);
+			if (active.discard) return '';
 			throw error;
 		} finally {
 			if (this.active === active) {
 				this.active = undefined;
-				this.ended.fire({ error: active.discard ? undefined : active.endedError });
+				this.setStatus(active.endedError && !active.discard ? { state: LocalTranscriptionModelState.Error, error: active.endedError } : { state: LocalTranscriptionModelState.Idle });
 			}
 		}
 	}
@@ -170,18 +197,18 @@ export class LocalTranscriptionService extends Disposable implements ILocalTrans
 }
 
 class ModelOperation extends Disposable implements ILocalTranscriptionModelOperation {
-	private readonly completion = new DeferredPromise<LocalTranscriptionModelState.Ready | LocalTranscriptionModelState.Cancelled>();
+	private readonly completion = new DeferredPromise<DictationModelState.Ready | DictationModelState.Cancelled>();
 	public readonly completed = this.completion.p;
 	private started: Promise<void> = Promise.resolve();
 	private released: Promise<void> | undefined;
-	private terminal: ILocalTranscriptionModelStatus | undefined;
+	private terminal: IDictationModelStatus | undefined;
 
-	constructor(private readonly backend: ILocalTranscriptionBackendService, private readonly resourceId: string, private readonly onProgress: (status: ILocalTranscriptionModelStatus) => void) {
+	constructor(private readonly backend: ILocalTranscriptionBackendService, private readonly resourceId: string, private readonly onProgress: (status: IDictationModelStatus) => void) {
 		super();
 		this._register(backend.onDidChangeModelStatus(event => {
 			if (event.resourceId !== resourceId || this.terminal || this.completion.isSettled) { return; }
 			const status = event.status;
-			if (status.state === LocalTranscriptionModelState.Ready || status.state === LocalTranscriptionModelState.Cancelled || status.state === LocalTranscriptionModelState.Error) {
+			if (status.state === DictationModelState.Ready || status.state === DictationModelState.Cancelled || status.state === DictationModelState.Error) {
 				this.terminal = status;
 				void this.release();
 			}
@@ -212,8 +239,8 @@ class ModelOperation extends Disposable implements ILocalTranscriptionModelOpera
 			await this.started;
 			if (this.backend.isConnected) { await this.backend.stopModelOperation(this.resourceId); }
 			const terminal = this.terminal;
-			if (terminal?.state === LocalTranscriptionModelState.Error) { throw new Error(terminal.error); }
-			await this.completion.complete(terminal?.state === LocalTranscriptionModelState.Ready ? LocalTranscriptionModelState.Ready : LocalTranscriptionModelState.Cancelled);
+			if (terminal?.state === DictationModelState.Error) { throw new Error(terminal.error); }
+			await this.completion.complete(terminal?.state === DictationModelState.Ready ? DictationModelState.Ready : DictationModelState.Cancelled);
 		} catch (error) {
 			await this.completion.error(error);
 		}
@@ -229,5 +256,16 @@ class ModelOperation extends Disposable implements ILocalTranscriptionModelOpera
 export function registerLocalTranscriptionService(services: InstantiationService, client: AppServerProtocolClient): RendererHostCapabilities {
 	services.registerInstance(ILocalTranscriptionBackendService, createAppServerLocalTranscriptionBackendService(client));
 	services.registerSingleton(ILocalTranscriptionService, () => services.createInstance(LocalTranscriptionService));
-	return { localTranscription: services.get(ILocalTranscriptionService) };
+	services.registerSingleton(ILocalTranscriptionModelService, () => services.get(ILocalTranscriptionService) as LocalTranscriptionService);
+	return { localTranscription: services.get(ILocalTranscriptionService), localTranscriptionModels: services.get(ILocalTranscriptionModelService) };
+}
+
+function transcriptionStatus(status: IDictationModelStatus): ILocalTranscriptionModelStatus {
+	switch (status.state) {
+		case DictationModelState.Checking: case DictationModelState.Loading: return { state: LocalTranscriptionModelState.Loading };
+		case DictationModelState.Cancelled: return { state: LocalTranscriptionModelState.Idle };
+		case DictationModelState.Downloading: return { state: LocalTranscriptionModelState.Downloading };
+		case DictationModelState.Ready: return { state: LocalTranscriptionModelState.Ready };
+		case DictationModelState.Error: return { state: LocalTranscriptionModelState.Error, error: status.error };
+	}
 }

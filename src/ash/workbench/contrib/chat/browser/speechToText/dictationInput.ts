@@ -1,15 +1,15 @@
 import type { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import type { ILocalTranscriptionService, ILocalTranscriptionModelSnapshot } from '../../../../../platform/localTranscription/common/localTranscription.js';
+import type { ILocalTranscriptionModelService, ILocalTranscriptionModelSnapshot } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import type { IVoiceCodeTranscriptionBackendService, IDictationInputOptions } from '../../../../../platform/renderer/common/dictation.js';
 import type { ISpeechService } from '../../../speech/common/speechService.js';
 import { dictationBackend } from '../../common/constants.js';
 import { localize } from '../../../../../nls.js';
 
 /** Ash's installed-model and input choices are view data, separate from the shared recording contract. */
-export async function readDictationPreparation(configuration: IConfigurationService, local: ILocalTranscriptionService, speech: ISpeechService): Promise<ILocalTranscriptionModelSnapshot | undefined> {
+export async function readDictationPreparation(configuration: IConfigurationService, local: ILocalTranscriptionModelService, speech: ISpeechService): Promise<ILocalTranscriptionModelSnapshot | undefined> {
 	if (speech.hasSpeechProvider) return undefined;
 	const backend = dictationBackend(configuration);
-	return backend.type === 'local' && local.isSupported ? local.getModelStatus(backend.modelId) : undefined;
+	return backend.type === 'local' && local.isSupported ? local.getModel(backend.modelId) : undefined;
 }
 
 export async function readDictationOptions(window: Window & typeof globalThis, configuration: IConfigurationService, backend: IVoiceCodeTranscriptionBackendService | undefined, speech: ISpeechService): Promise<IDictationInputOptions | undefined> {

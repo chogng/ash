@@ -1,13 +1,15 @@
+import { Event } from '../../../../../../base/common/event.js';
+import { MenuItemAction } from '../../../../../../platform/actions/common/actions.js';
 import { IChatSpeechToTextService, ChatSpeechToTextState } from '../../../../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
-import { DictationActionViewItem } from '../../speechToText/dictationActionViewItem.js';
-import { DictationSession } from '../../speechToText/dictationSession.js';
-import { IDictationOnboardingService } from '../../speechToText/dictationOnboarding.js';
+import { DictationActionViewItem } from '../../../../../../workbench/contrib/chat/browser/speechToText/dictationActionViewItem.js';
+import { DictationInput } from '../../../../../../workbench/contrib/chat/browser/speechToText/dictationInputController.js';
+import { IDictationOnboardingService } from '../../../../../../workbench/contrib/chat/browser/speechToText/dictationOnboarding.js';
 import { addDisposableListener, h } from "../../../../../../base/browser/dom.js";
 import { ButtonActionViewItem, type ActionViewItem } from "../../../../../../base/browser/ui/actionbar/actionViewItems.js";
 import { appendIcon } from "../../../../../../base/browser/ui/lxicons/lxicon.js";
 import type { IAction } from "../../../../../../base/common/actions.js";
 import type { Icon } from "../../../../../../base/common/icon.js";
-import { Disposable, DisposableStore, toDisposable, type IDisposable } from "../../../../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from "../../../../../../base/common/lifecycle.js";
 import { Emitter } from '../../../../../../base/common/event.js';
 import { Lxicon } from "../../../../../../base/common/lxicons.js";
 import { localize } from "../../../../../../nls.js";
@@ -86,7 +88,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private serverSlashCommands: ChatInputState["slashCommands"] = [];
 	private skillSelectors: ChatInputState["skillSelectors"] = [];
 	private get mode(): ChatInputState['mode'] { return this.state.mode; }
-	private readonly dictationSession: DictationSession;
+	private readonly dictationSession: DictationInput;
+	private readonly dictationHost = this._register(new MutableDisposable());
 	private visible = true;
 	private draftRevision = 0;
 	private submitting = false;
@@ -145,11 +148,11 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		}));
 		this.modelToolbar.element.classList.add('ash-cowork-input-toolbars', 'ash-cowork-input-settings');
 		this.inputContainer.append(this.attachmentList, editorHost, this.inputToolbar.element);
-		this.dictationSession = this._register(instantiationService.createInstance(DictationSession, this.input, this.dictationPreview, () => this.visible, () => this.delegate.openModelSettings('dictation')));
-		this._register(this.speechToText.onDidChangeState(() => { this.status.textContent = this.statusText(this.state); this.renderToolbarActions(); }));
+		this.dictationSession = this._register(instantiationService.createInstance(DictationInput, this.input, this.dictationPreview, () => this.visible, () => this.delegate.openModelSettings('dictation'), 'chat'));
+		this._register(Event.any(this.speechToText.onDidChangeState, Event.map(this.dictationSession.onDidChange, () => this.speechToText.state))(() => { this.status.textContent = this.statusText(this.state); this.renderToolbarActions(); }));
 		this._register(this.dictationSession.onDidEnd(error => { if (error) { this.notifications.error(localize('chat.input.dictationFailed', 'Dictation failed: {0}', error)); } }));
 		this.element.append(this.status, this.dictationPreview, this.interaction, this.inputContainer, this.modelToolbar.element);
-		this._register(onboarding.registerHost({ container: this.element, focusTarget: this.element, isVisible: () => this.visible }));
+		this.updateDictationHost();
 		this._register(addDisposableListener(this.inputContainer, "focusin", () => this.inputContainer.classList.add("focused")));
 		this._register(addDisposableListener(this.inputContainer, "focusout", event => {
 			if (this.inputContainer.contains(event.relatedTarget as Node | null)) return;
@@ -292,13 +295,18 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 	setVisible(visible: boolean): void {
 		this.visible = visible;
+		this.updateDictationHost();
 		if (visible) this.input.layout();
 		if (!visible) {
-			this.onboarding.hide(this.element);
 			void this.dictationSession.cancel().catch(error => {
 				if (!this.isDisposed) { this.notifications.error(localize('chat.input.dictationFailed', 'Dictation failed: {0}', String(error))); }
 			});
 		}
+	}
+
+	private updateDictationHost(): void {
+		if (!this.visible) this.dictationHost.clear();
+		else if (!this.dictationHost.value) this.dictationHost.value = this.onboarding.registerHost({ container: this.element, focusRoot: this.element, focus: () => this.input.focus() });
 	}
 
 	render(state: ChatInputState): void {
@@ -345,7 +353,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	private renderToolbarActions(): void {
-		const micAction = { ...this.dictationSession.action };
+		const micAction = this.dictationSession.action;
 		let sendAction: ChatInputAction;
 		if (this.toolbarState.hasInput) {
 			const tooltip = this.toolbarState.inputKind === "command" ? "Run command" : "Send message";
@@ -401,7 +409,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	private createToolbarViewItem(action: IAction, contextViewService: IContextViewService): ActionViewItem | undefined {
-		if (action.id === this.dictationSession.action.id) { return new DictationActionViewItem(action); }
+		if (action instanceof MenuItemAction && action.id === this.dictationSession.action.id) { return this.instantiationService.createInstance(DictationActionViewItem, action, undefined, this.dictationSession.activeState); }
 		if (!(action instanceof ChatInputAction)) return undefined;
 		if (action.presentation === 'model') {
 			return this.modelPickerActionItem = this.instantiationService.createInstance(ModelPickerActionItem, action, {

@@ -30,7 +30,7 @@ export function parseBackend(value: unknown): 'local' | 'cloud' | 'codex' {
 
 export function parseLocalModel(value: unknown): string {
 	if (typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/u.test(value)) { return value; }
-	throw new TypeError('dictation.localModel must be a model package ID');
+	throw new TypeError('dictation.model must be a model package ID');
 }
 
 export function parseCloudProvider(value: unknown): 'openAi' | 'xai' {
@@ -42,7 +42,7 @@ export function dictationBackend(configuration: Pick<IConfigurationService, 'get
 	const type = parseBackend(configuration.getValue(DictationConfiguration.backend) ?? 'local');
 	if (type === 'codex') { return { type }; }
 	if (type === 'local') {
-		return { type, modelId: parseLocalModel(configuration.getValue(DictationConfiguration.localModel) ?? DEFAULT_LOCAL_TRANSCRIPTION_MODEL) };
+		return { type, modelId: parseLocalModel(configuration.getValue(DictationConfiguration.model) ?? DEFAULT_LOCAL_TRANSCRIPTION_MODEL) };
 	}
 	const provider = parseCloudProvider(configuration.getValue(DictationConfiguration.cloudProvider) ?? 'openAi');
 	return { type, provider, modelId: provider === 'xai' ? XAI_DICTATION_MODEL : CLOUD_DICTATION_MODEL };
@@ -65,9 +65,11 @@ export function dictationInputOptions(configuration: Pick<IConfigurationService,
 }
 
 export const DictationConfiguration = Object.freeze({
+	enabled: 'dictation.enabled',
+	showButton: 'dictation.showButton',
 	inputDevice: 'dictation.inputDevice',
 	language: 'dictation.language',
 	backend: 'dictation.backend',
 	cloudProvider: 'dictation.cloudProvider',
-	localModel: 'dictation.localModel',
+	model: 'dictation.model',
 });

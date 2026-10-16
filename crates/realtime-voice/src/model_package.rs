@@ -18,6 +18,8 @@ use tokio::fs;
 use tokio::io::AsyncWriteExt;
 
 pub const DEFAULT_MODEL_ID: &str = "paraformer-large-online-ec6a3c64";
+/// Revision of the prepared Sherpa Paraformer package format accepted by this backend.
+pub const MODEL_PACKAGE_FORMAT_VERSION: u32 = 1;
 const FORMAT: &str = "sherpa-online-paraformer-v1";
 const BASE_URL: &str = "https://modelscope.cn/models/iic/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-online-onnx/resolve/master";
 

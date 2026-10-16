@@ -283,7 +283,7 @@ test('Chat input places the microphone beside voice or send at the right edge', 
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 	const toolbar = chat.locator('.ash-chat-input-toolbars');
 	const rightActionLayout = async (actionId: string) => toolbar.evaluate((element, id) => {
-		const mic = element.querySelector<HTMLElement>('[data-action-id="ash.chat.input.mic"]');
+		const mic = element.querySelector<HTMLElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"]');
 		const action = element.querySelector<HTMLElement>(`[data-action-id="${id}"]`);
 		if (!mic || !action) throw new Error('Chat input actions are incomplete');
 		const micBounds = mic.getBoundingClientRect();
@@ -296,7 +296,7 @@ test('Chat input places the microphone beside voice or send at the right edge', 
 		};
 	}, actionId);
 	await expect(toolbar.locator('[data-action-id="ash.chat.input.attachment"]')).toHaveCount(0);
-	await expect(toolbar.locator('[data-action-id="ash.chat.input.mic"] button')).toHaveCount(1);
+	await expect(toolbar.locator('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')).toHaveCount(1);
 	const voiceButton = toolbar.locator('[data-action-id="ash.chat.input.voice"] button');
 	await expect(voiceButton).toBeVisible();
 	const emptyLayout = await rightActionLayout('ash.chat.input.voice');
@@ -328,7 +328,7 @@ test('Chat input places the microphone beside voice or send at the right edge', 
 	await page.keyboard.press('Backspace');
 	await expect(toolbar.locator('[data-action-id="ash.chat.input.voice"] button')).toBeVisible();
 	await page.keyboard.insertText('/config');
-	await expect(toolbar.locator('[data-action-id="ash.chat.input.mic"]')).toHaveCount(0);
+	await expect(toolbar.locator('[data-action-id="workbench.action.chat.toggleSpeechToText"]')).toHaveCount(0);
 	const commandRightInset = await toolbar.evaluate(element => {
 		const send = element.querySelector<HTMLElement>('[data-action-id="ash.chat.input.send"]');
 		if (!send) throw new Error('Chat send action is missing');
@@ -346,7 +346,7 @@ test('Desktop Chat guides a missing local model to Dictation settings without op
 		const snapshot = await readUserSettings(page);
 		const settings = JSON.parse(snapshot.content) as Record<string, unknown>;
 		settings['dictation.backend'] = 'local';
-		settings['dictation.localModel'] = 'ash-playwright-missing-model';
+		settings['dictation.model'] = 'ash-playwright-missing-model';
 		await writeUserSettings(page, JSON.stringify(settings), snapshot.revision);
 	})();
 	try {
@@ -360,7 +360,7 @@ test('Desktop Chat guides a missing local model to Dictation settings without op
 		const input = chat.locator('.ash-chat-input-editor .stanza-editor-input');
 		await input.focus();
 		await page.keyboard.insertText('Keep this draft');
-		const button = chat.locator('[data-action-id="ash.chat.input.mic"] button');
+		const button = chat.locator('[data-action-id="workbench.action.chat.toggleSpeechToText"] button');
 		await expect(button).toBeEnabled();
 		await expect(button).toHaveAttribute('aria-label', 'Dictate message');
 		await button.focus();

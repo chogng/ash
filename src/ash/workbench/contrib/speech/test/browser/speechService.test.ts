@@ -184,7 +184,7 @@ suite('Workbench speech ownership', () => {
 		const contexts = owner.add(new ContextKeyService());
 		const speech = owner.add(new SpeechService(undefined, undefined, contexts));
 		const flags = () => ['hasSpeechProvider', 'speechToTextInProgress', 'textToSpeechInProgress'].map(key => contexts.getContext().getValue(key));
-		const cancel = MenusRegistry.getMenuItems(MenuId.CommandPalette).find(item => 'command' in item && item.command.id === 'workbench.action.chat.dictation.cancel');
+		const cancel = MenusRegistry.getMenuItems(MenuId.CommandPalette).find(item => 'command' in item && item.command.id === 'workbench.action.chat.cancelSpeechToText');
 		assert.ok(cancel && 'command' in cancel);
 		const canCancel = () => cancel.command.precondition!.evaluate(contexts.getContext());
 		assert.deepEqual(flags(), [false, false, false]); assert.equal(canCancel(), false);

@@ -38,6 +38,7 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 	readonly element: HTMLDivElement;
 	private readonly model = this._register(new TextModel('', { languageId: CHAT_INPUT_LANGUAGE_ID }));
 	private readonly editor: CodeEditorWidget;
+	public get codeEditor(): CodeEditorWidget { return this.editor; }
 	private readonly _onDidChange = this._register(new Emitter<string>());
 	private readonly _onDidSubmit = this._register(new Emitter<void>());
 	readonly onDidChange: Event<string> = this._onDidChange.event;

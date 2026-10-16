@@ -9,6 +9,44 @@ import { NullLoggerService } from '../../../../platform/log/common/log.js';
 import { equals } from '../../../../base/common/objects.js';
 const settingsLog = new NullLoggerService();
 import { localize } from '../../../../nls.js';
+import { getConfigurationMigrations } from '../../../common/configuration.js';
+
+/** Rewrite a settings document once, retaining JSONC and leaving failed migrations intact. */
+export async function migrateSettings(source: string, onError: (error: unknown) => void): Promise<string> {
+	const migrations = getConfigurationMigrations();
+	if (!migrations.length) return source;
+	const document = parseJsonDocument(source, { allowComments: true, allowTrailingComma: true });
+	// Invalid documents stay with the file owner's parser and its existing diagnostics.
+	if (document.errors.length || document.root?.type !== 'object') return source;
+	const parse = (text: string) => {
+		const result = parseJsonDocument(text, { allowComments: true, allowTrailingComma: true });
+		if (result.errors.length || result.root?.type !== 'object') throw new TypeError('Settings JSONC is invalid');
+		return result.value as Record<string, unknown>;
+	};
+	let output = source;
+	const original = parse(source);
+	// Language overrides are independent settings maps and migrate independently.
+	for (const block of [undefined, ...Object.keys(original).filter(key => /^\[.+\]$/u.test(key))]) {
+		const parsed = parseJsonDocument(output, { allowComments: true, allowTrailingComma: true });
+		const node = block === undefined || parsed.root?.type !== 'object' ? undefined : parsed.root.properties.find(property => property.key === block)?.valueNode;
+		let text = node ? output.slice(node.offset, node.offset + node.length) : output;
+		if (!text || block !== undefined && (typeof original[block] !== 'object' || !original[block] || Array.isArray(original[block]))) continue;
+		for (const migration of migrations) {
+			const values = parse(text);
+			if (!Object.hasOwn(values, migration.key)) continue;
+			try {
+				const result = await migration.migrateFn(values[migration.key], key => values[key]);
+				const updates = Array.isArray(result) ? result : [[migration.key, result] as const];
+				let next = text;
+				for (const [key, value] of updates) next = editJsonObjectProperty(next, key, value.value);
+				text = next;
+			} catch (error) { onError(error); }
+		}
+		if (block === undefined) output = text;
+		else if (node && !equals(parse(text), original[block])) output = output.slice(0, node.offset) + text + output.slice(node.offset + node.length);
+	}
+	return output;
+}
 
 /** Owns one settings file's last valid source, conditional writes and watch lifetime. */
 class SettingsFile extends Disposable {
@@ -23,7 +61,7 @@ class SettingsFile extends Disposable {
 		readonly resource: URI,
 		private readonly files: IFileService,
 		private readonly nested: boolean,
-		onError: (error: unknown) => void,
+		private readonly onError: (error: unknown) => void,
 	) {
 		super();
 		this._register(files.watch(dirname(resource), { recursive: false, excludes: [] }));
@@ -41,9 +79,15 @@ class SettingsFile extends Disposable {
 	loadConfiguration(): Promise<void> {
 		return this.enqueue(async () => {
 			if (this.stopped) return;
-			const { source } = await this.read();
+			const { source, revision } = await this.read();
 			if (this.stopped) return;
-			const document = this.extract(source);
+			const settings = this.extract(source);
+			const migrated = await migrateSettings(settings.source, this.onError);
+			const document = this.parseSource(migrated);
+			if (migrated !== settings.source) {
+				const output = this.replaceSettings(source, migrated);
+				await this.files.writeFile({ resource: this.resource, content: output, expectedRevision: revision }, { create: true, overwrite: revision !== undefined }, this.cancellation.signal);
+			}
 			if (!this.stopped && !equals(document.model.toJSON(), this.document.toJSON())) {
 				this.document = document.model;
 				this.changes.fire();
@@ -58,14 +102,7 @@ class SettingsFile extends Disposable {
 			const settings = this.extract(source);
 			const next = this.parseSource(transform(settings.source));
 			if (this.stopped) throw new Error('Configuration resource was disposed');
-			let output = next.source;
-			if (this.nested) {
-				const parsed = parseJsonDocument(source, { allowComments: true, allowTrailingComma: true });
-				const settingsNode = parsed.root?.type === 'object' ? parsed.root.properties.find(property => property.key === 'settings')?.valueNode : undefined;
-				// Replace only the settings value, retaining comments both inside and outside it.
-				output = settingsNode ? source.slice(0, settingsNode.offset) + next.source + source.slice(settingsNode.offset + settingsNode.length)
-					: editJsonObjectProperty(source, 'settings', parseJsonDocument(next.source, { allowComments: true, allowTrailingComma: true }).value);
-			}
+			const output = this.replaceSettings(source, next.source);
 			if (output !== source) {
 				await this.files.createDirectory(dirname(this.resource));
 				await this.files.writeFile({ resource: this.resource, content: output, expectedRevision: revision }, { create: true, overwrite: revision !== undefined }, this.cancellation.signal);
@@ -75,6 +112,14 @@ class SettingsFile extends Disposable {
 				this.changes.fire();
 			}
 		});
+	}
+
+	private replaceSettings(source: string, settings: string): string {
+		if (!this.nested) return settings;
+		const parsed = parseJsonDocument(source, { allowComments: true, allowTrailingComma: true });
+		const node = parsed.root?.type === 'object' ? parsed.root.properties.find(property => property.key === 'settings')?.valueNode : undefined;
+		return node ? source.slice(0, node.offset) + settings + source.slice(node.offset + node.length)
+			: editJsonObjectProperty(source, 'settings', parseJsonDocument(settings, { allowComments: true, allowTrailingComma: true }).value);
 	}
 
 	private async read(): Promise<{ source: string; revision?: string; }> {

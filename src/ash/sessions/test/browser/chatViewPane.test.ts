@@ -45,6 +45,7 @@ import { ChatContextKeys } from '../../../workbench/contrib/chat/common/actions/
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../workbench/common/contributions.js';
 import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../../platform/renderer/common/dictation.js';
+import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../../workbench/contrib/chat/browser/speechToText/voiceCodeTranscriptionClient.js';
 import { ISpeechService } from '../../../workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../workbench/contrib/speech/browser/speechService.js';
 import { createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
@@ -137,6 +138,8 @@ function createInputServices(contextView: IContextViewService, chat: IChatServic
 	services.registerInstance(IAppServerSkillApi, skillServices.get(chat)!);
 	services.registerInstance(IAccessibleViewService, unavailableAccessibleViewService);
 	services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
+	// The editor parent contains product descriptors, but the host boundary belongs to this scope.
+	services.registerSingleton(IVoiceCodeTranscriptionClient, () => services.createInstance(VoiceCodeTranscriptionClient));
 	services.registerInstance(IAgentVoiceService, undefined);
 	services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
@@ -641,7 +644,7 @@ test("Chat title and history switching retain conversations and drafts", async (
 			[
 				"ash.chat.input.mode",
 				"ash.chat.input.model",
-				"ash.chat.input.mic",
+				"workbench.action.chat.toggleSpeechToText",
 				"ash.chat.input.voice",
 			],
 		);
@@ -649,7 +652,7 @@ test("Chat title and history switching retain conversations and drafts", async (
 		assert.equal(inputToolbar?.querySelector<HTMLElement>(".ash-chat-input-model-action .ash-chat-input-picker-label")?.textContent, "GPT-6.1 Sol");
 		assert.equal(inputToolbar?.querySelector<HTMLElement>(".ash-chat-input-configuration-action")?.getAttribute('aria-label'), 'Model options: Medium');
 		assert.equal(inputToolbar?.querySelector(".ash-chat-input-model-access-badge"), null);
-		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mic'] button")?.disabled, true);
+		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='workbench.action.chat.toggleSpeechToText'] button")?.disabled, true);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.voice'] button")?.disabled, true);
 	}
 	const firstChatPane = chatPanes[0]!;
@@ -1041,6 +1044,7 @@ test('sending from one session preserves a later draft during first-session crea
 		detachPullRequest: async () => { throw new Error('Unexpected PR removal'); },
 	});
 	editorServices.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
+	editorServices.registerSingleton(IVoiceCodeTranscriptionClient, () => editorServices.createInstance(VoiceCodeTranscriptionClient));
 	editorServices.registerInstance(IAgentVoiceService, undefined);
 	editorServices.registerSingleton(ISpeechService, () => editorServices.createInstance(SpeechService));
 	editorServices.registerSingleton(IChatSpeechToTextService, () => editorServices.createInstance(ChatSpeechToTextService));

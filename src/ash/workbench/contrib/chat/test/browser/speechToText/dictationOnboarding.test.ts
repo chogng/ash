@@ -1,0 +1,81 @@
+import assert from 'node:assert/strict';
+import { suite, test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import '../../../browser/chat.shared.contribution.js';
+import { DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
+import { installEditorTestDom } from '../../../../../../editor/test/browser/editorTestGlobals.js';
+import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
+import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../../../../../platform/renderer/common/dictation.js';
+import { IAccessibleViewService } from '../../../../../../platform/accessibility/browser/accessibleView.js';
+import { IPreferencesService } from '../../../../../services/preferences/common/preferences.js';
+import { TestConfigurationService } from '../../../../../services/configuration/test/common/testServices.js';
+import { ISpeechService } from '../../../../speech/common/speechService.js';
+import { SpeechService } from '../../../../speech/browser/speechService.js';
+import { registerTestDictationOnboarding, createTestDictationBackend, installTestDictationAudio } from '../../../../../test/common/testDictationServices.js';
+import { IDictationOnboardingService } from '../../../browser/speechToText/dictationOnboarding.js';
+import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../browser/speechToText/chatSpeechToTextService.js';
+import type { IChatInputNoticeClaimOptions } from '../../../browser/widget/input/chatInputNoticeHost.js';
+
+function fixture() {
+	const owner = new DisposableStore();
+	const dom = new JSDOM('<!doctype html><body><main tabindex="0"></main><aside tabindex="0"></aside></body>', { url: 'https://ash.test' });
+	owner.add(toDisposable(() => dom.window.close()));
+	owner.add(installEditorTestDom(dom, ['Node', 'Element', 'HTMLElement', 'HTMLButtonElement', 'Event', 'KeyboardEvent', 'MouseEvent']));
+	const window = dom.window as unknown as Window & typeof globalThis;
+	const audio = owner.add(installTestDictationAudio(window));
+	const services = owner.add(new InstantiationService());
+	services.registerSingleton(IConfigurationService, () => new TestConfigurationService({ source: '{"dictation.backend":"cloud"}' }));
+	services.registerInstance(IVoiceCodeTranscriptionBackendService, createTestDictationBackend(owner, { start: async () => ({ stop: async () => { }, cancel: async () => { } }) }));
+	services.registerInstance(IPreferencesService, { openSettings: async () => { } } as unknown as IPreferencesService);
+	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
+	registerTestDictationOnboarding(services, false);
+	services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
+	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+	const onboarding = services.get(IDictationOnboardingService);
+	const root = dom.window.document.querySelector<HTMLElement>('main')!;
+	const other = dom.window.document.querySelector<HTMLElement>('aside')!;
+	return { root, other, audio, window, onboarding, dispose: () => owner.dispose(), [Symbol.dispose]: () => owner.dispose() };
+}
+
+suite('Dictation onboarding host contract', () => {
+	test('notice arbitration controls visibility; reset and host disposal release the card', () => {
+		using f = fixture();
+		assert.equal(f.onboarding.show(), false);
+		let claim: IChatInputNoticeClaimOptions | undefined;
+		let released = 0;
+		using host = f.onboarding.registerHost({ container: f.root, focusRoot: f.root, focus: () => f.root.focus(), claimNotice: options => { claim = options; return toDisposable(() => { released++; }); } });
+		assert.equal(f.onboarding.showIfNeeded(), true);
+		assert.equal(f.onboarding.isVisible, false);
+		assert.equal(claim?.focusTarget?.canFocus?.(), false);
+		claim?.onDidChangeLeading?.(true);
+		assert.equal(f.onboarding.isVisible, true);
+		claim?.focusTarget?.focus();
+		assert.equal(claim?.focusTarget?.hasFocus(), true);
+		f.onboarding.reset();
+		assert.equal(f.onboarding.isVisible, false);
+		assert.equal(released, 1);
+		assert.equal(f.onboarding.showIfNeeded(), true);
+		host.dispose();
+		assert.equal(f.onboarding.isVisible, false);
+		assert.equal(released, 2);
+		assert.equal(f.onboarding.show(), false);
+		assert.equal(f.audio.requests.length, 0);
+	});
+	test('focused visible host wins and refreshing devices never opens a microphone', async () => {
+		using f = fixture();
+		using first = f.onboarding.registerHost({ container: f.root, focusRoot: f.root });
+		using second = f.onboarding.registerHost({ container: f.other, focusRoot: f.other });
+		f.other.focus();
+		assert.equal(f.onboarding.show(), true);
+		assert.ok(f.other.querySelector('.ash-dictation-onboarding'));
+		assert.equal(f.root.querySelector('.ash-dictation-onboarding'), null);
+		f.onboarding.refreshMicrophones();
+		f.window.navigator.mediaDevices.dispatchEvent(new f.window.Event('devicechange'));
+		await new Promise(resolve => setTimeout(resolve, 0));
+		assert.equal(f.audio.requests.length, 0);
+		assert.equal(f.audio.contexts.length, 0);
+		second.dispose(); f.root.hidden = true;
+		assert.equal(f.onboarding.show(), false);
+	});
+});

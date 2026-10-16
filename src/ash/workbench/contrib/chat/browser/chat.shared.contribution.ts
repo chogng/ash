@@ -1,6 +1,7 @@
+import { Extensions as WorkbenchExtensions, type IConfigurationMigrationRegistry } from '../../../common/configuration.js';
 import { DEFAULT_LOCAL_TRANSCRIPTION_MODEL } from '../../../../platform/localTranscription/common/localTranscription.js';
 import { parseBackend, parseLocalModel, parseCloudProvider, parseInputDevice, parseLanguage } from '../common/constants.js';
-import { IChatSpeechToTextService, ChatSpeechToTextService } from './speechToText/chatSpeechToTextService.js';
+import { IChatSpeechToTextService, ChatSpeechToTextService, DICTATION_MODEL_SETTING } from './speechToText/chatSpeechToTextService.js';
 import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from './speechToText/voiceCodeTranscriptionClient.js';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -204,6 +205,17 @@ configurationRegistry.registerConfiguration<string>({
 });
 
 configurationRegistry.registerConfiguration<boolean>({
+	key: 'dictation.enabled', defaultValue: true,
+	parse(value: unknown): boolean { if (typeof value !== 'boolean') throw new TypeError('dictation.enabled must be boolean'); return value; },
+	setting: { valueType: 'boolean', title: localize('dictation.enabled.title', 'Enable dictation'), description: localize('dictation.enabled.description', 'Use speech to enter text in messages, editors, and terminals.') },
+});
+configurationRegistry.registerConfiguration<boolean>({
+	key: 'dictation.showButton', defaultValue: true,
+	parse(value: unknown): boolean { if (typeof value !== 'boolean') throw new TypeError('dictation.showButton must be boolean'); return value; },
+	setting: { valueType: 'boolean', title: localize('dictation.showButton.title', 'Show microphone button'), description: localize('dictation.showButton.description', 'Show the dictation button in message inputs. Dictation commands remain available.') },
+});
+
+configurationRegistry.registerConfiguration<boolean>({
 	key: 'dictation.showTranscript', defaultValue: true,
 	parse(value: unknown): boolean { if (typeof value !== 'boolean') throw new TypeError('dictation.showTranscript must be boolean'); return value; },
 	setting: { valueType: 'boolean', title: localize('dictation.showTranscript.title', 'Show interim dictation text'), description: localize('dictation.showTranscript.description', 'Show the live transcript while speech is being recognized.') },
@@ -245,13 +257,23 @@ configurationRegistry.registerConfiguration<'openAi' | 'xai'>({
 });
 
 configurationRegistry.registerConfiguration<string>({
-	key: 'dictation.localModel',
+	key: DICTATION_MODEL_SETTING,
 	defaultValue: DEFAULT_LOCAL_TRANSCRIPTION_MODEL,
 	parse: parseLocalModel,
 	setting: {
 		valueType: 'text',
-		title: localize({ bundle: 'ash', key: 'dictation.localModel.title' }, 'Local dictation model'),
-		description: localize({ bundle: 'ash', key: 'dictation.localModel.description' }, 'Model package ID in the Ash dictation-models directory.'),
+		title: localize({ bundle: 'ash', key: 'dictation.model.title' }, 'Local dictation model'),
+		description: localize({ bundle: 'ash', key: 'dictation.model.description' }, 'Model package ID in the Ash dictation-models directory.'),
 		placeholder: DEFAULT_LOCAL_TRANSCRIPTION_MODEL,
 	},
 });
+
+Registry.as<IConfigurationMigrationRegistry>(WorkbenchExtensions.ConfigurationMigration).registerConfigurationMigrations([{
+	key: 'dictation.localModel',
+	migrateFn(value, read) {
+		const model = parseLocalModel(value);
+		const target = read(DICTATION_MODEL_SETTING);
+		if (target !== undefined && parseLocalModel(target) !== model) throw new Error(localize('dictation.modelMigrationConflict', 'Dictation model settings conflict. Keep the desired value in dictation.model and remove dictation.localModel.'));
+		return target === undefined ? [[DICTATION_MODEL_SETTING, { value: model }], ['dictation.localModel', { value: undefined }]] : { value: undefined };
+	},
+}]);

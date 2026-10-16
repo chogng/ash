@@ -66,7 +66,7 @@ import type { RemoteAgentConnection } from '../../../../../platform/remote/commo
 import type { RemoteConnectionState } from '../../../../../platform/remote/common/remote.js';
 import type { IWorkspaceTrustApi } from '../../../../../platform/workspace/common/workspaceTrust.js';
 import type { ILanguagePackService } from '../../../../../platform/languagePacks/common/languagePacks.js';
-import type { ILocalTranscriptionModelStatus, ILocalTranscriptionService as LocalTranscriptionService, LocalTranscriptionModelState as ModelState } from '../../../../../platform/localTranscription/common/localTranscription.js';
+import type { IDictationModelStatus, ILocalTranscriptionModelService as LocalTranscriptionService, DictationModelState as ModelState } from '../../../../../platform/localTranscription/common/localTranscription.js';
 
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import type { HookSource } from '../../../../../platform/agentHost/common/appServerApi.js';
@@ -164,7 +164,7 @@ const { TOCTreeModel } = await import('../../browser/tocTree.js');
 const { SettingsEditorId } = await import('../../browser/settingsEditor.js');
 await import('../../../chat/browser/aiCustomization/aiCustomizationManagement.contribution.js');
 const { AI_CUSTOMIZATION_MANAGEMENT_EDITOR_ID } = await import('../../../chat/browser/aiCustomization/aiCustomizationManagement.js');
-const { ILocalTranscriptionService, LocalTranscriptionModelState } = await import('../../../../../platform/localTranscription/common/localTranscription.js');
+const { ILocalTranscriptionService, ILocalTranscriptionModelService, DictationModelState } = await import('../../../../../platform/localTranscription/common/localTranscription.js');
 const { NullLocalTranscriptionService } = await import('../../../../services/localTranscription/browser/localTranscriptionService.js');
 const { ModelSettingsContent } = await import('../../../chat/browser/modelSettingsContent.js');
 const { LocalTranscriptionModelControls } = await import('../../../localTranscription/browser/localTranscriptionModelControls.js');
@@ -934,7 +934,7 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, HoverConfiguration.delay), 'general');
 	assert.equal(findSettingCategory(layout, SashConfiguration.size), 'general');
 	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'voice-input');
-	assert.equal(findSettingCategory(layout, DictationConfiguration.localModel), 'voice-input');
+	assert.equal(findSettingCategory(layout, DictationConfiguration.model), 'voice-input');
 	assert.equal(findSettingCategory(layout, 'chat.defaultModel'), 'models');
 	assert.equal(findSettingCategory(layout, 'chat.editing.autoAcceptDelay'), 'agent-defaults');
 	assert.equal(defaults.get('chat.editing.autoAcceptDelay').valueType, 'number');
@@ -998,7 +998,7 @@ test('settingsLayout is the single projection from registered settings to catego
 	]);
 	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'voice-input');
 	assert.equal(findSettingCategory(layout, DictationConfiguration.cloudProvider), 'voice-input');
-	assert.equal(findSettingCategory(layout, DictationConfiguration.localModel), 'voice-input');
+	assert.equal(findSettingCategory(layout, DictationConfiguration.model), 'voice-input');
 	assert.equal(defaults.all.some(setting => setting.id === GitConfiguration.autofetch), true);
 	assert.equal(findSettingCategory(layout, GitConfiguration.autofetch), 'extension.ash.git');
 	assert.equal(configurationRegistry.getConfiguration(GitConfiguration.autofetch)?.defaultValue, false);
@@ -1235,7 +1235,9 @@ test('Models Settings keeps loading API connections when the model catalog chang
 	const services = disposables.add(new InstantiationService());
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
-	services.registerInstance(ILocalTranscriptionService, disposables.add(new NullLocalTranscriptionService()));
+	const localTranscription = disposables.add(new NullLocalTranscriptionService());
+	services.registerInstance(ILocalTranscriptionModelService, localTranscription);
+	services.registerInstance(ILocalTranscriptionService, localTranscription);
 	services.registerInstance(ConfigurationServiceId, configuration);
 	services.registerInstance(ChatServiceId, chat);
 	services.registerInstance(INotificationService, disposables.add(new NotificationService()));
@@ -1554,7 +1556,9 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(ILanguageModelsService, chatService as unknown as ILanguageModelsService);
 	services.registerInstance(ISecretStorageStatusService, { readState: async () => ({ status: 'available' }), authorizeAccess: async () => ({ status: 'available' }), setStorageMode: async mode => ({ status: 'available', mode }) });
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
-	services.registerInstance(ILocalTranscriptionService, disposables.add(new NullLocalTranscriptionService()));
+	const localTranscription = disposables.add(new NullLocalTranscriptionService());
+	services.registerInstance(ILocalTranscriptionModelService, localTranscription);
+	services.registerInstance(ILocalTranscriptionService, localTranscription);
 	const descriptor = EditorPanes.getEditorPanes().find(candidate => candidate.id === SettingsEditorId);
 	assert.ok(descriptor);
 	assert.throws(() => descriptor.create({ instantiationService: services }), /Unknown service: localeService/);
@@ -2090,7 +2094,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	dictationSearch.value = '';
 	dictationSearch.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
 	await configuration.updateValue(LocalizationConfiguration.locale, 'en');
-	assert.equal(root.querySelector('[data-configuration-key="dictation.localModel"]'), null);
+	assert.equal(root.querySelector('[data-configuration-key="dictation.model"]'), null);
 	assert.ok(root.querySelector('[role="grid"][aria-label="Local dictation models"]'));
 	await configuration.updateValue('dictation.backend', 'codex');
 	const subscription = root.querySelector('[data-settings-item-id="dictation.subscription"]');
@@ -2112,7 +2116,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	root.querySelector<HTMLElement>('[data-settings-category-id="models"]')?.click();
 	await nextTurn();
 	assert.equal(root.querySelector('[data-settings-container]')?.getAttribute('data-active-settings-category'), 'models');
-	assert.equal(root.querySelector('[data-configuration-key="dictation.localModel"]'), null);
+	assert.equal(root.querySelector('[data-configuration-key="dictation.model"]'), null);
 	const modelSwitch = root.querySelector<HTMLInputElement>('.ash-models-settings-model-row input[role="switch"]');
 	assert.ok(modelSwitch);
 	assert.equal(modelSwitch.getAttribute('aria-label'), 'Show GPT Test in model picker');
@@ -2271,29 +2275,29 @@ test('Local model controls share translated snapshots and keep preparation runni
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	resources.add(toDisposable(resetNlsResolver));
 	const configuration = resources.add(new WorkbenchConfigurationService());
-	await configuration.updateValue(DictationConfiguration.localModel, 'imported-model');
+	await configuration.updateValue(DictationConfiguration.model, 'imported-model');
 	const services = resources.add(new InstantiationService());
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	services.registerInstance(ConfigurationServiceId, configuration);
 	const changed = resources.add(new Emitter<void>());
-	let modelStatus: ILocalTranscriptionModelStatus | undefined;
-	const progress = (status: ILocalTranscriptionModelStatus): void => { modelStatus = status; changed.fire(); };
+	let modelStatus: IDictationModelStatus | undefined;
+	const progress = (status: IDictationModelStatus): void => { modelStatus = status; changed.fire(); };
 	let finish!: (state: ModelState.Cancelled) => void;
 	let cancellations = 0;
 	const imported: unknown[] = [];
-	services.registerInstance(ILocalTranscriptionService, {
+	services.registerInstance(ILocalTranscriptionModelService, {
 		isSupported: true,
-		getModelStatus: async (model: string) => ({ model, available: false, sizeBytes: 0, status: modelStatus }),
+		getModel: async (model: string) => ({ model, available: false, sizeBytes: 0, status: modelStatus }),
 		listModels: async () => [],
 		onDidChangeModels: changed.event,
-		cancelModel: async () => { cancellations++; progress({ state: LocalTranscriptionModelState.Cancelled }); finish(LocalTranscriptionModelState.Cancelled); },
-		importModel: (options: unknown, onProgress: typeof progress) => {
+		cancelModel: async () => { cancellations++; progress({ state: DictationModelState.Cancelled }); finish(DictationModelState.Cancelled); },
+		importPackage: (options: unknown, onProgress: typeof progress) => {
 			imported.push(options);
-			progress({ state: LocalTranscriptionModelState.Checking });
+			progress({ state: DictationModelState.Checking });
 			return {
 				completed: new Promise<ModelState.Cancelled>(resolve => { finish = resolve; }),
-				cancel: async () => { cancellations++; progress({ state: LocalTranscriptionModelState.Cancelled }); finish(LocalTranscriptionModelState.Cancelled); },
+				cancel: async () => { cancellations++; progress({ state: DictationModelState.Cancelled }); finish(DictationModelState.Cancelled); },
 				dispose() { },
 			};
 		},
@@ -2315,7 +2319,7 @@ test('Local model controls share translated snapshots and keep preparation runni
 	importButton.click();
 	assert.deepEqual(imported, [{ model: 'imported-model', sourcePath: 'C:\\prepared-model' }]);
 	assert.equal(importButton.disabled, true);
-	progress({ state: LocalTranscriptionModelState.Downloading, file: 'encoder.onnx', downloadedBytes: 2 * 1024 * 1024 });
+	progress({ state: DictationModelState.Downloading, file: 'encoder.onnx', downloadedBytes: 2 * 1024 * 1024 });
 	await nextTurn();
 	assert.equal(status.textContent, '正在下载 encoder.onnx：2.0 MiB');
 	assert.equal(status.getAttribute('aria-atomic'), 'true');

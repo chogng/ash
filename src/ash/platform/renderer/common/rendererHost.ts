@@ -12,7 +12,7 @@ import type { IBackupService } from '../../backup/common/backup.js';
 import type { INetworkDiagnosticsService } from '../../networkDiagnostics/common/networkDiagnosticsService.js';
 import type { ICallService } from '../../call/common/callService.js';
 import type { IVoiceCodeTranscriptionBackendService } from './dictation.js';
-import type { ILocalTranscriptionService } from '../../localTranscription/common/localTranscription.js';
+import type { ILocalTranscriptionService, ILocalTranscriptionModelService } from '../../localTranscription/common/localTranscription.js';
 import type { IApprovalEnvironmentService } from '../../approvalEnvironment/common/approvalEnvironmentService.js';
 import type { IMemoriesService } from '../../memories/common/memoriesService.js';
 import type { IMemoryDiagnosticsService } from '../../memory/common/memoryDiagnosticsService.js';
@@ -59,6 +59,7 @@ import type { ITestExecutionService } from '../../testing/common/testExecutionSe
 export interface RendererHostCapabilities {
 	readonly debugAdapter?: IDebugAdapterProcessService;
 	readonly localTranscription?: ILocalTranscriptionService;
+	readonly localTranscriptionModels?: ILocalTranscriptionModelService;
 }
 
 /** Merges product capabilities while rejecting two contributions that claim the same slot. */

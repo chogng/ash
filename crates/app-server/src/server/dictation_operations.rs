@@ -327,7 +327,11 @@ impl AppServer {
             .into_iter()
             .map(|id| self.dictation_model_status(id))
             .collect::<Result<Vec<_>, _>>()?;
-        result(&DictationModelList { models })
+        result(&DictationModelList {
+            models,
+            cache_directory: self.dictation_model_root()?.to_string_lossy().into_owned(),
+            package_version: realtime_voice::MODEL_PACKAGE_FORMAT_VERSION,
+        })
     }
 
     pub(super) fn dictation_model_cancel(

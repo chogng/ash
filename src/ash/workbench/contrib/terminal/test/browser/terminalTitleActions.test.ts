@@ -2,8 +2,9 @@ import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../chat
 import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../../chat/browser/speechToText/voiceCodeTranscriptionClient.js';
 import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
 import { NullTelemetryService } from '../../../../../platform/telemetry/common/telemetryUtils.js';
-import { ILocalTranscriptionService } from '../../../../../platform/localTranscription/common/localTranscription.js';
+import { ILocalTranscriptionService, ILocalTranscriptionModelService } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { NullLocalTranscriptionService } from '../../../../services/localTranscription/browser/localTranscriptionService.js';
+import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { IEnvironmentVariableService } from '../../common/environmentVariable.js';
 import { EnvironmentVariableService } from '../../common/environmentVariableService.js';
 import { ITerminalGroupService } from '../../../../services/terminal/browser/terminal.js';
@@ -287,7 +288,10 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	services.registerSingleton(IVoiceCodeTranscriptionClient, () => services.createInstance(VoiceCodeTranscriptionClient));
 	services.registerInstance(ITelemetryService, NullTelemetryService);
 	services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
-	services.registerInstance(ILocalTranscriptionService, resources.add(new NullLocalTranscriptionService()));
+	const localTranscription = resources.add(new NullLocalTranscriptionService());
+	services.registerInstance(ILocalTranscriptionService, localTranscription);
+	services.registerInstance(ILocalTranscriptionModelService, localTranscription);
+	services.registerInstance(ILogService, resources.add(new NullLoggerService()));
 	services.registerInstance(IDictationOnboardingService, resources.add(services.createInstance(DictationOnboardingService)));
 	services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, source) => source });
 	const unhosted = resources.add(services.createInstance(TerminalViewPane, browserEnvironment.window.document.body, { id: 'test.terminalGeometry', title: 'Terminal' }));

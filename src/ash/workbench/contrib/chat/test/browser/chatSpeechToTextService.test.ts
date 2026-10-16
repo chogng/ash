@@ -29,22 +29,69 @@ import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../comm
 import { IExtensionService } from '../../../../services/extensions/common/extensionService.js';
 import { TestExtensionService } from '../../../../test/common/testExtensionServices.js';
 import { ISpeechService, SpeechToTextStatus, type ISpeechToTextEvent } from '../../../speech/common/speechService.js';
-import { ILocalTranscriptionService, LocalTranscriptionModelState, type ILocalTranscriptionModelStatus, type ILocalTranscriptionResult, type ILocalTranscriptionModelSnapshot } from '../../../../../platform/localTranscription/common/localTranscription.js';
+import { ILocalTranscriptionService, ILocalTranscriptionModelService, LocalTranscriptionModelState, DictationModelState, type IDictationModelStatus, type ILocalTranscriptionResult, type ILocalTranscriptionModelSnapshot } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { NullLocalTranscriptionService } from '../../../../services/localTranscription/browser/localTranscriptionService.js';
 import { TestConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
+import { FileService } from '../../../../../platform/files/common/fileService.js';
+import { InMemoryFileSystemProvider } from '../../../../../platform/files/common/inMemoryFilesystemProvider.js';
+import { FolderConfiguration, WorkspaceConfiguration } from '../../../../services/configuration/browser/configuration.js';
+import { URI } from '../../../../../base/common/uri.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService, ChatSpeechToTextState, ChatSpeechToTextInProgress, type IChatDictationTranscript } from '../../browser/speechToText/chatSpeechToTextService.js';
 
 suite('Builtin dictation ownership', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+	for (const nested of [false, true]) test(`model migration preserves ${nested ? 'workspace' : 'folder'} JSONC and unrelated settings`, async () => {
+		using files = new FileService();
+		using provider = new InMemoryFileSystemProvider();
+		using registration = files.registerProvider('file', provider);
+		const resource = URI.file('/workspace/project.json');
+		await files.createDirectory(URI.file('/workspace'));
+		const settings = '{/* model comment */"dictation.localModel":"custom-model","unrelated":42}';
+		const source = nested ? `// workspace comment\n{"folders":[],"settings":${settings},"outside":true}` : settings;
+		await files.writeFile({ resource, content: source }, { create: true, overwrite: false });
+		const errors: unknown[] = [];
+		using configuration = nested ? new WorkspaceConfiguration(resource, files, error => errors.push(error)) : new FolderConfiguration(resource, files, error => errors.push(error));
+		await configuration.loadConfiguration();
+		const first = await files.readFile(resource);
+		assert.equal(configuration.getConfiguration().getValue('dictation.model'), 'custom-model');
+		assert.equal(first.content.includes('dictation.localModel'), false);
+		assert.ok(first.content.includes('/* model comment */'));
+		assert.ok(first.content.includes('"unrelated":42'));
+		if (nested) { assert.ok(first.content.startsWith('// workspace comment')); assert.ok(first.content.includes('"outside":true')); }
+		await configuration.loadConfiguration();
+		assert.equal((await files.readFile(resource)).revision, first.revision);
+		assert.deepEqual(errors, []);
+	});
+	for (const [name, source, expected, error] of [
+		['legacy', '{/* retained */"dictation.localModel":"my-model","unrelated":42}', 'my-model', false],
+		['target', '{"dictation.model":"my-model","unrelated":42}', 'my-model', false],
+		['equal', '{"dictation.localModel":"my-model","dictation.model":"my-model","unrelated":42}', 'my-model', false],
+		['conflicting', '{"dictation.localModel":"old-model","dictation.model":"new-model","unrelated":42}', 'new-model', true],
+		['invalid', '{"dictation.localModel":"../invalid","unrelated":42}', 'paraformer-large-online-ec6a3c64', true],
+	] as const) test(`model setting migration preserves ${name} settings and is restart-idempotent`, async () => {
+		const errors: unknown[] = [];
+		using configuration = new TestConfigurationService({ source, onError: issue => errors.push(issue) });
+		await configuration.reloadConfiguration();
+		assert.equal(configuration.getValue('dictation.model'), expected);
+		const first = await configuration.read();
+		assert.equal(first.source.includes('dictation.localModel'), error);
+		assert.ok(first.source.includes('"unrelated":42'));
+		if (name === 'legacy') assert.ok(first.source.includes('/* retained */'));
+		if (error) assert.equal(first.source, source);
+		assert.equal(errors.length > 0, error);
+		await configuration.reloadConfiguration();
+		assert.deepEqual(await configuration.read(), first);
+	});
 	const captureWindow = { navigator: {}, URL, Blob, setTimeout, clearTimeout } as unknown as Window & typeof globalThis;
 
-	function services(owner: DisposableStore, start: (onTranscript: (text: string, final: boolean) => void, onEnded: (error?: string) => void) => Promise<TestDictationSession>, options: { source?: string; local?: ILocalTranscriptionService; start?: TestDictationCapture['start']; } = {}) {
+	function services(owner: DisposableStore, start: (onTranscript: (text: string, final: boolean) => void, onEnded: (error?: string) => void) => Promise<TestDictationSession>, options: { source?: string; local?: ILocalTranscriptionService & ILocalTranscriptionModelService; start?: TestDictationCapture['start']; } = {}) {
 		const registrations = getSingletonServiceDescriptors().filter(([id]) => id === IChatSpeechToTextService || id === ISpeechService || id === IVoiceCodeTranscriptionClient);
 		assert.equal(registrations.length, 3);
 		const services = owner.add(new InstantiationService(new ServiceCollection(...registrations)));
 		services.registerSingleton(IExtensionService, () => new TestExtensionService());
 		services.registerSingleton(IConfigurationService, () => new TestConfigurationService({ source: options.source ?? '{"dictation.backend":"cloud"}' }));
 		services.registerSingleton(ILocalTranscriptionService, () => options.local ?? new NullLocalTranscriptionService());
+		services.registerSingleton(ILocalTranscriptionModelService, () => options.local ?? new NullLocalTranscriptionService());
 		services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 		const audio = owner.add(installTestDictationAudio(captureWindow));
 		const notifications = owner.add(new NotificationService());
@@ -60,12 +107,12 @@ suite('Builtin dictation ownership', () => {
 		host.advance(WorkbenchPhase.AfterRestored);
 		return {
 			services, speech: services.get(IChatSpeechToTextService), cues, audio, notifications,
-			preparation: () => readDictationPreparation(services.get(IConfigurationService), services.get(ILocalTranscriptionService), services.get(ISpeechService)),
+			preparation: () => readDictationPreparation(services.get(IConfigurationService), services.get(ILocalTranscriptionModelService), services.get(ISpeechService)),
 			inputOptions: () => readDictationOptions(captureWindow, services.get(IConfigurationService), services.get(IVoiceCodeTranscriptionBackendService), services.get(ISpeechService)),
 		};
 	}
 
-	class LocalCapture extends Disposable implements ILocalTranscriptionService {
+	class LocalCapture extends Disposable implements ILocalTranscriptionService, ILocalTranscriptionModelService {
 		readonly _serviceBrand = undefined;
 		readonly isSupported = true;
 		readonly transcribed = this._register(new Emitter<ILocalTranscriptionResult>());
@@ -73,13 +120,15 @@ suite('Builtin dictation ownership', () => {
 		readonly ended = this._register(new Emitter<{ error?: string; }>());
 		readonly onDidEnd = this.ended.event;
 		readonly onDidChangeModels = Event.None;
-		readonly modelStatus = this._register(new Emitter<{ model: string; status: ILocalTranscriptionModelStatus; }>());
+		readonly modelStatus = this._register(new Emitter<import("../../../../../platform/localTranscription/common/localTranscription.js").ILocalTranscriptionModelStatus>());
 		readonly onDidChangeModelStatus = this.modelStatus.event;
 		readonly starts: Parameters<ILocalTranscriptionService['start']>[0][] = [];
 		readonly reads: string[] = [];
 		cancels = 0;
 		pending = Promise.resolve();
-		async getModelStatus(model: string): Promise<ILocalTranscriptionModelSnapshot> {
+		async getModelStatus() { return { state: LocalTranscriptionModelState.Idle }; }
+		async getCacheDirectory() { return "C:/models"; }
+		async getModel(model: string): Promise<ILocalTranscriptionModelSnapshot> {
 			this.reads.push(model);
 			return { model, available: true, sizeBytes: 1024 };
 		}
@@ -87,11 +136,12 @@ suite('Builtin dictation ownership', () => {
 		async cancelModel() { assert.fail('Input must not cancel model preparation'); }
 		async deleteModel() { assert.fail('Input must not delete models'); }
 		prepareModel(): never { assert.fail('Input must not prepare models'); }
-		importModel(): never { assert.fail('Input must not import models'); }
+		importPackage(): never { assert.fail('Input must not import models'); }
+		async importModel(): Promise<never> { assert.fail("Input must not import models"); }
 		async start(options: Parameters<ILocalTranscriptionService['start']>[0]) { this.starts.push(options); await this.pending; }
 		async pushAudio() { }
-		async stop() { this.transcribed.fire({ text: 'final local text', isFinal: true }); this.ended.fire({}); return 'final local text'; }
-		async cancel() { this.cancels++; this.ended.fire({}); }
+		async stop() { this.transcribed.fire({ text: 'final local text', isFinal: true }); this.modelStatus.fire({ state: LocalTranscriptionModelState.Idle }); return 'final local text'; }
+		async cancel() { this.cancels++; this.modelStatus.fire({ state: LocalTranscriptionModelState.Idle }); }
 	}
 
 	test('switching microphones retains the analyser and releases every track and context on stop', async () => {
@@ -142,10 +192,10 @@ suite('Builtin dictation ownership', () => {
 		owner.add(fixture.speech.onDidChangePreparingModel(value => preparing.push(value)));
 		owner.add(fixture.speech.onDidChangeDownloadingModel(value => downloading.push(value)));
 		const starting = fixture.speech.start(captureWindow);
-		local.modelStatus.fire({ model: 'selected', status: { state: LocalTranscriptionModelState.Downloading, file: 'model.onnx', downloadedBytes: 42 } });
+		local.modelStatus.fire({ state: LocalTranscriptionModelState.Downloading });
 		assert.equal(fixture.speech.isPreparingModel, true);
 		assert.equal(fixture.speech.modelDownloadProgress, undefined);
-		local.modelStatus.fire({ model: 'selected', status: { state: LocalTranscriptionModelState.Ready } });
+		local.modelStatus.fire({ state: LocalTranscriptionModelState.Ready });
 		await ready.complete(); await starting;
 		await fixture.speech.cancel();
 		assert.deepEqual({ preparing, downloading }, { preparing: [true, false], downloading: [true, false] });
@@ -155,14 +205,14 @@ suite('Builtin dictation ownership', () => {
 		using owner = new DisposableStore();
 		const local = new LocalCapture();
 		const fixture = services(owner, async () => assert.fail('Local capture must not use the cloud adapter'), {
-			source: '{"dictation.backend":"local","dictation.localModel":"custom-online","dictation.inputDevice":"mic-2","dictation.language":"zh"}', local,
+			source: '{"dictation.backend":"local","dictation.model":"custom-online","dictation.inputDevice":"mic-2","dictation.language":"zh"}', local,
 		});
 		assert.equal(fixture.speech.isConfigured, true);
 		assert.deepEqual(local.reads, []);
 		assert.equal((await fixture.preparation())?.model, 'custom-online');
 		assert.deepEqual(local.reads, ['custom-online']);
 		await fixture.speech.start(captureWindow);
-		assert.deepEqual(local.starts, [{ model: 'custom-online' }]);
+		assert.deepEqual(local.starts, [{ cacheDir: 'C:/models', model: 'custom-online' }]);
 		assert.equal(await fixture.speech.stopAndTranscribe(), 'final local text');
 		assert.equal(fixture.speech.state, ChatSpeechToTextState.Idle);
 	});
@@ -335,7 +385,7 @@ suite('Builtin dictation ownership', () => {
 		const contexts = fixture.services.get(IContextKeyService);
 		await fixture.speech.start(captureWindow, 'terminal');
 		assert.equal(contexts.contextMatchesRules(ChatSpeechToTextInProgress.isEqualTo(true)), true);
-		const command = CommandsRegistry.getCommand('workbench.action.chat.dictation.cancel');
+		const command = CommandsRegistry.getCommand('workbench.action.chat.cancelSpeechToText');
 		assert.ok(command);
 		await fixture.services.invokeFunction(accessor => command(accessor));
 		assert.equal(cancels, 1);
