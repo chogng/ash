@@ -24,7 +24,13 @@ impl GitRuntime {
         let (group, path) = resource
             .split_once(':')
             .ok_or_else(|| invalid("Invalid Git resource"))?;
-        let status = self.api.status(repository, Some(token))?;
+        // The selected SCM resource comes from the backend's published revision.
+        // changeFile reads current contents; preview selection need not rescan
+        // every file merely to recover the same resource identity.
+        let status = repository
+            .status
+            .as_ref()
+            .ok_or_else(|| invalid("Git status unavailable"))?;
         let change = status
             .changes
             .iter()
@@ -43,7 +49,7 @@ impl GitRuntime {
                 "unstaged"
             };
             let (original, modified) =
-                self.change_inputs(repository, &status, change, comparison, token)?;
+                self.change_inputs(repository, status, change, comparison, token)?;
             if repository.configuration.boolean("openDiffOnClick", true) {
                 diff_input(original, modified, path)
             } else {
@@ -238,7 +244,10 @@ impl GitRuntime {
         else {
             return Ok(Value::Null);
         };
-        let status = self.api.status(repository, Some(token))?;
+        let status = repository
+            .status
+            .as_ref()
+            .ok_or_else(|| invalid("Git status unavailable"))?;
         let Some(change) = status
             .changes
             .iter()

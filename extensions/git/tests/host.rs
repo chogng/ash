@@ -66,9 +66,17 @@ impl Client {
     }
     fn request(&self, operation: Operation) -> Result<ResultValue, host::HostFailure> {
         let result = match operation {
-            Operation::BackendState { .. } => ResultValue::Value {
-                value: json!({"connection":"ready","sequence":0,"generation":1,"reset":false,"events":[],"folders":[{"id":"workspace","name":"test","uri":url::Url::from_directory_path(&self.root).unwrap().to_string().trim_end_matches('/')} ]}),
-            },
+            Operation::BackendState {
+                wait_for_change, ..
+            } => {
+                if wait_for_change == Some(true) {
+                    // This fixture has no notification producer; model the bounded idle tick.
+                    std::thread::sleep(Duration::from_millis(500));
+                }
+                ResultValue::Value {
+                    value: json!({"connection":"ready","sequence":0,"generation":1,"reset":false,"events":[],"folders":[{"id":"workspace","name":"test","uri":url::Url::from_directory_path(&self.root).unwrap().to_string().trim_end_matches('/')} ]}),
+                }
+            }
             Operation::InspectConfiguration { section, .. } => ResultValue::Configuration {
                 value: json!({"userLocalValue":self.configuration.lock().unwrap()[section.strip_prefix("git.").unwrap_or(&section)]}),
             },
@@ -107,6 +115,7 @@ impl Client {
                             Value::Null
                         }
                         Some("confirm") => json!({"confirmed":true}),
+                        Some("open") => Value::Null,
                         _ => panic!("Unexpected editor request {payload}"),
                     },
                 }
@@ -666,6 +675,53 @@ fn verify_binary_comparisons(supervisor: &host::ExtensionHostSupervisor, client:
                 .ends_with("/image.bin")
         );
     }
+    execute(
+        supervisor,
+        client,
+        invocation(
+            "ash.scm",
+            "scm",
+            json!({"method":"refresh","providerId":"root"}),
+        ),
+    );
+    let before = client.requests.lock().unwrap().len();
+    for group in ["changes", "staged"] {
+        execute(
+            supervisor,
+            client,
+            invocation(
+                "ash.scm",
+                "scm",
+                json!({"method":"open","providerId":"root","resourceId":format!("{group}:image.bin"),"options":{"pinned":false}}),
+            ),
+        );
+        let baseline = execute(
+            supervisor,
+            client,
+            invocation(
+                "ash.scm",
+                "scm",
+                json!({"method":"quickDiff","providerId":"root","resource":url::Url::from_file_path(client.root.join("image.bin")).unwrap().to_string()}),
+            ),
+        );
+        assert!(baseline.is_null());
+    }
+    {
+        let requests = client.requests.lock().unwrap();
+        assert!(
+            requests[before..]
+                .iter()
+                .all(|(method, _)| method != "status"),
+            "Opening a published resource must not rescan the repository"
+        );
+        assert_eq!(
+            requests[before..]
+                .iter()
+                .filter(|(method, _)| method == "changeFile")
+                .count(),
+            4
+        );
+    }
     let baseline = execute(
         supervisor,
         client,
@@ -678,4 +734,13 @@ fn verify_binary_comparisons(supervisor: &host::ExtensionHostSupervisor, client:
     assert!(baseline.is_null());
     client.binary_comparison.store(false, Ordering::Release);
     client.revision.fetch_add(1, Ordering::Relaxed);
+    execute(
+        supervisor,
+        client,
+        invocation(
+            "ash.scm",
+            "scm",
+            json!({"method":"refresh","providerId":"root"}),
+        ),
+    );
 }

@@ -84,7 +84,15 @@ GitClient::snapshot
 └─ GitClient::run_query_with_fsmonitor
    └─ git status --porcelain=v2 --branch -z
       └─ parse_status
+```
 
+`GitClient::snapshot_paths` 复用相同的有界执行与 parser，但使用 literal repository-relative
+pathspec 查询指定前缀。结果保留 HEAD，路径列表仅描述查询范围，不能作为全仓快照覆盖缓存。
+窄范围查询直接禁用 fsmonitor，避免额外启动 Git 探测配置，也不会执行仓库指定的 helper；
+全仓查询继续探测并使用受支持的内置 fsmonitor daemon。
+App Server 的 watcher 负责合并增量，并在 HEAD、仓库身份、忽略规则或重命名匹配不确定时回退全量读取。
+
+```text
 GitClient::read_file_at_revision
 └─ GitClient::run_query_unchecked
    └─ git show --no-textconv HEAD:path | :path

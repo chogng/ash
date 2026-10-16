@@ -248,6 +248,28 @@ impl GitService {
         self.snapshot_using(self.canonical_client(), cancellation)
     }
 
+    pub(crate) fn snapshot_paths_for_request(
+        &self,
+        repository: &GitRepository,
+        paths: &GitPathspecSet,
+        cancellation: &CancellationToken,
+    ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
+        // The runtime retains the discovered working-tree identity and sends
+        // metadata/configuration hints through the full rediscovery path.
+        self.ensure_readable()?;
+        let runtime = lock_for_request(&self.runtime, cancellation)?;
+        let client = self.canonical_client();
+        run(&runtime, async {
+            tokio::select! {
+                biased;
+                _ = cancellation.cancelled() => Err(GitServiceError::Cancelled),
+                result = client.snapshot_paths(repository, paths) => {
+                    Ok((repository.clone(), result.map_err(GitServiceError::Git)?))
+                }
+            }
+        })
+    }
+
     fn snapshot_using(
         &self,
         client: GitClient,
@@ -325,19 +347,18 @@ impl GitService {
 
     pub(crate) fn check_ignore(
         &self,
+        repository: &GitRepository,
         paths: &[PathBuf],
         cancellation: &CancellationToken,
     ) -> Result<Vec<PathBuf>, GitServiceError> {
         self.ensure_readable()?;
         let runtime = lock_for_request(&self.runtime, cancellation)?;
+        let client = self.client();
         run(&runtime, async {
             tokio::select! {
                 biased;
                 _ = cancellation.cancelled() => Err(GitServiceError::Cancelled),
-                result = async {
-                    let repository = self.client().open_repository(&self.projection_root).await?;
-                    self.client().check_ignore(&repository, paths).await
-                } => result.map_err(GitServiceError::Git),
+                result = client.check_ignore(repository, paths) => result.map_err(GitServiceError::Git),
             }
         })
     }
@@ -1378,7 +1399,7 @@ impl GitService {
             .map_err(|_| GitServiceError::Boundary)
     }
 
-    fn ensure_readable(&self) -> Result<(), GitServiceError> {
+    pub(crate) fn ensure_readable(&self) -> Result<(), GitServiceError> {
         if !matches!(
             self.authorization.permission(),
             Permission::InspectRepository | Permission::MutateRepository

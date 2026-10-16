@@ -23,6 +23,205 @@ use std::process::Command;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+#[cfg(unix)]
+#[test]
+fn discovery_reuses_equal_scans_within_one_request_but_observes_new_repositories_next_time() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let repository = TestRepository::init();
+    let runtime = GitRuntime::new(
+        inspection_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    let scripts = tempfile::tempdir().unwrap();
+    let log = scripts.path().join("commands");
+    let executable = scripts.path().join("git");
+    let quote = |path: &Path| format!("'{}'", path.display().to_string().replace('\'', "'\\''"));
+    let git = ash_git::GitClient::system().executable().unwrap();
+    std::fs::write(
+        &executable,
+        format!(
+            "#!/bin/sh\nprintf '%s ' \"$@\" >> {}\nprintf '\\n' >> {}\nexec {} \"$@\"\n",
+            quote(&log),
+            quote(&log),
+            quote(&git),
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let client =
+        ash_git::GitClient::with_executable(executable, ash_git::GitExecutionLimits::default())
+            .unwrap();
+    let discover = |connection| {
+        crate::git_service::with_client(client.clone(), || {
+            runtime.discover_for(
+                connection,
+                Some(vec![super::GitDiscoveryOptions::default()]),
+            )
+        })
+        .unwrap()
+    };
+    assert_eq!(discover(1).repositories.len(), 1);
+    let first = std::fs::read_to_string(&log).unwrap();
+    std::fs::write(&log, "").unwrap();
+    assert_eq!(discover(2).repositories.len(), 1);
+    let second = std::fs::read_to_string(&log).unwrap();
+    assert!(!first.is_empty());
+    assert_eq!(
+        first, second,
+        "another equal client policy must not add scans"
+    );
+
+    repository.git(&["init", "-b", "main", "nested"]);
+    assert_eq!(
+        discover(2).repositories.len(),
+        2,
+        "a later request must scan again"
+    );
+    let shallow = runtime
+        .discover_for(
+            3,
+            Some(vec![super::GitDiscoveryOptions {
+                max_depth: 0,
+                ..Default::default()
+            }]),
+        )
+        .unwrap();
+    assert_eq!(
+        shallow.repositories.len(),
+        1,
+        "distinct policies stay isolated"
+    );
+}
+
+#[test]
+fn published_startup_status_requires_live_post_registration_watch_coverage() {
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "initial\n");
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "initial"]);
+    let runtime = GitRuntime::new(
+        mutation_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    let descriptors = runtime.repositories().repositories;
+    assert!(
+        runtime
+            .published_statuses_for(&descriptors)
+            .unwrap()
+            .is_empty()
+    );
+    runtime.status().unwrap();
+    assert!(
+        runtime
+            .published_statuses_for(&descriptors)
+            .unwrap()
+            .is_empty()
+    );
+
+    repository.write("tracked.txt", "changed before watch\n");
+    let watcher = runtime.start_watching(None, vec![watch_authorization(repository.root())]);
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let initial = loop {
+        let states = runtime.published_statuses_for(&descriptors).unwrap();
+        if let Some(state) = states.first() {
+            assert_eq!(state.changes.len(), 1);
+            break state.clone();
+        }
+        assert!(
+            Instant::now() < deadline,
+            "post-registration scan did not publish"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    assert_eq!(
+        runtime.published_statuses_for(&descriptors).unwrap(),
+        [initial.clone()]
+    );
+    assert!(runtime.published_statuses_for(&[]).unwrap().is_empty());
+
+    // Explicit status remains authoritative, even without waiting for a watcher hint.
+    repository.git(&["add", "tracked.txt"]);
+    let staged = runtime.status_for(Some(&initial.repository_id)).unwrap();
+    assert_eq!(
+        staged.changes[0].index_status,
+        super::GitChangeStatusDto::Modified
+    );
+    assert!(staged.revision > initial.revision);
+    drop(watcher);
+    assert!(
+        runtime
+            .published_statuses_for(&descriptors)
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
+fn cancelled_watch_coverage_cannot_publish_old_status_to_a_new_client() {
+    let repository = TestRepository::init();
+    let runtime = GitRuntime::new(
+        mutation_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    let owner = runtime.repository(None).unwrap();
+    runtime.status().unwrap();
+    let mut watcher = runtime.start_watching(None, vec![watch_authorization(repository.root())]);
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while owner.published_status().unwrap().is_none() {
+        assert!(
+            Instant::now() < deadline,
+            "watcher did not establish coverage"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    watcher.signal_shutdown();
+    assert!(owner.published_status().unwrap().is_none());
+    assert!(owner.status_watchers.lock().unwrap().is_empty());
+}
+
+#[test]
+fn revoked_watch_permission_disables_cached_status_without_disabling_explicit_queries() {
+    let repository = TestRepository::init();
+    let runtime = GitRuntime::new(
+        mutation_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    let grant = Grant::for_environment(
+        Dir::open_local(repository.root()).unwrap(),
+        GrantSource::HostConfiguration,
+        Permissions::new([Permission::WatchFiles]),
+    );
+    let _watcher =
+        runtime.start_watching(None, vec![grant.authorize(Permission::WatchFiles).unwrap()]);
+    let descriptors = runtime.repositories().repositories;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while runtime
+        .published_statuses_for(&descriptors)
+        .unwrap()
+        .is_empty()
+    {
+        assert!(
+            Instant::now() < deadline,
+            "watcher did not establish coverage"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    grant.revoke();
+    assert!(
+        runtime
+            .published_statuses_for(&descriptors)
+            .unwrap()
+            .is_empty()
+    );
+    repository.write("after.txt", "explicit queries still work\n");
+    assert!(!runtime.status().unwrap().changes.is_empty());
+}
+
 #[test]
 fn scoped_commit_publishes_real_index_changes_to_all_connections_after_failure() {
     let repository = TestRepository::init();
@@ -610,6 +809,578 @@ fn runtime_incarnations_use_distinct_revision_scopes() {
     );
     assert_eq!(first_status.revision, 1);
     assert_eq!(second_status.revision, 1);
+}
+
+#[test]
+fn incremental_watcher_merges_edits_clean_paths_and_directory_changes() {
+    let repository = TestRepository::init();
+    for path in ["left/file.txt", "left/second.txt", "right/file.txt"] {
+        repository.write(path, "initial\n");
+    }
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "initial"]);
+    repository.write("right/file.txt", "unrelated dirty file\n");
+    let runtime = GitRuntime::new(
+        mutation_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    runtime.status().unwrap();
+
+    repository.write("left/file.txt", "updated\n");
+    assert_incremental_matches_full(&runtime, vec![repository.root().join("left/file.txt")]);
+    repository.write("left/file.txt", "initial\n");
+    assert_incremental_matches_full(&runtime, vec![repository.root().join("left/file.txt")]);
+    repository.write("left/new.txt", "new\n");
+    repository.write("left/nested/new.txt", "new\n");
+    assert_incremental_matches_full(
+        &runtime,
+        vec![
+            repository.root().join("left"),
+            repository.root().join("left/new.txt"),
+        ],
+    );
+    std::fs::rename(
+        repository.root().join("left/nested"),
+        repository.root().join("right/moved"),
+    )
+    .unwrap();
+    assert_incremental_matches_full(
+        &runtime,
+        vec![
+            repository.root().join("left/nested"),
+            repository.root().join("right/moved"),
+        ],
+    );
+    std::fs::remove_file(repository.root().join("left/second.txt")).unwrap();
+    assert_incremental_matches_full(&runtime, vec![repository.root().join("left/second.txt")]);
+    repository.write(".gitignore", "left/new.txt\nright/moved/\n");
+    assert_incremental_matches_full(&runtime, vec![repository.root().join(".gitignore")]);
+}
+
+#[test]
+fn incremental_watcher_reconciles_cross_directory_index_renames_and_late_head_hints() {
+    let repository = TestRepository::init();
+    repository.write("left/file.txt", "original content\n");
+    repository.write("right/keep.txt", "unchanged\n");
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "initial"]);
+    let runtime = GitRuntime::new(
+        mutation_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    runtime.status().unwrap();
+
+    repository.git(&["mv", "left/file.txt", "right/renamed.txt"]);
+    // Only one endpoint's hint has arrived; scoped rename pairing is insufficient.
+    assert_incremental_matches_full(&runtime, vec![repository.root().join("right/renamed.txt")]);
+    assert_eq!(
+        runtime.status().unwrap().changes[0]
+            .original_path
+            .as_deref(),
+        Some("left/file.txt")
+    );
+    repository.write("right/renamed.txt", "worktree edit after staged rename\n");
+    assert_incremental_matches_full(&runtime, vec![repository.root().join("right/renamed.txt")]);
+    repository.git(&["reset", "HEAD", "--", "left/file.txt", "right/renamed.txt"]);
+    assert_incremental_matches_full(&runtime, vec![repository.root().join("right/renamed.txt")]);
+    repository.git(&["commit", "--allow-empty", "-m", "external head"]);
+    assert_incremental_matches_full(&runtime, vec![repository.root().join("right/renamed.txt")]);
+}
+
+#[test]
+fn cancelled_incremental_refresh_keeps_the_previous_snapshot() {
+    let repository = TestRepository::init();
+    repository.write("file.txt", "initial\n");
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "initial"]);
+    let runtime = GitRuntime::new(
+        mutation_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    let initial = runtime.status().unwrap();
+    let owner = runtime.repository(None).unwrap();
+    repository.write("file.txt", "updated\n");
+    let cancellation = ash_async_utils::CancellationSource::new();
+    cancellation.cancel();
+    assert!(matches!(
+        owner.refresh_from_watcher_for_request(
+            &ash_file_watcher::FileWatcherEvent::PathsChanged {
+                paths: vec![repository.root().join("file.txt")],
+            },
+            &cancellation.token(),
+        ),
+        Err(super::GitRuntimeError::Service(
+            crate::git_service::GitServiceError::Cancelled
+        ))
+    ));
+    let retained = owner.state.lock().unwrap().status.clone().unwrap();
+    assert_eq!(retained.changes, initial.changes);
+    assert_eq!(retained.revision, initial.revision);
+    assert!(!runtime.status().unwrap().changes.is_empty());
+}
+
+#[cfg(unix)]
+#[test]
+fn warm_edits_and_known_renames_each_need_only_one_scoped_git_process() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let repository = TestRepository::init();
+    repository.write("left/before.txt", "original\n");
+    repository.write("tracked.txt", "initial\n");
+    let submodule = TestRepository::init();
+    submodule.write("tracked.txt", "initial\n");
+    submodule.git(&["add", "."]);
+    submodule.git(&["commit", "-m", "submodule"]);
+    repository.git(&[
+        "-c",
+        "protocol.file.allow=always",
+        "submodule",
+        "add",
+        submodule.root().to_str().unwrap(),
+        "sub",
+    ]);
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "initial"]);
+    repository.git(&["mv", "left/before.txt", "after.txt"]);
+    repository.git(&["config", "core.fsmonitor", "this-helper-must-never-run"]);
+    let runtime = GitRuntime::new(
+        mutation_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    runtime.status().unwrap();
+    let owner = runtime.repository(None).unwrap();
+    let scripts = tempfile::tempdir().unwrap();
+    let log = scripts.path().join("commands");
+    let executable = scripts.path().join("git");
+    let quote = |path: &Path| format!("'{}'", path.display().to_string().replace('\'', "'\\''"));
+    let git = ash_git::GitClient::system().executable().unwrap();
+    std::fs::write(
+        &executable,
+        format!(
+            "#!/bin/sh\nprintf '%s ' \"$@\" >> {}\nprintf '\\n' >> {}\nexec {} \"$@\"\n",
+            quote(&log),
+            quote(&log),
+            quote(&git),
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let client =
+        ash_git::GitClient::with_executable(executable, ash_git::GitExecutionLimits::default())
+            .unwrap();
+    for path in ["tracked.txt", "after.txt", "sub/tracked.txt"] {
+        repository.write(path, "edited in working tree\n");
+        crate::git_service::with_client(client.clone(), || {
+            owner
+                .refresh_from_watcher_for_request(
+                    &ash_file_watcher::FileWatcherEvent::PathsChanged {
+                        paths: vec![repository.root().join(path)],
+                    },
+                    &ash_async_utils::CancellationSource::new().token(),
+                )
+                .unwrap();
+        });
+        let incremental = owner.state.lock().unwrap().status.clone().unwrap();
+        assert_eq!(incremental.changes, runtime.status().unwrap().changes);
+    }
+    let commands = std::fs::read_to_string(log).unwrap();
+    let commands = commands.lines().collect::<Vec<_>>();
+    assert_eq!(commands.len(), 3, "{commands:?}");
+    for command in &commands {
+        assert!(command.contains("--literal-pathspecs status "), "{command}");
+        assert!(command.contains("core.fsmonitor=false"), "{command}");
+    }
+    assert!(commands[1].contains("after.txt"));
+    assert!(commands[1].contains("left/before.txt"));
+    assert!(
+        commands[2].ends_with("-- sub "),
+        "A submodule edit queries its gitlink prefix: {}",
+        commands[2]
+    );
+}
+
+#[test]
+fn incremental_watcher_keeps_authorized_subdirectory_paths_relative() {
+    let repository = TestRepository::init();
+    repository.write("scope/file.txt", "initial\n");
+    repository.write("outside.txt", "outside\n");
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "initial"]);
+    let runtime = GitRuntime::new(
+        inspection_authorization(&repository.root().join("scope")),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    runtime.status().unwrap();
+    repository.write("scope/file.txt", "inside change\n");
+    repository.write("outside.txt", "outside change\n");
+    assert_incremental_matches_full(&runtime, vec![repository.root().join("scope/file.txt")]);
+    let status = runtime.status().unwrap();
+    assert_eq!(status.changes.len(), 1);
+    assert_eq!(status.changes[0].path, "file.txt");
+    assert_eq!(status.path, "scope");
+}
+
+#[cfg(unix)]
+#[test]
+fn ignore_answers_reuse_identity_and_survive_unrelated_edits_but_not_rule_or_index_changes() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let repository = TestRepository::init();
+    repository.write(".gitignore", "*.log\n");
+    repository.write("tracked.txt", "initial\n");
+    repository.write("ignored.log", "ignored\n");
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "initial"]);
+    let runtime = GitRuntime::new(
+        mutation_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    runtime.status().unwrap();
+    let owner = runtime.repository(None).unwrap();
+    let scripts = tempfile::tempdir().unwrap();
+    let log = scripts.path().join("commands");
+    let executable = scripts.path().join("git");
+    let quote = |path: &Path| format!("'{}'", path.display().to_string().replace('\'', "'\\''"));
+    let git = ash_git::GitClient::system().executable().unwrap();
+    std::fs::write(
+        &executable,
+        format!(
+            "#!/bin/sh\nprintf '%s ' \"$@\" >> {}\nprintf '\\n' >> {}\nexec {} \"$@\"\n",
+            quote(&log),
+            quote(&log),
+            quote(&git),
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let client =
+        ash_git::GitClient::with_executable(executable, ash_git::GitExecutionLimits::default())
+            .unwrap();
+    let token = ash_async_utils::CancellationSource::new().token();
+    let paths = vec![PathBuf::from("tracked.txt"), PathBuf::from("ignored.log")];
+    let query = || {
+        crate::git_service::with_client(client.clone(), || {
+            runtime.check_ignore_for(None, &paths, &token).unwrap()
+        })
+    };
+    let commands = || std::fs::read_to_string(&log).unwrap();
+    assert_eq!(query(), vec![PathBuf::from("ignored.log")]);
+    assert_eq!(query(), vec![PathBuf::from("ignored.log")]);
+    assert_eq!(commands().lines().count(), 1);
+    assert!(!commands().contains("rev-parse"));
+
+    owner
+        .ignore_change(&ash_file_watcher::FileWatcherEvent::PathsChanged {
+            paths: vec![repository.root().join("unrelated.txt")],
+        })
+        .unwrap();
+    assert_eq!(query(), vec![PathBuf::from("ignored.log")]);
+    assert_eq!(commands().lines().count(), 1);
+
+    repository.git(&["add", "--force", "ignored.log"]);
+    owner
+        .ignore_change(&ash_file_watcher::FileWatcherEvent::PathsChanged {
+            paths: vec![owner.identity.git_dir().join("index")],
+        })
+        .unwrap();
+    assert!(query().is_empty());
+    assert_eq!(commands().lines().count(), 2);
+    repository.git(&["reset", "--quiet", "HEAD", "--", "ignored.log"]);
+    // A caller may force refresh before the index watcher catches up.
+    runtime.status().unwrap();
+    assert_eq!(query(), vec![PathBuf::from("ignored.log")]);
+    assert_eq!(commands().lines().count(), 3);
+
+    repository.write(".gitignore", "*.txt\n");
+    owner
+        .ignore_change(&ash_file_watcher::FileWatcherEvent::PathsChanged {
+            paths: vec![repository.root().join(".gitignore")],
+        })
+        .unwrap();
+    assert!(
+        query().is_empty(),
+        "Tracked files remain excluded from ignore decorations"
+    );
+    assert_eq!(commands().lines().count(), 4);
+    let cancelled = ash_async_utils::CancellationSource::new();
+    cancelled.cancel();
+    assert!(matches!(
+        runtime.check_ignore_for(None, &paths, &cancelled.token()),
+        Err(super::GitRuntimeError::Service(
+            crate::git_service::GitServiceError::Cancelled
+        ))
+    ));
+    assert_eq!(commands().lines().count(), 4);
+}
+
+fn assert_incremental_matches_full(runtime: &GitRuntime, paths: Vec<PathBuf>) {
+    let owner = runtime.repository(None).unwrap();
+    owner
+        .refresh_from_watcher_for_request(
+            &ash_file_watcher::FileWatcherEvent::PathsChanged { paths },
+            &ash_async_utils::CancellationSource::new().token(),
+        )
+        .unwrap();
+    let incremental = owner.state.lock().unwrap().status.clone().unwrap();
+    let full = runtime.status().unwrap();
+    assert_eq!(incremental.head, full.head);
+    assert_eq!(incremental.changes, full.changes);
+    assert_eq!(
+        incremental.revision, full.revision,
+        "A full read after an equivalent delta must not notify again"
+    );
+    assert_eq!(incremental.history_revision, full.history_revision);
+}
+
+#[test]
+fn ignore_cache_is_bounded_and_preserves_complete_batched_answers() {
+    let repository = TestRepository::init();
+    repository.write(".gitignore", "*.log\n");
+    let runtime = GitRuntime::new(
+        mutation_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    let paths = (0..5000)
+        .map(|index| PathBuf::from(format!("logs/{index}.log")))
+        .collect::<Vec<_>>();
+    let token = ash_async_utils::CancellationSource::new().token();
+    assert_eq!(
+        runtime.check_ignore_for(None, &paths, &token).unwrap(),
+        paths
+    );
+    assert_eq!(
+        runtime.check_ignore_for(None, &paths, &token).unwrap(),
+        paths
+    );
+    assert!(
+        runtime
+            .repository(None)
+            .unwrap()
+            .ignore_cache
+            .lock()
+            .unwrap()
+            .paths
+            .len()
+            <= 4096
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn ignore_query_finishing_after_invalidation_cannot_repopulate_the_cache() {
+    use std::os::unix::fs::PermissionsExt;
+    struct ReleaseOnDrop(PathBuf);
+    impl Drop for ReleaseOnDrop {
+        fn drop(&mut self) {
+            let _ = std::fs::write(&self.0, "release");
+        }
+    }
+    let repository = TestRepository::init();
+    repository.write(".gitignore", "*.log\n");
+    let runtime = GitRuntime::new(
+        mutation_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    let owner = runtime.repository(None).unwrap();
+    let scripts = tempfile::tempdir().unwrap();
+    let started = scripts.path().join("started");
+    let release = ReleaseOnDrop(scripts.path().join("release"));
+    let executable = scripts.path().join("git");
+    let quote = |path: &Path| format!("'{}'", path.display().to_string().replace('\'', "'\\''"));
+    let git = ash_git::GitClient::system().executable().unwrap();
+    std::fs::write(&executable, format!(
+        "#!/bin/sh\nprintf 'start\\n' >> {}\nwhile ! test -f {}; do sleep 0.01; done\nexec {} \"$@\"\n",
+        quote(&started), quote(&release.0), quote(&git),
+    )).unwrap();
+    std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let client =
+        ash_git::GitClient::with_executable(executable, ash_git::GitExecutionLimits::default())
+            .unwrap();
+    let token = ash_async_utils::CancellationSource::new().token();
+    let paths = vec![PathBuf::from("ignored.log")];
+    std::thread::scope(|scope| {
+        let _release_on_failure = ReleaseOnDrop(release.0.clone());
+        let query = scope.spawn(|| {
+            crate::git_service::with_client(client.clone(), || {
+                runtime.check_ignore_for(None, &paths, &token).unwrap()
+            })
+        });
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !started.exists() {
+            assert!(Instant::now() < deadline, "Ignore query did not start");
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        owner
+            .ignore_change(&ash_file_watcher::FileWatcherEvent::PathsChanged {
+                paths: vec![repository.root().join("ignored.log")],
+            })
+            .unwrap();
+        std::fs::write(&release.0, "release").unwrap();
+        assert_eq!(query.join().unwrap(), paths);
+    });
+    assert_eq!(
+        crate::git_service::with_client(client, || runtime
+            .check_ignore_for(None, &paths, &token)
+            .unwrap()),
+        paths
+    );
+    assert_eq!(std::fs::read_to_string(started).unwrap().lines().count(), 2);
+}
+
+#[test]
+fn watcher_file_updates_reuse_refs_until_metadata_changes_or_head_moves() {
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "initial\n");
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "initial"]);
+    let broker = Arc::new(UpdateBroker::default());
+    let queue = NotificationQueue::default();
+    broker.register(1, false, &queue);
+    let runtime = GitRuntime::new(mutation_authorization(repository.root()), broker).unwrap();
+    let initial = runtime.status().unwrap();
+    queue.drain();
+    let owner = runtime.repository(None).unwrap();
+    let token = ash_async_utils::CancellationSource::new().token();
+    let edit = ash_file_watcher::FileWatcherEvent::PathsChanged {
+        paths: vec![repository.root().join("tracked.txt")],
+    };
+
+    // A metadata notification may arrive after the file notification. Only that
+    // later notification needs to scan refs; file state should be visible first.
+    repository.git(&["branch", "external"]);
+    repository.write("tracked.txt", "updated\n");
+    owner
+        .refresh_from_watcher_for_request(&edit, &token)
+        .unwrap();
+    let events = queue.drain();
+    assert_eq!(events.len(), 1);
+    assert_eq!(
+        events[0]["params"]["status"]["changes"][0]["path"],
+        "tracked.txt"
+    );
+    assert_eq!(
+        events[0]["params"]["status"]["historyRevision"],
+        initial.history_revision
+    );
+    assert!(
+        !owner
+            .state
+            .lock()
+            .unwrap()
+            .references
+            .as_ref()
+            .unwrap()
+            .references
+            .iter()
+            .any(|reference| reference.name() == "external")
+    );
+
+    owner
+        .refresh_from_watcher_for_request(
+            &ash_file_watcher::FileWatcherEvent::PathsChanged {
+                paths: vec![owner.identity.common_dir().join("refs/heads/external")],
+            },
+            &token,
+        )
+        .unwrap();
+    assert_eq!(queue.drain().len(), 1);
+    {
+        let state = owner.state.lock().unwrap();
+        assert_eq!(state.history_revision, initial.history_revision + 1);
+        assert!(
+            state
+                .references
+                .as_ref()
+                .unwrap()
+                .references
+                .iter()
+                .any(|reference| reference.name() == "external")
+        );
+    }
+
+    // A new HEAD invalidates cached refs even if only the file hint has arrived.
+    repository.git(&["commit", "--allow-empty", "-m", "external head"]);
+    owner
+        .refresh_from_watcher_for_request(&edit, &token)
+        .unwrap();
+    assert_eq!(queue.drain().len(), 1);
+    let state = owner.state.lock().unwrap();
+    assert_ne!(state.status.as_ref().unwrap().head, initial.head);
+    assert_eq!(state.history_revision, initial.history_revision + 2);
+}
+
+#[test]
+fn watcher_config_sources_and_rescans_refresh_refs() {
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "initial\n");
+    repository.write(
+        "included.config",
+        "[remote \"origin\"]\nurl = https://example.invalid/first\n",
+    );
+    repository.git(&["config", "include.path", "../included.config"]);
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "initial"]);
+    let broker = Arc::new(UpdateBroker::default());
+    let queue = NotificationQueue::default();
+    broker.register(1, false, &queue);
+    let runtime = GitRuntime::new(mutation_authorization(repository.root()), broker).unwrap();
+    let initial = runtime.status().unwrap();
+    queue.drain();
+    let owner = runtime.repository(None).unwrap();
+    let token = ash_async_utils::CancellationSource::new().token();
+
+    // Included config can live inside the worktree, but changing it invalidates
+    // remote metadata rather than taking the ordinary file refresh path.
+    repository.write(
+        "included.config",
+        "[remote \"renamed\"]\nurl = https://example.invalid/second\n",
+    );
+    owner
+        .refresh_from_watcher_for_request(
+            &ash_file_watcher::FileWatcherEvent::PathsChanged {
+                paths: vec![repository.root().join("included.config")],
+            },
+            &token,
+        )
+        .unwrap();
+    assert_eq!(queue.drain().len(), 1);
+    assert_eq!(
+        owner
+            .state
+            .lock()
+            .unwrap()
+            .references
+            .as_ref()
+            .unwrap()
+            .catalog
+            .remotes,
+        vec!["renamed"]
+    );
+
+    repository.git(&["tag", "external"]);
+    owner
+        .refresh_from_watcher_for_request(
+            &ash_file_watcher::FileWatcherEvent::RescanRequired {
+                watched_paths: vec![repository.root().to_path_buf()],
+            },
+            &token,
+        )
+        .unwrap();
+    assert_eq!(queue.drain().len(), 1);
+    let state = owner.state.lock().unwrap();
+    assert_eq!(state.history_revision, initial.history_revision + 2);
+    assert_eq!(
+        state.references.as_ref().unwrap().catalog.tags[0].0,
+        "external"
+    );
 }
 
 #[test]
@@ -1318,6 +2089,77 @@ fn discovery_skips_deep_worktrees_but_accepts_them_when_opened_directly() {
         worktree.status().unwrap().head,
         ash_app_server_protocol::protocol::git::GitHeadDto::Branch { name, .. } if name == "review"
     ));
+}
+
+#[test]
+fn enabling_worktree_discovery_wakes_idle_watchers_without_another_directory_event() {
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "initial\n");
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "initial"]);
+    repository.git(&["worktree", "add", "-b", "linked", "linked"]);
+    let broker = Arc::new(UpdateBroker::default());
+    let queue = NotificationQueue::default();
+    broker.register(1, false, &queue);
+    let runtime = GitRuntime::new(inspection_authorization(repository.root()), broker).unwrap();
+    assert_eq!(runtime.repositories().repositories.len(), 1);
+    let watcher = runtime.start_watching(None, vec![watch_authorization(repository.root())]);
+    let detected = runtime
+        .discover_for(
+            1,
+            Some(vec![super::GitDiscoveryOptions {
+                detect_worktrees: true,
+                ..Default::default()
+            }]),
+        )
+        .unwrap();
+    let linked = detected
+        .repositories
+        .iter()
+        .find(|repository| repository.path == "linked")
+        .unwrap();
+    let owner = runtime.repository(Some(&linked.id)).unwrap();
+    // Starting the newly admitted watcher publishes its first authoritative state.
+    // No directory creation or metadata change occurs after updating the policy.
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        if queue.drain().iter().any(|event| {
+            event["method"] == "git/statusChanged"
+                && event["params"]["status"]["repositoryId"] == linked.id
+        }) {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "Newly discovered worktree was never watched"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    repository.write("linked/tracked.txt", "changed\n");
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let changed = owner
+            .state
+            .lock()
+            .unwrap()
+            .status
+            .as_ref()
+            .is_some_and(|status| {
+                status
+                    .changes
+                    .iter()
+                    .any(|change| change.path == "tracked.txt")
+            });
+        if changed {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "Worktree file edit did not reach its owner"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    drop(watcher);
 }
 
 #[test]

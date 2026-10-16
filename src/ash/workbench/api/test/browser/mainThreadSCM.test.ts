@@ -52,6 +52,29 @@ test('SCM resource groups survive input-only snapshots and retire changed resour
 	assert.ok(!repository.provider.groups.includes(groups[0]!));
 });
 
+test('SCM reconciles resources by group and ID while replacing changed actions and removed identities', async () => {
+	const resource = (id: string, enabled = true): JsonValue => ({ id, sourceUri: `file:///workspace/${id}.txt`, path: `${id}.txt`, decorations: { badge: 'M', tooltip: 'Modified', kind: 'modified' }, openLabel: `Open ${id}`, actions: [{ id: `stage:${id}`, label: 'Stage', tooltip: 'Stage', enabled }] });
+	const group = (id: string, resources: JsonValue[]): JsonValue => ({ id, label: id, actions: [], resources });
+	const snapshot = (groups: JsonValue[]): JsonValue => ({ ...provider() as Record<string, JsonValue>, groups });
+	const calls: JsonValue[] = [];
+	const first = resource('first'), second = resource('second');
+	const value = fixture(async request => { calls.push(request.payload); return null; }, [snapshot([group('changes', [first, second]), group('staged', [first])])]);
+	using cleanup = value.lifetime;
+	const repository = value.scm.getRepository('repo')!;
+	const before = repository.provider.groups;
+	value.bridge.set(source, 'ash.scm', 2, [snapshot([group('staged', [first]), group('changes', [resource('added'), first, resource('second', false)])])]);
+	const after = repository.provider.groups;
+	assert.strictEqual(after[0], before[1], 'An unchanged group survives reordering');
+	assert.strictEqual(after[1]!.resources[1], before[0]!.resources[0], 'An unchanged resource survives insertion before it');
+	assert.notStrictEqual(after[1]!.resources[2], before[0]!.resources[1]);
+	assert.equal(after[1]!.resources[2]!.actions[0]!.enabled, false);
+	await after[1]!.resources[1]!.open({}, false);
+	assert.equal((calls.at(-1) as Record<string, JsonValue>).resourceId, 'first');
+	value.bridge.set(source, 'ash.scm', 3, [snapshot([group('changes', [second])])]);
+	assert.equal(repository.provider.groups.length, 1);
+	assert.notStrictEqual(repository.provider.groups[0]!.resources[0], before[0]!.resources[1], 'The new action state replaces the disabled action');
+});
+
 test('SCM decorates collapsed ancestors from current changes and respects provider bubbling', async () => {
 	const resource = URI.file('/workspace/src/sample.txt');
 	const snapshot = { ...(provider() as Record<string, JsonValue>), groups: [{ id: 'changes', label: 'Changes', actions: [], resources: [{ id: 'sample', sourceUri: resource.toString(), path: 'src/sample.txt', decorations: { badge: 'D', tooltip: 'Deleted', kind: 'deleted' }, openLabel: 'Open change', actions: [] }] }] };

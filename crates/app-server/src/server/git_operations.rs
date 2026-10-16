@@ -608,12 +608,27 @@ impl AppServer {
                     .collect::<Result<Vec<_>, RpcError>>()
             })
             .transpose()?;
-        result(
-            &self
-                .git_runtime_service()?
-                .discover_for(connection.connection_id, folders)
-                .map_err(git_error)?,
-        )
+        let runtime = self.git_runtime_service()?;
+        let mut discovered = runtime
+            .discover_for(connection.connection_id, folders)
+            .map_err(git_error)?;
+        // Watched state uses the canonical Git policy. Alternate executables and
+        // rename thresholds still require their existing authoritative query.
+        if params.include_status == Some(true)
+            && params.client.as_ref().is_none_or(|client| {
+                client.paths.is_empty()
+                    && client
+                        .similarity_threshold
+                        .is_none_or(|threshold| threshold == 50)
+            })
+        {
+            discovered.statuses = Some(
+                runtime
+                    .published_statuses_for(&discovered.repositories)
+                    .map_err(git_error)?,
+            );
+        }
+        result(&discovered)
     }
 
     pub(super) fn git_status(&self, value: &Value) -> Result<Value, RpcError> {

@@ -171,7 +171,6 @@
         "notifications": [
           "git/statusChanged",
           "git/repositoriesChanged",
-          "git/ignoreChanged",
           "config/changed"
         ]
       }

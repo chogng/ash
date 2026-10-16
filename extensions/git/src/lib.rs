@@ -292,10 +292,6 @@ impl GitRuntime {
     }
 
     fn refresh(&self, token: Option<&CancellationToken>) -> Result<(), ExtensionError> {
-        let _gate = self
-            .discovery
-            .lock()
-            .map_err(|_| invalid("Git discovery failed"))?;
         let after = self.lock().sequence;
         let facts = match token {
             Some(token) => self
@@ -304,6 +300,88 @@ impl GitRuntime {
                 .backend_state("git.repository", after, token)?,
             None => self.api.background.backend_state("git.repository", after)?,
         };
+        self.refresh_with_state(facts, token)
+    }
+
+    fn refresh_with_state(
+        &self,
+        facts: Value,
+        token: Option<&CancellationToken>,
+    ) -> Result<(), ExtensionError> {
+        let _gate = self
+            .discovery
+            .lock()
+            .map_err(|_| invalid("Git discovery failed"))?;
+        let after = self.lock().sequence;
+        if facts["sequence"]
+            .as_u64()
+            .is_some_and(|sequence| sequence < after)
+        {
+            return Ok(());
+        }
+        // A status notification already contains the backend owner's complete snapshot.
+        // Keep configuration/discovery changes on the full path; ordinary file changes
+        // can update the existing repository without another scan or Git subprocess.
+        let updates = {
+            let state = self.lock();
+            let same_workspace = (facts["connection"] == "ready"
+                || facts["connection"] == "connected")
+                && state.discovery_signature.as_ref().is_some_and(|signature| {
+                    signature[0] == facts["generation"] && signature[1] == facts["folders"]
+                });
+            facts["events"]
+                .as_array()
+                .filter(|events| {
+                    same_workspace
+                        && facts["reset"] != true
+                        && !events.is_empty()
+                        && events
+                            .iter()
+                            .all(|event| event["method"] == "git/statusChanged")
+                })
+                .and_then(|events| {
+                    events
+                        .iter()
+                        .map(|event| {
+                            let status: Status = decode(event["params"]["status"].clone()).ok()?;
+                            let repository = state.repositories.get(&status.repository_id)?;
+                            // Notifications use the shared client's defaults. A package selecting a
+                            // custom executable or rename threshold must still request its own view.
+                            (repository.status.is_some()
+                                && !repository.is_busy()
+                                && repository.configuration.boolean("autorefresh", true)
+                                && repository.configuration.value("path").is_null()
+                                && repository.configuration.number("similarityThreshold", 50) == 50)
+                                .then_some(status)
+                        })
+                        .collect::<Option<Vec<_>>>()
+                })
+        };
+        if let Some(updates) = updates {
+            let mut state = self.lock();
+            let mut changed = false;
+            for status in updates {
+                let Some(repository) = state.repositories.get_mut(&status.repository_id) else {
+                    continue;
+                };
+                let previous = repository
+                    .status
+                    .as_ref()
+                    .map(|status| (status.stream_instance_id.clone(), status.revision));
+                accept_repository_status(repository, status);
+                changed |= previous
+                    != repository
+                        .status
+                        .as_ref()
+                        .map(|status| (status.stream_instance_id.clone(), status.revision));
+            }
+            state.sequence = facts["sequence"].as_u64().unwrap_or(after);
+            drop(state);
+            if changed {
+                self.publish()?;
+            }
+            return Ok(());
+        }
         if facts["connection"] != "ready" && facts["connection"] != "connected" {
             let changed = {
                 let mut state = self.lock();
@@ -393,16 +471,22 @@ impl GitRuntime {
             (!reset && state.discovery_signature.as_ref() == Some(&signature))
                 .then(|| state.discovery_result.clone())
         };
+        let mut published_statuses = std::collections::HashMap::<String, Status>::new();
         let descriptors = if let Some(cached) = cached {
             cached
         } else {
             let result = self.api.request(
                 "repositories",
-                json!({"folders":discovery}),
+                json!({"folders":discovery,"includeStatus":true}),
                 &configuration,
                 token,
             )?;
             let descriptors: Vec<RepositoryDescriptor> = decode(result["repositories"].clone())?;
+            if let Some(statuses) = result.get("statuses").filter(|value| !value.is_null()) {
+                for status in decode::<Vec<Status>>(statuses.clone())? {
+                    published_statuses.insert(status.repository_id.clone(), status);
+                }
+            }
             let mut state = self.lock();
             state.discovery_signature = Some(signature);
             state.discovery_result = descriptors.clone();
@@ -448,15 +532,22 @@ impl GitRuntime {
             repository.descriptor = descriptor;
             repository.root_uri = root_uri;
             repository.configuration = config;
+            // Discovery may carry the backend's already-published, watched state.
+            // It is used only for a new view under the canonical client policy;
+            // explicit refresh and configuration changes keep their full queries.
+            let published = published_statuses.remove(&repository.descriptor.id);
+            let initial_snapshot = accept_initial_repository_status(&mut repository, published);
             let changed = config_changed
-                || repository.status.is_none()
-                || facts["reset"] == true
-                || facts["events"].as_array().is_some_and(|events| {
-                    events.iter().any(|event| {
-                        event["method"] == "git/statusChanged"
-                            && event["params"]["status"]["repositoryId"] == repository.descriptor.id
-                    })
-                });
+                || !initial_snapshot
+                    && (repository.status.is_none()
+                        || facts["reset"] == true
+                        || facts["events"].as_array().is_some_and(|events| {
+                            events.iter().any(|event| {
+                                event["method"] == "git/statusChanged"
+                                    && event["params"]["status"]["repositoryId"]
+                                        == repository.descriptor.id
+                            })
+                        }));
             if changed
                 && (!repository.is_busy() || repository.status.is_none())
                 && (repository.configuration.boolean("autorefresh", true)
@@ -584,10 +675,22 @@ impl GitRuntime {
                     .name("git-client-subscriptions".into())
                     .spawn(move || {
                         while !runtime.stopped.load(Ordering::Acquire) {
-                            std::thread::sleep(Duration::from_millis(500));
-                            if !runtime.stopped.load(Ordering::Acquire) {
-                                let _ = runtime.refresh(None);
-                                let _ = runtime.update_blame();
+                            let after = runtime.lock().sequence;
+                            let facts = runtime
+                                .api
+                                .background
+                                .wait_for_backend_state("git.repository", after);
+                            if runtime.stopped.load(Ordering::Acquire) {
+                                break;
+                            }
+                            match facts {
+                                Ok(facts) => {
+                                    let _ = runtime.refresh_with_state(facts, None);
+                                    let _ = runtime.update_blame();
+                                }
+                                // Transport failures still back off; normal updates are
+                                // driven by the window's admitted notification stream.
+                                Err(_) => std::thread::sleep(Duration::from_millis(500)),
                             }
                         }
                     })
@@ -709,6 +812,22 @@ impl GitRuntime {
             _ => Err(invalid("Unsupported Git SCM operation")),
         }
     }
+}
+
+fn accept_initial_repository_status(repository: &mut Repository, status: Option<Status>) -> bool {
+    let path = repository.configuration.value("path");
+    if repository.status.is_some()
+        || !(path.is_null() || path.as_array().is_some_and(Vec::is_empty))
+        || repository.configuration.number("similarityThreshold", 50) != 50
+    {
+        return false;
+    }
+    let Some(status) = status.filter(|status| status.repository_id == repository.descriptor.id)
+    else {
+        return false;
+    };
+    accept_repository_status(repository, status);
+    repository.status.is_some()
 }
 
 // A reconnected stream can replace a previous stream once. Delayed work from a retired

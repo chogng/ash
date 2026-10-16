@@ -467,19 +467,30 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 	}
 	public get groups(): readonly ISCMResourceGroup[] {
 		// Keep resource identities while only input or status presentation changes.
-		return this.resourceGroups ??= this.snapshot.groups.map(group => ({
-			id: string(group.id), label: string(group.label), actions: array(group.actions).map(value => this.action(value)),
-			resources: array(group.resources).map(value => {
-				const resource = object(value);
-				const decoration = object(resource.decorations);
-				return {
-					sourceUri: URI.parse(string(resource.sourceUri)), path: string(resource.path), originalPath: optionalString(resource.originalPath),
-					decorations: { badge: string(decoration.badge), tooltip: string(decoration.tooltip), kind: string(decoration.kind) },
-					openLabel: string(resource.openLabel), actions: array(resource.actions).map(value => this.action(value)),
-					open: async (options, sideBySide) => { await this.call('open', { resourceId: string(resource.id), options, sideBySide }); },
-				};
-			}),
-		}));
+		return this.resourceGroups ??= this.createResourceGroups(this.snapshot.groups);
+	}
+	private createResourceGroups(groups: ProviderSnapshot['groups'], previous: ProviderSnapshot['groups'] = [], resources: readonly ISCMResourceGroup[] = []): readonly ISCMResourceGroup[] {
+		const retained = new Map(previous.map((group, index) => [string(group.id), { snapshot: group, group: resources[index] }]));
+		return groups.map(group => {
+			const old = retained.get(string(group.id));
+			if (old?.group && structuralEquals(old.snapshot, group)) return old.group;
+			const previousResources = new Map(old?.group ? array(old.snapshot.resources).map((value, index) => [string(object(value).id), { snapshot: value, resource: old.group!.resources[index] }]) : []);
+			return {
+				id: string(group.id), label: string(group.label), actions: array(group.actions).map(value => this.action(value)),
+				resources: array(group.resources).map(value => {
+					const resource = object(value);
+					const retained = previousResources.get(string(resource.id));
+					if (retained?.resource && structuralEquals(retained.snapshot, value)) return retained.resource;
+					const decoration = object(resource.decorations);
+					return {
+						sourceUri: URI.parse(string(resource.sourceUri)), path: string(resource.path), originalPath: optionalString(resource.originalPath),
+						decorations: { badge: string(decoration.badge), tooltip: string(decoration.tooltip), kind: string(decoration.kind) },
+						openLabel: string(resource.openLabel), actions: array(resource.actions).map(value => this.action(value)),
+						open: async (options, sideBySide) => { await this.call('open', { resourceId: string(resource.id), options, sideBySide }); },
+					};
+				}),
+			};
+		});
 	}
 	public get statusBarCommands(): ISCMProvider['statusBarCommands'] {
 		return this.snapshot.statusBarCommands.map(entry => ({
@@ -516,8 +527,12 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 		const historyChanged = value.historyRevision !== this.snapshot.historyRevision;
 		const historyRefsChanged = value.historyRefsRevision !== this.snapshot.historyRefsRevision;
 		const resourcesChanged = !structuralEquals(value.groups, this.snapshot.groups);
+		if (resourcesChanged && this.resourceGroups) {
+			// Reconcile by provider/group/resource identity. Unchanged rows keep their
+			// actions and labels; removed rows leave this owner's reachable snapshot.
+			this.resourceGroups = this.createResourceGroups(value.groups, this.snapshot.groups, this.resourceGroups);
+		}
 		this.snapshot = value;
-		if (resourcesChanged) this.resourceGroups = undefined;
 		if (!structuralEquals(this.historyRef.get(), value.historyRef)) { this.historyRef.set(value.historyRef); }
 		if (!structuralEquals(this.historyRemoteRef.get(), value.historyRemoteRef)) { this.historyRemoteRef.set(value.historyRemoteRef); }
 		if (!structuralEquals(this.historyBaseRef.get(), value.historyBaseRef)) { this.historyBaseRef.set(value.historyBaseRef); }

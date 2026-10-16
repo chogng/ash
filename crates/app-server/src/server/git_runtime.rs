@@ -43,6 +43,7 @@ use ash_file_watcher::DebouncedWatchReceiver;
 use ash_file_watcher::FileWatcher;
 use ash_file_watcher::FileWatcherBackend;
 use ash_file_watcher::FileWatcherEvent;
+use ash_file_watcher::ThrottledWatchReceiver;
 use ash_file_watcher::WatchPath;
 use ash_git::GitChangeFileComparison;
 use ash_git::GitChangeStatus;
@@ -50,6 +51,7 @@ use ash_git::GitCommitChange;
 use ash_git::GitGraph;
 use ash_git::GitGraphCursor;
 use ash_git::GitHead;
+use ash_git::GitPathspecSet;
 use ash_git::GitPullMode;
 use ash_git::GitReferenceKind;
 use ash_git::GitRemoteProvider;
@@ -62,6 +64,7 @@ use ignore::WalkBuilder;
 use sha2::Digest;
 use sha2::Sha256;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -74,7 +77,7 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 use std::time::Instant;
 
-const GIT_WATCH_DEBOUNCE: Duration = Duration::from_millis(100);
+const GIT_WATCH_INTERVAL: Duration = Duration::from_millis(100);
 const ALIASED_PATH_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 pub(crate) struct GitRuntime {
@@ -84,10 +87,11 @@ pub(crate) struct GitRuntime {
     discovery: Mutex<()>,
     discovery_interests: Mutex<HashMap<u64, Vec<GitDiscoveryOptions>>>,
     registry: RwLock<GitRepositoryRegistry>,
+    registry_changed: tokio::sync::watch::Sender<()>,
 }
 
 /// Ephemeral query preferences; the frontend configuration service owns persisted values.
-#[derive(Clone)]
+#[derive(Clone, Eq, Hash, PartialEq)]
 pub(super) struct GitDiscoveryOptions {
     pub dir_id: Option<String>,
     pub max_depth: i32,
@@ -98,6 +102,10 @@ pub(super) struct GitDiscoveryOptions {
     pub detect_worktrees: bool,
     pub worktree_limit: usize,
 }
+
+// Shared only within one discovery operation. Equal directory policies need one
+// scan even when requested by multiple windows or reused to filter the reply.
+type GitDiscoveryScans = HashMap<(PathBuf, GitDiscoveryOptions), Vec<PathBuf>>;
 impl Default for GitDiscoveryOptions {
     fn default() -> Self {
         Self {
@@ -134,6 +142,8 @@ struct GitRepositoryRuntime {
     common_dir: PathBuf,
     identity: GitRepository,
     ignore_watch_paths: Mutex<Vec<PathBuf>>,
+    ignore_cache: Mutex<IgnoreCache>,
+    status_watchers: Mutex<Vec<(CancellationToken, Authorization)>>,
     state: Mutex<GitRuntimeState>,
     graph_sessions: Mutex<HashMap<u64, GraphSession>>,
     next_graph_token: AtomicU64,
@@ -165,10 +175,24 @@ struct GraphSession {
     revisions: Option<Vec<String>>,
 }
 
+// Derived ignore answers share the repository owner's lifetime. File/ignore/index
+// hints invalidate them before consumers are notified; in-flight reads cannot
+// repopulate a cache that has moved to a newer generation.
+#[derive(Default)]
+struct IgnoreCache {
+    generation: u64,
+    paths: HashMap<(PathBuf, PathBuf), bool>,
+}
+
 #[derive(Clone, Copy)]
 enum StatusNotification {
     OnChange,
     Always,
+}
+
+enum StatusRefresh {
+    Repository,
+    Paths(GitPathspecSet),
 }
 
 pub(super) struct GitRuntimeCommit {
@@ -222,6 +246,7 @@ impl GitRuntime {
             updates,
             discovery: Mutex::new(()),
             discovery_interests: Mutex::new(HashMap::new()),
+            registry_changed: tokio::sync::watch::channel(()).0,
             registry: RwLock::new(GitRepositoryRegistry::default()),
         });
         runtime.reconcile_with_notification(false, &CancellationSource::new().token())?;
@@ -268,6 +293,15 @@ impl GitRuntime {
         notify: bool,
         cancellation: &CancellationToken,
     ) -> Result<(), GitRuntimeError> {
+        self.reconcile_with_scans(notify, cancellation, &mut GitDiscoveryScans::new())
+    }
+
+    fn reconcile_with_scans(
+        &self,
+        notify: bool,
+        cancellation: &CancellationToken,
+        scans: &mut GitDiscoveryScans,
+    ) -> Result<(), GitRuntimeError> {
         let _discovery = crate::git_service::lock_for_request(&self.discovery, cancellation)
             .map_err(GitRuntimeError::Service)?;
         let previous = self.repository_runtimes();
@@ -280,13 +314,13 @@ impl GitRuntime {
             .clone();
         for (dir_id, authorization) in &self.dirs {
             let mut roots =
-                discover_repository_roots(authorization, &GitDiscoveryOptions::default());
+                discover_repository_roots(authorization, &GitDiscoveryOptions::default(), scans);
             for options in interests
                 .values()
                 .flatten()
                 .filter(|options| options.dir_id.as_ref() == dir_id.as_ref())
             {
-                roots.extend(discover_repository_roots(authorization, options));
+                roots.extend(discover_repository_roots(authorization, options, scans));
             }
             roots.sort();
             roots.dedup();
@@ -366,6 +400,10 @@ impl GitRuntime {
                     repositories,
                     repositories_by_id,
                 };
+            // Discovery can be requested by a client after the watcher has gone
+            // idle. Notify every authorized watcher to add/remove child watches
+            // without requiring an unrelated filesystem event to wake it first.
+            self.registry_changed.send_replace(());
             if notify {
                 self.updates.publish_git_repositories_changed();
             }
@@ -386,6 +424,7 @@ impl GitRuntime {
         connection_id: u64,
         folders: Option<Vec<GitDiscoveryOptions>>,
     ) -> Result<GitRepositoriesResult, GitRuntimeError> {
+        let mut scans = GitDiscoveryScans::new();
         if let Some(folders) = folders {
             if folders.len() > self.dirs.len()
                 || folders
@@ -419,7 +458,7 @@ impl GitRuntime {
                 .lock()
                 .expect("Git discovery interests")
                 .insert(connection_id, folders);
-            self.reconcile()?;
+            self.reconcile_with_scans(true, &CancellationSource::new().token(), &mut scans)?;
         }
         let interests = self
             .discovery_interests
@@ -434,7 +473,11 @@ impl GitRuntime {
         for options in interests {
             if let Some((_, authorization)) = self.dirs.iter().find(|(id, _)| id == &options.dir_id)
             {
-                roots.extend(discover_repository_roots(authorization, &options));
+                roots.extend(discover_repository_roots(
+                    authorization,
+                    &options,
+                    &mut scans,
+                ));
             }
         }
         let ids = self
@@ -452,6 +495,7 @@ impl GitRuntime {
 
     pub(super) fn repositories(&self) -> GitRepositoriesResult {
         GitRepositoriesResult {
+            statuses: None,
             repositories: self
                 .repository_runtimes()
                 .iter()
@@ -472,6 +516,20 @@ impl GitRuntime {
         repository_id: Option<&str>,
     ) -> Result<GitStatusResult, GitRuntimeError> {
         self.repository(repository_id)?.status()
+    }
+
+    pub(super) fn published_statuses_for(
+        &self,
+        repositories: &[GitRepositoryDto],
+    ) -> Result<Vec<GitStatusResult>, GitRuntimeError> {
+        repositories
+            .iter()
+            .filter_map(|descriptor| {
+                self.repository(Some(&descriptor.id))
+                    .and_then(|repository| repository.published_status())
+                    .transpose()
+            })
+            .collect()
     }
 
     /// Applies a caller's rename classification only to its returned view. Canonical status,
@@ -539,9 +597,7 @@ impl GitRuntime {
         cancellation: &CancellationToken,
     ) -> Result<Vec<PathBuf>, GitRuntimeError> {
         self.repository(repository_id)?
-            .service
             .check_ignore(paths, cancellation)
-            .map_err(GitRuntimeError::Service)
     }
 
     pub(super) fn blame_for(
@@ -1149,6 +1205,88 @@ impl GitRuntime {
 }
 
 impl GitRepositoryRuntime {
+    fn check_ignore(
+        &self,
+        paths: &[PathBuf],
+        cancellation: &CancellationToken,
+    ) -> Result<Vec<PathBuf>, GitRuntimeError> {
+        cancellation
+            .check()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Cancelled))?;
+        // Clients may select different Git installations. Do not share an answer
+        // produced by a different executable even within the same repository.
+        let executable = crate::git_service::current_client()
+            .executable()
+            .map_err(|error| GitRuntimeError::Service(GitServiceError::Git(error)))?;
+        let (generation, mut answers, missing) = {
+            let cache = self
+                .ignore_cache
+                .lock()
+                .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+            let mut answers = HashMap::new();
+            let mut missing = Vec::new();
+            for path in paths {
+                if let Some(ignored) = cache.paths.get(&(executable.clone(), path.clone())) {
+                    answers.insert(path.clone(), *ignored);
+                } else {
+                    missing.push(path.clone());
+                }
+            }
+            (cache.generation, answers, missing)
+        };
+        if !missing.is_empty() {
+            let ignored = self
+                .service
+                .check_ignore(&self.identity, &missing, cancellation)
+                .map_err(GitRuntimeError::Service)?
+                .into_iter()
+                .collect::<HashSet<_>>();
+            let mut cache = self
+                .ignore_cache
+                .lock()
+                .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+            // Visible labels commonly ask about the same unchanged files on every
+            // SCM publication. Bound this memo instead of growing with the workspace.
+            if cache.generation == generation && cache.paths.len() + missing.len() > 4096 {
+                cache.paths.clear();
+            }
+            for path in missing {
+                let answer = ignored.contains(&path);
+                if cache.generation == generation && cache.paths.len() < 4096 {
+                    cache
+                        .paths
+                        .insert((executable.clone(), path.clone()), answer);
+                }
+                answers.insert(path, answer);
+            }
+        }
+        Ok(paths
+            .iter()
+            .filter(|path| answers.get(*path) == Some(&true))
+            .cloned()
+            .collect())
+    }
+
+    /// An empty scope has the same repository-wide meaning as git/ignoreChanged.
+    fn invalidate_ignore_cache(&self, paths: &[String]) -> Result<(), GitRuntimeError> {
+        let mut cache = self
+            .ignore_cache
+            .lock()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        cache.generation = cache
+            .generation
+            .checked_add(1)
+            .expect("Git ignore generation overflowed");
+        if paths.is_empty() {
+            cache.paths.clear();
+        } else {
+            cache.paths.retain(|(_, path), _| {
+                !paths.iter().any(|scope| path.starts_with(Path::new(scope)))
+            });
+        }
+        Ok(())
+    }
+
     fn new(
         authorization: Authorization,
         projection_root: PathBuf,
@@ -1158,7 +1296,9 @@ impl GitRepositoryRuntime {
     ) -> Result<Option<Self>, GitRuntimeError> {
         let service =
             GitService::new(authorization, projection_root).map_err(GitRuntimeError::Service)?;
-        let Ok((repository, _)) = service.snapshot_for_request(cancellation) else {
+        // Discovery needs identity, not a status that would predate watcher coverage
+        // and be discarded. The watcher's first scan publishes the reusable state.
+        let Ok(repository) = service.repository_for_request(cancellation) else {
             return Ok(None);
         };
         let ignore_watch_paths = service
@@ -1169,6 +1309,8 @@ impl GitRepositoryRuntime {
             common_dir: dunce::simplified(repository.common_dir()).to_path_buf(),
             identity: repository,
             ignore_watch_paths: Mutex::new(ignore_watch_paths),
+            ignore_cache: Mutex::new(IgnoreCache::default()),
+            status_watchers: Mutex::new(Vec::new()),
             service,
             descriptor,
             stream_instance_id: new_stream_instance_id()?,
@@ -1192,6 +1334,26 @@ impl GitRepositoryRuntime {
             .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
         let (repository, snapshot) = self.service.snapshot().map_err(GitRuntimeError::Service)?;
         self.accept(repository, snapshot)
+    }
+
+    fn published_status(&self) -> Result<Option<GitStatusResult>, GitRuntimeError> {
+        self.service
+            .ensure_readable()
+            .map_err(GitRuntimeError::Service)?;
+        let mut watchers = self
+            .status_watchers
+            .lock()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        watchers.retain(|(token, watch)| !token.is_cancelled() && watch.ensure_active().is_ok());
+        if watchers.is_empty() {
+            return Ok(None);
+        }
+        Ok(self
+            .state
+            .lock()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?
+            .status
+            .clone())
     }
 
     pub(super) fn local_branches(&self) -> Result<Vec<GitBranchDto>, GitRuntimeError> {
@@ -1699,7 +1861,11 @@ impl GitRepositoryRuntime {
         self.mutate_remote(GitService::push, cancellation)
     }
 
-    pub(super) fn start_watching(self: &Arc<Self>, parent: &CancellationToken) -> GitWatcher {
+    pub(super) fn start_watching(
+        self: &Arc<Self>,
+        parent: &CancellationToken,
+        watch_authorization: Authorization,
+    ) -> GitWatcher {
         let cancellation = parent.child_source();
         let token = cancellation.token();
         let (ready, started) = mpsc::channel();
@@ -1707,7 +1873,7 @@ impl GitRepositoryRuntime {
         let runtime = Arc::downgrade(self);
         let thread = std::thread::Builder::new()
             .name("ash-git-watcher".into())
-            .spawn(move || watch_git(runtime, shutdown_rx, token, ready))
+            .spawn(move || watch_git(runtime, shutdown_rx, token, watch_authorization, ready))
             .ok();
         if thread.is_none() {
             return GitWatcher::default();
@@ -1830,6 +1996,28 @@ impl GitRepositoryRuntime {
         notification: StatusNotification,
         cancellation: &CancellationToken,
     ) -> Result<GitStatusResult, GitRuntimeError> {
+        self.accept_status_for_refresh(
+            repository,
+            snapshot,
+            notification,
+            &StatusRefresh::Repository,
+            cancellation,
+        )
+    }
+
+    fn accept_status_for_refresh(
+        &self,
+        repository: GitRepository,
+        snapshot: GitRepositorySnapshot,
+        notification: StatusNotification,
+        refresh: &StatusRefresh,
+        cancellation: &CancellationToken,
+    ) -> Result<GitStatusResult, GitRuntimeError> {
+        // Explicit queries and mutation recovery must not depend on a watcher hint
+        // having arrived, especially when index membership changed externally.
+        if matches!(refresh, StatusRefresh::Repository) {
+            self.invalidate_ignore_cache(&[])?;
+        }
         let mut projected = project_status(
             self.descriptor.id.clone(),
             self.stream_instance_id.clone(),
@@ -1837,10 +2025,39 @@ impl GitRepositoryRuntime {
             &repository,
             snapshot,
         )?;
-        let references = self
-            .service
-            .reference_state_for_request(&repository, cancellation)
-            .map_err(GitRuntimeError::Service)?;
+        let cached_references = match refresh {
+            StatusRefresh::Repository => None,
+            StatusRefresh::Paths(paths) => {
+                let state = self
+                    .state
+                    .lock()
+                    .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+                let previous = state.status.as_ref().ok_or(GitRuntimeError::Boundary)?;
+                let prefix = self
+                    .service
+                    .dir_root()
+                    .strip_prefix(repository.worktree_root())
+                    .map_err(|_| GitRuntimeError::Boundary)?;
+                // Only the queried prefixes may replace entries. An empty scoped result
+                // means these paths became clean, not that the repository became clean.
+                projected.changes.extend(
+                    previous
+                        .changes
+                        .iter()
+                        .filter(|change| !change_in_paths(change, prefix, paths))
+                        .cloned(),
+                );
+                sort_status_changes(&mut projected.changes);
+                state.references.clone()
+            }
+        };
+        let references = match cached_references {
+            Some(references) => references,
+            None => self
+                .service
+                .reference_state_for_request(&repository, cancellation)
+                .map_err(GitRuntimeError::Service)?,
+        };
         let mut state = self
             .state
             .lock()
@@ -1928,22 +2145,201 @@ impl GitRepositoryRuntime {
 
     #[cfg(test)]
     fn refresh_from_watcher(&self) {
-        self.refresh_from_watcher_for_request(&CancellationSource::new().token());
+        let _ = self.refresh_from_watcher_for_request(
+            &FileWatcherEvent::RescanRequired {
+                watched_paths: Vec::new(),
+            },
+            &CancellationSource::new().token(),
+        );
     }
 
-    fn refresh_from_watcher_for_request(&self, cancellation: &CancellationToken) {
-        let Ok(_operation) = lock_operation_for_request(&self.operation, cancellation) else {
-            return;
+    fn refresh_from_watcher_for_request(
+        &self,
+        event: &FileWatcherEvent,
+        cancellation: &CancellationToken,
+    ) -> Result<(), GitRuntimeError> {
+        let _operation = lock_operation_for_request(&self.operation, cancellation)
+            .map_err(GitRuntimeError::Service)?;
+        let mut refresh = self.status_refresh_for_event(event);
+        let result = match &refresh {
+            StatusRefresh::Repository => self.service.snapshot_for_request(cancellation),
+            StatusRefresh::Paths(paths) => {
+                self.service
+                    .snapshot_paths_for_request(&self.identity, paths, cancellation)
+            }
         };
-        let Ok((repository, snapshot)) = self.service.snapshot_for_request(cancellation) else {
-            return;
-        };
-        let _ = self.accept_status_for_request(
+        let (mut repository, mut snapshot) = result.map_err(GitRuntimeError::Service)?;
+        if let StatusRefresh::Paths(paths) = &refresh
+            && !self.can_merge_status(&repository, &snapshot, paths)
+        {
+            let full = self
+                .service
+                .snapshot_for_request(cancellation)
+                .map_err(GitRuntimeError::Service)?;
+            (repository, snapshot) = full;
+            refresh = StatusRefresh::Repository;
+        }
+        self.accept_status_for_refresh(
             repository,
             snapshot,
             StatusNotification::OnChange,
+            &refresh,
             cancellation,
-        );
+        )?;
+        Ok(())
+    }
+
+    fn can_merge_status(
+        &self,
+        repository: &GitRepository,
+        snapshot: &GitRepositorySnapshot,
+        paths: &GitPathspecSet,
+    ) -> bool {
+        let Ok(state) = self.state.lock() else {
+            return false;
+        };
+        let Some(previous) = state.status.as_ref() else {
+            return false;
+        };
+        let Ok(prefix) = self
+            .service
+            .dir_root()
+            .strip_prefix(repository.worktree_root())
+        else {
+            return false;
+        };
+        // Both endpoints of known renames are in the query. Retain the fast path
+        // only when Git reports the same structural index changes; a new pairing,
+        // addition or deletion may depend on paths outside the query.
+        let current = snapshot
+            .changes()
+            .iter()
+            .filter(|change| structural_index_status(change.index_status()))
+            .filter_map(|change| dir_change(change, prefix))
+            .collect::<Result<Vec<_>, _>>();
+        let Ok(mut current) = current else {
+            return false;
+        };
+        let mut expected = previous
+            .changes
+            .iter()
+            .filter(|change| {
+                change_in_paths(change, prefix, paths)
+                    && structural_index_status_dto(change.index_status)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        sort_status_changes(&mut current);
+        sort_status_changes(&mut expected);
+        state.repository.as_ref() == Some(repository)
+            && state.references.is_some()
+            && previous.head == head(snapshot.head())
+            && current.len() == expected.len()
+            && current.iter().zip(&expected).all(|(current, expected)| {
+                current.path == expected.path
+                    && current.original_path == expected.original_path
+                    && current.index_status == expected.index_status
+            })
+    }
+
+    fn status_refresh_for_event(&self, event: &FileWatcherEvent) -> StatusRefresh {
+        let FileWatcherEvent::PathsChanged { paths } = event else {
+            return StatusRefresh::Repository;
+        };
+        let Ok(sources) = self.ignore_watch_paths.lock() else {
+            return StatusRefresh::Repository;
+        };
+        if paths.is_empty() || paths.len() > 256 {
+            return StatusRefresh::Repository;
+        }
+        let mut prefixes = Vec::new();
+        for path in paths {
+            let path = path
+                .strip_prefix(self.service.dir().requested_path())
+                .map(|relative| self.service.dir().canonical_path().join(relative))
+                .unwrap_or_else(|_| path.clone());
+            if !path.starts_with(self.service.dir_root())
+                || path == self.service.dir_root()
+                || path.starts_with(self.identity.git_dir())
+                || path.starts_with(self.identity.common_dir())
+                || path.starts_with(self.identity.worktree_root().join(".git"))
+                || path
+                    .strip_prefix(self.identity.worktree_root())
+                    .is_ok_and(|relative| {
+                        relative
+                            .components()
+                            .any(|component| component.as_os_str() == ".git")
+                    })
+                || path
+                    .file_name()
+                    .is_some_and(|name| name == ".gitignore" || name == ".gitmodules")
+                || sources
+                    .iter()
+                    .any(|source| &path == source || source.starts_with(&path))
+            {
+                return StatusRefresh::Repository;
+            }
+            // A submodule is represented by its root, not its nested file paths.
+            // Querying that prefix also handles independent nested worktrees without
+            // forcing an unrelated full scan of their parent repository.
+            let scope = path
+                .ancestors()
+                .take_while(|ancestor| *ancestor != self.identity.worktree_root())
+                .find(|ancestor| ancestor.join(".git").exists())
+                .unwrap_or(&path);
+            let Ok(relative) = scope.strip_prefix(self.identity.worktree_root()) else {
+                return StatusRefresh::Repository;
+            };
+            prefixes.push(relative.to_path_buf());
+        }
+        // A path-filtered status must include the other endpoint of every cached
+        // rename it touches. Otherwise Git reports a deletion/addition instead.
+        let Ok(state) = self.state.lock() else {
+            return StatusRefresh::Repository;
+        };
+        if let Some(status) = &state.status {
+            let Ok(prefix) = self
+                .service
+                .dir_root()
+                .strip_prefix(self.identity.worktree_root())
+            else {
+                return StatusRefresh::Repository;
+            };
+            for change in &status.changes {
+                let Some(original) = &change.original_path else {
+                    continue;
+                };
+                let destination = prefix.join(&change.path);
+                let original = prefix.join(original);
+                if prefixes
+                    .iter()
+                    .any(|path| destination.starts_with(path) || original.starts_with(path))
+                {
+                    prefixes.extend([destination, original]);
+                }
+            }
+        }
+        drop(state);
+        prefixes.sort();
+        let mut coalesced: Vec<PathBuf> = Vec::new();
+        for path in prefixes {
+            if !coalesced.iter().any(|parent| path.starts_with(parent)) {
+                coalesced.push(path);
+            }
+        }
+        if coalesced.len() > 256
+            || coalesced
+                .iter()
+                .map(|path| path.as_os_str().as_encoded_bytes().len())
+                .sum::<usize>()
+                > 32 * 1024
+        {
+            return StatusRefresh::Repository;
+        }
+        match GitPathspecSet::new(coalesced) {
+            Ok(paths) => StatusRefresh::Paths(paths),
+            Err(_) => StatusRefresh::Repository,
+        }
     }
 
     #[cfg(test)]
@@ -2020,6 +2416,7 @@ impl GitRepositoryRuntime {
         }
         affected.sort();
         affected.dedup();
+        self.invalidate_ignore_cache(&affected)?;
         Ok(Some(GitIgnoreChanged {
             repository_id: self.descriptor.id.clone(),
             paths: affected,
@@ -2035,13 +2432,18 @@ impl GitRepositoryRuntime {
     }
 
     fn watched_paths(&self) -> Vec<WatchPath> {
+        let relative = self
+            .service
+            .dir_root()
+            .strip_prefix(self.service.dir().canonical_path())
+            .expect("repository scope is inside its authorized directory");
         let mut paths = vec![
             WatchPath {
-                path: self.service.dir().requested_path().to_path_buf(),
+                path: self.service.dir().requested_path().join(relative),
                 recursive: true,
             },
             WatchPath {
-                path: self.service.dir().canonical_path().to_path_buf(),
+                path: self.service.dir_root().to_path_buf(),
                 recursive: true,
             },
         ];
@@ -2235,9 +2637,15 @@ fn watch_repositories(
     let Ok(mut registration) = subscriber.register_paths(paths.clone()) else {
         return;
     };
-    let mut receiver = DebouncedWatchReceiver::new(receiver, GIT_WATCH_DEBOUNCE);
+    let mut receiver = DebouncedWatchReceiver::new(receiver, GIT_WATCH_INTERVAL);
     let mut children = HashMap::<String, (Arc<GitRepositoryRuntime>, GitWatcher)>::new();
+    let mut registry_changes = runtime.registry_changed.subscribe();
     let mut ready = Some(ready);
+    enum DiscoveryWake {
+        RegistryChanged,
+        Files(FileWatcherEvent),
+        Stopped,
+    }
     loop {
         if cancellation.is_cancelled() {
             break;
@@ -2245,6 +2653,9 @@ fn watch_repositories(
         if let Err(error) = runtime.reconcile_with_notification(true, &cancellation) {
             log::warn!("Git repository discovery failed: {error:?}");
         }
+        // A later replacement remains pending even if it occurs between reading
+        // the current owners and entering the wait below.
+        registry_changes.borrow_and_update();
         let repositories = runtime.watched_repositories(&watch_dirs);
         children.retain(|id, (owner, _)| {
             repositories
@@ -2255,7 +2666,13 @@ fn watch_repositories(
             children
                 .entry(repository.descriptor.id.clone())
                 .or_insert_with(|| {
-                    let mut watches = vec![repository.start_watching(&cancellation)];
+                    let watch_authorization = watch_dirs
+                        .iter()
+                        .find(|proof| proof.dir().id() == repository.service.dir().id())
+                        .expect("watched repository has a matching authorization")
+                        .clone();
+                    let mut watches =
+                        vec![repository.start_watching(&cancellation, watch_authorization)];
                     if repository.service.can_mutate()
                         && let Some(config) = &config
                     {
@@ -2292,14 +2709,19 @@ fn watch_repositories(
         let changed = loop {
             let event = executor.block_on(async {
                 tokio::select! {
-                    _ = &mut shutdown => None,
-                    event = receiver.recv() => event,
+                    _ = &mut shutdown => DiscoveryWake::Stopped,
+                    _ = registry_changes.changed() => DiscoveryWake::RegistryChanged,
+                    event = receiver.recv() => match event {
+                        Some(event) => DiscoveryWake::Files(event),
+                        None => DiscoveryWake::Stopped,
+                    },
                 }
             });
             match event {
-                Some(event) if runtime.discovery_invalidated(&event) => break true,
-                Some(_) => {}
-                None => break false,
+                DiscoveryWake::RegistryChanged => break true,
+                DiscoveryWake::Files(event) if runtime.discovery_invalidated(&event) => break true,
+                DiscoveryWake::Files(_) => {}
+                DiscoveryWake::Stopped => break false,
             }
         };
         if !changed {
@@ -2314,6 +2736,7 @@ fn watch_git(
     runtime: std::sync::Weak<GitRepositoryRuntime>,
     mut shutdown: tokio::sync::oneshot::Receiver<()>,
     cancellation: CancellationToken,
+    watch_authorization: Authorization,
     ready: mpsc::Sender<()>,
 ) {
     // Keep the final strong reference on the watcher thread stack. `GitService` owns a Tokio
@@ -2359,7 +2782,12 @@ fn watch_git(
                 .collect(),
         });
         drop(git_runtime);
-        let mut receiver = DebouncedWatchReceiver::new(receiver, GIT_WATCH_DEBOUNCE);
+        // An isolated edit should refresh immediately. During a burst the receiver
+        // retains and coalesces subsequent hints, with the same maximum refresh rate.
+        let mut receiver = ThrottledWatchReceiver::new(receiver, GIT_WATCH_INTERVAL);
+        // This lease is admitted only after the first scan with registered watches.
+        // Cancellation, a failed refresh, or any worker exit retires cached reads.
+        let mut coverage = None;
         loop {
             if cancellation.is_cancelled() {
                 break;
@@ -2383,14 +2811,17 @@ fn watch_git(
             };
             let refresh_runtime = Arc::clone(&git_runtime);
             let request_cancellation = cancellation.clone();
-            let change = match tokio::task::spawn_blocking(move || {
-                refresh_runtime.ignore_change_for_request(&event, &request_cancellation)
+            let (event, change) = match tokio::task::spawn_blocking(move || {
+                refresh_runtime
+                    .ignore_change_for_request(&event, &request_cancellation)
+                    .map(|change| (event, change))
             })
             .await
             {
                 Ok(Ok(change)) => change,
                 error => {
                     log::warn!("Unable to refresh Git ignore rules: {error:?}");
+                    coverage = None;
                     continue;
                 }
             };
@@ -2412,10 +2843,27 @@ fn watch_git(
                 git_runtime.updates.publish_git_ignore_changed(change);
             }
             let request_cancellation = cancellation.clone();
-            let _ = tokio::task::spawn_blocking(move || {
-                git_runtime.refresh_from_watcher_for_request(&request_cancellation)
+            let refresh_runtime = Arc::clone(&git_runtime);
+            let refreshed = tokio::task::spawn_blocking(move || {
+                refresh_runtime.refresh_from_watcher_for_request(&event, &request_cancellation)
             })
             .await;
+            if matches!(refreshed, Ok(Ok(()))) {
+                if coverage.is_none() {
+                    let source = cancellation.child_source();
+                    coverage = Some(source.cancel_on_drop());
+                    let mut watchers = git_runtime
+                        .status_watchers
+                        .lock()
+                        .expect("Git status watchers");
+                    watchers.retain(|(token, watch)| {
+                        !token.is_cancelled() && watch.ensure_active().is_ok()
+                    });
+                    watchers.push((source.token(), watch_authorization.clone()));
+                }
+            } else {
+                coverage = None;
+            }
         }
         drop(registration);
     });
@@ -2424,9 +2872,18 @@ fn watch_git(
 fn discover_repository_roots(
     authorization: &Authorization,
     options: &GitDiscoveryOptions,
+    scans: &mut GitDiscoveryScans,
 ) -> Vec<PathBuf> {
     const MAX_REPOSITORIES: usize = 512;
     let dir_root = authorization.dir().canonical_path();
+    let mut policy = options.clone();
+    // The authorized root identifies the scan; dir_id only routes the client's
+    // policy to it and must not make an otherwise identical default scan distinct.
+    policy.dir_id = None;
+    let scan_key = (dir_root.to_path_buf(), policy);
+    if let Some(roots) = scans.get(&scan_key) {
+        return roots.clone();
+    }
     let mut candidates = vec![dir_root.to_path_buf()];
     let mut builder = WalkBuilder::new(dir_root);
     let ignored = options.ignored_folders.clone();
@@ -2555,6 +3012,7 @@ fn discover_repository_roots(
     roots.sort();
     roots.dedup();
     roots.truncate(MAX_REPOSITORIES);
+    scans.insert(scan_key, roots.clone());
     roots
 }
 
@@ -2671,6 +3129,12 @@ fn project_status(
     let dir_prefix = dir_root
         .strip_prefix(repository.worktree_root())
         .map_err(|_| GitRuntimeError::Boundary)?;
+    let mut changes = snapshot
+        .changes()
+        .iter()
+        .filter_map(|change| dir_change(change, dir_prefix))
+        .collect::<Result<Vec<_>, _>>()?;
+    sort_status_changes(&mut changes);
     Ok(GitStatusResult {
         repository_id,
         stream_instance_id,
@@ -2678,12 +3142,51 @@ fn project_status(
         history_revision: 0,
         path: wire_path(dir_prefix)?,
         head: head(snapshot.head()),
-        changes: snapshot
-            .changes()
-            .iter()
-            .filter_map(|change| dir_change(change, dir_prefix))
-            .collect::<Result<_, _>>()?,
+        changes,
     })
+}
+
+fn structural_index_status(status: GitChangeStatus) -> bool {
+    matches!(
+        status,
+        GitChangeStatus::Added
+            | GitChangeStatus::Deleted
+            | GitChangeStatus::Renamed
+            | GitChangeStatus::Copied
+    )
+}
+
+fn structural_index_status_dto(status: GitChangeStatusDto) -> bool {
+    matches!(
+        status,
+        GitChangeStatusDto::Added
+            | GitChangeStatusDto::Deleted
+            | GitChangeStatusDto::Renamed
+            | GitChangeStatusDto::Copied
+    )
+}
+
+fn change_in_paths(change: &GitRepositoryChangeDto, prefix: &Path, paths: &GitPathspecSet) -> bool {
+    [Some(change.path.as_str()), change.original_path.as_deref()]
+        .into_iter()
+        .flatten()
+        .any(|path| {
+            paths
+                .paths()
+                .iter()
+                .any(|scope| prefix.join(path).starts_with(scope))
+        })
+}
+
+fn sort_status_changes(changes: &mut [GitRepositoryChangeDto]) {
+    // Keep a stable repository order after merging a delta, including Git's
+    // separate untracked section, so equivalent full/scoped reads do not notify.
+    changes.sort_by(|left, right| {
+        let untracked = |change: &GitRepositoryChangeDto| {
+            change.worktree_status == GitChangeStatusDto::Untracked
+        };
+        (untracked(left), &left.path).cmp(&(untracked(right), &right.path))
+    });
 }
 
 fn new_stream_instance_id() -> Result<StreamInstanceId, GitRuntimeError> {

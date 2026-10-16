@@ -50,6 +50,8 @@ export class ScmViewPane extends ViewPane {
 	private readonly actionViewItems = new Set<ScmActionViewItem>();
 	private renderedProvider: ISCMProvider | undefined;
 	private renderedGroups: readonly ISCMResourceGroup[] | undefined;
+	private readonly resourceElements = new WeakMap<ISCMResource, Extract<TreeElement, { resource: ISCMResource; }>>();
+	private readonly groupElements = new WeakMap<ISCMResourceGroup, Extract<TreeElement, { group: ISCMResourceGroup; }>>();
 	private readonly titleToolbar = this._register(new MutableDisposable<MenuWorkbenchToolBar>());
 	private readonly titleContext: IScopedContextKeyService;
 	private readonly providerContext: IContextKey<string>;
@@ -323,14 +325,21 @@ export class ScmViewPane extends ViewPane {
 		if (provider !== this.renderedProvider || groups !== this.renderedGroups) {
 			this.renderedProvider = provider;
 			this.renderedGroups = groups;
-			// Provider snapshots replace group objects; repository/group identities keep tree state stable.
+			// Retain the element as well as its stable ID: the tree can then preserve
+			// unchanged row DOM, listeners and focus when another resource changes.
 			this.tree.setChildren((groups ?? []).map(group => {
 				const resources = new ResourceTree<ISCMResource, ISCMResourceGroup>(group, provider!.rootUri, extUriBiasedIgnorePathCase);
 				for (const resource of group.resources) {
 					resources.add(resource.sourceUri, resource);
 				}
+				const id = JSON.stringify([active!.id, group.id]);
+				let element = this.groupElements.get(group);
+				if (element?.id !== id) {
+					element = { id, group };
+					this.groupElements.set(group, element);
+				}
 				return {
-					element: { id: JSON.stringify([active!.id, group.id]), group },
+					element,
 					children: this.viewMode === 'tree' ? this.resourceChildren(resources.root, active!.id) : this.listChildren(group, active!.id),
 				};
 			}));
@@ -344,7 +353,15 @@ export class ScmViewPane extends ViewPane {
 			const primary = this.viewSortKey === 'name' ? basename(left.path).localeCompare(basename(right.path))
 				: this.viewSortKey === 'status' ? left.decorations.kind.localeCompare(right.decorations.kind) : 0;
 			return primary || left.path.localeCompare(right.path);
-		}).map(resource => ({ element: { id: JSON.stringify([repositoryId, group.id, extUriBiasedIgnorePathCase.getComparisonKey(resource.sourceUri)]), resource } }));
+		}).map(resource => ({ element: this.resourceElement(resource, JSON.stringify([repositoryId, group.id, extUriBiasedIgnorePathCase.getComparisonKey(resource.sourceUri)])) }));
+	}
+	private resourceElement(resource: ISCMResource, id: string): Extract<TreeElement, { resource: ISCMResource; }> {
+		let element = this.resourceElements.get(resource);
+		if (element?.id !== id) {
+			element = { id, resource };
+			this.resourceElements.set(resource, element);
+		}
+		return element;
 	}
 
 	private resourceChildren(parent: IResourceNode<ISCMResource, ISCMResourceGroup>, repositoryId: string): ObjectTreeElement<TreeElement>[] {
@@ -352,7 +369,7 @@ export class ScmViewPane extends ViewPane {
 		return nodes.map(node => {
 			const id = JSON.stringify([repositoryId, node.context.id, extUriBiasedIgnorePathCase.getComparisonKey(node.uri)]);
 			return node.element
-				? { element: { id, resource: node.element } }
+				? { element: this.resourceElement(node.element, id) }
 				: { element: { id, folder: node }, children: this.resourceChildren(node, repositoryId) };
 		});
 	}

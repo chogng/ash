@@ -20,9 +20,8 @@ fn status(stream: &str, revision: u64) -> Status {
     }
 }
 
-#[test]
-fn restarted_repository_stream_rejects_late_retired_and_older_snapshots() {
-    let mut repository = Repository {
+fn repository(initial_status: Option<Status>) -> Repository {
+    Repository {
         descriptor: RepositoryDescriptor {
             id: "repo".into(),
             label: "Test".into(),
@@ -32,7 +31,7 @@ fn restarted_repository_stream_rejects_late_retired_and_older_snapshots() {
         },
         root_uri: "file:///workspace".into(),
         configuration: Configuration::default(),
-        status: Some(status("first", 20)),
+        status: initial_status,
         draft: "Retained draft".into(),
         input_revision: 7,
         operation: None,
@@ -41,7 +40,12 @@ fn restarted_repository_stream_rejects_late_retired_and_older_snapshots() {
         blame: None,
         pending_paths: None,
         retired_streams: BTreeSet::new(),
-    };
+    }
+}
+
+#[test]
+fn restarted_repository_stream_rejects_late_retired_and_older_snapshots() {
+    let mut repository = repository(Some(status("first", 20)));
     accept_repository_status(&mut repository, status("second", 1));
     accept_repository_status(&mut repository, status("first", 21));
     assert_eq!(
@@ -55,4 +59,39 @@ fn restarted_repository_stream_rejects_late_retired_and_older_snapshots() {
     assert_eq!(repository.status.as_ref().unwrap().revision, 2);
     assert_eq!(repository.draft, "Retained draft");
     assert_eq!(repository.input_revision, 7);
+}
+
+#[test]
+fn initial_watched_status_respects_client_policy_and_never_overwrites_a_live_view() {
+    let mut initial = repository(None);
+    assert!(super::accept_initial_repository_status(
+        &mut initial,
+        Some(status("new", 1))
+    ));
+    assert!(!super::accept_initial_repository_status(
+        &mut initial,
+        Some(status("new", 9))
+    ));
+    assert_eq!(initial.status.as_ref().unwrap().revision, 1);
+    for configuration in [
+        serde_json::json!({"path": "/custom/git"}),
+        serde_json::json!({"path": ["/custom/git"]}),
+        serde_json::json!({"similarityThreshold": 75}),
+    ] {
+        let mut customized = repository(None);
+        customized.configuration = Configuration(configuration);
+        assert!(!super::accept_initial_repository_status(
+            &mut customized,
+            Some(status("new", 1))
+        ));
+        assert!(customized.status.is_none());
+    }
+    let mut missing = repository(None);
+    assert!(!super::accept_initial_repository_status(&mut missing, None));
+    let mut foreign = status("foreign", 1);
+    foreign.repository_id = "another-repository".into();
+    assert!(!super::accept_initial_repository_status(
+        &mut missing,
+        Some(foreign)
+    ));
 }

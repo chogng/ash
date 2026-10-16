@@ -1720,6 +1720,13 @@ test('ScmViewPane folds groups through the shared tree and keeps state when reso
 		iconChanges.fire();
 		assert.equal(tree.querySelector('[aria-label="Open first.ts"]'), retainedFile, 'Icon theme changes update shared labels without rebuilding tree rows');
 		assert.equal(retainedFile.querySelector<HTMLElement>('[data-file-icon]')?.dataset.fileIcon, 'second');
+		retainedFile.focus();
+		groups = [{ ...groups[0], resources: [...groups[0].resources, resource('unrelated.ts')] }];
+		changes.fire();
+		assert.equal(tree.querySelector('[aria-label="Open first.ts"]'), retainedFile, 'Unchanged resource identities retain row DOM across another file update');
+		assert.equal(browser.window.document.activeElement, retainedFile, 'An unrelated update preserves keyboard focus on the file action');
+		groups = [{ ...groups[0], resources: groups[0].resources.filter(resource => resource.path !== 'unrelated.ts') }];
+		changes.fire();
 		const fileTwistie = retainedFile.closest('.ash-tree-row')!.querySelector('.ash-tree-twistie')!;
 		assert.ok(fileTwistie.classList.contains('ash-tree-twistie-hidden'));
 		hasFolderIcons = true;

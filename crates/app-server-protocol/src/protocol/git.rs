@@ -236,6 +236,11 @@ pub struct GitRepositoryDto {
 #[serde(rename_all = "camelCase")]
 pub struct GitRepositoriesResult {
     pub repositories: Vec<GitRepositoryDto>,
+    /// Last published states covered by active watchers. Subscribe before discovery;
+    /// absent repositories require an explicit status query. These are not forced scans.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub statuses: Option<Vec<GitStatusResult>>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -1323,6 +1328,9 @@ pub struct GitDiscoveryParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub folders: Option<Vec<GitDiscoveryFolderDto>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub include_status: Option<bool>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

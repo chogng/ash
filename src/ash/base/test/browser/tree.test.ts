@@ -13,6 +13,84 @@ import { ObjectTreeModel } from "../../browser/ui/tree/objectTreeModel.js";
 import { TreeVisibility } from "../../browser/ui/tree/tree.js";
 import { h, svg } from "../../browser/dom.js";
 import { isMacintosh } from "../../common/platform.js";
+import { DeferredPromise } from "../../common/async.js";
+
+test('Compact async reads stay bounded and release capacity after failures', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		const root = { id: 'root', directory: true };
+		const folders = Array.from({ length: 120 }, (_, index) => ({ id: `folder-${index}`, directory: true }));
+		const firstBatch = new DeferredPromise<void>();
+		const release = new DeferredPromise<void>();
+		let active = 0;
+		let peak = 0;
+		let reads = 0;
+		using tree = new CompressibleAsyncDataTree<typeof root, typeof root>(dom.window.document.body, {
+			hasChildren: item => item.directory,
+			getChildren: async item => {
+				if (item === root) return folders;
+				reads++;
+				peak = Math.max(peak, ++active);
+				if (active === 8) void firstBatch.complete();
+				try {
+					await release.p;
+					if (item === folders[0]) throw new Error('unreadable directory');
+					return [{ id: `${item.id}/file`, directory: false }];
+				} finally { active--; }
+			},
+		}, {
+			identityProvider: { getId: item => item.id },
+			isIncompressible: item => !item.directory,
+			collapseByDefault: () => true,
+			renderCompressedElements: items => h(dom.window.document, 'span', items.map(item => item.id).join('/')),
+		});
+		const loaded = tree.setInput(root);
+		await firstBatch.p;
+		assert.equal(reads, 8);
+		void release.complete();
+		await loaded;
+		assert.equal(reads, 120);
+		assert.equal(peak, 8);
+		assert.equal(active, 0);
+		assert.equal(tree.getNode(folders[119]!).children?.length, 1);
+	} finally { dom.window.close(); }
+});
+
+test('Compact async reads discard queued work on input replacement and disposal', async () => {
+	for (const action of ['replace', 'dispose'] as const) {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			const root = { id: 'root', directory: true };
+			const replacement = { id: 'replacement', directory: true };
+			const folders = Array.from({ length: 120 }, (_, index) => ({ id: `folder-${index}`, directory: true }));
+			const firstBatch = new DeferredPromise<void>();
+			const release = new DeferredPromise<void>();
+			const reads: string[] = [];
+			using tree = new CompressibleAsyncDataTree<typeof root, typeof root>(dom.window.document.body, {
+				hasChildren: item => item.directory,
+				getChildren: async item => {
+					if (item === root) return folders;
+					if (item === replacement) return [];
+					reads.push(item.id);
+					if (reads.length === 8) void firstBatch.complete();
+					await release.p;
+					return [{ id: `${item.id}/file`, directory: false }];
+				},
+			}, {
+				identityProvider: { getId: item => item.id },
+				isIncompressible: item => !item.directory,
+				renderCompressedElements: items => h(dom.window.document, 'span', items.map(item => item.id).join('/')),
+			});
+			const oldRead = tree.setInput(root);
+			await firstBatch.p;
+			const newRead = action === 'replace' ? tree.setInput(replacement) : Promise.resolve(tree.dispose());
+			void release.complete();
+			await Promise.all([oldRead, newRead]);
+			assert.equal(reads.length, 8, action);
+			if (action === 'replace') assert.deepEqual(tree.getNode().children, []);
+		} finally { dom.window.close(); }
+	}
+});
 
 interface TestNode {
 	readonly id: string;

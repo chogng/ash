@@ -1,4 +1,5 @@
 import { Emitter, type Event } from "../../../common/event.js";
+import { TaskQueue } from "../../../common/async.js";
 import { Disposable, type IDisposable, toDisposable } from "../../../common/lifecycle.js";
 import type { ListScrolling } from "../list/list.js";
 import { CompressibleObjectTree, ObjectTree, type CompressibleKeyboardNavigationLabelProvider, type CompressibleTreeAcceptEvent, type CompressibleTreeFocusChangeEvent, type CompressibleTreePointerEvent, type CompressibleTreeSelectionChangeEvent, type ObjectTreeAcceptEvent, type ObjectTreeCollapseStateChangeEvent, type ObjectTreeFocusChangeEvent, type ObjectTreePointerEvent, type ObjectTreeSelectionChangeEvent } from "./objectTree.js";
@@ -158,6 +159,10 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 	protected readonly tree: AsyncTreeView<T>;
 	private readonly generatedIds = new Map<T, string>();
 	private readonly requests = new Map<string | undefined, AsyncTreeRequest>();
+	// Bound data-source reads across compression probes and recursive refreshes.
+	// Only the read holds a slot; waiting for descendants must never hold it.
+	private readonly childReads = Array.from({ length: 8 }, () => new TaskQueue());
+	private nextChildRead = 0;
 	private readonly _onDidChangeLoadState = this._register(new Emitter<AsyncDataTreeLoadStateEvent<T>>());
 	private readonly _onDidError = this._register(new Emitter<AsyncDataTreeErrorEvent<T>>());
 	private readonly states = new Map<string, AsyncNodeState<T>>();
@@ -183,6 +188,7 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 		this._register(toDisposable(() => {
 			this.generation += 1;
 			this.requests.clear();
+			for (const queue of this.childReads) queue.clearPending();
 		}));
 	}
 
@@ -249,6 +255,7 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 		this.states.clear();
 		this.rootChildren = [];
 		this.requests.clear();
+		for (const queue of this.childReads) queue.clearPending();
 		this.updateAriaBusy();
 		this.render();
 		if (input !== undefined) await this.loadChildren(input, undefined, generation);
@@ -320,7 +327,7 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 		const gate = new Promise<void>(resolve => { start = resolve; });
 		let request: AsyncTreeRequest;
 		const promise = gate
-			.then(() => this.dataSource.getChildren(parent))
+			.then(() => this.readChildren(parent, () => this.isCurrentRequest(requestKey, request)))
 			.then(async children => {
 				if (!this.isCurrentRequest(requestKey, request)) return;
 				this.replaceChildren(parentId, [...children]);
@@ -393,12 +400,23 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 		if (!state?.hasChildren || this.options.isIncompressible?.(state.element)) return;
 		// Inspect only the continuation of a single-directory chain. Branches stay lazy.
 		let children: readonly T[];
-		try { children = [...await this.dataSource.getChildren(state.element)]; }
-		catch { return; } // An unreadable collapsed folder reports its error when expanded.
+		try {
+			children = [...await this.readChildren(state.element, () =>
+				generation === this.generation && !this.isDisposed && this.states.get(id) === state)];
+		} catch {
+			return; // An unreadable collapsed folder reports its error when expanded.
+		}
 		if (generation !== this.generation || this.isDisposed || this.states.get(id) !== state) return;
 		this.replaceChildren(id, children);
 		resolved.add(id);
 		if (children.length === 1) await this.resolveCompactChain(this.getId(children[0]!), generation, resolved);
+	}
+
+	private async readChildren(element: TInput | T, isCurrent: () => boolean): Promise<Iterable<T>> {
+		const queue = this.childReads[this.nextChildRead]!;
+		this.nextChildRead = (this.nextChildRead + 1) % this.childReads.length;
+		const children = await queue.scheduleSkipIfCleared(() => isCurrent() ? this.dataSource.getChildren(element) : []);
+		return children ?? [];
 	}
 
 	private replaceChildren(parentId: string | undefined, elements: readonly T[]): void {

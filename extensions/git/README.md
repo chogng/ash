@@ -55,6 +55,13 @@ coalesced SCM publication run independently of UI acknowledgement; an immediate 
 waits for discovery and current scoped policy. Retired activations cancel callbacks, helpers,
 annotations, terminal environment and providers. Re-enabling creates a new activation.
 
+The background subscription waits for admitted backend notifications and refreshes as soon
+as they arrive. It consumes status snapshots rather than ignore invalidation hints, which
+arrive before status is ready and would start redundant configuration/discovery work.
+A bounded idle tick still updates editor-owned facts such as blame; it does
+not delay repository changes. State waits run outside the discovery lock and are cancelled
+before shutdown joins the monitor.
+
 Use **Manage built-in editor extensions** to disable `ash.git` for the current profile.
 Other SCM providers, editors, undo and saving retain their lifetimes. Shared Rust Git and
 Agent/TUI operations remain available under the same directory authorization.
@@ -71,6 +78,10 @@ History queries retain connection-owned cursors and canonical branch/tag IDs. Se
 part of cursor identity; changing it begins a new traversal. Immutable binary contents decode
 from bounded base64 into byte arrays for history and multi-file comparisons. Input/status
 updates preserve SCM resource identity; unchanged diff snapshots retain reviewed models.
+Opening an existing SCM resource and asking for its quick-diff baseline use the published
+backend status identity and read current file contents through `changeFile`; they do not
+force another repository status scan. Explicit refreshes and mutations retain their
+authoritative query paths.
 
 ## Verification
 

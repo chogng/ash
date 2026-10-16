@@ -25,6 +25,10 @@ Desktop SCM History / Changes View → generic SCM bridge
 这条依赖方向让目录边界、Git executable identity、process limits 和 output
 parsing 留在 Rust host。Renderer 只拥有展示状态和用户 intent。
 
+产品 Git 部署沿用包声明的 `*` 激活事件，在宿主可用时开始初始化，与 Workbench
+恢复并行；不把它改写成等待整个窗口恢复的 `onStartupFinished`。执行授权、窗口 scope
+和客户端回调仍由通用扩展宿主管理。
+
 Git 查询和修改使用不同 capability：
 
 | Git 能力                                                                                                                  | `InspectRepository` | `MutateRepository` |
@@ -285,7 +289,13 @@ Thread 提交不走普通 `git/commit`。`git-turn-changes` 保存每轮不可�
 - `git/repositories` 返回稳定、目录相对的 repository identity；`git/status` 与其他 query/mutation 接受可选 `repositoryId`，省略时选择排序后的首个仓库；文件 mutation 只接受仓库相对路径，Rust 边界拒绝绝对路径、空路径和父目录逃逸。worktree 请求使用后端清单返回的 `checkoutRoot`，后端重新检查归属和可用性；
 - 授权目录位于更大 repository 内时，App Server 会过滤 repository 其他目录并把 path 重新映射为
   directory-relative；mutation 则把合法目录 path 映射回 repository-relative path；
-- 每次请求重新打开仓库并读取 authoritative snapshot，不把旧 snapshot 当作 mutation 前提；
+- 显式 `git/status` 和 mutation 继续重新读取 authoritative snapshot，不把旧状态当作 mutation 前提；
+  `git/repositories { includeStatus: true }` 可附带当前仓库的已发布 `statuses`，用于首次 SCM 绑定。
+  只复用 watcher 注册之后已成功校验、且监听仍有效的状态；监听缺失、失败、停止，或请求使用
+  特殊 Git executable/rename 配置时省略相应快照，客户端回到完整查询。订阅先于发现请求，
+  `streamInstanceId` 与 revision 抵御响应和通知乱序；仓库发现本身只读取身份，不额外执行丢弃结果的 status；
+- 同一次仓库发现操作按授权根目录和完整扫描策略复用扫描结果，默认发现、相同窗口策略和响应过滤不重复扫描。
+  复用只覆盖当前操作；下一次请求仍重新发现，深度、忽略目录、submodule 和 worktree 策略不同的扫描不会混用；
 - response 保留 HEAD branch/detached/unborn、upstream ahead/behind、index/worktree 状态、
   rename original path、conflict 和 submodule flags，并带 `repositoryId`、directory-relative `path`、
   Git runtime `streamInstanceId` 与在该实例内单调递增的 repository status revision；协议不暴露
@@ -312,14 +322,19 @@ Thread 提交不走普通 `git/commit`。`git-turn-changes` 保存每轮不可�
   `git/pull` 的 `mode` 为 `configured`（默认）、`rebase` 或 `sync`；`sync` 读取共享 `[git].rebaseWhenSync`，冲突失败后仍发布真实 SCM 状态。`git/push` 使用 Git 当前
   upstream/default 配置；所有 remote operation 都是 non-interactive；
 - 文件、提交和切分支操作返回新的 `GitStatusResult`；创建/删除分支返回分支列表，后端同时推进状态 revision、清理旧 graph cursor 并通知所有连接。worktree 操作返回路径或清单，不改变当前检出的分支；首次打开 View 也会自动刷新；
-- App Server Git runtime 监听已授权目录、Git metadata 和目录上层 repository `.gitignore`，以 100ms
-  debounce 合并 burst；事件只触发重新查询，不直接成为 Git 状态；
+- App Server Git runtime 监听已授权目录、Git metadata 和目录上层 repository `.gitignore`，空闲后的首次变化立即处理，连续变化按 100ms 间隔合并。普通工作树文件事件复用已识别仓库，只启动一次 literal 路径前缀 status 查询并合并现有快照。已知重命名包含两端路径，配对不变时保留增量路径；HEAD、仓库身份、索引、忽略规则变化、监听重扫或重命名匹配不确定时重新读取全仓。事件只提供失效范围，不直接成为 Git 状态；
 - 忽略装饰使用独立的 `git/ignoreChanged` 通知：普通文件变化只查询相关路径，嵌套 `.gitignore`
   变化只查询所在目录。index、`info/exclude`、Git 配置（包括 include）和 Git 解析出的全局排除
   文件变化查询对应仓库；这些文件在工作区外也纳入监听。前端保留已完成的颜色直到查询结束，
-  合并异步完成通知并跳过相同结果；查询取消通过操作 ID 传到后端，终止排队或正在执行的 Git 查询；
+  合并异步完成通知并跳过相同结果；后端按仓库、Git 可执行文件和路径有界复用 ignore 查询结果，
+  文件事件按路径失效，规则、index 和全量刷新使仓库缓存失效，旧请求不能回填已失效的缓存。
+  查询取消通过操作 ID 传到后端，终止排队或正在执行的 Git 查询；
+- SCM 全量快照在现有 Provider 中按分组和资源 ID 复用未变化的对象，Changes 树保留这些资源的
+  行元素、事件监听和焦点。资源的操作、装饰或路径变化时替换对应对象，删除条目不继续保留；
 - watcher 比较 HEAD、文件、分支、标签、remote 配置、stash 和整合状态；外部命令仅修改引用也会推进 revision、清理旧历史分页并通过 `git/statusChanged` 通知所有连接。实际状态未改变时保留 revision 和分页；
 - 已授权目录即使尚无仓库也持续监听。外部 init、嵌套仓库创建、移动或删除会更新仓库清单，并发送 `git/repositoriesChanged {}`；客户端重新查询 `git/repositories`。仍存在的仓库保留原有状态流和分页，不因清单扫描重新创建；
+  客户端更改发现策略后，清单替换会直接唤醒已授权的监听管理器，为新增 worktree 建立监听，
+  不依赖后续目录事件；
 - SCM View 只在相同 `streamInstanceId` 内按 revision 拒绝旧 notification/response；连接重新
   ready 时主动刷新，并接受新 runtime 从较小 revision 开始的 snapshot。已退役实例的迟到通知
   不能覆盖新状态。Watcher 初始化失败不会关闭 Git RPC，用户仍可手动 Refresh。

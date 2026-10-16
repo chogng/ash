@@ -293,20 +293,53 @@ impl GitClient {
 
     /// Captures HEAD and path state without taking optional Git locks.
     pub async fn snapshot(&self, repository: &GitRepository) -> GitResult<GitRepositorySnapshot> {
-        let fsmonitor = detect_fsmonitor_override(self, repository).await;
+        self.query_status(repository, &[]).await
+    }
+
+    /// Captures HEAD and status only under the supplied literal repository-relative prefixes.
+    /// Paths outside these prefixes are absent from this result, not known to be clean.
+    /// Uses one Git process with fsmonitor disabled; no configuration probe or helper runs.
+    pub async fn snapshot_paths(
+        &self,
+        repository: &GitRepository,
+        paths: &GitPathspecSet,
+    ) -> GitResult<GitRepositorySnapshot> {
+        self.query_status(repository, paths.paths()).await
+    }
+
+    async fn query_status(
+        &self,
+        repository: &GitRepository,
+        paths: &[PathBuf],
+    ) -> GitResult<GitRepositorySnapshot> {
+        use std::ffi::OsString;
+
+        // Narrow queries already have a bounded path set. Avoid an additional Git
+        // process to discover fsmonitor support, and never execute configured helpers.
+        // Full scans retain the built-in daemon optimization after capability checks.
+        let fsmonitor = if paths.is_empty() {
+            detect_fsmonitor_override(self, repository).await
+        } else {
+            crate::client::FsmonitorOverride::Disabled
+        };
+        let mut arguments = Vec::<OsString>::new();
+        if !paths.is_empty() {
+            arguments.push("--literal-pathspecs".into());
+        }
+        arguments.extend([
+            "status".into(),
+            self.rename_argument().into(),
+            "--porcelain=v2".into(),
+            "--branch".into(),
+            "-z".into(),
+            "--untracked-files=all".into(),
+        ]);
+        if !paths.is_empty() {
+            arguments.push("--".into());
+            arguments.extend(paths.iter().map(|path| path.as_os_str().to_owned()));
+        }
         let output = self
-            .run_query_with_fsmonitor(
-                repository.worktree_root(),
-                [
-                    "status",
-                    &self.rename_argument(),
-                    "--porcelain=v2",
-                    "--branch",
-                    "-z",
-                    "--untracked-files=all",
-                ],
-                fsmonitor,
-            )
+            .run_query_with_fsmonitor(repository.worktree_root(), arguments, fsmonitor)
             .await?;
         parse_status(&output.stdout, &output.command)
     }

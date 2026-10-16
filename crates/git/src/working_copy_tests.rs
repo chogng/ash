@@ -9,7 +9,66 @@ use super::GitRepositorySnapshot;
 use super::GitSubmoduleState;
 use super::parse_status;
 use crate::GitClient;
+use crate::GitPathspecSet;
 use crate::test_support::TestRepository;
+
+#[tokio::test]
+async fn scoped_snapshot_keeps_head_and_queries_literal_prefixes_only() {
+    let repository = TestRepository::init();
+    for path in [
+        "src/changed.txt",
+        "src/deleted.txt",
+        "src-other/outside.txt",
+        "literal[1].txt",
+        "literal1.txt",
+    ] {
+        repository.write(path, "initial\n");
+    }
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "initial"]);
+    for path in [
+        "src/changed.txt",
+        "src-other/outside.txt",
+        "literal[1].txt",
+        "literal1.txt",
+    ] {
+        repository.write(path, "updated\n");
+    }
+    std::fs::remove_file(repository.root().join("src/deleted.txt")).unwrap();
+    repository.write("src/new.txt", "new\n");
+    let client = GitClient::system();
+    let opened = client.open_repository(repository.root()).await.unwrap();
+    let full = client.snapshot(&opened).await.unwrap();
+    let paths =
+        GitPathspecSet::new(vec![PathBuf::from("src"), PathBuf::from("literal[1].txt")]).unwrap();
+    let scoped = client.snapshot_paths(&opened, &paths).await.unwrap();
+    assert_eq!(scoped.head(), full.head());
+    let expected: Vec<_> = full
+        .changes()
+        .iter()
+        .filter(|change| {
+            change.path().starts_with("src")
+                || change.path() == std::path::Path::new("literal[1].txt")
+        })
+        .cloned()
+        .collect();
+    assert_eq!(scoped.changes(), expected);
+    assert_eq!(scoped.changes().len(), 4);
+
+    repository.write("src/changed.txt", "initial\n");
+    let clean = client
+        .snapshot_paths(
+            &opened,
+            &GitPathspecSet::new(vec![PathBuf::from("src/changed.txt")]).unwrap(),
+        )
+        .await
+        .unwrap();
+    assert!(
+        clean.is_clean(),
+        "An empty scoped result does not describe the dirty paths outside it"
+    );
+    assert!(!client.snapshot(&opened).await.unwrap().is_clean());
+}
 
 #[tokio::test(flavor = "current_thread")]
 async fn ignore_watch_paths_include_git_resolved_external_rules_and_config_includes() {

@@ -13,6 +13,28 @@ use crate::protocol::initialize::ServerCapabilities;
 use crate::protocol::initialize::ensure_protocol_compatible;
 
 #[test]
+fn repository_discovery_can_request_watched_status_without_changing_legacy_responses() {
+    use crate::protocol::git::GitDiscoveryParams;
+    use crate::protocol::git::GitRepositoriesResult;
+    let legacy: GitDiscoveryParams = serde_json::from_value(serde_json::json!({})).unwrap();
+    assert_eq!(legacy.include_status, None);
+    assert_eq!(serde_json::to_value(legacy).unwrap(), serde_json::json!({}));
+    let requested: GitDiscoveryParams =
+        serde_json::from_value(serde_json::json!({"includeStatus": true})).unwrap();
+    assert_eq!(requested.include_status, Some(true));
+    let legacy: GitRepositoriesResult =
+        serde_json::from_value(serde_json::json!({"repositories": []})).unwrap();
+    assert_eq!(legacy.statuses, None);
+    assert_eq!(
+        serde_json::to_value(legacy).unwrap(),
+        serde_json::json!({"repositories": []})
+    );
+    let watched: GitRepositoriesResult =
+        serde_json::from_value(serde_json::json!({"repositories": [], "statuses": []})).unwrap();
+    assert_eq!(watched.statuses, Some(Vec::new()));
+}
+
+#[test]
 fn backup_page_and_legacy_list_contracts_round_trip() {
     use crate::protocol::backup::BackupListPageParams;
     use crate::protocol::backup::BackupListPageResult;

@@ -10,7 +10,7 @@ use crate::GitResult;
 
 const MAX_COMMIT_MESSAGE_BYTES: usize = 64 * 1024;
 
-/// Validated repository-relative paths targeted by one explicit Git mutation.
+/// Validated repository-relative paths targeted by one Git operation.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GitPathspecSet {
     paths: Vec<PathBuf>,
