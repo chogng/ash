@@ -17,6 +17,7 @@ ec4rs = { workspace = true }
 chardetng = { workspace = true }
 encoding_rs = { workspace = true, features = ["fast-legacy-encode"] }
 cap-std = { workspace = true }
+cap-fs-ext = { workspace = true }
 sha2 = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

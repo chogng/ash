@@ -4,6 +4,161 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 static NEXT_DIR: AtomicU64 = AtomicU64::new(1);
 
+thread_local! {
+    static READ_RESOLUTION_HOOK: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+pub(super) fn after_read_resolution() {
+    let hook = READ_RESOLUTION_HOOK.with(|hook| hook.borrow_mut().take());
+    if let Some(hook) = hook {
+        hook();
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn concurrent_symlink_replacement_cannot_read_a_denied_subtree() {
+    #[derive(Clone, Copy, Debug)]
+    enum ReadOperation {
+        Read,
+        Revision,
+        Snapshot,
+        Validate,
+        Copy,
+        CopyDirectory,
+    }
+    for (replaced, target) in [
+        ("visible", "denied"),
+        ("visible/nested", "../denied/nested"),
+        ("visible/nested/file", "../../denied/nested/file"),
+    ] {
+        for operation in [
+            ReadOperation::Read,
+            ReadOperation::Revision,
+            ReadOperation::Snapshot,
+            ReadOperation::Validate,
+            ReadOperation::Copy,
+            ReadOperation::CopyDirectory,
+        ] {
+            let directory = TestDir::new();
+            fs::create_dir_all(directory.path.join("visible/nested")).unwrap();
+            fs::create_dir_all(directory.path.join("denied/nested")).unwrap();
+            fs::write(directory.path.join("visible/nested/file"), b"public").unwrap();
+            fs::write(directory.path.join("denied/nested/file"), b"secret").unwrap();
+            let grant = Grant::for_environment(
+                Dir::open_local(&directory.path).unwrap(),
+                ash_file_access::GrantSource::ExplicitUser,
+                ash_file_access::Permissions::new([Permission::ReadFiles, Permission::BrowseFiles]),
+            )
+            .with_path_policy(
+                ash_file_access::PathAccessPolicy::new(
+                    ash_file_access::PathAccess::ReadWrite,
+                    vec![ash_file_access::PathAccessRule {
+                        pattern: "denied".into(),
+                        access: ash_file_access::PathAccess::Denied,
+                    }],
+                )
+                .unwrap(),
+            );
+            let files = LocalFileSystem::new(grant);
+            let path = Path::new("visible/nested/file");
+            let snapshot = files.read_file_snapshot(path, 100).unwrap();
+            assert!(
+                files
+                    .read_file(Path::new("denied/nested/file"), 100)
+                    .is_err()
+            );
+            let (resolved_tx, resolved_rx) = std::sync::mpsc::sync_channel(0);
+            let (replaced_tx, replaced_rx) = std::sync::mpsc::sync_channel(0);
+            READ_RESOLUTION_HOOK.with(|hook| {
+                *hook.borrow_mut() = Some(Box::new(move || {
+                    resolved_tx.send(()).unwrap();
+                    replaced_rx
+                        .recv_timeout(std::time::Duration::from_secs(10))
+                        .unwrap();
+                }));
+            });
+            let result = std::thread::scope(|scope| {
+                let root = &directory.path;
+                scope.spawn(move || {
+                    resolved_rx
+                        .recv_timeout(std::time::Duration::from_secs(10))
+                        .unwrap();
+                    fs::rename(root.join(replaced), root.join("old")).unwrap();
+                    std::os::unix::fs::symlink(target, root.join(replaced)).unwrap();
+                    replaced_tx.send(()).unwrap();
+                });
+                // Exercise the public read paths, with the writer released only after policy
+                // resolution. The replacement finishes before the reader opens the file.
+                match operation {
+                    ReadOperation::Read => files.read_file(path, 100).map(|_| ()),
+                    ReadOperation::Revision => files.read_file_with_revision(path, 100).map(|_| ()),
+                    ReadOperation::Snapshot => files.read_file_snapshot(path, 100).map(|_| ()),
+                    ReadOperation::Validate => files.validate_file_snapshot(path, &snapshot),
+                    ReadOperation::Copy => {
+                        let destination = TestDir::new();
+                        files.copy_to(path, &destination.file_system(), Path::new("copy"))
+                    }
+                    ReadOperation::CopyDirectory => {
+                        let destination = TestDir::new();
+                        let result = files.copy_to(
+                            Path::new("visible"),
+                            &destination.file_system(),
+                            Path::new("copy"),
+                        );
+                        assert!(!destination.path.join("copy").exists());
+                        result
+                    }
+                }
+            });
+            assert!(
+                result.is_err(),
+                "{operation:?} followed replaced {replaced}"
+            );
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn policy_checked_reads_keep_allowed_directory_and_leaf_symlinks() {
+    let directory = TestDir::new();
+    fs::create_dir(directory.path.join("visible")).unwrap();
+    fs::write(directory.path.join("visible/file"), b"public").unwrap();
+    std::os::unix::fs::symlink("visible", directory.path.join("directory-alias")).unwrap();
+    std::os::unix::fs::symlink("visible/file", directory.path.join("file-alias")).unwrap();
+    let grant = Grant::for_environment(
+        Dir::open_local(&directory.path).unwrap(),
+        ash_file_access::GrantSource::ExplicitUser,
+        ash_file_access::Permissions::new([Permission::ReadFiles]),
+    )
+    .with_path_policy(
+        ash_file_access::PathAccessPolicy::new(
+            ash_file_access::PathAccess::ReadOnly,
+            vec![ash_file_access::PathAccessRule {
+                pattern: "denied-alias".into(),
+                access: ash_file_access::PathAccess::Denied,
+            }],
+        )
+        .unwrap(),
+    );
+    let files = LocalFileSystem::new(grant);
+    for path in ["directory-alias/file", "file-alias"] {
+        let path = Path::new(path);
+        assert_eq!(files.read_file(path, 100).unwrap(), b"public");
+        assert_eq!(
+            files.read_file_with_revision(path, 100).unwrap().bytes,
+            b"public"
+        );
+        let snapshot = files.read_file_snapshot(path, 100).unwrap();
+        assert_eq!(snapshot.content().bytes, b"public");
+        files.validate_file_snapshot(path, &snapshot).unwrap();
+    }
+    std::os::unix::fs::symlink("visible/file", directory.path.join("denied-alias")).unwrap();
+    assert!(files.read_file(Path::new("denied-alias"), 100).is_err());
+}
+
 #[test]
 fn read_snapshots_keep_read_authorization_and_reject_replacement_or_size_changes() {
     let directory = TestDir::new();

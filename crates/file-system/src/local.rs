@@ -19,8 +19,12 @@ use ash_file_access::Dir;
 use ash_file_access::Grant;
 use ash_file_access::Permission;
 use ash_file_identity::FileInformation;
+use cap_fs_ext::DirExt;
+use cap_fs_ext::FollowSymlinks;
+use cap_fs_ext::OpenOptionsFollowExt;
 use cap_std::fs::Dir as Directory;
 use cap_std::fs::OpenOptions;
+use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -78,8 +82,7 @@ impl LocalFileSystem {
         maximum_bytes: usize,
     ) -> Result<FileReadSnapshot, FileSystemError> {
         self.execute(Permission::ReadFiles, |files| {
-            let resolved = files.resolve_existing(path)?;
-            let mut file = files.handle().open(resolved).map_err(io_error)?.into_std();
+            let mut file = files.open_file(path)?.into_std();
             if !file.metadata().map_err(io_error)?.is_file() {
                 return Err(FileSystemError::NotFile(path.to_path_buf()));
             }
@@ -117,8 +120,7 @@ impl LocalFileSystem {
         snapshot: &FileReadSnapshot,
     ) -> Result<(), FileSystemError> {
         self.execute(Permission::ReadFiles, |files| {
-            let resolved = files.resolve_existing(path)?;
-            let file = files.handle().open(resolved).map_err(io_error)?.into_std();
+            let file = files.open_file(path)?.into_std();
             if FileReadStamp::observe(&file)? != snapshot.stamp {
                 return Err(FileSystemError::RevisionConflict(path.to_path_buf()));
             }
@@ -944,6 +946,29 @@ fn read_x11_clipboard_format(format: &str) -> Result<Option<Vec<u8>>, FileSystem
     }
 }
 
+/// Opens a policy-checked, canonical relative path without resolving any new symlinks.
+/// Each ancestor is pinned before opening its child, including the final file. Replacing
+/// a checked component with a symlink therefore fails instead of reaching a denied subtree.
+fn open_resolved_file(root: &Directory, path: &Path) -> std::io::Result<cap_std::fs::File> {
+    #[cfg(test)]
+    tests::after_read_resolution();
+    let mut parent: Option<Directory> = None;
+    if let Some(ancestors) = path.parent() {
+        for component in ancestors.components() {
+            parent = Some(
+                parent
+                    .as_ref()
+                    .unwrap_or(root)
+                    .open_dir_nofollow(component.as_os_str())?,
+            );
+        }
+    }
+    parent.as_ref().unwrap_or(root).open_with(
+        path.file_name().unwrap_or(OsStr::new(".")),
+        OpenOptions::new().read(true).follow(FollowSymlinks::No),
+    )
+}
+
 fn copy_resource(
     source_dir: &Directory,
     source: &Path,
@@ -952,15 +977,17 @@ fn copy_resource(
     permitted: &dyn Fn(&Path, &Path) -> Result<(), FileSystemError>,
 ) -> Result<(), FileSystemError> {
     permitted(source, target)?;
-    let kind = source_dir
+    if source_dir
         .symlink_metadata(source)
         .map_err(io_error)?
-        .file_type();
-    if kind.is_symlink() {
+        .is_symlink()
+    {
         return Err(FileSystemError::InvalidPath(source.to_path_buf()));
     }
+    let mut from = open_resolved_file(source_dir, source).map_err(io_error)?;
+    let source_metadata = from.metadata().map_err(io_error)?;
+    let kind = source_metadata.file_type();
     if kind.is_file() {
-        let mut from = source_dir.open(source).map_err(io_error)?;
         let mut to = target_dir
             .open_with(target, OpenOptions::new().write(true).create_new(true))
             .map_err(|error| {
@@ -971,9 +998,7 @@ fn copy_resource(
                 }
             })?;
         let result = std::io::copy(&mut from, &mut to)
-            .and_then(|_| {
-                target_dir.set_permissions(target, source_dir.metadata(source)?.permissions())
-            })
+            .and_then(|_| target_dir.set_permissions(target, source_metadata.permissions()))
             .map_err(io_error);
         if result.is_err() {
             let _ = target_dir.remove_file(target);
@@ -983,7 +1008,8 @@ fn copy_resource(
     if !kind.is_dir() {
         return Err(FileSystemError::NotFile(source.to_path_buf()));
     }
-    let permissions = source_dir.metadata(source).map_err(io_error)?.permissions();
+    let permissions = source_metadata.permissions();
+    let source_directory = Directory::from_std_file(from.into_std());
     #[cfg(unix)]
     let created = {
         use cap_std::fs::DirBuilderExt;
@@ -1002,7 +1028,7 @@ fn copy_resource(
         }
     })?;
     let result = (|| {
-        for entry in source_dir.read_dir(source).map_err(io_error)? {
+        for entry in source_directory.entries().map_err(io_error)? {
             let entry = entry.map_err(io_error)?;
             let name = entry.file_name();
             copy_resource(
@@ -1157,15 +1183,17 @@ fn check_file_revision(
     path: &Path,
     expected: &str,
 ) -> Result<(), FileSystemError> {
-    let resolved = files.resolve_existing(path)?;
-    let metadata = files.handle().metadata(&resolved).map_err(io_error)?;
+    let mut file = files.open_file(path)?;
+    let metadata = file.metadata().map_err(io_error)?;
     if !metadata.is_file() {
         return Err(FileSystemError::NotFile(path.to_path_buf()));
     }
     if metadata.permissions().readonly() {
         return Err(FileSystemError::ReadOnly(path.to_path_buf()));
     }
-    if file_revision(&files.handle().read(resolved).map_err(io_error)?) != expected {
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes).map_err(io_error)?;
+    if file_revision(&bytes) != expected {
         return Err(FileSystemError::RevisionConflict(path.to_path_buf()));
     }
     Ok(())
@@ -1332,12 +1360,16 @@ impl ScopedFiles {
 }
 
 impl ScopedFiles {
+    fn open_file(&self, path: &Path) -> Result<cap_std::fs::File, FileSystemError> {
+        let resolved = self.resolve_existing(path)?;
+        open_resolved_file(self.handle(), &resolved).map_err(io_error)
+    }
+
     fn read_file(&self, path: &Path, maximum_bytes: usize) -> Result<Vec<u8>, FileSystemError> {
         if maximum_bytes == 0 {
             return Err(FileSystemError::ReadLimitExceeded { maximum_bytes });
         }
-        let resolved = self.resolve_existing(path)?;
-        let mut file = self.handle().open(resolved).map_err(io_error)?;
+        let mut file = self.open_file(path)?;
         let mut bytes = Vec::with_capacity(maximum_bytes.min(8 * 1024));
         Read::by_ref(&mut file)
             .take((maximum_bytes + 1) as u64)
