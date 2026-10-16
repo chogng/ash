@@ -65,7 +65,7 @@ export function getThemeEditorSource(extensions: IExtensionService, target: stri
 				? URI.joinPath(entry.description.extensionLocation, contribution.path)
 				: toExtensionResourceURI(request);
 			// Package generations select read capabilities, not a second editor identity.
-			if (typeof target === 'string' ? target === id : target.with({ query: '' }).toString() === resource.with({ query: '' }).toString()) {
+			if (typeof target === 'string' ? target === id : [resource, toExtensionResourceURI(request)].some(candidate => target.with({ query: '' }).toString() === candidate.with({ query: '' }).toString())) {
 				return { resource, request, contribution, index, id };
 			}
 		}

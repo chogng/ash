@@ -88,7 +88,8 @@ export class AuxiliaryEditorPart extends Disposable {
 			this._register(statusServices.createInstance(EditorStatusContribution, creation.part, statusbarService));
 			let compact: boolean | undefined;
 			const updateWindowChrome = (): void => {
-				const isCompact = compact ?? creation.part.activePane?.prefersCompactTitlebar === true;
+				const singleEditor = creation.part.groups.length === 1 && creation.part.activeGroup.inputs.length === 1;
+				const isCompact = (compact ?? creation.part.activePane?.prefersCompactTitlebar === true) && singleEditor;
 				creation.titlebar.updateOptions({ compact: isCompact });
 				for (const group of creation.part.groups) group.setTitleVisible(!isCompact);
 				const hidden = isCompact || creation.part.activePane?.prefersStatusbarHidden === true || configuration.getValue<boolean>(WorkbenchConfiguration.statusBarVisible) === false;
@@ -107,8 +108,8 @@ export class AuxiliaryEditorPart extends Disposable {
 			});
 			this._register(toDisposable(() => compactWindowCommands.delete(window.window)));
 			this._register(creation.part.onDidChangeEditors(() => {
-				// Compact windows expose one editor. Reveal navigation when another is added.
-				if (creation.part.groups.length > 1 || creation.part.activeGroup.inputs.length > 1) compact = false;
+				// Resource replacement briefly opens a second input. Derive navigation
+				// from the live inputs without changing the user's presentation choice.
 				updateWindowChrome();
 			}));
 			this._register(configuration.onDidChangeConfiguration(event => { if (event.affectsConfiguration(WorkbenchConfiguration.statusBarVisible)) updateWindowChrome(); }));

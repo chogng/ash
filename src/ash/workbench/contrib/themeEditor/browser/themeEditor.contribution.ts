@@ -6,11 +6,13 @@ import { URI } from '../../../../base/common/uri.js';
 import { IUserThemeService } from '../../../common/userThemes.js';
 import { getWindow } from '../../../../base/browser/dom.js';
 import { IExtensionService } from '../../../services/extensions/common/extensionService.js';
-import { IExtensionResourceLoaderService } from '../../../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
+import { IExtensionResourceLoaderService, toExtensionResourceURI } from '../../../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
+import { IFileService } from '../../../../platform/files/common/files.js';
 import { EditorPanes, registerEditorPane } from '../../../browser/editor.js';
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import { CODE_EDITOR_ID, TextResourceEditor } from '../../../browser/parts/editor/textResourceEditor.js';
 import { IEditorPartsService } from '../../../browser/parts/editor/editorParts.js';
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import { createThemeEditorInput, getThemeEditorSource, ThemeEditor, ThemeEditorId } from './themeEditor.js';
 import './themeEditorAccessibility.js';
 
@@ -44,7 +46,8 @@ registerAction2(class OpenThemeEditorAction extends Action2 {
 		if (!users.available) throw new Error(localize('themeEditor.unavailable', 'User theme files are unavailable in this window.'));
 		const theme = accessor.get(IWorkbenchThemeService).getColorTheme();
 		const source = users.sourceFor(theme.id);
-		const extension = source ? undefined : getThemeEditorSource(accessor.get(IExtensionService), theme.id);
+		const extensions = accessor.get(IExtensionService);
+		const extension = source ? undefined : getThemeEditorSource(extensions, theme.id);
 		if (!source && !extension) throw new Error(localize('themeEditor.sourceUnavailable', 'The source file for theme {0} is unavailable.', theme.label));
 		const resource = source ? URI.joinPath(users.directory!, source.file) : extension!.resource;
 		const parts = accessor.get(IEditorPartsService);
@@ -54,10 +57,14 @@ registerAction2(class OpenThemeEditorAction extends Action2 {
 		const current = pending.get(key);
 		if (current) return current;
 		const resources = accessor.get(IExtensionResourceLoaderService);
+		const files = accessor.get(IFileService);
 		const operation = (async () => {
-			const existing = parts.parts.find(part => part.editorsMru.some(({ input }) => input.editorId === ThemeEditorId && input.resource.with({ query: '' }).toString() === key));
+			const matches = ({ input }: { input: IResourceEditorInput; }): boolean => input.editorId === ThemeEditorId && (source
+				? input.resource.with({ query: '' }).toString() === key
+				: getThemeEditorSource(extensions, input.resource)?.id === extension!.id);
+			const existing = parts.parts.find(part => part.editorsMru.some(matches));
 			if (existing) {
-				const editor = existing.editorsMru.find(({ input }) => input.editorId === ThemeEditorId && input.resource.with({ query: '' }).toString() === key)!;
+				const editor = existing.editorsMru.find(matches)!;
 				const target = existing === parts.mainPart ? await parts.openEditorsInNewWindow([editor], 'move') : existing;
 				if (target) {
 					await target.openEditor(editor.input, { preferredEditorId: ThemeEditorId, pinned: true, revealIfOpened: true });
@@ -65,10 +72,14 @@ registerAction2(class OpenThemeEditorAction extends Action2 {
 				}
 				return;
 			}
-			const packaged = resource.scheme === 'ash-extension-resource';
+			// An installation path does not grant access through the workspace file provider.
+			// Keep directly accessible sources editable; otherwise use the catalog's read capability.
+			const stat = extension && resource.scheme !== 'ash-extension-resource' ? await files.stat(resource).catch(() => undefined) : undefined;
+			const packaged = extension !== undefined && stat === undefined;
+			const editorResource = packaged ? toExtensionResourceURI(extension.request) : resource;
 			const input = createThemeEditorInput({
-				resource, label: source?.file ?? resource.path.split('/').at(-1),
-				...(packaged ? { initialText: await resources.readExtensionResource(resource), readOnly: true } : {}),
+				resource: editorResource, label: source?.file ?? resource.path.split('/').at(-1),
+				...(packaged ? { initialText: await resources.readExtensionResource(editorResource), readOnly: true } : stat?.readonly ? { readOnly: true } : {}),
 			});
 			const target = await parts.createAuxiliaryEditorPart();
 			try { await target.openEditor(input, { preferredEditorId: ThemeEditorId, pinned: true }); }
