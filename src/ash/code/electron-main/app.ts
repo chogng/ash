@@ -1729,7 +1729,8 @@ export class AshApplication extends Disposable {
 					windowDisposables.add(toDisposable(() => window.removeListener('focus', onFocus)));
 					// Reloaded renderers must register their current system-wide keybindings again.
 					const clearInterruptedKeybindings = (): void => {
-						this.globalKeybindings.removeWindow(window.id);
+						// Contribution leases belong to the live window and handle navigation themselves.
+						this.globalKeybindings.updateKeybindings(window.id, []);
 					};
 					const onNavigation = (_event: unknown, _url: string, inPlace: boolean, mainFrame: boolean): void => {
 						if (mainFrame && !inPlace) clearInterruptedKeybindings();

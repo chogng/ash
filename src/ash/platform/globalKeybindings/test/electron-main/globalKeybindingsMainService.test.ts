@@ -3,6 +3,9 @@ import { test } from 'mocha';
 import { GlobalKeybindingsMainService, type IGlobalShortcutRegistry } from '../../electron-main/globalKeybindingsMainService.js';
 import type { INativeSystemWideKeybinding } from '../../../native/common/nativeHost.js';
 import { validateSystemWideKeybindings } from '../../../native/common/nativeHost.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
+
+ensureNoDisposablesAreLeakedInTestSuite();
 
 class TestShortcuts implements IGlobalShortcutRegistry {
 	readonly callbacks = new Map<string, () => void>();
@@ -159,4 +162,23 @@ test('contribution global shortcut falls back while a non-owner window has focus
 	owner.update(binding('Control+A'));
 	shortcuts.callbacks.get('Control+A')!();
 	assert.equal(fired, 1);
+});
+
+test('renderer navigation clears user bindings while contribution leases can register again', () => {
+	const shortcuts = new TestShortcuts();
+	using service = new GlobalKeybindingsMainService({ shortcuts, activeWindowId: () => 1, runCommand: () => { }, onError: error => { throw error; } });
+	using owner = service.createOwner(1, () => { });
+	for (let navigation = 0; navigation < 2; navigation++) {
+		owner.update(binding('Control+A'));
+		service.updateKeybindings(1, [binding('Control+B')]);
+		service.updateKeybindings(1, []);
+		assert.equal(shortcuts.callbacks.has('Control+B'), false);
+		assert.equal(shortcuts.callbacks.has('Control+A'), true);
+		owner.update(undefined);
+		assert.equal(shortcuts.callbacks.size, 0);
+		assert.equal(owner.update(binding('Control+A')), true);
+	}
+	service.removeWindow(1);
+	assert.equal(shortcuts.callbacks.size, 0);
+	assert.throws(() => owner.update(binding('Control+A')), /Shortcut owner has closed/);
 });
