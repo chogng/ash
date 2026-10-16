@@ -72,6 +72,37 @@ class CargoBuildTests(unittest.TestCase):
         run.assert_not_called()
         environment.assert_not_called()
 
+    def test_protocol_preparation_is_owned_by_the_build_or_its_watcher(self):
+        self.packages.return_value = {"ash-app-server-protocol"}
+        executable = self.executable("ash-app-server")
+        artifact = {
+            "reason": "compiler-artifact",
+            "target": {"kind": ["bin"], "name": "ash-app-server"},
+            "executable": str(executable),
+        }
+        for prepared in (False, True):
+            with (
+                self.subTest(protocol_prepared=prepared),
+                patch("build.lib.package_binaries.generate_protocol") as generate,
+                patch(
+                    "build.lib.package_binaries.subprocess.run",
+                    return_value=subprocess.CompletedProcess(
+                        [], 0, json.dumps(artifact)
+                    ),
+                ) as run,
+            ):
+                result = build_binaries(
+                    self.root,
+                    self.spec,
+                    {"ash-app-server": None},
+                    cargo="cargo",
+                    cargo_profile="dev-small",
+                    protocol_prepared=prepared,
+                )
+                self.assertEqual(result, {"ash-app-server": executable})
+                self.assertEqual(generate.call_count, int(not prepared))
+                run.assert_called_once()
+
     @patch.dict("os.environ", {"CARGO_BUILD_TARGET": "x86_64-pc-windows-gnullvm"})
     def test_windows_development_hosts_select_msvc_and_matching_cache(self) -> None:
         spec = TARGETS["x86_64-pc-windows-msvc"]

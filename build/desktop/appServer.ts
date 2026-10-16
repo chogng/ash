@@ -130,7 +130,7 @@ export async function watchAppServer(options: { skipInitial?: boolean; javascrip
 			// Web owns a packaged Node runtime; Electron supplies Node from its host.
 			const buildArguments = options.javascriptRuntime === 'packaged-node'
 				? ['-B', 'build/prepare.py', '--javascript-runtime', 'packaged-node']
-				: ['-B', 'build/desktop/develop.py'];
+				: ['-B', 'build/desktop/develop.py', '--protocol-prepared'];
 			const { command, args } = pythonCommand(buildArguments);
 			const child = spawn(command, args, { cwd: repositoryRoot, env: process.env, stdio: 'inherit', windowsHide: true });
 			activeBuild = child;

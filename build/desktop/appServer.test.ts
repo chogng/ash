@@ -122,7 +122,7 @@ test('watcher invokes the Python backend builder after protocol generation', asy
 	t.mock.method(fs, 'watch', () => ({ close() { } }));
 	t.mock.method(console, 'error', (message: string) => failure.resolve(message));
 	t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
-		commands.push(args.at(-1) ?? '');
+		commands.push(args[1] ?? '');
 		const child = new ChildProcess();
 		setImmediate(() => child.emit('close', commands.length === 1 ? 0 : 1, null));
 		return child;
@@ -182,7 +182,7 @@ for (const javascriptRuntime of ['host-provided-node', 'packaged-node'] as const
 		await completed.promise;
 		const expected = javascriptRuntime === 'packaged-node'
 			? ['-B', 'build/prepare.py', '--javascript-runtime', 'packaged-node']
-			: ['-B', 'build/desktop/develop.py'];
+			: ['-B', 'build/desktop/develop.py', '--protocol-prepared'];
 		assert.deepEqual(commands, [pythonCommand(expected).args]);
 	});
 }
@@ -193,7 +193,7 @@ test('a shared contract save survives a later business save in the same batch', 
 	mockProtocolDirectories(t);
 	const save = mockSourceChanges(t);
 	t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
-		commands.push(args.at(-1)!);
+		commands.push(args[1]!);
 		const child = new ChildProcess();
 		setImmediate(() => child.emit('close', 0, null));
 		return child;
@@ -213,7 +213,7 @@ test('a Rust SDK save rebuilds the backend from its root SDK directory', async t
 	mockProtocolDirectories(t);
 	const save = mockSourceChanges(t);
 	t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
-		commands.push(args.at(-1)!);
+		commands.push(args[1]!);
 		const child = new ChildProcess();
 		setImmediate(() => child.emit('close', 0, null));
 		return child;
@@ -234,7 +234,7 @@ test('a protocol save during an active backend build exports before the next bui
 	mockProtocolDirectories(t);
 	const save = mockSourceChanges(t);
 	t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
-		commands.push(args.at(-1)!);
+		commands.push(args[1]!);
 		const child = new ChildProcess();
 		if (commands.length === 1) firstBuild.resolve(child);
 		else setImmediate(() => child.emit('close', 0, null));
@@ -257,7 +257,7 @@ test('a manifest as the first save exports before building the backend', async t
 	mockProtocolDirectories(t);
 	const save = mockSourceChanges(t);
 	t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
-		commands.push(args.at(-1)!);
+		commands.push(args[1]!);
 		const child = new ChildProcess();
 		setImmediate(() => child.emit('close', 0, null));
 		return child;
@@ -283,7 +283,7 @@ test('failed dependency discovery blocks the backend and is retried on the next 
 	});
 	t.mock.method(console, 'error', () => failed.resolve());
 	t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
-		commands.push(args.at(-1)!);
+		commands.push(args[1]!);
 		const child = new ChildProcess();
 		setImmediate(() => child.emit('close', 0, null));
 		return child;
@@ -308,7 +308,7 @@ test('failed protocol export is retried before a subsequent business build', asy
 	const save = mockSourceChanges(t);
 	t.mock.method(console, 'error', () => failed.resolve());
 	t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
-		commands.push(args.at(-1)!);
+		commands.push(args[1]!);
 		const child = new ChildProcess();
 		const code = commands.length === 1 ? 1 : 0;
 		setImmediate(() => child.emit('close', code, null));
@@ -332,7 +332,7 @@ test('manifest changes refresh the protocol graph before new dependency saves', 
 	const save = mockSourceChanges(t);
 	let completed = Promise.withResolvers<void>();
 	t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
-		commands.push(args.at(-1)!);
+		commands.push(args[1]!);
 		const child = new ChildProcess();
 		setImmediate(() => child.emit('close', 0, null));
 		return child;

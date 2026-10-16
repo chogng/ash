@@ -679,6 +679,8 @@ opt-level = "s"
 inherits = "dev"
 debug = "none"
 strip = "symbols"
+# Avoid local ThinLTO reoptimizing other codegen units after a source edit.
+lto = "off"
 # Fewer codegen units shorten a clean Code build without changing its unwind behavior.
 codegen-units = 16
 

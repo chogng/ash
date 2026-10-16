@@ -52,10 +52,13 @@ fn issue_server(root: &std::path::Path, origin: &str) -> AppServer {
     let mut server = server().with_config_store(Arc::new(
         ConfigStore::open(root.join("config.sqlite3")).unwrap(),
     ));
-    server.issue_runtime = Some(crate::server::issue_runtime::IssueRuntime::open(root).unwrap());
-    server.issue_cache = Some(Arc::new(Mutex::new(
-        ash_state::SqliteIssueCache::open(&root.join("state.sqlite3")).unwrap(),
-    )));
+    server.issue_processor = Some(Arc::new(
+        crate::server::issue_operations::IssueRequestProcessor::open(
+            root,
+            &root.join("state.sqlite3"),
+        )
+        .unwrap(),
+    ));
     server
 }
 
@@ -83,11 +86,7 @@ fn issue_rpc_reads_only_the_current_accounts_cache_and_rejects_revoked_credentia
         .unwrap()
         .as_secs();
     for (authorization, number) in [(&first, 1), (&second, 2)] {
-        server
-            .issue_cache
-            .as_ref()
-            .unwrap()
-            .lock()
+        ash_state::SqliteIssueCache::open(&directory.path().join("state.sqlite3"))
             .unwrap()
             .write(
                 &ash_state::IssueCacheKey {
@@ -265,6 +264,44 @@ fn repository_credentials() -> Arc<Credentials> {
         account_id: "42".into(),
         grant_id: "repository-tests".into(),
     }))))
+}
+
+#[test]
+fn github_symphony_uses_the_shared_executor_without_directory_issue_services() {
+    let directory = tempfile::tempdir().unwrap();
+    let workflow_path = directory.path().join("WORKFLOW.md");
+    std::fs::write(
+        &workflow_path,
+        "---\ntracker:\n  kind: github\n  provider:\n    repo: team/repo\n---\n{{ issue.title }}",
+    )
+    .unwrap();
+    let workflow = ash_symphony::Workflow::load(&workflow_path).unwrap();
+    let http = Arc::new(RepositoryHttp::default());
+    let server = server()
+        .with_github_http(repository_credentials(), http.clone())
+        .unwrap();
+    assert!(server.issue_processor.is_none());
+    http.reply(200, serde_json::json!([]));
+    http.reply(200, serde_json::json!([]));
+    let cancellation = ash_async_utils::CancellationSource::new();
+    assert!(
+        server
+            .poll_symphony(&workflow, &cancellation.token())
+            .unwrap()
+            .is_empty()
+    );
+    http.reply(200, serde_json::json!({
+        "number":7, "title":"Issue", "body":"Body", "html_url":"https://github.com/team/repo/issues/7",
+        "updated_at":"now", "state":"open", "labels":[], "assignees":[],
+    }));
+    http.reply(200, serde_json::json!([]));
+    let issue = server
+        .refresh_symphony(&workflow, "team/repo#7", &cancellation.token())
+        .unwrap()
+        .unwrap();
+    assert_eq!(issue.identifier, "team/repo#7");
+    assert_eq!(issue.title, "Issue");
+    assert_eq!(http.requests.lock().unwrap().len(), 4);
 }
 
 #[test]
@@ -458,7 +495,7 @@ fn github_repository_rpc_supports_issue_and_pr_management_without_a_local_checko
     let server = server()
         .with_github_http(repository_credentials(), http.clone())
         .unwrap();
-    assert!(server.issue_runtime.is_none());
+    assert!(server.issue_processor.is_none());
     let mut connection = server.connection();
     initialize(&server, &mut connection);
     let issue = json!({"number":7,"node_id":"issue7","title":"Issue","body":"Body","html_url":"https://github.com/team/repo/issues/7","updated_at":"now","state":"open"});
@@ -1066,20 +1103,46 @@ fn reporter_cancel_before_search_stops_io_and_has_a_terminal_cancelled_response(
 }
 
 #[test]
-fn stalled_github_reads_run_concurrently_without_blocking_queries_or_cancellation() {
+fn stalled_github_and_issue_reads_keep_queries_and_cancellation_available() {
+    for method in ["github/labels/list", "issue/list", "issue/read"] {
+        assert_stalled_reads_keep_dispatch_available(method);
+    }
+}
+
+fn read_params(method: &str, operation_id: &str, repository: &str) -> serde_json::Value {
+    use serde_json::json;
+    match method {
+        "issue/list" => {
+            json!({"operationId":operation_id, "state":"open", "query":"", "page":1, "mode":"refresh"})
+        }
+        "issue/read" => {
+            json!({"operationId":operation_id, "repository":{"host":"github.com","owner":"team","name":repository}, "number":7})
+        }
+        "github/labels/list" => {
+            json!({"operationId":operation_id, "repository":{"host":"github.com","owner":"team","name":repository}})
+        }
+        _ => panic!("unsupported fixture method {method}"),
+    }
+}
+
+fn assert_stalled_reads_keep_dispatch_available(method: &str) {
     use crate::server::request_dispatch::tests::Client;
     use serde_json::json;
     let (entered, started) = std::sync::mpsc::channel();
+    let directory = tempfile::tempdir().unwrap();
     let backend = Arc::new(
-        server()
-            .with_github_http(
-                repository_credentials(),
-                Arc::new(CancelledRepositoryHttp {
-                    entered,
-                    confirmed: false,
-                }),
-            )
-            .unwrap(),
+        issue_server(
+            directory.path(),
+            "https://github.com/team/network-saturation.git",
+        )
+        .with_github_http(
+            repository_credentials(),
+            Arc::new(CancelledRepositoryHttp {
+                entered,
+                confirmed: false,
+            }),
+        )
+        .unwrap(),
     );
     let serving = Arc::clone(&backend);
     let (mut client, host) = Client::pair();
@@ -1098,25 +1161,21 @@ fn stalled_github_reads_run_concurrently_without_blocking_queries_or_cancellatio
     for id in 2..10 {
         client.send(
             id,
-            "github/labels/list",
-            json!({
-                "operationId":format!("held-{id}"),
-                "repository":{"host":"github.com","owner":"team","name":"network-saturation"},
-            }),
+            method,
+            read_params(method, &format!("held-{id}"), "network-saturation"),
         );
     }
     // All eight requests must reach HTTP before any is released. This fails when
     // waiting for the first HTTP request occupies the sole background worker.
     for _ in 2..10 {
-        started.recv_timeout(Duration::from_secs(3)).unwrap();
+        if started.recv_timeout(Duration::from_secs(3)).is_err() {
+            panic!("{method} did not enter HTTP: {}", client.read());
+        }
     }
     client.send(
         99,
-        "github/labels/list",
-        json!({
-            "operationId":"over-capacity",
-            "repository":{"host":"github.com","owner":"team","name":"network-saturation"},
-        }),
+        method,
+        read_params(method, "over-capacity", "network-saturation"),
     );
     let rejected = client.read();
     assert_eq!(rejected["id"], 99);
@@ -1164,19 +1223,29 @@ fn stalled_github_reads_run_concurrently_without_blocking_queries_or_cancellatio
 }
 
 #[test]
-fn disconnect_drains_all_running_github_reads() {
+fn disconnect_drains_all_running_github_and_issue_reads() {
+    for method in ["github/labels/list", "issue/read"] {
+        assert_disconnect_drains_reads(method);
+    }
+}
+
+fn assert_disconnect_drains_reads(method: &str) {
     use crate::server::request_dispatch::tests::Client;
     let (entered, started) = std::sync::mpsc::channel();
+    let directory = tempfile::tempdir().unwrap();
     let backend = Arc::new(
-        server()
-            .with_github_http(
-                repository_credentials(),
-                Arc::new(CancelledRepositoryHttp {
-                    entered,
-                    confirmed: false,
-                }),
-            )
-            .unwrap(),
+        issue_server(
+            directory.path(),
+            "https://github.com/team/disconnect-drain.git",
+        )
+        .with_github_http(
+            repository_credentials(),
+            Arc::new(CancelledRepositoryHttp {
+                entered,
+                confirmed: false,
+            }),
+        )
+        .unwrap(),
     );
     let (mut client, host) = Client::pair();
     let (done, completed) = std::sync::mpsc::channel();
@@ -1192,15 +1261,14 @@ fn disconnect_drains_all_running_github_reads() {
     for id in 2..8 {
         client.send(
             id,
-            "github/labels/list",
-            serde_json::json!({
-                "operationId":format!("disconnect-{id}"),
-                "repository":{"host":"github.com","owner":"team","name":"disconnect-drain"},
-            }),
+            method,
+            read_params(method, &format!("disconnect-{id}"), "disconnect-drain"),
         );
     }
     for _ in 2..8 {
-        started.recv_timeout(Duration::from_secs(3)).unwrap();
+        if started.recv_timeout(Duration::from_secs(3)).is_err() {
+            panic!("{method} did not enter HTTP: {}", client.read());
+        }
     }
     client.close();
     let result = completed.recv_timeout(Duration::from_secs(3)).unwrap();

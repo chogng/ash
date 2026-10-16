@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def build_development_server(
-    *, root: Path = ROOT, select_prepared: bool = False
+    *, root: Path = ROOT, select_prepared: bool = False, protocol_prepared: bool = False
 ) -> tuple[bool, str]:
     spec = TARGETS[default_target()]
     package = current_package(development_root(root, spec.target, "host-provided-node"))
@@ -35,6 +35,7 @@ def build_development_server(
             cargo="cargo",
             cargo_profile=PROFILE,
             host_build=True,
+            protocol_prepared=protocol_prepared,
         )
     )
     result = publish_generation(
@@ -47,9 +48,17 @@ def build_development_server(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--protocol-prepared",
+        action="store_true",
+        help="Reuse the protocol already prepared by the source watcher",
+    )
+    parser.add_argument(
         "--select-prepared",
         action="store_true",
         help="Select prepared binaries without invoking Cargo",
     )
     arguments = parser.parse_args()
-    build_development_server(select_prepared=arguments.select_prepared)
+    build_development_server(
+        select_prepared=arguments.select_prepared,
+        protocol_prepared=arguments.protocol_prepared,
+    )

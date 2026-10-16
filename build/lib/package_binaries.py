@@ -84,6 +84,7 @@ def build_binaries(
     cargo: str,
     cargo_profile: str,
     host_build: bool = False,
+    protocol_prepared: bool = False,
 ) -> Dict[str, Path]:
     if (
         any(
@@ -125,7 +126,9 @@ def build_binaries(
     if "ash-voice-host" in missing:
         command.extend(["--features", "ash-voice-host/host"])
     packages = cargo_command_packages(cargo, command[1:], repository_root)
-    if "ash-app-server-protocol" in packages:
+    # Watchers prepare protocol changes before this call and serialize subsequent
+    # saves. Direct builds still own preparation when no caller has done it.
+    if not protocol_prepared and "ash-app-server-protocol" in packages:
         generate_protocol(root=repository_root, cargo=cargo)
     environment = cargo_environment(spec, packages)
     if cargo_profile == "release" and "apple-darwin" in spec.target:

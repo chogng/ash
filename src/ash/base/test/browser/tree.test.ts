@@ -204,7 +204,7 @@ test('Compact async chains retain selection and loaded expansion across branchin
 		await tree.updateChildren(root, { recursive: true, deferIfCollapsed: true });
 		assert.deepEqual(tree.getCompressedTreeNode(a)?.elements, [a, b, c]);
 		assert.equal(tree.isCollapsed(c), true);
-		assert.deepEqual(reads.slice(4), ['root', 'a', 'b', 'c']);
+		assert.deepEqual(reads.slice(4), ['root', 'a', 'b']);
 		await tree.expand(c);
 		tree.setFocus(file);
 		tree.setSelection([file]);
@@ -456,6 +456,41 @@ test('AsyncDataTree defers invalidated folded branches until expansion, includin
 	} finally {
 		dom.window.close();
 	}
+});
+
+test('Compact async trees defer folded directory changes and read fresh children on expansion', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		const root = { id: 'root', directory: true };
+		const build = { id: '.build', directory: true };
+		const first = { id: 'first', directory: false };
+		const second = { id: 'second', directory: false };
+		const replacement = { id: 'replacement', directory: false };
+		let children = [first, second];
+		const reads: string[] = [];
+		using tree = new CompressibleAsyncDataTree<typeof root, typeof root>(dom.window.document.body, {
+			hasChildren: item => item.directory,
+			getChildren: item => { reads.push(item.id); return item === root ? [build] : children; },
+		}, {
+			identityProvider: { getId: item => item.id },
+			compressionEnabled: true,
+			isIncompressible: item => !item.directory,
+			collapseByDefault: () => true,
+			renderCompressedElements: items => h(dom.window.document, 'span', items.map(item => item.id).join('/')),
+		});
+		await tree.setInput(root);
+		assert.deepEqual(reads, ['root', '.build']);
+		children = [replacement];
+		for (let i = 0; i < 3; i++) await tree.updateChildren(build, { deferIfCollapsed: true });
+		await tree.updateChildren(root, { recursive: true, deferIfCollapsed: true });
+		assert.deepEqual(reads, ['root', '.build', 'root']);
+		assert.deepEqual(tree.getVisibleElements(), [build]);
+		assert.equal(tree.isLoading(build), false);
+		assert.equal(tree.element.getAttribute('aria-busy'), 'false');
+		await tree.expand(build);
+		assert.deepEqual(reads, ['root', '.build', 'root', '.build']);
+		assert.deepEqual(tree.getVisibleElements(), [build, replacement]);
+	} finally { dom.window.close(); }
 });
 
 test('AsyncDataTree rereads after a change arrives during an expanded branch load', async () => {

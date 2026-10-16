@@ -309,6 +309,18 @@ class DevelopTests(unittest.TestCase):
             )
             self.assertEqual("dev-small", build.call_args.kwargs["cargo_profile"])
             self.assertTrue(build.call_args.kwargs["host_build"])
+            self.assertFalse(build.call_args.kwargs["protocol_prepared"])
+
+    def test_watcher_passes_its_prepared_protocol_to_the_binary_builder(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package = prepared_package(root)
+            with (
+                patch.object(develop, "current_package", return_value=package),
+                patch.object(develop, "build_binaries", return_value={}) as build,
+            ):
+                develop.build_development_server(root=root, protocol_prepared=True)
+            self.assertTrue(build.call_args.kwargs["protocol_prepared"])
 
     def test_selecting_prepared_outputs_does_not_invoke_cargo(self):
         with tempfile.TemporaryDirectory() as temporary:

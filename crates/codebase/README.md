@@ -19,6 +19,8 @@
 结构切分与符号提取通过 `ash-syntax::SyntaxLanguage::for_language` 独立选择可用解析器。
 身份和结构切分变化已升级 chunker contract，旧的可重建源码索引会在打开时失效。
 
+扫描、文件变更处理和编辑器覆盖层共同排除 `.git`、`.ash`、`.build`、`node_modules` 和 `target`。这些目录内的变化不会触发源码重扫，即使索引已达容量上限；`.git/info/exclude` 的变更仍会重新应用忽略规则。其他隐藏源码仍可通过 ignore 文件的允许规则纳入索引。
+
 | 接口                                                      | 保证                                                                                        |
 | --------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | `Codebase::open/rebuild/reconcile/refresh_observed_paths` | 只在规范化 root 内读取事实；自动扫描保留未变化的 generation，显式 rebuild 发布新 generation |

@@ -1368,6 +1368,23 @@ fn initialize_is_required_and_request_ids_are_connection_unique() {
         serde_json::json!({"jsonrpc":"2.0","id":1,"method":"session/list","params":{}}),
     );
     assert_eq!(duplicate["error"]["message"], "InvalidRequest");
+    // Gaps and out-of-order IDs remain legal, but completion never permits reuse.
+    for id in [4, 2, 3] {
+        let reply = call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":id,"method":"session/list","params":{}}),
+        );
+        assert!(reply.get("result").is_some(), "{reply}");
+    }
+    for id in [2, 4] {
+        let reply = call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":id,"method":"session/list","params":{}}),
+        );
+        assert_eq!(reply["error"]["message"], "InvalidRequest");
+    }
 }
 
 #[test]
