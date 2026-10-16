@@ -5,6 +5,7 @@ import { localize } from '../../../../nls.js';
 
 /** A browser host has no device-local Rust capture capability. */
 export class NullLocalTranscriptionService extends AbstractDisposable implements ILocalTranscriptionService {
+	public async pushAudio(): Promise<never> { throw unavailable(); }
 	public readonly _serviceBrand = undefined;
 	public readonly isSupported = false;
 	public readonly onDidTranscribe = Event.None;

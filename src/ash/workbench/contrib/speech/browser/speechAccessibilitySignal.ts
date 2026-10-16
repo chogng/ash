@@ -1,4 +1,4 @@
-import { IChatSpeechToTextService } from '../../chat/browser/speechToText/chatSpeechToTextService.js';
+import { IChatSpeechToTextService, ChatSpeechToTextState } from '../../chat/browser/speechToText/chatSpeechToTextService.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { AccessibilitySignal, IAccessibilitySignalService } from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { ISpeechService } from '../common/speechService.js';
@@ -13,9 +13,9 @@ export class SpeechAccessibilitySignalContribution extends Disposable {
 	) {
 		super();
 		let extensionRecording = speech.hasActiveSpeechToTextSession;
-		let recordingAnnounced = extensionRecording || dictation.isBusy && !dictation.isStarting;
+		let recordingAnnounced = extensionRecording || dictation.state === ChatSpeechToTextState.Recording;
 		const update = (): void => {
-			const recording = extensionRecording || dictation.isBusy && !dictation.isStarting;
+			const recording = extensionRecording || dictation.state === ChatSpeechToTextState.Recording;
 			if (recording === recordingAnnounced) return;
 			recordingAnnounced = recording;
 			void signals.playSignal(recording ? AccessibilitySignal.voiceRecordingStarted : AccessibilitySignal.voiceRecordingStopped);

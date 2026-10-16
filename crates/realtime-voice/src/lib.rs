@@ -1,6 +1,7 @@
 //! Device-local dictation sessions. The product host owns connection identity and delivery;
 //! this crate owns microphone exclusivity, recognition, and session teardown.
 
+mod audio_input;
 #[cfg(feature = "cloud")]
 mod cloud;
 mod local;
@@ -22,6 +23,7 @@ use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::thread;
+use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 #[cfg(feature = "cloud")]
 use websocket_client::WebSocketConnector;
@@ -179,6 +181,7 @@ trait Recognizer: Send + Sync {
     fn start(
         &self,
         request: DictationRequest,
+        audio: Option<audio_input::AudioReceiver>,
         cancellation: async_utils::CancellationToken,
         on_event: Box<dyn Fn(DictationEvent) + Send + Sync>,
     ) -> Result<Box<dyn RecognitionSession>, String>;
@@ -191,19 +194,33 @@ trait RecognitionSession: Send {
 
 struct SessionRecognizer;
 
+enum CaptureMode {
+    Device,
+    Stream,
+}
+
 struct WorkerSession {
     stop: Option<oneshot::Sender<()>>,
     worker: Option<thread::JoinHandle<()>>,
+    capture_mode: CaptureMode,
+    cancellation: async_utils::CancellationToken,
 }
 
 impl Recognizer for SessionRecognizer {
     fn start(
         &self,
         request: DictationRequest,
+        audio: Option<audio_input::AudioReceiver>,
         cancellation: async_utils::CancellationToken,
         on_event: Box<dyn Fn(DictationEvent) + Send + Sync>,
     ) -> Result<Box<dyn RecognitionSession>, String> {
         let (stop, mut stopped) = oneshot::channel();
+        let capture_mode = if audio.is_some() {
+            CaptureMode::Stream
+        } else {
+            CaptureMode::Device
+        };
+        let worker_cancellation = cancellation.clone();
         let on_event: Arc<dyn Fn(DictationEvent) + Send + Sync> = Arc::from(on_event);
         let worker = thread::Builder::new()
             .name("ash-dictation".into())
@@ -219,11 +236,13 @@ impl Recognizer for SessionRecognizer {
                             }
                             match request {
                                 DictationRequest::Local(request) => {
-                                    local::run(request, &mut stopped, Arc::clone(&on_event)).await
+                                    local::run(request, &mut stopped, Arc::clone(&on_event), audio)
+                                        .await
                                 }
                                 #[cfg(feature = "cloud")]
                                 DictationRequest::Cloud(request) => {
-                                    cloud::run(request, &mut stopped, on_event.as_ref()).await
+                                    cloud::run(request, &mut stopped, on_event.as_ref(), audio)
+                                        .await
                                 }
                                 #[cfg(feature = "cloud")]
                                 DictationRequest::Subscription(request) => {
@@ -232,6 +251,7 @@ impl Recognizer for SessionRecognizer {
                                         &mut stopped,
                                         cancellation,
                                         on_event.as_ref(),
+                                        audio,
                                     )
                                     .await
                                 }
@@ -246,18 +266,25 @@ impl Recognizer for SessionRecognizer {
         Ok(Box::new(WorkerSession {
             stop: Some(stop),
             worker: Some(worker),
+            capture_mode,
+            cancellation: worker_cancellation,
         }))
     }
 }
 
 impl RecognitionSession for WorkerSession {
     fn stop(&mut self) {
-        if let Some(stop) = self.stop.take() {
-            let _ = stop.send(());
+        // PCM stop closes its producer first. Let queued audio drain before finalizing;
+        // cancellation still interrupts provider acquisition or an in-flight upload.
+        if matches!(self.capture_mode, CaptureMode::Device) || self.cancellation.is_cancelled() {
+            if let Some(stop) = self.stop.take() {
+                let _ = stop.send(());
+            }
         }
         if let Some(worker) = self.worker.take() {
             let _ = worker.join();
         }
+        self.stop.take();
     }
 }
 
@@ -268,6 +295,7 @@ struct ActiveDictation {
     cancellation: async_utils::CancellationSource,
     ended: Arc<AtomicBool>,
     outcome: Arc<Mutex<DictationOutcome>>,
+    audio: Option<mpsc::Sender<Vec<i16>>>,
 }
 
 #[derive(Default)]
@@ -341,6 +369,35 @@ impl DictationManager {
         request: DictationRequest,
         on_event: impl Fn(DictationEvent) + Send + Sync + 'static,
     ) -> Result<(), String> {
+        self.start_with_audio(owner, resource_id, request, on_event, None)
+    }
+
+    /// Starts inference for externally captured PCM16 mono 16 kHz audio.
+    /// Audio is bounded per session and remains private to its owning connection.
+    pub fn start_stream(
+        &self,
+        owner: u64,
+        resource_id: String,
+        request: DictationRequest,
+        on_event: impl Fn(DictationEvent) + Send + Sync + 'static,
+    ) -> Result<(), String> {
+        self.start_with_audio(
+            owner,
+            resource_id,
+            request,
+            on_event,
+            Some(mpsc::channel(64)),
+        )
+    }
+
+    fn start_with_audio(
+        &self,
+        owner: u64,
+        resource_id: String,
+        request: DictationRequest,
+        on_event: impl Fn(DictationEvent) + Send + Sync + 'static,
+        audio: Option<(mpsc::Sender<Vec<i16>>, audio_input::AudioReceiver)>,
+    ) -> Result<(), String> {
         Self::validate_resource_id(&resource_id)?;
         let mut active = self
             .active
@@ -365,8 +422,13 @@ impl DictationManager {
         let event_outcome = Arc::clone(&outcome);
         let cancellation = async_utils::CancellationSource::new();
         let event_cancellation = cancellation.token();
+        let (audio, receiver) = match audio {
+            Some((sender, receiver)) => (Some(sender), Some(receiver)),
+            None => (None, None),
+        };
         let session = self.recognizer.start(
             request,
+            receiver,
             cancellation.token(),
             Box::new(move |event| {
                 if event_cancellation.is_cancelled()
@@ -402,8 +464,32 @@ impl DictationManager {
             cancellation,
             ended,
             outcome,
+            audio,
         });
         Ok(())
+    }
+
+    /// Accepts bounded PCM packets after the caller's protocol boundary decoded them.
+    pub fn push_audio(
+        &self,
+        owner: u64,
+        resource_id: &str,
+        samples: Vec<i16>,
+    ) -> Result<(), String> {
+        let active = self
+            .active
+            .lock()
+            .map_err(|_| "Dictation state unavailable")?;
+        let session = active
+            .as_ref()
+            .filter(|session| session.owner == owner && session.resource_id == resource_id)
+            .ok_or("Dictation session not found")?;
+        session
+            .audio
+            .as_ref()
+            .ok_or("Dictation session does not accept PCM input")?
+            .try_send(samples)
+            .map_err(|_| "Dictation audio input is closed or backpressured".to_owned())
     }
 
     /// Releases the session before responding with its final text or worker failure.
@@ -420,6 +506,7 @@ impl DictationManager {
             return Err("Dictation session not found".into());
         }
         let session = active.as_mut().expect("validated active dictation");
+        session.audio.take();
         let mut worker = session
             .session
             .take()
@@ -459,6 +546,7 @@ impl DictationManager {
             .filter(|session| session.owner == owner && session.resource_id == resource_id)
             .ok_or("Dictation session not found")?;
         session.cancellation.cancel();
+        session.audio.take();
         let worker = session.session.take();
         // If stop owns the worker, it removes this record after joining it.
         drop(active);

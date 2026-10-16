@@ -1576,6 +1576,7 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
                 backend,
                 language: None,
                 input_device: None,
+                audio_input: None,
             },
         )
     }

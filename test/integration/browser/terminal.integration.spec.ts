@@ -462,10 +462,13 @@ test('terminal dictation writes phrases without executing and cancels when the p
 	await page.keyboard.press('Space');
 	await expect(page.getByRole('button', { name: 'Stop dictation', exact: true })).toBeEnabled();
 	await page.evaluate(() => window.ashTerminalPaneIntegration.transcript('echo hello\n\u001b', true));
+	await page.getByRole('button', { name: 'Stop dictation', exact: true }).click();
 	await expect.poll(() => page.evaluate(() => window.ashTerminalIntegration.writes)).toEqual(['echo hello ']);
+	await page.getByRole('button', { name: 'Terminal: Start dictation', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'Stop dictation', exact: true })).toBeEnabled();
 	await page.evaluate(() => window.ashTerminalPaneIntegration.transcript('unfinished', false));
 	await page.evaluate(() => window.ashTerminalPaneIntegration.panel(false));
-	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.stops())).toBe(1);
+	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.stops())).toBe(2);
 	await page.evaluate(() => window.ashTerminalPaneIntegration.transcript('late', true));
 	expect(await page.evaluate(() => window.ashTerminalIntegration.writes)).toEqual(['echo hello ']);
 });

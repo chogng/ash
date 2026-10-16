@@ -1,3 +1,7 @@
+import { ILocalTranscriptionService } from '../../../../../platform/localTranscription/common/localTranscription.js';
+import { ISpeechService } from '../../../speech/common/speechService.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { readDictationPreparation } from './dictationInput.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
@@ -13,7 +17,7 @@ import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { isModelPreparing, type ILocalTranscriptionModelSnapshot } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { localize } from '../../../../../nls.js';
 import { IDictationOnboardingService } from './dictationOnboarding.js';
-import { IChatSpeechToTextService, ChatSpeechToTextState, type ChatDictationSurface } from './chatSpeechToTextService.js';
+import { IChatSpeechToTextService, ChatSpeechToTextState, isDictationActiveOnSurface, type ChatDictationSurface } from './chatSpeechToTextService.js';
 
 /** The target editor owns text and undo history; interim recognition stays outside its model. */
 interface DictationTarget { insertText(text: string): void; focus(): void; }
@@ -27,7 +31,8 @@ export class DictationSession extends Disposable {
 	private readonly ended = this._register(new Emitter<string | undefined>());
 	public readonly onDidEnd = this.ended.event;
 	public getAccessibleContent(): string { return this.committedText + this.preview.textContent; }
-	public get isActive(): boolean { return this.active; }
+	public get isActive(): boolean { return this.active && isDictationActiveOnSurface(this.service, this.surface); }
+	public get isStarting(): boolean { return this.active && this.service.isBusy && this.service.state === ChatSpeechToTextState.Idle; }
 	private get isAvailable(): boolean { return this.service.isConfigured; }
 	public readonly action: IAction;
 
@@ -39,6 +44,9 @@ export class DictationSession extends Disposable {
 		private readonly surface: ChatDictationSurface,
 		@IChatSpeechToTextService private readonly service: IChatSpeechToTextService,
 		@IDictationOnboardingService private readonly onboarding: IDictationOnboardingService,
+		@ILocalTranscriptionService private readonly localTranscription: ILocalTranscriptionService,
+		@ISpeechService private readonly speechProviders: ISpeechService,
+		@IConfigurationService private readonly configuration: IConfigurationService,
 	) {
 		super();
 		const session = this;
@@ -50,14 +58,14 @@ export class DictationSession extends Disposable {
 				return session.isAvailable ? localize('chat.input.dictate', 'Dictate message') : localize('chat.input.dictationUnavailable', 'Dictation is unavailable');
 			},
 			icon: Lxicon.mic,
-			get enabled() { return session.isAvailable && (!service.isBusy || session.active) && !service.isStarting && service.state !== ChatSpeechToTextState.Transcribing; },
+			get enabled() { return session.isAvailable && (!service.isBusy || session.active) && !session.isStarting && service.state !== ChatSpeechToTextState.Transcribing; },
 			get checked() { return session.active && service.state === ChatSpeechToTextState.Recording; },
 			run: () => this.toggle(),
 		};
 		const clearPreview = (): void => { preview.textContent = ''; preview.hidden = true; };
 		this._register(service.onDidChangeState(state => {
-			if (state === ChatSpeechToTextState.Idle && (!this.active || this.recordingEvents.value || this.recordingToken.value?.token.isCancellationRequested)) {
-				this.active = false;
+			if (state === ChatSpeechToTextState.Idle && !service.isBusy) {
+				this.finish();
 				clearPreview();
 			}
 		}));
@@ -70,7 +78,7 @@ export class DictationSession extends Disposable {
 			if (!this.isAvailable) { throw new Error(localize('chat.input.dictationUnavailable', 'Dictation is unavailable')); }
 			if (this.service.isBusy) { return; }
 			this.preparing = true;
-			const preparation = await this.service.getPreparation();
+			const preparation = await readDictationPreparation(this.configuration, this.localTranscription, this.speechProviders);
 			if (this.isDisposed || !this.isVisible() || this.service.isBusy) { return; }
 			if (preparation && (!preparation.available || isModelPreparing(preparation.status))) {
 				await this.showPreparation(preparation);
@@ -97,14 +105,11 @@ export class DictationSession extends Disposable {
 			events.add(owner.token.onCancellationRequested(() => {
 				if (this.recordingToken.value === owner) void this.service.cancel().catch(() => undefined);
 			}));
-			events.add(this.service.onDidEnd(error => {
-				if (this.recordingToken.value === owner) this.finish(error);
-			}));
 			events.add(this.service.onDidUpdateTranscript(event => {
 				if (!this.active || this.recordingToken.value !== owner || !this.isVisible()) return;
 				const phrase = event.finalizedText.slice(this.committedText.length);
 				this.committedText = event.finalizedText;
-				this.preview.textContent = event.text.slice(event.finalizedText.length);
+				this.preview.textContent = this.service.showTranscriptWhileDictating ? event.text.slice(event.finalizedText.length) : '';
 				this.preview.hidden = !this.preview.textContent;
 				if (phrase) { this.editor.insertText(phrase); this.editor.focus(); status(localize('chat.input.dictationInserted', 'Dictation added to message')); }
 			}));

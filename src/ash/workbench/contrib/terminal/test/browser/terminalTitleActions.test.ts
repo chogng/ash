@@ -1,4 +1,7 @@
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../chat/browser/speechToText/chatSpeechToTextService.js';
+import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../../chat/browser/speechToText/voiceCodeTranscriptionClient.js';
+import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
+import { NullTelemetryService } from '../../../../../platform/telemetry/common/telemetryUtils.js';
 import { ILocalTranscriptionService } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { NullLocalTranscriptionService } from '../../../../services/localTranscription/browser/localTranscriptionService.js';
 import { IEnvironmentVariableService } from '../../common/environmentVariable.js';
@@ -236,7 +239,7 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	const { IConfigurationService } = await import('../../../../../platform/configuration/common/configuration.js');
 	const { IAccessibleViewService } = await import('../../../../../platform/accessibility/browser/accessibleView.js');
 	const { ISpeechService } = await import('../../../speech/common/speechService.js');
-	const { IDictationBackendService } = await import('../../../../../platform/renderer/common/dictation.js');
+	const { IVoiceCodeTranscriptionBackendService } = await import('../../../../../platform/renderer/common/dictation.js');
 	const { SpeechService } = await import('../../../speech/browser/speechService.js');
 	const { IDictationOnboardingService, DictationOnboardingService } = await import('../../../chat/browser/speechToText/dictationOnboarding.js');
 	const { WorkbenchViewRegistry, IViewDescriptorService, ViewContainerLocation } = await import('../../../../common/views.js');
@@ -281,7 +284,9 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	services.registerInstance(IAccessibleViewService, { ...toDisposable(() => { }), show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp() { } });
 	services.registerInstance(ISpeechService, resources.add(new SpeechService(undefined)));
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
-	services.registerInstance(IDictationBackendService, undefined);
+	services.registerSingleton(IVoiceCodeTranscriptionClient, () => services.createInstance(VoiceCodeTranscriptionClient));
+	services.registerInstance(ITelemetryService, NullTelemetryService);
+	services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
 	services.registerInstance(ILocalTranscriptionService, resources.add(new NullLocalTranscriptionService()));
 	services.registerInstance(IDictationOnboardingService, resources.add(services.createInstance(DictationOnboardingService)));
 	services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, source) => source });

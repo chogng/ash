@@ -36,7 +36,7 @@ import type { ApprovalMode, IActiveSessionThread, ISession, IUntitledChatSession
 import type { ISessionsManagementService, SessionsManagementState } from "../../services/sessions/common/sessionsManagement.js";
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
-import { IDictationBackendService } from '../../../platform/renderer/common/dictation.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../../platform/renderer/common/dictation.js';
 import { ISpeechService } from '../../../workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../workbench/contrib/speech/browser/speechService.js';
 
@@ -76,7 +76,7 @@ test("opens a local Chat conversation before the backend session request settles
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	services.registerSingleton(IActionWidgetService, () => services.createInstance(ActionWidgetService));
-	services.registerInstance(IDictationBackendService, undefined);
+	services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
 	services.registerInstance(IAgentVoiceService, undefined);
 	services.registerInstance(IDialogService, { confirm: async () => ({ confirmed: false }) } as unknown as IDialogService);
 	services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));

@@ -68,7 +68,7 @@ import { IContextViewService, IContextMenuService } from '../../../src/ash/platf
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
 import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
-import { IDictationBackendService } from '../../../src/ash/platform/renderer/common/dictation.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform/renderer/common/dictation.js';
 import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { ILanguageModelsService } from '../../../src/ash/workbench/contrib/chat/common/languageModels.js';
 import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
@@ -139,7 +139,7 @@ class Clipboard extends BrowserClipboardService {
 }
 services.registerInstance(IClipboardService, resources.add(new Clipboard()));
 services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
-services.registerInstance(IDictationBackendService, undefined);
+services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
 registerTestDictationOnboarding(services);
 services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
@@ -650,7 +650,7 @@ window.ashChatTranscriptIntegration = {
 		chatServices.registerInstance(ILanguageModelsService, { onDidChangeModels: Event.None, isModelVisible: () => true } as unknown as ILanguageModelsService);
 		chatServices.registerInstance(IChatSessionNavigationService, { openConversation: async () => { throw new Error('Unexpected conversation navigation'); } } as unknown as IChatSessionNavigationService);
 		chatServices.registerInstance(IOpenerService, { open: async () => { throw new Error('Unexpected link opening'); } } as unknown as IOpenerService);
-		chatServices.registerInstance(IDictationBackendService, undefined);
+		chatServices.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
 		chatServices.registerInstance(IAgentVoiceService, voice ? voiceFixture : undefined);
 		registerTestDictationOnboarding(chatServices);
 		chatServices.registerSingleton(IMenuService, () => chatServices.createInstance(MenuService));

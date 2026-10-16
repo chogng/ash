@@ -1,4 +1,5 @@
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
+import { encodeBase64 } from '../../../base/common/buffer.js';
 import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
 import { LocalTranscriptionModelState, type ILocalTranscriptionBackendService, type ILocalTranscriptionModelStatus } from '../common/localTranscription.js';
 import type { DictationModelStage, DictationModelStatus } from '../../../../../.build/protocol/typescript/index.js';
@@ -37,9 +38,10 @@ export function createAppServerLocalTranscriptionBackendService(client: AppServe
 			await client.request(APP_SERVER_METHODS['dictation/model/start'], { resourceId, modelId: model, operation });
 		},
 		stopModelOperation: async resourceId => { await client.request(APP_SERVER_METHODS['dictation/model/stop'], { resourceId }); },
-		start: async (resourceId, model, inputDevice) => {
-			await client.request(APP_SERVER_METHODS['dictation/start'], { resourceId, backend: { type: 'local', modelId: model }, inputDevice: inputDevice ?? null, language: null });
+		start: async (resourceId, model) => {
+			await client.request(APP_SERVER_METHODS['dictation/start'], { resourceId, backend: { type: 'local', modelId: model }, inputDevice: null, language: null, audioInput: 'pcm16' });
 		},
+		pushAudio: async (resourceId, chunk) => { await client.request(APP_SERVER_METHODS['dictation/audio'], { resourceId, audio: encodeBase64(chunk) }); },
 		stop: async resourceId => (await client.request(APP_SERVER_METHODS['dictation/stop'], { resourceId })).text,
 	};
 }

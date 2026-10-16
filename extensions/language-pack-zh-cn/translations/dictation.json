@@ -35,7 +35,7 @@
     "dictation.test": "测试麦克风",
     "dictation.prepareSettings": "模型与 API 设置",
     "dictation.done": "完成",
-    "dictation.introductionHelp": "按 Tab 访问麦克风、语言、测试、设置和完成按钮。测试按钮开始或停止录音。Escape 关闭引导并释放录音。试录文字不会插入草稿或终端。",
+    "dictation.introductionHelp": "按 Tab 访问麦克风、语言、测试、设置和完成按钮。测试按钮开始或停止录音。切换麦克风会继续录音；切换语言会停止录音。Escape 关闭引导并释放录音。试录文字不会插入草稿或终端。",
     "dictation.systemMicrophone": "系统默认麦克风",
     "dictation.autoLanguage": "自动检测语言",
     "dictation.missingMicrophone": "所选麦克风已断开",
@@ -92,6 +92,13 @@
     "dictation.cloudProvider.title": "云端听写供应商",
     "dictation.cloudProvider.description": "选择云端语音转写供应商，并配置对应的 API 密钥。",
     "dictation.localModel.title": "本地听写模型",
-    "dictation.localModel.description": "Ash dictation-models 目录中的模型包 ID。"
+    "dictation.localModel.description": "Ash dictation-models 目录中的模型包 ID。",
+    "dictation.invalidTurn": "语音转写轮次标识无效",
+    "dictation.sessionUnavailable": "语音转写会话尚未初始化",
+    "dictation.turnStopping": "正在结束语音转写轮次",
+    "dictation.audioBackpressure": "音频为空或转写处理速度不足，请重新录音",
+    "dictation.turnInactive": "语音转写轮次未在进行中",
+    "dictation.showTranscript.title": "显示听写临时文本",
+    "dictation.showTranscript.description": "在语音识别过程中显示实时转写文本。"
   }
 }

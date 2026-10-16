@@ -178,6 +178,7 @@ impl Recognizer for TestRecognizer {
     fn start(
         &self,
         _request: DictationRequest,
+        _audio: Option<audio_input::AudioReceiver>,
         _cancellation: async_utils::CancellationToken,
         on_event: EventSink,
     ) -> Result<Box<dyn RecognitionSession>, String> {
@@ -253,6 +254,7 @@ fn cancellation_can_interrupt_a_worker_already_owned_by_stop() {
         fn start(
             &self,
             _request: DictationRequest,
+            _audio: Option<audio_input::AudioReceiver>,
             token: async_utils::CancellationToken,
             _sink: EventSink,
         ) -> Result<Box<dyn RecognitionSession>, String> {
@@ -389,4 +391,80 @@ fn stop_preserves_a_worker_failure_and_releases_the_session() {
         .start(1, "second".into(), request(), |_| {})
         .unwrap();
     manager.stop(1, "second").unwrap();
+}
+
+#[test]
+fn streamed_audio_is_private_bounded_and_drained_before_stop_returns() {
+    struct StreamRecognizer;
+    struct StreamSession(Option<thread::JoinHandle<()>>);
+    impl Recognizer for StreamRecognizer {
+        fn start(
+            &self,
+            _request: DictationRequest,
+            audio: Option<audio_input::AudioReceiver>,
+            _cancellation: async_utils::CancellationToken,
+            on_event: EventSink,
+        ) -> Result<Box<dyn RecognitionSession>, String> {
+            let mut audio = audio.expect("stream input");
+            Ok(Box::new(StreamSession(Some(thread::spawn(move || {
+                let mut samples = Vec::new();
+                while let Some(chunk) = audio.blocking_recv() {
+                    samples.extend(chunk);
+                }
+                on_event(DictationEvent::Transcript {
+                    text: format!("{samples:?}"),
+                    is_final: true,
+                });
+                on_event(DictationEvent::Ended { error: None });
+            })))))
+        }
+    }
+    impl RecognitionSession for StreamSession {
+        fn stop(&mut self) {
+            self.0.take().unwrap().join().unwrap();
+        }
+    }
+    let manager = DictationManager {
+        recognizer: Box::new(StreamRecognizer),
+        active: Mutex::new(None),
+    };
+    manager
+        .start_stream(7, "pcm".into(), request(), |_| {})
+        .unwrap();
+    assert!(manager.push_audio(8, "pcm", vec![9]).is_err());
+    manager.push_audio(7, "pcm", vec![1, 2]).unwrap();
+    manager.push_audio(7, "pcm", vec![3]).unwrap();
+    assert_eq!(manager.stop(7, "pcm").unwrap(), Some("[1, 2, 3]".into()));
+    assert!(manager.push_audio(7, "pcm", vec![4]).is_err());
+}
+
+#[test]
+fn a_stalled_pcm_consumer_has_a_bounded_queue() {
+    struct StalledRecognizer(Arc<Mutex<Option<audio_input::AudioReceiver>>>);
+    impl Recognizer for StalledRecognizer {
+        fn start(
+            &self,
+            _request: DictationRequest,
+            audio: Option<audio_input::AudioReceiver>,
+            _cancellation: async_utils::CancellationToken,
+            _on_event: EventSink,
+        ) -> Result<Box<dyn RecognitionSession>, String> {
+            *self.0.lock().unwrap() = audio;
+            Ok(Box::new(TestSession(Arc::new(AtomicUsize::new(0)))))
+        }
+    }
+    let input = Arc::new(Mutex::new(None));
+    let manager = DictationManager {
+        recognizer: Box::new(StalledRecognizer(Arc::clone(&input))),
+        active: Mutex::new(None),
+    };
+    manager
+        .start_stream(7, "pcm".into(), request(), |_| {})
+        .unwrap();
+    for _ in 0..64 {
+        manager.push_audio(7, "pcm", vec![1]).unwrap();
+    }
+    assert!(manager.push_audio(7, "pcm", vec![2]).is_err());
+    manager.cancel(7, "pcm").unwrap();
+    assert!(!manager.is_active());
 }

@@ -1,126 +1,237 @@
 import { Disposable } from '../../../../../base/common/lifecycle.js';
-import { Emitter } from '../../../../../base/common/event.js';
+import { Emitter, type Event } from '../../../../../base/common/event.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
-import type { IDictationBackendService, IDictationSession, IDictationInputOptions, DictationBackend, IVoiceCodeTranscriptionBackend } from '../../../../../platform/renderer/common/dictation.js';
+import { canceled } from '../../../../../base/common/errors.js';
+import { createDecorator } from '../../../../../platform/instantiation/common/instantiation.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { IVoiceCodeTranscriptionBackendService, type DictationBackend } from '../../../../../platform/renderer/common/dictation.js';
+import { dictationBackend, dictationInputOptions } from '../../common/constants.js';
 import { localize } from '../../../../../nls.js';
 
-interface DictationCallbacks {
-	readonly onTranscript: (text: string, isFinal: boolean) => void;
-	readonly onEnded: (error?: string) => void;
-	stopping: boolean;
-	cancelled: boolean;
-	cancelling?: Promise<void>;
-	endedError?: string;
+export const IVoiceCodeTranscriptionClient = createDecorator<IVoiceCodeTranscriptionClient>('voiceCodeTranscriptionClient');
+
+export interface IVoiceCodeTranscription {
+	readonly turnId: string;
+	readonly text: string;
+	readonly status: 'partial' | 'final';
+	readonly revision: number;
+	readonly committed: string;
 }
 
-type ActiveDictation = DictationCallbacks & { readonly resourceId: string; finalDelivered: boolean; };
+export interface IVoiceCodeTranscriptionError {
+	readonly detail: string;
+	readonly code?: string;
+	readonly turnId?: string;
+	readonly terminal?: boolean;
+}
 
-/**
- * Adapts cloud and subscription transcription to the host's dictation contract.
- * The host owns audio capture and transport; this client owns session lifetimes, while
- * ChatSpeechToTextService owns backend selection and cumulative transcripts.
- */
-export class VoiceCodeTranscriptionClient extends Disposable implements IDictationBackendService {
-	private readonly availabilityChanged = this._register(new Emitter<void>());
-	public readonly onDidChangeAvailability = this.availabilityChanged.event;
-	private active: ActiveDictation | undefined;
-	private starting = false;
+export interface IVoiceCodeTranscriptionClient {
+	readonly _serviceBrand: undefined;
+	readonly onTranscription: Event<IVoiceCodeTranscription>;
+	readonly onError: Event<IVoiceCodeTranscriptionError>;
+	readonly onDidClose: Event<number>;
+	readonly isConnected: boolean;
+	connect(window: Window & typeof globalThis, authToken: string): Promise<void>;
+	startSession(): Promise<void>;
+	sendPttStart(turnId: string): void;
+	sendPttAudioChunk(turnId: string, audio: string): void;
+	sendPttEnd(turnId: string): void;
+	disconnect(): void;
+}
 
-	constructor(private readonly backend: IVoiceCodeTranscriptionBackend) {
+interface TranscriptionTurn {
+	readonly id: string;
+	readonly resourceId: string;
+	operations: Promise<void>;
+	queuedBytes: number;
+	revision: number;
+	text: string;
+	stopping: boolean;
+	error?: string;
+}
+
+/** One frontend session over the host's authenticated connection; audio and turn identity stay explicit. */
+export class VoiceCodeTranscriptionClient extends Disposable implements IVoiceCodeTranscriptionClient {
+	public readonly _serviceBrand = undefined;
+	private readonly transcriptions = this._register(new Emitter<IVoiceCodeTranscription>());
+	public readonly onTranscription = this.transcriptions.event;
+	private readonly errors = this._register(new Emitter<IVoiceCodeTranscriptionError>());
+	public readonly onError = this.errors.event;
+	private readonly closed = this._register(new Emitter<number>());
+	public readonly onDidClose = this.closed.event;
+	private connected = false;
+	private session: { backend: DictationBackend; language: string | null; resourceId: string; claimed: boolean; operations: Promise<void>; error?: string; } | undefined;
+	private active: TranscriptionTurn | undefined;
+	private release = Promise.resolve();
+	public get isConnected(): boolean { return this.connected && !!this.backend?.isConnected; }
+
+	constructor(
+		@IVoiceCodeTranscriptionBackendService private readonly backend: IVoiceCodeTranscriptionBackendService | undefined,
+		@IConfigurationService private readonly configuration: IConfigurationService,
+	) {
 		super();
+		if (!backend) return;
 		this._register(backend.onDidTranscribe(result => {
-			const active = this.active;
-			if (!active || result.resourceId !== active.resourceId || active.cancelled) { return; }
-			if (result.isFinal) { active.finalDelivered = true; }
-			active.onTranscript(result.text, result.isFinal);
+			const turn = this.active;
+			if (!turn || turn.resourceId !== result.resourceId) return;
+			turn.text = result.text;
+			// The host may publish its final notification before stop acknowledges
+			// resource release. Keep final delivery behind that acknowledgment.
+			if (!result.isFinal) this.publish(turn, false);
 		}));
 		this._register(backend.onDidEnd(result => {
-			const active = this.active;
-			if (!active || result.resourceId !== active.resourceId) { return; }
-			if (active.stopping) {
-				active.endedError = active.cancelled ? undefined : dictationError(result.error);
+			const turn = this.active;
+			if (!turn || turn.resourceId !== result.resourceId) {
+				if (this.session?.resourceId === result.resourceId && !this.session.claimed) {
+					this.session.error = result.error ?? localize('dictation.sessionUnavailable', 'Transcription session is not initialized');
+					this.release = backend.cancel(result.resourceId).catch(() => undefined);
+					this.errors.fire({ detail: this.session.error, terminal: true });
+				}
 				return;
 			}
-			this.active = undefined;
-			active.onEnded(dictationError(result.error));
-			void this.backend.stop(active.resourceId).catch(() => undefined);
+			turn.error = result.error;
+			if (!turn.stopping) this.sendPttEnd(turn.id);
 		}));
 		this._register(backend.onDidChangeConnection(() => {
-			this.availabilityChanged.fire();
-			if (backend.isConnected || !this.active) { return; }
-			const active = this.active;
+			if (!this.connected || backend.isConnected) return;
+			const turnId = this.active?.id;
+			this.connected = false;
+			this.session = undefined;
 			this.active = undefined;
-			active.onEnded(localize('dictation.connectionLost', 'Dictation connection lost'));
+			this.closed.fire(1006);
+			this.errors.fire({ detail: localize('dictation.connectionLost', 'Dictation connection lost'), turnId, terminal: true });
 		}));
 	}
 
-	public getOptions(backend: DictationBackend): Promise<IDictationInputOptions> {
-		return this.backend.getOptions(backend);
-	}
-
-	async start(options: Parameters<IDictationBackendService['start']>[0], onTranscript: (text: string, isFinal: boolean) => void, onEnded: (error?: string) => void): Promise<IDictationSession> {
+	public async connect(_window: Window & typeof globalThis, _authToken: string): Promise<void> {
 		this.assertNotDisposed();
-		if (!this.backend.isConnected) { throw new Error(localize('dictation.connectionUnavailable', 'Dictation connection is unavailable')); }
-		if (this.active || this.starting) { throw new Error(localize('dictation.alreadyActive', 'Dictation is already active')); }
-		this.starting = true;
-		try {
-			this.assertNotDisposed();
-			const callbacks: DictationCallbacks = { onTranscript, onEnded, stopping: false, cancelled: false };
-			const active: ActiveDictation = { ...callbacks, resourceId: generateUuid(), finalDelivered: false };
-			this.active = active;
-			try {
-				await this.backend.start(active.resourceId, options);
-			} catch (error) {
-				if (this.active === active) { this.active = undefined; }
-				throw new Error(dictationError(String(error)));
-			}
-			return { stop: () => this.stop(active), cancel: () => this.cancel(active) };
-		} finally {
-			this.starting = false;
-		}
+		this.disconnect();
+		await this.release;
+		if (this.isDisposed || !this.backend?.isConnected) throw new Error(localize('dictation.connectionUnavailable', 'Dictation connection is unavailable'));
+		// The host already authenticates this renderer and resolves provider credentials.
+		// Browser bearer credentials never replace the host's account authority.
+		this.connected = true;
 	}
 
-	private async stop(active: ActiveDictation): Promise<void> {
-		if (this.active !== active) { return; }
-		active.stopping = true;
+	public async startSession(): Promise<void> {
+		this.requireConnection();
+		if (this.active) throw new Error(localize('dictation.alreadyActive', 'Dictation is already active'));
+		if (this.session && !this.session.claimed) throw new Error(localize('dictation.alreadyActive', 'Dictation is already active'));
+		const backend = dictationBackend(this.configuration);
+		const language = dictationInputOptions(this.configuration, backend.type).language;
+		const resourceId = generateUuid();
+		const session: NonNullable<VoiceCodeTranscriptionClient['session']> = {
+			backend, language, resourceId, claimed: false, operations: this.release.then(() => {
+				if (this.session !== session) throw canceled();
+				this.requireConnection();
+				return this.backend!.start(resourceId, { backend, language });
+			})
+		};
+		this.session = session;
 		try {
-			const text = await this.backend.stop(active.resourceId);
-			if (this.active !== active) { return; }
-			if (!active.cancelled && !active.finalDelivered && text !== undefined) {
-				active.finalDelivered = true;
-				active.onTranscript(text, true);
-			}
-			if (this.active === active) {
-				this.active = undefined;
-				active.onEnded(active.endedError);
-			}
+			await session.operations;
+			if (session.error) throw new Error(session.error);
+			if (this.session !== session || !this.isConnected) throw canceled();
 		} catch (error) {
-			if (this.active === active) { this.active = undefined; }
-			if (!active.cancelled) { throw new Error(dictationError(String(error))); }
+			if (this.session === session) this.session = undefined;
+			throw error;
 		}
 	}
 
-	private cancel(active: ActiveDictation): Promise<void> {
-		if (active.cancelling) { return active.cancelling; }
-		if (this.active !== active) { return Promise.resolve(); }
-		active.cancelled = active.stopping = true;
-		return active.cancelling = this.cancelRecording(active);
+	public sendPttStart(turnId: string): void {
+		this.requireConnection();
+		if (!turnId || turnId.length > 128) throw new TypeError(localize('dictation.invalidTurn', 'Invalid transcription turn ID'));
+		if (!this.session) throw new Error(localize('dictation.sessionUnavailable', 'Transcription session is not initialized'));
+		if (this.active) throw new Error(localize('dictation.alreadyActive', 'Dictation is already active'));
+		const session = this.session;
+		if (session.error) throw new Error(session.error);
+		const primed = !session.claimed;
+		session.claimed = true;
+		const turn: TranscriptionTurn = { id: turnId, resourceId: primed ? session.resourceId : generateUuid(), operations: primed ? session.operations : this.release, queuedBytes: 0, revision: 0, text: '', stopping: false };
+		this.active = turn;
+		if (!primed) this.enqueue(turn, async () => {
+			await this.backend!.start(turn.resourceId, { backend: session.backend, language: session.language });
+			if (this.active !== turn) await this.backend!.cancel(turn.resourceId);
+		});
 	}
 
-	private async cancelRecording(active: ActiveDictation): Promise<void> {
-		try {
-			await this.backend.cancel(active.resourceId);
-		} finally {
-			if (this.active === active) { this.active = undefined; active.onEnded(); }
+	public sendPttAudioChunk(turnId: string, audio: string): void {
+		const turn = this.requireTurn(turnId);
+		if (turn.stopping) throw new Error(localize('dictation.turnStopping', 'Transcription turn is stopping'));
+		if (!audio || audio.length > 42668 || turn.queuedBytes + audio.length > 4 * 1024 * 1024) {
+			this.fail(turn, new Error(localize('dictation.audioBackpressure', 'Transcription audio is empty or backpressured')));
+			return;
 		}
+		turn.queuedBytes += audio.length;
+		this.enqueue(turn, async () => {
+			try { await this.backend!.pushAudio(turn.resourceId, audio); }
+			finally { turn.queuedBytes -= audio.length; }
+		});
+	}
+
+	public sendPttEnd(turnId: string): void {
+		const turn = this.requireTurn(turnId);
+		if (turn.stopping) return;
+		turn.stopping = true;
+		this.enqueue(turn, async () => {
+			const text = await this.backend!.stop(turn.resourceId);
+			if (this.active !== turn) return;
+			if (turn.error) throw new Error(turn.error);
+			turn.text = text ?? turn.text;
+			this.active = undefined;
+			this.publish(turn, true);
+		});
+		this.release = turn.operations;
+	}
+
+	public disconnect(): void {
+		this.connected = false;
+		const session = this.session;
+		this.session = undefined;
+		const turn = this.active;
+		this.active = undefined;
+		if (turn && this.backend) {
+			// Cancel bypasses queued audio and stop, including a pending subscription upload.
+			this.release = Promise.all([turn.operations, this.backend.cancel(turn.resourceId).catch(() => undefined)]).then(() => undefined);
+		} else if (session && !session.claimed && this.backend) {
+			const backend = this.backend;
+			this.release = Promise.all([
+				backend.cancel(session.resourceId).catch(() => undefined),
+				session.operations.then(() => backend.cancel(session.resourceId)).catch(() => undefined),
+			]).then(() => undefined);
+		}
+	}
+
+	private enqueue(turn: TranscriptionTurn, operation: () => Promise<void>): void {
+		turn.operations = turn.operations.then(async () => {
+			if (this.active === turn) await operation();
+		}).catch(error => this.fail(turn, error));
+	}
+
+	private fail(turn: TranscriptionTurn, error: unknown): void {
+		if (this.active !== turn) return;
+		this.active = undefined;
+		this.release = this.backend!.cancel(turn.resourceId).catch(() => undefined);
+		this.errors.fire({ detail: dictationError(String(error)) ?? String(error), turnId: turn.id, terminal: true });
+	}
+
+	private publish(turn: TranscriptionTurn, final: boolean): void {
+		this.transcriptions.fire({ turnId: turn.id, text: turn.text, status: final ? 'final' : 'partial', revision: ++turn.revision, committed: final ? turn.text : '' });
+	}
+
+	private requireConnection(): void {
+		this.assertNotDisposed();
+		if (!this.isConnected) throw new Error(localize('dictation.connectionUnavailable', 'Dictation connection is unavailable'));
+	}
+
+	private requireTurn(turnId: string): TranscriptionTurn {
+		this.requireConnection();
+		if (!this.active || this.active.id !== turnId) throw new Error(localize('dictation.turnInactive', 'Transcription turn is not active'));
+		return this.active;
 	}
 
 	protected override disposeCore(): void {
-		const active = this.active;
-		this.active = undefined;
-		if (active) {
-			void this.backend.cancel(active.resourceId).catch(() => undefined);
-		}
+		this.disconnect();
 		super.disposeCore();
 	}
 }

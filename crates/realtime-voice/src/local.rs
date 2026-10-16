@@ -3,22 +3,21 @@ use crate::DictationEvent;
 use crate::LocalDictationRequest;
 use crate::LocalSpeechEvent;
 use crate::LocalSpeechMode;
+use crate::audio_input::AudioInput;
+use crate::audio_input::AudioReceiver;
 use crate::model_package::ModelPackage;
 use async_utils::CancellationSource;
 use std::sync::Arc;
 use tokio::sync::oneshot;
-use voice_host::AudioConfig;
-use voice_host::AudioHost;
-use voice_host::Direction;
-use voice_host::Processing;
 use voice_host::SampleRate;
 
 pub(super) async fn run(
     request: LocalDictationRequest,
     stopped: &mut oneshot::Receiver<()>,
     on_event: Arc<dyn Fn(DictationEvent) + Send + Sync>,
+    input: Option<AudioReceiver>,
 ) -> Result<(), String> {
-    run_session(
+    run_with_audio(
         request,
         stopped,
         LocalSpeechMode::Dictation,
@@ -37,6 +36,7 @@ pub(super) async fn run(
             }),
             LocalSpeechEvent::Ended { .. } => unreachable!("the session owner reports completion"),
         }),
+        input,
     )
     .await
 }
@@ -46,6 +46,16 @@ pub(super) async fn run_session(
     stopped: &mut oneshot::Receiver<()>,
     mode: LocalSpeechMode,
     on_event: Arc<dyn Fn(LocalSpeechEvent) + Send + Sync>,
+) -> Result<(), String> {
+    run_with_audio(request, stopped, mode, on_event, None).await
+}
+
+async fn run_with_audio(
+    request: LocalDictationRequest,
+    stopped: &mut oneshot::Receiver<()>,
+    mode: LocalSpeechMode,
+    on_event: Arc<dyn Fn(LocalSpeechEvent) + Send + Sync>,
+    input: Option<AudioReceiver>,
 ) -> Result<(), String> {
     let cancellation = CancellationSource::new();
     let token = cancellation.token();
@@ -72,28 +82,21 @@ pub(super) async fn run_session(
     let recognizer = package.recognizer(mode)?;
     on_event(LocalSpeechEvent::ModelProgress(crate::ModelProgress::Ready));
     let stream = recognizer.create_stream();
-    let mut audio = AudioHost::spawn(&request.audio_host)
-        .await
-        .map_err(|error| error.to_string())?;
-    audio
-        .start_input(
-            AudioConfig {
-                rate: SampleRate::Hz16000,
-                direction: Direction::Capture,
-                processing: Processing::Speech,
-            },
-            request.input_device,
-        )
-        .await
-        .map_err(|error| error.to_string())?;
+    let mut audio = AudioInput::open(
+        &request.audio_host,
+        request.input_device,
+        SampleRate::Hz16000,
+        input,
+    )
+    .await?;
     on_event(LocalSpeechEvent::Ready);
     let mut last_text = String::new();
     loop {
         tokio::select! {
             _ = &mut *stopped => break,
             capture = audio.next_capture() => {
-                let capture = capture.map_err(|error| error.to_string())?;
-                let waveform = capture.samples.iter().map(|sample| *sample as f32 / 32768.0).collect::<Vec<_>>();
+                let Some(samples) = capture? else { break; };
+                let waveform = samples.iter().map(|sample| *sample as f32 / 32768.0).collect::<Vec<_>>();
                 stream.accept_waveform(16000, &waveform);
                 while recognizer.is_ready(&stream) {
                     recognizer.decode(&stream);

@@ -55,10 +55,11 @@ import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { ITerminalService, type ITerminalDimensions, type ITerminalInstance } from '../../../src/ash/workbench/services/terminal/browser/terminal.js';
 import { GeneralShellType, ITerminalLogService, PosixShellType } from '../../../src/ash/platform/terminal/common/terminal.js';
-import { IDictationBackendService } from '../../../src/ash/platform/renderer/common/dictation.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform/renderer/common/dictation.js';
+import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/voiceCodeTranscriptionClient.js';
 import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
-import { registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
+import { registerTestDictationOnboarding, createTestDictationBackend, installTestDictationAudio } from '../../../src/ash/workbench/test/common/testDictationServices.js';
 import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
@@ -82,6 +83,7 @@ if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
 }
 
 const store = new DisposableStore();
+store.add(installTestDictationAudio(window));
 setIconResolver(document, icon => getIconDefinition(icon));
 function setupTerminalFixtureServices(services: import('../../../src/ash/platform/instantiation/common/instantiationService.js').InstantiationService, lifetime: DisposableStore): void {
 	if (!services.has(ITerminalGroupService)) services.registerSingleton(ITerminalGroupService, () => lifetime.add(services.createInstance(TerminalGroupService)));
@@ -336,7 +338,7 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		services.registerInstance(ITerminalService, terminals);
 		let transcript!: (text: string, isFinal: boolean) => void;
 		let stops = 0;
-		services.registerInstance(IDictationBackendService, { onDidChangeAvailability: Event.None, getOptions: async () => ({ inputDevices: [], languages: [] }), start: async (_options, callback) => { transcript = callback; return { stop: async () => { stops++; }, cancel: async () => { stops++; } }; } });
+		services.registerInstance(IVoiceCodeTranscriptionBackendService, createTestDictationBackend(store, { getOptions: async () => ({ inputDevices: [], languages: [] }), start: async (_options, callback) => { transcript = callback; return { stop: async () => { stops++; }, cancel: async () => { stops++; } }; } }));
 		services.registerInstance(IContextKeyService, context);
 		services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 		services.registerInstance(IViewsService, { openView: () => pane, getViewWithId: () => pane, focusView: () => { pane.focus(); return true; } } as unknown as IViewsService);
@@ -352,6 +354,7 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		setupTerminalFixtureServices(services, lifetime);
 		services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 		services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+		services.registerSingleton(IVoiceCodeTranscriptionClient, () => services.createInstance(VoiceCodeTranscriptionClient));
 		registerTestDictationOnboarding(services);
 		const profileService = lifetime.add(services.createInstance(TerminalProfileService));
 		services.registerInstance(ITerminalProfileService, profileService);
@@ -893,10 +896,12 @@ if (new URLSearchParams(location.search).has('input')) {
 			root.style.display = 'flex'; root.style.flexDirection = 'column';
 			services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 			services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+			services.registerSingleton(IVoiceCodeTranscriptionClient, () => services.createInstance(VoiceCodeTranscriptionClient));
+			services.registerInstance(IVoiceCodeTranscriptionBackendService, createTestDictationBackend(store, { getOptions: async () => ({ inputDevices: [], languages: [] }), start: async () => ({ stop: async () => { }, cancel: async () => { } }) }));
 			registerTestDictationOnboarding(services);
 			await services.get(IConfigurationService).updateValue('dictation.backend', 'cloud');
 			services.registerInstance(IPreferencesService, { openSettings: async () => { } } as unknown as IPreferencesService);
-			services.registerInstance(IDictationBackendService, { onDidChangeAvailability: Event.None, getOptions: async () => ({ inputDevices: [], languages: [] }), start: async () => ({ stop: async () => { }, cancel: async () => { } }) });
+
 			services.registerInstance(IMenuService, new MenuService(commands, services.get(IContextKeyService)));
 			const layout = Object.assign(store.add(new BrowserLayoutService({ root })), {
 				onDidChangePartVisibility: Event.None, isPartVisible: () => true, hidePart: () => { }, hasFocus: () => false,

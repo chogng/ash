@@ -1,3 +1,7 @@
+import { ILocalTranscriptionService } from '../../../../../platform/localTranscription/common/localTranscription.js';
+import { ISpeechService } from '../../../speech/common/speechService.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../../../../platform/renderer/common/dictation.js';
+import { readDictationOptions } from './dictationInput.js';
 import { ILanguageModelsService } from '../../common/languageModels.js';
 import './media/dictationSettingsContent.css';
 import { h } from '../../../../../base/browser/dom.js';
@@ -67,6 +71,9 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 		@IInstantiationService instantiation: IInstantiationService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IAccessibleViewService accessibleView: IAccessibleViewService,
+		@ILocalTranscriptionService private readonly localTranscription: ILocalTranscriptionService,
+		@ISpeechService private readonly speechProviders: ISpeechService,
+		@IVoiceCodeTranscriptionBackendService private readonly backend: IVoiceCodeTranscriptionBackendService | undefined,
 		@IChatSpeechToTextService private readonly speech: IChatSpeechToTextService,
 		@INotificationService private readonly notifications: INotificationService,
 	) {
@@ -113,7 +120,7 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 			}
 			if (event.affectsConfiguration(DictationConfiguration.inputDevice) || event.affectsConfiguration(DictationConfiguration.language)) { this.updateVisibility(); }
 		}));
-		this._register(speech.onDidChangePreparation(() => this.updateVisibility()));
+		this._register(speech.onDidChangeState(() => this.updateVisibility()));
 		this._register(chat.onDidChangeModels(() => this.updateVisibility()));
 		const scoped = this._register(contextKeys.createScoped(this.controls.domNode));
 		scoped.createKey('dictationModelsFocused', true);
@@ -217,8 +224,10 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 
 	private async configure(key: string, value: string): Promise<void> {
 		try {
-			// Capture belongs to the selected device. Release it before persisting a new selection.
-			if (this.speech.isBusy) { await this.speech.stopAndTranscribe(); }
+			if (this.speech.isBusy) {
+				if (key === DictationConfiguration.inputDevice && this.speech.analyserNode) await this.speech.switchMicrophone(this.inputOptions.ownerDocument.defaultView as Window & typeof globalThis, value);
+				else await this.speech.stopAndTranscribe();
+			}
 			await this.configuration.updateValue(key, value);
 		} catch (error) { this.notifications.error(String(error)); }
 	}
@@ -227,7 +236,7 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 		this.microphone.enabled = this.language.enabled = false;
 		if (!this.speech.isConfigured) { return; }
 		try {
-			const options = await this.speech.getOptions();
+			const options = await readDictationOptions(this.inputOptions.ownerDocument.defaultView as Window & typeof globalThis, this.configuration, this.backend, this.speechProviders);
 			if (this.isDisposed || version !== this.requestVersion) { return; }
 			this.inputOptions.hidden = !options;
 			if (!options) return;

@@ -2,6 +2,7 @@ import { Emitter } from '../../../../base/common/event.js';
 import { DeferredPromise } from '../../../../base/common/async.js';
 import { Disposable, DisposableMap } from '../../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
+import type { VSBuffer } from '../../../../base/common/buffer.js';
 import type { AppServerProtocolClient } from '../../../../platform/agentHost/browser/appServerProtocolClient.js';
 import { createAppServerLocalTranscriptionBackendService } from '../../../../platform/localTranscription/browser/appServerLocalTranscriptionBackendService.js';
 import { ILocalTranscriptionBackendService, ILocalTranscriptionService, LocalTranscriptionModelState, type ILocalTranscriptionResult, type ILocalTranscriptionModelStatus, type ILocalTranscriptionModelOperation, type LocalTranscriptionModelOperation } from '../../../../platform/localTranscription/common/localTranscription.js';
@@ -12,6 +13,7 @@ import { localize } from '../../../../nls.js';
 interface ActiveTranscription {
 	readonly resourceId: string;
 	readonly started: Promise<void>;
+	audio: Promise<void>;
 	text: string;
 	finalDelivered: boolean;
 	discard: boolean;
@@ -89,13 +91,13 @@ export class LocalTranscriptionService extends Disposable implements ILocalTrans
 		return handle;
 	}
 
-	public async start(options: { readonly model: string; readonly inputDevice?: string; }): Promise<void> {
+	public async start(options: { readonly model: string; }): Promise<void> {
 		this.assertNotDisposed();
 		if (!this.backend.isConnected) { throw new Error(localize('dictation.connectionUnavailable', 'Dictation connection is unavailable')); }
 		if (this.active) { throw new Error(localize('dictation.alreadyActive', 'Dictation is already active')); }
 		const resourceId = generateUuid();
-		const started = Promise.resolve().then(() => this.backend.start(resourceId, options.model, options.inputDevice));
-		const active: ActiveTranscription = { resourceId, started, text: '', finalDelivered: false, discard: false, hasEnded: false };
+		const started = Promise.resolve().then(() => this.backend.start(resourceId, options.model));
+		const active: ActiveTranscription = { resourceId, started, audio: started, text: '', finalDelivered: false, discard: false, hasEnded: false };
 		this.active = active;
 		try {
 			await started;
@@ -107,6 +109,16 @@ export class LocalTranscriptionService extends Disposable implements ILocalTrans
 
 	public stop(): Promise<string> {
 		return this.active ? this.finish(this.active) : Promise.resolve('');
+	}
+
+	public pushAudio(chunk: VSBuffer): Promise<void> {
+		this.assertNotDisposed();
+		const active = this.active;
+		if (!active || active.discard || active.hasEnded || active.stopping) return Promise.resolve();
+		active.audio = active.audio.then(async () => {
+			if (this.active === active && !active.discard) await this.backend.pushAudio(active.resourceId, chunk);
+		});
+		return active.audio;
 	}
 
 	public async cancel(): Promise<void> {
@@ -126,9 +138,13 @@ export class LocalTranscriptionService extends Disposable implements ILocalTrans
 		try {
 			// A stop issued while startup is pending must release the resource after acceptance.
 			await active.started;
+			// Failed audio must still release the admitted backend resource.
+			let audioError: unknown;
+			try { await active.audio; } catch (error) { audioError = error; }
 			if (this.active !== active) { return ''; }
 			const text = await this.backend.stop(active.resourceId);
 			if (this.active !== active) { return ''; }
+			if (audioError) throw audioError;
 			if (!active.discard && !active.finalDelivered && text !== null) {
 				active.text = text;
 				active.finalDelivered = true;

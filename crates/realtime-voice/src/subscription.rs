@@ -1,13 +1,11 @@
 //! Subscription dictation buffers one bounded recording and uploads only after an explicit stop.
+use crate::audio_input::AudioInput;
+use crate::audio_input::AudioReceiver;
 
 use crate::DictationEvent;
 use crate::SubscriptionDictationRequest;
 use async_utils::CancellationToken;
 use tokio::sync::oneshot;
-use voice_host::AudioConfig;
-use voice_host::AudioHost;
-use voice_host::Direction;
-use voice_host::Processing;
 use voice_host::SampleRate;
 
 const SAMPLE_RATE: usize = 24_000;
@@ -18,21 +16,15 @@ pub(super) async fn run(
     stopped: &mut oneshot::Receiver<()>,
     cancellation: CancellationToken,
     on_event: &dyn Fn(DictationEvent),
+    input: Option<AudioReceiver>,
 ) -> Result<(), String> {
-    let mut audio = AudioHost::spawn(&request.audio_host)
-        .await
-        .map_err(|error| error.to_string())?;
-    audio
-        .start_input(
-            AudioConfig {
-                rate: SampleRate::Hz24000,
-                direction: Direction::Capture,
-                processing: Processing::Speech,
-            },
-            request.input_device,
-        )
-        .await
-        .map_err(|error| error.to_string())?;
+    let mut audio = AudioInput::open(
+        &request.audio_host,
+        request.input_device,
+        SampleRate::Hz24000,
+        input,
+    )
+    .await?;
     let mut samples = Vec::new();
     loop {
         tokio::select! {
@@ -43,9 +35,9 @@ pub(super) async fn run(
                 break;
             }
             capture = audio.next_capture() => {
-                let capture = capture.map_err(|error| error.to_string())?;
-                if samples.len() + capture.samples.len() > MAX_SAMPLES { return Err("CodexDictationAudioTooLong".into()); }
-                samples.extend_from_slice(&capture.samples);
+                let Some(chunk) = capture? else { break; };
+                if samples.len() + chunk.len() > MAX_SAMPLES { return Err("CodexDictationAudioTooLong".into()); }
+                samples.extend_from_slice(&chunk);
             }
         }
     }

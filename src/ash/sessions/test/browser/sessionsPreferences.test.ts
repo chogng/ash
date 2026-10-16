@@ -1,4 +1,7 @@
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
+import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../../workbench/contrib/chat/browser/speechToText/voiceCodeTranscriptionClient.js';
+import { ITelemetryService } from '../../../platform/telemetry/common/telemetry.js';
+import { NullTelemetryService } from '../../../platform/telemetry/common/telemetryUtils.js';
 import { ISecretStorageStatusService } from '../../../platform/secrets/common/secrets.js';
 import { createTestLanguageModelToolsService } from '../../../workbench/contrib/chat/test/common/tools/testLanguageModelToolsService.js';
 import '../../../workbench/contrib/chat/browser/chat.shared.contribution.js';
@@ -149,16 +152,18 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(ILocalTranscriptionService, transcription);
-	const { IDictationBackendService } = await import('../../../platform/renderer/common/dictation.js');
+	const { IVoiceCodeTranscriptionBackendService } = await import('../../../platform/renderer/common/dictation.js');
 	const { ISpeechService } = await import('../../../workbench/contrib/speech/common/speechService.js');
 	const { SpeechService } = await import('../../../workbench/contrib/speech/browser/speechService.js');
-	services.registerInstance(IDictationBackendService, undefined);
+	services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
 	const { IContextKeyService: ContextKeys } = await import('../../../platform/contextkey/browser/contextKeyService.js');
 	services.registerInstance(ContextKeys, contextKeys);
 	services.registerSingleton(IExtensionService, () => new TestExtensionService());
 	using speech = services.createInstance(SpeechService);
 	services.registerInstance(ISpeechService, speech);
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+	services.registerSingleton(IVoiceCodeTranscriptionClient, () => services.createInstance(VoiceCodeTranscriptionClient));
+	services.registerInstance(ITelemetryService, NullTelemetryService);
 	const { INotificationService } = await import('../../../platform/notification/common/notification.js');
 	const { NotificationService } = await import('../../../workbench/services/notification/common/notificationService.js');
 	using notifications = new NotificationService();

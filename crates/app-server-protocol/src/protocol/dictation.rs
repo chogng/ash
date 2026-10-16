@@ -22,12 +22,33 @@ pub struct DictationStartParams {
     /// Explicit provider language hint; None delegates detection to the model.
     #[schemars(length(max = 32))]
     pub language: Option<String>,
+    /// Omitted for device capture. PCM input is mono signed little-endian 16 kHz audio.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audio_input: Option<DictationAudioInput>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum DictationAudioInput {
+    Pcm16,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DictationAudioParams {
+    #[schemars(length(min = 1, max = 128))]
+    pub resource_id: String,
+    /// Base64 PCM16, bounded to one second of mono 16 kHz audio per request.
+    #[schemars(length(min = 1, max = 42668))]
+    pub audio: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DictationOptionsParams {
     pub backend: DictationBackend,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audio_input: Option<DictationAudioInput>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

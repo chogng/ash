@@ -1,3 +1,7 @@
+import { ILocalTranscriptionService } from '../../../../../platform/localTranscription/common/localTranscription.js';
+import { ISpeechService } from '../../../speech/common/speechService.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../../../../platform/renderer/common/dictation.js';
+import { readDictationPreparation, readDictationOptions } from './dictationInput.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import './media/dictationOnboarding.css';
@@ -83,6 +87,9 @@ class DictationOnboardingBanner extends Disposable {
 		@IPreferencesService preferences: IPreferencesService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IAccessibleViewService accessibleView: IAccessibleViewService,
+		@ILocalTranscriptionService private readonly localTranscription: ILocalTranscriptionService,
+		@ISpeechService private readonly speechProviders: ISpeechService,
+		@IVoiceCodeTranscriptionBackendService private readonly backend: IVoiceCodeTranscriptionBackendService | undefined,
 	) {
 		super();
 		const document = host.container.ownerDocument;
@@ -113,7 +120,7 @@ class DictationOnboardingBanner extends Disposable {
 		this._register(addDisposableListener(this.domNode, 'keydown', event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); } }));
 		this._register(this.microphone.onDidSelect(({ value }) => { void this.configure(DictationConfiguration.inputDevice, value); }));
 		this._register(this.language.onDidSelect(({ value }) => { void this.configure(DictationConfiguration.language, value); }));
-		this._register(speech.onDidChangePreparation(() => { this.updateTest(); void this.initialize(); }));
+		this._register(speech.onDidChangeState(() => { this.updateTest(); void this.initialize(); }));
 		this._register(speech.onDidChangeState(() => { if (!speech.isBusy) { this.recording = false; } this.updateTest(); }));
 		const keys = this._register(contextKeys.createScoped(this.domNode));
 		keys.createKey('dictationIntroductionFocused', true);
@@ -131,7 +138,7 @@ class DictationOnboardingBanner extends Disposable {
 						AccessibleViewProviderId.DictationOnboarding,
 						{ type },
 						() => type === AccessibleViewType.Help
-							? localize({ bundle: 'ash', key: 'dictation.introductionHelp' }, 'Use Tab to reach microphone, language, test, settings and Done. Test starts or stops recording. Escape closes the introduction and releases its recording. Test text is never inserted into your draft or terminal.')
+							? localize({ bundle: 'ash', key: 'dictation.introductionHelp' }, 'Use Tab to reach microphone, language, test, settings and Done. Test starts or stops recording. Changing the microphone keeps recording; changing the language stops it. Escape closes the introduction and releases its recording. Test text is never inserted into your draft or terminal.')
 							: this.transcript.textContent || description.textContent!,
 						() => focus.focus(),
 						AccessibilityVerbositySettingId.DictationOnboarding,
@@ -150,7 +157,7 @@ class DictationOnboardingBanner extends Disposable {
 		this.microphone.enabled = this.language.enabled = false;
 		if (!this.speech.isConfigured) { this.transcript.textContent = localize('chat.input.dictationUnavailable', 'Dictation is unavailable'); return; }
 		try {
-			const options = await this.speech.getOptions();
+			const options = await readDictationOptions(this.domNode.ownerDocument.defaultView as Window & typeof globalThis, this.configuration, this.backend, this.speechProviders);
 			if (this.isDisposed || request !== this.optionsRequest) { return; }
 			this.microphone.element.hidden = this.language.element.hidden = !options;
 			this.description.textContent = options
@@ -171,7 +178,10 @@ class DictationOnboardingBanner extends Disposable {
 	}
 	private async configure(key: string, value: string): Promise<void> {
 		try {
-			if (this.recording) { this.recording = false; this.recordingToken.value?.cancel(); await this.speech.stopAndTranscribe(); }
+			if (this.recording) {
+				if (key === DictationConfiguration.inputDevice && this.speech.analyserNode) await this.speech.switchMicrophone(this.domNode.ownerDocument.defaultView as Window & typeof globalThis, value);
+				else { this.recording = false; this.recordingToken.value?.cancel(); await this.speech.stopAndTranscribe(); }
+			}
 			await this.configuration.updateValue(key, value);
 		} catch (error) { if (!this.isDisposed && !isCancellationError(error)) { this.transcript.textContent = String(error); } }
 	}
@@ -181,7 +191,7 @@ class DictationOnboardingBanner extends Disposable {
 			if (this.speech.isBusy || this.preparing) { return; }
 			this.preparing = true;
 			this.updateTest();
-			const preparation = await this.speech.getPreparation();
+			const preparation = await readDictationPreparation(this.configuration, this.localTranscription, this.speechProviders);
 			if (this.isDisposed || !this.host.isVisible() || this.speech.isBusy) { return; }
 			if (preparation && (!preparation.available || isModelPreparing(preparation.status))) {
 				this.transcript.textContent = localize({ bundle: 'ash', key: 'dictation.prepare' }, 'Install or select a local model in Dictation settings before testing.');
@@ -199,12 +209,6 @@ class DictationOnboardingBanner extends Disposable {
 			events.add(this.speech.onDidUpdateTranscript(event => {
 				if (this.recordingToken.value === owner && !this.isDisposed) this.transcript.textContent = event.text;
 			}));
-			events.add(this.speech.onDidEnd(error => {
-				if (this.recordingToken.value !== owner || this.isDisposed) return;
-				if (error) this.transcript.textContent = error;
-				this.recording = false;
-				this.updateTest();
-			}));
 			await this.speech.start(this.domNode.ownerDocument.defaultView as Window & typeof globalThis);
 		} catch (error) { this.recording = false; if (!this.isDisposed && !isCancellationError(error)) { this.transcript.textContent = String(error); } }
 		finally {
@@ -214,7 +218,7 @@ class DictationOnboardingBanner extends Disposable {
 	}
 	private updateTest(): void {
 		this.test.label = this.recording && this.speech.isBusy ? localize({ bundle: 'ash', key: 'dictation.stopTest' }, 'Stop test') : localize({ bundle: 'ash', key: 'dictation.test' }, 'Test microphone');
-		this.test.enabled = (this.speech.isConfigured) && !this.preparing && (!this.speech.isBusy || this.recording) && !this.speech.isStarting && this.speech.state !== ChatSpeechToTextState.Transcribing;
+		this.test.enabled = (this.speech.isConfigured) && !this.preparing && (!this.speech.isBusy || this.recording) && this.speech.state !== ChatSpeechToTextState.Transcribing;
 	}
 	protected override disposeCore(): void {
 		if (this.recording) { this.recording = false; this.recordingToken.value?.cancel(); void this.speech.stopAndTranscribe().catch(() => undefined); }

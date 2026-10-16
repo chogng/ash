@@ -31,10 +31,10 @@ import { IContextViewService } from '../../../src/ash/platform/contextview/brows
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { Event } from '../../../src/ash/base/common/event.js';
-import { IDictationBackendService, type IDictationBackendService as DictationService } from '../../../src/ash/platform/renderer/common/dictation.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform/renderer/common/dictation.js';
 import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
-import { registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
+import { registerTestDictationOnboarding, createTestDictationBackend, installTestDictationAudio, type TestDictationCapture } from '../../../src/ash/workbench/test/common/testDictationServices.js';
 import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
 import type { ChatGPTVoiceConnection } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTClient.js';
 
@@ -46,6 +46,7 @@ const parameters = new URLSearchParams(location.search);
 const locale = parameters.get('locale') ?? 'zh-CN';
 if (locale !== 'en') { setNlsMessages(locale, productLanguagePackCatalogs.find(catalog => catalog.locale === locale)!.bundles); }
 const resources = new DisposableStore();
+if (parameters.has('dictation')) resources.add(installTestDictationAudio(window));
 const themes = { light: lightColorTheme, dark: darkColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme };
 const theme = resources.add(new TestThemeService(themes[(parameters.get('theme') ?? 'dark') as keyof typeof themes]));
 const requests = new Map<string, { controller: AbortController; reader?: ReadableStreamDefaultReader<Uint8Array>; }>();
@@ -53,11 +54,12 @@ const values = new Map<string, string>();
 let widget: ChatGPTWidget;
 let transcript: ((text: string, final: boolean) => void) | undefined;
 let dictationStops = 0;
-const dictation: DictationService | undefined = parameters.has('dictation') ? {
-	onDidChangeAvailability: Event.None, getOptions: async () => ({ inputDevices: [], languages: [] }),
+const dictation: TestDictationCapture | undefined = parameters.has('dictation') ? {
+	getOptions: async () => ({ inputDevices: [], languages: [] }),
 	start: async (_options, onTranscript, onEnded) => {
-		transcript = onTranscript;
-		return { stop: async () => { dictationStops++; onTranscript('final words', true); onEnded(); }, cancel: async () => { dictationStops++; onEnded(); } };
+		let finalText = 'final words';
+		transcript = (text, final) => { if (final) finalText = text; onTranscript(text, final); };
+		return { stop: async () => { dictationStops++; onTranscript(finalText, true); onEnded(); }, cancel: async () => { dictationStops++; onEnded(); } };
 	},
 } : undefined;
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
@@ -104,7 +106,7 @@ const services = resources.add(new InstantiationService(new ServiceCollection(
 	[IAgentThreadService, {} as IAgentThreadService],
 	[IThemeService, theme],
 	[IContextViewService, resources.add(new BrowserContextViewService(document.body))],
-	[IDictationBackendService, dictation],
+	[IVoiceCodeTranscriptionBackendService, dictation ? createTestDictationBackend(resources, dictation) : undefined],
 	[IPreferencesService, { openSettings: async () => undefined } as unknown as IPreferencesService],
 )));
 services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));

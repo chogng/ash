@@ -1,3 +1,7 @@
+import { ILocalTranscriptionService } from '../../../../../platform/localTranscription/common/localTranscription.js';
+import { ISpeechService } from '../../../../../workbench/contrib/speech/common/speechService.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { readDictationPreparation } from '../../../../../workbench/contrib/chat/browser/speechToText/dictationInput.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
@@ -24,6 +28,7 @@ export class DictationSession extends Disposable {
 	public readonly onDidEnd = this.ended.event;
 	public getAccessibleContent(): string { return this.committedText + this.preview.textContent; }
 	public get isActive(): boolean { return this.active; }
+	public get isStarting(): boolean { return this.active && this.service.isBusy && this.service.state === ChatSpeechToTextState.Idle; }
 	public readonly action: IAction;
 
 	constructor(
@@ -33,6 +38,9 @@ export class DictationSession extends Disposable {
 		private readonly showPreparation: (snapshot: ILocalTranscriptionModelSnapshot) => Promise<void>,
 		@IChatSpeechToTextService private readonly service: IChatSpeechToTextService,
 		@IDictationOnboardingService private readonly onboarding: IDictationOnboardingService,
+		@ILocalTranscriptionService private readonly localTranscription: ILocalTranscriptionService,
+		@ISpeechService private readonly speechProviders: ISpeechService,
+		@IConfigurationService private readonly configuration: IConfigurationService,
 	) {
 		super();
 		const session = this;
@@ -44,7 +52,7 @@ export class DictationSession extends Disposable {
 				return service.isConfigured ? localize('chat.input.dictate', 'Dictate message') : localize('chat.input.dictationUnavailable', 'Dictation is unavailable');
 			},
 			icon: Lxicon.mic,
-			get enabled() { return service.isConfigured && (!service.isBusy || session.active) && !service.isStarting && service.state !== ChatSpeechToTextState.Transcribing; },
+			get enabled() { return service.isConfigured && (!service.isBusy || session.active) && !session.isStarting && service.state !== ChatSpeechToTextState.Transcribing; },
 			get checked() { return session.active && service.state === ChatSpeechToTextState.Recording; },
 			run: () => this.toggle(),
 		};
@@ -53,7 +61,7 @@ export class DictationSession extends Disposable {
 			if (!this.active || !isVisible()) { return; }
 			const phrase = finalizedText.slice(this.committedText.length);
 			this.committedText = finalizedText;
-			preview.textContent = text.slice(finalizedText.length);
+			preview.textContent = service.showTranscriptWhileDictating ? text.slice(finalizedText.length) : '';
 			preview.hidden = !preview.textContent;
 			if (phrase) {
 				editor.insertText(phrase);
@@ -61,9 +69,9 @@ export class DictationSession extends Disposable {
 				status(localize('chat.input.dictationInserted', 'Dictation added to message'));
 			}
 		}));
-		this._register(service.onDidEnd(error => { if (this.active) { this.ended.fire(error); } }));
 		this._register(service.onDidChangeState(state => {
-			if (state === ChatSpeechToTextState.Idle) {
+			if (state === ChatSpeechToTextState.Idle && !service.isBusy) {
+				if (this.active) this.ended.fire(undefined);
 				this.active = false;
 				clearPreview();
 			}
@@ -77,7 +85,7 @@ export class DictationSession extends Disposable {
 			if (!this.service.isConfigured) { throw new Error(localize('chat.input.dictationUnavailable', 'Dictation is unavailable')); }
 			if (this.service.isBusy) { return; }
 			this.preparing = true;
-			const preparation = await this.service.getPreparation();
+			const preparation = await readDictationPreparation(this.configuration, this.localTranscription, this.speechProviders);
 			if (this.isDisposed || !this.isVisible() || this.service.isBusy) { return; }
 			if (preparation && (!preparation.available || isModelPreparing(preparation.status))) {
 				await this.showPreparation(preparation);

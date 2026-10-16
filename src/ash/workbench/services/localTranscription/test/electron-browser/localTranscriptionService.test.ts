@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { VSBuffer } from '../../../../../base/common/buffer.js';
 import { suite, test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
@@ -18,6 +19,7 @@ class Client {
 	public readonly stopped = new DeferredPromise<void>();
 	public startBarrier?: DeferredPromise<void>;
 	public stopBarrier?: DeferredPromise<void>;
+	public audioBarrier?: DeferredPromise<void>;
 	public stopText: string | null = 'final text';
 	public beforeStop?: () => void;
 	public readonly notifications = new Set<(notification: Notification) => void>();
@@ -35,6 +37,7 @@ class Client {
 
 	public async request(method: { readonly method: string; }, params: { readonly resourceId: string; readonly backend?: unknown; }): Promise<unknown> {
 		this.requests.push({ method: method.method, ...params });
+		if (method.method === 'dictation/audio') { await this.audioBarrier?.p; return null; }
 		if (method.method === 'dictation/start' || method.method === 'dictation/model/start') {
 			await this.accepted.complete();
 			await this.startBarrier?.p;
@@ -80,6 +83,30 @@ class Fixture extends Disposable {
 }
 
 suite('LocalTranscriptionService', () => {
+	test('stop drains queued renderer audio before releasing the inference session', async () => {
+		using fixture = new Fixture();
+		await fixture.service.start({ model: 'selected-model' });
+		fixture.client.audioBarrier = new DeferredPromise<void>();
+		const packet = fixture.service.pushAudio(VSBuffer.wrap(new Uint8Array([0, 1])));
+		const stopping = fixture.service.stop();
+		await fixture.client.audioBarrier.complete();
+		await packet;
+		assert.equal(await stopping, 'final text');
+		assert.deepEqual(fixture.client.requests.map(request => request.method), ['dictation/start', 'dictation/audio', 'dictation/stop']);
+	});
+
+	test('failed audio rejects stop after releasing the backend and allows a later session', async () => {
+		using fixture = new Fixture();
+		await fixture.service.start({ model: 'selected-model' });
+		fixture.client.audioBarrier = new DeferredPromise<void>();
+		const packet = assert.rejects(fixture.service.pushAudio(VSBuffer.wrap(new Uint8Array([0, 1]))), /audio failed/);
+		const stopped = assert.rejects(fixture.service.stop(), /audio failed/);
+		await fixture.client.audioBarrier.error(new Error('audio failed'));
+		await Promise.all([packet, stopped]);
+		assert.equal(fixture.client.requests.at(-1)?.method, 'dictation/stop');
+		await fixture.service.start({ model: 'selected-model' });
+		await fixture.service.cancel();
+	});
 	test('window disposal detaches preparation without sending a backend cancel', async () => {
 		using fixture = new Fixture();
 		const operation = fixture.service.prepareModel('selected-model', () => { });
@@ -165,7 +192,7 @@ suite('LocalTranscriptionService', () => {
 		fixture.transcript('late', true);
 		assert.deepEqual({ requests: fixture.client.requests, results }, {
 			requests: [
-				{ method: 'dictation/start', resourceId: fixture.resourceId, backend: { type: 'local', modelId: 'selected-model' }, inputDevice: null, language: null },
+				{ method: 'dictation/start', resourceId: fixture.resourceId, backend: { type: 'local', modelId: 'selected-model' }, inputDevice: null, language: null, audioInput: 'pcm16' },
 				{ method: 'dictation/stop', resourceId: fixture.resourceId },
 			],
 			results: [{ text: 'interim', isFinal: false }, { text: 'final text', isFinal: true }],

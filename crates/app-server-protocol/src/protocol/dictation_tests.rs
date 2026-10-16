@@ -11,6 +11,23 @@ fn subscription_dictation_has_no_model_or_credentials_on_the_wire() {
 }
 
 #[test]
+fn renderer_pcm_input_is_explicit_and_device_capture_remains_the_default() {
+    let pcm = json!({"resourceId":"turn", "backend":{"type":"codex"}, "inputDevice":null, "language":null, "audioInput":"pcm16"});
+    let decoded: DictationStartParams = serde_json::from_value(pcm.clone()).unwrap();
+    assert_eq!(decoded.audio_input, Some(super::DictationAudioInput::Pcm16));
+    assert_eq!(serde_json::to_value(decoded).unwrap(), pcm);
+    assert!(
+        serde_json::from_value::<DictationStartParams>(
+            json!({"resourceId":"turn","backend":{"type":"codex"},"audioInput":"unknown"})
+        )
+        .is_err()
+    );
+    let audio = json!({"resourceId":"turn","audio":"AAE="});
+    let decoded: super::DictationAudioParams = serde_json::from_value(audio.clone()).unwrap();
+    assert_eq!(serde_json::to_value(decoded).unwrap(), audio);
+}
+
+#[test]
 fn cloud_start_requires_a_declared_provider_and_model() {
     let request = json!({
         "resourceId": "speech-1",

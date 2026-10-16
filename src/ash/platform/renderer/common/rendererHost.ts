@@ -11,7 +11,7 @@ import type { ILocalGitService } from '../../git/common/localGitService.js';
 import type { IBackupService } from '../../backup/common/backup.js';
 import type { INetworkDiagnosticsService } from '../../networkDiagnostics/common/networkDiagnosticsService.js';
 import type { ICallService } from '../../call/common/callService.js';
-import type { IDictationBackendService } from './dictation.js';
+import type { IVoiceCodeTranscriptionBackendService } from './dictation.js';
 import type { ILocalTranscriptionService } from '../../localTranscription/common/localTranscription.js';
 import type { IApprovalEnvironmentService } from '../../approvalEnvironment/common/approvalEnvironmentService.js';
 import type { IMemoriesService } from '../../memories/common/memoriesService.js';
@@ -87,7 +87,7 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly assets: IAssetService;
 	readonly testing: ITestExecutionService;
 	readonly calls?: ICallService;
-	readonly dictation?: IDictationBackendService;
+	readonly dictation?: IVoiceCodeTranscriptionBackendService;
 	readonly agentVoice?: IAgentVoiceService;
 	readonly automation?: IAutomationBackendService;
 	readonly messageHistory?: IMessageHistoryService;

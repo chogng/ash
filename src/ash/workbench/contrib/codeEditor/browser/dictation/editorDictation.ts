@@ -70,10 +70,10 @@ export class EditorDictation extends Disposable {
 		const cancel = this._register(new Button(controls, { label: localize({ bundle: 'ash', key: 'dictation.cancel' }, 'Cancel dictation'), presentation: 'quiet' }));
 		this._register(stop.onDidClick(() => { void this.session.stop().catch(error => notifications.error(String(error))); }));
 		this._register(cancel.onDidClick(() => { void this.session.cancel().catch(error => notifications.error(String(error))); }));
-		this._register(this.session.onDidEnd(error => { if (error) notifications.error(error); controls.hidden = !this.session.isActive; stop.enabled = !speech.isStarting && speech.state !== ChatSpeechToTextState.Transcribing; }));
+		this._register(this.session.onDidEnd(error => { if (error) notifications.error(error); controls.hidden = !this.session.isActive; stop.enabled = !this.session.isStarting && speech.state !== ChatSpeechToTextState.Transcribing; }));
 		this._register(speech.onDidChangeState(() => {
 			controls.hidden = !this.session.isActive;
-			stop.enabled = !speech.isStarting && speech.state !== ChatSpeechToTextState.Transcribing;
+			stop.enabled = !this.session.isStarting && speech.state !== ChatSpeechToTextState.Transcribing;
 		}));
 		controls.hidden = true;
 		this.widget = {

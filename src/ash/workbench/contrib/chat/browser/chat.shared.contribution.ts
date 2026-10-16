@@ -1,6 +1,7 @@
 import { DEFAULT_LOCAL_TRANSCRIPTION_MODEL } from '../../../../platform/localTranscription/common/localTranscription.js';
 import { parseBackend, parseLocalModel, parseCloudProvider, parseInputDevice, parseLanguage } from '../common/constants.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from './speechToText/chatSpeechToTextService.js';
+import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from './speechToText/voiceCodeTranscriptionClient.js';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
@@ -19,6 +20,7 @@ import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSe
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 
 registerSingleton(IChatSpeechToTextService, ChatSpeechToTextService, InstantiationType.Delayed);
+registerSingleton(IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient, InstantiationType.Delayed);
 
 registerSingleton(ILanguageModelToolsService, LanguageModelToolsService, InstantiationType.Delayed);
 
@@ -216,6 +218,12 @@ configurationRegistry.registerConfiguration<number>({
 
 configurationRegistry.registerConfiguration<string>({
 	key: 'dictation.inputDevice', defaultValue: '', parse: parseInputDevice,
+});
+
+configurationRegistry.registerConfiguration<boolean>({
+	key: 'dictation.showTranscript', defaultValue: true,
+	parse(value: unknown): boolean { if (typeof value !== 'boolean') throw new TypeError('dictation.showTranscript must be boolean'); return value; },
+	setting: { valueType: 'boolean', title: localize('dictation.showTranscript.title', 'Show interim dictation text'), description: localize('dictation.showTranscript.description', 'Show the live transcript while speech is being recognized.') },
 });
 
 configurationRegistry.registerConfiguration<string>({

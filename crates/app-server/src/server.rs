@@ -3198,6 +3198,7 @@ impl AppServer {
                 self.attachment_upload_start(connection, &request.params)
             }
             Some(ClientMethod::DictationStart) => self.dictation_start(connection, &request.params),
+            Some(ClientMethod::DictationAudio) => self.dictation_audio(connection, &request.params),
             Some(ClientMethod::DictationOptions) => {
                 self.dictation_options(connection, &request.params)
             }

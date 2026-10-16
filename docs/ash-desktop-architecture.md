@@ -881,15 +881,16 @@ Workbench 的“常规 → 听写”和 Sessions 的“常规”页使用同一�
 `platform/renderer/common/dictation.ts` 声明宿主听写能力及转写后端的领域契约，
 `platform/renderer/browser/appServerVoiceCodeTranscriptionBackend.ts` 转换现有连接上的 App Server RPC 与通知；
 `workbench/contrib/chat/browser/speechToText/voiceCodeTranscriptionClient.ts` 拥有云端／订阅听写会话、
-资源隔离与断连清理，不读取生成协议或产品配置，也不代理本地模型管理。后端选择及麦克风／语言参数在
-`contrib/chat/common/constants.ts` 解析，由窗口听写服务传给对应能力；本地录音、推理和模型准备
-直接交给现有 `ILocalTranscriptionService`。客户端与 VS Code 的云端转写客户端职责对应，Ash 使用
-宿主契约与 App Server RPC，由后端采音，不引入浏览器 WebSocket 或另一套录音状态。
+资源隔离与断连清理，通过配置服务和 `contrib/chat/common/constants.ts` 解析后端与语言，不导入生成协议。
+`IChatSpeechToTextService` 与 `IVoiceCodeTranscriptionClient` 的公开成员对应本地 VS Code 契约，
+客户端由窗口 DI 容器创建；内置识别的麦克风、analyser 和 PCM worklet 属于窗口听写服务，
+PCM16 音频通过 `dictation/audio` 按资源顺序送往 App Server。本地推理和模型准备
+交给现有 `ILocalTranscriptionService`，Rust 管理凭据和识别资源；TUI 仍使用既有后端设备采音。
 旧 `platform/dictation`、`workbench/services/dictation` 目录及 Cowork 的听写服务副本已删除。
 Workbench 和 Sessions 各自在窗口服务容器中注册一个听写服务，输入区通过构造注入使用它，
 不各自创建录音状态。`DictationSession` 拥有当前编辑器的麦克风动作、模型就绪检查和转写插入，
 `DictationActionViewItem` 呈现按钮。输入区只组合工具栏、转写预览和错误通知。
-只有发起录音的输入区接收文字与错误；提交等待最终转写，隐藏或销毁该输入区丢弃后续转写并释放录音。
+只有发起录音的输入区接收文字，会话错误由窗口通知服务呈现一次；提交等待最终转写，隐藏或销毁该输入区丢弃后续转写并释放录音。
 服务输出累计转写与已确认部分，停止后返回完整结果；旧录音的迟到事件不会进入下一次录音。
 最终识别文字通过编辑器编辑操作插入当前选区，临时识别文字不进入编辑器模型。
 `workbench/contrib/localTranscription` 拥有本地模型安装、导入、选择、卸载及进度控件。
@@ -916,11 +917,11 @@ Ctrl/Cmd+Alt+V 启动，再按该快捷键结束，
 终端提供标题栏麦克风按钮与开始、停止命令，文字只写入发起录音时选中的运行实例，
 换实例、退出或隐藏面板取消录音。终端插入前移除换行及控制字符，执行仍由用户按 Enter 触发。
 
-“麦克风与语言”设置使用 `dictation/options` 查询音频进程列出的设备和所选服务支持的语言提示，
-查询不会打开麦克风。`dictation.inputDevice` 保存设备身份，空值跟随系统默认；设备断开会明确报错。
+“麦克风与语言”设置使用浏览器 enumerateDevices 查询设备，通过 `dictation/options` 查询所选服务支持的语言提示，
+查询不会打开麦克风。`dictation.inputDevice` 保存浏览器设备身份，空值跟随系统默认；旧的后端设备 ID 显示为断开，需要重新选择。
 `dictation.language` 的 `auto` 交由模型检测，显式值仅发送给支持提示的云端服务；本地 Paraformer
 不接受强制语言选项。OpenAI 提示进入转写会话的 `languages` 字段，xAI 提示进入 STT 请求参数。
-切换设备或语言时先停止当前听写、释放音频设备，再保存选择。设置归当前产品配置档，
+录音中切换麦克风保留 analyser 和当前会话，接入新设备后释放旧轨道；切换语言先停止当前听写再保存选择。设置归当前产品配置档，
 不保存在项目或聊天草稿中。
 
 首次使用且模型就绪时，在聚焦的输入区显示引导，提供设备、语言、模型设置与独立试录。

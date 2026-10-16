@@ -68,7 +68,7 @@ export class TerminalVoiceSession extends Disposable {
 		controls.hidden = true;
 		this._register(speech.onDidChangeState(() => {
 			controls.hidden = !this.session.isActive;
-			stop.enabled = !speech.isStarting && speech.state !== ChatSpeechToTextState.Transcribing;
+			stop.enabled = !this.session.isStarting && speech.state !== ChatSpeechToTextState.Transcribing;
 		}));
 		this._register(terminals.onDidChangeActiveInstance(() => this.hide()));
 		this._register(terminals.onDidDisposeInstance(instance => { if (instance === this.target) { this.hide(); } }));

@@ -755,6 +755,10 @@ use crate::protocol::diagnostics::NetworkRouteDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::diagnostics::NetworkTargetDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::dictation::DictationAudioInput;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::dictation::DictationAudioParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::dictation::DictationBackend;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::dictation::DictationCloudProvider;
@@ -4536,6 +4540,11 @@ client_methods! {
         response: (),
         serialization: ConnectionExclusive("dictation"),
     },
+    DictationAudio => "dictation/audio" {
+        params: DictationAudioParams,
+        response: (),
+        serialization: ConnectionExclusive("dictation"),
+    },
     DictationOptions => "dictation/options" {
         params: DictationOptionsParams,
         response: DictationOptions,
@@ -6102,10 +6111,12 @@ typescript_bindings! {
     CallStatus,
     DictationResourceParams,
     DictationStartParams,
+    DictationAudioParams,
     DictationOptions,
     DictationOptionsParams,
     DictationInputDevice,
     DictationBackend,
+    DictationAudioInput,
     DictationCloudProvider,
     DictationTranscript,
     DictationEnded,

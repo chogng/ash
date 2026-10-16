@@ -1,4 +1,23 @@
 import { expect, test } from '@playwright/test';
+test.use({ launchOptions: { args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] } });
+
+test.describe('renderer audio capture', () => {
+	for (const locale of ['en', 'zh-CN']) {
+		test(`streams real worklet PCM through the standard client and releases capture (${locale})`, async ({ page }) => {
+			await page.goto(`/table.html?realAudio&locale=${locale}`);
+			await page.evaluate(() => window.ashTableIntegration.startDictation());
+			await expect.poll(() => page.evaluate(() => window.ashTableIntegration.audioPackets)).toBeGreaterThan(0);
+			expect(await page.evaluate(() => window.ashTableIntegration.analysing)).toBe(true);
+			await page.evaluate(() => window.ashTableIntegration.transcript('audio result', true));
+			expect(await page.evaluate(() => window.ashTableIntegration.draft)).toBe('');
+			expect(await page.evaluate(() => window.ashTableIntegration.stopDictation())).toBe('audio result');
+			expect(await page.evaluate(() => [window.ashTableIntegration.draft, window.ashTableIntegration.analysing, window.ashTableIntegration.stops])).toEqual(['audio result', false, 1]);
+			const packets = await page.evaluate(() => window.ashTableIntegration.audioPackets);
+			await page.evaluate(() => window.ashTableIntegration.transcript('stale', true));
+			expect(await page.evaluate(() => [window.ashTableIntegration.draft, window.ashTableIntegration.audioPackets])).toEqual(['audio result', packets]);
+		});
+	}
+});
 
 for (const locale of ['en', 'zh-CN']) {
 	test(`credential storage failure preserves saved-key state and keyboard retry recovers (${locale})`, async ({ page }) => {
@@ -70,6 +89,7 @@ test('dictation inserts at the rich editor selection and preserves undo', async 
 	await expect(page.locator('#dictation-preview')).toHaveText('partial');
 	expect(await page.evaluate(() => window.ashTableIntegration.draft)).toBe('before old after');
 	await page.evaluate(() => window.ashTableIntegration.transcript('replacement', true));
+	await page.evaluate(() => window.ashTableIntegration.stopDictation());
 	expect(await page.evaluate(() => window.ashTableIntegration.draft)).toBe('before replacement after');
 	await page.keyboard.press('ControlOrMeta+z');
 	expect(await page.evaluate(() => window.ashTableIntegration.draft)).toBe('before old after');
@@ -83,16 +103,21 @@ test('shared dictation disables other inputs and routes text to its current edit
 	await page.evaluate(() => window.ashTableIntegration.startDictation());
 	await expect(microphone).toBeDisabled();
 	await page.evaluate(() => window.ashTableIntegration.transcript('first editor', true));
+	await page.evaluate(() => window.ashTableIntegration.stopDictation());
 	expect(await page.evaluate(() => window.ashTableIntegration.draft)).toBe('first editor');
 	expect(await page.evaluate(() => window.ashTableIntegration.secondDraft())).toBe('');
-	await page.evaluate(() => window.ashTableIntegration.stopDictation());
 	await expect(microphone).toBeEnabled();
 	await microphone.focus();
 	await page.keyboard.press('Space');
 	await expect(microphone).toHaveAttribute('aria-pressed', 'true');
 	await page.evaluate(() => window.ashTableIntegration.transcript('second editor', true));
+	await microphone.click();
+	await expect.poll(() => page.evaluate(() => window.ashTableIntegration.secondDraft())).toBe('second editor');
 	expect(await page.evaluate(() => window.ashTableIntegration.secondDraft())).toBe('second editor');
 	expect(await page.evaluate(() => window.ashTableIntegration.draft)).toBe('first editor');
+	await microphone.click();
+	await expect(microphone).toHaveAttribute('aria-pressed', 'true');
+	await page.evaluate(() => window.ashTableIntegration.transcript('unfinished', false));
 	await page.evaluate(() => window.ashTableIntegration.hideSecondInput());
 	await page.evaluate(() => window.ashTableIntegration.transcript('late text', true));
 	expect(await page.evaluate(() => window.ashTableIntegration.secondDraft())).toBe('second editor');
@@ -166,18 +191,20 @@ test('ordinary editor dictation command replaces its selection, supports undo an
 	for (let index = 0; index < 3; index++) await page.keyboard.press('Shift+ArrowRight');
 	await page.evaluate(() => window.ashTableIntegration.codeDictation());
 	await page.evaluate(() => window.ashTableIntegration.transcript('replacement', true));
+	await page.evaluate(() => window.ashTableIntegration.stopDictation());
 	expect(await page.evaluate(() => window.ashTableIntegration.codeText)).toBe('before replacement after');
 	await page.keyboard.press('ControlOrMeta+z');
 	expect(await page.evaluate(() => window.ashTableIntegration.codeText)).toBe('before old after');
+	await page.evaluate(() => window.ashTableIntegration.codeDictation());
 	await page.evaluate(() => window.ashTableIntegration.transcript('unfinished', false));
 	await page.keyboard.press('Escape');
-	await expect.poll(() => page.evaluate(() => window.ashTableIntegration.stops)).toBe(1);
+	await expect.poll(() => page.evaluate(() => window.ashTableIntegration.stops)).toBe(2);
 	await page.evaluate(() => window.ashTableIntegration.transcript('late', true));
 	expect(await page.evaluate(() => window.ashTableIntegration.codeText)).toBe('before old after');
 	await page.keyboard.press('ControlOrMeta+Alt+v');
-	await expect.poll(() => page.evaluate(() => window.ashTableIntegration.starts)).toBe(2);
+	await expect.poll(() => page.evaluate(() => window.ashTableIntegration.starts)).toBe(3);
 	await page.keyboard.press('ControlOrMeta+Alt+v');
-	await expect.poll(() => page.evaluate(() => window.ashTableIntegration.stops)).toBe(2);
+	await expect.poll(() => page.evaluate(() => window.ashTableIntegration.stops)).toBe(3);
 });
 
 test('first dictation introduction keeps trial text out of drafts and saves microphone and language in Chinese', async ({ page }) => {
@@ -196,7 +223,7 @@ test('first dictation introduction keeps trial text out of drafts and saves micr
 	expect(await page.evaluate(() => [window.ashTableIntegration.microphone, window.ashTableIntegration.language])).toEqual(['microphone-1', 'zh']);
 	await intro.getByRole('button', { name: '测试麦克风', exact: true }).click();
 	await expect(intro.getByRole('button', { name: '停止测试', exact: true })).toBeEnabled();
-	await page.evaluate(() => window.ashTableIntegration.transcript('这只是试录', true));
+	await page.evaluate(() => window.ashTableIntegration.transcript('这只是试录', false));
 	await expect(intro.getByRole('status')).toHaveText('这只是试录');
 	expect(await page.evaluate(() => window.ashTableIntegration.secondDraft())).toBe('');
 	await intro.getByRole('button', { name: '完成', exact: true }).focus();
@@ -207,6 +234,8 @@ test('first dictation introduction keeps trial text out of drafts and saves micr
 	await expect(input.locator('[data-action-id="ash.chat.input.mic"] button')).toHaveAttribute('aria-pressed', 'true');
 	await expect(intro).toHaveCount(0);
 	await page.evaluate(() => window.ashTableIntegration.transcript('写入草稿', true));
+	await input.locator('[data-action-id="ash.chat.input.mic"] button').click();
+	await expect.poll(() => page.evaluate(() => window.ashTableIntegration.secondDraft())).toBe('写入草稿');
 	expect(await page.evaluate(() => window.ashTableIntegration.secondDraft())).toBe('写入草稿');
 });
 

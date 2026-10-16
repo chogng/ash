@@ -1,6 +1,7 @@
 import type { Event } from '../../../base/common/event.js';
 import type { IDisposable } from '../../../base/common/lifecycle.js';
 import { createDecorator } from '../../instantiation/common/instantiation.js';
+import type { VSBuffer } from '../../../base/common/buffer.js';
 
 /** Default on-device model package supplied by Ash. */
 export const DEFAULT_LOCAL_TRANSCRIPTION_MODEL = 'paraformer-large-online-ec6a3c64';
@@ -46,7 +47,7 @@ export interface ILocalTranscriptionModelOperation extends IDisposable {
 
 export type LocalTranscriptionModelOperation = { readonly type: 'prepare'; } | { readonly type: 'import'; readonly sourceDirectory: string; };
 
-/** Capture, model preparation and inference belong to the shared Rust backend. */
+/** Renderer audio feeds the shared Rust backend, which owns model preparation and inference. */
 export interface ILocalTranscriptionService extends IDisposable {
 	readonly _serviceBrand: undefined;
 	readonly isSupported: boolean;
@@ -61,7 +62,9 @@ export interface ILocalTranscriptionService extends IDisposable {
 	deleteModel(model: string): Promise<void>;
 	prepareModel(model: string, onProgress: (status: ILocalTranscriptionModelStatus) => void): ILocalTranscriptionModelOperation;
 	importModel(options: { readonly model: string; readonly sourcePath: string; }, onProgress: (status: ILocalTranscriptionModelStatus) => void): ILocalTranscriptionModelOperation;
-	start(options: { readonly model: string; readonly inputDevice?: string; }): Promise<void>;
+	start(options: { readonly model: string; }): Promise<void>;
+	/** Append renderer-captured PCM16 mono 16 kHz audio. */
+	pushAudio(chunk: VSBuffer): Promise<void>;
 	/** Waits for capture to stop and returns the final transcript. */
 	stop(): Promise<string>;
 	/** Stops backend work and discards subsequent transcript delivery. */
@@ -82,6 +85,7 @@ export interface ILocalTranscriptionBackendService {
 	deleteModel(model: string): Promise<void>;
 	startModelOperation(resourceId: string, model: string, operation: LocalTranscriptionModelOperation): Promise<void>;
 	stopModelOperation(resourceId: string): Promise<void>;
-	start(resourceId: string, model: string, inputDevice?: string): Promise<void>;
+	start(resourceId: string, model: string): Promise<void>;
+	pushAudio(resourceId: string, chunk: VSBuffer): Promise<void>;
 	stop(resourceId: string): Promise<string | null>;
 }

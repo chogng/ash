@@ -51,13 +51,13 @@ const { TestConfigurationService: WorkbenchConfigurationService } = await import
 test('Sessions common entry registers the shared speech service for unavailable capture hosts', async () => {
 	const { getSingletonServiceDescriptors } = await import('../../../platform/instantiation/common/extensions.js');
 	const { ServiceCollection } = await import('../../../platform/instantiation/common/serviceCollection.js');
-	const { IDictationBackendService } = await import('../../../platform/renderer/common/dictation.js');
+	const { IVoiceCodeTranscriptionBackendService } = await import('../../../platform/renderer/common/dictation.js');
 	const { ISpeechService } = await import('../../../workbench/contrib/speech/common/speechService.js');
 	const registrations = getSingletonServiceDescriptors().filter(([id]) => id === ISpeechService);
 	assert.equal(registrations.length, 1);
 	const { IExtensionService } = await import('../../../workbench/services/extensions/common/extensionService.js');
 	using services = new InstantiationService(new ServiceCollection(...registrations, [IExtensionService, undefined], [IConfigurationService, undefined], [IContextKeyService, undefined]));
-	services.registerInstance(IDictationBackendService, undefined);
+	services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
 	const speech = services.get(ISpeechService);
 	assert.equal(speech.hasSpeechProvider, false);
 	await assert.rejects(speech.createSpeechToTextSession(CancellationToken.None), /No speech extension provider/);

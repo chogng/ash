@@ -124,7 +124,7 @@ export class ChatGPTInputWidget extends Disposable {
 		appendIcon(Lxicon.mic, this.dictationButton);
 		this._register(addDisposableListener(this.dictationButton, 'click', () => { void this.dictation.action.run(); }));
 		this._register(speech.onDidChangeState(() => this.renderDictation()));
-		this._register(speech.onDidChangePreparation(() => this.renderDictation()));
+		this._register(speech.onDidChangePreparingModel(() => this.renderDictation()));
 		this._register(this.dictation.onDidEnd(error => {
 			this.renderDictation();
 			if (error) { this.reportDictationError(error); }

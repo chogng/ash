@@ -2,6 +2,8 @@
 use crate::CloudDictationRequest;
 use crate::CloudTranscriptionProvider;
 use crate::DictationEvent;
+use crate::audio_input::AudioInput;
+use crate::audio_input::AudioReceiver;
 use async_utils::CancellationSource;
 use model_provider::TranscriptionEvent;
 use protocol::ModelId;
@@ -9,20 +11,17 @@ use protocol::ModelRef;
 use protocol::ProviderId;
 use std::time::Duration;
 use tokio::sync::oneshot;
-use voice_host::AudioConfig;
-use voice_host::AudioHost;
-use voice_host::Direction;
-use voice_host::Processing;
 use voice_host::SampleRate;
 
 pub(super) async fn run(
     request: CloudDictationRequest,
     stopped: &mut oneshot::Receiver<()>,
     on_event: &dyn Fn(DictationEvent),
+    input: Option<AudioReceiver>,
 ) -> Result<(), String> {
     match request.provider {
         CloudTranscriptionProvider::Xai => {
-            return crate::xai::run(request, stopped, on_event).await;
+            return crate::xai::run(request, stopped, on_event, input).await;
         }
         CloudTranscriptionProvider::OpenAi => {}
     }
@@ -44,28 +43,21 @@ pub(super) async fn run(
         ) => result.map_err(|error| error.to_string())?,
         _ = &mut *stopped => return Ok(()),
     };
-    let mut audio = AudioHost::spawn(&request.audio_host)
-        .await
-        .map_err(|error| error.to_string())?;
-    audio
-        .start_input(
-            AudioConfig {
-                rate: SampleRate::Hz24000,
-                direction: Direction::Capture,
-                processing: Processing::Speech,
-            },
-            request.input_device,
-        )
-        .await
-        .map_err(|error| error.to_string())?;
+    let mut audio = AudioInput::open(
+        &request.audio_host,
+        request.input_device,
+        SampleRate::Hz24000,
+        input,
+    )
+    .await?;
     let mut item_id = None;
     let mut partial = String::new();
     loop {
         tokio::select! {
             _ = &mut *stopped => break,
             capture = audio.next_capture() => {
-                let capture = capture.map_err(|error| error.to_string())?;
-                let pcm16 = capture.samples.iter().flat_map(|sample| sample.to_le_bytes()).collect::<Vec<_>>();
+                let Some(samples) = capture? else { break; };
+                let pcm16 = samples.iter().flat_map(|sample| sample.to_le_bytes()).collect::<Vec<_>>();
                 session.append_audio(&pcm16, &token).await.map_err(|error| error.to_string())?;
             }
             event = session.receive(&token) => {

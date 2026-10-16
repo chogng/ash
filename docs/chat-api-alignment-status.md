@@ -203,19 +203,30 @@ Sessions Preferences、Skill 相关调用及 13 项分层检查；4 项 Chromium
 
 - `browser/chat.shared.contribution.ts` 注册产品设置与窗口共享服务；
 - `common/constants.ts` 解析设置与后端选择，`browser/speechToText/chatSpeechToTextService.ts` 拥有会话编排与累计转写；
-- 扩展识别由 `contrib/speech` 的公开会话提供；本地模型准备、录音和推理直接使用 `ILocalTranscriptionService`；
-- Ash 专属宿主契约收敛到 `src/ash/platform/renderer/common/dictation.ts` 的 `IDictationBackendService`；云端／订阅会话实现在 `browser/speechToText/voiceCodeTranscriptionClient.ts`，不读取配置或代理模型准备；
+- 扩展识别由 `contrib/speech` 的公开会话提供；内置识别由 Renderer 捕获 PCM16，本地模型准备与推理使用 `ILocalTranscriptionService`；
+- Ash 专属宿主契约收敛到 `src/ash/platform/renderer/common/dictation.ts` 的 `IVoiceCodeTranscriptionBackendService`；云端／订阅客户端实现在 `browser/speechToText/voiceCodeTranscriptionClient.ts`，通过配置服务解析后端与语言；
 - Cowork 旧组件引用共享工作台听写服务，不再引用其旧副本。
 
 用户确认将云端转写客户端迁回 VS Code 对应的 `browser/speechToText/voiceCodeTranscriptionClient.ts`，
-测试迁回 `test/browser/speechToText/voiceCodeTranscriptionClient.test.ts`。桌面入口创建唯一的
-`VoiceCodeTranscriptionClient` 并通过既有宿主契约提供能力；停止、取消、最终文本去重和断线清理
-仍由该客户端承担。宿主契约从 `rendererHost.ts` 聚合入口迁入 `platform/renderer/common/dictation.ts`，
+测试迁回 `test/browser/speechToText/voiceCodeTranscriptionClient.test.ts`。窗口容器注册唯一的
+`IVoiceCodeTranscriptionClient`，公开事件、连接、会话和 PTT 音频接口与本地 VS Code 契约一致；
+客户端负责资源隔离、发送顺序、停止确认、取消及断线清理。宿主契约位于 `platform/renderer/common/dictation.ts`，
 所有消费者直接引用契约的唯一声明；`platform/renderer/browser/appServerVoiceCodeTranscriptionBackend.ts`
 仅负责 RPC 与通知转换，不保存第二份会话状态。两者属于此次迁移保留的 Ash 宿主边界。
-对应关系是客户端职责与文件位置，Ash 保留 App Server 采音与 RPC 契约，
-不引入上游的 WebSocket／音频分块 API。旧 `workbench/services/dictation` 中的实现和测试已迁出，
+`IChatSpeechToTextService` 的公开成员与本地 VS Code 对齐，包括 analyser、切换麦克风、模型准备事件、
+停止选项及准确率统计；`pcmCaptureWorklet.ts` 提供实际浏览器采音与 flush 屏障。
+Ash 内部通过 App Server 的 `dictation/audio` 发送 PCM16，凭据和推理由 Rust 持有；既有 TUI 仍可使用后端设备采音。
+准确率只记录长度和编辑距离，不发送文字。下载缺少总大小时进度为 undefined，不伪造百分比。
+本地 `ILocalTranscriptionService` 的模型管理契约仍是 Ash 专属：支持多模型导入、安装状态和共享准备任务，
+尚未与上游 Foundry Local 的 cacheDir、运行时下载及代理参数契约对齐；本批不声称整个 localTranscription 目录完全一致。
+旧 `workbench/services/dictation` 中的实现和测试已迁出，
 原路径没有生产引用或兼容别名，Git 可恢复。
+
+本批验证：六个公开声明的成员与签名比对无差异；听写及调用方定向单测共 139 项通过，
+真实 Chromium 的 AudioWorklet、Chat、编辑器、终端及中英文场景 23 项通过。
+`ash-realtime-voice`（cloud）与 `ash-app-server-protocol` 的 check、test、warnings 均通过，
+Rust client、Renderer 和生成协议类型检查通过。App Server 完整编译仍被第三方
+`tree-sitter-scss` 向 MSVC 传入 `-Wno-unused-parameter` 阻断，不计作通过。
 
 用户已按准确路径清单确认删除以下五个旧文件；现已删除，`src/ash/platform/dictation` 完成退场：
 

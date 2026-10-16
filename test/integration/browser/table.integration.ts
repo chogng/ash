@@ -22,8 +22,8 @@ import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
 import { IStorageService, StorageScope } from '../../../src/ash/platform/storage/common/storage.js';
 import { IContextViewService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
-import { registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
-import { IDictationBackendService } from '../../../src/ash/platform/renderer/common/dictation.js';
+import { registerTestDictationOnboarding, createTestDictationBackend, installTestDictationAudio } from '../../../src/ash/workbench/test/common/testDictationServices.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform/renderer/common/dictation.js';
 import { ISpeechService, SPEECH_LANGUAGE_CONFIG } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import '../../../src/ash/base/browser/ui/button/button.css';
 import '../../../src/ash/base/browser/ui/inputbox/inputbox.css';
@@ -95,6 +95,8 @@ declare global {
 			readonly language: string;
 			readonly starts: number;
 			readonly stops: number;
+			readonly audioPackets: number;
+			readonly analysing: boolean;
 			holdCapture(): void;
 			releaseCapture(): void;
 			transcript(text: string, final: boolean): void;
@@ -112,6 +114,7 @@ if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
 }
 
 const resources = new DisposableStore();
+if (!new URLSearchParams(location.search).has('realAudio')) resources.add(installTestDictationAudio(window));
 const configuration = resources.add(new WorkbenchConfigurationService({ source: '{"dictation.backend":"cloud"}' }));
 const services = resources.add(new InstantiationService());
 const modelChanges = resources.add(new Emitter<void>());
@@ -177,7 +180,7 @@ const backend: ILocalTranscriptionService = {
 		models = models.filter(value => value.model !== model);
 		changed.fire();
 	},
-	start: async () => { }, stop: async () => '', cancel: async () => { }, dispose() { }, [Symbol.dispose]() { },
+	pushAudio: async () => { }, start: async () => { }, stop: async () => '', cancel: async () => { }, dispose() { }, [Symbol.dispose]() { },
 };
 services.registerInstance(ILocalTranscriptionService, backend);
 const root = document.getElementById('models')!;
@@ -197,6 +200,7 @@ preview.id = 'dictation-preview';
 document.body.append(preview);
 let starts = 0;
 let stops = 0;
+let audioPackets = 0;
 let captureReady = Promise.resolve();
 let releaseCapture!: () => void;
 let transcript!: (text: string, final: boolean) => void;
@@ -214,9 +218,14 @@ const speechExtensions = resources.add(new TestExtensionService({
 	resources: new ExtensionResourceLoaderService(async () => { throw new Error('Speech metadata must not read resources'); }),
 }));
 services.registerInstance(IExtensionService, speechExtensions);
-services.registerInstance(IDictationBackendService, new URLSearchParams(location.search).has('extensionOnly') ? undefined : {
-	onDidChangeAvailability: Event.None, getOptions: async () => ({ inputDevices: [{ id: 'microphone-1', label: 'Test microphone', isDefault: true }], languages: ['en', 'zh'] }), start: async (_options, onTranscript: (text: string, isFinal: boolean) => void) => { starts++; transcript = onTranscript; await captureReady; return { stop: async () => { stops++; }, cancel: async () => { stops++; } }; },
+const transcriptionBackend = createTestDictationBackend(resources, {
+	getOptions: async () => ({ inputDevices: [{ id: 'microphone-1', label: 'Test microphone', isDefault: true }], languages: ['en', 'zh'] }), start: async (_options, onTranscript: (text: string, isFinal: boolean) => void) => { starts++; transcript = onTranscript; await captureReady; return { stop: async () => { stops++; }, cancel: async () => { stops++; } }; },
 });
+transcriptionBackend.pushAudio = async (_resourceId, audio) => {
+	if (!audio || atob(audio).length % 2 !== 0) throw new Error('Invalid PCM16 from renderer');
+	audioPackets++;
+};
+services.registerInstance(IVoiceCodeTranscriptionBackendService, new URLSearchParams(location.search).has('extensionOnly') ? undefined : transcriptionBackend);
 services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 registerTestDictationOnboarding(services);
@@ -322,6 +331,8 @@ window.ashTableIntegration = {
 	get language() { return configuration.getValue<string>(DictationConfiguration.language); },
 	get starts() { return starts; },
 	get stops() { return stops; },
+	get audioPackets() { return audioPackets; },
+	get analysing() { return !!services.get(IChatSpeechToTextService).analyserNode; },
 	holdCapture: () => { captureReady = new Promise(resolve => { releaseCapture = resolve; }); },
 	releaseCapture: () => releaseCapture(),
 	secondDraft: async () => (await secondInput.captureDraft())?.draft.text ?? '',

@@ -185,6 +185,9 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private get mode(): ChatInputMode { return this.state.mode; }
 	private pendingAgentSelection: { readonly agent: ChatAgent | undefined; } | undefined;
 	private readonly dictationSession: DictationSession;
+	private dictationSample: { text: string; backend: string; } | undefined;
+	private measuringDictation = false;
+	private measureWholeDraft = false;
 	private visible = true;
 	private draftRevision = 0;
 	private textRevision = 0;
@@ -279,8 +282,19 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		}
 
 		this.dictationSession = this._register(instantiationService.createInstance(DictationSession, this.input, this.dictationPreview, () => this.visible, () => this.delegate.openModelSettings('dictation'), 'chat'));
-		this._register(this.speechToText.onDidChangeState(() => { this.renderStatus(); this.renderToolbarActions(); }));
-		this._register(this.speechToText.onDidChangePreparation(() => this.renderToolbarActions()));
+		this._register(this.speechToText.onDidChangeState(() => {
+			if (this.dictationSession.isActive && this.speechToText.state === ChatSpeechToTextState.Recording && !this.measuringDictation) {
+				this.measuringDictation = true;
+				this.measureWholeDraft = this.input.value.length === 0;
+				this.dictationSample = undefined;
+			}
+			if (!this.speechToText.isBusy) this.measuringDictation = false;
+			this.renderStatus(); this.renderToolbarActions();
+		}));
+		this._register(this.speechToText.onDidUpdateTranscript(event => {
+			if (this.dictationSession.isActive && this.measureWholeDraft && event.finalizedText) this.dictationSample = { text: event.finalizedText, backend: this.speechToText.currentBackend };
+		}));
+		this._register(this.speechToText.onDidChangePreparingModel(() => this.renderToolbarActions()));
 		this._register(this.dictationSession.onDidEnd(error => {
 			// The speech service can become idle before the input session releases its active state.
 			this.renderStatus();
@@ -349,7 +363,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.renderToolbarActions();
 		this._register(toDisposable(() => this.element.remove()));
 		this._register(toDisposable(() => this.inputLifecycle.abort()));
-		this._register(toDisposable(() => { void this.stopDictation(); }));
+		this._register(toDisposable(() => { this.logDictationSample(false); void this.stopDictation(); }));
 	}
 
 	private captureHistoryDraft(): InputHistoryDraft {
@@ -481,6 +495,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	private async submit(draft: InputHistoryDraft, textRevision: number, lifecycle: AbortSignal, operation: () => Promise<void>): Promise<void> {
+		this.logDictationSample(true, draft.text);
 		void this.history.record(draft.text, parseSlashCommandInput(this.commandText(draft.text, draft.attachments), this.slashCommands).kind === 'command' ? 'command' : 'agent').catch(error => {
 			if (!this.isDisposed && !lifecycle.aborted) this.notifications.error(localize('chat.history.saveFailed', 'Could not save input history: {0}', String(error)));
 		});
@@ -525,11 +540,18 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	private setInputValue(value: string): void {
+		if (value !== this.input.value) this.logDictationSample(false);
 		// Clearing or restoring a draft is not a user revocation of live App context.
 		const synchronizing = this.synchronizingSourceContext;
 		this.synchronizingSourceContext = true;
 		try { this.input.value = value; }
 		finally { this.synchronizingSourceContext = synchronizing; }
+	}
+
+	private logDictationSample(submitted: boolean, text = this.input.value): void {
+		const sample = this.dictationSample;
+		this.dictationSample = undefined;
+		if (sample) this.speechToText.logDictationAccuracy({ dictatedText: sample.text, submittedText: text, backend: sample.backend, surface: 'chat', submitted });
 	}
 
 	private setReferenceState(contexts: readonly ChatContextAttachment[]): void {
@@ -1278,7 +1300,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		if (state.aiDisabled) return localize('chat.ai.disabled.message', 'AI features are disabled. Turn off Disable AI features in Settings to send messages.');
 		if (state.inputBlocked && state.phase !== 'loading') return '';
 		if (state.error) return state.error;
-		if (this.dictationSession.isActive && this.speechToText.isStarting) return localize('chat.input.dictationStarting', 'Starting dictation…');
+		if (this.dictationSession.isStarting) return localize('chat.input.dictationStarting', 'Starting dictation…');
 		if (this.dictationSession.isActive && this.speechToText.state === ChatSpeechToTextState.Transcribing) return localize('chat.input.dictationTranscribing', 'Transcribing…');
 		if (this.dictationSession.isActive) return localize('chat.input.dictationListening', 'Listening…');
 		switch (state.phase) {

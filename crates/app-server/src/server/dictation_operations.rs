@@ -3,6 +3,8 @@ use super::ConnectionState;
 use super::RpcError;
 use super::decode;
 use super::result;
+use ash_app_server_protocol::protocol::dictation::DictationAudioInput;
+use ash_app_server_protocol::protocol::dictation::DictationAudioParams;
 use ash_app_server_protocol::protocol::dictation::DictationBackend;
 use ash_app_server_protocol::protocol::dictation::DictationCloudProvider;
 use ash_app_server_protocol::protocol::dictation::DictationEnded;
@@ -22,6 +24,7 @@ use ash_app_server_protocol::protocol::dictation::DictationStopResult;
 use ash_app_server_protocol::protocol::dictation::DictationTranscript;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::registry::ServerNotificationMethod;
+use base64::Engine;
 use realtime_voice::CloudDictationRequest;
 use realtime_voice::CloudTranscriptionProvider;
 use realtime_voice::DictationEvent;
@@ -41,19 +44,23 @@ impl AppServer {
     ) -> Result<Value, RpcError> {
         require_product_host(connection)?;
         let params: DictationOptionsParams = decode(params)?;
-        let audio_host = super::call_runtime::executable("ASH_VOICE_HOST_PATH", "ash-voice-host")
-            .map_err(dictation_error)?;
-        let input_devices = self
-            .dictation
-            .input_devices(&audio_host)
-            .map_err(dictation_error)?
-            .into_iter()
-            .map(|device| DictationInputDevice {
-                id: device.id,
-                label: device.label,
-                is_default: device.is_default,
-            })
-            .collect();
+        let input_devices = if params.audio_input.is_some() {
+            Vec::new()
+        } else {
+            let audio_host =
+                super::call_runtime::executable("ASH_VOICE_HOST_PATH", "ash-voice-host")
+                    .map_err(dictation_error)?;
+            self.dictation
+                .input_devices(&audio_host)
+                .map_err(dictation_error)?
+                .into_iter()
+                .map(|device| DictationInputDevice {
+                    id: device.id,
+                    label: device.label,
+                    is_default: device.is_default,
+                })
+                .collect()
+        };
         result(&DictationOptions {
             input_devices,
             languages: languages(&params.backend)
@@ -95,8 +102,12 @@ impl AppServer {
                 "The microphone is already in use for a call".into(),
             ));
         }
-        let audio_host = super::call_runtime::executable("ASH_VOICE_HOST_PATH", "ash-voice-host")
-            .map_err(dictation_error)?;
+        let audio_host = if params.audio_input.is_some() {
+            std::path::PathBuf::new()
+        } else {
+            super::call_runtime::executable("ASH_VOICE_HOST_PATH", "ash-voice-host")
+                .map_err(dictation_error)?
+        };
         let request = match params.backend {
             DictationBackend::Codex {} => {
                 let runtime = self.provider_runtime.as_ref().ok_or_else(|| {
@@ -183,39 +194,73 @@ impl AppServer {
             DictationRequest::Cloud(_) | DictationRequest::Subscription(_) => None,
         };
         let notifications = connection.outbound_notifications.clone();
-        self.dictation
-            .start(
+        let on_event = move |event| match event {
+            DictationEvent::ModelProgress(progress) => notifications.push(notification(
+                ServerNotificationMethod::DictationModelProgress,
+                &DictationModelProgress {
+                    resource_id: resource_id.clone(),
+                    model_id: model_id.clone().expect("local model progress"),
+                    stage: model_stage(progress),
+                },
+            )),
+            DictationEvent::Transcript { text, is_final } => notifications.push(notification(
+                ServerNotificationMethod::DictationTranscript,
+                &DictationTranscript {
+                    resource_id: resource_id.clone(),
+                    text,
+                    is_final,
+                },
+            )),
+            DictationEvent::Ended { error } => notifications.push(notification(
+                ServerNotificationMethod::DictationEnded,
+                &DictationEnded {
+                    resource_id: resource_id.clone(),
+                    error,
+                },
+            )),
+        };
+        match params.audio_input {
+            Some(DictationAudioInput::Pcm16) => self.dictation.start_stream(
                 connection.connection_id,
                 params.resource_id,
                 request,
-                move |event| match event {
-                    DictationEvent::ModelProgress(progress) => notifications.push(notification(
-                        ServerNotificationMethod::DictationModelProgress,
-                        &DictationModelProgress {
-                            resource_id: resource_id.clone(),
-                            model_id: model_id.clone().expect("local model progress"),
-                            stage: model_stage(progress),
-                        },
-                    )),
-                    DictationEvent::Transcript { text, is_final } => {
-                        notifications.push(notification(
-                            ServerNotificationMethod::DictationTranscript,
-                            &DictationTranscript {
-                                resource_id: resource_id.clone(),
-                                text,
-                                is_final,
-                            },
-                        ))
-                    }
-                    DictationEvent::Ended { error } => notifications.push(notification(
-                        ServerNotificationMethod::DictationEnded,
-                        &DictationEnded {
-                            resource_id: resource_id.clone(),
-                            error,
-                        },
-                    )),
-                },
-            )
+                on_event,
+            ),
+            None => self.dictation.start(
+                connection.connection_id,
+                params.resource_id,
+                request,
+                on_event,
+            ),
+        }
+        .map_err(dictation_error)?;
+        result(&())
+    }
+
+    pub(super) fn dictation_audio(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        require_product_host(connection)?;
+        let params: DictationAudioParams = decode(params)?;
+        realtime_voice::DictationManager::validate_resource_id(&params.resource_id)
+            .map_err(dictation_error)?;
+        if params.audio.is_empty() || params.audio.len() > 42668 {
+            return Err(dictation_error("Invalid dictation audio packet".into()));
+        }
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(&params.audio)
+            .map_err(|_| dictation_error("Invalid dictation audio encoding".into()))?;
+        if bytes.is_empty() || bytes.len() > 32000 || bytes.len() % 2 != 0 {
+            return Err(dictation_error("Invalid dictation PCM16 audio".into()));
+        }
+        let samples = bytes
+            .chunks_exact(2)
+            .map(|sample| i16::from_le_bytes([sample[0], sample[1]]))
+            .collect();
+        self.dictation
+            .push_audio(connection.connection_id, &params.resource_id, samples)
             .map_err(dictation_error)?;
         result(&())
     }
