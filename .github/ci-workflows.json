@@ -121,6 +121,24 @@
     "third_party/ripgrep/runtime-lock.json",
     ".github/workflows/rust-warnings.yml"
   ],
+  "v8-security": [
+    "crates/v8-runtime/**",
+    "crates/v8-poc/**",
+    "third_party/v8/**",
+    "build/v8/**",
+    "build/lib/v8.py",
+    "scripts/cargo.py",
+    "Cargo.toml",
+    "Cargo.lock",
+    "MODULE.bazel",
+    "MODULE.bazel.lock",
+    ".bazelrc",
+    ".bazelversion",
+    "bazel/toolchains/*v8*",
+    ".cargo/config.toml",
+    ".github/workflows/v8-security.yml",
+    ".github/workflows/rusty-v8-release.yml"
+  ],
   "tooling": [
     "build/**",
     "scripts/**",

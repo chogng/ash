@@ -199,6 +199,57 @@ class CiWorkflowTests(unittest.TestCase):
             [],
         )
 
+    def test_v8_backport_changes_require_source_builds_even_without_a_version_bump(
+        self,
+    ) -> None:
+        for path in (
+            "third_party/v8/patches/v8_array_sort_elements_kind.patch",
+            "third_party/v8/patches/future_security_backport.patch",
+            "third_party/v8/source-lock.json",
+            "third_party/v8/runtime-lock.json",
+            "crates/v8-runtime/src/lib.rs",
+            "crates/v8-poc/src/array_sort_regression.js",
+            "build/v8/release.py",
+            ".github/workflows/v8-security.yml",
+        ):
+            with self.subTest(path=path):
+                selected = ci_workflows.select([path], self.policy)
+                self.assertTrue(selected["v8-security"])
+                needs = self.results(selected)
+                needs["v8-security"]["result"] = "skipped"
+                self.assertTrue(
+                    ci_workflows.require_results(needs, selected, self.policy)
+                )
+        self.assertFalse(
+            ci_workflows.select(["crates/tui/src/app.rs"], self.policy)["v8-security"]
+        )
+
+    def test_v8_security_executes_new_source_pairs_without_publishing(self) -> None:
+        workflow = (ROOT / ".github/workflows/v8-security.yml").read_text()
+        consumers, sources = workflow.split("\n  sources:\n", 1)
+        self.assertIn("runner: [ubuntu-24.04, windows-latest, macos-15]", consumers)
+        self.assertIn("just verify ash-v8-runtime", consumers)
+        self.assertIn("just verify ash-v8-poc --features sandbox", consumers)
+        self.assertIn("target: x86_64-unknown-linux-gnu", sources)
+        self.assertIn("target: x86_64-pc-windows-msvc", sources)
+        self.assertIn("build/v8/release.py bazel-stage", sources)
+        self.assertIn("build/v8/release.py upstream-toolchain", sources)
+        self.assertIn("git -C upstream-rusty-v8/v8 apply -p3", sources)
+        self.assertIn('V8_FROM_SOURCE: "1"', sources)
+        self.assertIn("--features v8_enable_sandbox", sources)
+        self.assertIn("RUSTY_V8_ARCHIVE: ${{ steps.stage.outputs.archive }}", sources)
+        self.assertIn(
+            'just test ash-v8-poc --locked --target "$TARGET" --features sandbox',
+            sources,
+        )
+        self.assertIn('just test ash-v8-runtime --locked --target "$TARGET"', sources)
+        self.assertIn("build/v8/smoke.py bazel", sources)
+        self.assertNotIn("continue-on-error", workflow)
+        self.assertNotIn("--no-run", workflow)
+        self.assertNotIn("--skip", workflow)
+        self.assertNotIn("contents: write", workflow)
+        self.assertNotIn("gh release", workflow)
+
     def test_owned_sources_select_their_real_checks(self) -> None:
         cases = {
             "resources/extension-host/vscode.js": {
@@ -298,12 +349,14 @@ class CiWorkflowTests(unittest.TestCase):
 
     def test_parent_calls_and_fan_in_cover_exactly_the_policy(self) -> None:
         workflow = (ROOT / ".github/workflows/blocking-ci.yml").read_text()
-        calls = set(re.findall(r"uses: \./\.github/workflows/([a-z-]+)\.yml", workflow))
+        calls = set(
+            re.findall(r"uses: \./\.github/workflows/([a-z][a-z0-9-]*)\.yml", workflow)
+        )
         self.assertEqual(calls, set(self.policy))
         required = workflow.split("\n  required:\n", 1)[1]
         self.assertIn("if: ${{ always() }}", required)
         self.assertEqual(
-            set(re.findall(r"^      - ([a-z-]+)$", required, re.MULTILINE)),
+            set(re.findall(r"^      - ([a-z][a-z0-9-]*)$", required, re.MULTILINE)),
             {"select", *self.policy},
         )
         for name in self.policy:
@@ -321,7 +374,9 @@ class CiWorkflowTests(unittest.TestCase):
             if patterns is None:
                 continue
             job = re.split(
-                r"\n  [a-z-]+:\n", workflow.split(f"\n  {name}:\n", 1)[1], maxsplit=1
+                r"\n  [a-z][a-z0-9-]*:\n",
+                workflow.split(f"\n  {name}:\n", 1)[1],
+                maxsplit=1,
             )[0]
             needs = re.search(r"needs: \[([^\]]+)\]", job)
             self.assertIsNotNone(needs, name)

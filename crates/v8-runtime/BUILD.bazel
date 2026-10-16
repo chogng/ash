@@ -18,4 +18,9 @@ cc_library(
     }),
 )
 
-ash_rust_crate(name = "v8-runtime", crate_name = "v8_runtime", extra_deps = [":bounded-allocator"])
+ash_rust_crate(
+    name = "v8-runtime",
+    crate_name = "v8_runtime",
+    data = ["//crates/v8-poc:src/array_sort_regression.js"],
+    extra_deps = [":bounded-allocator"],
+)

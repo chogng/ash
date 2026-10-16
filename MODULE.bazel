@@ -273,6 +273,18 @@ crate.annotation(
     workspace_cargo_toml = "rust/runfiles/Cargo.toml",
 )
 
+# The pinned Sherpa fork keeps both Rust crates in a nested workspace; its
+# repository root has no Cargo.toml for rules_rs's GitHub metadata fast path.
+crate.annotation(
+    crate = "sherpa-onnx",
+    workspace_cargo_toml = "sherpa-onnx/rust/Cargo.toml",
+)
+
+crate.annotation(
+    crate = "sherpa-onnx-sys",
+    workspace_cargo_toml = "sherpa-onnx/rust/Cargo.toml",
+)
+
 # The consolidated SDK stamps its Windows helper binaries during its build.
 # Use the existing LLVM toolchain for resources rather than a host Windows SDK.
 crate.annotation(

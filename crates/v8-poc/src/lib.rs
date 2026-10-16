@@ -32,6 +32,9 @@ mod tests {
         static INIT: Once = Once::new();
 
         INIT.call_once(|| {
+            // This probe tests the linked engine fix with optimizations enabled,
+            // independently of the product runtime's conservative safety flags.
+            v8::V8::set_flags_from_string("--allow-natives-syntax --maglev");
             v8::V8::initialize_platform(v8::new_default_platform(0, false).make_shared());
             v8::V8::initialize();
         });
@@ -46,10 +49,15 @@ mod tests {
         let context = v8::Context::new(scope, Default::default());
         let scope = &mut v8::ContextScope::new(scope, context);
         let source = v8::String::new(scope, expression).expect("expression should be valid UTF-8");
-        let script = v8::Script::compile(scope, source, None).expect("expression should compile");
-        let result = script.run(scope).expect("expression should evaluate");
-
-        result.to_rust_string_lossy(scope)
+        let tc = std::pin::pin!(v8::TryCatch::new(scope));
+        let scope = &mut tc.init();
+        let result = v8::Script::compile(scope, source, None).and_then(|script| script.run(scope));
+        if let Some(exception) = scope.exception() {
+            panic!("{}", exception.to_rust_string_lossy(scope));
+        }
+        result
+            .expect("expression should evaluate")
+            .to_rust_string_lossy(scope)
     }
 
     #[test]
@@ -82,6 +90,14 @@ mod tests {
     #[test]
     fn evaluates_integer_addition() {
         assert_eq!(evaluate_expression("1 + 2"), "3");
+    }
+
+    #[test]
+    fn array_sort_preserves_elements_across_comparator_mutation() {
+        assert_eq!(
+            evaluate_expression(include_str!("array_sort_regression.js")),
+            "true"
+        );
     }
 
     #[test]

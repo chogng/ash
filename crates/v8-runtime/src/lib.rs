@@ -3,6 +3,9 @@
 
 use std::sync::OnceLock;
 
+#[cfg(test)]
+mod tests;
+
 /// Controls whether V8 may generate executable code at runtime.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum V8JitMode {
@@ -71,6 +74,11 @@ fn initialize_v8_with_mode(jit_mode: V8JitMode) -> Result<V8Initialization, Stri
     }
     v8::icu::set_common_data_78(deno_core_icudata::ICU_DATA)
         .map_err(|error| format!("failed to initialize ICU data: {error}"))?;
+    // Cargo's V8_FROM_SOURCE and explicit archive overrides can bypass our patched
+    // release inputs. Keep the affected sort optimizations disabled for every host
+    // until all supported inputs contain the upstream mixed-elements fix:
+    // https://github.com/v8/v8/commit/94c34b200ae9caf83d06c167a070746a1c7e825c
+    v8::V8::set_flags_from_string("--no-maglev --no-turbolev --no-turbo-inline-array-builtins");
     if jit_mode == V8JitMode::Disabled {
         v8::V8::set_flags_from_string("--jitless");
     }

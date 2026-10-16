@@ -19,6 +19,11 @@
 
 Rust binding crate 使用 crates.io 发布的 v8 152.2.0，不维护本地源码副本；引擎版本、静态库 ABI 和锁定配对保持一致。`V8_FROM_SOURCE=1` 使用发布包自带的源码与上游构建入口。停止维护宏依赖的逐项审查见 [依赖安全策略](../../.cargo/deny.toml)。
 
+发布包自带的源码尚未包含 Array.sort 混合元素类型修复。共享 `ash-v8-runtime`
+初始化始终关闭 Maglev、Turbolev 和 TurboFan 数组内建函数内联，覆盖
+`V8_FROM_SOURCE=1` 和显式 archive/mirror 覆盖入口。只有所有支持的引擎输入
+均包含上游修复后，才能移除这些防护；sandbox 检查不能替代该防护。
+
 显式设置 `RUSTY_V8_ARCHIVE`、`RUSTY_V8_SRC_BINDING_PATH`、`RUSTY_V8_SRC_BINDING_URL`、`RUSTY_V8_MIRROR` 或 `RUSTY_V8_MIRROR_TAG` 时，包装入口直接使用 [rusty_v8 上游的输入选择规则](https://github.com/denoland/rusty_v8/blob/v152.2.0/README.md#the-rusty_v8_archive-environment-variable)，不下载默认配对或改写这些设置。`RUSTY_V8_ARCHIVE` 可以单独指向包含 archive 和 binding 的目录；指定 binding 路径优先于 binding URL，镜像模板、tag 和 fallback 由上游处理。调用方负责提供匹配目标、版本和功能配置的输入，以及需要的 `RUSTY_V8_ARCHIVE_SHA256`。
 
 Windows 的两个 V8 宿主始终作为独立 MSVC 可执行文件构建，复用 Codex 的
@@ -162,8 +167,17 @@ Windows 从 `source-lock.json` 固定的 `denoland/rusty_v8` commit 递归检出
 
 手动运行 workflow 只构建和验证；推送 `rusty-v8-v<crate-version>` tag
 才会在当前仓库创建独立的 prerelease，不覆盖已有 release。
-源码发布 workflow 不再由 PR 或其他 workflow 自动触发；本地反馈不需要
-等待八目标云端矩阵。
+源码发布 workflow 不由 PR 或其他 workflow 自动触发；本地反馈不需要
+等待八目标云端矩阵。必需 CI 的 `v8-security` 检查单独覆盖 Linux x64
+Bazel 与 Windows x64 Cargo/GN 源码生产，复用上述 pin、补丁、产物装配与
+消费检查。安全补丁、源码输入或防护/探针变更会触发该检查，失败会阻止
+`CI required` 通过，不生成 release。
+
+`ash-v8-poc` 的 sort 回归在不加载产品防护开关的独立进程中测试实际引擎：
+强制 TurboFan 和可用的 Maglev 优化，覆盖比较器修改数组、混合对象/整数、
+混合整数/浮点数，以及同元素类型不同 map 仍保持优化。`ash-v8-runtime`
+用同一用例验证产品初始化后的防护；测试专用内建语法不向产品脚本开放。
+默认锁定产物的两个测试包还在 Linux、Windows、macOS 上执行并检查警告。
 发布前验证 Cargo manifest、Cargo lock 和产物 lock 的版本一致，
 每个目标的 checksum 必须精确覆盖 archive 和 binding 两项。
 macOS、GNU Linux 和 Windows x64 使用 `ash-v8-poc` 链接并执行产物；

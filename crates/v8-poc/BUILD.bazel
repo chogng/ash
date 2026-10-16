@@ -1,8 +1,11 @@
 load("//:defs.bzl", "ash_rust_crate")
 
+exports_files(["src/array_sort_regression.js"], visibility = ["//crates/v8-runtime:__pkg__"])
+
 ash_rust_crate(
     name = "v8-poc",
     crate_name = "ash_v8_poc",
     # Bazel's locked V8 inputs enable the sandbox, so the probe must match it.
     crate_features = ["sandbox"],
+    data = ["src/array_sort_regression.js"],
 )

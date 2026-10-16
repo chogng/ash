@@ -1,0 +1,153 @@
+name: V8 security checks
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v8-security-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  consumers:
+    name: Runtime policy and pinned artifacts (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, windows-latest, macos-15]
+    env:
+      # First-isolate sandbox pool initialization must be serialized.
+      RUST_TEST_THREADS: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+      - uses: ./.github/actions/setup-just
+      - name: Verify runtime mitigation and optimized sort regression
+        shell: bash
+        run: |
+          just verify ash-v8-runtime
+          just verify ash-v8-poc --features sandbox
+
+  metadata:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      source_revision: ${{ steps.metadata.outputs.source_revision }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+      - name: Validate source and consumer versions
+        id: metadata
+        run: python3 -B build/v8/release.py metadata --github-output "$GITHUB_OUTPUT"
+
+  sources:
+    name: Patched source (${{ matrix.target }})
+    needs: metadata
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      # Cover both source producers; release-only cross builds stay in the
+      # independent release workflow. These checks never publish artifacts.
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - runner: windows-2022
+            target: x86_64-pc-windows-msvc
+    defaults:
+      run:
+        shell: bash
+    env:
+      TARGET: ${{ matrix.target }}
+      RUST_TEST_THREADS: "1"
+      SCCACHE_GHA_ENABLED: "true"
+      SCCACHE_IDLE_TIMEOUT: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+      - uses: ./.github/actions/setup-just
+      - name: Enable upstream Windows symlinks
+        if: runner.os == 'Windows'
+        run: git config --global core.symlinks true
+      - name: Check out pinned Windows source
+        if: runner.os == 'Windows'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: denoland/rusty_v8
+          ref: ${{ needs.metadata.outputs.source_revision }}
+          path: upstream-rusty-v8
+          submodules: recursive
+          persist-credentials: false
+      - name: Set up Windows compiler cache
+        if: runner.os == 'Windows'
+        uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba
+        with:
+          version: v0.16.0
+      - name: Apply pinned sort backport
+        if: runner.os == 'Windows'
+        run: |
+          patch="$GITHUB_WORKSPACE/third_party/v8/patches/v8_array_sort_elements_kind.patch"
+          git -C upstream-rusty-v8/v8 apply --check -p3 "$patch"
+          git -C upstream-rusty-v8/v8 apply -p3 "$patch"
+      - name: Validate Windows source, backport and toolchain
+        if: runner.os == 'Windows'
+        id: upstream
+        run: |
+          python -B build/v8/release.py windows-tools --upstream upstream-rusty-v8
+          python -B build/v8/release.py upstream-toolchain --upstream upstream-rusty-v8 --github-output "$GITHUB_OUTPUT"
+      - name: Build Windows V8 from source
+        if: runner.os == 'Windows'
+        working-directory: upstream-rusty-v8
+        env:
+          UPSTREAM_TOOLCHAIN: ${{ steps.upstream.outputs.toolchain }}
+          V8_FROM_SOURCE: "1"
+          CARGO_TARGET_DIR: ${{ github.workspace }}/upstream-rusty-v8/target
+        run: |
+          rustup toolchain install "$UPSTREAM_TOOLCHAIN" --profile minimal --no-self-update
+          rustup target add --toolchain "$UPSTREAM_TOOLCHAIN" "$TARGET"
+          unset CLANG_BASE_PATH LIBCLANG_PATH BINDGEN_EXTRA_CLANG_ARGS DISABLE_CLANG
+          export GN_ARGS="v8_enable_partition_alloc=false"
+          cargo "+$UPSTREAM_TOOLCHAIN" build --locked --release --target "$TARGET" --features v8_enable_sandbox
+      - name: Set up Bazel source producer and consumer
+        if: runner.os == 'Linux'
+        uses: bazel-contrib/setup-bazel@c5acdfb288317d0b5c0bbd7a396a3dc868bb0f86
+        with:
+          bazelisk-cache: true
+          disk-cache: v8-security-source-${{ matrix.target }}
+          repository-cache: true
+      - name: Build and stage the source pair
+        id: stage
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then
+            python -B build/v8/release.py stage --upstream upstream-rusty-v8 --target "$TARGET" --output "dist/$TARGET" --github-output "$GITHUB_OUTPUT"
+          else
+            python -B build/v8/release.py bazel-stage --target "$TARGET" --output "dist/$TARGET" --github-output "$GITHUB_OUTPUT"
+          fi
+      - name: Execute sort regression and product mitigation on the new pair
+        env:
+          RUSTY_V8_ARCHIVE: ${{ steps.stage.outputs.archive }}
+          RUSTY_V8_SRC_BINDING_PATH: ${{ steps.stage.outputs.binding }}
+        run: |
+          just test ash-v8-poc --locked --target "$TARGET" --features sandbox -- --test-threads=1
+          just test ash-v8-runtime --locked --target "$TARGET" -- --test-threads=1
+      - name: Execute the new pair through the Bazel consumer
+        if: runner.os == 'Linux'
+        run: python -B build/v8/smoke.py bazel --target "$TARGET" --artifacts "dist/$TARGET" --output "$RUNNER_TEMP/v8-bazel-inputs"

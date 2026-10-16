@@ -98,6 +98,11 @@ jobs:
     if: fromJSON(needs.select.outputs.selection).tooling
     uses: ./.github/workflows/tooling.yml
 
+  v8-security:
+    needs: [select, blob-size-policy, cargo-deny, codespell, format]
+    if: fromJSON(needs.select.outputs.selection).v8-security
+    uses: ./.github/workflows/v8-security.yml
+
   required:
     name: CI required
     if: ${{ always() }}
@@ -113,6 +118,7 @@ jobs:
       - rust-build-health
       - rust-warnings
       - tooling
+      - v8-security
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
