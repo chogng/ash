@@ -19,10 +19,11 @@ test('editor color picker uses shared controls and applies one undoable color ed
 	await hue.press('ArrowRight');
 	await expect(picker.getByRole('combobox', { name: 'Document color format' })).toHaveValue('#00ff0080');
 	await picker.getByRole('button', { name: 'Apply', exact: true }).click();
-	await editor.waitForEditorContents(text => text === '#00ff0080');
+	// Inline color decorators contribute visual spacing to rendered viewport text.
+	await editor.waitForEditorContents(text => text.trim() === '#00ff0080');
 	await expect(editor.input).toBeFocused();
 	await page.keyboard.press('ControlOrMeta+z');
-	await editor.waitForEditorContents(text => text === '#ff000080');
+	await editor.waitForEditorContents(text => text.trim() === '#ff000080');
 	await page.keyboard.press('ControlOrMeta+Shift+c');
 	await expect(picker).toBeVisible();
 	await page.keyboard.press('Alt+F1');
@@ -48,7 +49,7 @@ test('editor color hover commits directly and standalone Enter applies with one 
 	await hue.focus();
 	await hue.evaluate(element => { (element as HTMLInputElement).value = '119'; element.dispatchEvent(new Event('input', { bubbles: true })); });
 	await hue.press('ArrowRight');
-	await editor.waitForEditorContents(text => text === '#00ff0080');
+	await editor.waitForEditorContents(text => text.trim() === '#00ff0080');
 	await expect(hoverPicker).toBeVisible();
 	await page.keyboard.press('Alt+F1');
 	const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
@@ -58,7 +59,7 @@ test('editor color hover commits directly and standalone Enter applies with one 
 	await page.keyboard.press('Escape');
 	await expect(hoverPicker).toHaveCount(0);
 	await page.keyboard.press('ControlOrMeta+z');
-	await editor.waitForEditorContents(text => text === '#ff000080');
+	await editor.waitForEditorContents(text => text.trim() === '#ff000080');
 	await workbench.quickaccess.runCommand('editor.action.showOrFocusStandaloneColorPicker');
 	const picker = page.getByRole('dialog', { name: 'Color picker', exact: true });
 	const opacity = picker.getByRole('slider', { name: 'Opacity', exact: true });
@@ -67,9 +68,9 @@ test('editor color hover commits directly and standalone Enter applies with one 
 	await expect(picker.getByRole('combobox', { name: 'Document color format' })).toHaveValue('#ff000000');
 	await opacity.press('Enter');
 	await expect(picker).toBeHidden();
-	await editor.waitForEditorContents(text => text === '#ff000000');
+	await editor.waitForEditorContents(text => text.trim() === '#ff000000');
 	await page.keyboard.press('ControlOrMeta+z');
-	await editor.waitForEditorContents(text => text === '#ff000080');
+	await editor.waitForEditorContents(text => text.trim() === '#ff000080');
 });
 
 test('opening find focuses its input and leaves editor text unchanged', async ({ workbench }) => {

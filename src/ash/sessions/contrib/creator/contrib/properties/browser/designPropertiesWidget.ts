@@ -8,13 +8,7 @@ import type { IDesignTextContribution } from '../../../browser/designEditorBrows
 import './designPropertiesWidget.css';
 import { addDisposableListener, h } from '../../../../../../base/browser/dom.js';
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
-import { ColorPicker } from '../../../../../../base/browser/ui/colorPicker/colorPicker.js';
-import { Color, RGBA } from '../../../../../../base/common/color.js';
-import { ContextViewFocusRestore, ContextViewHideReason } from '../../../../../../base/browser/ui/contextview/contextview.js';
-import { IContextViewService } from '../../../../../../platform/contextview/browser/contextView.js';
-import { IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
-import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
-import { AccessibilityVerbositySettingId } from '../../../../../../platform/accessibility/browser/accessibleView.js';
+import { Color } from '../../../../../../base/common/color.js';
 import type { IAction } from '../../../../../../base/common/actions.js';
 import { Disposable } from '../../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../../nls.js';
@@ -27,6 +21,9 @@ import { getDesignShapeEntries } from '../../../common/model/hitTest.js';
 import type { DesignSelection } from '../../../common/selection.js';
 import { ResourcePropertiesWidget } from './resourcePropertiesWidget.js';
 import { ComponentPropertiesWidget } from './componentPropertiesWidget.js';
+import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
+import { createDesignColorPicker } from '../../../browser/widgets/designColorPicker.js';
+import { ColorPicker } from '../../../../../../base/browser/ui/colorPicker/colorPicker.js';
 
 type GeometryField = 'x' | 'y' | 'width' | 'height' | 'rotation';
 
@@ -49,8 +46,8 @@ export class DesignPropertiesWidget extends Disposable {
 	private readonly limitsProperties: HTMLElement;
 	private readonly layoutRefresh: (() => void)[] = [];
 	private readonly pageDomNode: HTMLElement;
-	private readonly pageNameDomNode: HTMLElement;
-	private readonly pageSummaryDomNode: HTMLElement;
+	private readonly pageColor: ColorPicker;
+	private pageColorPreview: string | undefined;
 	private readonly positionSection: HTMLDetailsElement;
 	private readonly layoutSection: HTMLDetailsElement;
 	private readonly geometryInputs = new Map<GeometryField, HTMLInputElement>();
@@ -58,17 +55,12 @@ export class DesignPropertiesWidget extends Disposable {
 	private readonly paints: PaintPropertiesWidget;
 	private readonly effects: EffectPropertiesWidget;
 	private readonly effectProperties: HTMLElement;
-	private readonly fillButton: Button;
-	private readonly fillSwatchDomNode: HTMLElement;
-	private readonly fillOpacityInput: HTMLInputElement;
+	private readonly fillColor: ColorPicker;
+	private readonly fillDomNode: HTMLElement;
 	private readonly exportButton: Button;
 	private readonly exportFormatInput: HTMLSelectElement;
-	private readonly colorPicker: ColorPicker;
-	private pickerVisible = false;
-	private pickerShapeId: string | undefined;
 	private isCommittingColor = false;
 	private colorPreview: DesignShape | undefined;
-	private readonly recentColors: string[] = [];
 	private readonly textProperties: HTMLElement;
 	private readonly typography: TextPropertiesWidget;
 	private readonly imageProperties: HTMLElement;
@@ -90,23 +82,23 @@ export class DesignPropertiesWidget extends Disposable {
 		private readonly exportDesign: (format: 'svg' | 'html') => Promise<void>,
 		text: IDesignTextContribution,
 		focusCanvas: () => void,
-		@IContextViewService private readonly contextViews: IContextViewService,
-		@IContextKeyService contextKeys: IContextKeyService,
-		@IConfigurationService private readonly configuration: IConfigurationService,
+		@IInstantiationService instantiation: IInstantiationService,
 	) {
 		super();
 		this.domNode = h(ownerDocument, 'div', { className: 'ash-sessions-design-properties', attributes: { role: 'group', 'aria-label': localize('sessions.design.properties', 'Shape properties') } });
 		this.headingDomNode = h(ownerDocument, 'h2', { className: 'ash-design-properties-heading', attributes: { tabindex: '-1' } });
 		this.domNode.append(this.headingDomNode);
-		this.pageNameDomNode = h(ownerDocument, 'span', { className: 'ash-design-page-name' });
-		this.pageSummaryDomNode = h(ownerDocument, 'p', { className: 'ash-design-page-summary' });
-		this.pageDomNode = h(ownerDocument, 'div', { className: 'ash-design-page-properties' }, this.pageNameDomNode, this.pageSummaryDomNode);
+		this.pageColor = this._register(createDesignColorPicker(instantiation, ownerDocument, { color: localize('sessions.design.pageBackground', 'Page background'), value: localize('sessions.design.pageBackgroundColor', 'Page background color'), opacity: localize('sessions.design.pageBackgroundOpacity', 'Page background opacity (%)') }));
+		this._register(this.pageColor.onDidChangeColor(color => { this.pageColorPreview = Color.Format.CSS.formatHexA(color, true); this.refresh(); }));
+		this._register(this.pageColor.onDidClose(() => { this.pageColorPreview = undefined; this.refresh(); }));
+		this._register(this.pageColor.onDidCommitColor(color => this.commitColor(color, this.pageColor)));
+		this.pageDomNode = h(ownerDocument, 'div', { className: 'ash-design-page-properties' }, this.pageColor.domNode);
 		this.domNode.append(this.pageDomNode);
 		this.componentProperties = this._register(new ComponentPropertiesWidget(documentController, commands.components, selection, ownerDocument, refresh));
 		this.domNode.append(this.componentProperties.domNode);
-		this.resourceProperties = this._register(new ResourcePropertiesWidget(documentController, commands, selection, ownerDocument));
+		this.resourceProperties = this._register(instantiation.createInstance(ResourcePropertiesWidget, documentController, commands, selection, ownerDocument));
 		this.domNode.append(this.resourceProperties.domNode);
-		this.vectorProperties = this._register(new VectorPropertiesWidget(documentController, commands, selection, ownerDocument, refresh, focusCanvas));
+		this.vectorProperties = this._register(instantiation.createInstance(VectorPropertiesWidget, documentController, commands, selection, ownerDocument, refresh, focusCanvas));
 		const layer = this.createSection(localize('sessions.design.layer', 'Layer'));
 		this.nameInput = h(ownerDocument, 'input', { properties: { type: 'text', maxLength: 1024 }, attributes: { 'aria-label': localize('sessions.design.layerName', 'Layer name') } });
 		layer.append(h(ownerDocument, 'label', { className: 'ash-design-property-wide' }, localize('sessions.design.layerName', 'Layer name'), this.nameInput));
@@ -163,42 +155,23 @@ export class DesignPropertiesWidget extends Disposable {
 		this.appearanceProperties = this.createSection(localize('sessions.design.appearance', 'Appearance'));
 		const fill = h(ownerDocument, 'div', { className: 'ash-design-property-wide ash-design-fill' }, h(ownerDocument, 'span', {}, localize('sessions.design.fill', 'Fill')));
 		this.appearanceProperties.append(fill);
-		const fillRow = h(ownerDocument, 'div', { className: 'ash-design-fill-row' });
-		fill.append(fillRow);
-		this.fillButton = this._register(new Button(fillRow, { label: '', ariaLabel: localize('sessions.design.fill', 'Fill'), onClick: () => this.openColorPicker() }));
-		this.fillButton.domNode.setAttribute('aria-haspopup', 'dialog');
-		this.fillButton.domNode.setAttribute('aria-expanded', 'false');
-		this.fillSwatchDomNode = h(ownerDocument, 'span', { className: 'ash-design-fill-swatch', attributes: { 'aria-hidden': 'true' } });
-		this.fillButton.domNode.prepend(this.fillSwatchDomNode);
-		this.fillOpacityInput = h(ownerDocument, 'input', { attributes: { type: 'number', min: '0', max: '100', step: '0.1', 'aria-label': localize('sessions.design.fillOpacity', 'Fill opacity (%)') } });
-		fillRow.append(h(ownerDocument, 'label', { className: 'ash-design-fill-opacity' }, this.fillOpacityInput, h(ownerDocument, 'span', {}, '%')));
-		this._register(addDisposableListener(this.fillOpacityInput, 'change', () => {
-			const shape = this.selectedShape;
-			if (!shape || !this.fillOpacityInput.value || !this.fillOpacityInput.checkValidity()) { this.refresh(); return; }
-			const { r, g, b } = Color.Format.CSS.parseHex(this.paints.color)!.rgba;
-			this.commitColor(new Color(new RGBA(r, g, b, this.fillOpacityInput.valueAsNumber / 100)));
-		}));
-		this.colorPicker = this._register(new ColorPicker(ownerDocument));
-		this._register(contextKeys.createScoped(this.colorPicker.domNode)).createKey('sessionsDesignColorPickerFocused', true);
-		this._register(this.colorPicker.onDidChangeColor(color => {
-			const shape = this.selectedShape;
-			if (!shape) { return; }
+		this.fillDomNode = fill;
+		this.fillColor = this._register(createDesignColorPicker(instantiation, ownerDocument, { color: localize('sessions.design.fill', 'Fill'), value: localize('sessions.design.fillColor', 'Fill color'), opacity: localize('sessions.design.fillOpacity', 'Fill opacity (%)'), getDocumentColors: () => [...new Set(flattenDesignShapes(this.documentController.model.value.shapes).filter(shape => (shape.kind !== 'group' || !!shape.booleanOperation) && shape.kind !== 'image').flatMap(shape => designPaints(shape).flatMap(paint => paint.type === 'solid' ? [paint.color.toLowerCase()] : paint.stops.map(stop => stop.color.toLowerCase()))))].map(fill => Color.Format.CSS.parseHex(fill)!) }));
+		fill.append(this.fillColor.domNode);
+		this._register(this.fillColor.onDidChangeColor(color => {
+			const shape = this.selectedShape; if (!shape) { return; }
 			this.colorPreview = withDesignPaintColor(shape, this.selection.paintId, this.selection.gradientStopId, Color.Format.CSS.formatHexA(color, true));
-			this.renderFill(Color.Format.CSS.formatHexA(color, true));
 			this.refresh();
 		}));
-		this._register(this.colorPicker.onDidCommitColor(color => this.commitColor(color)));
-		this._register(this.colorPicker.onDidRequestClose(() => {
-			this.commitColor(this.colorPicker.color);
-			this.cancel();
-		}));
+		this._register(this.fillColor.onDidClose(() => { this.colorPreview = undefined; this.refresh(); }));
+		this._register(this.fillColor.onDidCommitColor(color => this.commitColor(color, this.fillColor)));
 		this._register(documentController.model.onDidChange(() => {
 			if (!this.isCommittingColor) { this.cancel(); }
 		}));
 		this.paints = this._register(new PaintPropertiesWidget(documentController, commands, selection, ownerDocument, () => this.refresh(), focusCanvas));
 		this.appearanceProperties.append(this.paints.domNode);
 		this.effectProperties = this.createSection(localize('sessions.design.effects', 'Effects'));
-		this.effects = this._register(new EffectPropertiesWidget(documentController, commands, selection, ownerDocument, () => this.refresh(), focusCanvas, contextViews, contextKeys));
+		this.effects = this._register(instantiation.createInstance(EffectPropertiesWidget, documentController, commands, selection, ownerDocument, () => this.refresh(), focusCanvas));
 		this.effectProperties.append(this.effects.domNode);
 		this.textProperties = this.createSection(localize('sessions.design.typography', 'Typography'));
 		this.typography = this._register(new TextPropertiesWidget(ownerDocument, documentController, commands, text));
@@ -376,66 +349,30 @@ export class DesignPropertiesWidget extends Disposable {
 		this.domNode.append(guide, h(ownerDocument, 'section', { className: 'ash-design-property-section', attributes: { 'aria-label': localize('sessions.design.exportSection', 'Export') } }, h(ownerDocument, 'h3', {}, localize('sessions.design.exportSection', 'Export')), exportRow));
 	}
 
+	public get background(): string { return this.pageColorPreview ?? this.documentController.model.value.background ?? '#ffffff'; }
+
 	public get preview(): DesignShape | undefined { return this.vectorProperties.preview ?? this.colorPreview; }
 
 	public cancel(): void {
 		this.vectorProperties.cancel();
-		if (this.pickerVisible) { this.contextViews.hide(); }
+		ColorPicker.cancelPickers(this.domNode);
 	}
 
-	private openColorPicker(): void {
+	private commitColor(color: Color, target: ColorPicker): void {
 		const shape = this.selectedShape;
-		if (!shape || this.documentController.isBusy) { return; }
-		if (this.pickerVisible) { this.commitColor(this.colorPicker.color); this.cancel(); return; }
-		this.colorPicker.setColor(Color.Format.CSS.parseHex(this.paints.color)!);
-		this.colorPicker.setPalettes([
-			{ label: localize('sessions.design.documentColors', 'Document colors'), colors: [...new Set(flattenDesignShapes(this.documentController.model.value.shapes).filter(shape => (shape.kind !== 'group' || !!shape.booleanOperation) && shape.kind !== 'image').flatMap(shape => designPaints(shape).flatMap(paint => paint.type === 'solid' ? [paint.color.toLowerCase()] : paint.stops.map(stop => stop.color.toLowerCase()))))].map(fill => Color.Format.CSS.parseHex(fill)!) },
-			{ label: localize('sessions.design.recentColors', 'Recent colors'), colors: this.recentColors.map(fill => Color.Format.CSS.parseHex(fill)!) },
-		]);
-		const title = localize('colorPicker.title', 'Color picker');
-		this.colorPicker.domNode.setAttribute('aria-label', this.configuration.getValue<boolean>(AccessibilityVerbositySettingId.DesignCanvas) ? `${title}. ${localize('sessions.design.colorHelpHint', 'Press Alt+F1 for color picker help.')}` : title);
-		this.pickerVisible = true;
-		this.pickerShapeId = shape.id;
-		this.fillButton.domNode.setAttribute('aria-expanded', 'true');
-		this.contextViews.show({
-			anchor: this.fillButton.domNode,
-			content: this.colorPicker.domNode,
-			presentation: 'dialog',
-			focusRestore: ContextViewFocusRestore.Previous,
-			onHide: reason => {
-				if (reason === ContextViewHideReason.OutsidePointer) { this.commitColor(this.colorPicker.color); }
-				this.pickerVisible = false;
-				this.pickerShapeId = undefined;
-				this.colorPreview = undefined;
-				const shape = this.selectedShape;
-				if (shape) { this.colorPicker.setColor(Color.Format.CSS.parseHex(this.paints.color)!); }
-				this.fillButton.domNode.setAttribute('aria-expanded', 'false');
-				if (!this.isDisposed) { this.refresh(); }
-			},
-		});
-		this.colorPicker.focus();
-	}
-
-	private commitColor(color: Color): void {
-		const shape = this.selectedShape;
-		if (!shape || this.documentController.isBusy) { return; }
+		const isPage = target === this.pageColor;
+		if (this.documentController.isBusy || (isPage ? this.selection.ids.size > 0 : !shape)) { return; }
 		const fill = Color.Format.CSS.formatHexA(color, true);
 		this.colorPreview = undefined;
-		if (fill.toLowerCase() === this.paints.color.toLowerCase()) { this.refresh(); return; }
+		this.pageColorPreview = undefined;
+		if (fill.toLowerCase() === (isPage ? this.documentController.model.value.background ?? '#ffffff' : this.paints.color).toLowerCase()) { this.refresh(); return; }
 		this.isCommittingColor = true;
-		try { this.commands.updateShape(withDesignPaintColor(shape, this.selection.paintId, this.selection.gradientStopId, fill)); }
+		try { if (isPage) { this.commands.setBackground(fill); } else { this.commands.updateShape(withDesignPaintColor(shape!, this.selection.paintId, this.selection.gradientStopId, fill)); } }
 		finally { this.isCommittingColor = false; }
-		const index = this.recentColors.indexOf(fill);
-		if (index >= 0) { this.recentColors.splice(index, 1); }
-		this.recentColors.unshift(fill);
-		this.recentColors.length = Math.min(this.recentColors.length, 16);
 	}
 
 	private renderFill(fill: string): void {
-		const color = Color.Format.CSS.parseHex(fill)!;
-		this.fillButton.label = Color.Format.CSS.formatHex(color).slice(1).toUpperCase();
-		this.fillOpacityInput.value = `${Math.round(color.rgba.a * 1000) / 10}`;
-		this.fillSwatchDomNode.style.setProperty('--ash-design-fill', fill);
+		this.fillColor.setColor(Color.Format.CSS.parseHex(fill)!, `${this.selectedShape?.id}:${this.paints.paint?.id}:${this.selection.gradientStopId}`);
 	}
 
 	private createSection(title: string): HTMLElement {
@@ -660,9 +597,12 @@ export class DesignPropertiesWidget extends Disposable {
 		this.componentProperties.update();
 		this.resourceProperties.update();
 		this.vectorProperties.update(); this.paints.update(); this.effects.update();
-		if (!shape || !isVisible || this.documentController.isBusy || (this.pickerVisible && shape.id !== this.pickerShapeId)) { this.cancel(); }
+		if (!isVisible || this.documentController.isBusy) { this.cancel(); }
 		this.domNode.classList.toggle('visible', isVisible);
-		this.pageDomNode.hidden = !!shape;
+		this.pageDomNode.hidden = this.selection.ids.size > 0;
+		this.pageColor.setColor(Color.Format.CSS.parseHex(this.documentController.model.value.background ?? '#ffffff')!, this.documentController.model.value.documentId);
+		this.pageColor.enabled = !this.documentController.isBusy && this.selection.ids.size === 0;
+		if (!shape) { this.fillColor.enabled = false; }
 		this.nameInput.closest('details')!.hidden = !shape;
 		this.nameInput.value = shape?.name ?? '';
 		this.nameInput.disabled = this.documentController.isBusy;
@@ -683,7 +623,7 @@ export class DesignPropertiesWidget extends Disposable {
 		this.positionSection.hidden = this.layoutSection.hidden = !shape;
 		this.exportButton.enabled = !this.documentController.isBusy && this.documentController.model.value.shapes.length > 0;
 		this.exportFormatInput.disabled = !this.exportButton.enabled;
-		this.effectProperties.parentElement!.hidden = !shape; this.appearanceProperties.parentElement!.hidden = !shape; this.fillButton.domNode.parentElement!.parentElement!.hidden = !shape || shape.kind === 'group' && !shape.booleanOperation || shape.kind === 'image' || !this.paints.paint;
+		this.effectProperties.parentElement!.hidden = !shape; this.appearanceProperties.parentElement!.hidden = !shape; this.fillDomNode.hidden = !shape || shape.kind === 'group' && !shape.booleanOperation || shape.kind === 'image' || !this.paints.paint;
 		this.textProperties.parentElement!.hidden = shape?.kind !== 'text';
 		if (shape?.kind !== 'text') { this.typography.update(undefined); }
 		this.pathProperties.parentElement!.hidden = shape?.kind !== 'path';
@@ -691,8 +631,6 @@ export class DesignPropertiesWidget extends Disposable {
 		this.frameProperties.hidden = shape?.kind !== 'frame';
 		if (!shape) {
 			this.headingDomNode.textContent = this.selection.ids.size > 1 ? localize('sessions.design.selectionCount', '{0} objects selected.', this.selection.ids.size) : localize('sessions.design.page', 'Page');
-			this.pageNameDomNode.textContent = this.documentController.name;
-			this.pageSummaryDomNode.textContent = this.selection.ids.size > 1 ? localize('sessions.design.propertiesEmpty', 'Select one object to edit its properties.') : localize('sessions.design.objectCount', '{0} objects', flattenDesignShapes(this.documentController.model.value.shapes).length);
 			return;
 		}
 		const titles: Record<DesignShape['kind'], string> = {
@@ -710,9 +648,8 @@ export class DesignPropertiesWidget extends Disposable {
 			input.value = `${shape[field]}`;
 			input.disabled = this.documentController.isBusy || ((field === 'x' || field === 'y') && !!parent?.autoLayout && shape.layoutPositioning !== 'absolute') || (inherited && (field === 'x' || field === 'y' || field === 'rotation' || shape.kind === 'text'));
 		}
-		this.renderFill(this.colorPreview ? Color.Format.CSS.formatHexA(this.colorPicker.color, true) : this.paints.color);
-		this.fillButton.enabled = !booleanChild && !this.documentController.isBusy && (shape.kind !== 'group' || !!shape.booleanOperation) && shape.kind !== 'image';
-		this.fillOpacityInput.disabled = !this.fillButton.enabled;
+		this.renderFill(this.paints.color);
+		this.fillColor.enabled = !booleanChild && !this.documentController.isBusy && (shape.kind !== 'group' || !!shape.booleanOperation) && shape.kind !== 'image';
 		if (shape.kind === 'frame') { this.clipInput.checked = shape.clip; this.clipInput.disabled = this.documentController.isBusy || !!shape.instance || inherited; }
 		if (shape.kind === 'image') {
 			for (const [field, input] of this.cropInputs) {

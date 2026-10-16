@@ -987,7 +987,11 @@ test('Design panel labels and empty states follow Chinese localization', async (
 		assert.equal(view.layersDomNode.querySelector('[role="tree"]')!.getAttribute('aria-label'), '图层');
 		assert.match(view.layersDomNode.textContent!, /绘制对象后会显示对应图层。/u);
 		assert.equal(view.propertiesDomNode.querySelector('.ash-design-properties-heading')!.textContent, '页面');
-		assert.equal(view.propertiesDomNode.querySelector('.ash-design-page-summary')!.textContent, '0 个对象');
+		assert.equal(view.propertiesDomNode.querySelector('.ash-design-page-summary'), null);
+		assert.ok(view.propertiesDomNode.querySelector('input[aria-label="页面背景颜色"]'));
+		assert.ok(view.propertiesDomNode.querySelector('input[aria-label="页面背景不透明度（%）"]'));
+		assert.ok(view.propertiesDomNode.querySelector('input[aria-label="描边不透明度（%）"]'));
+		assert.ok(view.propertiesDomNode.querySelector('input[aria-label="阴影不透明度（%）"]'));
 		assert.ok(view.propertiesDomNode.querySelector('select[aria-label="导出格式"]'));
 		assert.match(view.propertiesDomNode.textContent!, /网格 · 12 像素/u);
 	} finally { resetNlsResolver(); }
@@ -2475,4 +2479,76 @@ test('Design save a copy rejects the active package as its destination', async (
 	await document.saveCopy();
 	assert.deepEqual(await fixture.readActive(), original);
 	assert.deepEqual(document.model.value, original);
+});
+
+test('Page and fill color widgets preserve alpha, validate edits and restore their shared document history', async () => {
+	using fixture = new AutoSaveFixture();
+	const document = fixture.createDocument();
+	using editor = fixture.child.createInstance(DesignEditorWidget, browser.window.document, document, (context: DesignEditorContributionContext) => createDesignEditorContributions(context, fixture.child));
+	editor.initialize();
+	const properties = editor.propertiesDomNode;
+	const field = (label: string): HTMLInputElement => properties.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;
+	const change = (label: string, value: string): void => { const input = field(label); input.value = value; input.dispatchEvent(new browser.window.Event('change')); };
+	assert.equal(properties.querySelector('.ash-design-page-name, .ash-design-page-summary'), null);
+	assert.equal(field('Page background color').value, 'FFFFFF');
+	change('Page background color', '112233');
+	change('Page background opacity (%)', '25');
+	assert.equal(document.model.value.background, '#11223340');
+	document.model.undo();
+	assert.equal(document.model.value.background, '#112233');
+	document.model.undo();
+	assert.equal(document.model.value.background, undefined);
+	document.model.redo(); document.model.redo();
+	const version = document.model.version;
+	change('Page background color', 'invalid');
+	change('Page background opacity (%)', '101');
+	assert.equal(document.model.version, version);
+	assert.equal(field('Page background color').getAttribute('aria-invalid'), 'true');
+	assert.equal(field('Page background opacity (%)').getAttribute('aria-invalid'), 'true');
+	change('Page background color', 'ABCDEF');
+	assert.equal(document.model.value.background, '#abcdef40');
+	const id = new DocumentCommands(document.model).addShape('rectangle', { x: 0, y: 0 });
+	editor.selectShape(id);
+	change('Fill color', 'AABBCC');
+	change('Fill opacity (%)', '40');
+	assert.equal(document.model.value.shapes[0].fill, '#aabbcc66');
+	assert.equal(document.model.value.background, '#abcdef40');
+	assert.equal(await document.flushAutoSave(), true);
+	using restored = fixture.createDocument();
+	await restored.ready;
+	assert.equal(restored.model.value.background, '#abcdef40');
+	assert.equal(restored.model.value.shapes[0].fill, '#aabbcc66');
+	const serialized = JSON.parse(serializeDesignDocument(restored.model.value));
+	serialized.artifacts[restored.model.value.artifactId].background = 'url(untrusted)';
+	assert.throws(() => parseDesignDocument(JSON.stringify(serialized)), /Invalid design composition/u);
+});
+
+test('Stroke and both shadow types share color controls, keep alpha and close pickers on selection changes', () => {
+	using view = createView();
+	const editor = DesignEditorWidget.getFocused(view.domNode)!;
+	const model = editor.documentController.model;
+	const commands = new DocumentCommands(model);
+	const pathId = commands.addShape('path', { x: 0, y: 0 }); editor.selectShape(pathId);
+	const field = (label: string): HTMLInputElement => view.propertiesDomNode.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;
+	const change = (label: string, value: string): void => { const input = field(label); input.value = value; input.dispatchEvent(new browser.window.Event('change')); };
+	const button = (label: string): HTMLButtonElement => [...view.propertiesDomNode.querySelectorAll<HTMLButtonElement>('button')].find(button => button.getAttribute('aria-label') === label || button.textContent === label)!;
+	change('Stroke color', '336699'); change('Stroke opacity (%)', '40');
+	assert.equal((model.value.shapes[0] as Extract<DesignShape, { kind: 'path'; }>).stroke, '#33669966');
+	editor.undo(); assert.equal((model.value.shapes[0] as Extract<DesignShape, { kind: 'path'; }>).stroke, '#336699');
+	editor.redo(); button('Use fill color for stroke').click();
+	assert.equal((model.value.shapes[0] as Extract<DesignShape, { kind: 'path'; }>).stroke, undefined);
+	button('Stroke color').click(); assert.ok(browser.window.document.querySelector('.ash-color-picker'));
+	pressCanvas(view, 'r'); assert.equal(browser.window.document.querySelector('.ash-color-picker'), null);
+	button('Add effect').click();
+	for (const type of ['drop-shadow', 'inner-shadow']) {
+		const select = view.propertiesDomNode.querySelector<HTMLSelectElement>('select[aria-label="Effect type"]')!;
+		select.value = type; select.dispatchEvent(new browser.window.Event('change'));
+		change('Shadow color', '123456'); change('Shadow opacity (%)', '40');
+		const effects = model.value.shapes[1].effects; assert.ok(Array.isArray(effects));
+		assert.equal(effects[0].color, '#12345666');
+		assert.ok(field('Shadow color').closest('.ash-color-picker-input'));
+		button('Choose shadow color').click(); assert.ok(browser.window.document.querySelector('.ash-color-picker'));
+		editor.setVisible(false); assert.equal(browser.window.document.querySelector('.ash-color-picker'), null);
+		editor.setVisible(true);
+	}
 });

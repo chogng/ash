@@ -987,7 +987,7 @@ test('Sessions Design property pane groups fields, collapses with the keyboard a
 	await expect(pane.locator('details:visible')).toHaveCount(0);
 	await canvas.press('Escape');
 	await expect(pane.getByRole('heading', { name: 'Page', exact: true })).toBeVisible();
-	await expect(pane.locator('.ash-design-page-summary')).toHaveText('3 objects');
+	await expect(pane.getByRole('textbox', { name: 'Page background color', exact: true })).toBeVisible();
 	await expect(pane.getByRole('combobox', { name: 'Export format', exact: true }).locator('option')).toHaveText(['SVG', 'HTML']);
 });
 

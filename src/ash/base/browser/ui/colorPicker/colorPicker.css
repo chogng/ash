@@ -209,3 +209,95 @@
 .ash-color-picker-message {
 	color: var(--ash-error-foreground);
 }
+
+.ash-color-picker-input {
+	--ash-color-picker-value: transparent;
+	display: flex;
+	align-items: stretch;
+	min-width: 0;
+	min-height: var(--ash-spacing-size320);
+	background: var(--ash-input-background);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border-radius: var(--ash-cornerRadius-small);
+	color: var(--ash-input-foreground);
+}
+
+.ash-color-picker-input > .ash-color-picker-input-swatch {
+	min-width: var(--ash-spacing-size320);
+	width: var(--ash-spacing-size320);
+	padding: var(--ash-spacing-size40);
+	border: 0;
+	border-radius: var(--ash-cornerRadius-small) 0 0
+		var(--ash-cornerRadius-small);
+	background: transparent;
+	flex-shrink: 0;
+}
+
+.ash-color-picker-input-preview {
+	width: var(--ash-spacing-size160);
+	height: var(--ash-spacing-size160);
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	border-radius: var(--ash-cornerRadius-small);
+	background:
+		linear-gradient(
+			var(--ash-color-picker-value),
+			var(--ash-color-picker-value)
+		),
+		repeating-conic-gradient(
+				var(--ash-input-background) 0% 25%,
+				var(--ash-description-foreground) 0% 50%
+			)
+			0 / 8px 8px;
+}
+
+.ash-color-picker-input .ash-color-picker-input-value,
+.ash-color-picker-input .ash-color-picker-input-alpha {
+	box-sizing: border-box;
+	min-width: 0;
+	width: 100%;
+	min-height: var(--ash-spacing-size320);
+	padding: var(--ash-spacing-size40);
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+}
+
+.ash-color-picker-input .ash-color-picker-input-value {
+	flex: 1 1 0;
+}
+
+.ash-color-picker-input .ash-color-picker-input-percent {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	gap: 0;
+	flex: 0 0 64px;
+	min-width: 0;
+	padding-right: var(--ash-spacing-size80);
+	border-left: var(--ash-strokeThickness) solid var(--ash-border);
+	color: inherit;
+}
+
+.ash-color-picker-input input[type="number"] {
+	appearance: textfield;
+}
+
+.ash-color-picker-input input::-webkit-inner-spin-button {
+	appearance: none;
+}
+
+.ash-color-picker-input input:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}
+
+.ash-color-picker-input input:invalid {
+	outline: var(--ash-strokeThickness) solid var(--ash-error-foreground);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}
+
+.ash-color-picker-input input:disabled {
+	color: var(--ash-muted-foreground);
+}

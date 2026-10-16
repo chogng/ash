@@ -21,6 +21,8 @@ export class DocumentCommands {
 	public readonly resources: ResourceCommands;
 	constructor(private readonly model: DesignModel) { this.vector = new VectorCommands(model); this.text = new TextCommands(model); this.prototype = new PrototypeCommands(model); this.components = new ComponentCommands(model); this.resources = new ResourceCommands(model); }
 
+	public setBackground(background: string): void { this.model.setBackground(background); }
+
 	public addShape(kind: 'rectangle' | 'ellipse' | 'text' | 'path', center: DesignPoint, text = ''): string {
 		const geometry: DesignShapeGeometry = { id: generateUuid(), x: center.x - 60, y: center.y - 40, width: 120, height: 80, rotation: 0, fill: '#808080' };
 		let shape: DesignShape;

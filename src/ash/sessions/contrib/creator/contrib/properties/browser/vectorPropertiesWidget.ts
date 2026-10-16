@@ -1,4 +1,7 @@
 import { designPathEndpoints } from '../../../common/model/designVectorStroke.js';
+import { Color } from '../../../../../../base/common/color.js';
+import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
+import { createDesignColorPicker } from '../../../browser/widgets/designColorPicker.js';
 import { VectorAppearanceWidget } from './vectorAppearanceWidget.js';
 import { importDesignOutlineFont, outlineDesignText } from '../../../browser/designTextOutlines.js';
 import { clearDesignTextMeasurements } from '../../../browser/designTextMeasurement.js';
@@ -35,7 +38,7 @@ export class VectorPropertiesWidget extends Disposable {
 	private edgeIndex = 0;
 	private regionIndex = 0;
 	private simplification: { source: DesignPath; network: ReturnType<typeof toDesignVectorNetwork>; version: string; result: DesignPath; amount: number; } | undefined;
-	constructor(private readonly controller: DesignDocumentController, private readonly commands: DocumentCommands, private readonly selection: DesignSelection, document: Document, private readonly refresh: () => void, private readonly focusCanvas: () => void) {
+	constructor(private readonly controller: DesignDocumentController, private readonly commands: DocumentCommands, private readonly selection: DesignSelection, document: Document, private readonly refresh: () => void, private readonly focusCanvas: () => void, @IInstantiationService instantiation: IInstantiationService) {
 		super();
 		this.domNode = h(document, 'details', { className: 'ash-design-property-section ash-design-vector-properties', properties: { open: true } }, h(document, 'summary', { className: 'ash-design-property-disclosure' }, localize('sessions.design.vectorTools', 'Vector tools')));
 		const content = h(document, 'div', { className: 'ash-design-property-fields' }); this.domNode.append(content);
@@ -81,17 +84,24 @@ export class VectorPropertiesWidget extends Disposable {
 		select(localize('sessions.design.vectorFillRule', 'Fill rule'), [['nonzero', localize('sessions.design.vectorNonzero', 'Nonzero')], ['evenodd', localize('sessions.design.vectorEvenOdd', 'Even odd')]], () => this.path?.fillRule ?? 'nonzero', value => { if (this.path) { this.commands.updateShape({ ...this.path, fillRule: value as 'nonzero' | 'evenodd' }); } });
 		select(localize('sessions.design.vectorCap', 'Stroke cap'), [['butt', localize('sessions.design.vectorButt', 'Butt')], ['round', localize('sessions.design.vectorRound', 'Round')], ['square', localize('sessions.design.vectorSquare', 'Square')]], () => this.path?.strokeCap ?? 'butt', value => { if (this.path) { this.commands.vector.setEndpoints({ ...this.path, strokeCap: value as 'butt' | 'round' | 'square' }, designPathEndpoints(this.path), undefined); } });
 		select(localize('sessions.design.vectorJoin', 'Stroke join'), [['miter', localize('sessions.design.vectorMiter', 'Miter')], ['round', localize('sessions.design.vectorRound', 'Round')], ['bevel', localize('sessions.design.vectorBevel', 'Bevel')]], () => this.path?.strokeJoin ?? 'miter', value => { if (this.path) { this.commands.updateShape({ ...this.path, strokeJoin: value as 'miter' | 'round' | 'bevel' }); } });
-		for (const [field, label] of [['stroke', localize('sessions.design.vectorStroke', 'Stroke color')], ['dashArray', localize('sessions.design.vectorDash', 'Dash pattern')]] as const) {
-			const input = h(document, 'input', { attributes: { 'aria-label': label } }); this.fields.append(h(document, 'label', { className: 'ash-design-property-wide' }, label, input));
-			this._register(addDisposableListener(input, 'change', () => {
-				if (!this.path || !this.editable) { return; }
-				const values = input.value.trim().split(/[\s,]+/u).map(Number);
-				const valid = !input.value.trim() || (field === 'stroke' ? /^#[\da-f]{6}(?:[\da-f]{2})?$/iu.test(input.value) : values.length <= 32 && values.every(value => Number.isFinite(value) && value >= .01));
-				input.setCustomValidity(valid ? '' : localize('sessions.design.vectorInvalidStyle', 'Enter a hex color or positive dash lengths.')); if (!valid) { input.reportValidity(); return; }
-				this.commands.updateShape({ ...this.path, [field]: input.value.trim() ? field === 'stroke' ? input.value : values : undefined, ...(field === 'dashArray' && input.value.trim() ? { widthPoints: undefined } : {}) });
-			}));
-			this.updates.push(() => { input.value = field === 'stroke' ? this.path?.stroke ?? '' : this.path?.dashArray?.join(' ') ?? ''; input.disabled = !this.editable; });
-		}
+		const stroke = this._register(createDesignColorPicker(instantiation, document, { color: localize('sessions.design.vectorStroke', 'Stroke color'), value: localize('sessions.design.vectorStroke', 'Stroke color'), opacity: localize('sessions.design.strokeOpacity', 'Stroke opacity (%)') }));
+		stroke.domNode.classList.add('ash-design-property-wide'); this.fields.append(stroke.domNode);
+		this._register(stroke.onDidCommitColor(color => { if (this.path && this.editable) { this.commands.updateShape({ ...this.path, stroke: Color.Format.CSS.formatHexA(color, true) }); } }));
+		const resetStroke = this._register(new Button(this.fields, { label: localize('sessions.design.strokeReset', 'Use fill color for stroke'), onClick: () => { if (this.path && this.editable) { this.commands.updateShape({ ...this.path, stroke: undefined }); } } }));
+		this.updates.push(() => {
+			stroke.enabled = this.editable; stroke.setColor(Color.Format.CSS.parseHex(this.path?.stroke ?? this.path?.fill ?? '#000000')!, this.path?.id);
+			resetStroke.enabled = this.editable && this.path?.stroke !== undefined;
+		});
+		const dash = h(document, 'input', { attributes: { 'aria-label': localize('sessions.design.vectorDash', 'Dash pattern') } });
+		this.fields.append(h(document, 'label', { className: 'ash-design-property-wide' }, localize('sessions.design.vectorDash', 'Dash pattern'), dash));
+		this._register(addDisposableListener(dash, 'change', () => {
+			if (!this.path || !this.editable) { return; }
+			const values = dash.value.trim().split(/[\s,]+/u).map(Number);
+			const valid = !dash.value.trim() || values.length <= 32 && values.every(value => Number.isFinite(value) && value >= .01);
+			dash.setCustomValidity(valid ? '' : localize('sessions.design.vectorInvalidStyle', 'Enter positive dash lengths.')); if (!valid) { dash.reportValidity(); return; }
+			this.commands.updateShape({ ...this.path, dashArray: dash.value.trim() ? values : undefined, ...(dash.value.trim() ? { widthPoints: undefined } : {}) });
+		}));
+		this.updates.push(() => { dash.value = this.path?.dashArray?.join(' ') ?? ''; dash.disabled = !this.editable; });
 		const networkFields = h(document, 'div', { className: 'ash-design-property-fields ash-design-property-wide' }); content.append(networkFields);
 		const edgeLabel = localize('sessions.design.networkEdge', 'Network segment');
 		const edgeInput = h(document, 'select', { attributes: { 'aria-label': edgeLabel } });
@@ -127,14 +137,20 @@ export class VectorPropertiesWidget extends Disposable {
 		const paint = h(document, 'input', { properties: { type: 'checkbox' }, attributes: { 'aria-label': paintLabel } });
 		networkFields.append(h(document, 'label', {}, paintLabel, paint));
 		this._register(addDisposableListener(paint, 'change', () => { this.selection.paintingVector = paint.checked; this.selection.editingVector = true; this.focusCanvas(); this.refresh(); }));
-		const fillLabel = localize('sessions.design.networkRegionColor', 'Region color');
-		const color = h(document, 'input', { attributes: { 'aria-label': fillLabel } }); networkFields.append(h(document, 'label', {}, fillLabel, color));
-		this._register(addDisposableListener(color, 'change', () => {
+		const regionColor = this._register(createDesignColorPicker(instantiation, document, { color: localize('sessions.design.networkRegionColor', 'Region color'), value: localize('sessions.design.networkRegionColor', 'Region color'), opacity: localize('sessions.design.regionOpacity', 'Region opacity (%)') }));
+		regionColor.domNode.classList.add('ash-design-property-wide'); networkFields.append(regionColor.domNode);
+		this._register(regionColor.onDidCommitColor(color => {
 			const path = this.path, network = path?.network; if (!path || !network || !this.editable) { return; }
-			if (color.value && !/^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/iu.test(color.value)) { color.setCustomValidity(localize('sessions.design.networkColorInvalid', 'Enter a hex color such as #3366ff.')); color.reportValidity(); return; }
-			color.setCustomValidity(''); const region = designNetworkRegions(network)[this.regionIndex]; if (!region) { return; }
-			const regionFills = { ...network.regionFills }; if (color.value) { regionFills[region.key] = color.value; } else { delete regionFills[region.key]; }
-			this.commands.vector.update(withDesignVectorNetwork(path, { ...network, regionFills }));
+			const region = designNetworkRegions(network)[this.regionIndex]; if (!region) { return; }
+			this.commands.vector.update(withDesignVectorNetwork(path, { ...network, regionFills: { ...network.regionFills, [region.key]: Color.Format.CSS.formatHexA(color, true) } }));
+		}));
+		const resetRegion = this._register(new Button(networkFields, {
+			label: localize('sessions.design.regionReset', 'Use path color for region'), onClick: () => {
+				const path = this.path, network = path?.network; if (!path || !network || !this.editable) { return; }
+				const region = designNetworkRegions(network)[this.regionIndex]; if (!region) { return; }
+				const regionFills = { ...network.regionFills }; delete regionFills[region.key];
+				this.commands.vector.update(withDesignVectorNetwork(path, { ...network, regionFills }));
+			}
 		}));
 		this.updates.unshift(() => {
 			const network = this.path?.network; networkFields.hidden = !network;
@@ -144,7 +160,9 @@ export class VectorPropertiesWidget extends Disposable {
 			this.regionIndex = Math.min(this.regionIndex, Math.max(0, regions.length - 1));
 			regionInput.replaceChildren(...regions.map((_, i) => h(document, 'option', { properties: { value: String(i) } }, String(i + 1)))); regionInput.value = String(this.regionIndex);
 			paint.checked = this.selection.paintingVector; paint.disabled = !this.editable;
-			color.value = network?.regionFills?.[regions[this.regionIndex]?.key] ?? this.path?.fill ?? ''; color.disabled = !this.editable || !regions.length;
+			regionColor.enabled = this.editable && !!regions.length;
+			regionColor.setColor(Color.Format.CSS.parseHex(network?.regionFills?.[regions[this.regionIndex]?.key] ?? this.path?.fill ?? '#000000')!, `${this.path?.id}:${regions[this.regionIndex]?.key}`);
+			resetRegion.enabled = this.editable && !!network?.regionFills?.[regions[this.regionIndex]?.key];
 			filled.checked = regions[this.regionIndex]?.filled ?? false; filled.disabled = regionInput.disabled = !this.editable || !regions.length;
 		});
 		content.append(this.appearance.domNode);

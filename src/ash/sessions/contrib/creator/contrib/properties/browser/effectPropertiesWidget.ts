@@ -1,14 +1,12 @@
 import { designEffectTypeLabel } from '../../../browser/designEffectLabels.js';
 import { addDisposableListener, h } from '../../../../../../base/browser/dom.js';
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
-import { ColorPicker } from '../../../../../../base/browser/ui/colorPicker/colorPicker.js';
-import { ContextViewFocusRestore } from '../../../../../../base/browser/ui/contextview/contextview.js';
+import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
+import { createDesignColorPicker } from '../../../browser/widgets/designColorPicker.js';
 import { Color } from '../../../../../../base/common/color.js';
 import { Disposable } from '../../../../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../../../../base/common/uuid.js';
 import { localize } from '../../../../../../nls.js';
-import type { IContextViewService } from '../../../../../../platform/contextview/browser/contextView.js';
-import type { IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
 import type { DesignDocumentController } from '../../../browser/designDocumentController.js';
 import type { DocumentCommands } from '../../../common/commands/documentCommands.js';
 import {
@@ -27,8 +25,6 @@ const types: readonly DesignEffect['type'][] = ['drop-shadow', 'inner-shadow', '
 export class EffectPropertiesWidget extends Disposable {
 	public readonly domNode: HTMLElement;
 	private readonly updates: (() => void)[] = [];
-	private pickerTarget: { shape: string; effect: string; } | undefined;
-	private readonly picker: ColorPicker;
 	constructor(
 		private readonly controller: DesignDocumentController,
 		private readonly commands: DocumentCommands,
@@ -36,8 +32,7 @@ export class EffectPropertiesWidget extends Disposable {
 		document: Document,
 		private readonly refresh: () => void,
 		private readonly focusCanvas: () => void,
-		private readonly contextViews: IContextViewService,
-		contextKeys: IContextKeyService,
+		@IInstantiationService instantiation: IInstantiationService,
 	) {
 		super();
 		this.domNode = h(document, 'div', { className: 'ash-design-property-fields ash-design-property-wide' });
@@ -222,75 +217,15 @@ export class EffectPropertiesWidget extends Disposable {
 			}),
 			() => !!this.shadow
 		);
-		const color = h(
-			document,
-			'input',
-			{
-				properties: {
-					type: 'text',
-					pattern: '#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?',
-					required: true
-				},
-				attributes: {
-					'aria-label': localize('sessions.design.shadowColor', 'Shadow color')
-				}
-			}
-		);
-		const colorRow = h(document, 'label', { className: 'ash-design-property-wide' }, localize('sessions.design.shadowColor', 'Shadow color'), color);
-		this.domNode.append(colorRow);
-		this._register(addDisposableListener(color, 'change', () => {
-			if (color.checkValidity() && this.editable && this.shadow) {
-				this.edit({
-					...this.shadow,
-					color: color.value
-				});
-			} else {
-				color.reportValidity();
-			}
-		}));
+		const color = this._register(createDesignColorPicker(instantiation, document, { color: localize('sessions.design.effectChooseColor', 'Choose shadow color'), value: localize('sessions.design.shadowColor', 'Shadow color'), opacity: localize('sessions.design.shadowOpacity', 'Shadow opacity (%)') }));
+		color.domNode.classList.add('ash-design-property-wide');
+		this.domNode.append(color.domNode);
+		this._register(color.onDidCommitColor(value => { if (this.editable && this.shadow) { this.edit({ ...this.shadow, color: Color.Format.CSS.formatHexA(value, true) }); } }));
 		this.updates.push(() => {
-			colorRow.hidden = !this.shadow;
-			color.disabled = !this.editable;
-			if (document.activeElement !== color) {
-				color.value = this.shadow?.color ?? '';
-			}
+			color.domNode.hidden = !this.shadow;
+			color.enabled = this.editable && !!this.shadow;
+			color.setColor(Color.Format.CSS.parseHex(this.shadow?.color ?? '#000000')!, `${this.shape?.id}:${this.effect?.id}`);
 		});
-		this.picker = this._register(new ColorPicker(document));
-		this._register(contextKeys.createScoped(this.picker.domNode)).createKey('sessionsDesignColorPickerFocused', true);
-		const colorButton = this.action(localize('sessions.design.effectChooseColor', 'Choose shadow color'), () => {
-			this.pickerTarget = { shape: this.shape!.id, effect: this.effect!.id };
-			this.picker.setColor(Color.Format.CSS.parseHex(this.shadow!.color)!);
-			colorButton.domNode.setAttribute('aria-expanded', 'true');
-			this.contextViews.show({
-				anchor: colorButton.domNode,
-				content: this.picker.domNode,
-				presentation: 'dialog',
-				focusRestore: ContextViewFocusRestore.Previous,
-				onHide: () => {
-					this.pickerTarget = undefined;
-					colorButton.domNode.setAttribute(
-						'aria-expanded',
-						'false'
-					);
-				}
-			});
-			this.picker.focus();
-		}, () => !!this.shadow, () => !!this.shadow);
-		colorButton.domNode.classList.add('ash-design-property-wide');
-		colorButton.domNode.setAttribute('aria-haspopup', 'dialog');
-		colorButton.domNode.setAttribute('aria-expanded', 'false');
-		this._register(this.picker.onDidCommitColor(value => {
-			if (this.editable && this.shadow && this.pickerTarget?.shape === this.shape?.id && this.pickerTarget?.effect === this.effect?.id) {
-				this.edit({
-					...this.shadow,
-					color: Color.Format.CSS.formatHexA(
-						value,
-						true
-					)
-				});
-			}
-		}));
-		this._register(this.picker.onDidRequestClose(() => this.contextViews.hide()));
 	}
 
 	private get shape() {
@@ -445,18 +380,9 @@ export class EffectPropertiesWidget extends Disposable {
 		if (!this.blur?.progressive || !this.editable || this.blur.visible === false || this.blur.id !== this.selection.effectId) {
 			this.selection.editingBlur = false;
 		}
-		if (this.pickerTarget && (this.pickerTarget.shape !== this.shape?.id || this.pickerTarget.effect !== this.effect?.id || !this.editable || !this.shadow)) {
-			this.contextViews.hide();
-		}
 		for (const update of this.updates) {
 			update();
 		}
 	}
 
-	public override dispose(): void {
-		if (this.pickerTarget) {
-			this.contextViews.hide();
-		}
-		super.dispose();
-	}
 }

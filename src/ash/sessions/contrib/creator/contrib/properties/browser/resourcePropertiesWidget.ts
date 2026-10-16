@@ -1,3 +1,6 @@
+import { Color } from '../../../../../../base/common/color.js';
+import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
+import { createDesignColorPicker } from '../../../browser/widgets/designColorPicker.js';
 import { describeDesignEffect } from '../../../browser/designEffectLabels.js';
 import { addDisposableListener, h } from '../../../../../../base/browser/dom.js';
 import { status } from '../../../../../../base/browser/ui/aria/aria.js';
@@ -23,7 +26,7 @@ export class ResourcePropertiesWidget extends Disposable {
 	private styleKind: DesignStyleKind = 'fill';
 	private styleId = '';
 	private revision = '';
-	constructor(private readonly controller: DesignDocumentController, private readonly commands: DocumentCommands, private readonly selection: DesignSelection, ownerDocument: Document) {
+	constructor(private readonly controller: DesignDocumentController, private readonly commands: DocumentCommands, private readonly selection: DesignSelection, ownerDocument: Document, @IInstantiationService private readonly instantiation: IInstantiationService) {
 		super();
 		this.fields = h(ownerDocument, 'div', { className: 'ash-design-resource-fields' });
 		this.domNode = h(ownerDocument, 'details', { className: 'ash-design-property-section ash-design-resources' }, h(ownerDocument, 'summary', {}, localize('sessions.design.resources', 'Design resources'), h(ownerDocument, 'span', { className: 'ash-design-property-disclosure', attributes: { 'aria-hidden': 'true' } })), this.fields);
@@ -87,9 +90,9 @@ export class ResourcePropertiesWidget extends Disposable {
 					if (!alias) {
 						const label = localize('sessions.design.modeValue', '{0}: value', mode.name);
 						if (variable.type === 'boolean') { this.select(variables, `value:${mode.id}`, label, String(value), [['true', localize('sessions.design.true', 'True')], ['false', localize('sessions.design.false', 'False')]], value => this.commands.resources.setVariableValue(variable.id, mode.id, value === 'true')); }
+						else if (variable.type === 'color') { this.color(variables, `value:${mode.id}`, label, String(value), value => this.commands.resources.setVariableValue(variable.id, mode.id, value)); }
 						else {
 							this.input(variables, `value:${mode.id}`, label, String(value), value => {
-								if (variable.type === 'color' && !/^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/iu.test(value)) { this.invalid(); }
 								this.commands.resources.setVariableValue(variable.id, mode.id, variable.type === 'number' ? this.numeric(value) : value);
 							}, variable.type === 'number' ? 'number' : 'text');
 						}
@@ -161,7 +164,7 @@ export class ResourcePropertiesWidget extends Disposable {
 		if (this.styleKind === 'grid' && shape.kind === 'frame') {
 			const guide = shape.layoutGuide ?? { size: 8, color: '#ff000040' };
 			this.input(parent, 'guideSize', localize('sessions.design.guideSize', 'Layout guide size'), String(guide.size), value => edit({ layoutGuide: { ...guide, size: this.numeric(value, 0.001) } }), 'number');
-			this.input(parent, 'guideColor', localize('sessions.design.guideColor', 'Layout guide color'), guide.color, value => { if (!/^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/iu.test(value)) { this.invalid(); } edit({ layoutGuide: { ...guide, color: value } }); });
+			this.color(parent, 'guideColor', localize('sessions.design.guideColor', 'Layout guide color'), guide.color, value => edit({ layoutGuide: { ...guide, color: value } }));
 			this.button(parent, 'toggleGuide', shape.layoutGuide ? localize('sessions.design.removeGuide', 'Remove layout guide') : localize('sessions.design.addGuide', 'Add layout guide'), () => edit({ layoutGuide: shape.layoutGuide ? undefined : guide }));
 		}
 	}
@@ -175,6 +178,14 @@ export class ResourcePropertiesWidget extends Disposable {
 		const input = h(this.domNode.ownerDocument, 'select', { attributes: { 'aria-label': label, 'data-resource-control': key }, properties: { disabled: this.controller.isBusy } }, ...choices.map(([value, label]) => h(this.domNode.ownerDocument, 'option', { properties: { value } }, label))); input.value = value;
 		parent.append(h(this.domNode.ownerDocument, 'label', {}, label, input)); this.controls.add(addDisposableListener(input, 'change', () => this.run(() => change(input.value))));
 	}
+	private color(parent: HTMLElement, key: string, label: string, value: string, change: (value: string) => unknown): void {
+		const widget = this.controls.add(createDesignColorPicker(this.instantiation, this.domNode.ownerDocument, { color: label, value: label, opacity: localize('sessions.design.colorOpacity', '{0}: opacity (%)', label) }));
+		widget.setColor(Color.Format.CSS.parseHex(value)!); widget.enabled = !this.controller.isBusy;
+		parent.append(h(this.domNode.ownerDocument, 'div', {}, h(this.domNode.ownerDocument, 'span', {}, label), widget.domNode));
+		for (const [index, element] of [...widget.domNode.querySelectorAll('button, input')].entries()) { element.setAttribute('data-resource-control', index === 1 ? key : `${key}:${index === 0 ? 'swatch' : 'opacity'}`); }
+		this.controls.add(widget.onDidCommitColor(color => this.run(() => change(Color.Format.CSS.formatHexA(color, true)))));
+	}
+
 	private input(parent: HTMLElement, key: string, label: string, value: string, change: (value: string) => unknown, type = 'text'): void {
 		const input = h(this.domNode.ownerDocument, 'input', { attributes: { 'aria-label': label, 'data-resource-control': key }, properties: { type, value, step: 'any', disabled: this.controller.isBusy } });
 		parent.append(h(this.domNode.ownerDocument, 'label', {}, label, input)); this.controls.add(addDisposableListener(input, 'input', () => input.setCustomValidity('')));

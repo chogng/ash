@@ -72,16 +72,6 @@
 	padding: 0 var(--ash-spacing-size160) var(--ash-spacing-size160);
 }
 
-.ash-design-page-name {
-	display: block;
-	overflow-wrap: anywhere;
-}
-
-.ash-design-page-summary {
-	margin: var(--ash-spacing-size80) 0 0;
-	color: var(--ash-description-foreground);
-}
-
 .ash-design-property-fields {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -206,40 +196,6 @@
 	color: var(--ash-description-foreground);
 }
 
-.ash-design-fill-row {
-	display: flex;
-	align-items: stretch;
-	border: var(--ash-strokeThickness) solid var(--ash-input-border);
-	border-radius: var(--ash-cornerRadius-medium);
-	background: var(--ash-input-background);
-	min-width: 0;
-}
-
-.ash-design-fill-row > .ash-button {
-	justify-content: start;
-	flex: 1;
-	min-width: 0;
-	border: 0;
-	border-radius: var(--ash-cornerRadius-medium) 0 0
-		var(--ash-cornerRadius-medium);
-}
-
-.ash-sessions-design-properties .ash-design-fill-opacity {
-	flex-direction: row;
-	align-items: center;
-	gap: 0;
-	width: 64px;
-	padding-right: var(--ash-spacing-size80);
-	border-left: var(--ash-strokeThickness) solid var(--ash-border);
-	flex-shrink: 0;
-}
-
-.ash-sessions-design-properties .ash-design-fill-opacity > input {
-	padding: var(--ash-spacing-size40);
-	border: 0;
-	background: transparent;
-}
-
 .ash-design-guide-row {
 	padding: var(--ash-spacing-size80);
 	background: var(--ash-input-background);
@@ -259,21 +215,6 @@
 .ash-design-properties-heading:focus-visible {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
-}
-
-.ash-design-fill-swatch {
-	width: var(--ash-spacing-size200);
-	height: var(--ash-spacing-size200);
-	flex-shrink: 0;
-	border: var(--ash-strokeThickness) solid var(--ash-border);
-	border-radius: var(--ash-cornerRadius-small);
-	background:
-		linear-gradient(var(--ash-design-fill), var(--ash-design-fill)),
-		repeating-conic-gradient(
-				var(--ash-input-background) 0% 25%,
-				var(--ash-description-foreground) 0% 50%
-			)
-			0 / 8px 8px;
 }
 
 .ash-sessions-design-properties .ash-design-resource-fields,

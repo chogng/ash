@@ -95,7 +95,15 @@ export class DesignModel extends Disposable {
 		const components = resolveDesignResources(resolveDesignComponents(layout, resolveDesignResources(getDesignLibraryShapes(resources), resources), this.measureText), resources);
 		// Removing a wire target is derived cleanup, not an explicit instance override.
 		const resolved = reconcilePrototypeLinks(resolveDesignLayout(components, components, this.measureText), this.document.shapes);
-		const next = documentFromShapes(resolved, { documentId: this.document.documentId, artifactId: this.document.artifactId, mode: this.document.mode, ...(resources ? { resources } : {}) }, assets);
+		const next = documentFromShapes(resolved, { documentId: this.document.documentId, artifactId: this.document.artifactId, mode: this.document.mode, ...(this.document.background === undefined ? {} : { background: this.document.background }), ...(resources ? { resources } : {}) }, assets);
+		this.commit(next, undoGroup);
+	}
+
+	public setBackground(background: string): void {
+		this.commit(documentFromShapes(this.document.shapes, { ...this.document, background }, this.document.assets));
+	}
+
+	private commit(next: DesignDocument, undoGroup?: object): void {
 		if (serializeDesignDocument(next) === serializeDesignDocument(this.document)) {
 			return;
 		}

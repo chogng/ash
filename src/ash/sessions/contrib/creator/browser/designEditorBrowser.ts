@@ -38,6 +38,7 @@ export interface IDesignMotionContribution {
 }
 
 export interface IDesignPropertiesContribution {
+	readonly background: string;
 	readonly preview: DesignShape | undefined;
 	cancel(): void;
 	focus(): void;

@@ -1515,3 +1515,81 @@ test('Sessions Design automatically retains an untitled draft across window reop
 	}
 	await page.screenshot({ path: testInfo.outputPath('design-restored-after-close.png') });
 });
+
+test('Sessions Design color widgets edit page backgrounds and fills and restore them after closing', async ({ application, target, workbench }, testInfo) => {
+	let page = await workbench.openAgentsWindow(target.kind);
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
+	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
+	let properties = page.locator('[data-part="auxiliarybar"]');
+	let canvas = page.getByRole('region', { name: 'Design canvas', exact: true });
+	await expect(properties.locator('.ash-design-page-name, .ash-design-page-summary')).toHaveCount(0);
+	const background = properties.getByRole('textbox', { name: 'Page background color', exact: true });
+	await background.fill('E8EEF6'); await background.press('Enter');
+	await expect(canvas.locator('.ash-canvas-viewport')).toHaveCSS('background-color', 'rgb(232, 238, 246)');
+	await canvas.press('ControlOrMeta+z');
+	await expect(background).toHaveValue('FFFFFF');
+	await canvas.press('ControlOrMeta+Shift+z');
+	await expect(background).toHaveValue('E8EEF6');
+	await properties.getByRole('button', { name: 'Page background', exact: true }).click();
+	await expect(page.getByRole('dialog', { name: /^Color picker/u })).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(properties.getByRole('button', { name: 'Page background', exact: true })).toBeFocused();
+	await page.screenshot({ path: testInfo.outputPath('page-background-widget.png') });
+	await canvas.press('r');
+	const color = properties.getByRole('textbox', { name: 'Fill color', exact: true });
+	await color.fill('invalid'); await color.press('Enter');
+	await expect(color).toHaveAttribute('aria-invalid', 'true');
+	await color.fill('2F6FED'); await color.press('Enter');
+	const opacity = properties.getByRole('spinbutton', { name: 'Fill opacity (%)', exact: true });
+	await opacity.fill('40'); await opacity.press('Enter');
+	await expect(canvas.locator('rect[data-shape-id]')).toHaveAttribute('fill', '#2f6fed66');
+	const widget = color.locator('..');
+	await widget.scrollIntoViewIfNeeded();
+	await expect.poll(() => widget.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+	await page.screenshot({ path: testInfo.outputPath('fill-color-widget.png') });
+	if (target.kind === 'browser') { await expect(canvas).not.toHaveClass(/\bdirty\b/u); }
+	page = await workbench.reopenAgentsWindow(application, page);
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
+	const design = page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true });
+	if (await design.isVisible()) { await design.click(); }
+	canvas = page.getByRole('region', { name: 'Design canvas', exact: true });
+	properties = page.locator('[data-part="auxiliarybar"]');
+	await expect(properties.getByRole('textbox', { name: 'Page background color', exact: true })).toHaveValue('E8EEF6');
+	await expect(canvas.locator('rect[data-shape-id]')).toHaveAttribute('fill', '#2f6fed66');
+	await expect(canvas.locator('.ash-canvas-viewport')).toHaveCSS('background-color', 'rgb(232, 238, 246)');
+});
+
+test('Sessions Design shares color widgets and picker behavior for strokes and shadows', async ({ target, workbench }, testInfo) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
+	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
+	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true });
+	const properties = page.locator('[data-part="auxiliarybar"]');
+	await canvas.press('p');
+	await canvas.locator('.ash-canvas-viewport').click({ position: { x: 120, y: 140 } });
+	await canvas.locator('.ash-canvas-viewport').click({ position: { x: 260, y: 220 } });
+	await canvas.press('Enter');
+	const stroke = properties.getByRole('textbox', { name: 'Stroke color', exact: true });
+	await stroke.fill('336699'); await stroke.press('Enter');
+	const alpha = properties.getByRole('spinbutton', { name: 'Stroke opacity (%)', exact: true });
+	await alpha.fill('40'); await alpha.press('Enter');
+	await expect(canvas.locator('path[data-shape-id]')).toHaveAttribute('stroke', '#33669966');
+	await properties.getByRole('button', { name: 'Stroke color', exact: true }).click();
+	await expect(page.getByRole('dialog', { name: /^Color picker/u })).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(properties.getByRole('button', { name: 'Stroke color', exact: true })).toBeFocused();
+	await stroke.locator('..').scrollIntoViewIfNeeded();
+	await page.screenshot({ path: testInfo.outputPath('stroke-color-widget.png') });
+	await properties.getByRole('button', { name: 'Add effect', exact: true }).click();
+	const shadow = properties.getByRole('textbox', { name: 'Shadow color', exact: true });
+	await shadow.fill('123456'); await shadow.press('Enter');
+	const shadowAlpha = properties.getByRole('spinbutton', { name: 'Shadow opacity (%)', exact: true });
+	await shadowAlpha.fill('40'); await shadowAlpha.press('Enter');
+	await expect(canvas.locator('feFlood[flood-color="#123456"]')).toHaveAttribute('flood-opacity', '0.4');
+	await properties.getByRole('button', { name: 'Choose shadow color', exact: true }).click();
+	await expect(page.getByRole('dialog', { name: /^Color picker/u })).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(properties.getByRole('button', { name: 'Choose shadow color', exact: true })).toBeFocused();
+	await shadow.locator('..').scrollIntoViewIfNeeded();
+	await page.screenshot({ path: testInfo.outputPath('shadow-color-widget.png') });
+});

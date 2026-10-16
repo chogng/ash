@@ -337,6 +337,7 @@ export class DesignEditorWidget extends Disposable {
 	}
 
 	private renderShapes(): void {
+		this.canvas.domNode.style.backgroundColor = this.properties.background;
 		const scene = this.mode === DesignMode.Motion ? this.motion.getScene() : undefined;
 		const preview = (shape: DesignShape): DesignShape => {
 			const fillPreview = this.properties.preview;

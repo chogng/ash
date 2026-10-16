@@ -171,6 +171,8 @@ export interface DesignDocument {
 	readonly mode: CreatorMode;
 	readonly documentId: string;
 	readonly artifactId: string;
+	/** Page background is canvas presentation, independent of exported object fills. */
+	readonly background?: string;
 	/** Array order is paint order, from back to front. */
 	readonly shapes: readonly DesignShape[];
 	readonly assets: readonly DesignAsset[];
@@ -212,7 +214,7 @@ function freezeShape(shape: DesignShape): DesignShape {
 	return Object.freeze({ ...shape });
 }
 
-export function documentFromShapes(shapes: readonly DesignShape[], identity: Pick<DesignDocument, 'documentId' | 'artifactId'> & Partial<Pick<DesignDocument, 'mode' | 'resources'>> = { documentId: generateUuid(), artifactId: generateUuid() }, assets: readonly DesignAsset[] = []): DesignDocument {
+export function documentFromShapes(shapes: readonly DesignShape[], identity: Pick<DesignDocument, 'documentId' | 'artifactId'> & Partial<Pick<DesignDocument, 'mode' | 'resources' | 'background'>> = { documentId: generateUuid(), artifactId: generateUuid() }, assets: readonly DesignAsset[] = []): DesignDocument {
 	return Object.freeze({ schemaVersion: 2, ...identity, mode: identity.mode ?? CreatorMode.Design, ...(identity.resources ? { resources: freezeDesignResources(identity.resources) } : {}), shapes: Object.freeze(shapes.map(freezeShape)), assets: Object.freeze(assets.map(asset => Object.freeze({ ...asset, versions: Object.freeze(asset.versions.map(version => Object.freeze({ ...version }))) }))) });
 }
 
@@ -234,7 +236,8 @@ function readDocument(content: string, allowLibraries: boolean): DesignDocument 
 	const artifactId = value.artifactOrder[0];
 	const artifact = value.artifacts[artifactId];
 	if (Object.keys(value.artifacts).length !== 1 || !isRecord(artifact) || artifact.kind !== 'composition' || !Array.isArray(artifact.roots) || !isRecord(artifact.objects)
-		|| Object.keys(artifact).some(key => !['kind', 'mode', 'roots', 'objects'].includes(key))) { throw new TypeError(localize('sessions.design.invalidComposition', 'Invalid design composition')); }
+		|| Object.keys(artifact).some(key => !['kind', 'mode', 'roots', 'objects', 'background'].includes(key))) { throw new TypeError(localize('sessions.design.invalidComposition', 'Invalid design composition')); }
+	if (artifact.background !== undefined && (typeof artifact.background !== 'string' || !/^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/iu.test(artifact.background))) { throw new TypeError(localize('sessions.design.invalidComposition', 'Invalid design composition')); }
 	const mode = artifact.mode === undefined ? CreatorMode.Design : artifact.mode;
 	if (!Object.values(CreatorMode).includes(mode as CreatorMode)) { throw new TypeError(localize('sessions.creator.invalidMode', 'Invalid Creator document mode.')); }
 	const objects = artifact.objects;
@@ -284,7 +287,7 @@ function readDocument(content: string, allowLibraries: boolean): DesignDocument 
 	validatePrototypeExpressions(shapes, resources);
 	validateDesignComponents(allShapes);
 	validateDesignShapeResources(allShapes, resources);
-	return documentFromShapes(shapes, { documentId: value.documentId, artifactId, mode: mode as CreatorMode, ...(resources ? { resources } : {}) }, assets);
+	return documentFromShapes(shapes, { documentId: value.documentId, artifactId, mode: mode as CreatorMode, ...(artifact.background === undefined ? {} : { background: artifact.background as string }), ...(resources ? { resources } : {}) }, assets);
 }
 
 /** Containers retain the only copy of their children; consumers derive identity lookup from this tree. */
@@ -480,7 +483,7 @@ export function serializeDesignDocument(document: DesignDocument): string {
 		} else if (shape.kind === 'path' && shape.network) { const { nodes: _nodes, closed: _closed, ...networkPath } = shape; objects[shape.id] = networkPath; } else { objects[shape.id] = shape; }
 	}
 	document.shapes.forEach(writeObject);
-	return JSON.stringify({ schemaVersion: 2, documentId: document.documentId, ...(document.resources ? { resources: { ...document.resources, libraries: document.resources.libraries.map(library => ({ ...library, document: JSON.parse(serializeDesignDocument(library.document)) })) } } : {}), artifactOrder: [document.artifactId], artifacts: { [document.artifactId]: { kind: 'composition', ...(document.mode === CreatorMode.Design ? {} : { mode: document.mode }), roots: document.shapes.map(shape => shape.id), objects } }, assets: Object.fromEntries(document.assets.map(asset => [asset.id, asset])) }, null, '\t') + '\n';
+	return JSON.stringify({ schemaVersion: 2, documentId: document.documentId, ...(document.resources ? { resources: { ...document.resources, libraries: document.resources.libraries.map(library => ({ ...library, document: JSON.parse(serializeDesignDocument(library.document)) })) } } : {}), artifactOrder: [document.artifactId], artifacts: { [document.artifactId]: { kind: 'composition', ...(document.background === undefined ? {} : { background: document.background }), ...(document.mode === CreatorMode.Design ? {} : { mode: document.mode }), roots: document.shapes.map(shape => shape.id), objects } }, assets: Object.fromEntries(document.assets.map(asset => [asset.id, asset])) }, null, '\t') + '\n';
 }
 
 function parseComponent(value: unknown): DesignComponent {

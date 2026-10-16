@@ -1,7 +1,7 @@
 import type { IAction } from '../../../../base/common/actions.js';
 import { MenuId, SubmenuItemAction } from '../../../../platform/actions/common/actions.js';
 import './media/themeEditor.css';
-import { addDisposableListener, getWindow, h, stopEvent } from '../../../../base/browser/dom.js';
+import { addDisposableListener, getWindow, h, isHTMLElement, stopEvent } from '../../../../base/browser/dom.js';
 import type { IDimension } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { ColorPicker } from '../../../../base/browser/ui/colorPicker/colorPicker.js';
@@ -97,7 +97,6 @@ export class ThemeEditor extends EditorPane {
 	private readonly rows = new Map<string, ThemeColorRow>();
 	private readonly inputLifetime = this._register(new DisposableStore());
 	private readonly nameDialog = this._register(new MutableDisposable<DisposableStore>());
-	private readonly pickerLifetime = this._register(new MutableDisposable<DisposableStore>());
 	private picker: ColorPicker | undefined;
 	private pickerRow: ThemeColorRow | undefined;
 	private readonly refresh = this._register(new RunOnceScheduler(() => { void this.updatePreview(); }, 60));
@@ -165,11 +164,11 @@ export class ThemeEditor extends EditorPane {
 			}
 		}));
 		this._register(addDisposableListener<FocusEvent>(root, 'focusout', event => {
-			if (!event.relatedTarget || (!root.contains(event.relatedTarget as Node) && !this.picker?.domNode.contains(event.relatedTarget as Node))) focused.reset();
+			if (!event.relatedTarget || (!root.contains(event.relatedTarget as Node) && !(isHTMLElement(event.relatedTarget) && this.picker && ColorPicker.getFocused(event.relatedTarget) === this.picker))) focused.reset();
 		}));
 		// Auxiliary controls must resolve help in their owner window before the shared dispatcher.
 		this._register(addDisposableListener<KeyboardEvent>(getWindow(root), 'keydown', event => {
-			if (!root.contains(event.target as Node) && !this.picker?.domNode.contains(event.target as Node)) return;
+			if (!root.contains(event.target as Node) && !(isHTMLElement(event.target) && this.picker && ColorPicker.getFocused(event.target) === this.picker)) return;
 			if (event.altKey && !event.ctrlKey && !event.metaKey && (event.key === 'F1' || event.key === 'F2')) {
 				stopEvent(event);
 				this.accessibleViews.show(event.key === 'F1' ? AccessibleViewType.Help : AccessibleViewType.View, root);
@@ -231,7 +230,7 @@ export class ThemeEditor extends EditorPane {
 		];
 		for (const group of groups) {
 			this.groups.push(this._register(new ThemeColorGroup(this.list, group.id, group.label, group.pattern, group.id === 'surface', () => {
-				this.pickerLifetime.clear();
+				this.picker?.cancel();
 				this.scrollable?.layout();
 			})));
 		}
@@ -279,7 +278,7 @@ export class ThemeEditor extends EditorPane {
 	}
 
 	public override clearInput(): void {
-		this.pickerLifetime.clear();
+		this.picker?.cancel();
 		this.operation++;
 		this.refresh.cancel();
 		this.inputLifetime.clear();
@@ -308,7 +307,7 @@ export class ThemeEditor extends EditorPane {
 		}
 	}
 	public override setVisible(visible: boolean): void {
-		if (!visible) this.pickerLifetime.clear();
+		if (!visible) this.picker?.cancel();
 		super.setVisible(visible);
 		this.textEditor.setVisible(visible);
 		this.applyPreview();
@@ -577,7 +576,7 @@ export class ThemeEditor extends EditorPane {
 			let row = this.rows.get(entry.id);
 			if (!row) {
 				row = new ThemeColorRow(this.list.ownerDocument, entry.id, entry.description, this.hoverService,
-					value => this.editColor(entry.id, value), () => this.revealColor(entry.id), row => this.showColorPicker(row), id => this.revealDesignToken(id));
+					value => this.editColor(entry.id, value), () => this.revealColor(entry.id), row => this.createColorPicker(row), id => this.revealDesignToken(id));
 				this.rows.set(entry.id, row);
 				group.body.append(row.element);
 			}
@@ -589,17 +588,7 @@ export class ThemeEditor extends EditorPane {
 		}
 		for (const group of this.groups) group.setCount(counts.get(group) ?? 0);
 		if (this.empty) this.empty.hidden = counts.size > 0;
-		if (this.picker && this.pickerRow) {
-			if (this.pickerRow.element.closest('[hidden]') || !this.pickerRow.picker.enabled) {
-				this.pickerLifetime.clear();
-			} else {
-				const color = this.pickerRow.color ?? Color.black;
-				// JSON edits and Undo win; a serialized echo must not cancel the picker's pointer gesture.
-				if (Color.Format.CSS.formatHexA(this.picker.color, true) !== Color.Format.CSS.formatHexA(color, true)) {
-					this.picker.setColor(color);
-				}
-			}
-		}
+		if (this.pickerRow?.element.closest('[hidden]')) this.picker?.cancel();
 		const identifiers = new Set(entries.map(entry => entry.id));
 		for (const [id, row] of this.rows) if (!identifiers.has(id)) { row.dispose(); this.rows.delete(id); }
 		this.scrollable?.layout();
@@ -622,6 +611,7 @@ export class ThemeEditor extends EditorPane {
 		const model = control?.getModel();
 		if (!model || !control) return;
 		const edits = setProperty(model.getText(), ['colors', id], value, { insertSpaces: !/^\t/mu.test(model.getText()), tabSize: 2, eol: model.getText().includes('\r\n') ? '\r\n' : '\n' });
+		if (edits.length === 0) return;
 		model.pushStackElement();
 		control.executeEdits('themeEditor.color', edits.map(edit => ({ range: Range.fromPositions(model.getPositionAt(edit.offset), model.getPositionAt(edit.offset + edit.length)), text: edit.content })));
 		model.pushStackElement();
@@ -633,48 +623,36 @@ export class ThemeEditor extends EditorPane {
 		this.revealColor(id, false);
 	}
 
-	private showColorPicker(row: ThemeColorRow): void {
-		this.pickerLifetime.clear();
-		const lifetime = new DisposableStore();
-		this.pickerLifetime.value = lifetime;
-		let visible = false;
-		const picker = lifetime.add(new ColorPicker(row.element.ownerDocument));
-		picker.domNode.classList.add('ash-theme-editor-color-popup');
-		// ContextView can mount outside the auxiliary workbench's themed root.
-		lifetime.add(bindColorTheme(this.themes, picker.domNode));
-		this.picker = picker;
-		this.pickerRow = row;
-		picker.setColor(row.color ?? Color.black);
-		lifetime.add(this.contextKeys.createScoped(picker.domNode)).createKey(ThemeEditorFocused.key, true);
-		lifetime.add(picker.onDidChangeColor(color => this.editColor(row.id, Color.Format.CSS.formatHexA(color, true))));
-		lifetime.add(picker.onDidRequestClose(() => {
-			this.pickerLifetime.clear();
-			// Close is an explicit return to the trigger; outside clicks retain their own focus.
-			if (row.picker.domNode.isConnected && row.picker.enabled) row.picker.focus();
-		}));
-		// Stores dispose in reverse order: hide and restore focus before removing the controls.
-		lifetime.add(toDisposable(() => {
-			if (visible) this.contextViews.hide();
-			this.picker = undefined;
-			this.pickerRow = undefined;
-		}));
-		row.picker.domNode.setAttribute('aria-expanded', 'true');
-		row.picker.focus();
-		visible = this.contextViews.show({
-			anchor: row.picker.domNode,
-			content: picker.domNode,
-			presentation: 'plain',
-			focusRestore: ContextViewFocusRestore.Previous,
-			onHide: () => {
-				visible = false;
-				row.picker.domNode.setAttribute('aria-expanded', 'false');
-				this.pickerLifetime.clear();
+	private createColorPicker(row: ThemeColorRow): ColorPicker {
+		const picker = new ColorPicker(row.element.ownerDocument, 'input', {
+			color: localize('themeEditor.pickColor', 'Choose color for {0}', row.id),
+			value: localize('themeEditor.hexColor', 'Hex color for {0}', row.id),
+			opacity: localize('themeEditor.colorOpacity', 'Opacity for {0} (%)', row.id),
+			popup: {
+				show: (anchor, panel, onHide) => {
+					const visible = this.contextViews.show({
+						anchor, content: panel, presentation: 'plain', focusRestore: ContextViewFocusRestore.Previous, onHide: () => {
+							if (this.picker === picker) { this.picker = undefined; this.pickerRow = undefined; }
+							onHide(false);
+						}
+					});
+					if (visible) { this.picker = picker; this.pickerRow = row; }
+					return visible;
+				},
+				hide: () => this.contextViews.hide(),
+				configure: panel => {
+					const lifetime = new DisposableStore();
+					panel.classList.add('ash-theme-editor-color-popup');
+					// The popup can mount outside the auxiliary workbench's themed root.
+					lifetime.add(bindColorTheme(this.themes, panel));
+					lifetime.add(this.contextKeys.createScoped(panel)).createKey(ThemeEditorFocused.key, true);
+					return lifetime;
+				},
 			},
 		});
-		if (visible) picker.focus();
-		else this.pickerLifetime.clear();
+		picker.domNode.classList.add('ash-theme-color-input');
+		return picker;
 	}
-
 	private revealColor(id: string, focus = true): void {
 		const control = this.getControl(); const model = control?.getModel();
 		if (!control || !model) return;
@@ -758,9 +736,7 @@ class ThemeColorGroup extends Disposable {
 class ThemeColorRow extends Disposable {
 	public readonly element: HTMLElement;
 	private readonly name: HTMLButtonElement;
-	private readonly hex: HTMLInputElement;
-	public readonly picker: Button;
-	private readonly swatch: HTMLElement;
+	public readonly picker: ColorPicker;
 	private readonly reset: Button;
 	private readonly source: HTMLElement;
 	private readonly sourceLifetime = this._register(new DisposableStore());
@@ -768,54 +744,40 @@ class ThemeColorRow extends Disposable {
 	private currentColor: Color | undefined;
 	private documentValue: string | undefined;
 	private renderedState: string | undefined;
-	public get accessibleText(): string { return `${this.id}: ${this.hex.value}. ${this.source.textContent ?? ''}`; }
+	private editable = false;
+	public get accessibleText(): string { return `${this.id}: ${this.picker.getAccessibleContent()}. ${this.source.textContent ?? ''}`; }
 	public get color(): Color | undefined { return this.currentColor; }
 
-	constructor(doc: Document, public readonly id: string, description: string, hover: IHoverService, edit: (value: string | undefined) => void, reveal: () => void, pick: (row: ThemeColorRow) => void, private readonly navigate: (id: string) => void) {
+	constructor(doc: Document, public readonly id: string, description: string, hover: IHoverService, edit: (value: string | undefined) => void, reveal: () => void, createPicker: (row: ThemeColorRow) => ColorPicker, private readonly navigate: (id: string) => void) {
 		super();
 		this.element = h(doc, 'div'); this.element.className = 'ash-theme-color';
-		this.picker = this._register(new Button(this.element, { label: '', iconOnly: true, ariaLabel: localize('themeEditor.pickColor', 'Choose color for {0}', id), onClick: () => pick(this) }));
-		this.picker.domNode.classList.add('ash-theme-color-picker');
-		this.picker.domNode.setAttribute('aria-haspopup', 'dialog');
-		this.picker.domNode.setAttribute('aria-expanded', 'false');
-		this.swatch = h(doc, 'span', { className: 'ash-theme-color-swatch', attributes: { 'aria-hidden': 'true' } });
-		this.picker.domNode.append(this.swatch);
 		this.name = h(doc, 'button', { className: 'ash-theme-color-name', attributes: { type: 'button' } }, id);
 		this.element.append(this.name);
 		this._register(addDisposableListener(this.name, 'click', reveal));
 		this._register(hover.setupHover({ target: this.name, content: `${id}\n${description}` }));
-		this.hex = h(doc, 'input', { className: 'ash-theme-color-hex', attributes: { type: 'text', spellcheck: 'false', autocomplete: 'off', 'aria-label': localize('themeEditor.hexColor', 'Hex color for {0}', id) } });
-		this.element.append(this.hex);
-		this._register(addDisposableListener(this.hex, 'input', () => {
-			const value = this.hex.value;
-			const valid = /^#(?:[\da-f]{3}|[\da-f]{4}|[\da-f]{6}|[\da-f]{8})$/iu.test(value);
-			this.hex.setAttribute('aria-invalid', String(!valid));
-			if (valid) edit(value);
-		}));
+		this.picker = this._register(createPicker(this));
+		this._register(this.picker.onDidChangeColor(color => edit(Color.Format.CSS.formatHexA(color, true))));
+		this._register(this.picker.onDidCommitColor(color => edit(Color.Format.CSS.formatHexA(color, true))));
+		this.element.append(this.picker.domNode);
 		this.source = h(doc, 'p'); this.source.className = 'ash-theme-color-source'; this.element.append(this.source);
 		this.reset = this._register(new Button(this.element, { label: localize('themeEditor.reset', 'Reset'), icon: Lxicon.discard, iconOnly: true, size: 'small', presentation: 'quiet', ariaLabel: localize('themeEditor.resetColor', 'Remove the override for {0}', id), title: localize('themeEditor.resetColor', 'Remove the override for {0}', id), onClick: () => edit(undefined) }));
 		this.reset.domNode.classList.add('ash-theme-color-reset');
 		this._register(toDisposable(() => this.element.remove()));
 	}
 
-	public focus(): void { (this.hex.disabled ? this.name : this.hex).focus({ preventScroll: true }); }
+	public focus(): void { if (this.editable) this.picker.focus(); else this.name.focus({ preventScroll: true }); }
 
 	public update(authored: string | undefined, effective: Color | undefined, enabled: boolean, references: ThemeColorReferences | undefined): void {
 		const value = authored ?? (effective ? Color.Format.CSS.formatHexA(effective, true) : '');
 		const state = JSON.stringify([authored, effective ? Color.Format.CSS.formatHexA(effective, true) : undefined, enabled, references]);
-		if (state === this.renderedState && (this.hex.value === value || this.element.ownerDocument.activeElement === this.hex)) return;
+		if (state === this.renderedState) return;
 		this.renderedState = state;
 		this.currentColor = authored ? Color.fromHex(authored) : effective;
-		// Document changes (including Undo in JSON) win over the focused control.
-		// An incomplete hex input survives unrelated preview/catalog refreshes.
-		if (this.documentValue !== value || this.element.ownerDocument.activeElement !== this.hex) {
-			this.hex.value = value;
-			this.hex.removeAttribute('aria-invalid');
-		}
+		// Keep incomplete input through preview refreshes; actual document changes (including Undo) win.
+		if (this.documentValue !== value) this.picker.setColor(this.currentColor ?? Color.transparent, this.id);
 		this.documentValue = value;
-		this.swatch.style.backgroundColor = this.color ? Color.Format.CSS.formatHexA(this.color, true) : 'transparent';
+		this.editable = enabled;
 		this.picker.enabled = enabled;
-		this.hex.disabled = !enabled;
 		this.reset.enabled = enabled && authored !== undefined;
 		this.element.classList.toggle('modified', authored !== undefined);
 		const relation = authored === undefined ? references : undefined;
@@ -828,7 +790,6 @@ class ThemeColorRow extends Disposable {
 		this.sourceKey = key;
 		this.sourceLifetime.clear();
 		this.source.replaceChildren();
-		this.element.classList.toggle('linked', !!relation);
 		if (!relation) {
 			this.source.textContent = label;
 			this.source.title = label;
