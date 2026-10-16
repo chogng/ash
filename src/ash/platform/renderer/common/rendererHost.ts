@@ -11,7 +11,7 @@ import type { ILocalGitService } from '../../git/common/localGitService.js';
 import type { IBackupService } from '../../backup/common/backup.js';
 import type { INetworkDiagnosticsService } from '../../networkDiagnostics/common/networkDiagnosticsService.js';
 import type { ICallService } from '../../call/common/callService.js';
-import type { Event } from '../../../base/common/event.js';
+import type { IDictationBackendService } from './dictation.js';
 import type { ILocalTranscriptionService } from '../../localTranscription/common/localTranscription.js';
 import type { IApprovalEnvironmentService } from '../../approvalEnvironment/common/approvalEnvironmentService.js';
 import type { IMemoriesService } from '../../memories/common/memoriesService.js';
@@ -54,36 +54,6 @@ import type { ITeamApi } from '../../teams/common/teamApi.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type { URI } from '../../../base/common/uri.js';
 import type { ITestExecutionService } from '../../testing/common/testExecutionService.js';
-
-/** A host can provide device access without choosing the user's transcription backend. */
-export const IDictationBackendService = createServiceIdentifier<IDictationBackendService | undefined>('dictationBackendService');
-
-export type DictationBackend =
-	| { readonly type: 'local'; readonly modelId: string; }
-	| { readonly type: 'cloud'; readonly provider: 'openAi' | 'xai'; readonly modelId: string; }
-	| { readonly type: 'codex'; };
-
-export interface IDictationInputOptions {
-	readonly inputDevices: readonly { readonly id: string; readonly label: string; readonly isDefault: boolean; }[];
-	readonly languages: readonly string[];
-}
-
-export interface IDictationSession {
-	stop(): Promise<void>;
-	/** Discards capture and interrupts an upload already waiting for transcription. */
-	cancel(): Promise<void>;
-}
-
-/** Device options and non-local capture. Workbench owns selection; the local transcription service owns local capture. */
-export interface IDictationBackendService {
-	readonly onDidChangeAvailability: Event<void>;
-	getOptions(backend: DictationBackend): Promise<IDictationInputOptions>;
-	start(
-		options: { readonly backend: Exclude<DictationBackend, { readonly type: 'local'; }>; readonly inputDevice: string | null; readonly language: string | null; },
-		onTranscript: (text: string, isFinal: boolean) => void,
-		onEnded: (error?: string) => void,
-	): Promise<IDictationSession>;
-}
 
 /** Optional product capabilities contributed by a statically selected host bundle. */
 export interface RendererHostCapabilities {

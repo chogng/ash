@@ -31,7 +31,7 @@ import { IContextViewService } from '../../../src/ash/platform/contextview/brows
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { Event } from '../../../src/ash/base/common/event.js';
-import { IDictationBackendService, type IDictationBackendService as DictationService } from '../../../src/ash/platform/renderer/common/rendererHost.js';
+import { IDictationBackendService, type IDictationBackendService as DictationService } from '../../../src/ash/platform/renderer/common/dictation.js';
 import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
 import { registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';

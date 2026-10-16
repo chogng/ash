@@ -86,7 +86,7 @@ import { ISessionsProvidersService } from '../services/sessions/browser/sessions
 import { IChatSessionNavigationService } from '../../workbench/services/chat/common/chatSessionNavigationService.js';
 import '../../workbench/contrib/chat/browser/actions/chatSpeechToTextActions.js';
 import '../../workbench/contrib/quickaccess/browser/quickAccess.contribution.js';
-import { IDictationBackendService } from '../../platform/renderer/common/rendererHost.js';
+import { IDictationBackendService } from '../../platform/renderer/common/dictation.js';
 import "../../workbench/browser/style.js";
 import "./media/workbench.css";
 import "./actions/sessionsChatActions.js";

@@ -1,10 +1,8 @@
-import { Disposable } from '../../../../base/common/lifecycle.js';
-import { Emitter } from '../../../../base/common/event.js';
-import { generateUuid } from '../../../../base/common/uuid.js';
-import type { AppServerProtocolClient } from '../../../../platform/agentHost/browser/appServerProtocolClient.js';
-import { APP_SERVER_METHODS } from '../../../../../../.build/protocol/typescript/index.js';
-import type { IDictationBackendService, IDictationSession, IDictationInputOptions, DictationBackend } from '../../../../platform/renderer/common/rendererHost.js';
-import { localize } from '../../../../nls.js';
+import { Disposable } from '../../../../../base/common/lifecycle.js';
+import { Emitter } from '../../../../../base/common/event.js';
+import { generateUuid } from '../../../../../base/common/uuid.js';
+import type { IDictationBackendService, IDictationSession, IDictationInputOptions, DictationBackend, IVoiceCodeTranscriptionBackend } from '../../../../../platform/renderer/common/dictation.js';
+import { localize } from '../../../../../nls.js';
 
 interface DictationCallbacks {
 	readonly onTranscript: (text: string, isFinal: boolean) => void;
@@ -17,34 +15,39 @@ interface DictationCallbacks {
 
 type ActiveDictation = DictationCallbacks & { readonly resourceId: string; finalDelivered: boolean; };
 
-export class AppServerDictationService extends Disposable implements IDictationBackendService {
+/**
+ * Adapts cloud and subscription transcription to the host's dictation contract.
+ * The host owns audio capture and transport; this client owns session lifetimes, while
+ * ChatSpeechToTextService owns backend selection and cumulative transcripts.
+ */
+export class VoiceCodeTranscriptionClient extends Disposable implements IDictationBackendService {
 	private readonly availabilityChanged = this._register(new Emitter<void>());
 	public readonly onDidChangeAvailability = this.availabilityChanged.event;
 	private active: ActiveDictation | undefined;
 	private starting = false;
 
-	constructor(private readonly client: AppServerProtocolClient) {
+	constructor(private readonly backend: IVoiceCodeTranscriptionBackend) {
 		super();
-		this._register(client.onNotification(notification => {
+		this._register(backend.onDidTranscribe(result => {
 			const active = this.active;
-			if (!active) { return; }
-			if (notification.method === 'dictation/transcript' && notification.params.resourceId === active.resourceId) {
-				if (active.cancelled) { return; }
-				if (notification.params.isFinal) { active.finalDelivered = true; }
-				active.onTranscript(notification.params.text, notification.params.isFinal);
-			} else if (notification.method === 'dictation/ended' && notification.params.resourceId === active.resourceId) {
-				if (active.stopping) {
-					active.endedError = active.cancelled ? undefined : dictationError(notification.params.error ?? undefined);
-					return;
-				}
-				this.active = undefined;
-				active.onEnded(dictationError(notification.params.error ?? undefined));
-				if (!active.stopping) { void this.client.request(APP_SERVER_METHODS['dictation/stop'], { resourceId: active.resourceId }).catch(() => undefined); }
-			}
+			if (!active || result.resourceId !== active.resourceId || active.cancelled) { return; }
+			if (result.isFinal) { active.finalDelivered = true; }
+			active.onTranscript(result.text, result.isFinal);
 		}));
-		this._register(client.onStateChange(state => {
+		this._register(backend.onDidEnd(result => {
+			const active = this.active;
+			if (!active || result.resourceId !== active.resourceId) { return; }
+			if (active.stopping) {
+				active.endedError = active.cancelled ? undefined : dictationError(result.error);
+				return;
+			}
+			this.active = undefined;
+			active.onEnded(dictationError(result.error));
+			void this.backend.stop(active.resourceId).catch(() => undefined);
+		}));
+		this._register(backend.onDidChangeConnection(() => {
 			this.availabilityChanged.fire();
-			if (state === 'ready' || !this.active) { return; }
+			if (backend.isConnected || !this.active) { return; }
 			const active = this.active;
 			this.active = undefined;
 			active.onEnded(localize('dictation.connectionLost', 'Dictation connection lost'));
@@ -52,12 +55,12 @@ export class AppServerDictationService extends Disposable implements IDictationB
 	}
 
 	public getOptions(backend: DictationBackend): Promise<IDictationInputOptions> {
-		return this.client.request(APP_SERVER_METHODS['dictation/options'], { backend });
+		return this.backend.getOptions(backend);
 	}
 
 	async start(options: Parameters<IDictationBackendService['start']>[0], onTranscript: (text: string, isFinal: boolean) => void, onEnded: (error?: string) => void): Promise<IDictationSession> {
 		this.assertNotDisposed();
-		if (this.client.state !== 'ready') { throw new Error(localize('dictation.connectionUnavailable', 'Dictation connection is unavailable')); }
+		if (!this.backend.isConnected) { throw new Error(localize('dictation.connectionUnavailable', 'Dictation connection is unavailable')); }
 		if (this.active || this.starting) { throw new Error(localize('dictation.alreadyActive', 'Dictation is already active')); }
 		this.starting = true;
 		try {
@@ -66,7 +69,7 @@ export class AppServerDictationService extends Disposable implements IDictationB
 			const active: ActiveDictation = { ...callbacks, resourceId: generateUuid(), finalDelivered: false };
 			this.active = active;
 			try {
-				await this.client.request(APP_SERVER_METHODS['dictation/start'], { resourceId: active.resourceId, ...options });
+				await this.backend.start(active.resourceId, options);
 			} catch (error) {
 				if (this.active === active) { this.active = undefined; }
 				throw new Error(dictationError(String(error)));
@@ -81,11 +84,11 @@ export class AppServerDictationService extends Disposable implements IDictationB
 		if (this.active !== active) { return; }
 		active.stopping = true;
 		try {
-			const result = await this.client.request(APP_SERVER_METHODS['dictation/stop'], { resourceId: active.resourceId });
+			const text = await this.backend.stop(active.resourceId);
 			if (this.active !== active) { return; }
-			if (!active.cancelled && !active.finalDelivered && result.text !== null) {
+			if (!active.cancelled && !active.finalDelivered && text !== undefined) {
 				active.finalDelivered = true;
-				active.onTranscript(result.text, true);
+				active.onTranscript(text, true);
 			}
 			if (this.active === active) {
 				this.active = undefined;
@@ -106,7 +109,7 @@ export class AppServerDictationService extends Disposable implements IDictationB
 
 	private async cancelRecording(active: ActiveDictation): Promise<void> {
 		try {
-			await this.client.request(APP_SERVER_METHODS['dictation/cancel'], { resourceId: active.resourceId });
+			await this.backend.cancel(active.resourceId);
 		} finally {
 			if (this.active === active) { this.active = undefined; active.onEnded(); }
 		}
@@ -116,7 +119,7 @@ export class AppServerDictationService extends Disposable implements IDictationB
 		const active = this.active;
 		this.active = undefined;
 		if (active) {
-			void this.client.request(APP_SERVER_METHODS['dictation/cancel'], { resourceId: active.resourceId }).catch(() => undefined);
+			void this.backend.cancel(active.resourceId).catch(() => undefined);
 		}
 		super.disposeCore();
 	}

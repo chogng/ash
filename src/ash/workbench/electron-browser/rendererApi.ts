@@ -7,7 +7,8 @@ import { EDIT_USER_CONFIGURATION_CHANNEL } from '../../platform/native/common/na
 import { AppServerBackupService } from '../../platform/backup/browser/appServerBackupService.js';
 import { AppServerCallService } from '../../platform/call/browser/appServerCallService.js';
 import { AppServerAgentVoiceService } from '../../platform/agentHost/browser/appServerAgentService.js';
-import { AppServerDictationService } from '../services/dictation/browser/appServerDictationService.js';
+import { VoiceCodeTranscriptionClient } from '../contrib/chat/browser/speechToText/voiceCodeTranscriptionClient.js';
+import { createAppServerVoiceCodeTranscriptionBackend } from '../../platform/renderer/browser/appServerVoiceCodeTranscriptionBackend.js';
 import { AppServerMemoriesService } from '../../platform/memories/browser/appServerMemoriesService.js';
 import { AppServerMemoryDiagnosticsService } from '../../platform/memory/browser/appServerMemoryDiagnosticsService.js';
 import type { MemoryObservation } from '../../platform/memory/common/memoryDiagnosticsService.js';
@@ -147,7 +148,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			if (client.capabilities?.contracts.calls?.version === 1) { backend = { ...backend, calls: resources.add(new AppServerCallService(client)) }; }
 			if (remoteConnection.kind === 'local' && client.capabilities?.contracts.voiceConversation?.version === 1) { backend = { ...backend, agentVoice: resources.add(new AppServerAgentVoiceService(client)) }; }
 			if (remoteConnection.kind === 'local') {
-				backend = { ...backend, dictation: resources.add(new AppServerDictationService(client)) };
+				backend = { ...backend, dictation: resources.add(new VoiceCodeTranscriptionClient(createAppServerVoiceCodeTranscriptionBackend(client))) };
 			} else {
 				backend = { ...backend, localTranscription: undefined };
 			}

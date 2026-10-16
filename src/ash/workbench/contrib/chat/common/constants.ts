@@ -1,5 +1,5 @@
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import type { DictationBackend } from '../../../../platform/renderer/common/rendererHost.js';
+import type { DictationBackend } from '../../../../platform/renderer/common/dictation.js';
 import { DEFAULT_LOCAL_TRANSCRIPTION_MODEL } from '../../../../platform/localTranscription/common/localTranscription.js';
 
 export const OPEN_AGENTS_WINDOW_COMMAND_ID = 'workbench.action.openAgentsWindow';

@@ -24,7 +24,7 @@ import { DialogService } from '../../../workbench/services/dialogs/common/dialog
 import { FileDialogService } from '../../../workbench/services/dialogs/browser/fileDialogService.js';
 import type { IWebWorkspaceClient } from '../../../workbench/services/workspaces/browser/workspaceOpenService.js';
 import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
-import { IDictationBackendService } from '../../../platform/renderer/common/rendererHost.js';
+import { IDictationBackendService } from '../../../platform/renderer/common/dictation.js';
 import { ISpeechService } from '../../../workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../workbench/contrib/speech/browser/speechService.js';
 import { observableValue } from '../../../base/common/observable.js';

@@ -4,7 +4,7 @@ import { CancellationTokenSource } from '../../../../../base/common/cancellation
 import { canceled, isCancellationError } from '../../../../../base/common/errors.js';
 import { RawContextKey } from '../../../../../platform/contextkey/common/contextkey.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import { IDictationBackendService, type IDictationSession, type IDictationInputOptions } from '../../../../../platform/renderer/common/rendererHost.js';
+import { IDictationBackendService, type IDictationSession, type IDictationInputOptions } from '../../../../../platform/renderer/common/dictation.js';
 import { createDecorator } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ILocalTranscriptionService, type ILocalTranscriptionModelSnapshot } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';

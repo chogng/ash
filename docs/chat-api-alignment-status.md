@@ -204,8 +204,18 @@ Sessions Preferences、Skill 相关调用及 13 项分层检查；4 项 Chromium
 - `browser/chat.shared.contribution.ts` 注册产品设置与窗口共享服务；
 - `common/constants.ts` 解析设置与后端选择，`browser/speechToText/chatSpeechToTextService.ts` 拥有会话编排与累计转写；
 - 扩展识别由 `contrib/speech` 的公开会话提供；本地模型准备、录音和推理直接使用 `ILocalTranscriptionService`；
-- Ash 专属宿主契约收敛到 `src/ash/platform/renderer/common/rendererHost.ts` 的 `IDictationBackendService`；云端／订阅 RPC 实现在 `src/ash/workbench/services/dictation/browser/appServerDictationService.ts`，不读取配置或代理模型准备；
+- Ash 专属宿主契约收敛到 `src/ash/platform/renderer/common/dictation.ts` 的 `IDictationBackendService`；云端／订阅会话实现在 `browser/speechToText/voiceCodeTranscriptionClient.ts`，不读取配置或代理模型准备；
 - Cowork 旧组件引用共享工作台听写服务，不再引用其旧副本。
+
+用户确认将云端转写客户端迁回 VS Code 对应的 `browser/speechToText/voiceCodeTranscriptionClient.ts`，
+测试迁回 `test/browser/speechToText/voiceCodeTranscriptionClient.test.ts`。桌面入口创建唯一的
+`VoiceCodeTranscriptionClient` 并通过既有宿主契约提供能力；停止、取消、最终文本去重和断线清理
+仍由该客户端承担。宿主契约从 `rendererHost.ts` 聚合入口迁入 `platform/renderer/common/dictation.ts`，
+所有消费者直接引用契约的唯一声明；`platform/renderer/browser/appServerVoiceCodeTranscriptionBackend.ts`
+仅负责 RPC 与通知转换，不保存第二份会话状态。两者属于此次迁移保留的 Ash 宿主边界。
+对应关系是客户端职责与文件位置，Ash 保留 App Server 采音与 RPC 契约，
+不引入上游的 WebSocket／音频分块 API。旧 `workbench/services/dictation` 中的实现和测试已迁出，
+原路径没有生产引用或兼容别名，Git 可恢复。
 
 用户已按准确路径清单确认删除以下五个旧文件；现已删除，`src/ash/platform/dictation` 完成退场：
 

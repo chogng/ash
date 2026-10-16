@@ -236,7 +236,7 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	const { IConfigurationService } = await import('../../../../../platform/configuration/common/configuration.js');
 	const { IAccessibleViewService } = await import('../../../../../platform/accessibility/browser/accessibleView.js');
 	const { ISpeechService } = await import('../../../speech/common/speechService.js');
-	const { IDictationBackendService } = await import('../../../../../platform/renderer/common/rendererHost.js');
+	const { IDictationBackendService } = await import('../../../../../platform/renderer/common/dictation.js');
 	const { SpeechService } = await import('../../../speech/browser/speechService.js');
 	const { IDictationOnboardingService, DictationOnboardingService } = await import('../../../chat/browser/speechToText/dictationOnboarding.js');
 	const { WorkbenchViewRegistry, IViewDescriptorService, ViewContainerLocation } = await import('../../../../common/views.js');

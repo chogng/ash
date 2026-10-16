@@ -46,7 +46,7 @@ import { ILanguageModelsService, LanguageModelsService } from '../contrib/chat/c
 import { ILanguageModelsConfigurationService } from '../contrib/chat/common/languageModelsConfiguration.js';
 import { ChatModelPreferences, LanguageModelsConfigurationService } from '../contrib/chat/browser/languageModelsConfigurationService.js';
 import { IAgentVoiceService } from '../../platform/agentHost/common/agentService.js';
-import { IDictationBackendService } from '../../platform/renderer/common/rendererHost.js';
+import { IDictationBackendService } from '../../platform/renderer/common/dictation.js';
 import { ExtensionColorThemeService } from '../services/extensions/browser/extensionColorThemeService.js';
 import { IWorkbenchThemeService } from '../services/themes/common/workbenchThemeService.js';
 import { IHostColorSchemeService, type IHostColorSchemeService as HostColorSchemeService } from '../services/themes/common/hostColorSchemeService.js';

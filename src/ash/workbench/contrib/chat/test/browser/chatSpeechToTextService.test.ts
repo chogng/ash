@@ -13,7 +13,7 @@ import { CommandsRegistry } from '../../../../../platform/commands/common/comman
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import { IDictationBackendService, type IDictationSession } from '../../../../../platform/renderer/common/rendererHost.js';
+import { IDictationBackendService, type IDictationSession } from '../../../../../platform/renderer/common/dictation.js';
 import { ExtensionIdentifier } from '../../../../../platform/extensions/common/extensions.js';
 import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
