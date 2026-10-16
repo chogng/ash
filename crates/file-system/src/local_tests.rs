@@ -160,6 +160,33 @@ fn policy_checked_reads_keep_allowed_directory_and_leaf_symlinks() {
 }
 
 #[test]
+fn read_snapshot_link_information_belongs_to_the_opened_file() {
+    let directory = TestDir::new();
+    let path = directory.path.join("file");
+    fs::write(&path, b"original").unwrap();
+    let files = directory.file_system();
+    assert!(
+        !files
+            .read_file_snapshot(Path::new("file"), 100)
+            .unwrap()
+            .has_multiple_links()
+    );
+    fs::hard_link(&path, directory.path.join("alias")).unwrap();
+    let snapshot = files.read_file_snapshot(Path::new("file"), 100).unwrap();
+    fs::remove_file(&path).unwrap();
+    fs::write(&path, b"replacement").unwrap();
+    // The requested name now has one link; policy consumers must inspect the snapshot's object.
+    assert!(snapshot.has_multiple_links());
+    assert_eq!(snapshot.content().bytes, b"original");
+    assert!(
+        !files
+            .read_file_snapshot(Path::new("file"), 100)
+            .unwrap()
+            .has_multiple_links()
+    );
+}
+
+#[test]
 fn read_snapshots_keep_read_authorization_and_reject_replacement_or_size_changes() {
     let directory = TestDir::new();
     fs::write(directory.path.join("file"), "original").unwrap();

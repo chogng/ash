@@ -13,6 +13,7 @@ use std::sync::RwLock;
 const MAX_UPLOAD_BYTES: usize = 4 * 1024 * 1024;
 
 /// Materializes uploads through the same revocable directory proofs used by file tools.
+/// Built-in sensitive-path denials accompany the final read; hard-link checks use its snapshot.
 /// The returned bytes cannot cause the browser host to reopen a different local path.
 pub(super) fn read(
     runtime: &RwLock<EnvRuntime>,
@@ -32,7 +33,8 @@ pub(super) fn read(
         .map_err(|_| denied())?
         .tools
         .file_access_policy()
-        .map_err(|_| denied())?;
+        .map_err(|_| denied())?
+        .intersect(&crate::local_tools::LOCAL_FILE_ACCESS_POLICY);
     let snapshot = threads.read_thread(thread).map_err(|_| denied())?;
     if matches!(
         snapshot.execution_target,
@@ -121,18 +123,16 @@ pub(super) fn read(
             .and_then(|name| name.to_str())
             .filter(|name| name.len() <= 255)
             .ok_or_else(denied)?;
-        let resolved = authorization
-            .dir()
-            .resolve_existing(relative)
-            .map_err(|_| denied())?;
-        crate::local_tools::ensure_local_file_access(authorization.dir(), &resolved)
-            .map_err(|_| denied())?;
-        let bytes = LocalFileSystem::from_authorization(authorization.clone())
+        #[cfg(test)]
+        tests::before_read_snapshot();
+        let snapshot = LocalFileSystem::from_authorization(authorization.clone())
             .read_file_snapshot(relative, remaining)
-            .map_err(|_| denied())?
-            .content()
-            .bytes
-            .clone();
+            .map_err(|_| denied())?;
+        // A path denial cannot identify hard-link aliases; inspect the object that supplied bytes.
+        if snapshot.has_multiple_links() {
+            return Err(denied());
+        }
+        let bytes = &snapshot.content().bytes;
         cancellation.check().map_err(|_| denied())?;
         // A revoked grant cannot publish bytes from an operation admitted before revocation.
         authorization.ensure_active().map_err(|_| denied())?;

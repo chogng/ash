@@ -1859,8 +1859,23 @@ fn local_isolation() -> ash_sandboxing::FileSystemIsolation {
     }
 }
 
-const LOCAL_DENIED_NAME: &str = ".env";
 const LOCAL_DENIED_GLOBS: &[&str] = &["**/.env"];
+
+/// Built-in path ceilings shared by preflight checks and the authorization used for final reads.
+pub(crate) static LOCAL_FILE_ACCESS_POLICY: LazyLock<ash_file_access::PathAccessPolicy> =
+    LazyLock::new(|| {
+        ash_file_access::PathAccessPolicy::new(
+            ash_file_access::PathAccess::ReadWrite,
+            LOCAL_DENIED_GLOBS
+                .iter()
+                .map(|pattern| ash_file_access::PathAccessRule {
+                    pattern: (*pattern).into(),
+                    access: ash_file_access::PathAccess::Denied,
+                })
+                .collect(),
+        )
+        .expect("built-in local filesystem patterns are valid")
+    });
 
 pub(crate) fn local_sandbox_scope(
     authorization: &Authorization,
@@ -1996,10 +2011,7 @@ pub(crate) fn ensure_local_file_access(dir: &Dir, path: &Path) -> Result<(), Cor
             path.display()
         ))
     })?;
-    if relative
-        .iter()
-        .any(|component| component == LOCAL_DENIED_NAME)
-    {
+    if !LOCAL_FILE_ACCESS_POLICY.allows(relative, ash_file_access::PathOperation::Read) {
         return Err(CoreError::Policy(format!(
             "path is denied by the local filesystem policy: {}",
             path.display()

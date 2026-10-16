@@ -8,6 +8,18 @@ use ash_file_access::PathAccessPolicy;
 use ash_file_access::PathAccessRule;
 use ash_file_access::Permissions;
 
+thread_local! {
+    static SNAPSHOT_READ_HOOK: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+pub(super) fn before_read_snapshot() {
+    let hook = SNAPSHOT_READ_HOOK.with(|hook| hook.borrow_mut().take());
+    if let Some(hook) = hook {
+        hook();
+    }
+}
+
 fn task(server: &crate::AppServer, name: &str) -> (ThreadId, TurnId) {
     let created = server
         .threads
@@ -51,6 +63,134 @@ fn task(server: &crate::AppServer, name: &str) -> (ThreadId, TurnId) {
     (created.thread_id, turn.turn_id)
 }
 
+#[cfg(unix)]
+#[test]
+fn browser_upload_denies_sensitive_symlink_replacement_before_snapshot() {
+    for (alias, allowed, denied) in [
+        ("upload.txt", "allowed.txt", ".env"),
+        ("alias/file.txt", "allowed", ".env"),
+    ] {
+        let mut server = crate::tests::server();
+        let root = tempfile::tempdir().unwrap();
+        let root_path = root.path().canonicalize().unwrap();
+        let leaf = Path::new(alias).file_name().unwrap();
+        for (target, bytes) in [(allowed, b"public"), (denied, b"secret")] {
+            let mut target = root_path.join(target);
+            if alias.contains('/') {
+                std::fs::create_dir(&target).unwrap();
+                target.push(leaf);
+            }
+            std::fs::write(target, bytes).unwrap();
+        }
+        let replaced = root_path.join(Path::new(alias).components().next().unwrap());
+        std::os::unix::fs::symlink(allowed, &replaced).unwrap();
+        let dir = Dir::open_local(&root_path).unwrap();
+        server.env_runtime_mut().selected_grant = Some(Grant::for_environment(
+            dir.clone(),
+            GrantSource::ExplicitUser,
+            Permissions::new([Permission::ReadFiles]),
+        ));
+        let (thread, turn) = task(&server, "sensitive-race");
+        let paths = [root_path.join(alias).to_str().unwrap().to_owned()];
+        let source = CancellationSource::new();
+        let upload = || {
+            read(
+                &server.env_runtime,
+                &server.env_config,
+                &server.threads,
+                &thread,
+                &turn,
+                &paths,
+                &source.token(),
+            )
+        };
+        let files = upload().unwrap();
+        assert_eq!(
+            base64::engine::general_purpose::STANDARD
+                .decode(&files[0].data_base64)
+                .unwrap(),
+            b"public"
+        );
+        // Establish that the earlier local check accepts the object before the writer runs.
+        let resolved = dir.resolve_existing(alias).unwrap();
+        crate::local_tools::ensure_local_file_access(&dir, &resolved).unwrap();
+        let (ready_tx, ready_rx) = std::sync::mpsc::sync_channel(0);
+        let (replaced_tx, replaced_rx) = std::sync::mpsc::sync_channel(0);
+        SNAPSHOT_READ_HOOK.with(|hook| {
+            *hook.borrow_mut() = Some(Box::new(move || {
+                ready_tx.send(()).unwrap();
+                replaced_rx
+                    .recv_timeout(std::time::Duration::from_secs(10))
+                    .unwrap();
+            }));
+        });
+        let result = std::thread::scope(|scope| {
+            scope.spawn(move || {
+                ready_rx
+                    .recv_timeout(std::time::Duration::from_secs(10))
+                    .unwrap();
+                std::fs::remove_file(&replaced).unwrap();
+                std::os::unix::fs::symlink(denied, &replaced).unwrap();
+                replaced_tx.send(()).unwrap();
+            });
+            upload()
+        });
+        assert!(
+            result.is_err(),
+            "uploaded sensitive replacement for {alias}"
+        );
+    }
+}
+
+#[test]
+fn browser_upload_denies_hard_link_replacement_before_snapshot() {
+    let mut server = crate::tests::server();
+    let root = tempfile::tempdir().unwrap();
+    let root_path = root.path().canonicalize().unwrap();
+    let path = root_path.join("upload.txt");
+    let secret = root_path.join(".env");
+    std::fs::write(&path, b"public").unwrap();
+    std::fs::write(&secret, b"secret").unwrap();
+    server.env_runtime_mut().selected_grant = Some(Grant::for_environment(
+        Dir::open_local(&root_path).unwrap(),
+        GrantSource::ExplicitUser,
+        Permissions::new([Permission::ReadFiles]),
+    ));
+    let (thread, turn) = task(&server, "hard-link-race");
+    let paths = [path.to_str().unwrap().to_owned()];
+    let source = CancellationSource::new();
+    let (ready_tx, ready_rx) = std::sync::mpsc::sync_channel(0);
+    let (replaced_tx, replaced_rx) = std::sync::mpsc::sync_channel(0);
+    SNAPSHOT_READ_HOOK.with(|hook| {
+        *hook.borrow_mut() = Some(Box::new(move || {
+            ready_tx.send(()).unwrap();
+            replaced_rx
+                .recv_timeout(std::time::Duration::from_secs(10))
+                .unwrap();
+        }));
+    });
+    let result = std::thread::scope(|scope| {
+        scope.spawn(move || {
+            ready_rx
+                .recv_timeout(std::time::Duration::from_secs(10))
+                .unwrap();
+            std::fs::remove_file(&path).unwrap();
+            std::fs::hard_link(&secret, &path).unwrap();
+            replaced_tx.send(()).unwrap();
+        });
+        read(
+            &server.env_runtime,
+            &server.env_config,
+            &server.threads,
+            &thread,
+            &turn,
+            &paths,
+            &source.token(),
+        )
+    });
+    assert!(result.is_err(), "uploaded a multiply linked replacement");
+}
+
 #[test]
 fn browser_upload_uses_live_path_permissions_and_denies_escapes_sensitive_files_and_revocation() {
     let mut server = crate::tests::server();
@@ -62,9 +202,12 @@ fn browser_upload_uses_live_path_permissions_and_denies_escapes_sensitive_files_
         ("allowed.txt", "allowed bytes"),
         ("denied.txt", "denied bytes"),
         (".env", "secret"),
+        (".env.local", "allowed suffix"),
     ] {
         std::fs::write(root_path.join(name), content).unwrap();
     }
+    std::fs::create_dir(root_path.join("nested")).unwrap();
+    std::fs::write(root_path.join("nested/.env"), "nested secret").unwrap();
     std::fs::write(outside_path.join("secret.txt"), "outside secret").unwrap();
     let grant = Grant::for_environment(
         Dir::open_local(&root_path).unwrap(),
@@ -106,10 +249,12 @@ fn browser_upload_uses_live_path_permissions_and_denies_escapes_sensitive_files_
             .unwrap(),
         b"allowed bytes"
     );
+    assert!(read_paths(vec![root_path.join(".env.local")]).is_ok());
     for path in [
         outside_path.join("secret.txt"),
         root_path.join("denied.txt"),
         root_path.join(".env"),
+        root_path.join("nested/.env"),
         root_path.join("../secret.txt"),
         root_path.clone(),
     ] {
@@ -128,8 +273,10 @@ fn browser_upload_uses_live_path_permissions_and_denies_escapes_sensitive_files_
         std::os::unix::fs::symlink(outside_path.join("secret.txt"), root_path.join("escape"))
             .unwrap();
         std::os::unix::fs::symlink(root_path.join("denied.txt"), root_path.join("alias")).unwrap();
+        std::os::unix::fs::symlink(root_path.join(".env"), root_path.join("secret-alias")).unwrap();
         assert!(read_paths(vec![root_path.join("escape")]).is_err());
         assert!(read_paths(vec![root_path.join("alias")]).is_err());
+        assert!(read_paths(vec![root_path.join("secret-alias")]).is_err());
         std::fs::hard_link(outside_path.join("secret.txt"), root_path.join("hardlink")).unwrap();
         assert!(read_paths(vec![root_path.join("hardlink")]).is_err());
     }

@@ -47,6 +47,11 @@ impl FileReadSnapshot {
     pub fn content(&self) -> &FileContent {
         &self.content
     }
+
+    /// Reports hard links on the handle used to read these bytes, without reopening its path.
+    pub fn has_multiple_links(&self) -> bool {
+        self.stamp.identity.has_multiple_links()
+    }
 }
 
 #[derive(PartialEq)]
