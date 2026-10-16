@@ -165,6 +165,39 @@ async function chatPage(page: Page, answer = 'Synthetic answer'): Promise<void> 
 
 for (const locale of ['en', 'zh-CN']) {
 	for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
+		test(`ChatGPT startup focus stays in the editor through loading in ${locale} ${theme}`, async ({ page }, testInfo) => {
+			await mockChatGPTRequests(page);
+			let releaseCatalog!: () => Promise<void>;
+			await page.route('**/service/backend-api/models?*', route => {
+				releaseCatalog = () => route.fulfill({ json: { models: [{ slug: 'fixture', title: 'Fixture model' }], default_model_slug: 'fixture' } });
+			});
+			await page.goto(`/chatgptNavigation.html?focus=1&locale=${locale}&theme=${theme}`);
+			const composer = page.locator('.ash-chatgpt-composer');
+			const input = composer.getByRole('textbox', { name: locale === 'en' ? 'Ask ChatGPT' : '询问 ChatGPT' });
+			const model = composer.getByRole('combobox');
+			await expect(input).toBeFocused();
+			await expect(input).toBeDisabled();
+			await expect(composer).toHaveCSS('outline-style', 'none');
+			await expect(composer.locator('.stanza-editor')).toHaveCSS('outline-style', 'none');
+			await page.keyboard.insertText('Ignored while loading');
+			await expectDraft(page, '');
+			await expect.poll(() => typeof releaseCatalog).toBe('function');
+			await releaseCatalog();
+			await expect(input).toBeEnabled();
+			await expect(input).toBeFocused();
+			await page.keyboard.insertText('Ready to type');
+			await expectDraft(page, 'Ready to type');
+			await composer.locator('.view-line').click();
+			await expect(composer).toHaveCSS('outline-style', 'none');
+			await input.press('Tab');
+			await expect(model).toBeFocused();
+			await expect(model).toHaveCSS('outline-style', 'solid');
+			await expect(model).not.toHaveCSS('outline-color', 'rgba(0, 0, 0, 0)');
+			await page.keyboard.press('Shift+Tab');
+			await expect(input).toBeFocused();
+			await testInfo.attach('composer-ready-focus', { body: await page.screenshot(), contentType: 'image/png' });
+		});
+
 		test(`ChatGPT composer grows from one line and retains inline controls in ${locale} ${theme}`, async ({ page }, testInfo) => {
 			await mockChatGPTRequests(page);
 			await page.goto(`/chatgptNavigation.html?locale=${locale}&theme=${theme}`);

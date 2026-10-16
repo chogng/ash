@@ -136,4 +136,5 @@ const resize = new ResizeObserver(() => view.layout(host.clientHeight, 0, host.c
 resize.observe(host);
 resources.add(toDisposable(() => resize.disconnect()));
 chat.initialize();
+if (parameters.has('focus')) { widget.focus(); }
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });

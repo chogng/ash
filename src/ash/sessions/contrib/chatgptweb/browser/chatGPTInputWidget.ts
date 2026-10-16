@@ -48,7 +48,6 @@ export class ChatGPTInputWidget extends Disposable {
 		super();
 		this.element = h(container.ownerDocument, 'form');
 		this.element.className = 'ash-chatgpt-composer';
-		this.element.tabIndex = -1;
 		container.append(this.element);
 		this.attachmentList = h(container.ownerDocument, 'div');
 		this.attachmentList.className = 'ash-chatgpt-input-attachments';
@@ -285,8 +284,7 @@ export class ChatGPTInputWidget extends Disposable {
 	}
 
 	focus(): void {
-		const state = this.chat.state.get();
-		if (!state.connected || state.busy || state.sending) { this.element.focus(); }
-		else { this.editor.focus(); }
+		// Read-only loading states retain the text focus target without focusing the form.
+		this.editor.focus();
 	}
 }
