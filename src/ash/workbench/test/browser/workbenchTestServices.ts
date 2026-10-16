@@ -46,7 +46,7 @@ class TestWorkbenchServices extends InstantiationService {
 	public readonly resources = this._register(new DisposableStore());
 }
 
-export function workbenchInstantiationService(owner?: Pick<DisposableStore, 'add'>, storage?: IStorageService, overrides: { readonly languageFeatures?: ILanguageFeaturesService; readonly output?: IOutputService; } = {}): TestWorkbenchServices {
+export function workbenchInstantiationService(owner?: Pick<DisposableStore, 'add'>, storage?: IStorageService, overrides: { readonly languageFeatures?: ILanguageFeaturesService; readonly output?: IOutputService; readonly fileResources?: ITextResourceStore; } = {}): TestWorkbenchServices {
 	const services = new TestWorkbenchServices();
 	owner?.add(services);
 	const resources = services.resources;
@@ -70,11 +70,11 @@ export function workbenchInstantiationService(owner?: Pick<DisposableStore, 'add
 		storage = resources.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'test', backend: browser.window.localStorage, flushInterval: 0 }));
 	}
 	services.registerInstance(IStorageService, storage);
-	const fileModels = resources.add(uriIdentityServices.createInstance(BrowserTextModelService, {
+	const fileModels = resources.add(uriIdentityServices.createInstance(BrowserTextModelService, overrides.fileResources ?? {
 		onDidChange: Event.None,
 		resolve: async () => { throw new Error('Filesystem acquisition is outside this Output scenario'); },
 		save: async () => { throw new Error('Filesystem acquisition is outside this Output scenario'); },
-	} satisfies ITextResourceStore, {}));
+	} satisfies ITextResourceStore, { languageService: languages, languageFeaturesService: features, languageConfigurationService: languageConfiguration }));
 	services.registerInstance(ITextModelResourceService, fileModels);
 	services.registerInstance(IFileTextModelService, fileModels);
 	services.registerInstance(ITextModelService, services.createInstance(TextModelResolverService));

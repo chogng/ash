@@ -573,8 +573,10 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		entry.fileChangeListener.dispose();
 		entry.dirtyEmitter.dispose();
 		entry.externalChangeEmitter.dispose();
-		entry.model.dispose();
+		// Removal observers need the final snapshot after the registry drops its
+		// identity, while the model can still answer version/text requests.
 		this.modelRemoved.fire(entry.model);
+		entry.model.dispose();
 	}
 
 	private ensureEntryAlive(entry: TextModelEntry): void {

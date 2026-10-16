@@ -114,7 +114,7 @@ test('extension provider replacement updates diagnostics and navigation atomical
 	using registration = service.registerProviderBatch({ syntax: [diagnostics], definitions: [definitions] });
 	const observations: number[] = [];
 	using listener = service.syntaxProvider.onDidChange(() => observations.push(service.definitionProvider.all(model).length));
-	registration.replace({ syntax: [diagnostics], documentSymbols: [{ selector: 'markdown', provider: { provideDocumentSymbols: () => [] } }] });
+	registration.replace({ syntax: [{ ...diagnostics }], documentSymbols: [{ selector: 'markdown', provider: { provideDocumentSymbols: () => [] } }] });
 	assert.deepEqual(observations, [0]);
 	assert.equal(service.documentSymbolProvider.all(model).length, 1);
 	assert.throws(() => registration.replace({ syntax: [{ ...diagnostics, id: 'bad id' }] }), /Syntax provider ID/);
@@ -122,4 +122,19 @@ test('extension provider replacement updates diagnostics and navigation atomical
 	assert.equal(service.documentSymbolProvider.all(model).length, 1);
 	registration.dispose();
 	assert.deepEqual([service.syntaxProvider.getDiagnosticProviders('markdown').length, service.documentSymbolProvider.all(model).length], [0, 0]);
+});
+
+test('navigation-only batch updates retain syntax providers without invalidating open models', () => {
+	using service = new LanguageFeaturesService();
+	const diagnostics = { id: 'markdown', languageIds: ['markdown'], provideDiagnostics: () => ({ diagnostics: [] }) };
+	using registration = service.registerProviderBatch({ syntax: [diagnostics] });
+	const selected = service.syntaxProvider.getDiagnosticProviders('markdown')[0];
+	let changes = 0;
+	using listener = service.syntaxProvider.onDidChange(() => changes++);
+	registration.replace({ syntax: [diagnostics], documentSymbols: [{ selector: 'markdown', provider: { provideDocumentSymbols: () => [] } }] });
+	assert.equal(changes, 0);
+	assert.equal(service.syntaxProvider.getDiagnosticProviders('markdown')[0], selected);
+	registration.replace({ syntax: [{ ...diagnostics }] });
+	assert.equal(changes, 1);
+	assert.notEqual(service.syntaxProvider.getDiagnosticProviders('markdown')[0], selected);
 });

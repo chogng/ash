@@ -69,7 +69,7 @@ export class MainThreadTerminalService extends Disposable {
 		for (const descriptor of next) {
 			const key = descriptor.runtimeId;
 			if (this.environmentDescriptors.get(key) === descriptor) continue;
-			const extension = this.extensions.currentCatalog.extensions.find(extension => extension.packageSha256 === descriptor.packageDigest);
+			const extension = this.extensionForRuntime(descriptor);
 			if (!extension) throw invalid();
 			this.environmentRegistrations.deleteAndDispose(key);
 			this.environmentDescriptors.delete(key);
@@ -100,7 +100,7 @@ export class MainThreadTerminalService extends Disposable {
 		for (const descriptor of next) {
 			const key = `${descriptor.runtimeId}/${descriptor.profileId}`;
 			if (this.descriptors.get(key) === descriptor) continue;
-			const extension = this.extensions.currentCatalog.extensions.find(extension => extension.packageSha256 === descriptor.packageDigest);
+			const extension = this.extensionForRuntime(descriptor);
 			if (!extension) throw new Error(localize('terminal.profile.providerUnavailable', 'Terminal profile provider is unavailable: {0}', descriptor.title));
 			this.registrations.deleteAndDispose(key);
 			this.descriptors.delete(key);
@@ -215,6 +215,14 @@ export class MainThreadTerminalService extends Disposable {
 				throw error;
 			}
 		}
+	}
+
+	private extensionForRuntime(descriptor: ExtensionTerminalEnvironmentRegistration) {
+		// Product executables use a source fingerprint for their process fence;
+		// the client catalog hashes packaged resources. Only built-in identities
+		// can bridge those different digests; external packages require an exact match.
+		return this.extensions.currentCatalog.extensions.find(extension => extension.packageSha256 === descriptor.packageDigest
+			|| extension.sourceKind === 'builtIn' && extension.id === descriptor.runtimeId);
 	}
 
 	protected override disposeCore(): void {

@@ -1,7 +1,7 @@
 import { Disposable, DisposableMap, DisposableStore } from '../../../base/common/lifecycle.js';
 import { throwIfCancelled } from '../../../base/common/cancellation.js';
 import type { ITextModel } from '../../../editor/common/model.js';
-import { IModelService } from '../../../editor/common/services/model.js';
+import { IFileTextModelService } from '../../services/textmodelResolver/common/textModelResourceService.js';
 import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
 import { type ExtensionDocumentSnapshot } from '../common/extHost.protocol.js';
 
@@ -13,7 +13,7 @@ export class MainThreadDocuments extends Disposable {
 	constructor(
 		private readonly timeoutMillis: number,
 		private readonly reportError: (error: unknown) => void,
-		@IModelService private readonly models: IModelService,
+		@IFileTextModelService private readonly models: IFileTextModelService,
 		@IExtensionHostApi private readonly api: IExtensionHostApi,
 	) {
 		super();

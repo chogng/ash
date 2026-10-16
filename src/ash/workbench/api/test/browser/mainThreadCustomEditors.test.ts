@@ -205,6 +205,9 @@ test('packaged Markdown extension activates Chinese labels and renders the suppl
 	assert.equal(provider?.kind === 'customTextEditor' && provider.displayName, 'Markdown 预览');
 	const previewCommand = registrations.find(registration => registration.kind === 'command' && registration.command === 'markdown.showPreview');
 	assert.equal(previewCommand?.kind === 'command' && previewCommand.title, '打开预览');
+	assert.equal(previewCommand?.kind === 'command' && previewCommand.icon, 'preview');
+	const sideCommand = registrations.find(registration => registration.kind === 'command' && registration.command === 'markdown.showPreviewToSide');
+	assert.equal(sideCommand?.kind === 'command' && sideCommand.icon, 'open-preview');
 	const signal = new AbortController().signal;
 	const result = await handlers.get('vscode.markdown.preview.editor')!('resolveCustomTextEditor', {
 		document: { uri: 'untitled:/draft.md', text: '# Unsaved\n\n**bold**\n\n<script>alert(1)</script>', languageId: 'markdown', version: 1 },
@@ -420,4 +423,122 @@ test('Rust Markdown extracts link definitions and resolves extensionless targets
 	assert.equal(actions[0]!.kind, 'refactor.extract.link');
 	assert.equal(actions[0]!.edit.entries[0]!.expectedText, text);
 	assert.deepEqual(actions[0]!.edit.entries[0]!.edits.map(edit => edit.text), ['[link][1]', '\n\n[1]: ./other#heading\n']);
+});
+
+test('Rust Markdown keeps escaped reference labels on UTF-16 boundaries and remains usable', async () => {
+	const uri = 'untitled:/escaped.md';
+	const text = '[go][a\\]😀]\n\n[a\\]😀]: https://example.com\n[a\\]😀]: https://duplicate.example\n';
+	const { invoke } = await loadMarkdown('en', [{ uri, text, version: 1, languageId: 'markdown' }]);
+	const signal = new AbortController().signal;
+	const request = { resource: uri, text, version: 1 };
+	const diagnostics = await invoke('diagnostics', request, signal) as any;
+	assert.deepEqual(diagnostics.diagnostics.map((value: any) => [value.code, value.range]), [
+		['link.duplicate-definition', { start: { lineIndex: 3, columnIndex: 1 }, end: { lineIndex: 3, columnIndex: 6 } }],
+	]);
+	const renamed = await invoke('rename', { ...request, position: { lineIndex: 0, columnIndex: 8 }, kind: 'edit', newName: 'renamed' }, signal) as any;
+	assert.deepEqual(renamed.entries[0].edits, [
+		{ range: { start: { lineIndex: 0, columnIndex: 5 }, end: { lineIndex: 0, columnIndex: 10 } }, text: 'renamed' },
+		{ range: { start: { lineIndex: 2, columnIndex: 1 }, end: { lineIndex: 2, columnIndex: 6 } }, text: 'renamed' },
+		{ range: { start: { lineIndex: 3, columnIndex: 1 }, end: { lineIndex: 3, columnIndex: 6 } }, text: 'renamed' },
+	]);
+	assert.deepEqual(await invoke('diagnostics', { resource: uri, text: '# Still alive', version: 2 }, signal), { diagnostics: [] });
+});
+
+test('heading rename preserves links when collision suffixes change on other headings', async () => {
+	const uri = 'file:///workspace/headings.md';
+	const text = '# Alpha\n\n# Beta\n\n# Alpha\n\n[renamed](#beta) [later](#alpha-1) [first](#alpha)\n';
+	const referring = { uri: 'file:///workspace/referring.md', text: '[go](./headings.md#alpha-1)', version: 1, languageId: 'markdown' };
+	const { invoke, handlers } = await loadMarkdown('en', [{ uri, text, version: 1, languageId: 'markdown' }, referring]);
+	const signal = new AbortController().signal;
+	const edit = await invoke('rename', { resource: uri, text, version: 1, position: { lineIndex: 2, columnIndex: 3 }, kind: 'edit', newName: '**Alpha**' }, signal) as any;
+	const changed = new Map<string, string>();
+	for (const entry of edit.entries) {
+		const lines: string[] = entry.expectedText.split('\n');
+		const offset = (position: any) => lines.slice(0, position.lineIndex).reduce((total, line) => total + line.length + 1, 0) + position.columnIndex;
+		let result: string = entry.expectedText;
+		for (const replacement of [...entry.edits].sort((a, b) => offset(b.range.start) - offset(a.range.start))) result = result.slice(0, offset(replacement.range.start)) + replacement.text + result.slice(offset(replacement.range.end));
+		changed.set(entry.resource, result);
+	}
+	assert.equal(changed.get(uri), '# Alpha\n\n# **Alpha**\n\n# Alpha\n\n[renamed](#alpha-1) [later](#alpha-2) [first](#alpha)\n');
+	assert.equal(changed.get(referring.uri), '[go](./headings.md#alpha-2)');
+	const preview = await handlers.get('vscode.markdown.preview.editor')!('resolveCustomTextEditor', { document: { uri, text: changed.get(uri)!, version: 2, languageId: 'markdown' } }, signal) as any;
+	assert.deepEqual([...preview.update.html.matchAll(/<h1 id="([^"]+)"/gu)].map(value => value[1]), ['alpha', 'alpha-1', 'alpha-2']);
+});
+
+test('root-relative Markdown links use the containing workspace for navigation diagnostics and completion', async () => {
+	const current = { uri: 'file:///workspace/nested/docs/current.md', text: '[go](/target.md#heading)', version: 1, languageId: 'markdown' };
+	const target = { ...current, uri: 'file:///workspace/nested/target.md', text: '# Heading\n' };
+	const { invoke, clientCalls } = await loadMarkdown('en', [current, target], {}, ['file:///workspace', 'file:///workspace/nested'], async request => {
+		if (request.operation === 'setDiagnostics') return { result: 'done' };
+		if (request.operation === 'readResourceDirectory') {
+			assert.equal(request.uri.replace(/\/$/u, ''), 'file:///workspace/nested');
+			return { result: 'resourceDirectory', entries: [['target.md', 1]] };
+		}
+		throw new Error(`Unexpected root-relative request: ${JSON.stringify(request)}`);
+	});
+	const signal = new AbortController().signal;
+	const request = { resource: current.uri, text: current.text, version: 1 };
+	assert.deepEqual(await invoke('diagnostics', request, signal), { diagnostics: [] });
+	assert.deepEqual(await invoke('definition', { ...request, position: { lineIndex: 0, columnIndex: 10 } }, signal), [
+		{ resource: target.uri, range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 9 } } },
+	]);
+	const links = await invoke('documentLinks', request, signal) as any[];
+	assert.equal(URI.parse(links[0]!.target).toString(true), `${target.uri}#1,1`);
+	const completion = await invoke('completion', { ...request, text: '[go](/tar', position: { lineIndex: 0, columnIndex: 9 } }, signal) as any;
+	assert.ok(completion.items.some((item: any) => item.insertText === '/target.md'));
+	assert.ok(!clientCalls.includes('statResource'));
+});
+
+test('Markdown changes inspect only the changed document and indexed dependents after initialization', async () => {
+	const documents = [
+		{ uri: 'file:///workspace/target.md', text: '# Before\n', version: 1, languageId: 'markdown' },
+		{ uri: 'file:///workspace/link.md', text: '[go](./target#before)', version: 1, languageId: 'markdown' },
+		{ uri: 'file:///workspace/unrelated.md', text: '# Unrelated', version: 1, languageId: 'markdown' },
+	];
+	const reads: string[] = [], publications: any[] = [];
+	const { invoke, handlers, clientCalls } = await loadMarkdown('en', documents, {}, [], async request => {
+		if (request.operation === 'setDiagnostics') { publications.push(request); return { result: 'done' }; }
+		if (request.operation === 'statResource') throw new Error('Extensionless target does not exist');
+		if (request.operation === 'readDocument') { reads.push(request.uri); throw new Error('No such document'); }
+		throw new Error(`Unexpected incremental request: ${JSON.stringify(request)}`);
+	});
+	clientCalls.length = reads.length = publications.length = 0;
+	documents[0] = { ...documents[0]!, text: '# After\n', version: 2 };
+	const signal = new AbortController().signal;
+	await handlers.get('vscode.documents')!('documentEvent', { type: 'change', document: documents[0]! }, signal);
+	assert.equal(clientCalls.filter(value => value === 'listDocuments').length, 0);
+	assert.equal(clientCalls.filter(value => value === 'readDocument').length, 1, 'read only the dependent snapshot');
+	assert.deepEqual(reads, []);
+	assert.deepEqual(publications[0].entries.map((entry: any) => entry.uri).sort(), documents.slice(0, 2).map(document => document.uri).sort());
+	assert.equal(publications[0].entries[0].uri === documents[0]!.uri ? publications[0].entries[1].diagnostics[0].code : publications[0].entries[0].diagnostics[0].code, 'link.no-such-header-in-file');
+	// Equal URI/version values are insufficient for cache reuse after a model is reopened.
+	assert.deepEqual(await invoke('diagnostics', { resource: documents[0]!.uri, version: 2, text: '# Different\n\n[go](#different)' }, signal), { diagnostics: [] });
+});
+
+test('an interrupted Markdown diagnostic publication rebuilds dependencies from current client snapshots', async () => {
+	const documents = [
+		{ uri: 'file:///workspace/target.md', text: '# Before', version: 1, languageId: 'markdown' },
+		{ uri: 'file:///workspace/link.md', text: '[go](./target.md#before)', version: 1, languageId: 'markdown' },
+	];
+	let failPublication = false;
+	const publications: any[] = [];
+	const { handlers, clientCalls } = await loadMarkdown('en', documents, {}, [], async request => {
+		if (request.operation === 'setDiagnostics') {
+			if (failPublication) { failPublication = false; throw new Error('Deliberate publication failure'); }
+			publications.push(request);
+			return { result: 'done' };
+		}
+		throw new Error(`Unexpected diagnostic recovery request: ${JSON.stringify(request)}`);
+	});
+	const signal = new AbortController().signal;
+	documents[0] = { ...documents[0]!, text: '# After', version: 2 };
+	failPublication = true;
+	await assert.rejects(handlers.get('vscode.documents')!('documentEvent', { type: 'change', document: documents[0]! }, signal), /Deliberate publication failure/u);
+	clientCalls.length = publications.length = 0;
+	documents[0] = { ...documents[0]!, text: '# Final', version: 3 };
+	await handlers.get('vscode.documents')!('documentEvent', { type: 'change', document: documents[0]! }, signal);
+	assert.equal(clientCalls.filter(value => value === 'listDocuments').length, 1);
+	assert.equal(publications[0].merge, undefined);
+	assert.deepEqual(publications[0].entries.map((entry: any) => [entry.uri, entry.version]), documents.slice().reverse().map(document => [document.uri, document.version]));
+	assert.equal(publications[0].entries[0].diagnostics[0].code, 'link.no-such-header-in-file');
 });

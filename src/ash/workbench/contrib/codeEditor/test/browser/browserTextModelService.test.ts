@@ -851,7 +851,7 @@ test('file model observers see one shared model, language changes and final rele
 	const events: string[] = [];
 	using added = models.onModelAdded(model => { assert.equal(models.getModel(resource), model); events.push('added:' + model.getLanguageId()); });
 	using changed = models.onModelLanguageChanged(event => events.push(event.oldLanguageId + '->' + event.model.getLanguageId()));
-	using removed = models.onModelRemoved(() => { assert.equal(models.getModel(resource), null); events.push('removed'); });
+	using removed = models.onModelRemoved(model => { assert.equal(models.getModel(resource), null); assert.equal(model.getValue(), 'content'); assert.ok(model.getVersionId() > 0); events.push('removed'); });
 	const first = await models.acquire({ resource, languageId: 'typescript' }, new AbortController().signal);
 	const second = await models.acquire({ resource }, new AbortController().signal);
 	first.model.setLanguage(languages.createById('rust'));

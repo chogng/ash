@@ -3,11 +3,13 @@
 //! precede authorized filesystem reads and edits are returned to the client's transaction.
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::collections::VecDeque;
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::ops::Range;
 use std::sync::Arc;
 use std::sync::LazyLock;
+use std::sync::Mutex;
 use std::sync::RwLock;
 
 use external_ext_sdk::CancellationToken;
@@ -82,6 +84,132 @@ struct Document {
     heading_ids: BTreeMap<String, usize>,
 }
 
+/// Shared with preview and rename so collisions use the same document-order IDs.
+#[derive(Default)]
+pub(crate) struct HeadingIds {
+    next: BTreeMap<String, usize>,
+}
+
+impl HeadingIds {
+    pub(crate) fn insert(&mut self, title: &str) -> String {
+        let base = slug(title);
+        let mut number = self.next.get(&base).copied().unwrap_or(0);
+        let mut candidate = if number == 0 {
+            base.clone()
+        } else {
+            format!("{base}-{number}")
+        };
+        while self.next.contains_key(&candidate) {
+            number += 1;
+            candidate = format!("{base}-{number}");
+        }
+        self.next.insert(base, number + 1);
+        self.next.insert(candidate.clone(), 1);
+        candidate
+    }
+}
+
+/// Only derived analysis is retained. Every lookup requires a caller-supplied
+/// snapshot, including its text, so equal URI/version values from different
+/// clients or reopened models cannot reuse another snapshot's analysis.
+#[derive(Default)]
+struct AnalysisCache {
+    entries: VecDeque<(Arc<Document>, usize)>,
+    bytes: usize,
+}
+
+impl AnalysisCache {
+    const MAX_ENTRIES: usize = 16;
+    const MAX_BYTES: usize = 32 * 1024 * 1024;
+
+    fn get(&mut self, snapshot: &DocumentSnapshot) -> Option<Arc<Document>> {
+        let index = self.entries.iter().position(|(document, _)| {
+            document.snapshot.uri == snapshot.uri
+                && document.snapshot.version == snapshot.version
+                && document.snapshot.text == snapshot.text
+        })?;
+        let entry = self.entries.remove(index)?;
+        let document = Arc::clone(&entry.0);
+        self.entries.push_back(entry);
+        Some(document)
+    }
+
+    fn remove(&mut self, uri: &str) {
+        if let Some(index) = self
+            .entries
+            .iter()
+            .position(|(document, _)| document.snapshot.uri == uri)
+        {
+            self.bytes -= self.entries.remove(index).unwrap().1;
+        }
+    }
+
+    fn insert(&mut self, document: Arc<Document>) {
+        if self.entries.iter().any(|(previous, _)| {
+            previous.snapshot.uri == document.snapshot.uri
+                && previous.snapshot.version > document.snapshot.version
+        }) {
+            return;
+        }
+        self.remove(&document.snapshot.uri);
+        let bytes = document.retained_bytes();
+        if bytes > Self::MAX_BYTES {
+            return;
+        }
+        while self.entries.len() >= Self::MAX_ENTRIES || self.bytes + bytes > Self::MAX_BYTES {
+            self.bytes -= self.entries.pop_front().unwrap().1;
+        }
+        self.bytes += bytes;
+        self.entries.push_back((document, bytes));
+    }
+}
+
+/// Observed open documents retain only derived link targets, never editor state.
+/// Oversized dependency sets fall back to checking that source on any change.
+#[derive(Default)]
+struct DependencyIndex {
+    sources: BTreeMap<String, Option<BTreeSet<String>>>,
+    bytes: usize,
+    edges: usize,
+}
+
+impl DependencyIndex {
+    const MAX_BYTES: usize = 4 * 1024 * 1024;
+    const MAX_EDGES: usize = 65536;
+
+    fn remove(&mut self, uri: &str) {
+        if let Some(Some(targets)) = self.sources.remove(uri) {
+            self.edges -= targets.len();
+            self.bytes -= targets.iter().map(|target| target.len()).sum::<usize>();
+        }
+    }
+
+    fn update(&mut self, uri: String, targets: Option<BTreeSet<String>>) {
+        self.remove(&uri);
+        let targets = targets.filter(|targets| {
+            self.edges + targets.len() <= Self::MAX_EDGES
+                && self.bytes + targets.iter().map(|target| target.len()).sum::<usize>()
+                    <= Self::MAX_BYTES
+        });
+        if let Some(targets) = &targets {
+            self.edges += targets.len();
+            self.bytes += targets.iter().map(|target| target.len()).sum::<usize>();
+        }
+        self.sources.insert(uri, targets);
+    }
+
+    fn affected(&self, uri: &str) -> BTreeSet<String> {
+        self.sources
+            .iter()
+            .filter(|(source, targets)| {
+                source.as_str() == uri
+                    || targets.as_ref().is_none_or(|targets| targets.contains(uri))
+            })
+            .map(|(source, _)| source.clone())
+            .collect()
+    }
+}
+
 /// Sparse UTF-16 checkpoints bound coordinate conversion work even on long lines.
 struct SourceIndex {
     lines: Vec<(usize, u32)>,
@@ -152,11 +280,13 @@ impl SourceIndex {
     }
 }
 
-/// Derived analysis lives for one invocation. The client remains the document owner.
+/// Request-local snapshots and references to cached analysis. The client remains
+/// the document owner; cached entries cannot authorize a target document read.
 #[derive(Default)]
 struct Documents {
     snapshots: BTreeMap<String, DocumentSnapshot>,
     parsed: BTreeMap<String, Arc<Document>>,
+    open: BTreeSet<String>,
 }
 
 impl Deref for Documents {
@@ -186,7 +316,7 @@ impl Document {
         let mut definitions = Vec::new();
         let mut heading: Option<(Range<usize>, String)> = None;
         let mut occupied = Vec::new();
-        let mut slugs = BTreeSet::<String>::new();
+        let mut slugs = HeadingIds::default();
         // Keep unresolved reference links in the semantic tree so diagnostics and
         // completion work before their definition has been written.
         let mut broken = |link: pulldown_cmark::BrokenLink<'_>| {
@@ -204,13 +334,12 @@ impl Document {
         );
         for (id, definition) in parser.reference_definitions().iter() {
             let span = definition.span.clone();
-            definitions.push(Definition {
-                id: id.to_lowercase(),
-                label: span.start + 1
-                    ..span.start + snapshot.text[span.clone()].find(']').unwrap_or(1),
-                range: span,
-                destination: definition.dest.to_string(),
-            });
+            definitions.push(Definition::new(
+                id,
+                span,
+                definition.dest.to_string(),
+                &snapshot.text,
+            )?);
         }
         for (event, span) in parser.into_offset_iter() {
             token.check_cancelled()?;
@@ -224,14 +353,7 @@ impl Document {
                 }
                 Event::End(TagEnd::Heading(_)) => {
                     if let Some((span, title)) = heading.take() {
-                        let base = slug(&title);
-                        let mut unique = base.clone();
-                        let mut count = 1;
-                        while slugs.contains(&unique) {
-                            unique = format!("{base}-{count}");
-                            count += 1;
-                        }
-                        slugs.insert(unique.clone());
+                        let unique = slugs.insert(&title);
                         let raw = snapshot.text[span.clone()].trim_end_matches(['\r', '\n']);
                         let trimmed = raw.trim_start_matches('\u{feff}');
                         let start = span.start + raw.len() - trimmed.len();
@@ -329,12 +451,12 @@ impl Document {
             {
                 for (id, definition) in Parser::new(trimmed).reference_definitions().iter() {
                     let span = definition.span.clone();
-                    definitions.push(Definition {
-                        id: id.to_lowercase(),
-                        label: start + 1..start + trimmed.find(']').unwrap_or(1),
-                        range: start + span.start..start + span.end,
-                        destination: definition.dest.to_string(),
-                    });
+                    definitions.push(Definition::new(
+                        id,
+                        start + span.start..start + span.end,
+                        definition.dest.to_string(),
+                        &snapshot.text,
+                    )?);
                 }
             }
             offset += line.len();
@@ -373,6 +495,64 @@ impl Document {
         json!({"start":self.index.position(&self.snapshot.text,range.start),"end":self.index.position(&self.snapshot.text,range.end)})
     }
 
+    fn retained_bytes(&self) -> usize {
+        self.snapshot.text.capacity()
+            + self.snapshot.uri.capacity()
+            + self.headings.capacity() * std::mem::size_of::<Heading>()
+            + self
+                .headings
+                .iter()
+                .map(|heading| heading.title.capacity() + heading.slug.capacity())
+                .sum::<usize>()
+            + self.links.capacity() * std::mem::size_of::<Link>()
+            + self
+                .links
+                .iter()
+                .map(|link| {
+                    link.destination.capacity()
+                        + link.reference.as_ref().map_or(0, String::capacity)
+                })
+                .sum::<usize>()
+            + self.definitions.capacity() * std::mem::size_of::<Definition>()
+            + self
+                .definitions
+                .iter()
+                .map(|definition| definition.id.capacity() + definition.destination.capacity())
+                .sum::<usize>()
+            + (self.index.lines.capacity() + self.index.points.capacity())
+                * std::mem::size_of::<(usize, u32)>()
+            + self
+                .heading_ids
+                .keys()
+                .map(|key| key.capacity() + 64)
+                .sum::<usize>()
+    }
+
+    /// Reparse the edited heading content to account for Markdown formatting and
+    /// every later heading whose collision suffix changes with the rename.
+    fn renamed_heading_ids(
+        &self,
+        heading: &Heading,
+        name: &str,
+        token: &CancellationToken,
+    ) -> Result<BTreeMap<String, String>, ExtensionError> {
+        let mut snapshot = self.snapshot.clone();
+        snapshot.text.replace_range(heading.content.clone(), name);
+        let renamed = Self::parse(snapshot, token)?;
+        if renamed.headings.len() != self.headings.len() {
+            return Err(invalid(
+                "Markdown rename must preserve the heading structure",
+            ));
+        }
+        Ok(self
+            .headings
+            .iter()
+            .zip(&renamed.headings)
+            .filter(|(before, after)| before.slug != after.slug)
+            .map(|(before, after)| (before.slug.clone(), after.slug.clone()))
+            .collect())
+    }
+
     fn offset(&self, position: Position) -> Result<usize, ExtensionError> {
         self.index.offset(&self.snapshot.text, position)
     }
@@ -381,6 +561,39 @@ impl Document {
         self.heading_ids
             .get(&fragment.to_lowercase())
             .map(|index| &self.headings[*index])
+    }
+}
+
+impl Definition {
+    fn new(
+        id: &str,
+        range: Range<usize>,
+        destination: String,
+        source: &str,
+    ) -> Result<Self, ExtensionError> {
+        let raw = &source[range.clone()];
+        let mut escaped = false;
+        let end = raw
+            .char_indices()
+            .skip(1)
+            .find_map(|(offset, character)| {
+                if escaped {
+                    escaped = false;
+                    return None;
+                }
+                if character == '\\' {
+                    escaped = true;
+                    return None;
+                }
+                (character == ']').then_some(offset)
+            })
+            .ok_or_else(|| invalid("Invalid Markdown reference definition"))?;
+        Ok(Self {
+            id: id.to_lowercase(),
+            label: range.start + 1..range.start + end,
+            range,
+            destination,
+        })
     }
 }
 
@@ -435,8 +648,32 @@ fn link_range(raw: &str, kind: LinkType) -> Range<usize> {
         | LinkType::CollapsedUnknown
         | LinkType::Shortcut
         | LinkType::ShortcutUnknown => {
-            let start = raw.rfind('[').map_or(0, |offset| offset + 1);
-            start..start + raw[start..].find(']').unwrap_or(0)
+            let mut depth = 0usize;
+            let mut escaped = false;
+            let mut start = 0;
+            let mut label = 0..0;
+            for (offset, character) in raw.char_indices() {
+                if escaped {
+                    escaped = false;
+                    continue;
+                }
+                if character == '\\' {
+                    escaped = true;
+                    continue;
+                }
+                if character == '[' {
+                    if depth == 0 {
+                        start = offset + 1;
+                    }
+                    depth += 1;
+                } else if character == ']' && depth > 0 {
+                    depth -= 1;
+                    if depth == 0 {
+                        label = start..offset;
+                    }
+                }
+            }
+            label
         }
         LinkType::Autolink | LinkType::Email => 1..raw.len().saturating_sub(1),
         LinkType::Inline => {
@@ -522,9 +759,25 @@ fn severity<'a>(configuration: &'a Value, path: &str, default: &'a str) -> &'a s
         .unwrap_or(default)
 }
 
-fn target(resource: &str, destination: &str) -> Option<(String, Option<String>)> {
+fn target(
+    resource: &str,
+    destination: &str,
+    folders: &[String],
+) -> Option<(String, Option<String>)> {
     let base = Url::parse(resource).ok()?;
-    let mut uri = base.join(destination).ok()?;
+    let mut uri = if destination.starts_with('/') && !destination.starts_with("//") {
+        // Markdown's leading slash refers to the containing workspace, including
+        // nested multi-root folders. Without one, use the document's directory.
+        let root = folders
+            .iter()
+            .filter_map(|folder| Url::parse(&(folder.trim_end_matches('/').to_owned() + "/")).ok())
+            .filter(|folder| base.as_str().starts_with(folder.as_str()))
+            .max_by_key(|folder| folder.as_str().len())
+            .or_else(|| base.join("./").ok())?;
+        root.join(destination.trim_start_matches('/')).ok()?
+    } else {
+        base.join(destination).ok()?
+    };
     if matches!(
         uri.scheme(),
         "http" | "https" | "mailto" | "javascript" | "data" | "command"
@@ -536,13 +789,94 @@ fn target(resource: &str, destination: &str) -> Option<(String, Option<String>)>
     Some((uri.into(), fragment))
 }
 
+fn markdown_alias(uri: &str) -> Option<String> {
+    let mut candidate = Url::parse(uri).ok()?;
+    let path = candidate.path();
+    let stem = if let Some(stem) = path.strip_suffix(".html") {
+        stem
+    } else if path
+        .rsplit('/')
+        .next()
+        .is_some_and(|name| !name.contains('.'))
+    {
+        path
+    } else {
+        return None;
+    };
+    candidate.set_path(&format!("{stem}.md"));
+    Some(candidate.into())
+}
+
 struct Runtime {
     client: Client,
     folders: RwLock<Vec<String>>,
     messages: Value,
+    analysis: Mutex<AnalysisCache>,
+    observations: Mutex<Option<DependencyIndex>>,
 }
 
 impl Runtime {
+    fn target(
+        &self,
+        resource: &str,
+        destination: &str,
+    ) -> Result<Option<(String, Option<String>)>, ExtensionError> {
+        let folders = self
+            .folders
+            .read()
+            .map_err(|_| invalid("Markdown workspace unavailable"))?;
+        Ok(target(resource, destination, &folders))
+    }
+
+    fn dependencies(
+        &self,
+        document: &Document,
+        token: &CancellationToken,
+    ) -> Result<Option<BTreeSet<String>>, ExtensionError> {
+        let mut targets = BTreeSet::new();
+        let mut bytes = 0;
+        for link in &document.links {
+            token.check_cancelled()?;
+            if let Some((uri, _)) = self.target(&document.snapshot.uri, &link.destination)? {
+                // Track both spellings without filesystem calls. Creating or
+                // closing an extensionless/.html target can change its resolution.
+                for uri in std::iter::once(uri.clone()).chain(markdown_alias(&uri)) {
+                    if targets.insert(uri.clone()) {
+                        bytes += uri.len();
+                    }
+                    if targets.len() > DependencyIndex::MAX_EDGES
+                        || bytes > DependencyIndex::MAX_BYTES
+                    {
+                        return Ok(None);
+                    }
+                }
+            }
+        }
+        Ok(Some(targets))
+    }
+
+    fn parse(
+        &self,
+        snapshot: DocumentSnapshot,
+        token: &CancellationToken,
+    ) -> Result<Arc<Document>, ExtensionError> {
+        token.check_cancelled()?;
+        if let Some(document) = self
+            .analysis
+            .lock()
+            .map_err(|_| invalid("Markdown analysis unavailable"))?
+            .get(&snapshot)
+        {
+            return Ok(document);
+        }
+        let document = Arc::new(Document::parse(snapshot, token)?);
+        token.check_cancelled()?;
+        self.analysis
+            .lock()
+            .map_err(|_| invalid("Markdown analysis unavailable"))?
+            .insert(Arc::clone(&document));
+        Ok(document)
+    }
     fn message(&self, key: &str, value: &str) -> String {
         self.messages[key]
             .as_str()
@@ -563,7 +897,22 @@ impl Runtime {
                 return Ok(());
             }
         }
-        let mut documents = self.documents(token)?;
+        // Serialize observations, but never hold the analysis cache lock during
+        // parsing or client calls. The input loop continues to deliver cancellation.
+        let mut observations = self
+            .observations
+            .lock()
+            .map_err(|_| invalid("Markdown observations unavailable"))?;
+        let refresh = observations.is_none() || event.is_none();
+        // Invalidate before any cancellable client request. A failed refresh or
+        // skipped document event must not leave an older graph eligible for reuse.
+        let mut index = observations.take().unwrap_or_default();
+        token.check_cancelled()?;
+        let mut documents = if refresh {
+            self.documents(token)?
+        } else {
+            Documents::default()
+        };
         let (changed, closed) = match event {
             Some(
                 external_ext_sdk::languages::DocumentEvent::Open { document }
@@ -575,56 +924,80 @@ impl Runtime {
             }
             Some(external_ext_sdk::languages::DocumentEvent::Close { document }) => {
                 documents.remove(&document.uri);
+                self.analysis
+                    .lock()
+                    .map_err(|_| invalid("Markdown analysis unavailable"))?
+                    .remove(&document.uri);
                 (Some(document.uri), true)
             }
             None => (None, false),
         };
-        let open = documents.values().cloned().collect::<Vec<_>>();
-        let mut entries = Vec::new();
-        for snapshot in open {
-            token.check_cancelled()?;
-            let document = self.analyze(&snapshot.uri, &mut documents, token)?;
-            if let Some(changed) = &changed {
-                if &snapshot.uri != changed {
-                    let mut dependent = false;
-                    for link in &document.links {
-                        if self
-                            .resolve_link(&snapshot.uri, &link.destination, &mut documents, token)?
-                            .is_some_and(|(uri, _)| &uri == changed)
-                        {
-                            dependent = true;
-                            break;
-                        }
-                    }
-                    if !dependent {
-                        continue;
-                    }
-                }
+        let mut affected = if refresh {
+            index = DependencyIndex::default();
+            documents.keys().cloned().collect::<BTreeSet<_>>()
+        } else {
+            index.affected(changed.as_deref().unwrap_or(""))
+        };
+        if let Some(changed) = &changed {
+            if closed {
+                affected.remove(changed);
+                index.remove(changed);
+            } else {
+                affected.insert(changed.clone());
             }
-            let configuration =
-                self.client
-                    .get_configuration("markdown", Some(snapshot.uri.clone()), token)?;
-            let diagnostics = self.diagnostics(&document, &configuration, &mut documents, token)?;
-            let diagnostics = diagnostics.into_iter().map(|diagnostic| {
+        }
+        documents.open = index
+            .sources
+            .keys()
+            .cloned()
+            .chain(documents.keys().cloned())
+            .collect();
+        if closed {
+            documents.open.remove(changed.as_deref().unwrap_or(""));
+        }
+        let mut entries = Vec::new();
+        let result = (|| {
+            for uri in affected {
+                token.check_cancelled()?;
+                let document = self.analyze(&uri, &mut documents, token)?;
+                index.update(uri, self.dependencies(&document, token)?);
+                if index.sources.len() > 8192 {
+                    return Err(invalid("Markdown observations exceed their document limit"));
+                }
+                let configuration = self.client.get_configuration(
+                    "markdown",
+                    Some(document.snapshot.uri.clone()),
+                    token,
+                )?;
+                let diagnostics =
+                    self.diagnostics(&document, &configuration, &mut documents, token)?;
+                let diagnostics = diagnostics.into_iter().map(|diagnostic| {
                 let start = &diagnostic["range"]["start"];
                 let end = &diagnostic["range"]["end"];
                 json!({"start":{"line":start["lineIndex"],"character":start["columnIndex"]},"end":{"line":end["lineIndex"],"character":end["columnIndex"]},"message":diagnostic["message"],"severity":diagnostic["severity"],"code":diagnostic["code"],"source":"markdown"})
             }).collect::<Vec<_>>();
-            entries.push(serde_json::from_value(json!({"uri":document.snapshot.uri,"version":document.snapshot.version,"diagnostics":diagnostics})).map_err(|_| invalid("Invalid Markdown diagnostic"))?);
+                entries.push(serde_json::from_value(json!({"uri":document.snapshot.uri,"version":document.snapshot.version,"diagnostics":diagnostics})).map_err(|_| invalid("Invalid Markdown diagnostic"))?);
+            }
+            if closed {
+                entries.push(
+                    serde_json::from_value(json!({"uri":changed,"version":null,"diagnostics":[]}))
+                        .map_err(|_| invalid("Invalid closed Markdown document"))?,
+                );
+            }
+            if changed.is_some() && !refresh {
+                self.client
+                    .update_diagnostics("markdown".into(), entries, token)
+            } else {
+                self.client
+                    .set_diagnostics("markdown".into(), entries, token)
+            }
+        })();
+        // An interrupted refresh must be rebuilt from the client's current open
+        // snapshots; a partial dependency graph cannot safely skip future work.
+        if result.is_ok() {
+            *observations = Some(index);
         }
-        if closed {
-            entries.push(
-                serde_json::from_value(json!({"uri":changed,"version":null,"diagnostics":[]}))
-                    .map_err(|_| invalid("Invalid closed Markdown document"))?,
-            );
-        }
-        if changed.is_some() {
-            self.client
-                .update_diagnostics("markdown".into(), entries, token)
-        } else {
-            self.client
-                .set_diagnostics("markdown".into(), entries, token)
-        }
+        result
     }
 
     fn documents(&self, token: &CancellationToken) -> Result<Documents, ExtensionError> {
@@ -637,6 +1010,7 @@ impl Runtime {
                 .map(|document| (document.uri.clone(), document))
                 .collect(),
             parsed: BTreeMap::new(),
+            open: BTreeSet::new(),
         })
     }
 
@@ -663,7 +1037,7 @@ impl Runtime {
         if let Some(document) = documents.parsed.get(uri) {
             return Ok(Arc::clone(document));
         }
-        let document = Arc::new(Document::parse(self.read(uri, documents, token)?, token)?);
+        let document = self.parse(self.read(uri, documents, token)?, token)?;
         documents.parsed.insert(uri.into(), Arc::clone(&document));
         Ok(document)
     }
@@ -676,6 +1050,15 @@ impl Runtime {
     ) -> Result<bool, ExtensionError> {
         if documents.contains_key(uri) {
             return Ok(true);
+        }
+        if documents.open.contains(uri) {
+            return match self.read(uri, documents, token) {
+                Ok(_) => Ok(true),
+                Err(error) if error.code == external_ext_sdk::HostErrorCode::InvalidRequest => {
+                    Ok(false)
+                }
+                Err(error) => Err(error),
+            };
         }
         match self.client.stat_resource(uri, token) {
             Ok(_) => Ok(true),
@@ -708,28 +1091,17 @@ impl Runtime {
         documents: &mut Documents,
         token: &CancellationToken,
     ) -> Result<Option<(String, Option<String>)>, ExtensionError> {
-        let Some((uri, fragment)) = target(resource, destination) else {
+        let Some((uri, fragment)) = self.target(resource, destination)? else {
             return Ok(None);
         };
         if self.exists(&uri, documents, token)? {
             return Ok(Some((uri, fragment)));
         }
-        let mut candidate = Url::parse(&uri).map_err(|_| invalid("Invalid link URI"))?;
-        let path = candidate.path();
-        let stem = if let Some(stem) = path.strip_suffix(".html") {
-            stem
-        } else if path
-            .rsplit('/')
-            .next()
-            .is_some_and(|name| !name.contains('.'))
-        {
-            path
-        } else {
+        let Some(candidate) = markdown_alias(&uri) else {
             return Ok(None);
         };
-        candidate.set_path(&format!("{stem}.md"));
-        if self.exists(candidate.as_str(), documents, token)? {
-            Ok(Some((candidate.into(), fragment)))
+        if self.exists(&candidate, documents, token)? {
+            Ok(Some((candidate, fragment)))
         } else {
             Ok(None)
         }
@@ -831,11 +1203,19 @@ impl Runtime {
             &token,
         )?;
         let mut documents = Documents::default();
+        if let Some(index) = self
+            .observations
+            .lock()
+            .map_err(|_| invalid("Markdown observations unavailable"))?
+            .as_ref()
+        {
+            documents.open = index.sources.keys().cloned().collect();
+        }
         if operation == Operation::WorkspaceSymbols {
             self.workspace(&mut documents, &configuration, &token)?;
             let mut result = Vec::new();
             for document in documents.snapshots.into_values() {
-                let document = Document::parse(document, &token)?;
+                let document = self.parse(document, &token)?;
                 for heading in &document.headings {
                     if heading
                         .title
@@ -851,7 +1231,7 @@ impl Runtime {
         if request.version == 0 || request.resource.is_empty() {
             return Err(invalid("Missing Markdown document identity"));
         }
-        let document = Arc::new(Document::parse(
+        let document = self.parse(
             DocumentSnapshot {
                 uri: request.resource.clone(),
                 version: request.version,
@@ -859,7 +1239,7 @@ impl Runtime {
                 text: request.text.clone(),
             },
             &token,
-        )?);
+        )?;
         documents.insert(request.resource.clone(), document.snapshot.clone());
         documents
             .parsed
@@ -1044,7 +1424,7 @@ impl Runtime {
                         if name.is_empty() || name.contains(['[',']','\n','\r']) { return Err(invalid("Invalid reference name")); }
                         let edits = document.links.iter().filter(|link| link.reference.as_deref() == Some(id)).map(|link| {
                             let raw = &request.text[link.range.clone()];
-                            if raw.matches('[').count() == 1 { (link.range.end..link.range.end,format!("[{name}]")) }
+                            if link.destination_range.start == link.range.start + 1 + usize::from(raw.starts_with('!')) { (link.range.end..link.range.end,format!("[{name}]")) }
                             else { (link.destination_range.clone(),name.to_owned()) }
                         }).chain(document.definitions.iter().filter(|definition| definition.id == id).map(|definition| (definition.label.clone(),name.to_owned()))).collect();
                         Ok(workspace_edit(&document,edits))
@@ -1129,8 +1509,20 @@ impl Runtime {
                         ..offset.clamp(link.destination_range.start, link.destination_range.end)]
                         .contains('#')
                 }));
+        let renamed_headings = if operation == Operation::Rename && renaming_heading {
+            other
+                .as_ref()
+                .ok_or_else(|| invalid("Missing Markdown heading document"))?
+                .renamed_heading_ids(
+                    target_heading.ok_or_else(|| invalid("Missing Markdown heading"))?,
+                    name,
+                    &token,
+                )?
+        } else {
+            BTreeMap::new()
+        };
         let renamed_file = if operation == Operation::Rename && !renaming_heading {
-            target(&request.resource, name).map(|target| target.0)
+            self.target(&request.resource, name)?.map(|target| target.0)
         } else {
             None
         };
@@ -1162,7 +1554,7 @@ impl Runtime {
                     if !found.destination.starts_with(['#', '/'])
                         && Url::parse(&found.destination).is_err()
                     {
-                        if let Some((resource, fragment)) = target(&uri, &found.destination) {
+                        if let Some((resource, fragment)) = self.target(&uri, &found.destination)? {
                             if resource != uri {
                                 let destination = format!(
                                     "{resource}{}",
@@ -1183,10 +1575,18 @@ impl Runtime {
                     .is_some_and(|(resource, found_fragment)| {
                         resource == &uri
                             && (operation == Operation::Rename && !renaming_heading
-                                || found_fragment
-                                    .as_ref()
-                                    .map(|fragment| fragment.to_lowercase())
-                                    == fragment.as_ref().map(|fragment| fragment.to_lowercase()))
+                                || operation == Operation::Rename
+                                    && renaming_heading
+                                    && found_fragment.as_ref().is_some_and(|fragment| {
+                                        renamed_headings.contains_key(&fragment.to_lowercase())
+                                    })
+                                || operation != Operation::Rename
+                                    && found_fragment
+                                        .as_ref()
+                                        .map(|fragment| fragment.to_lowercase())
+                                        == fragment
+                                            .as_ref()
+                                            .map(|fragment| fragment.to_lowercase()))
                     })
                 {
                     continue;
@@ -1197,7 +1597,11 @@ impl Runtime {
                         format!(
                             "{}#{}",
                             found.destination.split('#').next().unwrap_or(""),
-                            slug(name)
+                            renamed_headings[&found_target
+                                .as_ref()
+                                .and_then(|(_, fragment)| fragment.as_ref())
+                                .unwrap()
+                                .to_lowercase()]
                         )
                     } else {
                         let moved = renamed_file
@@ -1329,12 +1733,15 @@ impl Runtime {
                     }
                 } else if inline == Some(start) {
                     let (directory, partial) = prefix.rsplit_once('/').unwrap_or(("", prefix));
-                    let parent = if directory.is_empty() {
+                    let parent = if directory.is_empty() && prefix.starts_with('/') {
+                        "/".to_owned()
+                    } else if directory.is_empty() {
                         "./".to_owned()
                     } else {
                         format!("{directory}/")
                     };
-                    let (uri, _) = target(&request.resource, &parent)
+                    let (uri, _) = self
+                        .target(&request.resource, &parent)?
                         .ok_or_else(|| invalid("Invalid completion URI"))?;
                     for (name, kind) in self.client.read_resource_directory(&uri, token)? {
                         token.check_cancelled()?;
@@ -1356,7 +1763,9 @@ impl Runtime {
                             } else {
                                 &name
                             };
-                            let path = if directory.is_empty() {
+                            let path = if directory.is_empty() && prefix.starts_with('/') {
+                                format!("/{insert}")
+                            } else if directory.is_empty() {
                                 insert.to_owned()
                             } else {
                                 format!("{directory}/{insert}")
@@ -1413,7 +1822,8 @@ impl Runtime {
                     continue;
                 }
             }
-            let Some((original_uri, _)) = target(&document.snapshot.uri, &link.destination) else {
+            let Some((original_uri, _)) = self.target(&document.snapshot.uri, &link.destination)?
+            else {
                 continue;
             };
             let resolved =
@@ -1560,6 +1970,8 @@ pub(crate) fn register(
         client: context.client.clone(),
         folders: RwLock::new(folders),
         messages,
+        analysis: Mutex::new(AnalysisCache::default()),
+        observations: Mutex::new(None),
     });
     for operation in [
         Operation::Completion,

@@ -458,8 +458,11 @@ export class MainThreadExtensionApi extends Disposable {
 				const signal = this.activationController.signal;
 				for (const command of runtime.activation!.commands) {
 					commands.push({
-						id: command.command, metadata: { description: command.title }, handler: async (_accessor, ...args) => {
+						id: command.command, metadata: { description: command.title }, handler: async (accessor, ...args) => {
 							signal.throwIfAborted();
+							// Activation can outlive the originating editor focus. Capture
+							// context now, then attach it if the real command owns editor menus.
+							const activeEditor = this.commandEditorContext(accessor, args);
 							const activated = await this.api.activateByEvent({
 								extensionId, activationGeneration, event: { type: 'command', command: command.command }, initialization: createExtensionHostInitialization(this.workspace, this.configuration)
 							});
@@ -469,7 +472,7 @@ export class MainThreadExtensionApi extends Disposable {
 							if (!current || !registration) { throw new Error(localize({ bundle: 'ash.workbench', key: 'missingCommandAfterActivation' }, "Extension command '{0}' was not registered after activation.", command.command)); }
 							// Activating replaces process registrations. This command retains the connection
 							// lifetime signal and uses the new process fence, rather than the retired batch.
-							return this.registrationInvoker(current, registration, signal)('execute', normalizeExtensionHostPayload({ arguments: await this.scmApi.prepareCommandArguments(extensionId, args) }), signal);
+							return this.registrationInvoker(current, registration, signal)('execute', normalizeExtensionHostPayload({ arguments: await this.scmApi.prepareCommandArguments(extensionId, args), ...(registration.kind === 'command' && registration.menus?.some(placement => placement.menu.startsWith('editor/')) ? { activeEditor } : {}) }), signal);
 						}
 					});
 				}
@@ -497,11 +500,8 @@ export class MainThreadExtensionApi extends Disposable {
 							if (!registration.menus?.some(placement => placement.menu.startsWith('editor/'))) {
 								return invoke('execute', normalizeExtensionHostPayload({ arguments: await this.scmApi.prepareCommandArguments(runtimeId, args) }), controller.signal);
 							}
-							const part = accessor.get(IEditorPart);
-							const context = args[0] as { groupId?: string; editorIndex?: number; } | undefined;
-							const group = typeof context?.groupId === 'string' ? part.groups.find(group => group.id === context.groupId) : part.activeGroup;
-							const input = typeof context?.editorIndex === 'number' ? group?.inputs[context.editorIndex] : group?.activeInput;
-							return invoke('execute', normalizeExtensionHostPayload({ arguments: await this.scmApi.prepareCommandArguments(runtimeId, args), activeEditor: input ? { resource: input.resource.toJSON(), groupId: group!.id, editorIndex: group!.inputs.indexOf(input) } : null }), controller.signal);
+							const activeEditor = this.commandEditorContext(accessor, args);
+							return invoke('execute', normalizeExtensionHostPayload({ arguments: await this.scmApi.prepareCommandArguments(runtimeId, args), activeEditor }), controller.signal);
 						}
 					}));
 					for (const placement of registration.menus ?? []) {
@@ -568,6 +568,14 @@ export class MainThreadExtensionApi extends Disposable {
 			}
 		}
 		return Object.freeze({ menus: Object.freeze(menus), commands: Object.freeze(commands), languages: freezeLanguageBatch(languages), tasks: Object.freeze(tasks), debugAdapters: Object.freeze(debugAdapters), debugConfigurations: Object.freeze(debugConfigurations), debugTrackers: Object.freeze(debugTrackers), tests: Object.freeze(tests), remoteResolvers: Object.freeze(remoteResolvers), terminalProfiles: Object.freeze(terminalProfiles), terminalEnvironments: Object.freeze(terminalEnvironments), issues: Object.freeze(issues), controller });
+	}
+
+	private commandEditorContext(accessor: ServicesAccessor, args: readonly unknown[]) {
+		const part = accessor.get(IEditorPart);
+		const context = args[0] as { groupId?: string; editorIndex?: number; } | undefined;
+		const group = typeof context?.groupId === 'string' ? part.groups.find(group => group.id === context.groupId) : part.activeGroup;
+		const input = typeof context?.editorIndex === 'number' ? group?.inputs[context.editorIndex] : group?.activeInput;
+		return input ? { resource: input.resource.toJSON(), groupId: group!.id, editorIndex: group!.inputs.indexOf(input) } : null;
 	}
 
 	private registrationInvoker(runtime: ExtensionHostRuntime, registration: ExtensionHostRegistration, generationSignal: AbortSignal): ExtensionHostProviderInvoker {

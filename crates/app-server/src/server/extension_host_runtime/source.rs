@@ -224,6 +224,31 @@ fn product_markdown_deployment(
         "sha256:{:x}",
         Sha256::digest(format!("{manifest}\0{source}"))
     );
+    let manifest_value: serde_json::Value =
+        serde_json::from_str(manifest).map_err(|_| ExtensionHostRuntimeError::Internal)?;
+    let commands = manifest_value["contributes"]["commands"]
+        .as_array()
+        .ok_or(ExtensionHostRuntimeError::Internal)?
+        .iter()
+        .filter_map(|entry| {
+            entry["command"]
+                .as_str()
+                .map(|id| (id.to_owned(), id.to_owned()))
+        })
+        .collect::<Vec<_>>();
+    let mut events = manifest_value["activationEvents"]
+        .as_array()
+        .ok_or(ExtensionHostRuntimeError::Internal)?
+        .iter()
+        .filter_map(|event| event.as_str().map(str::to_owned))
+        .collect::<Vec<_>>();
+    // Contributed commands must be callable before startup restoration completes,
+    // matching the manifest-derived activation facts used by the client.
+    events.extend(
+        commands
+            .iter()
+            .map(|(command, _)| format!("onCommand:{command}")),
+    );
     Ok(EditorExtensionDeployment {
         scope: EditorExtensionScope::Product,
         id: "vscode.markdown-language-features".into(),
@@ -261,7 +286,7 @@ fn product_markdown_deployment(
                 entrypoint: "ash-markdown-language-features".into(),
             },
             runtime_api_version: 1,
-            activation_events: vec!["onStartupFinished".into()],
+            activation_events: events.clone(),
             capabilities: vec![
                 ExtensionCapability::Command,
                 ExtensionCapability::CustomTextEditor,
@@ -269,20 +294,7 @@ fn product_markdown_deployment(
             ],
         },
         authority: Arc::new(ProductAuthority),
-        activation: Some(ActivationPlan {
-            events: vec!["onStartupFinished".into()],
-            commands: serde_json::from_str::<serde_json::Value>(manifest)
-                .map_err(|_| ExtensionHostRuntimeError::Internal)?["contributes"]["commands"]
-                .as_array()
-                .ok_or(ExtensionHostRuntimeError::Internal)?
-                .iter()
-                .filter_map(|entry| {
-                    entry["command"]
-                        .as_str()
-                        .map(|id| (id.to_owned(), id.to_owned()))
-                })
-                .collect(),
-        }),
+        activation: Some(ActivationPlan { events, commands }),
         activation_failure: None,
     })
 }

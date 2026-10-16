@@ -477,6 +477,35 @@ suite('Terminal configuration and interactive profiles', () => {
 		assert.equal(services.get(ITerminalService).instances.length, 1);
 	});
 
+	test('built-in runtime fingerprints bind terminal contributions by their admitted product identity', async () => {
+		using owner = new DisposableStore();
+		const { services, profiles, launches } = createServices(owner, true);
+		const packageDigest = `sha256:${'a'.repeat(64)}`;
+		Object.assign(services.get(IExtensionService), { currentCatalog: { generation: 1, diagnostics: [], extensions: [{ id: 'ash.git', sourceKind: 'builtIn', packageSha256: `sha256:${'b'.repeat(64)}` }] } });
+		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
+		bridge.replaceEnvironmentProviders([{
+			runtimeId: 'ash.git', packageDigest, invoke: async () => ({ persistent: false, map: [['GIT_EDITOR', { type: 1, value: 'ash-editor' }]] }),
+		}]);
+		bridge.replaceProfiles([{
+			runtimeId: 'ash.git', packageDigest, profileId: 'shell', title: 'Product shell', invoke: async () => ({ options: { shellPath: 'C:\\Windows\\cmd.exe' } }),
+		}]);
+		await profiles.getContributedProfileProvider('ash.git', 'shell')!.createContributedTerminalProfile({});
+		assert.equal(launches[0]!.env?.GIT_EDITOR, 'ash-editor');
+		bridge.replaceEnvironmentProviders([]);
+		bridge.replaceProfiles([]);
+		assert.throws(() => bridge.replaceEnvironmentProviders([{ runtimeId: 'other.product', packageDigest, invoke: async () => null }]), /Invalid terminal profile/);
+	});
+
+	for (const sourceKind of ['user', 'plugin', 'registry']) test(`external ${sourceKind} terminal contributions reject a mismatched package digest even for the same ID`, () => {
+		using owner = new DisposableStore();
+		const { services } = createServices(owner);
+		Object.assign(services.get(IExtensionService), { currentCatalog: { generation: 1, diagnostics: [], extensions: [{ id: 'acme.extension', sourceKind, packageSha256: `sha256:${'b'.repeat(64)}` }] } });
+		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
+		const descriptor = { runtimeId: 'acme.extension', packageDigest: `sha256:${'a'.repeat(64)}`, invoke: async () => null };
+		assert.throws(() => bridge.replaceEnvironmentProviders([descriptor]), /Invalid terminal profile/);
+		assert.throws(() => bridge.replaceProfiles([{ ...descriptor, profileId: 'shell', title: 'External shell' }]), /provider is unavailable/);
+	});
+
 	test('extension environment snapshots reach the process through the original profile creation entry', async () => {
 		using owner = new DisposableStore();
 		const { services, profiles, launches } = createServices(owner, true);

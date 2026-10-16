@@ -92,6 +92,7 @@ import { ILogService, NullLoggerService } from '../../../../../platform/log/comm
 import { AbstractLifecycleService } from '../../../lifecycle/common/lifecycleService.js';
 import { ILifecycleService, LifecyclePhase } from '../../../lifecycle/common/lifecycle.js';
 import { IModelService } from '../../../../../editor/common/services/model.js';
+import { IFileTextModelService, type TextModelReference } from '../../../textmodelResolver/common/textModelResourceService.js';
 import { ILanguageService } from '../../../../../editor/common/languages/language.js';
 import { IMarkerService } from '../../../../../platform/markers/common/markers.js';
 import { MarkerService } from '../../../../../platform/markers/common/markerService.js';
@@ -270,8 +271,9 @@ test('document subscriptions deliver model commits in order and retire on restar
 	const api = new FakeExtensionHostApi(snapshot(1, 'acme.run', [registration]));
 	using languages = new LanguageFeaturesService();
 	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
-	const models = services.get(IModelService);
-	const model = models.createModel('😀', null, URI.file('/main.ts'));
+	using reference = await acquireFile(services, '😀', URI.file('/main.ts'));
+	const model = reference.model;
+	assert.equal(services.get(IModelService).getModel(model.uri), null, 'File models have a distinct owner');
 	using service = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
 	await service.start();
 	await waitFor(() => api.invocations.length === 1);
@@ -295,12 +297,12 @@ test('document subscriptions deliver model commits in order and retire on restar
 	assert.equal(api.invocationSignals[0]!.aborted, true);
 	assert.equal(api.invocations[3]!.incarnation, 4);
 	assert.deepEqual(api.invocations[3]!.payload, { type: 'open', document: { uri: model.uri.toString(), version: 3, languageId: 'plaintext', text: '😀ab' } });
-	model.dispose();
+	reference.dispose();
 	await waitFor(() => api.invocations.length === 5);
 	assert.deepEqual(api.invocations[4]!.payload, { type: 'close', document: { uri: model.uri.toString(), version: 3, languageId: 'plaintext', text: '😀ab' } });
 	api.emitConnection('restarting');
 	assert.equal(api.invocationSignals[4]!.aborted, true);
-	const next = models.createModel('after disconnect', null, URI.file('/next.ts'));
+	using next = await acquireFile(services, 'after disconnect', URI.file('/next.ts'));
 	await new Promise(resolve => setTimeout(resolve, 0));
 	assert.equal(api.invocations.length, 5);
 	next.dispose();
@@ -311,7 +313,8 @@ test('diagnostic collections reject stale versions and keep extension ownership 
 	api.current = { ...api.current, extensions: [...api.current.extensions, { ...api.current.extensions[0]!, id: 'acme.other', registrations: [] }] };
 	using languages = new LanguageFeaturesService();
 	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
-	const model = services.get(IModelService).createModel('bad', null, URI.file('/main.ts'));
+	using reference = await acquireFile(services, 'bad', URI.file('/main.ts'));
+	const model = reference.model;
 	using service = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
 	await service.start();
 	const markers = services.get(IMarkerService);
@@ -326,7 +329,8 @@ test('diagnostic collections reject stale versions and keep extension ownership 
 	assert.deepEqual(markers.read({ resource: model.uri }).map(marker => [marker.startLineNumber, marker.startColumn, marker.endLineNumber, marker.endColumn, marker.modelVersionId, marker.code]), [[1, 1, 1, 4, 1, 'W1'], [1, 1, 1, 4, 1, 'W1']]);
 	await assert.rejects(api.clientHandler!({ operation: 'setDiagnostics', collection: 'lint', entries: [{ ...entries[0]!, diagnostics: [{ ...diagnostic, message: '' }] }] }, signal, source), /Diagnostic message must not be empty/);
 	assert.equal(markers.read({ resource: model.uri }).length, 2, 'invalid replacement leaves current collections intact');
-	const second = services.get(IModelService).createModel('bad', null, URI.file('/second.ts'));
+	using secondReference = await acquireFile(services, 'bad', URI.file('/second.ts'));
+	const second = secondReference.model;
 	await api.clientHandler!({ operation: 'setDiagnostics', collection: 'lint', merge: true, entries: [{ ...entries[0]!, uri: second.uri.toString() }] }, signal, source);
 	await api.clientHandler!({ operation: 'setDiagnostics', collection: 'lint', merge: true, entries: [{ ...entries[0]!, diagnostics: [] }] }, signal, source);
 	assert.equal(markers.read({ resource: model.uri }).length, 1, 'merge clears only the listed resource for this extension');
@@ -343,15 +347,16 @@ test('diagnostic collections reject stale versions and keep extension ownership 
 	await waitFor(() => service.currentSnapshot.fleetGeneration === 2);
 	assert.equal(markers.read({ resource: model.uri }).length, 0);
 	await assert.rejects(api.clientHandler!({ operation: 'setDiagnostics', collection: 'lint', entries: [] }, signal, source), /retired extension/);
-	model.dispose();
-	second.dispose();
+	reference.dispose();
+	secondReference.dispose();
 });
 
 test('document callback errors do not suppress later commits and language changes close then reopen', async () => {
 	const api = new FakeExtensionHostApi(snapshot(1, 'acme.run', [{ kind: 'textDocumentEvents', registrationId: 'documents' }]));
 	using languages = new LanguageFeaturesService();
 	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
-	const model = services.get(IModelService).createModel('initial', null, URI.file('/main.ts'));
+	using reference = await acquireFile(services, 'initial', URI.file('/main.ts'));
+	const model = reference.model;
 	using service = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
 	await service.start();
 	await waitFor(() => api.invocations.length === 1);
@@ -369,7 +374,7 @@ test('document callback errors do not suppress later commits and language change
 		{ type: 'close', document: { uri: model.uri.toString(), version: 3, languageId: 'plaintext', text: 'next commit' } },
 		{ type: 'open', document: { uri: model.uri.toString(), version: 3, languageId: 'typescript', text: 'next commit' } },
 	]);
-	model.dispose();
+	reference.dispose();
 });
 
 test('extension command palette declarations replace implicit entries and retire with command authority', async () => {
@@ -429,6 +434,7 @@ test('extension editor menus capture the clicked input and reject malformed repl
 	api.current = snapshot(2, 'acme.new', [{ ...registration, menus: [{ ...placement, group: 'navigation@bad-order' }] }]);
 	await service.reload();
 	assert.equal(service.state, 'degraded');
+	assert.match(services.get(IOutputService).getChannel('extension-host')!.getText(), /Invalid menu order.*acme.preview/);
 	assert.equal(commands.hasCommand('acme.old'), true);
 	assert.equal(commands.hasCommand('acme.new'), false);
 	assert.deepEqual(MenusRegistry.getMenuItems(MenuId.EditorTitleContext).filter(item => 'command' in item && item.command.id === 'acme.preview'), placements);
@@ -961,8 +967,18 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 	throw new Error("Timed out waiting for Extension Host state");
 }
 
+function acquireFile(services: InstantiationService, text: string, resource: URI, languageId = 'plaintext'): Promise<TextModelReference> {
+	return services.get(IFileTextModelService).acquire({ resource, initialText: text, languageId }, new AbortController().signal);
+}
+
 function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesService, tasks: ProviderSink<TaskProvider>, tests: ProviderSink<TestProfileProvider>, output?: IOutputService, debug = new ProviderSink<IDebugConfigurationProvider>(), remote?: { connections: IRemoteConnectionApi; confirm: IDialogService['confirm']; }, extensionApi?: IExtensionApi): InstantiationService {
-	const services = workbenchInstantiationService(undefined, undefined, { languageFeatures: languages, output });
+	const services = workbenchInstantiationService(undefined, undefined, {
+		languageFeatures: languages, output, fileResources: {
+			onDidChange: Event.None,
+			resolve: async input => ({ resource: input.resource, text: input.bootstrapText ?? '', revision: '1' }),
+			save: async () => { throw new Error('Persistence is outside this extension-host scenario'); },
+		},
+	});
 	services.registerSingleton(ISpeechService, () => new SpeechService(undefined));
 	services.registerInstance(ILanguagePackService, createEmptyTestLanguagePacks());
 	services.registerInstance(IFileService, services.resources.add(new FileService()));
@@ -1094,15 +1110,37 @@ test('disconnect during first-use activation prevents command execution', async 
 	assert.equal(commands.hasCommand('acme.lazy'), false);
 });
 
+test('first-use editor commands retain their originating input across asynchronous activation', async () => {
+	const api = new FakeExtensionHostApi(dormantSnapshot());
+	const activation = deferred<ExtensionHostFleetSnapshot>();
+	api.activationResult = activation.promise;
+	const commands = new CommandRegistry();
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	const inputs = [{ resource: URI.file('/notes/origin.md') }, { resource: URI.file('/notes/later.md') }];
+	const group = { id: 'origin-group', inputs, activeInput: inputs[0] };
+	Object.assign(services.get(IEditorPart), { groups: [group], activeGroup: group });
+	using service = services.createInstance(AppServerExtensionHostService, commands, 1_000);
+	await service.start();
+	const result = services.invokeFunction(accessor => commands.getCommand('acme.lazy')!(accessor));
+	await waitFor(() => api.activations.length === 1);
+	group.activeInput = inputs[1];
+	const ready = snapshot(2, 'acme.lazy', [], '', [], 11);
+	activation.resolve({ ...ready, extensions: ready.extensions.map(runtime => ({ ...runtime, registrations: runtime.registrations.map(registration => registration.kind === 'command' ? { ...registration, menus: [{ menu: 'editor/title' }] } : registration) })) });
+	await result;
+	assert.deepEqual(JSON.parse(JSON.stringify(api.invocations[0]!.payload)), {
+		arguments: [], activeEditor: { resource: inputs[0]!.resource.toJSON(), groupId: group.id, editorIndex: 0 },
+	});
+});
+
 test('already open language models activate matching extensions once while startup awaits restoration', async () => {
 	const api = new FakeExtensionHostApi(dormantSnapshot(['onLanguage:typescript']));
 	const activation = deferred<ExtensionHostFleetSnapshot>();
 	api.activationResult = activation.promise;
 	using languages = new LanguageFeaturesService();
 	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
-	const models = services.get(IModelService);
 	using language = services.get(ILanguageService).registerLanguage({ id: 'typescript' });
-	using model = models.createModel('unsaved', services.get(ILanguageService).createById('typescript'), URI.file('/project/main.ts'));
+	using reference = await acquireFile(services, 'unsaved', URI.file('/project/main.ts'), 'typescript');
 	using service = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
 	await service.start();
 	await service.reload();
@@ -1118,14 +1156,13 @@ test('new model and language change use current editor language for activation',
 		api.activationResult = Promise.resolve(snapshot(2, 'acme.lazy', [], '', [], 11));
 		using languages = new LanguageFeaturesService();
 		using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
-		const models = services.get(IModelService);
 		const languageService = services.get(ILanguageService);
 		using language = languageService.registerLanguage({ id: 'typescript' });
 		using service = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
 		await service.start();
 		assert.equal(api.activations.length, 0);
-		using model = models.createModel('text', languageService.createById(trigger === 'create' ? 'typescript' : 'plaintext'), URI.file('/project/main.ts'));
-		if (trigger === 'change') { model.setLanguage(languageService.createById('typescript')); }
+		using reference = await acquireFile(services, 'text', URI.file('/project/main.ts'), trigger === 'create' ? 'typescript' : 'plaintext');
+		if (trigger === 'change') { reference.model.setLanguage(languageService.createById('typescript')); }
 		await waitFor(() => service.currentSnapshot.extensions[0]?.state === 'ready');
 		assert.equal(api.activations.length, 1);
 	}
@@ -1498,4 +1535,33 @@ test('onSpeech activates the exact dormant provider and commits it through MainT
 		assert.equal(speech.hasSpeechProvider, true); assert.equal(host.currentSnapshot.extensions[0]!.registrations[0]!.kind, 'speechProvider');
 		await host.stop(); assert.equal(speech.hasSpeechProvider, false);
 	}
+});
+
+
+test('large extension outlines share one document budget and index snapshot lines once', async () => {
+	using languages = new LanguageFeaturesService();
+	using model = new TextModel('x\n'.repeat(100_000), { languageId: 'markdown' });
+	const signal = new AbortController().signal;
+	const base = createLanguageFeatureRequest(model, 'markdown', signal);
+	let reads = 0;
+	const request = { ...base, snapshot: { ...base.snapshot, getText: () => { reads++; return base.snapshot.getText(); } } };
+	const wireSymbol = (index: number) => ({ name: `Section${index}`, kind: 2, range: { start: { lineIndex: index * 5, columnIndex: 0 }, end: { lineIndex: index * 5, columnIndex: 1 } }, selectionRange: { start: { lineIndex: index * 5, columnIndex: 0 }, end: { lineIndex: index * 5, columnIndex: 1 } } });
+	let result: JsonValue = Array.from({ length: 20_000 }, (_, index) => wireSymbol(index));
+	using registration = languages.registerProviderBatch(createExtensionHostLanguageProviderBatch({
+		kind: 'languageProvider', registrationId: 'outline', languageIds: ['markdown'], operations: ['documentSymbols'],
+	}, 'markdown', 'outline', async () => result));
+	const provider = languages.documentSymbolProvider.ordered(model)[0]!;
+	const symbols = await provider.provideDocumentSymbols(request, signal);
+	assert.equal(symbols.length, 20_000);
+	assert.equal(symbols.at(-1)?.name, 'Section19999');
+	assert.ok(reads <= 2, `document text materialized ${reads} times`);
+	result = Array(50_001).fill(wireSymbol(0));
+	await assert.rejects(async () => provider.provideDocumentSymbols(request, signal), /Extension symbols/);
+	result = [
+		{ ...wireSymbol(0), children: Array(30_000).fill(wireSymbol(0)) },
+		{ ...wireSymbol(1), children: Array(30_000).fill(wireSymbol(0)) },
+	];
+	await assert.rejects(async () => provider.provideDocumentSymbols(request, signal), /Extension symbols/);
+	result = [{ ...wireSymbol(0), selectionRange: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 2 } } }];
+	await assert.rejects(async () => provider.provideDocumentSymbols(request, signal), /outside the document snapshot/);
 });

@@ -540,12 +540,20 @@ function normalizeParameterHintsResult(value: JsonValue): languages.LanguagePara
 	return Object.freeze({ signatures: Object.freeze(signatures), ...(activeSignature === undefined ? {} : { activeSignature }) });
 }
 
+// Snapshots are immutable. Keep only derived line lengths, and let the request
+// release them with its snapshot instead of splitting the whole file per endpoint.
+const snapshotLineLengths = new WeakMap<TextSnapshot, Uint32Array>();
+
 function normalizePosition(value: JsonValue | undefined, snapshot: TextSnapshot, owner: string): Position {
 	const position = exactObject(value, owner, ["columnIndex", "lineIndex"]);
 	const lineIndex = nonNegativeInteger(position.lineIndex, `${owner} lineIndex`);
 	const columnIndex = nonNegativeInteger(position.columnIndex, `${owner} columnIndex`);
-	const lines = snapshot.getText().split("\n");
-	if (lineIndex >= lines.length || columnIndex > lines[lineIndex]!.length) throw new RangeError(`${owner} is outside the document snapshot`);
+	let lengths = snapshotLineLengths.get(snapshot);
+	if (!lengths) {
+		lengths = Uint32Array.from(snapshot.getText().split("\n"), line => line.length);
+		snapshotLineLengths.set(snapshot, lengths);
+	}
+	if (lineIndex >= lengths.length || columnIndex > lengths[lineIndex]!) throw new RangeError(`${owner} is outside the document snapshot`);
 	return new Position((lineIndex) + 1, (columnIndex) + 1);
 }
 
@@ -647,9 +655,13 @@ function normalizeSymbols(
 	value: JsonValue,
 	snapshot: TextSnapshot,
 	depth = 0,
+	budget = { remaining: 50_000 },
 ): readonly languages.LanguageDocumentSymbol[] {
 	if (depth > 32) throw new RangeError('Extension symbol hierarchy is too deep');
-	return boundedArray(value, 'Extension symbols', 8192).map((value) => {
+	const symbols = boundedArray(value, 'Extension symbols', budget.remaining);
+	// Reserve sibling slots before descending so all scopes share one document limit.
+	budget.remaining -= symbols.length;
+	return symbols.map((value) => {
 		const symbol = object(value, 'Extension symbol');
 		assertAllowedKeys(
 			symbol,
@@ -664,7 +676,7 @@ function normalizeSymbols(
 			selectionRange: normalizeRange(symbol.selectionRange, snapshot, 'Extension symbol selection'),
 			...(symbol.children === undefined
 				? {}
-				: { children: normalizeSymbols(symbol.children, snapshot, depth + 1) }),
+				: { children: normalizeSymbols(symbol.children, snapshot, depth + 1, budget) }),
 		};
 	});
 }

@@ -53,7 +53,15 @@ impl Extension for MarkdownExtension {
                 .unwrap_or("")
                 .trim_matches('%');
             let mut command = Command::new(id.clone(), messages[title].as_str().unwrap_or(title));
-            command.icon = declaration["icon"].as_str().map(str::to_owned);
+            // VS Code manifests spell theme icons as `$(id)`; SDK command
+            // registrations carry the bare product icon ID consumed by the host.
+            command.icon = declaration["icon"]
+                .as_str()
+                .and_then(|icon| {
+                    icon.strip_prefix("$(")
+                        .and_then(|icon| icon.strip_suffix(')'))
+                })
+                .map(str::to_owned);
             if let Some(menus) = manifest["contributes"]["menus"].as_object() {
                 for (menu, entries) in menus {
                     for entry in entries
@@ -159,7 +167,7 @@ fn preview(
     }
     let mut events = Vec::new();
     let mut heading: Option<(usize, String)> = None;
-    let mut slugs = std::collections::BTreeSet::new();
+    let mut slugs = language::HeadingIds::default();
     let mut metadata = false;
     let math_enabled = math::enabled(configuration);
     let breaks = configuration
@@ -214,13 +222,7 @@ fn preview(
             }
             Event::End(TagEnd::Heading(_)) => {
                 if let Some((index, title)) = heading.take() {
-                    let base = language::slug(&title);
-                    let mut slug = base.clone();
-                    let mut count = 1;
-                    while !slugs.insert(slug.clone()) {
-                        slug = format!("{base}-{count}");
-                        count += 1;
-                    }
+                    let slug = slugs.insert(&title);
                     if let Event::Start(Tag::Heading { id, attrs, .. }) = &mut events[index] {
                         *id = Some(slug.into());
                         attrs.push(("tabindex".into(), Some("-1".into())));

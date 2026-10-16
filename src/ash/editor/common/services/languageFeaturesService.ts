@@ -136,7 +136,7 @@ export class LanguageFeaturesService extends Disposable implements ILanguageFeat
 			const next = normalizeProviderBatch(replacement);
 			runWithBufferedEvents(() => {
 				try {
-					replaceProviderRegistrations(registrations, next);
+					replaceProviderRegistrations(registrations, next, current);
 				} catch (error) {
 					replaceProviderRegistrations(registrations, current);
 					throw error;
@@ -244,8 +244,12 @@ function disposeRegistrations(registrations: readonly IDisposable[]): void {
 	}
 }
 
-function replaceProviderRegistrations(registrations: LanguageProviderRegistrations, providers: Required<LanguageProviderBatch>): void {
-	registrations.syntax.replace(providers.syntax);
+function replaceProviderRegistrations(registrations: LanguageProviderRegistrations, providers: Required<LanguageProviderBatch>, previous?: Required<LanguageProviderBatch>): void {
+	// Syntax invalidation restarts analysis for every open model. A navigation-only
+	// extension update must retain the existing normalized syntax providers.
+	if (!previous || providers.syntax.length !== previous.syntax.length || providers.syntax.some((provider, index) => provider !== previous.syntax[index])) {
+		registrations.syntax.replace(providers.syntax);
+	}
 	registrations.documentHighlights.replace(providers.documentHighlights);
 	registrations.workspaceSymbols.replace(providers.workspaceSymbols);
 	registrations.definitions.replace(providers.definitions);

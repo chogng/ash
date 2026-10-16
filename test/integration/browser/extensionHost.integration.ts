@@ -1,9 +1,18 @@
+import type { TextResourceResolveRequest } from '../../../src/ash/workbench/services/textmodelResolver/common/textResourceStore.js';
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
+import { Event } from '../../../src/ash/base/common/event.js';
 import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../src/ash/platform/agentHost/common/extensionHostApi.js';
 import { createDisconnectedExtensionHostApi } from '../../../src/ash/platform/agentHost/browser/extensionHostApi.js';
 import { IMarkerService } from '../../../src/ash/platform/markers/common/markers.js';
 import { ILanguageFeaturesService } from '../../../src/ash/editor/common/services/languageFeatures.js';
+import { ILanguageService } from '../../../src/ash/editor/common/languages/language.js';
+import { IFileService } from '../../../src/ash/platform/files/common/files.js';
+import { FileService } from '../../../src/ash/platform/files/common/fileService.js';
+import '../../../src/ash/platform/uriIdentity/common/uriIdentityService.js';
+import { BrowserTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/browser/browserTextModelService.js';
+import { IFileTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
 import { StandaloneServices } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
+import { CodeEditorWidget } from '../../../src/ash/editor/browser/widget/codeEditor/codeEditorWidget.js';
 import { MainThreadDocuments } from '../../../src/ash/workbench/api/browser/mainThreadDocuments.js';
 import { MainThreadDiagnostics } from '../../../src/ash/workbench/api/browser/mainThreadDiagnostics.js';
 import { createExtensionHostLanguageProviderBatch } from '../../../src/ash/workbench/api/browser/extensionHostLanguageBridge.js';
@@ -11,6 +20,13 @@ import * as stanza from '../../../src/ash/editor/editor.main.js';
 
 const resources = new DisposableStore();
 const services = StandaloneServices.initialize();
+services.registerInstance(IFileService, resources.add(new FileService()));
+const fileModels = resources.add(services.createInstance(BrowserTextModelService, {
+	onDidChange: Event.None,
+	resolve: async (input: TextResourceResolveRequest) => ({ resource: input.resource, text: input.bootstrapText ?? '', revision: '1' }),
+	save: async () => { throw new Error('Persistence is outside this extension integration'); },
+}, { languageService: services.get(ILanguageService), languageFeaturesService: services.get(ILanguageFeaturesService) }));
+services.registerInstance(IFileTextModelService, fileModels);
 const api = createDisconnectedExtensionHostApi(operation => { throw new Error(`Unexpected operation ${operation}`); });
 services.registerInstance(IExtensionHostApi, api);
 const diagnostics = resources.add(services.createInstance(MainThreadDiagnostics));
@@ -46,8 +62,9 @@ documents.update(snapshot);
 const features = services.get(ILanguageFeaturesService);
 const batch = createExtensionHostLanguageProviderBatch({ kind: 'languageProvider', registrationId: 'completion', languageIds: ['plaintext'], operations: ['completion'], completionTriggerCharacters: ['.'] }, source.extensionId, 'test.completion', (operation, payload, signal) => api.invoke({ ...source, registrationId: 'completion', operation, payload, deadlineUnixMillis: Date.now() + 1_000 }, signal));
 const provider = resources.add(features.registerProviderBatch(batch));
-const model = resources.add(stanza.editor.createModel('bad', 'plaintext', stanza.URI.file('/main.txt')));
-const editor = resources.add(stanza.editor.create(document.querySelector<HTMLElement>('#editor')!, { model }));
+const reference = resources.add(await fileModels.acquire({ initialText: 'bad', languageId: 'plaintext', resource: stanza.URI.file('/main.txt') }, new AbortController().signal));
+const model = reference.model;
+const editor = resources.add(services.createInstance(CodeEditorWidget, { container: document.querySelector<HTMLElement>('#editor')!, model }));
 
 declare global {
 	interface Window {
@@ -63,6 +80,6 @@ window.extensionEditorIntegration = {
 	markers: () => services.get(IMarkerService).read({ resource: model.uri }).map(marker => marker.message),
 	text: () => model.getValue(),
 	stop: () => { documents.clear(); diagnostics.clear(); provider.replace({}); },
-	close: () => { editor.setModel(null); model.dispose(); },
+	close: () => { editor.setModel(null); reference.dispose(); },
 	dispose: () => resources.dispose(),
 };

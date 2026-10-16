@@ -6,6 +6,8 @@ Its internal `parser` module uses `pulldown-cmark`; there is no separate parser
 extension, command or process. Syntax highlighting, outline, folding and structural
 selection use the editor's shared Rust Tree-sitter (and the Web Worker fallback).
 Grammar/query resources remain in `markdown-basics`.
+Opening a Markdown document or invoking a contributed command can activate the
+extension immediately, without waiting for the rest of workbench startup.
 
 Formula rendering belongs to the independently enabled [`markdown-math`](../markdown-math/README.md)
 Rust extension. Markdown sends inline/display formulas and `math` fences in document
@@ -28,9 +30,13 @@ The readonly and input composition behavior stays in the client view.
 
 Both views update their existing sandbox and retain unchanged DOM. Rich edits use
 versioned UTF-16 ranges; preview heading IDs, metadata and math use the same Markdown
-semantics as language features. A request shares parsed target documents and a sparse
-line index. Document events update diagnostics for the changed document and its open
-dependents. Compact render tuples keep prose-heavy documents within transport quotas;
+semantics as language features. A bounded analysis cache shares exact snapshots across
+requests, including their sparse UTF-16 line index. Document observations build a bounded
+link dependency index once, then update diagnostics for the changed document and its open
+dependents without fetching all open buffers again. Closing a document releases its cached
+analysis and dependency entry; interrupted refreshes rebuild from current client snapshots.
+Leading-slash links use the containing workspace folder, including nested multi-root folders.
+Compact render tuples keep prose-heavy documents within transport quotas;
 an oversized provider result returns a recoverable error instead of ending the process.
 
 Disable the functional extension to retire its process and providers; source

@@ -5,7 +5,7 @@ import { localize } from '../../../../nls.js';
 import { IExtensionService } from '../../extensions/common/extensionService.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
-import { IModelService } from '../../../../editor/common/services/model.js';
+import { IFileTextModelService } from '../../textmodelResolver/common/textModelResourceService.js';
 import { ILifecycleService, LifecyclePhase } from '../../lifecycle/common/lifecycle.js';
 import { Emitter, runWithBufferedEvents, type Event } from "../../../../base/common/event.js";
 import { CancellationError, getErrorMessage } from "../../../../base/common/errors.js";
@@ -49,7 +49,7 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 		@IExtensionHostApi private readonly api: IExtensionHostApi,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IOutputService output: IOutputService,
-		@IModelService private readonly models: IModelService,
+		@IFileTextModelService private readonly models: IFileTextModelService,
 		@ILifecycleService private readonly lifecycle: ILifecycleService,
 		@IExtensionService extensions: IExtensionService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
@@ -208,6 +208,7 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 			this.activateEditorEvents(snapshot);
 		} catch (error) {
 			runWithBufferedEvents(() => {
+				this.fleetOutput.appendLine({ severity: 'error', category: 'registration', text: errorMessage(error) });
 				this.failureEmitter.fire({ extensionId: undefined, code: "registrationProjectionFailed", incarnation: undefined, message: errorMessage(error) });
 				this.setState(this.extensionApi.hasContributions ? "degraded" : "failed");
 			});

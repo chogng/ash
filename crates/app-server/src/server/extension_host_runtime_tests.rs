@@ -175,10 +175,13 @@ fn markdown_product_registration_owns_views_and_obeys_profile_policy() {
         super::source::WorkspaceReadAccess::Read
     ));
     assert!(markdown.credential_providers.is_empty());
-    assert_eq!(
-        markdown.activation.as_ref().unwrap().events,
-        ["onStartupFinished"]
-    );
+    let activation = markdown.activation.as_ref().unwrap();
+    assert!(activation.matches(&super::source::ActivationEvent::Language("markdown".into())));
+    assert!(activation.matches(&super::source::ActivationEvent::StartupFinished));
+    for (command, _) in &activation.commands {
+        assert!(activation.matches(&super::source::ActivationEvent::Command(command.clone())));
+    }
+    assert_eq!(activation.events, markdown.params.activation_events);
     assert_eq!(markdown.activation.as_ref().unwrap().commands.len(), 7);
     assert!(!markdown.authority.authorizes());
     assert!(markdown.authority.acquire().is_none());

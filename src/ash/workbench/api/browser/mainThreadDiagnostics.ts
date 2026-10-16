@@ -1,6 +1,6 @@
 import { Disposable, DisposableMap, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
-import { IModelService } from '../../../editor/common/services/model.js';
+import { IFileTextModelService } from '../../services/textmodelResolver/common/textModelResourceService.js';
 import { IMarkerService, MarkerSeverity, type IResourceMarker } from '../../../platform/markers/common/markers.js';
 import type { ExtensionClientSource, ExtensionHostFleetSnapshot } from '../../../platform/agentHost/common/extensionHostApi.js';
 import type { ExtensionDiagnosticEntry } from '../common/extHost.protocol.js';
@@ -10,7 +10,7 @@ export class MainThreadDiagnostics extends Disposable {
 	private readonly collections = this._register(new DisposableMap<string, IDisposable>());
 	private sources = new Set<string>();
 
-	constructor(@IMarkerService private readonly markers: IMarkerService, @IModelService private readonly models: IModelService) { super(); }
+	constructor(@IMarkerService private readonly markers: IMarkerService, @IFileTextModelService private readonly models: IFileTextModelService) { super(); }
 
 	public update(snapshot: ExtensionHostFleetSnapshot): void {
 		this.sources = new Set(snapshot.extensions.filter(runtime => runtime.lifecycle === 'ready' && runtime.incarnation !== undefined).map(runtime => JSON.stringify([runtime.id, runtime.activationGeneration, runtime.incarnation])));
