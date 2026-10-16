@@ -1,3 +1,5 @@
+import { ActivityService } from '../../../../../../workbench/services/activity/browser/activityService.js';
+import { IActivityService } from '../../../../../../workbench/services/activity/common/activity.js';
 import { registerTestComponentServices } from '../../../../../test/common/testEditorServices.js';
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
@@ -291,6 +293,7 @@ test('Pane Composite combines scoped container and View actions while retaining 
 	resources.add(registry.registerViews(active.id, [{ id: 'fixture.action-view', title: 'View', canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(ActionView) }]));
 	const descriptors = resources.add(new ViewDescriptorService({ registry }, context));
 	services.registerInstance(IViewDescriptorService, descriptors);
+	if (!services.has(IActivityService)) services.registerSingleton(IActivityService, () => services.createInstance(ActivityService));
 	const menus = registerContainerServices(services).get(IMenuService);
 	resources.add(MenusRegistry.appendMenuItem(MenuId.ViewContainerTitle, { command: { id: 'fixture.containerAction', title: 'Container action' }, group: 'navigation', when: ContextKeyExpr.equals('viewContainer', active.id) }));
 	resources.add(MenusRegistry.appendMenuItem(MenuId.ViewContainerTitleContext, { command: { id: 'fixture.containerContext', title: 'Container context' }, when: ContextKeyExpr.equals('viewContainer', active.id) }));

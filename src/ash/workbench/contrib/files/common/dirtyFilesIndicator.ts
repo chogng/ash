@@ -32,7 +32,7 @@ export class DirtyFilesIndicator extends Disposable implements IWorkbenchContrib
 			: localize('files.dirtyMany', '{0} unsaved files', count);
 		this.badge.value = this.activityService.showViewContainerActivity(
 			WorkbenchViewContainerId.Sidebar,
-			new NumberBadge(count, description),
+			{ badge: new NumberBadge(count, () => description) },
 		);
 	}
 }

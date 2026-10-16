@@ -1,3 +1,5 @@
+import { ActivityService } from '../../../../services/activity/browser/activityService.js';
+import { IActivityService } from '../../../../services/activity/common/activity.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../chat/browser/speechToText/chatSpeechToTextService.js';
 import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../../chat/browser/speechToText/voiceCodeTranscriptionClient.js';
 import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
@@ -307,6 +309,7 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	resources.add(registry.registerViews(terminal.id, [{ id: 'test.terminalView', title: 'Terminal', canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(TerminalViewPane) }]));
 	const descriptors = resources.add(new ViewDescriptorService({ registry }, context));
 	services.registerInstance(IViewDescriptorService, descriptors);
+	if (!services.has(IActivityService)) services.registerSingleton(IActivityService, () => services.createInstance(ActivityService));
 	const panel = resources.add(services.createInstance(PanelPart, browserEnvironment.window.document.body));
 	const create = (descriptor: typeof terminal) => services.createInstance(PaneComposite, panel.domNode, {
 		viewContainer: descriptor, model: descriptors.getViewContainerModel(descriptor.id), instantiationService: services,

@@ -1,4 +1,5 @@
 import "./compositebar/compositebar.css";
+import { IActivityService, NumberBadge } from "../../services/activity/common/activity.js";
 import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
 import type { ActionViewItem } from "../../../base/browser/ui/actionbar/actionViewItems.js";
 import { ActionBar, type ActionBarDropPosition, type ActionBarOrientation } from "../../../base/browser/ui/actionbar/actionbar.js";
@@ -66,7 +67,6 @@ export class CompositeBar extends Disposable {
 	private disabledBadgeIds = new Set<string>();
 	private badgesEnabled = true;
 	private readonly tabWidths = new Map<string, number>();
-	private readonly badges = new Map<string, { readonly count: number; readonly description: string; }>();
 	private actionBarInsetWidth = 0;
 	private actionBarItemGap = 0;
 	private renderedContainerIds: readonly string[] = [];
@@ -75,7 +75,11 @@ export class CompositeBar extends Disposable {
 	private restoringOrder = false;
 	private _activeCompositeId: string | undefined;
 
-	constructor(container: HTMLElement, options: ICompositeBarOptions) {
+	constructor(
+		container: HTMLElement,
+		options: ICompositeBarOptions,
+		@IActivityService private readonly activityService: IActivityService,
+	) {
 		super();
 		this.openComposite = options.openComposite;
 		const presentation = options.presentation ?? "icon";
@@ -153,6 +157,9 @@ export class CompositeBar extends Disposable {
 			this.render();
 		}));
 		if (this.overflowEnabled) this._register(observeResize(this.domNode, () => this.layout()));
+		this._register(activityService.onDidChangeActivity(container => {
+			if (typeof container === 'string' || container.location === this.location) this.render();
+		}));
 		this.render();
 	}
 
@@ -165,10 +172,14 @@ export class CompositeBar extends Disposable {
 		this.actionBar.element.setAttribute("aria-label", label);
 	}
 
-	setBadge(containerId: string, count: number | undefined, description?: string): void {
-		if (count === undefined) this.badges.delete(containerId);
-		else this.badges.set(containerId, { count, description: description ?? String(count) });
-		this.render();
+	private getBadge(containerId: string): { readonly count: number; readonly description: string; } | undefined {
+		const activities = this.activityService.getViewContainerActivities(containerId);
+		const count = activities.reduce((total, activity) =>
+			total + (activity.badge instanceof NumberBadge ? activity.badge.number : 0), 0);
+		return count > 0 ? {
+			count,
+			description: [...new Set(activities.map(activity => activity.badge.getDescription()))].join(', '),
+		} : undefined;
 	}
 
 	areBadgesEnabled(compositeId: string): boolean {
@@ -326,7 +337,7 @@ export class CompositeBar extends Disposable {
 					tabId: compositeTabId(this.location, container.id),
 					panelId: compositePanelId(this.location, container.id),
 					checked: container.id === this._activeCompositeId,
-					badge: this.badges.get(container.id),
+					badge: this.getBadge(container.id),
 					badgeEnabled: this.badgesEnabled && this.areBadgesEnabled(container.id),
 					onActivate: (compositeId) => { void this.openComposite(compositeId).catch(onUnexpectedError); },
 				});

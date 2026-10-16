@@ -1,3 +1,4 @@
+import { IActivityService } from '../../../../workbench/services/activity/common/activity.js';
 import { ISessionGroupsService } from '../../../services/sessions/browser/sessionGroupsService.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import "./media/sidebarPart.css";
@@ -97,13 +98,14 @@ export class SidebarPart extends WorkbenchSidebarPart {
 		@IViewDescriptorService descriptors: IViewDescriptorService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IStorageService storage: IStorageService,
+		@IActivityService activityService: IActivityService,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IThemeService themeService: IThemeService,
 	) {
 		super(container, {
 			viewDescriptorService: descriptors, contextKeyService: contextKeys, compositeBarVisible: false,
 			openComposite: (id, preserveFocus) => instantiationService.invokeFunction(accessor => accessor.get(IViewsService).openViewContainer(id, !preserveFocus)),
-		}, themeService, storage);
+		}, themeService, storage, activityService);
 		this.topActivityBarHost = h(container.ownerDocument, 'div');
 		this.topActivityBarHost.className = 'ash-sessions-activity-host top';
 		this.topActivityBarHost.hidden = true;

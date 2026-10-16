@@ -1,3 +1,5 @@
+import { IActivityService } from '../../workbench/services/activity/common/activity.js';
+import { ActivityService } from '../../workbench/services/activity/browser/activityService.js';
 import { BrowserProgressService } from '../../platform/progress/browser/progressService.js';
 import { IProgressService } from '../../platform/progress/common/progress.js';
 import { IRemoteConnectionApi, IRemoteConnectionService, RemoteConnectionService, UnavailableRemoteConnectionApi } from '../../platform/remote/common/remoteConnectionService.js';
@@ -669,6 +671,7 @@ export abstract class Workbench extends Disposable {
 		const titlebar = this._register(options.createTitlebarPart(this.domNode, services));
 		const viewDescriptors = this._register(services.createInstance(ViewDescriptorService, { registry: SessionsViewRegistry }));
 		services.registerInstance(IViewDescriptorService, viewDescriptors);
+		services.registerSingleton(IActivityService, () => services.createInstance(ActivityService));
 		services.registerSingleton(IDesignEditorService, () => services.createInstance(DesignEditorService));
 		this._register(registerSessionsNavigation(async () => {
 			const catalog = await options.api.session.listAgents();

@@ -278,8 +278,18 @@ test('activity badges keep compact icons readable, center label counts and retai
 			return { itemHeight: tab.height, height: badge.height, top: badge.top - tab.top, right: tab.right - badge.right, padding: style.padding, radius: style.borderRadius, lineHeight: style.lineHeight };
 		});
 		expect(geometry).toEqual(compact
-			? { itemHeight: 28, height: 13, top: 13, right: 6, padding: '0px 2px', radius: '13px', lineHeight: '13px' }
-			: { itemHeight: 48, height: 16, top: 24, right: 8, padding: '0px 4px', radius: '20px', lineHeight: '16px' });
+			? { itemHeight: 28, height: 13, top: 13, right: 6, padding: '0px 2px', radius: '9999px', lineHeight: '13px' }
+			: { itemHeight: 48, height: 16, top: 24, right: 8, padding: '0px 4px', radius: '9999px', lineHeight: '16px' });
+		const placement = await tab.evaluate(element => {
+			const icon = element.querySelector('.ash-icon')!.getBoundingClientRect();
+			const badge = element.querySelector('.ash-composite-bar-badge')!.getBoundingClientRect();
+			return {
+				iconWidth: icon.width, iconHeight: icon.height,
+				rightOfIconCenter: badge.x + badge.width / 2 > icon.x + icon.width / 2,
+				belowIconCenter: badge.y + badge.height / 2 > icon.y + icon.height / 2,
+			};
+		});
+		expect(placement).toEqual({ iconWidth: compact ? 16 : 24, iconHeight: compact ? 16 : 24, rightOfIconCenter: true, belowIconCenter: true });
 		await page.screenshot({ path: testInfo.outputPath(`vertical-${compact ? 'compact' : 'default'}-badges.png`) });
 	}
 	await page.evaluate(() => window.ashCompositeIntegration.toggleBadge());

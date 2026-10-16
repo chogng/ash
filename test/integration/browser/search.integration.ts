@@ -1,3 +1,5 @@
+import { ActivityService } from '../../../src/ash/workbench/services/activity/browser/activityService.js';
+import { IActivityService } from '../../../src/ash/workbench/services/activity/common/activity.js';
 import { BrowserAuxiliaryWindowService, IAuxiliaryWindowService } from '../../../src/ash/workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { operatingSystem, OperatingSystem } from '../../../src/ash/base/common/platform.js';
 import { BrowserPathService } from '../../../src/ash/workbench/services/path/browser/pathService.js';
@@ -222,6 +224,7 @@ instantiation.registerInstance(IThemeService, theme);
 instantiation.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (bundle, key, fallback) => localize({ bundle, key }, fallback) });
 const descriptors = store.add(instantiation.createInstance(ViewDescriptorService, { registry }));
 instantiation.registerInstance(IViewDescriptorService, descriptors);
+instantiation.registerSingleton(IActivityService, () => instantiation.createInstance(ActivityService));
 instantiation.registerInstance(IAuxiliaryWindowService, store.add(instantiation.createInstance(BrowserAuxiliaryWindowService, window, host)));
 const layout = store.add(instantiation.createInstance(WorkbenchLayout, host, {
 	initialDimension: new Dimension(1024, 600), workbenchState: WorkbenchState.WORKSPACE,

@@ -104,10 +104,13 @@ test('Dirty file activity follows working copy registration and dirty state', ()
 	let isDirty = true;
 	let activeBadge: NumberBadge | undefined;
 	const activity: IActivityService = {
+		onDidChangeActivity: Event.None,
+		getViewContainerActivities: () => [],
+		showViewActivity: () => { throw new Error('Unexpected view activity'); },
 		showViewContainerActivity(_containerId, badge) {
-			activeBadge = badge;
+			activeBadge = badge.badge as NumberBadge;
 			return toDisposable(() => {
-				if (activeBadge === badge) activeBadge = undefined;
+				if (activeBadge === badge.badge) activeBadge = undefined;
 			});
 		},
 	};
@@ -130,7 +133,7 @@ test('Dirty file activity follows working copy registration and dirty state', ()
 	};
 	using registration = workingCopies.register(first);
 	assert.equal(activeBadge?.number, 1);
-	assert.equal(activeBadge?.description, '1 unsaved file');
+	assert.equal(activeBadge?.getDescription(), '1 unsaved file');
 	let secondIsDirty = false;
 	using secondRegistration = workingCopies.register({
 		...first,
@@ -144,14 +147,14 @@ test('Dirty file activity follows working copy registration and dirty state', ()
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {
 		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
-		assert.equal(activeBadge?.description, '2 unsaved files');
+		assert.equal(activeBadge?.getDescription(), '2 unsaved files');
 		using translated = new DirtyFilesIndicator(activity, workingCopies);
-		assert.equal(activeBadge?.description, '2 个未保存的文件');
+		assert.equal(activeBadge?.getDescription(), '2 个未保存的文件');
 	} finally {
 		resetNlsResolver();
 	}
 	secondDirtyChanges.fire();
-	assert.equal(activeBadge?.description, '2 unsaved files');
+	assert.equal(activeBadge?.getDescription(), '2 unsaved files');
 	isDirty = false;
 	dirtyChanges.fire();
 	assert.equal(activeBadge?.number, 1);

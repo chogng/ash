@@ -1,0 +1,20 @@
+/* Activity selectors keep the same badge placement when rehosted in a Sidebar. */
+.ash-composite-bar-vertical.ash-composite-bar-icon .ash-composite-bar-badge {
+	inset: 24px 8px auto auto;
+	min-width: 16px;
+	height: 16px;
+	padding: 0 4px;
+	border-radius: var(--ash-cornerRadius-circle);
+	font-size: 9px;
+	font-weight: var(--ash-fontWeight-semiBold);
+	line-height: 16px;
+}
+
+.ash-composite-bar-vertical.ash-composite-bar-icon.compact
+	.ash-composite-bar-badge {
+	inset: 13px 6px auto auto;
+	min-width: 13px;
+	height: 13px;
+	padding: 0 2px;
+	line-height: 13px;
+}

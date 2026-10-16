@@ -58,7 +58,7 @@ import { emptyEditorServiceState } from '../../../../../workbench/test/common/te
 import { SCMService } from '../../common/scmService.js';
 import { SCMViewService } from '../../browser/scmViewService.js';
 import { SCMRepositoriesViewPane } from '../../browser/scmRepositoriesViewPane.js';
-import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IStorageService, StorageScope } from '../../../../../platform/storage/common/storage.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { ISCMService, ISCMViewService, VIEW_PANE_ID, type ISCMProvider } from '../../common/scm.js';
@@ -2042,3 +2042,39 @@ function createHistoryViewFixture(data: HistoryFixtureData) {
 	resources.add(scmService.registerSCMProvider(testSCMProvider('repo-1', 'workspace', provider)));
 	return Object.assign(resources, { viewService, scmService });
 }
+
+
+test('SCM publishes its count through view activity and retires it with the controller', async () => {
+	const { WorkbenchViewRegistry, WorkbenchViewContainerId } = await import('../../../../common/views.js');
+	const { ViewDescriptorService } = await import('../../../../services/views/browser/viewDescriptorService.js');
+	const { NumberBadge } = await import('../../../../services/activity/common/activity.js');
+	const { registerSCMViews } = await import('../../browser/scm.contribution.js');
+	using registry = new WorkbenchViewRegistry();
+	registerSCMViews(registry);
+	using contexts = new ContextKeyService();
+	using descriptors = new ViewDescriptorService({ registry }, contexts);
+	using activity = new ActivityService(descriptors);
+	using scm = new SCMService();
+	using views = new SCMViewService(scm);
+	using changes = new Emitter<void>();
+	let count = 3;
+	using repository = scm.registerSCMProvider({
+		...testSCMProvider('badge-repository', 'Badge repository'),
+		get count() { return count; },
+		onDidChangeResources: changes.event,
+	});
+	using controller = new SCMActiveRepositoryController(views, activity);
+	const badges = () => activity.getViewContainerActivities(WorkbenchViewContainerId.SourceControl).map(entry => {
+		assert.ok(entry.badge instanceof NumberBadge);
+		return { count: entry.badge.number, description: entry.badge.getDescription() };
+	});
+	assert.deepEqual(badges(), [{ count: 3, description: '3 changed files' }]);
+	count = 0;
+	changes.fire();
+	assert.deepEqual(badges(), []);
+	count = 1;
+	changes.fire();
+	assert.deepEqual(badges(), [{ count: 1, description: '1 changed file' }]);
+	controller.dispose();
+	assert.deepEqual(badges(), []);
+});

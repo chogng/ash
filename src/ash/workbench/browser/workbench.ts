@@ -992,6 +992,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IGitHubConnectionService, this._register(services.createInstance(GitHubConnectionService)));
 		const viewDescriptors = this._register(services.createInstance(ViewDescriptorService, {}));
 		services.registerInstance(IViewDescriptorService, viewDescriptors);
+		services.registerSingleton(IActivityService, () => services.createInstance(ActivityService));
 		const contributions = this._register(
 			WorkbenchContributionsRegistry.createHost(services, undefined, contributionIds),
 		);
@@ -1031,8 +1032,6 @@ export class Workbench extends Disposable {
 		const initialActivityBarLocation = configuration.getValue<ActivityBarPosition>(WorkbenchConfiguration.activityBarLocation);
 		sidebar.setActivityBarLocation(initialActivityBarLocation);
 		sidebar.domNode.classList.toggle('sidebar-right', configuration.getValue(WorkbenchConfiguration.sideBarLocation) === 'right');
-		const activityService = this._register(new ActivityService(sidebar.compositeBar));
-		services.registerInstance(IActivityService, activityService);
 		const agentSidebar = this._register(services.createInstance(SidebarPart, workbenchRoot, {
 			openComposite: (id: string, preserveFocus?: boolean) => services.invokeFunction(accessor => accessor.get(IViewsService).openViewContainer(id, !preserveFocus)),
 			viewDescriptorService: viewDescriptors,

@@ -3,9 +3,8 @@ import { StatusbarAlignment, type IStatusbarEntryAccessor, IStatusbarService } f
 import { Disposable, DisposableMap, MutableDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { localize } from '../../../../nls.js';
-import { WorkbenchViewContainerId } from '../../../common/views.js';
 import { IActivityService, NumberBadge } from '../../../services/activity/common/activity.js';
-import { ISCMViewService, type ISCMProvider } from '../common/scm.js';
+import { ISCMViewService, VIEW_PANE_ID, type ISCMProvider } from '../common/scm.js';
 
 /** Counts live resources in the repository selected by SCM. */
 export class SCMActiveRepositoryController extends Disposable {
@@ -31,7 +30,7 @@ export class SCMActiveRepositoryController extends Disposable {
 		const count = provider.count ?? new Set(provider.groups.flatMap(group => group.resources.map(resource => extUriBiasedIgnorePathCase.getComparisonKey(resource.sourceUri)))).size;
 		if (!count) return;
 		const description = count === 1 ? localize('scm.activity.oneChange', '1 changed file') : localize('scm.activity.changes', '{0} changed files', count);
-		this.activity.value = this.activityService.showViewContainerActivity(WorkbenchViewContainerId.SourceControl, new NumberBadge(count, description));
+		this.activity.value = this.activityService.showViewActivity(VIEW_PANE_ID, { badge: new NumberBadge(count, () => description) });
 	}
 }
 

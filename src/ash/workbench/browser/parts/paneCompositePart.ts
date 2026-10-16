@@ -1,3 +1,4 @@
+import { IActivityService } from '../../services/activity/common/activity.js';
 import { Separator } from "../../../base/common/actions.js";
 import { SeparatorActionViewItem } from "../../../base/browser/ui/actionbar/actionViewItems.js";
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
@@ -82,6 +83,7 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 		options: PaneCompositePartOptions,
 		@IThemeService themeService: IThemeService,
 		@IStorageService private readonly storageService: IStorageService,
+		@IActivityService activityService: IActivityService,
 	) {
 		super(container, options.id, themeService, storageService);
 		this.viewDescriptorService = options.viewDescriptorService;
@@ -119,7 +121,7 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 			contextMenuProvider: options.compositeBarContextMenuProvider,
 			storageService,
 			containerFilter: options.compositeBarContainerFilter,
-		}));
+		}, activityService));
 		this.titleActionsSlotDomNode = h(ownerDocument, "div");
 		this.titleActionsSlotDomNode.className = "ash-pane-composite-title-actions";
 		this.viewTitleActionsDomNode = h(ownerDocument, "div");

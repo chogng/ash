@@ -1,6 +1,7 @@
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import './media/activitybarpart.css';
+import './media/activityaction.css';
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { Separator, type IAction } from '../../../../base/common/actions.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';

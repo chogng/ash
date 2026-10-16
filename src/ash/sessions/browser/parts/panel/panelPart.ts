@@ -1,3 +1,4 @@
+import { IActivityService } from '../../../../workbench/services/activity/common/activity.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
@@ -15,12 +16,13 @@ export class PanelPart extends WorkbenchPanelPart {
 		@IViewDescriptorService descriptors: IViewDescriptorService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IStorageService storage: IStorageService,
+		@IActivityService activityService: IActivityService,
 		@ILocalizationService localization: ILocalizationService,
 		@IMenuService menus: IMenuService,
 		@IContextMenuService contextMenus: IContextMenuService,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IThemeService themeService: IThemeService,
 	) {
-		super(container, descriptors, contextKeys, storage, localization, menus, contextMenus, instantiationService, themeService);
+		super(container, descriptors, contextKeys, storage, localization, menus, contextMenus, instantiationService, themeService, activityService);
 	}
 }

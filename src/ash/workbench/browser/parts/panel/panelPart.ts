@@ -1,3 +1,4 @@
+import { IActivityService } from '../../../services/activity/common/activity.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import "./media/panelpart.css";
 import { IStorageService } from "../../../../platform/storage/common/storage.js";
@@ -26,6 +27,7 @@ export class PanelPart extends PaneCompositePart {
 		@IContextMenuService contextMenuService: IContextMenuService,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IThemeService themeService: IThemeService,
+		@IActivityService activityService: IActivityService,
 	) {
 		super(container, {
 			openComposite: (id, preserveFocus) => instantiationService.invokeFunction(accessor => accessor.get(IViewsService).openViewContainer(id, !preserveFocus)),
@@ -41,7 +43,7 @@ export class PanelPart extends PaneCompositePart {
 			compositeBarPresentation: "label",
 			compositeBarContextMenuProvider: contextMenuService,
 			titleActions: { menuService, contextMenuProvider: contextMenuService, menuId: MenuId.PanelTitle },
-		}, themeService, storageService);
+		}, themeService, storageService, activityService);
 		this.titleDomNode.classList.add("ash-panel-title-control");
 	}
 

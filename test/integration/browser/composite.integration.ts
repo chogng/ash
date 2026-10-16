@@ -1,3 +1,6 @@
+import '../../../src/ash/workbench/browser/parts/activitybar/media/activitybarpart.css';
+import '../../../src/ash/workbench/browser/parts/activitybar/media/activityaction.css';
+import { IActivityService } from '../../../src/ash/workbench/services/activity/common/activity.js';
 import { IMarkerService, MarkerSeverity } from '../../../src/ash/platform/markers/common/markers.js';
 import { MarkerService } from '../../../src/ash/platform/markers/common/markerService.js';
 import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
@@ -227,6 +230,7 @@ const storage = resources.add(new BrowserStorageService({ ownerWindow: window, w
 services.registerInstance(IStorageService, storage);
 services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, source) => source });
 services.registerInstance(IViewDescriptorService, resources.add(services.createInstance(ViewDescriptorService, { registry })));
+services.registerSingleton(IActivityService, () => services.createInstance(ActivityService));
 const commands = resources.add(new CommandService(services));
 const openedAgentEvents: unknown[] = [];
 const agentSession = observableValue<SessionsViewSelection | undefined>('agentSession', undefined);
@@ -467,6 +471,7 @@ if (new URLSearchParams(location.search).has('badges')) {
 		host.style.cssText = 'width:240px;height:100px';
 		document.body.append(host);
 		resources.add(toDisposable(() => host.remove()));
+		const activity = resources.add(services.createInstance(ActivityService));
 		const bar = resources.add(new CompositeBar(host, {
 			presentation,
 			location: ViewContainerLocation.Panel,
@@ -474,9 +479,9 @@ if (new URLSearchParams(location.search).has('badges')) {
 			ariaLabel: 'Badge views',
 			activityHoverOptions: { position: () => HoverPosition.BELOW },
 			openComposite: id => views.openViewContainer(id),
-		}));
+		}, activity));
 		badgeBars.push(bar);
-		badgeActivities.push(resources.add(new ActivityService(bar)));
+		badgeActivities.push(activity);
 	}
 }
 const editorRegistry = new EditorPaneRegistry();
@@ -558,15 +563,17 @@ window.ashCompositeIntegration = {
 	setBadge: count => {
 		badgeHandles.value = new DisposableStore();
 		for (const activity of badgeActivities) {
-			badgeHandles.value.add(activity.showViewContainerActivity('first', new NumberBadge(count, `${count} changes`)));
+			badgeHandles.value.add(activity.showViewContainerActivity('first', { badge: new NumberBadge(count, value => `${value} changes`) }));
 		}
 	},
 	setBadgeOrientation: orientation => {
+		badgeBars[0]!.domNode.parentElement!.classList.toggle('ash-activity-bar-content', orientation === 'vertical');
 		badgeBars[0]!.domNode.parentElement!.style.width = orientation === 'vertical' ? '48px' : '240px';
 		badgeBars[0]!.setOrientation(orientation);
 	},
 	setBadgeCompact: compact => {
 		const host = badgeBars[0]!.domNode.parentElement!;
+		host.classList.toggle('compact', compact);
 		badgeBars[0]!.setDensity(compact ? 'compact' : 'default');
 		host.style.width = compact ? '36px' : '48px';
 	},

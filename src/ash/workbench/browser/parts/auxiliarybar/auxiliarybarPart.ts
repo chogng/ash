@@ -1,3 +1,4 @@
+import { IActivityService } from '../../../services/activity/common/activity.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import "./auxiliarybarpart.css";
 import { IStorageService } from "../../../../platform/storage/common/storage.js";
@@ -39,6 +40,7 @@ export class AuxiliarybarPart extends PaneCompositePart {
 		options: AuxiliarybarPartOptions,
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
+		@IActivityService activityService: IActivityService,
 	) {
 		super(container, {
 			openComposite: options.openComposite,
@@ -52,7 +54,7 @@ export class AuxiliarybarPart extends PaneCompositePart {
 			viewsAriaLabel: "Auxiliary sidebar views",
 			viewsAriaLabelKey: { bundle: "ash.regions", key: "auxiliarySidebarViews" },
 			compositeBarVisible: false,
-		}, themeService, storageService);
+		}, themeService, storageService, activityService);
 		this.contentDomNode.classList.add("ash-auxiliarybar-content");
 	}
 

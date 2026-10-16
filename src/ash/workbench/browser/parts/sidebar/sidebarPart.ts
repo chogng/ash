@@ -1,3 +1,5 @@
+import '../activitybar/media/activityaction.css';
+import { IActivityService } from '../../../services/activity/common/activity.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IActivityHoverOptions } from "../compositeBarActions.js";
 import "./sidebarpart.css";
@@ -53,6 +55,7 @@ export class SidebarPart extends PaneCompositePart {
 		options: SidebarPartOptions,
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
+		@IActivityService activityService: IActivityService,
 	) {
 		const location = options.location ?? ViewContainerLocation.Sidebar;
 		super(container, {
@@ -72,7 +75,7 @@ export class SidebarPart extends PaneCompositePart {
 			compositeBarContextMenuProvider: options.compositeBarContextMenuProvider,
 			compositeBarOrientation: location === ViewContainerLocation.Sidebar ? "vertical" : "horizontal",
 			titleActions: options.titleActions,
-		}, themeService, storageService);
+		}, themeService, storageService, activityService);
 		this.domNode.classList.add("ash-sidebar-part");
 		if (location === ViewContainerLocation.Sidebar) {
 			// In top and bottom mode the view selector belongs to the sidebar, so the sidebar keeps its full grid height.

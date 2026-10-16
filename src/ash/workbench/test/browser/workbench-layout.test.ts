@@ -1,3 +1,6 @@
+import { MutableDisposable } from '../../../base/common/lifecycle.js';
+import { ActivityService } from '../../services/activity/browser/activityService.js';
+import { IActivityService, NumberBadge } from '../../services/activity/common/activity.js';
 import { BrowserAuxiliaryWindowService, IAuxiliaryWindowService } from '../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { LayoutActionsContext } from '../../browser/actions/layoutActions.js';
 import { createTestComponentServices, registerTestComponentServices, createTestEditorServices } from '../common/testEditorServices.js';
@@ -386,13 +389,15 @@ test('Activity Bar badge setting applies on startup and preserves per-icon choic
 		}
 		const contextKeys = disposables.add(new ContextKeyService());
 		const views = disposables.add(new ViewDescriptorService({ registry }, contextKeys));
+		const activity = disposables.add(new ActivityService(views));
 		const bar = disposables.add(new CompositeBar(harness.container, {
 			openComposite: async () => null,
 			activityHoverOptions: { position: () => HoverPosition.RIGHT }, viewDescriptorService: views,
 			location: ViewContainerLocation.Sidebar, ariaLabel: 'Views', orientation: 'vertical',
-		}));
-		bar.setBadge('first', 1, '1 unsaved file');
-		bar.setBadge('second', 2);
+		}, activity));
+		const firstBadge = disposables.add(new MutableDisposable());
+		firstBadge.value = activity.showViewContainerActivity('first', { badge: new NumberBadge(1, () => '1 unsaved file') });
+		disposables.add(activity.showViewContainerActivity('second', { badge: new NumberBadge(2, () => '2') }));
 		bar.toggleBadgeEnablement('second');
 		const globalBar = { domNode: dom.window.document.createElement('div'), getContextMenuActions: () => [] };
 		using activityServices = harness.services.createChild();
@@ -400,7 +405,7 @@ test('Activity Bar badge setting applies on startup and preserves per-icon choic
 		disposables.add(activityServices.createInstance(ActivitybarPart, harness.container, bar, globalBar));
 		const first = (): HTMLElement => bar.domNode.querySelector('[data-action-id="first"]')!;
 		assert.equal(bar.domNode.querySelector('.ash-count-badge'), null);
-		bar.setBadge('first', 3, '3 unsaved files');
+		firstBadge.value = activity.showViewContainerActivity('first', { badge: new NumberBadge(3, () => '3 unsaved files') });
 		harness.container.append(bar.domNode);
 		bar.setOrientation('horizontal');
 		first().focus();
@@ -1378,6 +1383,7 @@ test("Pane Composite Parts restore workspace selections with Registry fallback",
 
 	const firstStorage = createStorage("workspace-a");
 	using firstServices = createTestComponentServices(firstStorage, undefined, dom.window.document);
+	firstServices.registerInstance(IViewDescriptorService, viewDescriptors);
 	const first = firstServices.createInstance(SidebarPart, dom.window.document.body, {
 		openComposite: async () => null,
 		viewDescriptorService: viewDescriptors,
@@ -1391,6 +1397,7 @@ test("Pane Composite Parts restore workspace selections with Registry fallback",
 
 	const restoredStorage = createStorage("workspace-a");
 	using restoredServices = createTestComponentServices(restoredStorage, undefined, dom.window.document);
+	restoredServices.registerInstance(IViewDescriptorService, viewDescriptors);
 	const restored = restoredServices.createInstance(SidebarPart, dom.window.document.body, {
 		openComposite: async () => null,
 		viewDescriptorService: viewDescriptors,
@@ -1408,6 +1415,7 @@ test("Pane Composite Parts restore workspace selections with Registry fallback",
 
 	const defaultStorage = createStorage("workspace-a");
 	using fallbackServices = createTestComponentServices(defaultStorage, undefined, dom.window.document);
+	fallbackServices.registerInstance(IViewDescriptorService, viewDescriptors);
 	const fallback = fallbackServices.createInstance(SidebarPart, dom.window.document.body, {
 		openComposite: async () => null,
 		viewDescriptorService: viewDescriptors,
@@ -1615,7 +1623,7 @@ test("CompositeBar moves non-fitting label tabs into its overflow menu", () => {
 		ariaLabel: "Panel views",
 		presentation: "label",
 		contextMenuProvider,
-	}));
+	}, disposables.add(new ActivityService(viewDescriptors))));
 	dom.window.document.body.append(compositeBar.domNode);
 	Object.defineProperty(compositeBar.domNode, "clientWidth", {
 		configurable: true,
@@ -1686,7 +1694,7 @@ for (const activeId of ['search', 'explorer']) {
 				ariaLabel: 'Views',
 				orientation: 'vertical',
 				contextMenuProvider: { showContextMenu(options) { actions = options.getActions(); } },
-			}));
+			}, disposables.add(new ActivityService(views))));
 			bar.setActiveComposite(activeId);
 			bar.showContextMenu(new dom.window.MouseEvent('contextmenu'));
 			await actions.find(action => action.label === 'git')!.run();
@@ -1735,7 +1743,7 @@ test('Activity Bar context menu persists hidden views and keeps one pinned view'
 		orientation: 'vertical',
 		contextMenuProvider,
 		storageService: storage,
-	}));
+	}, disposables.add(new ActivityService(viewDescriptors))));
 	const configuration = firstBar.add(new InMemoryConfigurationService());
 	const globalBar = { domNode: dom.window.document.createElement('div'), setOrientation() { }, getContextMenuActions: () => [] };
 	const localization = { translate: (_bundle: string, _key: string, fallback: string) => fallback } as ILocalizationService;
@@ -1766,7 +1774,7 @@ test('Activity Bar context menu persists hidden views and keeps one pinned view'
 		orientation: 'vertical',
 		contextMenuProvider,
 		storageService: restoredStorage,
-	});
+	}, disposables.add(new ActivityService(viewDescriptors)));
 	assert.equal(restored.domNode.querySelector('[data-action-id="ash.search"]'), null);
 	restored.dispose();
 	restoredStorage.dispose();
@@ -1797,7 +1805,7 @@ test("CompositeBar retains the startup language of View Container labels", () =>
 		localizationService: localization,
 		location: ViewContainerLocation.Panel,
 		ariaLabel: "Panel views",
-	}));
+	}, disposables.add(new ActivityService(viewDescriptors))));
 
 	assert.equal(compositeBar.domNode.querySelector("[role='tab']")?.textContent, "Terminal");
 	locale = "zh-CN";
@@ -1972,7 +1980,7 @@ test("CompositeBar reorders view container tabs through drag and drop", () => {
 		location: ViewContainerLocation.Panel,
 		ariaLabel: "Panel views",
 		presentation: "label",
-	}));
+	}, disposables.add(new ActivityService(viewDescriptors))));
 	dom.window.document.body.append(compositeBar.domNode);
 	const [problems, output] = compositeBar.domNode.querySelectorAll<HTMLElement>(".ash-composite-bar-destination");
 	assert.ok(problems);
@@ -2135,7 +2143,7 @@ test('Activity Bar restores user container order in a new window and keeps the a
 		openComposite: async () => null,
 		activityHoverOptions: { position: () => HoverPosition.ABOVE }, viewDescriptorService: descriptors,
 		location: ViewContainerLocation.Sidebar, ariaLabel: 'Views', orientation: 'vertical', storageService: storage,
-	}));
+	}, disposables.add(new ActivityService(descriptors))));
 	bar.setActiveComposite('second');
 	descriptors.moveViewContainer(ViewContainerLocation.Sidebar, 'third', 'first', 'before');
 	assert.equal(bar.activeCompositeId, 'second');
@@ -2146,7 +2154,7 @@ test('Activity Bar restores user container order in a new window and keeps the a
 		openComposite: async () => null,
 		activityHoverOptions: { position: () => HoverPosition.ABOVE }, viewDescriptorService: restoredDescriptors,
 		location: ViewContainerLocation.Sidebar, ariaLabel: 'Views', orientation: 'vertical', storageService: restoredStorage,
-	}));
+	}, disposables.add(new ActivityService(restoredDescriptors))));
 	assert.deepEqual([...restored.domNode.querySelectorAll<HTMLElement>('.ash-composite-bar-destination')].map(item => item.dataset.actionId), ['third', 'first', 'second']);
 	disposables.dispose();
 	dom.window.close();
@@ -2300,6 +2308,8 @@ const titleMenuResources = new DisposableStore();
 suiteTeardown(() => titleMenuResources.dispose());
 
 function registerContainerServices(services: InstanceType<typeof InstantiationService>): InstanceType<typeof InstantiationService> {
+	if (!services.has(IContextKeyService)) services.registerInstance(IContextKeyService, titleMenuResources.add(new ContextKeyService()));
+	if (!services.has(IViewDescriptorService)) services.registerInstance(IViewDescriptorService, titleMenuResources.add(services.createInstance(ViewDescriptorService, {})));
 	registerTestComponentServices(services);
 	if (!services.has(IMenuService)) {
 		const context = titleMenuResources.add(new ContextKeyService());
