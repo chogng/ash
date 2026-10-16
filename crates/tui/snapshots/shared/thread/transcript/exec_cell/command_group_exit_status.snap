@@ -1,0 +1,11 @@
+---
+source: crates/tui/src/thread/transcript/exec_cell/model_tests.rs
+expression: visible_buffer(&buffer)
+---
+● Finished 3 commands · 1 failed · 2 nonzero exits
+ └─ Exited (status 1)
+    Exit code 1
+ └─ Exited (status 2)
+    Exit code 2
+ └─ Command failed
+    could not start process

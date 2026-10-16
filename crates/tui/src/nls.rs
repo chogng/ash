@@ -1640,6 +1640,24 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Commande terminée",
     ),
     translation(
+        "Exited (status {0})",
+        "終了（ステータス {0}）",
+        "已退出（状态码 {0}）",
+        "Terminé (code {0})",
+    ),
+    translation(
+        "{0} · {1} nonzero exit",
+        "{0} · {1} 件が非ゼロで終了",
+        "{0} · {1} 条非零退出",
+        "{0} · {1} sortie avec un code non nul",
+    ),
+    translation(
+        "{0} · {1} nonzero exits",
+        "{0} · {1} 件が非ゼロで終了",
+        "{0} · {1} 条非零退出",
+        "{0} · {1} sorties avec un code non nul",
+    ),
+    translation(
         "Running {0}",
         "{0} を実行中",
         "正在运行 {0}",

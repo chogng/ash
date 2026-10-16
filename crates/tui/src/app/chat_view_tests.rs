@@ -732,7 +732,7 @@ fn operation_details_are_visible_before_expansion_in_both_modes() {
         for expected in [
             "src/daemon.rs",
             "start_daemon",
-            "命令执行失败",
+            "已退出（状态码 1）",
             "退出码 1",
             "test result: FAILED. 1 failed.",
             "查看完整详情",

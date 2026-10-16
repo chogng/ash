@@ -211,12 +211,16 @@ fn a_nonzero_process_exit_is_visible_even_when_the_tool_returned_successfully() 
         r#"{"result":{"exit_code":1,"stderr":"assertion failed\nfull error"}}"#.into(),
         false,
     );
-    assert_eq!(cell.status(), CommandStatus::Failed);
+    assert_eq!(cell.status(), CommandStatus::Succeeded);
+    assert_eq!(
+        cell.summary(Language::English),
+        "Finished 2 commands · 1 nonzero exit"
+    );
     assert_eq!(
         cell.summary(Language::Chinese),
-        "已完成 2 条命令 · 1 条失败"
+        "已完成 2 条命令 · 1 条非零退出"
     );
-    assert!(!cell.can_accept(Some(&activity)));
+    assert!(cell.can_accept(Some(&activity)));
     let view = crate::thread::transcript::history_cell::CellView::plain(
         crate::thread::transcript::MessageRole::Command,
         String::new(),
@@ -236,6 +240,182 @@ fn a_nonzero_process_exit_is_visible_even_when_the_tool_returned_successfully() 
         .join("\n");
     assert!(visible.contains("just test 'a b'"));
     assert!(visible.contains("退出码 1 · assertion failed"));
+    assert!(visible.contains("已退出（状态码 1）"));
     assert!(!visible.contains("full error"));
     assert!(cell.full_details().contains("full error"));
+}
+
+#[test]
+fn command_exit_status_stays_neutral_until_the_tool_reports_an_error() {
+    let call = call_id("query");
+    let mut cell = ExecCell::start(
+        "query-entry".into(),
+        call.clone(),
+        &tool_name("exec"),
+        "{}".into(),
+        Some(ToolActivity::Command {
+            program: "rg".into(),
+            arguments: vec!["missing".into()],
+            working_directory: ".".into(),
+        }),
+    );
+    cell.complete(
+        "query-result".into(),
+        &call,
+        r#"{"exit_code":1}"#.into(),
+        false,
+    );
+    assert_eq!(cell.status(), CommandStatus::Succeeded);
+    for (language, expected) in [
+        (Language::English, "Exited (status 1)"),
+        (Language::Chinese, "已退出（状态码 1）"),
+        (Language::Japanese, "終了（ステータス 1）"),
+        (Language::French, "Terminé (code 1)"),
+    ] {
+        assert_eq!(cell.summary(language), expected);
+    }
+    let mut snapshots = Vec::new();
+    for language in [Language::English, Language::Chinese] {
+        let buffer = render_cell(&cell, language);
+        assert_eq!(buffer[(0, 0)].symbol(), "●");
+        assert_eq!(buffer[(0, 0)].fg, crate::render::test_context().muted());
+        snapshots.push(visible_buffer(&buffer));
+    }
+    cell.complete(
+        "query-result".into(),
+        &call,
+        r#"{"exit_code":1,"stderr":"permission denied"}"#.into(),
+        true,
+    );
+    assert_eq!(cell.status(), CommandStatus::Failed);
+    assert_eq!(cell.summary(Language::English), "Command failed");
+    assert!(!cell.can_accept(Some(&ToolActivity::Run)));
+    let buffer = render_cell(&cell, Language::English);
+    assert_eq!(buffer[(0, 0)].fg, crate::render::test_context().danger());
+    snapshots.push(visible_buffer(&buffer));
+    crate::tui_assert_snapshot!("command_exit_status", snapshots.join("\n\n"));
+}
+
+#[test]
+fn command_groups_count_nonzero_exits_separately_from_tool_errors() {
+    let mut cell = ExecCell::start(
+        "first".into(),
+        call_id("first"),
+        &tool_name("exec"),
+        "{}".into(),
+        Some(ToolActivity::Run),
+    );
+    cell.complete(
+        "first-result".into(),
+        &call_id("first"),
+        r#"{"exit_code":1}"#.into(),
+        false,
+    );
+    assert!(cell.can_accept(Some(&ToolActivity::Run)));
+    cell.push_call(
+        "second".into(),
+        call_id("second"),
+        &tool_name("exec"),
+        "{}".into(),
+        Some(ToolActivity::Run),
+    );
+    assert_eq!(cell.status(), CommandStatus::Running);
+    assert_eq!(
+        cell.summary(Language::English),
+        "Running 2 commands · 1 nonzero exit"
+    );
+    cell.complete(
+        "second-result".into(),
+        &call_id("second"),
+        r#"{"exit_code":2}"#.into(),
+        false,
+    );
+    assert_eq!(
+        cell.summary(Language::English),
+        "Finished 2 commands · 2 nonzero exits"
+    );
+    assert!(cell.can_accept(Some(&ToolActivity::Run)));
+    cell.push_call(
+        "third".into(),
+        call_id("third"),
+        &tool_name("exec"),
+        "{}".into(),
+        Some(ToolActivity::Run),
+    );
+    assert_eq!(cell.status(), CommandStatus::Running);
+    assert_eq!(
+        cell.summary(Language::English),
+        "Running 3 commands · 2 nonzero exits"
+    );
+    cell.complete(
+        "third-result".into(),
+        &call_id("third"),
+        "could not start process".into(),
+        true,
+    );
+    assert_eq!(cell.status(), CommandStatus::Failed);
+    assert_eq!(
+        cell.summary(Language::English),
+        "Finished 3 commands · 1 failed · 2 nonzero exits"
+    );
+    assert_eq!(
+        cell.summary(Language::Chinese),
+        "已完成 3 条命令 · 1 条失败 · 2 条非零退出"
+    );
+    assert!(!cell.can_accept(Some(&ToolActivity::Run)));
+    let buffer = render_cell(&cell, Language::English);
+    assert_eq!(buffer[(0, 0)].fg, crate::render::test_context().muted());
+    for (label, color) in [
+        ("Exited (status 1)", crate::render::test_context().muted()),
+        ("Exited (status 2)", crate::render::test_context().muted()),
+        ("Command failed", crate::render::test_context().danger()),
+    ] {
+        let row = (0..buffer.area.height)
+            .find(|&y| {
+                (0..buffer.area.width)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<String>()
+                    .contains(label)
+            })
+            .expect("each command's status is visible");
+        assert_eq!(buffer[(4, row)].fg, color);
+    }
+    crate::tui_assert_snapshot!("command_group_exit_status", visible_buffer(&buffer));
+}
+
+fn render_cell(cell: &ExecCell, language: Language) -> ratatui::buffer::Buffer {
+    let view = crate::thread::transcript::history_cell::CellView::plain(
+        crate::thread::transcript::MessageRole::Command,
+        String::new(),
+    );
+    let rendered = crate::thread::transcript::history_cell::HistoryCell::lines(
+        cell,
+        &view,
+        crate::render::test_context().with_language(language),
+        None,
+        60,
+    );
+    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(60, 16)).unwrap();
+    terminal
+        .draw(|frame| {
+            frame.render_widget(
+                ratatui::widgets::Paragraph::new(rendered.lines),
+                frame.area(),
+            )
+        })
+        .unwrap();
+    terminal.backend().buffer().clone()
+}
+
+fn visible_buffer(buffer: &ratatui::buffer::Buffer) -> String {
+    crate::terminal::text::text_in_range(
+        buffer,
+        crate::terminal::text::ScreenSelectionRange::new(
+            ratatui::layout::Position::new(0, 0),
+            ratatui::layout::Position::new(buffer.area.right() - 1, buffer.area.bottom() - 1),
+        ),
+    )
+    .unwrap()
+    .trim_end()
+    .to_owned()
 }

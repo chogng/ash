@@ -1,0 +1,15 @@
+---
+source: crates/tui/src/thread/transcript/exec_cell/model_tests.rs
+expression: "snapshots.join(\"\\n\\n\")"
+---
+● Exited (status 1)
+ └─ rg missing
+    Exit code 1
+
+● 已退出（状态码 1）
+ └─ rg missing
+    退出码 1
+
+● Command failed
+ └─ rg missing
+    Exit code 1 · permission denied

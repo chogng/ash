@@ -87,12 +87,17 @@ impl ExecCall {
     }
 
     fn failed(&self) -> bool {
-        self.failed || self.exit_code().is_some_and(|code| code != 0)
+        // A nonzero process exit can be a normal query result (for example, no matches).
+        // Only the tool's error flag identifies an execution failure in the transcript.
+        self.failed
     }
 
     fn summary(&self, language: Language) -> String {
         if self.is_complete() && self.failed() {
             return self.failure_label(language);
+        }
+        if let Some(code) = self.exit_code().filter(|code| *code != 0) {
+            return localized(language, "Exited (status {0})", &[&code.to_string()]);
         }
         let running = !self.is_complete();
         let (template, target, translate_target) = match (running, self.activity.as_ref()) {
@@ -450,7 +455,7 @@ impl ExecCell {
     fn summary(&self, language: Language) -> String {
         let failed = self.calls.iter().filter(|call| call.failed()).count();
         let running = self.is_live();
-        match (self.group, self.calls.as_slice()) {
+        let summary = match (self.group, self.calls.as_slice()) {
             (_, [call]) => call.summary(language),
             (ExecGroup::ExploreGroup, calls) => {
                 let count = calls.len().to_string();
@@ -478,6 +483,21 @@ impl ExecCell {
                 let count = calls.len().to_string();
                 localized(language, "Completed {0} tools", &[&count])
             }
+        };
+        let nonzero_exits = self
+            .calls
+            .iter()
+            .filter(|call| !call.failed() && call.exit_code().is_some_and(|code| code != 0))
+            .count();
+        if self.calls.len() > 1 && nonzero_exits > 0 {
+            let template = if nonzero_exits == 1 {
+                "{0} · {1} nonzero exit"
+            } else {
+                "{0} · {1} nonzero exits"
+            };
+            localized(language, template, &[&summary, &nonzero_exits.to_string()])
+        } else {
+            summary
         }
     }
 
