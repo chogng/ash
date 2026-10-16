@@ -1,4 +1,5 @@
 import { Schemas } from '../../../../base/common/network.js';
+import { listRowHeight } from '../../../../base/common/uiSizes.js';
 import { ISearchService } from '../../../services/search/common/search.js';
 import { QueryBuilder } from '../../../services/search/common/queryBuilder.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
@@ -197,7 +198,7 @@ export class SearchView extends ViewPane {
 			ariaLabel: localize("search.resultsLabel", "Search results"),
 			configurationService,
 			scrolling: "managed",
-			getHeight: () => 22,
+			getHeight: () => listRowHeight,
 			openOnSingleClick: true,
 			multipleSelectionSupport: true,
 			expandOnlyOnTwistieClick: true,

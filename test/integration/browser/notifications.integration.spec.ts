@@ -12,8 +12,8 @@ test('notification rows share standard controls, preserve focus, and fit narrow 
 		await page.evaluate(index => window.ashNotificationsIntegration.theme(index), theme);
 		await page.mouse.move(0, 0);
 		await expect(close).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-		await expect(close).toHaveCSS('width', '22px');
-		await expect(close).toHaveCSS('height', '22px');
+		await expect(close).toHaveCSS('width', '24px');
+		await expect(close).toHaveCSS('height', '24px');
 		await expect(close.locator('svg')).toHaveCount(1);
 		await expect(toast).toHaveCSS('border-radius', '8px');
 		expect(await toast.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);

@@ -29,6 +29,7 @@ if (new URL(location.href).searchParams.has('automations')) {
 		api: {
 			...globalThis.ashWebWorkbenchHost.api, automation: {
 				onDidChange: Event.None, list: async () => [], runs: async () => [],
+				getRun: async () => { throw new Error('Unexpected automation run lookup'); },
 				preview: async () => [], readResult: async () => ({ output: '', files: [] }),
 				save: async () => { throw new Error('Unexpected automation save'); },
 				delete: async () => { throw new Error('Unexpected automation delete'); },

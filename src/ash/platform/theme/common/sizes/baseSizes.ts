@@ -1,3 +1,4 @@
+import { listRowHeight } from "../../../../base/common/uiSizes.js";
 import { registerSize } from "../sizeRegistry.js";
 import { size } from "../sizeUtils.js";
 
@@ -37,13 +38,14 @@ export const animationDurationNormal = duration("animation.durationNormal", 200,
 export const animationDurationSlow = duration("animation.durationSlow", 350, "Emphasized UI animation duration.");
 
 export const tabHeight = dimension("tab.height", 24, "Standard height for TabList tabs.");
+dimension("list.rowHeight", listRowHeight, "Standard height for single-line list and tree rows.");
 export const tabListContentInset = dimension("tabList.contentInset", 4, "Horizontal inset between an inset TabList and its first or last tab.");
 export const tabListItemContentInset = dimension("tabList.itemContentInset", 6, "Horizontal inset between a TabList item's edge and its label content.");
 export const compositeBarContentInset = dimension("compositeBar.contentInset", 4, "Horizontal inset between a CompositeBar and its first or last action.");
 export const paneTitleHeight = dimension("pane.titleHeight", 32, "Standard height for a Workbench pane title.");
 export const actionBarGap = dimension("actionBar.gap", 2, "Gap between action bar items.");
 export const toolbarItemGap = dimension("toolbar.itemGap", 2, "Gap before a toolbar item.");
-export const toolbarActionSize = dimension("toolbar.actionSize", 22, "Default square toolbar action size.");
+export const toolbarActionSize = dimension("toolbar.actionSize", 24, "Standard square hit area for toolbar icon actions.");
 export const scrollbarSize = dimension("scrollbar.size", 10, "Default scrollbar thickness.");
 export const treeIndent = dimension("tree.indent", 8, "Default tree nesting indentation.");
 export const sashDragAreaSize = dimension("sash.dragAreaSize", 4, "Default pointer target size for draggable Sash separators.");

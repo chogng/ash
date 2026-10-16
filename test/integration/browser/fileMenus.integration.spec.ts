@@ -10,6 +10,21 @@ for (const locale of ['en', 'zh-CN']) {
 		await page.waitForFunction(() => !!window.ashFileMenusIntegration);
 		const rows = page.locator('#explorer .ash-tree-row');
 		await expect(rows.locator('.ash-icon-label-text')).toHaveText(['examples', 'services', 'main.ts']);
+		const rowGeometry = await rows.evaluateAll(elements => elements.map(element => ({
+			height: element.getBoundingClientRect().height,
+			top: element.getBoundingClientRect().top,
+			lineHeight: getComputedStyle(element).lineHeight,
+		})));
+		expect(rowGeometry.map(row => [row.height, row.lineHeight])).toEqual([[24, '24px'], [24, '24px'], [24, '24px']]);
+		expect(rowGeometry.slice(1).map((row, index) => row.top - rowGeometry[index]!.top)).toEqual([24, 24]);
+		const iconActions = page.locator('#explorer .ash-toolbar .ash-action-view-item.icon > .ash-button');
+		expect(await iconActions.count()).toBeGreaterThan(0);
+		for (const action of await iconActions.all()) {
+			await expect(action).toHaveCSS('width', '24px');
+			await expect(action).toHaveCSS('height', '24px');
+			await expect(action.locator('.ash-icon').first()).toHaveCSS('width', '16px');
+			await expect(action.locator('.ash-icon').first()).toHaveCSS('height', '16px');
+		}
 		expect(await page.evaluate(() => window.ashFileMenusIntegration.directoryReads())).toEqual(['/workspace']);
 		await rows.filter({ hasText: 'examples' }).click();
 		await page.keyboard.press('ArrowRight');

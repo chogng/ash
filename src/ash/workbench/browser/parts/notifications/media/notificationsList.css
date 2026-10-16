@@ -19,7 +19,7 @@
 .ash-notification-severity {
 	display: flex;
 	align-items: center;
-	min-height: 22px;
+	min-height: var(--ash-toolbar-actionSize);
 }
 .ash-notification-severity-error {
 	color: var(--ash-error-foreground);

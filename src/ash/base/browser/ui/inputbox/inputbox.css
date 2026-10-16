@@ -30,7 +30,7 @@
 
 .ash-input-box-field.ash-input-box-compact input,
 .ash-input-box-field.ash-input-box-compact textarea {
-	min-height: 22px;
+	min-height: calc(24px - 2 * var(--ash-strokeThickness));
 	padding: 0 8px;
 }
 

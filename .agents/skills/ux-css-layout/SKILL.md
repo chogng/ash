@@ -39,6 +39,8 @@ Workbench-level global styles live in `src/ash/workbench/browser/media/`.
 
 ## 3. Standard Sizes
 
+Follow the [row and toolbar sizing rules](../../../.github/instructions/design-tokens.instructions.md#rows-and-toolbar-actions).
+
 | Element | Size |
 |---------|------|
 | Part title height | 35px |

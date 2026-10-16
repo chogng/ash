@@ -9,6 +9,14 @@ Size tokens are registered in [baseSizes.ts](../../src/ash/platform/theme/common
 
 After changing registrations, run `pnpm stylelint:update`, review [ash-known-variables.json](../../build/lib/stylelint/ash-known-variables.json), then run `pnpm stylelint` and `pnpm hygiene`. Referenced size variables must be in the generated `sizes` list; component-owned variables enter `others` only after verifying their defining owner.
 
+## Rows and toolbar actions
+
+- Standard single-line lists and trees: 24px (`--ash-list-rowHeight`). TS geometry and token registration share `listRowHeight` in `src/ash/base/common/uiSizes.ts`; center contents without enlarging rows.
+- Ordinary toolbar and row icon buttons: 24×24px (`--ash-toolbar-actionSize`), including editor-title and view-title toolbars. Glyph sizes follow the icon rules below.
+- Code-adjacent editor actions, such as diff gutter buttons: retain 20×20px with 16px glyphs through a local override. Preserve editor line height; do not mechanically convert these buttons to 24px.
+- No separate 22px control tier. Derive border-box inner sizes with `calc()`.
+- Multi-line content, cards, section headers and specialized layouts such as history graphs retain content-specific sizing. New density tiers require a product decision.
+
 ## Spacing — padding, margin, gap
 
 Use for `padding`, `margin`, `gap`, and fixed `width`/`height` of spacers. The numeric token name is the value in tenths of a px (`size200` = 20px).

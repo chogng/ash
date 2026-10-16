@@ -208,6 +208,20 @@ test('SCM commit form stays borderless with and without resource groups across t
 		for (const theme of ['dark', 'light', 'hcDark', 'hcLight'] as const) {
 			await page.evaluate(theme => window.gitScmPaneIntegration.setTheme(theme), theme);
 			await expect(tree.locator('.ash-scm-change')).toHaveCount(1);
+			const rowGeometry = await tree.getByRole('treeitem').evaluateAll(elements => elements.map(element => ({
+				height: element.getBoundingClientRect().height,
+				lineHeight: getComputedStyle(element).lineHeight,
+				contentHeight: element.querySelector('.ash-scm-section-heading, .ash-scm-change, .ash-scm-folder')!.getBoundingClientRect().height,
+			})));
+			expect(rowGeometry.length).toBeGreaterThan(0);
+			for (const row of rowGeometry) expect(row).toEqual({ height: 24, lineHeight: '24px', contentHeight: 24 });
+			const iconActions = tree.locator('.ash-toolbar .ash-action-view-item.icon > .ash-button');
+			expect(await iconActions.count()).toBeGreaterThan(0);
+			for (const action of await iconActions.all()) {
+				await expect(action).toHaveCSS('width', '24px');
+				await expect(action).toHaveCSS('height', '24px');
+				await expect(action.locator('.ash-icon').first()).toHaveCSS('width', '16px');
+			}
 			await expect(form).toHaveCSS('border-bottom-width', '0px');
 			await page.evaluate(() => window.gitScmPaneIntegration.setClean(true));
 			await expect(tree.getByRole('treeitem')).toHaveCount(0);

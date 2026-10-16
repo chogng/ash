@@ -185,6 +185,7 @@ The size and font tokens live in [`baseSizes.ts`](../../../src/ash/platform/them
 ### Tokens are the source of truth, not the pixel
 
 Design-system spacing, radii, type roles, and colors should use a named token or ramp where one exists. Raw literals remain valid for structural measurements.
+- Follow the [row and toolbar sizing rules](../../../.github/instructions/design-tokens.instructions.md#rows-and-toolbar-actions).
 - **Decision rule:** when something looks wrong, find the token it should be expressing and reason about *that* - not the literal.
 - **Serves:** *Sameness signals sameness* (6).
 

@@ -1,6 +1,7 @@
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import type { IAsyncDataTreeViewState } from '../../../../../base/browser/ui/tree/asyncDataTree.js';
 import { isRecord } from '../../../../../base/common/types.js';
+import { listRowHeight } from '../../../../../base/common/uiSizes.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../../base/common/cancellation.js';
 import { EditorOpenSource } from '../../../../../platform/editor/common/editor.js';
@@ -118,7 +119,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 			})),
 			scrolling: "managed",
 			configurationService,
-			getHeight: () => 22,
+			getHeight: () => listRowHeight,
 			findMode: 'filter',
 			compressionEnabled: configurationService.getValue<boolean>('explorer.compactFolders'),
 			// Keep workspace roots and their immediate children out of eager compact-chain resolution.

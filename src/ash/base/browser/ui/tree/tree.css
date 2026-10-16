@@ -55,7 +55,7 @@
 	color: inherit;
 	cursor: default;
 	font: inherit;
-	line-height: 22px;
+	line-height: var(--ash-list-rowHeight);
 	padding: 0 8px;
 	text-align: left;
 	text-overflow: ellipsis;

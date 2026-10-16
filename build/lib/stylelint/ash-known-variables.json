@@ -401,6 +401,7 @@
 		"--ash-fontSize-label3",
 		"--ash-fontWeight-regular",
 		"--ash-fontWeight-semiBold",
+		"--ash-list-rowHeight",
 		"--ash-lxiconFontSize",
 		"--ash-lxiconFontSize-compact",
 		"--ash-modalEditor-height",

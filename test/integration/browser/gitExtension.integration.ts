@@ -48,6 +48,8 @@ import { IThemeService } from '../../../src/ash/platform/theme/common/themeServi
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import '../../../src/ash/base/browser/ui/splitview/splitview.css';
+import '../../../src/ash/base/browser/ui/styles.css';
+import '../../../src/ash/workbench/browser/media/style.css';
 import '../../../src/ash/workbench/contrib/scm/browser/media/scm.css';
 import { QuickDiffService } from '../../../src/ash/workbench/contrib/scm/common/quickDiffService.js';
 import { MultiDiffSourceResolverService } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
@@ -215,7 +217,7 @@ const backend = lifetime.add(new MainThreadExtensionBackend(catalog, {
 			default: throw new Error(`Unexpected domain request ${method}`);
 		}
 	}
-}, { getConnectionState: async () => 'ready', connectionGeneration: 1 } as IAppServerApi, { subscribe: listener => configurationEvents.event(listener) }, workspace, lifetime.add(new BrowserProgressService(document.body))));
+}, { getConnectionState: async () => 'ready', getSlashCommands: async () => [], onConnectionState: () => ({ dispose() { } }), connectionGeneration: 1 } satisfies IAppServerApi, { subscribe: listener => configurationEvents.event(listener) }, workspace, configuration, lifetime.add(new BrowserProgressService(document.body))));
 const unavailable = (method: string): never => { throw new Error(`Unexpected remote host request ${method}`); };
 const workerCatalog = { ...catalog, list: async () => { const snapshot = await catalog.list('cached'); return { ...snapshot, extensions: snapshot.extensions.filter(extension => extension.id !== 'ash.git') }; } };
 const genericHost = lifetime.add(services.createInstance(BrowserExtensionHostApi, workerCatalog, createDisconnectedExtensionHostApi(unavailable)));

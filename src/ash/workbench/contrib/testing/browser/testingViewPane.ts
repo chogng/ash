@@ -5,6 +5,7 @@ import { Button } from '../../../../base/browser/ui/button/button.js';
 import { type ObjectTreeElement } from '../../../../base/browser/ui/tree/objectTreeModel.js';
 import { DisposableMap, DisposableStore, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
+import { listRowHeight } from '../../../../base/common/uiSizes.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { localize } from '../../../../nls.js';
 import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -79,7 +80,7 @@ export class TestingViewPane extends ViewPane {
 			configurationService: configuration,
 			ariaLabel: localize('testing.tree', 'Tests'),
 			scrolling: 'managed',
-			getHeight: () => 22,
+			getHeight: () => listRowHeight,
 			modelOptions: { identityProvider: { getId: item => item.id }, defaultCollapseState: 'expanded' },
 			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: item => item.label },
 			expandOnDoubleClick: false,

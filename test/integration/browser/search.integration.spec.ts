@@ -656,6 +656,7 @@ test('registered Search keeps query controls and labeled filters usable at the m
 			expect(geometry.narrowOptions).toBe(true);
 			expect(geometry.fits, JSON.stringify({ theme, requestedWidth: width, ...geometry })).toBe(true);
 			await expect(include).toHaveCSS('min-height', '22px');
+			await expect(include.locator('..')).toHaveCSS('min-height', '24px');
 		}
 	}
 });

@@ -575,8 +575,8 @@
 
 .ash-scm-input-action.ash-button {
 	flex: 0 0 auto;
-	width: var(--ash-spacing-size240);
-	min-height: var(--ash-spacing-size240);
+	width: var(--ash-toolbar-actionSize);
+	min-height: var(--ash-toolbar-actionSize);
 	padding: var(--ash-spacing-size20);
 	color: var(--ash-input-foreground);
 }
@@ -632,7 +632,7 @@
 .ash-scm-section-heading {
 	display: flex;
 	min-width: 0;
-	height: var(--ash-spacing-size240);
+	height: var(--ash-list-rowHeight);
 	flex: 1 1 auto;
 	align-items: center;
 	margin: 0;
@@ -640,7 +640,7 @@
 	font-size: var(--ash-fontSize-label1);
 	font-weight: var(--ash-fontWeight-semiBold);
 	gap: var(--ash-spacing-size40);
-	line-height: var(--ash-spacing-size240);
+	line-height: var(--ash-list-rowHeight);
 }
 
 .ash-scm-section-label {
@@ -664,7 +664,7 @@
 	/* Actions cover the label on intent; only the status marker reserves row width. */
 	position: absolute;
 	top: 0;
-	right: var(--ash-spacing-size240);
+	right: var(--ash-toolbar-actionSize);
 	bottom: 0;
 	display: flex;
 	align-items: center;
@@ -725,17 +725,17 @@
 .ash-scm-folder {
 	display: flex;
 	min-width: 0;
-	height: var(--ash-spacing-size240);
+	height: var(--ash-list-rowHeight);
 	flex: 1 1 auto;
 	align-items: center;
 	padding: 0;
-	line-height: var(--ash-spacing-size240);
+	line-height: var(--ash-list-rowHeight);
 }
 
 .ash-scm-change-open {
 	display: flex;
 	min-width: 0;
-	height: var(--ash-spacing-size240);
+	height: var(--ash-list-rowHeight);
 	flex: 1 1 auto;
 	align-items: center;
 	overflow: hidden;

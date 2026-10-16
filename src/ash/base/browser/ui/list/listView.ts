@@ -5,6 +5,7 @@ import { Emitter, type Event } from "../../../common/event.js";
 import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../../../common/lifecycle.js";
 import { Mimes } from '../../../common/mime.js';
 import { isFiniteNumber } from "../../../common/numbers.js";
+import { listRowHeight } from "../../../common/uiSizes.js";
 import { disposableWindowTimeout, scheduleAtNextAnimationFrame } from "../../scheduler.js";
 import { observeResize } from "../../observer.js";
 import { setAriaAttribute, setRole } from "../aria/aria.js";
@@ -468,7 +469,7 @@ export class ListView<T> extends Disposable {
 		const configured = this.heightOverrides.get(this.itemIds[index]!) ?? normalizeHeight(this.options.getHeight?.(item));
 		if (configured !== undefined) return configured;
 		const measured = this.row(index)?.getBoundingClientRect().height;
-		return measured !== undefined && measured > 0 ? measured : 22;
+		return measured !== undefined && measured > 0 ? measured : listRowHeight;
 	}
 
 	indexAt(position: number): number {
@@ -484,7 +485,7 @@ export class ListView<T> extends Disposable {
 		return Math.min(Math.max(0, this.rangeMap.indexAt(position)), this._items.length - 1);
 	}
 
-	private itemHeight(item: T, index: number): number { return this.heightOverrides.get(this.itemIds[index]!) ?? normalizeHeight(this.options.getHeight?.(item)) ?? 22; }
+	private itemHeight(item: T, index: number): number { return this.heightOverrides.get(this.itemIds[index]!) ?? normalizeHeight(this.options.getHeight?.(item)) ?? listRowHeight; }
 	private get isVirtualized(): boolean { return this.scrollable !== undefined && this.options.getHeight !== undefined; }
 	private itemId(item: T, index: number): string { return this.options.getId?.(item) ?? String(index); }
 	private setNumericAria(row: HTMLElement, name: string, value: number | undefined): void {
