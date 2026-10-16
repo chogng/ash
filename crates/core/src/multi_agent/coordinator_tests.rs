@@ -471,6 +471,14 @@ fn failed_child_is_reconciled_to_one_terminal_result() {
     let spawned = fixture.coordinator.spawn(spawn_request(&fixture)).unwrap();
     fixture
         .threads
+        .record_agent_message(
+            &spawned.child_thread_id,
+            &spawned.child_turn_id,
+            "The change looks correct so far".into(),
+        )
+        .unwrap();
+    fixture
+        .threads
         .fail_turn(
             &spawned.child_thread_id,
             &spawned.child_turn_id,
@@ -497,6 +505,70 @@ fn failed_child_is_reconciled_to_one_terminal_result() {
         .read_thread(&fixture.parent_thread_id)
         .unwrap();
     assert_eq!(parent.received_delegation_results.len(), 1);
+    assert!(parent.items.iter().all(|item| {
+        !matches!(item, ThreadItem::AgentMessage { text, .. } if text == &first.summary)
+    }));
+}
+
+#[test]
+fn terminal_child_summary_does_not_reuse_an_earlier_turn_answer() {
+    let fixture = fixture();
+    let spawned = fixture.coordinator.spawn(spawn_request(&fixture)).unwrap();
+    fixture
+        .threads
+        .complete_turn(
+            &spawned.child_thread_id,
+            &spawned.child_turn_id,
+            "Earlier review passed".into(),
+        )
+        .unwrap();
+    let child = fixture
+        .threads
+        .read_thread(&spawned.child_thread_id)
+        .unwrap();
+    let turn = fixture
+        .threads
+        .start_turn(
+            &spawned.child_thread_id,
+            StartTurnRequest {
+                context_policy: Default::default(),
+                mode: Default::default(),
+                advisor: None,
+                kind: ash_protocol::TurnKind::Coding,
+                instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
+                command_id: CommandId::new("continue-review").unwrap(),
+                expected_sequence: SequenceExpectation::Exact(child.sequence),
+                model: None,
+                reasoning_effort: None,
+                policy_revision: "policy-v1".into(),
+                approval_mode: ash_protocol::ApprovalMode::Manual,
+                tool_mode: ash_protocol::ToolMode::Direct,
+                tool_profile: None,
+                activated_skills: Vec::new(),
+                input: vec![UserInput::Text {
+                    text: "Check the new changes".into(),
+                }],
+            },
+        )
+        .unwrap();
+    fixture
+        .threads
+        .complete_turn_without_agent_message(&spawned.child_thread_id, &turn.turn_id)
+        .unwrap();
+    let result = fixture
+        .coordinator
+        .reconcile_terminal_delegation(&spawned.child_thread_id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(result.status, DelegationResultStatus::Completed);
+    assert_eq!(result.summary, "Child Agent completed without a summary.");
+    assert_eq!(
+        fixture
+            .coordinator
+            .reconcile_terminal_delegation(&spawned.child_thread_id)
+            .unwrap(),
+        Some(result),
+    );
 }
 
 #[test]

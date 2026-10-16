@@ -243,6 +243,88 @@ fn scope_mismatch_and_duplicate_cursor_are_ignored() {
 }
 
 #[test]
+fn terminal_turns_reject_late_streams_without_disturbing_the_next_turn() {
+    let terminal_events = [
+        ThreadEvent::TurnCompleted {
+            thread_id: thread_id(),
+            turn_id: turn_id(),
+        },
+        ThreadEvent::TurnFailed {
+            thread_id: thread_id(),
+            turn_id: turn_id(),
+            error: ash_protocol::StableTurnError::model_invocation_failed(),
+        },
+        ThreadEvent::TurnInterrupted {
+            thread_id: thread_id(),
+            turn_id: turn_id(),
+            error: None,
+        },
+    ];
+    for terminal in terminal_events {
+        let mut accumulator = TranscriptAccumulator::new(session_id(), thread_id());
+        apply(&mut accumulator, durable(1, terminal));
+
+        let next_turn = TurnId::new("turn-2").unwrap();
+        let next_delta = |text: &str| ThreadUpdate::ItemDelta {
+            turn_id: next_turn.clone(),
+            item_id: item_id("next-answer"),
+            delta: ItemDelta::AgentMessage { text: text.into() },
+        };
+        assert_eq!(
+            entry_text(&apply(
+                &mut accumulator,
+                transient_for_stream("next-stream", 1, next_delta("New")),
+            )),
+            "New",
+        );
+        let late_updates = [
+            ThreadUpdate::ItemStarted {
+                turn_id: turn_id(),
+                item: agent_item("late-start", "Success"),
+            },
+            ThreadUpdate::ItemDelta {
+                turn_id: turn_id(),
+                item_id: item_id("late-answer"),
+                delta: ItemDelta::AgentMessage {
+                    text: "Success".into(),
+                },
+            },
+            ThreadUpdate::ToolOutputDelta {
+                turn_id: turn_id(),
+                tool_call_id: ToolCallId::new("late-tool").unwrap(),
+                stream: ToolOutputStream::Stdout,
+                text: "Success".into(),
+            },
+        ];
+        for (index, update) in late_updates.into_iter().enumerate() {
+            assert_eq!(
+                accumulator.apply(&transient_for_stream(
+                    "late-stream",
+                    index as u64 + 1,
+                    update,
+                )),
+                TranscriptApplyResult::Ignored,
+            );
+        }
+        assert_eq!(
+            entry_text(&apply(
+                &mut accumulator,
+                transient_for_stream("next-stream", 2, next_delta(" answer")),
+            )),
+            "New answer",
+        );
+        let snapshot = accumulator
+            .snapshot(&thread_with_turn(
+                next_turn,
+                ash_protocol::TurnStatus::Running,
+            ))
+            .unwrap();
+        assert_eq!(snapshot.entries.len(), 1);
+        assert_eq!(snapshot.entries[0].entry_id(), "item:next-answer");
+    }
+}
+
+#[test]
 fn stream_gap_clears_transient_entries_instead_of_emitting_partial_text() {
     let mut accumulator = TranscriptAccumulator::new(session_id(), thread_id());
     apply(
@@ -432,6 +514,81 @@ fn snapshot_includes_current_transient_entries_for_late_consumers() {
             ..
         } if text == "in progress"
     ));
+}
+
+#[test]
+fn reconnect_snapshot_keeps_streamed_entries_unique_and_in_first_seen_order() {
+    let mut accumulator = TranscriptAccumulator::new(session_id(), thread_id());
+    let tool_call_id = ToolCallId::new("call-1").unwrap();
+    let updates = [
+        ThreadUpdate::ItemStarted {
+            turn_id: turn_id(),
+            item: agent_item("answer", ""),
+        },
+        ThreadUpdate::ToolOutputDelta {
+            turn_id: turn_id(),
+            tool_call_id: tool_call_id.clone(),
+            stream: ToolOutputStream::Stdout,
+            text: "out".into(),
+        },
+        ThreadUpdate::ItemDelta {
+            turn_id: turn_id(),
+            item_id: item_id("answer"),
+            delta: ItemDelta::AgentMessage { text: "One".into() },
+        },
+        ThreadUpdate::ItemDelta {
+            turn_id: turn_id(),
+            item_id: item_id("answer"),
+            delta: ItemDelta::AgentMessagePhase {
+                phase: Some(ash_protocol::MessagePhase::FinalAnswer),
+            },
+        },
+        ThreadUpdate::ItemDelta {
+            turn_id: turn_id(),
+            item_id: item_id("answer"),
+            delta: ItemDelta::AgentMessage {
+                text: " answer".into(),
+            },
+        },
+        ThreadUpdate::ToolOutputDelta {
+            turn_id: turn_id(),
+            tool_call_id: tool_call_id.clone(),
+            stream: ToolOutputStream::Stdout,
+            text: "put".into(),
+        },
+    ];
+    for (index, update) in updates.into_iter().enumerate() {
+        apply(&mut accumulator, transient(index as u64 + 1, update));
+    }
+    let snapshot = accumulator
+        .snapshot(&thread_with_turn(
+            turn_id(),
+            ash_protocol::TurnStatus::Running,
+        ))
+        .unwrap();
+    assert_eq!(
+        snapshot.entries,
+        vec![
+            ThreadTranscriptEntry::Item {
+                entry_id: "item:answer".into(),
+                turn_id: turn_id(),
+                item: ThreadItem::AgentMessage {
+                    item_id: item_id("answer"),
+                    turn_id: turn_id(),
+                    text: "One answer".into(),
+                    phase: Some(ash_protocol::MessagePhase::FinalAnswer),
+                },
+                transient: true,
+            },
+            ThreadTranscriptEntry::ToolOutput {
+                entry_id: "tool-output:turn-1:call-1:stdout".into(),
+                turn_id: turn_id(),
+                tool_call_id,
+                stream: ToolOutputStream::Stdout,
+                text: "output".into(),
+            },
+        ],
+    );
 }
 
 #[test]

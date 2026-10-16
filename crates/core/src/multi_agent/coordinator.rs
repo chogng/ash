@@ -468,7 +468,8 @@ impl MultiAgentCoordinator {
             TurnStatus::Interrupted => DelegationResultStatus::Cancelled,
             _ => unreachable!("terminal status checked above"),
         };
-        // Earlier progress text must not hide why policy stopped this delegation.
+        // A terminal failure is authoritative; progress and answers from earlier Turns
+        // must not be delivered to the parent as this delegation's outcome.
         let summary = policy_stop
             .map(|failure| {
                 format!(
@@ -478,16 +479,20 @@ impl MultiAgentCoordinator {
                 )
             })
             .or_else(|| {
-                child.items.iter().rev().find_map(|item| match item {
-                    ash_protocol::ThreadItem::AgentMessage { text, .. } => Some(text.clone()),
-                    _ => None,
-                })
-            })
-            .or_else(|| {
                 latest
                     .failure
                     .as_ref()
                     .map(|failure| failure.message.clone())
+            })
+            .or_else(|| {
+                child.items.iter().rev().find_map(|item| match item {
+                    ash_protocol::ThreadItem::AgentMessage { turn_id, text, .. }
+                        if turn_id == &latest.turn_id && !text.trim().is_empty() =>
+                    {
+                        Some(text.clone())
+                    }
+                    _ => None,
+                })
             })
             .unwrap_or_else(|| "Child Agent completed without a summary.".into());
         self.complete_delegation(CompleteDelegationRequest {

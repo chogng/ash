@@ -22,10 +22,12 @@ use ash_protocol::TurnStatus;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::VecDeque;
+use std::collections::btree_map::Entry;
 
 const MAX_TRANSIENT_ENTRIES: usize = 1_024;
 const MAX_TRANSIENT_TEXT_BYTES: usize = 256 * 1024;
 const MAX_COMMITTED_ITEM_IDS: usize = 4_096;
+const MAX_TERMINAL_TURN_IDS: usize = 4_096;
 const TRUNCATION_MARKER: &str = "\n… transient output truncated …";
 
 /// Result of feeding one internal Thread update into a transcript accumulator.
@@ -52,6 +54,8 @@ pub struct TranscriptAccumulator {
     transient_order: VecDeque<String>,
     committed_item_ids: BTreeSet<ItemId>,
     committed_item_order: VecDeque<ItemId>,
+    terminal_turn_ids: BTreeSet<TurnId>,
+    terminal_turn_order: VecDeque<TurnId>,
 }
 
 impl TranscriptAccumulator {
@@ -68,6 +72,8 @@ impl TranscriptAccumulator {
             transient_order: VecDeque::new(),
             committed_item_ids: BTreeSet::new(),
             committed_item_order: VecDeque::new(),
+            terminal_turn_ids: BTreeSet::new(),
+            terminal_turn_order: VecDeque::new(),
         }
     }
 
@@ -77,13 +83,25 @@ impl TranscriptAccumulator {
         }
 
         let mut changes = Vec::new();
-        if matches!(update.update, ThreadUpdate::Committed { .. }) {
-            if update.durable_sequence <= self.durable_sequence {
-                return TranscriptApplyResult::Ignored;
+        match &update.update {
+            ThreadUpdate::Committed { .. } => {
+                if update.durable_sequence <= self.durable_sequence {
+                    return TranscriptApplyResult::Ignored;
+                }
+                self.durable_sequence = update.durable_sequence;
             }
-            self.durable_sequence = update.durable_sequence;
-        } else if !self.accept_stream_cursor(update, &mut changes) {
-            return self.finish(update, changes);
+            ThreadUpdate::ItemStarted { turn_id, .. }
+            | ThreadUpdate::ItemDelta { turn_id, .. }
+            | ThreadUpdate::ToolOutputDelta { turn_id, .. } => {
+                // Retired streams cannot replace the current stream cursor or clear
+                // another Turn's live text, even when their first event arrives late.
+                if self.terminal_turn_ids.contains(turn_id) {
+                    return TranscriptApplyResult::Ignored;
+                }
+                if !self.accept_stream_cursor(update, &mut changes) {
+                    return self.finish(update, changes);
+                }
+            }
         }
 
         match &update.update {
@@ -267,7 +285,7 @@ impl TranscriptAccumulator {
                 error: Some(error),
                 ..
             } => {
-                let removed = self.remove_turn_transient(turn_id);
+                let removed = self.retire_turn(turn_id);
                 if !removed.is_empty() {
                     changes.push(ThreadTranscriptChange::Remove { entry_ids: removed });
                 }
@@ -285,7 +303,7 @@ impl TranscriptAccumulator {
                 error: None,
                 ..
             } => {
-                let removed = self.remove_turn_transient(turn_id);
+                let removed = self.retire_turn(turn_id);
                 if !removed.is_empty() {
                     changes.push(ThreadTranscriptChange::Remove { entry_ids: removed });
                 }
@@ -371,22 +389,26 @@ impl TranscriptAccumulator {
             return;
         }
         let entry_id = item_entry_id(item_id.as_str());
-        let mut entry = self.transient_entries.remove(&entry_id).unwrap_or_else(|| {
-            ThreadTranscriptEntry::Item {
-                entry_id: entry_id.clone(),
-                turn_id: turn_id.clone(),
-                item: item_from_delta(turn_id, item_id, delta),
-                transient: true,
+        let entry = match self.transient_entries.entry(entry_id.clone()) {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => {
+                self.transient_order.push_back(entry_id.clone());
+                entry.insert(ThreadTranscriptEntry::Item {
+                    entry_id,
+                    turn_id: turn_id.clone(),
+                    item: item_from_delta(turn_id, item_id, delta),
+                    transient: true,
+                })
             }
-        });
-        let ThreadTranscriptEntry::Item { item, .. } = &mut entry else {
+        };
+        let ThreadTranscriptEntry::Item { item, .. } = entry else {
             return;
         };
         if !append_matching_delta(item, delta) {
-            self.transient_entries.insert(entry_id, entry);
             return;
         }
-        self.store_transient(entry.clone(), changes);
+        let entry = entry.clone();
+        self.trim_transient(changes);
         changes.push(ThreadTranscriptChange::Upsert { entry });
     }
 
@@ -399,20 +421,25 @@ impl TranscriptAccumulator {
         changes: &mut Vec<ThreadTranscriptChange>,
     ) {
         let entry_id = tool_output_entry_id(turn_id.as_str(), tool_call_id, stream);
-        let mut entry = self.transient_entries.remove(&entry_id).unwrap_or_else(|| {
-            ThreadTranscriptEntry::ToolOutput {
-                entry_id: entry_id.clone(),
-                turn_id: turn_id.clone(),
-                tool_call_id: tool_call_id.clone(),
-                stream,
-                text: String::new(),
+        let entry = match self.transient_entries.entry(entry_id.clone()) {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => {
+                self.transient_order.push_back(entry_id.clone());
+                entry.insert(ThreadTranscriptEntry::ToolOutput {
+                    entry_id,
+                    turn_id: turn_id.clone(),
+                    tool_call_id: tool_call_id.clone(),
+                    stream,
+                    text: String::new(),
+                })
             }
-        });
-        let ThreadTranscriptEntry::ToolOutput { text: output, .. } = &mut entry else {
+        };
+        let ThreadTranscriptEntry::ToolOutput { text: output, .. } = entry else {
             return;
         };
         append_bounded(output, text);
-        self.store_transient(entry.clone(), changes);
+        let entry = entry.clone();
+        self.trim_transient(changes);
         changes.push(ThreadTranscriptChange::Upsert { entry });
     }
 
@@ -426,6 +453,10 @@ impl TranscriptAccumulator {
             self.transient_order.push_back(entry_id.clone());
         }
         self.transient_entries.insert(entry_id, entry);
+        self.trim_transient(changes);
+    }
+
+    fn trim_transient(&mut self, changes: &mut Vec<ThreadTranscriptChange>) {
         while self.transient_entries.len() > MAX_TRANSIENT_ENTRIES {
             let Some(expired) = self.transient_order.pop_front() else {
                 break;
@@ -467,7 +498,18 @@ impl TranscriptAccumulator {
         removed
     }
 
-    fn remove_turn_transient(&mut self, turn_id: &TurnId) -> Vec<String> {
+    fn retire_turn(&mut self, turn_id: &TurnId) -> Vec<String> {
+        // Keep bounded tombstones alongside the existing committed-item cache so
+        // delayed producers cannot resurrect transient content after termination.
+        if self.terminal_turn_ids.insert(turn_id.clone()) {
+            self.terminal_turn_order.push_back(turn_id.clone());
+        }
+        while self.terminal_turn_ids.len() > MAX_TERMINAL_TURN_IDS {
+            let Some(expired) = self.terminal_turn_order.pop_front() else {
+                break;
+            };
+            self.terminal_turn_ids.remove(&expired);
+        }
         let removed = self
             .transient_entries
             .iter()
