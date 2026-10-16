@@ -181,6 +181,11 @@ impl Client {
                         self.git(&["add", "--", "file.txt"]);
                         json!({"status":self.status()})
                     }
+                    "unstage" => {
+                        self.revision.fetch_add(1, Ordering::Relaxed);
+                        self.git(&["reset", "--quiet", "HEAD", "--", "file.txt"]);
+                        json!({"status":self.status()})
+                    }
                     "commit" => {
                         self.revision.fetch_add(1, Ordering::Relaxed);
                         assert_eq!(params["hooks"], "run");
@@ -338,6 +343,16 @@ fn rust_git_registers_scm_and_commits_through_public_client_without_a_js_host() 
             &client,
             invocation("ash.scm", "scm", json!({"method":"initialize"})),
         );
+        let status_reads = || {
+            client
+                .requests
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|(method, _)| method == "status")
+                .count()
+        };
+        let before_stage = status_reads();
         execute(
             &supervisor,
             &client,
@@ -348,6 +363,28 @@ fn rust_git_registers_scm_and_commits_through_public_client_without_a_js_host() 
             ),
         );
         assert_eq!(client.git(&["diff", "--cached", "--name-only"]), "file.txt");
+        assert_eq!(status_reads(), before_stage);
+        // Moving a displayed file between groups uses watched state and each
+        // mutation's returned status, without serial status round trips first.
+        for (action, staged) in [
+            ("unstage:staged:file.txt", false),
+            ("stage:changes:file.txt", true),
+        ] {
+            execute(
+                &supervisor,
+                &client,
+                invocation(
+                    "ash.scm",
+                    "scm",
+                    json!({"method":"action","providerId":"root","actionId":action}),
+                ),
+            );
+            assert_eq!(
+                client.git(&["diff", "--cached", "--name-only"]) == "file.txt",
+                staged
+            );
+            assert_eq!(status_reads(), before_stage);
+        }
         assert!(
             client
                 .configuration

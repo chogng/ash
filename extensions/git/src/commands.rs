@@ -261,13 +261,24 @@ impl GitRuntime {
         path: Option<&str>,
         token: &CancellationToken,
     ) -> Result<Value, ExtensionError> {
-        let status = self.api.status(repository, Some(token))?;
         let method = if command.starts_with("git.unstage") {
             "unstage"
         } else if command == "git.cleanAll" || command == "git.discardFile" {
             "discardWorktree"
         } else {
             "stage"
+        };
+        // Whole-file index operations target the paths already shown by the owning
+        // repository model. Their backend result returns the authoritative status;
+        // querying it twice first delays the existing optimistic group update.
+        // Discard still reviews fresh state before removing working-tree content.
+        let status = if matches!(method, "stage" | "unstage") {
+            match self.repository(Some(&repository.descriptor.id))?.status {
+                Some(status) => status,
+                None => self.api.status(repository, Some(token))?,
+            }
+        } else {
+            self.api.status(repository, Some(token))?
         };
         let paths: Vec<_> = status
             .changes
@@ -338,11 +349,13 @@ impl GitRuntime {
                 ));
             }
         }
-        let current = self.api.status(repository, Some(token))?;
-        if current.stream_instance_id != status.stream_instance_id
-            || current.revision != status.revision
-        {
-            return Err(invalid(&self.api.text("git.reopenComparison", &[])));
+        if method == "discardWorktree" {
+            let current = self.api.status(repository, Some(token))?;
+            if current.stream_instance_id != status.stream_instance_id
+                || current.revision != status.revision
+            {
+                return Err(invalid(&self.api.text("git.reopenComparison", &[])));
+            }
         }
         if matches!(method, "stage" | "unstage")
             && repository.configuration.boolean("optimisticUpdate", true)
