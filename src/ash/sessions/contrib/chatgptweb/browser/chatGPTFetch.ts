@@ -1,9 +1,14 @@
 import type { IChatGPTTransport } from '../common/chatGPTTransport.js';
+import { VSBuffer } from '../../../../base/common/buffer.js';
 
 /** Adapt the contribution's pull-based IPC transport to the client's HTTP/stream parser. */
 export function createChatGPTFetch(transport: IChatGPTTransport): typeof fetch {
 	return async (input, init) => {
-		if (typeof input !== 'string' || (init?.body !== undefined && typeof init.body !== 'string')) { throw new TypeError('Invalid ChatGPT request'); }
+		if (typeof input !== 'string') { throw new TypeError('Invalid ChatGPT request'); }
+		let requestBody: string | VSBuffer | undefined;
+		if (typeof init?.body === 'string') { requestBody = init.body; }
+		else if (init?.body instanceof Blob) { requestBody = VSBuffer.wrap(new Uint8Array(await init.body.arrayBuffer())); }
+		else if (init?.body != null) { throw new TypeError('Invalid ChatGPT request body'); }
 		const id = crypto.randomUUID();
 		const signal = init?.signal;
 		signal?.throwIfAborted();
@@ -18,8 +23,8 @@ export function createChatGPTFetch(transport: IChatGPTTransport): typeof fetch {
 		signal?.addEventListener('abort', abort, { once: true });
 		try {
 			const response = await transport.request(id, {
-				path: input, method: (init?.method ?? 'GET') as 'GET' | 'POST',
-				headers: Object.fromEntries(new Headers(init?.headers)), body: init?.body as string | undefined,
+				path: input, method: (init?.method ?? 'GET') as 'GET' | 'POST' | 'PUT',
+				headers: Object.fromEntries(new Headers(init?.headers)), body: requestBody,
 			});
 			signal?.throwIfAborted();
 			if ([204, 205, 304].includes(response.status)) { release(); return new Response(null, response); }

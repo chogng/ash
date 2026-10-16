@@ -1,6 +1,12 @@
 import { startMarkdownMathExtension, startMarkdownExtension } from '../../fixtures/markdownExtension.js';
-import { join } from 'node:path';
 import { readFileSync } from 'node:fs';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { createHmac } from 'node:crypto';
+import { spawn } from 'node:child_process';
+import { createServer } from 'node:net';
+import { createSocket } from 'node:dgram';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript';
 const preload = transpileModule(readFileSync(new URL('../../../src/ash/platform/browserView/electron-browser/preload-browserView.ts', import.meta.url), 'utf8'), {
@@ -8,6 +14,7 @@ const preload = transpileModule(readFileSync(new URL('../../../src/ash/platform/
 }).outputText;
 const rule = { origin: 'https://chatgpt.com', selector: '.ash-chatgpt-turn.complete' };
 type TestHost = { configureRendering: (value: typeof rule | undefined) => void; };
+const voiceTest = test.extend({ launchOptions: { args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] } });
 
 async function fixture(page: Page, origin = rule.origin): Promise<void> {
 	await page.route(`${origin}/**`, route => route.fulfill({ contentType: 'text/html', body: `<!doctype html><style>body{margin:0;font:16px/1.5 sans-serif}main{width:70%;margin:auto}.turn{padding:16px;border-bottom:1px solid #ccc}p{margin:0}</style><main>${Array.from({ length: 100 }, (_, i) => `<section class="turn ash-chatgpt-turn complete"><p>${(`Synthetic reply ${i}. `).repeat(40)}</p><button>Copy ${i}</button></section>`).join('')}<section id="stream" class="ash-chatgpt-turn">Synthetic reply in progress</section></main>` }));
@@ -46,7 +53,10 @@ test('ChatGPT scrolling retains geometry, focus, completed replies and restores 
 	await expect(last).toBeFocused();
 	await expect(last).toBeInViewport();
 	await testInfo.attach('retained-long-conversation', { body: await page.screenshot(), contentType: 'image/png' });
+	const previousIntrinsicHeight = await first.evaluate(element => element.style.getPropertyValue('contain-intrinsic-height'));
 	await page.setViewportSize({ width: 700, height: 600 });
+	// Wait for remeasurement; the old containment can survive until the resize event runs.
+	await expect(first).not.toHaveCSS('contain-intrinsic-height', previousIntrinsicHeight);
 	await expect(first).toHaveCSS('content-visibility', 'auto');
 	const resizedHeight = await page.evaluate(() => document.documentElement.scrollHeight);
 	await configure(page, false);
@@ -153,6 +163,330 @@ async function chatPage(page: Page, answer = 'Synthetic answer'): Promise<void> 
 	await expect(page.locator('.ash-chatgpt-turn.assistant')).toHaveCount(1);
 }
 
+for (const locale of ['en', 'zh-CN']) {
+	for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
+		test(`ChatGPT composer grows from one line and retains inline controls in ${locale} ${theme}`, async ({ page }, testInfo) => {
+			await mockChatGPTRequests(page);
+			await page.goto(`/chatgptNavigation.html?locale=${locale}&theme=${theme}`);
+			const composer = page.locator('.ash-chatgpt-composer');
+			const input = composer.getByRole('textbox', { name: locale === 'en' ? 'Ask ChatGPT' : '询问 ChatGPT' });
+			const editor = composer.locator('.ash-chat-input-editor');
+			const model = composer.getByRole('combobox', { name: locale === 'en' ? 'Model' : '模型' });
+			const send = composer.locator('.ash-chatgpt-send');
+			await expect(input).toBeEnabled();
+			await expect(editor).toHaveCSS('height', '20px');
+			await expect(composer).toHaveCSS('border-radius', '9999px');
+			await expect(send).toHaveCSS('border-radius', '9999px');
+			await expect(send.locator('svg')).toHaveAttribute('data-ash-icon-id', 'voice-mode');
+			const bounds = await composer.boundingBox();
+			expect(bounds!.height).toBeLessThanOrEqual(50);
+			const modelBounds = await model.boundingBox();
+			const sendBounds = await send.boundingBox();
+			expect(modelBounds!.y).toBe(sendBounds!.y);
+			await page.mouse.move(1, 1);
+			const restingShadow = await composer.evaluate(element => getComputedStyle(element).boxShadow);
+			await fillMessage(page, 'A short prompt');
+			await expectDraft(page, 'A short prompt');
+			await expect(send).toHaveAttribute('aria-label', locale === 'en' ? 'Send' : '发送');
+			await expect(send.locator('svg')).toHaveAttribute('data-ash-icon-id', 'arrow-up');
+			await expect(editor).toHaveCSS('height', '20px');
+			if (!theme.startsWith('hc')) {
+				await expect.poll(() => composer.evaluate(element => getComputedStyle(element).boxShadow)).not.toBe(restingShadow);
+			} else {
+				await expect(composer).toHaveCSS('box-shadow', 'none');
+				await expect(composer).not.toHaveCSS('border-top-color', 'rgba(0, 0, 0, 0)');
+			}
+			await input.press('Tab');
+			await expect(model).toBeFocused();
+			await page.keyboard.press('Tab');
+			await expect(send).toBeFocused();
+			await page.keyboard.press('Shift+Tab');
+			await page.keyboard.press('Shift+Tab');
+			await expect(input).toBeFocused();
+			await input.press('End');
+			await input.press('Shift+Enter');
+			await page.keyboard.insertText('Another line');
+			await expectDraft(page, 'A short prompt\nAnother line');
+			await expect(editor).toHaveCSS('height', '40px');
+			await fillMessage(page, 'Long prompt that wraps automatically. '.repeat(20));
+			await expect.poll(async () => (await editor.boundingBox())!.height).toBeGreaterThan(40);
+			await page.setViewportSize({ width: 580, height: 600 });
+			for (const control of [editor, model, send]) {
+				const controlBounds = await control.boundingBox();
+				const composerBounds = await composer.boundingBox();
+				expect(controlBounds!.x).toBeGreaterThanOrEqual(composerBounds!.x);
+				expect(controlBounds!.x + controlBounds!.width).toBeLessThanOrEqual(composerBounds!.x + composerBounds!.width);
+			}
+			await expect(input).toBeFocused();
+			await fillMessage(page, Array.from({ length: 30 }, (_, index) => `Line ${index}`).join('\n'));
+			await expect(editor).toHaveCSS('height', '240px');
+			await fillMessage(page, 'Hi');
+			await expect(editor).toHaveCSS('height', '20px');
+			await page.mouse.move(1, 1);
+			await page.getByRole('searchbox').focus();
+			await expect.poll(() => composer.evaluate(element => getComputedStyle(element).boxShadow)).toBe(restingShadow);
+			await composer.hover();
+			if (!theme.startsWith('hc')) {
+				await expect.poll(() => composer.evaluate(element => getComputedStyle(element).boxShadow)).not.toBe(restingShadow);
+			}
+			await input.focus();
+			await page.mouse.move(1, 1);
+			await expect(input).toBeFocused();
+			await expect(editor).toHaveCSS('height', '20px');
+			await page.emulateMedia({ reducedMotion: 'reduce' });
+			await expect(composer).toHaveCSS('transition-duration', '0s');
+			if (locale === 'zh-CN' && theme === 'light') {
+				await page.setViewportSize({ width: 1280, height: 800 });
+				await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
+				await expect(page.locator('.ash-chatgpt-turn.assistant')).toHaveCount(1);
+				await input.focus();
+				await testInfo.attach('chatgpt-single-line-composer', { body: await page.screenshot(), contentType: 'image/png' });
+			}
+		});
+	}
+}
+
+test('ChatGPT dictation inserts text at the cursor and cancels on navigation without sending', async ({ page }) => {
+	await mockChatGPTRequests(page);
+	await page.goto('/chatgptNavigation.html?dictation=1&locale=en');
+	const input = page.getByRole('textbox', { name: /^(Ask ChatGPT|询问 ChatGPT)$/u });
+	const mic = page.getByRole('button', { name: 'Dictate message', exact: true });
+	await expect(input).toBeEnabled();
+	await fillMessage(page, 'Please explain');
+	await input.press('Home');
+	await mic.click();
+	const stop = page.getByRole('button', { name: 'Stop dictation', exact: true });
+	await expect(stop).toHaveAttribute('aria-pressed', 'true');
+	await page.evaluate(() => window.ashChatGPTIntegration.dictate('interim speech', false));
+	await expect(page.locator('.ash-chatgpt-dictation-preview')).toHaveText('interim speech');
+	await expectDraft(page, 'Please explain');
+	await page.evaluate(() => window.ashChatGPTIntegration.dictate('First ', true));
+	await expectDraft(page, 'First Please explain');
+	await expect(input).toBeFocused();
+	await expect(page.locator('.ash-chatgpt-turn.user')).toHaveCount(0);
+	await input.press('Escape');
+	await expect(mic).toHaveAttribute('aria-pressed', 'false');
+	await expectDraft(page, 'First Please explain');
+	await expect(page.locator('.ash-chatgpt-dictation-preview')).toBeHidden();
+	await mic.click();
+	await expect(stop).toHaveAttribute('aria-pressed', 'true');
+	await page.getByRole('button', { name: 'New chat', exact: true }).click();
+	await expect(mic).toHaveAttribute('aria-pressed', 'false');
+	await page.evaluate(() => window.ashChatGPTIntegration.dictate('late new-chat speech', true));
+	await expectDraft(page, 'First Please explain');
+	await mic.click();
+	await expect(stop).toHaveAttribute('aria-pressed', 'true');
+	await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
+	await expectDraft(page, '');
+	await page.evaluate(() => window.ashChatGPTIntegration.dictate('late old speech', true));
+	await expectDraft(page, '');
+	await mic.click();
+	await expect(stop).toHaveAttribute('aria-pressed', 'true');
+	await page.evaluate(() => window.ashChatGPTIntegration.setVisible(false));
+	await expect(mic).toHaveAttribute('aria-pressed', 'false');
+	await expect.poll(() => page.evaluate(() => window.ashChatGPTIntegration.dictationStops())).toBe(4);
+	await expectDraft(page, '');
+});
+
+test('ChatGPT Send finishes dictation before submitting the final transcript', async ({ page }) => {
+	await mockChatGPTRequests(page);
+	let submitted: string | undefined;
+	await page.route('**/service/backend-api/f/conversation', async route => {
+		submitted = route.request().postDataJSON().messages[0].content.parts[0];
+		await route.fulfill({ status: 500, json: {} });
+	});
+	await page.goto('/chatgptNavigation.html?dictation=1&locale=en');
+	await expect(page.locator('.ash-chatgpt-input').getByRole('textbox')).toBeEnabled();
+	await fillMessage(page, 'Draft ');
+	await page.getByRole('button', { name: 'Dictate message', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'Stop dictation', exact: true })).toHaveAttribute('aria-pressed', 'true');
+	await page.getByRole('button', { name: 'Send', exact: true }).click();
+	await expect.poll(() => submitted).toBe('Draft final words');
+	await expect.poll(() => page.evaluate(() => window.ashChatGPTIntegration.dictationStops())).toBe(1);
+});
+
+test('ChatGPT uploads images and documents, waits for readiness and preserves attachments on rejection', async ({ page }) => {
+	await mockChatGPTRequests(page);
+	const uploads: { name: string; useCase: string; bytes?: Buffer; }[] = [];
+	let releaseImage!: () => Promise<void>;
+	let submitted: { messages: { content: { content_type: string; parts: unknown[]; }; metadata: { attachments: { id: string; name: string; }[]; }; }[]; } | undefined;
+	await page.route('**/service/backend-api/files', async route => {
+		const body = route.request().postDataJSON();
+		uploads.push({ name: body.file_name, useCase: body.use_case });
+		await route.fulfill({ json: { file_id: body.file_name.endsWith('.png') ? 'file_image' : 'file_document', upload_url: `https://files.oaiusercontent.com/${body.file_name}?signature=fixture` } });
+	});
+	await page.route('**/service/.upload?*', async route => {
+		const url = new URL(new URL(route.request().url()).searchParams.get('url')!);
+		const upload = uploads.find(item => url.pathname.endsWith(item.name))!;
+		upload.bytes = route.request().postDataBuffer()!;
+		if (upload.name.endsWith('.png')) { releaseImage = () => route.fulfill({ status: 201, body: '' }); }
+		else { await route.fulfill({ status: 201, body: '' }); }
+	});
+	await page.route('**/service/backend-api/files/*/uploaded', route => route.fulfill({ json: { status: 'success' } }));
+	await page.route('**/service/backend-api/f/conversation', async route => { submitted = route.request().postDataJSON(); await route.fulfill({ status: 403, json: {} }); });
+	await page.goto('/chatgptNavigation.html?locale=en');
+	const composer = page.locator('.ash-chatgpt-composer');
+	await expect(composer.getByRole('button', { name: 'Attach files', exact: true })).toBeEnabled();
+	const image = Buffer.from(await page.evaluate(() => {
+		const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1;
+		return canvas.toDataURL('image/png').split(',')[1]!;
+	}), 'base64');
+	await composer.locator('input[type=file]').setInputFiles([
+		{ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('Selected file content') },
+		{ name: 'pixel.png', mimeType: 'image/png', buffer: image },
+	]);
+	await expect.poll(() => typeof releaseImage).toBe('function');
+	const attachments = page.getByRole('list', { name: 'Attachments' });
+	await expect(attachments.getByRole('listitem')).toHaveCount(2);
+	await expect(composer.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
+	await releaseImage();
+	await expect(attachments.getByText('Ready', { exact: true })).toHaveCount(2);
+	expect(uploads.find(item => item.name === 'notes.txt')?.bytes?.toString()).toBe('Selected file content');
+	expect(uploads.find(item => item.name === 'notes.txt')?.useCase).toBe('ace_upload');
+	expect(uploads.find(item => item.name === 'pixel.png')?.useCase).toBe('multimodal');
+	expect(uploads.find(item => item.name === 'pixel.png')?.bytes).toEqual(image);
+	await composer.getByRole('button', { name: 'Send', exact: true }).click();
+	await expect.poll(() => submitted?.messages[0]?.content.content_type).toBe('multimodal_text');
+	expect(submitted!.messages[0]!.metadata.attachments.map(item => item.name)).toEqual(['notes.txt', 'pixel.png']);
+	expect(submitted!.messages[0]!.content.parts).toEqual([{ content_type: 'image_asset_pointer', asset_pointer: 'file-service://file_image', size_bytes: image.byteLength, width: 1, height: 1 }]);
+	await expect(composer.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+	await expect(attachments.getByRole('listitem')).toHaveCount(2);
+});
+
+test('ChatGPT retries failed uploads and keeps removed or old-draft files out of the active draft', async ({ page }) => {
+	await mockChatGPTRequests(page);
+	let attempts = 0;
+	let release!: () => Promise<void>;
+	await page.route('**/service/backend-api/files', async route => {
+		if (++attempts === 1) { await route.fulfill({ status: 500, json: {} }); return; }
+		await route.fulfill({ json: { file_id: 'file_retry', upload_url: 'https://files.oaiusercontent.com/retry?signature=fixture' } });
+	});
+	await page.route('**/service/.upload?*', route => { release = async () => { await route.fulfill({ status: 201, body: '' }).catch(() => { }); }; });
+	await page.route('**/service/backend-api/files/*/uploaded', route => route.fulfill({ json: { status: 'success' } }));
+	await page.goto('/chatgptNavigation.html?locale=en');
+	await expect(page.getByRole('button', { name: 'Attach files', exact: true })).toBeEnabled();
+	await page.locator('input[type=file]').setInputFiles({ name: 'retry.txt', mimeType: 'text/plain', buffer: Buffer.from('Retry this file') });
+	await page.getByRole('button', { name: 'Retry retry.txt', exact: true }).click();
+	await expect.poll(() => typeof release).toBe('function');
+	await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
+	await expect(page.getByRole('list', { name: 'Attachments' })).toBeHidden();
+	await page.getByRole('button', { name: 'New chat', exact: true }).click();
+	await expect(page.getByRole('list', { name: 'Attachments' })).toContainText('retry.txt');
+	await page.getByRole('button', { name: 'Remove retry.txt', exact: true }).click();
+	await release();
+	await expect(page.getByRole('list', { name: 'Attachments' })).toBeHidden();
+	await expect(page.locator('.ash-chatgpt-input').getByRole('textbox')).toBeFocused();
+	expect(attempts).toBe(2);
+});
+
+test('ChatGPT can stop pending voice setup and rejects a stale or untrusted room ticket', async ({ page }) => {
+	await mockChatGPTRequests(page);
+	let release!: () => Promise<void>;
+	let requests = 0;
+	await page.route('**/service/voice/get_token', route => {
+		requests++;
+		release = async () => { await route.fulfill({ json: { url: 'wss://attacker.invalid', token: 'fixture', e2ee_key: 'fixture-key', conversation_id: 'late-chat' } }).catch(() => { }); };
+	});
+	await page.goto('/chatgptNavigation.html?locale=en');
+	const voice = page.getByRole('button', { name: 'Voice conversation', exact: true });
+	await expect(voice).toBeEnabled();
+	await voice.click();
+	await expect.poll(() => requests).toBe(1);
+	await expect(page.locator('.ash-chatgpt-voice-status')).toHaveText('Connecting voice…');
+	await expect(page.locator('.ash-chatgpt-input').getByRole('textbox')).toHaveAttribute('aria-readonly', 'true');
+	await page.getByRole('button', { name: 'Stop voice conversation', exact: true }).click();
+	await release();
+	await expect(voice).toBeEnabled();
+	await expect(page.locator('.ash-chatgpt-voice-status')).toBeHidden();
+	await voice.click();
+	await expect.poll(() => requests).toBe(2);
+	await release();
+	await expect(page.locator('.ash-chatgpt-error')).toContainText('unsupported response');
+	await expect(voice).toBeEnabled();
+});
+
+voiceTest.describe('ChatGPT encrypted voice media', () => {
+	voiceTest('exchanges encrypted audio in a real room and releases the microphone on stop and navigation', async ({ context, page }) => {
+		voiceTest.setTimeout(60_000);
+		voiceTest.skip(!process.env.ASH_TEST_LIVEKIT_SERVER, 'Requires the verified LiveKit Server executable');
+		const directory = await mkdtemp(join(tmpdir(), 'ash-chatgpt-voice-'));
+		const listener = createServer();
+		await new Promise<void>(resolve => listener.listen(0, '127.0.0.1', resolve));
+		const port = (listener.address() as { port: number; }).port;
+		await new Promise<void>((resolve, reject) => listener.close(error => error ? reject(error) : resolve()));
+		const udp = createSocket('udp4');
+		await new Promise<void>(resolve => udp.bind(0, '127.0.0.1', resolve));
+		const udpPort = udp.address().port;
+		await new Promise<void>(resolve => udp.close(resolve));
+		const secret = 'ash-test-livekit-secret-thirty-two-bytes';
+		const config = join(directory, 'livekit.yaml');
+		await writeFile(config, `port: ${port}\nbind_addresses: [127.0.0.1]\nrtc:\n  udp_port: ${udpPort}\n  tcp_port: 0\n  node_ip: 127.0.0.1\n  use_external_ip: false\nkeys:\n  ash-test: ${secret}\nlogging:\n  level: error\n`);
+		const server = spawn(process.env.ASH_TEST_LIVEKIT_SERVER!, ['--config', config], { stdio: 'ignore' });
+		const exited = new Promise<void>(resolve => { server.once('exit', () => resolve()); server.once('error', () => resolve()); });
+		const token = (identity: string): string => {
+			const encode = (value: object): string => Buffer.from(JSON.stringify(value)).toString('base64url');
+			const data = `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode({ iss: 'ash-test', sub: identity, exp: Math.floor(Date.now() / 1000) + 120, video: { room: 'chatgpt-voice-test', roomJoin: true, canPublish: true, canSubscribe: true, canPublishData: true } })}`;
+			return `${data}.${createHmac('sha256', secret).update(data).digest('base64url')}`;
+		};
+		try {
+			await expect.poll(async () => {
+				if (server.exitCode !== null) { throw new Error('LiveKit exited before readiness'); }
+				return fetch(`http://127.0.0.1:${port}`).then(response => response.ok, () => false);
+			}).toBe(true);
+			// Keep production ticket validation intact; only this test's signaling host is local.
+			await context.addInitScript(({ port }) => {
+				const OriginalWebSocket = window.WebSocket;
+				window.WebSocket = class extends OriginalWebSocket {
+					constructor(url: string | URL, protocols?: string | string[]) {
+						const target = new URL(String(url));
+						if (target.hostname === 'chatgpt.livekit.cloud') { target.protocol = 'ws:'; target.host = `127.0.0.1:${port}`; }
+						super(target, protocols);
+					}
+				};
+				const tracks: MediaStreamTrack[] = [];
+				Object.assign(window, { testMediaTracks: tracks });
+				const capture = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+				navigator.mediaDevices.getUserMedia = async constraints => {
+					const stream = await capture(constraints); tracks.push(...stream.getTracks()); return stream;
+				};
+			}, { port });
+			await context.route('https://chatgpt.livekit.cloud/**', route => route.fulfill({ json: { regions: [{ region: 'local', url: 'wss://chatgpt.livekit.cloud', distance: 0 }] } }));
+			const peer = await context.newPage();
+			await mockChatGPTRequests(peer);
+			await peer.goto('/chatgptNavigation.html?locale=en');
+			const connection = { url: 'wss://chatgpt.livekit.cloud', token: token('peer'), encryptionKey: 'synthetic-shared-media-key' };
+			await peer.evaluate(connection => window.ashChatGPTIntegration.connectVoicePeer(connection), connection);
+			await mockChatGPTRequests(page);
+			await page.route('**/service/voice/get_token', route => route.fulfill({ json: { url: connection.url, token: token('user'), e2ee_key: connection.encryptionKey, conversation_id: 'fixture-chat' } }));
+			await page.goto('/chatgptNavigation.html?locale=en');
+			const voice = page.getByRole('button', { name: 'Voice conversation', exact: true });
+			await voice.click();
+			await expect(page.locator('.ash-chatgpt-voice-status')).toHaveText('Voice conversation is active');
+			for (const participant of [page, peer]) {
+				await expect.poll(() => participant.evaluate(() => [...document.querySelectorAll('audio')].some(audio => audio.readyState >= 2 && !audio.paused))).toBe(true);
+			}
+			const microphoneEnded = (): Promise<boolean> => page.evaluate(() => {
+				const tracks = (window as unknown as { testMediaTracks: MediaStreamTrack[]; }).testMediaTracks;
+				return tracks.length > 0 && tracks.every(track => track.readyState === 'ended');
+			});
+			await page.getByRole('button', { name: 'Stop voice conversation', exact: true }).click();
+			await expect.poll(microphoneEnded).toBe(true);
+			await expect(page.locator('audio')).toHaveCount(0);
+			await expect(voice).toBeEnabled();
+			await voice.click();
+			await expect(page.locator('.ash-chatgpt-voice-status')).toHaveText('Voice conversation is active');
+			await page.getByRole('button', { name: 'New chat', exact: true }).click();
+			await expect.poll(microphoneEnded).toBe(true);
+			await expect(page.locator('audio')).toHaveCount(0);
+			await expect(page.locator('.ash-chatgpt-voice-status')).toBeHidden();
+			await peer.close();
+		} finally {
+			server.kill('SIGKILL'); await exited;
+			await rm(directory, { recursive: true, force: true });
+		}
+	});
+});
+
 test('ChatGPT sidebar and editor share drafts and selection with keyboard navigation and independent sizing', async ({ page }, testInfo) => {
 	await mockChatGPTRequests(page);
 	await page.route('**/service/backend-api/conversations?**', route => route.fulfill({
@@ -176,11 +510,11 @@ test('ChatGPT sidebar and editor share drafts and selection with keyboard naviga
 	await expect(page.locator('.ash-chatgpt-turn.assistant')).toHaveCount(1);
 	await expect(conversation).toHaveAttribute('aria-current', 'page');
 	const input = page.getByRole('textbox', { name: '询问 ChatGPT' });
-	await input.fill('Sidebar switch keeps this draft');
+	await fillMessage(page, 'Sidebar switch keeps this draft');
 	await sidebar.getByRole('button', { name: '新聊天', exact: true }).click();
-	await expect(input).toHaveValue('');
+	await expectDraft(page, '');
 	await conversation.click();
-	await expect(input).toHaveValue('Sidebar switch keeps this draft');
+	await expectDraft(page, 'Sidebar switch keeps this draft');
 	await sidebar.getByRole('searchbox').fill('no match');
 	await expect(conversation).toBeHidden();
 	await sidebar.getByRole('searchbox').fill('Synthetic');
@@ -194,7 +528,7 @@ test('ChatGPT sidebar and editor share drafts and selection with keyboard naviga
 	const before = await page.locator('#editor').boundingBox();
 	await page.locator('#navigation').evaluate(element => { element.style.width = '400px'; });
 	await expect.poll(async () => (await page.locator('#editor').boundingBox())!.width).toBe(before!.width - 100);
-	await expect(input).toHaveValue('Sidebar switch keeps this draft');
+	await expectDraft(page, 'Sidebar switch keeps this draft');
 	await testInfo.attach('chatgpt-sidebar-and-editor', { body: await page.screenshot(), contentType: 'image/png' });
 });
 
@@ -382,7 +716,7 @@ test('ChatGPT waits for the streamed conversation ID before resolving a sandbox 
 		return route.fulfill({ contentType: 'text/csv', body: 'name,value\nMay,42\n' });
 	});
 	await page.route('**/service/backend-api/f/conversation', route => route.fulfill({ contentType: 'text/event-stream', body: `data: ${JSON.stringify({ message })}\n\ndata: {"conversation_id":"late-chat"}\n\ndata: [DONE]\n\n` }));
-	await page.getByRole('textbox', { name: '询问 ChatGPT' }).fill('Synthetic rich content probe');
+	await fillMessage(page, 'Synthetic rich content probe');
 	await page.getByRole('button', { name: '发送', exact: true }).click();
 	await expect(page.locator('.ash-chat-media pre')).toContainText('May,42');
 	expect(paths).toHaveLength(1);
@@ -409,9 +743,18 @@ test('ChatGPT Stop cancels pending verification without sending or stopping the 
 	await page.route('**/service/backend-api/f/conversation', async route => { sent++; await route.fulfill({ contentType: 'text/event-stream', body: 'data: [DONE]\n\n' }); });
 	let stop!: () => Promise<void>;
 	await page.route('**/service/backend-api/stop_conversation', route => { stops++; stop = async () => { await route.fulfill({ json: {} }).catch(() => { }); }; });
-	await page.getByRole('textbox', { name: '询问 ChatGPT' }).fill('Synthetic cancellation probe');
-	await page.getByRole('button', { name: '发送', exact: true }).click();
+	await fillMessage(page, 'Synthetic cancellation probe');
+	const input = page.getByRole('textbox', { name: '询问 ChatGPT' });
+	await input.dispatchEvent('keydown', { key: 'Enter', isComposing: true });
+	await expect(page.getByRole('button', { name: '发送', exact: true })).toBeVisible();
+	await input.press('Enter');
 	await expect.poll(() => typeof verify).toBe('function');
+	await expect(input).toHaveAttribute('aria-readonly', 'true');
+	await input.focus();
+	await page.keyboard.type('ignored while replying');
+	await input.press('Enter');
+	await expectDraft(page, 'Synthetic cancellation probe');
+	expect(stops).toBe(0);
 	await page.getByRole('button', { name: '停止', exact: true }).click();
 	try {
 		await expect(page.locator('.ash-chatgpt-error')).toContainText('确认本次回复之前被中断');
@@ -419,7 +762,7 @@ test('ChatGPT Stop cancels pending verification without sending or stopping the 
 		await verify();
 		expect(sent).toBe(0);
 		expect(stops).toBe(0);
-		await expect(page.getByRole('textbox', { name: '询问 ChatGPT' })).toHaveValue('Synthetic cancellation probe');
+		await expectDraft(page, 'Synthetic cancellation probe');
 		await expect(page.getByRole('button', { name: '发送', exact: true })).toBeDisabled();
 	} finally { await verify(); await stop?.(); }
 });
@@ -443,7 +786,7 @@ test('ChatGPT Stop cancels an active stream immediately and fences a delayed rem
 		messageId = route.request().postDataJSON().message_id;
 		stop = async () => { await route.fulfill({ json: {} }); };
 	});
-	await page.getByRole('textbox', { name: '询问 ChatGPT' }).fill('Synthetic streaming probe');
+	await fillMessage(page, 'Synthetic streaming probe');
 	await page.getByRole('button', { name: '发送', exact: true }).click();
 	await expect(page.locator('.ash-chatgpt-messages')).toContainText('Synthetic live reply');
 	await page.getByRole('button', { name: '停止', exact: true }).click();

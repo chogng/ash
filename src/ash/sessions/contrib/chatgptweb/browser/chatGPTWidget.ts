@@ -7,25 +7,23 @@ import { autorun } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ChatContentMarkdownRenderer } from '../../../../workbench/contrib/chat/browser/widget/chatContentMarkdownRenderer.js';
-import type { ChatGPTMessage, ChatGPTModel, ChatGPTResource } from './chatGPTClient.js';
+import type { ChatGPTMessage, ChatGPTResource } from './chatGPTClient.js';
 import { ChatAttachmentsContentPart, type IChatAttachmentResource } from '../../../../workbench/contrib/chat/browser/widget/chatContentParts/chatAttachmentsContentPart.js';
 import { IChatGPTService, type ChatGPTState } from './chatGPTService.js';
 import { completeChatGPTRichContent, getChatGPTMarkdownRenderOptions } from './chatGPTRichContent.js';
+import { ChatGPTInputWidget } from './chatGPTInputWidget.js';
 import './media/chatGPTWidget.css';
 
 export class ChatGPTWidget extends Disposable {
 	private readonly markdownRenderer: ChatContentMarkdownRenderer;
 	private readonly rendered = new Map<string, { element: HTMLElement; body: HTMLElement; markdown?: IRenderedMarkdown; attachments?: ChatAttachmentsContentPart; resources: readonly ChatGPTResource[]; text: string; }>();
 	private renderedConversationId: string | undefined;
-	private modelReference: readonly ChatGPTModel[] | undefined;
 	private readonly scroll = this.element('div', 'ash-chatgpt-scroll');
 	private readonly messages = this.element('div', 'ash-chatgpt-messages');
 	private readonly welcome = this.element('h1', 'ash-chatgpt-welcome');
-	private readonly input = document.createElement('textarea');
-	private readonly model = document.createElement('select');
+	private readonly input: ChatGPTInputWidget;
 	private readonly error = this.element('p', 'ash-chatgpt-error');
 	private readonly status = this.element('span', 'ash-chatgpt-status');
-	private readonly sendButton: HTMLButtonElement;
 	private readonly jumpButton: HTMLButtonElement;
 	private followOutput = true;
 
@@ -46,28 +44,12 @@ export class ChatGPTWidget extends Disposable {
 		this.jumpButton = this.button(localize('sessions.chatgpt.latest', 'Latest message'), () => { this.scroll.scrollTop = this.scroll.scrollHeight; this.jumpButton.hidden = true; });
 		this.jumpButton.classList.add('ash-chatgpt-jump');
 		this.jumpButton.hidden = true;
-		const composer = this.element('form', 'ash-chatgpt-composer');
-		this.input.rows = 1;
-		this.input.maxLength = 500_000;
-		this.input.placeholder = localize('sessions.chatgpt.prompt', 'Ask ChatGPT');
-		this.input.setAttribute('aria-label', this.input.placeholder);
-		this.listen(this.input, 'input', () => { this.chat.setDraft(this.input.value); this.resizeInput(); });
-		this.listen(this.input, 'keydown', event => {
-			if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); composer.requestSubmit(); }
-		});
-		this.listen(composer, 'submit', event => { event.preventDefault(); void (this.chat.state.get().sending ? this.chat.stop() : this.chat.send()); });
-		const controls = this.element('div', 'ash-chatgpt-composer-controls');
-		this.model.setAttribute('aria-label', localize('sessions.chatgpt.model', 'Model'));
-		this.listen(this.model, 'change', () => this.chat.setModel(this.model.value));
-		this.sendButton = this.button(localize('sessions.chatgpt.send', 'Send'), () => { composer.requestSubmit(); });
-		this.sendButton.classList.add('ash-chatgpt-send');
-		controls.append(this.model, this.sendButton);
-		composer.append(this.input, controls);
 		this.error.setAttribute('role', 'alert');
 		this.status.setAttribute('role', 'status');
 		this.status.setAttribute('aria-live', 'polite');
 		const footer = this.element('div', 'ash-chatgpt-footer');
-		footer.append(composer, this.error, this.status);
+		this.input = this._register(instantiation.createInstance(ChatGPTInputWidget, footer));
+		footer.append(this.error, this.status);
 		main.append(this.scroll, this.jumpButton, footer);
 		root.append(main);
 		this._register(autorun(reader => this.render(this.chat.state.read(reader))));
@@ -92,11 +74,13 @@ export class ChatGPTWidget extends Disposable {
 		return button;
 	}
 
-	public focus(): void { if (this.input.disabled) { this.root.focus(); } else { this.input.focus(); } }
-	public setVisible(visible: boolean): void { for (const row of this.rendered.values()) row.attachments?.setVisible(visible); }
+	public focus(): void { this.input.focus(); }
+	public setVisible(visible: boolean): void {
+		this.input.setVisible(visible);
+		for (const row of this.rendered.values()) row.attachments?.setVisible(visible);
+	}
 	public setScrollingOptimization(enabled: boolean): void { this.root.classList.toggle('optimize-scrolling', enabled); }
 	private atBottom(): boolean { return this.scroll.scrollHeight - this.scroll.scrollTop - this.scroll.clientHeight < 80; }
-	private resizeInput(): void { this.input.style.height = 'auto'; this.input.style.height = `${Math.min(this.input.scrollHeight, 240)}px`; }
 	private roleLabel(role: ChatGPTMessage['role']): string { return role === 'user' ? localize('sessions.chatgpt.you', 'You') : 'ChatGPT'; }
 	private render(state: ChatGPTState): void {
 		const conversationChanged = state.conversationId !== this.renderedConversationId;
@@ -112,16 +96,6 @@ export class ChatGPTWidget extends Disposable {
 			state.stopped ? localize('sessions.chatgpt.replyStopped', 'Reply stopped') : '';
 		this.status.hidden = !this.status.textContent;
 		this.messages.setAttribute('aria-busy', String(state.sending || state.busy));
-		this.input.disabled = !state.connected || state.busy || state.sending;
-		this.model.disabled = !state.connected || state.busy || state.sending;
-		this.sendButton.disabled = !state.connected || state.busy || state.uncertain;
-		this.sendButton.textContent = state.sending ? localize('sessions.chatgpt.stop', 'Stop') : localize('sessions.chatgpt.send', 'Send');
-		if (this.modelReference !== state.models) {
-			this.modelReference = state.models;
-			this.model.replaceChildren(...state.models.map(model => new Option(model.title, model.id)));
-		}
-		this.model.value = state.model;
-		if (this.input.value !== state.draft) { this.input.value = state.draft; this.resizeInput(); }
 		const ids = new Set(state.messages.map(message => message.id));
 		for (const [id, row] of this.rendered) {
 			if (!ids.has(id)) { row.markdown?.dispose(); row.attachments?.dispose(); row.element.remove(); this.rendered.delete(id); }

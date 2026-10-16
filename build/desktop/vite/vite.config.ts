@@ -7,6 +7,7 @@ import { desktopBuildPath } from "../paths.ts";
 import { buildMetricsPlugin } from './buildMetricsPlugin.ts';
 import { desktopStartupTracePlugin } from './desktopStartupTracePlugin.ts';
 import { rendererOutput } from './rendererOutput.ts';
+import { rendererDependencyAliases } from './rendererDependencies.ts';
 import { hotReloadPlugin } from "./hotReloadPlugin.ts";
 import { productIconsPlugin } from "./productIconsPlugin.ts";
 import { webAppServerVitePlugin } from "./webAppServerPlugin.ts";
@@ -157,6 +158,7 @@ export default defineConfig(({ mode, command }) => {
 			noDiscovery: true,
 			include: ["@xterm/xterm", "@xterm/addon-fit", "pdfjs-dist"],
 		},
+		resolve: { alias: rendererDependencyAliases },
 		server: {
 			host: "127.0.0.1",
 			port: developmentPort,

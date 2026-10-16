@@ -4,6 +4,12 @@ import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { suite, test } from 'mocha';
+import { VSBuffer } from '../../../../../base/common/buffer.js';
+import { Emitter } from '../../../../../base/common/event.js';
+import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { IPCClient } from '../../../../../base/parts/ipc/common/ipc.js';
+import { IMainProcessService } from '../../../../../platform/ipc/common/mainProcessService.js';
+import { ElectronChatGPTTransport } from '../../electron-browser/electronChatGPTTransport.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { ChatGPTTransport } from '../../electron-main/chatGPTTransport.js';
 import { createChatGPTFetch } from '../../browser/chatGPTFetch.js';
@@ -23,6 +29,60 @@ function runtime(fetcher: typeof fetch, prepareHeaders: IChatGPTVerificationRunt
 
 suite('ChatGPT transport', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('preserves upload bytes across the actual JSON IPC channel and rejects malformed binary envelopes', async () => fixture(async file => {
+		using resources = new DisposableStore();
+		const fromRenderer = resources.add(new Emitter<VSBuffer>()), fromMain = resources.add(new Emitter<VSBuffer>());
+		const renderer = resources.add(new IPCClient({ onMessage: fromMain.event, send: buffer => queueMicrotask(() => fromRenderer.fire(buffer)) }, 'renderer'));
+		const main = resources.add(new IPCClient({ onMessage: fromRenderer.event, send: buffer => queueMicrotask(() => fromMain.fire(buffer)) }, 'main'));
+		const bytes = new Uint8Array([0, 128, 255, 137, 80, 78, 71]);
+		let received = false;
+		const transport = resources.add(new ChatGPTTransport({
+			credentialFile: file, readVerificationScript: async () => '', createRuntime: () => runtime((async (_url, init) => {
+				assert.deepEqual(init?.body, bytes); received = true;
+				return new Response(null, { status: 201 });
+			}) as typeof fetch)
+		}));
+		main.registerChannel('sessions.chatgpt.transport', transport.getChannel());
+		const adapter = new ElectronChatGPTTransport({ getChannel: name => renderer.getChannel(name) } as IMainProcessService);
+		const path = '/service/.upload?' + new URLSearchParams({ url: 'https://files.oaiusercontent.com/test?signature=fixture' });
+		const response = await createChatGPTFetch(adapter)(path, { method: 'PUT', body: new Blob([bytes]) });
+		assert.equal(response.status, 201); await response.text(); assert.equal(received, true);
+		for (const body of [{ base64: 'AAAA=' }, { base64: 'AA==garbage' }, { base64: 'AA==', extra: true }, { base64: 'x'.repeat(Math.ceil(20 * 1024 * 1024 / 3) * 4 + 1) }]) {
+			await assert.rejects(renderer.getChannel('sessions.chatgpt.transport').call('request', [randomUUID(), { path, method: 'PUT', headers: {}, body }]), /Invalid ChatGPT upload/u);
+		}
+	}));
+
+	test('uploads binary bytes only to signed storage and never forwards login or follows redirects', async () => fixture(async file => {
+		const calls: RequestInit[] = [];
+		using transport = new ChatGPTTransport({
+			credentialFile: file, readVerificationScript: async () => '', createRuntime: () => runtime((async (url, init) => {
+				assert.equal(new URL(String(url)).origin, 'https://files.oaiusercontent.com');
+				calls.push(init!);
+				return new Response(null, { status: 201, headers: { 'Set-Cookie': 'private' } });
+			}) as typeof fetch)
+		});
+		const path = '/service/.upload?' + new URLSearchParams({ url: 'https://files.oaiusercontent.com/test?signature=fixture' });
+		const body = VSBuffer.wrap(new Uint8Array([0, 128, 255]));
+		const channel = transport.getChannel();
+		const id = randomUUID();
+		const result = await channel.call('', 'request', [id, { path, method: 'PUT', headers: { 'Content-Type': 'image/png', 'x-ms-blob-type': 'BlockBlob' }, body }]) as { status: number; headers: object; };
+		assert.equal(result.status, 201);
+		assert.deepEqual(result.headers, {});
+		assert.deepEqual([...(calls[0]!.body as Uint8Array)], [0, 128, 255]);
+		assert.equal(new Headers(calls[0]!.headers).get('Authorization'), null);
+		assert.equal(calls[0]!.credentials, 'omit');
+		assert.equal(calls[0]!.redirect, 'error');
+		assert.equal(await transport.read(id), null);
+		for (const change of [
+			{ method: 'POST' }, { body: 'not bytes' }, { body: VSBuffer.alloc(20 * 1024 * 1024 + 1) },
+			{ headers: { Authorization: 'private' } }, { headers: { 'x-conduit-token': 'proof' } },
+			...['https://chatgpt.com/backend-api/files/test?signature=x', 'https://files.oaiusercontent.com/test', 'https://files.oaiusercontent.com.evil.test/test?signature=x', 'http://127.0.0.1/test?signature=x'].map(url => ({ path: '/service/.upload?' + new URLSearchParams({ url }) })),
+		]) {
+			await assert.rejects(channel.call('', 'request', [randomUUID(), { path, method: 'PUT', headers: {}, body, ...change }]), TypeError);
+		}
+		assert.equal(calls.length, 1);
+	}));
 	test('reads web resource bytes without forwarding credentials to signed storage or following an unapproved redirect', async () => fixture(async file => {
 		const calls: Array<{ url: string; headers: Headers; }> = [];
 		using transport = new ChatGPTTransport({

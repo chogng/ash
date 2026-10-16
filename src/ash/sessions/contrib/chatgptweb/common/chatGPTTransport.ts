@@ -6,9 +6,9 @@ export const chatGPTTransportChannel = 'sessions.chatgpt.transport';
 /** Transport data stays inside the ChatGPT client and its host adapter; UI consumers use ChatGPTService. */
 export interface ChatGPTRequest {
 	readonly path: string;
-	readonly method: 'GET' | 'POST';
+	readonly method: 'GET' | 'POST' | 'PUT';
 	readonly headers: Readonly<Record<string, string>>;
-	readonly body?: string;
+	readonly body?: string | VSBuffer;
 }
 
 export interface ChatGPTResponse {

@@ -18,7 +18,7 @@ import { SuggestModel } from "../../../../../../editor/contrib/suggest/browser/s
 import { SuggestController } from "../../../../../../editor/contrib/suggest/browser/suggestController.js";
 import { PlaceholderTextContribution } from "../../../../../../editor/contrib/placeholderText/browser/placeholderTextContribution.js";
 import "../../../../../../editor/contrib/placeholderText/browser/placeholderText.contribution.js";
-import "../../../../../../editor/browser/coreCommands.js";
+import { EditorCoreCommandId } from '../../../../../../editor/browser/coreCommands.js';
 import { Position } from "../../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../../editor/common/core/range.js";
 import { TextModel } from "../../../../../../editor/common/model/textModel.js";
@@ -45,12 +45,14 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 	private height = CHAT_INPUT_MIN_HEIGHT;
 	private readonly minimumHeight: number;
 	private readonly maximumHeight: number;
+	private readonly tabFocusMode: boolean;
 	private readonly referenceWidgets = new Map<string, InlineChatAttachmentWidget>();
 
 	constructor(options: ChatInputEditorOptions, @IInstantiationService private readonly instantiationService: IInstantiationService, @IConfigurationService private readonly configurationService: IConfigurationService, @IContextViewService private readonly contextViews: IContextViewService) {
 		super();
 		this.minimumHeight = options.height?.minimum ?? CHAT_INPUT_MIN_HEIGHT;
 		this.maximumHeight = options.height?.maximum ?? CHAT_INPUT_MAX_HEIGHT;
+		this.tabFocusMode = options.tabFocusMode ?? false;
 		this.height = this.minimumHeight;
 		this.element = h(options.container.ownerDocument, "div");
 		this.element.className = "ash-chat-input-editor";
@@ -73,8 +75,9 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 				});
 			},
 		} satisfies EditorContributionRegistration;
-		// Chat only needs its placeholder and command/skill suggestions; unrelated editor features add work to every Chat tab.
+		// Keep basic text commands alongside Chat features; unrelated editor features add work to every Chat tab.
 		const contributions = EditorExtensionsRegistry.getSomeEditorContributions([
+			EditorCoreCommandId.selectAll,
 			PlaceholderTextContribution.ID,
 			SuggestController.ID,
 		]).map(contribution =>
@@ -94,6 +97,7 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 			overviewRulerLanes: 0,
 			scrollBeyondLastLine: false,
 			lineWrapping: EditorLineWrapping.On,
+			tabFocusMode: this.tabFocusMode,
 			contributions,
 		}));
 		const layout = this._register(new RunOnceScheduler(() => this.layout(), 0));
@@ -116,7 +120,7 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 			this._onDidChange.fire(this.value);
 		}));
 		this._register(addDisposableListener(this.editor.controller.element, "keydown", event => {
-			if (event.defaultPrevented || event.isComposing || event.key !== "Enter" || event.shiftKey) return;
+			if (event.defaultPrevented || event.isComposing || event.key !== "Enter" || event.shiftKey || this.editor.getOption(EditorOption.readOnly)) return;
 			stopEvent(event);
 			this._onDidSubmit.fire();
 		}));
@@ -160,7 +164,7 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 			} else widget.attachment = reference;
 			for (const contentWidget of widget.widgets) this.editor.layoutContentWidget(contentWidget);
 		}
-		this.editor.updateOptions({ ...this.getFontOptions(), tabFocusMode: references.length > 0 });
+		this.editor.updateOptions({ ...this.getFontOptions(), tabFocusMode: this.tabFocusMode || references.length > 0 });
 		this.layout();
 	}
 
@@ -196,6 +200,12 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 
 	focus(): void {
 		this.editor.focus();
+	}
+
+	setReadOnly(readOnly: boolean): void {
+		if (this.editor.getOption(EditorOption.readOnly) === readOnly) return;
+		this.editor.updateOptions({ readOnly });
+		this.editor.controller.element.setAttribute('aria-disabled', String(readOnly));
 	}
 
 	public insertText(text: string): void {

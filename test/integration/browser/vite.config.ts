@@ -1,10 +1,12 @@
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
 import { rendererOutput } from '../../../build/desktop/vite/rendererOutput.js';
+import { rendererDependencyAliases } from '../../../build/desktop/vite/rendererDependencies.js';
 import { workbenchEntryPlugin } from '../../../build/desktop/vite/workbenchEntryPlugin.js';
 
 export default defineConfig({
 	define: { __ASH_WEB_APP_SERVER__: 'false' },
+	resolve: { alias: rendererDependencyAliases },
 	root: resolve(import.meta.dirname),
 	plugins: [workbenchEntryPlugin('/themeEditor.html', [{
 		url: '/browser/theme-preview/themePreview.html',

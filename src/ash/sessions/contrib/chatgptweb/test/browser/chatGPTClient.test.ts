@@ -12,6 +12,30 @@ async function collect<T>(values: AsyncIterable<T>): Promise<T[]> {
 }
 
 suite('Bundled ChatGPT client', () => {
+	test('accepts bounded encrypted room tickets and rejects non-LiveKit, insecure or malformed tickets', async () => {
+		const ticket = { url: 'wss://chatgpt.livekit.cloud', token: 'fixture-room-token', e2ee_key: 'fixture-media-key', conversation_id: 'chat-one' };
+		let value: object = ticket;
+		let body: Record<string, unknown> = {};
+		const client = new ChatGPTClient((async (url, init) => {
+			assert.equal(url, '/service/voice/get_token');
+			body = JSON.parse(String(init?.body));
+			return json(value);
+		}) as typeof fetch);
+		assert.deepEqual(await client.voice({ parentId: 'parent', conversationId: 'chat-one', language: 'zh-CN' }, signal()), {
+			url: ticket.url + '/', token: ticket.token, encryptionKey: ticket.e2ee_key, conversationId: ticket.conversation_id,
+		});
+		assert.equal(body.parent_message_id, 'parent');
+		assert.equal(body.conversation_id, 'chat-one');
+		assert.equal(body.language, 'zh-CN');
+		assert.equal(body.voice_training_allowed, false);
+		for (const change of [
+			{ url: 'ws://chatgpt.livekit.cloud' }, { url: 'wss://chatgpt.livekit.cloud.evil.test' }, { url: 'wss://user@chatgpt.livekit.cloud' },
+			{ token: '' }, { token: 'x'.repeat(32769) }, { e2ee_key: '' }, { conversation_id: '../invalid' },
+		]) {
+			value = { ...ticket, ...change };
+			await assert.rejects(client.voice({ parentId: 'parent', language: 'en' }, signal()), /unsupported response/u);
+		}
+	});
 	test('retains authenticated resources and source metadata instead of reducing them to web links', async () => {
 		const client = new ChatGPTClient((async () => json({
 			current_node: 'reply', mapping: {

@@ -5,6 +5,21 @@ import { getMediaOrTextMime } from '../../../../base/common/mime.js';
 export interface ChatGPTConversation { readonly id: string; readonly title: string; }
 
 export interface ChatGPTModel { readonly id: string; readonly title: string; }
+/** A confirmed ChatGPT file reference; signed upload URLs never enter conversation state. */
+export interface ChatGPTFile {
+	readonly id: string;
+	readonly name: string;
+	readonly mimeType: string;
+	readonly size: number;
+	readonly width?: number;
+	readonly height?: number;
+}
+export interface ChatGPTVoiceConnection {
+	readonly url: string;
+	readonly token: string;
+	readonly encryptionKey: string;
+	readonly conversationId?: string;
+}
 export interface ChatGPTResource {
 	readonly uri: string;
 	readonly name: string;
@@ -74,11 +89,74 @@ export class ChatGPTClient {
 		};
 	}
 
-	async *send(input: { text: string; model: string; parentId: string; conversationId?: string; messageId: string; }, signal: AbortSignal): AsyncGenerator<ChatGPTStreamUpdate> {
+	async upload(file: File, signal: AbortSignal): Promise<ChatGPTFile> {
+		let dimensions: { width: number; height: number; } | undefined;
+		if (file.type.startsWith('image/')) {
+			const image = await createImageBitmap(file);
+			try { dimensions = { width: image.width, height: image.height }; }
+			finally { image.close(); }
+		}
+		signal.throwIfAborted();
+		const metadata: unknown = await (await this.request('/files', signal, {
+			method: 'POST', headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ file_name: file.name, file_size: file.size, use_case: dimensions ? 'multimodal' : 'ace_upload', ...(dimensions ? { width: dimensions.width, height: dimensions.height } : {}) }),
+		})).json();
+		if (!isRecord(metadata) || typeof metadata.file_id !== 'string' || !/^file[-_][A-Za-z0-9_-]{1,240}$/u.test(metadata.file_id)
+			|| typeof metadata.upload_url !== 'string' || metadata.upload_url.length > 8192) { throw this.invalidResponse(); }
+		const response = await this.fetcher('/service/.upload?' + new URLSearchParams({ url: metadata.upload_url }), {
+			method: 'PUT', headers: { 'Content-Type': file.type || 'application/octet-stream', 'x-ms-blob-type': 'BlockBlob' }, body: file, signal,
+		});
+		if (!response.ok) { throw new ChatGPTRequestError(response.status, localize('sessions.chatgpt.uploadFailed', 'File upload failed ({0}).', response.status)); }
+		await response.body?.cancel();
+		for (let attempt = 0; attempt < 20; attempt++) {
+			const confirmed: unknown = await (await this.request(`/files/${encodeURIComponent(metadata.file_id)}/uploaded`, signal, {
+				method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+			})).json();
+			if (!isRecord(confirmed)) { throw this.invalidResponse(); }
+			if (confirmed.status === 'success') {
+				return { id: metadata.file_id, name: file.name, mimeType: file.type || 'application/octet-stream', size: file.size, ...dimensions };
+			}
+			if (confirmed.status !== 'pending' && confirmed.status !== 'processing') { throw this.invalidResponse(); }
+			await waitForUpload(signal);
+		}
+		throw new Error(localize('sessions.chatgpt.uploadNotReady', 'The file is still processing. Retry the attachment.'));
+	}
+
+	async voice(input: { conversationId?: string; parentId: string; language: string; }, signal: AbortSignal): Promise<ChatGPTVoiceConnection> {
+		const response = await this.fetcher('/service/voice/get_token', {
+			method: 'POST', headers: { 'Content-Type': 'application/json' }, signal,
+			body: JSON.stringify({
+				voice: 'cove', voice_mode: 'standard', model_slug: 'auto', language: input.language,
+				parent_message_id: input.parentId, voice_session_id: crypto.randomUUID(),
+				...(input.conversationId ? { conversation_id: input.conversationId } : {}),
+				voice_training_allowed: false, video_training_allowed: false, enable_message_streaming: true,
+			}),
+		});
+		if (!response.ok) { throw new ChatGPTRequestError(response.status, localize('sessions.chatgpt.voiceRequestFailed', 'Could not start ChatGPT voice ({0}).', response.status)); }
+		const value: unknown = await response.json();
+		if (!isRecord(value) || typeof value.url !== 'string' || value.url.length > 2048 || typeof value.token !== 'string' || !value.token || value.token.length > 32768
+			|| typeof value.e2ee_key !== 'string' || !value.e2ee_key || value.e2ee_key.length > 4096
+			|| (value.conversation_id !== undefined && (typeof value.conversation_id !== 'string' || !/^[A-Za-z0-9_-]{1,240}$/u.test(value.conversation_id)))) { throw this.invalidResponse(); }
+		const url = new URL(value.url);
+		if (url.protocol !== 'wss:' || !url.hostname.endsWith('.livekit.cloud') || url.port || url.username || url.password || url.hash) { throw this.invalidResponse(); }
+		return { url: url.href, token: value.token, encryptionKey: value.e2ee_key, conversationId: value.conversation_id as string | undefined ?? input.conversationId };
+	}
+
+	async *send(input: { text: string; model: string; parentId: string; conversationId?: string; messageId: string; files?: readonly ChatGPTFile[]; }, signal: AbortSignal): AsyncGenerator<ChatGPTStreamUpdate> {
+		const images = input.files?.filter(file => file.width !== undefined && file.height !== undefined) ?? [];
+		const content = images.length ? {
+			content_type: 'multimodal_text', parts: [
+				...images.map(file => ({ content_type: 'image_asset_pointer', asset_pointer: `file-service://${file.id}`, size_bytes: file.size, width: file.width, height: file.height })),
+				...(input.text ? [input.text] : []),
+			],
+		} : { content_type: 'text', parts: [input.text] };
 		const body = {
 			action: 'next', model: input.model, parent_message_id: input.parentId,
 			...(input.conversationId ? { conversation_id: input.conversationId } : {}),
-			messages: [{ id: input.messageId, author: { role: 'user' }, content: { content_type: 'text', parts: [input.text] }, create_time: Date.now() / 1000 }],
+			messages: [{
+				id: input.messageId, author: { role: 'user' }, content, create_time: Date.now() / 1000,
+				...(input.files?.length ? { metadata: { attachments: input.files.map(file => ({ id: file.id, name: file.name, mime_type: file.mimeType, size: file.size, ...(file.width ? { width: file.width, height: file.height } : {}) })) } } : {}),
+			}],
 			timezone_offset_min: new Date().getTimezoneOffset(), history_and_training_disabled: false,
 			conversation_mode: { kind: 'primary_assistant' }, supports_buffering: true,
 		};
@@ -281,6 +359,15 @@ export async function* decodeChatGPTStream(stream: ReadableStream<Uint8Array>, s
 			}
 		}
 	} finally { signal.removeEventListener('abort', cancel); await reader.cancel().catch(() => { }); reader.releaseLock(); }
+}
+
+function waitForUpload(signal: AbortSignal): Promise<void> {
+	signal.throwIfAborted();
+	return new Promise((resolve, reject) => {
+		const abort = (): void => { clearTimeout(timer); signal.removeEventListener('abort', abort); reject(signal.reason); };
+		const timer = setTimeout(() => { signal.removeEventListener('abort', abort); resolve(); }, 500);
+		signal.addEventListener('abort', abort, { once: true });
+	});
 }
 
 function applyDelta(root: Record<string, unknown>, path: string, operation: unknown, value: unknown): void {

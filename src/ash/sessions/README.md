@@ -14,6 +14,14 @@ request; the contribution does not query account identity, retain account
 bindings, detect account changes or reset chats and drafts when login changes.
 Credentials and cookies remain in the host, outside renderer state.
 
+ChatGPTService owns file upload status and file references alongside each draft.
+The host accepts bounded file bytes only for signed storage uploads and never
+forwards login headers to storage. Voice uses the ChatGPT voice-session endpoint
+and an encrypted LiveKit media connection; its short-lived room ticket and key
+stay in memory for that call. Leaving ChatGPT or switching conversations releases
+the microphone, playback, worker and room. Voice does not create an Agent Thread.
+The chat history returned by ChatGPT remains the canonical conversation record.
+
 Shared Agent execution, Thread records, model catalogs, approval metadata and
 profile execution defaults belong to `platform/agentHost/common/`. Its browser
 adapters own App Server DTO conversion; Workbench and Sessions consume the shared

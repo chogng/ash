@@ -1,5 +1,5 @@
 import { open } from 'node:fs/promises';
-import { VSBuffer } from '../../../../base/common/buffer.js';
+import { VSBuffer, decodeBase64, encodeBase64 } from '../../../../base/common/buffer.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { isRecord } from '../../../../base/common/types.js';
@@ -8,11 +8,12 @@ import type { ChatGPTRequest, ChatGPTResponse, IChatGPTTransport } from '../comm
 import type { IChatGPTVerificationRuntime } from './chatGPTVerificationRuntime.js';
 
 const readPaths = new Set(['/backend-api/models', '/backend-api/conversations']);
-const writePaths = new Set(['/backend-api/f/conversation/prepare', '/backend-api/f/conversation', '/backend-api/stop_conversation']);
+const writePaths = new Set(['/backend-api/f/conversation/prepare', '/backend-api/f/conversation', '/backend-api/stop_conversation', '/backend-api/files', '/voice/get_token']);
+const uploadedPath = (path: string): boolean => /^\/backend-api\/files\/[^/]+\/uploaded$/u.test(path);
 const conversationPath = (path: string): boolean => /^\/backend-api\/conversation\/[^/]+$/u.test(path);
 const filePath = (path: string): boolean => /^\/backend-api\/(?:files\/[^/]+(?:\/download)?|conversation\/[^/]+\/(?:interpreter\/download|files\/[^/]+(?:\/download)?)|estuary\/content)$/u.test(path);
 const proofHeaders = ['OpenAI-Sentinel-Chat-Requirements-Token', 'OpenAI-Sentinel-Proof-Token', 'OpenAI-Sentinel-Turnstile-Token'];
-const requestHeaders = new Set(['accept', 'content-type', 'x-conduit-token', ...proofHeaders.map(name => name.toLowerCase())]);
+const requestHeaders = new Set(['accept', 'content-type', 'x-conduit-token', 'x-ms-blob-type', ...proofHeaders.map(name => name.toLowerCase())]);
 interface PendingRequest {
 	readonly controller: AbortController;
 	bytesRead?: number;
@@ -92,6 +93,16 @@ export class ChatGPTTransport extends Disposable implements IChatGPTTransport {
 	}
 
 	private async fetch(request: ChatGPTRequest, signal: AbortSignal): Promise<Response> {
+		if (request.path.startsWith('/service/.upload?')) {
+			const url = readUploadUrl(new URL(request.path, 'https://chatgpt.com').searchParams.get('url')!);
+			// Signed storage receives only the file bytes and upload headers, never the login.
+			const response = await this.getRuntime().session.fetch(url.href, {
+				method: 'PUT', headers: request.headers, body: (request.body as VSBuffer).buffer,
+				credentials: 'omit', redirect: 'error', signal,
+			});
+			await response.body?.cancel();
+			return new Response(null, { status: response.status });
+		}
 		if (request.path.startsWith('/service/.resource?')) {
 			return this.fetchResource(new URL(request.path, 'https://chatgpt.com').searchParams.get('url')!, signal);
 		}
@@ -128,7 +139,7 @@ export class ChatGPTTransport extends Disposable implements IChatGPTTransport {
 		for (const [name, value] of authorization) { headers.set(name, value); }
 		signal.throwIfAborted();
 		try {
-			const response = await runtime.session.fetch(url.href, { method: request.method, headers, body: request.body, credentials: 'include', redirect: 'error', signal });
+			const response = await runtime.session.fetch(url.href, { method: request.method, headers, body: request.body as string | undefined, credentials: 'include', redirect: 'error', signal });
 			const contentType = response.headers.get('content-type') ?? '';
 			if (response.status !== 204 && !/^(?:application\/(?:[\w.-]+\+)?json|text\/event-stream)(?:;|$)/iu.test(contentType)) {
 				await response.body?.cancel();
@@ -166,7 +177,7 @@ export class ChatGPTTransport extends Disposable implements IChatGPTTransport {
 		// each request. No account identity or credential-change state is retained here.
 		return this.runtime ??= this.options.createRuntime(async url => {
 			const headers = new Headers({ Authorization: '', 'ChatGPT-Account-Id': '' });
-			if (url.origin !== 'https://chatgpt.com' || /%(?:2f|5c|00|25)/iu.test(url.pathname) || !(readPaths.has(url.pathname) || writePaths.has(url.pathname) || conversationPath(url.pathname) || filePath(url.pathname) || url.pathname.startsWith('/backend-api/sentinel/'))) { return headers; }
+			if (url.origin !== 'https://chatgpt.com' || /%(?:2f|5c|00|25)/iu.test(url.pathname) || !(readPaths.has(url.pathname) || writePaths.has(url.pathname) || uploadedPath(url.pathname) || conversationPath(url.pathname) || filePath(url.pathname) || url.pathname.startsWith('/backend-api/sentinel/'))) { return headers; }
 			for (const [name, value] of await this.readCredentialHeaders()) { headers.set(name, value); }
 			return headers;
 		});
@@ -197,11 +208,26 @@ export class ChatGPTTransport extends Disposable implements IChatGPTTransport {
 }
 
 function readRequest(value: unknown): ChatGPTRequest {
+	if (isRecord(value) && isRecord(value.body) && !(value.body instanceof VSBuffer)) {
+		const encoded = value.body.base64;
+		if (Object.keys(value.body).length !== 1 || typeof encoded !== 'string' || encoded.length > Math.ceil(20 * 1024 * 1024 / 3) * 4 || /[^A-Za-z0-9+/=]/u.test(encoded)) { throw new TypeError('Invalid ChatGPT upload bytes'); }
+		const bytes = decodeBase64(encoded);
+		if (encodeBase64(bytes) !== encoded) { throw new TypeError('Invalid ChatGPT upload encoding'); }
+		value = { ...value, body: bytes };
+	}
 	if (!isRecord(value) || Object.keys(value).some(key => !['path', 'method', 'headers', 'body'].includes(key))
 		|| typeof value.path !== 'string' || value.path.length > 8192 || !value.path.startsWith('/service/') || /[\r\n\0\\#]/u.test(value.path)
-		|| !['GET', 'POST'].includes(value.method as string) || !isRecord(value.headers)
+		|| !['GET', 'POST', 'PUT'].includes(value.method as string) || !isRecord(value.headers)
 		|| Object.entries(value.headers).some(([name, header]) => !requestHeaders.has(name.toLowerCase()) || typeof header !== 'string' || header.length > 65536 || /[\r\n\0]/u.test(header))
-		|| (value.body !== undefined && (typeof value.body !== 'string' || Buffer.byteLength(value.body) > 2 * 1024 * 1024))) { throw new TypeError('Invalid ChatGPT request'); }
+		|| (value.body !== undefined && !(typeof value.body === 'string' ? Buffer.byteLength(value.body) <= 2 * 1024 * 1024 : value.body instanceof VSBuffer && value.body.byteLength <= 20 * 1024 * 1024))) { throw new TypeError('Invalid ChatGPT request'); }
+	if (value.path.startsWith('/service/.upload?')) {
+		const url = new URL(value.path, 'https://chatgpt.com');
+		if (value.method !== 'PUT' || !(value.body instanceof VSBuffer) || url.searchParams.size !== 1 || !url.searchParams.has('url')
+			|| Object.keys(value.headers).some(name => !['content-type', 'x-ms-blob-type'].includes(name.toLowerCase()))) { throw new TypeError('Invalid ChatGPT upload request'); }
+		readUploadUrl(url.searchParams.get('url')!);
+		return value as unknown as ChatGPTRequest;
+	}
+	if (value.body instanceof VSBuffer || value.method === 'PUT') { throw new TypeError('Invalid ChatGPT upload endpoint'); }
 	const headersOnly = value.path.startsWith('/service/.headers/');
 	if (value.path.startsWith('/service/.resource?') && value.method === 'GET' && value.body === undefined && Object.keys(value.headers).length === 0) {
 		const url = new URL(value.path, 'https://chatgpt.com');
@@ -214,9 +240,15 @@ function readRequest(value: unknown): ChatGPTRequest {
 		? value.method === 'POST' && url.pathname === '/backend-api/f/conversation' && !url.search && value.body === undefined
 		: value.method === 'GET'
 			? readPaths.has(url.pathname) || conversationPath(url.pathname)
-			: !url.search && writePaths.has(url.pathname));
+			: !url.search && (writePaths.has(url.pathname) || uploadedPath(url.pathname)));
 	if (!allowed || (value.method === 'GET' && value.body !== undefined)) { throw new TypeError('Invalid ChatGPT endpoint'); }
 	return value as unknown as ChatGPTRequest;
+}
+
+function readUploadUrl(value: string): URL {
+	const url = readResourceUrl(value);
+	if (url.origin === 'https://chatgpt.com' || !url.search) { throw new TypeError('Invalid ChatGPT upload origin'); }
+	return url;
 }
 
 function readResourceUrl(value: string): URL {

@@ -141,49 +141,6 @@
 	margin: 0 auto;
 	padding: 12px 24px 20px;
 }
-.ash-chatgpt-composer {
-	padding: 12px;
-	border: var(--ash-strokeThickness, 1px) solid
-		var(--ash-widget-border, GrayText);
-	border-radius: var(--ash-cornerRadius-xLarge, 12px);
-	box-shadow: 0 2px 12px var(--ash-widget-shadow, transparent);
-}
-.ash-chatgpt-composer:hover,
-.ash-chatgpt-composer:focus-within {
-	border-color: var(--ash-input-border, GrayText);
-	box-shadow: 0 2px 12px var(--ash-widget-shadow, transparent);
-}
-.ash-chatgpt-composer textarea {
-	width: 100%;
-	min-height: 36px;
-	max-height: 240px;
-	padding: 8px;
-	resize: none;
-	border: 0;
-	background: transparent;
-}
-.ash-chatgpt-composer textarea:focus-visible {
-	outline: none;
-}
-.ash-chatgpt-composer-controls {
-	display: flex;
-	justify-content: space-between;
-	gap: 12px;
-	align-items: center;
-}
-.ash-chatgpt-composer select {
-	max-width: 70%;
-	min-height: 36px;
-	padding: 6px 8px;
-	border: 0;
-	border-radius: var(--ash-cornerRadius-large, 8px);
-	background: var(--ash-editor-background, Canvas);
-}
-.ash-chatgpt-widget .ash-chatgpt-send {
-	background: var(--ash-button-background, ButtonFace);
-	color: var(--ash-button-foreground, ButtonText);
-	min-width: 64px;
-}
 .ash-chatgpt-error {
 	margin: 12px 0 0;
 	color: var(--ash-error-foreground, CanvasText);

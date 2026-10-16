@@ -15,6 +15,8 @@ export interface ChatInputEditorOptions {
 	readonly slashCommands: SlashCommandCatalog;
 	readonly skills: SkillSelectorCatalog;
 	readonly height?: { readonly minimum: number; readonly maximum: number; };
+	/** Move to the next control with Tab instead of inserting indentation. */
+	readonly tabFocusMode?: boolean;
 }
 
 export interface ChatInputEditorSelection {
