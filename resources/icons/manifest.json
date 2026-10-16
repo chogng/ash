@@ -1007,6 +1007,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "record-keys",
+      "file": "record-keys.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "redo",
       "file": "redo.svg",
       "rendering": "symbolic"
