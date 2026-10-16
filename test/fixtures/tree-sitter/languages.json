@@ -10,7 +10,7 @@
     "language": "javascriptreact",
     "text": "const view = <div>hello</div>;",
     "lexeme": "div",
-    "capture": "entity.name.tag",
+    "capture": "tag",
     "tokenType": "tag"
   },
   {
@@ -24,7 +24,7 @@
     "language": "typescriptreact",
     "text": "const view = <div>hello</div>;",
     "lexeme": "div",
-    "capture": "entity.name.tag",
+    "capture": "tag",
     "tokenType": "tag"
   },
   {
