@@ -1,3 +1,4 @@
+import '../workbench/contrib/debug/browser/debugAdapterManager.js';
 import '../workbench/contrib/terminal/terminal.all.js';
 // Register this renderer's Sessions colors before Workbench theme initialization.
 import './common/theme.js';
