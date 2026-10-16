@@ -189,6 +189,10 @@ const backend: IAutomationBackendService = {
 		if (historyUnavailable) throw new Error('History unavailable');
 		return id === run.automationId ? [run] : [];
 	},
+	getRun: async id => {
+		if (id !== run.id) throw new Error('Run unavailable');
+		return run;
+	},
 	stop: async () => {
 		stops++;
 		run = { ...run, status: 'stopped' };

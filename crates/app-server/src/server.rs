@@ -2856,6 +2856,7 @@ impl AppServer {
             Some(ClientMethod::AutomationWrite) => self.automation_write(&request.params),
             Some(ClientMethod::AutomationDelete) => self.automation_delete(&request.params),
             Some(ClientMethod::AutomationRun) => self.automation_run(&request.params),
+            Some(ClientMethod::AutomationRunRead) => self.automation_run_read(&request.params),
             Some(ClientMethod::AutomationRuns) => self.automation_runs(&request.params),
             Some(ClientMethod::AutomationStop) => self.automation_stop(&request.params),
             Some(ClientMethod::ProjectRead) => self.project_read(connection, &request.params),

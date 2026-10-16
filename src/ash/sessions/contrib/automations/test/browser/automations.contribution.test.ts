@@ -1,7 +1,8 @@
 import { JSDOM } from 'jsdom';
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { suite, test } from 'mocha';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
@@ -72,9 +73,11 @@ function fixture() {
 			}
 		}];
 		let history: AutomationRun[] = [];
+		const records = new Map<string, AutomationRun>();
 		const saves: AutomationDefinition[] = [];
 		const requests: string[] = [];
 		const stops: string[] = [];
+		const reads: string[] = [];
 		const backend: IAutomationBackendService = {
 			onDidChange: changed.event,
 			preview: async () => [],
@@ -108,14 +111,22 @@ function fixture() {
 					message: null
 				};
 				history = [value];
+				records.set(value.id, value);
 				changed.fire();
 				return value;
 			},
 			runs: async () => history,
+			getRun: async id => {
+				reads.push(id);
+				const run = records.get(id);
+				if (!run) throw new Error('Run unavailable');
+				return run;
+			},
 			stop: async id => {
 				stops.push(id);
 				const value = { ...history[0]!, status: 'stopped' as const };
 				history = [value];
+				records.set(value.id, value);
 				changed.fire();
 				return value;
 			},
@@ -133,8 +144,13 @@ function fixture() {
 			saves,
 			requests,
 			stops,
+			reads,
 			setPlans(value: Automation[]) { plans = value; },
-			setHistory(value: AutomationRun[]) { history = value; },
+			setHistory(value: AutomationRun[]) {
+				history = value;
+				for (const run of value) records.set(run.id, run);
+			},
+			setRun(value: AutomationRun) { records.set(value.id, value); },
 		};
 	}
 	return { resources, services, registry, facade, host, errors };
@@ -287,6 +303,141 @@ test('Manual dispatch observes terminal failure without duplicating catalogue no
 	} finally { value.resources.dispose(); }
 });
 
+suite('Automation run observation', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	for (const status of ['completed', 'failed', 'stopped', 'skipped'] as const) {
+		test(`Manual run observation finishes as ${status} after overflowing the history page`, async () => {
+			const value = fixture();
+			try {
+				const host = value.host('one');
+				await host.store.refresh();
+				const operation = await host.store.runAutomation(host.store.automations.get()[0]!.id);
+				const pending = (await host.backend.runs('same-id'))[0]!;
+				const skipped: AutomationRun[] = Array.from({ length: 51 }, (_, index) => ({
+					...pending, id: `skipped-${index}`, status: 'skipped', scheduledAt: index + 2, finishedAt: index + 2,
+				}));
+				host.setHistory([...skipped.slice(1), pending]);
+				await host.store.refresh();
+				assert.equal(host.store.runs.get().length, 51);
+				host.setRun({ ...pending, status, finishedAt: 54 });
+				host.setHistory(skipped.slice(1));
+				host.changed.fire();
+				await host.store.refresh();
+				assert.equal(host.store.runs.get().some(run => run.id === operation.run.id), false);
+				await operation.whenCompleted;
+				assert.ok(host.reads.length > 0);
+				assert.ok(host.reads.every(id => id === pending.id));
+				const reads = host.reads.length;
+				host.changed.fire();
+				await host.store.refresh();
+				assert.equal(host.reads.length, reads, 'Completion releases the run observer');
+				assert.deepEqual(host.stops, []);
+			} finally { value.resources.dispose(); }
+		});
+	}
+
+	test('A change during an in-flight read is queried again without waiting for history', async () => {
+		const value = fixture();
+		const first = new DeferredPromise<AutomationRun>();
+		const refreshing = new DeferredPromise<readonly AutomationRun[]>();
+		void first.p.catch(() => { });
+		try {
+			const host = value.host('one');
+			await host.store.refresh();
+			let reads = 0;
+			const getRun = host.backend.getRun;
+			host.backend.getRun = id => ++reads === 1 ? first.p : getRun(id);
+			const operation = await host.store.runAutomation(host.store.automations.get()[0]!.id);
+			const pending = (await host.backend.runs('same-id'))[0]!;
+			host.backend.runs = () => refreshing.p;
+			host.setRun({ ...pending, status: 'completed', finishedAt: 2 });
+			host.changed.fire();
+			host.changed.fire();
+			assert.equal(reads, 1, 'Notifications do not start concurrent reads');
+			await first.complete(pending);
+			await operation.whenCompleted;
+			assert.equal(reads, 2, 'A notification cannot be lost behind an older response');
+			await refreshing.complete([]);
+			await host.store.refresh();
+			assert.equal(reads, 2);
+		} finally {
+			value.resources.dispose();
+			await first.error(new Error('Test disposed'));
+			await refreshing.complete([]);
+		}
+	});
+
+	test('A run can finish while catalogue and history reads fail', async () => {
+		const value = fixture();
+		try {
+			const host = value.host('one');
+			await host.store.refresh();
+			const operation = await host.store.runAutomation(host.store.automations.get()[0]!.id);
+			await host.store.refresh();
+			const pending = (await host.backend.runs('same-id'))[0]!;
+			host.backend.runs = async () => { throw new Error('History unavailable'); };
+			await assert.rejects(host.store.refresh(), /History unavailable/);
+			host.backend.list = async () => { throw new Error('Catalogue unavailable'); };
+			await assert.rejects(host.store.refresh(), /Catalogue unavailable/);
+			host.setRun({ ...pending, status: 'completed', finishedAt: 2 });
+			host.changed.fire();
+			await operation.whenCompleted;
+			assert.deepEqual(host.stops, []);
+		} finally { value.resources.dispose(); }
+	});
+
+	test('A failed run read rejects observation and releases its listeners', async () => {
+		const value = fixture();
+		try {
+			const host = value.host('one');
+			await host.store.refresh();
+			const operation = await host.store.runAutomation(host.store.automations.get()[0]!.id);
+			await host.store.refresh();
+			let reads = 0;
+			host.backend.getRun = async () => {
+				reads++;
+				throw new Error('Run unavailable');
+			};
+			const observing = assert.rejects(operation.whenCompleted, /Run unavailable/);
+			host.changed.fire();
+			await observing;
+			host.changed.fire();
+			await host.store.refresh();
+			assert.equal(reads, 1);
+			assert.deepEqual(host.stops, []);
+		} finally { value.resources.dispose(); }
+	});
+
+	for (const ending of ['disconnect', 'dispose'] as const) {
+		test(`A ${ending} ends observation during a pending read and ignores its late result`, async () => {
+			const value = fixture();
+			const read = new DeferredPromise<AutomationRun>();
+			void read.p.catch(() => { });
+			try {
+				const host = value.host('one');
+				await host.store.refresh();
+				let reads = 0;
+				host.backend.getRun = () => { reads++; return read.p; };
+				const operation = await host.store.runAutomation(host.store.automations.get()[0]!.id);
+				const pending = (await host.backend.runs('same-id'))[0]!;
+				const observing = assert.rejects(operation.whenCompleted, /may still be active/);
+				if (ending === 'disconnect') host.connection.set('disconnected', undefined);
+				else host.store.dispose();
+				await observing;
+				await read.complete({ ...pending, status: 'completed', finishedAt: 2 });
+				host.changed.fire();
+				await host.store.refresh();
+				assert.equal(reads, 1);
+				assert.deepEqual(host.stops, []);
+			} finally {
+				value.resources.dispose();
+				await read.error(new Error('Test disposed'));
+			}
+		});
+	}
+});
+
 test('Catalogue and history ordering changes retain card identity and keyboard focus', async () => {
 	const value = fixture();
 	try {
@@ -327,6 +478,7 @@ test('Run cancellation after admission stops the host run once; disposing the fr
 		const host = value.host('one');
 		await host.store.refresh();
 		const admission = new DeferredPromise<AutomationRun>();
+		const dispatch = host.backend.run;
 		host.backend.run = async id => {
 			host.requests.push(id);
 			return admission.p;
@@ -354,6 +506,7 @@ test('Run cancellation after admission stops the host run once; disposing the fr
 		await operation.whenCompleted;
 		assert.deepEqual(host.stops, ['run']);
 		assert.deepEqual(value.errors, []);
+		host.backend.run = dispatch;
 		const second = await host.store.runAutomation(host.store.automations.get()[0]!.id);
 		const observing = assert.rejects(second.whenCompleted, /may still be active/);
 		host.store.dispose();

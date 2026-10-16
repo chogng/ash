@@ -51,6 +51,7 @@ export interface IAutomationBackendService {
 	save(id: string, revision: number, definition: AutomationDefinition, status: AutomationStatus): Promise<Automation>;
 	delete(id: string, revision: number): Promise<void>;
 	run(id: string): Promise<AutomationRun>;
+	getRun(runId: string): Promise<AutomationRun>;
 	runs(id: string): Promise<readonly AutomationRun[]>;
 	stop(runId: string): Promise<AutomationRun>;
 	readResult(run: AutomationRun): Promise<AutomationRunResult>;

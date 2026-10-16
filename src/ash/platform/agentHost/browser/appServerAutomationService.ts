@@ -39,6 +39,10 @@ export class AppServerAutomationService extends Disposable implements IAutomatio
 		return (await this.client.request(APP_SERVER_METHODS['automation/runs'], { id, limit: 50 }).catch(explain)).runs;
 	}
 
+	public getRun(runId: string): Promise<AutomationRun> {
+		return this.client.request(APP_SERVER_METHODS['automation/run/read'], { runId }).catch(explain);
+	}
+
 	public stop(runId: string): Promise<AutomationRun> {
 		return this.client.request(APP_SERVER_METHODS['automation/stop'], { runId }).catch(explain);
 	}

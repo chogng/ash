@@ -118,7 +118,12 @@ fn active_runs_remain_visible_after_skipped_runs_fill_the_history_page() {
     let page = store.runs("daily", 50).unwrap();
     assert_eq!(page.len(), 50);
     assert!(page.iter().all(|run| run.id != active.id));
+    assert_eq!(store.get_run(&active.id).unwrap(), active);
     assert!(store.active_runs().unwrap().is_empty());
+    assert!(matches!(
+        store.get_run("missing"),
+        Err(AutomationError::NotFound)
+    ));
 }
 
 #[test]

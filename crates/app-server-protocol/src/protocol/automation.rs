@@ -43,6 +43,12 @@ pub struct AutomationRunParams {
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
+pub struct AutomationRunReadParams {
+    pub run_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
 pub struct AutomationRunsParams {
     pub id: String,
     pub limit: u32,

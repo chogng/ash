@@ -212,22 +212,48 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 	private observeRun(id: string): Promise<void> {
 		return new Promise((resolve, reject) => {
 			const watching = new DisposableStore();
+			let reading = false;
+			let readAgain = false;
+			const read = async (): Promise<void> => {
+				reading = true;
+				try {
+					do {
+						readAgain = false;
+						// A run can leave the bounded history page as soon as it finishes.
+						const run = await this.backend.getRun(this.backendId(id));
+						if (watching.isDisposed) return;
+						if (terminal(run)) {
+							watching.dispose();
+							resolve();
+							return;
+						}
+						// A notification during the read may describe a newer state than its response.
+					} while (readAgain);
+				} catch (error) {
+					if (!watching.isDisposed) {
+						watching.dispose();
+						reject(error);
+					}
+				} finally { reading = false; }
+			};
 			const update = (): void => {
+				if (watching.isDisposed) return;
 				const run = this.runs.get().find(item => item.id === id);
-				if (this.isDisposed || this.catalogueState.get() === 'unavailable' || this.catalogueState.get() === 'error') {
+				if (this.isDisposed || this.connection.get() !== 'connected') {
 					watching.dispose();
 					reject(new Error(localize('automations.observationLost', 'The automation host is unavailable. Its run may still be active.')));
 				} else if (run && terminal(run)) {
 					watching.dispose();
 					resolve();
-				} else if (this.historyState.get() === 'error') {
-					watching.dispose();
-					reject(new Error(localize('automations.historyObservationLost', 'Could not refresh run history. The run may still be active on its host.')));
+				} else {
+					readAgain = true;
+					if (!reading) void read();
 				}
 			};
+			watching.add(this.backend.onDidChange(update));
 			watching.add(this.runs.onDidChange(update));
 			watching.add(this.catalogueState.onDidChange(update));
-			watching.add(this.historyState.onDidChange(update));
+			watching.add(this.connection.onDidChange(update));
 			update();
 		});
 	}
@@ -299,4 +325,4 @@ function definition(options: ICreateAutomationOptions): AutomationDefinition {
 	};
 }
 
-function terminal(run: IAutomationRun): boolean { return ['completed', 'failed', 'stopped', 'skipped'].includes(run.status); }
+function terminal(run: Pick<IAutomationRun, 'status'>): boolean { return ['completed', 'failed', 'stopped', 'skipped'].includes(run.status); }

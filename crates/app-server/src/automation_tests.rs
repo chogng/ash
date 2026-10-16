@@ -27,6 +27,50 @@ fn create_run(
 }
 
 #[test]
+fn automation_run_reads_return_current_state_and_reject_missing_or_invalid_ids() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = Arc::new(AutomationStore::open(&dir.path().join("state.db")).unwrap());
+    let server = server().with_automation_store(Arc::clone(&store));
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let mut run = create_run(&store, dir.path(), AutomationSession::New);
+    for (request_id, status) in [
+        (2, AutomationRunStatus::Pending),
+        (3, AutomationRunStatus::Completed),
+    ] {
+        run.status = status;
+        if status.is_finished() {
+            run.finished_at = Some(ash_automation::now().unwrap());
+        }
+        store.observe(&run).unwrap();
+        let response = call(
+            &server,
+            &mut connection,
+            json!({"jsonrpc":"2.0", "id":request_id, "method":"automation/run/read", "params":{"runId":run.id}}),
+        );
+        assert_eq!(
+            response["result"],
+            serde_json::to_value(&run).unwrap(),
+            "{response}"
+        );
+    }
+    let missing = call(
+        &server,
+        &mut connection,
+        json!({"jsonrpc":"2.0", "id":4, "method":"automation/run/read", "params":{"runId":"missing"}}),
+    );
+    assert_eq!(missing["error"]["message"], "AutomationNotFound");
+    for (request_id, params) in [(5, json!({})), (6, json!({"runId":1}))] {
+        let invalid = call(
+            &server,
+            &mut connection,
+            json!({"jsonrpc":"2.0", "id":request_id, "method":"automation/run/read", "params":params}),
+        );
+        assert_eq!(invalid["error"]["message"], "InvalidParams");
+    }
+}
+
+#[test]
 fn automation_session_deletion_stops_runs_even_before_first_observation() {
     for recorded in [false, true] {
         let dir = tempfile::tempdir().unwrap();

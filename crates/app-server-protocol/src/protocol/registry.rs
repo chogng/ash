@@ -319,6 +319,8 @@ use crate::protocol::automation::AutomationPreviewResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::automation::AutomationRunParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::automation::AutomationRunReadParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::automation::AutomationRunsParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::automation::AutomationRunsResult;
@@ -3461,6 +3463,9 @@ client_methods! {
     },
     AutomationRun => "automation/run" {
         params: AutomationRunParams, response: AutomationRun, serialization: None,
+    },
+    AutomationRunRead => "automation/run/read" {
+        params: AutomationRunReadParams, response: AutomationRun, serialization: None,
     },
     AutomationRuns => "automation/runs" {
         params: AutomationRunsParams, response: AutomationRunsResult, serialization: None,
@@ -6808,6 +6813,7 @@ typescript_bindings! {
     AutomationWriteParams,
     AutomationDeleteParams,
     AutomationRunParams,
+    AutomationRunReadParams,
     AutomationRunsParams,
     AutomationRunsResult,
     AutomationStopParams,

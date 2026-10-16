@@ -7,6 +7,7 @@ use ash_app_server_protocol::protocol::automation::AutomationListResult;
 use ash_app_server_protocol::protocol::automation::AutomationPreviewParams;
 use ash_app_server_protocol::protocol::automation::AutomationPreviewResult;
 use ash_app_server_protocol::protocol::automation::AutomationRunParams;
+use ash_app_server_protocol::protocol::automation::AutomationRunReadParams;
 use ash_app_server_protocol::protocol::automation::AutomationRunsParams;
 use ash_app_server_protocol::protocol::automation::AutomationRunsResult;
 use ash_app_server_protocol::protocol::automation::AutomationStopParams;
@@ -82,6 +83,16 @@ impl AppServer {
             .map_err(error)?;
         self.updates.publish_automation_changed();
         result(&run)
+    }
+
+    pub(super) fn automation_run_read(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: AutomationRunReadParams = decode(params)?;
+        result(
+            &self
+                .automation_store()?
+                .get_run(&params.run_id)
+                .map_err(error)?,
+        )
     }
 
     pub(super) fn automation_runs(&self, params: &Value) -> Result<Value, RpcError> {

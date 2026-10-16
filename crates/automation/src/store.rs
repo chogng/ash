@@ -244,6 +244,15 @@ impl AutomationStore {
         Ok(())
     }
 
+    /// Reads one run independently of the bounded history page.
+    pub fn get_run(&self, id: &str) -> Result<AutomationRun, AutomationError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| AutomationError::LockPoisoned)?;
+        load_run(&connection, id)
+    }
+
     /// Returns recent terminal history plus the active run, even when it predates that page.
     pub fn runs(&self, id: &str, limit: u32) -> Result<Vec<AutomationRun>, AutomationError> {
         let connection = self
